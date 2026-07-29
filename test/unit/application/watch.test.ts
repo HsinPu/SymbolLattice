@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  DEFAULT_WATCH_EVENT_DEBOUNCE_MS,
   DEFAULT_WATCH_INTERVAL_MS,
   MAX_WATCH_INTERVAL_MS,
   MIN_WATCH_INTERVAL_MS,
@@ -9,19 +10,26 @@ import {
   validateWatchInterval,
   type ForegroundWatchOptions,
   type IndexWatchService,
+  type WatchEventCallbacks,
+  type WatchEventSource,
   type WatchReceipt,
   type WatchScheduler
 } from "../../../src/application/index.js";
 import type { IndexStatus, IndexWork } from "../../../src/domain/index.js";
 
 class ManualScheduler implements WatchScheduler {
-  private readonly timers: Array<{ readonly callback: () => void; readonly delayMs: number; active: boolean }> = [];
+  private readonly timers: Array<{
+    readonly callback: () => void;
+    readonly delayMs: number;
+    readonly dueAt: number;
+    active: boolean;
+  }> = [];
   private timestamp = Date.parse("2026-07-30T00:00:00.000Z");
 
   public now = (): Date => new Date(this.timestamp);
 
   public setTimeout(callback: () => void, delayMs: number): unknown {
-    const timer = { callback, delayMs, active: true };
+    const timer = { callback, delayMs, dueAt: this.timestamp + delayMs, active: true };
     this.timers.push(timer);
     return timer;
   }
@@ -34,13 +42,23 @@ class ManualScheduler implements WatchScheduler {
     return this.timers.filter((timer) => timer.active).map((timer) => timer.delayMs);
   }
 
+  public advanceBy(delayMs: number): void {
+    this.timestamp += delayMs;
+  }
+
   public fireNext(): void {
-    const timer = this.timers.find((candidate) => candidate.active);
+    const timer = this.timers
+      .filter((candidate) => candidate.active)
+      .reduce<(typeof this.timers)[number] | undefined>(
+        (earliest, candidate) =>
+          earliest === undefined || candidate.dueAt < earliest.dueAt ? candidate : earliest,
+        undefined
+      );
     if (timer === undefined) {
       throw new Error("No active timer is scheduled.");
     }
     timer.active = false;
-    this.timestamp += timer.delayMs;
+    this.timestamp = timer.dueAt;
     timer.callback();
   }
 }
@@ -109,6 +127,41 @@ class FakeWatchService implements IndexWatchService {
       throw next;
     }
     return next;
+  }
+}
+
+class FakeWatchEventSource implements WatchEventSource {
+  public readonly subscribeCalls: string[] = [];
+  public closeCalls = 0;
+  private callbacks: WatchEventCallbacks | null = null;
+
+  public constructor(
+    private readonly subscribeError: Error | null = null,
+    private readonly emitChangeDuringSubscribe = false
+  ) {}
+
+  public subscribe(projectPath: string, callbacks: WatchEventCallbacks): { close(): void } {
+    this.subscribeCalls.push(projectPath);
+    if (this.subscribeError !== null) {
+      throw this.subscribeError;
+    }
+    this.callbacks = callbacks;
+    if (this.emitChangeDuringSubscribe) {
+      callbacks.onChange();
+    }
+    return {
+      close: () => {
+        this.closeCalls += 1;
+      }
+    };
+  }
+
+  public emitChange(): void {
+    this.callbacks?.onChange();
+  }
+
+  public emitError(error: unknown): void {
+    this.callbacks?.onError(error);
   }
 }
 
@@ -340,5 +393,347 @@ describe("foreground index watch", () => {
     ]);
     expect(statusChecks).toBe(1);
     await session.stop();
+  });
+
+  it("debounces source-change bursts ahead of the regular poll", async () => {
+    const scheduler = new ManualScheduler();
+    const receipts: WatchReceipt[] = [];
+    const source = new FakeWatchEventSource();
+    const service = new FakeWatchService(
+      [status("generation:one"), status("generation:one", true)],
+      [status("generation:two")]
+    );
+    const session = await startForegroundWatch(
+      service,
+      {
+        ...watchOptions(receipts),
+        intervalMs: 1_000,
+        eventSource: source
+      },
+      scheduler
+    );
+
+    expect(source.subscribeCalls).toEqual(["C:/project"]);
+    expect(receipts.map((receipt) => receipt.event)).toEqual(["started", "event-watch-active"]);
+    expect(scheduler.scheduledDelays).toEqual([1_000]);
+
+    source.emitChange();
+    source.emitChange();
+    source.emitChange();
+
+    expect(service.getStatusCalls).toHaveLength(1);
+    expect(scheduler.scheduledDelays).toEqual([1_000, DEFAULT_WATCH_EVENT_DEBOUNCE_MS]);
+
+    scheduler.fireNext();
+    await settle();
+
+    expect(service.getStatusCalls).toHaveLength(2);
+    expect(service.syncCalls).toEqual([{ projectPath: "C:/project", force: false }]);
+    expect(receipts.map((receipt) => receipt.event)).toEqual([
+      "started",
+      "event-watch-active",
+      "stale-detected",
+      "synced"
+    ]);
+    expect(scheduler.scheduledDelays).toEqual([1_000]);
+
+    await session.stop();
+  });
+
+  it("keeps the polling safety sweep live during a continuous event stream", async () => {
+    const scheduler = new ManualScheduler();
+    const receipts: WatchReceipt[] = [];
+    const source = new FakeWatchEventSource();
+    const service = new FakeWatchService(
+      [status("generation:one"), status("generation:one", true)],
+      [status("generation:two")]
+    );
+    const session = await startForegroundWatch(
+      service,
+      {
+        ...watchOptions(receipts),
+        intervalMs: 1_000,
+        eventSource: source
+      },
+      scheduler
+    );
+
+    for (let tick = 0; tick < 9; tick += 1) {
+      source.emitChange();
+      scheduler.advanceBy(100);
+    }
+
+    expect(scheduler.scheduledDelays).toEqual([1_000, DEFAULT_WATCH_EVENT_DEBOUNCE_MS]);
+
+    scheduler.fireNext();
+    await settle();
+
+    expect(service.getStatusCalls).toHaveLength(2);
+    expect(service.syncCalls).toEqual([{ projectPath: "C:/project", force: false }]);
+    expect(receipts.map((receipt) => receipt.event)).toContain("synced");
+
+    await session.stop();
+  });
+
+  it("arms the polling safety sweep when an event arrives during subscription", async () => {
+    const scheduler = new ManualScheduler();
+    const receipts: WatchReceipt[] = [];
+    const source = new FakeWatchEventSource(null, true);
+    const service = new FakeWatchService([status("generation:one")]);
+    const session = await startForegroundWatch(
+      service,
+      {
+        ...watchOptions(receipts),
+        intervalMs: 1_000,
+        eventSource: source
+      },
+      scheduler
+    );
+
+    expect(receipts.map((receipt) => receipt.event)).toEqual(["started", "event-watch-active"]);
+    expect(scheduler.scheduledDelays).toEqual([DEFAULT_WATCH_EVENT_DEBOUNCE_MS, 1_000]);
+
+    await session.stop();
+  });
+
+  it("coalesces source changes received during an in-flight sync into one later reconciliation", async () => {
+    let releaseSync: ((result: IndexStatus) => void) | undefined;
+    const pendingSync = new Promise<IndexStatus>((resolveSync) => {
+      releaseSync = resolveSync;
+    });
+    const scheduler = new ManualScheduler();
+    const receipts: WatchReceipt[] = [];
+    const source = new FakeWatchEventSource();
+    const statuses = [status("generation:one"), status("generation:one", true), status("generation:two")];
+    const service: IndexWatchService & {
+      readonly syncCalls: Array<{ readonly projectPath: string; readonly force?: boolean }>;
+      statusCalls: number;
+    } = {
+      syncCalls: [],
+      statusCalls: 0,
+      assertSafeProjectPath(): void {},
+      async getStatus(): Promise<IndexStatus> {
+        this.statusCalls += 1;
+        const next = statuses.shift();
+        if (next === undefined) {
+          throw new Error("No fake status remains.");
+        }
+        return next;
+      },
+      async sync(options): Promise<IndexStatus> {
+        this.syncCalls.push(options);
+        return pendingSync;
+      }
+    };
+
+    const session = await startForegroundWatch(
+      service,
+      {
+        ...watchOptions(receipts),
+        intervalMs: 1_000,
+        eventSource: source
+      },
+      scheduler
+    );
+
+    source.emitChange();
+    scheduler.fireNext();
+    await settle();
+    expect(service.syncCalls).toHaveLength(1);
+
+    source.emitChange();
+    source.emitChange();
+    expect(scheduler.scheduledDelays).toEqual([1_000, DEFAULT_WATCH_EVENT_DEBOUNCE_MS]);
+    scheduler.fireNext();
+    await settle();
+    expect(service.statusCalls).toBe(2);
+    expect(service.syncCalls).toHaveLength(1);
+
+    releaseSync?.(status("generation:two"));
+    await settle();
+
+    expect(service.statusCalls).toBe(3);
+    expect(service.syncCalls).toHaveLength(1);
+    expect(scheduler.scheduledDelays).toEqual([1_000]);
+
+    await session.stop();
+  });
+
+  it("falls back to polling when event subscription setup fails", async () => {
+    const scheduler = new ManualScheduler();
+    const receipts: WatchReceipt[] = [];
+    const source = new FakeWatchEventSource(new Error("Native watcher is unavailable."));
+    const service = new FakeWatchService([status("generation:one"), status("generation:one")]);
+    const session = await startForegroundWatch(
+      service,
+      {
+        ...watchOptions(receipts),
+        intervalMs: 1_000,
+        eventSource: source
+      },
+      scheduler
+    );
+
+    expect(receipts.map((receipt) => receipt.event)).toEqual(["started", "event-watch-failed"]);
+    expect(receipts.at(-1)).toMatchObject({
+      error: { code: "WATCH_EVENTS_UNAVAILABLE", message: "Native watcher is unavailable." },
+      retryDelayMs: null
+    });
+    expect(scheduler.scheduledDelays).toEqual([1_000]);
+
+    scheduler.fireNext();
+    await settle();
+    expect(service.getStatusCalls).toHaveLength(2);
+    expect(scheduler.scheduledDelays).toEqual([1_000]);
+
+    await session.stop();
+  });
+
+  it("activates the event source after recovering from an initial status failure", async () => {
+    const scheduler = new ManualScheduler();
+    const receipts: WatchReceipt[] = [];
+    const source = new FakeWatchEventSource();
+    const service = new FakeWatchService([
+      new Error("Temporary status failure."),
+      status("generation:one")
+    ]);
+    const session = await startForegroundWatch(
+      service,
+      {
+        ...watchOptions(receipts),
+        intervalMs: 1_000,
+        eventSource: source
+      },
+      scheduler
+    );
+
+    expect(source.subscribeCalls).toEqual([]);
+    expect(scheduler.scheduledDelays).toEqual([2_000]);
+
+    scheduler.fireNext();
+    await settle();
+
+    expect(source.subscribeCalls).toEqual(["C:/project"]);
+    expect(receipts.map((receipt) => receipt.event)).toEqual([
+      "status-failed",
+      "event-watch-active"
+    ]);
+    expect(scheduler.scheduledDelays).toEqual([1_000]);
+
+    await session.stop();
+  });
+
+  it("closes a failed event source and retains polling after a runtime callback error", async () => {
+    const scheduler = new ManualScheduler();
+    const receipts: WatchReceipt[] = [];
+    const source = new FakeWatchEventSource();
+    const service = new FakeWatchService([status("generation:one"), status("generation:one")]);
+    const session = await startForegroundWatch(
+      service,
+      {
+        ...watchOptions(receipts),
+        intervalMs: 1_000,
+        eventSource: source
+      },
+      scheduler
+    );
+
+    source.emitError(new Error("Native watcher ended."));
+
+    expect(source.closeCalls).toBe(1);
+    expect(receipts.map((receipt) => receipt.event)).toEqual([
+      "started",
+      "event-watch-active",
+      "event-watch-failed"
+    ]);
+    expect(receipts.at(-1)).toMatchObject({
+      error: { code: "WATCH_EVENTS_FAILED", message: "Native watcher ended." },
+      retryDelayMs: null
+    });
+    expect(scheduler.scheduledDelays).toEqual([1_000]);
+
+    source.emitChange();
+    expect(scheduler.scheduledDelays).toEqual([1_000]);
+    scheduler.fireNext();
+    await settle();
+    expect(service.getStatusCalls).toHaveLength(2);
+
+    await session.stop();
+    expect(source.closeCalls).toBe(1);
+  });
+
+  it("cancels event work, closes once, and ignores late callbacks after stop", async () => {
+    const scheduler = new ManualScheduler();
+    const receipts: WatchReceipt[] = [];
+    const source = new FakeWatchEventSource();
+    const service = new FakeWatchService([status("generation:one")]);
+    const session = await startForegroundWatch(
+      service,
+      {
+        ...watchOptions(receipts),
+        intervalMs: 1_000,
+        eventSource: source
+      },
+      scheduler
+    );
+
+    source.emitChange();
+    expect(scheduler.scheduledDelays).toEqual([1_000, DEFAULT_WATCH_EVENT_DEBOUNCE_MS]);
+
+    await session.stop();
+    await session.stop();
+    expect(source.closeCalls).toBe(1);
+    expect(scheduler.scheduledDelays).toEqual([]);
+    expect(receipts.at(-1)?.event).toBe("stopped");
+
+    source.emitChange();
+    source.emitError(new Error("Late watcher error."));
+    expect(scheduler.scheduledDelays).toEqual([]);
+    expect(receipts.at(-1)?.event).toBe("stopped");
+  });
+
+  it("closes the event source and ignores late callbacks when the active index disappears", async () => {
+    const scheduler = new ManualScheduler();
+    const receipts: WatchReceipt[] = [];
+    const source = new FakeWatchEventSource();
+    const service = new FakeWatchService([
+      status("generation:one"),
+      {
+        ...status(null),
+        initialized: false,
+        indexedAt: null,
+        counts: { files: 0, symbols: 0, edges: 0, pendingReferences: 0 }
+      }
+    ]);
+    const session = await startForegroundWatch(
+      service,
+      {
+        ...watchOptions(receipts),
+        intervalMs: 1_000,
+        eventSource: source
+      },
+      scheduler
+    );
+    const terminal = session.done.then(
+      () => null,
+      (error: unknown) => error
+    );
+
+    source.emitChange();
+    scheduler.fireNext();
+    await settle();
+
+    await expect(terminal).resolves.toMatchObject({ code: "MISSING_INDEX" });
+    expect(source.closeCalls).toBe(1);
+    expect(scheduler.scheduledDelays).toEqual([]);
+
+    source.emitChange();
+    source.emitError(new Error("Late watcher error."));
+    expect(scheduler.scheduledDelays).toEqual([]);
+    expect(receipts.map((receipt) => receipt.event)).toEqual([
+      "started",
+      "event-watch-active",
+      "status-failed"
+    ]);
   });
 });

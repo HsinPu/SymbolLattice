@@ -522,8 +522,8 @@ describe("symbol-lattice v0.6 affected-test CLI", () => {
   }
 });
 
-describe("symbol-lattice v0.8 foreground watch CLI", () => {
-  it("forwards the bounded interval and force flag while rendering compact NDJSON receipts", async () => {
+describe("symbol-lattice v0.9 foreground watch CLI", () => {
+  it("forwards the bounded interval and force flag, enables native events, and renders compact NDJSON receipts", async () => {
     const calls: ForegroundWatchOptions[] = [];
     const service = {} as SymbolLatticeService;
     const receipt: WatchReceipt = {
@@ -567,7 +567,27 @@ describe("symbol-lattice v0.8 foreground watch CLI", () => {
       force: true,
       intervalMs: 750
     });
+    expect(calls[0]?.eventSource).toBeDefined();
     expect(write).toHaveBeenCalledWith(`${JSON.stringify(receipt)}\n`);
+  });
+
+  it("lets callers opt out of native event acceleration with --poll", async () => {
+    const calls: ForegroundWatchOptions[] = [];
+    const service = {} as SymbolLatticeService;
+    const watchRunner = async (
+      _receivedService: SymbolLatticeService,
+      options: ForegroundWatchOptions
+    ): Promise<void> => {
+      calls.push(options);
+    };
+
+    await createProgram(service, watchRunner).parseAsync(
+      ["node", "symbol-lattice", "watch", "--project", "C:/chosen-project", "--poll"],
+      { from: "node" }
+    );
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).not.toHaveProperty("eventSource");
   });
 
   it("rejects out-of-range watch intervals before starting a lifecycle", async () => {

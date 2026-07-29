@@ -6,6 +6,8 @@ import type { IndexOptions } from "./service.js";
 
 /** Default cadence for the explicit foreground freshness monitor. */
 export const DEFAULT_WATCH_INTERVAL_MS = 2_000;
+/** Delay used to coalesce a burst of source-change notifications. */
+export const DEFAULT_WATCH_EVENT_DEBOUNCE_MS = 250;
 export const MIN_WATCH_INTERVAL_MS = 250;
 export const MAX_WATCH_INTERVAL_MS = 60_000;
 
@@ -21,6 +23,8 @@ export interface WatchReceipt {
     | "synced"
     | "sync-failed"
     | "status-failed"
+    | "event-watch-active"
+    | "event-watch-failed"
     | "stopped";
   readonly observedAt: string;
   readonly projectPath: string;
@@ -44,11 +48,28 @@ export interface IndexWatchService {
   sync(options: IndexOptions): Promise<IndexStatus>;
 }
 
+/** Callbacks supplied to an optional local project-change event source. */
+export interface WatchEventCallbacks {
+  onChange(): void;
+  onError(error: unknown): void;
+}
+
+/** A closeable subscription to local project-change events. */
+export interface WatchEventSubscription {
+  close(): void;
+}
+
+/** Optional event source that complements the foreground polling watch. */
+export interface WatchEventSource {
+  subscribe(projectPath: string, callbacks: WatchEventCallbacks): WatchEventSubscription;
+}
+
 export interface ForegroundWatchOptions {
   readonly projectPath: string;
   /** Reasserts deliberate broad-scope indexing on every automatic sync. */
   readonly force?: boolean;
   readonly intervalMs?: number;
+  readonly eventSource?: WatchEventSource;
   readonly onReceipt?: (receipt: WatchReceipt) => void;
 }
 
@@ -75,6 +96,16 @@ function toWatchError(error: unknown): WatchReceipt["error"] {
   return {
     code: error instanceof SymbolLatticeError ? error.code : "UNEXPECTED_ERROR",
     message: error instanceof Error ? error.message : "Unknown SymbolLattice error."
+  };
+}
+
+function toEventWatchError(
+  code: "WATCH_EVENTS_UNAVAILABLE" | "WATCH_EVENTS_FAILED",
+  error: unknown
+): WatchReceipt["error"] {
+  return {
+    code,
+    message: error instanceof Error ? error.message : "Unknown watch event source error."
   };
 }
 
@@ -118,11 +149,16 @@ class ForegroundWatch implements ForegroundWatchSession {
   private resolveDone: (() => void) | null = null;
   private rejectDone: ((reason?: unknown) => void) | null = null;
   private timer: unknown = null;
+  private eventTimer: unknown = null;
   private running: Promise<void> | null = null;
   private stopped = false;
   private finished = false;
   private consecutiveFailures = 0;
   private lastStatus: IndexStatus | null = null;
+  private eventSourceAttempted = false;
+  private eventSourceActive = false;
+  private eventSubscription: WatchEventSubscription | null = null;
+  private eventReconcilePending = false;
 
   public constructor(
     private readonly service: IndexWatchService,
@@ -173,6 +209,13 @@ class ForegroundWatch implements ForegroundWatchSession {
     this.emit("started", status, statusGenerationId(status), statusGenerationId(status));
     const delayMs = await this.reconcile(status);
     if (!this.stopped && delayMs !== null) {
+      this.startEventWatch();
+    }
+    if (
+      !this.stopped &&
+      delayMs !== null &&
+      this.timer === null
+    ) {
       this.scheduleNext(delayMs);
     }
   }
@@ -183,10 +226,8 @@ class ForegroundWatch implements ForegroundWatchSession {
     }
 
     this.stopped = true;
-    if (this.timer !== null) {
-      this.scheduler.clearTimeout(this.timer);
-      this.timer = null;
-    }
+    this.cancelPollTimer();
+    this.disableEventSource();
     if (this.running === null) {
       this.finish();
     }
@@ -195,26 +236,166 @@ class ForegroundWatch implements ForegroundWatchSession {
   }
 
   private scheduleNext(delayMs: number): void {
-    if (this.stopped || this.finished) {
+    if (this.stopped || this.finished || this.timer !== null) {
       return;
     }
 
     this.timer = this.scheduler.setTimeout(() => {
       this.timer = null;
-      this.running = this.poll()
-        .then((delayMs) => {
-          if (!this.stopped && delayMs !== null) {
-            this.scheduleNext(delayMs);
-          }
-        })
-        .finally(() => {
-          this.running = null;
-          if (this.stopped) {
-            this.finish();
-          }
-        });
-      void this.running;
+      this.startPoll();
     }, delayMs);
+  }
+
+  private startPoll(): void {
+    if (this.stopped || this.finished || this.running !== null) {
+      return;
+    }
+
+    this.running = this.poll()
+      .then((delayMs) => {
+        if (!this.stopped && delayMs !== null) {
+          this.scheduleNext(delayMs);
+        }
+      })
+      .finally(() => {
+        this.running = null;
+        if (this.stopped) {
+          this.finish();
+          return;
+        }
+
+        if (this.eventTimer === null && this.eventReconcilePending) {
+          this.eventReconcilePending = false;
+          this.startPoll();
+        }
+      });
+    void this.running;
+  }
+
+  private startEventWatch(): void {
+    const source = this.options.eventSource;
+    if (
+      source === undefined ||
+      this.stopped ||
+      this.finished ||
+      this.eventSourceAttempted ||
+      this.eventSourceActive
+    ) {
+      return;
+    }
+
+    this.eventSourceAttempted = true;
+    this.eventSourceActive = true;
+    let subscription: WatchEventSubscription;
+    try {
+      subscription = source.subscribe(this.options.projectPath, {
+        onChange: () => this.handleEventChange(),
+        onError: (error) => this.handleEventError(error)
+      });
+    } catch (error) {
+      if (this.eventSourceActive) {
+        this.handleEventSourceFailure("WATCH_EVENTS_UNAVAILABLE", error);
+      }
+      return;
+    }
+
+    if (!this.eventSourceActive || this.stopped || this.finished) {
+      this.closeEventSubscription(subscription);
+      return;
+    }
+
+    this.eventSubscription = subscription;
+    this.emit(
+      "event-watch-active",
+      this.lastStatus,
+      statusGenerationId(this.lastStatus),
+      statusGenerationId(this.lastStatus)
+    );
+  }
+
+  private handleEventChange(): void {
+    if (!this.eventSourceActive || this.stopped || this.finished) {
+      return;
+    }
+
+    this.eventReconcilePending = true;
+    this.cancelEventTimer();
+    this.eventTimer = this.scheduler.setTimeout(() => {
+      this.eventTimer = null;
+      this.runDebouncedEventReconcile();
+    }, DEFAULT_WATCH_EVENT_DEBOUNCE_MS);
+  }
+
+  private runDebouncedEventReconcile(): void {
+    if (!this.eventSourceActive || this.stopped || this.finished) {
+      return;
+    }
+
+    if (this.running !== null) {
+      return;
+    }
+
+    this.eventReconcilePending = false;
+    this.startPoll();
+  }
+
+  private handleEventError(error: unknown): void {
+    if (!this.eventSourceActive || this.stopped || this.finished) {
+      return;
+    }
+
+    this.handleEventSourceFailure("WATCH_EVENTS_FAILED", error);
+  }
+
+  private handleEventSourceFailure(
+    code: "WATCH_EVENTS_UNAVAILABLE" | "WATCH_EVENTS_FAILED",
+    error: unknown
+  ): void {
+    this.disableEventSource();
+    this.emit(
+      "event-watch-failed",
+      this.lastStatus,
+      statusGenerationId(this.lastStatus),
+      statusGenerationId(this.lastStatus),
+      { error: toEventWatchError(code, error), retryDelayMs: null }
+    );
+
+    if (!this.stopped && !this.finished && this.running === null && this.timer === null) {
+      this.scheduleNext(this.intervalMs);
+    }
+  }
+
+  private cancelPollTimer(): void {
+    if (this.timer !== null) {
+      this.scheduler.clearTimeout(this.timer);
+      this.timer = null;
+    }
+  }
+
+  private cancelEventTimer(): void {
+    if (this.eventTimer !== null) {
+      this.scheduler.clearTimeout(this.eventTimer);
+      this.eventTimer = null;
+    }
+  }
+
+  private disableEventSource(): void {
+    this.eventSourceActive = false;
+    this.eventReconcilePending = false;
+    this.cancelEventTimer();
+    const subscription = this.eventSubscription;
+    this.eventSubscription = null;
+    if (subscription !== null) {
+      this.closeEventSubscription(subscription);
+    }
+  }
+
+  private closeEventSubscription(subscription: WatchEventSubscription): void {
+    try {
+      subscription.close();
+    } catch {
+      // A failed cleanup must not reactivate the event source or block polling fallback.
+    }
   }
 
   private async poll(): Promise<number | null> {
@@ -241,6 +422,7 @@ class ForegroundWatch implements ForegroundWatchSession {
       return null;
     }
 
+    this.startEventWatch();
     return this.reconcile(status);
   }
 
@@ -328,10 +510,8 @@ class ForegroundWatch implements ForegroundWatchSession {
     }
 
     this.stopped = true;
-    if (this.timer !== null) {
-      this.scheduler.clearTimeout(this.timer);
-      this.timer = null;
-    }
+    this.cancelPollTimer();
+    this.disableEventSource();
     this.emit(
       "status-failed",
       status,
@@ -347,9 +527,10 @@ class ForegroundWatch implements ForegroundWatchSession {
 }
 
 /**
- * Starts an explicit foreground polling watch. It never initializes an index,
- * never changes persisted scope, and delegates every graph mutation to the
- * existing atomic `sync` operation.
+ * Starts an explicit foreground watch with optional event acceleration and a
+ * polling fallback. It never initializes an index, never changes persisted
+ * scope, and delegates every graph mutation to the existing atomic `sync`
+ * operation.
  */
 export async function startForegroundWatch(
   service: IndexWatchService,

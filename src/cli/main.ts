@@ -29,7 +29,10 @@ import {
   type WatchReceipt
 } from "../application/index.js";
 import { MAX_SOURCE_SEARCH_LIMIT } from "../domain/index.js";
-import { FileSystemSourceCatalog } from "../infrastructure/filesystem/index.js";
+import {
+  FileSystemSourceCatalog,
+  NodeFileSystemWatchSource
+} from "../infrastructure/filesystem/index.js";
 import { FileSystemGitChangeSetProvider } from "../infrastructure/git/index.js";
 import { SqliteGraphStore } from "../infrastructure/sqlite/index.js";
 import { serveMcp } from "../mcp/index.js";
@@ -81,6 +84,7 @@ interface ContextCommandOptions extends ProjectOptions {
 
 interface WatchCommandOptions extends ProjectOptions {
   readonly interval?: number;
+  readonly poll?: boolean;
 }
 
 /** Injectable CLI seam for a long-lived foreground watch command. */
@@ -318,9 +322,10 @@ export function createProgram(
     .option("--force", "Allow automatic sync of a filesystem root or the home directory")
     .option(
       "--interval <milliseconds>",
-      `Polling interval in milliseconds (${MIN_WATCH_INTERVAL_MS}-${MAX_WATCH_INTERVAL_MS}; default ${DEFAULT_WATCH_INTERVAL_MS})`,
+      `Polling fallback interval in milliseconds (${MIN_WATCH_INTERVAL_MS}-${MAX_WATCH_INTERVAL_MS}; default ${DEFAULT_WATCH_INTERVAL_MS})`,
       parseWatchInterval
     )
+    .option("--poll", "Disable native filesystem-event acceleration and use polling only")
     .option("--json", "Emit newline-delimited JSON watch receipts (the default)")
     .action(async (path: string | undefined, options: WatchCommandOptions) => {
       const projectPath = resolve(path ?? defaultProjectPath(options));
@@ -328,6 +333,7 @@ export function createProgram(
         projectPath,
         force: options.force ?? false,
         intervalMs: options.interval ?? DEFAULT_WATCH_INTERVAL_MS,
+        ...(options.poll === true ? {} : { eventSource: new NodeFileSystemWatchSource() }),
         onReceipt: renderWatchReceipt
       });
     });

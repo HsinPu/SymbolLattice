@@ -6,6 +6,24 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.9.0] - 2026-07-30
+
+### Added
+
+- Native filesystem-event acceleration for the explicit foreground `watch [path]` command. The CLI subscribes recursively when the host supports it, debounces event bursts for 250 ms, filters the same hard-excluded directories as source discovery, and always reuses the established `getStatus` then atomic `sync` path.
+- The existing bounded polling cadence now remains a safety sweep. Native watcher setup or runtime failure emits a compact `event-watch-failed` NDJSON receipt with `WATCH_EVENTS_UNAVAILABLE` or `WATCH_EVENTS_FAILED`, closes the event source, and continues polling instead of silently losing freshness checks.
+- `event-watch-active` NDJSON receipt, deterministic event-burst/coalescing/cleanup coverage, and a testable Node `fs.watch` adapter. `watch --poll` explicitly disables native event acceleration for controlled environments.
+
+### Compatibility
+
+- No SQLite migration is required. `WatchEventSource` is optional: existing application embeddings that call `startForegroundWatch` without one retain v0.8 polling behavior, while the CLI supplies the native adapter by default.
+- The foreground process, persisted scope, atomic publication, force guard, retry/backoff, signal handling, and read-only MCP boundary are unchanged. No daemon or MCP mutation surface was added.
+
+### Deliberate limits
+
+- Native events are a scheduling hint, not a per-file semantic incremental resolver. A reconciliation still scans the complete live catalog and can rebuild the full project projection when required.
+- SymbolLattice does not provide a daemon, durable background watch, cross-process coordination, CodeGraph-style pending-file banners, historical graph generations, semantic Git diff, or hunk-to-declaration attribution in this release.
+
 ## [0.8.0] - 2026-07-30
 
 ### Added
@@ -198,7 +216,8 @@ No unreleased changes.
 - Explicit full indexing, caller/callee/impact queries, and read-only MCP exploration.
 - `exact`, `heuristic`, and `unresolved` relationship states.
 
-[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.5.0...v0.6.0
