@@ -6,6 +6,24 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.13.0] - 2026-07-30
+
+### Added
+
+- Read-only `node <reference>` CLI command for an exact, generation-bound declaration view. It returns the persisted declaration range when available, direct callers/callees, live freshness, source provenance, and explicit output bounds without initializing or refreshing an index.
+- Read-only, idempotent `symbol_lattice_node` MCP tool when an embedding supplies the optional node capability. Existing explore-only embeddings retain their prior MCP surface.
+- Explicit node bounds in every result: at most 200 persisted declaration lines, 16,000 UTF-16 code units, 25 direct callers, 25 direct callees, and 25 ambiguous match candidates. Source, relation, and ambiguity truncation are separately disclosed.
+
+### Compatibility
+
+- No SQLite migration or index backfill is required. `node` reuses the existing optional active source-document projection, and existing `explore`, context, history, Git, watch, CLI, and MCP contracts remain unchanged.
+- An exact node stays graph-queryable when an older adapter or legacy generation cannot provide persisted source documents. It reports `sourceAvailability: "unavailable"` with `source: null` rather than reading current filesystem text.
+
+### Deliberate limits
+
+- `node` returns source and relationships only for an exact ID, qualified-name, simple-name, or location match. Ambiguous and missing references preserve their match state without selecting a candidate or inventing evidence.
+- Source text is an immutable active-generation declaration range. It is not a live-file reader, retained-generation source browser, transitive impact query, dynamic-dispatch analysis, or semantic code explanation.
+
 ## [0.12.0] - 2026-07-30
 
 ### Added
@@ -274,7 +292,8 @@ No unreleased changes.
 - Explicit full indexing, caller/callee/impact queries, and read-only MCP exploration.
 - `exact`, `heuristic`, and `unresolved` relationship states.
 
-[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.12.0...HEAD
+[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.13.0...HEAD
+[0.13.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.9.0...v0.10.0

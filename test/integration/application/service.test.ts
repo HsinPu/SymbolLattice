@@ -13,6 +13,10 @@ import {
   MAX_GIT_HUNK_SOURCE_FILES,
   MAX_GENERATION_DIFF_LIMIT,
   MAX_GENERATION_HISTORY_LIMIT,
+  NODE_MATCH_CANDIDATE_LIMIT,
+  NODE_RELATION_LIMIT,
+  NODE_SOURCE_CHARACTER_LIMIT,
+  NODE_SOURCE_LINE_LIMIT,
   SymbolLatticeError,
   SymbolLatticeService
 } from "../../../src/application/index.js";
@@ -2161,5 +2165,413 @@ describe("SymbolLatticeService", () => {
         "packages/core/src/math.ts"
       ]
     });
+  });
+
+  it("returns an exact generation-bound declaration node with direct callers and callees", async () => {
+    const projectPath = await createInlineProject({
+      "src/node.ts": [
+        "export function target(): number {",
+        "  return 1;",
+        "}",
+        "",
+        "export function middle(): number {",
+        "  return target();",
+        "}",
+        "",
+        "export function entry(): number {",
+        "  return middle();",
+        "}",
+        ""
+      ].join("\n")
+    });
+    const service = createService();
+    await service.init({ projectPath });
+
+    const exact = await service.node(projectPath, "src/node.ts#middle");
+    if (exact.match.status !== "exact") {
+      throw new Error("Expected middle to resolve exactly.");
+    }
+
+    expect(exact).toMatchObject({
+      status: { stale: false },
+      bounds: {
+        sourceLineLimit: NODE_SOURCE_LINE_LIMIT,
+        sourceCharacterLimit: NODE_SOURCE_CHARACTER_LIMIT,
+        relationLimit: NODE_RELATION_LIMIT
+      },
+      match: { status: "exact", symbol: { qualifiedName: "src/node.ts#middle" } },
+      sourceAvailability: "active-generation",
+      source: {
+        filePath: "src/node.ts",
+        truncated: false
+      },
+      callers: {
+        items: [expect.objectContaining({ symbol: expect.objectContaining({ name: "entry" }) })],
+        truncated: false
+      },
+      callees: {
+        items: [expect.objectContaining({ symbol: expect.objectContaining({ name: "target" }) })],
+        truncated: false
+      }
+    });
+    expect(exact.source?.text).toBe(
+      ["export function middle(): number {", "  return target();", "}"].join("\n")
+    );
+
+    const byId = await service.node(projectPath, exact.match.symbol.id);
+    const byQualifiedName = await service.node(projectPath, exact.match.symbol.qualifiedName);
+    const byLocation = await service.node(
+      projectPath,
+      `${exact.match.symbol.filePath}:${exact.match.symbol.range.start.line}`
+    );
+    expect(byId.match).toMatchObject({ status: "exact", symbol: { id: exact.match.symbol.id } });
+    expect(byQualifiedName.match).toMatchObject({
+      status: "exact",
+      symbol: { id: exact.match.symbol.id }
+    });
+    expect(byLocation.match).toMatchObject({
+      status: "exact",
+      symbol: { id: exact.match.symbol.id }
+    });
+  });
+
+  it("keeps node declaration evidence generation-bound after live source changes and deletion", async () => {
+    const projectPath = await createInlineProject({
+      "src/node-evidence.ts": [
+        "export function indexedNode(): string {",
+        '  return "indexed declaration";',
+        "}",
+        ""
+      ].join("\n")
+    });
+    const service = createService();
+    await service.init({ projectPath });
+
+    await writeFile(
+      join(projectPath, "src", "node-evidence.ts"),
+      'export function liveReplacement(): string { return "live only"; }\n',
+      "utf8"
+    );
+    const changed = await service.node(projectPath, "src/node-evidence.ts#indexedNode");
+    expect(changed).toMatchObject({
+      status: { stale: true, staleReasons: ["source-files-changed"] },
+      sourceAvailability: "active-generation",
+      source: { filePath: "src/node-evidence.ts" }
+    });
+    expect(changed.source?.text).toContain("indexed declaration");
+    expect(changed.source?.text).not.toContain("liveReplacement");
+
+    await rm(join(projectPath, "src", "node-evidence.ts"));
+    const deleted = await service.node(projectPath, "src/node-evidence.ts#indexedNode");
+    expect(deleted).toMatchObject({
+      status: { stale: true, staleReasons: ["source-files-changed"] },
+      sourceAvailability: "active-generation",
+      source: { filePath: "src/node-evidence.ts" }
+    });
+    expect(deleted.source?.text).toContain("indexed declaration");
+  });
+
+  it("keeps nonexact node matches source- and relation-free", async () => {
+    const projectPath = await createInlineProject(
+      Object.fromEntries(
+        Array.from({ length: NODE_MATCH_CANDIDATE_LIMIT + 1 }, (_value, index) => [
+          `src/duplicate-${index}.ts`,
+          `export function duplicateNode(): number { return ${index}; }\n`
+        ])
+      )
+    );
+    const service = createService();
+    await service.init({ projectPath });
+
+    const ambiguous = await service.node(projectPath, "duplicateNode");
+    const missing = await service.node(projectPath, "missingNode");
+
+    expect(ambiguous).toMatchObject({
+      match: { status: "ambiguous" },
+      bounds: { matchCandidateLimit: NODE_MATCH_CANDIDATE_LIMIT },
+      matchCandidatesTruncated: true,
+      sourceAvailability: "not-applicable",
+      source: null,
+      callers: { items: [], truncated: false },
+      callees: { items: [], truncated: false }
+    });
+    expect(missing).toMatchObject({
+      match: { status: "not_found" },
+      matchCandidatesTruncated: false,
+      sourceAvailability: "not-applicable",
+      source: null,
+      callers: { items: [], truncated: false },
+      callees: { items: [], truncated: false }
+    });
+    if (ambiguous.match.status !== "ambiguous") {
+      throw new Error("Expected duplicateNode to be ambiguous.");
+    }
+    expect(ambiguous.match.candidates).toHaveLength(NODE_MATCH_CANDIDATE_LIMIT);
+  });
+
+  it("reports an unavailable legacy source projection without losing same-generation relations", async () => {
+    const projectPath = await createInlineProject({
+      "src/legacy-node.ts": [
+        "export function legacyTarget(): number {",
+        "  return 1;",
+        "}",
+        "",
+        "export function legacyMiddle(): number {",
+        "  return legacyTarget();",
+        "}",
+        "",
+        "export function legacyEntry(): number {",
+        "  return legacyMiddle();",
+        "}",
+        ""
+      ].join("\n")
+    });
+    const service = new SymbolLatticeService(
+      createV03GraphStore(new SqliteGraphStore()),
+      new FileSystemSourceCatalog()
+    );
+    await service.init({ projectPath });
+
+    const result = await service.node(projectPath, "src/legacy-node.ts#legacyMiddle");
+
+    expect(result).toMatchObject({
+      match: { status: "exact" },
+      sourceAvailability: "unavailable",
+      source: null,
+      callers: {
+        items: [expect.objectContaining({ symbol: expect.objectContaining({ name: "legacyEntry" }) })]
+      },
+      callees: {
+        items: [expect.objectContaining({ symbol: expect.objectContaining({ name: "legacyTarget" }) })]
+      }
+    });
+  });
+
+  it("caps declaration disclosure by persisted source lines and UTF-16 characters", async () => {
+    const linePadding = Array.from({ length: NODE_SOURCE_LINE_LIMIT + 5 }, (_value, index) =>
+      `  // line-padding-${index}`
+    );
+    const projectPath = await createInlineProject({
+      "src/line-bound.ts": [
+        "export function lineBound(): string {",
+        ...linePadding,
+        '  return "line-bound-end";',
+        "}",
+        ""
+      ].join("\n"),
+      "src/character-bound.ts": `export const characterBound = "${"x".repeat(
+        NODE_SOURCE_CHARACTER_LIMIT + 100
+      )}";\n`
+    });
+    const service = createService();
+    await service.init({ projectPath });
+
+    const lineBound = await service.node(projectPath, "src/line-bound.ts#lineBound");
+    const characterBound = await service.node(
+      projectPath,
+      "src/character-bound.ts#characterBound"
+    );
+
+    expect(lineBound.source).toMatchObject({
+      totalLines: expect.any(Number),
+      truncated: true
+    });
+    expect(lineBound.source?.totalLines).toBeGreaterThan(NODE_SOURCE_LINE_LIMIT);
+    expect(lineBound.source?.text).not.toContain(`line-padding-${NODE_SOURCE_LINE_LIMIT + 4}`);
+    expect(lineBound.source?.text.length).toBeLessThanOrEqual(NODE_SOURCE_CHARACTER_LIMIT);
+
+    expect(characterBound.source).toMatchObject({
+      totalLines: 1,
+      truncated: true
+    });
+    expect(characterBound.source?.totalCharacters).toBeGreaterThan(NODE_SOURCE_CHARACTER_LIMIT);
+    expect(characterBound.source?.text).toHaveLength(NODE_SOURCE_CHARACTER_LIMIT);
+  });
+
+  it("counts an indented multi-line declaration's containing start line in node metadata", async () => {
+    const indentedPadding = Array.from(
+      { length: NODE_SOURCE_LINE_LIMIT - 2 },
+      (_value, index) => `    // indented-padding-${index}`
+    );
+    const projectPath = await createInlineProject({
+      "src/indented-node.ts": [
+        "export class IndentedNode {",
+        "  inspect(): number {",
+        ...indentedPadding,
+        "    return 1;",
+        "  }",
+        "}",
+        ""
+      ].join("\n")
+    });
+    const service = createService();
+    await service.init({ projectPath });
+
+    const result = await service.node(projectPath, "src/indented-node.ts#IndentedNode.inspect");
+
+    expect(result.source).toMatchObject({
+      totalLines: NODE_SOURCE_LINE_LIMIT + 1,
+      truncated: true
+    });
+  });
+
+  it("rejects malformed persisted node ranges that point into a line terminator or following line", async () => {
+    for (const fixture of [
+      { filePath: "src/corrupt-lf.ts", sourceText: "a\nb", malformedStartColumn: 3 },
+      { filePath: "src/corrupt-crlf.ts", sourceText: "a\r\nb", malformedStartColumn: 4 }
+    ]) {
+      const initialSnapshot = raceSnapshot(fixture.filePath);
+      const initialSymbol = initialSnapshot.symbols[0];
+      if (initialSymbol === undefined) {
+        throw new Error("Expected a race symbol.");
+      }
+      const corruptedSymbol = {
+        ...initialSymbol,
+        id: `symbol:${fixture.filePath}:alpha`,
+        name: "alpha",
+        qualifiedName: `${fixture.filePath}#alpha`,
+        range: {
+          start: { line: 1, column: fixture.malformedStartColumn },
+          end: { line: 2, column: 2 }
+        }
+      };
+      const corruptedSnapshot: GraphSnapshot = {
+        ...initialSnapshot,
+        symbols: [corruptedSymbol]
+      };
+      const sourceBundle: ActiveSourceDocumentsBundle = {
+        status: raceStatus(`generation:${fixture.filePath}`),
+        snapshot: corruptedSnapshot,
+        indexInputs: null,
+        extractorVersion: null,
+        resolverVersion: null,
+        sourceSearchVersion: SOURCE_SEARCH_INDEX_VERSION,
+        documents: [raceSourceDocument(fixture.filePath, fixture.sourceText)]
+      };
+      const { graphStore } = createSequencedSourceDocumentGraphStore(
+        { ...sourceBundle, documents: [] },
+        [sourceBundle]
+      );
+      const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+      const result = await service.node("C:/symbol-lattice-race-project", corruptedSymbol.qualifiedName);
+
+      expect(result).toMatchObject({
+        match: { status: "exact", symbol: { id: corruptedSymbol.id } },
+        sourceAvailability: "unavailable",
+        source: null
+      });
+    }
+  });
+
+  it("returns persisted node source across ECMAScript U+2028 and U+2029 line separators", async () => {
+    const projectPath = await createInlineProject({
+      "src/line-separator.ts": "export const alpha = 1;\u2028export const beta = 2;",
+      "src/paragraph-separator.ts": "export const gamma = 3;\u2029export const delta = 4;"
+    });
+    const service = createService();
+    await service.init({ projectPath });
+
+    const beta = await service.node(projectPath, "src/line-separator.ts#beta");
+    const delta = await service.node(projectPath, "src/paragraph-separator.ts#delta");
+
+    expect(beta).toMatchObject({
+      sourceAvailability: "active-generation",
+      source: { text: expect.stringContaining("beta"), truncated: false }
+    });
+    expect(delta).toMatchObject({
+      sourceAvailability: "active-generation",
+      source: { text: expect.stringContaining("delta"), truncated: false }
+    });
+  });
+
+  it("takes node source and direct relations from one authoritative source bundle generation", async () => {
+    const sourceText = [
+      "export function raceTarget() {",
+      "  return raceCallee();",
+      "}",
+      ""
+    ].join("\n");
+    const target = raceSnapshot("src/race.ts").symbols[0];
+    if (target === undefined) {
+      throw new Error("Expected race target symbol.");
+    }
+    const caller = {
+      ...target,
+      id: "symbol:race-caller",
+      name: "raceCaller",
+      qualifiedName: "src/race.ts#raceCaller"
+    };
+    const callee = {
+      ...target,
+      id: "symbol:race-callee",
+      name: "raceCallee",
+      qualifiedName: "src/race.ts#raceCallee"
+    };
+    const authoritativeSnapshot: GraphSnapshot = {
+      ...raceSnapshot("src/race.ts"),
+      symbols: [caller, target, callee],
+      edges: [
+        {
+          id: "edge:race-caller-target",
+          sourceId: caller.id,
+          targetId: target.id,
+          kind: "calls",
+          filePath: "src/race.ts",
+          range: target.range,
+          resolution: "exact",
+          confidence: 1,
+          referenceName: target.name
+        },
+        {
+          id: "edge:race-target-callee",
+          sourceId: target.id,
+          targetId: callee.id,
+          kind: "calls",
+          filePath: "src/race.ts",
+          range: target.range,
+          resolution: "exact",
+          confidence: 1,
+          referenceName: callee.name
+        }
+      ]
+    };
+    const initialBundle: ActiveGraphBundle = {
+      status: raceStatus("generation:A"),
+      snapshot: raceSnapshot("src/race.ts"),
+      indexInputs: null,
+      extractorVersion: null,
+      resolverVersion: null,
+      sourceSearchVersion: SOURCE_SEARCH_INDEX_VERSION
+    };
+    const authoritativeBundle: ActiveSourceDocumentsBundle = {
+      status: raceStatus("generation:B"),
+      snapshot: authoritativeSnapshot,
+      indexInputs: null,
+      extractorVersion: null,
+      resolverVersion: null,
+      sourceSearchVersion: SOURCE_SEARCH_INDEX_VERSION,
+      documents: [raceSourceDocument("src/race.ts", sourceText)]
+    };
+    const { graphStore, sourceDocumentRequests } = createSequencedSourceDocumentGraphStore(
+      initialBundle,
+      [authoritativeBundle]
+    );
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    const result = await service.node("C:/symbol-lattice-race-project", "raceTarget");
+
+    expect(result).toMatchObject({
+      status: { generationId: "generation:B" },
+      sourceAvailability: "active-generation",
+      source: { filePath: "src/race.ts", text: expect.stringContaining("raceCallee") },
+      callers: {
+        items: [expect.objectContaining({ symbol: expect.objectContaining({ name: "raceCaller" }) })]
+      },
+      callees: {
+        items: [expect.objectContaining({ symbol: expect.objectContaining({ name: "raceCallee" }) })]
+      }
+    });
+    expect(sourceDocumentRequests).toEqual([["src/race.ts"]]);
   });
 });

@@ -16,6 +16,7 @@ import {
   type GitAffectedTestsResult,
   type GitHunksOptions,
   type GitHunksResult,
+  type NodeResult,
   type SearchResult
 } from "../../../src/application/index.js";
 import {
@@ -28,6 +29,7 @@ import {
   runGenerationHistoryTool,
   runGitAffectedTestsTool,
   runGitHunksTool,
+  runNodeTool,
   runSearchTool
 } from "../../../src/mcp/index.js";
 
@@ -60,6 +62,50 @@ function exploreResult(): ExploreResult {
 function legacyExploreResult(): ExploreResult {
   const { sourceAvailability: _sourceAvailability, ...result } = exploreResult();
   return result;
+}
+
+function nodeResult(): NodeResult {
+  const symbol = {
+    id: "symbol:users:userById",
+    name: "userById",
+    qualifiedName: "src/users.ts#userById",
+    kind: "function" as const,
+    filePath: "src/users.ts",
+    range: {
+      start: { line: 1, column: 1 },
+      end: { line: 1, column: 52 }
+    },
+    isExported: true,
+    declarationOrdinal: 0
+  };
+
+  return {
+    status: exploreResult().status,
+    bounds: {
+      sourceLineLimit: 200,
+      sourceCharacterLimit: 16_000,
+      relationLimit: 25,
+      matchCandidateLimit: 25
+    },
+    match: {
+      status: "exact",
+      reference: "src/users.ts#userById",
+      symbol,
+      candidates: [symbol]
+    },
+    matchCandidatesTruncated: false,
+    sourceAvailability: "active-generation",
+    source: {
+      filePath: symbol.filePath,
+      range: symbol.range,
+      text: "export function userById(id: string) { return id; }",
+      totalLines: 1,
+      totalCharacters: 51,
+      truncated: false
+    },
+    callers: { items: [], truncated: false },
+    callees: { items: [], truncated: false }
+  };
 }
 
 function contextResult(): ContextResult {
@@ -416,6 +462,82 @@ describe("SymbolLattice MCP server", () => {
     });
     expect(explainCalls).toEqual([
       { projectPath: "C:/chosen-project", edgeId: "edge:caller-callee" }
+    ]);
+  });
+
+  it("registers exact node retrieval only when the service supports it", async () => {
+    const nodeCalls: Array<{ projectPath: string; reference: string }> = [];
+    const service = {
+      async explore(): Promise<ExploreResult> {
+        return exploreResult();
+      },
+      async node(projectPath: string, reference: string): Promise<NodeResult> {
+        nodeCalls.push({ projectPath, reference });
+        return nodeResult();
+      }
+    };
+    const server = createMcpServer(service, "C:/default-project");
+    const client = new Client({ name: "symbol-lattice-node-test", version: "1.0.0" });
+    const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+    closeCallbacks.push(() => client.close(), () => server.close());
+
+    const listedTools = (await client.listTools()).tools;
+    expect(listedTools.map((tool) => tool.name)).toEqual([
+      "symbol_lattice_explore",
+      "symbol_lattice_node"
+    ]);
+    const nodeTool = listedTools.find((tool) => tool.name === "symbol_lattice_node");
+    expect(nodeTool?.outputSchema).toMatchObject({
+      type: "object",
+      properties: {
+        status: { type: "object" },
+        bounds: { type: "object" },
+        match: { type: "object" },
+        matchCandidatesTruncated: { type: "boolean" },
+        sourceAvailability: { type: "string" },
+        source: {},
+        callers: { type: "object" },
+        callees: { type: "object" }
+      },
+      required: expect.arrayContaining([
+        "status",
+        "bounds",
+        "match",
+        "matchCandidatesTruncated",
+        "sourceAvailability",
+        "source",
+        "callers",
+        "callees"
+      ])
+    });
+
+    const result = await client.callTool({
+      name: "symbol_lattice_node",
+      arguments: { query: "src/users.ts#userById", projectPath: "C:/chosen-project" }
+    });
+
+    expect(result.isError).not.toBe(true);
+    expect(result.content[0]).toEqual({
+      type: "text",
+      text: JSON.stringify(nodeResult(), null, 2)
+    });
+    expect(result.structuredContent).toMatchObject({
+      status: { stale: false },
+      bounds: { sourceLineLimit: 200, relationLimit: 25 },
+      match: { status: "exact", symbol: { qualifiedName: "src/users.ts#userById" } },
+      sourceAvailability: "active-generation",
+      source: { filePath: "src/users.ts", truncated: false }
+    });
+    const defaultProjectResult = await client.callTool({
+      name: "symbol_lattice_node",
+      arguments: { query: "symbol:users:userById" }
+    });
+    expect(defaultProjectResult.isError).not.toBe(true);
+    expect(nodeCalls).toEqual([
+      { projectPath: "C:/chosen-project", reference: "src/users.ts#userById" },
+      { projectPath: "C:/default-project", reference: "symbol:users:userById" }
     ]);
   });
 
@@ -843,7 +965,7 @@ describe("SymbolLattice MCP server", () => {
     ]);
   });
 
-  it("keeps the v0.1 explore-only embedding contract usable", async () => {
+  it("keeps the v0.1 explore-only embedding contract usable without registering node", async () => {
     const server = createMcpServer(
       {
         async explore(): Promise<ExploreResult> {
@@ -899,6 +1021,21 @@ describe("SymbolLattice MCP server", () => {
       },
       "C:/project",
       { query: "anything" }
+    );
+
+    expect(response).toMatchObject({ isError: true });
+    expect(response.content[0]?.text).toContain("MISSING_INDEX");
+  });
+
+  it("returns exact-node errors without indexing", async () => {
+    const response = await runNodeTool(
+      {
+        async node(): Promise<NodeResult> {
+          throw new SymbolLatticeError("MISSING_INDEX", "Run symbol-lattice init first.");
+        }
+      },
+      "C:/project",
+      { query: "src/missing.ts#missing" }
     );
 
     expect(response).toMatchObject({ isError: true });
@@ -1043,6 +1180,9 @@ describe("SymbolLattice MCP server", () => {
       async explore(): Promise<ExploreResult> {
         return exploreResult();
       },
+      async node(): Promise<NodeResult> {
+        return nodeResult();
+      },
       async context(): Promise<ContextResult> {
         return contextResult();
       },
@@ -1085,6 +1225,7 @@ describe("SymbolLattice MCP server", () => {
     };
 
     await runExploreTool(service, "C:/project", { query: "missing" });
+    await runNodeTool(service, "C:/project", { query: "src/missing.ts#missing" });
     await runContextTool(service, "C:/project", { references: ["src/missing.ts#missing"] });
     await runAffectedTestsTool(service, "C:/project", { filePaths: ["src/missing.ts"] });
     await runGitAffectedTestsTool(service, "C:/project", {});

@@ -47,6 +47,12 @@ export interface SourceExcerpt {
 /** Provenance for a source excerpt returned with graph evidence. */
 export type SourceAvailability = "active-generation" | "unavailable" | "not-applicable";
 
+/** Fixed disclosure limits for the single-symbol declaration view. */
+export const NODE_SOURCE_LINE_LIMIT = 200;
+export const NODE_SOURCE_CHARACTER_LIMIT = 16_000;
+export const NODE_RELATION_LIMIT = 25;
+export const NODE_MATCH_CANDIDATE_LIMIT = 25;
+
 /** Bounded context packs intentionally keep a small, explicit request surface. */
 export const MAX_CONTEXT_REFERENCES = 8;
 export const CONTEXT_MATCH_CANDIDATE_LIMIT = 25;
@@ -401,6 +407,47 @@ export interface ContextBounds {
 export interface BoundedRelations {
   readonly items: readonly GraphRelation[];
   readonly truncated: boolean;
+}
+
+/**
+ * The declaration-range text retained with one active graph generation. The
+ * text is an exact prefix of that persisted range when `truncated` is true;
+ * it is never read from the current filesystem.
+ */
+export interface NodeSource {
+  readonly filePath: string;
+  readonly range: SourceRange;
+  readonly text: string;
+  /** Physical source lines covered by the full persisted declaration range. */
+  readonly totalLines: number;
+  /** Raw UTF-16 code units in the full persisted declaration range. */
+  readonly totalCharacters: number;
+  readonly truncated: boolean;
+}
+
+/** Fixed limits applied to every `node` response. */
+export interface NodeBounds {
+  readonly sourceLineLimit: number;
+  readonly sourceCharacterLimit: number;
+  readonly relationLimit: number;
+  readonly matchCandidateLimit: number;
+}
+
+/**
+ * A generation-bound exact symbol view. Nonexact matches deliberately carry
+ * no source or relationships, preserving the match result for callers to
+ * render ambiguity and absence without inventing graph evidence.
+ */
+export interface NodeResult {
+  readonly status: IndexStatus;
+  readonly bounds: NodeBounds;
+  readonly match: SymbolMatch;
+  /** True only when an ambiguous match has more persisted candidates than returned. */
+  readonly matchCandidatesTruncated: boolean;
+  readonly sourceAvailability: SourceAvailability;
+  readonly source: NodeSource | null;
+  readonly callers: BoundedRelations;
+  readonly callees: BoundedRelations;
 }
 
 export interface BoundedImpactPaths {

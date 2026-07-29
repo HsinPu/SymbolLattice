@@ -438,6 +438,12 @@ export function createProgram(
       render(await service.find(defaultProjectPath(options), query, findOptions), options);
     });
 
+  addJsonOption(addProjectOption(program.command("node <reference>"))).action(
+    async (reference: string, options: ProjectOptions) => {
+      render(await service.node(defaultProjectPath(options), reference), options);
+    }
+  );
+
   addJsonOption(addProjectOption(program.command("search <query>")))
     .option(
       "--limit <count>",

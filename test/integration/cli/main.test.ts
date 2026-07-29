@@ -18,6 +18,7 @@ import {
   type GitHunksResult,
   type ImpactOptions,
   type ImpactResult,
+  type NodeResult,
   type SearchOptions,
   type SearchResult,
   type WatchReceipt,
@@ -702,6 +703,65 @@ describe("symbol-lattice v0.6 affected-test CLI", () => {
       ).rejects.toThrow(rangeCase[2]);
     });
   }
+});
+
+describe("symbol-lattice v0.13 node CLI", () => {
+  it("forwards the reference and project path and renders the stable JSON result", async () => {
+    const calls: Array<{ projectPath: string; reference: string }> = [];
+    const result: NodeResult = {
+      status: resultStatus(),
+      bounds: {
+        sourceLineLimit: 200,
+        sourceCharacterLimit: 16_000,
+        relationLimit: 25,
+        matchCandidateLimit: 25
+      },
+      match: { status: "not_found", reference: "src/math.ts#add", candidates: [] },
+      matchCandidatesTruncated: false,
+      sourceAvailability: "not-applicable",
+      source: null,
+      callers: { items: [], truncated: false },
+      callees: { items: [], truncated: false }
+    };
+    const service = {
+      async node(projectPath: string, reference: string): Promise<NodeResult> {
+        calls.push({ projectPath, reference });
+        return result;
+      }
+    } as unknown as SymbolLatticeService;
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+    await createProgram(service).parseAsync(
+      [
+        "node",
+        "symbol-lattice",
+        "node",
+        "src/math.ts#add",
+        "--project",
+        "C:/chosen-project",
+        "--json"
+      ],
+      { from: "node" }
+    );
+
+    expect(calls).toEqual([
+      { projectPath: resolve("C:/chosen-project"), reference: "src/math.ts#add" }
+    ]);
+    expect(write).toHaveBeenCalledWith(`${JSON.stringify(result, null, 2)}\n`);
+  });
+
+  it("requires a reference before invoking the service", async () => {
+    const node = vi.fn();
+    const program = createProgram({ node } as unknown as SymbolLatticeService);
+    const nodeCommand = program.commands.find((command) => command.name() === "node");
+    expect(nodeCommand).toBeDefined();
+    nodeCommand?.exitOverride();
+
+    await expect(
+      program.parseAsync(["node", "symbol-lattice", "node"], { from: "node" })
+    ).rejects.toThrow(/missing required argument/u);
+    expect(node).not.toHaveBeenCalled();
+  });
 });
 
 describe("symbol-lattice v0.12 immutable Git hunk CLI", () => {

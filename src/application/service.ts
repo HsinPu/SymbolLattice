@@ -92,7 +92,11 @@ import {
   MAX_AFFECTED_CHANGED_FILES,
   MAX_AFFECTED_LIMIT,
   MAX_AFFECTED_MAX_DEPTH,
-  MAX_IMPACT_LIMIT
+  MAX_IMPACT_LIMIT,
+  NODE_MATCH_CANDIDATE_LIMIT,
+  NODE_RELATION_LIMIT,
+  NODE_SOURCE_CHARACTER_LIMIT,
+  NODE_SOURCE_LINE_LIMIT
 } from "./types.js";
 import type {
   AffectedTestEvidence,
@@ -121,6 +125,9 @@ import type {
   GraphContext,
   ImpactOptions,
   ImpactResult,
+  NodeBounds,
+  NodeResult,
+  NodeSource,
   RelationResult,
   SearchOptions,
   SearchResult,
@@ -183,6 +190,13 @@ interface ContextRead {
   readonly matches: readonly SymbolMatch[];
   readonly documentsByFilePath: ReadonlyMap<string, IndexedSourceDocument>;
 }
+
+const NODE_BOUNDS: NodeBounds = {
+  sourceLineLimit: NODE_SOURCE_LINE_LIMIT,
+  sourceCharacterLimit: NODE_SOURCE_CHARACTER_LIMIT,
+  relationLimit: NODE_RELATION_LIMIT,
+  matchCandidateLimit: NODE_MATCH_CANDIDATE_LIMIT
+};
 
 function compareText(left: string, right: string): number {
   if (left < right) {
@@ -430,6 +444,103 @@ function excerptFromSourceText(
   }));
 
   return { filePath, startLine, endLine, lines: excerptLines };
+}
+
+/** Raw UTF-16 offsets for every physical line start, including a trailing empty line. */
+function sourceLineStarts(sourceText: string): readonly number[] {
+  const starts = [0];
+  for (let index = 0; index < sourceText.length; index += 1) {
+    const codeUnit = sourceText.charCodeAt(index);
+    if (codeUnit === 13 && sourceText.charCodeAt(index + 1) === 10) {
+      index += 1;
+      starts.push(index + 1);
+      continue;
+    }
+    if (codeUnit === 13 || codeUnit === 10 || codeUnit === 0x2028 || codeUnit === 0x2029) {
+      starts.push(index + 1);
+    }
+  }
+  return starts;
+}
+
+function sourcePositionOffset(
+  sourceText: string,
+  lineStarts: readonly number[],
+  position: SourceRange["start"]
+): number | null {
+  if (
+    !Number.isSafeInteger(position.line) ||
+    !Number.isSafeInteger(position.column) ||
+    position.line < 1 ||
+    position.column < 1
+  ) {
+    return null;
+  }
+
+  const lineStart = lineStarts[position.line - 1];
+  if (lineStart === undefined) {
+    return null;
+  }
+  let lineContentEnd = lineStarts[position.line] ?? sourceText.length;
+  while (lineContentEnd > lineStart) {
+    const codeUnit = sourceText.charCodeAt(lineContentEnd - 1);
+    if (codeUnit !== 13 && codeUnit !== 10 && codeUnit !== 0x2028 && codeUnit !== 0x2029) {
+      break;
+    }
+    lineContentEnd -= 1;
+  }
+  const offset = lineStart + position.column - 1;
+  return offset <= lineContentEnd ? offset : null;
+}
+
+function countPhysicalSourceLines(
+  lineStarts: readonly number[],
+  startOffset: number,
+  endOffset: number
+): number {
+  let containingStartLine = 0;
+  let lastIncludedLine = -1;
+  for (const [index, lineStart] of lineStarts.entries()) {
+    if (lineStart <= startOffset) {
+      containingStartLine = index;
+    }
+    if (lineStart < endOffset) {
+      lastIncludedLine = index;
+    }
+  }
+  return Math.max(1, lastIncludedLine - containingStartLine + 1);
+}
+
+/**
+ * Extracts one declaration directly from persisted source using the same
+ * UTF-16, end-exclusive range convention produced by the extractor. Both
+ * limits preserve a prefix of that declaration and are disclosed in every
+ * `NodeResult` rather than reading the working tree for a larger payload.
+ */
+function nodeSourceFromPersistedText(
+  filePath: string,
+  sourceText: string,
+  range: SourceRange
+): NodeSource | null {
+  const lineStarts = sourceLineStarts(sourceText);
+  const startOffset = sourcePositionOffset(sourceText, lineStarts, range.start);
+  const endOffset = sourcePositionOffset(sourceText, lineStarts, range.end);
+  if (startOffset === null || endOffset === null || endOffset < startOffset) {
+    return null;
+  }
+
+  const firstExcludedLineStart = lineStarts[range.start.line - 1 + NODE_SOURCE_LINE_LIMIT];
+  const lineLimitedEnd = Math.min(endOffset, firstExcludedLineStart ?? sourceText.length);
+  const boundedEnd = Math.min(lineLimitedEnd, startOffset + NODE_SOURCE_CHARACTER_LIMIT);
+
+  return {
+    filePath,
+    range,
+    text: sourceText.slice(startOffset, boundedEnd),
+    totalLines: countPhysicalSourceLines(lineStarts, startOffset, endOffset),
+    totalCharacters: endOffset - startOffset,
+    truncated: boundedEnd < endOffset
+  };
 }
 
 interface PersistedLexicalMatch {
@@ -1280,6 +1391,108 @@ export class SymbolLatticeService {
     }
 
     return this.exploreResultForBundle(
+      normalizedProjectPath,
+      reference,
+      graphBundle,
+      null,
+      "unavailable"
+    );
+  }
+
+  /**
+   * Returns one exact symbol's persisted declaration together with bounded
+   * direct call relationships. Source, graph, and freshness remain tied to a
+   * single active generation; this never falls back to the live filesystem.
+   */
+  public async node(projectPath: string, reference: string): Promise<NodeResult> {
+    const normalizedProjectPath = resolve(projectPath);
+    const graphBundle = this.getActiveGraphBundle(normalizedProjectPath);
+    if (!graphBundle.status.initialized) {
+      throw new SymbolLatticeError(
+        "MISSING_INDEX",
+        `No SymbolLattice index exists for ${normalizedProjectPath}. Run "symbol-lattice init ${normalizedProjectPath}" first.`
+      );
+    }
+
+    let match = matchSymbol(graphBundle.snapshot, reference);
+    if (match.status !== "exact") {
+      return this.nodeResultForBundle(
+        normalizedProjectPath,
+        reference,
+        graphBundle,
+        null,
+        "not-applicable"
+      );
+    }
+
+    const getActiveSourceDocumentsBundle = this.graphStore.getActiveSourceDocumentsBundle;
+    if (typeof getActiveSourceDocumentsBundle !== "function") {
+      return this.nodeResultForBundle(
+        normalizedProjectPath,
+        reference,
+        graphBundle,
+        null,
+        "unavailable"
+      );
+    }
+
+    // This mirrors explore's authoritative bundle retry: the initial graph
+    // chooses a bounded path, while a concurrent sync can move the symbol and
+    // requires one retry against the current generation's path.
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const sourceBundle = getActiveSourceDocumentsBundle.call(this.graphStore, normalizedProjectPath, [
+        match.symbol.filePath
+      ]);
+      const sourceMatch = matchSymbol(sourceBundle.snapshot, reference);
+      if (sourceMatch.status !== "exact") {
+        return this.nodeResultForBundle(
+          normalizedProjectPath,
+          reference,
+          sourceBundle,
+          null,
+          "not-applicable"
+        );
+      }
+
+      const sourceDocument =
+        sourceBundle.sourceSearchVersion === null || sourceBundle.sourceSearchVersion === undefined
+          ? undefined
+          : sourceBundle.documents.find((document) => document.filePath === sourceMatch.symbol.filePath);
+      if (sourceDocument !== undefined) {
+        const source = nodeSourceFromPersistedText(
+          sourceDocument.filePath,
+          sourceDocument.sourceText,
+          sourceMatch.symbol.range
+        );
+        return this.nodeResultForBundle(
+          normalizedProjectPath,
+          reference,
+          sourceBundle,
+          source,
+          source === null ? "unavailable" : "active-generation"
+        );
+      }
+
+      if (
+        attempt === 0 &&
+        sourceBundle.sourceSearchVersion !== null &&
+        sourceBundle.sourceSearchVersion !== undefined &&
+        sourceMatch.symbol.filePath !== match.symbol.filePath
+      ) {
+        match = sourceMatch;
+        continue;
+      }
+
+      return this.nodeResultForBundle(
+        normalizedProjectPath,
+        reference,
+        sourceBundle,
+        null,
+        "unavailable"
+      );
+    }
+
+    return this.nodeResultForBundle(
       normalizedProjectPath,
       reference,
       graphBundle,
@@ -2196,6 +2409,41 @@ export class SymbolLatticeService {
     return {
       status: await this.getStatusForBundle(normalizedProjectPath, bundle),
       snapshot: bundle.snapshot
+    };
+  }
+
+  private async nodeResultForBundle(
+    normalizedProjectPath: string,
+    reference: string,
+    bundle: ActiveGraphBundle,
+    source: NodeSource | null,
+    sourceAvailability: SourceAvailability
+  ): Promise<NodeResult> {
+    const match = matchSymbol(bundle.snapshot, reference);
+    const boundedMatch = this.boundedContextMatch(match, NODE_MATCH_CANDIDATE_LIMIT);
+    const status = await this.getStatusForBundle(normalizedProjectPath, bundle);
+    if (match.status !== "exact") {
+      return {
+        status,
+        bounds: { ...NODE_BOUNDS },
+        match: boundedMatch.match,
+        matchCandidatesTruncated: boundedMatch.truncated,
+        sourceAvailability: "not-applicable",
+        source: null,
+        callers: { items: [], truncated: false },
+        callees: { items: [], truncated: false }
+      };
+    }
+
+    return {
+      status,
+      bounds: { ...NODE_BOUNDS },
+      match: boundedMatch.match,
+      matchCandidatesTruncated: boundedMatch.truncated,
+      sourceAvailability,
+      source,
+      callers: this.boundedItems(getCallers(bundle.snapshot, match.symbol.id), NODE_RELATION_LIMIT),
+      callees: this.boundedItems(getCallees(bundle.snapshot, match.symbol.id), NODE_RELATION_LIMIT)
     };
   }
 

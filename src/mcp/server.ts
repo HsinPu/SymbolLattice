@@ -31,6 +31,7 @@ import type {
   GitAffectedTestsResult,
   GitHunksOptions,
   GitHunksResult,
+  NodeResult,
   SearchOptions,
   SearchResult
 } from "../application/types.js";
@@ -38,6 +39,11 @@ import { SYMBOL_LATTICE_VERSION } from "../version.js";
 
 export interface ExploreService {
   explore(projectPath: string, reference: string): Promise<ExploreResult>;
+}
+
+/** Additive exact-node retrieval seam; older explore-only embeddings remain valid. */
+export interface NodeService {
+  node(projectPath: string, reference: string): Promise<NodeResult>;
 }
 
 /** Additive multi-symbol context seam; older explore embeddings remain valid. */
@@ -104,6 +110,7 @@ export interface GenerationDiffService {
 }
 
 export type ReadOnlyMcpService = ExploreService & ExplainEdgeService;
+export type NodeMcpService = ExploreService & NodeService;
 export type SearchMcpService = ExploreService & SearchService;
 export type ContextMcpService = ExploreService & ContextService;
 export type AffectedTestsMcpService = ExploreService & AffectedTestsService;
@@ -113,6 +120,11 @@ export type GenerationHistoryMcpService = ExploreService & GenerationHistoryServ
 export type GenerationDiffMcpService = ExploreService & GenerationDiffService;
 
 export interface ExploreToolArguments {
+  readonly query: string;
+  readonly projectPath?: string | undefined;
+}
+
+export interface NodeToolArguments {
   readonly query: string;
   readonly projectPath?: string | undefined;
 }
@@ -185,6 +197,7 @@ export interface ReadOnlyToolResponse {
 }
 
 export type ExploreToolResponse = ReadOnlyToolResponse;
+export type NodeToolResponse = ReadOnlyToolResponse;
 export type ContextToolResponse = ReadOnlyToolResponse;
 export type AffectedTestsToolResponse = ReadOnlyToolResponse;
 export type GitAffectedTestsToolResponse = ReadOnlyToolResponse;
@@ -246,6 +259,39 @@ const exploreOutputSchema = z
     callers: z.array(z.object({}).passthrough()),
     callees: z.array(z.object({}).passthrough()),
     impact: z.array(z.object({}).passthrough())
+  })
+  .passthrough();
+
+const nodeOutputSchema = z
+  .object({
+    status: indexStatusOutputSchema,
+    bounds: z.object({
+      sourceLineLimit: z.number().int().positive(),
+      sourceCharacterLimit: z.number().int().positive(),
+      relationLimit: z.number().int().positive(),
+      matchCandidateLimit: z.number().int().positive()
+    }),
+    match: z.object({}).passthrough(),
+    matchCandidatesTruncated: z.boolean(),
+    sourceAvailability: z.enum(["active-generation", "unavailable", "not-applicable"]),
+    source: z
+      .object({
+        filePath: z.string(),
+        range: sourceRangeOutputSchema,
+        text: z.string(),
+        totalLines: z.number().int().positive(),
+        totalCharacters: z.number().int().nonnegative(),
+        truncated: z.boolean()
+      })
+      .nullable(),
+    callers: z.object({
+      items: z.array(z.object({}).passthrough()),
+      truncated: z.boolean()
+    }),
+    callees: z.object({
+      items: z.array(z.object({}).passthrough()),
+      truncated: z.boolean()
+    })
   })
   .passthrough();
 
@@ -463,6 +509,10 @@ function supportsExplainEdge(service: ExploreService): service is ReadOnlyMcpSer
   return "explainEdge" in service && typeof service.explainEdge === "function";
 }
 
+function supportsNode(service: ExploreService): service is NodeMcpService {
+  return "node" in service && typeof service.node === "function";
+}
+
 function supportsSearch(service: ExploreService): service is SearchMcpService {
   return "search" in service && typeof service.search === "function";
 }
@@ -524,6 +574,23 @@ export async function runExploreTool(
 ): Promise<ExploreToolResponse> {
   try {
     const result = await service.explore(arguments_.projectPath ?? defaultProjectPath, arguments_.query);
+    return {
+      content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      structuredContent: result as unknown as Record<string, unknown>
+    };
+  } catch (error) {
+    return renderToolError(error);
+  }
+}
+
+/** Retrieves exact persisted node evidence without ever triggering an index operation. */
+export async function runNodeTool(
+  service: NodeService,
+  defaultProjectPath: string,
+  arguments_: NodeToolArguments
+): Promise<NodeToolResponse> {
+  try {
+    const result = await service.node(arguments_.projectPath ?? defaultProjectPath, arguments_.query);
     return {
       content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       structuredContent: result as unknown as Record<string, unknown>
@@ -752,6 +819,28 @@ export function createMcpServer(
     },
     async (arguments_) => runExploreTool(service, defaultProjectPath, arguments_)
   );
+
+  const nodeService = supportsNode(service) ? service : null;
+  if (nodeService !== null) {
+    server.registerTool(
+      "symbol_lattice_node",
+      {
+        title: "Retrieve an exact SymbolLattice node",
+        description:
+          "Retrieves one node's persisted graph evidence from an existing local SymbolLattice index. This tool never creates or refreshes an index.",
+        inputSchema: {
+          query: z.string().trim().min(1).describe("Exact symbol or source reference for the indexed node."),
+          projectPath: z.string().trim().min(1).optional().describe("Optional path to an already indexed project.")
+        },
+        outputSchema: nodeOutputSchema,
+        annotations: {
+          readOnlyHint: true,
+          idempotentHint: true
+        }
+      },
+      async (arguments_) => runNodeTool(nodeService, defaultProjectPath, arguments_)
+    );
+  }
 
   const contextService = supportsContext(service) ? service : null;
   if (contextService !== null) {

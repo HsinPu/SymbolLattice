@@ -9,12 +9,12 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![License](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
 
-[Quick start](#quick-start) | [History and diff](#retained-graph-history-and-structural-diff) | [Auto sync](#opt-in-foreground-watch) | [Affected tests](#affected-test-evidence) | [Git hunks](#immutable-git-hunk-declaration-attribution) | [Context packs](#bounded-multi-symbol-context) | [Commands](#command-reference) | [MCP](#mcp-server) | [Architecture](#architecture) | [Roadmap](#roadmap)
+[Quick start](#quick-start) | [Node inspection](#generation-bound-node-inspection) | [History and diff](#retained-graph-history-and-structural-diff) | [Auto sync](#opt-in-foreground-watch) | [Affected tests](#affected-test-evidence) | [Git hunks](#immutable-git-hunk-declaration-attribution) | [Context packs](#bounded-multi-symbol-context) | [Commands](#command-reference) | [MCP](#mcp-server) | [Architecture](#architecture) | [Roadmap](#roadmap)
 
 </div>
 
 > [!IMPORTANT]
-> **v0.12.0** is an early developer release. This public repository runs from source; its npm package is intentionally private and is not published to npm.
+> **v0.13.0** is an early developer release. This public repository runs from source; its npm package is intentionally private and is not published to npm.
 
 SymbolLattice builds a local symbol graph without hiding uncertainty. It keeps syntax-proven artifact facts, resolves cross-file relationships conservatively, and records why every resolved edge exists. The graph stays local to the inspected project under `.symbol-lattice/index.sqlite`.
 
@@ -26,6 +26,7 @@ SymbolLattice builds a local symbol graph without hiding uncertainty. It keeps s
 - **Incremental parsing, atomic publication** - `sync` only reparses changed source artifacts when their persisted facts are compatible, then atomically publishes one fresh project graph.
 - **Event-accelerated foreground freshness** - opt-in `watch` uses native filesystem events when the host supports them, exposes bounded pending-path evidence in its own stream, coalesces saves, retains bounded polling as a safety sweep, and invokes the same atomic `sync` only after drift.
 - **Generation-bound source evidence** - `search` and exact `explore` results use source captured with the active graph generation, even when the live project has since drifted.
+- **Declaration-focused node view** - exact `node` results return the full persisted declaration range plus a bounded declaration body, direct callers/callees, and explicit limits from one active generation without substituting live source text.
 - **Bounded context packs** - ordered symbol references produce persisted source, capped relationship/impact summaries, and static directed evidence paths without guessing ambiguous symbols or dynamic behavior.
 - **Affected-test evidence** - changed indexed files map to conventionally named tests through bounded, exact import/export proof paths; explicit paths, `--working-tree`, and `--base <ref>` retain stale, scope, depth, visit, and result limits in the response.
 - **Immutable Git hunk attribution** - `git-hunks` compares a local merge base with `HEAD` through immutable Git blobs, returns zero-context hunks, and anchors declarations independently in each revision without an active graph or a cross-revision identity claim.
@@ -63,6 +64,7 @@ On Windows, use `npm.cmd` if `npm` is not available directly in PowerShell.
 # Query symbols after indexing.
 node dist/cli/main.js find add --project /path/to/project
 node dist/cli/main.js callers "src/math.ts#add" --project /path/to/project
+node dist/cli/main.js node "src/math.ts#add" --project /path/to/project
 node dist/cli/main.js search "session timeout" --project /path/to/project --path src
 node dist/cli/main.js context "src/consumer.ts#calculate" "src/math.ts#add" --project /path/to/project
 
@@ -93,7 +95,7 @@ One-shot data commands emit stable, pretty JSON. `watch` is the deliberate strea
 
 ## Capabilities
 
-| Area | v0.12.0 behavior |
+| Area | v0.13.0 behavior |
 | --- | --- |
 | Source files | TypeScript, TSX, JavaScript, and JSX |
 | Scope | Project root by default or repeatable, persisted `--scope` directories |
@@ -104,6 +106,7 @@ One-shot data commands emit stable, pretty JSON. `watch` is the deliberate strea
 | Workspaces | Root `package.json` workspaces array/object, local package root/subpath `exports`, and entrypoint fallback |
 | Re-exports | Named aliases, `export *`, default-through-named aliases, and namespace-export provenance |
 | Retrieval | Local deterministic FTS5 search across persisted source text and identifier parts; bounded path/language filters, source/symbol evidence, and exact `explore` excerpts from the same active generation |
+| Node inspection | Exact ID, qualified-name, simple-name, or `path:line[:column]` matches can return the persisted declaration range, capped direct callers/callees, source provenance, truncation, and active freshness from one generation |
 | Context | Bounded packs for 1–8 ordered references: exact-match source excerpts, capped callers/callees and reverse impact, plus shortest static directed evidence paths between adjacent exact references |
 | Affected tests | Explicit changed files or local Git change sets feed exact persisted `imports` / `exports` paths, deterministic proof paths, conventional test-path classification, and explicit completeness limits |
 | Immutable Git hunks | Local merge-base-to-`HEAD` zero-context hunks from immutable blobs, independently anchored to revision-local declarations without an active SQLite graph |
@@ -162,6 +165,20 @@ The bundled service supplies `sourceAvailability` to make that contract explicit
 - `not-applicable` — the reference was ambiguous or not found, so there is no exact symbol source to return.
 
 The field is additive: an external legacy `ExploreService` embedding may omit it rather than making a provenance claim it cannot support.
+
+### Generation-bound node inspection
+
+`node` is the exact-symbol companion to `explore`: it returns the full declaration range plus a bounded persisted declaration body rather than a small surrounding excerpt, together with direct persisted callers and callees from the same active generation.
+
+```bash
+# ID, qualified name, simple name, and path:line[:column] references use the normal exact-match rules.
+node dist/cli/main.js node "src/math.ts#add" --project /path/to/project
+node dist/cli/main.js node "src/math.ts:12" --project /path/to/project
+```
+
+Every response carries fixed `bounds`: at most **200 source lines**, **16,000 UTF-16 code units**, **25 direct callers**, **25 direct callees**, and **25 ambiguous match candidates**. `source` includes the full persisted declaration `range`, `totalLines`, `totalCharacters`, and `truncated`. When a declaration exceeds either source bound, `source.text` is a contiguous prefix of that immutable declaration range; SymbolLattice never quietly reads a current file to fill the remainder. `callers.truncated`, `callees.truncated`, and `matchCandidatesTruncated` make relation or ambiguity omissions explicit.
+
+Like `explore`, `node` preserves `exact`, `ambiguous`, and `not_found` matching rather than choosing an ambiguous candidate. Ambiguous candidates retain deterministic source order and are capped at 25 with `matchCandidatesTruncated: true` when further persisted candidates exist. Only an exact match has source or graph relationships. `sourceAvailability` is `active-generation`, `unavailable`, or `not-applicable`; a legacy adapter or generation with no persisted source projection remains graph-queryable but returns `source: null`, never live source. The command and MCP tool are read-only and do not initialize, sync, or refresh an index.
 
 ### Bounded multi-symbol context
 
@@ -401,6 +418,7 @@ The active generation fingerprints the root `.gitignore`, selected `tsconfig.jso
 | `diff <from-generation-id> [path]` | Structurally compare an older retained graph with active or explicit `--to <generation-id>`; accepts per-category `--limit` and never refreshes the index |
 | `find <query>` / `query <query>` | Search symbols by name, qualified name, ID, or location |
 | `search <query>` | Search persisted source and identifier evidence; accepts `--limit`, `--path`, and `--language` |
+| `node <reference>` | Return one exact symbol's bounded persisted declaration range, direct callers/callees, provenance, and freshness; never refreshes the index |
 | `callers <symbol>` / `callees <symbol>` | Show direct graph relationships |
 | `impact <symbol>` | Trace reverse impact with optional `--depth` and explicit output `--limit` |
 | `affected [filePaths...]` | Select conventionally named tests from exact persisted import/export evidence; accepts direct paths or `--stdin`, plus local Git `--working-tree` or `--base <ref>`, `--depth`, and `--limit` |
@@ -423,6 +441,7 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 | Tool | Contract |
 | --- | --- |
 | `symbol_lattice_explore` | Return generation-bound source when available, callers, callees, impact, freshness, and structured output for an existing graph |
+| `symbol_lattice_node` | Return one exact node's bounded persisted declaration range, direct callers/callees, provenance, and freshness without refreshing an index |
 | `symbol_lattice_context` | Return bounded generation-bound source, relationships, reverse impact, and directed proof paths for ordered references without refreshing an index |
 | `symbol_lattice_affected` | Return bounded affected-test proofs for changed files, index coverage, and completeness limits without refreshing an index |
 | `symbol_lattice_affected_git` | Read a local Git working-tree or merge-base change set, then return its provenance and bounded affected-test proofs without fetching, refreshing, or synchronizing an index |
@@ -442,11 +461,13 @@ v0.11 keeps the SQLite metadata marker at `4` for rollback compatibility and add
 
 v0.12 adds no SQLite migration or active-graph requirement. Immutable Git hunk attribution is available to an embedding only when it supplies the optional Git hunk capability; otherwise its existing MCP surface remains unchanged. The feature reads local immutable Git blobs directly and never backfills, refreshes, or otherwise changes an index.
 
+v0.13 adds no SQLite migration or index backfill. `node` reuses the optional active source-document bundle already used by exact exploration: a compatible adapter exposes the additive CLI/service and `symbol_lattice_node` MCP surface, while an explore-only embedding keeps its existing MCP tools. Exact nodes remain graph-queryable when a legacy adapter or generation cannot return source documents, but report `sourceAvailability: "unavailable"` and never read current filesystem text as a substitute.
+
 ## Architecture
 
 ```mermaid
 flowchart LR
-  CLI["CLI: explicit init/index/sync/watch\nread-only history/diff/git-hunks"] --> App["Application service"]
+  CLI["CLI: explicit init/index/sync/watch\nread-only node/history/diff/git-hunks"] --> App["Application service"]
   Native["Native filesystem events\nfiltered + recursive"] --> Watch["Foreground watch\ndebounce + polling fallback"]
   Timer["Bounded polling safety sweep"] --> Watch
   Watch --> App
@@ -481,7 +502,7 @@ src/
 
 ## Deliberate boundaries
 
-v0.12.0 does not yet provide:
+v0.13.0 does not yet provide:
 
 - Daemon mode, background automatic sync after the foreground process exits, cross-process watch coordination, MCP per-query pending-file banners, worker pools, or historical source browsing.
 - pnpm workspace YAML, TypeScript project references, external/package `extends`, or nested `.gitignore` semantics.
@@ -504,7 +525,8 @@ v0.12.0 does not yet provide:
 | `v0.10.0` | Bounded foreground pending-file disclosure for native event batches, honest unknown/overflow semantics, and clear-after-success lifecycle evidence |
 | `v0.11.0` | Bounded retained immutable graph generations, read-only CLI/MCP history and structural diff, explicit active freshness, and v4-compatible storage migration |
 | `v0.12.0` | Bounded immutable local Git hunk attribution with zero-context hunks, revision-local declaration anchors, and read-only CLI/MCP support without an active graph |
-| `v0.13+` | Additional language adapters, framework packs, contract graphs, and further CodeGraph-parity work where evidence supports it |
+| `v0.13.0` | Exact persisted node inspection with bounded full declaration ranges, direct callers/callees, explicit source provenance, and additive read-only CLI/MCP support |
+| `v0.14+` | Additional language adapters, framework packs, contract graphs, retained-generation source browsing, and further CodeGraph-parity work where evidence supports it |
 
 See [CHANGELOG.md](CHANGELOG.md) for release notes and migration history.
 
@@ -518,7 +540,7 @@ npm.cmd pack --dry-run
 git diff --check
 ```
 
-The suite covers discovery, input fingerprints, alias and workspace resolution, re-export semantics, exact affected-test proofs and completeness limits, local Git change-set parsing and selection, immutable revision-local Git hunk declaration attribution, generation-bound search and exploration source evidence, retained graph history and structural diffs, legacy snapshot backfill, stale-source evidence, incremental raw-fact reuse, bounded foreground pending-file disclosure, event debounce/polling fallback/retry receipts, no-op sync, schema migration, atomic rollback, MCP read-only behavior, CLI parsing, and architecture boundaries.
+The suite covers discovery, input fingerprints, alias and workspace resolution, re-export semantics, exact affected-test proofs and completeness limits, local Git change-set parsing and selection, immutable revision-local Git hunk declaration attribution, bounded generation-bound node declaration evidence, generation-bound search and exploration source evidence, retained graph history and structural diffs, legacy snapshot backfill, stale-source evidence, incremental raw-fact reuse, bounded foreground pending-file disclosure, event debounce/polling fallback/retry receipts, no-op sync, schema migration, atomic rollback, MCP read-only behavior, CLI parsing, and architecture boundaries.
 
 ## Contributing
 
