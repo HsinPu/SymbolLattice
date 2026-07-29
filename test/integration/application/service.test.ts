@@ -2967,4 +2967,77 @@ describe("SymbolLatticeService", () => {
       }
     ]);
   });
+
+  it("persists exact Nest RouterModule prefix facts across an incremental sync", async () => {
+    const projectPath = await createInlineProject({
+      "src/cats.controller.ts": [
+        'import { Controller, Get } from "@nestjs/common";',
+        '@Controller("cats")',
+        "export class CatsController {",
+        "  @Get(\":id\") findOne() { return []; }",
+        "}"
+      ].join("\n"),
+      "src/cats.module.ts": [
+        'import { Module } from "@nestjs/common";',
+        'import { CatsController } from "./cats.controller";',
+        "@Module({ controllers: [CatsController] })",
+        "export class CatsModule {}"
+      ].join("\n"),
+      "src/app.module.ts": [
+        'import { Module as NestModule } from "@nestjs/common";',
+        'import { RouterModule as NestRouter } from "@nestjs/core";',
+        'import { CatsModule } from "./cats.module";',
+        "@NestModule({ imports: [NestRouter.register([{ path: \"admin\", module: CatsModule }])] })",
+        "export class AppModule {}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const initialRoutes = await service.routes(projectPath);
+    const persistedFacts = graphStore.getArtifactFacts(projectPath);
+
+    expect(initialRoutes.routes).toMatchObject([
+      {
+        method: "GET",
+        path: "/admin/cats/:id",
+        route: { kind: "route", name: "GET /admin/cats/:id" },
+        edge: {
+          kind: "routes",
+          resolution: "exact",
+          evidence: { ruleId: "framework.nestjs.router-module.exact-prefix", stage: "module" }
+        },
+        handler: { qualifiedName: "src/cats.controller.ts#CatsController.findOne" }
+      }
+    ]);
+    expect(
+      persistedFacts.find((facts) => facts.filePath === "src/cats.controller.ts")?.nestRouteFacts
+        ?.routeControllers
+    ).toHaveLength(1);
+    expect(
+      persistedFacts.find((facts) => facts.filePath === "src/cats.module.ts")?.nestRouteFacts
+        ?.moduleControllers
+    ).toHaveLength(1);
+    expect(
+      persistedFacts.find((facts) => facts.filePath === "src/app.module.ts")?.nestRouteFacts
+        ?.routerModulePrefixes
+    ).toHaveLength(1);
+
+    await writeFile(join(projectPath, "src", "unrelated.ts"), "export const unrelated = true;\n", "utf8");
+    const synced = await service.sync({ projectPath });
+    const routesAfterReuse = await service.routes(projectPath);
+
+    expect(synced.lastIndexWork).toMatchObject({
+      mode: "incremental",
+      reExtractedFiles: ["src/unrelated.ts"],
+      reusedArtifactFiles: ["src/app.module.ts", "src/cats.controller.ts", "src/cats.module.ts"]
+    });
+    expect(routesAfterReuse.routes).toMatchObject([
+      {
+        path: "/admin/cats/:id",
+        edge: { evidence: { ruleId: "framework.nestjs.router-module.exact-prefix" } }
+      }
+    ]);
+  });
 });

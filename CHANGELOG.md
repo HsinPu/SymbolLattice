@@ -6,6 +6,24 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.17.0] - 2026-07-30
+
+### Added
+
+- AST-proven NestJS `RouterModule.register([...])` module-prefix composition for TypeScript and JavaScript. A direct named `RouterModule` import from `@nestjs/core`, a direct named `@Module` import from `@nestjs/common`, literal route-object paths, and direct module identifiers now project controller-local HTTP routes through statically registered prefixes.
+- Recursive `children` route trees, import aliases, and exact local/import/re-export class bindings. A route under `{ path: "admin", module: AdminModule, children: [{ path: "catalog", module: CatsModule }] }` becomes `/admin/catalog/...` when the controller is statically registered in `CatsModule`.
+- Persisted syntax facts for route-to-controller, module-to-controller, and RouterModule-prefix relationships. The project resolver derives a full route symbol and an exact `routes` edge with `framework.nestjs.router-module.exact-prefix` module evidence; the existing CLI, MCP, callers, callees, context, and route views receive the projected route without a new public command.
+
+### Compatibility
+
+- No SQLite schema migration or public query contract change is required. The existing raw artifact-fact JSON payload carries the additive RouterModule facts, and existing generations remain readable.
+- The artifact extractor advances to `typescript-ast-v6` and the project resolver advances to `project-resolver-v5`. A pre-v0.17 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes complete Nest module-prefix evidence.
+
+### Deliberate limits
+
+- This supports only direct `RouterModule.register([...])` expressions in a direct `@Module({ imports: [...] })` array. `forRoot` / `forChild`, variables, factories, CommonJS, local decorator barrels, namespace calls, custom wrappers, computed/spread/duplicate route-object properties, nonliteral paths, non-identifier modules, and dynamic children are deliberately excluded.
+- A controller-local route is retained when its module prefix is missing, dynamic, ambiguous, or otherwise unproven. SymbolLattice adds no guessed global prefix, versioning, runtime adapter, guard, GraphQL, microservice, WebSocket, or SSE behavior.
+
 ## [0.16.0] - 2026-07-30
 
 ### Added
@@ -348,7 +366,8 @@ No unreleased changes.
 - Explicit full indexing, caller/callee/impact queries, and read-only MCP exploration.
 - `exact`, `heuristic`, and `unresolved` relationship states.
 
-[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.16.0...HEAD
+[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.17.0...HEAD
+[0.17.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.13.0...v0.14.0

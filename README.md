@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> **v0.16.0** is an early developer release. This public repository runs from source; its npm package is intentionally private and is not published to npm.
+> **v0.17.0** is an early developer release. This public repository runs from source; its npm package is intentionally private and is not published to npm.
 
 SymbolLattice builds a local symbol graph without hiding uncertainty. It keeps syntax-proven artifact facts, resolves cross-file relationships conservatively, and records why every resolved edge exists. The graph stays local to the inspected project under `.symbol-lattice/index.sqlite`.
 
@@ -99,7 +99,7 @@ One-shot data commands emit stable, pretty JSON. `watch` is the deliberate strea
 
 ## Capabilities
 
-| Area | v0.16.0 behavior |
+| Area | v0.17.0 behavior |
 | --- | --- |
 | Source files | TypeScript, TSX, JavaScript, and JSX |
 | Scope | Project root by default or repeatable, persisted `--scope` directories |
@@ -111,7 +111,7 @@ One-shot data commands emit stable, pretty JSON. `watch` is the deliberate strea
 | Re-exports | Named aliases, `export *`, default-through-named aliases, and namespace-export provenance |
 | Retrieval | Local deterministic FTS5 search across persisted source text and identifier parts; bounded path/language filters, source/symbol evidence, and exact `explore` excerpts from the same active generation |
 | Node inspection | Exact ID, qualified-name, simple-name, or `path:line[:column]` matches can return the persisted declaration range, capped direct callers/callees, source provenance, truncation, and active freshness from one generation |
-| HTTP routes | Static AST-proven Express literal registrations plus direct NestJS controller decorators. Both use bounded `routes` listing and exact handler evidence; only Express can retain an unresolved terminal handler in this release |
+| HTTP routes | Static AST-proven Express literal registrations plus direct NestJS controller decorators and `RouterModule.register()` module-prefix projection. All use bounded `routes` listing and exact handler evidence; only Express can retain an unresolved terminal handler in this release |
 | Type hierarchy | Direct TS/JS class `extends`, TS class `implements`, and TS interface `extends`; exact lexical/import/re-export proof with value/type namespaces, plus bounded direct parents/children |
 | Context | Bounded packs for 1–8 ordered references: exact-match source excerpts, capped callers/callees and reverse impact, plus shortest static directed evidence paths between adjacent exact references |
 | Affected tests | Explicit changed files or local Git change sets feed exact persisted `imports` / `exports` paths, deterministic proof paths, conventional test-path classification, and explicit completeness limits |
@@ -176,9 +176,9 @@ If the terminal handler cannot be resolved through a lexical binding, explicit i
 > [!NOTE]
 > `routes` is a read-only active-generation query. Its `status` may be stale after a source edit, while every route/handler record remains evidence from the last successfully indexed generation. Run `sync` or `index` to publish newer route evidence.
 
-### NestJS decorator route evidence
+### NestJS decorator and RouterModule route evidence
 
-v0.16 adds an AST-proven NestJS HTTP pack to the same persisted `route` / `routes` graph contract. Nest combines the optional class-level controller prefix with a method decorator path; SymbolLattice performs that direct syntax join and points the route edge at the method declaration itself. This matches Nest's [documented controller-routing model](https://docs.nestjs.com/controllers) while retaining exact source and binding evidence.
+v0.17 extends the AST-proven NestJS HTTP pack with exact `RouterModule.register()` prefix projection. Nest combines the optional controller prefix with a method decorator path, and module routes recursively add parent-to-child prefixes. SymbolLattice follows the documented [controller-routing](https://docs.nestjs.com/controllers) and [RouterModule](https://docs.nestjs.com/recipes/router-module) models while retaining source, binding, and module-composition evidence.
 
 ```ts
 import { Controller as ApiController, Get, Post } from "@nestjs/common";
@@ -193,15 +193,42 @@ export class CatsController {
 }
 ```
 
-The indexed route records are `GET /api/cats -> CatsController.findAll` and `POST /api/cats/:id -> CatsController.replaceOne`. No name lookup, module export surface, or project-wide fallback is used for these handler edges: a valid decorated method in the same controller is the proof.
+The indexed route records are `GET /api/cats -> CatsController.findAll` and `POST /api/cats/:id -> CatsController.replaceOne`. No name lookup or project-wide fallback is used for these handler edges: a valid decorated method in the same controller is the proof.
 
-The v0.16 surface is deliberately strict:
+When the controller is registered in a module with a static RouterModule route tree, the resolver produces the complete project route:
+
+```ts
+import { Module } from "@nestjs/common";
+import { RouterModule } from "@nestjs/core";
+
+@Module({ controllers: [CatsController] })
+export class CatsModule {}
+
+@Module({
+  imports: [
+    RouterModule.register([
+      {
+        path: "admin",
+        module: AdminModule,
+        children: [{ path: "catalog", module: CatsModule }]
+      }
+    ])
+  ]
+})
+export class AppModule {}
+```
+
+Here `@Controller("cats")` plus `@Get(":id")` becomes `GET /admin/catalog/cats/:id`. Its persisted handler edge remains `exact`, but now records `framework.nestjs.router-module.exact-prefix` module evidence with the handler, controller, and owning module candidates.
+
+The v0.17 surface is deliberately strict:
 
 - TypeScript and JavaScript source are supported when the parser exposes decorators.
 - `Controller`, `Get`, `Post`, `Put`, `Patch`, `Delete`, `Head`, `Options`, and `All` must be non-type-only **named imports** from `@nestjs/common`; import aliases are supported.
 - `@Controller(...)` and the method decorator must be direct calls with zero arguments or one static string/template-literal path. Prefixes are normalized only at their join boundary, so `@Controller("api")` plus `@Get(":id")` becomes `/api/:id`.
 - Decorated instance methods with a body are accepted. Their `routes` edge is `exact` with `framework.nestjs.decorator-route.local-method` syntax evidence.
-- Namespace decorators, local barrels/re-exports, custom/composed decorators, dynamic/object/array decorator arguments, static or abstract methods, `RouterModule` prefixes, global prefixes, versioning, and non-HTTP Nest transports remain outside this release's proof surface.
+- Module composition requires direct named `Module` and `RouterModule` imports from `@nestjs/common` and `@nestjs/core`, respectively; aliases are supported. Only a direct `RouterModule.register([...])` entry in a direct `@Module({ imports: [...] })` array is read.
+- The route tree accepts literal `path`, direct identifier `module`, and recursively static `children` entries. Controller/module targets need exact local, import, or re-export class proof. Dynamic, namespace, type-only, shadowed, duplicate, computed, or spread-based shapes are not promoted into a prefix.
+- If a module prefix cannot be proven, SymbolLattice retains the controller-local route rather than inventing a global route. `forRoot` / `forChild`, global prefixes, versioning, runtime adapters, guards, custom/composed decorators, GraphQL, microservices, WebSockets, and SSE remain outside this release's proof surface.
 
 > [!NOTE]
 > `routes` does not need a new command or MCP tool for NestJS: the existing read-only route query returns Express and NestJS evidence from the active generation together.
@@ -521,7 +548,7 @@ The active generation fingerprints the root `.gitignore`, selected `tsconfig.jso
 | `search <query>` | Search persisted source and identifier evidence; accepts `--limit`, `--path`, and `--language` |
 | `node <reference>` | Return one exact symbol's bounded persisted declaration range, direct callers/callees, provenance, and freshness; never refreshes the index |
 | `hierarchy <reference>` | Return bounded direct `extends` / `implements` parents and exact children, including unresolved parent evidence; accepts `--limit` and never refreshes the index |
-| `routes [path]` | List bounded static Express and direct NestJS route nodes with handler evidence; accepts `--method`, `--path`, and `--limit`; never refreshes the index |
+| `routes [path]` | List bounded static Express and AST-proven NestJS route nodes, including exact `RouterModule.register()` prefix projections, with handler evidence; accepts `--method`, `--path`, and `--limit`; never refreshes the index |
 | `callers <symbol>` / `callees <symbol>` | Show direct graph relationships |
 | `impact <symbol>` | Trace reverse impact with optional `--depth` and explicit output `--limit` |
 | `affected [filePaths...]` | Select conventionally named tests from exact persisted import/export evidence; accepts direct paths or `--stdin`, plus local Git `--working-tree` or `--base <ref>`, `--depth`, and `--limit` |
@@ -546,7 +573,7 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 | `symbol_lattice_explore` | Return generation-bound source when available, callers, callees, impact, freshness, and structured output for an existing graph |
 | `symbol_lattice_node` | Return one exact node's bounded persisted declaration range, direct callers/callees, provenance, and freshness without refreshing an index |
 | `symbol_lattice_hierarchy` | Return bounded direct `extends` / `implements` parents and exact children from one active generation, including unresolved parent evidence, without refreshing an index |
-| `symbol_lattice_routes` | Return bounded static Express and direct NestJS route nodes, method/path filters, handler-edge evidence, and freshness without refreshing an index |
+| `symbol_lattice_routes` | Return bounded static Express and AST-proven NestJS route nodes, including exact RouterModule prefix projections, with method/path filters, handler-edge evidence, and freshness without refreshing an index |
 | `symbol_lattice_context` | Return bounded generation-bound source, relationships, reverse impact, and directed proof paths for ordered references without refreshing an index |
 | `symbol_lattice_affected` | Return bounded affected-test proofs for changed files, index coverage, and completeness limits without refreshing an index |
 | `symbol_lattice_affected_git` | Read a local Git working-tree or merge-base change set, then return its provenance and bounded affected-test proofs without fetching, refreshing, or synchronizing an index |
@@ -574,6 +601,8 @@ v0.15 adds no SQLite schema migration. It persists additive `extends` and `imple
 
 v0.16 adds no SQLite schema migration or public query surface. It persists direct NestJS HTTP `route` symbols and exact `routes` edges through the existing graph and retained-snapshot tables. The extractor advances because raw facts now contain AST-proven Nest decorator edges, so a pre-v0.16 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes route evidence; the resolver version is unchanged because no name-resolution rule was added. Existing generations remain readable, and the existing `routes` CLI/service/MCP tool reads the active generation only.
 
+v0.17 adds no SQLite schema migration or public query surface. It persists additive Nest route-to-controller, module-to-controller, and `RouterModule.register()` prefix facts in the existing raw artifact-fact payload, then projects complete route symbols during full project resolution. Both extractor and resolver versions advance, so a pre-v0.17 active index requires an explicit `sync` or `index` before route coverage can include module prefixes. Existing generations remain readable; the current `routes` CLI/service/MCP surface reads only the active generation.
+
 ## Architecture
 
 ```mermaid
@@ -587,7 +616,7 @@ flowchart LR
   Catalog["Filesystem catalog\nscope + gitignore"] --> Inputs["Index inputs"]
   Catalog --> TS["TS alias resolver"]
   Catalog --> WS["Workspace resolver"]
-  Extractor["TypeScript AST extractor\ndirect heritage + Express/Nest HTTP routes"] --> Facts["Reusable artifact facts"]
+  Extractor["TypeScript AST extractor\ndirect heritage + Express/Nest HTTP routes\nNest module-prefix facts"] --> Facts["Reusable artifact facts"]
   Catalog --> SourceDocs["Persisted source documents"]
   SourceDocs --> Retrieval["Generation-bound lexical projection"]
   Facts --> Resolver["Full project export surface"]
@@ -613,12 +642,12 @@ src/
 
 ## Deliberate boundaries
 
-v0.16.0 does not yet provide:
+v0.17.0 does not yet provide:
 
 - Daemon mode, background automatic sync after the foreground process exits, cross-process watch coordination, MCP per-query pending-file banners, worker pools, or historical source browsing.
 - pnpm workspace YAML, TypeScript project references, external/package `extends`, or nested `.gitignore` semantics.
 - CommonJS `require`, dynamic dispatch, reflection, arbitrary framework routes, or namespace property-call resolution. The v0.14 Express pack remains limited to syntax-proven static registrations; it does not model mutable/aliased receivers, mounts, chained routers, inline callbacks, or runtime route composition.
-- Semantic type checking, transitive hierarchy traversal, declaration-merging semantics, override dispatch, mixin/qualified/conditional heritage expressions, or automatic framework decorator inference. v0.16 recognizes only direct imported NestJS HTTP decorators; it does not infer custom decorators, barrels, RouterModule/global/version prefixes, guards, or non-HTTP transports.
+- Semantic type checking, transitive hierarchy traversal, declaration-merging semantics, override dispatch, mixin/qualified/conditional heritage expressions, or automatic framework decorator inference. v0.17 recognizes direct imported NestJS HTTP decorators and direct static `RouterModule.register()` prefixes only; it does not infer custom decorators, barrels, `forRoot` / `forChild`, global/version prefixes, guards, or non-HTTP transports.
 - Parsers beyond TS/TSX/JS/JSX, external dependency indexing, telemetry, or multi-project routing.
 - Embedding-based or cloud retrieval, semantic ranking, arbitrary natural-language context assembly, semantic Git diff beyond immutable zero-context hunk-to-revision-local-declaration evidence, or reliable rename/move/cross-side identity attribution.
 
@@ -641,8 +670,9 @@ v0.16.0 does not yet provide:
 | `v0.14.0` | First AST-proven Express framework pack: literal static route nodes/handler edges, route-aware graph traversal, and bounded read-only CLI/MCP listing |
 | `v0.15.0` | Direct AST-proven TypeScript/JavaScript `extends` / `implements` graph with value/type namespace proof, unresolved heritage evidence, and bounded read-only CLI/MCP hierarchy views |
 | `v0.16.0` | AST-proven NestJS HTTP controller decorators with direct method edges, imported-alias proof, and shared read-only route views |
-| `v0.17.0` | Planned NestJS RouterModule and explicit module-prefix evidence, retaining the same no-guessing route contract |
-| `v0.18+` | Additional language adapters, framework packs, contract graphs, retained-generation source browsing, and further CodeGraph-parity work where evidence supports it |
+| `v0.17.0` | AST-proven `RouterModule.register()` module prefixes, recursive static children, exact module/controller bindings, and complete Nest HTTP route projections |
+| `v0.18.0` | Planned AST-proven NestJS non-HTTP entrypoints: GraphQL operation decorators, microservice message/event patterns, and WebSocket subscriptions, with separate evidence contracts |
+| `v0.19+` | Additional language adapters, framework packs, contract graphs, retained-generation source browsing, and further CodeGraph-parity work where evidence supports it |
 
 See [CHANGELOG.md](CHANGELOG.md) for release notes and migration history.
 
@@ -656,7 +686,7 @@ npm.cmd pack --dry-run
 git diff --check
 ```
 
-The suite covers discovery, input fingerprints, alias and workspace resolution, exact direct TypeScript/JavaScript heritage extraction and namespace-aware local/import/re-export resolution, bounded hierarchy traversal, exact static Express route extraction and handler resolution, direct NestJS controller-decorator extraction with alias and shadow rejection, route-aware graph traversal, re-export semantics, exact affected-test proofs and completeness limits, local Git change-set parsing and selection, immutable revision-local Git hunk declaration attribution, bounded generation-bound node declaration evidence, generation-bound search and exploration source evidence, retained graph history and structural diffs, legacy snapshot backfill, stale-source evidence, incremental raw-fact reuse, bounded foreground pending-file disclosure, event debounce/polling fallback/retry receipts, no-op sync, schema migration, atomic rollback, MCP read-only behavior, CLI parsing, and architecture boundaries.
+The suite covers discovery, input fingerprints, alias and workspace resolution, exact direct TypeScript/JavaScript heritage extraction and namespace-aware local/import/re-export resolution, bounded hierarchy traversal, exact static Express route extraction and handler resolution, direct NestJS controller decorators plus static `RouterModule.register()` prefix composition with alias, shadow, dynamic, nested-child, persistence, and incremental raw-fact reuse coverage, route-aware graph traversal, re-export semantics, exact affected-test proofs and completeness limits, local Git change-set parsing and selection, immutable revision-local Git hunk declaration attribution, bounded generation-bound node declaration evidence, generation-bound search and exploration source evidence, retained graph history and structural diffs, legacy snapshot backfill, stale-source evidence, bounded foreground pending-file disclosure, event debounce/polling fallback/retry receipts, no-op sync, schema migration, atomic rollback, MCP read-only behavior, CLI parsing, and architecture boundaries.
 
 ## Contributing
 

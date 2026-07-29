@@ -10,13 +10,13 @@ import type {
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "typescript-ast-v5";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "typescript-ast-v6";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v4";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v5";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -111,6 +111,42 @@ export interface ReferenceScope {
   readonly scopeIds: readonly string[];
 }
 
+/** A direct identifier reference retained for strict NestJS module resolution. */
+export interface NestSymbolReference {
+  readonly name: string;
+  readonly range: SourceRange;
+  /** Lexical scopes visible at the identifier, nearest first. */
+  readonly scopeIds: readonly string[];
+}
+
+/** Connects one syntax-proven Nest HTTP route to its decorated controller class. */
+export interface NestRouteControllerFact {
+  readonly routeId: string;
+  readonly controllerId: string;
+}
+
+/** A direct `@Module({ controllers: [...] })` controller identifier. */
+export interface NestModuleControllerFact {
+  readonly moduleId: string;
+  readonly controller: NestSymbolReference;
+}
+
+/** A direct `RouterModule.register()` module prefix, after static child-path composition. */
+export interface NestRouterModulePrefixFact {
+  readonly module: NestSymbolReference;
+  readonly prefix: string;
+}
+
+/**
+ * Syntax-only facts used to project a Nest controller-local HTTP route through
+ * a statically registered RouterModule prefix in the project resolver.
+ */
+export interface NestRouteFacts {
+  readonly routeControllers: readonly NestRouteControllerFact[];
+  readonly moduleControllers: readonly NestModuleControllerFact[];
+  readonly routerModulePrefixes: readonly NestRouterModulePrefixFact[];
+}
+
 /**
  * Syntax-proven, file-local facts. They deliberately retain unresolved source
  * references so later resolution stages can be recomputed without reparsing.
@@ -124,6 +160,8 @@ export interface ArtifactFacts {
   readonly importBindings: readonly ImportBinding[];
   readonly exportBindings: readonly ExportBinding[];
   readonly reExportBindings: readonly ReExportBinding[];
+  /** Omitted only by artifact facts persisted before v0.17. */
+  readonly nestRouteFacts?: NestRouteFacts;
 }
 
 /**

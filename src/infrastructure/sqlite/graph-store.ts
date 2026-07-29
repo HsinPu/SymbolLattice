@@ -661,7 +661,8 @@ function artifactFactsPayload(facts: PersistedArtifactFacts): ArtifactFacts {
     referenceScopes: facts.referenceScopes,
     importBindings: facts.importBindings,
     exportBindings: facts.exportBindings,
-    reExportBindings: facts.reExportBindings
+    reExportBindings: facts.reExportBindings,
+    ...(facts.nestRouteFacts === undefined ? {} : { nestRouteFacts: facts.nestRouteFacts })
   };
 }
 

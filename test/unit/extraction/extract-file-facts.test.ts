@@ -661,6 +661,76 @@ describe("TypeScript and JavaScript extraction", () => {
     ]);
   });
 
+  it("retains AST-proven Nest module controller and RouterModule prefix facts", () => {
+    const facts = extractFileFacts({
+      filePath: "src/app.module.ts",
+      language: "typescript",
+      sourceText: [
+        'import { Controller, Get, Module as NestModule } from "@nestjs/common";',
+        'import { RouterModule as NestRouter } from "@nestjs/core";',
+        "@Controller(\"cats\")",
+        "export class CatsController {",
+        "  @Get() list() {}",
+        "}",
+        "@NestModule({ controllers: [CatsController] })",
+        "export class CatsModule {}",
+        "export class AdminModule {}",
+        "@NestModule({",
+        "  imports: [",
+        "    NestRouter.register([",
+        "      { path: \"admin\", module: AdminModule, children: [{ path: `v1`, module: CatsModule }] }",
+        "    ])",
+        "  ]",
+        "})",
+        "export class AppModule {}"
+      ].join("\n")
+    });
+
+    const route = facts.symbols.find((symbol) => symbol.kind === "route" && symbol.name === "GET /cats");
+    const controller = facts.symbols.find((symbol) => symbol.name === "CatsController");
+    const catsModule = facts.symbols.find((symbol) => symbol.name === "CatsModule");
+    const factsForNest = facts.nestRouteFacts;
+
+    expect(factsForNest?.routeControllers).toEqual([
+      { routeId: route?.id, controllerId: controller?.id }
+    ]);
+    expect(factsForNest?.moduleControllers).toEqual([
+      expect.objectContaining({
+        moduleId: catsModule?.id,
+        controller: expect.objectContaining({ name: "CatsController", scopeIds: expect.any(Array) })
+      })
+    ]);
+    expect(
+      factsForNest?.routerModulePrefixes.map((prefix) => [prefix.module.name, prefix.prefix])
+    ).toEqual([
+      ["AdminModule", "/admin"],
+      ["CatsModule", "/admin/v1"]
+    ]);
+  });
+
+  it("does not retain dynamic, type-only, namespace, or shadowed Nest RouterModule prefixes", () => {
+    const facts = extractFileFacts({
+      filePath: "src/unproven.module.ts",
+      language: "typescript",
+      sourceText: [
+        'import { Controller, Get, Module } from "@nestjs/common";',
+        'import { RouterModule } from "@nestjs/core";',
+        'import type { RouterModule as TypeRouter } from "@nestjs/core";',
+        'import * as nestCore from "@nestjs/core";',
+        "const dynamicPath = \"dynamic\";",
+        "const RouterModule = { register: () => [] };",
+        "@Controller(\"cats\") class CatsController { @Get() list() {} }",
+        "@Module({ controllers: [CatsController] }) class CatsModule {}",
+        "@Module({ imports: [RouterModule.register([{ path: dynamicPath, module: CatsModule }])] }) class DynamicModule {}",
+        "@Module({ imports: [TypeRouter.register([{ path: \"type\", module: CatsModule }])] }) class TypeOnlyModule {}",
+        "@Module({ imports: [nestCore.RouterModule.register([{ path: \"namespace\", module: CatsModule }])] }) class NamespaceModule {}"
+      ].join("\n")
+    });
+
+    expect(facts.nestRouteFacts?.moduleControllers).toHaveLength(1);
+    expect(facts.nestRouteFacts?.routerModulePrefixes).toEqual([]);
+  });
+
   it("rejects type-only, non-Nest, shadowed, dynamic, namespace, and static NestJS route shapes", () => {
     const facts = extractFileFacts({
       filePath: "src/unproven.controller.ts",

@@ -1,10 +1,12 @@
 import {
   compareStableText,
   createEdgeId,
+  createSymbolId,
   type BindingSpace,
   type EdgeEvidence,
   type GraphEdge,
   type GraphSnapshot,
+  type NestSymbolReference,
   type PendingReference,
   type ResolutionKind,
   type SymbolNode
@@ -639,6 +641,360 @@ function exportCandidateSupportsSpace(candidate: ExportCandidate, expectedSpace:
   return expectedSpace === "type" || !candidate.isTypeOnly;
 }
 
+/**
+ * Resolves a static Nest module/controller identifier through the same exact
+ * local/import/re-export proof used by ordinary project references. Router
+ * metadata is deliberately never allowed to fall back to project-wide names.
+ */
+function resolveExactNestClassReference(input: {
+  readonly filePath: string;
+  readonly reference: NestSymbolReference;
+  readonly localBindings: ExtractedFileFacts["localBindings"];
+  readonly importBindings: ExtractedFileFacts["importBindings"];
+  readonly symbolsById: ReadonlyMap<string, SymbolNode>;
+  readonly moduleTargetPathByKey: ReadonlyMap<string, string>;
+  readonly exportSurfaces: ReadonlyMap<string, ExportSurface>;
+}): SymbolNode | null {
+  const local = resolveScopedBinding(
+    input.reference.name,
+    input.reference.scopeIds,
+    input.localBindings,
+    input.symbolsById,
+    "value"
+  );
+  const localClasses = local.candidates.filter((candidate) => candidate.kind === "class");
+  if (local.hasBinding) {
+    return localClasses.length === 1 ? localClasses[0] ?? null : null;
+  }
+
+  const imports = input.importBindings.filter((binding) => binding.localName === input.reference.name);
+  if (imports.length !== 1) {
+    return null;
+  }
+
+  const binding = imports[0];
+  if (binding === undefined || binding.isTypeOnly === true) {
+    return null;
+  }
+
+  const targetPath = input.moduleTargetPathByKey.get(
+    moduleKey(input.filePath, binding.moduleSpecifier)
+  );
+  if (targetPath === undefined || input.exportSurfaces.get(targetPath)?.get(binding.importedName)?.ambiguous === true) {
+    return null;
+  }
+
+  const candidates = canonicalExportCandidates(
+    candidatesForExport(input.exportSurfaces, targetPath, binding.importedName).filter(
+      (candidate) => !candidate.isTypeOnly && candidate.symbol.kind === "class"
+    )
+  );
+  return candidates.length === 1 ? candidates[0]?.symbol ?? null : null;
+}
+
+function routePathFromSymbol(route: SymbolNode): string | null {
+  const separator = route.name.indexOf(" ");
+  if (separator <= 0) {
+    return null;
+  }
+
+  const path = route.name.slice(separator + 1);
+  return path.startsWith("/") ? path : null;
+}
+
+function nestPathPart(path: string): string {
+  return path.replace(/^\/+|\/+$/gu, "");
+}
+
+function joinNestRouterPath(prefix: string, routePath: string): string {
+  const parts = [nestPathPart(prefix), nestPathPart(routePath)].filter((part) => part.length > 0);
+  return parts.length === 0 ? "/" : `/${parts.join("/")}`;
+}
+
+interface ProjectedNestRoute {
+  readonly sourceRoute: SymbolNode;
+  readonly route: SymbolNode;
+  readonly controllerIds: readonly string[];
+  readonly moduleIds: readonly string[];
+  readonly prefixApplied: boolean;
+}
+
+interface NestRouteProjection {
+  readonly symbols: readonly SymbolNode[];
+  readonly structuralEdges: readonly GraphEdge[];
+  readonly projectionsBySourceRouteId: ReadonlyMap<string, readonly ProjectedNestRoute[]>;
+}
+
+function projectedRouteSort(left: ProjectedNestRoute, right: ProjectedNestRoute): number {
+  return (
+    compareStableText(left.sourceRoute.filePath, right.sourceRoute.filePath) ||
+    left.sourceRoute.range.start.line - right.sourceRoute.range.start.line ||
+    left.sourceRoute.range.start.column - right.sourceRoute.range.start.column ||
+    compareStableText(left.route.name, right.route.name) ||
+    Number(left.prefixApplied) - Number(right.prefixApplied) ||
+    compareStableText(left.sourceRoute.id, right.sourceRoute.id) ||
+    compareStableText(left.moduleIds.join("\u0001"), right.moduleIds.join("\u0001"))
+  );
+}
+
+function projectedRouteSymbol(route: SymbolNode, path: string, declarationOrdinal: number): SymbolNode {
+  const methodSeparator = route.name.indexOf(" ");
+  const method = route.name.slice(0, methodSeparator);
+  const name = `${method} ${path}`;
+  const qualifiedName = `${route.filePath}#route:${name}`;
+  return {
+    ...route,
+    id: createSymbolId({
+      filePath: route.filePath,
+      qualifiedName,
+      kind: "route",
+      declarationOrdinal
+    }),
+    name,
+    qualifiedName,
+    declarationOrdinal
+  };
+}
+
+function projectedRouteEdge(
+  edge: GraphEdge,
+  source: ProjectedNestRoute | undefined,
+  target: ProjectedNestRoute | undefined
+): GraphEdge {
+  const sourceId = source?.route.id ?? edge.sourceId;
+  const targetId = target?.route.id ?? edge.targetId;
+  const referenceName =
+    edge.kind === "contains" && target !== undefined ? target.route.name : edge.referenceName;
+  const evidence =
+    edge.kind === "contains" && target !== undefined
+      ? {
+          ruleId: "syntax.containment",
+          stage: "syntax" as const,
+          candidateSymbolIds: [target.route.id]
+        }
+      : edge.kind === "routes" && source?.prefixApplied === true
+      ? {
+          ruleId: "framework.nestjs.router-module.exact-prefix",
+          stage: "module" as const,
+          candidateSymbolIds: [
+            ...(edge.targetId === null ? [] : [edge.targetId]),
+            ...source.controllerIds,
+            ...source.moduleIds
+          ].sort(compareStableText)
+        }
+      : edge.evidence;
+
+  return {
+    ...edge,
+    id: createEdgeId({
+      sourceId,
+      targetId,
+      kind: edge.kind,
+      line: edge.range.start.line,
+      column: edge.range.start.column,
+      referenceName
+    }),
+    sourceId,
+    targetId,
+    referenceName,
+    ...(evidence === undefined ? {} : { evidence })
+  };
+}
+
+function projectEdgesThroughRoutes(
+  edges: readonly GraphEdge[],
+  projectionsBySourceRouteId: ReadonlyMap<string, readonly ProjectedNestRoute[]>
+): readonly GraphEdge[] {
+  return edges.flatMap((edge) => {
+    const sources = projectionsBySourceRouteId.get(edge.sourceId) ?? [undefined];
+    const targets =
+      edge.targetId === null
+        ? [undefined]
+        : projectionsBySourceRouteId.get(edge.targetId) ?? [undefined];
+    return sources.flatMap((source) =>
+      targets.map((target) => projectedRouteEdge(edge, source, target))
+    );
+  });
+}
+
+function projectPendingReferencesThroughRoutes(
+  references: readonly PendingReference[],
+  projectionsBySourceRouteId: ReadonlyMap<string, readonly ProjectedNestRoute[]>
+): readonly PendingReference[] {
+  return references.flatMap((reference) => {
+    const sources = projectionsBySourceRouteId.get(reference.sourceId) ?? [undefined];
+    return sources.map((source) => {
+      if (source === undefined) {
+        return reference;
+      }
+      const sourceId = source.route.id;
+      return {
+        ...reference,
+        id: createEdgeId({
+          sourceId,
+          targetId: null,
+          kind: reference.relationKind,
+          line: reference.range.start.line,
+          column: reference.range.start.column,
+          referenceName: reference.referenceName
+        }),
+        sourceId
+      };
+    });
+  });
+}
+
+function projectNestRouterRoutes(input: {
+  readonly symbols: readonly SymbolNode[];
+  readonly structuralEdges: readonly GraphEdge[];
+  readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
+  readonly localBindingsByFile: ReadonlyMap<string, ExtractedFileFacts["localBindings"]>;
+  readonly importBindingsByFile: ReadonlyMap<string, ExtractedFileFacts["importBindings"]>;
+  readonly symbolsById: ReadonlyMap<string, SymbolNode>;
+  readonly moduleTargetPathByKey: ReadonlyMap<string, string>;
+  readonly exportSurfaces: ReadonlyMap<string, ExportSurface>;
+}): NestRouteProjection {
+  const routeControllerIds = new Map<string, Set<string>>();
+  const controllerModuleIds = new Map<string, Set<string>>();
+  const modulePrefixes = new Map<string, Set<string>>();
+  const nestReference = (filePath: string, reference: NestSymbolReference): SymbolNode | null =>
+    resolveExactNestClassReference({
+      filePath,
+      reference,
+      localBindings: input.localBindingsByFile.get(filePath) ?? [],
+      importBindings: input.importBindingsByFile.get(filePath) ?? [],
+      symbolsById: input.symbolsById,
+      moduleTargetPathByKey: input.moduleTargetPathByKey,
+      exportSurfaces: input.exportSurfaces
+    });
+
+  for (const [filePath, facts] of input.factsByFile) {
+    const nestFacts = facts.nestRouteFacts;
+    if (nestFacts === undefined) {
+      continue;
+    }
+
+    for (const binding of nestFacts.routeControllers) {
+      const controller = input.symbolsById.get(binding.controllerId);
+      if (controller?.kind !== "class" || !input.symbolsById.has(binding.routeId)) {
+        continue;
+      }
+      const controllers = routeControllerIds.get(binding.routeId) ?? new Set<string>();
+      controllers.add(controller.id);
+      routeControllerIds.set(binding.routeId, controllers);
+    }
+
+    for (const binding of nestFacts.moduleControllers) {
+      const module = input.symbolsById.get(binding.moduleId);
+      const controller = nestReference(filePath, binding.controller);
+      if (module?.kind !== "class" || controller?.kind !== "class") {
+        continue;
+      }
+      const modules = controllerModuleIds.get(controller.id) ?? new Set<string>();
+      modules.add(module.id);
+      controllerModuleIds.set(controller.id, modules);
+    }
+
+    for (const binding of nestFacts.routerModulePrefixes) {
+      const module = nestReference(filePath, binding.module);
+      if (module?.kind !== "class") {
+        continue;
+      }
+      const prefixes = modulePrefixes.get(module.id) ?? new Set<string>();
+      prefixes.add(binding.prefix);
+      modulePrefixes.set(module.id, prefixes);
+    }
+  }
+
+  const projections: ProjectedNestRoute[] = [];
+  for (const sourceRoute of input.symbols.filter((symbol) => symbol.kind === "route")) {
+    const localPath = routePathFromSymbol(sourceRoute);
+    const controllerIds = [...(routeControllerIds.get(sourceRoute.id) ?? [])].sort(compareStableText);
+    if (localPath === null || controllerIds.length === 0) {
+      projections.push({
+        sourceRoute,
+        route: sourceRoute,
+        controllerIds: [],
+        moduleIds: [],
+        prefixApplied: false
+      });
+      continue;
+    }
+
+    const modules = [...new Set(controllerIds.flatMap((controllerId) => [...(controllerModuleIds.get(controllerId) ?? [])]))]
+      .sort(compareStableText);
+    const prefixedByPath = new Map<string, Set<string>>();
+    let preserveLocalRoute = modules.length === 0;
+    for (const moduleId of modules) {
+      const prefixes = modulePrefixes.get(moduleId);
+      if (prefixes === undefined || prefixes.size === 0) {
+        preserveLocalRoute = true;
+        continue;
+      }
+      for (const prefix of prefixes) {
+        const path = joinNestRouterPath(prefix, localPath);
+        const routeModules = prefixedByPath.get(path) ?? new Set<string>();
+        routeModules.add(moduleId);
+        prefixedByPath.set(path, routeModules);
+      }
+    }
+
+    if (preserveLocalRoute) {
+      projections.push({
+        sourceRoute,
+        route: sourceRoute,
+        controllerIds,
+        moduleIds: [],
+        prefixApplied: false
+      });
+    }
+    for (const [path, moduleIds] of [...prefixedByPath.entries()].sort(([left], [right]) =>
+      compareStableText(left, right)
+    )) {
+      projections.push({
+        sourceRoute,
+        route: projectedRouteSymbol(sourceRoute, path, sourceRoute.declarationOrdinal),
+        controllerIds,
+        moduleIds: [...moduleIds].sort(compareStableText),
+        prefixApplied: true
+      });
+    }
+  }
+
+  const ordinalByQualifiedName = new Map<string, number>();
+  const normalizedProjections = projections
+    .sort(projectedRouteSort)
+    .map((projection) => {
+      const ordinalKey = `${projection.route.filePath}\u0000${projection.route.qualifiedName}`;
+      const declarationOrdinal = ordinalByQualifiedName.get(ordinalKey) ?? 0;
+      ordinalByQualifiedName.set(ordinalKey, declarationOrdinal + 1);
+      return {
+        ...projection,
+        route: projectedRouteSymbol(
+          projection.sourceRoute,
+          routePathFromSymbol(projection.route) ?? routePathFromSymbol(projection.sourceRoute) ?? "/",
+          declarationOrdinal
+        )
+      };
+    });
+  const projectionsBySourceRouteId = new Map<string, ProjectedNestRoute[]>();
+  for (const projection of normalizedProjections) {
+    const entries = projectionsBySourceRouteId.get(projection.sourceRoute.id) ?? [];
+    entries.push(projection);
+    projectionsBySourceRouteId.set(projection.sourceRoute.id, entries);
+  }
+
+  const structuralEdges = projectEdgesThroughRoutes(input.structuralEdges, projectionsBySourceRouteId);
+  return {
+    symbols: [
+      ...input.symbols.filter((symbol) => symbol.kind !== "route"),
+      ...normalizedProjections.map((projection) => projection.route)
+    ],
+    structuralEdges,
+    projectionsBySourceRouteId
+  };
+}
+
 function heritageRuleId(
   relationKind: HeritageReferenceContext["relationKind"],
   suffix: "local-value-binding" | "local-type-binding" | "imported-target" | "reexported-target" | "unresolved-target"
@@ -1056,15 +1412,35 @@ export function resolveProjectFacts(input: {
     );
   }
 
+  const nestRouteProjection = projectNestRouterRoutes({
+    symbols,
+    structuralEdges,
+    factsByFile,
+    localBindingsByFile,
+    importBindingsByFile,
+    symbolsById,
+    moduleTargetPathByKey,
+    exportSurfaces
+  });
+  const projectedResolvedEdges = projectEdgesThroughRoutes(
+    resolvedEdges,
+    nestRouteProjection.projectionsBySourceRouteId
+  );
+  const projectedUnresolvedReferences = projectPendingReferencesThroughRoutes(
+    unresolvedReferences,
+    nestRouteProjection.projectionsBySourceRouteId
+  );
   const edgeById = new Map<string, GraphEdge>();
-  for (const edge of [...structuralEdges, ...resolvedEdges]) {
+  for (const edge of [...nestRouteProjection.structuralEdges, ...projectedResolvedEdges]) {
     edgeById.set(edge.id, edge);
   }
 
   return {
     files: buildFiles(input.sourceDocuments, input.indexedAt),
-    symbols: [...symbols].sort((left, right) => compareStableText(left.id, right.id)),
+    symbols: [...nestRouteProjection.symbols].sort((left, right) => compareStableText(left.id, right.id)),
     edges: [...edgeById.values()].sort((left, right) => compareStableText(left.id, right.id)),
-    pendingReferences: unresolvedReferences.sort((left, right) => compareStableText(left.id, right.id))
+    pendingReferences: [...projectedUnresolvedReferences].sort((left, right) =>
+      compareStableText(left.id, right.id)
+    )
   };
 }

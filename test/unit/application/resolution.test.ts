@@ -815,6 +815,220 @@ describe("literal route handler resolution", () => {
     expect(snapshot.pendingReferences.filter((reference) => reference.relationKind === "routes")).toEqual([]);
   });
 
+  it("projects Nest RouterModule child prefixes through exact module and re-export bindings", () => {
+    const sourceDocuments: readonly SourceDocument[] = [
+      {
+        absolutePath: "C:/project/src/cats.controller.ts",
+        relativePath: "src/cats.controller.ts",
+        language: "typescript",
+        sourceText: [
+          'import { Controller, Get } from "@nestjs/common";',
+          '@Controller("cats")',
+          "export class CatsController {",
+          '  @Get(":id") findOne() { return "cat"; }',
+          "}"
+        ].join("\n"),
+        contentHash: "cats-controller"
+      },
+      {
+        absolutePath: "C:/project/src/controllers.ts",
+        relativePath: "src/controllers.ts",
+        language: "typescript",
+        sourceText: 'export { CatsController } from "./cats.controller";',
+        contentHash: "controllers-barrel"
+      },
+      {
+        absolutePath: "C:/project/src/cats.module.ts",
+        relativePath: "src/cats.module.ts",
+        language: "typescript",
+        sourceText: [
+          'import { Module } from "@nestjs/common";',
+          'import { CatsController } from "./controllers";',
+          "@Module({ controllers: [CatsController] })",
+          "export class CatsModule {}"
+        ].join("\n"),
+        contentHash: "cats-module"
+      },
+      {
+        absolutePath: "C:/project/src/admin.module.ts",
+        relativePath: "src/admin.module.ts",
+        language: "typescript",
+        sourceText: [
+          'import { Module } from "@nestjs/common";',
+          "@Module({})",
+          "export class AdminModule {}"
+        ].join("\n"),
+        contentHash: "admin-module"
+      },
+      {
+        absolutePath: "C:/project/src/app.module.ts",
+        relativePath: "src/app.module.ts",
+        language: "typescript",
+        sourceText: [
+          'import { Module as NestModule } from "@nestjs/common";',
+          'import { RouterModule as NestRouter } from "@nestjs/core";',
+          'import { AdminModule } from "./admin.module";',
+          'import { CatsModule } from "./cats.module";',
+          "@NestModule({",
+          "  imports: [",
+          "    NestRouter.register([",
+          "      { path: \"admin\", module: AdminModule, children: [{ path: \"catalog\", module: CatsModule }] }",
+          "    ])",
+          "  ]",
+          "})",
+          "export class AppModule {}"
+        ].join("\n"),
+        contentHash: "app-module"
+      }
+    ];
+
+    const snapshot = snapshotWithResolver(sourceDocuments, undefined);
+    const handler = snapshot.symbols.find(
+      (symbol) => symbol.qualifiedName === "src/cats.controller.ts#CatsController.findOne"
+    );
+    const controller = snapshot.symbols.find(
+      (symbol) => symbol.qualifiedName === "src/cats.controller.ts#CatsController"
+    );
+    const catsModule = snapshot.symbols.find(
+      (symbol) => symbol.qualifiedName === "src/cats.module.ts#CatsModule"
+    );
+    const projectedRoute = snapshot.symbols.find(
+      (symbol) => symbol.kind === "route" && symbol.name === "GET /admin/catalog/cats/:id"
+    );
+    const routeEdge = snapshot.edges.find(
+      (edge) => edge.kind === "routes" && edge.sourceId === projectedRoute?.id
+    );
+
+    expect(snapshot.symbols.filter((symbol) => symbol.kind === "route").map((route) => route.name)).toEqual([
+      "GET /admin/catalog/cats/:id"
+    ]);
+    expect(routeEdge).toMatchObject({
+      targetId: handler?.id,
+      resolution: "exact",
+      confidence: 1,
+      evidence: {
+        ruleId: "framework.nestjs.router-module.exact-prefix",
+        stage: "module",
+        candidateSymbolIds: [handler?.id, controller?.id, catsModule?.id]
+          .filter((id): id is string => id !== undefined)
+          .sort()
+      }
+    });
+  });
+
+  it("keeps the controller-local Nest route when its RouterModule path is not statically proven", () => {
+    const sourceDocuments: readonly SourceDocument[] = [
+      {
+        absolutePath: "C:/project/src/cats.controller.ts",
+        relativePath: "src/cats.controller.ts",
+        language: "typescript",
+        sourceText: [
+          'import { Controller, Get } from "@nestjs/common";',
+          '@Controller("cats")',
+          "export class CatsController { @Get() findAll() {} }"
+        ].join("\n"),
+        contentHash: "cats-controller"
+      },
+      {
+        absolutePath: "C:/project/src/cats.module.ts",
+        relativePath: "src/cats.module.ts",
+        language: "typescript",
+        sourceText: [
+          'import { Module } from "@nestjs/common";',
+          'import { CatsController } from "./cats.controller";',
+          "@Module({ controllers: [CatsController] })",
+          "export class CatsModule {}"
+        ].join("\n"),
+        contentHash: "cats-module"
+      },
+      {
+        absolutePath: "C:/project/src/app.module.ts",
+        relativePath: "src/app.module.ts",
+        language: "typescript",
+        sourceText: [
+          'import { Module } from "@nestjs/common";',
+          'import { RouterModule } from "@nestjs/core";',
+          'import { CatsModule } from "./cats.module";',
+          'const prefix = "admin";',
+          "@Module({ imports: [RouterModule.register([{ path: prefix, module: CatsModule }])] })",
+          "export class AppModule {}"
+        ].join("\n"),
+        contentHash: "app-module"
+      }
+    ];
+
+    const snapshot = snapshotWithResolver(sourceDocuments, undefined);
+    const route = snapshot.symbols.find((symbol) => symbol.kind === "route");
+    const routeEdge = snapshot.edges.find((edge) => edge.kind === "routes");
+
+    expect(route).toMatchObject({ name: "GET /cats" });
+    expect(routeEdge?.evidence).toMatchObject({
+      ruleId: "framework.nestjs.decorator-route.local-method",
+      stage: "syntax"
+    });
+  });
+
+  it("keeps colliding Express route edges and unresolved handler references attached to their projected route symbols", () => {
+    const sourceDocuments: readonly SourceDocument[] = [
+      {
+        absolutePath: "C:/project/src/mixed.ts",
+        relativePath: "src/mixed.ts",
+        language: "typescript",
+        sourceText: [
+          'import express from "express";',
+          'import { Controller, Get, Module, Post } from "@nestjs/common";',
+          'import { RouterModule } from "@nestjs/core";',
+          "const app = express();",
+          "function expressHandler() {}",
+          '@Controller("cats")',
+          "class CatsController {",
+          "  @Get() findAll() {}",
+          "  @Post() create() {}",
+          "}",
+          "@Module({ controllers: [CatsController] })",
+          "class CatsModule {}",
+          "@Module({ imports: [RouterModule.register([{ path: \"admin\", module: CatsModule }])] })",
+          "class AppModule {}",
+          'app.get("/admin/cats", expressHandler);',
+          'app.post("/admin/cats", missingHandler);'
+        ].join("\n"),
+        contentHash: "mixed"
+      }
+    ];
+
+    const snapshot = snapshotWithResolver(sourceDocuments, undefined);
+    const expressHandler = snapshot.symbols.find(
+      (symbol) => symbol.qualifiedName === "src/mixed.ts#expressHandler"
+    );
+    const expressGetRoute = snapshot.symbols.find(
+      (symbol) => symbol.kind === "route" && symbol.range.start.line === 15
+    );
+    const expressPostRoute = snapshot.symbols.find(
+      (symbol) => symbol.kind === "route" && symbol.range.start.line === 16
+    );
+    const expressGetEdge = snapshot.edges.find(
+      (edge) => edge.kind === "routes" && edge.targetId === expressHandler?.id
+    );
+    const missingPostEdge = snapshot.edges.find(
+      (edge) => edge.kind === "routes" && edge.referenceName === "missingHandler"
+    );
+    const missingPostReference = snapshot.pendingReferences.find(
+      (reference) => reference.referenceName === "missingHandler"
+    );
+
+    expect(expressGetEdge).toMatchObject({
+      sourceId: expressGetRoute?.id,
+      resolution: "exact",
+      evidence: { ruleId: "framework.express.literal-route.local-handler", stage: "lexical" }
+    });
+    expect(missingPostEdge).toMatchObject({
+      sourceId: expressPostRoute?.id,
+      targetId: null,
+      resolution: "unresolved"
+    });
+    expect(missingPostReference).toMatchObject({ sourceId: expressPostRoute?.id });
+  });
+
   it("keeps ambiguous and unproven route handlers unresolved without changing ordinary call heuristics", () => {
     const sourceDocuments: readonly SourceDocument[] = [
       {
