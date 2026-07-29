@@ -5,9 +5,15 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   SymbolLatticeError,
   type ExplainEdgeResult,
-  type ExploreResult
+  type ExploreResult,
+  type SearchResult
 } from "../../../src/application/index.js";
-import { createMcpServer, runExplainEdgeTool, runExploreTool } from "../../../src/mcp/index.js";
+import {
+  createMcpServer,
+  runExplainEdgeTool,
+  runExploreTool,
+  runSearchTool
+} from "../../../src/mcp/index.js";
 
 const closeCallbacks: Array<() => Promise<void>> = [];
 
@@ -31,6 +37,50 @@ function exploreResult(): ExploreResult {
     callers: [],
     callees: [],
     impact: []
+  };
+}
+
+function searchResult(): SearchResult {
+  return {
+    status: exploreResult().status,
+    results: [
+      {
+        rank: 1,
+        filePath: "src/users.ts",
+        language: "typescript",
+        range: {
+          start: { line: 4, column: 17 },
+          end: { line: 4, column: 21 }
+        },
+        excerpt: {
+          filePath: "src/users.ts",
+          startLine: 3,
+          endLine: 5,
+          lines: [
+            { line: 3, text: "" },
+            { line: 4, text: "export function userById(id: string) {" },
+            { line: 5, text: "  return id;" }
+          ]
+        },
+        matchingTerms: ["user"],
+        lexicalReason: "all query terms matched indexed source text",
+        symbolCandidates: [
+          {
+            id: "symbol:user-by-id",
+            name: "userById",
+            qualifiedName: "src/users.ts#userById",
+            kind: "function",
+            filePath: "src/users.ts",
+            range: {
+              start: { line: 4, column: 1 },
+              end: { line: 6, column: 2 }
+            },
+            isExported: true,
+            declarationOrdinal: 0
+          }
+        ]
+      }
+    ]
   };
 }
 
@@ -97,13 +147,26 @@ function explainEdgeResult(): ExplainEdgeResult {
 }
 
 describe("SymbolLattice MCP server", () => {
-  it("exposes read-only exploration and evidence tools and forwards their projects", async () => {
+  it("exposes read-only retrieval tools and forwards projects and filters", async () => {
     const exploreCalls: Array<{ projectPath: string; reference: string }> = [];
     const explainCalls: Array<{ projectPath: string; edgeId: string }> = [];
+    const searchCalls: Array<{
+      projectPath: string;
+      query: string;
+      options: { limit?: number; pathPrefix?: string; language?: "typescript" | "javascript" };
+    }> = [];
     const service = {
       async explore(projectPath: string, reference: string): Promise<ExploreResult> {
         exploreCalls.push({ projectPath, reference });
         return exploreResult();
+      },
+      async search(
+        projectPath: string,
+        query: string,
+        options: { limit?: number; pathPrefix?: string; language?: "typescript" | "javascript" } = {}
+      ): Promise<SearchResult> {
+        searchCalls.push({ projectPath, query, options });
+        return searchResult();
       },
       async explainEdge(projectPath: string, edgeId: string): Promise<ExplainEdgeResult> {
         explainCalls.push({ projectPath, edgeId });
@@ -120,6 +183,7 @@ describe("SymbolLattice MCP server", () => {
     const tools = await client.listTools();
     expect(tools.tools.map((tool) => tool.name)).toEqual([
       "symbol_lattice_explore",
+      "symbol_lattice_search",
       "symbol_lattice_explain_edge"
     ]);
 
@@ -129,7 +193,34 @@ describe("SymbolLattice MCP server", () => {
     });
     expect(result.isError).not.toBe(true);
     expect(result.content[0]).toMatchObject({ type: "text" });
+    expect(result.structuredContent).toMatchObject({
+      status: { stale: false },
+      match: { status: "not_found" }
+    });
     expect(exploreCalls).toEqual([{ projectPath: "C:/chosen-project", reference: "missing" }]);
+
+    const search = await client.callTool({
+      name: "symbol_lattice_search",
+      arguments: {
+        query: "user",
+        projectPath: "C:/chosen-project",
+        limit: 7,
+        path: "src/",
+        language: "typescript"
+      }
+    });
+    expect(search.isError).not.toBe(true);
+    expect(search.structuredContent).toMatchObject({
+      status: { stale: false },
+      results: [{ filePath: "src/users.ts", matchingTerms: ["user"] }]
+    });
+    expect(searchCalls).toEqual([
+      {
+        projectPath: "C:/chosen-project",
+        query: "user",
+        options: { limit: 7, pathPrefix: "src/", language: "typescript" }
+      }
+    ]);
 
     const explanation = await client.callTool({
       name: "symbol_lattice_explain_edge",
@@ -143,6 +234,31 @@ describe("SymbolLattice MCP server", () => {
     });
     expect(explainCalls).toEqual([
       { projectPath: "C:/chosen-project", edgeId: "edge:caller-callee" }
+    ]);
+  });
+
+  it("does not register search for an existing explore-and-explain embedding", async () => {
+    const server = createMcpServer(
+      {
+        async explore(): Promise<ExploreResult> {
+          return exploreResult();
+        },
+        async explainEdge(): Promise<ExplainEdgeResult> {
+          return explainEdgeResult();
+        }
+      },
+      "C:/default-project"
+    );
+    const client = new Client({ name: "symbol-lattice-pre-search-test", version: "1.0.0" });
+    const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+    closeCallbacks.push(() => client.close(), () => server.close());
+
+    const tools = await client.listTools();
+    expect(tools.tools.map((tool) => tool.name)).toEqual([
+      "symbol_lattice_explore",
+      "symbol_lattice_explain_edge"
     ]);
   });
 
@@ -165,7 +281,7 @@ describe("SymbolLattice MCP server", () => {
     expect(tools.tools.map((tool) => tool.name)).toEqual(["symbol_lattice_explore"]);
   });
 
-  it("returns actionable tool errors without indexing", async () => {
+  it("returns actionable explore errors", async () => {
     const response = await runExploreTool(
       {
         async explore(): Promise<ExploreResult> {
@@ -174,6 +290,21 @@ describe("SymbolLattice MCP server", () => {
       },
       "C:/project",
       { query: "anything" }
+    );
+
+    expect(response).toMatchObject({ isError: true });
+    expect(response.content[0]?.text).toContain("MISSING_INDEX");
+  });
+
+  it("returns indexed-search errors without indexing", async () => {
+    const response = await runSearchTool(
+      {
+        async search(): Promise<SearchResult> {
+          throw new SymbolLatticeError("MISSING_INDEX", "Run symbol-lattice init first.");
+        }
+      },
+      "C:/project",
+      { query: "anything", limit: 3 }
     );
 
     expect(response).toMatchObject({ isError: true });
@@ -193,5 +324,35 @@ describe("SymbolLattice MCP server", () => {
 
     expect(response).toMatchObject({ isError: true });
     expect(response.content[0]?.text).toContain("EDGE_NOT_FOUND");
+  });
+
+  it("never invokes init, index, or sync for any query tool", async () => {
+    const mutationCalls: string[] = [];
+    const service = {
+      async explore(): Promise<ExploreResult> {
+        return exploreResult();
+      },
+      async search(): Promise<SearchResult> {
+        return searchResult();
+      },
+      async explainEdge(): Promise<ExplainEdgeResult> {
+        return explainEdgeResult();
+      },
+      async init(): Promise<void> {
+        mutationCalls.push("init");
+      },
+      async index(): Promise<void> {
+        mutationCalls.push("index");
+      },
+      async sync(): Promise<void> {
+        mutationCalls.push("sync");
+      }
+    };
+
+    await runExploreTool(service, "C:/project", { query: "missing" });
+    await runSearchTool(service, "C:/project", { query: "user" });
+    await runExplainEdgeTool(service, "C:/project", { edgeId: "edge:caller-callee" });
+
+    expect(mutationCalls).toEqual([]);
   });
 });

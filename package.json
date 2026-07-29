@@ -1,6 +1,6 @@
 {
   "name": "@hsinpu/symbol-lattice",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Evidence-first local code graph exploration for TypeScript and JavaScript projects.",
   "license": "MIT",
   "repository": {
@@ -29,6 +29,7 @@
     "check": "tsc -p tsconfig.test.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "prepack": "npm run build",
     "start": "node dist/cli/main.js"
   },
   "dependencies": {

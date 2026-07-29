@@ -1,6 +1,7 @@
 import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
 
 import { afterEach, describe, expect, it } from "vitest";
@@ -10,6 +11,11 @@ import { ARTIFACT_FACTS_EXTRACTOR_VERSION } from "../../../src/domain/index.js";
 import { extractFileFacts } from "../../../src/extraction/index.js";
 import { FileSystemSourceCatalog } from "../../../src/infrastructure/filesystem/index.js";
 import { SqliteGraphStore } from "../../../src/infrastructure/sqlite/index.js";
+import type {
+  ActiveGenerationBundle,
+  GraphStore,
+  ReplaceProjectFactsInput
+} from "../../../src/ports/index.js";
 
 const temporaryDirectories: string[] = [];
 const fixturePath = join(
@@ -26,6 +32,8 @@ const configuredFixturePath = join(
   "fixtures",
   "configured-project"
 );
+const INDEX_DIRECTORY_NAME = ".symbol-lattice";
+const DATABASE_FILE_NAME = "index.sqlite";
 
 async function createFixtureProject(sourcePath = fixturePath): Promise<string> {
   const projectPath = await mkdtemp(join(tmpdir(), "symbol-lattice-service-"));
@@ -51,6 +59,83 @@ function createService(): SymbolLatticeService {
   return new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
 }
 
+/**
+ * Deliberately exposes only the v0.3 adapter surface. It proves that the
+ * additive v0.4 graph/search bundle optimization does not break existing
+ * storage adapters at runtime.
+ */
+type V03GraphStore = Omit<
+  GraphStore,
+  "getActiveGraphBundle" | "getActiveSourceSearchBundle" | "getActiveGenerationBundle" | "replaceProjectFacts"
+> & {
+  readonly getActiveGenerationBundle: (
+    projectPath: string
+  ) => Omit<ActiveGenerationBundle, "sourceSearchVersion">;
+  readonly replaceProjectFacts: (
+    input: Omit<ReplaceProjectFactsInput, "sourceDocuments" | "sourceSearchVersion">
+  ) => void;
+};
+
+function createV03GraphStore(backingStore: SqliteGraphStore): V03GraphStore {
+  const adapter: V03GraphStore = {
+    isInitialized: (projectPath) => backingStore.isInitialized(projectPath),
+    initialize: (projectPath) => backingStore.initialize(projectPath),
+    getStatus: (projectPath) => backingStore.getStatus(projectPath),
+    getSnapshot: (projectPath) => backingStore.getSnapshot(projectPath),
+    getArtifactFacts: (projectPath) => backingStore.getArtifactFacts(projectPath),
+    getIndexInputs: (projectPath) => backingStore.getIndexInputs(projectPath),
+    getActiveGenerationBundle: (projectPath) => {
+      const { sourceSearchVersion: _sourceSearchVersion, ...legacyBundle } =
+        backingStore.getActiveGenerationBundle(projectPath);
+      return legacyBundle;
+    },
+    replaceProjectFacts: (input) => backingStore.replaceProjectFacts(input)
+  };
+  return adapter;
+}
+
+/** Simulates a migrated v0.3 graph whose source-search projection was not yet present. */
+function removeSourceSearchProjection(projectPath: string): void {
+  const database = new DatabaseSync(join(projectPath, INDEX_DIRECTORY_NAME, DATABASE_FILE_NAME));
+  try {
+    database.exec("PRAGMA foreign_keys = OFF;");
+    database.exec("DROP TABLE source_search;");
+    database.exec("DROP TABLE source_documents;");
+    database.exec("DROP TABLE generation_source_search;");
+    database
+      .prepare("UPDATE meta SET value = ? WHERE key = ?")
+      .run("4", "schema_version");
+  } finally {
+    database.close();
+  }
+}
+
+function setSchemaVersion(projectPath: string, version: string): void {
+  const database = new DatabaseSync(join(projectPath, INDEX_DIRECTORY_NAME, DATABASE_FILE_NAME));
+  try {
+    database.prepare("UPDATE meta SET value = ? WHERE key = ?").run(version, "schema_version");
+  } finally {
+    database.close();
+  }
+}
+
+function readSchemaVersion(projectPath: string): string {
+  const database = new DatabaseSync(join(projectPath, INDEX_DIRECTORY_NAME, DATABASE_FILE_NAME), {
+    readOnly: true
+  });
+  try {
+    const row = database
+      .prepare("SELECT value FROM meta WHERE key = ?")
+      .get("schema_version") as { readonly value: string } | undefined;
+    if (row === undefined) {
+      throw new Error("Expected schema version metadata.");
+    }
+    return row.value;
+  } finally {
+    database.close();
+  }
+}
+
 afterEach(async () => {
   await Promise.all(
     temporaryDirectories.splice(0).map((directoryPath) =>
@@ -60,6 +145,36 @@ afterEach(async () => {
 });
 
 describe("SymbolLatticeService", () => {
+  it("keeps graph reads compatible with a v0.3 GraphStore adapter", async () => {
+    const projectPath = await createFixtureProject();
+    const service = new SymbolLatticeService(
+      createV03GraphStore(new SqliteGraphStore()),
+      new FileSystemSourceCatalog()
+    );
+
+    const initialStatus = await service.init({ projectPath });
+
+    await expect(service.getStatus(projectPath)).resolves.toMatchObject({
+      initialized: true,
+      stale: false,
+      staleReasons: []
+    });
+    await expect(service.find(projectPath, "add")).resolves.toMatchObject({
+      symbols: [expect.objectContaining({ name: "add" })]
+    });
+    await expect(service.explore(projectPath, "src/math.ts#add")).resolves.toMatchObject({
+      match: { status: "exact" }
+    });
+    await expect(service.search(projectPath, "add")).rejects.toMatchObject({
+      code: "SOURCE_SEARCH_UNAVAILABLE"
+    });
+    await expect(service.sync({ projectPath })).resolves.toMatchObject({
+      generationId: initialStatus.generationId,
+      stale: false,
+      staleReasons: []
+    });
+  });
+
   it("indexes a TS/JS project, resolves direct graph facts, and detects staleness", async () => {
     const projectPath = await createFixtureProject();
     const graphStore = new SqliteGraphStore();
@@ -293,6 +408,220 @@ describe("SymbolLatticeService", () => {
     expect(status.generationId).toBe(generationId);
     expect(extractionCount).toBe(3);
     expect(status.lastIndexWork).toMatchObject({ mode: "full" });
+  });
+
+  it("normalizes the pre-release source-search marker during a no-op sync", async () => {
+    const projectPath = await createFixtureProject();
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+    await service.init({ projectPath });
+    const generationId = graphStore.getStatus(projectPath).generationId;
+    setSchemaVersion(projectPath, "5");
+
+    const status = await service.sync({ projectPath });
+
+    expect(readSchemaVersion(projectPath)).toBe("4");
+    expect(status).toMatchObject({ generationId, stale: false, staleReasons: [] });
+    expect((await service.search(projectPath, "add")).results).not.toEqual([]);
+  });
+
+  it("returns persisted source evidence while reporting live source drift as stale", async () => {
+    const projectPath = await createInlineProject({
+      "src/search.ts": [
+        "export function indexedNeedle() {",
+        '  return "indexed evidence";',
+        "}",
+        ""
+      ].join("\n")
+    });
+    const service = createService();
+    await service.init({ projectPath });
+
+    await writeFile(
+      join(projectPath, "src", "search.ts"),
+      'export function liveReplacement() { return "live only"; }\n',
+      "utf8"
+    );
+
+    const search = await service.search(projectPath, "indexedNeedle");
+
+    expect(search.status).toMatchObject({
+      stale: true,
+      staleReasons: ["source-files-changed"]
+    });
+    expect(search.results).toHaveLength(1);
+    expect(search.results[0]).toMatchObject({
+      rank: 1,
+      filePath: "src/search.ts",
+      language: "typescript",
+      matchingTerms: ["indexedneedle"],
+      lexicalReason: "Matched persisted lexical terms: indexedneedle.",
+      symbolCandidates: [expect.objectContaining({ name: "indexedNeedle" })]
+    });
+    expect(search.results[0]?.excerpt.lines.map((line) => line.text).join("\n")).toContain(
+      "indexedNeedle"
+    );
+    expect(search.results[0]?.excerpt.lines.map((line) => line.text).join("\n")).not.toContain(
+      "liveReplacement"
+    );
+  });
+
+  it("reports persisted ranges in raw UTF-16 source columns after NFKC expansion", async () => {
+    const projectPath = await createInlineProject({
+      "src/unicode.ts": 'const ligature = "\uFB03"; export const needle = true;\n'
+    });
+    const service = createService();
+    await service.init({ projectPath });
+
+    const search = await service.search(projectPath, "needle");
+
+    expect(search.results).toMatchObject([
+      {
+        filePath: "src/unicode.ts",
+        range: {
+          start: { line: 1, column: 36 },
+          end: { line: 1, column: 42 }
+        }
+      }
+    ]);
+  });
+
+  it("reconstructs diacritic-folded FTS hits as persisted source evidence", async () => {
+    const projectPath = await createInlineProject({
+      "src/diacritic.ts": "export const café = true;\n"
+    });
+    const service = createService();
+    await service.init({ projectPath });
+
+    const search = await service.search(projectPath, "cafe");
+
+    expect(search.results).toMatchObject([
+      {
+        filePath: "src/diacritic.ts",
+        matchingTerms: ["cafe"],
+        lexicalReason: "Matched persisted lexical terms: cafe.",
+        range: {
+          start: { line: 1, column: 14 },
+          end: { line: 1, column: 18 }
+        },
+        symbolCandidates: [expect.objectContaining({ name: "café" })]
+      }
+    ]);
+  });
+
+  it("reports source search ranges and candidates correctly for CR-only files", async () => {
+    const projectPath = await createInlineProject({
+      "src/cr-only.ts": "const before = 1;\rexport const crNeedle = true;\r"
+    });
+    const service = createService();
+    await service.init({ projectPath });
+
+    const search = await service.search(projectPath, "crNeedle");
+
+    expect(search.results).toMatchObject([
+      {
+        filePath: "src/cr-only.ts",
+        range: {
+          start: { line: 2, column: 14 },
+          end: { line: 2, column: 22 }
+        },
+        excerpt: {
+          lines: expect.arrayContaining([expect.objectContaining({ line: 2, text: "export const crNeedle = true;" })])
+        },
+        symbolCandidates: [expect.objectContaining({ name: "crNeedle" })]
+      }
+    ]);
+  });
+
+  it("validates persisted-source search filters and associates zero or many declarations", async () => {
+    const projectPath = await createInlineProject({
+      "src/filter.ts": "export const filterNeedle = true;\n",
+      "lib/filter.js": "export const filterNeedle = true;\n",
+      "src/comment.ts": "// commentNeedle\nexport const unrelated = true;\n",
+      "src/nested.ts": [
+        "export function wrapper() {",
+        "  const nestedNeedle = 1;",
+        "  return nestedNeedle;",
+        "}",
+        ""
+      ].join("\n")
+    });
+    const service = createService();
+    await service.init({ projectPath });
+
+    const filtered = await service.search(projectPath, "filterNeedle", {
+      pathPrefix: "src/",
+      language: "typescript",
+      limit: 1
+    });
+    expect(filtered.results).toMatchObject([{ rank: 1, filePath: "src/filter.ts" }]);
+
+    const comment = await service.search(projectPath, "commentNeedle");
+    expect(comment.results[0]).toMatchObject({
+      filePath: "src/comment.ts",
+      symbolCandidates: []
+    });
+
+    const nested = await service.search(projectPath, "nestedNeedle");
+    expect(nested.results[0]?.symbolCandidates.map((symbol) => symbol.name)).toEqual([
+      "wrapper",
+      "nestedNeedle"
+    ]);
+
+    await expect(service.search(projectPath, "+++" as string)).rejects.toMatchObject({
+      code: "INVALID_SEARCH_QUERY"
+    });
+    await expect(service.search(projectPath, "needle", { limit: 0 })).rejects.toMatchObject({
+      code: "INVALID_SEARCH_LIMIT"
+    });
+    await expect(
+      service.search(projectPath, "needle", { pathPrefix: "../outside" })
+    ).rejects.toMatchObject({ code: "INVALID_SEARCH_PATH_PREFIX" });
+    await expect(
+      service.search(projectPath, "needle", { language: "python" as "typescript" })
+    ).rejects.toMatchObject({ code: "INVALID_SEARCH_LANGUAGE" });
+  });
+
+  it("backfills a missing source-search projection without re-extracting compatible facts", async () => {
+    const projectPath = await createInlineProject({
+      "src/search.ts": "export const backfillNeedle = true;\n"
+    });
+    const graphStore = new SqliteGraphStore();
+    let extractionCount = 0;
+    const service = new SymbolLatticeService(
+      graphStore,
+      new FileSystemSourceCatalog(),
+      (input) => {
+        extractionCount += 1;
+        return extractFileFacts(input);
+      }
+    );
+    await service.init({ projectPath });
+    const firstGenerationId = graphStore.getStatus(projectPath).generationId;
+    expect(extractionCount).toBe(1);
+
+    removeSourceSearchProjection(projectPath);
+
+    expect(await service.getStatus(projectPath)).toMatchObject({
+      stale: true,
+      staleReasons: ["indexer-version-changed"]
+    });
+    await expect(service.search(projectPath, "backfillNeedle")).rejects.toMatchObject({
+      code: "SOURCE_SEARCH_UNAVAILABLE"
+    });
+
+    const synced = await service.sync({ projectPath });
+    expect(synced).toMatchObject({ stale: false, staleReasons: [] });
+    expect(synced.generationId).not.toBe(firstGenerationId);
+    expect(extractionCount).toBe(1);
+    expect(synced.lastIndexWork).toMatchObject({
+      mode: "incremental",
+      reExtractedFiles: [],
+      reusedArtifactFiles: ["src/search.ts"]
+    });
+    expect((await service.search(projectPath, "backfillNeedle")).results).toMatchObject([
+      { filePath: "src/search.ts" }
+    ]);
   });
 
   it("removes deleted source facts and invalidates their existing importers", async () => {

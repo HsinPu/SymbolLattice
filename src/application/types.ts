@@ -3,7 +3,14 @@ import type {
   ImpactPath,
   SymbolMatch
 } from "../domain/graph.js";
-import type { GraphEdge, GraphSnapshot, IndexStatus, SymbolNode } from "../domain/types.js";
+import type {
+  ArtifactLanguage,
+  GraphEdge,
+  GraphSnapshot,
+  IndexStatus,
+  SourceRange,
+  SymbolNode
+} from "../domain/types.js";
 
 export interface GraphContext {
   readonly status: IndexStatus;
@@ -25,6 +32,40 @@ export interface SourceExcerpt {
 export interface FindResult {
   readonly status: IndexStatus;
   readonly symbols: readonly SymbolNode[];
+}
+
+/** Optional filters for persisted-source lexical retrieval. */
+export interface SearchOptions {
+  /** Maximum number of matching indexed files to return. */
+  readonly limit?: number;
+  /** Project-relative directory or file prefix, normalized to forward slashes. */
+  readonly pathPrefix?: string;
+  /** Restricts results to one indexed source language. */
+  readonly language?: ArtifactLanguage;
+}
+
+/** One deterministic source hit from the active persisted graph generation. */
+export interface SourceSearchHitResult {
+  /** One-based position in the persisted retrieval ordering. */
+  readonly rank: number;
+  readonly filePath: string;
+  readonly language: ArtifactLanguage;
+  /** Exact lexical span selected from the persisted source text. */
+  readonly range: SourceRange;
+  /** Small persisted-source context around the lexical span. */
+  readonly excerpt: SourceExcerpt;
+  /** Query terms found directly in the persisted source text. */
+  readonly matchingTerms: readonly string[];
+  /** Stable explanation of how this file matched the persisted lexical index. */
+  readonly lexicalReason: string;
+  /** All non-file declarations whose persisted ranges overlap the lexical span. */
+  readonly symbolCandidates: readonly SymbolNode[];
+}
+
+export interface SearchResult {
+  /** Freshness is evaluated against the current project without changing these persisted hits. */
+  readonly status: IndexStatus;
+  readonly results: readonly SourceSearchHitResult[];
 }
 
 export interface RelationResult {

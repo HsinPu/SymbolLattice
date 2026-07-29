@@ -1,17 +1,26 @@
-import { resolve } from "node:path";
+import { isAbsolute, resolve } from "node:path";
 
 import {
   ARTIFACT_FACTS_EXTRACTOR_VERSION,
+  ARTIFACT_LANGUAGES,
+  DEFAULT_SOURCE_SEARCH_LIMIT,
   findSymbols,
   getCallees,
   getCallers,
   getImpactPaths,
+  MAX_SOURCE_SEARCH_LIMIT,
   matchSymbol,
+  normalizeSourceSearchLexicalText,
   PROJECT_RESOLVER_VERSION,
+  SOURCE_SEARCH_INDEX_VERSION,
+  sourceSearchTerms,
   type GraphSnapshot,
+  type IndexedSourceSearchHit,
   type IndexWork,
   type PersistedArtifactFacts,
   type ProjectIndexInputs,
+  type SourceSearchRequest,
+  type SourceRange,
   type SymbolKind,
   type SymbolNode
 } from "../domain/index.js";
@@ -21,7 +30,7 @@ import {
   type ExtractedFileFacts
 } from "../extraction/index.js";
 import type {
-  ActiveGenerationBundle,
+  ActiveGraphBundle,
   GraphStore,
   ProjectScan,
   ProjectScanOptions,
@@ -38,6 +47,9 @@ import type {
   GraphContext,
   ImpactResult,
   RelationResult,
+  SearchOptions,
+  SearchResult,
+  SourceSearchHitResult,
   SourceExcerpt
 } from "./types.js";
 
@@ -70,6 +82,210 @@ function compareText(left: string, right: string): number {
     return 1;
   }
   return 0;
+}
+
+function comparePosition(
+  left: SourceRange["start"],
+  right: SourceRange["start"]
+): number {
+  if (left.line !== right.line) {
+    return left.line - right.line;
+  }
+  return left.column - right.column;
+}
+
+function rangesOverlap(left: SourceRange, right: SourceRange): boolean {
+  return (
+    comparePosition(left.start, right.end) < 0 &&
+    comparePosition(right.start, left.end) < 0
+  );
+}
+
+function compareSymbolCandidates(left: SymbolNode, right: SymbolNode): number {
+  const startDifference = comparePosition(left.range.start, right.range.start);
+  if (startDifference !== 0) {
+    return startDifference;
+  }
+  const endDifference = comparePosition(left.range.end, right.range.end);
+  if (endDifference !== 0) {
+    return endDifference;
+  }
+  const kindDifference = compareText(left.kind, right.kind);
+  if (kindDifference !== 0) {
+    return kindDifference;
+  }
+  const nameDifference = compareText(left.name, right.name);
+  return nameDifference === 0 ? compareText(left.id, right.id) : nameDifference;
+}
+
+function normalizedLexicalText(value: string): string {
+  return normalizeSourceSearchLexicalText(value);
+}
+
+interface NormalizedLexicalTextWithSourceOffsets {
+  readonly text: string;
+  /** Raw UTF-16 start offsets for each normalized UTF-16 code unit. */
+  readonly startOffsets: readonly number[];
+  /** Raw UTF-16 exclusive end offsets for each normalized UTF-16 code unit. */
+  readonly endOffsets: readonly number[];
+}
+
+function sharedTextPrefixLength(left: string, right: string): number {
+  const limit = Math.min(left.length, right.length);
+  let length = 0;
+  while (length < limit && left.charCodeAt(length) === right.charCodeAt(length)) {
+    length += 1;
+  }
+  return length;
+}
+
+/**
+ * Maps a normalized string back to raw UTF-16 offsets without turning a
+ * compatibility expansion such as U+FB03 into extra columns. Most text can be
+ * handled by normalizing a base character with its combining marks. The prefix
+ * fallback retains correct offsets for the few normalization sequences that
+ * cross that boundary (for example, Hangul composition).
+ */
+function normalizedLexicalTextWithSourceOffsets(
+  value: string
+): NormalizedLexicalTextWithSourceOffsets {
+  const expected = normalizedLexicalText(value);
+  const startOffsets: number[] = [];
+  const endOffsets: number[] = [];
+  let reconstructed = "";
+
+  for (const match of value.matchAll(/(?:\P{M}\p{M}*|\p{M}+)/gu)) {
+    const sourceStart = match.index;
+    const sourceEnd = sourceStart + match[0].length;
+    const normalizedPart = normalizedLexicalText(match[0]);
+    reconstructed += normalizedPart;
+    for (let index = 0; index < normalizedPart.length; index += 1) {
+      startOffsets.push(sourceStart);
+      endOffsets.push(sourceEnd);
+    }
+  }
+
+  if (reconstructed === expected) {
+    return { text: expected, startOffsets, endOffsets };
+  }
+
+  let previous = "";
+  let mappedStarts: number[] = [];
+  let mappedEnds: number[] = [];
+  let sourceOffset = 0;
+  for (const character of value) {
+    const sourceEnd = sourceOffset + character.length;
+    const next = normalizedLexicalText(value.slice(0, sourceEnd));
+    const shared = sharedTextPrefixLength(previous, next);
+    const replacedStart = Math.min(
+      sourceOffset,
+      ...mappedStarts.slice(shared)
+    );
+    mappedStarts = mappedStarts.slice(0, shared);
+    mappedEnds = mappedEnds.slice(0, shared);
+    for (let index = shared; index < next.length; index += 1) {
+      mappedStarts.push(replacedStart);
+      mappedEnds.push(sourceEnd);
+    }
+    previous = next;
+    sourceOffset = sourceEnd;
+  }
+
+  return { text: expected, startOffsets: mappedStarts, endOffsets: mappedEnds };
+}
+
+function excerptFromSourceText(
+  filePath: string,
+  sourceText: string,
+  centerLine: number,
+  contextLines = 2
+): SourceExcerpt {
+  const lines = sourceText.split(/\r\n|\r|\n/);
+  const startLine = Math.max(1, centerLine - contextLines);
+  const endLine = Math.min(lines.length, centerLine + contextLines);
+  const excerptLines = lines.slice(startLine - 1, endLine).map((text, index) => ({
+    line: startLine + index,
+    text
+  }));
+
+  return { filePath, startLine, endLine, lines: excerptLines };
+}
+
+interface PersistedLexicalMatch {
+  readonly matchingTerms: readonly string[];
+  readonly range: SourceRange;
+  readonly excerpt: SourceExcerpt;
+}
+
+/**
+ * The store owns matching and ordering. This only chooses a reproducible span
+ * and context from the source text saved in the same generation as that hit.
+ */
+function persistedLexicalMatch(
+  filePath: string,
+  sourceText: string,
+  terms: readonly string[]
+): PersistedLexicalMatch {
+  const lines = sourceText.split(/\r\n|\r|\n/);
+  const normalizedTerms = terms.map((term) => normalizedLexicalText(term));
+  const normalizedSource = normalizedLexicalText(sourceText);
+  const matchingTerms = terms.filter((term, index) => {
+    const normalizedTerm = normalizedTerms[index];
+    return normalizedTerm !== undefined && normalizedSource.includes(normalizedTerm);
+  });
+
+  let selectedLine = 1;
+  let selectedTerm: string | null = null;
+  let selectedTermStartOffset = 0;
+  let selectedTermEndOffset = 0;
+  let selectedLineMatchCount = 0;
+
+  for (const [lineIndex, line] of lines.entries()) {
+    const normalizedLine = normalizedLexicalTextWithSourceOffsets(line);
+    const lineMatches = normalizedTerms
+      .map((term, termIndex) => ({ term, termIndex, offset: normalizedLine.text.indexOf(term) }))
+      .filter((match) => match.offset >= 0);
+    if (lineMatches.length <= selectedLineMatchCount) {
+      continue;
+    }
+
+    const firstMatch = lineMatches.sort(
+      (left, right) => left.offset - right.offset || left.termIndex - right.termIndex
+    )[0];
+    if (firstMatch === undefined) {
+      continue;
+    }
+
+    selectedLine = lineIndex + 1;
+    selectedTerm = terms[firstMatch.termIndex] ?? null;
+    selectedTermStartOffset = normalizedLine.startOffsets[firstMatch.offset] ?? 0;
+    selectedTermEndOffset =
+      normalizedLine.endOffsets[firstMatch.offset + firstMatch.term.length - 1] ??
+      selectedTermStartOffset;
+    selectedLineMatchCount = lineMatches.length;
+  }
+
+  const startColumn = selectedTerm === null ? 1 : selectedTermStartOffset + 1;
+  const endColumn = selectedTerm === null ? startColumn : selectedTermEndOffset + 1;
+
+  return {
+    matchingTerms,
+    range: {
+      start: { line: selectedLine, column: startColumn },
+      end: { line: selectedLine, column: endColumn }
+    },
+    excerpt: excerptFromSourceText(filePath, sourceText, selectedLine)
+  };
+}
+
+function lexicalReason(terms: readonly string[], matchingTerms: readonly string[]): string {
+  if (matchingTerms.length === terms.length) {
+    return `Matched persisted lexical terms: ${matchingTerms.join(", ")}.`;
+  }
+  if (matchingTerms.length > 0) {
+    return `Matched persisted lexical terms: ${matchingTerms.join(", ")}; additional terms matched the indexed identifier corpus.`;
+  }
+  return `Matched the indexed identifier corpus for lexical terms: ${terms.join(", ")}.`;
 }
 
 function filesMatch(
@@ -208,7 +424,7 @@ export class SymbolLatticeService {
     this.assertSafeProjectPath(options);
     const projectPath = resolve(options.projectPath);
     const bundle = this.graphStore.isInitialized(projectPath)
-      ? this.graphStore.getActiveGenerationBundle(projectPath)
+      ? this.getActiveGraphBundle(projectPath)
       : null;
     const scan = await this.scanForIndex(projectPath, options, bundle?.indexInputs ?? null);
     const artifactFacts = scan.sourceDocuments.map((document) =>
@@ -228,6 +444,10 @@ export class SymbolLatticeService {
       );
     }
 
+    // `sync` is the explicit repair/upgrade operation. Let a store complete
+    // additive migrations even when the source scan later proves this is a
+    // graph no-op (including the short-lived v0.4 prerelease metadata marker).
+    this.graphStore.initialize(projectPath);
     const bundle = this.graphStore.getActiveGenerationBundle(projectPath);
     const scan = await this.scanForIndex(projectPath, options, bundle.indexInputs);
     const changes = sourceChangeSet(scan.sourceDocuments, bundle.snapshot);
@@ -262,11 +482,13 @@ export class SymbolLatticeService {
       changes.addedFiles.length === 0 &&
       changes.modifiedFiles.length === 0 &&
       changes.removedFiles.length === 0;
+    const sourceSearchChanged = this.sourceSearchProjectionChanged(bundle.sourceSearchVersion);
     if (
       noSourceChange &&
       !configurationChanged &&
       !resolverChanged &&
-      reExtractedFiles.length === 0
+      reExtractedFiles.length === 0 &&
+      !sourceSearchChanged
     ) {
       return this.getStatus(projectPath);
     }
@@ -299,8 +521,50 @@ export class SymbolLatticeService {
 
   public async getStatus(projectPath: string): Promise<GraphContext["status"]> {
     const normalizedProjectPath = resolve(projectPath);
-    const bundle = this.graphStore.getActiveGenerationBundle(normalizedProjectPath);
+    const bundle = this.getActiveGraphBundle(normalizedProjectPath);
     return this.getStatusForBundle(normalizedProjectPath, bundle);
+  }
+
+  /**
+   * Searches the immutable source projection installed with the active graph
+   * generation. Freshness may inspect the live project, but result evidence is
+   * never rebuilt from it.
+   */
+  public async search(
+    projectPath: string,
+    query: string,
+    options: SearchOptions = {}
+  ): Promise<SearchResult> {
+    const request = this.sourceSearchRequest(query, options);
+    const normalizedProjectPath = resolve(projectPath);
+    const graphBundle = this.getActiveGraphBundle(normalizedProjectPath);
+    if (!graphBundle.status.initialized) {
+      throw new SymbolLatticeError(
+        "MISSING_INDEX",
+        `No SymbolLattice index exists for ${normalizedProjectPath}. Run "symbol-lattice init ${normalizedProjectPath}" first.`
+      );
+    }
+    const getActiveSourceSearchBundle = this.graphStore.getActiveSourceSearchBundle;
+    if (typeof getActiveSourceSearchBundle !== "function") {
+      throw new SymbolLatticeError(
+        "SOURCE_SEARCH_UNAVAILABLE",
+        `The configured SymbolLattice graph store for ${normalizedProjectPath} does not expose persisted source search. Upgrade the adapter and run "symbol-lattice sync ${normalizedProjectPath}".`
+      );
+    }
+    const bundle = getActiveSourceSearchBundle.call(this.graphStore, normalizedProjectPath, request);
+    if (bundle.sourceSearchVersion !== SOURCE_SEARCH_INDEX_VERSION) {
+      throw new SymbolLatticeError(
+        "SOURCE_SEARCH_UNAVAILABLE",
+        `The active SymbolLattice index for ${normalizedProjectPath} has no compatible persisted source-search projection. Run "symbol-lattice sync ${normalizedProjectPath}" to backfill it.`
+      );
+    }
+
+    return {
+      status: await this.getStatusForBundle(normalizedProjectPath, bundle),
+      results: bundle.hits.map((hit, index) =>
+        this.toSourceSearchHitResult(hit, index + 1, request.terms, bundle.snapshot)
+      )
+    };
   }
 
   public async find(
@@ -399,6 +663,122 @@ export class SymbolLatticeService {
     };
   }
 
+  private sourceSearchRequest(query: string, options: SearchOptions): SourceSearchRequest {
+    if (typeof query !== "string") {
+      throw new SymbolLatticeError(
+        "INVALID_SEARCH_QUERY",
+        "Search query must be text containing at least one lexical term."
+      );
+    }
+    const terms = sourceSearchTerms(query);
+    if (terms.length === 0) {
+      throw new SymbolLatticeError(
+        "INVALID_SEARCH_QUERY",
+        "Search query must contain at least one letter, number, or underscore term."
+      );
+    }
+
+    const limit = options.limit ?? DEFAULT_SOURCE_SEARCH_LIMIT;
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > MAX_SOURCE_SEARCH_LIMIT) {
+      throw new SymbolLatticeError(
+        "INVALID_SEARCH_LIMIT",
+        `Search limit must be a whole number from 1 to ${MAX_SOURCE_SEARCH_LIMIT}.`
+      );
+    }
+
+    const language = options.language;
+    if (language !== undefined && !ARTIFACT_LANGUAGES.includes(language)) {
+      throw new SymbolLatticeError(
+        "INVALID_SEARCH_LANGUAGE",
+        `Search language must be one of: ${ARTIFACT_LANGUAGES.join(", ")}.`
+      );
+    }
+
+    const pathPrefix =
+      options.pathPrefix === undefined
+        ? undefined
+        : this.normalizedSearchPathPrefix(options.pathPrefix);
+    return {
+      query,
+      terms,
+      limit,
+      ...(pathPrefix === undefined ? {} : { pathPrefix }),
+      ...(language === undefined ? {} : { language })
+    };
+  }
+
+  private normalizedSearchPathPrefix(pathPrefix: string): string | undefined {
+    if (typeof pathPrefix !== "string") {
+      throw new SymbolLatticeError(
+        "INVALID_SEARCH_PATH_PREFIX",
+        "Search path prefix must be a project-relative path."
+      );
+    }
+
+    const normalized = pathPrefix.trim().replaceAll("\\", "/");
+    if (normalized === ".") {
+      return undefined;
+    }
+    if (
+      normalized.length === 0 ||
+      normalized.includes("\0") ||
+      isAbsolute(pathPrefix) ||
+      normalized.startsWith("/") ||
+      /^[A-Za-z]:/.test(normalized)
+    ) {
+      throw new SymbolLatticeError(
+        "INVALID_SEARCH_PATH_PREFIX",
+        `Search path prefix must stay project-relative: ${pathPrefix}`
+      );
+    }
+
+    const parts: string[] = [];
+    for (const part of normalized.split("/")) {
+      if (part === "" || part === ".") {
+        continue;
+      }
+      if (part === "..") {
+        throw new SymbolLatticeError(
+          "INVALID_SEARCH_PATH_PREFIX",
+          `Search path prefix must not traverse outside the project: ${pathPrefix}`
+        );
+      }
+      parts.push(part);
+    }
+    if (parts.length === 0) {
+      return undefined;
+    }
+    return parts.join("/");
+  }
+
+  private toSourceSearchHitResult(
+    hit: IndexedSourceSearchHit,
+    rank: number,
+    terms: readonly string[],
+    snapshot: GraphSnapshot
+  ): SourceSearchHitResult {
+    const lexicalMatch = persistedLexicalMatch(hit.filePath, hit.sourceText, terms);
+    const symbolCandidates = snapshot.symbols
+      .filter(
+        (symbol) =>
+          symbol.kind !== "file" &&
+          symbol.filePath === hit.filePath &&
+          rangesOverlap(symbol.range, lexicalMatch.range)
+      )
+      .sort(compareSymbolCandidates);
+
+    return {
+      rank,
+      filePath: hit.filePath,
+      language: hit.language,
+      range: lexicalMatch.range,
+      excerpt: lexicalMatch.excerpt,
+      matchingTerms: lexicalMatch.matchingTerms,
+      lexicalReason: lexicalReason(terms, lexicalMatch.matchingTerms),
+      symbolCandidates
+    };
+  }
+
   private extractPersistedFacts(document: SourceDocument): PersistedArtifactFacts {
     return {
       ...this.artifactFactsExtractor({
@@ -433,25 +813,39 @@ export class SymbolLatticeService {
       artifactFacts,
       indexInputs: scan.indexInputs,
       resolverVersion: PROJECT_RESOLVER_VERSION,
+      sourceDocuments: scan.sourceDocuments.map((document) => ({
+        filePath: document.relativePath,
+        language: document.language,
+        sourceText: document.sourceText
+      })),
+      sourceSearchVersion: SOURCE_SEARCH_INDEX_VERSION,
       indexWork
     });
   }
 
   private async getStatusForBundle(
     normalizedProjectPath: string,
-    bundle: ActiveGenerationBundle
+    bundle: ActiveGraphBundle
   ): Promise<GraphContext["status"]> {
     const persistedStatus = bundle.status;
     if (!persistedStatus.initialized) {
       return persistedStatus;
     }
 
+    const versionChanged =
+      bundle.snapshot.files.length > 0 &&
+      (bundle.extractorVersion !== ARTIFACT_FACTS_EXTRACTOR_VERSION ||
+        bundle.resolverVersion !== PROJECT_RESOLVER_VERSION ||
+        this.sourceSearchProjectionChanged(bundle.sourceSearchVersion));
     const persistedInputs = bundle.indexInputs;
     if (persistedInputs === null) {
       return {
         ...persistedStatus,
         stale: true,
-        staleReasons: ["configuration-untracked"]
+        staleReasons: [
+          "configuration-untracked",
+          ...(versionChanged ? (["indexer-version-changed"] as const) : [])
+        ]
       };
     }
 
@@ -465,15 +859,14 @@ export class SymbolLatticeService {
         return {
           ...persistedStatus,
           stale: true,
-          staleReasons: ["configuration-invalid"]
+          staleReasons: [
+            "configuration-invalid",
+            ...(versionChanged ? (["indexer-version-changed"] as const) : [])
+          ]
         };
       }
       throw error;
     }
-    const versionChanged =
-      bundle.snapshot.files.length > 0 &&
-      (bundle.extractorVersion !== ARTIFACT_FACTS_EXTRACTOR_VERSION ||
-        bundle.resolverVersion !== PROJECT_RESOLVER_VERSION);
     const staleReasons = [
       ...(filesMatch(scan.sourceDocuments, bundle.snapshot.files)
         ? []
@@ -521,7 +914,7 @@ export class SymbolLatticeService {
 
   private async requireGraph(projectPath: string): Promise<GraphContext> {
     const normalizedProjectPath = resolve(projectPath);
-    const bundle = this.graphStore.getActiveGenerationBundle(normalizedProjectPath);
+    const bundle = this.getActiveGraphBundle(normalizedProjectPath);
     if (!bundle.status.initialized) {
       throw new SymbolLatticeError(
         "MISSING_INDEX",
@@ -533,6 +926,38 @@ export class SymbolLatticeService {
       status: await this.getStatusForBundle(normalizedProjectPath, bundle),
       snapshot: bundle.snapshot
     };
+  }
+
+  /**
+   * v0.4 adds a smaller graph-only bundle, but GraphStore is public and v0.3
+   * adapters only expose the full generation bundle. Preserve that contract
+   * rather than making ordinary reads depend on an optional optimization.
+   */
+  private getActiveGraphBundle(projectPath: string): ActiveGraphBundle {
+    const readGraphBundle = this.graphStore.getActiveGraphBundle;
+    if (typeof readGraphBundle === "function") {
+      return readGraphBundle.call(this.graphStore, projectPath);
+    }
+
+    const legacyBundle = this.graphStore.getActiveGenerationBundle(projectPath);
+    return {
+      status: legacyBundle.status,
+      snapshot: legacyBundle.snapshot,
+      indexInputs: legacyBundle.indexInputs,
+      extractorVersion: legacyBundle.extractorVersion,
+      resolverVersion: legacyBundle.resolverVersion,
+      sourceSearchVersion: legacyBundle.sourceSearchVersion ?? null
+    };
+  }
+
+  /** A missing v0.4 capability on a v0.3 adapter is not index drift. */
+  private sourceSearchProjectionChanged(
+    sourceSearchVersion: string | null | undefined
+  ): boolean {
+    return (
+      typeof this.graphStore.getActiveSourceSearchBundle === "function" &&
+      sourceSearchVersion !== SOURCE_SEARCH_INDEX_VERSION
+    );
   }
 
   private requireExactSymbol(context: GraphContext, reference: string): SymbolNode {
@@ -559,14 +984,11 @@ export class SymbolLatticeService {
     centerLine: number,
     contextLines = 2
   ): Promise<SourceExcerpt> {
-    const lines = (await this.sourceCatalog.read(projectPath, filePath)).split(/\r?\n/);
-    const startLine = Math.max(1, centerLine - contextLines);
-    const endLine = Math.min(lines.length, centerLine + contextLines);
-    const excerptLines = lines.slice(startLine - 1, endLine).map((text, index) => ({
-      line: startLine + index,
-      text
-    }));
-
-    return { filePath, startLine, endLine, lines: excerptLines };
+    return excerptFromSourceText(
+      filePath,
+      await this.sourceCatalog.read(projectPath, filePath),
+      centerLine,
+      contextLines
+    );
   }
 }

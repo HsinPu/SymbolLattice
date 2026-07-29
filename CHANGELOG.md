@@ -6,6 +6,33 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.4.0] - 2026-07-29
+
+### Added
+
+- Generation-bound local FTS5 source retrieval across persisted TypeScript/TSX/JavaScript/JSX source text and identifier parts.
+- `search <query>` CLI command with bounded `--limit`, project-relative `--path`, and `--language` filters.
+- Persisted source hit evidence: deterministic rank, range, excerpt, direct source terms, lexical explanation, and overlapping symbol candidates.
+- Read-only, idempotent `symbol_lattice_search` MCP tool with structured output; `symbol_lattice_explore` now also exposes structured output.
+- Additive source-retrieval tables for source documents and a versioned FTS projection, committed atomically with the active graph generation under the SQLite v4 metadata marker.
+- A `prepack` build gate so packaged artifacts always regenerate `dist` from the current source.
+
+### Changed
+
+- Query-only graph reads now load a lightweight active graph bundle instead of raw artifacts.
+- `sync` treats a missing or outdated source-search projection as an explicit indexer-version change and can backfill it while reusing compatible raw facts.
+- Search freshness is evaluated against the current project while every result excerpt and range remains bound to the persisted active generation.
+- Existing v0.3 `GraphStore` adapters retain ordinary graph reads; source search stays explicitly unavailable until an adapter opts into the new retrieval capability.
+
+### Upgrade notes
+
+- SQLite v1-v4 indexes remain readable. The additive retrieval tables keep a v4 metadata marker so a v0.3 binary can still open and reindex after a rollback. A legacy active generation intentionally has no source-search projection; run `sync` or `index` before using `search`.
+- The v0.4 source-search backfill reuses compatible v0.3 raw artifacts when safe. It never fabricates historical source evidence or index-work data.
+
+### Deliberate limits
+
+- Retrieval is local lexical FTS only. Embeddings, cloud search, semantic ranking, multi-symbol context assembly, and historical source browsing remain out of scope.
+
 ## [0.3.0] - 2026-07-29
 
 ### Added
@@ -78,7 +105,8 @@ No unreleased changes.
 - Explicit full indexing, caller/callee/impact queries, and read-only MCP exploration.
 - `exact`, `heuristic`, and `unresolved` relationship states.
 
-[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/HsinPu/symbol-lattice/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.1.0...v0.2.0

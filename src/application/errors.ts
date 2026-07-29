@@ -5,7 +5,12 @@ export class SymbolLatticeError extends Error {
       | "EDGE_NOT_FOUND"
       | "INVALID_PROJECT_CONFIGURATION"
       | "INVALID_PROJECT_PATH"
+      | "INVALID_SEARCH_LANGUAGE"
+      | "INVALID_SEARCH_LIMIT"
+      | "INVALID_SEARCH_PATH_PREFIX"
+      | "INVALID_SEARCH_QUERY"
       | "MISSING_INDEX"
+      | "SOURCE_SEARCH_UNAVAILABLE"
       | "SYMBOL_NOT_FOUND"
       | "UNSUPPORTED_NODE_VERSION",
     message: string

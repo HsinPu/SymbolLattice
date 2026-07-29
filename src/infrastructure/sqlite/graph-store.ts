@@ -23,8 +23,18 @@ import type {
   SymbolKind,
   SymbolNode
 } from "../../domain/types.js";
+import {
+  MAX_SOURCE_SEARCH_LIMIT,
+  sourceSearchCorpus,
+  sourceSearchTerms,
+  type IndexedSourceDocument,
+  type IndexedSourceSearchHit,
+  type SourceSearchRequest
+} from "../../domain/source-search.js";
 import type {
+  ActiveGraphBundle,
   ActiveGenerationBundle,
+  ActiveSourceSearchBundle,
   GraphStore,
   ReplaceProjectFactsInput
 } from "../../ports/graph-store.js";
@@ -34,8 +44,15 @@ const DATABASE_FILE_NAME = "index.sqlite";
 const INDEXED_AT_META_KEY = "indexed_at";
 const ACTIVE_GENERATION_ID_META_KEY = "active_generation_id";
 const SCHEMA_VERSION_META_KEY = "schema_version";
-const SCHEMA_VERSION = "4";
 const INDEX_INPUTS_SCHEMA_VERSION = "3";
+const INDEX_WORK_SCHEMA_VERSION = "4";
+// Source retrieval is a strictly additive v0.4 capability. Keep the metadata
+// marker at v4 so a v0.3 reader can still open and replace this index; v0.4
+// detects its extra tables before attempting source-search reads.
+const SCHEMA_VERSION = INDEX_WORK_SCHEMA_VERSION;
+// The first unreleased v0.4 candidate used this marker. Accept it only long
+// enough to install the additive tables and normalize metadata back to v4.
+const PRE_RELEASE_SOURCE_SEARCH_SCHEMA_VERSION = "5";
 const GENERATION_SCHEMA_VERSION = "2";
 const LEGACY_SCHEMA_VERSION = "1";
 
@@ -182,11 +199,54 @@ const GENERATION_INDEX_WORK_SCHEMA = `
   ) STRICT;
 `;
 
+/**
+ * The v0.4 source-retrieval side tables remain additive while metadata stays
+ * v4-compatible. The ordinary document table keeps raw source available to
+ * callers, while FTS5 holds a derived corpus. A per-generation version row
+ * makes upgraded v1-v4 generations honestly report that no source retrieval
+ * projection was captured for them.
+ */
+const GENERATION_SOURCE_SEARCH_SCHEMA = `
+  PRAGMA foreign_keys = ON;
+
+  CREATE TABLE IF NOT EXISTS generation_source_search (
+    generation_id TEXT PRIMARY KEY,
+    source_search_version TEXT NOT NULL,
+    FOREIGN KEY(generation_id) REFERENCES generations(id) ON DELETE CASCADE
+  ) STRICT;
+`;
+
+const SOURCE_DOCUMENTS_SCHEMA = `
+  PRAGMA foreign_keys = ON;
+
+  CREATE TABLE IF NOT EXISTS source_documents (
+    generation_id TEXT NOT NULL,
+    file_path TEXT NOT NULL,
+    language TEXT NOT NULL,
+    source_text TEXT NOT NULL,
+    PRIMARY KEY(generation_id, file_path),
+    FOREIGN KEY(generation_id) REFERENCES generations(id) ON DELETE CASCADE
+  ) STRICT;
+
+  CREATE INDEX IF NOT EXISTS source_documents_by_file_path
+    ON source_documents(file_path, generation_id);
+`;
+
+const SOURCE_SEARCH_SCHEMA = `
+  CREATE VIRTUAL TABLE IF NOT EXISTS source_search USING fts5(
+    generation_id UNINDEXED,
+    file_path UNINDEXED,
+    language UNINDEXED,
+    corpus
+  );
+`;
+
 type SupportedSchemaVersion =
   | typeof LEGACY_SCHEMA_VERSION
   | typeof GENERATION_SCHEMA_VERSION
   | typeof INDEX_INPUTS_SCHEMA_VERSION
-  | typeof SCHEMA_VERSION;
+  | typeof INDEX_WORK_SCHEMA_VERSION
+  | typeof PRE_RELEASE_SOURCE_SEARCH_SCHEMA_VERSION;
 
 interface CountRow {
   readonly count: number;
@@ -265,6 +325,17 @@ interface GenerationRow {
   readonly indexed_at: string;
   readonly extractor_version: string;
   readonly resolver_version: string;
+}
+
+interface GenerationSourceSearchRow {
+  readonly source_search_version: string;
+}
+
+interface SourceSearchRow {
+  readonly file_path: string;
+  readonly language: ArtifactLanguage;
+  readonly source_text: string;
+  readonly relevance: number;
 }
 
 function databasePathFor(projectPath: string): string {
@@ -352,7 +423,7 @@ function unsupportedSchemaError(version: string | null): Error {
   }
 
   return new Error(
-    `SymbolLattice index schema version \"${version}\" is unsupported by this release (supported: ${LEGACY_SCHEMA_VERSION}, ${GENERATION_SCHEMA_VERSION}, ${INDEX_INPUTS_SCHEMA_VERSION}, ${SCHEMA_VERSION}). Rebuild with a compatible SymbolLattice version.`
+    `SymbolLattice index schema version \"${version}\" is unsupported by this release (supported: ${LEGACY_SCHEMA_VERSION}, ${GENERATION_SCHEMA_VERSION}, ${INDEX_INPUTS_SCHEMA_VERSION}, ${INDEX_WORK_SCHEMA_VERSION}; legacy prerelease ${PRE_RELEASE_SOURCE_SEARCH_SCHEMA_VERSION} is normalized on initialization). Rebuild with a compatible SymbolLattice version.`
   );
 }
 
@@ -366,12 +437,41 @@ function readSchemaVersion(database: DatabaseSync): SupportedSchemaVersion {
     version === LEGACY_SCHEMA_VERSION ||
     version === GENERATION_SCHEMA_VERSION ||
     version === INDEX_INPUTS_SCHEMA_VERSION ||
-    version === SCHEMA_VERSION
+    version === INDEX_WORK_SCHEMA_VERSION ||
+    version === PRE_RELEASE_SOURCE_SEARCH_SCHEMA_VERSION
   ) {
     return version;
   }
 
   throw unsupportedSchemaError(version);
+}
+
+function installCurrentAdditiveSchema(database: DatabaseSync): void {
+  database.exec(GENERATION_SCHEMA);
+  database.exec(GENERATION_INDEX_INPUTS_SCHEMA);
+  database.exec(GENERATION_INDEX_WORK_SCHEMA);
+  database.exec(GENERATION_SOURCE_SEARCH_SCHEMA);
+  database.exec(SOURCE_DOCUMENTS_SCHEMA);
+  database.exec(SOURCE_SEARCH_SCHEMA);
+}
+
+function cleanOrphanedSourceSearchRows(database: DatabaseSync): void {
+  if (!supportsSourceSearch(database)) {
+    return;
+  }
+
+  // v0.3 does not know the FTS5 table. Its generation delete cascades the
+  // ordinary source rows, but SQLite virtual tables cannot carry that foreign
+  // key, so an old reindex can leave behind an invisible FTS row.
+  database.exec(`
+    DELETE FROM source_search
+    WHERE NOT EXISTS (
+      SELECT 1
+      FROM source_documents
+      WHERE source_documents.generation_id = source_search.generation_id
+        AND source_documents.file_path = source_search.file_path
+    );
+  `);
 }
 
 function migrateDatabaseToCurrent(database: DatabaseSync): void {
@@ -380,9 +480,8 @@ function migrateDatabaseToCurrent(database: DatabaseSync): void {
     // All historic revisions use the same v0.1 projection. The v2-v4
     // additions are independent side tables, so this is a strictly additive
     // upgrade that preserves the active graph and any raw facts already there.
-    database.exec(GENERATION_SCHEMA);
-    database.exec(GENERATION_INDEX_INPUTS_SCHEMA);
-    database.exec(GENERATION_INDEX_WORK_SCHEMA);
+    installCurrentAdditiveSchema(database);
+    cleanOrphanedSourceSearchRows(database);
     setMeta(database, SCHEMA_VERSION_META_KEY, SCHEMA_VERSION);
     database.exec("COMMIT");
   } catch (error) {
@@ -395,9 +494,7 @@ function initializeNewDatabase(database: DatabaseSync): void {
   database.exec("BEGIN IMMEDIATE");
   try {
     database.exec(SNAPSHOT_SCHEMA);
-    database.exec(GENERATION_SCHEMA);
-    database.exec(GENERATION_INDEX_INPUTS_SCHEMA);
-    database.exec(GENERATION_INDEX_WORK_SCHEMA);
+    installCurrentAdditiveSchema(database);
     setMeta(database, SCHEMA_VERSION_META_KEY, SCHEMA_VERSION);
     database.exec("COMMIT");
   } catch (error) {
@@ -418,12 +515,18 @@ function ensureSchema(database: DatabaseSync, databaseExisted: boolean): void {
     return;
   }
 
-  // A previous v4 initialization might have been interrupted after the main
-  // schema version was stored. The idempotent side tables can be restored
-  // without changing graph data or its active generation.
-  database.exec(GENERATION_SCHEMA);
-  database.exec(GENERATION_INDEX_INPUTS_SCHEMA);
-  database.exec(GENERATION_INDEX_WORK_SCHEMA);
+  // A previous v0.4 initialization might have been interrupted after the main
+  // schema version was stored. Restore the additive tables, then clean any
+  // source FTS rows a v0.3 reindex left without matching documents.
+  database.exec("BEGIN IMMEDIATE");
+  try {
+    installCurrentAdditiveSchema(database);
+    cleanOrphanedSourceSearchRows(database);
+    database.exec("COMMIT");
+  } catch (error) {
+    database.exec("ROLLBACK");
+    throw error;
+  }
 }
 
 function getActiveGenerationId(database: DatabaseSync): string | null {
@@ -436,7 +539,24 @@ function supportsGenerationData(schemaVersion: SupportedSchemaVersion): boolean 
 
 function supportsIndexInputs(schemaVersion: SupportedSchemaVersion): boolean {
   return (
-    schemaVersion === INDEX_INPUTS_SCHEMA_VERSION || schemaVersion === SCHEMA_VERSION
+    schemaVersion === INDEX_INPUTS_SCHEMA_VERSION ||
+    schemaVersion === INDEX_WORK_SCHEMA_VERSION ||
+    schemaVersion === PRE_RELEASE_SOURCE_SEARCH_SCHEMA_VERSION
+  );
+}
+
+function supportsIndexWork(schemaVersion: SupportedSchemaVersion): boolean {
+  return (
+    schemaVersion === INDEX_WORK_SCHEMA_VERSION ||
+    schemaVersion === PRE_RELEASE_SOURCE_SEARCH_SCHEMA_VERSION
+  );
+}
+
+function supportsSourceSearch(database: DatabaseSync): boolean {
+  return (
+    tableExists(database, "generation_source_search") &&
+    tableExists(database, "source_documents") &&
+    tableExists(database, "source_search")
   );
 }
 
@@ -622,6 +742,42 @@ function insertIndexWork(database: DatabaseSync, generationId: string, indexWork
     .run(generationId, JSON.stringify(indexWork));
 }
 
+function insertSourceSearchVersion(
+  database: DatabaseSync,
+  generationId: string,
+  sourceSearchVersion: string
+): void {
+  database
+    .prepare(
+      "INSERT INTO generation_source_search(generation_id, source_search_version) VALUES (?, ?)"
+    )
+    .run(generationId, sourceSearchVersion);
+}
+
+function insertSourceDocument(
+  database: DatabaseSync,
+  generationId: string,
+  document: IndexedSourceDocument
+): void {
+  database
+    .prepare(
+      `INSERT INTO source_documents(generation_id, file_path, language, source_text)
+       VALUES (?, ?, ?, ?)`
+    )
+    .run(generationId, document.filePath, document.language, document.sourceText);
+  database
+    .prepare(
+      `INSERT INTO source_search(generation_id, file_path, language, corpus)
+       VALUES (?, ?, ?, ?)`
+    )
+    .run(
+      generationId,
+      document.filePath,
+      document.language,
+      sourceSearchCorpus(document.sourceText)
+    );
+}
+
 function emptySnapshot(): GraphSnapshot {
   return { files: [], symbols: [], edges: [], pendingReferences: [] };
 }
@@ -794,7 +950,7 @@ function readActiveIndexWork(
   schemaVersion: SupportedSchemaVersion,
   activeGenerationId: string | null
 ): IndexWork | null {
-  if (schemaVersion !== SCHEMA_VERSION || activeGenerationId === null) {
+  if (!supportsIndexWork(schemaVersion) || activeGenerationId === null) {
     return null;
   }
 
@@ -811,15 +967,129 @@ function readActiveIndexWork(
     : parseJson<IndexWork>(row.work_json, `index work for generation ${activeGenerationId}`);
 }
 
-function readActiveGenerationBundle(
+function readActiveSourceSearchVersion(
+  database: DatabaseSync,
+  activeGenerationId: string | null
+): string | null {
+  if (!supportsSourceSearch(database) || activeGenerationId === null) {
+    return null;
+  }
+
+  const row = database
+    .prepare(
+      `SELECT source_search_version
+       FROM generation_source_search
+       WHERE generation_id = ?`
+    )
+    .get(activeGenerationId) as unknown as GenerationSourceSearchRow | undefined;
+  return row?.source_search_version ?? null;
+}
+
+function sourceSearchPrefixQuery(terms: readonly string[]): string | null {
+  const normalizedTerms = [
+    ...new Set(terms.flatMap((term) => sourceSearchTerms(term)))
+  ];
+  if (normalizedTerms.length === 0) {
+    return null;
+  }
+
+  return normalizedTerms
+    .map((term) => `"${term.replaceAll('"', '""')}"*`)
+    .join(" AND ");
+}
+
+function boundedSourceSearchLimit(limit: number): number {
+  if (!Number.isFinite(limit)) {
+    return MAX_SOURCE_SEARCH_LIMIT;
+  }
+
+  return Math.min(Math.max(Math.trunc(limit), 0), MAX_SOURCE_SEARCH_LIMIT);
+}
+
+function normalizedPathPrefix(pathPrefix: string | undefined): string | null {
+  if (pathPrefix === undefined) {
+    return null;
+  }
+
+  const normalized = pathPrefix.replace(/\/+$/u, "");
+  return normalized === "" || normalized === "." ? null : normalized;
+}
+
+function escapeLike(value: string): string {
+  return value.replace(/[\\%_]/gu, "\\$&");
+}
+
+function readActiveSourceSearchHits(
+  database: DatabaseSync,
+  activeGenerationId: string | null,
+  sourceSearchVersion: string | null,
+  request: SourceSearchRequest
+): readonly IndexedSourceSearchHit[] {
+  if (
+    !supportsSourceSearch(database) ||
+    activeGenerationId === null ||
+    sourceSearchVersion === null
+  ) {
+    return [];
+  }
+
+  const matchQuery = sourceSearchPrefixQuery(request.terms);
+  const limit = boundedSourceSearchLimit(request.limit);
+  if (matchQuery === null || limit === 0) {
+    return [];
+  }
+
+  const where = ["source_search MATCH ?", "source_search.generation_id = ?"];
+  const parameters: (string | number)[] = [matchQuery, activeGenerationId];
+  if (request.language !== undefined) {
+    where.push("source_documents.language = ?");
+    parameters.push(request.language);
+  }
+
+  const pathPrefix = normalizedPathPrefix(request.pathPrefix);
+  if (pathPrefix !== null) {
+    where.push(
+      "(source_documents.file_path = ? OR source_documents.file_path LIKE ? ESCAPE '\\')"
+    );
+    parameters.push(pathPrefix, `${escapeLike(pathPrefix)}/%`);
+  }
+
+  parameters.push(limit);
+  const rows = database
+    .prepare(
+      `SELECT source_documents.file_path, source_documents.language,
+        source_documents.source_text, bm25(source_search) AS relevance
+       FROM source_search
+       INNER JOIN source_documents
+         ON source_documents.generation_id = source_search.generation_id
+         AND source_documents.file_path = source_search.file_path
+       WHERE ${where.join(" AND ")}
+       ORDER BY relevance ASC, source_documents.file_path ASC
+       LIMIT ?`
+    )
+    .all(...parameters) as unknown as SourceSearchRow[];
+
+  return rows.map((row) => ({
+    filePath: row.file_path,
+    language: row.language,
+    sourceText: row.source_text,
+    relevance: row.relevance
+  }));
+}
+
+function readActiveGraphBundle(
   database: DatabaseSync,
   projectPath: string
-): ActiveGenerationBundle {
+): ActiveGraphBundle {
   const schemaVersion = readSchemaVersion(database);
   const generationId =
     supportsGenerationData(schemaVersion) ? getActiveGenerationId(database) : null;
   const generation = readGeneration(database, generationId);
   const indexWork = readActiveIndexWork(database, schemaVersion, generationId);
+  const sourceSearchVersion = readActiveSourceSearchVersion(
+    database,
+    generationId
+  );
   const statusWithoutWork: IndexStatus = {
     initialized: true,
     stale: false,
@@ -835,10 +1105,25 @@ function readActiveGenerationBundle(
   return {
     status,
     snapshot: readSnapshotProjection(database, generationId),
-    artifactFacts: readActiveArtifactFacts(database, schemaVersion, generationId),
     indexInputs: readActiveIndexInputs(database, schemaVersion, generationId),
     extractorVersion: generation?.extractor_version ?? null,
-    resolverVersion: generation?.resolver_version ?? null
+    resolverVersion: generation?.resolver_version ?? null,
+    sourceSearchVersion
+  };
+}
+
+function readActiveGenerationBundle(
+  database: DatabaseSync,
+  projectPath: string
+): ActiveGenerationBundle {
+  const graphBundle = readActiveGraphBundle(database, projectPath);
+  return {
+    ...graphBundle,
+    artifactFacts: readActiveArtifactFacts(
+      database,
+      readSchemaVersion(database),
+      graphBundle.status.generationId
+    )
   };
 }
 
@@ -861,11 +1146,11 @@ export class SqliteGraphStore implements GraphStore {
   }
 
   public getStatus(projectPath: string): IndexStatus {
-    return this.getActiveGenerationBundle(projectPath).status;
+    return this.getActiveGraphBundle(projectPath).status;
   }
 
   public getSnapshot(projectPath: string): GraphSnapshot {
-    return this.getActiveGenerationBundle(projectPath).snapshot;
+    return this.getActiveGraphBundle(projectPath).snapshot;
   }
 
   public getArtifactFacts(projectPath: string): readonly PersistedArtifactFacts[] {
@@ -873,7 +1158,30 @@ export class SqliteGraphStore implements GraphStore {
   }
 
   public getIndexInputs(projectPath: string): ProjectIndexInputs | null {
-    return this.getActiveGenerationBundle(projectPath).indexInputs;
+    return this.getActiveGraphBundle(projectPath).indexInputs;
+  }
+
+  public getActiveGraphBundle(projectPath: string): ActiveGraphBundle {
+    const normalizedProjectPath = resolve(projectPath);
+    if (!this.isInitialized(normalizedProjectPath)) {
+      return {
+        status: uninitializedStatus(normalizedProjectPath),
+        snapshot: emptySnapshot(),
+        indexInputs: null,
+        extractorVersion: null,
+        resolverVersion: null,
+        sourceSearchVersion: null
+      };
+    }
+
+    const database = new DatabaseSync(databasePathFor(normalizedProjectPath), { readOnly: true });
+    try {
+      return readConsistently(database, () =>
+        readActiveGraphBundle(database, normalizedProjectPath)
+      );
+    } finally {
+      database.close();
+    }
   }
 
   public getActiveGenerationBundle(projectPath: string): ActiveGenerationBundle {
@@ -885,7 +1193,8 @@ export class SqliteGraphStore implements GraphStore {
         artifactFacts: [],
         indexInputs: null,
         extractorVersion: null,
-        resolverVersion: null
+        resolverVersion: null,
+        sourceSearchVersion: null
       };
     }
 
@@ -894,6 +1203,37 @@ export class SqliteGraphStore implements GraphStore {
       return readConsistently(database, () =>
         readActiveGenerationBundle(database, normalizedProjectPath)
       );
+    } finally {
+      database.close();
+    }
+  }
+
+  public getActiveSourceSearchBundle(
+    projectPath: string,
+    request: SourceSearchRequest
+  ): ActiveSourceSearchBundle {
+    const normalizedProjectPath = resolve(projectPath);
+    if (!this.isInitialized(normalizedProjectPath)) {
+      return {
+        ...this.getActiveGraphBundle(normalizedProjectPath),
+        hits: []
+      };
+    }
+
+    const database = new DatabaseSync(databasePathFor(normalizedProjectPath), { readOnly: true });
+    try {
+      return readConsistently(database, () => {
+        const graphBundle = readActiveGraphBundle(database, normalizedProjectPath);
+        return {
+          ...graphBundle,
+          hits: readActiveSourceSearchHits(
+            database,
+            graphBundle.status.generationId,
+            graphBundle.sourceSearchVersion ?? null,
+            request
+          )
+        };
+      });
     } finally {
       database.close();
     }
@@ -927,9 +1267,20 @@ export class SqliteGraphStore implements GraphStore {
         if (input.indexWork !== undefined) {
           insertIndexWork(database, generationId, input.indexWork);
         }
+        const writesSourceSearch =
+          input.sourceSearchVersion !== undefined && input.sourceDocuments !== undefined;
+        if (writesSourceSearch) {
+          insertSourceSearchVersion(database, generationId, input.sourceSearchVersion);
+        }
 
         for (const facts of input.artifactFacts) {
           insertArtifactFacts(database, generationId, facts);
+        }
+
+        if (writesSourceSearch) {
+          for (const document of input.sourceDocuments) {
+            insertSourceDocument(database, generationId, document);
+          }
         }
 
         for (const edge of input.snapshot.edges) {
@@ -960,6 +1311,11 @@ export class SqliteGraphStore implements GraphStore {
         // inside this transaction, so a failed replacement rolls back to the old
         // graph and its still-active evidence together.
         if (previousGenerationId !== null && previousGenerationId !== generationId) {
+          database.prepare("DELETE FROM source_search WHERE generation_id = ?").run(previousGenerationId);
+          database.prepare("DELETE FROM source_documents WHERE generation_id = ?").run(previousGenerationId);
+          database
+            .prepare("DELETE FROM generation_source_search WHERE generation_id = ?")
+            .run(previousGenerationId);
           database.prepare("DELETE FROM edge_evidence WHERE generation_id = ?").run(previousGenerationId);
           database.prepare("DELETE FROM artifact_facts WHERE generation_id = ?").run(previousGenerationId);
           database

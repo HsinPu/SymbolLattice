@@ -7,8 +7,10 @@ import { resolve } from "node:path";
 import {
   SymbolLatticeError,
   SymbolLatticeService,
-  type FindOptions
+  type FindOptions,
+  type SearchOptions
 } from "../application/index.js";
+import { MAX_SOURCE_SEARCH_LIMIT } from "../domain/index.js";
 import { FileSystemSourceCatalog } from "../infrastructure/filesystem/index.js";
 import { SqliteGraphStore } from "../infrastructure/sqlite/index.js";
 import { serveMcp } from "../mcp/index.js";
@@ -32,6 +34,12 @@ interface FindCommandOptions extends ProjectOptions {
   readonly limit?: number;
 }
 
+interface SearchCommandOptions extends ProjectOptions {
+  readonly limit?: number;
+  readonly path?: string;
+  readonly language?: NonNullable<SearchOptions["language"]>;
+}
+
 interface DepthCommandOptions extends ProjectOptions {
   readonly depth?: number;
 }
@@ -50,6 +58,42 @@ function parsePositiveInteger(value: string): number {
     throw new Error(`Expected a positive integer, received \"${value}\".`);
   }
   return parsed;
+}
+
+function parseSearchLimit(value: string): number {
+  const parsed = parsePositiveInteger(value);
+  if (parsed > MAX_SOURCE_SEARCH_LIMIT) {
+    throw new Error(
+      `Expected an integer between 1 and ${MAX_SOURCE_SEARCH_LIMIT}, received \"${value}\".`
+    );
+  }
+  return parsed;
+}
+
+function parseSearchPath(value: string): string {
+  const pathPrefix = value.trim();
+  if (pathPrefix.length === 0) {
+    throw new Error("Expected a non-empty project-relative path prefix.");
+  }
+  return pathPrefix;
+}
+
+function parseSearchLanguage(value: string): NonNullable<SearchOptions["language"]> {
+  const language = value.trim();
+  if (language !== "typescript" && language !== "javascript") {
+    throw new Error(
+      `Expected \"typescript\" or \"javascript\", received \"${value}\".`
+    );
+  }
+  return language;
+}
+
+function normalizeSearchQuery(value: string): string {
+  const query = value.trim();
+  if (query.length === 0) {
+    throw new Error("Expected a non-empty search query.");
+  }
+  return query;
 }
 
 function render(value: unknown, _options: OutputOptions): void {
@@ -180,6 +224,30 @@ export function createProgram(service = createService()): Command {
         findOptions.limit = options.limit;
       }
       render(await service.find(defaultProjectPath(options), query, findOptions), options);
+    });
+
+  addJsonOption(addProjectOption(program.command("search <query>")))
+    .option(
+      "--limit <count>",
+      `Maximum number of results (1-${MAX_SOURCE_SEARCH_LIMIT})`,
+      parseSearchLimit
+    )
+    .option("--path <project-relative-prefix>", "Restrict results to a project-relative source-path prefix", parseSearchPath)
+    .option(
+      "--language <typescript|javascript>",
+      "Restrict results to TypeScript or JavaScript",
+      parseSearchLanguage
+    )
+    .action(async (query: string, options: SearchCommandOptions) => {
+      const searchOptions: SearchOptions = {
+        ...(options.limit === undefined ? {} : { limit: options.limit }),
+        ...(options.path === undefined ? {} : { pathPrefix: options.path }),
+        ...(options.language === undefined ? {} : { language: options.language })
+      };
+      render(
+        await service.search(defaultProjectPath(options), normalizeSearchQuery(query), searchOptions),
+        options
+      );
     });
 
   for (const commandName of ["callers", "callees"] as const) {
