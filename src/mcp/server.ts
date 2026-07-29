@@ -20,6 +20,8 @@ import type {
   ContextResult,
   ExplainEdgeResult,
   ExploreResult,
+  GitAffectedTestsOptions,
+  GitAffectedTestsResult,
   SearchOptions,
   SearchResult
 } from "../application/types.js";
@@ -47,6 +49,15 @@ export interface AffectedTestsService {
   ): Promise<AffectedTestsResult>;
 }
 
+/** Additive local-Git change-set seam; older affected-test embeddings remain valid. */
+export interface GitAffectedTestsService {
+  gitAffectedTestsAvailable(): boolean;
+  affectedTestsFromGit(
+    projectPath: string,
+    options?: GitAffectedTestsOptions
+  ): Promise<GitAffectedTestsResult>;
+}
+
 export interface ExplainEdgeService {
   explainEdge(projectPath: string, edgeId: string): Promise<ExplainEdgeResult>;
 }
@@ -60,6 +71,7 @@ export type ReadOnlyMcpService = ExploreService & ExplainEdgeService;
 export type SearchMcpService = ExploreService & SearchService;
 export type ContextMcpService = ExploreService & ContextService;
 export type AffectedTestsMcpService = ExploreService & AffectedTestsService;
+export type GitAffectedTestsMcpService = ExploreService & GitAffectedTestsService;
 
 export interface ExploreToolArguments {
   readonly query: string;
@@ -78,6 +90,14 @@ export interface ContextToolArguments {
 export interface AffectedTestsToolArguments {
   readonly filePaths: readonly string[];
   readonly projectPath?: string | undefined;
+  readonly maxDepth?: number | undefined;
+  readonly limit?: number | undefined;
+}
+
+export interface GitAffectedTestsToolArguments {
+  readonly projectPath?: string | undefined;
+  /** Omit for HEAD-to-working-tree selection; otherwise compare local merge-base to HEAD. */
+  readonly baseRef?: string | undefined;
   readonly maxDepth?: number | undefined;
   readonly limit?: number | undefined;
 }
@@ -109,6 +129,7 @@ export interface ReadOnlyToolResponse {
 export type ExploreToolResponse = ReadOnlyToolResponse;
 export type ContextToolResponse = ReadOnlyToolResponse;
 export type AffectedTestsToolResponse = ReadOnlyToolResponse;
+export type GitAffectedTestsToolResponse = ReadOnlyToolResponse;
 export type ExplainEdgeToolResponse = ReadOnlyToolResponse;
 export type SearchToolResponse = ReadOnlyToolResponse;
 
@@ -258,6 +279,14 @@ const affectedTestsOutputSchema = z
   })
   .passthrough();
 
+const gitAffectedTestsOutputSchema = z
+  .object({
+    status: indexStatusOutputSchema,
+    changeSet: z.object({}).passthrough(),
+    affected: affectedTestsOutputSchema.nullable()
+  })
+  .passthrough();
+
 const searchOutputSchema = z
   .object({
     status: indexStatusOutputSchema,
@@ -292,6 +321,16 @@ function supportsContext(service: ExploreService): service is ContextMcpService 
 
 function supportsAffectedTests(service: ExploreService): service is AffectedTestsMcpService {
   return "affectedTests" in service && typeof service.affectedTests === "function";
+}
+
+function supportsGitAffectedTests(service: ExploreService): service is GitAffectedTestsMcpService {
+  return (
+    "gitAffectedTestsAvailable" in service &&
+    typeof service.gitAffectedTestsAvailable === "function" &&
+    service.gitAffectedTestsAvailable() &&
+    "affectedTestsFromGit" in service &&
+    typeof service.affectedTestsFromGit === "function"
+  );
 }
 
 function renderToolError(error: unknown): ReadOnlyToolResponse {
@@ -365,6 +404,31 @@ export async function runAffectedTestsTool(
     const result = await service.affectedTests(
       arguments_.projectPath ?? defaultProjectPath,
       arguments_.filePaths,
+      options
+    );
+    return {
+      content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      structuredContent: result as unknown as Record<string, unknown>
+    };
+  } catch (error) {
+    return renderToolError(error);
+  }
+}
+
+/** Builds a bounded local-Git changed-file selection response without indexing. */
+export async function runGitAffectedTestsTool(
+  service: GitAffectedTestsService,
+  defaultProjectPath: string,
+  arguments_: GitAffectedTestsToolArguments
+): Promise<GitAffectedTestsToolResponse> {
+  try {
+    const options: GitAffectedTestsOptions = {
+      ...(arguments_.baseRef === undefined ? {} : { baseRef: arguments_.baseRef }),
+      ...(arguments_.maxDepth === undefined ? {} : { maxDepth: arguments_.maxDepth }),
+      ...(arguments_.limit === undefined ? {} : { limit: arguments_.limit })
+    };
+    const result = await service.affectedTestsFromGit(
+      arguments_.projectPath ?? defaultProjectPath,
       options
     );
     return {
@@ -538,6 +602,47 @@ export function createMcpServer(
         }
       },
       async (arguments_) => runAffectedTestsTool(affectedTestsService, defaultProjectPath, arguments_)
+    );
+  }
+
+  const gitAffectedTestsService = supportsGitAffectedTests(service) ? service : null;
+  if (gitAffectedTestsService !== null) {
+    server.registerTool(
+      "symbol_lattice_affected_git",
+      {
+        title: "Select affected tests from a local Git change set",
+        description:
+          "Uses local read-only Git commands to select TypeScript/JavaScript changes, then returns exact persisted import/export test proofs and completeness limits. Omit baseRef for HEAD-to-working-tree plus untracked files; provide baseRef for local merge-base-to-HEAD selection. This tool never fetches, creates, refreshes, or synchronizes an index.",
+        inputSchema: {
+          projectPath: z.string().trim().min(1).optional().describe("Optional path to an already indexed Git project."),
+          baseRef: z
+            .string()
+            .min(1)
+            .max(256)
+            .optional()
+            .describe("Optional local Git ref; compares its merge-base with HEAD. Omit for working-tree selection."),
+          maxDepth: z
+            .number()
+            .int()
+            .min(1)
+            .max(MAX_AFFECTED_MAX_DEPTH)
+            .optional()
+            .describe("Maximum reverse exact import/export depth per selected source file."),
+          limit: z
+            .number()
+            .int()
+            .min(1)
+            .max(MAX_AFFECTED_LIMIT)
+            .optional()
+            .describe("Maximum proof-bearing affected-test records returned.")
+        },
+        outputSchema: gitAffectedTestsOutputSchema,
+        annotations: {
+          readOnlyHint: true,
+          idempotentHint: true
+        }
+      },
+      async (arguments_) => runGitAffectedTestsTool(gitAffectedTestsService, defaultProjectPath, arguments_)
     );
   }
 

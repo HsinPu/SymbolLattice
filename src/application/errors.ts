@@ -3,6 +3,8 @@ export class SymbolLatticeError extends Error {
     public readonly code:
       | "AMBIGUOUS_SYMBOL"
       | "EDGE_NOT_FOUND"
+      | "GIT_CHANGE_SET_MALFORMED"
+      | "GIT_CHANGE_SET_UNAVAILABLE"
       | "INVALID_AFFECTED_DEPTH"
       | "INVALID_AFFECTED_FILES"
       | "INVALID_AFFECTED_LIMIT"
@@ -11,6 +13,7 @@ export class SymbolLatticeError extends Error {
       | "INVALID_CONTEXT_MAX_HOPS"
       | "INVALID_CONTEXT_REFERENCES"
       | "INVALID_CONTEXT_RELATION_LIMIT"
+      | "INVALID_GIT_BASE_REF"
       | "INVALID_IMPACT_DEPTH"
       | "INVALID_IMPACT_LIMIT"
       | "INVALID_PROJECT_CONFIGURATION"

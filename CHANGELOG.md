@@ -6,6 +6,25 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.7.0] - 2026-07-30
+
+### Added
+
+- Local Git-aware affected-test selection through `affected --working-tree` and `affected --base <ref>`. Working-tree mode compares `HEAD` with staged and unstaged work plus untracked files; base mode compares the local `merge-base(<ref>, HEAD)` with `HEAD` and never fetches.
+- A small `GitChangeSetProvider` port and native `FileSystemGitChangeSetProvider` adapter. The adapter uses argv-only `execFile`, `--no-ext-diff`, `--no-textconv`, NUL-delimited output parsing, bounded command execution, and project-relative path validation.
+- Immutable `changeSet` provenance for requested base, merge base, HEAD, untracked inclusion, deterministic Git records, rename/copy scores, and selected source paths. Both sides of a rename or copy remain visible to the active-generation graph query.
+- Read-only, idempotent `symbol_lattice_affected_git` MCP tool when a Git-aware service capability is configured; existing MCP and explicit-path affected-test surfaces remain unchanged.
+
+### Compatibility
+
+- No SQLite migration is required. Existing graph queries and explicit-path `affected` behavior are unchanged.
+- Older embedded services can omit the optional `GitChangeSetProvider`; they retain their existing MCP tool surface instead of exposing a partially configured Git tool.
+
+### Deliberate limits
+
+- Git selection is local file-level selection, not semantic Git diff, hunk-to-symbol mapping, runtime analysis, or test-runner discovery.
+- Only supported TypeScript/JavaScript paths outside hard-excluded directories enter graph analysis. A Git change set with no such paths returns provenance with `affected: null`; more than 50 source paths fails explicitly rather than truncating.
+
 ## [0.6.0] - 2026-07-29
 
 ### Added
@@ -160,7 +179,8 @@ No unreleased changes.
 - Explicit full indexing, caller/callee/impact queries, and read-only MCP exploration.
 - `exact`, `heuristic`, and `unresolved` relationship states.
 
-[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/HsinPu/symbol-lattice/compare/v0.4.0...v0.4.1

@@ -13,6 +13,7 @@ import type {
   SourceRange,
   SymbolNode
 } from "../domain/types.js";
+import type { GitChangeSet } from "../ports/git-change-set.js";
 
 export interface GraphContext {
   readonly status: IndexStatus;
@@ -123,6 +124,12 @@ export interface AffectedTestsOptions {
   readonly limit?: number;
 }
 
+/** Optional Git baseline combined with the existing affected-test bounds. */
+export interface GitAffectedTestsOptions extends AffectedTestsOptions {
+  /** Omit for working-tree changes; otherwise compare the requested Git base. */
+  readonly baseRef?: string;
+}
+
 export type AffectedTestReason = "changed-test" | "exact-dependent";
 
 /** One conventionally identified test file and its persisted graph proof. */
@@ -179,6 +186,20 @@ export interface AffectedTestsResult {
     readonly completeForActiveGeneration: boolean;
     readonly limitations: readonly AffectedTestsLimitation[];
   };
+}
+
+/**
+ * Git-derived source selection plus exact persisted-generation test proofs.
+ * `affected` is null when the Git change set contains no supported source
+ * paths, so an empty selection cannot look like a complete graph traversal.
+ */
+export interface GitAffectedTestsResult {
+  /** Current index freshness, evaluated without indexing or synchronization. */
+  readonly status: IndexStatus;
+  /** Immutable provenance returned by the injected Git change-set provider. */
+  readonly changeSet: GitChangeSet;
+  /** Exact test evidence for selected supported source paths, when any exist. */
+  readonly affected: AffectedTestsResult | null;
 }
 
 export interface ExploreResult {

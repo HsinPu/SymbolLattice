@@ -2,6 +2,7 @@ export * from "./application/index.js";
 export * from "./domain/index.js";
 export * from "./extraction/index.js";
 export * from "./infrastructure/filesystem/index.js";
+export * from "./infrastructure/git/index.js";
 export * from "./infrastructure/sqlite/index.js";
 export * from "./mcp/index.js";
 export * from "./ports/index.js";

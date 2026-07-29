@@ -7,6 +7,8 @@ import {
   type AffectedTestsResult,
   type ContextOptions,
   type ContextResult,
+  type GitAffectedTestsOptions,
+  type GitAffectedTestsResult,
   type ImpactOptions,
   type ImpactResult,
   type SearchOptions,
@@ -99,6 +101,28 @@ function affectedTestsResult(): AffectedTestsResult {
       completeForActiveGeneration: true,
       limitations: []
     }
+  };
+}
+
+function gitAffectedTestsResult(): GitAffectedTestsResult {
+  return {
+    status: resultStatus(),
+    changeSet: {
+      requestedBaseRef: null,
+      mergeBaseCommit: null,
+      headCommit: "a".repeat(40),
+      includesUntracked: true,
+      changes: [
+        {
+          kind: "modified",
+          previousPath: "src/math.ts",
+          currentPath: "src/math.ts",
+          score: null
+        }
+      ],
+      sourcePaths: ["src/math.ts"]
+    },
+    affected: affectedTestsResult()
   };
 }
 
@@ -384,6 +408,89 @@ describe("symbol-lattice v0.6 affected-test CLI", () => {
     ]);
     expect(write).toHaveBeenCalledWith(`${JSON.stringify(result, null, 2)}\n`);
   });
+
+  it("forwards working-tree Git selection and preserves stable JSON output", async () => {
+    const calls: Array<{ projectPath: string; options: GitAffectedTestsOptions }> = [];
+    const result = gitAffectedTestsResult();
+    const service = {
+      async affectedTestsFromGit(
+        projectPath: string,
+        options: GitAffectedTestsOptions = {}
+      ): Promise<GitAffectedTestsResult> {
+        calls.push({ projectPath, options });
+        return result;
+      }
+    } as unknown as SymbolLatticeService;
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+    await createProgram(service).parseAsync(
+      [
+        "node",
+        "symbol-lattice",
+        "affected",
+        "--working-tree",
+        "--project",
+        "C:/chosen-project",
+        "--depth",
+        "4",
+        "--limit",
+        "7",
+        "--json"
+      ],
+      { from: "node" }
+    );
+
+    expect(calls).toEqual([
+      {
+        projectPath: resolve("C:/chosen-project"),
+        options: { maxDepth: 4, limit: 7 }
+      }
+    ]);
+    expect(write).toHaveBeenCalledWith(`${JSON.stringify(result, null, 2)}\n`);
+  });
+
+  it("forwards an explicit Git base ref without changing the existing file-list contract", async () => {
+    const calls: Array<{ projectPath: string; options: GitAffectedTestsOptions }> = [];
+    const service = {
+      async affectedTestsFromGit(
+        projectPath: string,
+        options: GitAffectedTestsOptions = {}
+      ): Promise<GitAffectedTestsResult> {
+        calls.push({ projectPath, options });
+        return gitAffectedTestsResult();
+      }
+    } as unknown as SymbolLatticeService;
+    vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+    await createProgram(service).parseAsync(
+      ["node", "symbol-lattice", "affected", "--base", "origin/main", "--project", "C:/chosen-project"],
+      { from: "node" }
+    );
+
+    expect(calls).toEqual([
+      {
+        projectPath: resolve("C:/chosen-project"),
+        options: { baseRef: "origin/main" }
+      }
+    ]);
+  });
+
+  for (const conflictCase of [
+    ["src/math.ts", "--working-tree"],
+    ["--base", "HEAD", "--working-tree"],
+    ["--base", "HEAD", "--stdin"]
+  ] as const) {
+    it(`rejects incompatible Git affected selection: ${conflictCase.join(" ")}`, async () => {
+      const program = createProgram({} as SymbolLatticeService);
+      program.exitOverride();
+
+      await expect(
+        program.parseAsync(["node", "symbol-lattice", "affected", ...conflictCase], {
+          from: "node"
+        })
+      ).rejects.toThrow(/Git selection|either "--working-tree"/u);
+    });
+  }
 
   for (const rangeCase of [
     ["--depth", "9", "Expected an integer between 1 and 8"],

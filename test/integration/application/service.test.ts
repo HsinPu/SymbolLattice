@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { SymbolLatticeService } from "../../../src/application/index.js";
+import { SymbolLatticeError, SymbolLatticeService } from "../../../src/application/index.js";
 import {
   ARTIFACT_FACTS_EXTRACTOR_VERSION,
   SOURCE_SEARCH_INDEX_VERSION,
@@ -21,9 +21,12 @@ import type {
   ActiveGraphBundle,
   ActiveGenerationBundle,
   ActiveSourceDocumentsBundle,
+  GitChangeSet,
+  GitChangeSetProvider,
   GraphStore,
   ReplaceProjectFactsInput
 } from "../../../src/ports/index.js";
+import { GitChangeSetError } from "../../../src/ports/index.js";
 
 const temporaryDirectories: string[] = [];
 const fixturePath = join(
@@ -65,6 +68,25 @@ async function createInlineProject(files: Readonly<Record<string, string>>): Pro
 
 function createService(): SymbolLatticeService {
   return new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+}
+
+function gitChangeSet(
+  sourcePaths: readonly string[],
+  changes: GitChangeSet["changes"] = sourcePaths.map((filePath) => ({
+    kind: "modified",
+    previousPath: filePath,
+    currentPath: filePath,
+    score: null
+  }))
+): GitChangeSet {
+  return {
+    requestedBaseRef: null,
+    mergeBaseCommit: null,
+    headCommit: "a".repeat(40),
+    includesUntracked: true,
+    changes,
+    sourcePaths
+  };
 }
 
 /**
@@ -604,6 +626,194 @@ describe("SymbolLatticeService", () => {
     await expect(
       service.affectedTests(projectPath, ["src/math.ts"], { limit: 101 })
     ).rejects.toMatchObject({ code: "INVALID_AFFECTED_LIMIT" });
+  });
+
+  it("delegates Git change-set selection to the injected port, then retains exact affected-test evidence", async () => {
+    const projectPath = await createInlineProject({
+      "src/math.ts": [
+        "export function add(left: number, right: number): number {",
+        "  return left + right;",
+        "}",
+        ""
+      ].join("\n"),
+      "test/math.test.ts": [
+        'import { add } from "../src/math.js";',
+        "export const testResult = add(1, 2);",
+        ""
+      ].join("\n")
+    });
+    const calls: Array<{ projectPath: string; request: unknown }> = [];
+    const provider: GitChangeSetProvider = {
+      async getChangeSet(projectPath_, request) {
+        calls.push({ projectPath: projectPath_, request });
+        return {
+          ...gitChangeSet(["src/math.ts"]),
+          ...(request.mode === "base"
+            ? {
+                requestedBaseRef: request.baseRef,
+                mergeBaseCommit: "b".repeat(40),
+                includesUntracked: false
+              }
+            : {})
+        };
+      }
+    };
+    const service = new SymbolLatticeService(
+      new SqliteGraphStore(),
+      new FileSystemSourceCatalog(),
+      undefined,
+      provider
+    );
+    await service.init({ projectPath });
+    const before = await service.getStatus(projectPath);
+
+    const workingTree = await service.affectedTestsFromGit(projectPath, {
+      maxDepth: 2,
+      limit: 10
+    });
+    const fromBase = await service.affectedTestsFromGit(projectPath, { baseRef: "origin/main" });
+    const after = await service.getStatus(projectPath);
+
+    expect(service.gitAffectedTestsAvailable()).toBe(true);
+    expect(calls).toEqual([
+      { projectPath, request: { mode: "working-tree" } },
+      { projectPath, request: { mode: "base", baseRef: "origin/main" } }
+    ]);
+    expect(workingTree).toMatchObject({
+      status: { generationId: before.generationId, stale: false },
+      changeSet: { sourcePaths: ["src/math.ts"], includesUntracked: true },
+      affected: {
+        inputs: { requested: ["src/math.ts"], indexed: ["src/math.ts"], notIndexed: [] },
+        tests: {
+          items: [
+            expect.objectContaining({
+              filePath: "test/math.test.ts",
+              reason: "exact-dependent",
+              path: expect.objectContaining({
+                edges: [expect.objectContaining({ kind: "imports", resolution: "exact" })]
+              })
+            })
+          ]
+        },
+        completeness: { completeForActiveGeneration: true, limitations: [] }
+      }
+    });
+    expect(fromBase).toMatchObject({
+      changeSet: {
+        requestedBaseRef: "origin/main",
+        mergeBaseCommit: "b".repeat(40),
+        includesUntracked: false
+      }
+    });
+    expect(after.generationId).toBe(before.generationId);
+  });
+
+  it("keeps no-source Git changes explicit without inventing an affected-test traversal", async () => {
+    const projectPath = await createInlineProject({
+      "src/math.ts": "export const add = (left: number, right: number) => left + right;\n"
+    });
+    const provider: GitChangeSetProvider = {
+      async getChangeSet() {
+        return gitChangeSet([], [
+          { kind: "modified", previousPath: "README.md", currentPath: "README.md", score: null }
+        ]);
+      }
+    };
+    const service = new SymbolLatticeService(
+      new SqliteGraphStore(),
+      new FileSystemSourceCatalog(),
+      undefined,
+      provider
+    );
+    await service.init({ projectPath });
+
+    await expect(service.affectedTestsFromGit(projectPath)).resolves.toMatchObject({
+      status: { stale: false },
+      changeSet: { changes: [{ currentPath: "README.md" }], sourcePaths: [] },
+      affected: null
+    });
+  });
+
+  it("preserves whitespace-bearing Git paths before exact graph lookup", async () => {
+    const projectPath = await createInlineProject({
+      " src/math.ts": "export const add = (left: number, right: number) => left + right;\n",
+      "test/math.test.ts": [
+        'import { add } from "../ src/math.js";',
+        "export const testResult = add(1, 2);",
+        ""
+      ].join("\n")
+    });
+    const provider: GitChangeSetProvider = {
+      async getChangeSet() {
+        return gitChangeSet([" src/math.ts"]);
+      }
+    };
+    const service = new SymbolLatticeService(
+      new SqliteGraphStore(),
+      new FileSystemSourceCatalog(),
+      undefined,
+      provider
+    );
+    await service.init({ projectPath });
+
+    const result = await service.affectedTestsFromGit(projectPath);
+
+    expect(result.affected).toMatchObject({
+      inputs: {
+        requested: [" src/math.ts"],
+        indexed: [" src/math.ts"],
+        notIndexed: []
+      },
+      tests: {
+        items: [expect.objectContaining({ filePath: "test/math.test.ts", reason: "exact-dependent" })]
+      }
+    });
+  });
+
+  it("makes Git selection availability, base validation, port errors, and source caps actionable", async () => {
+    const projectPath = await createInlineProject({
+      "src/math.ts": "export const add = (left: number, right: number) => left + right;\n"
+    });
+    const unavailable = createService();
+    expect(unavailable.gitAffectedTestsAvailable()).toBe(false);
+    await expect(unavailable.affectedTestsFromGit(projectPath)).rejects.toMatchObject({
+      code: "GIT_CHANGE_SET_UNAVAILABLE"
+    });
+
+    const provider: GitChangeSetProvider = {
+      async getChangeSet() {
+        throw new GitChangeSetError("GIT_UNAVAILABLE", "Git executable was not found.");
+      }
+    };
+    const service = new SymbolLatticeService(
+      new SqliteGraphStore(),
+      new FileSystemSourceCatalog(),
+      undefined,
+      provider
+    );
+    await expect(service.affectedTestsFromGit(projectPath, { baseRef: " origin/main" })).rejects.toEqual(
+      expect.objectContaining<Partial<SymbolLatticeError>>({ code: "INVALID_GIT_BASE_REF" })
+    );
+    await expect(service.affectedTestsFromGit(projectPath)).rejects.toEqual(
+      expect.objectContaining<Partial<SymbolLatticeError>>({ code: "GIT_CHANGE_SET_UNAVAILABLE" })
+    );
+
+    const oversized: GitChangeSetProvider = {
+      async getChangeSet() {
+        return gitChangeSet(
+          Array.from({ length: 51 }, (_value, index) => `src/changed-${index}.ts`)
+        );
+      }
+    };
+    const oversizedService = new SymbolLatticeService(
+      new SqliteGraphStore(),
+      new FileSystemSourceCatalog(),
+      undefined,
+      oversized
+    );
+    await expect(oversizedService.affectedTestsFromGit(projectPath)).rejects.toMatchObject({
+      code: "INVALID_AFFECTED_FILES"
+    });
   });
 
   it("continues through a test-directory helper before judging active-generation completeness", async () => {

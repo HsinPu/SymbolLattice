@@ -17,11 +17,13 @@ import {
   SymbolLatticeService,
   type ContextOptions,
   type AffectedTestsOptions,
+  type GitAffectedTestsOptions,
   type FindOptions,
   type SearchOptions
 } from "../application/index.js";
 import { MAX_SOURCE_SEARCH_LIMIT } from "../domain/index.js";
 import { FileSystemSourceCatalog } from "../infrastructure/filesystem/index.js";
+import { FileSystemGitChangeSetProvider } from "../infrastructure/git/index.js";
 import { SqliteGraphStore } from "../infrastructure/sqlite/index.js";
 import { serveMcp } from "../mcp/index.js";
 import { SYMBOL_LATTICE_VERSION } from "../version.js";
@@ -59,6 +61,8 @@ interface AffectedCommandOptions extends ProjectOptions {
   readonly depth?: number;
   readonly limit?: number;
   readonly stdin?: boolean;
+  readonly workingTree?: boolean;
+  readonly base?: string;
 }
 
 interface ContextCommandOptions extends ProjectOptions {
@@ -69,7 +73,12 @@ interface ContextCommandOptions extends ProjectOptions {
 }
 
 function createService(): SymbolLatticeService {
-  return new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+  return new SymbolLatticeService(
+    new SqliteGraphStore(),
+    new FileSystemSourceCatalog(),
+    undefined,
+    new FileSystemGitChangeSetProvider()
+  );
 }
 
 function defaultProjectPath(options: ProjectOptions): string {
@@ -318,6 +327,14 @@ export function createProgram(service = createService()): Command {
   addJsonOption(addProjectOption(program.command("affected [filePaths...]")))
     .option("--stdin", "Read additional changed file paths from standard input (one per line)")
     .option(
+      "--working-tree",
+      "Select changed source files from HEAD, staged/unstaged work, and untracked files through local Git"
+    )
+    .option(
+      "--base <ref>",
+      "Select source files changed from the local merge-base of <ref> and HEAD through local Git"
+    )
+    .option(
       "--depth <count>",
       `Maximum reverse import/export depth per changed file (1-${MAX_AFFECTED_MAX_DEPTH})`,
       (value: string) => parseBoundedPositiveInteger(value, MAX_AFFECTED_MAX_DEPTH)
@@ -332,6 +349,26 @@ export function createProgram(service = createService()): Command {
         ...(options.depth === undefined ? {} : { maxDepth: options.depth }),
         ...(options.limit === undefined ? {} : { limit: options.limit })
       };
+      const hasGitSelection = options.workingTree === true || options.base !== undefined;
+      if (options.workingTree === true && options.base !== undefined) {
+        throw new Error('Use either "--working-tree" or "--base <ref>", not both.');
+      }
+      if (hasGitSelection && (filePaths.length > 0 || options.stdin === true)) {
+        throw new Error(
+          'Git selection cannot be combined with explicit affected file paths or "--stdin".'
+        );
+      }
+      if (hasGitSelection) {
+        const gitOptions: GitAffectedTestsOptions = {
+          ...affectedOptions,
+          ...(options.base === undefined ? {} : { baseRef: options.base })
+        };
+        render(
+          await service.affectedTestsFromGit(defaultProjectPath(options), gitOptions),
+          options
+        );
+        return;
+      }
       const stdinPaths = options.stdin ? parseAffectedStdin(readFileSync(0, "utf8")) : [];
       render(
         await service.affectedTests(defaultProjectPath(options), [...filePaths, ...stdinPaths], affectedOptions),

@@ -1,4 +1,4 @@
-import { isAbsolute, relative, resolve } from "node:path";
+import { isAbsolute, relative, resolve, sep } from "node:path";
 
 import {
   AFFECTED_TEST_EDGE_KINDS,
@@ -36,6 +36,11 @@ import {
   type ExtractFileFactsInput,
   type ExtractedFileFacts
 } from "../extraction/index.js";
+import {
+  GitChangeSetError,
+  type GitChangeSet,
+  type GitChangeSetProvider
+} from "../ports/git-change-set.js";
 import type {
   ActiveGraphBundle,
   ActiveSourceDocumentsBundle,
@@ -74,6 +79,8 @@ import type {
   AffectedTestsLimitation,
   AffectedTestsOptions,
   AffectedTestsResult,
+  GitAffectedTestsOptions,
+  GitAffectedTestsResult,
   ExplainEdgeResult,
   ContextBounds,
   ContextEvidencePath,
@@ -492,8 +499,14 @@ export class SymbolLatticeService {
   public constructor(
     private readonly graphStore: GraphStore,
     private readonly sourceCatalog: SourceCatalog,
-    private readonly artifactFactsExtractor: ArtifactFactsExtractor = extractFileFacts
+    private readonly artifactFactsExtractor: ArtifactFactsExtractor = extractFileFacts,
+    private readonly gitChangeSetProvider?: GitChangeSetProvider
   ) {}
+
+  /** True when this service can select changed source paths through its Git port. */
+  public gitAffectedTestsAvailable(): boolean {
+    return this.gitChangeSetProvider !== undefined;
+  }
 
   public async init(options: IndexOptions): Promise<GraphContext["status"]> {
     this.assertSafeProjectPath(options);
@@ -703,6 +716,42 @@ export class SymbolLatticeService {
       symbol,
       paths: paths.slice(0, options.limit),
       truncated: paths.length > options.limit
+    };
+  }
+
+  /**
+   * Selects Git-changed supported source paths through the injected port, then
+   * delegates proof calculation to `affectedTests`. This query never runs Git
+   * itself and never initializes, indexes, or synchronizes a project.
+   */
+  public async affectedTestsFromGit(
+    projectPath: string,
+    options: GitAffectedTestsOptions = {}
+  ): Promise<GitAffectedTestsResult> {
+    const normalizedProjectPath = resolve(projectPath);
+    const request = this.gitChangeSetRequest(options);
+    const changeSet = await this.readGitChangeSet(normalizedProjectPath, request);
+
+    if (changeSet.sourcePaths.length === 0) {
+      return {
+        status: await this.getStatus(normalizedProjectPath),
+        changeSet,
+        affected: null
+      };
+    }
+
+    if (changeSet.sourcePaths.length > MAX_AFFECTED_CHANGED_FILES) {
+      throw new SymbolLatticeError(
+        "INVALID_AFFECTED_FILES",
+        `Git source selection is capped at ${MAX_AFFECTED_CHANGED_FILES} paths. Refine the base ref or working-tree changes.`
+      );
+    }
+
+    const affected = await this.affectedTests(normalizedProjectPath, changeSet.sourcePaths, options);
+    return {
+      status: affected.status,
+      changeSet,
+      affected
     };
   }
 
@@ -965,6 +1014,69 @@ export class SymbolLatticeService {
     };
   }
 
+  private gitChangeSetRequest(
+    options: GitAffectedTestsOptions
+  ): Parameters<GitChangeSetProvider["getChangeSet"]>[1] {
+    const baseRef = options.baseRef;
+    if (baseRef === undefined) {
+      return { mode: "working-tree" };
+    }
+
+    if (
+      typeof baseRef !== "string" ||
+      baseRef.length === 0 ||
+      baseRef !== baseRef.trim() ||
+      baseRef.startsWith("-") ||
+      /[\u0000-\u001F\u007F\s]/u.test(baseRef)
+    ) {
+      throw new SymbolLatticeError(
+        "INVALID_GIT_BASE_REF",
+        'Git base ref must be non-empty, contain no whitespace or control characters, and not begin with "-".'
+      );
+    }
+
+    return { mode: "base", baseRef };
+  }
+
+  private async readGitChangeSet(
+    projectPath: string,
+    request: Parameters<GitChangeSetProvider["getChangeSet"]>[1]
+  ): Promise<GitChangeSet> {
+    const provider = this.gitChangeSetProvider;
+    if (provider === undefined) {
+      throw new SymbolLatticeError(
+        "GIT_CHANGE_SET_UNAVAILABLE",
+        "Git change-set selection is unavailable because no GitChangeSetProvider is configured."
+      );
+    }
+
+    try {
+      return await provider.getChangeSet(projectPath, request);
+    } catch (error) {
+      if (!(error instanceof GitChangeSetError)) {
+        throw error;
+      }
+
+      switch (error.code) {
+        case "GIT_UNAVAILABLE":
+          throw new SymbolLatticeError(
+            "GIT_CHANGE_SET_UNAVAILABLE",
+            `Git change-set selection is unavailable: ${error.message}`
+          );
+        case "INVALID_GIT_BASE":
+          throw new SymbolLatticeError(
+            "INVALID_GIT_BASE_REF",
+            `Git base ref is invalid: ${error.message}`
+          );
+        case "MALFORMED_GIT_OUTPUT":
+          throw new SymbolLatticeError(
+            "GIT_CHANGE_SET_MALFORMED",
+            `Git change-set output is malformed: ${error.message}`
+          );
+      }
+    }
+  }
+
   private affectedTestsRequest(
     projectPath: string,
     filePaths: readonly string[],
@@ -980,7 +1092,7 @@ export class SymbolLatticeService {
     const normalizedPaths: string[] = [];
     const seenPaths = new Set<string>();
     for (const filePath of filePaths) {
-      if (typeof filePath !== "string" || filePath.trim().length === 0) {
+      if (typeof filePath !== "string" || filePath.length === 0) {
         throw new SymbolLatticeError(
           "INVALID_AFFECTED_FILES",
           "Every affected-test input must be a non-empty file path."
@@ -1024,11 +1136,10 @@ export class SymbolLatticeService {
   }
 
   private normalizeAffectedFilePath(projectPath: string, filePath: string): string {
-    const trimmed = filePath.trim();
-    const absolutePath = isAbsolute(trimmed)
-      ? resolve(trimmed)
-      : resolve(projectPath, trimmed.replaceAll("\\", "/"));
-    const relativePath = relative(projectPath, absolutePath).replaceAll("\\", "/");
+    // Paths from Git's NUL-delimited output are exact filenames. Do not trim
+    // whitespace or rewrite literal POSIX backslashes before resolving them.
+    const absolutePath = isAbsolute(filePath) ? resolve(filePath) : resolve(projectPath, filePath);
+    const relativePath = relative(projectPath, absolutePath).split(sep).join("/");
     if (
       relativePath.length === 0 ||
       relativePath === ".." ||

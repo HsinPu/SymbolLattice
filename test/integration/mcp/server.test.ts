@@ -8,6 +8,8 @@ import {
   type ContextResult,
   type ExplainEdgeResult,
   type ExploreResult,
+  type GitAffectedTestsOptions,
+  type GitAffectedTestsResult,
   type SearchResult
 } from "../../../src/application/index.js";
 import {
@@ -16,6 +18,7 @@ import {
   runContextTool,
   runExplainEdgeTool,
   runExploreTool,
+  runGitAffectedTestsTool,
   runSearchTool
 } from "../../../src/mcp/index.js";
 
@@ -106,6 +109,28 @@ function affectedTestsResult(): AffectedTestsResult {
       completeForActiveGeneration: true,
       limitations: []
     }
+  };
+}
+
+function gitAffectedTestsResult(): GitAffectedTestsResult {
+  return {
+    status: exploreResult().status,
+    changeSet: {
+      requestedBaseRef: null,
+      mergeBaseCommit: null,
+      headCommit: "a".repeat(40),
+      includesUntracked: true,
+      changes: [
+        {
+          kind: "modified",
+          previousPath: "src/math.ts",
+          currentPath: "src/math.ts",
+          score: null
+        }
+      ],
+      sourcePaths: ["src/math.ts"]
+    },
+    affected: affectedTestsResult()
   };
 }
 
@@ -430,6 +455,103 @@ describe("SymbolLattice MCP server", () => {
     ]);
   });
 
+  it("registers local Git affected-test selection only when the capability is available", async () => {
+    const gitCalls: Array<{
+      projectPath: string;
+      options: GitAffectedTestsOptions;
+    }> = [];
+    const server = createMcpServer(
+      {
+        async explore(): Promise<ExploreResult> {
+          return exploreResult();
+        },
+        gitAffectedTestsAvailable(): boolean {
+          return true;
+        },
+        async affectedTestsFromGit(
+          projectPath: string,
+          options: GitAffectedTestsOptions = {}
+        ): Promise<GitAffectedTestsResult> {
+          gitCalls.push({ projectPath, options });
+          if (options.baseRef === " origin/main") {
+            throw new SymbolLatticeError(
+              "INVALID_GIT_BASE_REF",
+              "Git base ref must not contain surrounding whitespace."
+            );
+          }
+          return gitAffectedTestsResult();
+        }
+      },
+      "C:/default-project"
+    );
+    const client = new Client({ name: "symbol-lattice-affected-git-test", version: "1.0.0" });
+    const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+    closeCallbacks.push(() => client.close(), () => server.close());
+
+    const tools = await client.listTools();
+    expect(tools.tools.map((tool) => tool.name)).toEqual([
+      "symbol_lattice_explore",
+      "symbol_lattice_affected_git"
+    ]);
+
+    const result = await client.callTool({
+      name: "symbol_lattice_affected_git",
+      arguments: {
+        projectPath: "C:/chosen-project",
+        baseRef: "origin/main",
+        maxDepth: 4,
+        limit: 7
+      }
+    });
+    expect(result.isError).not.toBe(true);
+    expect(result.structuredContent).toMatchObject({
+      changeSet: { requestedBaseRef: null, sourcePaths: ["src/math.ts"] },
+      affected: { completeness: { completeForActiveGeneration: true } }
+    });
+    expect(gitCalls).toEqual([
+      {
+        projectPath: "C:/chosen-project",
+        options: { baseRef: "origin/main", maxDepth: 4, limit: 7 }
+      }
+    ]);
+
+    const invalidBaseResult = await client.callTool({
+      name: "symbol_lattice_affected_git",
+      arguments: { baseRef: " origin/main" }
+    });
+    expect(invalidBaseResult.isError).toBe(true);
+    expect(invalidBaseResult.content[0]?.text).toContain("INVALID_GIT_BASE_REF");
+    expect(gitCalls.at(-1)).toEqual({
+      projectPath: "C:/default-project",
+      options: { baseRef: " origin/main" }
+    });
+
+    const unavailableServer = createMcpServer(
+      {
+        async explore(): Promise<ExploreResult> {
+          return exploreResult();
+        },
+        gitAffectedTestsAvailable(): boolean {
+          return false;
+        },
+        async affectedTestsFromGit(): Promise<GitAffectedTestsResult> {
+          return gitAffectedTestsResult();
+        }
+      },
+      "C:/default-project"
+    );
+    const unavailableClient = new Client({ name: "symbol-lattice-git-disabled-test", version: "1.0.0" });
+    const [unavailableServerTransport, unavailableClientTransport] = InMemoryTransport.createLinkedPair();
+    await unavailableServer.connect(unavailableServerTransport);
+    await unavailableClient.connect(unavailableClientTransport);
+    closeCallbacks.push(() => unavailableClient.close(), () => unavailableServer.close());
+    expect((await unavailableClient.listTools()).tools.map((tool) => tool.name)).toEqual([
+      "symbol_lattice_explore"
+    ]);
+  });
+
   it("does not register search for an existing explore-and-explain embedding", async () => {
     const server = createMcpServer(
       {
@@ -547,6 +669,27 @@ describe("SymbolLattice MCP server", () => {
     expect(response.content[0]?.text).toContain("MISSING_INDEX");
   });
 
+  it("returns local Git affected-test errors without indexing", async () => {
+    const response = await runGitAffectedTestsTool(
+      {
+        gitAffectedTestsAvailable(): boolean {
+          return true;
+        },
+        async affectedTestsFromGit(): Promise<GitAffectedTestsResult> {
+          throw new SymbolLatticeError(
+            "GIT_CHANGE_SET_UNAVAILABLE",
+            "Git is not available in this project."
+          );
+        }
+      },
+      "C:/project",
+      { baseRef: "origin/main" }
+    );
+
+    expect(response).toMatchObject({ isError: true });
+    expect(response.content[0]?.text).toContain("GIT_CHANGE_SET_UNAVAILABLE");
+  });
+
   it("returns indexed-search errors without indexing", async () => {
     const response = await runSearchTool(
       {
@@ -589,6 +732,12 @@ describe("SymbolLattice MCP server", () => {
       async affectedTests(): Promise<AffectedTestsResult> {
         return affectedTestsResult();
       },
+      gitAffectedTestsAvailable(): boolean {
+        return true;
+      },
+      async affectedTestsFromGit(): Promise<GitAffectedTestsResult> {
+        return gitAffectedTestsResult();
+      },
       async search(): Promise<SearchResult> {
         return searchResult();
       },
@@ -609,6 +758,7 @@ describe("SymbolLattice MCP server", () => {
     await runExploreTool(service, "C:/project", { query: "missing" });
     await runContextTool(service, "C:/project", { references: ["src/missing.ts#missing"] });
     await runAffectedTestsTool(service, "C:/project", { filePaths: ["src/missing.ts"] });
+    await runGitAffectedTestsTool(service, "C:/project", {});
     await runSearchTool(service, "C:/project", { query: "user" });
     await runExplainEdgeTool(service, "C:/project", { edgeId: "edge:caller-callee" });
 
