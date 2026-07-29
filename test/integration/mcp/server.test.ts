@@ -17,6 +17,8 @@ import {
   type GitHunksOptions,
   type GitHunksResult,
   type NodeResult,
+  type RoutesOptions,
+  type RoutesResult,
   type SearchResult
 } from "../../../src/application/index.js";
 import {
@@ -30,6 +32,7 @@ import {
   runGitAffectedTestsTool,
   runGitHunksTool,
   runNodeTool,
+  runRoutesTool,
   runSearchTool
 } from "../../../src/mcp/index.js";
 
@@ -253,6 +256,87 @@ function searchResult(): SearchResult {
   };
 }
 
+function routesResult(): RoutesResult {
+  const route = {
+    id: "symbol:route:get-users",
+    name: "GET /api/users",
+    qualifiedName: "src/routes.ts#GET /api/users",
+    kind: "route" as const,
+    filePath: "src/routes.ts",
+    range: {
+      start: { line: 5, column: 1 },
+      end: { line: 5, column: 38 }
+    },
+    isExported: false,
+    declarationOrdinal: 0
+  };
+  const handler = {
+    id: "symbol:handlers:listUsers",
+    name: "listUsers",
+    qualifiedName: "src/handlers.ts#listUsers",
+    kind: "function" as const,
+    filePath: "src/handlers.ts",
+    range: {
+      start: { line: 1, column: 1 },
+      end: { line: 3, column: 2 }
+    },
+    isExported: true,
+    declarationOrdinal: 0
+  };
+  const unresolvedRoute = {
+    ...route,
+    id: "symbol:route:post-missing",
+    name: "POST /api/missing",
+    qualifiedName: "src/routes.ts#POST /api/missing",
+    range: {
+      start: { line: 6, column: 1 },
+      end: { line: 6, column: 43 }
+    },
+    declarationOrdinal: 1
+  };
+  return {
+    status: exploreResult().status,
+    bounds: { limit: 7, maximumLimit: 100 },
+    routes: [
+      {
+        method: "GET",
+        path: "/api/users",
+        route,
+        edge: {
+          id: "edge:route:get-users",
+          sourceId: route.id,
+          targetId: handler.id,
+          kind: "routes",
+          filePath: route.filePath,
+          range: route.range,
+          resolution: "exact",
+          confidence: 1,
+          referenceName: handler.name
+        },
+        handler
+      },
+      {
+        method: "POST",
+        path: "/api/missing",
+        route: unresolvedRoute,
+        edge: {
+          id: "edge:route:post-missing",
+          sourceId: unresolvedRoute.id,
+          targetId: null,
+          kind: "routes",
+          filePath: unresolvedRoute.filePath,
+          range: unresolvedRoute.range,
+          resolution: "unresolved",
+          confidence: 0,
+          referenceName: "missingHandler"
+        },
+        handler: null
+      }
+    ],
+    truncated: false
+  };
+}
+
 function generationHistoryResult(): GenerationHistoryResult {
   return {
     activeStatus: exploreResult().status,
@@ -462,6 +546,115 @@ describe("SymbolLattice MCP server", () => {
     });
     expect(explainCalls).toEqual([
       { projectPath: "C:/chosen-project", edgeId: "edge:caller-callee" }
+    ]);
+  });
+
+  it("registers bounded route inventory only when the service supports it", async () => {
+    const routeCalls: Array<{ projectPath: string; options: RoutesOptions }> = [];
+    const service = {
+      async explore(): Promise<ExploreResult> {
+        return exploreResult();
+      },
+      async routes(
+        projectPath: string,
+        options: RoutesOptions = {}
+      ): Promise<RoutesResult> {
+        routeCalls.push({ projectPath, options });
+        return routesResult();
+      }
+    };
+    const server = createMcpServer(service, "C:/default-project");
+    const client = new Client({ name: "symbol-lattice-routes-test", version: "1.0.0" });
+    const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+    closeCallbacks.push(() => client.close(), () => server.close());
+
+    const tools = await client.listTools();
+    expect(tools.tools.map((tool) => tool.name)).toEqual([
+      "symbol_lattice_explore",
+      "symbol_lattice_routes"
+    ]);
+    const routeTool = tools.tools.find((tool) => tool.name === "symbol_lattice_routes");
+    expect(routeTool?.annotations).toMatchObject({ readOnlyHint: true, idempotentHint: true });
+    expect(routeTool?.inputSchema).toMatchObject({
+      type: "object",
+      properties: {
+        method: expect.objectContaining({ type: "string" }),
+        path: expect.objectContaining({ type: "string" }),
+        limit: expect.objectContaining({ type: "integer", minimum: 1, maximum: 100 })
+      }
+    });
+    expect(JSON.stringify(routeTool?.inputSchema)).toContain("GET");
+    expect(routeTool?.outputSchema).toMatchObject({
+      type: "object",
+      properties: {
+        status: { type: "object" },
+        bounds: { type: "object" },
+        routes: { type: "array" },
+        truncated: { type: "boolean" }
+      }
+    });
+
+    const result = await client.callTool({
+      name: "symbol_lattice_routes",
+      arguments: {
+        projectPath: "C:/chosen-project",
+        method: "GET",
+        path: "/api",
+        limit: 7
+      }
+    });
+
+    expect(result.isError).not.toBe(true);
+    expect(result.structuredContent).toMatchObject({
+      status: { stale: false },
+      bounds: { limit: 7, maximumLimit: 100 },
+      routes: [
+        { method: "GET", path: "/api/users", handler: { name: "listUsers" } },
+        { method: "POST", path: "/api/missing", handler: null }
+      ],
+      truncated: false
+    });
+    expect(routeCalls).toEqual([
+      {
+        projectPath: "C:/chosen-project",
+        options: { method: "GET", pathPrefix: "/api", limit: 7 }
+      }
+    ]);
+
+    const unsupportedMethod = await client.callTool({
+      name: "symbol_lattice_routes",
+      arguments: { method: "get" }
+    });
+    expect(unsupportedMethod.isError).toBe(true);
+    expect(routeCalls).toHaveLength(1);
+
+    const invalidPath = await client.callTool({
+      name: "symbol_lattice_routes",
+      arguments: { path: "api" }
+    });
+    expect(invalidPath.isError).toBe(true);
+    expect(routeCalls).toHaveLength(1);
+  });
+
+  it("does not register routes for an explore-only embedding", async () => {
+    const server = createMcpServer(
+      {
+        async explore(): Promise<ExploreResult> {
+          return exploreResult();
+        }
+      },
+      "C:/default-project"
+    );
+    const client = new Client({ name: "symbol-lattice-routes-legacy-test", version: "1.0.0" });
+    const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+    closeCallbacks.push(() => client.close(), () => server.close());
+
+    expect((await client.listTools()).tools.map((tool) => tool.name)).toEqual([
+      "symbol_lattice_explore"
     ]);
   });
 
@@ -1129,6 +1322,21 @@ describe("SymbolLattice MCP server", () => {
     expect(response.content[0]?.text).toContain("MISSING_INDEX");
   });
 
+  it("returns route inventory errors without indexing", async () => {
+    const response = await runRoutesTool(
+      {
+        async routes(): Promise<RoutesResult> {
+          throw new SymbolLatticeError("MISSING_INDEX", "Run symbol-lattice init first.");
+        }
+      },
+      "C:/project",
+      { method: "GET", path: "/api", limit: 3 }
+    );
+
+    expect(response).toMatchObject({ isError: true });
+    expect(response.content[0]?.text).toContain("MISSING_INDEX");
+  });
+
   it("returns retained-history and structural-diff errors without indexing", async () => {
     const history = await runGenerationHistoryTool(
       {
@@ -1204,6 +1412,9 @@ describe("SymbolLattice MCP server", () => {
       async search(): Promise<SearchResult> {
         return searchResult();
       },
+      async routes(): Promise<RoutesResult> {
+        return routesResult();
+      },
       async history(): Promise<GenerationHistoryResult> {
         return generationHistoryResult();
       },
@@ -1231,6 +1442,7 @@ describe("SymbolLattice MCP server", () => {
     await runGitAffectedTestsTool(service, "C:/project", {});
     await runGitHunksTool(service, "C:/project", { baseRef: "origin/main" });
     await runSearchTool(service, "C:/project", { query: "user" });
+    await runRoutesTool(service, "C:/project", { method: "GET", path: "/api" });
     await runGenerationHistoryTool(service, "C:/project", {});
     await runGenerationDiffTool(service, "C:/project", { fromGenerationId: "generation:old" });
     await runExplainEdgeTool(service, "C:/project", { edgeId: "edge:caller-callee" });

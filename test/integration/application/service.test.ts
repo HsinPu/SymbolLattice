@@ -8,9 +8,11 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import {
   DEFAULT_GIT_HUNK_LIMIT,
+  DEFAULT_ROUTE_LIMIT,
   MAX_GIT_HUNK_DECLARATION_ANCHORS,
   MAX_GIT_HUNK_LIMIT,
   MAX_GIT_HUNK_SOURCE_FILES,
+  MAX_ROUTE_LIMIT,
   MAX_GENERATION_DIFF_LIMIT,
   MAX_GENERATION_HISTORY_LIMIT,
   NODE_MATCH_CANDIDATE_LIMIT,
@@ -22,6 +24,7 @@ import {
 } from "../../../src/application/index.js";
 import {
   ARTIFACT_FACTS_EXTRACTOR_VERSION,
+  PROJECT_RESOLVER_VERSION,
   SOURCE_SEARCH_INDEX_VERSION,
   type GraphSnapshot,
   type IndexedSourceDocument,
@@ -2573,5 +2576,218 @@ describe("SymbolLatticeService", () => {
       }
     });
     expect(sourceDocumentRequests).toEqual([["src/race.ts"]]);
+  });
+
+  it("lists filtered persisted routes with honest bounds, unresolved handlers, and live drift status", async () => {
+    const projectPath = await createInlineProject({
+      "src/handlers.ts": [
+        "export function listUsers(): string[] {",
+        '  return ["indexed"];',
+        "}",
+        ""
+      ].join("\n"),
+      "src/routes.ts": [
+        "// The active graph below is intentionally persisted independently from this live source.",
+        "export const persistedRoutes = true;",
+        ""
+      ].join("\n")
+    });
+    const sourceCatalog = new FileSystemSourceCatalog();
+    const scan = await sourceCatalog.scan(projectPath);
+    const routeRange = {
+      start: { line: 1, column: 1 },
+      end: { line: 1, column: 32 }
+    };
+    const handler = {
+      id: "symbol:handlers:listUsers",
+      name: "listUsers",
+      qualifiedName: "src/handlers.ts#listUsers",
+      kind: "function" as const,
+      filePath: "src/handlers.ts",
+      range: routeRange,
+      isExported: true,
+      declarationOrdinal: 0
+    };
+    const routePaths = [
+      "/api/users",
+      ...Array.from(
+        { length: DEFAULT_ROUTE_LIMIT + 1 },
+        (_value, index) => `/api/extra-${index}`
+      )
+    ];
+    const exactRoutes = routePaths.map((path, index) => ({
+      id: `symbol:route:get:${index}`,
+      name: `GET ${path}`,
+      qualifiedName: `src/routes.ts#route:GET ${path}`,
+      kind: "route" as const,
+      filePath: "src/routes.ts",
+      range: {
+        start: { line: index + 1, column: 1 },
+        end: { line: index + 1, column: 32 }
+      },
+      isExported: false,
+      declarationOrdinal: index
+    }));
+    const unresolvedRoute = {
+      id: "symbol:route:post:missing",
+      name: "POST /api/missing",
+      qualifiedName: "src/routes.ts#route:POST /api/missing",
+      kind: "route" as const,
+      filePath: "src/routes.ts",
+      range: {
+        start: { line: exactRoutes.length + 1, column: 1 },
+        end: { line: exactRoutes.length + 1, column: 36 }
+      },
+      isExported: false,
+      declarationOrdinal: exactRoutes.length
+    };
+    const snapshot: GraphSnapshot = {
+      files: scan.sourceDocuments.map((document) => ({
+        path: document.relativePath,
+        contentHash: document.contentHash,
+        language: document.language,
+        indexedAt: "2026-07-30T00:00:00.000Z"
+      })),
+      symbols: [handler, ...exactRoutes, unresolvedRoute],
+      edges: [
+        ...exactRoutes.map((route) => ({
+          id: `edge:${route.id}`,
+          sourceId: route.id,
+          targetId: handler.id,
+          kind: "routes" as const,
+          filePath: route.filePath,
+          range: route.range,
+          resolution: "exact" as const,
+          confidence: 1,
+          referenceName: handler.name
+        })),
+        {
+          id: "edge:route:post:missing",
+          sourceId: unresolvedRoute.id,
+          targetId: null,
+          kind: "routes" as const,
+          filePath: unresolvedRoute.filePath,
+          range: unresolvedRoute.range,
+          resolution: "unresolved" as const,
+          confidence: 0,
+          referenceName: "missingHandler"
+        }
+      ],
+      pendingReferences: []
+    };
+    const initialGenerationId = "generation:routes";
+    const bundle: ActiveGraphBundle = {
+      status: {
+        initialized: true,
+        stale: false,
+        staleReasons: [],
+        projectPath,
+        indexedAt: "2026-07-30T00:00:00.000Z",
+        generationId: initialGenerationId,
+        counts: {
+          files: snapshot.files.length,
+          symbols: snapshot.symbols.length,
+          edges: snapshot.edges.length,
+          pendingReferences: 0
+        }
+      },
+      snapshot,
+      indexInputs: scan.indexInputs,
+      extractorVersion: ARTIFACT_FACTS_EXTRACTOR_VERSION,
+      resolverVersion: PROJECT_RESOLVER_VERSION,
+      sourceSearchVersion: SOURCE_SEARCH_INDEX_VERSION
+    };
+    const mutationCalls: string[] = [];
+    const graphStore: GraphStore = {
+      isInitialized: () => true,
+      initialize: () => {
+        mutationCalls.push("initialize");
+      },
+      getStatus: () => bundle.status,
+      getSnapshot: () => bundle.snapshot,
+      getArtifactFacts: () => [],
+      getIndexInputs: () => bundle.indexInputs,
+      getActiveGraphBundle: () => bundle,
+      getActiveGenerationBundle: () => ({ ...bundle, artifactFacts: [] }),
+      replaceProjectFacts: () => {
+        mutationCalls.push("replaceProjectFacts");
+      }
+    };
+    const service = new SymbolLatticeService(graphStore, sourceCatalog);
+
+    const defaultResult = await service.routes(projectPath);
+    const filtered = await service.routes(projectPath, {
+      method: "GET",
+      pathPrefix: "/api/users",
+      limit: 1
+    });
+    const unresolved = await service.routes(projectPath, { method: "POST" });
+
+    expect(defaultResult).toMatchObject({
+      status: { generationId: initialGenerationId, stale: false },
+      bounds: { limit: DEFAULT_ROUTE_LIMIT, maximumLimit: MAX_ROUTE_LIMIT },
+      truncated: true
+    });
+    expect(defaultResult.routes).toHaveLength(DEFAULT_ROUTE_LIMIT);
+    expect(filtered).toMatchObject({
+      bounds: { limit: 1, maximumLimit: MAX_ROUTE_LIMIT },
+      routes: [
+        {
+          method: "GET",
+          path: "/api/users",
+          route: { kind: "route", name: "GET /api/users" },
+          edge: { kind: "routes", resolution: "exact" },
+          handler: { name: "listUsers" }
+        }
+      ],
+      truncated: false
+    });
+    expect(unresolved).toMatchObject({
+      routes: [
+        {
+          method: "POST",
+          path: "/api/missing",
+          edge: { kind: "routes", resolution: "unresolved", targetId: null },
+          handler: null
+        }
+      ]
+    });
+
+    await writeFile(
+      join(projectPath, "src", "routes.ts"),
+      [
+        'import express from "express";',
+        "const app = express();",
+        'app.get("/live-only", () => "live");',
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    const stale = await service.routes(projectPath, { method: "GET", pathPrefix: "/api/users" });
+
+    expect(stale).toMatchObject({
+      status: {
+        generationId: initialGenerationId,
+        stale: true,
+        staleReasons: ["source-files-changed"]
+      },
+      routes: [{ path: "/api/users", handler: { name: "listUsers" } }]
+    });
+    expect(stale.routes.map((route) => route.path)).not.toContain("/live-only");
+    expect((await service.getStatus(projectPath)).generationId).toBe(initialGenerationId);
+    expect(mutationCalls).toEqual([]);
+
+    await expect(
+      service.routes(projectPath, { method: "get" as "GET" })
+    ).rejects.toMatchObject({ code: "INVALID_ROUTE_METHOD" });
+    await expect(service.routes(projectPath, { pathPrefix: "api" })).rejects.toMatchObject({
+      code: "INVALID_ROUTE_PATH_PREFIX"
+    });
+    await expect(service.routes(projectPath, { limit: 0 })).rejects.toMatchObject({
+      code: "INVALID_ROUTE_LIMIT"
+    });
+    await expect(service.routes(projectPath, { limit: MAX_ROUTE_LIMIT + 1 })).rejects.toMatchObject({
+      code: "INVALID_ROUTE_LIMIT"
+    });
   });
 });

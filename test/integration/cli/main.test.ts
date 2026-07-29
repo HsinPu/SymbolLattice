@@ -19,6 +19,8 @@ import {
   type ImpactOptions,
   type ImpactResult,
   type NodeResult,
+  type RoutesOptions,
+  type RoutesResult,
   type SearchOptions,
   type SearchResult,
   type WatchReceipt,
@@ -47,6 +49,59 @@ function searchResult(): SearchResult {
   return {
     status: resultStatus(),
     results: []
+  };
+}
+
+function routesResult(): RoutesResult {
+  const route = {
+    id: "symbol:route:get-users",
+    name: "GET /api/users",
+    qualifiedName: "src/routes.ts#GET /api/users",
+    kind: "route" as const,
+    filePath: "src/routes.ts",
+    range: {
+      start: { line: 5, column: 1 },
+      end: { line: 5, column: 38 }
+    },
+    isExported: false,
+    declarationOrdinal: 0
+  };
+  const handler = {
+    id: "symbol:handlers:listUsers",
+    name: "listUsers",
+    qualifiedName: "src/handlers.ts#listUsers",
+    kind: "function" as const,
+    filePath: "src/handlers.ts",
+    range: {
+      start: { line: 1, column: 1 },
+      end: { line: 3, column: 2 }
+    },
+    isExported: true,
+    declarationOrdinal: 0
+  };
+  return {
+    status: resultStatus(),
+    bounds: { limit: 7, maximumLimit: 100 },
+    routes: [
+      {
+        method: "GET",
+        path: "/api/users",
+        route,
+        edge: {
+          id: "edge:route:get-users",
+          sourceId: route.id,
+          targetId: handler.id,
+          kind: "routes",
+          filePath: route.filePath,
+          range: route.range,
+          resolution: "exact",
+          confidence: 1,
+          referenceName: handler.name
+        },
+        handler
+      }
+    ],
+    truncated: false
   };
 }
 
@@ -274,6 +329,75 @@ describe("symbol-lattice search CLI", () => {
         { from: "node" }
       )
     ).rejects.toThrow("Expected an integer between 1 and 100");
+  });
+});
+
+describe("symbol-lattice v0.14 routes CLI", () => {
+  it("forwards route filters, positional project selection, and stable JSON without mutating", async () => {
+    const calls: Array<{ projectPath: string; options: RoutesOptions }> = [];
+    const mutationCalls: string[] = [];
+    const result = routesResult();
+    const service = {
+      async routes(projectPath: string, options: RoutesOptions = {}): Promise<RoutesResult> {
+        calls.push({ projectPath, options });
+        return result;
+      },
+      async init(): Promise<void> {
+        mutationCalls.push("init");
+      },
+      async index(): Promise<void> {
+        mutationCalls.push("index");
+      },
+      async sync(): Promise<void> {
+        mutationCalls.push("sync");
+      }
+    } as unknown as SymbolLatticeService;
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+    await createProgram(service).parseAsync(
+      [
+        "node",
+        "symbol-lattice",
+        "routes",
+        "C:/positional-project",
+        "--project",
+        "C:/ignored-project",
+        "--method",
+        "GET",
+        "--path",
+        "/api",
+        "--limit",
+        "7",
+        "--json"
+      ],
+      { from: "node" }
+    );
+
+    expect(calls).toEqual([
+      {
+        projectPath: resolve("C:/positional-project"),
+        options: { method: "GET", pathPrefix: "/api", limit: 7 }
+      }
+    ]);
+    expect(mutationCalls).toEqual([]);
+    expect(write).toHaveBeenCalledWith(`${JSON.stringify(result, null, 2)}\n`);
+  });
+
+  it.each([
+    [["--method", "get"], "Expected one of: GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS, ALL"],
+    [["--path", "api"], "Expected a non-empty route path prefix beginning with"],
+    [["--limit", "101"], "Expected an integer between 1 and 100"]
+  ])("rejects invalid route filter %j before invoking the service", async (arguments_, message) => {
+    const routes = vi.fn();
+    const program = createProgram({ routes } as unknown as SymbolLatticeService);
+    program.exitOverride();
+
+    await expect(
+      program.parseAsync(["node", "symbol-lattice", "routes", ...arguments_], {
+        from: "node"
+      })
+    ).rejects.toThrow(message);
+    expect(routes).not.toHaveBeenCalled();
   });
 });
 

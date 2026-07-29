@@ -1,6 +1,22 @@
 import { type EdgeKind, type GraphEdge, type SymbolNode } from "./types.js";
 
-const DEFAULT_IMPACT_EDGE_KINDS: readonly EdgeKind[] = ["calls", "imports"];
+const DEFAULT_IMPACT_EDGE_KINDS: readonly EdgeKind[] = ["calls", "routes", "imports"];
+
+/** HTTP methods represented by literal Express route symbols. */
+export const ROUTE_METHODS = [
+  "GET",
+  "POST",
+  "PUT",
+  "PATCH",
+  "DELETE",
+  "HEAD",
+  "OPTIONS",
+  "ALL"
+] as const;
+
+export type RouteMethod = (typeof ROUTE_METHODS)[number];
+
+const ROUTE_METHOD_SET = new Set<string>(ROUTE_METHODS);
 
 /** Exact file-level edges trusted for affected-test selection. */
 export const AFFECTED_TEST_EDGE_KINDS = ["imports", "exports"] as const;
@@ -54,6 +70,16 @@ export type SymbolMatch =
 export interface GraphRelation {
   readonly symbol: SymbolNode;
   readonly edge: GraphEdge;
+}
+
+/** A literal route together with its persisted handler-resolution evidence. */
+export interface RouteRecord {
+  readonly method: RouteMethod;
+  readonly path: string;
+  readonly route: SymbolNode;
+  readonly edge: GraphEdge;
+  /** Null when the route handler could not be resolved to an indexed symbol. */
+  readonly handler: SymbolNode | null;
 }
 
 /** One reverse-dependency traversal step. The edge retains its original direction. */
@@ -349,7 +375,71 @@ function compareRelations(left: GraphRelation, right: GraphRelation): number {
   return compareSymbolNodes(left.symbol, right.symbol) || compareGraphEdges(left.edge, right.edge);
 }
 
-/** Returns all resolved call sites whose target is the supplied symbol. */
+function parseRouteName(route: SymbolNode): Pick<RouteRecord, "method" | "path"> | null {
+  // Synthetic names are encoded as `${METHOD} ${literalPath}`. Split only at
+  // that first delimiter: literal paths may legally contain whitespace or a
+  // newline escape, both of which must survive a persisted graph round trip.
+  const delimiterIndex = route.name.indexOf(" ");
+  if (delimiterIndex <= 0) {
+    return null;
+  }
+  const method = route.name.slice(0, delimiterIndex).toUpperCase();
+  const path = route.name.slice(delimiterIndex + 1);
+  if (
+    path.length === 0 ||
+    !ROUTE_METHOD_SET.has(method) ||
+    !path.startsWith("/")
+  ) {
+    return null;
+  }
+
+  return { method: method as RouteMethod, path };
+}
+
+function compareRouteRecords(left: RouteRecord, right: RouteRecord): number {
+  return (
+    compareSymbolNodes(left.route, right.route) ||
+    compareGraphEdges(left.edge, right.edge) ||
+    compareText(left.handler?.id ?? "", right.handler?.id ?? "")
+  );
+}
+
+/**
+ * Returns literal route records in deterministic source order. A persisted route
+ * edge is retained even when its handler is unresolved, in which case `handler`
+ * is null. Callers deliberately apply any route filters or result limits themselves.
+ */
+export function getRoutes(graph: SymbolGraph): readonly RouteRecord[] {
+  const symbolsById = createSymbolIndex(graph.symbols);
+  const routes: RouteRecord[] = [];
+
+  for (const edge of graph.edges) {
+    if (edge.kind !== "routes") {
+      continue;
+    }
+
+    const route = symbolsById.get(edge.sourceId);
+    if (route === undefined || route.kind !== "route") {
+      continue;
+    }
+
+    const parsed = parseRouteName(route);
+    if (parsed === null) {
+      continue;
+    }
+
+    routes.push({
+      ...parsed,
+      route,
+      edge,
+      handler: isResolvedGraphEdge(edge) ? symbolsById.get(edge.targetId) ?? null : null
+    });
+  }
+
+  return routes.sort(compareRouteRecords);
+}
+
+/** Returns all resolved static call or route bindings whose target is the supplied symbol. */
 export function getCallers(graph: SymbolGraph, symbolId: string): readonly GraphRelation[] {
   const symbolsById = createSymbolIndex(graph.symbols);
   if (!symbolsById.has(symbolId)) {
@@ -359,7 +449,7 @@ export function getCallers(graph: SymbolGraph, symbolId: string): readonly Graph
   const callers: GraphRelation[] = [];
   for (const edge of graph.edges) {
     if (
-      edge.kind !== "calls" ||
+      (edge.kind !== "calls" && edge.kind !== "routes") ||
       !isResolvedGraphEdge(edge) ||
       edge.targetId !== symbolId
     ) {
@@ -375,7 +465,7 @@ export function getCallers(graph: SymbolGraph, symbolId: string): readonly Graph
   return callers.sort(compareRelations);
 }
 
-/** Returns all resolved call targets referenced by the supplied symbol. */
+/** Returns all resolved static call or route binding targets referenced by the supplied symbol. */
 export function getCallees(graph: SymbolGraph, symbolId: string): readonly GraphRelation[] {
   const symbolsById = createSymbolIndex(graph.symbols);
   if (!symbolsById.has(symbolId)) {
@@ -385,7 +475,7 @@ export function getCallees(graph: SymbolGraph, symbolId: string): readonly Graph
   const callees: GraphRelation[] = [];
   for (const edge of graph.edges) {
     if (
-      edge.kind !== "calls" ||
+      (edge.kind !== "calls" && edge.kind !== "routes") ||
       !isResolvedGraphEdge(edge) ||
       edge.sourceId !== symbolId
     ) {
@@ -463,8 +553,8 @@ function assertPositiveVisitCap(maxVisitedSymbols: number): void {
 
 /**
  * Finds one deterministic shortest directed evidence path through exact,
- * resolved graph edges. The bounded breadth-first traversal follows calls and
- * imports by default, never revisits a symbol, and only reports truncation
+ * resolved graph edges. The bounded breadth-first traversal follows calls,
+ * routes, and imports by default, never revisits a symbol, and only reports truncation
  * when its visit cap prevented another unvisited candidate from entering the
  * search.
  */
@@ -736,8 +826,8 @@ export function findAffectedTestPaths(
  * Traverses resolved incoming edges to find symbols affected by a change.
  *
  * The result excludes the root, keeps one deterministic shortest evidence path
- * per impacted symbol, never repeats a symbol, and follows every edge kind by
- * default. Pass a subset of `EDGE_KINDS` to scope the dependency relation.
+ * per impacted symbol, never repeats a symbol, and follows static calls, routes,
+ * and imports by default. Pass a subset of `EDGE_KINDS` to scope the dependency relation.
  */
 export function getImpactPaths(
   graph: SymbolGraph,

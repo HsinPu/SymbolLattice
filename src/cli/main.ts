@@ -15,6 +15,8 @@ import {
   MAX_GENERATION_DIFF_LIMIT,
   MAX_GENERATION_HISTORY_LIMIT,
   MAX_GIT_HUNK_LIMIT,
+  MAX_ROUTE_LIMIT,
+  ROUTE_METHODS,
   DEFAULT_WATCH_INTERVAL_MS,
   MAX_WATCH_INTERVAL_MS,
   MIN_WATCH_INTERVAL_MS,
@@ -32,6 +34,7 @@ import {
   type GitHunksOptions,
   type FindOptions,
   type SearchOptions,
+  type RoutesOptions,
   type WatchReceipt
 } from "../application/index.js";
 import { MAX_SOURCE_SEARCH_LIMIT } from "../domain/index.js";
@@ -66,6 +69,12 @@ interface SearchCommandOptions extends ProjectOptions {
   readonly limit?: number;
   readonly path?: string;
   readonly language?: NonNullable<SearchOptions["language"]>;
+}
+
+interface RoutesCommandOptions extends ProjectOptions {
+  readonly method?: NonNullable<RoutesOptions["method"]>;
+  readonly path?: string;
+  readonly limit?: number;
 }
 
 interface ImpactCommandOptions extends ProjectOptions {
@@ -182,6 +191,20 @@ function parseSearchLanguage(value: string): NonNullable<SearchOptions["language
     );
   }
   return language;
+}
+
+function parseRouteMethod(value: string): NonNullable<RoutesOptions["method"]> {
+  if (!ROUTE_METHODS.includes(value as NonNullable<RoutesOptions["method"]>)) {
+    throw new Error(`Expected one of: ${ROUTE_METHODS.join(", ")}; received "${value}".`);
+  }
+  return value as NonNullable<RoutesOptions["method"]>;
+}
+
+function parseRoutePathPrefix(value: string): string {
+  if (value.length === 0 || !value.startsWith("/")) {
+    throw new Error('Expected a non-empty route path prefix beginning with "/".');
+  }
+  return value;
 }
 
 function normalizeSearchQuery(value: string): string {
@@ -464,6 +487,34 @@ export function createProgram(
       };
       render(
         await service.search(defaultProjectPath(options), normalizeSearchQuery(query), searchOptions),
+        options
+      );
+    });
+
+  addJsonOption(addProjectOption(program.command("routes [path]")))
+    .option(
+      "--method <method>",
+      `Restrict results to one uppercase HTTP method (${ROUTE_METHODS.join(", ")})`,
+      parseRouteMethod
+    )
+    .option(
+      "--path <route-path-prefix>",
+      "Restrict results to a slash-leading route path prefix",
+      parseRoutePathPrefix
+    )
+    .option(
+      "--limit <count>",
+      `Maximum route records to return (1-${MAX_ROUTE_LIMIT})`,
+      (value: string) => parseBoundedPositiveInteger(value, MAX_ROUTE_LIMIT)
+    )
+    .action(async (path: string | undefined, options: RoutesCommandOptions) => {
+      const routeOptions: RoutesOptions = {
+        ...(options.method === undefined ? {} : { method: options.method }),
+        ...(options.path === undefined ? {} : { pathPrefix: options.path }),
+        ...(options.limit === undefined ? {} : { limit: options.limit })
+      };
+      render(
+        await service.routes(resolve(path ?? defaultProjectPath(options)), routeOptions),
         options
       );
     });

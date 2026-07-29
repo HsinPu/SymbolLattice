@@ -452,6 +452,203 @@ describe("project reference resolution", () => {
   });
 });
 
+describe("literal route handler resolution", () => {
+  it("resolves local, imported, and re-exported route handlers exactly", () => {
+    const sourceDocuments: readonly SourceDocument[] = [
+      {
+        absolutePath: "C:/project/src/handlers.ts",
+        relativePath: "src/handlers.ts",
+        language: "typescript",
+        sourceText:
+          "export function importedHandler() { return 1; } export function reexportedHandler() { return 2; }",
+        contentHash: "handlers"
+      },
+      {
+        absolutePath: "C:/project/src/barrel.ts",
+        relativePath: "src/barrel.ts",
+        language: "typescript",
+        sourceText: 'export { reexportedHandler } from "./handlers";',
+        contentHash: "barrel"
+      },
+      {
+        absolutePath: "C:/project/src/local-routes.ts",
+        relativePath: "src/local-routes.ts",
+        language: "typescript",
+        sourceText:
+          'import express from "express"; const app = express(); function localHandler() { return 3; } app.get("/local", localHandler);',
+        contentHash: "local-routes"
+      },
+      {
+        absolutePath: "C:/project/src/imported-routes.ts",
+        relativePath: "src/imported-routes.ts",
+        language: "typescript",
+        sourceText:
+          'import express from "express"; import { importedHandler } from "./handlers"; const app = express(); app.post("/imported", importedHandler);',
+        contentHash: "imported-routes"
+      },
+      {
+        absolutePath: "C:/project/src/reexported-routes.ts",
+        relativePath: "src/reexported-routes.ts",
+        language: "typescript",
+        sourceText:
+          'import express from "express"; import { reexportedHandler } from "./barrel"; const app = express(); app.put("/reexported", reexportedHandler);',
+        contentHash: "reexported-routes"
+      }
+    ];
+    const snapshot = snapshotWithResolver(sourceDocuments, undefined);
+    const localHandler = snapshot.symbols.find(
+      (symbol) => symbol.filePath === "src/local-routes.ts" && symbol.name === "localHandler"
+    );
+    const importedHandler = snapshot.symbols.find(
+      (symbol) => symbol.filePath === "src/handlers.ts" && symbol.name === "importedHandler"
+    );
+    const reexportedHandler = snapshot.symbols.find(
+      (symbol) => symbol.filePath === "src/handlers.ts" && symbol.name === "reexportedHandler"
+    );
+    const localRoute = snapshot.edges.find(
+      (edge) => edge.kind === "routes" && edge.referenceName === "localHandler"
+    );
+    const importedRoute = snapshot.edges.find(
+      (edge) => edge.kind === "routes" && edge.referenceName === "importedHandler"
+    );
+    const reexportedRoute = snapshot.edges.find(
+      (edge) => edge.kind === "routes" && edge.referenceName === "reexportedHandler"
+    );
+
+    expect(localRoute).toMatchObject({
+      targetId: localHandler?.id,
+      resolution: "exact",
+      confidence: 1,
+      evidence: {
+        ruleId: "framework.express.literal-route.local-handler",
+        stage: "lexical",
+        candidateSymbolIds: [localHandler?.id]
+      }
+    });
+    expect(importedRoute).toMatchObject({
+      targetId: importedHandler?.id,
+      resolution: "exact",
+      confidence: 1,
+      evidence: {
+        ruleId: "framework.express.literal-route.imported-handler",
+        stage: "module",
+        candidateSymbolIds: [importedHandler?.id]
+      }
+    });
+    expect(reexportedRoute).toMatchObject({
+      targetId: reexportedHandler?.id,
+      resolution: "exact",
+      confidence: 1,
+      evidence: {
+        ruleId: "framework.express.literal-route.reexported-handler",
+        stage: "module",
+        candidateSymbolIds: [reexportedHandler?.id],
+        resolutionPath: ["src/reexported-routes.ts", "src/barrel.ts", "src/handlers.ts"]
+      }
+    });
+    expect(
+      snapshot.pendingReferences.filter((reference) => reference.relationKind === "routes")
+    ).toEqual([]);
+  });
+
+  it("keeps ambiguous and unproven route handlers unresolved without changing ordinary call heuristics", () => {
+    const sourceDocuments: readonly SourceDocument[] = [
+      {
+        absolutePath: "C:/project/src/left.ts",
+        relativePath: "src/left.ts",
+        language: "typescript",
+        sourceText: "export function handler() { return 1; }",
+        contentHash: "left"
+      },
+      {
+        absolutePath: "C:/project/src/right.ts",
+        relativePath: "src/right.ts",
+        language: "typescript",
+        sourceText: "export function handler() { return 2; }",
+        contentHash: "right"
+      },
+      {
+        absolutePath: "C:/project/src/barrel.ts",
+        relativePath: "src/barrel.ts",
+        language: "typescript",
+        sourceText: 'export * from "./left"; export * from "./right";',
+        contentHash: "barrel"
+      },
+      {
+        absolutePath: "C:/project/src/unrelated.ts",
+        relativePath: "src/unrelated.ts",
+        language: "typescript",
+        sourceText: "export function orphan() { return 3; }",
+        contentHash: "unrelated"
+      },
+      {
+        absolutePath: "C:/project/src/routes.ts",
+        relativePath: "src/routes.ts",
+        language: "typescript",
+        sourceText:
+          'import express from "express"; import { handler } from "./barrel"; import "./unrelated"; const app = express(); app.get("/ambiguous", handler); app.post("/unproven", orphan); export const ordinary = orphan();',
+        contentHash: "routes"
+      }
+    ];
+    const snapshot = snapshotWithResolver(sourceDocuments, undefined);
+    const leftHandler = snapshot.symbols.find(
+      (symbol) => symbol.filePath === "src/left.ts" && symbol.name === "handler"
+    );
+    const rightHandler = snapshot.symbols.find(
+      (symbol) => symbol.filePath === "src/right.ts" && symbol.name === "handler"
+    );
+    const orphan = snapshot.symbols.find(
+      (symbol) => symbol.filePath === "src/unrelated.ts" && symbol.name === "orphan"
+    );
+    const ambiguousRoute = snapshot.edges.find(
+      (edge) => edge.kind === "routes" && edge.referenceName === "handler"
+    );
+    const unprovenRoute = snapshot.edges.find(
+      (edge) => edge.kind === "routes" && edge.referenceName === "orphan"
+    );
+    const ordinaryCall = snapshot.edges.find(
+      (edge) => edge.kind === "calls" && edge.referenceName === "orphan"
+    );
+
+    expect(ambiguousRoute).toMatchObject({
+      targetId: null,
+      resolution: "unresolved",
+      confidence: 0,
+      evidence: {
+        ruleId: "framework.express.literal-route.unresolved-handler",
+        stage: "unresolved",
+        candidateSymbolIds: [leftHandler?.id, rightHandler?.id]
+      }
+    });
+    expect(unprovenRoute).toMatchObject({
+      targetId: null,
+      resolution: "unresolved",
+      confidence: 0,
+      evidence: expect.objectContaining({
+        ruleId: "framework.express.literal-route.unresolved-handler",
+        stage: "unresolved",
+        candidateSymbolIds: expect.arrayContaining([orphan?.id])
+      })
+    });
+    expect(ordinaryCall).toMatchObject({
+      targetId: orphan?.id,
+      resolution: "heuristic",
+      confidence: 0.8,
+      evidence: {
+        ruleId: "heuristic.unique-imported-export",
+        stage: "heuristic",
+        candidateSymbolIds: [orphan?.id]
+      }
+    });
+    expect(
+      snapshot.pendingReferences
+        .filter((reference) => reference.relationKind === "routes")
+        .map((reference) => reference.referenceName)
+        .sort()
+    ).toEqual(["handler", "orphan"]);
+  });
+});
+
 describe("TypeScript configuration module resolution", () => {
   it("resolves exact and wildcard paths aliases with deterministic import and call evidence", async () => {
     const project = await createConfiguredProject({

@@ -173,4 +173,210 @@ describe("TypeScript and JavaScript extraction", () => {
       )
     ).toEqual(["twice"]);
   });
+
+  it("extracts syntax-proven static Express routes with literal paths and named handlers", () => {
+    const facts = extractFileFacts({
+      filePath: "src/routes.ts",
+      language: "typescript",
+      sourceText: [
+        'import express, { Router } from "express";',
+        "const app = express();",
+        "const router = Router();",
+        "const requireAuth = () => undefined;",
+        "function listUsers() { return undefined; }",
+        "function createUser() { return undefined; }",
+        'app.get("/users", listUsers);',
+        'router.post("/users", requireAuth, createUser);'
+      ].join("\n")
+    });
+
+    const routes = facts.symbols.filter((symbol) => symbol.kind === "route");
+    expect(routes.map((route) => [route.name, route.qualifiedName, route.isExported])).toEqual([
+      ["GET /users", "src/routes.ts#route:GET /users", false],
+      ["POST /users", "src/routes.ts#route:POST /users", false]
+    ]);
+    expect(routes.map((route) => route.range.start.line)).toEqual([7, 8]);
+
+    const routeReferences = facts.pendingReferences.filter(
+      (reference) => reference.relationKind === "routes"
+    );
+    expect(routeReferences.map((reference) => [reference.referenceName, reference.range])).toEqual([
+      [
+        "listUsers",
+        {
+          start: { line: 7, column: 19 },
+          end: { line: 7, column: 28 }
+        }
+      ],
+      [
+        "createUser",
+        {
+          start: { line: 8, column: 36 },
+          end: { line: 8, column: 46 }
+        }
+      ]
+    ]);
+    expect(routeReferences.map((reference) => reference.sourceId)).toEqual(routes.map((route) => route.id));
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "contains" && routes.some((route) => route.id === edge.targetId))
+        .map((edge) => edge.referenceName)
+    ).toEqual(["GET /users", "POST /users"]);
+  });
+
+  it("accepts a namespace Express Router factory but only immutable direct receivers", () => {
+    const facts = extractFileFacts({
+      filePath: "src/routes.ts",
+      language: "typescript",
+      sourceText: [
+        'import * as express from "express";',
+        "const router = express.Router();",
+        "let mutable = express.Router();",
+        "function health() { return undefined; }",
+        'router.head("/health", health);',
+        'mutable.get("/mutable", health);'
+      ].join("\n")
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route").map((route) => route.name)).toEqual([
+      "HEAD /health"
+    ]);
+    expect(
+      facts.pendingReferences
+        .filter((reference) => reference.relationKind === "routes")
+        .map((reference) => reference.referenceName)
+    ).toEqual(["health"]);
+  });
+
+  it("rejects receivers built from lexically shadowed Express factory imports", () => {
+    const facts = extractFileFacts({
+      filePath: "src/routes.ts",
+      language: "typescript",
+      sourceText: [
+        'import express, { Router } from "express";',
+        'import * as expressNamespace from "express";',
+        "function handler() { return undefined; }",
+        "function shadowFactories(",
+        "  express: () => unknown,",
+        "  Router: () => unknown,",
+        "  expressNamespace: { Router: () => unknown }",
+        ") {",
+        "  const shadowedApp = express();",
+        "  const shadowedRouter = Router();",
+        "  const shadowedNamespaceRouter = expressNamespace.Router();",
+        '  shadowedApp.get("/shadowed-default", handler);',
+        '  shadowedRouter.post("/shadowed-router", handler);',
+        '  shadowedNamespaceRouter.patch("/shadowed-namespace", handler);',
+        "}",
+        "const app = express();",
+        "const router = Router();",
+        "const namespaceRouter = expressNamespace.Router();",
+        'app.get("/proven-default", handler);',
+        'router.post("/proven-router", handler);',
+        'namespaceRouter.patch("/proven-namespace", handler);'
+      ].join("\n")
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route").map((route) => route.name)).toEqual([
+      "GET /proven-default",
+      "POST /proven-router",
+      "PATCH /proven-namespace"
+    ]);
+  });
+
+  it("rejects Express factory imports that exist only in TypeScript type space", () => {
+    const facts = extractFileFacts({
+      filePath: "src/routes.ts",
+      language: "typescript",
+      sourceText: [
+        'import type express from "express";',
+        'import type * as expressNamespace from "express";',
+        'import type { Router } from "express";',
+        'import { type Router as TypeOnlyRouter } from "express";',
+        "function handler() { return undefined; }",
+        "const defaultApp = express();",
+        "const namespaceRouter = expressNamespace.Router();",
+        "const router = Router();",
+        "const aliasedRouter = TypeOnlyRouter();",
+        'defaultApp.get("/type-default", handler);',
+        'namespaceRouter.get("/type-namespace", handler);',
+        'router.get("/type-router", handler);',
+        'aliasedRouter.get("/type-alias", handler);'
+      ].join("\n")
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+  });
+
+  it("rejects factory names shadowed by named function and class expressions", () => {
+    const facts = extractFileFacts({
+      filePath: "src/routes.ts",
+      language: "typescript",
+      sourceText: [
+        'import express from "express";',
+        "const register = function express() {",
+        "  const app = express();",
+        "  function handler() { return undefined; }",
+        '  app.get("/function-expression-shadow", handler);',
+        "};",
+        "const Container = class express {",
+        "  static register() {",
+        "    const app = express();",
+        "    function handler() { return undefined; }",
+        '    app.get("/class-expression-shadow", handler);',
+        "  }",
+        "};",
+        "void register;",
+        "void Container;"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+  });
+
+  it("rejects unproven, dynamic, and nonterminal Express route shapes", () => {
+    const facts = extractFileFacts({
+      filePath: "src/routes.ts",
+      language: "typescript",
+      sourceText: [
+        'import express from "express";',
+        'import other from "not-express";',
+        "const app = express();",
+        "const optionalFactory = express?.();",
+        "const wrongModule = other();",
+        'const legacy = require("express");',
+        "const legacyApp = legacy();",
+        "const unknown = { get: () => undefined };",
+        "const controller = { handler: () => undefined };",
+        "const handler = () => undefined;",
+        "const path = \"/dynamic\";",
+        'app.get("/real", handler);',
+        'optionalFactory.get("/optional-factory", handler);',
+        'app?.get("/optional-property", handler);',
+        'app.get?.("/optional-call", handler);',
+        "app.get(path, handler);",
+        'app.get("health", handler);',
+        'app.get("/inline", () => undefined);',
+        'app.get("/member", controller.handler);',
+        'app["get"]("/computed", handler);',
+        'app.use("/mount", handler);',
+        'wrongModule.get("/wrong-module", handler);',
+        'legacyApp.get("/require", handler);',
+        'unknown.get("/unknown", handler);',
+        "{",
+        "  const app = { get: () => undefined };",
+        '  app.get("/shadowed", handler);',
+        "}"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route").map((route) => route.name)).toEqual([
+      "GET /real"
+    ]);
+    expect(
+      facts.pendingReferences
+        .filter((reference) => reference.relationKind === "routes")
+        .map((reference) => reference.referenceName)
+    ).toEqual(["handler"]);
+  });
 });

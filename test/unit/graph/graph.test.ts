@@ -8,6 +8,7 @@ import {
   getCallees,
   getCallers,
   getImpactPaths,
+  getRoutes,
   matchSymbol,
   type GraphEdge,
   type SymbolNode
@@ -26,7 +27,12 @@ function symbol(input: {
   return {
     id: input.id,
     name: input.name,
-    qualifiedName: kind === "file" ? filePath : `${filePath}#${input.name}`,
+    qualifiedName:
+      kind === "file"
+        ? filePath
+        : kind === "route"
+          ? `${filePath}#route:${input.name}`
+          : `${filePath}#${input.name}`,
     kind,
     filePath,
     range: {
@@ -113,6 +119,129 @@ describe("pure graph traversal", () => {
     ]);
   });
 
+  it("treats literal routes as static bindings for callers, callees, evidence, and impact", () => {
+    const handler = symbol({ id: "handler", name: "handler", filePath: "src/handlers.ts", startLine: 30 });
+    const localRoute = symbol({
+      id: "local-route",
+      name: "GET /health",
+      filePath: "src/routes.ts",
+      startLine: 10,
+      kind: "route"
+    });
+    const unresolvedRoute = symbol({
+      id: "unresolved-route",
+      name: "POST /unknown",
+      filePath: "src/routes.ts",
+      startLine: 20,
+      kind: "route"
+    });
+    const routeGraph = {
+      symbols: [handler, unresolvedRoute, localRoute],
+      edges: [
+        edge({ id: "health-routes-handler", sourceId: "local-route", targetId: "handler", kind: "routes" }),
+        edge({
+          id: "unknown-routes-handler",
+          sourceId: "unresolved-route",
+          targetId: null,
+          kind: "routes",
+          resolution: "unresolved"
+        })
+      ]
+    };
+
+    expect(getRoutes(routeGraph)).toEqual([
+      {
+        method: "GET",
+        path: "/health",
+        route: localRoute,
+        edge: routeGraph.edges[0],
+        handler
+      },
+      {
+        method: "POST",
+        path: "/unknown",
+        route: unresolvedRoute,
+        edge: routeGraph.edges[1],
+        handler: null
+      }
+    ]);
+    expect(getCallers(routeGraph, "handler").map((relation) => relation.edge.id)).toEqual([
+      "health-routes-handler"
+    ]);
+    expect(getCallees(routeGraph, "local-route").map((relation) => relation.symbol.id)).toEqual([
+      "handler"
+    ]);
+    expect(findEvidencePath(routeGraph, "local-route", "handler").path?.edges.map((item) => item.id)).toEqual([
+      "health-routes-handler"
+    ]);
+    expect(getImpactPaths(routeGraph, "handler", 1).map((path) => path.symbols.at(-1)?.id)).toEqual([
+      "local-route"
+    ]);
+  });
+
+  it("rejects malformed persisted route names that do not have slash-leading paths", () => {
+    const malformedRoute = symbol({
+      id: "malformed-route",
+      name: "GET *",
+      filePath: "src/routes.ts",
+      kind: "route"
+    });
+    const handler = symbol({ id: "handler", name: "handler", filePath: "src/handlers.ts" });
+
+    expect(
+      getRoutes({
+        symbols: [malformedRoute, handler],
+        edges: [
+          edge({
+            id: "malformed-route-edge",
+            sourceId: "malformed-route",
+            targetId: "handler",
+            kind: "routes"
+          })
+        ]
+      })
+    ).toEqual([]);
+  });
+
+  it("preserves whitespace and newline escapes in literal route paths", () => {
+    const trailingSpaceRoute = symbol({
+      id: "trailing-space-route",
+      name: "GET /audit ",
+      filePath: "src/routes.ts",
+      kind: "route"
+    });
+    const multilineRoute = symbol({
+      id: "multiline-route",
+      name: "POST /audit\nnext",
+      filePath: "src/routes.ts",
+      kind: "route"
+    });
+    const handler = symbol({ id: "handler", name: "handler", filePath: "src/handlers.ts" });
+
+    expect(
+      getRoutes({
+        symbols: [trailingSpaceRoute, multilineRoute, handler],
+        edges: [
+          edge({
+            id: "trailing-space-route-edge",
+            sourceId: "trailing-space-route",
+            targetId: "handler",
+            kind: "routes"
+          }),
+          edge({
+            id: "multiline-route-edge",
+            sourceId: "multiline-route",
+            targetId: "handler",
+            kind: "routes"
+          })
+        ]
+      }).map((route) => [route.method, route.path])
+    ).toEqual([
+      ["GET", "/audit "],
+      ["POST", "/audit\nnext"]
+    ]);
+  });
+
   it("walks reverse call dependencies without cycles and honors depth", () => {
     expect(getImpactPaths(graph, "changed", 1).map((path) => path.symbols.at(-1)?.id)).toEqual([
       "direct"
@@ -140,12 +269,19 @@ describe("pure graph traversal", () => {
       filePath: "test/heuristic.test.ts",
       kind: "file"
     });
+    const routeOnlyTest = symbol({
+      id: "route-only-test",
+      name: "route-only.test.ts",
+      filePath: "test/route-only.test.ts",
+      kind: "file"
+    });
     const affectedGraph = {
-      symbols: [heuristicTest, reexportTest, directTest, barrelFile, changedFile],
+      symbols: [routeOnlyTest, heuristicTest, reexportTest, directTest, barrelFile, changedFile],
       edges: [
         edge({ id: "barrel-exports-math", sourceId: "barrel-file", targetId: "changed-file", kind: "exports" }),
         edge({ id: "direct-imports-math", sourceId: "direct-test", targetId: "changed-file", kind: "imports" }),
         edge({ id: "test-imports-barrel", sourceId: "reexport-test", targetId: "barrel-file", kind: "imports" }),
+        edge({ id: "route-only-binding", sourceId: "route-only-test", targetId: "changed-file", kind: "routes" }),
         edge({
           id: "heuristic-import",
           sourceId: "heuristic-test",

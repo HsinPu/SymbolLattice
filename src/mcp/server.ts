@@ -14,7 +14,9 @@ import {
   MAX_CONTEXT_RELATION_LIMIT,
   MAX_GENERATION_DIFF_LIMIT,
   MAX_GENERATION_HISTORY_LIMIT,
-  MAX_GIT_HUNK_LIMIT
+  MAX_GIT_HUNK_LIMIT,
+  MAX_ROUTE_LIMIT,
+  ROUTE_METHODS
 } from "../application/types.js";
 import type {
   AffectedTestsOptions,
@@ -32,6 +34,9 @@ import type {
   GitHunksOptions,
   GitHunksResult,
   NodeResult,
+  RouteMethod,
+  RoutesOptions,
+  RoutesResult,
   SearchOptions,
   SearchResult
 } from "../application/types.js";
@@ -92,6 +97,11 @@ export interface SearchService {
   search(projectPath: string, query: string, options?: SearchOptions): Promise<SearchResult>;
 }
 
+/** Additive active-generation route inventory seam for existing read-only embeddings. */
+export interface RoutesService {
+  routes(projectPath: string, options?: RoutesOptions): Promise<RoutesResult>;
+}
+
 /** Optional retained-snapshot listing seam for compatible read-only embeddings. */
 export interface GenerationHistoryService {
   history(
@@ -112,6 +122,7 @@ export interface GenerationDiffService {
 export type ReadOnlyMcpService = ExploreService & ExplainEdgeService;
 export type NodeMcpService = ExploreService & NodeService;
 export type SearchMcpService = ExploreService & SearchService;
+export type RoutesMcpService = ExploreService & RoutesService;
 export type ContextMcpService = ExploreService & ContextService;
 export type AffectedTestsMcpService = ExploreService & AffectedTestsService;
 export type GitAffectedTestsMcpService = ExploreService & GitAffectedTestsService;
@@ -174,6 +185,14 @@ export interface SearchToolArguments {
   readonly language?: "typescript" | "javascript" | undefined;
 }
 
+export interface RoutesToolArguments {
+  readonly projectPath?: string | undefined;
+  readonly method?: RouteMethod | undefined;
+  /** Slash-leading route path prefix. */
+  readonly path?: string | undefined;
+  readonly limit?: number | undefined;
+}
+
 export interface GenerationHistoryToolArguments {
   readonly projectPath?: string | undefined;
   readonly limit?: number | undefined;
@@ -204,6 +223,7 @@ export type GitAffectedTestsToolResponse = ReadOnlyToolResponse;
 export type GitHunksToolResponse = ReadOnlyToolResponse;
 export type ExplainEdgeToolResponse = ReadOnlyToolResponse;
 export type SearchToolResponse = ReadOnlyToolResponse;
+export type RoutesToolResponse = ReadOnlyToolResponse;
 export type GenerationHistoryToolResponse = ReadOnlyToolResponse;
 export type GenerationDiffToolResponse = ReadOnlyToolResponse;
 
@@ -431,6 +451,33 @@ const searchOutputSchema = z
   })
   .passthrough();
 
+const routesOutputSchema = z
+  .object({
+    status: indexStatusOutputSchema,
+    bounds: z.object({
+      limit: z.number().int().min(1).max(MAX_ROUTE_LIMIT),
+      maximumLimit: z.literal(MAX_ROUTE_LIMIT)
+    }),
+    routes: z
+      .array(
+        z.object({
+          method: z.enum(ROUTE_METHODS),
+          path: z
+            .string()
+            .min(1)
+            .refine((path) => path === "*" || path.startsWith("/"), {
+              message: "A persisted route path must begin with '/' or be '*'."
+            }),
+          route: z.object({}).passthrough(),
+          edge: z.object({}).passthrough(),
+          handler: z.object({}).passthrough().nullable()
+        })
+      )
+      .max(MAX_ROUTE_LIMIT),
+    truncated: z.boolean()
+  })
+  .passthrough();
+
 const generationSummaryOutputSchema = z
   .object({
     generationId: z.string(),
@@ -515,6 +562,10 @@ function supportsNode(service: ExploreService): service is NodeMcpService {
 
 function supportsSearch(service: ExploreService): service is SearchMcpService {
   return "search" in service && typeof service.search === "function";
+}
+
+function supportsRoutes(service: ExploreService): service is RoutesMcpService {
+  return "routes" in service && typeof service.routes === "function";
 }
 
 function supportsContext(service: ExploreService): service is ContextMcpService {
@@ -726,6 +777,28 @@ export async function runSearchTool(
   }
 }
 
+/** Lists bounded persisted route facts without ever triggering an index operation. */
+export async function runRoutesTool(
+  service: RoutesService,
+  defaultProjectPath: string,
+  arguments_: RoutesToolArguments
+): Promise<RoutesToolResponse> {
+  try {
+    const options: RoutesOptions = {
+      ...(arguments_.method === undefined ? {} : { method: arguments_.method }),
+      ...(arguments_.path === undefined ? {} : { pathPrefix: arguments_.path }),
+      ...(arguments_.limit === undefined ? {} : { limit: arguments_.limit })
+    };
+    const result = await service.routes(arguments_.projectPath ?? defaultProjectPath, options);
+    return {
+      content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      structuredContent: result as unknown as Record<string, unknown>
+    };
+  } catch (error) {
+    return renderToolError(error);
+  }
+}
+
 /** Lists immutable retained graph generations without initializing or synchronizing. */
 export async function runGenerationHistoryTool(
   service: GenerationHistoryService,
@@ -870,7 +943,7 @@ export function createMcpServer(
             .min(1)
             .max(MAX_CONTEXT_MAX_HOPS)
             .optional()
-            .describe("Maximum directed call/import hops in each adjacent-reference evidence path."),
+            .describe("Maximum directed call/route/import hops in each adjacent-reference evidence path."),
           impactDepth: z
             .number()
             .int()
@@ -1032,6 +1105,44 @@ export function createMcpServer(
         }
       },
       async (arguments_) => runSearchTool(searchService, defaultProjectPath, arguments_)
+    );
+  }
+
+  const routesService = supportsRoutes(service) ? service : null;
+  if (routesService !== null) {
+    server.registerTool(
+      "symbol_lattice_routes",
+      {
+        title: "List routes from a SymbolLattice generation",
+        description:
+          "Lists bounded persisted route facts and resolved or unresolved handlers from an existing SymbolLattice index. This tool never creates or refreshes an index.",
+        inputSchema: {
+          projectPath: z.string().trim().min(1).optional().describe("Optional path to an already indexed project."),
+          method: z
+            .enum(ROUTE_METHODS)
+            .optional()
+            .describe("Optional supported uppercase HTTP method filter."),
+          path: z
+            .string()
+            .min(1)
+            .startsWith("/")
+            .optional()
+            .describe("Optional nonempty slash-leading route path prefix."),
+          limit: z
+            .number()
+            .int()
+            .min(1)
+            .max(MAX_ROUTE_LIMIT)
+            .optional()
+            .describe(`Maximum route records to return (1-${MAX_ROUTE_LIMIT}).`)
+        },
+        outputSchema: routesOutputSchema,
+        annotations: {
+          readOnlyHint: true,
+          idempotentHint: true
+        }
+      },
+      async (arguments_) => runRoutesTool(routesService, defaultProjectPath, arguments_)
     );
   }
 

@@ -791,6 +791,129 @@ describe("SqliteGraphStore", () => {
     expect(readTableCount(projectPath, "source_search")).toBe(2);
   });
 
+  it("round-trips route symbols, route edges, and unresolved route references", async () => {
+    const projectPath = await temporaryProject();
+    const store = new SqliteGraphStore();
+    const handler = symbol("handler", "healthHandler");
+    const route: SymbolNode = {
+      id: "route:health",
+      name: "GET /health",
+      qualifiedName: "src/example.ts#route:GET /health",
+      kind: "route",
+      filePath: "src/example.ts",
+      range: {
+        start: { line: 5, column: 1 },
+        end: { line: 5, column: 33 }
+      },
+      isExported: false,
+      declarationOrdinal: 0
+    };
+    const unresolvedRoute: SymbolNode = {
+      id: "route:missing",
+      name: "POST /missing",
+      qualifiedName: "src/example.ts#route:POST /missing",
+      kind: "route",
+      filePath: "src/example.ts",
+      range: {
+        start: { line: 6, column: 1 },
+        end: { line: 6, column: 34 }
+      },
+      isExported: false,
+      declarationOrdinal: 0
+    };
+    const routeSnapshot: GraphSnapshot = {
+      files: [
+        {
+          path: "src/example.ts",
+          contentHash: "route-hash",
+          language: "typescript",
+          indexedAt: "2026-07-30T00:00:00.000Z"
+        }
+      ],
+      symbols: [route, unresolvedRoute, handler],
+      edges: [
+        {
+          id: "edge:route-health",
+          sourceId: route.id,
+          targetId: handler.id,
+          kind: "routes",
+          filePath: route.filePath,
+          range: {
+            start: { line: 5, column: 20 },
+            end: { line: 5, column: 33 }
+          },
+          resolution: "exact",
+          confidence: 1,
+          referenceName: handler.name,
+          evidence: {
+            ruleId: "framework.express.literal-route.local-handler",
+            stage: "lexical",
+            candidateSymbolIds: [handler.id]
+          }
+        },
+        {
+          id: "edge:route-missing",
+          sourceId: unresolvedRoute.id,
+          targetId: null,
+          kind: "routes",
+          filePath: unresolvedRoute.filePath,
+          range: {
+            start: { line: 6, column: 23 },
+            end: { line: 6, column: 37 }
+          },
+          resolution: "unresolved",
+          confidence: 0,
+          referenceName: "missingHandler",
+          evidence: {
+            ruleId: "framework.express.literal-route.unresolved-handler",
+            stage: "unresolved",
+            candidateSymbolIds: []
+          }
+        }
+      ],
+      pendingReferences: [
+        {
+          id: "edge:route-missing",
+          sourceId: unresolvedRoute.id,
+          filePath: unresolvedRoute.filePath,
+          referenceName: "missingHandler",
+          relationKind: "routes",
+          range: {
+            start: { line: 6, column: 23 },
+            end: { line: 6, column: 37 }
+          }
+        }
+      ]
+    };
+    const facts = persistedFacts(routeSnapshot);
+
+    store.replaceProjectFacts({
+      projectPath,
+      snapshot: routeSnapshot,
+      indexedAt: "2026-07-30T00:00:00.000Z",
+      artifactFacts: facts,
+      indexInputs: indexInputs("routes"),
+      resolverVersion: "test-resolver-routes",
+      sourceDocuments: sourceDocuments(routeSnapshot, 'const app = express(); app.get("/health", healthHandler);'),
+      sourceSearchVersion: SOURCE_SEARCH_INDEX_VERSION,
+      indexWork: indexWork("full", "routes")
+    });
+
+    expect(store.getSnapshot(projectPath)).toEqual({
+      ...routeSnapshot,
+      // SQLite's canonical projection is source-range ordered, independently
+      // of the caller-provided snapshot insertion order.
+      symbols: [handler, route, unresolvedRoute]
+    });
+    expect(store.getArtifactFacts(projectPath)).toEqual(facts);
+    expect(store.getGenerationHistoryBundle(projectPath)?.generations).toMatchObject([
+      {
+        counts: { files: 1, symbols: 3, edges: 2, pendingReferences: 1 },
+        resolverVersion: "test-resolver-routes"
+      }
+    ]);
+  });
+
   it("reads comparison selections and the active projection from one retained state", async () => {
     const projectPath = await temporaryProject();
     const store = new SqliteGraphStore();

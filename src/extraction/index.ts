@@ -3,6 +3,7 @@ import ts from "typescript";
 import {
   createEdgeId,
   createSymbolId,
+  ROUTE_METHODS,
   type ArtifactFacts,
   type ArtifactLanguage,
   type EdgeKind,
@@ -13,6 +14,7 @@ import {
   type PendingReference,
   type ReExportBinding,
   type ReferenceScope,
+  type RouteMethod,
   type SourceRange,
   type SymbolKind,
   type SymbolNode
@@ -252,6 +254,330 @@ function hasValueBinding(info: DeclarationInfo): boolean {
   return info.kind === "class" || info.kind === "function" || info.kind === "variable";
 }
 
+interface ScopedRouteReceiverBindings {
+  /** The closest value binding decides whether a receiver is known to be Express. */
+  readonly byScopeId: ReadonlyMap<string, ReadonlyMap<string, readonly RouteBinding[]>>;
+}
+
+type RouteBindingKind =
+  | "express-receiver"
+  | "express-default-factory"
+  | "express-namespace"
+  | "express-router-factory"
+  | "other";
+
+interface RouteBinding {
+  readonly declaration: ts.Node;
+  kind: RouteBindingKind;
+}
+
+interface StaticExpressRoute {
+  readonly method: RouteMethod;
+  readonly path: string;
+  readonly handler: ts.Identifier;
+}
+
+function bindingNames(name: ts.BindingName): readonly string[] {
+  if (ts.isIdentifier(name)) {
+    return [name.text];
+  }
+
+  const names: string[] = [];
+  for (const element of name.elements) {
+    if (!ts.isBindingElement(element)) {
+      continue;
+    }
+    names.push(...bindingNames(element.name));
+  }
+  return names;
+}
+
+function sourceScopeId(sourceFile: ts.SourceFile): string {
+  return scopeIdFor(sourceFile, sourceFile);
+}
+
+function variableBindingScopeId(
+  sourceFile: ts.SourceFile,
+  declaration: ts.VariableDeclaration
+): string | undefined {
+  return declarationScopeId(sourceFile, declaration, {
+    name: "value-binding",
+    kind: "variable",
+    isExported: false
+  });
+}
+
+function isConstVariableDeclaration(declaration: ts.VariableDeclaration): boolean {
+  return (
+    ts.isVariableDeclarationList(declaration.parent) &&
+    (declaration.parent.flags & ts.NodeFlags.Const) !== 0
+  );
+}
+
+function isExpressImport(statement: ts.ImportDeclaration): boolean {
+  return (
+    ts.isStringLiteral(statement.moduleSpecifier) &&
+    statement.moduleSpecifier.text === "express" &&
+    statement.importClause?.isTypeOnly !== true
+  );
+}
+
+function namedExpressImportBindingKind(
+  statement: ts.ImportDeclaration,
+  element: ts.ImportSpecifier
+): RouteBindingKind {
+  if (!isExpressImport(statement) || element.isTypeOnly) {
+    return "other";
+  }
+  const importedName = element.propertyName?.text ?? element.name.text;
+  if (importedName === "default") {
+    return "express-default-factory";
+  }
+  if (importedName === "Router") {
+    return "express-router-factory";
+  }
+  return "other";
+}
+
+function visibleRouteBindingKind(
+  sourceFile: ts.SourceFile,
+  identifier: ts.Identifier,
+  bindings: ScopedRouteReceiverBindings
+): RouteBindingKind | undefined {
+  for (const scopeId of enclosingScopeIds(sourceFile, identifier)) {
+    const candidates = bindings.byScopeId.get(scopeId)?.get(identifier.text);
+    if (candidates !== undefined) {
+      // A duplicate declaration is ambiguous. It must block lookup rather than
+      // allowing an outer Express import to prove a synthetic receiver.
+      return candidates.length === 1 ? candidates[0]?.kind : undefined;
+    }
+  }
+  return undefined;
+}
+
+function isExpressReceiverInitializer(
+  sourceFile: ts.SourceFile,
+  initializer: ts.Expression,
+  bindings: ScopedRouteReceiverBindings
+): boolean {
+  if (!ts.isCallExpression(initializer) || initializer.questionDotToken !== undefined) {
+    return false;
+  }
+
+  if (ts.isIdentifier(initializer.expression)) {
+    const binding = visibleRouteBindingKind(sourceFile, initializer.expression, bindings);
+    return binding === "express-default-factory" || binding === "express-router-factory";
+  }
+
+  if (
+    !ts.isPropertyAccessExpression(initializer.expression) ||
+    initializer.expression.name.text !== "Router" ||
+    !ts.isIdentifier(initializer.expression.expression)
+  ) {
+    return false;
+  }
+
+  const binding = visibleRouteBindingKind(sourceFile, initializer.expression.expression, bindings);
+  return binding === "express-default-factory" || binding === "express-namespace";
+}
+
+function addScopedValueBinding(
+  byScopeId: Map<string, Map<string, RouteBinding[]>>,
+  scopeId: string | undefined,
+  names: readonly string[],
+  declaration: ts.Node,
+  bindingKind: RouteBindingKind = "other"
+): void {
+  if (scopeId === undefined) {
+    return;
+  }
+
+  const bindings = byScopeId.get(scopeId) ?? new Map<string, RouteBinding[]>();
+  for (const name of names) {
+    const candidates = bindings.get(name) ?? [];
+    candidates.push({ declaration, kind: bindingKind });
+    bindings.set(name, candidates);
+  }
+  byScopeId.set(scopeId, bindings);
+}
+
+function markExpressRouteReceiver(
+  byScopeId: Map<string, Map<string, RouteBinding[]>>,
+  scopeId: string | undefined,
+  declaration: ts.VariableDeclaration
+): void {
+  if (scopeId === undefined || !ts.isIdentifier(declaration.name)) {
+    return;
+  }
+
+  const binding = byScopeId
+    .get(scopeId)
+    ?.get(declaration.name.text)
+    ?.find((candidate) => candidate.declaration === declaration);
+  if (binding !== undefined) {
+    binding.kind = "express-receiver";
+  }
+}
+
+/**
+ * Finds value bindings before route extraction so a receiver cannot be inferred
+ * from its spelling. A lexical shadow always wins over an outer Express receiver.
+ */
+function collectScopedRouteReceiverBindings(sourceFile: ts.SourceFile): ScopedRouteReceiverBindings {
+  const byScopeId = new Map<string, Map<string, RouteBinding[]>>();
+  const rootScopeId = sourceScopeId(sourceFile);
+
+  function collectBindings(node: ts.Node): void {
+    if (ts.isImportDeclaration(node)) {
+      const importClause = node.importClause;
+      if (importClause?.name !== undefined) {
+        addScopedValueBinding(
+          byScopeId,
+          rootScopeId,
+          [importClause.name.text],
+          importClause.name,
+          isExpressImport(node) ? "express-default-factory" : "other"
+        );
+      }
+      if (importClause?.namedBindings !== undefined) {
+        if (ts.isNamespaceImport(importClause.namedBindings)) {
+          addScopedValueBinding(
+            byScopeId,
+            rootScopeId,
+            [importClause.namedBindings.name.text],
+            importClause.namedBindings.name,
+            isExpressImport(node) ? "express-namespace" : "other"
+          );
+        } else {
+          for (const element of importClause.namedBindings.elements) {
+            addScopedValueBinding(
+              byScopeId,
+              rootScopeId,
+              [element.name.text],
+              element.name,
+              namedExpressImportBindingKind(node, element)
+            );
+          }
+        }
+      }
+    }
+
+    if (ts.isVariableDeclaration(node)) {
+      const names = bindingNames(node.name);
+      const scopeId = variableBindingScopeId(sourceFile, node);
+      addScopedValueBinding(byScopeId, scopeId, names, node);
+    }
+
+    if (
+      ts.isFunctionDeclaration(node) ||
+      ts.isClassDeclaration(node) ||
+      ts.isEnumDeclaration(node) ||
+      ts.isModuleDeclaration(node) ||
+      ts.isImportEqualsDeclaration(node)
+    ) {
+      if (node.name !== undefined) {
+        const scopeId = declarationScopeId(sourceFile, node, {
+          name: node.name.text,
+          kind: ts.isFunctionDeclaration(node) || ts.isClassDeclaration(node) ? "class" : "variable",
+          isExported: false
+        });
+        addScopedValueBinding(byScopeId, scopeId, [node.name.text], node);
+      }
+    }
+
+    if (
+      (ts.isFunctionExpression(node) || ts.isClassExpression(node)) &&
+      node.name !== undefined
+    ) {
+      // Named expressions bind their own name only inside their lexical body.
+      // Record that self-binding so it cannot be mistaken for an outer import.
+      addScopedValueBinding(byScopeId, scopeIdFor(sourceFile, node), [node.name.text], node);
+    }
+
+    if (ts.isFunctionLike(node)) {
+      const scopeId = scopeIdFor(sourceFile, node);
+      for (const parameter of node.parameters) {
+        addScopedValueBinding(byScopeId, scopeId, bindingNames(parameter.name), parameter);
+      }
+    }
+
+    if (ts.isCatchClause(node) && node.variableDeclaration !== undefined) {
+      addScopedValueBinding(
+        byScopeId,
+        scopeIdFor(sourceFile, node),
+        bindingNames(node.variableDeclaration.name),
+        node.variableDeclaration
+      );
+    }
+
+    ts.forEachChild(node, collectBindings);
+  }
+
+  function collectReceivers(node: ts.Node): void {
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.initializer !== undefined &&
+      isConstVariableDeclaration(node) &&
+      isExpressReceiverInitializer(sourceFile, node.initializer, { byScopeId })
+    ) {
+      markExpressRouteReceiver(byScopeId, variableBindingScopeId(sourceFile, node), node);
+    }
+
+    ts.forEachChild(node, collectReceivers);
+  }
+
+  ts.forEachChild(sourceFile, collectBindings);
+  ts.forEachChild(sourceFile, collectReceivers);
+  return { byScopeId };
+}
+
+function isExpressRouteReceiver(
+  sourceFile: ts.SourceFile,
+  receiver: ts.Identifier,
+  bindings: ScopedRouteReceiverBindings
+): boolean {
+  return visibleRouteBindingKind(sourceFile, receiver, bindings) === "express-receiver";
+}
+
+function staticExpressRoute(
+  sourceFile: ts.SourceFile,
+  node: ts.CallExpression,
+  bindings: ScopedRouteReceiverBindings
+): StaticExpressRoute | null {
+  if (
+    node.questionDotToken !== undefined ||
+    !ts.isPropertyAccessExpression(node.expression) ||
+    node.expression.questionDotToken !== undefined ||
+    !ts.isIdentifier(node.expression.expression) ||
+    !isExpressRouteReceiver(sourceFile, node.expression.expression, bindings)
+  ) {
+    return null;
+  }
+
+  const methodName = node.expression.name.text;
+  const method = ROUTE_METHODS.find((candidate) => candidate.toLowerCase() === methodName);
+  if (method === undefined) {
+    return null;
+  }
+
+  const pathArgument = node.arguments[0];
+  const handler = node.arguments.at(-1);
+  if (
+    node.arguments.length < 2 ||
+    pathArgument === undefined ||
+    !ts.isStringLiteral(pathArgument) ||
+    !pathArgument.text.startsWith("/") ||
+    handler === undefined ||
+    !ts.isIdentifier(handler) ||
+    node.arguments.slice(1).some((argument) => !ts.isIdentifier(argument))
+  ) {
+    return null;
+  }
+
+  return { method, path: pathArgument.text, handler };
+}
+
 function fileNodeFor(sourceFile: ts.SourceFile, input: ExtractFileFactsInput): SymbolNode {
   const fileName = input.filePath.split("/").at(-1) ?? input.filePath;
   return {
@@ -293,6 +619,7 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
   const exportBindings: ExportBinding[] = [];
   const reExportBindings: ReExportBinding[] = [];
   const declarationOrdinals = new Map<string, number>();
+  const routeReceiverBindings = collectScopedRouteReceiverBindings(sourceFile);
   const stack: SymbolNode[] = [];
 
   const fileNode = fileNodeFor(sourceFile, input);
@@ -367,6 +694,32 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
       referenceId: reference.id,
       scopeIds: enclosingScopeIds(sourceFile, node)
     });
+  }
+
+  function addStaticExpressRoute(node: ts.CallExpression, route: StaticExpressRoute): void {
+    const name = `${route.method} ${route.path}`;
+    const qualifiedName = `${input.filePath}#route:${name}`;
+    const identity = `${qualifiedName}\u0000route`;
+    const declarationOrdinal = declarationOrdinals.get(identity) ?? 0;
+    declarationOrdinals.set(identity, declarationOrdinal + 1);
+    const symbol: SymbolNode = {
+      id: createSymbolId({
+        filePath: input.filePath,
+        qualifiedName,
+        kind: "route",
+        declarationOrdinal
+      }),
+      name,
+      qualifiedName,
+      kind: "route",
+      filePath: input.filePath,
+      range: sourceRange(sourceFile, node),
+      isExported: false,
+      declarationOrdinal
+    };
+    symbols.push(symbol);
+    addResolvedEdge(fileNode.id, symbol.id, "contains", node, name);
+    addPendingReference(symbol.id, route.handler.text, "routes", route.handler);
   }
 
   function addDeclaration(node: ts.Node, info: DeclarationInfo): SymbolNode {
@@ -558,6 +911,18 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
   }
 
   ts.forEachChild(sourceFile, visit);
+
+  function extractStaticExpressRoutes(node: ts.Node): void {
+    if (ts.isCallExpression(node)) {
+      const route = staticExpressRoute(sourceFile, node, routeReceiverBindings);
+      if (route !== null) {
+        addStaticExpressRoute(node, route);
+      }
+    }
+    ts.forEachChild(node, extractStaticExpressRoutes);
+  }
+
+  ts.forEachChild(sourceFile, extractStaticExpressRoutes);
 
   return {
     symbols,

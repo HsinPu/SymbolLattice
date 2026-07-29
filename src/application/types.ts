@@ -2,6 +2,8 @@ import type {
   EvidencePath,
   GraphRelation,
   ImpactPath,
+  RouteMethod,
+  RouteRecord,
   SymbolMatch,
   TestFileClassification
 } from "../domain/graph.js";
@@ -26,6 +28,10 @@ import type {
   GitChangeSet,
   GitRevisionSourceAvailability
 } from "../ports/git-change-set.js";
+
+/** Route extraction remains domain-owned; application callers consume these public records. */
+export { ROUTE_METHODS } from "../domain/graph.js";
+export type { RouteMethod, RouteRecord } from "../domain/graph.js";
 
 export interface GraphContext {
   readonly status: IndexStatus;
@@ -196,6 +202,39 @@ export interface SearchResult {
   /** Freshness is evaluated against the current project without changing these persisted hits. */
   readonly status: IndexStatus;
   readonly results: readonly SourceSearchHitResult[];
+}
+
+/** Public route listing remains intentionally bounded independently of graph size. */
+export const DEFAULT_ROUTE_LIMIT = 50;
+export const MAX_ROUTE_LIMIT = 100;
+
+/** Optional exact method and prefix filters for persisted route records. */
+export interface RoutesOptions {
+  /** One supported uppercase HTTP method, including ALL when indexed. */
+  readonly method?: RouteMethod;
+  /** A nonempty route-path prefix beginning with a forward slash. */
+  readonly pathPrefix?: string;
+  /** Maximum persisted route records returned from the active generation. */
+  readonly limit?: number;
+}
+
+/** Fixed disclosure bounds reported with every active-generation route listing. */
+export interface RoutesBounds {
+  readonly limit: number;
+  readonly maximumLimit: number;
+}
+
+/**
+ * A read-only active-generation route inventory. The underlying records are
+ * deterministic persisted graph facts; `status` reports current live freshness
+ * without initializing, indexing, or synchronizing the project.
+ */
+export interface RoutesResult {
+  readonly status: IndexStatus;
+  readonly bounds: RoutesBounds;
+  readonly routes: readonly RouteRecord[];
+  /** True only when matching persisted records were omitted by `bounds.limit`. */
+  readonly truncated: boolean;
 }
 
 export interface RelationResult {
@@ -385,7 +424,7 @@ export interface ExploreResult {
 export interface ContextOptions {
   /** Maximum direct callers and callees retained for each exact symbol. */
   readonly relationLimit?: number;
-  /** Maximum directed call/import edges in each adjacent-reference proof path. */
+  /** Maximum directed call/route/import edges in each adjacent-reference proof path. */
   readonly maxHops?: number;
   /** Maximum reverse dependency depth retained for each exact symbol. */
   readonly impactDepth?: number;

@@ -9,12 +9,13 @@ export const SYMBOL_KINDS = [
   "method",
   "interface",
   "type",
-  "variable"
+  "variable",
+  "route"
 ] as const;
 
 export type SymbolKind = (typeof SYMBOL_KINDS)[number];
 
-export const EDGE_KINDS = ["contains", "imports", "exports", "calls"] as const;
+export const EDGE_KINDS = ["contains", "imports", "exports", "calls", "routes"] as const;
 
 export type EdgeKind = (typeof EDGE_KINDS)[number];
 
@@ -71,7 +72,7 @@ export interface PendingReference {
   readonly sourceId: string;
   readonly filePath: string;
   readonly referenceName: string;
-  readonly relationKind: Extract<EdgeKind, "calls" | "imports" | "exports">;
+  readonly relationKind: Extract<EdgeKind, "calls" | "imports" | "exports" | "routes">;
   readonly range: SourceRange;
 }
 

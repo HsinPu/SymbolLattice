@@ -14,10 +14,12 @@ import {
   getCallees,
   getCallers,
   getImpactPaths,
+  getRoutes,
   MAX_SOURCE_SEARCH_LIMIT,
   matchSymbol,
   normalizeSourceSearchLexicalText,
   PROJECT_RESOLVER_VERSION,
+  ROUTE_METHODS,
   SOURCE_SEARCH_INDEX_VERSION,
   sourceSearchTerms,
   type GraphSnapshot,
@@ -30,6 +32,7 @@ import {
   type IndexWork,
   type PersistedArtifactFacts,
   type ProjectIndexInputs,
+  type RouteMethod,
   type SourceSearchRequest,
   type SourceRange,
   type SymbolMatch,
@@ -79,6 +82,7 @@ import {
   DEFAULT_CONTEXT_RELATION_LIMIT,
   DEFAULT_GENERATION_DIFF_LIMIT,
   DEFAULT_GENERATION_HISTORY_LIMIT,
+  DEFAULT_ROUTE_LIMIT,
   MAX_CONTEXT_IMPACT_DEPTH,
   MAX_CONTEXT_IMPACT_LIMIT,
   MAX_CONTEXT_MAX_HOPS,
@@ -93,6 +97,7 @@ import {
   MAX_AFFECTED_LIMIT,
   MAX_AFFECTED_MAX_DEPTH,
   MAX_IMPACT_LIMIT,
+  MAX_ROUTE_LIMIT,
   NODE_MATCH_CANDIDATE_LIMIT,
   NODE_RELATION_LIMIT,
   NODE_SOURCE_CHARACTER_LIMIT,
@@ -129,6 +134,8 @@ import type {
   NodeResult,
   NodeSource,
   RelationResult,
+  RoutesOptions,
+  RoutesResult,
   SearchOptions,
   SearchResult,
   SourceAvailability,
@@ -181,6 +188,12 @@ interface NormalizedGitHunksRequest {
 interface NormalizedGenerationDiffRequest {
   readonly fromGenerationId: string;
   readonly toGenerationId: string | undefined;
+  readonly limit: number;
+}
+
+interface NormalizedRoutesRequest {
+  readonly method?: RouteMethod;
+  readonly pathPrefix?: string;
   readonly limit: number;
 }
 
@@ -1024,6 +1037,34 @@ export class SymbolLatticeService {
       results: bundle.hits.map((hit, index) =>
         this.toSourceSearchHitResult(hit, index + 1, request.terms, bundle.snapshot)
       )
+    };
+  }
+
+  /**
+   * Lists deterministic route facts from the active persisted graph generation.
+   * This is deliberately a query-only surface: it uses `requireGraph` and never
+   * initializes, indexes, or synchronizes a project.
+   */
+  public async routes(
+    projectPath: string,
+    options: RoutesOptions = {}
+  ): Promise<RoutesResult> {
+    const request = this.routesRequest(options);
+    const context = await this.requireGraph(projectPath);
+    const matchingRoutes = getRoutes(context.snapshot).filter(
+      (route) =>
+        (request.method === undefined || route.method === request.method) &&
+        (request.pathPrefix === undefined || route.path.startsWith(request.pathPrefix))
+    );
+
+    return {
+      status: context.status,
+      bounds: {
+        limit: request.limit,
+        maximumLimit: MAX_ROUTE_LIMIT
+      },
+      routes: matchingRoutes.slice(0, request.limit),
+      truncated: matchingRoutes.length > request.limit
     };
   }
 
@@ -2183,6 +2224,44 @@ export class SymbolLatticeService {
       limit,
       ...(pathPrefix === undefined ? {} : { pathPrefix }),
       ...(language === undefined ? {} : { language })
+    };
+  }
+
+  private routesRequest(options: RoutesOptions): NormalizedRoutesRequest {
+    const limit = options.limit ?? DEFAULT_ROUTE_LIMIT;
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > MAX_ROUTE_LIMIT) {
+      throw new SymbolLatticeError(
+        "INVALID_ROUTE_LIMIT",
+        `Route limit must be a whole number from 1 to ${MAX_ROUTE_LIMIT}.`
+      );
+    }
+
+    const method = options.method;
+    if (
+      method !== undefined &&
+      (typeof method !== "string" || !ROUTE_METHODS.includes(method as RouteMethod))
+    ) {
+      throw new SymbolLatticeError(
+        "INVALID_ROUTE_METHOD",
+        `Route method must be one of: ${ROUTE_METHODS.join(", ")}.`
+      );
+    }
+
+    const pathPrefix = options.pathPrefix;
+    if (
+      pathPrefix !== undefined &&
+      (typeof pathPrefix !== "string" || pathPrefix.length === 0 || !pathPrefix.startsWith("/"))
+    ) {
+      throw new SymbolLatticeError(
+        "INVALID_ROUTE_PATH_PREFIX",
+        "Route path prefix must be non-empty text beginning with '/'."
+      );
+    }
+
+    return {
+      limit,
+      ...(method === undefined ? {} : { method }),
+      ...(pathPrefix === undefined ? {} : { pathPrefix })
     };
   }
 

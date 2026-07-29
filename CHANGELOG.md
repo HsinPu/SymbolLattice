@@ -6,6 +6,24 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.14.0] - 2026-07-30
+
+### Added
+
+- Evidence-first Express static-route extraction for a deliberately narrow, AST-proven surface: supported immutable `const` receivers from `express()` / `express.Router()` / `Router()`, slash-prefixed string-literal paths, supported HTTP verbs, and identifier-only middleware chains with a terminal named handler.
+- First-class `route` graph nodes and `routes` edges. Exact handler bindings carry framework-specific evidence; unresolved or ambiguous handlers remain inspectable route edges instead of becoming guessed links. Route bindings participate in callers, callees, reverse impact, context evidence paths, and ordinary graph inspection with their distinct edge kind preserved.
+- Read-only `routes [path]` CLI command and conditional `symbol_lattice_routes` MCP tool. Both provide bounded method/path filters, handler evidence, freshness, and explicit truncation without initializing, synchronizing, or mutating an index.
+
+### Compatibility
+
+- No SQLite schema migration is required: the existing text-backed symbol, edge, pending-reference, and retained-snapshot storage persists the additive route graph shape. Existing generations remain readable.
+- The extractor and resolver versions advance so a pre-v0.14 active index reports `indexer-version-changed` until an explicit `sync` or `index` publishes route evidence. Explore-only embedded MCP services retain their prior tool list because `symbol_lattice_routes` is capability-gated.
+
+### Deliberate limits
+
+- This is not a general Express runtime model. It excludes CommonJS `require`, mutable or unknown receiver aliases, `app.use` mounts, chained `.route()`, computed methods, nonliteral or non-slash paths, property/namespace handlers, inline callbacks, arrays/spreads, and dynamic dispatch.
+- SymbolLattice does not read `node_modules` or infer Express from a filename, package manifest, or receiver spelling. A supported route must have a local AST proof of its Express import and receiver origin.
+
 ## [0.13.0] - 2026-07-30
 
 ### Added
@@ -292,7 +310,8 @@ No unreleased changes.
 - Explicit full indexing, caller/callee/impact queries, and read-only MCP exploration.
 - `exact`, `heuristic`, and `unresolved` relationship states.
 
-[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.13.0...HEAD
+[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.14.0...HEAD
+[0.14.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.10.0...v0.11.0

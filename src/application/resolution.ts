@@ -674,9 +674,10 @@ export function resolveProjectFacts(input: {
   });
 
   for (const reference of [...references].sort((left, right) => compareStableText(left.id, right.id))) {
-    if (reference.relationKind !== "calls") {
+    if (reference.relationKind !== "calls" && reference.relationKind !== "routes") {
       continue;
     }
+    const isRouteHandler = reference.relationKind === "routes";
 
     const scopedLocal = resolveScopedBinding(
       reference.referenceName,
@@ -723,7 +724,9 @@ export function resolveProjectFacts(input: {
             "exact",
             1,
             referenceEvidence(
-              "lexical.local-binding",
+              isRouteHandler
+                ? "framework.express.literal-route.local-handler"
+                : "lexical.local-binding",
               "lexical",
               candidateSymbolIds(scopedLocal.candidates)
             )
@@ -738,7 +741,9 @@ export function resolveProjectFacts(input: {
             "unresolved",
             0,
             referenceEvidence(
-              "reference.unresolved",
+              isRouteHandler
+                ? "framework.express.literal-route.unresolved-handler"
+                : "reference.unresolved",
               "unresolved",
               candidateSymbolIds(scopedLocal.candidates)
             )
@@ -767,9 +772,13 @@ export function resolveProjectFacts(input: {
           "exact",
           1,
           referenceEvidence(
-            resolutionPath.length === 0
-              ? "module.explicit-import-binding"
-              : "module.reexported-import-binding",
+            isRouteHandler
+              ? resolutionPath.length === 0
+                ? "framework.express.literal-route.imported-handler"
+                : "framework.express.literal-route.reexported-handler"
+              : resolutionPath.length === 0
+                ? "module.explicit-import-binding"
+                : "module.reexported-import-binding",
             "module",
             candidateSymbolIds(exactImportedSymbols),
             exactImportedConfigurationPaths,
@@ -793,9 +802,37 @@ export function resolveProjectFacts(input: {
           "unresolved",
           0,
           referenceEvidence(
-            "reference.unresolved",
+            isRouteHandler
+              ? "framework.express.literal-route.unresolved-handler"
+              : "reference.unresolved",
             "unresolved",
             candidateSymbolIds(exactImportedSymbols),
+            exactImportedConfigurationPaths
+          )
+        )
+      );
+      continue;
+    }
+
+    // Route handler bindings require an explicit lexical, import, or re-export
+    // proof. Unlike ordinary call expressions, a unique name elsewhere in the
+    // project is not sufficient evidence to bind a framework route.
+    if (isRouteHandler) {
+      unresolvedReferences.push(reference);
+      resolvedEdges.push(
+        referenceEdge(
+          reference,
+          null,
+          "unresolved",
+          0,
+          referenceEvidence(
+            "framework.express.literal-route.unresolved-handler",
+            "unresolved",
+            candidateSymbolIds(
+              exactImportedSymbols,
+              importedCandidates.map((candidate) => candidate.symbol),
+              exportedCandidates.map((candidate) => candidate.symbol)
+            ),
             exactImportedConfigurationPaths
           )
         )
