@@ -3,7 +3,16 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 
 import { SymbolLatticeError } from "../application/errors.js";
+import {
+  MAX_CONTEXT_IMPACT_DEPTH,
+  MAX_CONTEXT_IMPACT_LIMIT,
+  MAX_CONTEXT_MAX_HOPS,
+  MAX_CONTEXT_REFERENCES,
+  MAX_CONTEXT_RELATION_LIMIT
+} from "../application/types.js";
 import type {
+  ContextOptions,
+  ContextResult,
   ExplainEdgeResult,
   ExploreResult,
   SearchOptions,
@@ -13,6 +22,15 @@ import { SYMBOL_LATTICE_VERSION } from "../version.js";
 
 export interface ExploreService {
   explore(projectPath: string, reference: string): Promise<ExploreResult>;
+}
+
+/** Additive multi-symbol context seam; older explore embeddings remain valid. */
+export interface ContextService {
+  context(
+    projectPath: string,
+    references: readonly string[],
+    options?: ContextOptions
+  ): Promise<ContextResult>;
 }
 
 export interface ExplainEdgeService {
@@ -26,10 +44,20 @@ export interface SearchService {
 
 export type ReadOnlyMcpService = ExploreService & ExplainEdgeService;
 export type SearchMcpService = ExploreService & SearchService;
+export type ContextMcpService = ExploreService & ContextService;
 
 export interface ExploreToolArguments {
   readonly query: string;
   readonly projectPath?: string | undefined;
+}
+
+export interface ContextToolArguments {
+  readonly references: readonly string[];
+  readonly projectPath?: string | undefined;
+  readonly relationLimit?: number | undefined;
+  readonly maxHops?: number | undefined;
+  readonly impactDepth?: number | undefined;
+  readonly impactLimit?: number | undefined;
 }
 
 export interface ExplainEdgeToolArguments {
@@ -57,6 +85,7 @@ export interface ReadOnlyToolResponse {
 }
 
 export type ExploreToolResponse = ReadOnlyToolResponse;
+export type ContextToolResponse = ReadOnlyToolResponse;
 export type ExplainEdgeToolResponse = ReadOnlyToolResponse;
 export type SearchToolResponse = ReadOnlyToolResponse;
 
@@ -115,6 +144,50 @@ const exploreOutputSchema = z
   })
   .passthrough();
 
+const contextOutputSchema = z
+  .object({
+    status: indexStatusOutputSchema,
+    bounds: z.object({
+      maxReferences: z.number().int().positive(),
+      matchCandidateLimit: z.number().int().positive(),
+      relationLimit: z.number().int().positive(),
+      maxHops: z.number().int().positive(),
+      maxVisitedSymbolsPerPath: z.number().int().positive(),
+      impactDepth: z.number().int().positive(),
+      impactLimit: z.number().int().positive()
+    }),
+    contexts: z.array(
+      z.object({
+        reference: z.string(),
+        match: z.object({}).passthrough(),
+        matchCandidatesTruncated: z.boolean(),
+        sourceAvailability: z.enum(["active-generation", "unavailable", "not-applicable"]),
+        source: sourceExcerptOutputSchema.nullable(),
+        callers: z.object({
+          items: z.array(z.object({}).passthrough()),
+          truncated: z.boolean()
+        }),
+        callees: z.object({
+          items: z.array(z.object({}).passthrough()),
+          truncated: z.boolean()
+        }),
+        impact: z.object({
+          paths: z.array(z.object({}).passthrough()),
+          truncated: z.boolean()
+        })
+      })
+    ),
+    evidencePaths: z.array(
+      z.object({
+        fromReference: z.string(),
+        toReference: z.string(),
+        status: z.enum(["path", "same-symbol", "no-path", "not-applicable", "truncated"]),
+        path: z.object({}).passthrough().nullable()
+      })
+    )
+  })
+  .passthrough();
+
 const searchOutputSchema = z
   .object({
     status: indexStatusOutputSchema,
@@ -143,6 +216,10 @@ function supportsSearch(service: ExploreService): service is SearchMcpService {
   return "search" in service && typeof service.search === "function";
 }
 
+function supportsContext(service: ExploreService): service is ContextMcpService {
+  return "context" in service && typeof service.context === "function";
+}
+
 function renderToolError(error: unknown): ReadOnlyToolResponse {
   const message =
     error instanceof SymbolLatticeError
@@ -164,6 +241,33 @@ export async function runExploreTool(
 ): Promise<ExploreToolResponse> {
   try {
     const result = await service.explore(arguments_.projectPath ?? defaultProjectPath, arguments_.query);
+    return {
+      content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      structuredContent: result as unknown as Record<string, unknown>
+    };
+  } catch (error) {
+    return renderToolError(error);
+  }
+}
+
+/** Builds a bounded, generation-bound context response without indexing. */
+export async function runContextTool(
+  service: ContextService,
+  defaultProjectPath: string,
+  arguments_: ContextToolArguments
+): Promise<ContextToolResponse> {
+  try {
+    const options: ContextOptions = {
+      ...(arguments_.relationLimit === undefined ? {} : { relationLimit: arguments_.relationLimit }),
+      ...(arguments_.maxHops === undefined ? {} : { maxHops: arguments_.maxHops }),
+      ...(arguments_.impactDepth === undefined ? {} : { impactDepth: arguments_.impactDepth }),
+      ...(arguments_.impactLimit === undefined ? {} : { impactLimit: arguments_.impactLimit })
+    };
+    const result = await service.context(
+      arguments_.projectPath ?? defaultProjectPath,
+      arguments_.references,
+      options
+    );
     return {
       content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       structuredContent: result as unknown as Record<string, unknown>
@@ -243,6 +347,60 @@ export function createMcpServer(
     },
     async (arguments_) => runExploreTool(service, defaultProjectPath, arguments_)
   );
+
+  const contextService = supportsContext(service) ? service : null;
+  if (contextService !== null) {
+    server.registerTool(
+      "symbol_lattice_context",
+      {
+        title: "Build a bounded SymbolLattice context pack",
+        description:
+          "Resolves up to eight symbol references from one existing SymbolLattice generation, returns generation-bound source when available, bounded callers/callees/impact, and directed static evidence paths for adjacent references. This tool never creates or refreshes an index.",
+        inputSchema: {
+          references: z
+            .array(z.string().trim().min(1))
+            .min(1)
+            .max(MAX_CONTEXT_REFERENCES)
+            .describe("One to eight symbol references in the order whose adjacent directed paths should be checked."),
+          projectPath: z.string().trim().min(1).optional().describe("Optional path to an already indexed project."),
+          relationLimit: z
+            .number()
+            .int()
+            .min(1)
+            .max(MAX_CONTEXT_RELATION_LIMIT)
+            .optional()
+            .describe("Maximum direct callers and callees included for each exact symbol."),
+          maxHops: z
+            .number()
+            .int()
+            .min(1)
+            .max(MAX_CONTEXT_MAX_HOPS)
+            .optional()
+            .describe("Maximum directed call/import hops in each adjacent-reference evidence path."),
+          impactDepth: z
+            .number()
+            .int()
+            .min(1)
+            .max(MAX_CONTEXT_IMPACT_DEPTH)
+            .optional()
+            .describe("Maximum reverse dependency depth included for each exact symbol."),
+          impactLimit: z
+            .number()
+            .int()
+            .min(1)
+            .max(MAX_CONTEXT_IMPACT_LIMIT)
+            .optional()
+            .describe("Maximum reverse-impact paths included for each exact symbol.")
+        },
+        outputSchema: contextOutputSchema,
+        annotations: {
+          readOnlyHint: true,
+          idempotentHint: true
+        }
+      },
+      async (arguments_) => runContextTool(contextService, defaultProjectPath, arguments_)
+    );
+  }
 
   const searchService = supportsSearch(service) ? service : null;
   if (searchService !== null) {

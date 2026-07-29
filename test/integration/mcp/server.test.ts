@@ -4,12 +4,14 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import {
   SymbolLatticeError,
+  type ContextResult,
   type ExplainEdgeResult,
   type ExploreResult,
   type SearchResult
 } from "../../../src/application/index.js";
 import {
   createMcpServer,
+  runContextTool,
   runExplainEdgeTool,
   runExploreTool,
   runSearchTool
@@ -44,6 +46,34 @@ function exploreResult(): ExploreResult {
 function legacyExploreResult(): ExploreResult {
   const { sourceAvailability: _sourceAvailability, ...result } = exploreResult();
   return result;
+}
+
+function contextResult(): ContextResult {
+  return {
+    status: exploreResult().status,
+    bounds: {
+      maxReferences: 8,
+      matchCandidateLimit: 25,
+      relationLimit: 2,
+      maxHops: 3,
+      maxVisitedSymbolsPerPath: 500,
+      impactDepth: 2,
+      impactLimit: 2
+    },
+    contexts: [
+      {
+        reference: "src/users.ts#userById",
+        match: { status: "not_found", reference: "src/users.ts#userById", candidates: [] },
+        matchCandidatesTruncated: false,
+        sourceAvailability: "not-applicable",
+        source: null,
+        callers: { items: [], truncated: false },
+        callees: { items: [], truncated: false },
+        impact: { paths: [], truncated: false }
+      }
+    ],
+    evidencePaths: []
+  };
 }
 
 function searchResult(): SearchResult {
@@ -244,6 +274,71 @@ describe("SymbolLattice MCP server", () => {
     ]);
   });
 
+  it("registers bounded multi-symbol context only when the service supports it", async () => {
+    const contextCalls: Array<{
+      projectPath: string;
+      references: readonly string[];
+      options: {
+        relationLimit?: number;
+        maxHops?: number;
+        impactDepth?: number;
+        impactLimit?: number;
+      };
+    }> = [];
+    const server = createMcpServer(
+      {
+        async explore(): Promise<ExploreResult> {
+          return exploreResult();
+        },
+        async context(
+          projectPath: string,
+          references: readonly string[],
+          options = {}
+        ): Promise<ContextResult> {
+          contextCalls.push({ projectPath, references, options });
+          return contextResult();
+        }
+      },
+      "C:/default-project"
+    );
+    const client = new Client({ name: "symbol-lattice-context-test", version: "1.0.0" });
+    const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+    closeCallbacks.push(() => client.close(), () => server.close());
+
+    const tools = await client.listTools();
+    expect(tools.tools.map((tool) => tool.name)).toEqual([
+      "symbol_lattice_explore",
+      "symbol_lattice_context"
+    ]);
+
+    const result = await client.callTool({
+      name: "symbol_lattice_context",
+      arguments: {
+        projectPath: "C:/chosen-project",
+        references: ["src/entry.ts#entry", "src/target.ts#target"],
+        relationLimit: 2,
+        maxHops: 3,
+        impactDepth: 2,
+        impactLimit: 4
+      }
+    });
+
+    expect(result.isError).not.toBe(true);
+    expect(result.structuredContent).toMatchObject({
+      bounds: { relationLimit: 2, maxHops: 3 },
+      contexts: [{ sourceAvailability: "not-applicable" }]
+    });
+    expect(contextCalls).toEqual([
+      {
+        projectPath: "C:/chosen-project",
+        references: ["src/entry.ts#entry", "src/target.ts#target"],
+        options: { relationLimit: 2, maxHops: 3, impactDepth: 2, impactLimit: 4 }
+      }
+    ]);
+  });
+
   it("does not register search for an existing explore-and-explain embedding", async () => {
     const server = createMcpServer(
       {
@@ -331,6 +426,21 @@ describe("SymbolLattice MCP server", () => {
     expect(response.content[0]?.text).toContain("MISSING_INDEX");
   });
 
+  it("returns context errors without indexing", async () => {
+    const response = await runContextTool(
+      {
+        async context(): Promise<ContextResult> {
+          throw new SymbolLatticeError("MISSING_INDEX", "Run symbol-lattice init first.");
+        }
+      },
+      "C:/project",
+      { references: ["src/missing.ts#missing"] }
+    );
+
+    expect(response).toMatchObject({ isError: true });
+    expect(response.content[0]?.text).toContain("MISSING_INDEX");
+  });
+
   it("returns indexed-search errors without indexing", async () => {
     const response = await runSearchTool(
       {
@@ -367,6 +477,9 @@ describe("SymbolLattice MCP server", () => {
       async explore(): Promise<ExploreResult> {
         return exploreResult();
       },
+      async context(): Promise<ContextResult> {
+        return contextResult();
+      },
       async search(): Promise<SearchResult> {
         return searchResult();
       },
@@ -385,6 +498,7 @@ describe("SymbolLattice MCP server", () => {
     };
 
     await runExploreTool(service, "C:/project", { query: "missing" });
+    await runContextTool(service, "C:/project", { references: ["src/missing.ts#missing"] });
     await runSearchTool(service, "C:/project", { query: "user" });
     await runExplainEdgeTool(service, "C:/project", { edgeId: "edge:caller-callee" });
 

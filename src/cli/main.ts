@@ -5,8 +5,14 @@ import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
 
 import {
+  MAX_CONTEXT_IMPACT_DEPTH,
+  MAX_CONTEXT_IMPACT_LIMIT,
+  MAX_CONTEXT_MAX_HOPS,
+  MAX_CONTEXT_RELATION_LIMIT,
+  MAX_IMPACT_LIMIT,
   SymbolLatticeError,
   SymbolLatticeService,
+  type ContextOptions,
   type FindOptions,
   type SearchOptions
 } from "../application/index.js";
@@ -40,8 +46,16 @@ interface SearchCommandOptions extends ProjectOptions {
   readonly language?: NonNullable<SearchOptions["language"]>;
 }
 
-interface DepthCommandOptions extends ProjectOptions {
+interface ImpactCommandOptions extends ProjectOptions {
   readonly depth?: number;
+  readonly limit?: number;
+}
+
+interface ContextCommandOptions extends ProjectOptions {
+  readonly relationLimit?: number;
+  readonly maxHops?: number;
+  readonly impactDepth?: number;
+  readonly impactLimit?: number;
 }
 
 function createService(): SymbolLatticeService {
@@ -61,11 +75,13 @@ function parsePositiveInteger(value: string): number {
 }
 
 function parseSearchLimit(value: string): number {
+  return parseBoundedPositiveInteger(value, MAX_SOURCE_SEARCH_LIMIT);
+}
+
+function parseBoundedPositiveInteger(value: string, maximum: number): number {
   const parsed = parsePositiveInteger(value);
-  if (parsed > MAX_SOURCE_SEARCH_LIMIT) {
-    throw new Error(
-      `Expected an integer between 1 and ${MAX_SOURCE_SEARCH_LIMIT}, received \"${value}\".`
-    );
+  if (parsed > maximum) {
+    throw new Error(`Expected an integer between 1 and ${maximum}, received \"${value}\".`);
   }
   return parsed;
 }
@@ -265,11 +281,51 @@ export function createProgram(service = createService()): Command {
 
   addJsonOption(addProjectOption(program.command("impact <symbol>")))
     .option("--depth <count>", "Maximum reverse dependency depth", parsePositiveInteger)
-    .action(async (reference: string, options: DepthCommandOptions) => {
+    .option(
+      "--limit <count>",
+      `Maximum returned impact paths (1-${MAX_IMPACT_LIMIT})`,
+      (value: string) => parseBoundedPositiveInteger(value, MAX_IMPACT_LIMIT)
+    )
+    .action(async (reference: string, options: ImpactCommandOptions) => {
+      const impactOptions = {
+        maxDepth: options.depth ?? 1,
+        ...(options.limit === undefined ? {} : { limit: options.limit })
+      };
       render(
-        await service.impact(defaultProjectPath(options), reference, options.depth ?? 1),
+        await service.impact(defaultProjectPath(options), reference, impactOptions),
         options
       );
+    });
+
+  addJsonOption(addProjectOption(program.command("context <reference...>")))
+    .option(
+      "--relation-limit <count>",
+      `Maximum callers and callees per exact symbol (1-${MAX_CONTEXT_RELATION_LIMIT})`,
+      (value: string) => parseBoundedPositiveInteger(value, MAX_CONTEXT_RELATION_LIMIT)
+    )
+    .option(
+      "--max-hops <count>",
+      `Maximum evidence-path hops (1-${MAX_CONTEXT_MAX_HOPS})`,
+      (value: string) => parseBoundedPositiveInteger(value, MAX_CONTEXT_MAX_HOPS)
+    )
+    .option(
+      "--impact-depth <count>",
+      `Maximum impact depth per exact symbol (1-${MAX_CONTEXT_IMPACT_DEPTH})`,
+      (value: string) => parseBoundedPositiveInteger(value, MAX_CONTEXT_IMPACT_DEPTH)
+    )
+    .option(
+      "--impact-limit <count>",
+      `Maximum impact paths per exact symbol (1-${MAX_CONTEXT_IMPACT_LIMIT})`,
+      (value: string) => parseBoundedPositiveInteger(value, MAX_CONTEXT_IMPACT_LIMIT)
+    )
+    .action(async (references: string[], options: ContextCommandOptions) => {
+      const contextOptions: ContextOptions = {
+        ...(options.relationLimit === undefined ? {} : { relationLimit: options.relationLimit }),
+        ...(options.maxHops === undefined ? {} : { maxHops: options.maxHops }),
+        ...(options.impactDepth === undefined ? {} : { impactDepth: options.impactDepth }),
+        ...(options.impactLimit === undefined ? {} : { impactLimit: options.impactLimit })
+      };
+      render(await service.context(defaultProjectPath(options), references, contextOptions), options);
     });
 
   addJsonOption(addProjectOption(program.command("explore <query>"))).action(

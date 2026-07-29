@@ -388,6 +388,151 @@ describe("SymbolLatticeService", () => {
     });
   });
 
+  it("assembles bounded multi-symbol context with persisted source and directed proof paths", async () => {
+    const projectPath = await createInlineProject({
+      "src/entry.ts": [
+        'import { middle } from "./middle.js";',
+        "",
+        "export function entry(): string {",
+        "  return middle();",
+        "}",
+        ""
+      ].join("\n"),
+      "src/middle.ts": [
+        'import { target } from "./target.js";',
+        "",
+        "export function middle(): string {",
+        "  return target();",
+        "}",
+        ""
+      ].join("\n"),
+      "src/alternate.ts": [
+        'import { target } from "./target.js";',
+        "",
+        "export function alternate(): string {",
+        "  return target();",
+        "}",
+        ""
+      ].join("\n"),
+      "src/target.ts": ["export function target(): string {", '  return "indexed target";', "}", ""].join(
+        "\n"
+      )
+    });
+    const service = createService();
+    await service.init({ projectPath });
+
+    const result = await service.context(
+      projectPath,
+      ["src/entry.ts#entry", "src/target.ts#target"],
+      { relationLimit: 1, maxHops: 2, impactDepth: 2, impactLimit: 1 }
+    );
+
+    expect(result).toMatchObject({
+      status: { stale: false },
+      bounds: {
+        maxReferences: 8,
+        matchCandidateLimit: 25,
+        relationLimit: 1,
+        maxHops: 2,
+        maxVisitedSymbolsPerPath: 500,
+        impactDepth: 2,
+        impactLimit: 1
+      },
+      contexts: [
+        {
+          reference: "src/entry.ts#entry",
+          match: { status: "exact", symbol: { name: "entry" } },
+          sourceAvailability: "active-generation",
+          source: { filePath: "src/entry.ts" }
+        },
+        {
+          reference: "src/target.ts#target",
+          match: { status: "exact", symbol: { name: "target" } },
+          sourceAvailability: "active-generation",
+          source: { filePath: "src/target.ts" },
+          callers: { items: [expect.any(Object)], truncated: true },
+          impact: { paths: [expect.any(Object)], truncated: true }
+        }
+      ],
+      evidencePaths: [
+        {
+          fromReference: "src/entry.ts#entry",
+          toReference: "src/target.ts#target",
+          status: "path",
+          path: {
+            symbols: [{ name: "entry" }, { name: "middle" }, { name: "target" }],
+            edges: [
+              { kind: "calls", resolution: "exact" },
+              { kind: "calls", resolution: "exact" }
+            ]
+          }
+        }
+      ]
+    });
+
+    const unboundedImpact = await service.impact(projectPath, "src/target.ts#target", 2);
+    const boundedImpact = await service.impact(projectPath, "src/target.ts#target", {
+      maxDepth: 2,
+      limit: 1
+    });
+    expect(unboundedImpact).not.toHaveProperty("truncated");
+    expect(boundedImpact).toMatchObject({
+      paths: unboundedImpact.paths.slice(0, 1),
+      truncated: true
+    });
+  });
+
+  it("keeps context graph-queryable when a legacy store cannot supply persisted source", async () => {
+    const projectPath = await createFixtureProject();
+    const service = new SymbolLatticeService(
+      createV03GraphStore(new SqliteGraphStore()),
+      new FileSystemSourceCatalog()
+    );
+    await service.init({ projectPath });
+
+    const result = await service.context(projectPath, ["src/math.ts#add", "missing"]);
+
+    expect(result).toMatchObject({
+      contexts: [
+        {
+          match: { status: "exact", symbol: { name: "add" } },
+          sourceAvailability: "unavailable",
+          source: null
+        },
+        {
+          match: { status: "not_found" },
+          sourceAvailability: "not-applicable",
+          source: null
+        }
+      ],
+      evidencePaths: [{ status: "not-applicable", path: null }]
+    });
+  });
+
+  it("caps ambiguous context candidates while keeping the ambiguity explicit", async () => {
+    const projectPath = await createInlineProject(
+      Object.fromEntries(
+        Array.from({ length: 26 }, (_value, index) => [
+          `src/duplicate-${index}.ts`,
+          `export function duplicate(): number { return ${index}; }\n`
+        ])
+      )
+    );
+    const service = createService();
+    await service.init({ projectPath });
+
+    const result = await service.context(projectPath, ["duplicate"]);
+    const context = result.contexts[0];
+
+    expect(result.bounds.matchCandidateLimit).toBe(25);
+    expect(context).toMatchObject({
+      match: { status: "ambiguous" },
+      matchCandidatesTruncated: true,
+      sourceAvailability: "not-applicable"
+    });
+    expect(context?.match.candidates).toHaveLength(25);
+  });
+
   it("returns a newer authoritative same-path source bundle without a redundant retry", async () => {
     const initialBundle = raceSourceDocumentsBundle(
       "generation:A",
@@ -451,6 +596,48 @@ describe("SymbolLatticeService", () => {
       source: { filePath: "src/after.ts" }
     });
     expect(exploration.source?.lines.map((line) => line.text).join("\n")).toContain("C evidence");
+    expect(sourceDocumentRequests).toEqual([["src/before.ts"], ["src/after.ts"]]);
+  });
+
+  it("retries a context source bundle once when an exact symbol moves during sync", async () => {
+    const initialBundle = raceSourceDocumentsBundle(
+      "generation:A",
+      "src/before.ts",
+      'export function raceTarget() { return "A evidence"; }\n',
+      []
+    );
+    const movedBundleWithoutRequestedDocument = raceSourceDocumentsBundle(
+      "generation:B",
+      "src/after.ts",
+      'export function raceTarget() { return "B evidence"; }\n',
+      []
+    );
+    const movedBundleWithRequestedDocument = raceSourceDocumentsBundle(
+      "generation:C",
+      "src/after.ts",
+      'export function raceTarget() { return "C evidence"; }\n'
+    );
+    const { graphStore, sourceDocumentRequests } = createSequencedSourceDocumentGraphStore(
+      initialBundle,
+      [movedBundleWithoutRequestedDocument, movedBundleWithRequestedDocument]
+    );
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    const result = await service.context("C:/symbol-lattice-race-project", ["raceTarget"]);
+
+    expect(result).toMatchObject({
+      status: { generationId: "generation:C" },
+      contexts: [
+        {
+          match: { status: "exact", symbol: { filePath: "src/after.ts" } },
+          sourceAvailability: "active-generation",
+          source: { filePath: "src/after.ts" }
+        }
+      ]
+    });
+    expect(result.contexts[0]?.source?.lines.map((line) => line.text).join("\n")).toContain(
+      "C evidence"
+    );
     expect(sourceDocumentRequests).toEqual([["src/before.ts"], ["src/after.ts"]]);
   });
 
@@ -714,6 +901,21 @@ describe("SymbolLatticeService", () => {
       "liveReplacement"
     );
 
+    const changedContext = await service.context(projectPath, ["src/explore.ts#indexedExplore"]);
+    expect(changedContext).toMatchObject({
+      status: { stale: true, staleReasons: ["source-files-changed"] },
+      contexts: [
+        {
+          match: { status: "exact" },
+          sourceAvailability: "active-generation",
+          source: { filePath: "src/explore.ts" }
+        }
+      ]
+    });
+    expect(changedContext.contexts[0]?.source?.lines.map((line) => line.text).join("\n")).toContain(
+      "indexed evidence"
+    );
+
     await rm(join(projectPath, "src", "explore.ts"));
 
     const deleted = await service.explore(projectPath, "src/explore.ts#indexedExplore");
@@ -724,6 +926,11 @@ describe("SymbolLatticeService", () => {
       source: { filePath: "src/explore.ts" }
     });
     expect(deleted.source?.lines.map((line) => line.text).join("\n")).toContain(
+      "indexed evidence"
+    );
+
+    const deletedContext = await service.context(projectPath, ["src/explore.ts#indexedExplore"]);
+    expect(deletedContext.contexts[0]?.source?.lines.map((line) => line.text).join("\n")).toContain(
       "indexed evidence"
     );
   });

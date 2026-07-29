@@ -58,6 +58,27 @@ export interface ImpactPath {
   readonly steps: readonly ImpactStep[];
 }
 
+/** One directed evidence step, aligned with its graph edge from source to target. */
+export interface EvidencePathStep {
+  readonly from: SymbolNode;
+  readonly to: SymbolNode;
+  readonly edge: GraphEdge;
+}
+
+/** A directed, exact-resolved-edge evidence path between two persisted symbols. */
+export interface EvidencePath {
+  readonly symbols: readonly SymbolNode[];
+  readonly edges: readonly GraphEdge[];
+  readonly steps: readonly EvidencePathStep[];
+}
+
+/** The bounded shortest-path result used for context evidence. */
+export interface EvidencePathResult {
+  readonly path: EvidencePath | null;
+  /** True only when the visit cap prevented an unvisited candidate from being explored. */
+  readonly truncated: boolean;
+}
+
 interface SourceLocationReference {
   readonly filePath: string;
   readonly line: number;
@@ -67,6 +88,11 @@ interface SourceLocationReference {
 interface TraversalState {
   readonly terminal: SymbolNode;
   readonly path: ImpactPath;
+}
+
+interface EvidenceTraversalState {
+  readonly terminal: SymbolNode;
+  readonly path: EvidencePath;
 }
 
 function compareText(left: string, right: string): number {
@@ -335,6 +361,137 @@ export function getCallees(graph: SymbolGraph, symbolId: string): readonly Graph
   }
 
   return callees.sort(compareRelations);
+}
+
+function createEvidenceRootPath(root: SymbolNode): EvidencePath {
+  return {
+    symbols: [root],
+    edges: [],
+    steps: []
+  };
+}
+
+function extendEvidencePath(
+  path: EvidencePath,
+  from: SymbolNode,
+  to: SymbolNode,
+  edge: GraphEdge
+): EvidencePath {
+  return {
+    symbols: [...path.symbols, to],
+    edges: [...path.edges, edge],
+    steps: [...path.steps, { from, to, edge }]
+  };
+}
+
+function outgoingExactRelations(
+  graph: SymbolGraph,
+  symbolsById: ReadonlyMap<string, SymbolNode>,
+  sourceId: string,
+  edgeKinds: ReadonlySet<EdgeKind>
+): GraphRelation[] {
+  const relations: GraphRelation[] = [];
+
+  for (const edge of graph.edges) {
+    if (
+      !isResolvedGraphEdge(edge) ||
+      edge.resolution !== "exact" ||
+      edge.sourceId !== sourceId ||
+      !edgeKinds.has(edge.kind)
+    ) {
+      continue;
+    }
+
+    const target = symbolsById.get(edge.targetId);
+    if (target !== undefined) {
+      relations.push({ symbol: target, edge });
+    }
+  }
+
+  return relations.sort(compareRelations);
+}
+
+function assertNonnegativeHops(maxHops: number): void {
+  if (!Number.isSafeInteger(maxHops) || maxHops < 0) {
+    throw new RangeError("maxHops must be a nonnegative integer.");
+  }
+}
+
+function assertPositiveVisitCap(maxVisitedSymbols: number): void {
+  if (!Number.isSafeInteger(maxVisitedSymbols) || maxVisitedSymbols < 1) {
+    throw new RangeError("maxVisitedSymbols must be a positive integer.");
+  }
+}
+
+/**
+ * Finds one deterministic shortest directed evidence path through exact,
+ * resolved graph edges. The bounded breadth-first traversal follows calls and
+ * imports by default, never revisits a symbol, and only reports truncation
+ * when its visit cap prevented another unvisited candidate from entering the
+ * search.
+ */
+export function findEvidencePath(
+  graph: SymbolGraph,
+  fromSymbolId: string,
+  toSymbolId: string,
+  maxHops = 4,
+  maxVisitedSymbols = 500,
+  edgeKinds: readonly EdgeKind[] = DEFAULT_IMPACT_EDGE_KINDS
+): EvidencePathResult {
+  assertNonnegativeHops(maxHops);
+  assertPositiveVisitCap(maxVisitedSymbols);
+
+  const symbolsById = createSymbolIndex(graph.symbols);
+  const root = symbolsById.get(fromSymbolId);
+  const target = symbolsById.get(toSymbolId);
+  if (root === undefined || target === undefined) {
+    return { path: null, truncated: false };
+  }
+
+  const rootPath = createEvidenceRootPath(root);
+  if (root.id === target.id) {
+    return { path: rootPath, truncated: false };
+  }
+
+  const allowedEdgeKinds = new Set(edgeKinds);
+  const seenSymbolIds = new Set<string>([root.id]);
+  const queue: EvidenceTraversalState[] = [{ terminal: root, path: rootPath }];
+  let queueIndex = 0;
+  let truncated = false;
+
+  while (queueIndex < queue.length) {
+    const state = queue[queueIndex];
+    queueIndex += 1;
+    if (state === undefined || state.path.edges.length >= maxHops) {
+      continue;
+    }
+
+    const relations = outgoingExactRelations(
+      graph,
+      symbolsById,
+      state.terminal.id,
+      allowedEdgeKinds
+    );
+    for (const relation of relations) {
+      if (seenSymbolIds.has(relation.symbol.id)) {
+        continue;
+      }
+      if (seenSymbolIds.size >= maxVisitedSymbols) {
+        truncated = true;
+        continue;
+      }
+
+      seenSymbolIds.add(relation.symbol.id);
+      const path = extendEvidencePath(state.path, state.terminal, relation.symbol, relation.edge);
+      if (relation.symbol.id === target.id) {
+        return { path, truncated };
+      }
+
+      queue.push({ terminal: relation.symbol, path });
+    }
+  }
+
+  return { path: null, truncated };
 }
 
 function createRootPath(root: SymbolNode): ImpactPath {

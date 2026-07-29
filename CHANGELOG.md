@@ -6,6 +6,25 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.5.0] - 2026-07-29
+
+### Added
+
+- `context <reference...>` CLI command for 1–8 ordered symbol references, with explicit caps for direct relationships, static proof hops, reverse-impact depth, and reverse-impact paths.
+- Read-only, idempotent `symbol_lattice_context` MCP tool with structured output and capability detection, so existing explore-only embeddings retain their previous tool surface.
+- Generation-bound multi-symbol context records: each reference preserves its `exact`, `ambiguous`, or `not_found` resolution, and exact records carry persisted source when available plus bounded callers, callees, and reverse impact. Ambiguous candidate lists are capped with an explicit truncation flag.
+- Deterministic shortest directed evidence paths for adjacent exact references. Paths follow only exact resolved `calls` and `imports` edges, retain their original edge evidence, and report `no-path`, `not-applicable`, or traversal truncation explicitly when appropriate.
+- An additive `impact` options overload and `impact --limit` CLI flag. Explicit limits return the deterministic path prefix together with `truncated`; existing unbounded impact responses keep their prior JSON shape.
+
+### Compatibility
+
+- No SQLite metadata or table migration is required. `context` reuses the v0.4.1 optional active-generation source-document bundle.
+- Older GraphStore adapters and legacy generations remain graph-queryable. Exact context records use `source: null` with `sourceAvailability: "unavailable"` when persisted source cannot be supplied; they never fall back to live filesystem content.
+
+### Deliberate limits
+
+- Context references are explicit rather than natural-language retrieval. Evidence paths do not reverse edges, promote heuristic edges to proof, invent dynamic dispatch, or cross unsupported language/framework boundaries.
+
 ## [0.4.1] - 2026-07-29
 
 ### Fixed
@@ -120,7 +139,8 @@ No unreleased changes.
 - Explicit full indexing, caller/callee/impact queries, and read-only MCP exploration.
 - `exact`, `heuristic`, and `unresolved` relationship states.
 
-[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/HsinPu/symbol-lattice/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.2.1...v0.3.0

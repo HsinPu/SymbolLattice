@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  findEvidencePath,
   findSymbols,
   getCallees,
   getCallers,
@@ -117,5 +118,90 @@ describe("pure graph traversal", () => {
       "transitive"
     ]);
     expect(() => getImpactPaths(graph, "changed", 0)).toThrow("positive integer");
+  });
+
+  it("finds a deterministic shortest directed evidence path with aligned steps", () => {
+    const from = symbol({ id: "from", name: "from", filePath: "src/from.ts" });
+    const through = symbol({ id: "through", name: "through", filePath: "src/through.ts" });
+    const target = symbol({ id: "target", name: "target", filePath: "src/target.ts" });
+    const evidenceGraph = {
+      symbols: [target, through, from],
+      edges: [
+        edge({ id: "through-target", sourceId: "through", targetId: "target" }),
+        edge({ id: "from-through", sourceId: "from", targetId: "through" }),
+        edge({ id: "from-target", sourceId: "from", targetId: "target" })
+      ]
+    };
+
+    const result = findEvidencePath(evidenceGraph, "from", "target");
+
+    expect(result.truncated).toBe(false);
+    expect(result.path?.symbols.map((item) => item.id)).toEqual(["from", "target"]);
+    expect(result.path?.edges.map((item) => item.id)).toEqual(["from-target"]);
+    expect(
+      result.path?.steps.map((step) => ({ from: step.from.id, to: step.to.id, edge: step.edge.id }))
+    ).toEqual([{ from: "from", to: "target", edge: "from-target" }]);
+    expect(findEvidencePath(evidenceGraph, "target", "from")).toEqual({
+      path: null,
+      truncated: false
+    });
+    expect(findEvidencePath(evidenceGraph, "from", "from", 0)).toMatchObject({
+      truncated: false,
+      path: { symbols: [{ id: "from" }], edges: [], steps: [] }
+    });
+  });
+
+  it("returns no path without truncation when the hop bound blocks a longer route", () => {
+    const from = symbol({ id: "from", name: "from", filePath: "src/from.ts" });
+    const middle = symbol({ id: "middle", name: "middle", filePath: "src/middle.ts" });
+    const target = symbol({ id: "target", name: "target", filePath: "src/target.ts" });
+    const evidenceGraph = {
+      symbols: [target, from, middle],
+      edges: [
+        edge({ id: "middle-target", sourceId: "middle", targetId: "target" }),
+        edge({ id: "from-middle", sourceId: "from", targetId: "middle" })
+      ]
+    };
+
+    expect(findEvidencePath(evidenceGraph, "from", "target", 1)).toEqual({
+      path: null,
+      truncated: false
+    });
+    expect(
+      findEvidencePath(
+        {
+          symbols: [from, target],
+          edges: [
+            edge({
+              id: "heuristic-only",
+              sourceId: "from",
+              targetId: "target",
+              resolution: "heuristic"
+            })
+          ]
+        },
+        "from",
+        "target"
+      )
+    ).toEqual({ path: null, truncated: false });
+  });
+
+  it("marks truncation only when the visit cap blocks an unvisited candidate", () => {
+    const from = symbol({ id: "from", name: "from", startLine: 1 });
+    const first = symbol({ id: "first", name: "first", startLine: 10 });
+    const target = symbol({ id: "target", name: "target", startLine: 20 });
+    const evidenceGraph = {
+      symbols: [target, from, first],
+      edges: [
+        edge({ id: "first-cycle", sourceId: "first", targetId: "from" }),
+        edge({ id: "from-target", sourceId: "from", targetId: "target" }),
+        edge({ id: "from-first", sourceId: "from", targetId: "first" })
+      ]
+    };
+
+    expect(findEvidencePath(evidenceGraph, "from", "target", 2, 2)).toEqual({
+      path: null,
+      truncated: true
+    });
   });
 });

@@ -4,6 +4,7 @@ import {
   ARTIFACT_FACTS_EXTRACTOR_VERSION,
   ARTIFACT_LANGUAGES,
   DEFAULT_SOURCE_SEARCH_LIMIT,
+  findEvidencePath,
   findSymbols,
   getCallees,
   getCallers,
@@ -15,12 +16,15 @@ import {
   SOURCE_SEARCH_INDEX_VERSION,
   sourceSearchTerms,
   type GraphSnapshot,
+  type ImpactPath,
+  type IndexedSourceDocument,
   type IndexedSourceSearchHit,
   type IndexWork,
   type PersistedArtifactFacts,
   type ProjectIndexInputs,
   type SourceSearchRequest,
   type SourceRange,
+  type SymbolMatch,
   type SymbolKind,
   type SymbolNode
 } from "../domain/index.js";
@@ -31,6 +35,7 @@ import {
 } from "../extraction/index.js";
 import type {
   ActiveGraphBundle,
+  ActiveSourceDocumentsBundle,
   GraphStore,
   ProjectScan,
   ProjectScanOptions,
@@ -40,17 +45,38 @@ import type {
 import { ProjectConfigurationError } from "../domain/configuration.js";
 import { SymbolLatticeError } from "./errors.js";
 import { resolveProjectFacts } from "./resolution.js";
+import {
+  CONTEXT_MATCH_CANDIDATE_LIMIT,
+  CONTEXT_MAX_VISITED_SYMBOLS,
+  DEFAULT_CONTEXT_IMPACT_DEPTH,
+  DEFAULT_CONTEXT_IMPACT_LIMIT,
+  DEFAULT_CONTEXT_MAX_HOPS,
+  DEFAULT_CONTEXT_RELATION_LIMIT,
+  MAX_CONTEXT_IMPACT_DEPTH,
+  MAX_CONTEXT_IMPACT_LIMIT,
+  MAX_CONTEXT_MAX_HOPS,
+  MAX_CONTEXT_REFERENCES,
+  MAX_CONTEXT_RELATION_LIMIT,
+  MAX_IMPACT_LIMIT
+} from "./types.js";
 import type {
   ExplainEdgeResult,
+  ContextBounds,
+  ContextEvidencePath,
+  ContextOptions,
+  ContextResult,
   ExploreResult,
   FindResult,
   GraphContext,
+  ImpactOptions,
   ImpactResult,
   RelationResult,
   SearchOptions,
   SearchResult,
+  SourceAvailability,
   SourceSearchHitResult,
-  SourceExcerpt
+  SourceExcerpt,
+  SymbolContext
 } from "./types.js";
 
 export interface IndexOptions {
@@ -72,6 +98,23 @@ interface SourceChangeSet {
   readonly addedFiles: readonly string[];
   readonly modifiedFiles: readonly string[];
   readonly removedFiles: readonly string[];
+}
+
+interface NormalizedImpactOptions {
+  readonly maxDepth: number;
+  readonly limit: number | undefined;
+}
+
+interface ContextRequest {
+  readonly references: readonly string[];
+  readonly bounds: ContextBounds;
+}
+
+/** One graph/source snapshot used consistently for every item in a context pack. */
+interface ContextRead {
+  readonly bundle: ActiveGraphBundle;
+  readonly matches: readonly SymbolMatch[];
+  readonly documentsByFilePath: ReadonlyMap<string, IndexedSourceDocument>;
 }
 
 function compareText(left: string, right: string): number {
@@ -599,17 +642,64 @@ export class SymbolLatticeService {
     };
   }
 
+  public impact(projectPath: string, reference: string, maxDepth?: number): Promise<ImpactResult>;
+  public impact(projectPath: string, reference: string, options?: ImpactOptions): Promise<ImpactResult>;
   public async impact(
     projectPath: string,
     reference: string,
-    maxDepth = 1
+    maxDepthOrOptions: number | ImpactOptions = 1
   ): Promise<ImpactResult> {
+    const options = this.normalizedImpactOptions(maxDepthOrOptions);
     const context = await this.requireGraph(projectPath);
     const symbol = this.requireExactSymbol(context, reference);
+    const paths = getImpactPaths(context.snapshot, symbol.id, options.maxDepth);
+    if (options.limit === undefined) {
+      return {
+        status: context.status,
+        symbol,
+        paths
+      };
+    }
+
     return {
       status: context.status,
       symbol,
-      paths: getImpactPaths(context.snapshot, symbol.id, maxDepth)
+      paths: paths.slice(0, options.limit),
+      truncated: paths.length > options.limit
+    };
+  }
+
+  /**
+   * Builds a bounded, auditable multi-symbol pack without changing the
+   * single-symbol `explore` contract. Every source excerpt is read from the
+   * same persisted generation as the graph relationships below it.
+   */
+  public async context(
+    projectPath: string,
+    references: readonly string[],
+    options: ContextOptions = {}
+  ): Promise<ContextResult> {
+    const request = this.contextRequest(references, options);
+    const normalizedProjectPath = resolve(projectPath);
+    const initialBundle = this.getActiveGraphBundle(normalizedProjectPath);
+    if (!initialBundle.status.initialized) {
+      throw new SymbolLatticeError(
+        "MISSING_INDEX",
+        `No SymbolLattice index exists for ${normalizedProjectPath}. Run "symbol-lattice init ${normalizedProjectPath}" first.`
+      );
+    }
+
+    const read = this.getContextRead(normalizedProjectPath, initialBundle, request.references);
+    const status = await this.getStatusForBundle(normalizedProjectPath, read.bundle);
+    const contexts = read.matches.map((match) =>
+      this.toSymbolContext(match.reference, match, read, request.bounds)
+    );
+
+    return {
+      status,
+      bounds: request.bounds,
+      contexts,
+      evidencePaths: this.contextEvidencePaths(read.matches, read.bundle, request.bounds)
     };
   }
 
@@ -738,6 +828,313 @@ export class SymbolLatticeService {
           ? null
           : (context.snapshot.symbols.find((symbol) => symbol.id === edge.targetId) ?? null)
     };
+  }
+
+  private normalizedImpactOptions(
+    maxDepthOrOptions: number | ImpactOptions
+  ): NormalizedImpactOptions {
+    const options =
+      typeof maxDepthOrOptions === "number"
+        ? { maxDepth: maxDepthOrOptions }
+        : maxDepthOrOptions;
+    const maxDepth = options?.maxDepth ?? 1;
+    if (!Number.isSafeInteger(maxDepth) || maxDepth < 1) {
+      throw new SymbolLatticeError(
+        "INVALID_IMPACT_DEPTH",
+        "Impact depth must be a positive whole number."
+      );
+    }
+
+    const limit = options?.limit;
+    if (limit !== undefined && (!Number.isSafeInteger(limit) || limit < 1 || limit > MAX_IMPACT_LIMIT)) {
+      throw new SymbolLatticeError(
+        "INVALID_IMPACT_LIMIT",
+        `Impact limit must be a whole number from 1 to ${MAX_IMPACT_LIMIT}.`
+      );
+    }
+
+    return { maxDepth, limit };
+  }
+
+  private contextRequest(references: readonly string[], options: ContextOptions): ContextRequest {
+    if (!Array.isArray(references) || references.length < 1 || references.length > MAX_CONTEXT_REFERENCES) {
+      throw new SymbolLatticeError(
+        "INVALID_CONTEXT_REFERENCES",
+        `Context requires from 1 to ${MAX_CONTEXT_REFERENCES} symbol references.`
+      );
+    }
+
+    const normalizedReferences = references.map((reference) => {
+      if (typeof reference !== "string" || reference.trim().length === 0) {
+        throw new SymbolLatticeError(
+          "INVALID_CONTEXT_REFERENCES",
+          "Every context reference must be non-empty text."
+        );
+      }
+      return reference.trim();
+    });
+
+    return {
+      references: normalizedReferences,
+      bounds: {
+        maxReferences: MAX_CONTEXT_REFERENCES,
+        matchCandidateLimit: CONTEXT_MATCH_CANDIDATE_LIMIT,
+        relationLimit: this.boundedContextOption(
+          options.relationLimit,
+          DEFAULT_CONTEXT_RELATION_LIMIT,
+          MAX_CONTEXT_RELATION_LIMIT,
+          "INVALID_CONTEXT_RELATION_LIMIT",
+          "Context relation limit"
+        ),
+        maxHops: this.boundedContextOption(
+          options.maxHops,
+          DEFAULT_CONTEXT_MAX_HOPS,
+          MAX_CONTEXT_MAX_HOPS,
+          "INVALID_CONTEXT_MAX_HOPS",
+          "Context maximum hops"
+        ),
+        maxVisitedSymbolsPerPath: CONTEXT_MAX_VISITED_SYMBOLS,
+        impactDepth: this.boundedContextOption(
+          options.impactDepth,
+          DEFAULT_CONTEXT_IMPACT_DEPTH,
+          MAX_CONTEXT_IMPACT_DEPTH,
+          "INVALID_CONTEXT_IMPACT_DEPTH",
+          "Context impact depth"
+        ),
+        impactLimit: this.boundedContextOption(
+          options.impactLimit,
+          DEFAULT_CONTEXT_IMPACT_LIMIT,
+          MAX_CONTEXT_IMPACT_LIMIT,
+          "INVALID_CONTEXT_IMPACT_LIMIT",
+          "Context impact limit"
+        )
+      }
+    };
+  }
+
+  private boundedContextOption(
+    value: number | undefined,
+    fallback: number,
+    maximum: number,
+    code:
+      | "INVALID_CONTEXT_RELATION_LIMIT"
+      | "INVALID_CONTEXT_MAX_HOPS"
+      | "INVALID_CONTEXT_IMPACT_DEPTH"
+      | "INVALID_CONTEXT_IMPACT_LIMIT",
+    label: string
+  ): number {
+    const normalized = value ?? fallback;
+    if (!Number.isSafeInteger(normalized) || normalized < 1 || normalized > maximum) {
+      throw new SymbolLatticeError(
+        code,
+        `${label} must be a whole number from 1 to ${maximum}.`
+      );
+    }
+    return normalized;
+  }
+
+  private getContextRead(
+    projectPath: string,
+    initialBundle: ActiveGraphBundle,
+    references: readonly string[]
+  ): ContextRead {
+    const initialMatches = references.map((reference) => matchSymbol(initialBundle.snapshot, reference));
+    const getActiveSourceDocumentsBundle = this.graphStore.getActiveSourceDocumentsBundle;
+    let requestedFilePaths = this.contextSourceFilePaths(initialMatches);
+    if (typeof getActiveSourceDocumentsBundle !== "function" || requestedFilePaths.length === 0) {
+      return {
+        bundle: initialBundle,
+        matches: initialMatches,
+        documentsByFilePath: new Map()
+      };
+    }
+
+    // A source-document bundle is an authoritative graph-and-source snapshot.
+    // If an intervening sync moves any exact symbol, retry once for those newly
+    // resolved paths rather than combining paths from two generations.
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const sourceBundle = getActiveSourceDocumentsBundle.call(
+        this.graphStore,
+        projectPath,
+        requestedFilePaths
+      );
+      const read = this.contextReadForSourceBundle(sourceBundle, references);
+      const currentFilePaths = this.contextSourceFilePaths(read.matches);
+      const hasAllCurrentDocuments = currentFilePaths.every((filePath) =>
+        read.documentsByFilePath.has(filePath)
+      );
+      const sourceProjectionAvailable =
+        sourceBundle.sourceSearchVersion !== null && sourceBundle.sourceSearchVersion !== undefined;
+
+      if (
+        !sourceProjectionAvailable ||
+        hasAllCurrentDocuments ||
+        attempt === 1 ||
+        this.sameFilePaths(requestedFilePaths, currentFilePaths)
+      ) {
+        return read;
+      }
+
+      requestedFilePaths = currentFilePaths;
+    }
+
+    throw new Error("Context source-document retry loop must return a snapshot.");
+  }
+
+  private contextReadForSourceBundle(
+    bundle: ActiveSourceDocumentsBundle,
+    references: readonly string[]
+  ): ContextRead {
+    return {
+      bundle,
+      matches: references.map((reference) => matchSymbol(bundle.snapshot, reference)),
+      documentsByFilePath: new Map(bundle.documents.map((document) => [document.filePath, document]))
+    };
+  }
+
+  private contextSourceFilePaths(matches: readonly SymbolMatch[]): readonly string[] {
+    const filePaths: string[] = [];
+    const seen = new Set<string>();
+    for (const match of matches) {
+      if (match.status !== "exact" || seen.has(match.symbol.filePath)) {
+        continue;
+      }
+      seen.add(match.symbol.filePath);
+      filePaths.push(match.symbol.filePath);
+    }
+    return filePaths;
+  }
+
+  private sameFilePaths(left: readonly string[], right: readonly string[]): boolean {
+    return left.length === right.length && left.every((filePath, index) => filePath === right[index]);
+  }
+
+  private toSymbolContext(
+    reference: string,
+    match: SymbolMatch,
+    read: ContextRead,
+    bounds: ContextBounds
+  ): SymbolContext {
+    const boundedMatch = this.boundedContextMatch(match, bounds.matchCandidateLimit);
+    if (match.status !== "exact") {
+      return {
+        reference,
+        match: boundedMatch.match,
+        matchCandidatesTruncated: boundedMatch.truncated,
+        sourceAvailability: "not-applicable",
+        source: null,
+        callers: { items: [], truncated: false },
+        callees: { items: [], truncated: false },
+        impact: { paths: [], truncated: false }
+      };
+    }
+
+    const sourceProjectionAvailable =
+      read.bundle.sourceSearchVersion !== null && read.bundle.sourceSearchVersion !== undefined;
+    const sourceDocument = sourceProjectionAvailable
+      ? read.documentsByFilePath.get(match.symbol.filePath)
+      : undefined;
+    const callers = getCallers(read.bundle.snapshot, match.symbol.id);
+    const callees = getCallees(read.bundle.snapshot, match.symbol.id);
+    const impact = getImpactPaths(read.bundle.snapshot, match.symbol.id, bounds.impactDepth);
+
+    return {
+      reference,
+      match: boundedMatch.match,
+      matchCandidatesTruncated: boundedMatch.truncated,
+      sourceAvailability: this.sourceAvailability(sourceDocument),
+      source:
+        sourceDocument === undefined
+          ? null
+          : excerptFromSourceText(
+              sourceDocument.filePath,
+              sourceDocument.sourceText,
+              match.symbol.range.start.line
+            ),
+      callers: this.boundedItems(callers, bounds.relationLimit),
+      callees: this.boundedItems(callees, bounds.relationLimit),
+      impact: this.boundedImpact(impact, bounds.impactLimit)
+    };
+  }
+
+  private sourceAvailability(sourceDocument: IndexedSourceDocument | undefined): SourceAvailability {
+    return sourceDocument === undefined ? "unavailable" : "active-generation";
+  }
+
+  private boundedContextMatch(
+    match: SymbolMatch,
+    limit: number
+  ): { readonly match: SymbolMatch; readonly truncated: boolean } {
+    if (match.candidates.length <= limit || match.status !== "ambiguous") {
+      return { match, truncated: false };
+    }
+
+    return {
+      match: { ...match, candidates: match.candidates.slice(0, limit) },
+      truncated: true
+    };
+  }
+
+  private boundedItems<T>(items: readonly T[], limit: number): { readonly items: readonly T[]; readonly truncated: boolean } {
+    return {
+      items: items.slice(0, limit),
+      truncated: items.length > limit
+    };
+  }
+
+  private boundedImpact(
+    paths: readonly ImpactPath[],
+    limit: number
+  ): { readonly paths: readonly ImpactPath[]; readonly truncated: boolean } {
+    const bounded = this.boundedItems(paths, limit);
+    return { paths: bounded.items, truncated: bounded.truncated };
+  }
+
+  private contextEvidencePaths(
+    matches: readonly SymbolMatch[],
+    bundle: ActiveGraphBundle,
+    bounds: ContextBounds
+  ): readonly ContextEvidencePath[] {
+    const paths: ContextEvidencePath[] = [];
+    for (let index = 1; index < matches.length; index += 1) {
+      const from = matches[index - 1];
+      const to = matches[index];
+      if (from === undefined || to === undefined) {
+        continue;
+      }
+
+      if (from.status !== "exact" || to.status !== "exact") {
+        paths.push({
+          fromReference: from.reference,
+          toReference: to.reference,
+          status: "not-applicable",
+          path: null
+        });
+        continue;
+      }
+
+      const evidence = findEvidencePath(
+        bundle.snapshot,
+        from.symbol.id,
+        to.symbol.id,
+        bounds.maxHops,
+        bounds.maxVisitedSymbolsPerPath
+      );
+      paths.push({
+        fromReference: from.reference,
+        toReference: to.reference,
+        status:
+          evidence.path === null
+            ? evidence.truncated
+              ? "truncated"
+              : "no-path"
+            : from.symbol.id === to.symbol.id
+              ? "same-symbol"
+              : "path",
+        path: evidence.path
+      });
+    }
+    return paths;
   }
 
   private sourceSearchRequest(query: string, options: SearchOptions): SourceSearchRequest {
