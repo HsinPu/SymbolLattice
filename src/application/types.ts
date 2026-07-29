@@ -16,7 +16,16 @@ import type {
   SourceRange,
   SymbolNode
 } from "../domain/types.js";
-import type { GitChangeSet } from "../ports/git-change-set.js";
+import type {
+  GitHunkAttributionState,
+  GitLineRange,
+  GitUnifiedHunk
+} from "../domain/git-hunk-attribution.js";
+import type {
+  GitChangeRecord,
+  GitChangeSet,
+  GitRevisionSourceAvailability
+} from "../ports/git-change-set.js";
 
 export interface GraphContext {
   readonly status: IndexStatus;
@@ -59,6 +68,12 @@ export const MAX_AFFECTED_MAX_DEPTH = 8;
 export const DEFAULT_AFFECTED_LIMIT = 25;
 export const MAX_AFFECTED_LIMIT = 100;
 export const AFFECTED_MAX_VISITED_FILES_PER_INPUT = 500;
+
+/** Immutable Git hunk reads keep source and declaration work independently bounded. */
+export const MAX_GIT_HUNK_SOURCE_FILES = 50;
+export const DEFAULT_GIT_HUNK_LIMIT = 25;
+export const MAX_GIT_HUNK_LIMIT = 100;
+export const MAX_GIT_HUNK_DECLARATION_ANCHORS = 25;
 
 /** Retained-generation reads are bounded independently from store retention. */
 export const DEFAULT_GENERATION_HISTORY_LIMIT = 20;
@@ -281,6 +296,69 @@ export interface GitAffectedTestsResult {
   readonly changeSet: GitChangeSet;
   /** Exact test evidence for selected supported source paths, when any exist. */
   readonly affected: AffectedTestsResult | null;
+}
+
+/** Options for one immutable Git base-to-HEAD hunk attribution query. */
+export interface GitHunksOptions {
+  /** Maximum hunk records returned across every changed source file. */
+  readonly limit?: number;
+}
+
+/** Fixed safety bounds and the caller-selected global hunk result bound. */
+export interface GitHunksBounds {
+  /** Maximum old/current TypeScript or JavaScript paths the Git adapter may read. */
+  readonly maxSourceFiles: number;
+  /** Maximum declarations anchored on each old or new hunk side. */
+  readonly maxDeclarationAnchorsPerSide: number;
+  /** Global hunk-record limit applied after deterministic ordering. */
+  readonly limit: number;
+  readonly maximumLimit: number;
+}
+
+/**
+ * Declarations anchored on one immutable source side. `identityScope` applies
+ * to every returned `SymbolNode.id`: it is meaningful only in that side's
+ * revision-local extraction and never asserts old/new continuity.
+ */
+export interface GitHunkDeclarationAnchors {
+  readonly identityScope: "revision-local";
+  readonly items: readonly SymbolNode[];
+  readonly total: number;
+  readonly truncated: boolean;
+}
+
+/**
+ * One old or new hunk side. It is deliberately revision-local: no active
+ * graph, cross-side symbol identity, move attribution, or rename continuity is
+ * implied by this evidence.
+ */
+export interface GitHunkSideResult {
+  readonly revision: string;
+  readonly path: string | null;
+  readonly sourceAvailability: GitRevisionSourceAvailability;
+  readonly lineRange: GitLineRange;
+  readonly attribution: GitHunkAttributionState;
+  readonly declarationAnchors: GitHunkDeclarationAnchors;
+}
+
+/** One immutable unified hunk and independent old/new local declaration evidence. */
+export interface GitHunkResultItem {
+  readonly change: GitChangeRecord;
+  readonly hunk: GitUnifiedHunk;
+  readonly old: GitHunkSideResult;
+  readonly new: GitHunkSideResult;
+}
+
+/** A globally bounded, deterministically ordered immutable Git hunk result. */
+export interface GitHunksResult {
+  /** Immutable Git provenance from the injected revision-hunk provider. */
+  readonly changeSet: GitChangeSet;
+  readonly bounds: GitHunksBounds;
+  readonly hunks: {
+    readonly items: readonly GitHunkResultItem[];
+    readonly total: number;
+    readonly truncated: boolean;
+  };
 }
 
 export interface ExploreResult {

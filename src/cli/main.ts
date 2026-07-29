@@ -14,6 +14,7 @@ import {
   MAX_CONTEXT_RELATION_LIMIT,
   MAX_GENERATION_DIFF_LIMIT,
   MAX_GENERATION_HISTORY_LIMIT,
+  MAX_GIT_HUNK_LIMIT,
   DEFAULT_WATCH_INTERVAL_MS,
   MAX_WATCH_INTERVAL_MS,
   MIN_WATCH_INTERVAL_MS,
@@ -28,6 +29,7 @@ import {
   type GenerationHistoryOptions,
   type ForegroundWatchOptions,
   type GitAffectedTestsOptions,
+  type GitHunksOptions,
   type FindOptions,
   type SearchOptions,
   type WatchReceipt
@@ -79,6 +81,11 @@ interface AffectedCommandOptions extends ProjectOptions {
   readonly base?: string;
 }
 
+interface GitHunksCommandOptions extends ProjectOptions {
+  readonly base?: string;
+  readonly limit?: number;
+}
+
 interface ContextCommandOptions extends ProjectOptions {
   readonly relationLimit?: number;
   readonly maxHops?: number;
@@ -113,11 +120,13 @@ export interface WatchSignalSource {
 }
 
 function createService(): SymbolLatticeService {
+  const gitChangeSetProvider = new FileSystemGitChangeSetProvider();
   return new SymbolLatticeService(
     new SqliteGraphStore(),
     new FileSystemSourceCatalog(),
     undefined,
-    new FileSystemGitChangeSetProvider()
+    gitChangeSetProvider,
+    gitChangeSetProvider
   );
 }
 
@@ -532,6 +541,29 @@ export function createProgram(
       const stdinPaths = options.stdin ? parseAffectedStdin(readFileSync(0, "utf8")) : [];
       render(
         await service.affectedTests(defaultProjectPath(options), [...filePaths, ...stdinPaths], affectedOptions),
+        options
+      );
+    });
+
+  addJsonOption(addProjectOption(program.command("git-hunks [path]")))
+    .requiredOption(
+      "--base <ref>",
+      "Compare the local merge-base of <ref> and HEAD through immutable local Git blobs"
+    )
+    .option(
+      "--limit <count>",
+      `Maximum hunk records to return (1-${MAX_GIT_HUNK_LIMIT})`,
+      (value: string) => parseBoundedPositiveInteger(value, MAX_GIT_HUNK_LIMIT)
+    )
+    .action(async (path: string | undefined, options: GitHunksCommandOptions) => {
+      const gitHunksOptions: GitHunksOptions =
+        options.limit === undefined ? {} : { limit: options.limit };
+      render(
+        await service.gitHunks(
+          resolve(path ?? defaultProjectPath(options)),
+          options.base ?? "",
+          gitHunksOptions
+        ),
         options
       );
     });

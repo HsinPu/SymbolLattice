@@ -7,6 +7,10 @@ import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
+  DEFAULT_GIT_HUNK_LIMIT,
+  MAX_GIT_HUNK_DECLARATION_ANCHORS,
+  MAX_GIT_HUNK_LIMIT,
+  MAX_GIT_HUNK_SOURCE_FILES,
   MAX_GENERATION_DIFF_LIMIT,
   MAX_GENERATION_HISTORY_LIMIT,
   SymbolLatticeError,
@@ -30,6 +34,8 @@ import type {
   GenerationHistoryEntry,
   GitChangeSet,
   GitChangeSetProvider,
+  GitRevisionHunkProvider,
+  GitRevisionHunkSet,
   GraphStore,
   ReplaceProjectFactsInput
 } from "../../../src/ports/index.js";
@@ -93,6 +99,25 @@ function gitChangeSet(
     includesUntracked: true,
     changes,
     sourcePaths
+  };
+}
+
+function gitRevisionHunkSet(
+  files: GitRevisionHunkSet["files"],
+  sourcePaths = [...new Set(files.flatMap((file) => [file.previous.filePath, file.current.filePath]))]
+    .filter((filePath): filePath is string => filePath !== null)
+    .sort()
+): GitRevisionHunkSet {
+  return {
+    changeSet: {
+      requestedBaseRef: "origin/main",
+      mergeBaseCommit: "b".repeat(40),
+      headCommit: "h".repeat(40),
+      includesUntracked: false,
+      changes: files.map((file) => file.change),
+      sourcePaths
+    },
+    files
   };
 }
 
@@ -1048,6 +1073,339 @@ describe("SymbolLatticeService", () => {
     await expect(oversizedService.affectedTestsFromGit(projectPath)).rejects.toMatchObject({
       code: "INVALID_AFFECTED_FILES"
     });
+  });
+
+  it("attributes immutable Git base/head hunk sides without reading an active graph or live source", async () => {
+    const projectPath = await createInlineProject({
+      "src/calculation.ts": "export const liveOnly = true;\n"
+    });
+    const baseSourceText = [
+      "export function calculate(value: number): number {",
+      "  return value + 1;",
+      "}",
+      ""
+    ].join("\n");
+    const headSourceText = [
+      "export function calculate(value: number): number {",
+      "  return value + 2;",
+      "}",
+      ""
+    ].join("\n");
+    let graphStoreReads = 0;
+    let sourceCatalogReads = 0;
+    const graphStore = new Proxy({} as GraphStore, {
+      get() {
+        graphStoreReads += 1;
+        throw new Error("gitHunks must not read GraphStore.");
+      }
+    });
+    const sourceCatalog = new Proxy({} as FileSystemSourceCatalog, {
+      get() {
+        sourceCatalogReads += 1;
+        throw new Error("gitHunks must not read SourceCatalog.");
+      }
+    });
+    const extractorInputs: Array<{ filePath: string; sourceText: string; language: string }> = [];
+    const providerCalls: Array<{ projectPath: string; request: unknown }> = [];
+    const provider: GitRevisionHunkProvider = {
+      async getRevisionHunks(projectPath_, request) {
+        providerCalls.push({ projectPath: projectPath_, request });
+        return gitRevisionHunkSet([
+          {
+            change: {
+              kind: "modified",
+              previousPath: "src/calculation.ts",
+              currentPath: "src/calculation.ts",
+              score: null
+            },
+            hunks: [{ oldRange: { start: 2, count: 1 }, newRange: { start: 2, count: 1 } }],
+            previous: {
+              revision: "b".repeat(40),
+              filePath: "src/calculation.ts",
+              language: "typescript",
+              availability: "available",
+              sourceText: baseSourceText
+            },
+            current: {
+              revision: "h".repeat(40),
+              filePath: "src/calculation.ts",
+              language: "typescript",
+              availability: "available",
+              sourceText: headSourceText
+            }
+          }
+        ]);
+      }
+    };
+    const service = new SymbolLatticeService(
+      graphStore,
+      sourceCatalog,
+      (input) => {
+        extractorInputs.push(input);
+        return extractFileFacts(input);
+      },
+      undefined,
+      provider
+    );
+
+    const result = await service.gitHunks(projectPath, "origin/main");
+
+    expect(service.gitHunksAvailable()).toBe(true);
+    expect(providerCalls).toEqual([
+      {
+        projectPath,
+        request: { baseRef: "origin/main", maxSourceFiles: MAX_GIT_HUNK_SOURCE_FILES }
+      }
+    ]);
+    expect(extractorInputs).toEqual([
+      { filePath: "src/calculation.ts", sourceText: baseSourceText, language: "typescript" },
+      { filePath: "src/calculation.ts", sourceText: headSourceText, language: "typescript" }
+    ]);
+    expect(graphStoreReads).toBe(0);
+    expect(sourceCatalogReads).toBe(0);
+    expect(result).toMatchObject({
+      changeSet: {
+        requestedBaseRef: "origin/main",
+        mergeBaseCommit: "b".repeat(40),
+        headCommit: "h".repeat(40)
+      },
+      bounds: {
+        maxSourceFiles: MAX_GIT_HUNK_SOURCE_FILES,
+        maxDeclarationAnchorsPerSide: MAX_GIT_HUNK_DECLARATION_ANCHORS,
+        limit: DEFAULT_GIT_HUNK_LIMIT,
+        maximumLimit: MAX_GIT_HUNK_LIMIT
+      },
+      hunks: {
+        total: 1,
+        truncated: false,
+        items: [
+          {
+            change: {
+              kind: "modified",
+              previousPath: "src/calculation.ts",
+              currentPath: "src/calculation.ts"
+            },
+            hunk: { oldRange: { start: 2, count: 1 }, newRange: { start: 2, count: 1 } },
+            old: {
+              revision: "b".repeat(40),
+              path: "src/calculation.ts",
+              sourceAvailability: "available",
+              lineRange: { start: 2, count: 1 },
+              attribution: "declaration",
+              declarationAnchors: {
+                identityScope: "revision-local",
+                total: 1,
+                truncated: false,
+                items: [expect.objectContaining({ name: "calculate", kind: "function" })]
+              }
+            },
+            new: {
+              revision: "h".repeat(40),
+              path: "src/calculation.ts",
+              sourceAvailability: "available",
+              lineRange: { start: 2, count: 1 },
+              attribution: "declaration",
+              declarationAnchors: {
+                identityScope: "revision-local",
+                total: 1,
+                truncated: false,
+                items: [expect.objectContaining({ name: "calculate", kind: "function" })]
+              }
+            }
+          }
+        ]
+      }
+    });
+    expect(result).not.toHaveProperty("status");
+  });
+
+  it("makes Git hunk capability, mandatory base, and output bounds explicit", async () => {
+    const projectPath = await createInlineProject({ "src/math.ts": "export const current = 1;\n" });
+    const unavailable = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+
+    expect(unavailable.gitHunksAvailable()).toBe(false);
+    await expect(unavailable.gitHunks(projectPath, "origin/main")).rejects.toMatchObject({
+      code: "GIT_HUNKS_UNAVAILABLE"
+    });
+
+    const provider: GitRevisionHunkProvider = {
+      async getRevisionHunks() {
+        return gitRevisionHunkSet([]);
+      }
+    };
+    const service = new SymbolLatticeService(
+      new SqliteGraphStore(),
+      new FileSystemSourceCatalog(),
+      undefined,
+      undefined,
+      provider
+    );
+
+    await expect(service.gitHunks(projectPath, "")).rejects.toMatchObject({
+      code: "INVALID_GIT_BASE_REF"
+    });
+    await expect(service.gitHunks(projectPath, " origin/main")).rejects.toMatchObject({
+      code: "INVALID_GIT_BASE_REF"
+    });
+    await expect(service.gitHunks(projectPath, "origin/main", { limit: 0 })).rejects.toMatchObject({
+      code: "INVALID_GIT_HUNK_LIMIT"
+    });
+    await expect(
+      service.gitHunks(projectPath, "origin/main", { limit: MAX_GIT_HUNK_LIMIT + 1 })
+    ).rejects.toMatchObject({ code: "INVALID_GIT_HUNK_LIMIT" });
+  });
+
+  it("maps immutable Git hunk port failures without falling back to the active graph", async () => {
+    const projectPath = await createInlineProject({ "src/math.ts": "export const current = 1;\n" });
+    const cases = [
+      ["GIT_UNAVAILABLE", "GIT_HUNKS_UNAVAILABLE"],
+      ["INVALID_GIT_BASE", "INVALID_GIT_BASE_REF"],
+      ["MALFORMED_GIT_OUTPUT", "GIT_HUNKS_MALFORMED"],
+      ["GIT_CHANGE_SET_TOO_LARGE", "INVALID_GIT_HUNK_FILES"]
+    ] as const;
+
+    for (const [portCode, applicationCode] of cases) {
+      const provider: GitRevisionHunkProvider = {
+        async getRevisionHunks() {
+          throw new GitChangeSetError(portCode, "provider fixture failure");
+        }
+      };
+      const service = new SymbolLatticeService(
+        new SqliteGraphStore(),
+        new FileSystemSourceCatalog(),
+        undefined,
+        undefined,
+        provider
+      );
+
+      await expect(service.gitHunks(projectPath, "origin/main")).rejects.toMatchObject({
+        code: applicationCode
+      });
+    }
+  });
+
+  it("keeps immutable addition and deletion sides explicit while globally bounding deterministic hunks", async () => {
+    const projectPath = await createInlineProject({ "src/live.ts": "export const live = true;\n" });
+    const added = {
+      change: { kind: "added" as const, previousPath: null, currentPath: "src/alpha.ts", score: null },
+      hunks: [{ oldRange: { start: 0, count: 0 }, newRange: { start: 1, count: 1 } }],
+      previous: {
+        revision: "b".repeat(40),
+        filePath: null,
+        language: null,
+        availability: "absent" as const
+      },
+      current: {
+        revision: "h".repeat(40),
+        filePath: "src/alpha.ts",
+        language: "typescript" as const,
+        availability: "available" as const,
+        sourceText: "export const alpha = 1;\n"
+      }
+    };
+    const modified = {
+      change: {
+        kind: "modified" as const,
+        previousPath: "src/beta.ts",
+        currentPath: "src/beta.ts",
+        score: null
+      },
+      hunks: [
+        { oldRange: { start: 2, count: 1 }, newRange: { start: 2, count: 1 } },
+        { oldRange: { start: 1, count: 1 }, newRange: { start: 1, count: 1 } }
+      ],
+      previous: {
+        revision: "b".repeat(40),
+        filePath: "src/beta.ts",
+        language: "typescript" as const,
+        availability: "available" as const,
+        sourceText: ["export function beta() {", "  return 1;", "}", ""].join("\n")
+      },
+      current: {
+        revision: "h".repeat(40),
+        filePath: "src/beta.ts",
+        language: "typescript" as const,
+        availability: "available" as const,
+        sourceText: ["export function beta() {", "  return 2;", "}", ""].join("\n")
+      }
+    };
+    const deleted = {
+      change: { kind: "deleted" as const, previousPath: "src/gamma.ts", currentPath: null, score: null },
+      hunks: [{ oldRange: { start: 1, count: 1 }, newRange: { start: 0, count: 0 } }],
+      previous: {
+        revision: "b".repeat(40),
+        filePath: "src/gamma.ts",
+        language: "typescript" as const,
+        availability: "available" as const,
+        sourceText: "export const gamma = 1;\n"
+      },
+      current: {
+        revision: "h".repeat(40),
+        filePath: null,
+        language: null,
+        availability: "absent" as const
+      }
+    };
+    let reverseOrder = false;
+    const provider: GitRevisionHunkProvider = {
+      async getRevisionHunks() {
+        reverseOrder = !reverseOrder;
+        return gitRevisionHunkSet(
+          reverseOrder ? [deleted, modified, added] : [added, modified, deleted]
+        );
+      }
+    };
+    const service = new SymbolLatticeService(
+      new SqliteGraphStore(),
+      new FileSystemSourceCatalog(),
+      undefined,
+      undefined,
+      provider
+    );
+
+    const complete = await service.gitHunks(projectPath, "origin/main", { limit: MAX_GIT_HUNK_LIMIT });
+    const firstBounded = await service.gitHunks(projectPath, "origin/main", { limit: 2 });
+    const secondBounded = await service.gitHunks(projectPath, "origin/main", { limit: 2 });
+    const addition = complete.hunks.items.find((item) => item.change.kind === "added");
+    const deletion = complete.hunks.items.find((item) => item.change.kind === "deleted");
+
+    expect(complete.hunks).toMatchObject({ total: 4, truncated: false });
+    expect(addition).toMatchObject({
+      old: {
+        revision: "b".repeat(40),
+        path: null,
+        sourceAvailability: "absent",
+        lineRange: { start: 0, count: 0 },
+        attribution: "not-applicable",
+        declarationAnchors: { identityScope: "revision-local", items: [], total: 0, truncated: false }
+      },
+      new: {
+        revision: "h".repeat(40),
+        path: "src/alpha.ts",
+        sourceAvailability: "available",
+        attribution: "declaration"
+      }
+    });
+    expect(deletion).toMatchObject({
+      old: {
+        revision: "b".repeat(40),
+        path: "src/gamma.ts",
+        sourceAvailability: "available",
+        attribution: "declaration"
+      },
+      new: {
+        revision: "h".repeat(40),
+        path: null,
+        sourceAvailability: "absent",
+        lineRange: { start: 0, count: 0 },
+        attribution: "not-applicable",
+        declarationAnchors: { identityScope: "revision-local", items: [], total: 0, truncated: false }
+      }
+    });
+    expect(firstBounded.hunks).toMatchObject({ total: 4, truncated: true });
+    expect(firstBounded.hunks.items).toHaveLength(2);
+    expect(firstBounded.hunks.items.map((item) => item.change.kind)).toEqual(["added", "modified"]);
+    expect(secondBounded.hunks).toEqual(firstBounded.hunks);
   });
 
   it("continues through a test-directory helper before judging active-generation completeness", async () => {

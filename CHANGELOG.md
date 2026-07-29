@@ -6,6 +6,25 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.12.0] - 2026-07-30
+
+### Added
+
+- Read-only `git-hunks [path] --base <ref> [--limit <count>]` CLI command for immutable local Git hunk declaration attribution. It resolves the local `merge-base(<ref>, HEAD)`, compares that revision with `HEAD`, returns zero-context unified hunks, and extracts declaration anchors separately from the exact old and new revision blobs.
+- Read-only, idempotent `symbol_lattice_git_hunks` MCP tool when an embedding supplies the optional Git hunk capability. It preserves the MCP surface of existing explore-only and Git-change-set-only embeddings.
+- Explicit immutable Git hunk bounds: at most 50 supported source files, a global hunk-record default of 25 and maximum of 100, and up to 25 declaration anchors for each old or new hunk side.
+
+### Compatibility
+
+- No SQLite migration, active graph, graph refresh, or index backfill is required. The feature reads local immutable Git blobs directly; existing graph, affected-test, retained-history, watch, CLI, and MCP contracts remain unchanged.
+- `affected --base <ref>` remains the graph-backed, file-level affected-test selector. `git-hunks` is a separate revision-local source-attribution query and does not select tests.
+
+### Deliberate limits
+
+- Only the resolved local merge base and `HEAD` participate. The command and MCP tool do not select working-tree, staged, or untracked files; they never fetch, index, synchronize, or mutate Git or SQLite state.
+- Declaration anchors and IDs are revision-local evidence. The release makes no rename, move, old/new identity, or cross-side continuity claim.
+- Attribution is limited to supported TypeScript/JavaScript source sides and zero-context unified hunks. A selection above the 50-source-file cap is rejected rather than silently truncated.
+
 ## [0.11.0] - 2026-07-30
 
 ### Added
@@ -255,7 +274,8 @@ No unreleased changes.
 - Explicit full indexing, caller/callee/impact queries, and read-only MCP exploration.
 - `exact`, `heuristic`, and `unresolved` relationship states.
 
-[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.8.0...v0.9.0

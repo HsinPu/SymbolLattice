@@ -1,12 +1,21 @@
 import { execFile } from "node:child_process";
 
 import {
+  GitHunkParseError,
+  parseGitUnifiedHunks
+} from "../../domain/git-hunk-attribution.js";
+import {
   GitChangeSetError,
   type GitChangeKind,
   type GitChangeRecord,
   type GitChangeSet,
   type GitChangeSetProvider,
-  type GitChangeSetRequest
+  type GitChangeSetRequest,
+  type GitRevisionHunkFile,
+  type GitRevisionHunkProvider,
+  type GitRevisionHunkRequest,
+  type GitRevisionHunkSet,
+  type GitRevisionSource
 } from "../../ports/git-change-set.js";
 import {
   HARD_EXCLUDED_DIRECTORY_NAMES,
@@ -262,12 +271,61 @@ function validateBaseRef(baseRef: string): void {
   }
 }
 
+function validateMaxSourceFiles(maxSourceFiles: number): void {
+  if (!Number.isSafeInteger(maxSourceFiles) || maxSourceFiles < 0) {
+    throw new GitChangeSetError(
+      "GIT_CHANGE_SET_TOO_LARGE",
+      "Git revision hunk maxSourceFiles must be a non-negative safe integer."
+    );
+  }
+}
+
+/**
+ * `git diff --relative` returns paths relative to the caller's project path,
+ * while `<revision>:<path>` is relative to the repository root. Git reports
+ * the required root-relative prefix for the current directory; a bare repo
+ * has an empty prefix.
+ */
+function repositoryRelativePrefix(output: string): string {
+  const withoutTerminator = output.endsWith("\r\n")
+    ? output.slice(0, -2)
+    : output.endsWith("\n")
+      ? output.slice(0, -1)
+      : output;
+  if (withoutTerminator.length === 0) {
+    return "";
+  }
+  if (!withoutTerminator.endsWith("/")) {
+    throw malformed("Git returned a malformed repository-relative path prefix.");
+  }
+
+  return `${normalizeGitProjectPath(withoutTerminator.slice(0, -1))}/`;
+}
+
+function hasSupportedSourceSide(change: GitChangeRecord): boolean {
+  return [change.previousPath, change.currentPath].some(
+    (filePath) => filePath !== null && isSupportedSourcePath(filePath)
+  );
+}
+
+function literalPathspecs(change: GitChangeRecord): readonly string[] {
+  return [
+    ...new Set(
+      [change.previousPath, change.currentPath]
+        .filter((filePath): filePath is string => filePath !== null)
+        .map((filePath) => `:(literal)${filePath}`)
+    )
+  ];
+}
+
 /**
  * Read-only native Git adapter. Every command uses `execFile` with an argv
  * array, disables external diff/textconv hooks, and remains local to the
  * selected project directory.
  */
-export class FileSystemGitChangeSetProvider implements GitChangeSetProvider {
+export class FileSystemGitChangeSetProvider
+  implements GitChangeSetProvider, GitRevisionHunkProvider
+{
   public constructor(private readonly runner: GitCommandRunner = { run: runGitCommand }) {}
 
   public async getChangeSet(
@@ -304,6 +362,58 @@ export class FileSystemGitChangeSetProvider implements GitChangeSetProvider {
       changes,
       sourcePaths: gitSourcePaths(changes)
     };
+  }
+
+  public async getRevisionHunks(
+    projectPath: string,
+    request: GitRevisionHunkRequest
+  ): Promise<GitRevisionHunkSet> {
+    validateMaxSourceFiles(request.maxSourceFiles);
+    const changeSet = await this.getChangeSet(projectPath, {
+      mode: "base",
+      baseRef: request.baseRef
+    });
+    if (changeSet.sourcePaths.length > request.maxSourceFiles) {
+      throw new GitChangeSetError(
+        "GIT_CHANGE_SET_TOO_LARGE",
+        `Git revision hunk selection has ${changeSet.sourcePaths.length} source paths, exceeding maxSourceFiles ${request.maxSourceFiles}.`
+      );
+    }
+
+    const mergeBaseCommit = changeSet.mergeBaseCommit;
+    if (mergeBaseCommit === null) {
+      throw malformed("Immutable Git hunk selection requires a merge-base commit.");
+    }
+    const repositoryPathPrefix = await this.readRepositoryPathPrefix(projectPath);
+
+    const files: GitRevisionHunkFile[] = [];
+    for (const change of changeSet.changes) {
+      if (!hasSupportedSourceSide(change)) {
+        continue;
+      }
+
+      const hunks = await this.revisionHunks(
+        projectPath,
+        mergeBaseCommit,
+        changeSet.headCommit,
+        change
+      );
+      const previous = await this.readRevisionSource(
+        projectPath,
+        mergeBaseCommit,
+        change.previousPath,
+        repositoryPathPrefix
+      );
+      const current = await this.readRevisionSource(
+        projectPath,
+        changeSet.headCommit,
+        change.currentPath,
+        repositoryPathPrefix
+      );
+      files.push({ change, hunks, previous, current });
+    }
+
+    return { changeSet, files };
   }
 
   private async resolveRevision(
@@ -370,6 +480,104 @@ export class FileSystemGitChangeSetProvider implements GitChangeSetProvider {
           headCommit,
           "--"
         ])
+      );
+    } catch (error) {
+      if (error instanceof GitChangeSetError) {
+        throw error;
+      }
+      throw unavailable(error);
+    }
+  }
+
+  private async revisionHunks(
+    projectPath: string,
+    mergeBaseCommit: string,
+    headCommit: string,
+    change: GitChangeRecord
+  ): Promise<ReturnType<typeof parseGitUnifiedHunks>> {
+    try {
+      return parseGitUnifiedHunks(
+        await this.runner.run(projectPath, [
+          "diff",
+          "--unified=0",
+          "--inter-hunk-context=0",
+          "--diff-algorithm=myers",
+          "--no-indent-heuristic",
+          "--no-ext-diff",
+          "--no-textconv",
+          "--no-color",
+          "--find-renames",
+          "--find-copies",
+          mergeBaseCommit,
+          headCommit,
+          "--",
+          ...literalPathspecs(change)
+        ])
+      );
+    } catch (error) {
+      if (error instanceof GitChangeSetError) {
+        throw error;
+      }
+      if (error instanceof GitHunkParseError) {
+        throw malformed(error.message);
+      }
+      throw unavailable(error);
+    }
+  }
+
+  private async readRevisionSource(
+    projectPath: string,
+    revision: string,
+    filePath: string | null,
+    repositoryPathPrefix: string
+  ): Promise<GitRevisionSource> {
+    if (filePath === null) {
+      return {
+        revision,
+        filePath: null,
+        language: null,
+        availability: "absent"
+      };
+    }
+
+    const language = getSourceLanguage(filePath);
+    if (language === null || !isSupportedSourcePath(filePath)) {
+      return {
+        revision,
+        filePath,
+        language: null,
+        availability: "unsupported"
+      };
+    }
+
+    try {
+      return {
+        revision,
+        filePath,
+        language,
+        availability: "available",
+        sourceText: await this.runner.run(projectPath, [
+          "show",
+          "--no-ext-diff",
+          "--no-textconv",
+          "--no-color",
+          "--format=",
+          "--end-of-options",
+          `${revision}:${repositoryPathPrefix}${filePath}`
+        ])
+      };
+    } catch (error) {
+      if (error instanceof GitChangeSetError) {
+        throw error;
+      }
+      throw unavailable(error);
+    }
+  }
+
+  private async readRepositoryPathPrefix(projectPath: string): Promise<string> {
+    try {
+      return repositoryRelativePrefix(
+        await this.runner.run(projectPath, ["rev-parse", "--show-prefix"])
       );
     } catch (error) {
       if (error instanceof GitChangeSetError) {

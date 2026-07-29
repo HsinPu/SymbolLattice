@@ -254,3 +254,407 @@ describe("FileSystemGitChangeSetProvider", () => {
     ).rejects.toMatchObject({ code: "INVALID_GIT_BASE" });
   });
 });
+
+describe("FileSystemGitChangeSetProvider immutable revision hunks", () => {
+  it("keeps full provenance while reading add/delete/modify/rename hunks and blobs from resolved commits", async () => {
+    const calls: Array<{ projectPath: string; arguments_: readonly string[] }> = [];
+    const runner = {
+      run: vi.fn(async (projectPath: string, arguments_: readonly string[]) => {
+        calls.push({ projectPath, arguments_ });
+        if (arguments_[0] === "rev-parse" && arguments_.includes("--show-prefix")) {
+          return "\n";
+        }
+        if (arguments_[0] === "rev-parse" && arguments_.at(-1) === "HEAD^{commit}") {
+          return `${HEAD}\n`;
+        }
+        if (arguments_[0] === "rev-parse" && arguments_.at(-1) === "origin/main^{commit}") {
+          return `${BASE}\n`;
+        }
+        if (arguments_[0] === "merge-base") {
+          return `${MERGE_BASE}\n`;
+        }
+        if (arguments_[0] === "diff" && arguments_.includes("--name-status")) {
+          return (
+            "M\u0000README.md\u0000" +
+            "A\u0000src/added.ts\u0000" +
+            "D\u0000src/deleted.ts\u0000" +
+            "M\u0000src/modified.ts\u0000" +
+            "R90\u0000src/old.ts\u0000src/renamed.ts\u0000"
+          );
+        }
+        if (arguments_[0] === "diff" && arguments_.includes("--unified=0")) {
+          const pathspecs = arguments_.slice(arguments_.indexOf("--") + 1);
+          if (pathspecs.includes(":(literal)src/added.ts")) {
+            return "@@ -0,0 +1,2 @@\n+export const added = true;\n";
+          }
+          if (pathspecs.includes(":(literal)src/deleted.ts")) {
+            return "@@ -2,2 +0,0 @@\n-const deleted = true;\n";
+          }
+          if (pathspecs.includes(":(literal)src/modified.ts")) {
+            return "@@ -4 +4 @@\n-export const oldValue = 1;\n+export const newValue = 2;\n";
+          }
+          if (pathspecs.includes(":(literal)src/renamed.ts")) {
+            return "diff --git a/src/old.ts b/src/renamed.ts\nsimilarity index 100%\nrename from src/old.ts\nrename to src/renamed.ts\n";
+          }
+        }
+        if (arguments_[0] === "show") {
+          switch (arguments_.at(-1)) {
+            case `${HEAD}:src/added.ts`:
+              return "export const added = true;\n";
+            case `${MERGE_BASE}:src/deleted.ts`:
+              return "export const deleted = true;\n";
+            case `${MERGE_BASE}:src/modified.ts`:
+              return "export const oldValue = 1;\n";
+            case `${HEAD}:src/modified.ts`:
+              return "export const newValue = 2;\n";
+            case `${MERGE_BASE}:src/old.ts`:
+              return "export const renamed = true;\n";
+            case `${HEAD}:src/renamed.ts`:
+              return "export const renamed = true;\n";
+            default:
+              break;
+          }
+        }
+        throw new Error(`Unexpected Git command: ${arguments_.join(" ")}`);
+      })
+    } satisfies GitCommandRunner;
+
+    const result = await new FileSystemGitChangeSetProvider(runner).getRevisionHunks("C:/project", {
+      baseRef: "origin/main",
+      maxSourceFiles: 5
+    });
+
+    expect(result.changeSet).toEqual({
+      requestedBaseRef: "origin/main",
+      mergeBaseCommit: MERGE_BASE,
+      headCommit: HEAD,
+      includesUntracked: false,
+      changes: [
+        { kind: "modified", previousPath: "README.md", currentPath: "README.md", score: null },
+        { kind: "added", previousPath: null, currentPath: "src/added.ts", score: null },
+        { kind: "deleted", previousPath: "src/deleted.ts", currentPath: null, score: null },
+        {
+          kind: "modified",
+          previousPath: "src/modified.ts",
+          currentPath: "src/modified.ts",
+          score: null
+        },
+        {
+          kind: "renamed",
+          previousPath: "src/old.ts",
+          currentPath: "src/renamed.ts",
+          score: 90
+        }
+      ],
+      sourcePaths: [
+        "src/added.ts",
+        "src/deleted.ts",
+        "src/modified.ts",
+        "src/old.ts",
+        "src/renamed.ts"
+      ]
+    });
+    expect(result.files).toEqual([
+      {
+        change: { kind: "added", previousPath: null, currentPath: "src/added.ts", score: null },
+        hunks: [{ oldRange: { start: 0, count: 0 }, newRange: { start: 1, count: 2 } }],
+        previous: {
+          revision: MERGE_BASE,
+          filePath: null,
+          language: null,
+          availability: "absent"
+        },
+        current: {
+          revision: HEAD,
+          filePath: "src/added.ts",
+          language: "typescript",
+          availability: "available",
+          sourceText: "export const added = true;\n"
+        }
+      },
+      {
+        change: { kind: "deleted", previousPath: "src/deleted.ts", currentPath: null, score: null },
+        hunks: [{ oldRange: { start: 2, count: 2 }, newRange: { start: 0, count: 0 } }],
+        previous: {
+          revision: MERGE_BASE,
+          filePath: "src/deleted.ts",
+          language: "typescript",
+          availability: "available",
+          sourceText: "export const deleted = true;\n"
+        },
+        current: {
+          revision: HEAD,
+          filePath: null,
+          language: null,
+          availability: "absent"
+        }
+      },
+      {
+        change: {
+          kind: "modified",
+          previousPath: "src/modified.ts",
+          currentPath: "src/modified.ts",
+          score: null
+        },
+        hunks: [{ oldRange: { start: 4, count: 1 }, newRange: { start: 4, count: 1 } }],
+        previous: {
+          revision: MERGE_BASE,
+          filePath: "src/modified.ts",
+          language: "typescript",
+          availability: "available",
+          sourceText: "export const oldValue = 1;\n"
+        },
+        current: {
+          revision: HEAD,
+          filePath: "src/modified.ts",
+          language: "typescript",
+          availability: "available",
+          sourceText: "export const newValue = 2;\n"
+        }
+      },
+      {
+        change: {
+          kind: "renamed",
+          previousPath: "src/old.ts",
+          currentPath: "src/renamed.ts",
+          score: 90
+        },
+        hunks: [],
+        previous: {
+          revision: MERGE_BASE,
+          filePath: "src/old.ts",
+          language: "typescript",
+          availability: "available",
+          sourceText: "export const renamed = true;\n"
+        },
+        current: {
+          revision: HEAD,
+          filePath: "src/renamed.ts",
+          language: "typescript",
+          availability: "available",
+          sourceText: "export const renamed = true;\n"
+        }
+      }
+    ]);
+
+    const hunkCalls = calls.filter(
+      (call) => call.arguments_[0] === "diff" && call.arguments_.includes("--unified=0")
+    );
+    expect(hunkCalls).toHaveLength(4);
+    for (const call of hunkCalls) {
+      expect(call.projectPath).toBe("C:/project");
+      expect(call.arguments_).toEqual(
+        expect.arrayContaining([
+          "--unified=0",
+          "--inter-hunk-context=0",
+          "--diff-algorithm=myers",
+          "--no-indent-heuristic",
+          "--no-ext-diff",
+          "--no-textconv",
+          "--no-color",
+          MERGE_BASE,
+          HEAD
+        ])
+      );
+      expect(call.arguments_.some((argument) => argument === "origin/main")).toBe(false);
+      expect(call.arguments_.some((argument) => argument.startsWith(":(literal)"))).toBe(true);
+    }
+    const showCalls = calls.filter((call) => call.arguments_[0] === "show");
+    expect(showCalls).toHaveLength(6);
+    for (const call of showCalls) {
+      expect(call.arguments_).toEqual(
+        expect.arrayContaining(["--no-ext-diff", "--no-textconv", "--no-color", "--end-of-options"])
+      );
+      expect(call.arguments_.at(-1)).toMatch(new RegExp(`^(?:${MERGE_BASE}|${HEAD}):`));
+      expect(call.arguments_.at(-1)).not.toContain("origin/main");
+    }
+  });
+
+  it("maps project-relative paths to repository-relative revision blobs below the worktree root", async () => {
+    const projectPath = "C:/project/src";
+    const runner = {
+      run: vi.fn(async (receivedProjectPath: string, arguments_: readonly string[]) => {
+        expect(receivedProjectPath).toBe(projectPath);
+        if (arguments_[0] === "rev-parse" && arguments_.includes("--show-prefix")) {
+          return "src/\n";
+        }
+        if (arguments_[0] === "rev-parse" && arguments_.at(-1) === "HEAD^{commit}") {
+          return `${HEAD}\n`;
+        }
+        if (arguments_[0] === "rev-parse" && arguments_.at(-1) === "origin/main^{commit}") {
+          return `${BASE}\n`;
+        }
+        if (arguments_[0] === "merge-base") {
+          return `${MERGE_BASE}\n`;
+        }
+        if (arguments_[0] === "diff" && arguments_.includes("--name-status")) {
+          // `--relative` makes this path relative to C:/project/src.
+          return "M\u0000application/errors.ts\u0000";
+        }
+        if (arguments_[0] === "diff" && arguments_.includes("--unified=0")) {
+          return "@@ -1 +1 @@\n-export const before = true;\n+export const after = true;\n";
+        }
+        if (arguments_[0] === "show" && arguments_.at(-1) === `${MERGE_BASE}:src/application/errors.ts`) {
+          return "export const before = true;\n";
+        }
+        if (arguments_[0] === "show" && arguments_.at(-1) === `${HEAD}:src/application/errors.ts`) {
+          return "export const after = true;\n";
+        }
+        throw new Error(`Unexpected Git command: ${arguments_.join(" ")}`);
+      })
+    } satisfies GitCommandRunner;
+
+    const result = await new FileSystemGitChangeSetProvider(runner).getRevisionHunks(projectPath, {
+      baseRef: "origin/main",
+      maxSourceFiles: 1
+    });
+
+    expect(result.files[0]).toMatchObject({
+      change: {
+        previousPath: "application/errors.ts",
+        currentPath: "application/errors.ts"
+      },
+      previous: { filePath: "application/errors.ts", sourceText: "export const before = true;\n" },
+      current: { filePath: "application/errors.ts", sourceText: "export const after = true;\n" }
+    });
+    expect(runner.run).toHaveBeenCalledWith(
+      projectPath,
+      expect.arrayContaining([`${MERGE_BASE}:src/application/errors.ts`])
+    );
+    expect(runner.run).toHaveBeenCalledWith(
+      projectPath,
+      expect.arrayContaining([`${HEAD}:src/application/errors.ts`])
+    );
+  });
+
+  it("keeps a supported old side but marks a renamed non-source destination unsupported", async () => {
+    const runner = {
+      run: vi.fn(async (_projectPath: string, arguments_: readonly string[]) => {
+        if (arguments_[0] === "rev-parse" && arguments_.includes("--show-prefix")) {
+          return "\n";
+        }
+        if (arguments_[0] === "rev-parse" && arguments_.at(-1) === "HEAD^{commit}") {
+          return `${HEAD}\n`;
+        }
+        if (arguments_[0] === "rev-parse" && arguments_.at(-1) === "origin/main^{commit}") {
+          return `${BASE}\n`;
+        }
+        if (arguments_[0] === "merge-base") {
+          return `${MERGE_BASE}\n`;
+        }
+        if (arguments_[0] === "diff" && arguments_.includes("--name-status")) {
+          return "R100\u0000src/old.ts\u0000docs/renamed.md\u0000";
+        }
+        if (arguments_[0] === "diff" && arguments_.includes("--unified=0")) {
+          return "@@ -1 +1 @@\n-export const oldValue = 1;\n+new documentation\n";
+        }
+        if (arguments_[0] === "show" && arguments_.at(-1) === `${MERGE_BASE}:src/old.ts`) {
+          return "export const oldValue = 1;\n";
+        }
+        throw new Error(`Unexpected Git command: ${arguments_.join(" ")}`);
+      })
+    } satisfies GitCommandRunner;
+
+    const result = await new FileSystemGitChangeSetProvider(runner).getRevisionHunks("C:/project", {
+      baseRef: "origin/main",
+      maxSourceFiles: 1
+    });
+
+    expect(result.changeSet.sourcePaths).toEqual(["src/old.ts"]);
+    expect(result.files).toMatchObject([
+      {
+        previous: {
+          revision: MERGE_BASE,
+          filePath: "src/old.ts",
+          availability: "available"
+        },
+        current: {
+          revision: HEAD,
+          filePath: "docs/renamed.md",
+          language: null,
+          availability: "unsupported"
+        }
+      }
+    ]);
+    expect(runner.run).not.toHaveBeenCalledWith(
+      "C:/project",
+      expect.arrayContaining([`${HEAD}:docs/renamed.md`])
+    );
+  });
+
+  it("enforces the immutable source-path cap before reading patches or blobs", async () => {
+    const runner = {
+      run: vi.fn(async (_projectPath: string, arguments_: readonly string[]) => {
+        if (arguments_[0] === "rev-parse" && arguments_.at(-1) === "HEAD^{commit}") {
+          return `${HEAD}\n`;
+        }
+        if (arguments_[0] === "rev-parse" && arguments_.at(-1) === "origin/main^{commit}") {
+          return `${BASE}\n`;
+        }
+        if (arguments_[0] === "merge-base") {
+          return `${MERGE_BASE}\n`;
+        }
+        if (arguments_[0] === "diff" && arguments_.includes("--name-status")) {
+          return "M\u0000src/one.ts\u0000M\u0000src/two.ts\u0000";
+        }
+        throw new Error(`Unexpected Git command: ${arguments_.join(" ")}`);
+      })
+    } satisfies GitCommandRunner;
+
+    await expect(
+      new FileSystemGitChangeSetProvider(runner).getRevisionHunks("C:/project", {
+        baseRef: "origin/main",
+        maxSourceFiles: 1
+      })
+    ).rejects.toMatchObject({ code: "GIT_CHANGE_SET_TOO_LARGE" });
+    expect(
+      runner.run.mock.calls.some(([, arguments_]) =>
+        arguments_.includes("--unified=0") || arguments_[0] === "show"
+      )
+    ).toBe(false);
+  });
+
+  it("maps unavailable Git reads and malformed hunk output to typed errors", async () => {
+    const baseRunner = (patchOutput: string | Error) =>
+      ({
+        run: vi.fn(async (_projectPath: string, arguments_: readonly string[]) => {
+          if (arguments_[0] === "rev-parse" && arguments_.includes("--show-prefix")) {
+            return "\n";
+          }
+          if (arguments_[0] === "rev-parse" && arguments_.at(-1) === "HEAD^{commit}") {
+            return `${HEAD}\n`;
+          }
+          if (arguments_[0] === "rev-parse" && arguments_.at(-1) === "origin/main^{commit}") {
+            return `${BASE}\n`;
+          }
+          if (arguments_[0] === "merge-base") {
+            return `${MERGE_BASE}\n`;
+          }
+          if (arguments_[0] === "diff" && arguments_.includes("--name-status")) {
+            return "M\u0000src/example.ts\u0000";
+          }
+          if (arguments_[0] === "diff" && arguments_.includes("--unified=0")) {
+            if (patchOutput instanceof Error) {
+              throw patchOutput;
+            }
+            return patchOutput;
+          }
+          throw new Error(`Unexpected Git command: ${arguments_.join(" ")}`);
+        })
+      }) satisfies GitCommandRunner;
+
+    await expect(
+      new FileSystemGitChangeSetProvider(baseRunner(new Error("spawn git ENOENT"))).getRevisionHunks(
+        "C:/project",
+        { baseRef: "origin/main", maxSourceFiles: 1 }
+      )
+    ).rejects.toMatchObject({ code: "GIT_UNAVAILABLE" });
+
+    await expect(
+      new FileSystemGitChangeSetProvider(baseRunner("@@ -not-a-range +1 @@\n")).getRevisionHunks(
+        "C:/project",
+        { baseRef: "origin/main", maxSourceFiles: 1 }
+      )
+    ).rejects.toMatchObject({ code: "MALFORMED_GIT_OUTPUT" });
+  });
+});

@@ -14,6 +14,8 @@ import {
   type GenerationHistoryResult,
   type GitAffectedTestsOptions,
   type GitAffectedTestsResult,
+  type GitHunksOptions,
+  type GitHunksResult,
   type SearchResult
 } from "../../../src/application/index.js";
 import {
@@ -25,6 +27,7 @@ import {
   runGenerationDiffTool,
   runGenerationHistoryTool,
   runGitAffectedTestsTool,
+  runGitHunksTool,
   runSearchTool
 } from "../../../src/mcp/index.js";
 
@@ -137,6 +140,26 @@ function gitAffectedTestsResult(): GitAffectedTestsResult {
       sourcePaths: ["src/math.ts"]
     },
     affected: affectedTestsResult()
+  };
+}
+
+function gitHunksResult(): GitHunksResult {
+  return {
+    changeSet: {
+      requestedBaseRef: "origin/main",
+      mergeBaseCommit: "b".repeat(40),
+      headCommit: "a".repeat(40),
+      includesUntracked: false,
+      changes: [],
+      sourcePaths: []
+    },
+    bounds: {
+      maxSourceFiles: 50,
+      maxDeclarationAnchorsPerSide: 25,
+      limit: 7,
+      maximumLimit: 100
+    },
+    hunks: { items: [], total: 0, truncated: false }
   };
 }
 
@@ -696,6 +719,105 @@ describe("SymbolLattice MCP server", () => {
     ]);
   });
 
+  it("registers immutable Git hunk attribution only when the capability is available", async () => {
+    const gitCalls: Array<{
+      projectPath: string;
+      baseRef: string;
+      options: GitHunksOptions;
+    }> = [];
+    const server = createMcpServer(
+      {
+        async explore(): Promise<ExploreResult> {
+          return exploreResult();
+        },
+        gitHunksAvailable(): boolean {
+          return true;
+        },
+        async gitHunks(
+          projectPath: string,
+          baseRef: string,
+          options: GitHunksOptions = {}
+        ): Promise<GitHunksResult> {
+          gitCalls.push({ projectPath, baseRef, options });
+          if (baseRef === " origin/main") {
+            throw new SymbolLatticeError(
+              "INVALID_GIT_BASE_REF",
+              "Git base ref must not contain surrounding whitespace."
+            );
+          }
+          return gitHunksResult();
+        }
+      },
+      "C:/default-project"
+    );
+    const client = new Client({ name: "symbol-lattice-git-hunks-test", version: "1.0.0" });
+    const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+    closeCallbacks.push(() => client.close(), () => server.close());
+
+    expect((await client.listTools()).tools.map((tool) => tool.name)).toEqual([
+      "symbol_lattice_explore",
+      "symbol_lattice_git_hunks"
+    ]);
+
+    const result = await client.callTool({
+      name: "symbol_lattice_git_hunks",
+      arguments: {
+        projectPath: "C:/chosen-project",
+        baseRef: "origin/main",
+        limit: 7
+      }
+    });
+    expect(result.isError).not.toBe(true);
+    expect(result.structuredContent).toMatchObject({
+      changeSet: { requestedBaseRef: "origin/main", includesUntracked: false },
+      bounds: { limit: 7, maximumLimit: 100 }
+    });
+    expect(gitCalls).toEqual([
+      {
+        projectPath: "C:/chosen-project",
+        baseRef: "origin/main",
+        options: { limit: 7 }
+      }
+    ]);
+
+    const invalidBaseResult = await client.callTool({
+      name: "symbol_lattice_git_hunks",
+      arguments: { baseRef: " origin/main" }
+    });
+    expect(invalidBaseResult.isError).toBe(true);
+    expect(invalidBaseResult.content[0]?.text).toContain("INVALID_GIT_BASE_REF");
+    expect(gitCalls.at(-1)).toEqual({
+      projectPath: "C:/default-project",
+      baseRef: " origin/main",
+      options: {}
+    });
+
+    const unavailableServer = createMcpServer(
+      {
+        async explore(): Promise<ExploreResult> {
+          return exploreResult();
+        },
+        gitHunksAvailable(): boolean {
+          return false;
+        },
+        async gitHunks(): Promise<GitHunksResult> {
+          return gitHunksResult();
+        }
+      },
+      "C:/default-project"
+    );
+    const unavailableClient = new Client({ name: "symbol-lattice-git-hunks-disabled-test", version: "1.0.0" });
+    const [unavailableServerTransport, unavailableClientTransport] = InMemoryTransport.createLinkedPair();
+    await unavailableServer.connect(unavailableServerTransport);
+    await unavailableClient.connect(unavailableClientTransport);
+    closeCallbacks.push(() => unavailableClient.close(), () => unavailableServer.close());
+    expect((await unavailableClient.listTools()).tools.map((tool) => tool.name)).toEqual([
+      "symbol_lattice_explore"
+    ]);
+  });
+
   it("does not register search for an existing explore-and-explain embedding", async () => {
     const server = createMcpServer(
       {
@@ -834,6 +956,27 @@ describe("SymbolLattice MCP server", () => {
     expect(response.content[0]?.text).toContain("GIT_CHANGE_SET_UNAVAILABLE");
   });
 
+  it("returns immutable Git hunk errors without indexing", async () => {
+    const response = await runGitHunksTool(
+      {
+        gitHunksAvailable(): boolean {
+          return true;
+        },
+        async gitHunks(): Promise<GitHunksResult> {
+          throw new SymbolLatticeError(
+            "GIT_HUNKS_UNAVAILABLE",
+            "Git is not available in this project."
+          );
+        }
+      },
+      "C:/project",
+      { baseRef: "origin/main" }
+    );
+
+    expect(response).toMatchObject({ isError: true });
+    expect(response.content[0]?.text).toContain("GIT_HUNKS_UNAVAILABLE");
+  });
+
   it("returns indexed-search errors without indexing", async () => {
     const response = await runSearchTool(
       {
@@ -912,6 +1055,12 @@ describe("SymbolLattice MCP server", () => {
       async affectedTestsFromGit(): Promise<GitAffectedTestsResult> {
         return gitAffectedTestsResult();
       },
+      gitHunksAvailable(): boolean {
+        return true;
+      },
+      async gitHunks(): Promise<GitHunksResult> {
+        return gitHunksResult();
+      },
       async search(): Promise<SearchResult> {
         return searchResult();
       },
@@ -939,6 +1088,7 @@ describe("SymbolLattice MCP server", () => {
     await runContextTool(service, "C:/project", { references: ["src/missing.ts#missing"] });
     await runAffectedTestsTool(service, "C:/project", { filePaths: ["src/missing.ts"] });
     await runGitAffectedTestsTool(service, "C:/project", {});
+    await runGitHunksTool(service, "C:/project", { baseRef: "origin/main" });
     await runSearchTool(service, "C:/project", { query: "user" });
     await runGenerationHistoryTool(service, "C:/project", {});
     await runGenerationDiffTool(service, "C:/project", { fromGenerationId: "generation:old" });

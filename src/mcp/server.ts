@@ -13,7 +13,8 @@ import {
   MAX_CONTEXT_REFERENCES,
   MAX_CONTEXT_RELATION_LIMIT,
   MAX_GENERATION_DIFF_LIMIT,
-  MAX_GENERATION_HISTORY_LIMIT
+  MAX_GENERATION_HISTORY_LIMIT,
+  MAX_GIT_HUNK_LIMIT
 } from "../application/types.js";
 import type {
   AffectedTestsOptions,
@@ -28,6 +29,8 @@ import type {
   GenerationHistoryResult,
   GitAffectedTestsOptions,
   GitAffectedTestsResult,
+  GitHunksOptions,
+  GitHunksResult,
   SearchOptions,
   SearchResult
 } from "../application/types.js";
@@ -64,6 +67,16 @@ export interface GitAffectedTestsService {
   ): Promise<GitAffectedTestsResult>;
 }
 
+/** Additive immutable Git hunk attribution seam; it does not require an index. */
+export interface GitHunksService {
+  gitHunksAvailable(): boolean;
+  gitHunks(
+    projectPath: string,
+    baseRef: string,
+    options?: GitHunksOptions
+  ): Promise<GitHunksResult>;
+}
+
 export interface ExplainEdgeService {
   explainEdge(projectPath: string, edgeId: string): Promise<ExplainEdgeResult>;
 }
@@ -95,6 +108,7 @@ export type SearchMcpService = ExploreService & SearchService;
 export type ContextMcpService = ExploreService & ContextService;
 export type AffectedTestsMcpService = ExploreService & AffectedTestsService;
 export type GitAffectedTestsMcpService = ExploreService & GitAffectedTestsService;
+export type GitHunksMcpService = ExploreService & GitHunksService;
 export type GenerationHistoryMcpService = ExploreService & GenerationHistoryService;
 export type GenerationDiffMcpService = ExploreService & GenerationDiffService;
 
@@ -124,6 +138,13 @@ export interface GitAffectedTestsToolArguments {
   /** Omit for HEAD-to-working-tree selection; otherwise compare local merge-base to HEAD. */
   readonly baseRef?: string | undefined;
   readonly maxDepth?: number | undefined;
+  readonly limit?: number | undefined;
+}
+
+export interface GitHunksToolArguments {
+  readonly projectPath?: string | undefined;
+  /** Required local Git baseline; the service resolves its merge-base with HEAD. */
+  readonly baseRef: string;
   readonly limit?: number | undefined;
 }
 
@@ -167,6 +188,7 @@ export type ExploreToolResponse = ReadOnlyToolResponse;
 export type ContextToolResponse = ReadOnlyToolResponse;
 export type AffectedTestsToolResponse = ReadOnlyToolResponse;
 export type GitAffectedTestsToolResponse = ReadOnlyToolResponse;
+export type GitHunksToolResponse = ReadOnlyToolResponse;
 export type ExplainEdgeToolResponse = ReadOnlyToolResponse;
 export type SearchToolResponse = ReadOnlyToolResponse;
 export type GenerationHistoryToolResponse = ReadOnlyToolResponse;
@@ -326,6 +348,23 @@ const gitAffectedTestsOutputSchema = z
   })
   .passthrough();
 
+const gitHunksOutputSchema = z
+  .object({
+    changeSet: z.object({}).passthrough(),
+    bounds: z.object({
+      maxSourceFiles: z.number().int().positive(),
+      maxDeclarationAnchorsPerSide: z.number().int().positive(),
+      limit: z.number().int().positive(),
+      maximumLimit: z.number().int().positive()
+    }),
+    hunks: z.object({
+      items: z.array(z.object({}).passthrough()),
+      total: z.number().int().nonnegative(),
+      truncated: z.boolean()
+    })
+  })
+  .passthrough();
+
 const searchOutputSchema = z
   .object({
     status: indexStatusOutputSchema,
@@ -454,6 +493,16 @@ function supportsGitAffectedTests(service: ExploreService): service is GitAffect
   );
 }
 
+function supportsGitHunks(service: ExploreService): service is GitHunksMcpService {
+  return (
+    "gitHunksAvailable" in service &&
+    typeof service.gitHunksAvailable === "function" &&
+    service.gitHunksAvailable() &&
+    "gitHunks" in service &&
+    typeof service.gitHunks === "function"
+  );
+}
+
 function renderToolError(error: unknown): ReadOnlyToolResponse {
   const message =
     error instanceof SymbolLatticeError
@@ -550,6 +599,29 @@ export async function runGitAffectedTestsTool(
     };
     const result = await service.affectedTestsFromGit(
       arguments_.projectPath ?? defaultProjectPath,
+      options
+    );
+    return {
+      content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      structuredContent: result as unknown as Record<string, unknown>
+    };
+  } catch (error) {
+    return renderToolError(error);
+  }
+}
+
+/** Builds a bounded immutable Git hunk-attribution response without indexing. */
+export async function runGitHunksTool(
+  service: GitHunksService,
+  defaultProjectPath: string,
+  arguments_: GitHunksToolArguments
+): Promise<GitHunksToolResponse> {
+  try {
+    const options: GitHunksOptions =
+      arguments_.limit === undefined ? {} : { limit: arguments_.limit };
+    const result = await service.gitHunks(
+      arguments_.projectPath ?? defaultProjectPath,
+      arguments_.baseRef,
       options
     );
     return {
@@ -813,6 +885,39 @@ export function createMcpServer(
         }
       },
       async (arguments_) => runGitAffectedTestsTool(gitAffectedTestsService, defaultProjectPath, arguments_)
+    );
+  }
+
+  const gitHunksService = supportsGitHunks(service) ? service : null;
+  if (gitHunksService !== null) {
+    server.registerTool(
+      "symbol_lattice_git_hunks",
+      {
+        title: "Attribute immutable local Git hunks to declarations",
+        description:
+          "Resolves the local merge-base of baseRef and HEAD, reads only immutable local Git blobs, and attributes TypeScript/JavaScript hunk sides to declarations extracted within each exact revision. Declaration IDs are revision-local: this tool does not infer rename, move, or old/new identity continuity. It never fetches, reads working-tree or staged changes, creates, refreshes, or synchronizes an index.",
+        inputSchema: {
+          projectPath: z.string().trim().min(1).optional().describe("Optional path to a local Git project."),
+          baseRef: z
+            .string()
+            .min(1)
+            .max(256)
+            .describe("Required local Git ref; compares its resolved merge-base with HEAD."),
+          limit: z
+            .number()
+            .int()
+            .min(1)
+            .max(MAX_GIT_HUNK_LIMIT)
+            .optional()
+            .describe("Maximum hunk records returned across all supported source files.")
+        },
+        outputSchema: gitHunksOutputSchema,
+        annotations: {
+          readOnlyHint: true,
+          idempotentHint: true
+        }
+      },
+      async (arguments_) => runGitHunksTool(gitHunksService, defaultProjectPath, arguments_)
     );
   }
 

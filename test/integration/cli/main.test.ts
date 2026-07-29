@@ -14,6 +14,8 @@ import {
   type GenerationHistoryResult,
   type GitAffectedTestsOptions,
   type GitAffectedTestsResult,
+  type GitHunksOptions,
+  type GitHunksResult,
   type ImpactOptions,
   type ImpactResult,
   type SearchOptions,
@@ -134,6 +136,26 @@ function gitAffectedTestsResult(): GitAffectedTestsResult {
       sourcePaths: ["src/math.ts"]
     },
     affected: affectedTestsResult()
+  };
+}
+
+function gitHunksResult(): GitHunksResult {
+  return {
+    changeSet: {
+      requestedBaseRef: "origin/main",
+      mergeBaseCommit: "b".repeat(40),
+      headCommit: "a".repeat(40),
+      includesUntracked: false,
+      changes: [],
+      sourcePaths: []
+    },
+    bounds: {
+      maxSourceFiles: 50,
+      maxDeclarationAnchorsPerSide: 25,
+      limit: 7,
+      maximumLimit: 100
+    },
+    hunks: { items: [], total: 0, truncated: false }
   };
 }
 
@@ -680,6 +702,60 @@ describe("symbol-lattice v0.6 affected-test CLI", () => {
       ).rejects.toThrow(rangeCase[2]);
     });
   }
+});
+
+describe("symbol-lattice v0.12 immutable Git hunk CLI", () => {
+  it("forwards the required base ref, positional project, and bounded limit", async () => {
+    const calls: Array<{ projectPath: string; baseRef: string; options: GitHunksOptions }> = [];
+    const result = gitHunksResult();
+    const service = {
+      async gitHunks(
+        projectPath: string,
+        baseRef: string,
+        options: GitHunksOptions = {}
+      ): Promise<GitHunksResult> {
+        calls.push({ projectPath, baseRef, options });
+        return result;
+      }
+    } as unknown as SymbolLatticeService;
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+    await createProgram(service).parseAsync(
+      [
+        "node",
+        "symbol-lattice",
+        "git-hunks",
+        "C:/chosen-project",
+        "--base",
+        "origin/main",
+        "--limit",
+        "7",
+        "--json"
+      ],
+      { from: "node" }
+    );
+
+    expect(calls).toEqual([
+      {
+        projectPath: resolve("C:/chosen-project"),
+        baseRef: "origin/main",
+        options: { limit: 7 }
+      }
+    ]);
+    expect(write).toHaveBeenCalledWith(`${JSON.stringify(result, null, 2)}\n`);
+  });
+
+  it("rejects Git hunk limits outside the public bound before invoking the service", async () => {
+    const program = createProgram({} as SymbolLatticeService);
+    program.exitOverride();
+
+    await expect(
+      program.parseAsync(
+        ["node", "symbol-lattice", "git-hunks", "--base", "origin/main", "--limit", "101"],
+        { from: "node" }
+      )
+    ).rejects.toThrow("Expected an integer between 1 and 100");
+  });
 });
 
 describe("symbol-lattice v0.10 foreground watch CLI", () => {

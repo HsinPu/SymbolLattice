@@ -4,6 +4,7 @@ import {
   AFFECTED_TEST_EDGE_KINDS,
   ARTIFACT_FACTS_EXTRACTOR_VERSION,
   ARTIFACT_LANGUAGES,
+  attributeGitHunkSide,
   classifyTestFile,
   diffGenerationSnapshots,
   DEFAULT_SOURCE_SEARCH_LIMIT,
@@ -20,6 +21,8 @@ import {
   SOURCE_SEARCH_INDEX_VERSION,
   sourceSearchTerms,
   type GraphSnapshot,
+  type GitLineRange,
+  type GitUnifiedHunk,
   GenerationSnapshotComparisonError,
   type ImpactPath,
   type IndexedSourceDocument,
@@ -40,8 +43,13 @@ import {
 } from "../extraction/index.js";
 import {
   GitChangeSetError,
+  type GitChangeRecord,
   type GitChangeSet,
-  type GitChangeSetProvider
+  type GitChangeSetProvider,
+  type GitRevisionHunkFile,
+  type GitRevisionHunkProvider,
+  type GitRevisionHunkSet,
+  type GitRevisionSource
 } from "../ports/git-change-set.js";
 import type {
   ActiveGraphBundle,
@@ -63,6 +71,7 @@ import {
   CONTEXT_MATCH_CANDIDATE_LIMIT,
   CONTEXT_MAX_VISITED_SYMBOLS,
   DEFAULT_AFFECTED_LIMIT,
+  DEFAULT_GIT_HUNK_LIMIT,
   DEFAULT_AFFECTED_MAX_DEPTH,
   DEFAULT_CONTEXT_IMPACT_DEPTH,
   DEFAULT_CONTEXT_IMPACT_LIMIT,
@@ -77,6 +86,9 @@ import {
   MAX_CONTEXT_RELATION_LIMIT,
   MAX_GENERATION_DIFF_LIMIT,
   MAX_GENERATION_HISTORY_LIMIT,
+  MAX_GIT_HUNK_DECLARATION_ANCHORS,
+  MAX_GIT_HUNK_LIMIT,
+  MAX_GIT_HUNK_SOURCE_FILES,
   MAX_AFFECTED_CHANGED_FILES,
   MAX_AFFECTED_LIMIT,
   MAX_AFFECTED_MAX_DEPTH,
@@ -90,6 +102,10 @@ import type {
   AffectedTestsResult,
   GitAffectedTestsOptions,
   GitAffectedTestsResult,
+  GitHunkResultItem,
+  GitHunkSideResult,
+  GitHunksOptions,
+  GitHunksResult,
   ExplainEdgeResult,
   ContextBounds,
   ContextEvidencePath,
@@ -150,6 +166,11 @@ interface NormalizedAffectedTestsRequest {
   readonly bounds: AffectedTestsBounds;
 }
 
+interface NormalizedGitHunksRequest {
+  readonly baseRef: string;
+  readonly limit: number;
+}
+
 interface NormalizedGenerationDiffRequest {
   readonly fromGenerationId: string;
   readonly toGenerationId: string | undefined;
@@ -198,6 +219,89 @@ function compareAffectedTestEvidence(
       left.path.edges.map((edge) => edge.id).join("\u0000"),
       right.path.edges.map((edge) => edge.id).join("\u0000")
     )
+  );
+}
+
+function compareNumber(left: number, right: number): number {
+  if (left < right) {
+    return -1;
+  }
+  if (left > right) {
+    return 1;
+  }
+  return 0;
+}
+
+function compareNullableText(left: string | null, right: string | null): number {
+  if (left === null) {
+    return right === null ? 0 : -1;
+  }
+  if (right === null) {
+    return 1;
+  }
+  return compareText(left, right);
+}
+
+function compareNullableNumber(left: number | null, right: number | null): number {
+  if (left === null) {
+    return right === null ? 0 : -1;
+  }
+  if (right === null) {
+    return 1;
+  }
+  return compareNumber(left, right);
+}
+
+function compareGitChangeRecord(left: GitChangeRecord, right: GitChangeRecord): number {
+  return (
+    compareNullableText(left.previousPath, right.previousPath) ||
+    compareNullableText(left.currentPath, right.currentPath) ||
+    compareText(left.kind, right.kind) ||
+    compareNullableNumber(left.score, right.score)
+  );
+}
+
+function compareGitLineRange(left: GitLineRange, right: GitLineRange): number {
+  return compareNumber(left.start, right.start) || compareNumber(left.count, right.count);
+}
+
+function compareGitUnifiedHunk(left: GitUnifiedHunk, right: GitUnifiedHunk): number {
+  return compareGitLineRange(left.oldRange, right.oldRange) || compareGitLineRange(left.newRange, right.newRange);
+}
+
+function compareGitRevisionHunkFile(
+  left: GitRevisionHunkFile,
+  right: GitRevisionHunkFile
+): number {
+  return (
+    compareGitChangeRecord(left.change, right.change) ||
+    compareText(left.previous.revision, right.previous.revision) ||
+    compareText(left.current.revision, right.current.revision) ||
+    compareNullableText(left.previous.filePath, right.previous.filePath) ||
+    compareNullableText(left.current.filePath, right.current.filePath)
+  );
+}
+
+function compareGitHunkSideResult(left: GitHunkSideResult, right: GitHunkSideResult): number {
+  return (
+    compareText(left.revision, right.revision) ||
+    compareNullableText(left.path, right.path) ||
+    compareText(left.sourceAvailability, right.sourceAvailability) ||
+    compareGitLineRange(left.lineRange, right.lineRange) ||
+    compareText(left.attribution, right.attribution) ||
+    compareText(
+      left.declarationAnchors.items.map((symbol) => symbol.id).join("\u0000"),
+      right.declarationAnchors.items.map((symbol) => symbol.id).join("\u0000")
+    )
+  );
+}
+
+function compareGitHunkResultItem(left: GitHunkResultItem, right: GitHunkResultItem): number {
+  return (
+    compareGitChangeRecord(left.change, right.change) ||
+    compareGitUnifiedHunk(left.hunk, right.hunk) ||
+    compareGitHunkSideResult(left.old, right.old) ||
+    compareGitHunkSideResult(left.new, right.new)
   );
 }
 
@@ -530,12 +634,18 @@ export class SymbolLatticeService {
     private readonly graphStore: GraphStore,
     private readonly sourceCatalog: SourceCatalog,
     private readonly artifactFactsExtractor: ArtifactFactsExtractor = extractFileFacts,
-    private readonly gitChangeSetProvider?: GitChangeSetProvider
+    private readonly gitChangeSetProvider?: GitChangeSetProvider,
+    private readonly gitRevisionHunkProvider?: GitRevisionHunkProvider
   ) {}
 
   /** True when this service can select changed source paths through its Git port. */
   public gitAffectedTestsAvailable(): boolean {
     return this.gitChangeSetProvider !== undefined;
+  }
+
+  /** True when immutable base-to-HEAD hunk attribution is backed by a Git port. */
+  public gitHunksAvailable(): boolean {
+    return this.gitRevisionHunkProvider !== undefined;
   }
 
   public async init(options: IndexOptions): Promise<GraphContext["status"]> {
@@ -902,6 +1012,50 @@ export class SymbolLatticeService {
   }
 
   /**
+   * Attributes immutable base-to-HEAD Git hunk sides to declarations extracted
+   * from those exact revision blobs. This intentionally does not read an
+   * active graph, inspect live files, or infer old/new declaration identity.
+   */
+  public async gitHunks(
+    projectPath: string,
+    baseRef: string,
+    options: GitHunksOptions = {}
+  ): Promise<GitHunksResult> {
+    const request = this.gitHunksRequest(baseRef, options);
+    const hunkSet = await this.readGitRevisionHunks(resolve(projectPath), {
+      baseRef: request.baseRef,
+      maxSourceFiles: MAX_GIT_HUNK_SOURCE_FILES
+    });
+    this.requireGitHunkSetWithinBounds(hunkSet);
+
+    const items: GitHunkResultItem[] = [];
+    const files = [...hunkSet.files].sort(compareGitRevisionHunkFile);
+    for (const file of files) {
+      const oldFacts = this.extractGitRevisionSourceFacts(file.previous);
+      const newFacts = this.extractGitRevisionSourceFacts(file.current);
+      for (const hunk of [...file.hunks].sort(compareGitUnifiedHunk)) {
+        items.push(this.toGitHunkResultItem(file, hunk, oldFacts, newFacts));
+      }
+    }
+
+    const orderedItems = items.sort(compareGitHunkResultItem);
+    return {
+      changeSet: hunkSet.changeSet,
+      bounds: {
+        maxSourceFiles: MAX_GIT_HUNK_SOURCE_FILES,
+        maxDeclarationAnchorsPerSide: MAX_GIT_HUNK_DECLARATION_ANCHORS,
+        limit: request.limit,
+        maximumLimit: MAX_GIT_HUNK_LIMIT
+      },
+      hunks: {
+        items: orderedItems.slice(0, request.limit),
+        total: orderedItems.length,
+        truncated: orderedItems.length > request.limit
+      }
+    };
+  }
+
+  /**
    * Selects conventionally named affected tests from exact import/export
    * evidence in the current persisted generation. This never syncs or invokes
    * Git; the returned freshness status makes any live-project drift explicit.
@@ -1168,6 +1322,25 @@ export class SymbolLatticeService {
       return { mode: "working-tree" };
     }
 
+    return { mode: "base", baseRef: this.requireGitBaseRef(baseRef) };
+  }
+
+  private gitHunksRequest(baseRef: string, options: GitHunksOptions): NormalizedGitHunksRequest {
+    const limit = options.limit ?? DEFAULT_GIT_HUNK_LIMIT;
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > MAX_GIT_HUNK_LIMIT) {
+      throw new SymbolLatticeError(
+        "INVALID_GIT_HUNK_LIMIT",
+        `Git hunk limit must be a whole number from 1 to ${MAX_GIT_HUNK_LIMIT}.`
+      );
+    }
+
+    return {
+      baseRef: this.requireGitBaseRef(baseRef),
+      limit
+    };
+  }
+
+  private requireGitBaseRef(baseRef: unknown): string {
     if (
       typeof baseRef !== "string" ||
       baseRef.length === 0 ||
@@ -1181,7 +1354,7 @@ export class SymbolLatticeService {
       );
     }
 
-    return { mode: "base", baseRef };
+    return baseRef;
   }
 
   private async readGitChangeSet(
@@ -1219,8 +1392,156 @@ export class SymbolLatticeService {
             "GIT_CHANGE_SET_MALFORMED",
             `Git change-set output is malformed: ${error.message}`
           );
+        case "GIT_CHANGE_SET_TOO_LARGE":
+          throw new SymbolLatticeError(
+            "INVALID_AFFECTED_FILES",
+            `Git source selection exceeds the affected-test cap: ${error.message}`
+          );
       }
     }
+  }
+
+  private async readGitRevisionHunks(
+    projectPath: string,
+    request: Parameters<GitRevisionHunkProvider["getRevisionHunks"]>[1]
+  ): Promise<GitRevisionHunkSet> {
+    const provider = this.gitRevisionHunkProvider;
+    if (provider === undefined) {
+      throw new SymbolLatticeError(
+        "GIT_HUNKS_UNAVAILABLE",
+        "Git hunk attribution is unavailable because no GitRevisionHunkProvider is configured."
+      );
+    }
+
+    try {
+      return await provider.getRevisionHunks(projectPath, request);
+    } catch (error) {
+      if (!(error instanceof GitChangeSetError)) {
+        throw error;
+      }
+
+      switch (error.code) {
+        case "GIT_UNAVAILABLE":
+          throw new SymbolLatticeError(
+            "GIT_HUNKS_UNAVAILABLE",
+            `Git hunk attribution is unavailable: ${error.message}`
+          );
+        case "INVALID_GIT_BASE":
+          throw new SymbolLatticeError(
+            "INVALID_GIT_BASE_REF",
+            `Git base ref is invalid: ${error.message}`
+          );
+        case "MALFORMED_GIT_OUTPUT":
+          throw new SymbolLatticeError(
+            "GIT_HUNKS_MALFORMED",
+            `Git hunk output is malformed: ${error.message}`
+          );
+        case "GIT_CHANGE_SET_TOO_LARGE":
+          throw new SymbolLatticeError(
+            "INVALID_GIT_HUNK_FILES",
+            `Git hunk source selection exceeds the ${MAX_GIT_HUNK_SOURCE_FILES}-path cap: ${error.message}`
+          );
+      }
+    }
+  }
+
+  private requireGitHunkSetWithinBounds(hunkSet: GitRevisionHunkSet): void {
+    if (
+      hunkSet.changeSet.sourcePaths.length > MAX_GIT_HUNK_SOURCE_FILES ||
+      hunkSet.files.length > MAX_GIT_HUNK_SOURCE_FILES
+    ) {
+      throw new SymbolLatticeError(
+        "INVALID_GIT_HUNK_FILES",
+        `Git hunk attribution is capped at ${MAX_GIT_HUNK_SOURCE_FILES} source paths.`
+      );
+    }
+  }
+
+  private extractGitRevisionSourceFacts(source: GitRevisionSource): ExtractedFileFacts | null {
+    if (source.availability !== "available") {
+      return null;
+    }
+
+    return this.artifactFactsExtractor({
+      filePath: source.filePath,
+      sourceText: source.sourceText,
+      language: source.language
+    });
+  }
+
+  private toGitHunkResultItem(
+    file: GitRevisionHunkFile,
+    hunk: GitUnifiedHunk,
+    oldFacts: ExtractedFileFacts | null,
+    newFacts: ExtractedFileFacts | null
+  ): GitHunkResultItem {
+    return {
+      change: file.change,
+      hunk,
+      old: this.toGitHunkSideResult(file.previous, hunk.oldRange, oldFacts),
+      new: this.toGitHunkSideResult(file.current, hunk.newRange, newFacts)
+    };
+  }
+
+  private toGitHunkSideResult(
+    source: GitRevisionSource,
+    lineRange: GitLineRange,
+    facts: ExtractedFileFacts | null
+  ): GitHunkSideResult {
+    if (source.availability !== "available") {
+      return {
+        revision: source.revision,
+        path: source.filePath,
+        sourceAvailability: source.availability,
+        lineRange,
+        attribution: "not-applicable",
+        declarationAnchors: {
+          identityScope: "revision-local",
+          items: [],
+          total: 0,
+          truncated: false
+        }
+      };
+    }
+
+    if (facts === null) {
+      throw new SymbolLatticeError(
+        "GIT_HUNKS_MALFORMED",
+        `Git hunk source ${source.filePath} was marked available without extracted immutable facts.`
+      );
+    }
+
+    let attribution;
+    try {
+      attribution = attributeGitHunkSide({
+        filePath: source.filePath,
+        range: lineRange,
+        symbols: facts.symbols,
+        limit: MAX_GIT_HUNK_DECLARATION_ANCHORS
+      });
+    } catch (error) {
+      if (error instanceof RangeError) {
+        throw new SymbolLatticeError(
+          "GIT_HUNKS_MALFORMED",
+          `Git hunk range for ${source.filePath} is malformed: ${error.message}`
+        );
+      }
+      throw error;
+    }
+
+    return {
+      revision: source.revision,
+      path: source.filePath,
+      sourceAvailability: source.availability,
+      lineRange,
+      attribution: attribution.state,
+      declarationAnchors: {
+        identityScope: "revision-local",
+        items: attribution.items,
+        total: attribution.total,
+        truncated: attribution.truncated
+      }
+    };
   }
 
   private affectedTestsRequest(
