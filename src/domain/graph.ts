@@ -1,0 +1,485 @@
+import { type EdgeKind, type GraphEdge, type SymbolNode } from "./types.js";
+
+const DEFAULT_IMPACT_EDGE_KINDS: readonly EdgeKind[] = ["calls", "imports"];
+
+/** The graph data required by the pure traversal helpers. */
+export interface SymbolGraph {
+  readonly symbols: readonly SymbolNode[];
+  readonly edges: readonly GraphEdge[];
+}
+
+export interface ExactSymbolMatch {
+  readonly status: "exact";
+  readonly reference: string;
+  readonly symbol: SymbolNode;
+  readonly candidates: readonly SymbolNode[];
+}
+
+export interface AmbiguousSymbolMatch {
+  readonly status: "ambiguous";
+  readonly reference: string;
+  readonly candidates: readonly SymbolNode[];
+}
+
+export interface MissingSymbolMatch {
+  readonly status: "not_found";
+  readonly reference: string;
+  readonly candidates: readonly SymbolNode[];
+}
+
+/** A deterministic result for a symbol reference supplied by a caller. */
+export type SymbolMatch =
+  | ExactSymbolMatch
+  | AmbiguousSymbolMatch
+  | MissingSymbolMatch;
+
+/** A neighboring symbol together with the resolved edge that proves the relation. */
+export interface GraphRelation {
+  readonly symbol: SymbolNode;
+  readonly edge: GraphEdge;
+}
+
+/** One reverse-dependency traversal step. The edge retains its original direction. */
+export interface ImpactStep {
+  readonly from: SymbolNode;
+  readonly to: SymbolNode;
+  readonly edge: GraphEdge;
+}
+
+/**
+ * A path from the changed symbol to one impacted symbol.
+ *
+ * `symbols`, `edges`, and `steps` are aligned: every step links adjacent symbols
+ * and carries the edge that established that relationship.
+ */
+export interface ImpactPath {
+  readonly symbols: readonly SymbolNode[];
+  readonly edges: readonly GraphEdge[];
+  readonly steps: readonly ImpactStep[];
+}
+
+interface SourceLocationReference {
+  readonly filePath: string;
+  readonly line: number;
+  readonly column: number | null;
+}
+
+interface TraversalState {
+  readonly terminal: SymbolNode;
+  readonly path: ImpactPath;
+}
+
+function compareText(left: string, right: string): number {
+  if (left < right) {
+    return -1;
+  }
+
+  if (left > right) {
+    return 1;
+  }
+
+  return 0;
+}
+
+function compareNumber(left: number, right: number): number {
+  if (left < right) {
+    return -1;
+  }
+
+  if (left > right) {
+    return 1;
+  }
+
+  return 0;
+}
+
+/** Sorts symbols by source path, source range, then name, with deterministic ties. */
+export function compareSymbolNodes(left: SymbolNode, right: SymbolNode): number {
+  return (
+    compareText(left.filePath, right.filePath) ||
+    compareNumber(left.range.start.line, right.range.start.line) ||
+    compareNumber(left.range.start.column, right.range.start.column) ||
+    compareNumber(left.range.end.line, right.range.end.line) ||
+    compareNumber(left.range.end.column, right.range.end.column) ||
+    compareText(left.name, right.name) ||
+    compareText(left.qualifiedName, right.qualifiedName) ||
+    compareText(left.kind, right.kind) ||
+    compareNumber(left.declarationOrdinal, right.declarationOrdinal) ||
+    compareText(left.id, right.id)
+  );
+}
+
+/** Sorts edges deterministically when several edges prove the same relation. */
+export function compareGraphEdges(left: GraphEdge, right: GraphEdge): number {
+  return (
+    compareText(left.filePath, right.filePath) ||
+    compareNumber(left.range.start.line, right.range.start.line) ||
+    compareNumber(left.range.start.column, right.range.start.column) ||
+    compareNumber(left.range.end.line, right.range.end.line) ||
+    compareNumber(left.range.end.column, right.range.end.column) ||
+    compareText(left.sourceId, right.sourceId) ||
+    compareText(left.targetId ?? "", right.targetId ?? "") ||
+    compareText(left.kind, right.kind) ||
+    compareText(left.referenceName ?? "", right.referenceName ?? "") ||
+    compareText(left.id, right.id)
+  );
+}
+
+function sortSymbols(symbols: readonly SymbolNode[]): SymbolNode[] {
+  return [...symbols].sort(compareSymbolNodes);
+}
+
+function parseSourceLocationReference(reference: string): SourceLocationReference | null {
+  const match = /^(.*):([1-9]\d*)(?::([0-9]\d*))?$/.exec(reference);
+  if (match === null) {
+    return null;
+  }
+
+  const [, filePath, lineText, columnText] = match;
+  if (filePath === undefined || filePath.length === 0 || lineText === undefined) {
+    return null;
+  }
+
+  const line = Number(lineText);
+  const column = columnText === undefined ? null : Number(columnText);
+  if (!Number.isSafeInteger(line) || line < 1 || (column !== null && !Number.isSafeInteger(column))) {
+    return null;
+  }
+
+  return { filePath, line, column };
+}
+
+function containsLocation(symbol: SymbolNode, location: SourceLocationReference): boolean {
+  if (symbol.filePath !== location.filePath) {
+    return false;
+  }
+
+  const { line, column } = location;
+  const { start, end } = symbol.range;
+  if (line < start.line || line > end.line) {
+    return false;
+  }
+
+  if (column === null) {
+    return true;
+  }
+
+  if (line === start.line && column < start.column) {
+    return false;
+  }
+
+  return line !== end.line || column <= end.column;
+}
+
+function createSymbolIndex(symbols: readonly SymbolNode[]): ReadonlyMap<string, SymbolNode> {
+  const symbolsById = new Map<string, SymbolNode>();
+
+  for (const symbol of sortSymbols(symbols)) {
+    if (!symbolsById.has(symbol.id)) {
+      symbolsById.set(symbol.id, symbol);
+    }
+  }
+
+  return symbolsById;
+}
+
+function toSymbolMatch(reference: string, candidates: readonly SymbolNode[]): SymbolMatch {
+  if (candidates.length === 0) {
+    return { status: "not_found", reference, candidates };
+  }
+
+  if (candidates.length === 1) {
+    const symbol = candidates[0];
+    if (symbol === undefined) {
+      return { status: "not_found", reference, candidates: [] };
+    }
+
+    return { status: "exact", reference, symbol, candidates };
+  }
+
+  return { status: "ambiguous", reference, candidates };
+}
+
+/**
+ * Resolves an exact id, qualified name, simple name, or `path:line[:column]`
+ * reference. Qualified names take precedence over simple names; candidates are
+ * always returned in source order so callers can render ambiguity deterministically.
+ */
+export function matchSymbol(graph: SymbolGraph, reference: string): SymbolMatch {
+  const symbols = sortSymbols(graph.symbols);
+  const exactIdCandidates = symbols.filter((symbol) => symbol.id === reference);
+  if (exactIdCandidates.length > 0) {
+    return toSymbolMatch(reference, exactIdCandidates);
+  }
+
+  const qualifiedNameCandidates = symbols.filter(
+    (symbol) => symbol.qualifiedName === reference
+  );
+  if (qualifiedNameCandidates.length > 0) {
+    return toSymbolMatch(reference, qualifiedNameCandidates);
+  }
+
+  const location = parseSourceLocationReference(reference);
+  if (location !== null) {
+    const locationCandidates = symbols.filter((symbol) => containsLocation(symbol, location));
+    const smallestSpan = Math.min(
+      ...locationCandidates.map(
+        (symbol) =>
+          (symbol.range.end.line - symbol.range.start.line) * 1_000_000 +
+          symbol.range.end.column -
+          symbol.range.start.column
+      )
+    );
+    return toSymbolMatch(
+      reference,
+      locationCandidates.filter(
+        (symbol) =>
+          (symbol.range.end.line - symbol.range.start.line) * 1_000_000 +
+            symbol.range.end.column -
+            symbol.range.start.column ===
+          smallestSpan
+      )
+    );
+  }
+
+  return toSymbolMatch(
+    reference,
+    symbols.filter((symbol) => symbol.name === reference)
+  );
+}
+
+/** Finds symbols by case-insensitive name or qualified-name substring. */
+export function findSymbols(
+  graph: SymbolGraph,
+  query: string,
+  options: { readonly kind?: SymbolNode["kind"]; readonly limit?: number } = {}
+): readonly SymbolNode[] {
+  const normalizedQuery = query.trim().toLocaleLowerCase();
+  if (normalizedQuery.length === 0) {
+    return [];
+  }
+
+  const limit = options.limit ?? 50;
+  if (!Number.isSafeInteger(limit) || limit < 1) {
+    throw new RangeError("limit must be a positive integer.");
+  }
+
+  return sortSymbols(
+    graph.symbols.filter(
+      (symbol) =>
+        (options.kind === undefined || symbol.kind === options.kind) &&
+        (symbol.name.toLocaleLowerCase().includes(normalizedQuery) ||
+          symbol.qualifiedName.toLocaleLowerCase().includes(normalizedQuery))
+    )
+  ).slice(0, limit);
+}
+
+/** An edge is usable only when it resolved to a concrete target symbol. */
+export function isResolvedGraphEdge(
+  edge: GraphEdge
+): edge is GraphEdge & { readonly targetId: string } {
+  return edge.resolution !== "unresolved" && edge.targetId !== null;
+}
+
+function compareRelations(left: GraphRelation, right: GraphRelation): number {
+  return compareSymbolNodes(left.symbol, right.symbol) || compareGraphEdges(left.edge, right.edge);
+}
+
+/** Returns all resolved call sites whose target is the supplied symbol. */
+export function getCallers(graph: SymbolGraph, symbolId: string): readonly GraphRelation[] {
+  const symbolsById = createSymbolIndex(graph.symbols);
+  if (!symbolsById.has(symbolId)) {
+    return [];
+  }
+
+  const callers: GraphRelation[] = [];
+  for (const edge of graph.edges) {
+    if (
+      edge.kind !== "calls" ||
+      !isResolvedGraphEdge(edge) ||
+      edge.targetId !== symbolId
+    ) {
+      continue;
+    }
+
+    const caller = symbolsById.get(edge.sourceId);
+    if (caller !== undefined) {
+      callers.push({ symbol: caller, edge });
+    }
+  }
+
+  return callers.sort(compareRelations);
+}
+
+/** Returns all resolved call targets referenced by the supplied symbol. */
+export function getCallees(graph: SymbolGraph, symbolId: string): readonly GraphRelation[] {
+  const symbolsById = createSymbolIndex(graph.symbols);
+  if (!symbolsById.has(symbolId)) {
+    return [];
+  }
+
+  const callees: GraphRelation[] = [];
+  for (const edge of graph.edges) {
+    if (
+      edge.kind !== "calls" ||
+      !isResolvedGraphEdge(edge) ||
+      edge.sourceId !== symbolId
+    ) {
+      continue;
+    }
+
+    const callee = symbolsById.get(edge.targetId);
+    if (callee !== undefined) {
+      callees.push({ symbol: callee, edge });
+    }
+  }
+
+  return callees.sort(compareRelations);
+}
+
+function createRootPath(root: SymbolNode): ImpactPath {
+  return {
+    symbols: [root],
+    edges: [],
+    steps: []
+  };
+}
+
+function extendImpactPath(
+  path: ImpactPath,
+  from: SymbolNode,
+  to: SymbolNode,
+  edge: GraphEdge
+): ImpactPath {
+  return {
+    symbols: [...path.symbols, to],
+    edges: [...path.edges, edge],
+    steps: [...path.steps, { from, to, edge }]
+  };
+}
+
+function terminalSymbol(path: ImpactPath): SymbolNode {
+  const symbol = path.symbols[path.symbols.length - 1];
+  if (symbol === undefined) {
+    throw new Error("Impact paths must contain at least one symbol.");
+  }
+
+  return symbol;
+}
+
+function compareImpactPaths(left: ImpactPath, right: ImpactPath): number {
+  const endpointComparison = compareSymbolNodes(terminalSymbol(left), terminalSymbol(right));
+  if (endpointComparison !== 0) {
+    return endpointComparison;
+  }
+
+  const commonLength = Math.min(left.symbols.length, right.symbols.length);
+  for (let index = 0; index < commonLength; index += 1) {
+    const leftSymbol = left.symbols[index];
+    const rightSymbol = right.symbols[index];
+    if (leftSymbol === undefined || rightSymbol === undefined) {
+      continue;
+    }
+
+    const comparison = compareSymbolNodes(leftSymbol, rightSymbol);
+    if (comparison !== 0) {
+      return comparison;
+    }
+  }
+
+  return (
+    compareNumber(left.symbols.length, right.symbols.length) ||
+    compareText(left.edges.map((edge) => edge.id).join("\u0000"), right.edges.map((edge) => edge.id).join("\u0000"))
+  );
+}
+
+function incomingResolvedRelations(
+  graph: SymbolGraph,
+  symbolsById: ReadonlyMap<string, SymbolNode>,
+  targetId: string,
+  edgeKinds: readonly EdgeKind[]
+): GraphRelation[] {
+  const relations: GraphRelation[] = [];
+
+  for (const edge of graph.edges) {
+    if (
+      !isResolvedGraphEdge(edge) ||
+      edge.targetId !== targetId ||
+      !edgeKinds.includes(edge.kind)
+    ) {
+      continue;
+    }
+
+    const source = symbolsById.get(edge.sourceId);
+    if (source !== undefined) {
+      relations.push({ symbol: source, edge });
+    }
+  }
+
+  return relations.sort(compareRelations);
+}
+
+function assertPositiveDepth(maxDepth: number): void {
+  if (!Number.isSafeInteger(maxDepth) || maxDepth < 1) {
+    throw new RangeError("maxDepth must be a positive integer.");
+  }
+}
+
+/**
+ * Traverses resolved incoming edges to find symbols affected by a change.
+ *
+ * The result excludes the root, keeps one deterministic shortest evidence path
+ * per impacted symbol, never repeats a symbol, and follows every edge kind by
+ * default. Pass a subset of `EDGE_KINDS` to scope the dependency relation.
+ */
+export function getImpactPaths(
+  graph: SymbolGraph,
+  symbolId: string,
+  maxDepth = 1,
+  edgeKinds: readonly EdgeKind[] = DEFAULT_IMPACT_EDGE_KINDS
+): readonly ImpactPath[] {
+  assertPositiveDepth(maxDepth);
+
+  const symbolsById = createSymbolIndex(graph.symbols);
+  const root = symbolsById.get(symbolId);
+  if (root === undefined) {
+    return [];
+  }
+
+  const seenSymbolIds = new Set<string>([root.id]);
+  const impactedPaths: ImpactPath[] = [];
+  let frontier: TraversalState[] = [{ terminal: root, path: createRootPath(root) }];
+
+  for (let depth = 1; depth <= maxDepth && frontier.length > 0; depth += 1) {
+    const nextFrontier: TraversalState[] = [];
+
+    for (const state of frontier.sort((left, right) => compareImpactPaths(left.path, right.path))) {
+      const relations = incomingResolvedRelations(
+        graph,
+        symbolsById,
+        state.terminal.id,
+        edgeKinds
+      );
+
+      for (const relation of relations) {
+        if (seenSymbolIds.has(relation.symbol.id)) {
+          continue;
+        }
+
+        seenSymbolIds.add(relation.symbol.id);
+        const path = extendImpactPath(
+          state.path,
+          state.terminal,
+          relation.symbol,
+          relation.edge
+        );
+        nextFrontier.push({ terminal: relation.symbol, path });
+        impactedPaths.push(path);
+      }
+    }
+
+    frontier = nextFrontier;
+  }
+
+  return impactedPaths.sort(compareImpactPaths);
+}

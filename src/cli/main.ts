@@ -1,0 +1,206 @@
+#!/usr/bin/env node
+
+import { Command } from "commander";
+import { fileURLToPath } from "node:url";
+import { resolve } from "node:path";
+
+import {
+  SymbolLatticeError,
+  SymbolLatticeService,
+  type FindOptions
+} from "../application/index.js";
+import { FileSystemSourceCatalog } from "../infrastructure/filesystem/index.js";
+import { SqliteGraphStore } from "../infrastructure/sqlite/index.js";
+import { serveMcp } from "../mcp/index.js";
+
+interface OutputOptions {
+  readonly json?: boolean;
+}
+
+interface ProjectOptions extends OutputOptions {
+  readonly project?: string;
+  readonly force?: boolean;
+}
+
+interface FindCommandOptions extends ProjectOptions {
+  readonly kind?: FindOptions["kind"];
+  readonly limit?: number;
+}
+
+interface DepthCommandOptions extends ProjectOptions {
+  readonly depth?: number;
+}
+
+function createService(): SymbolLatticeService {
+  return new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+}
+
+function defaultProjectPath(options: ProjectOptions): string {
+  return resolve(options.project ?? process.cwd());
+}
+
+function parsePositiveInteger(value: string): number {
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 1) {
+    throw new Error(`Expected a positive integer, received \"${value}\".`);
+  }
+  return parsed;
+}
+
+function render(value: unknown, _options: OutputOptions): void {
+  // JSON is deliberately the single stable public contract in v1. The flag is
+  // retained so callers can depend on it before a future human renderer lands.
+  process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
+}
+
+function renderError(error: unknown, json: boolean): void {
+  const code = error instanceof SymbolLatticeError ? error.code : "UNEXPECTED_ERROR";
+  const message = error instanceof Error ? error.message : "Unknown SymbolLattice error.";
+  if (json) {
+    process.stderr.write(`${JSON.stringify({ error: { code, message } }, null, 2)}\n`);
+  } else {
+    process.stderr.write(`symbol-lattice: ${code}: ${message}\n`);
+  }
+}
+
+function assertSupportedNodeVersion(): void {
+  const [majorText, minorText] = process.versions.node.split(".");
+  const major = Number(majorText);
+  const minor = Number(minorText);
+  if (
+    !Number.isSafeInteger(major) ||
+    !Number.isSafeInteger(minor) ||
+    major < 22 ||
+    (major === 22 && minor < 13) ||
+    major >= 25
+  ) {
+    throw new SymbolLatticeError(
+      "UNSUPPORTED_NODE_VERSION",
+      `SymbolLattice requires Node >=22.13 and <25; found ${process.versions.node}.`
+    );
+  }
+}
+
+function addProjectOption(command: Command): Command {
+  return command.option("-p, --project <path>", "Project directory (defaults to the current directory)");
+}
+
+function addJsonOption(command: Command): Command {
+  return command.option("--json", "Emit the stable JSON contract");
+}
+
+export function createProgram(service = createService()): Command {
+  const program = new Command();
+  program
+    .name("symbol-lattice")
+    .description("Evidence-first local code graph exploration for TypeScript and JavaScript.")
+    .version("0.1.0");
+
+  addJsonOption(addProjectOption(program.command("init [path]")))
+    .option("--force", "Allow indexing a filesystem root or the home directory")
+    .action(async (path: string | undefined, options: ProjectOptions) => {
+      const projectPath = resolve(path ?? defaultProjectPath(options));
+      render(await service.init({ projectPath, force: options.force ?? false }), options);
+    });
+
+  addJsonOption(addProjectOption(program.command("index [path]")))
+    .option("--force", "Allow indexing a filesystem root or the home directory")
+    .action(async (path: string | undefined, options: ProjectOptions) => {
+      const projectPath = resolve(path ?? defaultProjectPath(options));
+      render(await service.index({ projectPath, force: options.force ?? false }), options);
+    });
+
+  addJsonOption(addProjectOption(program.command("sync [path]")))
+    .option("--force", "Allow indexing a filesystem root or the home directory")
+    .action(async (path: string | undefined, options: ProjectOptions) => {
+      const projectPath = resolve(path ?? defaultProjectPath(options));
+      render(await service.sync({ projectPath, force: options.force ?? false }), options);
+    });
+
+  addJsonOption(addProjectOption(program.command("status [path]"))).action(
+    async (path: string | undefined, options: ProjectOptions) => {
+      const projectPath = resolve(path ?? defaultProjectPath(options));
+      render(await service.getStatus(projectPath), options);
+    }
+  );
+
+  addJsonOption(addProjectOption(program.command("find <query>")))
+    .option("--kind <kind>", "Restrict results to a symbol kind")
+    .option("--limit <count>", "Maximum number of results", parsePositiveInteger)
+    .action(async (query: string, options: FindCommandOptions) => {
+      const findOptions: { kind?: Exclude<FindOptions["kind"], undefined>; limit?: number } = {};
+      if (options.kind !== undefined) {
+        findOptions.kind = options.kind;
+      }
+      if (options.limit !== undefined) {
+        findOptions.limit = options.limit;
+      }
+      render(await service.find(defaultProjectPath(options), query, findOptions), options);
+    });
+
+  addJsonOption(addProjectOption(program.command("query <query>")))
+    .option("--kind <kind>", "Restrict results to a symbol kind")
+    .option("--limit <count>", "Maximum number of results", parsePositiveInteger)
+    .action(async (query: string, options: FindCommandOptions) => {
+      const findOptions: { kind?: Exclude<FindOptions["kind"], undefined>; limit?: number } = {};
+      if (options.kind !== undefined) {
+        findOptions.kind = options.kind;
+      }
+      if (options.limit !== undefined) {
+        findOptions.limit = options.limit;
+      }
+      render(await service.find(defaultProjectPath(options), query, findOptions), options);
+    });
+
+  for (const commandName of ["callers", "callees"] as const) {
+    addJsonOption(addProjectOption(program.command(`${commandName} <symbol>`))).action(
+      async (reference: string, options: ProjectOptions) => {
+        const projectPath = defaultProjectPath(options);
+        const result =
+          commandName === "callers"
+            ? await service.callers(projectPath, reference)
+            : await service.callees(projectPath, reference);
+        render(result, options);
+      }
+    );
+  }
+
+  addJsonOption(addProjectOption(program.command("impact <symbol>")))
+    .option("--depth <count>", "Maximum reverse dependency depth", parsePositiveInteger)
+    .action(async (reference: string, options: DepthCommandOptions) => {
+      render(
+        await service.impact(defaultProjectPath(options), reference, options.depth ?? 1),
+        options
+      );
+    });
+
+  addJsonOption(addProjectOption(program.command("explore <query>"))).action(
+    async (query: string, options: ProjectOptions) => {
+      render(await service.explore(defaultProjectPath(options), query), options);
+    }
+  );
+
+  addProjectOption(program.command("serve"))
+    .requiredOption("--mcp", "Run the MCP stdio server")
+    .action(async (options: ProjectOptions) => {
+      await serveMcp(service, defaultProjectPath(options));
+    });
+
+  return program;
+}
+
+export async function run(argv = process.argv): Promise<void> {
+  try {
+    assertSupportedNodeVersion();
+    const program = createProgram();
+    await program.parseAsync(argv);
+  } catch (error) {
+    renderError(error, argv.includes("--json"));
+    process.exitCode = 1;
+  }
+}
+
+const invokedPath = process.argv[1];
+if (invokedPath !== undefined && resolve(fileURLToPath(import.meta.url)) === resolve(invokedPath)) {
+  void run();
+}

@@ -1,0 +1,44 @@
+{
+  "name": "@hsinpu/symbol-lattice",
+  "version": "0.1.0",
+  "description": "Evidence-first local code graph exploration for TypeScript and JavaScript projects.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/HsinPu/symbol-lattice.git"
+  },
+  "bugs": {
+    "url": "https://github.com/HsinPu/symbol-lattice/issues"
+  },
+  "homepage": "https://github.com/HsinPu/symbol-lattice#readme",
+  "type": "module",
+  "private": true,
+  "bin": {
+    "symbol-lattice": "./dist/cli/main.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22.13 <25"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.test.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "start": "node dist/cli/main.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "commander": "^15.0.0",
+    "typescript": "^5.9.3",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.2",
+    "vitest": "^4.1.10"
+  }
+}
