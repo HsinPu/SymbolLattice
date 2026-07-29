@@ -33,11 +33,17 @@ function exploreResult(): ExploreResult {
       counts: { files: 1, symbols: 1, edges: 0, pendingReferences: 0 }
     },
     match: { status: "not_found", reference: "missing", candidates: [] },
+    sourceAvailability: "not-applicable",
     source: null,
     callers: [],
     callees: [],
     impact: []
   };
+}
+
+function legacyExploreResult(): ExploreResult {
+  const { sourceAvailability: _sourceAvailability, ...result } = exploreResult();
+  return result;
 }
 
 function searchResult(): SearchResult {
@@ -195,7 +201,8 @@ describe("SymbolLattice MCP server", () => {
     expect(result.content[0]).toMatchObject({ type: "text" });
     expect(result.structuredContent).toMatchObject({
       status: { stale: false },
-      match: { status: "not_found" }
+      match: { status: "not_found" },
+      sourceAvailability: "not-applicable"
     });
     expect(exploreCalls).toEqual([{ projectPath: "C:/chosen-project", reference: "missing" }]);
 
@@ -279,6 +286,34 @@ describe("SymbolLattice MCP server", () => {
 
     const tools = await client.listTools();
     expect(tools.tools.map((tool) => tool.name)).toEqual(["symbol_lattice_explore"]);
+  });
+
+  it("accepts a legacy explore response that omits source availability", async () => {
+    const server = createMcpServer(
+      {
+        async explore(): Promise<ExploreResult> {
+          return legacyExploreResult();
+        }
+      },
+      "C:/default-project"
+    );
+    const client = new Client({ name: "symbol-lattice-legacy-provenance-test", version: "1.0.0" });
+    const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+    closeCallbacks.push(() => client.close(), () => server.close());
+
+    const result = await client.callTool({
+      name: "symbol_lattice_explore",
+      arguments: { query: "missing" }
+    });
+
+    expect(result.isError).not.toBe(true);
+    expect(result.structuredContent).toMatchObject({
+      status: { stale: false },
+      match: { status: "not_found" }
+    });
+    expect(result.structuredContent).not.toHaveProperty("sourceAvailability");
   });
 
   it("returns actionable explore errors", async () => {

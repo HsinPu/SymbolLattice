@@ -518,6 +518,10 @@ describe("SqliteGraphStore", () => {
       sourceSearchVersion: null,
       hits: []
     });
+    expect(store.getActiveSourceDocumentsBundle(projectPath, ["src/example.ts"])).toMatchObject({
+      sourceSearchVersion: null,
+      documents: []
+    });
   });
 
   it("persists active-generation artifact facts and edge evidence, then clears stale facts", async () => {
@@ -589,6 +593,18 @@ describe("SqliteGraphStore", () => {
         }
       ]
     });
+    expect(store.getActiveSourceDocumentsBundle(projectPath, ["src/example.ts"])).toMatchObject({
+      status: { indexedAt: "2026-07-29T01:00:00.000Z" },
+      snapshot: firstBundle.snapshot,
+      sourceSearchVersion: SOURCE_SEARCH_INDEX_VERSION,
+      documents: [
+        {
+          filePath: "src/example.ts",
+          language: "typescript",
+          sourceText: "export const searchableValue = 'needle';"
+        }
+      ]
+    });
     const firstGenerationId = store.getStatus(projectPath).generationId;
 
     const secondSnapshot = snapshot([symbol("only", "only")]);
@@ -627,6 +643,16 @@ describe("SqliteGraphStore", () => {
     expect(store.getActiveSourceSearchBundle(projectPath, sourceSearchRequest("needle")).hits).toHaveLength(
       1
     );
+    expect(store.getActiveSourceDocumentsBundle(projectPath, ["src/example.ts"])).toMatchObject({
+      status: { generationId: firstGenerationId },
+      snapshot: firstBundle.snapshot,
+      documents: [
+        {
+          filePath: "src/example.ts",
+          sourceText: "export const searchableValue = 'needle';"
+        }
+      ]
+    });
 
     store.replaceProjectFacts({
       projectPath,
@@ -657,6 +683,18 @@ describe("SqliteGraphStore", () => {
     expect(store.getActiveSourceSearchBundle(projectPath, sourceSearchRequest("needle")).hits).toEqual([]);
     expect(store.getActiveSourceSearchBundle(projectPath, sourceSearchRequest("replacement"))).toMatchObject({
       hits: [
+        {
+          filePath: "src/example.ts",
+          sourceText: "export const replacement = 'other';"
+        }
+      ]
+    });
+    expect(store.getActiveSourceDocumentsBundle(projectPath, ["src/example.ts"])).toMatchObject({
+      status: { indexedAt: "2026-07-29T02:00:00.000Z" },
+      snapshot: {
+        symbols: [{ id: "only" }]
+      },
+      documents: [
         {
           filePath: "src/example.ts",
           sourceText: "export const replacement = 'other';"
@@ -737,6 +775,64 @@ describe("SqliteGraphStore", () => {
     ).toEqual(["src/a.ts"]);
   });
 
+  it("returns selected active-generation documents in deterministic request order", async () => {
+    const projectPath = await temporaryProject();
+    const store = new SqliteGraphStore();
+    const documents: readonly IndexedSourceDocument[] = [
+      { filePath: "src/a.ts", language: "typescript", sourceText: "export const a = 1;" },
+      { filePath: "src/z.ts", language: "typescript", sourceText: "export const z = 1;" },
+      { filePath: "src/worker.js", language: "javascript", sourceText: "export const worker = 1;" },
+      { filePath: "tests/example.ts", language: "typescript", sourceText: "export const test = 1;" }
+    ];
+    const graphSnapshot: GraphSnapshot = {
+      files: documents.map((document, index) => ({
+        path: document.filePath,
+        contentHash: `hash-${index}`,
+        language: document.language,
+        indexedAt: "2026-07-29T03:00:00.000Z"
+      })),
+      symbols: [],
+      edges: [],
+      pendingReferences: []
+    };
+
+    store.replaceProjectFacts({
+      projectPath,
+      snapshot: graphSnapshot,
+      indexedAt: "2026-07-29T03:00:00.000Z",
+      artifactFacts: persistedFacts(graphSnapshot),
+      indexInputs: indexInputs("source-documents-ordering"),
+      resolverVersion: "test-resolver-v041",
+      sourceDocuments: documents,
+      sourceSearchVersion: SOURCE_SEARCH_INDEX_VERSION,
+      indexWork: indexWork("full", "source-documents-ordering")
+    });
+
+    const bundle = store.getActiveSourceDocumentsBundle(projectPath, [
+      "tests/example.ts",
+      "missing.ts",
+      "src/a.ts",
+      "tests/example.ts",
+      "src/worker.js"
+    ]);
+
+    expect(bundle).toMatchObject({
+      status: {
+        indexedAt: "2026-07-29T03:00:00.000Z",
+        generationId: expect.any(String)
+      },
+      sourceSearchVersion: SOURCE_SEARCH_INDEX_VERSION
+    });
+    expect(bundle.snapshot.files.map((file) => file.path)).toEqual([
+      "src/a.ts",
+      "src/worker.js",
+      "src/z.ts",
+      "tests/example.ts"
+    ]);
+    expect(bundle.documents).toEqual([documents[3], documents[0], documents[2]]);
+    expect(store.getActiveSourceDocumentsBundle(projectPath, []).documents).toEqual([]);
+  });
+
   it("keeps source retrieval unavailable for a v0.3-shaped replacement", async () => {
     const projectPath = await temporaryProject();
     const store = new SqliteGraphStore();
@@ -754,6 +850,10 @@ describe("SqliteGraphStore", () => {
 
     expect(store.getActiveGraphBundle(projectPath).sourceSearchVersion).toBeNull();
     expect(store.getActiveSourceSearchBundle(projectPath, sourceSearchRequest("needle")).hits).toEqual([]);
+    expect(store.getActiveSourceDocumentsBundle(projectPath, ["src/example.ts"])).toMatchObject({
+      sourceSearchVersion: null,
+      documents: []
+    });
     expect(readTableCount(projectPath, "generation_source_search")).toBe(0);
     expect(readTableCount(projectPath, "source_documents")).toBe(0);
     expect(readTableCount(projectPath, "source_search")).toBe(0);
@@ -820,6 +920,10 @@ describe("SqliteGraphStore", () => {
     expect(readTableCount(projectPath, "source_search")).toBe(1);
     expect(store.getActiveGraphBundle(projectPath).sourceSearchVersion).toBeNull();
     expect(store.getActiveSourceSearchBundle(projectPath, sourceSearchRequest("oldNeedle")).hits).toEqual([]);
+    expect(store.getActiveSourceDocumentsBundle(projectPath, ["src/example.ts"])).toMatchObject({
+      sourceSearchVersion: null,
+      documents: []
+    });
 
     // Returning to v0.4 must not backfill the old generation. It prunes the
     // virtual-table orphan, then a new v0.4 generation restores FTS normally.
@@ -846,6 +950,15 @@ describe("SqliteGraphStore", () => {
         .getActiveSourceSearchBundle(projectPath, sourceSearchRequest("currentNeedle"))
         .hits.map((hit) => hit.filePath)
     ).toEqual(["src/example.ts"]);
+    expect(store.getActiveSourceDocumentsBundle(projectPath, ["src/example.ts"])).toMatchObject({
+      sourceSearchVersion: SOURCE_SEARCH_INDEX_VERSION,
+      documents: [
+        {
+          filePath: "src/example.ts",
+          sourceText: "export const currentNeedle = true;"
+        }
+      ]
+    });
   });
 
   it("keeps a v1 snapshot readable through additive migration until the next source-search sync", async () => {
@@ -896,6 +1009,10 @@ describe("SqliteGraphStore", () => {
     expect(store.getActiveSourceSearchBundle(projectPath, sourceSearchRequest("needle"))).toMatchObject({
       sourceSearchVersion: null,
       hits: []
+    });
+    expect(store.getActiveSourceDocumentsBundle(projectPath, ["src/example.ts"])).toMatchObject({
+      sourceSearchVersion: null,
+      documents: []
     });
   });
 

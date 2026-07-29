@@ -7,12 +7,20 @@ import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { SymbolLatticeService } from "../../../src/application/index.js";
-import { ARTIFACT_FACTS_EXTRACTOR_VERSION } from "../../../src/domain/index.js";
+import {
+  ARTIFACT_FACTS_EXTRACTOR_VERSION,
+  SOURCE_SEARCH_INDEX_VERSION,
+  type GraphSnapshot,
+  type IndexedSourceDocument,
+  type IndexStatus
+} from "../../../src/domain/index.js";
 import { extractFileFacts } from "../../../src/extraction/index.js";
 import { FileSystemSourceCatalog } from "../../../src/infrastructure/filesystem/index.js";
 import { SqliteGraphStore } from "../../../src/infrastructure/sqlite/index.js";
 import type {
+  ActiveGraphBundle,
   ActiveGenerationBundle,
+  ActiveSourceDocumentsBundle,
   GraphStore,
   ReplaceProjectFactsInput
 } from "../../../src/ports/index.js";
@@ -66,7 +74,11 @@ function createService(): SymbolLatticeService {
  */
 type V03GraphStore = Omit<
   GraphStore,
-  "getActiveGraphBundle" | "getActiveSourceSearchBundle" | "getActiveGenerationBundle" | "replaceProjectFacts"
+  | "getActiveGraphBundle"
+  | "getActiveSourceSearchBundle"
+  | "getActiveSourceDocumentsBundle"
+  | "getActiveGenerationBundle"
+  | "replaceProjectFacts"
 > & {
   readonly getActiveGenerationBundle: (
     projectPath: string
@@ -92,6 +104,122 @@ function createV03GraphStore(backingStore: SqliteGraphStore): V03GraphStore {
     replaceProjectFacts: (input) => backingStore.replaceProjectFacts(input)
   };
   return adapter;
+}
+
+/** Simulates a partial persisted source projection without changing graph facts. */
+function createMissingSourceDocumentGraphStore(backingStore: SqliteGraphStore): GraphStore {
+  return {
+    isInitialized: (projectPath) => backingStore.isInitialized(projectPath),
+    initialize: (projectPath) => backingStore.initialize(projectPath),
+    getStatus: (projectPath) => backingStore.getStatus(projectPath),
+    getSnapshot: (projectPath) => backingStore.getSnapshot(projectPath),
+    getArtifactFacts: (projectPath) => backingStore.getArtifactFacts(projectPath),
+    getIndexInputs: (projectPath) => backingStore.getIndexInputs(projectPath),
+    getActiveGraphBundle: (projectPath) => backingStore.getActiveGraphBundle(projectPath),
+    getActiveGenerationBundle: (projectPath) => backingStore.getActiveGenerationBundle(projectPath),
+    getActiveSourceSearchBundle: (projectPath, request) =>
+      backingStore.getActiveSourceSearchBundle(projectPath, request),
+    getActiveSourceDocumentsBundle: (projectPath, filePaths) => ({
+      ...backingStore.getActiveSourceDocumentsBundle(projectPath, filePaths),
+      documents: []
+    }),
+    replaceProjectFacts: (input) => backingStore.replaceProjectFacts(input)
+  };
+}
+
+function raceSnapshot(filePath: string): GraphSnapshot {
+  return {
+    files: [
+      {
+        path: filePath,
+        contentHash: `hash:${filePath}`,
+        language: "typescript",
+        indexedAt: "2026-07-29T00:00:00.000Z"
+      }
+    ],
+    symbols: [
+      {
+        id: "symbol:race-target",
+        name: "raceTarget",
+        qualifiedName: `${filePath}#raceTarget`,
+        kind: "function",
+        filePath,
+        range: {
+          start: { line: 1, column: 1 },
+          end: { line: 3, column: 2 }
+        },
+        isExported: true,
+        declarationOrdinal: 0
+      }
+    ],
+    edges: [],
+    pendingReferences: []
+  };
+}
+
+function raceStatus(generationId: string): IndexStatus {
+  return {
+    initialized: true,
+    stale: false,
+    staleReasons: [],
+    projectPath: "C:/symbol-lattice-race-project",
+    indexedAt: "2026-07-29T00:00:00.000Z",
+    generationId,
+    counts: { files: 1, symbols: 1, edges: 0, pendingReferences: 0 }
+  };
+}
+
+function raceSourceDocument(filePath: string, sourceText: string): IndexedSourceDocument {
+  return { filePath, language: "typescript", sourceText };
+}
+
+function raceSourceDocumentsBundle(
+  generationId: string,
+  filePath: string,
+  sourceText: string,
+  documents: readonly IndexedSourceDocument[] = [raceSourceDocument(filePath, sourceText)]
+): ActiveSourceDocumentsBundle {
+  return {
+    status: raceStatus(generationId),
+    snapshot: raceSnapshot(filePath),
+    indexInputs: null,
+    extractorVersion: null,
+    resolverVersion: null,
+    sourceSearchVersion: SOURCE_SEARCH_INDEX_VERSION,
+    documents
+  };
+}
+
+function createSequencedSourceDocumentGraphStore(
+  initialBundle: ActiveGraphBundle,
+  sourceBundles: readonly ActiveSourceDocumentsBundle[]
+): {
+  readonly graphStore: GraphStore;
+  readonly sourceDocumentRequests: readonly (readonly string[])[];
+} {
+  const sourceDocumentRequests: (readonly string[])[] = [];
+  let sourceBundleIndex = 0;
+  const graphStore: GraphStore = {
+    isInitialized: () => true,
+    initialize: () => {},
+    getStatus: () => initialBundle.status,
+    getSnapshot: () => initialBundle.snapshot,
+    getArtifactFacts: () => [],
+    getIndexInputs: () => initialBundle.indexInputs,
+    getActiveGraphBundle: () => initialBundle,
+    getActiveGenerationBundle: () => ({ ...initialBundle, artifactFacts: [] }),
+    getActiveSourceDocumentsBundle: (_projectPath, filePaths) => {
+      sourceDocumentRequests.push([...filePaths]);
+      const bundle = sourceBundles[sourceBundleIndex];
+      sourceBundleIndex += 1;
+      if (bundle === undefined) {
+        throw new Error("Unexpected source-document bundle read.");
+      }
+      return bundle;
+    },
+    replaceProjectFacts: () => {}
+  };
+  return { graphStore, sourceDocumentRequests };
 }
 
 /** Simulates a migrated v0.3 graph whose source-search projection was not yet present. */
@@ -162,9 +290,6 @@ describe("SymbolLatticeService", () => {
     await expect(service.find(projectPath, "add")).resolves.toMatchObject({
       symbols: [expect.objectContaining({ name: "add" })]
     });
-    await expect(service.explore(projectPath, "src/math.ts#add")).resolves.toMatchObject({
-      match: { status: "exact" }
-    });
     await expect(service.search(projectPath, "add")).rejects.toMatchObject({
       code: "SOURCE_SEARCH_UNAVAILABLE"
     });
@@ -172,6 +297,13 @@ describe("SymbolLatticeService", () => {
       generationId: initialStatus.generationId,
       stale: false,
       staleReasons: []
+    });
+    await rm(join(projectPath, "src", "math.ts"));
+    await expect(service.explore(projectPath, "src/math.ts#add")).resolves.toMatchObject({
+      status: { stale: true, staleReasons: ["source-files-changed"] },
+      match: { status: "exact" },
+      source: null,
+      sourceAvailability: "unavailable"
     });
   });
 
@@ -234,6 +366,92 @@ describe("SymbolLatticeService", () => {
     await writeFile(join(projectPath, "src", "math.ts"), "export const changed = true;", "utf8");
     expect((await service.getStatus(projectPath)).stale).toBe(true);
     expect((await service.sync({ projectPath })).stale).toBe(false);
+  });
+
+  it("reports unavailable when the active generation has no matching source document", async () => {
+    const projectPath = await createInlineProject({
+      "src/missing-document.ts": 'export const persistedSymbol = "live source";\n'
+    });
+    const service = new SymbolLatticeService(
+      createMissingSourceDocumentGraphStore(new SqliteGraphStore()),
+      new FileSystemSourceCatalog()
+    );
+    await service.init({ projectPath });
+
+    await expect(
+      service.explore(projectPath, "src/missing-document.ts#persistedSymbol")
+    ).resolves.toMatchObject({
+      status: { stale: false },
+      match: { status: "exact" },
+      source: null,
+      sourceAvailability: "unavailable"
+    });
+  });
+
+  it("returns a newer authoritative same-path source bundle without a redundant retry", async () => {
+    const initialBundle = raceSourceDocumentsBundle(
+      "generation:A",
+      "src/stable.ts",
+      'export function raceTarget() { return "A evidence"; }\n',
+      []
+    );
+    const authoritativeBundle = raceSourceDocumentsBundle(
+      "generation:B",
+      "src/stable.ts",
+      'export function raceTarget() { return "B evidence"; }\n'
+    );
+    const { graphStore, sourceDocumentRequests } = createSequencedSourceDocumentGraphStore(
+      initialBundle,
+      [authoritativeBundle]
+    );
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    const exploration = await service.explore("C:/symbol-lattice-race-project", "raceTarget");
+
+    expect(exploration).toMatchObject({
+      status: { generationId: "generation:B" },
+      match: { status: "exact", symbol: { filePath: "src/stable.ts" } },
+      sourceAvailability: "active-generation",
+      source: { filePath: "src/stable.ts" }
+    });
+    expect(exploration.source?.lines.map((line) => line.text).join("\n")).toContain("B evidence");
+    expect(sourceDocumentRequests).toEqual([["src/stable.ts"]]);
+  });
+
+  it("retries once with a moved exact symbol's authoritative path", async () => {
+    const initialBundle = raceSourceDocumentsBundle(
+      "generation:A",
+      "src/before.ts",
+      'export function raceTarget() { return "A evidence"; }\n',
+      []
+    );
+    const movedBundleWithoutRequestedDocument = raceSourceDocumentsBundle(
+      "generation:B",
+      "src/after.ts",
+      'export function raceTarget() { return "B evidence"; }\n',
+      []
+    );
+    const movedBundleWithRequestedDocument = raceSourceDocumentsBundle(
+      "generation:C",
+      "src/after.ts",
+      'export function raceTarget() { return "C evidence"; }\n'
+    );
+    const { graphStore, sourceDocumentRequests } = createSequencedSourceDocumentGraphStore(
+      initialBundle,
+      [movedBundleWithoutRequestedDocument, movedBundleWithRequestedDocument]
+    );
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    const exploration = await service.explore("C:/symbol-lattice-race-project", "raceTarget");
+
+    expect(exploration).toMatchObject({
+      status: { generationId: "generation:C" },
+      match: { status: "exact", symbol: { filePath: "src/after.ts" } },
+      sourceAvailability: "active-generation",
+      source: { filePath: "src/after.ts" }
+    });
+    expect(exploration.source?.lines.map((line) => line.text).join("\n")).toContain("C evidence");
+    expect(sourceDocumentRequests).toEqual([["src/before.ts"], ["src/after.ts"]]);
   });
 
   it("reports a stable edge lookup error for an absent edge", async () => {
@@ -466,6 +684,50 @@ describe("SymbolLatticeService", () => {
     );
   });
 
+  it("keeps exact exploration evidence generation-bound after live source changes or deletion", async () => {
+    const projectPath = await createInlineProject({
+      "src/explore.ts": [
+        "export function indexedExplore() {",
+        '  return "indexed evidence";',
+        "}",
+        ""
+      ].join("\n")
+    });
+    const service = createService();
+    await service.init({ projectPath });
+
+    await writeFile(
+      join(projectPath, "src", "explore.ts"),
+      'export function liveReplacement() { return "live only"; }\n',
+      "utf8"
+    );
+
+    const changed = await service.explore(projectPath, "src/explore.ts#indexedExplore");
+    expect(changed).toMatchObject({
+      status: { stale: true, staleReasons: ["source-files-changed"] },
+      match: { status: "exact" },
+      sourceAvailability: "active-generation",
+      source: { filePath: "src/explore.ts" }
+    });
+    expect(changed.source?.lines.map((line) => line.text).join("\n")).toContain("indexedExplore");
+    expect(changed.source?.lines.map((line) => line.text).join("\n")).not.toContain(
+      "liveReplacement"
+    );
+
+    await rm(join(projectPath, "src", "explore.ts"));
+
+    const deleted = await service.explore(projectPath, "src/explore.ts#indexedExplore");
+    expect(deleted).toMatchObject({
+      status: { stale: true, staleReasons: ["source-files-changed"] },
+      match: { status: "exact" },
+      sourceAvailability: "active-generation",
+      source: { filePath: "src/explore.ts" }
+    });
+    expect(deleted.source?.lines.map((line) => line.text).join("\n")).toContain(
+      "indexed evidence"
+    );
+  });
+
   it("reports persisted ranges in raw UTF-16 source columns after NFKC expansion", async () => {
     const projectPath = await createInlineProject({
       "src/unicode.ts": 'const ligature = "\uFB03"; export const needle = true;\n'
@@ -608,6 +870,10 @@ describe("SymbolLatticeService", () => {
     });
     await expect(service.search(projectPath, "backfillNeedle")).rejects.toMatchObject({
       code: "SOURCE_SEARCH_UNAVAILABLE"
+    });
+    await expect(service.explore(projectPath, "src/search.ts#backfillNeedle")).resolves.toMatchObject({
+      source: null,
+      sourceAvailability: "unavailable"
     });
 
     const synced = await service.sync({ projectPath });

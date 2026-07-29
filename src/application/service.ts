@@ -614,27 +614,104 @@ export class SymbolLatticeService {
   }
 
   public async explore(projectPath: string, reference: string): Promise<ExploreResult> {
-    const context = await this.requireGraph(projectPath);
-    const match = matchSymbol(context.snapshot, reference);
-    if (match.status !== "exact") {
-      return {
-        status: context.status,
-        match,
-        source: null,
-        callers: [],
-        callees: [],
-        impact: []
-      };
+    const normalizedProjectPath = resolve(projectPath);
+    const graphBundle = this.getActiveGraphBundle(normalizedProjectPath);
+    if (!graphBundle.status.initialized) {
+      throw new SymbolLatticeError(
+        "MISSING_INDEX",
+        `No SymbolLattice index exists for ${normalizedProjectPath}. Run "symbol-lattice init ${normalizedProjectPath}" first.`
+      );
     }
 
-    return {
-      status: context.status,
-      match,
-      source: await this.readExcerpt(projectPath, match.symbol.filePath, match.symbol.range.start.line),
-      callers: getCallers(context.snapshot, match.symbol.id),
-      callees: getCallees(context.snapshot, match.symbol.id),
-      impact: getImpactPaths(context.snapshot, match.symbol.id, 2)
-    };
+    let match = matchSymbol(graphBundle.snapshot, reference);
+    if (match.status !== "exact") {
+      return this.exploreResultForBundle(
+        normalizedProjectPath,
+        reference,
+        graphBundle,
+        null,
+        "not-applicable"
+      );
+    }
+
+    const getActiveSourceDocumentsBundle = this.graphStore.getActiveSourceDocumentsBundle;
+    if (typeof getActiveSourceDocumentsBundle !== "function") {
+      return this.exploreResultForBundle(
+        normalizedProjectPath,
+        reference,
+        graphBundle,
+        null,
+        "unavailable"
+      );
+    }
+
+    // The graph read above selects the requested document path. Each bounded
+    // source read is an authoritative graph-and-document snapshot: it is safe
+    // to return immediately when it contains the exact symbol's document,
+    // even if a concurrent sync advanced the active generation after the
+    // initial graph read.
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const sourceBundle = getActiveSourceDocumentsBundle.call(this.graphStore, normalizedProjectPath, [
+        match.symbol.filePath
+      ]);
+      const sourceMatch = matchSymbol(sourceBundle.snapshot, reference);
+      if (sourceMatch.status !== "exact") {
+        return this.exploreResultForBundle(
+          normalizedProjectPath,
+          reference,
+          sourceBundle,
+          null,
+          "not-applicable"
+        );
+      }
+
+      const sourceDocument =
+        sourceBundle.sourceSearchVersion === null || sourceBundle.sourceSearchVersion === undefined
+          ? undefined
+          : sourceBundle.documents.find((document) => document.filePath === sourceMatch.symbol.filePath);
+      if (sourceDocument !== undefined) {
+        return this.exploreResultForBundle(
+          normalizedProjectPath,
+          reference,
+          sourceBundle,
+          excerptFromSourceText(
+            sourceDocument.filePath,
+            sourceDocument.sourceText,
+            sourceMatch.symbol.range.start.line
+          ),
+          "active-generation"
+        );
+      }
+
+      // A sync may have moved the exact symbol after the initial graph read.
+      // The first bundle proves the current path, but only includes the
+      // originally requested document, so retry once with that current path.
+      if (
+        attempt === 0 &&
+        sourceBundle.sourceSearchVersion !== null &&
+        sourceBundle.sourceSearchVersion !== undefined &&
+        sourceMatch.symbol.filePath !== match.symbol.filePath
+      ) {
+        match = sourceMatch;
+        continue;
+      }
+
+      return this.exploreResultForBundle(
+        normalizedProjectPath,
+        reference,
+        sourceBundle,
+        null,
+        "unavailable"
+      );
+    }
+
+    return this.exploreResultForBundle(
+      normalizedProjectPath,
+      reference,
+      graphBundle,
+      null,
+      "unavailable"
+    );
   }
 
   public async explainEdge(projectPath: string, edgeId: string): Promise<ExplainEdgeResult> {
@@ -928,6 +1005,38 @@ export class SymbolLatticeService {
     };
   }
 
+  private async exploreResultForBundle(
+    normalizedProjectPath: string,
+    reference: string,
+    bundle: ActiveGraphBundle,
+    source: SourceExcerpt | null,
+    sourceAvailability: NonNullable<ExploreResult["sourceAvailability"]>
+  ): Promise<ExploreResult> {
+    const match = matchSymbol(bundle.snapshot, reference);
+    const status = await this.getStatusForBundle(normalizedProjectPath, bundle);
+    if (match.status !== "exact") {
+      return {
+        status,
+        match,
+        sourceAvailability: "not-applicable",
+        source: null,
+        callers: [],
+        callees: [],
+        impact: []
+      };
+    }
+
+    return {
+      status,
+      match,
+      sourceAvailability,
+      source,
+      callers: getCallers(bundle.snapshot, match.symbol.id),
+      callees: getCallees(bundle.snapshot, match.symbol.id),
+      impact: getImpactPaths(bundle.snapshot, match.symbol.id, 2)
+    };
+  }
+
   /**
    * v0.4 adds a smaller graph-only bundle, but GraphStore is public and v0.3
    * adapters only expose the full generation bundle. Preserve that contract
@@ -978,17 +1087,4 @@ export class SymbolLatticeService {
     throw new SymbolLatticeError("SYMBOL_NOT_FOUND", `No symbol matches "${reference}".`);
   }
 
-  private async readExcerpt(
-    projectPath: string,
-    filePath: string,
-    centerLine: number,
-    contextLines = 2
-  ): Promise<SourceExcerpt> {
-    return excerptFromSourceText(
-      filePath,
-      await this.sourceCatalog.read(projectPath, filePath),
-      centerLine,
-      contextLines
-    );
-  }
 }

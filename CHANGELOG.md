@@ -6,6 +6,21 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.4.1] - 2026-07-29
+
+### Fixed
+
+- Exact `explore` responses now take their source excerpt from the same persisted active generation as the graph, relationships, and ranges. Changed or deleted live files can no longer be mixed with older graph evidence.
+
+### Added
+
+- The bundled `SymbolLatticeService` now returns additive `explore.sourceAvailability` to distinguish immutable `active-generation` source evidence from `unavailable` legacy/retrieval states and `not-applicable` non-exact matches; legacy external embeddings may omit it without inventing provenance.
+- An optional, backward-compatible GraphStore source-document bundle read for exact generation-bound source evidence.
+
+### Compatibility
+
+- No SQLite metadata or table migration is required. Older GraphStore adapters and active generations remain graph-queryable; when they cannot provide persisted source text, `explore` returns `source: null` with `sourceAvailability: "unavailable"` instead of reading the live filesystem.
+
 ## [0.4.0] - 2026-07-29
 
 ### Added
@@ -105,7 +120,8 @@ No unreleased changes.
 - Explicit full indexing, caller/callee/impact queries, and read-only MCP exploration.
 - `exact`, `heuristic`, and `unresolved` relationship states.
 
-[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/HsinPu/symbol-lattice/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/HsinPu/symbol-lattice/compare/v0.2.0...v0.2.1

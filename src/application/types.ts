@@ -83,6 +83,11 @@ export interface ImpactResult {
 export interface ExploreResult {
   readonly status: IndexStatus;
   readonly match: SymbolMatch;
+  /**
+   * Additive provenance for v0.4.1-capable services. Omitted by compatible
+   * legacy ExploreService embeddings that cannot make this claim.
+   */
+  readonly sourceAvailability?: "active-generation" | "unavailable" | "not-applicable";
   readonly source: SourceExcerpt | null;
   readonly callers: readonly GraphRelation[];
   readonly callees: readonly GraphRelation[];

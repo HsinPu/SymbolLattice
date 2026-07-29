@@ -104,6 +104,10 @@ const exploreOutputSchema = z
   .object({
     status: indexStatusOutputSchema,
     match: z.object({}).passthrough(),
+    sourceAvailability: z
+      .enum(["active-generation", "unavailable", "not-applicable"])
+      .describe("When present, reports whether source is active-generation evidence, unavailable, or not applicable to the match.")
+      .optional(),
     source: sourceExcerptOutputSchema.nullable(),
     callers: z.array(z.object({}).passthrough()),
     callees: z.array(z.object({}).passthrough()),
@@ -226,7 +230,7 @@ export function createMcpServer(
     {
       title: "Explore a SymbolLattice code graph",
       description:
-        "Returns source evidence, direct callers/callees, impact paths, and index freshness from an existing local SymbolLattice index. This tool never creates or refreshes an index.",
+        "Returns generation-bound source evidence when available, direct callers/callees, impact paths, and index freshness from an existing local SymbolLattice index. When supplied by a v0.4.1-capable service, sourceAvailability reports whether persisted source evidence is unavailable or not applicable. This tool never creates or refreshes an index.",
       inputSchema: {
         query: z.string().trim().min(1).describe("Symbol qualified name, simple name, or relative path:line reference."),
         projectPath: z.string().trim().min(1).optional().describe("Optional path to an already indexed project.")

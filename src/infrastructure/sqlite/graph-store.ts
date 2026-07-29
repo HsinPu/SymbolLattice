@@ -34,6 +34,7 @@ import {
 import type {
   ActiveGraphBundle,
   ActiveGenerationBundle,
+  ActiveSourceDocumentsBundle,
   ActiveSourceSearchBundle,
   GraphStore,
   ReplaceProjectFactsInput
@@ -55,6 +56,7 @@ const SCHEMA_VERSION = INDEX_WORK_SCHEMA_VERSION;
 const PRE_RELEASE_SOURCE_SEARCH_SCHEMA_VERSION = "5";
 const GENERATION_SCHEMA_VERSION = "2";
 const LEGACY_SCHEMA_VERSION = "1";
+const SOURCE_DOCUMENT_PATH_QUERY_BATCH_SIZE = 500;
 
 /**
  * The v0.1 snapshot tables remain deliberately unpartitioned. They are a fast
@@ -336,6 +338,12 @@ interface SourceSearchRow {
   readonly language: ArtifactLanguage;
   readonly source_text: string;
   readonly relevance: number;
+}
+
+interface SourceDocumentRow {
+  readonly file_path: string;
+  readonly language: ArtifactLanguage;
+  readonly source_text: string;
 }
 
 function databasePathFor(projectPath: string): string {
@@ -1077,6 +1085,58 @@ function readActiveSourceSearchHits(
   }));
 }
 
+/**
+ * Reads only exact requested source paths. Query order is intentionally not
+ * exposed: a map followed by the distinct request paths makes results stable
+ * even when SQLite returns chunked `IN` queries in a different order.
+ */
+function readActiveSourceDocuments(
+  database: DatabaseSync,
+  activeGenerationId: string | null,
+  sourceSearchVersion: string | null,
+  filePaths: readonly string[]
+): readonly IndexedSourceDocument[] {
+  if (
+    !supportsSourceSearch(database) ||
+    activeGenerationId === null ||
+    sourceSearchVersion === null ||
+    filePaths.length === 0
+  ) {
+    return [];
+  }
+
+  const requestedPaths = [...new Set(filePaths)];
+  const documentsByPath = new Map<string, IndexedSourceDocument>();
+  for (
+    let start = 0;
+    start < requestedPaths.length;
+    start += SOURCE_DOCUMENT_PATH_QUERY_BATCH_SIZE
+  ) {
+    const paths = requestedPaths.slice(start, start + SOURCE_DOCUMENT_PATH_QUERY_BATCH_SIZE);
+    const placeholders = paths.map(() => "?").join(", ");
+    const rows = database
+      .prepare(
+        `SELECT file_path, language, source_text
+         FROM source_documents
+         WHERE generation_id = ? AND file_path IN (${placeholders})
+         ORDER BY file_path`
+      )
+      .all(activeGenerationId, ...paths) as unknown as SourceDocumentRow[];
+    for (const row of rows) {
+      documentsByPath.set(row.file_path, {
+        filePath: row.file_path,
+        language: row.language,
+        sourceText: row.source_text
+      });
+    }
+  }
+
+  return requestedPaths.flatMap((filePath) => {
+    const document = documentsByPath.get(filePath);
+    return document === undefined ? [] : [document];
+  });
+}
+
 function readActiveGraphBundle(
   database: DatabaseSync,
   projectPath: string
@@ -1231,6 +1291,37 @@ export class SqliteGraphStore implements GraphStore {
             graphBundle.status.generationId,
             graphBundle.sourceSearchVersion ?? null,
             request
+          )
+        };
+      });
+    } finally {
+      database.close();
+    }
+  }
+
+  public getActiveSourceDocumentsBundle(
+    projectPath: string,
+    filePaths: readonly string[]
+  ): ActiveSourceDocumentsBundle {
+    const normalizedProjectPath = resolve(projectPath);
+    if (!this.isInitialized(normalizedProjectPath)) {
+      return {
+        ...this.getActiveGraphBundle(normalizedProjectPath),
+        documents: []
+      };
+    }
+
+    const database = new DatabaseSync(databasePathFor(normalizedProjectPath), { readOnly: true });
+    try {
+      return readConsistently(database, () => {
+        const graphBundle = readActiveGraphBundle(database, normalizedProjectPath);
+        return {
+          ...graphBundle,
+          documents: readActiveSourceDocuments(
+            database,
+            graphBundle.status.generationId,
+            graphBundle.sourceSearchVersion ?? null,
+            filePaths
           )
         };
       });

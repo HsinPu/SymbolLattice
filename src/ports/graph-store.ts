@@ -48,6 +48,17 @@ export interface ActiveSourceSearchBundle extends ActiveGraphBundle {
   readonly hits: readonly IndexedSourceSearchHit[];
 }
 
+/**
+ * A graph snapshot and selected persisted source documents from exactly the
+ * same active generation. For a nonempty path request, documents occur at
+ * most once in first-requested-path order; unknown paths are omitted. An
+ * empty request intentionally selects no documents, keeping this capability
+ * bounded.
+ */
+export interface ActiveSourceDocumentsBundle extends ActiveGraphBundle {
+  readonly documents: readonly IndexedSourceDocument[];
+}
+
 export interface GraphStore {
   isInitialized(projectPath: string): boolean;
   initialize(projectPath: string): void;
@@ -63,5 +74,14 @@ export interface GraphStore {
     projectPath: string,
     request: SourceSearchRequest
   ): ActiveSourceSearchBundle;
+  /**
+   * Optional additive v0.4.1 retrieval capability. Paths are exact,
+   * project-relative source paths; an unavailable projection is represented by
+   * `sourceSearchVersion: null` and `documents: []`.
+   */
+  getActiveSourceDocumentsBundle?(
+    projectPath: string,
+    filePaths: readonly string[]
+  ): ActiveSourceDocumentsBundle;
   replaceProjectFacts(input: ReplaceProjectFactsInput): void;
 }
