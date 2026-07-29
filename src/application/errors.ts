@@ -22,6 +22,7 @@ export class SymbolLatticeError extends Error {
       | "INVALID_SEARCH_LIMIT"
       | "INVALID_SEARCH_PATH_PREFIX"
       | "INVALID_SEARCH_QUERY"
+      | "INVALID_WATCH_INTERVAL"
       | "MISSING_INDEX"
       | "SOURCE_SEARCH_UNAVAILABLE"
       | "SYMBOL_NOT_FOUND"

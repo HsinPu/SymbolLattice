@@ -7,15 +7,22 @@ import {
   type AffectedTestsResult,
   type ContextOptions,
   type ContextResult,
+  type ForegroundWatchOptions,
   type GitAffectedTestsOptions,
   type GitAffectedTestsResult,
   type ImpactOptions,
   type ImpactResult,
   type SearchOptions,
   type SearchResult,
+  type WatchReceipt,
   type SymbolLatticeService
 } from "../../../src/application/index.js";
-import { createProgram, parseAffectedStdin } from "../../../src/cli/main.js";
+import {
+  createProgram,
+  parseAffectedStdin,
+  runForegroundWatch,
+  type WatchSignalSource
+} from "../../../src/cli/main.js";
 
 function resultStatus(): SearchResult["status"] {
   return {
@@ -513,4 +520,121 @@ describe("symbol-lattice v0.6 affected-test CLI", () => {
       ).rejects.toThrow(rangeCase[2]);
     });
   }
+});
+
+describe("symbol-lattice v0.8 foreground watch CLI", () => {
+  it("forwards the bounded interval and force flag while rendering compact NDJSON receipts", async () => {
+    const calls: ForegroundWatchOptions[] = [];
+    const service = {} as SymbolLatticeService;
+    const receipt: WatchReceipt = {
+      event: "started",
+      observedAt: "2026-07-30T00:00:00.000Z",
+      projectPath: resolve("C:/chosen-project"),
+      status: resultStatus(),
+      previousGenerationId: "generation:test",
+      generationId: "generation:test",
+      lastIndexWork: null,
+      error: null,
+      retryDelayMs: null
+    };
+    const watchRunner = async (
+      _receivedService: SymbolLatticeService,
+      options: ForegroundWatchOptions
+    ): Promise<void> => {
+      calls.push(options);
+      options.onReceipt?.(receipt);
+    };
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+    await createProgram(service, watchRunner).parseAsync(
+      [
+        "node",
+        "symbol-lattice",
+        "watch",
+        "--project",
+        "C:/chosen-project",
+        "--force",
+        "--interval",
+        "750",
+        "--json"
+      ],
+      { from: "node" }
+    );
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({
+      projectPath: resolve("C:/chosen-project"),
+      force: true,
+      intervalMs: 750
+    });
+    expect(write).toHaveBeenCalledWith(`${JSON.stringify(receipt)}\n`);
+  });
+
+  it("rejects out-of-range watch intervals before starting a lifecycle", async () => {
+    const program = createProgram({} as SymbolLatticeService, async () => undefined);
+    program.exitOverride();
+
+    await expect(
+      program.parseAsync(["node", "symbol-lattice", "watch", "--interval", "249"], {
+        from: "node"
+      })
+    ).rejects.toThrow("Watch interval must be an integer between 250 and 60000 milliseconds.");
+  });
+
+  it("installs signal handling before the initial freshness check and stops cleanly", async () => {
+    let resolveStatus: ((status: SearchResult["status"]) => void) | undefined;
+    const pendingStatus = new Promise<SearchResult["status"]>((resolve) => {
+      resolveStatus = resolve;
+    });
+    const handlers = new Map<NodeJS.Signals, Set<() => void>>();
+    const signals: WatchSignalSource & { emit(signal: NodeJS.Signals): void; listenerCount(signal: NodeJS.Signals): number } = {
+      once(signal, listener): void {
+        const listeners = handlers.get(signal) ?? new Set<() => void>();
+        listeners.add(listener);
+        handlers.set(signal, listeners);
+      },
+      off(signal, listener): void {
+        handlers.get(signal)?.delete(listener);
+      },
+      emit(signal): void {
+        const listeners = [...(handlers.get(signal) ?? [])];
+        handlers.delete(signal);
+        for (const listener of listeners) {
+          listener();
+        }
+      },
+      listenerCount(signal): number {
+        return handlers.get(signal)?.size ?? 0;
+      }
+    };
+    const receipts: WatchReceipt[] = [];
+    const service = {
+      assertSafeProjectPath(): void {},
+      async getStatus(): Promise<SearchResult["status"]> {
+        return pendingStatus;
+      },
+      async sync(): Promise<SearchResult["status"]> {
+        throw new Error("sync must not run for a fresh initial status");
+      }
+    } as unknown as SymbolLatticeService;
+
+    const running = runForegroundWatch(
+      service,
+      {
+        projectPath: "C:/chosen-project",
+        intervalMs: 250,
+        onReceipt: (receipt) => receipts.push(receipt)
+      },
+      signals
+    );
+
+    expect(signals.listenerCount("SIGINT")).toBe(1);
+    signals.emit("SIGINT");
+    resolveStatus?.(resultStatus());
+    await running;
+
+    expect(receipts.map((receipt) => receipt.event)).toEqual(["started", "stopped"]);
+    expect(signals.listenerCount("SIGINT")).toBe(0);
+    expect(signals.listenerCount("SIGTERM")).toBe(0);
+  });
 });

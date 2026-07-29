@@ -6,6 +6,25 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.8.0] - 2026-07-30
+
+### Added
+
+- Explicit foreground `watch [path]` command for an existing index. It performs the same live freshness check as `status`, runs the established atomic `sync` only when drift is detected, and preserves the active generation when a refresh fails.
+- Compact, stable NDJSON lifecycle receipts: `started`, `stale-detected`, `synced`, `sync-failed`, `status-failed`, and `stopped`. Each record keeps generation IDs, current status, index-work telemetry, actionable errors, and an explicit retry delay.
+- Bounded polling interval validation (`250-60000` ms; default `2000`), non-overlapping recursive scheduling, exponential retry/backoff, fail-fast handling when an active index disappears, and graceful `SIGINT`/`SIGTERM` shutdown that waits for an in-flight sync to finish.
+- Deterministic lifecycle, retry, no-overlap, shutdown, CLI-output, and real filesystem-sync tests.
+
+### Compatibility
+
+- No SQLite migration is required. `watch` is a CLI-only lifecycle around existing `getStatus` and `sync` semantics; it does not replace persisted scope, alter ordinary command output, or add an MCP mutation surface.
+- Existing MCP tools remain read-only and never start, control, or wait for a watch session. Existing `affected` and Git-affected result contracts are unchanged.
+
+### Deliberate limits
+
+- `watch` is foreground polling, not a daemon, native filesystem-event watcher, cross-process coordinator, or background service. It scans the project catalog every interval and stops when its terminal process exits.
+- It requires an initialized project and never runs `init` automatically. `--scope` is intentionally unavailable so a watcher cannot silently replace the active generation's stored scope.
+
 ## [0.7.0] - 2026-07-30
 
 ### Added
@@ -179,7 +198,8 @@ No unreleased changes.
 - Explicit full indexing, caller/callee/impact queries, and read-only MCP exploration.
 - `exact`, `heuristic`, and `unresolved` relationship states.
 
-[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.4.1...v0.5.0

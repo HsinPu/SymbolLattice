@@ -1682,7 +1682,12 @@ export class SymbolLatticeService {
     };
   }
 
-  private assertSafeProjectPath(options: IndexOptions): void {
+  /**
+   * Reusable non-mutating broad-path guard for explicit index lifecycles.
+   * Foreground watch calls it before its first status scan so a fresh unsafe
+   * index cannot bypass the same deliberate `--force` requirement as sync.
+   */
+  public assertSafeProjectPath(options: IndexOptions): void {
     const projectPath = resolve(options.projectPath);
     if (!options.force && this.sourceCatalog.isUnsafeProjectPath(projectPath)) {
       throw new SymbolLatticeError(

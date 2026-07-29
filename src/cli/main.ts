@@ -12,14 +12,21 @@ import {
   MAX_CONTEXT_IMPACT_LIMIT,
   MAX_CONTEXT_MAX_HOPS,
   MAX_CONTEXT_RELATION_LIMIT,
+  DEFAULT_WATCH_INTERVAL_MS,
+  MAX_WATCH_INTERVAL_MS,
+  MIN_WATCH_INTERVAL_MS,
   MAX_IMPACT_LIMIT,
   SymbolLatticeError,
   SymbolLatticeService,
+  startForegroundWatch,
+  validateWatchInterval,
   type ContextOptions,
   type AffectedTestsOptions,
+  type ForegroundWatchOptions,
   type GitAffectedTestsOptions,
   type FindOptions,
-  type SearchOptions
+  type SearchOptions,
+  type WatchReceipt
 } from "../application/index.js";
 import { MAX_SOURCE_SEARCH_LIMIT } from "../domain/index.js";
 import { FileSystemSourceCatalog } from "../infrastructure/filesystem/index.js";
@@ -72,6 +79,22 @@ interface ContextCommandOptions extends ProjectOptions {
   readonly impactLimit?: number;
 }
 
+interface WatchCommandOptions extends ProjectOptions {
+  readonly interval?: number;
+}
+
+/** Injectable CLI seam for a long-lived foreground watch command. */
+export type WatchCommandRunner = (
+  service: SymbolLatticeService,
+  options: ForegroundWatchOptions
+) => Promise<void>;
+
+/** Minimal process-signal contract for the foreground watch lifecycle. */
+export interface WatchSignalSource {
+  once(signal: NodeJS.Signals, listener: () => void): unknown;
+  off(signal: NodeJS.Signals, listener: () => void): unknown;
+}
+
 function createService(): SymbolLatticeService {
   return new SymbolLatticeService(
     new SqliteGraphStore(),
@@ -103,6 +126,18 @@ function parseBoundedPositiveInteger(value: string, maximum: number): number {
     throw new Error(`Expected an integer between 1 and ${maximum}, received \"${value}\".`);
   }
   return parsed;
+}
+
+/** Parses the bounded polling interval before the watch lifecycle starts. */
+export function parseWatchInterval(value: string): number {
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed)) {
+    throw new SymbolLatticeError(
+      "INVALID_WATCH_INTERVAL",
+      `Watch interval must be an integer between ${MIN_WATCH_INTERVAL_MS} and ${MAX_WATCH_INTERVAL_MS} milliseconds.`
+    );
+  }
+  return validateWatchInterval(parsed);
 }
 
 function parseSearchPath(value: string): string {
@@ -143,6 +178,48 @@ function render(value: unknown, _options: OutputOptions): void {
   // JSON is deliberately the single stable public contract in this release. The flag is
   // retained so callers can depend on it before a future human renderer lands.
   process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
+}
+
+/** Watch uses compact NDJSON so every lifecycle receipt is independently parseable. */
+function renderWatchReceipt(receipt: WatchReceipt): void {
+  process.stdout.write(`${JSON.stringify(receipt)}\n`);
+}
+
+export async function runForegroundWatch(
+  service: SymbolLatticeService,
+  options: ForegroundWatchOptions,
+  signals: WatchSignalSource = process
+): Promise<void> {
+  let session: Awaited<ReturnType<typeof startForegroundWatch>> | null = null;
+  let stopping = false;
+  let stopRequestedBeforeStart = false;
+  const stop = () => {
+    if (stopping) {
+      return;
+    }
+    stopping = true;
+    if (session === null) {
+      // A first freshness repair can already be running. Retain the signal so
+      // the foreground process does not exit in the middle of that atomic sync.
+      stopRequestedBeforeStart = true;
+      return;
+    }
+    void session.stop();
+  };
+
+  signals.once("SIGINT", stop);
+  signals.once("SIGTERM", stop);
+  try {
+    session = await startForegroundWatch(service, options);
+    if (stopRequestedBeforeStart) {
+      await session.stop();
+      return;
+    }
+    await session.done;
+  } finally {
+    signals.off("SIGINT", stop);
+    signals.off("SIGTERM", stop);
+  }
 }
 
 function renderError(error: unknown, json: boolean): void {
@@ -200,7 +277,10 @@ function toIndexOptions(projectPath: string, options: IndexCommandOptions) {
   return options.scope === undefined ? base : { ...base, scopeRoots: options.scope };
 }
 
-export function createProgram(service = createService()): Command {
+export function createProgram(
+  service = createService(),
+  watchRunner: WatchCommandRunner = runForegroundWatch
+): Command {
   const program = new Command();
   program
     .name("symbol-lattice")
@@ -232,6 +312,24 @@ export function createProgram(service = createService()): Command {
         await service.sync(toIndexOptions(projectPath, options)),
         options
       );
+    });
+
+  addProjectOption(program.command("watch [path]"))
+    .option("--force", "Allow automatic sync of a filesystem root or the home directory")
+    .option(
+      "--interval <milliseconds>",
+      `Polling interval in milliseconds (${MIN_WATCH_INTERVAL_MS}-${MAX_WATCH_INTERVAL_MS}; default ${DEFAULT_WATCH_INTERVAL_MS})`,
+      parseWatchInterval
+    )
+    .option("--json", "Emit newline-delimited JSON watch receipts (the default)")
+    .action(async (path: string | undefined, options: WatchCommandOptions) => {
+      const projectPath = resolve(path ?? defaultProjectPath(options));
+      await watchRunner(service, {
+        projectPath,
+        force: options.force ?? false,
+        intervalMs: options.interval ?? DEFAULT_WATCH_INTERVAL_MS,
+        onReceipt: renderWatchReceipt
+      });
     });
 
   addJsonOption(addProjectOption(program.command("status [path]"))).action(
