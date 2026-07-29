@@ -3,15 +3,30 @@ import ts from "typescript";
 import {
   createEdgeId,
   createSymbolId,
+  type ArtifactFacts,
+  type ArtifactLanguage,
   type EdgeKind,
+  type ExportBinding,
   type GraphEdge,
+  type ImportBinding,
+  type LocalBinding,
   type PendingReference,
+  type ReferenceScope,
   type SourceRange,
   type SymbolKind,
   type SymbolNode
 } from "../domain/index.js";
 
-export type ExtractionLanguage = "typescript" | "javascript";
+export type {
+  ArtifactFacts,
+  ExportBinding,
+  ImportBinding,
+  LocalBinding,
+  ReferenceScope
+} from "../domain/index.js";
+
+/** @deprecated Use ArtifactLanguage from the domain package. */
+export type ExtractionLanguage = ArtifactLanguage;
 
 export interface ExtractFileFactsInput {
   readonly filePath: string;
@@ -19,44 +34,8 @@ export interface ExtractFileFactsInput {
   readonly language: ExtractionLanguage;
 }
 
-export interface ExtractedFileFacts {
-  readonly symbols: readonly SymbolNode[];
-  readonly edges: readonly GraphEdge[];
-  readonly pendingReferences: readonly PendingReference[];
-  /** Value bindings used only while resolving source-local lexical scopes. */
-  readonly localBindings: readonly LocalBinding[];
-  /** Lexical-scope paths for unresolved references, ordered nearest-first. */
-  readonly referenceScopes: readonly ReferenceScope[];
-  /** Named import bindings preserved for deterministic cross-file resolution. */
-  readonly importBindings: readonly ImportBinding[];
-  /** Local-to-public export aliases preserved for deterministic cross-file resolution. */
-  readonly exportBindings: readonly ExportBinding[];
-}
-
-export interface ImportBinding {
-  readonly moduleSpecifier: string;
-  readonly localName: string;
-  readonly importedName: string;
-  readonly range: SourceRange;
-}
-
-export interface ExportBinding {
-  readonly localName: string;
-  readonly exportedName: string;
-  readonly range: SourceRange;
-}
-
-export interface LocalBinding {
-  readonly name: string;
-  /** Null means a real lexical binding exists but is intentionally not a graph symbol. */
-  readonly symbolId: string | null;
-  readonly scopeId: string;
-}
-
-export interface ReferenceScope {
-  readonly referenceId: string;
-  readonly scopeIds: readonly string[];
-}
+/** @deprecated Use ArtifactFacts from the domain package. */
+export type ExtractedFileFacts = ArtifactFacts;
 
 interface DeclarationInfo {
   readonly name: string;
@@ -349,7 +328,12 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
       range,
       resolution: "exact",
       confidence: 1,
-      referenceName
+      referenceName,
+      evidence: {
+        ruleId: "syntax.containment",
+        stage: "syntax",
+        candidateSymbolIds: [targetId]
+      }
     });
   }
 

@@ -2,27 +2,28 @@
 
 # SymbolLattice
 
-**Evidence-first local code graph exploration for TypeScript and JavaScript.**
+**A local, evidence-first code-intelligence platform for TypeScript and JavaScript.**
 
+[![Version](https://img.shields.io/github/v/tag/HsinPu/symbol-lattice?label=version)](https://github.com/HsinPu/symbol-lattice/tags)
 ![Node.js](https://img.shields.io/badge/node-%E2%89%A522.13-339933?logo=nodedotjs&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript&logoColor=white)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-[Quick start](#quick-start) · [Commands](#command-reference) · [MCP](#mcp-server) · [Contributing](#contributing)
+[Quick start](#quick-start) · [Commands](#command-reference) · [MCP](#mcp-server) · [Architecture](#architecture) · [Roadmap](#roadmap)
 
 </div>
 
 > [!IMPORTANT]
-> SymbolLattice is an early v0.1 developer tool. Install and run it from source today; it is not published to npm yet.
+> **v0.2.0 — Graph Evidence Foundation** is an early developer release. It runs from source and is not published to npm yet.
 
-SymbolLattice turns a local TypeScript or JavaScript project into a queryable graph of symbols and relationships. It is designed to make uncertainty visible: every resolved edge carries a resolution kind and confidence, while unresolved references remain available for inspection instead of becoming false graph links.
+SymbolLattice turns a local project into a queryable symbol graph without hiding uncertainty. It preserves the syntax facts used to build a graph, attaches evidence to newly resolved relationships, and keeps indexing explicit: agents can query an existing index, but never create or refresh one implicitly.
 
 ## Why SymbolLattice?
 
-- **Evidence before inference** — distinguish `exact`, `heuristic`, and `unresolved` relationships.
-- **Local and explicit** — create or refresh an index only when you ask; no watcher, daemon, or telemetry in v0.1.
-- **Agent-safe MCP** — one read-only `symbol_lattice_explore` tool that never changes an index.
-- **Useful graph questions** — find symbols, inspect callers and callees, trace reverse impact, and retrieve source evidence.
+- **Explainable relationships** — new graph edges record the rule, resolution stage, and considered symbol candidates behind the result.
+- **Durable artifact facts** — local bindings, import/export bindings, reference scopes, and structural facts are stored with the active graph generation.
+- **Local and explicit** — `init`, `index`, and `sync` are the only operations that write an index; there is no watcher, daemon, telemetry, or network dependency.
+- **Agent-safe MCP** — MCP tools are read-only, idempotent, and report index freshness rather than silently rebuilding data.
 
 ## Quick start
 
@@ -37,27 +38,35 @@ cd symbol-lattice
 npm install
 npm run build
 
-# Create a local SQLite index for the project you want to inspect.
+# Create an index for the project you want to inspect.
 node dist/cli/main.js init /path/to/your-project
+
+# Explain a relationship after indexing.
+node dist/cli/main.js explain-edge "edge:<edge-id>" --project /path/to/your-project
 ```
 
-On Windows, use `npm.cmd` if your shell does not resolve `npm` directly.
+On Windows, use `npm.cmd` when `npm` is not available directly in your shell.
 
-The index is stored inside the inspected project at `.symbol-lattice/index.sqlite`. `init` performs the first full index; `index` and `sync` are explicit full refreshes in v0.1.
+The index is stored in the inspected project at `.symbol-lattice/index.sqlite`. `init`, `index`, and `sync` intentionally perform complete, atomic rebuilds in v0.2.0.
 
 > [!WARNING]
 > SymbolLattice refuses to index a filesystem root or home directory unless you deliberately pass `--force`.
 
+### Upgrading an existing v0.1 index
+
+v0.1 snapshots remain readable. Run one explicit `sync` after upgrading to create the active v0.2.0 generation, persist raw artifact facts, and attach evidence to newly built edges.
+
 ## What it understands
 
-| Area | v0.1 support |
+| Area | v0.2.0 support |
 | --- | --- |
 | Source files | TypeScript, TSX, JavaScript, and JSX |
 | Symbols | Files, classes, functions, methods, interfaces, types, and variables |
 | Relationships | `contains`, relative-module `imports` / `exports`, and direct identifier `calls` |
 | Default exports | Named declarations, existing-symbol exports, and direct callable expressions |
-| Storage | Local SQLite with deterministic snapshot replacement |
-| Evidence | Source ranges, reference names, resolution kind, confidence, and stale-index status |
+| Storage | Local SQLite, active graph generation, atomic full replacement |
+| Durable facts | Symbols, structural edges, pending references, local bindings, import bindings, export bindings, and reference scopes |
+| Evidence | Rule ID, resolution stage, candidate symbols, source range, resolution kind, confidence, and freshness |
 
 ### Resolution contract
 
@@ -67,20 +76,32 @@ The index is stored inside the inspected project at `.symbol-lattice/index.sqlit
 | `heuristic` | Conservative unique-name inference; never presented as proof |
 | `unresolved` | Preserved for inspection, but excluded from callers, callees, and impact paths |
 
+### Evidence stages
+
+| Stage | Meaning |
+| --- | --- |
+| `syntax` | A direct AST relationship such as containment |
+| `lexical` | A source-local binding proved the target |
+| `module` | A project module/import/export rule proved the target |
+| `heuristic` | A bounded unique-name inference supplied the target |
+| `unresolved` | The resolver could not prove one target |
+| `legacy` | A v0.1 snapshot is still queryable but has no newly captured evidence |
+
 ## Command reference
 
-All data-returning v0.1 CLI commands emit stable, pretty JSON. `--json` is retained as a forward-compatible flag for scripts; `serve --mcp` runs the long-lived stdio protocol instead.
+All data-returning commands emit stable, pretty JSON. `--json` remains a forward-compatible flag for scripts; `serve --mcp` runs the long-lived stdio protocol.
 
 | Command | Purpose |
 | --- | --- |
-| `init [path]` | Create the local database and perform the first index |
+| `init [path]` | Create the local database and build the first graph generation |
 | `index [path]` | Explicitly rebuild the complete graph |
 | `sync [path]` | Explicitly refresh the complete graph |
-| `status [path]` | Report index state and source staleness |
+| `status [path]` | Report index state, active generation, and source staleness |
 | `find <query>` / `query <query>` | Search symbols by name, qualified name, ID, or location |
 | `callers <symbol>` / `callees <symbol>` | Show direct graph relationships |
 | `impact <symbol>` | Trace reverse impact with an optional `--depth` |
 | `explore <query>` | Return a symbol, source evidence, and nearby graph context |
+| `explain-edge <edge-id>` | Explain a stored relationship and its resolution evidence |
 | `serve --mcp` | Start the stdio MCP server |
 
 ```bash
@@ -92,6 +113,10 @@ node dist/cli/main.js callers "src/math.ts#add" --project /path/to/your-project
 
 # Follow reverse impact two hops deep.
 node dist/cli/main.js impact "src/math.ts#add" --depth 2 --project /path/to/your-project
+
+# Inspect why a graph edge exists. Obtain an edge ID from callers, callees,
+# impact, explore, or another JSON query result.
+node dist/cli/main.js explain-edge "<edge-id>" --project /path/to/your-project
 
 # See every available option.
 node dist/cli/main.js --help
@@ -107,62 +132,77 @@ Build SymbolLattice and initialize the target project before starting MCP:
 node dist/cli/main.js serve --mcp --project /path/to/your-project
 ```
 
-The server exposes exactly one stdio tool:
+The server exposes read-only tools only:
 
 | Tool | Contract |
 | --- | --- |
-| `symbol_lattice_explore` | Read-only and idempotent; explores an existing index and returns actionable guidance when no index exists |
+| `symbol_lattice_explore` | Finds a symbol and returns source, callers, callees, impact, and freshness from an existing index |
+| `symbol_lattice_explain_edge` | Returns the relationship, source and target symbols, resolution evidence, and freshness from an existing index |
 
-This is intentional: MCP never initializes, refreshes, or mutates an index on an agent's behalf.
+Neither MCP tool initializes, refreshes, or otherwise mutates an index.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-  CLI[CLI] --> Service[Application service]
-  MCP[MCP server] --> Service
-  Service --> Domain[Domain graph and ports]
-  Service --> Extraction[TypeScript Compiler API extraction]
-  Service --> Storage[SQLite graph store]
-  Service --> Files[Filesystem source catalog]
+  CLI["CLI"] --> UseCases["Application use cases"]
+  MCP["Read-only MCP"] --> UseCases
+  Catalog["Filesystem source catalog"] --> Facts["Artifact facts"]
+  Extractor["TypeScript Compiler API"] --> Facts
+  Facts --> Resolver["Resolution rules"]
+  Resolver --> Graph["Active evidence graph"]
+  UseCases --> Graph
+  Graph --> SQLite["SQLite store"]
 ```
 
 ```text
 src/
 ├── application/     Use cases and orchestration
 ├── cli/             Commander-based CLI
-├── domain/          Graph rules, traversal, IDs, and contracts
-├── extraction/      TypeScript Compiler API facts
+├── domain/          Graph, fact, evidence, identity, and traversal contracts
+├── extraction/      TypeScript Compiler API adapter
 ├── infrastructure/  Filesystem and SQLite adapters
 ├── mcp/             Read-only MCP server
 └── ports/           Dependency boundaries
 ```
 
-## Deliberate v0.1 boundaries
+## Deliberate v0.2.0 boundaries
 
-SymbolLattice favors trustworthy, inspectable results over broad static-analysis claims. It does **not** yet provide:
+SymbolLattice now has the facts and evidence needed for later scale work, but it does **not** yet provide:
 
-- Watchers, daemon mode, or automatic sync
-- Dynamic dispatch, callbacks, `require`, path aliases, decorators, framework routes, or reflection
-- Parsers beyond TS/TSX/JS/JSX, native kernels, workers, telemetry, or multi-project routing
-- More than one MCP tool
+- Automatic sync, watchers, daemon mode, worker pools, or incremental updates
+- Path aliases, `require`, decorators, framework routes, reflection, or dynamic dispatch
+- Parsers beyond TS/TSX/JS/JSX, native kernels, telemetry, or multi-project routing
+- Historical graph generations, Git semantic diff, or full-text search
+
+## Roadmap
+
+| Milestone | Focus |
+| --- | --- |
+| `v0.2.1` | Configuration-aware scope and TypeScript path-alias resolution |
+| `v0.3` | Workspace/re-export semantics, dependency invalidation, and incremental sync |
+| `v0.4` | Full-text search, multi-symbol context, impact queries, and richer MCP retrieval |
+| `v0.5+` | Opt-in watcher/daemon, language adapters, framework packs, Git semantic diff, and contract graphs |
+
+See [CHANGELOG.md](CHANGELOG.md) for shipped versions and migration notes.
 
 ## Development
 
 ```bash
-npm run check
-npm test
-npm run build
-npm pack --dry-run
+npm.cmd run check
+npm.cmd test
+npm.cmd run build
+npm.cmd pack --dry-run
+git diff --check
 ```
 
-The test suite covers extraction, default-export resolution, SQLite replacement semantics, stale detection, caller/callee/impact traversal, source evidence, architecture boundaries, and the MCP contract.
+The suite covers extraction, resolution, evidence, artifact-fact persistence, active-generation replacement, staleness, caller/callee/impact traversal, MCP read-only behavior, and architecture boundaries.
 
 ## Contributing
 
-Issues and focused pull requests are welcome. Please keep changes small, preserve the explicit resolution contract, and include tests for observable graph behavior.
+Issues and focused pull requests are welcome. Please keep each change small, preserve the explicit indexing and resolution contracts, and add tests for observable graph behavior.
 
-Before opening a pull request, run the commands in [Development](#development). For a proposed capability that crosses a v0.1 boundary, open an issue first so its confidence and safety model can be agreed on.
+Before opening a pull request, run the commands in [Development](#development). For a capability that crosses a documented boundary, open an issue first so its evidence, confidence, and safety model can be agreed on.
 
 ## License
 
@@ -173,3 +213,4 @@ Distributed under the [MIT License](LICENSE).
 - [Repository](https://github.com/HsinPu/symbol-lattice)
 - [Issues](https://github.com/HsinPu/symbol-lattice/issues)
 - [Pull requests](https://github.com/HsinPu/symbol-lattice/pulls)
+- [Releases and tags](https://github.com/HsinPu/symbol-lattice/tags)

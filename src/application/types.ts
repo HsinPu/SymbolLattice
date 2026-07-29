@@ -3,7 +3,7 @@ import type {
   ImpactPath,
   SymbolMatch
 } from "../domain/graph.js";
-import type { GraphSnapshot, IndexStatus, SymbolNode } from "../domain/types.js";
+import type { GraphEdge, GraphSnapshot, IndexStatus, SymbolNode } from "../domain/types.js";
 
 export interface GraphContext {
   readonly status: IndexStatus;
@@ -46,4 +46,16 @@ export interface ExploreResult {
   readonly callers: readonly GraphRelation[];
   readonly callees: readonly GraphRelation[];
   readonly impact: readonly ImpactPath[];
+}
+
+/**
+ * A proof-oriented view of one persisted graph relation. The edge retains its
+ * optional evidence, while the resolved endpoints make the explanation useful
+ * without a follow-up symbol lookup.
+ */
+export interface ExplainEdgeResult {
+  readonly status: IndexStatus;
+  readonly edge: GraphEdge;
+  readonly source: SymbolNode;
+  readonly target: SymbolNode | null;
 }

@@ -32,6 +32,15 @@ describe("TypeScript and JavaScript extraction", () => {
     );
     expect(facts.symbols.find((symbol) => symbol.name === "calculate")?.isExported).toBe(true);
     expect(facts.edges.filter((edge) => edge.kind === "contains")).not.toHaveLength(0);
+    const calculate = facts.symbols.find((symbol) => symbol.name === "calculate");
+    const containment = facts.edges.find(
+      (edge) => edge.kind === "contains" && edge.targetId === calculate?.id
+    );
+    expect(containment?.evidence).toEqual({
+      ruleId: "syntax.containment",
+      stage: "syntax",
+      candidateSymbolIds: [calculate?.id]
+    });
     expect(
       facts.pendingReferences.map((reference) => [reference.relationKind, reference.referenceName])
     ).toEqual(

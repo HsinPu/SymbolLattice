@@ -12,6 +12,7 @@ import {
 import { FileSystemSourceCatalog } from "../infrastructure/filesystem/index.js";
 import { SqliteGraphStore } from "../infrastructure/sqlite/index.js";
 import { serveMcp } from "../mcp/index.js";
+import { SYMBOL_LATTICE_VERSION } from "../version.js";
 
 interface OutputOptions {
   readonly json?: boolean;
@@ -48,7 +49,7 @@ function parsePositiveInteger(value: string): number {
 }
 
 function render(value: unknown, _options: OutputOptions): void {
-  // JSON is deliberately the single stable public contract in v1. The flag is
+  // JSON is deliberately the single stable public contract in this release. The flag is
   // retained so callers can depend on it before a future human renderer lands.
   process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
 }
@@ -94,7 +95,7 @@ export function createProgram(service = createService()): Command {
   program
     .name("symbol-lattice")
     .description("Evidence-first local code graph exploration for TypeScript and JavaScript.")
-    .version("0.1.0");
+    .version(SYMBOL_LATTICE_VERSION);
 
   addJsonOption(addProjectOption(program.command("init [path]")))
     .option("--force", "Allow indexing a filesystem root or the home directory")
@@ -177,6 +178,12 @@ export function createProgram(service = createService()): Command {
   addJsonOption(addProjectOption(program.command("explore <query>"))).action(
     async (query: string, options: ProjectOptions) => {
       render(await service.explore(defaultProjectPath(options), query), options);
+    }
+  );
+
+  addJsonOption(addProjectOption(program.command("explain-edge <edge-id>"))).action(
+    async (edgeId: string, options: ProjectOptions) => {
+      render(await service.explainEdge(defaultProjectPath(options), edgeId), options);
     }
   );
 

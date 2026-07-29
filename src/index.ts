@@ -5,3 +5,4 @@ export * from "./infrastructure/filesystem/index.js";
 export * from "./infrastructure/sqlite/index.js";
 export * from "./mcp/index.js";
 export * from "./ports/index.js";
+export * from "./version.js";

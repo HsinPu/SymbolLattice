@@ -1,11 +1,13 @@
 import { resolve } from "node:path";
 
 import {
+  ARTIFACT_FACTS_EXTRACTOR_VERSION,
   findSymbols,
   getCallees,
   getCallers,
   getImpactPaths,
   matchSymbol,
+  type PersistedArtifactFacts,
   type SymbolKind,
   type SymbolMatch
 } from "../domain/index.js";
@@ -14,6 +16,7 @@ import type { GraphStore, SourceCatalog } from "../ports/index.js";
 import { SymbolLatticeError } from "./errors.js";
 import { resolveProjectFacts } from "./resolution.js";
 import type {
+  ExplainEdgeResult,
   ExploreResult,
   FindResult,
   GraphContext,
@@ -64,19 +67,29 @@ export class SymbolLatticeService {
     this.graphStore.initialize(projectPath);
     const sourceDocuments = await this.sourceCatalog.discover(projectPath);
     const indexedAt = new Date().toISOString();
+    const extractedFiles = sourceDocuments.map((document) =>
+      extractFileFacts({
+        filePath: document.relativePath,
+        sourceText: document.sourceText,
+        language: document.language
+      })
+    );
+    const artifactFacts: readonly PersistedArtifactFacts[] = sourceDocuments.map(
+      (document, index) => ({
+        ...extractedFiles[index]!,
+        filePath: document.relativePath,
+        language: document.language,
+        contentHash: document.contentHash,
+        extractorVersion: ARTIFACT_FACTS_EXTRACTOR_VERSION
+      })
+    );
     const snapshot = resolveProjectFacts({
       sourceDocuments,
-      extractedFiles: sourceDocuments.map((document) =>
-        extractFileFacts({
-          filePath: document.relativePath,
-          sourceText: document.sourceText,
-          language: document.language
-        })
-      ),
+      extractedFiles,
       indexedAt
     });
 
-    this.graphStore.replaceProjectFacts({ projectPath, snapshot, indexedAt });
+    this.graphStore.replaceProjectFacts({ projectPath, snapshot, indexedAt, artifactFacts });
     return this.getStatus(projectPath);
   }
 
@@ -177,6 +190,32 @@ export class SymbolLatticeService {
       callers: getCallers(context.snapshot, match.symbol.id),
       callees: getCallees(context.snapshot, match.symbol.id),
       impact: getImpactPaths(context.snapshot, match.symbol.id, 2)
+    };
+  }
+
+  public async explainEdge(projectPath: string, edgeId: string): Promise<ExplainEdgeResult> {
+    const context = await this.requireGraph(projectPath);
+    const edge = context.snapshot.edges.find((candidate) => candidate.id === edgeId);
+    if (edge === undefined) {
+      throw new SymbolLatticeError("EDGE_NOT_FOUND", `No graph edge matches \"${edgeId}\".`);
+    }
+
+    const source = context.snapshot.symbols.find((symbol) => symbol.id === edge.sourceId);
+    if (source === undefined) {
+      throw new SymbolLatticeError(
+        "EDGE_NOT_FOUND",
+        `Graph edge \"${edgeId}\" has no persisted source symbol.`
+      );
+    }
+
+    return {
+      status: context.status,
+      edge,
+      source,
+      target:
+        edge.targetId === null
+          ? null
+          : (context.snapshot.symbols.find((symbol) => symbol.id === edge.targetId) ?? null)
     };
   }
 

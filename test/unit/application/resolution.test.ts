@@ -53,7 +53,84 @@ describe("project reference resolution", () => {
         })
       ])
     );
+    const add = snapshot.symbols.find(
+      (symbol) => symbol.filePath === "src/math.ts" && symbol.name === "add"
+    );
+    const mathFile = snapshot.symbols.find(
+      (symbol) => symbol.filePath === "src/math.ts" && symbol.kind === "file"
+    );
+    const addCall = snapshot.edges.find(
+      (edge) => edge.kind === "calls" && edge.referenceName === "add"
+    );
+    const unknownCall = snapshot.edges.find(
+      (edge) => edge.kind === "calls" && edge.referenceName === "unknown"
+    );
+    const moduleImport = snapshot.edges.find(
+      (edge) => edge.kind === "imports" && edge.referenceName === "./math.js"
+    );
+    expect(moduleImport?.evidence).toEqual({
+      ruleId: "module.relative-specifier",
+      stage: "module",
+      candidateSymbolIds: [mathFile?.id]
+    });
+    expect(addCall?.evidence).toEqual({
+      ruleId: "module.explicit-import-binding",
+      stage: "module",
+      candidateSymbolIds: [add?.id]
+    });
+    expect(unknownCall?.evidence).toEqual({
+      ruleId: "reference.unresolved",
+      stage: "unresolved",
+      candidateSymbolIds: []
+    });
     expect(snapshot.pendingReferences.map((reference) => reference.referenceName)).toEqual(["unknown"]);
+  });
+
+  it("records deterministic evidence for a unique imported-export heuristic", () => {
+    const sourceDocuments = [
+      {
+        absolutePath: "C:/project/src/math.ts",
+        relativePath: "src/math.ts",
+        language: "typescript" as const,
+        sourceText: "export function add(left: number, right: number) { return left + right; }",
+        contentHash: "math"
+      },
+      {
+        absolutePath: "C:/project/src/consumer.ts",
+        relativePath: "src/consumer.ts",
+        language: "typescript" as const,
+        sourceText: 'import "./math.js"; export function total() { return add(1, 2); }',
+        contentHash: "consumer"
+      }
+    ];
+    const snapshot = resolveProjectFacts({
+      sourceDocuments,
+      extractedFiles: sourceDocuments.map((document) =>
+        extractFileFacts({
+          filePath: document.relativePath,
+          sourceText: document.sourceText,
+          language: document.language
+        })
+      ),
+      indexedAt: "2026-07-29T00:00:00.000Z"
+    });
+    const add = snapshot.symbols.find(
+      (symbol) => symbol.filePath === "src/math.ts" && symbol.name === "add"
+    );
+    const addCall = snapshot.edges.find(
+      (edge) => edge.kind === "calls" && edge.referenceName === "add"
+    );
+
+    expect(addCall).toMatchObject({
+      resolution: "heuristic",
+      confidence: 0.8,
+      targetId: add?.id
+    });
+    expect(addCall?.evidence).toEqual({
+      ruleId: "heuristic.unique-imported-export",
+      stage: "heuristic",
+      candidateSymbolIds: [add?.id]
+    });
   });
 
   it("resolves a named import through an explicit export alias", () => {

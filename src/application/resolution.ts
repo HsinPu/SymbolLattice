@@ -1,5 +1,6 @@
 import {
   createEdgeId,
+  type EdgeEvidence,
   type GraphEdge,
   type GraphSnapshot,
   type PendingReference,
@@ -59,7 +60,8 @@ function referenceEdge(
   reference: PendingReference,
   targetId: string | null,
   resolution: ResolutionKind,
-  confidence: number
+  confidence: number,
+  evidence: EdgeEvidence
 ): GraphEdge {
   return {
     id: createEdgeId({
@@ -77,7 +79,26 @@ function referenceEdge(
     range: reference.range,
     resolution,
     confidence,
-    referenceName: reference.referenceName
+    referenceName: reference.referenceName,
+    evidence
+  };
+}
+
+function candidateSymbolIds(...candidateSets: readonly (readonly SymbolNode[])[]): readonly string[] {
+  return [...new Set(candidateSets.flatMap((candidates) => candidates.map((candidate) => candidate.id)))].sort(
+    compareText
+  );
+}
+
+function referenceEvidence(
+  ruleId: EdgeEvidence["ruleId"],
+  stage: EdgeEvidence["stage"],
+  candidateIds: readonly string[]
+): EdgeEvidence {
+  return {
+    ruleId,
+    stage,
+    candidateSymbolIds: [...new Set(candidateIds)].sort(compareText)
   };
 }
 
@@ -232,13 +253,41 @@ export function resolveProjectFacts(input: {
     );
     const targetPath = matchingPaths.length === 1 ? matchingPaths[0] : undefined;
     const target = targetPath === undefined ? undefined : fileSymbols.get(targetPath);
+    const moduleCandidates = matchingPaths
+      .map((path) => fileSymbols.get(path))
+      .filter((candidate): candidate is SymbolNode => candidate !== undefined)
+      .sort((left, right) => compareText(left.id, right.id));
     if (target === undefined) {
       unresolvedReferences.push(reference);
-      resolvedEdges.push(referenceEdge(reference, null, "unresolved", 0));
+      resolvedEdges.push(
+        referenceEdge(
+          reference,
+          null,
+          "unresolved",
+          0,
+          referenceEvidence(
+            "module.unresolved-specifier",
+            "unresolved",
+            candidateSymbolIds(moduleCandidates)
+          )
+        )
+      );
       continue;
     }
 
-    resolvedEdges.push(referenceEdge(reference, target.id, "exact", 1));
+    resolvedEdges.push(
+      referenceEdge(
+        reference,
+        target.id,
+        "exact",
+        1,
+        referenceEvidence(
+          "module.relative-specifier",
+          "module",
+          candidateSymbolIds(moduleCandidates)
+        )
+      )
+    );
     if (reference.relationKind === "imports") {
       const targetPaths = importTargetPathsByFile.get(reference.filePath) ?? new Set<string>();
       targetPaths.add(target.filePath);
@@ -293,31 +342,103 @@ export function resolveProjectFacts(input: {
 
     if (scopedLocal.hasBinding) {
       if (scopedLocal.candidates.length === 1 && scopedLocal.candidates[0] !== undefined) {
-        resolvedEdges.push(referenceEdge(reference, scopedLocal.candidates[0].id, "exact", 1));
+        resolvedEdges.push(
+          referenceEdge(
+            reference,
+            scopedLocal.candidates[0].id,
+            "exact",
+            1,
+            referenceEvidence(
+              "lexical.local-binding",
+              "lexical",
+              candidateSymbolIds(scopedLocal.candidates)
+            )
+          )
+        );
       } else {
         unresolvedReferences.push(reference);
-        resolvedEdges.push(referenceEdge(reference, null, "unresolved", 0));
+        resolvedEdges.push(
+          referenceEdge(
+            reference,
+            null,
+            "unresolved",
+            0,
+            referenceEvidence(
+              "reference.unresolved",
+              "unresolved",
+              candidateSymbolIds(scopedLocal.candidates)
+            )
+          )
+        );
       }
       continue;
     }
 
     if (exactImportedCandidates.length === 1 && exactImportedCandidates[0] !== undefined) {
-      resolvedEdges.push(referenceEdge(reference, exactImportedCandidates[0].id, "exact", 1));
+      resolvedEdges.push(
+        referenceEdge(
+          reference,
+          exactImportedCandidates[0].id,
+          "exact",
+          1,
+          referenceEvidence(
+            "module.explicit-import-binding",
+            "module",
+            candidateSymbolIds(exactImportedCandidates)
+          )
+        )
+      );
       continue;
     }
 
     if (importedCandidates.length === 1 && importedCandidates[0] !== undefined) {
-      resolvedEdges.push(referenceEdge(reference, importedCandidates[0].id, "heuristic", 0.8));
+      resolvedEdges.push(
+        referenceEdge(
+          reference,
+          importedCandidates[0].id,
+          "heuristic",
+          0.8,
+          referenceEvidence(
+            "heuristic.unique-imported-export",
+            "heuristic",
+            candidateSymbolIds(importedCandidates)
+          )
+        )
+      );
       continue;
     }
 
     if (exportedCandidates.length === 1 && exportedCandidates[0] !== undefined) {
-      resolvedEdges.push(referenceEdge(reference, exportedCandidates[0].id, "heuristic", 0.5));
+      resolvedEdges.push(
+        referenceEdge(
+          reference,
+          exportedCandidates[0].id,
+          "heuristic",
+          0.5,
+          referenceEvidence(
+            "heuristic.unique-exported-name",
+            "heuristic",
+            candidateSymbolIds(exportedCandidates)
+          )
+        )
+      );
       continue;
     }
 
     unresolvedReferences.push(reference);
-    resolvedEdges.push(referenceEdge(reference, null, "unresolved", 0));
+    resolvedEdges.push(
+      referenceEdge(
+        reference,
+        null,
+        "unresolved",
+        0,
+        referenceEvidence(
+          "reference.unresolved",
+          "unresolved",
+          candidateSymbolIds(exactImportedCandidates, importedCandidates, exportedCandidates)
+        )
+      )
+    );
   }
 
   const edgeById = new Map<string, GraphEdge>();

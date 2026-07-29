@@ -1,3 +1,5 @@
+import type { EdgeEvidence } from "./facts.js";
+
 export const SYMBOL_KINDS = [
   "file",
   "class",
@@ -16,6 +18,10 @@ export type EdgeKind = (typeof EDGE_KINDS)[number];
 
 export type ResolutionKind = "exact" | "heuristic" | "unresolved";
 
+export const ARTIFACT_LANGUAGES = ["typescript", "javascript"] as const;
+
+export type ArtifactLanguage = (typeof ARTIFACT_LANGUAGES)[number];
+
 export interface SourcePosition {
   readonly line: number;
   readonly column: number;
@@ -29,7 +35,7 @@ export interface SourceRange {
 export interface IndexedFile {
   readonly path: string;
   readonly contentHash: string;
-  readonly language: "typescript" | "javascript";
+  readonly language: ArtifactLanguage;
   readonly indexedAt: string;
 }
 
@@ -54,6 +60,8 @@ export interface GraphEdge {
   readonly resolution: ResolutionKind;
   readonly confidence: number;
   readonly referenceName: string | null;
+  /** Omitted only for v0.1-compatible persisted snapshots. */
+  readonly evidence?: EdgeEvidence;
 }
 
 export interface PendingReference {
@@ -77,6 +85,7 @@ export interface IndexStatus {
   readonly stale: boolean;
   readonly projectPath: string;
   readonly indexedAt: string | null;
+  readonly generationId: string | null;
   readonly counts: IndexCounts;
 }
 
