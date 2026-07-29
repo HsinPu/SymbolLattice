@@ -1,10 +1,13 @@
-import { isAbsolute, resolve } from "node:path";
+import { isAbsolute, relative, resolve } from "node:path";
 
 import {
+  AFFECTED_TEST_EDGE_KINDS,
   ARTIFACT_FACTS_EXTRACTOR_VERSION,
   ARTIFACT_LANGUAGES,
+  classifyTestFile,
   DEFAULT_SOURCE_SEARCH_LIMIT,
   findEvidencePath,
+  findAffectedTestPaths,
   findSymbols,
   getCallees,
   getCallers,
@@ -46,8 +49,11 @@ import { ProjectConfigurationError } from "../domain/configuration.js";
 import { SymbolLatticeError } from "./errors.js";
 import { resolveProjectFacts } from "./resolution.js";
 import {
+  AFFECTED_MAX_VISITED_FILES_PER_INPUT,
   CONTEXT_MATCH_CANDIDATE_LIMIT,
   CONTEXT_MAX_VISITED_SYMBOLS,
+  DEFAULT_AFFECTED_LIMIT,
+  DEFAULT_AFFECTED_MAX_DEPTH,
   DEFAULT_CONTEXT_IMPACT_DEPTH,
   DEFAULT_CONTEXT_IMPACT_LIMIT,
   DEFAULT_CONTEXT_MAX_HOPS,
@@ -57,9 +63,17 @@ import {
   MAX_CONTEXT_MAX_HOPS,
   MAX_CONTEXT_REFERENCES,
   MAX_CONTEXT_RELATION_LIMIT,
+  MAX_AFFECTED_CHANGED_FILES,
+  MAX_AFFECTED_LIMIT,
+  MAX_AFFECTED_MAX_DEPTH,
   MAX_IMPACT_LIMIT
 } from "./types.js";
 import type {
+  AffectedTestEvidence,
+  AffectedTestsBounds,
+  AffectedTestsLimitation,
+  AffectedTestsOptions,
+  AffectedTestsResult,
   ExplainEdgeResult,
   ContextBounds,
   ContextEvidencePath,
@@ -110,6 +124,11 @@ interface ContextRequest {
   readonly bounds: ContextBounds;
 }
 
+interface NormalizedAffectedTestsRequest {
+  readonly filePaths: readonly string[];
+  readonly bounds: AffectedTestsBounds;
+}
+
 /** One graph/source snapshot used consistently for every item in a context pack. */
 interface ContextRead {
   readonly bundle: ActiveGraphBundle;
@@ -125,6 +144,24 @@ function compareText(left: string, right: string): number {
     return 1;
   }
   return 0;
+}
+
+function compareAffectedTestEvidence(
+  left: AffectedTestEvidence,
+  right: AffectedTestEvidence
+): number {
+  return (
+    compareText(left.triggerFilePath, right.triggerFilePath) ||
+    compareText(left.filePath, right.filePath) ||
+    compareText(
+      left.path.symbols.map((symbol) => symbol.id).join("\u0000"),
+      right.path.symbols.map((symbol) => symbol.id).join("\u0000")
+    ) ||
+    compareText(
+      left.path.edges.map((edge) => edge.id).join("\u0000"),
+      right.path.edges.map((edge) => edge.id).join("\u0000")
+    )
+  );
 }
 
 function comparePosition(
@@ -670,6 +707,104 @@ export class SymbolLatticeService {
   }
 
   /**
+   * Selects conventionally named affected tests from exact import/export
+   * evidence in the current persisted generation. This never syncs or invokes
+   * Git; the returned freshness status makes any live-project drift explicit.
+   */
+  public async affectedTests(
+    projectPath: string,
+    filePaths: readonly string[],
+    options: AffectedTestsOptions = {}
+  ): Promise<AffectedTestsResult> {
+    const normalizedProjectPath = resolve(projectPath);
+    const request = this.affectedTestsRequest(normalizedProjectPath, filePaths, options);
+    const bundle = this.getActiveGraphBundle(normalizedProjectPath);
+    if (!bundle.status.initialized) {
+      throw new SymbolLatticeError(
+        "MISSING_INDEX",
+        `No SymbolLattice index exists for ${normalizedProjectPath}. Run "symbol-lattice init ${normalizedProjectPath}" first.`
+      );
+    }
+
+    const status = await this.getStatusForBundle(normalizedProjectPath, bundle);
+    const fileSymbolsByPath = new Map(
+      bundle.snapshot.symbols
+        .filter((symbol) => symbol.kind === "file")
+        .map((symbol) => [symbol.filePath, symbol])
+    );
+    const indexed = request.filePaths.filter((filePath) => fileSymbolsByPath.has(filePath));
+    const notIndexed = request.filePaths.filter((filePath) => !fileSymbolsByPath.has(filePath));
+    const candidates: AffectedTestEvidence[] = [];
+    let resultLimitTruncated = false;
+    let traversalTruncated = false;
+    let depthLimitReached = false;
+
+    for (const filePath of indexed) {
+      const symbol = fileSymbolsByPath.get(filePath);
+      if (symbol === undefined) {
+        continue;
+      }
+
+      const traversal = findAffectedTestPaths(bundle.snapshot, symbol.id, {
+        maxDepth: request.bounds.maxDepth,
+        maxResults: request.bounds.limit + 1,
+        maxVisitedFiles: request.bounds.maxVisitedFilesPerInput
+      });
+      resultLimitTruncated ||= traversal.resultLimitReached;
+      traversalTruncated ||= traversal.traversalTruncated;
+      depthLimitReached ||= traversal.depthLimitReached;
+
+      for (const path of traversal.paths) {
+        const terminal = path.symbols.at(-1);
+        const classification = terminal === undefined ? null : classifyTestFile(terminal.filePath);
+        if (terminal === undefined || classification === null) {
+          throw new Error("Affected-test traversal must terminate at a classified test file.");
+        }
+        candidates.push({
+          triggerFilePath: filePath,
+          filePath: terminal.filePath,
+          reason: path.edges.length === 0 ? "changed-test" : "exact-dependent",
+          classification,
+          path
+        });
+      }
+    }
+
+    const orderedCandidates = candidates.sort(compareAffectedTestEvidence);
+    resultLimitTruncated ||= orderedCandidates.length > request.bounds.limit;
+    const limitations: AffectedTestsLimitation[] = [
+      ...(status.stale ? (["index-stale"] as const) : []),
+      ...(notIndexed.length > 0 ? (["input-not-indexed"] as const) : []),
+      ...(depthLimitReached ? (["depth-limit-reached"] as const) : []),
+      ...(traversalTruncated ? (["visit-limit-reached"] as const) : []),
+      ...(resultLimitTruncated ? (["result-limit-reached"] as const) : [])
+    ];
+
+    return {
+      status,
+      bounds: request.bounds,
+      indexScope: bundle.indexInputs?.scopeRoots ?? null,
+      indexedTestFiles: bundle.snapshot.files.filter((file) => classifyTestFile(file.path) !== null)
+        .length,
+      inputs: {
+        requested: request.filePaths,
+        indexed,
+        notIndexed
+      },
+      tests: {
+        items: orderedCandidates.slice(0, request.bounds.limit),
+        resultLimitTruncated,
+        traversalTruncated,
+        depthLimitReached
+      },
+      completeness: {
+        completeForActiveGeneration: limitations.length === 0,
+        limitations
+      }
+    };
+  }
+
+  /**
    * Builds a bounded, auditable multi-symbol pack without changing the
    * single-symbol `explore` contract. Every source excerpt is read from the
    * same persisted generation as the graph relationships below it.
@@ -828,6 +963,85 @@ export class SymbolLatticeService {
           ? null
           : (context.snapshot.symbols.find((symbol) => symbol.id === edge.targetId) ?? null)
     };
+  }
+
+  private affectedTestsRequest(
+    projectPath: string,
+    filePaths: readonly string[],
+    options: AffectedTestsOptions
+  ): NormalizedAffectedTestsRequest {
+    if (!Array.isArray(filePaths) || filePaths.length < 1 || filePaths.length > MAX_AFFECTED_CHANGED_FILES) {
+      throw new SymbolLatticeError(
+        "INVALID_AFFECTED_FILES",
+        `Affected-test analysis requires from 1 to ${MAX_AFFECTED_CHANGED_FILES} changed file paths.`
+      );
+    }
+
+    const normalizedPaths: string[] = [];
+    const seenPaths = new Set<string>();
+    for (const filePath of filePaths) {
+      if (typeof filePath !== "string" || filePath.trim().length === 0) {
+        throw new SymbolLatticeError(
+          "INVALID_AFFECTED_FILES",
+          "Every affected-test input must be a non-empty file path."
+        );
+      }
+
+      const normalizedPath = this.normalizeAffectedFilePath(projectPath, filePath);
+      if (!seenPaths.has(normalizedPath)) {
+        seenPaths.add(normalizedPath);
+        normalizedPaths.push(normalizedPath);
+      }
+    }
+
+    const maxDepth = options.maxDepth ?? DEFAULT_AFFECTED_MAX_DEPTH;
+    if (!Number.isSafeInteger(maxDepth) || maxDepth < 1 || maxDepth > MAX_AFFECTED_MAX_DEPTH) {
+      throw new SymbolLatticeError(
+        "INVALID_AFFECTED_DEPTH",
+        `Affected-test depth must be a whole number from 1 to ${MAX_AFFECTED_MAX_DEPTH}.`
+      );
+    }
+
+    const limit = options.limit ?? DEFAULT_AFFECTED_LIMIT;
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > MAX_AFFECTED_LIMIT) {
+      throw new SymbolLatticeError(
+        "INVALID_AFFECTED_LIMIT",
+        `Affected-test limit must be a whole number from 1 to ${MAX_AFFECTED_LIMIT}.`
+      );
+    }
+
+    return {
+      filePaths: normalizedPaths,
+      bounds: {
+        maxChangedFiles: MAX_AFFECTED_CHANGED_FILES,
+        maxDepth,
+        limit,
+        maxVisitedFilesPerInput: AFFECTED_MAX_VISITED_FILES_PER_INPUT,
+        edgeKinds: AFFECTED_TEST_EDGE_KINDS,
+        resolution: "exact"
+      }
+    };
+  }
+
+  private normalizeAffectedFilePath(projectPath: string, filePath: string): string {
+    const trimmed = filePath.trim();
+    const absolutePath = isAbsolute(trimmed)
+      ? resolve(trimmed)
+      : resolve(projectPath, trimmed.replaceAll("\\", "/"));
+    const relativePath = relative(projectPath, absolutePath).replaceAll("\\", "/");
+    if (
+      relativePath.length === 0 ||
+      relativePath === ".." ||
+      relativePath.startsWith("../") ||
+      isAbsolute(relativePath)
+    ) {
+      throw new SymbolLatticeError(
+        "INVALID_AFFECTED_FILES",
+        `Affected-test path "${filePath}" must stay inside ${projectPath}.`
+      );
+    }
+
+    return relativePath;
   }
 
   private normalizedImpactOptions(

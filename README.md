@@ -9,12 +9,12 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![License](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
 
-[Quick start](#quick-start) | [Context packs](#bounded-multi-symbol-context) | [Commands](#command-reference) | [MCP](#mcp-server) | [Architecture](#architecture) | [Roadmap](#roadmap)
+[Quick start](#quick-start) | [Affected tests](#affected-test-evidence) | [Context packs](#bounded-multi-symbol-context) | [Commands](#command-reference) | [MCP](#mcp-server) | [Architecture](#architecture) | [Roadmap](#roadmap)
 
 </div>
 
 > [!IMPORTANT]
-> **v0.5.0** is an early developer release. This public repository runs from source; its npm package is intentionally private and is not published to npm.
+> **v0.6.0** is an early developer release. This public repository runs from source; its npm package is intentionally private and is not published to npm.
 
 SymbolLattice builds a local symbol graph without hiding uncertainty. It keeps syntax-proven artifact facts, resolves cross-file relationships conservatively, and records why every resolved edge exists. The graph stays local to the inspected project under `.symbol-lattice/index.sqlite`.
 
@@ -26,6 +26,7 @@ SymbolLattice builds a local symbol graph without hiding uncertainty. It keeps s
 - **Incremental parsing, atomic publication** - `sync` only reparses changed source artifacts when their persisted facts are compatible, then atomically publishes one fresh project graph.
 - **Generation-bound source evidence** - `search` and exact `explore` results use source captured with the active graph generation, even when the live project has since drifted.
 - **Bounded context packs** - ordered symbol references produce persisted source, capped relationship/impact summaries, and static directed evidence paths without guessing ambiguous symbols or dynamic behavior.
+- **Affected-test evidence** - changed indexed files map to conventionally named tests through bounded, exact import/export proof paths; stale, scope, depth, visit, and result limits remain visible in the response.
 - **Agent-safe MCP** - MCP tools are read-only and never initialize or refresh a project.
 
 ## Quick start
@@ -62,6 +63,10 @@ node dist/cli/main.js callers "src/math.ts#add" --project /path/to/project
 node dist/cli/main.js search "session timeout" --project /path/to/project --path src
 node dist/cli/main.js context "src/consumer.ts#calculate" "src/math.ts#add" --project /path/to/project
 
+# Select affected tests from changed files already present in the active generation.
+node dist/cli/main.js affected src/math.ts --project /path/to/project
+git diff --name-only HEAD | node dist/cli/main.js affected --stdin --project /path/to/project
+
 # Inspect freshness before an explicit update.
 node dist/cli/main.js status /path/to/project
 node dist/cli/main.js sync /path/to/project
@@ -71,7 +76,7 @@ All data commands emit stable, pretty JSON. `--json` is retained as a forward-co
 
 ## Capabilities
 
-| Area | v0.5.0 behavior |
+| Area | v0.6.0 behavior |
 | --- | --- |
 | Source files | TypeScript, TSX, JavaScript, and JSX |
 | Scope | Project root by default or repeatable, persisted `--scope` directories |
@@ -83,6 +88,7 @@ All data commands emit stable, pretty JSON. `--json` is retained as a forward-co
 | Re-exports | Named aliases, `export *`, default-through-named aliases, and namespace-export provenance |
 | Retrieval | Local deterministic FTS5 search across persisted source text and identifier parts; bounded path/language filters, source/symbol evidence, and exact `explore` excerpts from the same active generation |
 | Context | Bounded packs for 1–8 ordered references: exact-match source excerpts, capped callers/callees and reverse impact, plus shortest static directed evidence paths between adjacent exact references |
+| Affected tests | Changed-file test selection through exact persisted `imports` / `exports` paths, deterministic proof paths, conventional test-path classification, and explicit completeness limits |
 | Storage | Local SQLite v4 metadata with additive generation-bound source retrieval tables, raw artifact facts, edge evidence, index inputs, and index-work telemetry |
 | Freshness | Source hashes, configuration/workspace manifest fingerprints, extractor/resolver versions, and actionable stale reasons |
 
@@ -129,7 +135,7 @@ Search accepts letters, numbers, and identifier fragments; punctuation is treate
 
 For an exact symbol match, `explore` returns its excerpt from the same active generation as its graph relationships and ranges. It never substitutes the current file contents. This means a changed or deleted live file can produce `stale: true` while the response still carries the older, internally consistent evidence.
 
-The bundled v0.5.0 service supplies `sourceAvailability` to make that contract explicit:
+The bundled service supplies `sourceAvailability` to make that contract explicit:
 
 - `active-generation` — `source` is immutable persisted evidence from the active generation.
 - `unavailable` — the graph is still queryable, but an older adapter or legacy generation cannot supply persisted source text; `source` is `null` and SymbolLattice does not fall back to the live filesystem.
@@ -164,6 +170,34 @@ Each context response includes the applied `bounds`, per-section `truncated` fla
 
 > [!NOTE]
 > Context uses the same active-generation source-document bundle as its graph data. With an older `GraphStore` adapter or legacy generation, exact graph context remains available with `sourceAvailability: "unavailable"`; SymbolLattice never reads the live file as a substitute.
+
+### Affected test evidence
+
+`affected` turns an explicit changed-file list into a bounded test-selection report. It is deliberately a graph query, not a Git command: pipe a Git diff into `--stdin` when that is useful, or supply one or more paths directly.
+
+```bash
+# One or more project-relative files. Absolute paths are normalized to the project.
+node dist/cli/main.js affected src/math.ts src/http/client.ts --project /path/to/project
+
+# Git remains an explicit caller-owned integration; SymbolLattice does not run Git itself.
+git diff --name-only HEAD | node dist/cli/main.js affected --stdin --project /path/to/project
+```
+
+For each changed file that exists in the active generation, SymbolLattice walks reverse **exact** `imports` and `exports` edges. This includes barrel re-exports and returns one deterministic proof path from the changed file to each selected test. A changed test file itself is included with a zero-edge `changed-test` path.
+
+Test files are classified conservatively from their indexed paths: `*.test.*`, `*.spec.*`, and `*.e2e.*`, plus files under `__tests__/`, `test/`, `tests/`, `spec/`, or `e2e/`. This is static path convention, not test-runner discovery.
+
+| Bound | Default | Range | Effect |
+| --- | ---: | ---: | --- |
+| Changed files | `50` | `1-50` | Rejects oversized input lists instead of silently dropping files |
+| `--depth` | `5` | `1-8` | Caps reverse exact import/export hops per changed indexed file |
+| `--limit` | `25` | `1-100` | Caps returned proof-bearing test records |
+| Visited files | `500` | fixed | Caps traversal work independently for each changed indexed file |
+
+Every response reports `inputs.indexed` and `inputs.notIndexed`, the test-path classification, proof path, `indexScope`, and `completeness`. `completeForActiveGeneration` is true only when the active generation is fresh, every requested path was indexed, and no depth, visit, or result cap omitted evidence. It is never a claim that unindexed source roots, runtime-discovered tests, dynamic dispatch, or unsupported languages are fully covered.
+
+> [!NOTE]
+> The graph proof is always read from the active persisted generation. As with other query commands, freshness is evaluated against the live project so a stale index is visible rather than silently refreshed.
 
 ### Workspace resolution
 
@@ -243,6 +277,7 @@ The active generation fingerprints the root `.gitignore`, selected `tsconfig.jso
 | `search <query>` | Search persisted source and identifier evidence; accepts `--limit`, `--path`, and `--language` |
 | `callers <symbol>` / `callees <symbol>` | Show direct graph relationships |
 | `impact <symbol>` | Trace reverse impact with optional `--depth` and explicit output `--limit` |
+| `affected [filePaths...]` | Select conventionally named tests from exact persisted import/export evidence; accepts `--stdin`, `--depth`, and `--limit` |
 | `explore <query>` | Return exact generation-bound source when available, callers, callees, impact, and freshness |
 | `context <reference...>` | Build a bounded multi-symbol persisted-evidence pack for 1–8 ordered references |
 | `explain-edge <edge-id>` | Explain edge endpoints and resolution evidence |
@@ -262,6 +297,7 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 | --- | --- |
 | `symbol_lattice_explore` | Return generation-bound source when available, callers, callees, impact, freshness, and structured output for an existing graph |
 | `symbol_lattice_context` | Return bounded generation-bound source, relationships, reverse impact, and directed proof paths for ordered references without refreshing an index |
+| `symbol_lattice_affected` | Return bounded affected-test proofs for changed files, index coverage, and completeness limits without refreshing an index |
 | `symbol_lattice_search` | Return persisted source evidence, declaration candidates, and freshness without refreshing an index |
 | `symbol_lattice_explain_edge` | Return an edge, endpoints, evidence, and freshness for an existing graph |
 
@@ -269,7 +305,7 @@ None of these tools initializes, refreshes, or otherwise mutates an index.
 
 ## Upgrade notes
 
-SQLite v1 through v4 indexes remain readable. v0.4 adds generation-bound source documents and an FTS5 projection under the SQLite v4 metadata marker, so a v0.3 binary can still open and reindex after a rollback. A legacy generation has no historical source-search projection, so `search` reports an explicit availability error until a successful `sync` or `index` publishes one. That backfill can reuse compatible v0.3 raw artifact facts; it does not invent historical source evidence or telemetry. v0.4.1 adds no schema migration: when an embedded older GraphStore adapter or legacy active generation cannot supply the persisted source documents, exact `explore` remains graph-queryable with `source: null` and `sourceAvailability: "unavailable"`; it never reads a live file as substitute evidence. v0.5 adds no SQLite migration either: `context` reuses that same optional source-document bundle and keeps exact graph context available with source marked `unavailable` when an older adapter cannot supply it. A short-lived pre-release marker `5` is normalized to `4` by explicit `sync` or `index` before rollback.
+SQLite v1 through v4 indexes remain readable. v0.4 adds generation-bound source documents and an FTS5 projection under the SQLite v4 metadata marker, so a v0.3 binary can still open and reindex after a rollback. A legacy generation has no historical source-search projection, so `search` reports an explicit availability error until a successful `sync` or `index` publishes one. That backfill can reuse compatible v0.3 raw artifact facts; it does not invent historical source evidence or telemetry. v0.4.1 adds no schema migration: when an embedded older GraphStore adapter or legacy active generation cannot supply the persisted source documents, exact `explore` remains graph-queryable with `source: null` and `sourceAvailability: "unavailable"`; it never reads a live file as substitute evidence. v0.5 adds no SQLite migration either: `context` reuses that same optional source-document bundle and keeps exact graph context available with source marked `unavailable` when an older adapter cannot supply it. v0.6 adds no SQLite migration: `affected` only reads the active graph bundle, so compatible legacy GraphStore adapters remain usable; older adapters expose `indexScope: null` instead of a fabricated scope. A short-lived pre-release marker `5` is normalized to `4` by explicit `sync` or `index` before rollback.
 
 ## Architecture
 
@@ -305,13 +341,13 @@ src/
 
 ## Deliberate boundaries
 
-v0.5.0 does not yet provide:
+v0.6.0 does not yet provide:
 
 - File watchers, daemon mode, automatic sync, worker pools, or historical graph generations.
 - pnpm workspace YAML, TypeScript project references, external/package `extends`, or nested `.gitignore` semantics.
 - CommonJS `require`, dynamic dispatch, decorators, framework routes, reflection, or namespace property-call resolution.
 - Parsers beyond TS/TSX/JS/JSX, external dependency indexing, telemetry, or multi-project routing.
-- Embedding-based or cloud retrieval, semantic ranking, arbitrary natural-language context assembly, or historical source browsing.
+- Embedding-based or cloud retrieval, semantic ranking, arbitrary natural-language context assembly, historical source browsing, or semantic Git diff.
 
 ## Roadmap
 
@@ -321,7 +357,8 @@ v0.5.0 does not yet provide:
 | `v0.4.0` | Generation-bound FTS5 source retrieval, source/symbol evidence, CLI search, and structured read-only MCP retrieval |
 | `v0.4.1` | Generation-bound exact exploration source, explicit source availability, and adapter-safe source-document reads |
 | `v0.5.0` | Bounded multi-symbol context, exact static evidence paths, capped relationship/impact context, and explicit `impact --limit` |
-| `v0.6+` | Opt-in watcher/daemon, language adapters, framework packs, Git semantic diff, and contract graphs |
+| `v0.6.0` | Changed-file affected-test evidence with exact import/export proofs, bounded traversal, explicit index coverage, and read-only MCP support |
+| `v0.7+` | Semantic Git diff, opt-in foreground watch, language adapters, framework packs, and contract graphs |
 
 See [CHANGELOG.md](CHANGELOG.md) for release notes and migration history.
 
@@ -335,7 +372,7 @@ npm.cmd pack --dry-run
 git diff --check
 ```
 
-The suite covers discovery, input fingerprints, alias and workspace resolution, re-export semantics, generation-bound search and exploration source evidence, legacy backfill, stale-source evidence, incremental raw-fact reuse, no-op sync, schema migration, atomic rollback, MCP read-only behavior, CLI parsing, and architecture boundaries.
+The suite covers discovery, input fingerprints, alias and workspace resolution, re-export semantics, exact affected-test proofs and completeness limits, generation-bound search and exploration source evidence, legacy backfill, stale-source evidence, incremental raw-fact reuse, no-op sync, schema migration, atomic rollback, MCP read-only behavior, CLI parsing, and architecture boundaries.
 
 ## Contributing
 

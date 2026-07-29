@@ -4,6 +4,9 @@ import { z } from "zod";
 
 import { SymbolLatticeError } from "../application/errors.js";
 import {
+  MAX_AFFECTED_CHANGED_FILES,
+  MAX_AFFECTED_LIMIT,
+  MAX_AFFECTED_MAX_DEPTH,
   MAX_CONTEXT_IMPACT_DEPTH,
   MAX_CONTEXT_IMPACT_LIMIT,
   MAX_CONTEXT_MAX_HOPS,
@@ -11,6 +14,8 @@ import {
   MAX_CONTEXT_RELATION_LIMIT
 } from "../application/types.js";
 import type {
+  AffectedTestsOptions,
+  AffectedTestsResult,
   ContextOptions,
   ContextResult,
   ExplainEdgeResult,
@@ -33,6 +38,15 @@ export interface ContextService {
   ): Promise<ContextResult>;
 }
 
+/** Additive changed-file test-analysis seam for existing read-only embeddings. */
+export interface AffectedTestsService {
+  affectedTests(
+    projectPath: string,
+    filePaths: readonly string[],
+    options?: AffectedTestsOptions
+  ): Promise<AffectedTestsResult>;
+}
+
 export interface ExplainEdgeService {
   explainEdge(projectPath: string, edgeId: string): Promise<ExplainEdgeResult>;
 }
@@ -45,6 +59,7 @@ export interface SearchService {
 export type ReadOnlyMcpService = ExploreService & ExplainEdgeService;
 export type SearchMcpService = ExploreService & SearchService;
 export type ContextMcpService = ExploreService & ContextService;
+export type AffectedTestsMcpService = ExploreService & AffectedTestsService;
 
 export interface ExploreToolArguments {
   readonly query: string;
@@ -58,6 +73,13 @@ export interface ContextToolArguments {
   readonly maxHops?: number | undefined;
   readonly impactDepth?: number | undefined;
   readonly impactLimit?: number | undefined;
+}
+
+export interface AffectedTestsToolArguments {
+  readonly filePaths: readonly string[];
+  readonly projectPath?: string | undefined;
+  readonly maxDepth?: number | undefined;
+  readonly limit?: number | undefined;
 }
 
 export interface ExplainEdgeToolArguments {
@@ -86,6 +108,7 @@ export interface ReadOnlyToolResponse {
 
 export type ExploreToolResponse = ReadOnlyToolResponse;
 export type ContextToolResponse = ReadOnlyToolResponse;
+export type AffectedTestsToolResponse = ReadOnlyToolResponse;
 export type ExplainEdgeToolResponse = ReadOnlyToolResponse;
 export type SearchToolResponse = ReadOnlyToolResponse;
 
@@ -188,6 +211,53 @@ const contextOutputSchema = z
   })
   .passthrough();
 
+const affectedTestsOutputSchema = z
+  .object({
+    status: indexStatusOutputSchema,
+    bounds: z.object({
+      maxChangedFiles: z.number().int().positive(),
+      maxDepth: z.number().int().positive(),
+      limit: z.number().int().positive(),
+      maxVisitedFilesPerInput: z.number().int().positive(),
+      edgeKinds: z.tuple([z.literal("imports"), z.literal("exports")]),
+      resolution: z.literal("exact")
+    }),
+    indexScope: z.array(z.string()).nullable(),
+    indexedTestFiles: z.number().int().nonnegative(),
+    inputs: z.object({
+      requested: z.array(z.string()),
+      indexed: z.array(z.string()),
+      notIndexed: z.array(z.string())
+    }),
+    tests: z.object({
+      items: z.array(
+        z.object({
+          triggerFilePath: z.string(),
+          filePath: z.string(),
+          reason: z.enum(["changed-test", "exact-dependent"]),
+          classification: z.enum(["test-file-name", "test-directory"]),
+          path: z.object({}).passthrough()
+        })
+      ),
+      resultLimitTruncated: z.boolean(),
+      traversalTruncated: z.boolean(),
+      depthLimitReached: z.boolean()
+    }),
+    completeness: z.object({
+      completeForActiveGeneration: z.boolean(),
+      limitations: z.array(
+        z.enum([
+          "index-stale",
+          "input-not-indexed",
+          "depth-limit-reached",
+          "visit-limit-reached",
+          "result-limit-reached"
+        ])
+      )
+    })
+  })
+  .passthrough();
+
 const searchOutputSchema = z
   .object({
     status: indexStatusOutputSchema,
@@ -218,6 +288,10 @@ function supportsSearch(service: ExploreService): service is SearchMcpService {
 
 function supportsContext(service: ExploreService): service is ContextMcpService {
   return "context" in service && typeof service.context === "function";
+}
+
+function supportsAffectedTests(service: ExploreService): service is AffectedTestsMcpService {
+  return "affectedTests" in service && typeof service.affectedTests === "function";
 }
 
 function renderToolError(error: unknown): ReadOnlyToolResponse {
@@ -266,6 +340,31 @@ export async function runContextTool(
     const result = await service.context(
       arguments_.projectPath ?? defaultProjectPath,
       arguments_.references,
+      options
+    );
+    return {
+      content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      structuredContent: result as unknown as Record<string, unknown>
+    };
+  } catch (error) {
+    return renderToolError(error);
+  }
+}
+
+/** Builds an idempotent changed-file test-selection response without indexing. */
+export async function runAffectedTestsTool(
+  service: AffectedTestsService,
+  defaultProjectPath: string,
+  arguments_: AffectedTestsToolArguments
+): Promise<AffectedTestsToolResponse> {
+  try {
+    const options: AffectedTestsOptions = {
+      ...(arguments_.maxDepth === undefined ? {} : { maxDepth: arguments_.maxDepth }),
+      ...(arguments_.limit === undefined ? {} : { limit: arguments_.limit })
+    };
+    const result = await service.affectedTests(
+      arguments_.projectPath ?? defaultProjectPath,
+      arguments_.filePaths,
       options
     );
     return {
@@ -399,6 +498,46 @@ export function createMcpServer(
         }
       },
       async (arguments_) => runContextTool(contextService, defaultProjectPath, arguments_)
+    );
+  }
+
+  const affectedTestsService = supportsAffectedTests(service) ? service : null;
+  if (affectedTestsService !== null) {
+    server.registerTool(
+      "symbol_lattice_affected",
+      {
+        title: "Select affected tests from a SymbolLattice generation",
+        description:
+          "Accepts changed project files and returns conventionally named tests reached through exact persisted import/export evidence, with bounded proof paths and explicit completeness limitations. This tool never runs Git, creates, or refreshes an index.",
+        inputSchema: {
+          filePaths: z
+            .array(z.string().trim().min(1))
+            .min(1)
+            .max(MAX_AFFECTED_CHANGED_FILES)
+            .describe("One to fifty changed project-relative or absolute source file paths."),
+          projectPath: z.string().trim().min(1).optional().describe("Optional path to an already indexed project."),
+          maxDepth: z
+            .number()
+            .int()
+            .min(1)
+            .max(MAX_AFFECTED_MAX_DEPTH)
+            .optional()
+            .describe("Maximum reverse exact import/export depth per changed file."),
+          limit: z
+            .number()
+            .int()
+            .min(1)
+            .max(MAX_AFFECTED_LIMIT)
+            .optional()
+            .describe("Maximum proof-bearing affected-test records returned.")
+        },
+        outputSchema: affectedTestsOutputSchema,
+        annotations: {
+          readOnlyHint: true,
+          idempotentHint: true
+        }
+      },
+      async (arguments_) => runAffectedTestsTool(affectedTestsService, defaultProjectPath, arguments_)
     );
   }
 

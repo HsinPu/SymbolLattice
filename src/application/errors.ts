@@ -3,6 +3,9 @@ export class SymbolLatticeError extends Error {
     public readonly code:
       | "AMBIGUOUS_SYMBOL"
       | "EDGE_NOT_FOUND"
+      | "INVALID_AFFECTED_DEPTH"
+      | "INVALID_AFFECTED_FILES"
+      | "INVALID_AFFECTED_LIMIT"
       | "INVALID_CONTEXT_IMPACT_DEPTH"
       | "INVALID_CONTEXT_IMPACT_LIMIT"
       | "INVALID_CONTEXT_MAX_HOPS"

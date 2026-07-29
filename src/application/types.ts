@@ -2,7 +2,8 @@ import type {
   EvidencePath,
   GraphRelation,
   ImpactPath,
-  SymbolMatch
+  SymbolMatch,
+  TestFileClassification
 } from "../domain/graph.js";
 import type {
   ArtifactLanguage,
@@ -46,6 +47,14 @@ export const MAX_CONTEXT_IMPACT_DEPTH = 3;
 export const DEFAULT_CONTEXT_IMPACT_LIMIT = 8;
 export const MAX_CONTEXT_IMPACT_LIMIT = 25;
 export const MAX_IMPACT_LIMIT = 100;
+
+/** Bounded changed-file analysis mirrors common CI diff sizes without unbounded reads. */
+export const MAX_AFFECTED_CHANGED_FILES = 50;
+export const DEFAULT_AFFECTED_MAX_DEPTH = 5;
+export const MAX_AFFECTED_MAX_DEPTH = 8;
+export const DEFAULT_AFFECTED_LIMIT = 25;
+export const MAX_AFFECTED_LIMIT = 100;
+export const AFFECTED_MAX_VISITED_FILES_PER_INPUT = 500;
 
 export interface FindResult {
   readonly status: IndexStatus;
@@ -104,6 +113,72 @@ export interface ImpactResult {
   readonly paths: readonly ImpactPath[];
   /** Present only when a caller explicitly requested a bounded result. */
   readonly truncated?: boolean;
+}
+
+/** Optional bounds for exact, file-level affected-test analysis. */
+export interface AffectedTestsOptions {
+  /** Maximum reverse import/export depth from each changed indexed file. */
+  readonly maxDepth?: number;
+  /** Maximum proof-bearing affected-test records returned across all inputs. */
+  readonly limit?: number;
+}
+
+export type AffectedTestReason = "changed-test" | "exact-dependent";
+
+/** One conventionally identified test file and its persisted graph proof. */
+export interface AffectedTestEvidence {
+  /** The indexed changed file that begins this exact reverse-dependency path. */
+  readonly triggerFilePath: string;
+  readonly filePath: string;
+  readonly reason: AffectedTestReason;
+  readonly classification: TestFileClassification;
+  /** A zero-edge root path is retained when the changed file is itself a test. */
+  readonly path: ImpactPath;
+}
+
+/** Actual limits and evidence semantics used for one affected-test query. */
+export interface AffectedTestsBounds {
+  readonly maxChangedFiles: number;
+  readonly maxDepth: number;
+  readonly limit: number;
+  readonly maxVisitedFilesPerInput: number;
+  readonly edgeKinds: readonly ["imports", "exports"];
+  readonly resolution: "exact";
+}
+
+/** Canonical input paths, separated so missing index coverage cannot look successful. */
+export interface AffectedTestsInputs {
+  readonly requested: readonly string[];
+  readonly indexed: readonly string[];
+  readonly notIndexed: readonly string[];
+}
+
+export type AffectedTestsLimitation =
+  | "index-stale"
+  | "input-not-indexed"
+  | "depth-limit-reached"
+  | "visit-limit-reached"
+  | "result-limit-reached";
+
+export interface AffectedTestsResult {
+  readonly status: IndexStatus;
+  readonly bounds: AffectedTestsBounds;
+  /** `null` means an older compatible adapter did not persist index inputs. */
+  readonly indexScope: readonly string[] | null;
+  /** Conventional test files available in the active generation before filtering. */
+  readonly indexedTestFiles: number;
+  readonly inputs: AffectedTestsInputs;
+  readonly tests: {
+    readonly items: readonly AffectedTestEvidence[];
+    readonly resultLimitTruncated: boolean;
+    readonly traversalTruncated: boolean;
+    readonly depthLimitReached: boolean;
+  };
+  /** Completeness is only ever a claim about the active indexed generation. */
+  readonly completeness: {
+    readonly completeForActiveGeneration: boolean;
+    readonly limitations: readonly AffectedTestsLimitation[];
+  };
 }
 
 export interface ExploreResult {

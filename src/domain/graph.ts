@@ -2,6 +2,23 @@ import { type EdgeKind, type GraphEdge, type SymbolNode } from "./types.js";
 
 const DEFAULT_IMPACT_EDGE_KINDS: readonly EdgeKind[] = ["calls", "imports"];
 
+/** Exact file-level edges trusted for affected-test selection. */
+export const AFFECTED_TEST_EDGE_KINDS = ["imports", "exports"] as const;
+
+export type TestFileClassification = "test-file-name" | "test-directory";
+
+/** Conservative conventional test-file identification for indexed source paths. */
+export function classifyTestFile(filePath: string): TestFileClassification | null {
+  const normalizedPath = filePath.replaceAll("\\", "/");
+  if (/(?:^|\/)(?:__tests__|tests?|spec|e2e)(?:\/|$)/iu.test(normalizedPath)) {
+    return "test-directory";
+  }
+
+  return /\.(?:test|spec|e2e)\.[cm]?[jt]sx?$/iu.test(normalizedPath)
+    ? "test-file-name"
+    : null;
+}
+
 /** The graph data required by the pure traversal helpers. */
 export interface SymbolGraph {
   readonly symbols: readonly SymbolNode[];
@@ -77,6 +94,27 @@ export interface EvidencePathResult {
   readonly path: EvidencePath | null;
   /** True only when the visit cap prevented an unvisited candidate from being explored. */
   readonly truncated: boolean;
+}
+
+/** Explicit resource bounds for one changed-file affected-test traversal. */
+export interface AffectedTestTraversalOptions {
+  /** Maximum reverse exact import/export hops from the changed file. */
+  readonly maxDepth: number;
+  /** Maximum conventionally classified test paths retained for this changed file. */
+  readonly maxResults: number;
+  /** Maximum distinct indexed file symbols visited while following dependents. */
+  readonly maxVisitedFiles: number;
+}
+
+/** A bounded, exact-only reverse file-dependency traversal result. */
+export interface AffectedTestTraversalResult {
+  readonly paths: readonly ImpactPath[];
+  /** An additional test path was found after the result cap was filled. */
+  readonly resultLimitReached: boolean;
+  /** The visited-file budget blocked at least one unseen exact dependent. */
+  readonly traversalTruncated: boolean;
+  /** The depth boundary left at least one unseen exact dependent unexplored. */
+  readonly depthLimitReached: boolean;
 }
 
 interface SourceLocationReference {
@@ -576,10 +614,122 @@ function incomingResolvedRelations(
   return relations.sort(compareRelations);
 }
 
+function incomingExactFileRelations(
+  graph: SymbolGraph,
+  symbolsById: ReadonlyMap<string, SymbolNode>,
+  targetId: string
+): GraphRelation[] {
+  const relations: GraphRelation[] = [];
+
+  for (const edge of graph.edges) {
+    if (
+      !isResolvedGraphEdge(edge) ||
+      edge.resolution !== "exact" ||
+      edge.targetId !== targetId ||
+      (edge.kind !== "imports" && edge.kind !== "exports")
+    ) {
+      continue;
+    }
+
+    const source = symbolsById.get(edge.sourceId);
+    if (source?.kind === "file") {
+      relations.push({ symbol: source, edge });
+    }
+  }
+
+  return relations.sort(compareRelations);
+}
+
 function assertPositiveDepth(maxDepth: number): void {
   if (!Number.isSafeInteger(maxDepth) || maxDepth < 1) {
     throw new RangeError("maxDepth must be a positive integer.");
   }
+}
+
+function assertPositiveBound(value: number, name: string): void {
+  if (!Number.isSafeInteger(value) || value < 1) {
+    throw new RangeError(`${name} must be a positive integer.`);
+  }
+}
+
+/**
+ * Finds conventionally named test files that have an exact import/export
+ * dependency on one changed indexed file. The traversal is reverse-directed,
+ * deterministic, and only uses persisted file-level graph edges. It does not
+ * infer runtime test discovery or use heuristic resolution as evidence.
+ */
+export function findAffectedTestPaths(
+  graph: SymbolGraph,
+  changedFileSymbolId: string,
+  options: AffectedTestTraversalOptions
+): AffectedTestTraversalResult {
+  assertPositiveDepth(options.maxDepth);
+  assertPositiveBound(options.maxResults, "maxResults");
+  assertPositiveBound(options.maxVisitedFiles, "maxVisitedFiles");
+
+  const symbolsById = createSymbolIndex(graph.symbols);
+  const root = symbolsById.get(changedFileSymbolId);
+  if (root?.kind !== "file") {
+    return {
+      paths: [],
+      resultLimitReached: false,
+      traversalTruncated: false,
+      depthLimitReached: false
+    };
+  }
+
+  const rootPath = createRootPath(root);
+  const seenFileSymbolIds = new Set<string>([root.id]);
+  const paths: ImpactPath[] = classifyTestFile(root.filePath) === null ? [] : [rootPath];
+  let frontier: TraversalState[] = [{ terminal: root, path: rootPath }];
+  let resultLimitReached = false;
+  let traversalTruncated = false;
+  let depthLimitReached = false;
+
+  for (let depth = 0; depth <= options.maxDepth && frontier.length > 0; depth += 1) {
+    const nextFrontier: TraversalState[] = [];
+    for (const state of frontier.sort((left, right) => compareImpactPaths(left.path, right.path))) {
+      const relations = incomingExactFileRelations(graph, symbolsById, state.terminal.id);
+      if (depth >= options.maxDepth) {
+        if (relations.some((relation) => !seenFileSymbolIds.has(relation.symbol.id))) {
+          depthLimitReached = true;
+        }
+        continue;
+      }
+
+      for (const relation of relations) {
+        if (seenFileSymbolIds.has(relation.symbol.id)) {
+          continue;
+        }
+        if (seenFileSymbolIds.size >= options.maxVisitedFiles) {
+          traversalTruncated = true;
+          continue;
+        }
+
+        seenFileSymbolIds.add(relation.symbol.id);
+        const path = extendImpactPath(state.path, state.terminal, relation.symbol, relation.edge);
+        if (classifyTestFile(relation.symbol.filePath) !== null) {
+          if (paths.length < options.maxResults) {
+            paths.push(path);
+          } else {
+            resultLimitReached = true;
+          }
+        }
+
+        // A test-directory file can be a shared helper. Keep following its
+        // exact dependents so a later conventional test is not hidden behind it.
+        nextFrontier.push({ terminal: relation.symbol, path });
+      }
+    }
+    frontier = nextFrontier;
+  }
+
+  return {
+    paths: paths.sort(compareImpactPaths),
+    resultLimitReached,
+    traversalTruncated,
+    depthLimitReached
+  };
 }
 
 /**

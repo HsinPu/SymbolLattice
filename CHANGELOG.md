@@ -6,6 +6,27 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.6.0] - 2026-07-29
+
+### Added
+
+- `affected [filePaths...]` CLI command with Git-friendly `--stdin`, bounded `--depth` and `--limit`, project-relative/absolute path normalization, and stable JSON output.
+- `SymbolLatticeService.affectedTests(projectPath, filePaths, options)` for changed-file test selection from the active graph generation.
+- Read-only, idempotent `symbol_lattice_affected` MCP tool with capability detection, preserving the tool list of older explore-only embeddings.
+- Deterministic affected-test evidence paths through exact persisted `imports` and `exports` edges, including barrel re-exports. A changed conventionally named test file is returned with a zero-edge `changed-test` proof.
+- Shared conservative test-path classification for `*.test.*`, `*.spec.*`, `*.e2e.*`, and conventional test directories.
+- Explicit analysis bounds and completeness reporting: indexed versus unindexed inputs, active index scope, stale index state, depth, visited-file, and result-limit omissions.
+
+### Compatibility
+
+- No SQLite migration is required. `affected` reads the active graph bundle only and remains compatible with older GraphStore adapters.
+- Older adapters that do not persist index inputs return `indexScope: null`; the feature does not fabricate scope or source provenance.
+
+### Deliberate limits
+
+- `affected` is changed-file static analysis, not Git semantic diff or test-runner discovery. Git is an explicit caller-owned pipeline integration.
+- Only exact persisted file-level import/export edges count as proof. Dynamic dispatch, runtime test discovery, unindexed paths, unsupported languages, and omitted traversal branches are surfaced as limitations rather than treated as safe.
+
 ## [0.5.0] - 2026-07-29
 
 ### Added
@@ -139,7 +160,8 @@ No unreleased changes.
 - Explicit full indexing, caller/callee/impact queries, and read-only MCP exploration.
 - `exact`, `heuristic`, and `unresolved` relationship states.
 
-[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/HsinPu/symbol-lattice/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.3.0...v0.4.0

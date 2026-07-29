@@ -3,6 +3,8 @@ import { resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  type AffectedTestsOptions,
+  type AffectedTestsResult,
   type ContextOptions,
   type ContextResult,
   type ImpactOptions,
@@ -11,7 +13,7 @@ import {
   type SearchResult,
   type SymbolLatticeService
 } from "../../../src/application/index.js";
-import { createProgram } from "../../../src/cli/main.js";
+import { createProgram, parseAffectedStdin } from "../../../src/cli/main.js";
 
 function resultStatus(): SearchResult["status"] {
   return {
@@ -66,6 +68,37 @@ function impactResult(): ImpactResult {
       declarationOrdinal: 0
     },
     paths: []
+  };
+}
+
+function affectedTestsResult(): AffectedTestsResult {
+  return {
+    status: resultStatus(),
+    bounds: {
+      maxChangedFiles: 50,
+      maxDepth: 5,
+      limit: 25,
+      maxVisitedFilesPerInput: 500,
+      edgeKinds: ["imports", "exports"],
+      resolution: "exact"
+    },
+    indexScope: [],
+    indexedTestFiles: 0,
+    inputs: {
+      requested: ["src/math.ts"],
+      indexed: ["src/math.ts"],
+      notIndexed: []
+    },
+    tests: {
+      items: [],
+      resultLimitTruncated: false,
+      traversalTruncated: false,
+      depthLimitReached: false
+    },
+    completeness: {
+      completeForActiveGeneration: true,
+      limitations: []
+    }
   };
 }
 
@@ -295,4 +328,82 @@ describe("symbol-lattice v0.5 context and impact CLI", () => {
       )
     ).rejects.toThrow("Expected an integer between 1 and 100");
   });
+});
+
+describe("symbol-lattice v0.6 affected-test CLI", () => {
+  it("parses Git-style stdin file lists without blank records", () => {
+    expect(parseAffectedStdin("src/math.ts\r\ntest/math.test.ts\n\n")).toEqual([
+      "src/math.ts",
+      "test/math.test.ts"
+    ]);
+  });
+
+  it("forwards changed files and bounded affected-test options", async () => {
+    const calls: Array<{
+      projectPath: string;
+      filePaths: readonly string[];
+      options: AffectedTestsOptions;
+    }> = [];
+    const result = affectedTestsResult();
+    const service = {
+      async affectedTests(
+        projectPath: string,
+        filePaths: readonly string[],
+        options: AffectedTestsOptions = {}
+      ): Promise<AffectedTestsResult> {
+        calls.push({ projectPath, filePaths, options });
+        return result;
+      }
+    } as unknown as SymbolLatticeService;
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+    await createProgram(service).parseAsync(
+      [
+        "node",
+        "symbol-lattice",
+        "affected",
+        "src/math.ts",
+        "tests/math.spec.ts",
+        "--project",
+        "C:/chosen-project",
+        "--depth",
+        "4",
+        "--limit",
+        "7",
+        "--json"
+      ],
+      { from: "node" }
+    );
+
+    expect(calls).toEqual([
+      {
+        projectPath: resolve("C:/chosen-project"),
+        filePaths: ["src/math.ts", "tests/math.spec.ts"],
+        options: { maxDepth: 4, limit: 7 }
+      }
+    ]);
+    expect(write).toHaveBeenCalledWith(`${JSON.stringify(result, null, 2)}\n`);
+  });
+
+  for (const rangeCase of [
+    ["--depth", "9", "Expected an integer between 1 and 8"],
+    ["--limit", "101", "Expected an integer between 1 and 100"]
+  ] as const) {
+    it(`rejects affected-test ${rangeCase[0]} outside its public bounds`, async () => {
+      const service = {
+        async affectedTests(): Promise<AffectedTestsResult> {
+          return affectedTestsResult();
+        }
+      } as unknown as SymbolLatticeService;
+      const program = createProgram(service);
+      program.exitOverride();
+
+      await expect(
+        program.parseAsync(
+          ["node", "symbol-lattice", "affected", "src/math.ts", rangeCase[0], rangeCase[1]],
+          { from: "node" }
+        )
+      ).rejects.toThrow(rangeCase[2]);
+    });
+  }
 });

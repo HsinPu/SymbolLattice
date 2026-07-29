@@ -293,6 +293,10 @@ describe("SymbolLatticeService", () => {
     await expect(service.search(projectPath, "add")).rejects.toMatchObject({
       code: "SOURCE_SEARCH_UNAVAILABLE"
     });
+    await expect(service.affectedTests(projectPath, ["src/math.ts"])).resolves.toMatchObject({
+      inputs: { indexed: ["src/math.ts"], notIndexed: [] },
+      completeness: { completeForActiveGeneration: true }
+    });
     await expect(service.sync({ projectPath })).resolves.toMatchObject({
       generationId: initialStatus.generationId,
       stale: false,
@@ -365,6 +369,13 @@ describe("SymbolLatticeService", () => {
 
     await writeFile(join(projectPath, "src", "math.ts"), "export const changed = true;", "utf8");
     expect((await service.getStatus(projectPath)).stale).toBe(true);
+    await expect(service.affectedTests(projectPath, ["src/math.ts"])).resolves.toMatchObject({
+      status: { stale: true },
+      completeness: {
+        completeForActiveGeneration: false,
+        limitations: ["index-stale"]
+      }
+    });
     expect((await service.sync({ projectPath })).stale).toBe(false);
   });
 
@@ -479,6 +490,163 @@ describe("SymbolLatticeService", () => {
     expect(boundedImpact).toMatchObject({
       paths: unboundedImpact.paths.slice(0, 1),
       truncated: true
+    });
+  });
+
+  it("selects affected conventionally named test files from exact active-generation file evidence", async () => {
+    const projectPath = await createInlineProject({
+      "src/math.ts": [
+        "export function add(left: number, right: number): number {",
+        "  return left + right;",
+        "}",
+        ""
+      ].join("\n"),
+      "src/index.ts": ['export { add } from "./math.js";', ""].join("\n"),
+      "test/direct.test.ts": [
+        'import { add } from "../src/math.js";',
+        "export const direct = add(1, 2);",
+        ""
+      ].join("\n"),
+      "tests/barrel.spec.ts": [
+        'import { add } from "../src/index.js";',
+        "export const barrel = add(2, 3);",
+        ""
+      ].join("\n"),
+      "test/changed.test.ts": [
+        "export const changedTest = true;",
+        ""
+      ].join("\n")
+    });
+    const service = createService();
+    await service.init({ projectPath });
+
+    const result = await service.affectedTests(
+      projectPath,
+      ["src\\math.ts", "src/missing.ts", "test/changed.test.ts"],
+      { maxDepth: 2, limit: 10 }
+    );
+
+    expect(result).toMatchObject({
+      status: { stale: false },
+      bounds: {
+        maxChangedFiles: 50,
+        maxDepth: 2,
+        limit: 10,
+        maxVisitedFilesPerInput: 500,
+        edgeKinds: ["imports", "exports"],
+        resolution: "exact"
+      },
+      indexScope: ["."],
+      indexedTestFiles: 3,
+      inputs: {
+        requested: ["src/math.ts", "src/missing.ts", "test/changed.test.ts"],
+        indexed: ["src/math.ts", "test/changed.test.ts"],
+        notIndexed: ["src/missing.ts"]
+      },
+      tests: {
+        resultLimitTruncated: false,
+        traversalTruncated: false,
+        depthLimitReached: false,
+        items: [
+          expect.objectContaining({
+            triggerFilePath: "src/math.ts",
+            filePath: "test/direct.test.ts",
+            reason: "exact-dependent",
+            classification: "test-directory",
+            path: expect.objectContaining({ edges: [expect.objectContaining({ kind: "imports", resolution: "exact" })] })
+          }),
+          expect.objectContaining({
+            triggerFilePath: "src/math.ts",
+            filePath: "tests/barrel.spec.ts",
+            reason: "exact-dependent",
+            classification: "test-directory",
+            path: expect.objectContaining({ edges: [expect.objectContaining({ kind: "exports" }), expect.objectContaining({ kind: "imports" })] })
+          }),
+          expect.objectContaining({
+            triggerFilePath: "test/changed.test.ts",
+            filePath: "test/changed.test.ts",
+            reason: "changed-test",
+            classification: "test-directory",
+            path: expect.objectContaining({ edges: [] })
+          })
+        ]
+      },
+      completeness: {
+        completeForActiveGeneration: false,
+        limitations: ["input-not-indexed"]
+      }
+    });
+
+    const depthBounded = await service.affectedTests(projectPath, ["src/math.ts"], {
+      maxDepth: 1,
+      limit: 10
+    });
+    expect(depthBounded).toMatchObject({
+      tests: { depthLimitReached: true },
+      completeness: {
+        completeForActiveGeneration: false,
+        limitations: ["depth-limit-reached"]
+      }
+    });
+
+    await expect(
+      service.affectedTests(projectPath, [join(projectPath, "src", "math.ts")])
+    ).resolves.toMatchObject({
+      inputs: { requested: ["src/math.ts"], indexed: ["src/math.ts"], notIndexed: [] }
+    });
+
+    await expect(service.affectedTests(projectPath, [])).rejects.toMatchObject({
+      code: "INVALID_AFFECTED_FILES"
+    });
+    await expect(
+      service.affectedTests(projectPath, ["src/math.ts"], { maxDepth: 9 })
+    ).rejects.toMatchObject({ code: "INVALID_AFFECTED_DEPTH" });
+    await expect(
+      service.affectedTests(projectPath, ["src/math.ts"], { limit: 101 })
+    ).rejects.toMatchObject({ code: "INVALID_AFFECTED_LIMIT" });
+  });
+
+  it("continues through a test-directory helper before judging active-generation completeness", async () => {
+    const projectPath = await createInlineProject({
+      "src/math.ts": ["export const add = (left: number, right: number) => left + right;", ""].join("\n"),
+      "test/helpers.ts": [
+        'import { add } from "../src/math.js";',
+        "export const helper = () => add(1, 2);",
+        ""
+      ].join("\n"),
+      "test/subject.test.ts": [
+        'import { helper } from "./helpers.js";',
+        "export const subject = helper();",
+        ""
+      ].join("\n")
+    });
+    const service = createService();
+    await service.init({ projectPath });
+
+    const result = await service.affectedTests(projectPath, ["src/math.ts"], {
+      maxDepth: 2,
+      limit: 10
+    });
+
+    expect(result).toMatchObject({
+      tests: {
+        items: [
+          expect.objectContaining({ filePath: "test/helpers.ts" }),
+          expect.objectContaining({
+            filePath: "test/subject.test.ts",
+            path: expect.objectContaining({
+              edges: [
+                expect.objectContaining({ kind: "imports", resolution: "exact" }),
+                expect.objectContaining({ kind: "imports", resolution: "exact" })
+              ]
+            })
+          })
+        ],
+        depthLimitReached: false,
+        traversalTruncated: false,
+        resultLimitTruncated: false
+      },
+      completeness: { completeForActiveGeneration: true, limitations: [] }
     });
   });
 

@@ -1,10 +1,13 @@
 #!/usr/bin/env node
 
 import { Command } from "commander";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
 
 import {
+  MAX_AFFECTED_LIMIT,
+  MAX_AFFECTED_MAX_DEPTH,
   MAX_CONTEXT_IMPACT_DEPTH,
   MAX_CONTEXT_IMPACT_LIMIT,
   MAX_CONTEXT_MAX_HOPS,
@@ -13,6 +16,7 @@ import {
   SymbolLatticeError,
   SymbolLatticeService,
   type ContextOptions,
+  type AffectedTestsOptions,
   type FindOptions,
   type SearchOptions
 } from "../application/index.js";
@@ -49,6 +53,12 @@ interface SearchCommandOptions extends ProjectOptions {
 interface ImpactCommandOptions extends ProjectOptions {
   readonly depth?: number;
   readonly limit?: number;
+}
+
+interface AffectedCommandOptions extends ProjectOptions {
+  readonly depth?: number;
+  readonly limit?: number;
+  readonly stdin?: boolean;
 }
 
 interface ContextCommandOptions extends ProjectOptions {
@@ -110,6 +120,14 @@ function normalizeSearchQuery(value: string): string {
     throw new Error("Expected a non-empty search query.");
   }
   return query;
+}
+
+/** Parses one Git-friendly changed-file path per input line. */
+export function parseAffectedStdin(value: string): readonly string[] {
+  return value
+    .split(/\r\n|\r|\n/u)
+    .map((filePath) => filePath.trim())
+    .filter((filePath) => filePath.length > 0);
 }
 
 function render(value: unknown, _options: OutputOptions): void {
@@ -293,6 +311,30 @@ export function createProgram(service = createService()): Command {
       };
       render(
         await service.impact(defaultProjectPath(options), reference, impactOptions),
+        options
+      );
+    });
+
+  addJsonOption(addProjectOption(program.command("affected [filePaths...]")))
+    .option("--stdin", "Read additional changed file paths from standard input (one per line)")
+    .option(
+      "--depth <count>",
+      `Maximum reverse import/export depth per changed file (1-${MAX_AFFECTED_MAX_DEPTH})`,
+      (value: string) => parseBoundedPositiveInteger(value, MAX_AFFECTED_MAX_DEPTH)
+    )
+    .option(
+      "--limit <count>",
+      `Maximum returned affected-test proofs (1-${MAX_AFFECTED_LIMIT})`,
+      (value: string) => parseBoundedPositiveInteger(value, MAX_AFFECTED_LIMIT)
+    )
+    .action(async (filePaths: string[], options: AffectedCommandOptions) => {
+      const affectedOptions: AffectedTestsOptions = {
+        ...(options.depth === undefined ? {} : { maxDepth: options.depth }),
+        ...(options.limit === undefined ? {} : { limit: options.limit })
+      };
+      const stdinPaths = options.stdin ? parseAffectedStdin(readFileSync(0, "utf8")) : [];
+      render(
+        await service.affectedTests(defaultProjectPath(options), [...filePaths, ...stdinPaths], affectedOptions),
         options
       );
     });

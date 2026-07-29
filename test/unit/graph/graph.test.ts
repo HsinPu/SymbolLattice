@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  classifyTestFile,
+  findAffectedTestPaths,
   findEvidencePath,
   findSymbols,
   getCallees,
@@ -16,14 +18,16 @@ function symbol(input: {
   readonly name: string;
   readonly filePath?: string;
   readonly startLine?: number;
+  readonly kind?: SymbolNode["kind"];
 }): SymbolNode {
   const filePath = input.filePath ?? "src/example.ts";
   const startLine = input.startLine ?? 1;
+  const kind = input.kind ?? "function";
   return {
     id: input.id,
     name: input.name,
-    qualifiedName: `${filePath}#${input.name}`,
-    kind: "function",
+    qualifiedName: kind === "file" ? filePath : `${filePath}#${input.name}`,
+    kind,
     filePath,
     range: {
       start: { line: startLine, column: 1 },
@@ -118,6 +122,130 @@ describe("pure graph traversal", () => {
       "transitive"
     ]);
     expect(() => getImpactPaths(graph, "changed", 0)).toThrow("positive integer");
+  });
+
+  it("finds exact affected test-file paths through imports and barrel exports", () => {
+    const changedFile = symbol({ id: "changed-file", name: "math.ts", filePath: "src/math.ts", kind: "file" });
+    const barrelFile = symbol({ id: "barrel-file", name: "index.ts", filePath: "src/index.ts", kind: "file" });
+    const directTest = symbol({ id: "direct-test", name: "math.test.ts", filePath: "test/math.test.ts", kind: "file" });
+    const reexportTest = symbol({
+      id: "reexport-test",
+      name: "math.spec.ts",
+      filePath: "tests/math.spec.ts",
+      kind: "file"
+    });
+    const heuristicTest = symbol({
+      id: "heuristic-test",
+      name: "math.test.ts",
+      filePath: "test/heuristic.test.ts",
+      kind: "file"
+    });
+    const affectedGraph = {
+      symbols: [heuristicTest, reexportTest, directTest, barrelFile, changedFile],
+      edges: [
+        edge({ id: "barrel-exports-math", sourceId: "barrel-file", targetId: "changed-file", kind: "exports" }),
+        edge({ id: "direct-imports-math", sourceId: "direct-test", targetId: "changed-file", kind: "imports" }),
+        edge({ id: "test-imports-barrel", sourceId: "reexport-test", targetId: "barrel-file", kind: "imports" }),
+        edge({
+          id: "heuristic-import",
+          sourceId: "heuristic-test",
+          targetId: "changed-file",
+          kind: "imports",
+          resolution: "heuristic"
+        })
+      ]
+    };
+
+    const result = findAffectedTestPaths(affectedGraph, "changed-file", {
+      maxDepth: 2,
+      maxResults: 5,
+      maxVisitedFiles: 20
+    });
+
+    expect(result).toMatchObject({
+      resultLimitReached: false,
+      traversalTruncated: false,
+      depthLimitReached: false
+    });
+    expect(result.paths.map((path) => path.symbols.at(-1)?.filePath)).toEqual([
+      "test/math.test.ts",
+      "tests/math.spec.ts"
+    ]);
+    expect(result.paths[1]?.edges.map((item) => item.kind)).toEqual(["exports", "imports"]);
+    expect(classifyTestFile("test/math.test.ts")).toBe("test-directory");
+    expect(classifyTestFile("src/math.test.ts")).toBe("test-file-name");
+    expect(classifyTestFile("src/math.ts")).toBeNull();
+
+    expect(
+      findAffectedTestPaths(affectedGraph, "changed-file", {
+        maxDepth: 1,
+        maxResults: 5,
+        maxVisitedFiles: 20
+      })
+    ).toMatchObject({
+      paths: [expect.objectContaining({ symbols: expect.arrayContaining([expect.objectContaining({ id: "changed-file" })]) })],
+      depthLimitReached: true
+    });
+    expect(
+      findAffectedTestPaths(affectedGraph, "changed-file", {
+        maxDepth: 2,
+        maxResults: 1,
+        maxVisitedFiles: 20
+      })
+    ).toMatchObject({ resultLimitReached: true });
+    expect(
+      findAffectedTestPaths(affectedGraph, "changed-file", {
+        maxDepth: 2,
+        maxResults: 5,
+        maxVisitedFiles: 1
+      })
+    ).toMatchObject({ paths: [], traversalTruncated: true });
+  });
+
+  it("continues through conventionally classified test helpers to later tests", () => {
+    const changedFile = symbol({ id: "changed-file", name: "math.ts", filePath: "src/math.ts", kind: "file" });
+    const helperFile = symbol({ id: "helper-file", name: "helpers.ts", filePath: "test/helpers.ts", kind: "file" });
+    const subjectTest = symbol({
+      id: "subject-test",
+      name: "subject.test.ts",
+      filePath: "test/subject.test.ts",
+      kind: "file"
+    });
+    const helperGraph = {
+      symbols: [subjectTest, helperFile, changedFile],
+      edges: [
+        edge({ id: "helper-imports-changed", sourceId: "helper-file", targetId: "changed-file", kind: "imports" }),
+        edge({ id: "subject-imports-helper", sourceId: "subject-test", targetId: "helper-file", kind: "imports" })
+      ]
+    };
+
+    const result = findAffectedTestPaths(helperGraph, "changed-file", {
+      maxDepth: 2,
+      maxResults: 5,
+      maxVisitedFiles: 20
+    });
+
+    expect(result).toMatchObject({
+      resultLimitReached: false,
+      traversalTruncated: false,
+      depthLimitReached: false
+    });
+    expect(result.paths.map((path) => path.symbols.at(-1)?.filePath)).toEqual([
+      "test/helpers.ts",
+      "test/subject.test.ts"
+    ]);
+    expect(result.paths[1]?.edges.map((item) => item.id)).toEqual([
+      "helper-imports-changed",
+      "subject-imports-helper"
+    ]);
+
+    expect(
+      findAffectedTestPaths(helperGraph, "helper-file", {
+        maxDepth: 1,
+        maxResults: 5,
+        maxVisitedFiles: 20
+      }).paths.map((path) => path.symbols.at(-1)?.filePath)
+    ).toEqual(["test/helpers.ts", "test/subject.test.ts"]);
   });
 
   it("finds a deterministic shortest directed evidence path with aligned steps", () => {

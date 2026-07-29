@@ -3,6 +3,7 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
+  type AffectedTestsResult,
   SymbolLatticeError,
   type ContextResult,
   type ExplainEdgeResult,
@@ -11,6 +12,7 @@ import {
 } from "../../../src/application/index.js";
 import {
   createMcpServer,
+  runAffectedTestsTool,
   runContextTool,
   runExplainEdgeTool,
   runExploreTool,
@@ -73,6 +75,37 @@ function contextResult(): ContextResult {
       }
     ],
     evidencePaths: []
+  };
+}
+
+function affectedTestsResult(): AffectedTestsResult {
+  return {
+    status: exploreResult().status,
+    bounds: {
+      maxChangedFiles: 50,
+      maxDepth: 5,
+      limit: 25,
+      maxVisitedFilesPerInput: 500,
+      edgeKinds: ["imports", "exports"],
+      resolution: "exact"
+    },
+    indexScope: [],
+    indexedTestFiles: 0,
+    inputs: {
+      requested: ["src/math.ts"],
+      indexed: ["src/math.ts"],
+      notIndexed: []
+    },
+    tests: {
+      items: [],
+      resultLimitTruncated: false,
+      traversalTruncated: false,
+      depthLimitReached: false
+    },
+    completeness: {
+      completeForActiveGeneration: true,
+      limitations: []
+    }
   };
 }
 
@@ -339,6 +372,64 @@ describe("SymbolLattice MCP server", () => {
     ]);
   });
 
+  it("registers affected-test analysis only when the service supports it", async () => {
+    const affectedCalls: Array<{
+      projectPath: string;
+      filePaths: readonly string[];
+      options: { maxDepth?: number; limit?: number };
+    }> = [];
+    const server = createMcpServer(
+      {
+        async explore(): Promise<ExploreResult> {
+          return exploreResult();
+        },
+        async affectedTests(
+          projectPath: string,
+          filePaths: readonly string[],
+          options = {}
+        ): Promise<AffectedTestsResult> {
+          affectedCalls.push({ projectPath, filePaths, options });
+          return affectedTestsResult();
+        }
+      },
+      "C:/default-project"
+    );
+    const client = new Client({ name: "symbol-lattice-affected-test", version: "1.0.0" });
+    const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+    closeCallbacks.push(() => client.close(), () => server.close());
+
+    const tools = await client.listTools();
+    expect(tools.tools.map((tool) => tool.name)).toEqual([
+      "symbol_lattice_explore",
+      "symbol_lattice_affected"
+    ]);
+
+    const result = await client.callTool({
+      name: "symbol_lattice_affected",
+      arguments: {
+        projectPath: "C:/chosen-project",
+        filePaths: ["src/math.ts", "tests/math.spec.ts"],
+        maxDepth: 4,
+        limit: 7
+      }
+    });
+
+    expect(result.isError).not.toBe(true);
+    expect(result.structuredContent).toMatchObject({
+      bounds: { maxDepth: 5, limit: 25 },
+      completeness: { completeForActiveGeneration: true }
+    });
+    expect(affectedCalls).toEqual([
+      {
+        projectPath: "C:/chosen-project",
+        filePaths: ["src/math.ts", "tests/math.spec.ts"],
+        options: { maxDepth: 4, limit: 7 }
+      }
+    ]);
+  });
+
   it("does not register search for an existing explore-and-explain embedding", async () => {
     const server = createMcpServer(
       {
@@ -441,6 +532,21 @@ describe("SymbolLattice MCP server", () => {
     expect(response.content[0]?.text).toContain("MISSING_INDEX");
   });
 
+  it("returns affected-test errors without indexing", async () => {
+    const response = await runAffectedTestsTool(
+      {
+        async affectedTests(): Promise<AffectedTestsResult> {
+          throw new SymbolLatticeError("MISSING_INDEX", "Run symbol-lattice init first.");
+        }
+      },
+      "C:/project",
+      { filePaths: ["src/missing.ts"] }
+    );
+
+    expect(response).toMatchObject({ isError: true });
+    expect(response.content[0]?.text).toContain("MISSING_INDEX");
+  });
+
   it("returns indexed-search errors without indexing", async () => {
     const response = await runSearchTool(
       {
@@ -480,6 +586,9 @@ describe("SymbolLattice MCP server", () => {
       async context(): Promise<ContextResult> {
         return contextResult();
       },
+      async affectedTests(): Promise<AffectedTestsResult> {
+        return affectedTestsResult();
+      },
       async search(): Promise<SearchResult> {
         return searchResult();
       },
@@ -499,6 +608,7 @@ describe("SymbolLattice MCP server", () => {
 
     await runExploreTool(service, "C:/project", { query: "missing" });
     await runContextTool(service, "C:/project", { references: ["src/missing.ts#missing"] });
+    await runAffectedTestsTool(service, "C:/project", { filePaths: ["src/missing.ts"] });
     await runSearchTool(service, "C:/project", { query: "user" });
     await runExplainEdgeTool(service, "C:/project", { edgeId: "edge:caller-callee" });
 
