@@ -8,6 +8,7 @@ import type {
   PersistedArtifactFacts
 } from "../../domain/facts.js";
 import type { ProjectIndexInputs } from "../../domain/index-inputs.js";
+import type { IndexWork } from "../../domain/index-work.js";
 import type {
   ArtifactLanguage,
   EdgeKind,
@@ -22,17 +23,21 @@ import type {
   SymbolKind,
   SymbolNode
 } from "../../domain/types.js";
-import type { GraphStore, ReplaceProjectFactsInput } from "../../ports/graph-store.js";
+import type {
+  ActiveGenerationBundle,
+  GraphStore,
+  ReplaceProjectFactsInput
+} from "../../ports/graph-store.js";
 
 const INDEX_DIRECTORY_NAME = ".symbol-lattice";
 const DATABASE_FILE_NAME = "index.sqlite";
 const INDEXED_AT_META_KEY = "indexed_at";
 const ACTIVE_GENERATION_ID_META_KEY = "active_generation_id";
 const SCHEMA_VERSION_META_KEY = "schema_version";
-const SCHEMA_VERSION = "3";
-const PREVIOUS_SCHEMA_VERSION = "2";
+const SCHEMA_VERSION = "4";
+const INDEX_INPUTS_SCHEMA_VERSION = "3";
+const GENERATION_SCHEMA_VERSION = "2";
 const LEGACY_SCHEMA_VERSION = "1";
-const RESOLVER_VERSION = "typescript-static-v1";
 
 /**
  * The v0.1 snapshot tables remain deliberately unpartitioned. They are a fast
@@ -162,9 +167,25 @@ const GENERATION_INDEX_INPUTS_SCHEMA = `
   ) STRICT;
 `;
 
+/**
+ * v4 records the actual indexing work next to the graph generation it
+ * produced. The row is intentionally optional: generations created by v1-v3
+ * stay honest about not having work telemetry.
+ */
+const GENERATION_INDEX_WORK_SCHEMA = `
+  PRAGMA foreign_keys = ON;
+
+  CREATE TABLE IF NOT EXISTS generation_index_work (
+    generation_id TEXT PRIMARY KEY,
+    work_json TEXT NOT NULL,
+    FOREIGN KEY(generation_id) REFERENCES generations(id) ON DELETE CASCADE
+  ) STRICT;
+`;
+
 type SupportedSchemaVersion =
   | typeof LEGACY_SCHEMA_VERSION
-  | typeof PREVIOUS_SCHEMA_VERSION
+  | typeof GENERATION_SCHEMA_VERSION
+  | typeof INDEX_INPUTS_SCHEMA_VERSION
   | typeof SCHEMA_VERSION;
 
 interface CountRow {
@@ -234,6 +255,16 @@ interface ArtifactFactsRow {
 
 interface GenerationIndexInputsRow {
   readonly inputs_json: string;
+}
+
+interface GenerationIndexWorkRow {
+  readonly work_json: string;
+}
+
+interface GenerationRow {
+  readonly indexed_at: string;
+  readonly extractor_version: string;
+  readonly resolver_version: string;
 }
 
 function databasePathFor(projectPath: string): string {
@@ -321,7 +352,7 @@ function unsupportedSchemaError(version: string | null): Error {
   }
 
   return new Error(
-    `SymbolLattice index schema version \"${version}\" is unsupported by this release (supported: ${LEGACY_SCHEMA_VERSION}, ${PREVIOUS_SCHEMA_VERSION}, ${SCHEMA_VERSION}). Rebuild with a compatible SymbolLattice version.`
+    `SymbolLattice index schema version \"${version}\" is unsupported by this release (supported: ${LEGACY_SCHEMA_VERSION}, ${GENERATION_SCHEMA_VERSION}, ${INDEX_INPUTS_SCHEMA_VERSION}, ${SCHEMA_VERSION}). Rebuild with a compatible SymbolLattice version.`
   );
 }
 
@@ -333,7 +364,8 @@ function readSchemaVersion(database: DatabaseSync): SupportedSchemaVersion {
   const version = getMeta(database, SCHEMA_VERSION_META_KEY);
   if (
     version === LEGACY_SCHEMA_VERSION ||
-    version === PREVIOUS_SCHEMA_VERSION ||
+    version === GENERATION_SCHEMA_VERSION ||
+    version === INDEX_INPUTS_SCHEMA_VERSION ||
     version === SCHEMA_VERSION
   ) {
     return version;
@@ -342,26 +374,15 @@ function readSchemaVersion(database: DatabaseSync): SupportedSchemaVersion {
   throw unsupportedSchemaError(version);
 }
 
-function migrateLegacyDatabase(database: DatabaseSync): void {
+function migrateDatabaseToCurrent(database: DatabaseSync): void {
   database.exec("BEGIN IMMEDIATE");
   try {
+    // All historic revisions use the same v0.1 projection. The v2-v4
+    // additions are independent side tables, so this is a strictly additive
+    // upgrade that preserves the active graph and any raw facts already there.
     database.exec(GENERATION_SCHEMA);
     database.exec(GENERATION_INDEX_INPUTS_SCHEMA);
-    setMeta(database, SCHEMA_VERSION_META_KEY, SCHEMA_VERSION);
-    database.exec("COMMIT");
-  } catch (error) {
-    database.exec("ROLLBACK");
-    throw error;
-  }
-}
-
-function migratePreviousDatabase(database: DatabaseSync): void {
-  database.exec("BEGIN IMMEDIATE");
-  try {
-    // Re-run the v2 definitions in case an earlier initialization was
-    // interrupted before every additive side table was created.
-    database.exec(GENERATION_SCHEMA);
-    database.exec(GENERATION_INDEX_INPUTS_SCHEMA);
+    database.exec(GENERATION_INDEX_WORK_SCHEMA);
     setMeta(database, SCHEMA_VERSION_META_KEY, SCHEMA_VERSION);
     database.exec("COMMIT");
   } catch (error) {
@@ -376,6 +397,7 @@ function initializeNewDatabase(database: DatabaseSync): void {
     database.exec(SNAPSHOT_SCHEMA);
     database.exec(GENERATION_SCHEMA);
     database.exec(GENERATION_INDEX_INPUTS_SCHEMA);
+    database.exec(GENERATION_INDEX_WORK_SCHEMA);
     setMeta(database, SCHEMA_VERSION_META_KEY, SCHEMA_VERSION);
     database.exec("COMMIT");
   } catch (error) {
@@ -391,21 +413,17 @@ function ensureSchema(database: DatabaseSync, databaseExisted: boolean): void {
   }
 
   const schemaVersion = readSchemaVersion(database);
-  if (schemaVersion === LEGACY_SCHEMA_VERSION) {
-    migrateLegacyDatabase(database);
+  if (schemaVersion !== SCHEMA_VERSION) {
+    migrateDatabaseToCurrent(database);
     return;
   }
 
-  if (schemaVersion === PREVIOUS_SCHEMA_VERSION) {
-    migratePreviousDatabase(database);
-    return;
-  }
-
-  // A previous v3 initialization might have been interrupted after the main
+  // A previous v4 initialization might have been interrupted after the main
   // schema version was stored. The idempotent side tables can be restored
   // without changing graph data or its active generation.
   database.exec(GENERATION_SCHEMA);
   database.exec(GENERATION_INDEX_INPUTS_SCHEMA);
+  database.exec(GENERATION_INDEX_WORK_SCHEMA);
 }
 
 function getActiveGenerationId(database: DatabaseSync): string | null {
@@ -414,6 +432,12 @@ function getActiveGenerationId(database: DatabaseSync): string | null {
 
 function supportsGenerationData(schemaVersion: SupportedSchemaVersion): boolean {
   return schemaVersion !== LEGACY_SCHEMA_VERSION;
+}
+
+function supportsIndexInputs(schemaVersion: SupportedSchemaVersion): boolean {
+  return (
+    schemaVersion === INDEX_INPUTS_SCHEMA_VERSION || schemaVersion === SCHEMA_VERSION
+  );
 }
 
 function parseJson<T>(json: string, description: string): T {
@@ -464,7 +488,8 @@ function artifactFactsPayload(facts: PersistedArtifactFacts): ArtifactFacts {
     localBindings: facts.localBindings,
     referenceScopes: facts.referenceScopes,
     importBindings: facts.importBindings,
-    exportBindings: facts.exportBindings
+    exportBindings: facts.exportBindings,
+    reExportBindings: facts.reExportBindings
   };
 }
 
@@ -591,6 +616,232 @@ function insertIndexInputs(
     .run(generationId, JSON.stringify(indexInputs));
 }
 
+function insertIndexWork(database: DatabaseSync, generationId: string, indexWork: IndexWork): void {
+  database
+    .prepare("INSERT INTO generation_index_work(generation_id, work_json) VALUES (?, ?)")
+    .run(generationId, JSON.stringify(indexWork));
+}
+
+function emptySnapshot(): GraphSnapshot {
+  return { files: [], symbols: [], edges: [], pendingReferences: [] };
+}
+
+function uninitializedStatus(projectPath: string): IndexStatus {
+  return {
+    initialized: false,
+    stale: false,
+    staleReasons: [],
+    projectPath,
+    indexedAt: null,
+    generationId: null,
+    counts: defaultCounts()
+  };
+}
+
+function readGeneration(database: DatabaseSync, generationId: string | null): GenerationRow | null {
+  if (generationId === null) {
+    return null;
+  }
+
+  const row = database
+    .prepare(
+      `SELECT indexed_at, extractor_version, resolver_version
+       FROM generations
+       WHERE id = ?`
+    )
+    .get(generationId) as unknown as GenerationRow | undefined;
+  return row ?? null;
+}
+
+function readSnapshotProjection(
+  database: DatabaseSync,
+  activeGenerationId: string | null
+): GraphSnapshot {
+  const files = database
+    .prepare("SELECT path, content_hash, language, indexed_at FROM files ORDER BY path")
+    .all() as unknown as FileRow[];
+  const symbols = database
+    .prepare(
+      `SELECT id, name, qualified_name, kind, file_path,
+        start_line, start_column, end_line, end_column,
+        is_exported, declaration_ordinal
+       FROM symbols
+       ORDER BY file_path, start_line, start_column, name, id`
+    )
+    .all() as unknown as SymbolRow[];
+  const edges =
+    activeGenerationId === null
+      ? (database
+          .prepare(
+            `SELECT id, source_id, target_id, kind, file_path,
+              start_line, start_column, end_line, end_column,
+              resolution, confidence, reference_name
+             FROM edges
+             ORDER BY file_path, start_line, start_column, kind, id`
+          )
+          .all() as unknown as EdgeRow[])
+      : (database
+          .prepare(
+            `SELECT e.id, e.source_id, e.target_id, e.kind, e.file_path,
+              e.start_line, e.start_column, e.end_line, e.end_column,
+              e.resolution, e.confidence, e.reference_name,
+              ee.evidence_json
+             FROM edges AS e
+             LEFT JOIN edge_evidence AS ee
+               ON ee.generation_id = ? AND ee.edge_id = e.id
+             ORDER BY e.file_path, e.start_line, e.start_column, e.kind, e.id`
+          )
+          .all(activeGenerationId) as unknown as EdgeRow[]);
+  const pendingReferences = database
+    .prepare(
+      `SELECT id, source_id, file_path, reference_name, relation_kind,
+        start_line, start_column, end_line, end_column
+       FROM pending_refs
+       ORDER BY file_path, start_line, start_column, relation_kind, id`
+    )
+    .all() as unknown as PendingReferenceRow[];
+
+  return {
+    files: files.map((file) => ({
+      path: file.path,
+      contentHash: file.content_hash,
+      language: file.language,
+      indexedAt: file.indexed_at
+    })),
+    symbols: symbols.map((symbol) => ({
+      id: symbol.id,
+      name: symbol.name,
+      qualifiedName: symbol.qualified_name,
+      kind: symbol.kind,
+      filePath: symbol.file_path,
+      range: toRange(symbol),
+      isExported: symbol.is_exported === 1,
+      declarationOrdinal: symbol.declaration_ordinal
+    })),
+    edges: edges.map(toGraphEdge),
+    pendingReferences: pendingReferences.map((reference) => ({
+      id: reference.id,
+      sourceId: reference.source_id,
+      filePath: reference.file_path,
+      referenceName: reference.reference_name,
+      relationKind: reference.relation_kind,
+      range: toRange(reference)
+    }))
+  };
+}
+
+function readActiveArtifactFacts(
+  database: DatabaseSync,
+  schemaVersion: SupportedSchemaVersion,
+  activeGenerationId: string | null
+): readonly PersistedArtifactFacts[] {
+  if (!supportsGenerationData(schemaVersion) || activeGenerationId === null) {
+    return [];
+  }
+
+  const rows = database
+    .prepare(
+      `SELECT file_path, content_hash, language, extractor_version, facts_json
+       FROM artifact_facts
+       WHERE generation_id = ?
+       ORDER BY file_path`
+    )
+    .all(activeGenerationId) as unknown as ArtifactFactsRow[];
+
+  return rows.map((row): PersistedArtifactFacts => {
+    const facts = parseJson<ArtifactFacts>(row.facts_json, `artifact facts for ${row.file_path}`);
+    return {
+      ...facts,
+      // v1-v3 payloads predate re-export extraction. Make the missing field
+      // explicit at the storage boundary so later resolution sees a stable
+      // ArtifactFacts contract without claiming a re-export existed.
+      reExportBindings: facts.reExportBindings ?? [],
+      filePath: row.file_path,
+      contentHash: row.content_hash,
+      language: row.language,
+      extractorVersion: row.extractor_version
+    };
+  });
+}
+
+function readActiveIndexInputs(
+  database: DatabaseSync,
+  schemaVersion: SupportedSchemaVersion,
+  activeGenerationId: string | null
+): ProjectIndexInputs | null {
+  if (!supportsIndexInputs(schemaVersion) || activeGenerationId === null) {
+    return null;
+  }
+
+  const row = database
+    .prepare(
+      `SELECT inputs_json
+       FROM generation_index_inputs
+       WHERE generation_id = ?`
+    )
+    .get(activeGenerationId) as unknown as GenerationIndexInputsRow | undefined;
+
+  return row === undefined
+    ? null
+    : parseJson<ProjectIndexInputs>(
+        row.inputs_json,
+        `index inputs for generation ${activeGenerationId}`
+      );
+}
+
+function readActiveIndexWork(
+  database: DatabaseSync,
+  schemaVersion: SupportedSchemaVersion,
+  activeGenerationId: string | null
+): IndexWork | null {
+  if (schemaVersion !== SCHEMA_VERSION || activeGenerationId === null) {
+    return null;
+  }
+
+  const row = database
+    .prepare(
+      `SELECT work_json
+       FROM generation_index_work
+       WHERE generation_id = ?`
+    )
+    .get(activeGenerationId) as unknown as GenerationIndexWorkRow | undefined;
+
+  return row === undefined
+    ? null
+    : parseJson<IndexWork>(row.work_json, `index work for generation ${activeGenerationId}`);
+}
+
+function readActiveGenerationBundle(
+  database: DatabaseSync,
+  projectPath: string
+): ActiveGenerationBundle {
+  const schemaVersion = readSchemaVersion(database);
+  const generationId =
+    supportsGenerationData(schemaVersion) ? getActiveGenerationId(database) : null;
+  const generation = readGeneration(database, generationId);
+  const indexWork = readActiveIndexWork(database, schemaVersion, generationId);
+  const statusWithoutWork: IndexStatus = {
+    initialized: true,
+    stale: false,
+    staleReasons: [],
+    projectPath,
+    indexedAt: generation?.indexed_at ?? getMeta(database, INDEXED_AT_META_KEY),
+    generationId,
+    counts: readCounts(database)
+  };
+  const status: IndexStatus =
+    indexWork === null ? statusWithoutWork : { ...statusWithoutWork, lastIndexWork: indexWork };
+
+  return {
+    status,
+    snapshot: readSnapshotProjection(database, generationId),
+    artifactFacts: readActiveArtifactFacts(database, schemaVersion, generationId),
+    indexInputs: readActiveIndexInputs(database, schemaVersion, generationId),
+    extractorVersion: generation?.extractor_version ?? null,
+    resolverVersion: generation?.resolver_version ?? null
+  };
+}
+
 export class SqliteGraphStore implements GraphStore {
   public isInitialized(projectPath: string): boolean {
     return existsSync(databasePathFor(projectPath));
@@ -610,207 +861,39 @@ export class SqliteGraphStore implements GraphStore {
   }
 
   public getStatus(projectPath: string): IndexStatus {
+    return this.getActiveGenerationBundle(projectPath).status;
+  }
+
+  public getSnapshot(projectPath: string): GraphSnapshot {
+    return this.getActiveGenerationBundle(projectPath).snapshot;
+  }
+
+  public getArtifactFacts(projectPath: string): readonly PersistedArtifactFacts[] {
+    return this.getActiveGenerationBundle(projectPath).artifactFacts;
+  }
+
+  public getIndexInputs(projectPath: string): ProjectIndexInputs | null {
+    return this.getActiveGenerationBundle(projectPath).indexInputs;
+  }
+
+  public getActiveGenerationBundle(projectPath: string): ActiveGenerationBundle {
     const normalizedProjectPath = resolve(projectPath);
     if (!this.isInitialized(normalizedProjectPath)) {
       return {
-        initialized: false,
-        stale: false,
-        staleReasons: [],
-        projectPath: normalizedProjectPath,
-        indexedAt: null,
-        generationId: null,
-        counts: defaultCounts()
+        status: uninitializedStatus(normalizedProjectPath),
+        snapshot: emptySnapshot(),
+        artifactFacts: [],
+        indexInputs: null,
+        extractorVersion: null,
+        resolverVersion: null
       };
     }
 
     const database = new DatabaseSync(databasePathFor(normalizedProjectPath), { readOnly: true });
     try {
-      return readConsistently(database, () => {
-        const schemaVersion = readSchemaVersion(database);
-        const generationId =
-          supportsGenerationData(schemaVersion) ? getActiveGenerationId(database) : null;
-        return {
-          initialized: true,
-          stale: false,
-          staleReasons: [],
-          projectPath: normalizedProjectPath,
-          indexedAt: getMeta(database, INDEXED_AT_META_KEY),
-          generationId,
-          counts: readCounts(database)
-        };
-      });
-    } finally {
-      database.close();
-    }
-  }
-
-  public getSnapshot(projectPath: string): GraphSnapshot {
-    const normalizedProjectPath = resolve(projectPath);
-    if (!this.isInitialized(normalizedProjectPath)) {
-      return { files: [], symbols: [], edges: [], pendingReferences: [] };
-    }
-
-    const database = new DatabaseSync(databasePathFor(normalizedProjectPath), { readOnly: true });
-    try {
-      return readConsistently(database, () => {
-        const schemaVersion = readSchemaVersion(database);
-        const activeGenerationId =
-          supportsGenerationData(schemaVersion) ? getActiveGenerationId(database) : null;
-        const files = database
-          .prepare("SELECT path, content_hash, language, indexed_at FROM files ORDER BY path")
-          .all() as unknown as FileRow[];
-        const symbols = database
-          .prepare(
-            `SELECT id, name, qualified_name, kind, file_path,
-              start_line, start_column, end_line, end_column,
-              is_exported, declaration_ordinal
-             FROM symbols
-             ORDER BY file_path, start_line, start_column, name, id`
-          )
-          .all() as unknown as SymbolRow[];
-        const edges =
-          activeGenerationId === null
-            ? (database
-                .prepare(
-                  `SELECT id, source_id, target_id, kind, file_path,
-                    start_line, start_column, end_line, end_column,
-                    resolution, confidence, reference_name
-                   FROM edges
-                   ORDER BY file_path, start_line, start_column, kind, id`
-                )
-                .all() as unknown as EdgeRow[])
-            : (database
-                .prepare(
-                  `SELECT e.id, e.source_id, e.target_id, e.kind, e.file_path,
-                    e.start_line, e.start_column, e.end_line, e.end_column,
-                    e.resolution, e.confidence, e.reference_name,
-                    ee.evidence_json
-                   FROM edges AS e
-                   LEFT JOIN edge_evidence AS ee
-                     ON ee.generation_id = ? AND ee.edge_id = e.id
-                   ORDER BY e.file_path, e.start_line, e.start_column, e.kind, e.id`
-                )
-                .all(activeGenerationId) as unknown as EdgeRow[]);
-        const pendingReferences = database
-          .prepare(
-            `SELECT id, source_id, file_path, reference_name, relation_kind,
-              start_line, start_column, end_line, end_column
-             FROM pending_refs
-             ORDER BY file_path, start_line, start_column, relation_kind, id`
-          )
-          .all() as unknown as PendingReferenceRow[];
-
-        return {
-          files: files.map((file) => ({
-            path: file.path,
-            contentHash: file.content_hash,
-            language: file.language,
-            indexedAt: file.indexed_at
-          })),
-          symbols: symbols.map((symbol) => ({
-            id: symbol.id,
-            name: symbol.name,
-            qualifiedName: symbol.qualified_name,
-            kind: symbol.kind,
-            filePath: symbol.file_path,
-            range: toRange(symbol),
-            isExported: symbol.is_exported === 1,
-            declarationOrdinal: symbol.declaration_ordinal
-          })),
-          edges: edges.map(toGraphEdge),
-          pendingReferences: pendingReferences.map((reference) => ({
-            id: reference.id,
-            sourceId: reference.source_id,
-            filePath: reference.file_path,
-            referenceName: reference.reference_name,
-            relationKind: reference.relation_kind,
-            range: toRange(reference)
-          }))
-        };
-      });
-    } finally {
-      database.close();
-    }
-  }
-
-  public getArtifactFacts(projectPath: string): readonly PersistedArtifactFacts[] {
-    const normalizedProjectPath = resolve(projectPath);
-    if (!this.isInitialized(normalizedProjectPath)) {
-      return [];
-    }
-
-    const database = new DatabaseSync(databasePathFor(normalizedProjectPath), { readOnly: true });
-    try {
-      return readConsistently(database, () => {
-        const schemaVersion = readSchemaVersion(database);
-        if (schemaVersion === LEGACY_SCHEMA_VERSION) {
-          return [];
-        }
-
-        const activeGenerationId = getActiveGenerationId(database);
-        if (activeGenerationId === null) {
-          return [];
-        }
-
-        const rows = database
-          .prepare(
-            `SELECT file_path, content_hash, language, extractor_version, facts_json
-             FROM artifact_facts
-             WHERE generation_id = ?
-             ORDER BY file_path`
-          )
-          .all(activeGenerationId) as unknown as ArtifactFactsRow[];
-
-        return rows.map((row) => ({
-          ...parseJson<ArtifactFacts>(row.facts_json, `artifact facts for ${row.file_path}`),
-          filePath: row.file_path,
-          contentHash: row.content_hash,
-          language: row.language,
-          extractorVersion: row.extractor_version
-        }));
-      });
-    } finally {
-      database.close();
-    }
-  }
-
-  public getIndexInputs(projectPath: string): ProjectIndexInputs | null {
-    const normalizedProjectPath = resolve(projectPath);
-    if (!this.isInitialized(normalizedProjectPath)) {
-      return null;
-    }
-
-    const database = new DatabaseSync(databasePathFor(normalizedProjectPath), { readOnly: true });
-    try {
-      return readConsistently(database, () => {
-        const schemaVersion = readSchemaVersion(database);
-        // v1 and v2 have no input identity to reconstruct. Returning null is
-        // intentional: the application can surface a configuration-untracked
-        // status rather than inventing provenance for a legacy generation.
-        if (schemaVersion !== SCHEMA_VERSION) {
-          return null;
-        }
-
-        const activeGenerationId = getActiveGenerationId(database);
-        if (activeGenerationId === null) {
-          return null;
-        }
-
-        const row = database
-          .prepare(
-            `SELECT inputs_json
-             FROM generation_index_inputs
-             WHERE generation_id = ?`
-          )
-          .get(activeGenerationId) as unknown as GenerationIndexInputsRow | undefined;
-
-        return row === undefined
-          ? null
-          : parseJson<ProjectIndexInputs>(
-              row.inputs_json,
-              `index inputs for generation ${activeGenerationId}`
-            );
-      });
+      return readConsistently(database, () =>
+        readActiveGenerationBundle(database, normalizedProjectPath)
+      );
     } finally {
       database.close();
     }
@@ -837,10 +920,13 @@ export class SqliteGraphStore implements GraphStore {
             generationId,
             input.indexedAt,
             extractorVersionFor(input.artifactFacts),
-            RESOLVER_VERSION
+            input.resolverVersion
           );
 
         insertIndexInputs(database, generationId, input.indexInputs);
+        if (input.indexWork !== undefined) {
+          insertIndexWork(database, generationId, input.indexWork);
+        }
 
         for (const facts of input.artifactFacts) {
           insertArtifactFacts(database, generationId, facts);
@@ -878,6 +964,9 @@ export class SqliteGraphStore implements GraphStore {
           database.prepare("DELETE FROM artifact_facts WHERE generation_id = ?").run(previousGenerationId);
           database
             .prepare("DELETE FROM generation_index_inputs WHERE generation_id = ?")
+            .run(previousGenerationId);
+          database
+            .prepare("DELETE FROM generation_index_work WHERE generation_id = ?")
             .run(previousGenerationId);
           database.prepare("DELETE FROM generations WHERE id = ?").run(previousGenerationId);
         }

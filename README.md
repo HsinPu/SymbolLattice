@@ -2,28 +2,29 @@
 
 # SymbolLattice
 
-**An evidence-first, local code-intelligence platform for TypeScript and JavaScript.**
+**Evidence-first local code intelligence for TypeScript and JavaScript projects.**
 
 [![Version](https://img.shields.io/github/v/tag/HsinPu/symbol-lattice?label=version)](https://github.com/HsinPu/symbol-lattice/tags)
-![Node.js](https://img.shields.io/badge/node-%E2%89%A522.13-339933?logo=nodedotjs&logoColor=white)
-![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript&logoColor=white)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D22.13-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![License](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
 
-[Quick start](#quick-start) · [Commands](#command-reference) · [Configuration contract](#configuration-contract) · [MCP](#mcp-server) · [Architecture](#architecture) · [Roadmap](#roadmap)
+[Quick start](#quick-start) | [Capabilities](#capabilities) | [Commands](#command-reference) | [Architecture](#architecture) | [Roadmap](#roadmap)
 
 </div>
 
 > [!IMPORTANT]
-> **v0.2.1 — Configuration-aware scope** is an early developer release. It runs from source and is not published to npm.
+> **v0.3.0** is an early developer release. This public repository runs from source; its npm package is intentionally private and is not published to npm.
 
-SymbolLattice turns a local project into a queryable symbol graph without hiding uncertainty. It keeps raw syntax facts, makes index refresh explicit, and records why each graph edge was resolved. v0.2.1 also preserves the project inputs that determine scope and TypeScript module aliases, so configuration-only edits cannot silently leave an apparently-current graph behind.
+SymbolLattice builds a local symbol graph without hiding uncertainty. It keeps syntax-proven artifact facts, resolves cross-file relationships conservatively, and records why every resolved edge exists. The graph stays local to the inspected project under `.symbol-lattice/index.sqlite`.
 
 ## Why SymbolLattice?
 
-- **Evidence-first** — resolved graph edges retain their rule, stage, considered symbols, and (for configured aliases) the configuration files that participated.
-- **Configuration-aware** — root `.gitignore`, selected `tsconfig.json` or `jsconfig.json`, local `extends` files, and effective scope are fingerprinted with the active graph generation.
-- **Local and explicit** — only `init`, `index`, and `sync` write an index. There is no watcher, daemon, telemetry, or implicit rebuild.
-- **Agent-safe MCP** — MCP tools are read-only and idempotent; they report freshness instead of creating or refreshing data.
+- **Evidence-first** - resolved edges retain a rule ID, resolution stage, considered symbols, relevant configuration paths, and re-export route when applicable.
+- **Safe freshness** - source hashes and project inputs are stored with each active generation; `status` reports drift instead of silently rebuilding.
+- **Workspace-aware** - local npm/Yarn-style workspaces can resolve package roots and explicit subpath exports without reading `node_modules`.
+- **Incremental parsing, atomic publication** - `sync` only reparses changed source artifacts when their persisted facts are compatible, then atomically publishes one fresh project graph.
+- **Agent-safe MCP** - MCP tools are read-only and never initialize or refresh a project.
 
 ## Quick start
 
@@ -38,184 +39,217 @@ cd symbol-lattice
 npm install
 npm run build
 
-# Create an index for the project you want to inspect.
-node dist/cli/main.js init /path/to/your-project
+# Create the first graph for a project.
+node dist/cli/main.js init /path/to/project
 
-# Explain a stored relationship after indexing.
-node dist/cli/main.js explain-edge "edge:<edge-id>" --project /path/to/your-project
+# Inspect a stored relationship.
+node dist/cli/main.js explain-edge "edge:<edge-id>" --project /path/to/project
 ```
 
-On Windows, use `npm.cmd` when `npm` is not available directly in your shell.
-
-The index lives in the inspected project at `.symbol-lattice/index.sqlite`. `init`, `index`, and `sync` deliberately perform a complete, atomic rebuild in v0.2.1.
+On Windows, use `npm.cmd` if `npm` is not available directly in PowerShell.
 
 > [!WARNING]
-> SymbolLattice refuses to index a filesystem root or home directory unless you deliberately pass `--force`.
+> SymbolLattice refuses to index a filesystem root or home directory unless `--force` is supplied deliberately.
 
-### Upgrade an existing index
+### Typical workflow
 
-v0.1 and v0.2 snapshots remain readable. Run one explicit `sync` after upgrading to v0.2.1: it stores the active generation's scope/configuration identity and upgrades legacy database schema data without inventing old provenance. Until then, `status` reports `configuration-untracked` rather than claiming configuration freshness.
+```bash
+# Query symbols after indexing.
+node dist/cli/main.js find add --project /path/to/project
+node dist/cli/main.js callers "src/math.ts#add" --project /path/to/project
 
-## What it understands
+# Inspect freshness before an explicit update.
+node dist/cli/main.js status /path/to/project
+node dist/cli/main.js sync /path/to/project
+```
 
-| Area | v0.2.1 support |
+All data commands emit stable, pretty JSON. `--json` is retained as a forward-compatible script flag.
+
+## Capabilities
+
+| Area | v0.3.0 behavior |
 | --- | --- |
 | Source files | TypeScript, TSX, JavaScript, and JSX |
-| Project scope | Project root by default, or repeatable persisted `--scope` directories |
-| Ignore policy | Root `.gitignore` with negation; `.git`, `.symbol-lattice`, `coverage`, `dist`, and `node_modules` are always excluded |
+| Scope | Project root by default or repeatable, persisted `--scope` directories |
+| Discovery | Root `.gitignore` with negation; `.git`, `.symbol-lattice`, `coverage`, `dist`, and `node_modules` are always excluded |
 | Symbols | Files, classes, functions, methods, interfaces, types, and variables |
-| Relationships | `contains`, imports/exports, and direct identifier calls |
-| Module resolution | Relative imports plus TypeScript/JavaScript `baseUrl` and `paths` aliases |
-| Storage | Local SQLite, atomic active-generation replacement, raw artifact facts, edge evidence, and generation-bound index inputs |
-| Freshness | Source hashes plus configuration/scope fingerprint with actionable stale reasons |
+| Relationships | `contains`, module imports/exports, and direct identifier calls |
+| Module resolution | Relative paths, TypeScript/JavaScript `baseUrl` and `paths`, then local workspace packages |
+| Workspaces | Root `package.json` workspaces array/object, local package root/subpath `exports`, and entrypoint fallback |
+| Re-exports | Named aliases, `export *`, default-through-named aliases, and namespace-export provenance |
+| Storage | Local SQLite v4, active generation, raw artifact facts, edge evidence, index inputs, and index-work telemetry |
+| Freshness | Source hashes, configuration/workspace manifest fingerprints, extractor/resolver versions, and actionable stale reasons |
 
 ### Resolution contract
 
-| Kind | Meaning |
+| State | Meaning |
 | --- | --- |
-| `exact` | Proven locally or through an explicit import/export binding |
-| `heuristic` | Conservative unique-name inference; never presented as proof |
-| `unresolved` | Preserved for inspection, but excluded from callers, callees, and impact paths |
+| `exact` | Proven by syntax, lexical binding, explicit import, workspace package, or re-export surface |
+| `heuristic` | Conservative unique-name inference; useful but never presented as proof |
+| `unresolved` | Kept for inspection but excluded from callers, callees, and impact paths |
 
-### Evidence stages
+For an exact call that travels through a barrel, evidence uses `module.reexported-import-binding` and includes a `resolutionPath`, for example:
 
-| Stage | Meaning |
-| --- | --- |
-| `syntax` | A direct AST relationship such as containment |
-| `lexical` | A source-local binding proved the target |
-| `module` | A project module/import/export rule proved the target |
-| `heuristic` | A bounded unique-name inference supplied the target |
-| `unresolved` | The resolver could not prove one target |
-| `legacy` | A v0.1 snapshot is still queryable but has no newly captured evidence |
+```json
+{
+  "ruleId": "module.reexported-import-binding",
+  "resolutionPath": [
+    "apps/web/src/consumer.ts",
+    "packages/core/src/index.ts",
+    "packages/core/src/math.ts"
+  ]
+}
+```
 
-## Configuration contract
+### Workspace resolution
 
-### Scope and ignore policy
+SymbolLattice recognizes local workspace packages declared by the root `package.json`:
+
+```json
+{
+  "private": true,
+  "workspaces": ["packages/*"]
+}
+```
+
+It also accepts `{ "workspaces": { "packages": [...] } }`, recursive `**` patterns, and `!` exclusions. Resolution order is:
+
+1. Relative source path.
+2. TypeScript/JavaScript `paths` or `baseUrl` alias.
+3. Local workspace package name and explicit subpath export.
+4. Unresolved.
+
+Workspace targets must already be inside the active source scope. SymbolLattice never broadens `--scope`, follows `node_modules`, or chooses between duplicate workspace package names. Invalid, escaping, or duplicate manifests fail explicitly before replacing the active graph.
+
+### Re-export semantics
+
+The extractor stores re-export syntax as raw, reusable facts. The resolver then builds a deterministic export surface across the project:
+
+- Local and explicit named exports take precedence over wildcard exports.
+- `export *` never forwards `default`.
+- Wildcard name collisions remain unresolved rather than selecting the first candidate.
+- Cyclic barrels terminate safely; no target is fabricated without a declaration.
+- `export * as namespace` is retained as provenance, but namespace property dispatch remains unresolved in this release.
+
+### Incremental sync contract
+
+`init` and `index` perform a complete extraction and graph rebuild. `sync` is explicit and follows this contract:
+
+1. Scan current sources, scope, ignore policy, TypeScript configuration, and workspace manifests.
+2. Reuse a persisted raw artifact only when its file path, content hash, language, and extractor version match.
+3. Re-extract added, modified, or incompatible artifacts.
+4. Compute reverse import/re-export dependency invalidation for observability.
+5. Rebuild the full module/export projection from the current raw facts.
+6. Atomically replace the active generation only after all work succeeds.
+
+The full-project projection in step 5 is intentional: a new export, removed file, barrel change, or configuration change can affect an unchanged caller. `lastIndexWork` reports `reExtractedFiles`, `reusedArtifactFiles`, and `dependencyInvalidatedFiles`; it does **not** claim that resolution was only partial. A no-op `sync` does not create a new generation.
+
+## Configuration and scope
 
 ```bash
-# Index only these project-relative directories.
+# Index only selected project-relative directories.
 node dist/cli/main.js init /path/to/project --scope src --scope packages/core
 
-# Reuse that persisted scope on a later refresh.
+# Reuse the successful scope later.
 node dist/cli/main.js sync /path/to/project
 
-# Deliberately replace the stored scope.
+# Replace it deliberately.
 node dist/cli/main.js sync /path/to/project --scope src
 ```
 
-- `--scope` is repeatable, normalized to project-relative directories, deduplicated, and persisted with the successful generation.
-- When no new `--scope` is supplied, `index` and `sync` reuse the last successful scope. A first index defaults to `.`.
-- Only the project's root `.gitignore` controls discovery in this release. Its negation rules are honored; nested `.gitignore` files intentionally do not change the policy yet.
-- Hard-excluded tool/build directories can never be re-included by a negation rule.
+The active generation fingerprints the root `.gitignore`, selected `tsconfig.json` or `jsconfig.json`, project-local `extends` chain, root workspace manifest, discovered workspace manifests, and effective scope. `status` can report:
 
-### TypeScript and JavaScript aliases
-
-SymbolLattice selects a root `tsconfig.json` first, then a root `jsconfig.json` when no `tsconfig.json` exists. It uses the TypeScript compiler API for `compilerOptions.baseUrl` and `compilerOptions.paths`, while accepting a target only when it is one of the currently indexed project source files.
-
-- A selected config may use a **project-local** relative `extends` chain; every participating file is persisted in edge evidence and the freshness fingerprint.
-- Invalid config syntax, cycles, missing local `extends`, and external/package `extends` fail explicitly as `INVALID_PROJECT_CONFIGURATION`; an existing graph remains intact.
-- TypeScript `files`, `include`, and `exclude` do not silently redefine source discovery. Scope and root `.gitignore` remain the sole discovery contract in v0.2.1.
-- Changing a tracked config file, the root `.gitignore`, or the effective scope makes `status` stale with `project-inputs-changed`; malformed current configuration reports `configuration-invalid`.
+| Reason | Meaning |
+| --- | --- |
+| `source-files-changed` | The active source set or source hash differs |
+| `project-inputs-changed` | Scope, ignore policy, config, or workspace metadata differs |
+| `indexer-version-changed` | Persisted artifacts or projection semantics need an explicit refresh |
+| `configuration-invalid` | Current TypeScript or workspace configuration cannot be parsed safely |
+| `configuration-untracked` | A legacy generation has no reproducibility identity |
 
 ## Command reference
 
-All data-returning commands emit stable, pretty JSON. `--json` remains a forward-compatible flag for scripts; `serve --mcp` runs the long-lived stdio protocol.
-
 | Command | Purpose |
 | --- | --- |
-| `init [path]` | Create the local database and build the first graph generation |
-| `index [path]` | Explicitly rebuild the complete graph |
-| `sync [path]` | Explicitly refresh the complete graph |
-| `status [path]` | Report active generation, source/configuration freshness, and stale reasons |
+| `init [path]` | Create the local database and build the first full generation |
+| `index [path]` | Explicitly perform a full extraction and rebuild |
+| `sync [path]` | Explicitly reuse compatible raw facts and publish a fresh graph when needed |
+| `status [path]` | Report active generation, freshness, stale reasons, and latest index work |
 | `find <query>` / `query <query>` | Search symbols by name, qualified name, ID, or location |
 | `callers <symbol>` / `callees <symbol>` | Show direct graph relationships |
-| `impact <symbol>` | Trace reverse impact with an optional `--depth` |
-| `explore <query>` | Return a symbol, source evidence, and nearby graph context |
-| `explain-edge <edge-id>` | Explain a stored relationship and its resolution evidence |
+| `impact <symbol>` | Trace reverse impact with optional `--depth` |
+| `explore <query>` | Return symbol source, callers, callees, impact, and freshness |
+| `explain-edge <edge-id>` | Explain edge endpoints and resolution evidence |
 | `serve --mcp` | Start the stdio MCP server |
 
-`init`, `index`, and `sync` also accept `--scope <directory>` (repeatable) and `--force`. Supplying `--scope` replaces the previous successful scope; omitting it reuses the stored scope when one exists.
-
-```bash
-# Search an indexed project.
-node dist/cli/main.js find add --project /path/to/your-project
-
-# Resolve a symbol by qualified name and inspect its callers.
-node dist/cli/main.js callers "src/math.ts#add" --project /path/to/your-project
-
-# Follow reverse impact two hops deep.
-node dist/cli/main.js impact "src/math.ts#add" --depth 2 --project /path/to/your-project
-
-# Inspect why a graph edge exists. Obtain an edge ID from callers, callees,
-# impact, explore, or another JSON query result.
-node dist/cli/main.js explain-edge "<edge-id>" --project /path/to/your-project
-```
-
-A symbol reference can be a qualified name such as `src/math.ts#add`, a symbol ID, an unambiguous simple name, or a `relative/path.ts:line[:column]` location.
+`init`, `index`, and `sync` accept repeatable `--scope <directory>` plus `--force`.
 
 ## MCP server
 
-Build SymbolLattice and initialize the target project before starting MCP:
+Build SymbolLattice and initialize the target project first:
 
 ```bash
-node dist/cli/main.js serve --mcp --project /path/to/your-project
+node dist/cli/main.js serve --mcp --project /path/to/project
 ```
-
-The server exposes read-only tools only:
 
 | Tool | Contract |
 | --- | --- |
-| `symbol_lattice_explore` | Finds a symbol and returns source, callers, callees, impact, and freshness from an existing index |
-| `symbol_lattice_explain_edge` | Returns the relationship, endpoints, resolution evidence, and freshness from an existing index |
+| `symbol_lattice_explore` | Return source, callers, callees, impact, and freshness for an existing graph |
+| `symbol_lattice_explain_edge` | Return an edge, endpoints, evidence, and freshness for an existing graph |
 
-Neither MCP tool initializes, refreshes, or otherwise mutates an index.
+Neither tool initializes, refreshes, or otherwise mutates an index.
+
+## Upgrade notes
+
+SQLite v1, v2, and v3 indexes remain readable. The first successful `sync` or `index` under v0.3.0 upgrades storage to schema v4 and writes generation-bound index work. Older raw facts do not contain re-export syntax, so the extractor-version change safely forces a fresh extraction before they can be reused. Legacy generations never receive invented historical telemetry.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-  CLI["CLI / explicit scope"] --> UseCases["Application use cases"]
-  MCP["Read-only MCP"] --> UseCases
-  Catalog["Filesystem catalog\nroot gitignore + scope"] --> Inputs["Persisted index inputs"]
-  Catalog --> Resolver["TypeScript module resolver"]
-  Extractor["TypeScript Compiler API"] --> Facts["Artifact facts"]
-  Facts --> Resolver
-  Resolver --> Graph["Active evidence graph"]
-  Inputs --> SQLite["SQLite generation"]
-  Graph --> SQLite
-  UseCases --> SQLite
+  CLI["CLI: explicit init/index/sync"] --> App["Application service"]
+  MCP["Read-only MCP"] --> App
+  Catalog["Filesystem catalog\nscope + gitignore"] --> Inputs["Index inputs"]
+  Catalog --> TS["TS alias resolver"]
+  Catalog --> WS["Workspace resolver"]
+  Extractor["TypeScript AST extractor"] --> Facts["Reusable artifact facts"]
+  Facts --> Resolver["Full project export surface"]
+  TS --> Resolver
+  WS --> Resolver
+  Inputs --> SQLite["Atomic SQLite generation"]
+  Resolver --> SQLite
+  App --> SQLite
 ```
 
 ```text
 src/
-├── application/     Use cases and orchestration
-├── cli/             Commander-based CLI
-├── domain/          Graph, fact, evidence, identity, and traversal contracts
-├── extraction/      TypeScript Compiler API adapter
-├── infrastructure/  Filesystem, TypeScript resolver, and SQLite adapters
-├── mcp/             Read-only MCP server
-└── ports/           Dependency boundaries
+  application/     Use cases, incremental planning, and graph projection
+  cli/             Commander-based CLI
+  domain/          Graph, evidence, identity, and index-work contracts
+  extraction/      TypeScript AST fact extraction
+  infrastructure/  Filesystem, workspace, TypeScript, and SQLite adapters
+  mcp/             Read-only MCP server
+  ports/           Dependency boundaries
 ```
 
-## Deliberate v0.2.1 boundaries
+## Deliberate boundaries
 
-SymbolLattice now has configuration-aware source scope and aliases, but it does **not** yet provide:
+v0.3.0 does not yet provide:
 
-- Automatic sync, watchers, daemon mode, worker pools, or incremental updates
-- Workspaces/project references, re-export semantics, CommonJS `require`, decorators, framework routes, reflection, or dynamic dispatch
-- Nested `.gitignore`, package/external TypeScript `extends`, parsers beyond TS/TSX/JS/JSX, native kernels, telemetry, or multi-project routing
-- Historical graph generations, Git semantic diff, or full-text search
+- File watchers, daemon mode, automatic sync, worker pools, or historical graph browsing.
+- pnpm workspace YAML, TypeScript project references, external/package `extends`, or nested `.gitignore` semantics.
+- CommonJS `require`, dynamic dispatch, decorators, framework routes, reflection, or namespace property-call resolution.
+- Parsers beyond TS/TSX/JS/JSX, external dependency indexing, telemetry, or multi-project routing.
 
 ## Roadmap
 
 | Milestone | Focus |
 | --- | --- |
-| `v0.2.1` | Configuration-aware scope and TypeScript path-alias resolution |
-| `v0.3` | Workspace/re-export semantics, dependency invalidation, and incremental sync |
-| `v0.4` | Full-text search, multi-symbol context, impact queries, and richer MCP retrieval |
+| `v0.3.0` | Workspace packages, AST re-exports, dependency-aware incremental parsing, and schema v4 telemetry |
+| `v0.4` | Full-text search, multi-symbol context, impact improvements, and richer MCP retrieval |
 | `v0.5+` | Opt-in watcher/daemon, language adapters, framework packs, Git semantic diff, and contract graphs |
 
-See [CHANGELOG.md](CHANGELOG.md) for shipped versions and migration notes.
+See [CHANGELOG.md](CHANGELOG.md) for release notes and migration history.
 
 ## Development
 
@@ -227,13 +261,11 @@ npm.cmd pack --dry-run
 git diff --check
 ```
 
-The suite covers discovery scope, root ignore policy, configuration fingerprints, alias resolution evidence, invalid-configuration safety, artifact facts, v1/v2/v3 SQLite migration, active-generation replacement, freshness, traversal, MCP read-only behavior, and architecture boundaries.
+The suite covers discovery, input fingerprints, alias and workspace resolution, re-export semantics, incremental raw-fact reuse, no-op sync, schema migration, atomic rollback, MCP read-only behavior, and architecture boundaries.
 
 ## Contributing
 
-Issues and focused pull requests are welcome. Please keep each change small, preserve the explicit indexing and resolution contracts, and add tests for observable graph behavior.
-
-Before opening a pull request, run the commands in [Development](#development). For a capability that crosses a documented boundary, open an issue first so its evidence, confidence, and safety model can be agreed on.
+Issues and focused pull requests are welcome. Keep changes small, preserve explicit indexing and evidence contracts, and add tests for observable graph behavior.
 
 ## License
 

@@ -11,6 +11,7 @@ import {
   type ImportBinding,
   type LocalBinding,
   type PendingReference,
+  type ReExportBinding,
   type ReferenceScope,
   type SourceRange,
   type SymbolKind,
@@ -22,6 +23,7 @@ export type {
   ExportBinding,
   ImportBinding,
   LocalBinding,
+  ReExportBinding,
   ReferenceScope
 } from "../domain/index.js";
 
@@ -289,6 +291,7 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
   const referenceScopes: ReferenceScope[] = [];
   const importBindings: ImportBinding[] = [];
   const exportBindings: ExportBinding[] = [];
+  const reExportBindings: ReExportBinding[] = [];
   const declarationOrdinals = new Map<string, number>();
   const stack: SymbolNode[] = [];
 
@@ -418,6 +421,18 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
             range: sourceRange(sourceFile, element)
           });
         }
+      } else if (
+        importClause?.namedBindings !== undefined &&
+        ts.isNamespaceImport(importClause.namedBindings)
+      ) {
+        // A namespace is a module object rather than a declaration target. Keep
+        // the binding so resolution can reject an unsafe global-name fallback.
+        importBindings.push({
+          moduleSpecifier: node.moduleSpecifier.text,
+          localName: importClause.namedBindings.name.text,
+          importedName: "*",
+          range: sourceRange(sourceFile, importClause.namedBindings)
+        });
       }
     }
 
@@ -427,6 +442,31 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
       ts.isStringLiteral(node.moduleSpecifier)
     ) {
       addPendingReference(fileNode.id, node.moduleSpecifier.text, "exports", node.moduleSpecifier);
+
+      if (node.exportClause === undefined) {
+        reExportBindings.push({
+          kind: "wildcard",
+          moduleSpecifier: node.moduleSpecifier.text,
+          range: sourceRange(sourceFile, node)
+        });
+      } else if (ts.isNamedExports(node.exportClause)) {
+        for (const element of node.exportClause.elements) {
+          reExportBindings.push({
+            kind: "named",
+            moduleSpecifier: node.moduleSpecifier.text,
+            importedName: element.propertyName?.text ?? element.name.text,
+            exportedName: element.name.text,
+            range: sourceRange(sourceFile, element)
+          });
+        }
+      } else if (ts.isNamespaceExport(node.exportClause)) {
+        reExportBindings.push({
+          kind: "namespace",
+          moduleSpecifier: node.moduleSpecifier.text,
+          exportedName: node.exportClause.name.text,
+          range: sourceRange(sourceFile, node.exportClause)
+        });
+      }
     }
 
     if (
@@ -526,6 +566,7 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
     localBindings,
     referenceScopes,
     importBindings,
-    exportBindings
+    exportBindings,
+    reExportBindings
   };
 }

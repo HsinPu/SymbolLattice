@@ -9,7 +9,9 @@ export const PROJECT_CONFIGURATION_INPUT_KINDS = [
   "root-gitignore",
   "tsconfig",
   "jsconfig",
-  "extends"
+  "extends",
+  "workspace-root-manifest",
+  "workspace-package-manifest"
 ] as const;
 
 export type ProjectConfigurationInputKind = (typeof PROJECT_CONFIGURATION_INPUT_KINDS)[number];
@@ -37,6 +39,7 @@ export interface ProjectIndexInputs {
 export const INDEX_STALENESS_REASONS = [
   "source-files-changed",
   "project-inputs-changed",
+  "indexer-version-changed",
   "configuration-invalid",
   "configuration-untracked"
 ] as const;

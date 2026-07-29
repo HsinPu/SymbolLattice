@@ -10,7 +10,13 @@ import type {
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "typescript-ast-v1";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "typescript-ast-v2";
+
+/**
+ * Bump this value whenever cross-file resolution semantics change in a way
+ * that requires a fresh graph projection from persisted facts.
+ */
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v2";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -35,6 +41,8 @@ export interface EdgeEvidence {
   readonly candidateSymbolIds: readonly string[];
   /** Project-relative config files that participated in module resolution. */
   readonly configurationPaths?: readonly string[];
+  /** Project-relative file hops used to reach an exact re-export target. */
+  readonly resolutionPath?: readonly string[];
 }
 
 /** A named import binding retained from syntax extraction for module resolution. */
@@ -51,6 +59,28 @@ export interface ExportBinding {
   readonly exportedName: string;
   readonly range: SourceRange;
 }
+
+/** A syntax-proven re-export retained for later cross-file export resolution. */
+export type ReExportBinding =
+  | {
+      readonly kind: "named";
+      readonly moduleSpecifier: string;
+      readonly importedName: string;
+      readonly exportedName: string;
+      readonly range: SourceRange;
+    }
+  | {
+      readonly kind: "wildcard";
+      readonly moduleSpecifier: string;
+      readonly range: SourceRange;
+    }
+  | {
+      /** Captured for provenance; namespace property dispatch remains deliberately unresolved. */
+      readonly kind: "namespace";
+      readonly moduleSpecifier: string;
+      readonly exportedName: string;
+      readonly range: SourceRange;
+    };
 
 /** A value binding visible in one lexical scope. */
 export interface LocalBinding {
@@ -78,6 +108,7 @@ export interface ArtifactFacts {
   readonly referenceScopes: readonly ReferenceScope[];
   readonly importBindings: readonly ImportBinding[];
   readonly exportBindings: readonly ExportBinding[];
+  readonly reExportBindings: readonly ReExportBinding[];
 }
 
 /**

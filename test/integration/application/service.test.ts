@@ -1,12 +1,13 @@
-import { cp, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { afterEach, describe, expect, it } from "vitest";
 
 import { SymbolLatticeService } from "../../../src/application/index.js";
 import { ARTIFACT_FACTS_EXTRACTOR_VERSION } from "../../../src/domain/index.js";
+import { extractFileFacts } from "../../../src/extraction/index.js";
 import { FileSystemSourceCatalog } from "../../../src/infrastructure/filesystem/index.js";
 import { SqliteGraphStore } from "../../../src/infrastructure/sqlite/index.js";
 
@@ -30,6 +31,19 @@ async function createFixtureProject(sourcePath = fixturePath): Promise<string> {
   const projectPath = await mkdtemp(join(tmpdir(), "symbol-lattice-service-"));
   temporaryDirectories.push(projectPath);
   await cp(sourcePath, projectPath, { recursive: true });
+  return projectPath;
+}
+
+async function createInlineProject(files: Readonly<Record<string, string>>): Promise<string> {
+  const projectPath = await mkdtemp(join(tmpdir(), "symbol-lattice-service-inline-"));
+  temporaryDirectories.push(projectPath);
+  await Promise.all(
+    Object.entries(files).map(async ([relativePath, sourceText]) => {
+      const absolutePath = resolve(projectPath, ...relativePath.split("/"));
+      await mkdir(resolve(absolutePath, ".."), { recursive: true });
+      await writeFile(absolutePath, sourceText, "utf8");
+    })
+  );
   return projectPath;
 }
 
@@ -217,5 +231,163 @@ describe("SymbolLatticeService", () => {
     });
     expect(graphStore.getStatus(projectPath).generationId).toBe(generationId);
     expect(graphStore.getSnapshot(projectPath)).toEqual(before);
+  });
+
+  it("re-extracts only dirty source artifacts and persists the reverse dependency plan", async () => {
+    const projectPath = await createFixtureProject();
+    const graphStore = new SqliteGraphStore();
+    let extractionCount = 0;
+    const service = new SymbolLatticeService(
+      graphStore,
+      new FileSystemSourceCatalog(),
+      (input) => {
+        extractionCount += 1;
+        return extractFileFacts(input);
+      }
+    );
+
+    await service.init({ projectPath });
+    expect(extractionCount).toBe(3);
+    const initialGenerationId = graphStore.getStatus(projectPath).generationId;
+    await writeFile(
+      join(projectPath, "src", "math.ts"),
+      "export function add(left: number, right: number) { return left + right; }\nexport const changed = true;\n",
+      "utf8"
+    );
+
+    const synced = await service.sync({ projectPath });
+    expect(extractionCount).toBe(4);
+    expect(synced.generationId).not.toBe(initialGenerationId);
+    expect(synced.lastIndexWork).toMatchObject({
+      mode: "incremental",
+      resolutionScope: "project",
+      addedFiles: [],
+      modifiedFiles: ["src/math.ts"],
+      removedFiles: [],
+      reExtractedFiles: ["src/math.ts"],
+      reusedArtifactFiles: ["src/consumer.ts", "src/legacy.js"],
+      dependencyInvalidatedFiles: ["src/consumer.ts"]
+    });
+    expect(graphStore.getActiveGenerationBundle(projectPath).status.lastIndexWork).toEqual(
+      synced.lastIndexWork
+    );
+  });
+
+  it("does not publish a new generation for a no-op sync", async () => {
+    const projectPath = await createFixtureProject();
+    const graphStore = new SqliteGraphStore();
+    let extractionCount = 0;
+    const service = new SymbolLatticeService(
+      graphStore,
+      new FileSystemSourceCatalog(),
+      (input) => {
+        extractionCount += 1;
+        return extractFileFacts(input);
+      }
+    );
+
+    await service.init({ projectPath });
+    const generationId = graphStore.getStatus(projectPath).generationId;
+    const status = await service.sync({ projectPath });
+
+    expect(status.generationId).toBe(generationId);
+    expect(extractionCount).toBe(3);
+    expect(status.lastIndexWork).toMatchObject({ mode: "full" });
+  });
+
+  it("removes deleted source facts and invalidates their existing importers", async () => {
+    const projectPath = await createFixtureProject();
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    await rm(join(projectPath, "src", "math.ts"));
+
+    expect(await service.getStatus(projectPath)).toMatchObject({
+      stale: true,
+      staleReasons: ["source-files-changed"]
+    });
+    const synced = await service.sync({ projectPath });
+
+    expect(synced).toMatchObject({ stale: false, counts: { files: 2 } });
+    expect(synced.lastIndexWork).toMatchObject({
+      mode: "incremental",
+      removedFiles: ["src/math.ts"],
+      reExtractedFiles: [],
+      reusedArtifactFiles: ["src/consumer.ts", "src/legacy.js"],
+      dependencyInvalidatedFiles: ["src/consumer.ts"]
+    });
+  });
+
+  it("reuses raw artifacts when configuration drift requires a fresh project resolution", async () => {
+    const projectPath = await createFixtureProject(configuredFixturePath);
+    const graphStore = new SqliteGraphStore();
+    let extractionCount = 0;
+    const service = new SymbolLatticeService(
+      graphStore,
+      new FileSystemSourceCatalog(),
+      (input) => {
+        extractionCount += 1;
+        return extractFileFacts(input);
+      }
+    );
+
+    await service.init({ projectPath });
+    const tsconfigPath = join(projectPath, "tsconfig.json");
+    await writeFile(tsconfigPath, `${await readFile(tsconfigPath, "utf8")}\n`, "utf8");
+    const synced = await service.sync({ projectPath });
+
+    expect(extractionCount).toBe(4);
+    expect(synced.lastIndexWork).toMatchObject({
+      mode: "incremental",
+      reExtractedFiles: [],
+      reusedArtifactFiles: [
+        "generated/kept/visible.ts",
+        "src/consumer.ts",
+        "src/lib/format.ts",
+        "src/lib/math.ts"
+      ],
+      dependencyInvalidatedFiles: [
+        "generated/kept/visible.ts",
+        "src/consumer.ts",
+        "src/lib/format.ts",
+        "src/lib/math.ts"
+      ]
+    });
+  });
+
+  it("resolves a workspace package re-export end to end with provenance", async () => {
+    const projectPath = await createInlineProject({
+      "package.json": JSON.stringify({ private: true, workspaces: ["packages/*"] }),
+      "packages/core/package.json": JSON.stringify({
+        name: "@fixture/core",
+        exports: { ".": "./src/index.ts" }
+      }),
+      "packages/core/src/math.ts": "export function add() { return 1; }",
+      "packages/core/src/index.ts": 'export { add as sum } from "./math";',
+      "apps/web/src/consumer.ts":
+        'import { sum } from "@fixture/core"; export function calculate() { return sum(); }'
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const calculate = (await service.find(projectPath, "calculate")).symbols.find(
+      (symbol) => symbol.qualifiedName === "apps/web/src/consumer.ts#calculate"
+    );
+    const callers = await service.callers(projectPath, "packages/core/src/math.ts#add");
+    const relation = callers.relations.find((candidate) => candidate.symbol.id === calculate?.id);
+
+    expect(relation?.edge.evidence).toEqual({
+      ruleId: "module.reexported-import-binding",
+      stage: "module",
+      candidateSymbolIds: [expect.any(String)],
+      configurationPaths: ["package.json", "packages/core/package.json"],
+      resolutionPath: [
+        "apps/web/src/consumer.ts",
+        "packages/core/src/index.ts",
+        "packages/core/src/math.ts"
+      ]
+    });
   });
 });

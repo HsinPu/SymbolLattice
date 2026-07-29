@@ -70,6 +70,19 @@ describe("TypeScript and JavaScript extraction", () => {
     expect(facts.exportBindings).toEqual([
       expect.objectContaining({ localName: "add", exportedName: "sum" })
     ]);
+    expect(facts.reExportBindings).toEqual([]);
+  });
+
+  it("retains a namespace import as a non-declaration binding", () => {
+    const facts = extractFileFacts({
+      filePath: "src/consumer.ts",
+      language: "typescript",
+      sourceText: 'import * as math from "./math"; export const value = math();'
+    });
+
+    expect(facts.importBindings).toEqual([
+      expect.objectContaining({ moduleSpecifier: "./math", localName: "math", importedName: "*" })
+    ]);
   });
 
   it("does not mark a same-named local declaration as exported by a re-export", () => {
@@ -81,6 +94,63 @@ describe("TypeScript and JavaScript extraction", () => {
 
     expect(facts.symbols.find((symbol) => symbol.name === "sum")?.isExported).toBe(false);
     expect(facts.exportBindings).toEqual([]);
+  });
+
+  it("retains named, wildcard, and namespace re-export facts for later module resolution", () => {
+    const facts = extractFileFacts({
+      filePath: "src/barrel.ts",
+      language: "typescript",
+      sourceText:
+        'export { foo as bar, default as Foo } from "./named";\n' +
+        'export * from "./wild";\n' +
+        'export * as namespaceApi from "./namespace";'
+    });
+
+    expect(
+      facts.pendingReferences
+        .filter((reference) => reference.relationKind === "exports")
+        .map((reference) => reference.referenceName)
+    ).toEqual(["./named", "./wild", "./namespace"]);
+    expect(facts.exportBindings).toEqual([]);
+    expect(facts.reExportBindings).toEqual([
+      expect.objectContaining({
+        kind: "named",
+        moduleSpecifier: "./named",
+        importedName: "foo",
+        exportedName: "bar",
+        range: {
+          start: { line: 1, column: 10 },
+          end: { line: 1, column: 20 }
+        }
+      }),
+      expect.objectContaining({
+        kind: "named",
+        moduleSpecifier: "./named",
+        importedName: "default",
+        exportedName: "Foo",
+        range: {
+          start: { line: 1, column: 22 },
+          end: { line: 1, column: 36 }
+        }
+      }),
+      expect.objectContaining({
+        kind: "wildcard",
+        moduleSpecifier: "./wild",
+        range: {
+          start: { line: 2, column: 1 },
+          end: { line: 2, column: 24 }
+        }
+      }),
+      expect.objectContaining({
+        kind: "namespace",
+        moduleSpecifier: "./namespace",
+        exportedName: "namespaceApi",
+        range: {
+          start: { line: 3, column: 8 },
+          end: { line: 3, column: 25 }
+        }
+      })
+    ]);
   });
 
   it("handles JavaScript and does not guess property dispatch", () => {

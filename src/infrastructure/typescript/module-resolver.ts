@@ -5,6 +5,7 @@ import { dirname, isAbsolute, relative, resolve } from "node:path";
 import ts from "typescript";
 
 import {
+  compareStableText,
   ProjectConfigurationError,
   type ProjectConfigurationInput
 } from "../../domain/index.js";
@@ -23,6 +24,16 @@ export interface TypeScriptProjectModuleResolver {
    * chain. Consumers persist these inputs with the graph generation.
    */
   readonly configurationInputs: readonly ProjectConfigurationInput[];
+  /**
+   * Indicates that a non-relative specifier was claimed by the selected
+   * TypeScript configuration, even when its target is outside the current
+   * source scan. Callers use this to avoid silently falling through to a
+   * lower-priority resolver such as a workspace package catalog.
+   */
+  readonly hasProjectConfigurationResolution: (
+    fromFilePath: string,
+    moduleSpecifier: string
+  ) => boolean;
 }
 
 interface LoadedConfiguration {
@@ -30,10 +41,6 @@ interface LoadedConfiguration {
   readonly relativePath: string;
   readonly sourceText: string;
   readonly kind: ProjectConfigurationInput["kind"];
-}
-
-function compareText(left: string, right: string): number {
-  return left.localeCompare(right);
 }
 
 function sourceHash(sourceText: string): string {
@@ -105,7 +112,7 @@ function modulePathCandidates(fromFilePath: string, moduleSpecifier: string): re
     candidates.add(`${rawPath}/index${extension}`);
   }
 
-  return [...candidates].sort(compareText);
+  return [...candidates].sort(compareStableText);
 }
 
 function unresolved(configurationPaths: readonly string[]): ResolvedModule {
@@ -416,8 +423,11 @@ export function createTypeScriptProjectModuleResolver(input: {
         }
       },
       configurationInputs: [jsconfigInput, tsconfigInput].sort((left, right) =>
-        left.path.localeCompare(right.path)
-      )
+        compareStableText(left.path, right.path)
+      ),
+      hasProjectConfigurationResolution() {
+        return false;
+      }
     };
   }
 
@@ -442,9 +452,41 @@ export function createTypeScriptProjectModuleResolver(input: {
         ) === index
     )
     .sort((left, right) => {
-      const byPath = compareText(left.path, right.path);
-      return byPath === 0 ? compareText(left.kind, right.kind) : byPath;
+      const byPath = compareStableText(left.path, right.path);
+      return byPath === 0 ? compareStableText(left.kind, right.kind) : byPath;
     });
+
+  function containingFilePath(fromFilePath: string): string {
+    const sourceDocument = input.sourceDocuments.find(
+      (document) => document.relativePath === fromFilePath
+    );
+
+    return sourceDocument?.absolutePath ?? resolve(projectPath, fromFilePath);
+  }
+
+  function hasProjectConfigurationResolution(
+    fromFilePath: string,
+    moduleSpecifier: string
+  ): boolean {
+    if (moduleSpecifier.startsWith(".")) {
+      return false;
+    }
+
+    if (
+      compilerOptions.paths !== undefined &&
+      matchesPathPattern(moduleSpecifier, compilerOptions.paths)
+    ) {
+      return true;
+    }
+
+    const containingFile = containingFilePath(fromFilePath);
+    const targetPath = resolvedModulePath(moduleSpecifier, containingFile, compilerOptions);
+
+    return (
+      targetPath !== null &&
+      nonRelativeStrategy(moduleSpecifier, containingFile, targetPath, compilerOptions) !== null
+    );
+  }
 
   return {
     moduleResolver: {
@@ -453,10 +495,7 @@ export function createTypeScriptProjectModuleResolver(input: {
           return exactRelativeTarget(knownFilePaths, fromFilePath, moduleSpecifier);
         }
 
-        const sourceDocument = input.sourceDocuments.find(
-          (document) => document.relativePath === fromFilePath
-        );
-        const containingFile = sourceDocument?.absolutePath ?? resolve(projectPath, fromFilePath);
+        const containingFile = containingFilePath(fromFilePath);
         const targetPath = resolvedModulePath(moduleSpecifier, containingFile, compilerOptions);
         if (targetPath === null) {
           return unresolved(configurationPaths);
@@ -476,6 +515,7 @@ export function createTypeScriptProjectModuleResolver(input: {
         return { targetFilePath, strategy, configurationPaths };
       }
     },
-    configurationInputs
+    configurationInputs,
+    hasProjectConfigurationResolution
   };
 }

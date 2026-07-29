@@ -6,6 +6,29 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.3.0] - 2026-07-29
+
+### Added
+
+- Local workspace package resolution from root `package.json` workspaces arrays or objects, including recursive/excluded patterns, root entries, explicit subpath exports, and safe entrypoint fallbacks.
+- Workspace manifest tracking in the active generation fingerprint; duplicate names, malformed manifests, escaping entries, and out-of-scope targets now fail explicitly instead of guessing.
+- TypeScript AST facts for named, wildcard, default-through-named, and namespace re-export syntax.
+- Deterministic re-export export surfaces for multi-hop barrels, explicit-over-wildcard precedence, wildcard collision safety, cycle termination, and re-export route evidence.
+- Incremental `sync` raw-artifact reuse based on file path, content hash, language, and extractor version.
+- Reverse import/re-export dependency invalidation telemetry through persisted `lastIndexWork`; no-op sync does not publish a new generation.
+- SQLite schema v4 with generation-bound index-work records and an atomic active-generation bundle read.
+
+### Changed
+
+- `sync` now rebuilds the complete cross-file projection from current raw facts after incremental extraction, preserving correctness for new exports, removals, aliases, barrels, and manifest changes.
+- Project freshness now recognizes `indexer-version-changed` and treats the root and discovered workspace manifests as reproducibility inputs.
+- Re-exported exact calls use `module.reexported-import-binding` evidence with a project-relative resolution path.
+- Persisted v1-v3 raw facts missing re-export data are normalized at the storage boundary but cannot be reused until a compatible v0.3 extraction succeeds.
+
+### Deliberate limits
+
+- pnpm workspace YAML, watcher/daemon sync, namespace property dispatch, CommonJS `require`, and external dependency indexing remain out of scope.
+
 ## [0.2.1] - 2026-07-29
 
 ### Added
@@ -55,7 +78,8 @@ No unreleased changes.
 - Explicit full indexing, caller/callee/impact queries, and read-only MCP exploration.
 - `exact`, `heuristic`, and `unresolved` relationship states.
 
-[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/HsinPu/symbol-lattice/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/HsinPu/symbol-lattice/releases/tag/v0.1.0

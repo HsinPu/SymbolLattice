@@ -14,6 +14,25 @@ import {
   toProjectRelativePath
 } from "./discovery.js";
 import { buildProjectIndexInputs } from "./project-inputs.js";
+import { createWorkspaceProjectModuleResolver } from "./workspace.js";
+
+function mergeConfigurationPaths(
+  ...configurationPathGroups: readonly (readonly string[])[]
+): readonly string[] {
+  const seenPaths = new Set<string>();
+  const result: string[] = [];
+
+  for (const configurationPaths of configurationPathGroups) {
+    for (const configurationPath of configurationPaths) {
+      if (!seenPaths.has(configurationPath)) {
+        seenPaths.add(configurationPath);
+        result.push(configurationPath);
+      }
+    }
+  }
+
+  return result;
+}
 
 export class FileSystemSourceCatalog implements SourceCatalog {
   public async scan(projectPath: string, options?: ProjectScanOptions): Promise<ProjectScan> {
@@ -23,19 +42,71 @@ export class FileSystemSourceCatalog implements SourceCatalog {
       projectPath: normalizedProjectPath,
       sourceDocuments
     });
+    const workspaceResolver = await createWorkspaceProjectModuleResolver({
+      projectPath: normalizedProjectPath,
+      sourceDocuments
+    });
     const inputOptions =
       options?.scopeRoots === undefined
-        ? { additionalConfigurationInputs: typeScriptResolver.configurationInputs }
+        ? {
+            additionalConfigurationInputs: [
+              ...typeScriptResolver.configurationInputs,
+              ...workspaceResolver.configurationInputs
+            ]
+          }
         : {
             scopeRoots: options.scopeRoots,
-            additionalConfigurationInputs: typeScriptResolver.configurationInputs
+            additionalConfigurationInputs: [
+              ...typeScriptResolver.configurationInputs,
+              ...workspaceResolver.configurationInputs
+            ]
           };
     const indexInputs = await buildProjectIndexInputs(normalizedProjectPath, inputOptions);
 
     return {
       sourceDocuments,
       indexInputs,
-      moduleResolver: typeScriptResolver.moduleResolver
+      moduleResolver: {
+        resolve(fromFilePath, moduleSpecifier) {
+          const typeScriptResolution = typeScriptResolver.moduleResolver.resolve(
+            fromFilePath,
+            moduleSpecifier
+          );
+          if (typeScriptResolution.strategy !== "unresolved") {
+            return typeScriptResolution;
+          }
+
+          if (
+            moduleSpecifier.startsWith(".") ||
+            typeScriptResolver.hasProjectConfigurationResolution(fromFilePath, moduleSpecifier)
+          ) {
+            return typeScriptResolution;
+          }
+
+          const workspaceResolution = workspaceResolver.moduleResolver.resolve(
+            fromFilePath,
+            moduleSpecifier
+          );
+          if (workspaceResolution.strategy !== "unresolved") {
+            return {
+              ...workspaceResolution,
+              configurationPaths: mergeConfigurationPaths(
+                typeScriptResolution.configurationPaths,
+                workspaceResolution.configurationPaths
+              )
+            };
+          }
+
+          return {
+            targetFilePath: null,
+            strategy: "unresolved",
+            configurationPaths: mergeConfigurationPaths(
+              typeScriptResolution.configurationPaths,
+              workspaceResolution.configurationPaths
+            )
+          };
+        }
+      }
     };
   }
 

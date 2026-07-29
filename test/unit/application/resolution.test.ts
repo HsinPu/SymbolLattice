@@ -704,4 +704,299 @@ describe("TypeScript configuration module resolution", () => {
     expect(() => createTypeScriptProjectModuleResolver(malformed)).not.toThrow(/Debug Failure/);
     expect(() => createTypeScriptProjectModuleResolver(external)).toThrow(ProjectConfigurationError);
   });
+
+  it("resolves a named re-export chain to the original declaration with route evidence", () => {
+    const sourceDocuments: readonly SourceDocument[] = [
+      {
+        absolutePath: "C:/project/src/math.ts",
+        relativePath: "src/math.ts",
+        language: "typescript",
+        sourceText: "export function add() { return 1; }",
+        contentHash: "math"
+      },
+      {
+        absolutePath: "C:/project/src/barrel.ts",
+        relativePath: "src/barrel.ts",
+        language: "typescript",
+        sourceText: 'export { add as sum } from "./math";',
+        contentHash: "barrel"
+      },
+      {
+        absolutePath: "C:/project/src/consumer.ts",
+        relativePath: "src/consumer.ts",
+        language: "typescript",
+        sourceText: 'import { sum } from "./barrel"; export const total = sum();',
+        contentHash: "consumer"
+      }
+    ];
+    const snapshot = snapshotWithResolver(sourceDocuments, undefined);
+    const add = snapshot.symbols.find(
+      (symbol) => symbol.filePath === "src/math.ts" && symbol.name === "add"
+    );
+    const call = snapshot.edges.find((edge) => edge.kind === "calls" && edge.referenceName === "sum");
+
+    expect(call).toMatchObject({ targetId: add?.id, resolution: "exact", confidence: 1 });
+    expect(call?.evidence).toEqual({
+      ruleId: "module.reexported-import-binding",
+      stage: "module",
+      candidateSymbolIds: [add?.id],
+      resolutionPath: ["src/consumer.ts", "src/barrel.ts", "src/math.ts"]
+    });
+  });
+
+  it("resolves a local export alias that forwards an imported binding", () => {
+    const sourceDocuments: readonly SourceDocument[] = [
+      {
+        absolutePath: "C:/project/src/math.ts",
+        relativePath: "src/math.ts",
+        language: "typescript",
+        sourceText: "export function add() { return 1; }",
+        contentHash: "math"
+      },
+      {
+        absolutePath: "C:/project/src/barrel.ts",
+        relativePath: "src/barrel.ts",
+        language: "typescript",
+        sourceText: 'import { add } from "./math"; export { add as sum };',
+        contentHash: "barrel"
+      },
+      {
+        absolutePath: "C:/project/src/consumer.ts",
+        relativePath: "src/consumer.ts",
+        language: "typescript",
+        sourceText: 'import { sum } from "./barrel"; export const total = sum();',
+        contentHash: "consumer"
+      }
+    ];
+    const snapshot = snapshotWithResolver(sourceDocuments, undefined);
+    const add = snapshot.symbols.find(
+      (symbol) => symbol.filePath === "src/math.ts" && symbol.name === "add"
+    );
+    const call = snapshot.edges.find((edge) => edge.kind === "calls" && edge.referenceName === "sum");
+
+    expect(call).toMatchObject({ targetId: add?.id, resolution: "exact", confidence: 1 });
+    expect(call?.evidence?.resolutionPath).toEqual([
+      "src/consumer.ts",
+      "src/barrel.ts",
+      "src/math.ts"
+    ]);
+  });
+
+  it("resolves wildcard barrels while keeping default exports out of their surface", () => {
+    const sourceDocuments: readonly SourceDocument[] = [
+      {
+        absolutePath: "C:/project/src/math.ts",
+        relativePath: "src/math.ts",
+        language: "typescript",
+        sourceText: "export function add() { return 1; } export default function hidden() { return 2; }",
+        contentHash: "math"
+      },
+      {
+        absolutePath: "C:/project/src/barrel.ts",
+        relativePath: "src/barrel.ts",
+        language: "typescript",
+        sourceText: 'export * from "./math";',
+        contentHash: "barrel"
+      },
+      {
+        absolutePath: "C:/project/src/consumer.ts",
+        relativePath: "src/consumer.ts",
+        language: "typescript",
+        sourceText: 'import { add, default as hidden } from "./barrel"; export const total = add() + hidden();',
+        contentHash: "consumer"
+      }
+    ];
+    const snapshot = snapshotWithResolver(sourceDocuments, undefined);
+    const addCall = snapshot.edges.find((edge) => edge.kind === "calls" && edge.referenceName === "add");
+    const hiddenCall = snapshot.edges.find(
+      (edge) => edge.kind === "calls" && edge.referenceName === "hidden"
+    );
+
+    expect(addCall).toMatchObject({ resolution: "exact", targetId: expect.any(String) });
+    expect(hiddenCall).toMatchObject({ resolution: "unresolved", targetId: null });
+  });
+
+  it("keeps conflicting wildcard exports unresolved instead of selecting a first match", () => {
+    const sourceDocuments: readonly SourceDocument[] = [
+      {
+        absolutePath: "C:/project/src/left.ts",
+        relativePath: "src/left.ts",
+        language: "typescript",
+        sourceText: "export function value() { return 1; }",
+        contentHash: "left"
+      },
+      {
+        absolutePath: "C:/project/src/right.ts",
+        relativePath: "src/right.ts",
+        language: "typescript",
+        sourceText: "export function value() { return 2; }",
+        contentHash: "right"
+      },
+      {
+        absolutePath: "C:/project/src/barrel.ts",
+        relativePath: "src/barrel.ts",
+        language: "typescript",
+        sourceText: 'export * from "./left"; export * from "./right";',
+        contentHash: "barrel"
+      },
+      {
+        absolutePath: "C:/project/src/consumer.ts",
+        relativePath: "src/consumer.ts",
+        language: "typescript",
+        sourceText: 'import { value } from "./barrel"; export const selected = value();',
+        contentHash: "consumer"
+      }
+    ];
+    const snapshot = snapshotWithResolver(sourceDocuments, undefined);
+    const valueCall = snapshot.edges.find(
+      (edge) => edge.kind === "calls" && edge.referenceName === "value"
+    );
+
+    expect(valueCall).toMatchObject({ resolution: "unresolved", targetId: null });
+    expect(valueCall?.evidence?.candidateSymbolIds).toHaveLength(2);
+  });
+
+  it("lets an explicit re-export take precedence over a wildcard collision", () => {
+    const sourceDocuments: readonly SourceDocument[] = [
+      {
+        absolutePath: "C:/project/src/left.ts",
+        relativePath: "src/left.ts",
+        language: "typescript",
+        sourceText: "export function value() { return 1; }",
+        contentHash: "left"
+      },
+      {
+        absolutePath: "C:/project/src/right.ts",
+        relativePath: "src/right.ts",
+        language: "typescript",
+        sourceText: "export function value() { return 2; }",
+        contentHash: "right"
+      },
+      {
+        absolutePath: "C:/project/src/barrel.ts",
+        relativePath: "src/barrel.ts",
+        language: "typescript",
+        sourceText: 'export { value } from "./right"; export * from "./left";',
+        contentHash: "barrel"
+      },
+      {
+        absolutePath: "C:/project/src/consumer.ts",
+        relativePath: "src/consumer.ts",
+        language: "typescript",
+        sourceText: 'import { value } from "./barrel"; export const selected = value();',
+        contentHash: "consumer"
+      }
+    ];
+    const snapshot = snapshotWithResolver(sourceDocuments, undefined);
+    const rightValue = snapshot.symbols.find(
+      (symbol) => symbol.filePath === "src/right.ts" && symbol.name === "value"
+    );
+    const valueCall = snapshot.edges.find(
+      (edge) => edge.kind === "calls" && edge.referenceName === "value"
+    );
+
+    expect(valueCall).toMatchObject({ resolution: "exact", targetId: rightValue?.id });
+  });
+
+  it("terminates cyclic wildcard re-exports without manufacturing a target", () => {
+    const sourceDocuments: readonly SourceDocument[] = [
+      {
+        absolutePath: "C:/project/src/a.ts",
+        relativePath: "src/a.ts",
+        language: "typescript",
+        sourceText: 'export * from "./b";',
+        contentHash: "a"
+      },
+      {
+        absolutePath: "C:/project/src/b.ts",
+        relativePath: "src/b.ts",
+        language: "typescript",
+        sourceText: 'export * from "./a";',
+        contentHash: "b"
+      },
+      {
+        absolutePath: "C:/project/src/consumer.ts",
+        relativePath: "src/consumer.ts",
+        language: "typescript",
+        sourceText: 'import { value } from "./a"; export const selected = value();',
+        contentHash: "consumer"
+      }
+    ];
+    const snapshot = snapshotWithResolver(sourceDocuments, undefined);
+    const valueCall = snapshot.edges.find(
+      (edge) => edge.kind === "calls" && edge.referenceName === "value"
+    );
+
+    expect(valueCall).toMatchObject({ resolution: "unresolved", targetId: null });
+  });
+
+  it("does not use a global heuristic for an explicit namespace re-export binding", () => {
+    const sourceDocuments: readonly SourceDocument[] = [
+      {
+        absolutePath: "C:/project/src/math.ts",
+        relativePath: "src/math.ts",
+        language: "typescript",
+        sourceText: "export function real() { return 1; }",
+        contentHash: "math"
+      },
+      {
+        absolutePath: "C:/project/src/barrel.ts",
+        relativePath: "src/barrel.ts",
+        language: "typescript",
+        sourceText: 'export * as ns from "./math";',
+        contentHash: "barrel"
+      },
+      {
+        absolutePath: "C:/project/src/unrelated.ts",
+        relativePath: "src/unrelated.ts",
+        language: "typescript",
+        sourceText: "export function ns() { return 2; }",
+        contentHash: "unrelated"
+      },
+      {
+        absolutePath: "C:/project/src/consumer.ts",
+        relativePath: "src/consumer.ts",
+        language: "typescript",
+        sourceText: 'import { ns } from "./barrel"; export const selected = ns();',
+        contentHash: "consumer"
+      }
+    ];
+    const snapshot = snapshotWithResolver(sourceDocuments, undefined);
+    const nsCall = snapshot.edges.find((edge) => edge.kind === "calls" && edge.referenceName === "ns");
+
+    expect(nsCall).toMatchObject({ resolution: "unresolved", targetId: null });
+    expect(nsCall?.evidence?.candidateSymbolIds).toEqual([]);
+  });
+
+  it("does not use a global heuristic for a namespace import", () => {
+    const sourceDocuments: readonly SourceDocument[] = [
+      {
+        absolutePath: "C:/project/src/math.ts",
+        relativePath: "src/math.ts",
+        language: "typescript",
+        sourceText: "export function real() { return 1; }",
+        contentHash: "math"
+      },
+      {
+        absolutePath: "C:/project/src/unrelated.ts",
+        relativePath: "src/unrelated.ts",
+        language: "typescript",
+        sourceText: "export function math() { return 2; }",
+        contentHash: "unrelated"
+      },
+      {
+        absolutePath: "C:/project/src/consumer.ts",
+        relativePath: "src/consumer.ts",
+        language: "typescript",
+        sourceText: 'import * as math from "./math"; export const selected = math();',
+        contentHash: "consumer"
+      }
+    ];
+    const snapshot = snapshotWithResolver(sourceDocuments, undefined);
+    const mathCall = snapshot.edges.find(
+      (edge) => edge.kind === "calls" && edge.referenceName === "math"
+    );
+
+    expect(mathCall).toMatchObject({ resolution: "unresolved", targetId: null });
+  });
 });

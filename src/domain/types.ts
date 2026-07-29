@@ -1,5 +1,6 @@
 import type { EdgeEvidence } from "./facts.js";
 import type { IndexStalenessReason } from "./index-inputs.js";
+import type { IndexWork } from "./index-work.js";
 
 export const SYMBOL_KINDS = [
   "file",
@@ -90,6 +91,8 @@ export interface IndexStatus {
   readonly indexedAt: string | null;
   readonly generationId: string | null;
   readonly counts: IndexCounts;
+  /** Omitted for generations created before index-work telemetry existed. */
+  readonly lastIndexWork?: IndexWork;
 }
 
 export interface GraphSnapshot {

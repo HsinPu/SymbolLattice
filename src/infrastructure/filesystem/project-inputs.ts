@@ -231,6 +231,10 @@ function configurationInputKindOrder(kind: ProjectConfigurationInputKind): numbe
       return 2;
     case "extends":
       return 3;
+    case "workspace-root-manifest":
+      return 4;
+    case "workspace-package-manifest":
+      return 5;
   }
 }
 

@@ -18,6 +18,7 @@ export type ModuleResolutionStrategy =
   | "relative"
   | "tsconfig-paths"
   | "tsconfig-base-url"
+  | "workspace-package"
   | "unresolved";
 
 export interface ResolvedModule {

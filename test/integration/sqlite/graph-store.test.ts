@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import type {
   GraphSnapshot,
+  IndexWork,
   PersistedArtifactFacts,
   ProjectIndexInputs,
   SymbolNode
@@ -108,8 +109,34 @@ function persistedFacts(graphSnapshot: GraphSnapshot): readonly PersistedArtifac
         }
       }
     ],
-    exportBindings: []
+    exportBindings: [],
+    reExportBindings: [
+      {
+        kind: "named",
+        moduleSpecifier: "./re-exported",
+        importedName: "callee",
+        exportedName: "callee",
+        range: {
+          start: { line: 1, column: 1 },
+          end: { line: 1, column: 7 }
+        }
+      }
+    ]
   }));
+}
+
+function indexWork(mode: IndexWork["mode"], marker: string): IndexWork {
+  return {
+    mode,
+    resolutionScope: "project",
+    addedFiles: mode === "full" ? ["src/example.ts"] : [],
+    modifiedFiles: mode === "incremental" ? ["src/example.ts"] : [],
+    removedFiles: [],
+    reExtractedFiles: ["src/example.ts"],
+    reusedArtifactFiles: [],
+    dependencyInvalidatedFiles: [`src/${marker}.ts`],
+    reuseInvalidationReasons: []
+  };
 }
 
 function indexInputs(fingerprint: string): ProjectIndexInputs {
@@ -162,8 +189,42 @@ function downgradeCurrentIndexToV2(projectPath: string): void {
   const database = new DatabaseSync(databasePathFor(projectPath));
   try {
     database.exec("PRAGMA foreign_keys = OFF;");
+    database.exec("DROP TABLE generation_index_work;");
     database.exec("DROP TABLE generation_index_inputs;");
     database.prepare("UPDATE meta SET value = ? WHERE key = ?").run("2", "schema_version");
+  } finally {
+    database.close();
+  }
+}
+
+function downgradeCurrentIndexToV3(
+  projectPath: string,
+  options: { readonly omitReExportBindings?: boolean } = {}
+): void {
+  const database = new DatabaseSync(databasePathFor(projectPath));
+  try {
+    database.exec("PRAGMA foreign_keys = OFF;");
+    if (options.omitReExportBindings === true) {
+      const rows = database
+        .prepare("SELECT generation_id, file_path, facts_json FROM artifact_facts")
+        .all() as readonly {
+        readonly generation_id: string;
+        readonly file_path: string;
+        readonly facts_json: string;
+      }[];
+      const update = database.prepare(
+        `UPDATE artifact_facts
+         SET facts_json = ?
+         WHERE generation_id = ? AND file_path = ?`
+      );
+      for (const row of rows) {
+        const facts = JSON.parse(row.facts_json) as Record<string, unknown>;
+        delete facts.reExportBindings;
+        update.run(JSON.stringify(facts), row.generation_id, row.file_path);
+      }
+    }
+    database.exec("DROP TABLE generation_index_work;");
+    database.prepare("UPDATE meta SET value = ? WHERE key = ?").run("3", "schema_version");
   } finally {
     database.close();
   }
@@ -319,6 +380,14 @@ describe("SqliteGraphStore", () => {
     });
     expect(store.getArtifactFacts(projectPath)).toEqual([]);
     expect(store.getIndexInputs(projectPath)).toBeNull();
+    expect(store.getActiveGenerationBundle(projectPath)).toEqual({
+      status: store.getStatus(projectPath),
+      snapshot: store.getSnapshot(projectPath),
+      artifactFacts: [],
+      indexInputs: null,
+      extractorVersion: null,
+      resolverVersion: null
+    });
   });
 
   it("persists active-generation artifact facts and edge evidence, then clears stale facts", async () => {
@@ -327,13 +396,16 @@ describe("SqliteGraphStore", () => {
     const firstSnapshot = snapshot([symbol("caller", "caller"), symbol("callee", "callee")]);
     const firstFacts = persistedFacts(firstSnapshot);
     const firstInputs = indexInputs("first");
+    const firstWork = indexWork("full", "first");
 
     store.replaceProjectFacts({
       projectPath,
       snapshot: firstSnapshot,
       indexedAt: "2026-07-29T01:00:00.000Z",
       artifactFacts: firstFacts,
-      indexInputs: firstInputs
+      indexInputs: firstInputs,
+      resolverVersion: "test-resolver-v2",
+      indexWork: firstWork
     });
 
     expect(store.getStatus(projectPath)).toMatchObject({
@@ -341,6 +413,7 @@ describe("SqliteGraphStore", () => {
       indexedAt: "2026-07-29T01:00:00.000Z",
       generationId: expect.any(String),
       staleReasons: [],
+      lastIndexWork: firstWork,
       counts: { files: 1, symbols: 2, edges: 1, pendingReferences: 0 }
     });
     expect(store.getSnapshot(projectPath).edges[0]).toMatchObject({
@@ -354,11 +427,23 @@ describe("SqliteGraphStore", () => {
     });
     expect(store.getArtifactFacts(projectPath)).toEqual(firstFacts);
     expect(store.getIndexInputs(projectPath)).toEqual(firstInputs);
+    const firstBundle = store.getActiveGenerationBundle(projectPath);
+    expect(firstBundle).toMatchObject({
+      status: {
+        lastIndexWork: firstWork
+      },
+      artifactFacts: firstFacts,
+      indexInputs: firstInputs,
+      extractorVersion: "test-extractor-v1",
+      resolverVersion: "test-resolver-v2"
+    });
+    expect(firstBundle.snapshot).toEqual(store.getSnapshot(projectPath));
     const firstGenerationId = store.getStatus(projectPath).generationId;
 
     const secondSnapshot = snapshot([symbol("only", "only")]);
     const secondFacts = persistedFacts(secondSnapshot);
     const secondInputs = indexInputs("second");
+    const secondWork = indexWork("incremental", "second");
     const invalidSecondSnapshot: GraphSnapshot = {
       ...secondSnapshot,
       symbols: [...secondSnapshot.symbols, ...secondSnapshot.symbols]
@@ -370,20 +455,30 @@ describe("SqliteGraphStore", () => {
         snapshot: invalidSecondSnapshot,
         indexedAt: "2026-07-29T01:30:00.000Z",
         artifactFacts: secondFacts,
-        indexInputs: secondInputs
+        indexInputs: secondInputs,
+        resolverVersion: "test-resolver-v3",
+        indexWork: secondWork
       })
     ).toThrow();
     expect(store.getStatus(projectPath).generationId).toBe(firstGenerationId);
     expect(store.getSnapshot(projectPath).edges[0]).toMatchObject({ targetId: "callee" });
     expect(store.getArtifactFacts(projectPath)).toEqual(firstFacts);
     expect(store.getIndexInputs(projectPath)).toEqual(firstInputs);
+    expect(store.getActiveGenerationBundle(projectPath)).toMatchObject({
+      status: { lastIndexWork: firstWork },
+      artifactFacts: firstFacts,
+      indexInputs: firstInputs,
+      resolverVersion: "test-resolver-v2"
+    });
 
     store.replaceProjectFacts({
       projectPath,
       snapshot: secondSnapshot,
       indexedAt: "2026-07-29T02:00:00.000Z",
       artifactFacts: secondFacts,
-      indexInputs: secondInputs
+      indexInputs: secondInputs,
+      resolverVersion: "test-resolver-v3",
+      indexWork: secondWork
     });
 
     expect(store.getSnapshot(projectPath)).toMatchObject({
@@ -392,6 +487,13 @@ describe("SqliteGraphStore", () => {
     });
     expect(store.getArtifactFacts(projectPath)).toEqual(secondFacts);
     expect(store.getIndexInputs(projectPath)).toEqual(secondInputs);
+    expect(store.getActiveGenerationBundle(projectPath)).toMatchObject({
+      status: { lastIndexWork: secondWork },
+      artifactFacts: secondFacts,
+      indexInputs: secondInputs,
+      extractorVersion: "test-extractor-v1",
+      resolverVersion: "test-resolver-v3"
+    });
     expect(store.getStatus(projectPath).counts).toEqual({
       files: 1,
       symbols: 1,
@@ -402,9 +504,10 @@ describe("SqliteGraphStore", () => {
     expect(readTableCount(projectPath, "artifact_facts")).toBe(1);
     expect(readTableCount(projectPath, "edge_evidence")).toBe(0);
     expect(readTableCount(projectPath, "generation_index_inputs")).toBe(1);
+    expect(readTableCount(projectPath, "generation_index_work")).toBe(1);
   });
 
-  it("keeps a v1 snapshot readable through additive migration until the next v2 sync", async () => {
+  it("keeps a v1 snapshot readable through additive migration until the next v4 sync", async () => {
     const projectPath = await temporaryProject();
     const legacySnapshot = snapshot([symbol("legacy-caller", "caller"), symbol("legacy-callee", "callee")]);
     createLegacyV1Index(projectPath, legacySnapshot);
@@ -427,6 +530,14 @@ describe("SqliteGraphStore", () => {
     ]);
     expect(store.getArtifactFacts(projectPath)).toEqual([]);
     expect(store.getIndexInputs(projectPath)).toBeNull();
+    expect(store.getActiveGenerationBundle(projectPath)).toMatchObject({
+      status: { generationId: null },
+      snapshot: beforeMigrationSnapshot,
+      artifactFacts: [],
+      indexInputs: null,
+      extractorVersion: null,
+      resolverVersion: null
+    });
 
     store.initialize(projectPath);
 
@@ -438,7 +549,7 @@ describe("SqliteGraphStore", () => {
     expect(store.getSnapshot(projectPath)).toEqual(beforeMigrationSnapshot);
     expect(store.getArtifactFacts(projectPath)).toEqual([]);
     expect(store.getIndexInputs(projectPath)).toBeNull();
-    expect(readSchemaVersion(projectPath)).toBe("3");
+    expect(readSchemaVersion(projectPath)).toBe("4");
   });
 
   it("keeps a v2 active generation readable, then adds input tracking without fabricating it", async () => {
@@ -452,7 +563,9 @@ describe("SqliteGraphStore", () => {
       snapshot: v2Snapshot,
       indexedAt: "2026-07-29T03:00:00.000Z",
       artifactFacts: v2Facts,
-      indexInputs: indexInputs("v3-before-downgrade")
+      indexInputs: indexInputs("v3-before-downgrade"),
+      resolverVersion: "test-resolver-v2",
+      indexWork: indexWork("full", "v2-before-downgrade")
     });
     const beforeMigrationSnapshot = store.getSnapshot(projectPath);
     downgradeCurrentIndexToV2(projectPath);
@@ -469,11 +582,57 @@ describe("SqliteGraphStore", () => {
 
     store.initialize(projectPath);
 
-    expect(readSchemaVersion(projectPath)).toBe("3");
+    expect(readSchemaVersion(projectPath)).toBe("4");
     expect(store.getSnapshot(projectPath)).toEqual(beforeMigrationSnapshot);
     expect(store.getArtifactFacts(projectPath)).toEqual(v2Facts);
     expect(store.getIndexInputs(projectPath)).toBeNull();
     expect(readTableCount(projectPath, "generation_index_inputs")).toBe(0);
+    expect(readTableCount(projectPath, "generation_index_work")).toBe(0);
+  });
+
+  it("keeps a v3 generation's inputs and versions while leaving missing work and re-exports honest", async () => {
+    const projectPath = await temporaryProject();
+    const store = new SqliteGraphStore();
+    const v3Snapshot = snapshot([symbol("v3-caller", "caller"), symbol("v3-callee", "callee")]);
+    const v3Facts = persistedFacts(v3Snapshot);
+    const v3Inputs = indexInputs("v3-before-downgrade");
+
+    store.replaceProjectFacts({
+      projectPath,
+      snapshot: v3Snapshot,
+      indexedAt: "2026-07-29T04:00:00.000Z",
+      artifactFacts: v3Facts,
+      indexInputs: v3Inputs,
+      resolverVersion: "test-resolver-v3",
+      indexWork: indexWork("incremental", "v3-before-downgrade")
+    });
+    const beforeMigrationSnapshot = store.getSnapshot(projectPath);
+    downgradeCurrentIndexToV3(projectPath, { omitReExportBindings: true });
+
+    expect(readSchemaVersion(projectPath)).toBe("3");
+    const legacyBundle = store.getActiveGenerationBundle(projectPath);
+    expect(legacyBundle).toMatchObject({
+      snapshot: beforeMigrationSnapshot,
+      indexInputs: v3Inputs,
+      extractorVersion: "test-extractor-v1",
+      resolverVersion: "test-resolver-v3"
+    });
+    expect(legacyBundle.status).not.toHaveProperty("lastIndexWork");
+    expect(legacyBundle.artifactFacts[0]?.reExportBindings).toEqual([]);
+
+    store.initialize(projectPath);
+
+    expect(readSchemaVersion(projectPath)).toBe("4");
+    const migratedBundle = store.getActiveGenerationBundle(projectPath);
+    expect(migratedBundle).toMatchObject({
+      snapshot: beforeMigrationSnapshot,
+      indexInputs: v3Inputs,
+      extractorVersion: "test-extractor-v1",
+      resolverVersion: "test-resolver-v3"
+    });
+    expect(migratedBundle.status).not.toHaveProperty("lastIndexWork");
+    expect(migratedBundle.artifactFacts[0]?.reExportBindings).toEqual([]);
+    expect(readTableCount(projectPath, "generation_index_work")).toBe(0);
   });
 
   it("rejects a database written by a newer schema instead of changing it", async () => {
