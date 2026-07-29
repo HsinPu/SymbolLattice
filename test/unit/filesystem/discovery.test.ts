@@ -5,6 +5,7 @@ import { join, parse, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
+  canonicalizeScopeRoots,
   discoverSourceFiles,
   hashSource,
   isUnsafeProjectPath,
@@ -42,6 +43,106 @@ describe("source discovery", () => {
 
     expect(files.map((file) => file.relativePath)).toEqual(["src/a.js", "src/z.ts"]);
     expect(files.map((file) => file.language)).toEqual(["javascript", "typescript"]);
+  });
+
+  it("applies only the root gitignore with case-sensitive anchored, glob, and negation rules", async () => {
+    const projectPath = await createProject();
+    await mkdir(join(projectPath, "ignored"), { recursive: true });
+    await mkdir(join(projectPath, "src", "generated"), { recursive: true });
+    await mkdir(join(projectPath, "nested"), { recursive: true });
+    await writeFile(
+      join(projectPath, ".gitignore"),
+      [
+        "/root-only.ts",
+        "**/generated/*.ts",
+        "ignored/",
+        "!ignored/",
+        "ignored/*",
+        "!ignored/keep.ts",
+        "case.ts"
+      ].join("\n"),
+      "utf8"
+    );
+    await writeFile(join(projectPath, "root-only.ts"), "export const rootOnly = true;", "utf8");
+    await writeFile(join(projectPath, "Case.ts"), "export const upper = true;", "utf8");
+    await writeFile(join(projectPath, "ignored", "drop.ts"), "export const drop = true;", "utf8");
+    await writeFile(join(projectPath, "ignored", "keep.ts"), "export const keep = true;", "utf8");
+    await writeFile(join(projectPath, "src", "generated", "drop.ts"), "export const generated = true;", "utf8");
+    await writeFile(join(projectPath, "src", "generated", "keep.js"), "export const generatedJs = true;", "utf8");
+    await writeFile(join(projectPath, "nested", ".gitignore"), "nested-hidden.ts\n", "utf8");
+    await writeFile(join(projectPath, "nested", "nested-hidden.ts"), "export const nested = true;", "utf8");
+
+    const files = await discoverSourceFiles(projectPath);
+
+    expect(files.map((file) => file.relativePath)).toEqual([
+      "Case.ts",
+      "ignored/keep.ts",
+      "nested/nested-hidden.ts",
+      "src/generated/keep.js"
+    ]);
+  });
+
+  it("never traverses hard-excluded directories, even when gitignore negates them", async () => {
+    const projectPath = await createProject();
+    const hardExcludedDirectories = [".git", ".symbol-lattice", "coverage", "dist", "node_modules"];
+
+    await writeFile(
+      join(projectPath, ".gitignore"),
+      hardExcludedDirectories.map((directory) => `!${directory}/`).join("\n"),
+      "utf8"
+    );
+    await writeFile(join(projectPath, "included.ts"), "export const included = true;", "utf8");
+
+    for (const directory of hardExcludedDirectories) {
+      await mkdir(join(projectPath, directory), { recursive: true });
+      await writeFile(join(projectPath, directory, "should-not-index.ts"), "export const ignored = true;", "utf8");
+    }
+
+    const files = await discoverSourceFiles(projectPath);
+
+    expect(files.map((file) => file.relativePath)).toEqual(["included.ts"]);
+  });
+
+  it("canonicalizes scope roots, folds overlap, and limits discovery to the selected directories", async () => {
+    const projectPath = await createProject();
+    await mkdir(join(projectPath, "src", "lib"), { recursive: true });
+    await mkdir(join(projectPath, "tools"), { recursive: true });
+    await writeFile(join(projectPath, "src", "index.ts"), "export const source = true;", "utf8");
+    await writeFile(join(projectPath, "src", "lib", "nested.ts"), "export const nested = true;", "utf8");
+    await writeFile(join(projectPath, "tools", "tool.ts"), "export const tool = true;", "utf8");
+    await writeFile(join(projectPath, "outside.ts"), "export const outside = true;", "utf8");
+
+    await expect(
+      canonicalizeScopeRoots(projectPath, ["tools", "src/lib", "src", "src"])
+    ).resolves.toEqual(["src", "tools"]);
+
+    const firstPass = await discoverSourceFiles(projectPath, {
+      scopeRoots: ["tools", "src/lib", "src", "src"]
+    });
+    const secondPass = await discoverSourceFiles(projectPath, {
+      scopeRoots: ["src", "tools"]
+    });
+
+    expect(firstPass.map((file) => file.relativePath)).toEqual([
+      "src/index.ts",
+      "src/lib/nested.ts",
+      "tools/tool.ts"
+    ]);
+    expect(secondPass.map((file) => file.relativePath)).toEqual(
+      firstPass.map((file) => file.relativePath)
+    );
+  });
+
+  it("rejects scope roots outside the project or that are not directories", async () => {
+    const projectPath = await createProject();
+    await writeFile(join(projectPath, "file.ts"), "export const file = true;", "utf8");
+
+    await expect(canonicalizeScopeRoots(projectPath, ["../outside"])).rejects.toThrow(
+      "outside the project"
+    );
+    await expect(canonicalizeScopeRoots(projectPath, ["file.ts"])).rejects.toThrow(
+      "not a directory"
+    );
   });
 
   it("normalizes safe project-relative paths and rejects external paths", async () => {

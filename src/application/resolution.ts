@@ -8,7 +8,11 @@ import {
   type SymbolNode
 } from "../domain/index.js";
 import type { ExtractedFileFacts } from "../extraction/index.js";
-import type { SourceDocument } from "../ports/source-catalog.js";
+import type {
+  ProjectModuleResolver,
+  ResolvedModule,
+  SourceDocument
+} from "../ports/source-catalog.js";
 
 function compareText(left: string, right: string): number {
   return left.localeCompare(right);
@@ -93,13 +97,69 @@ function candidateSymbolIds(...candidateSets: readonly (readonly SymbolNode[])[]
 function referenceEvidence(
   ruleId: EdgeEvidence["ruleId"],
   stage: EdgeEvidence["stage"],
-  candidateIds: readonly string[]
+  candidateIds: readonly string[],
+  configurationPaths: readonly string[] = []
 ): EdgeEvidence {
-  return {
+  const evidence: EdgeEvidence = {
     ruleId,
     stage,
     candidateSymbolIds: [...new Set(candidateIds)].sort(compareText)
   };
+  if (configurationPaths.length > 0) {
+    return {
+      ...evidence,
+      configurationPaths: [...new Set(configurationPaths)]
+    };
+  }
+  return evidence;
+}
+
+function fallbackModuleResolution(
+  knownFilePaths: ReadonlySet<string>,
+  fromFilePath: string,
+  moduleSpecifier: string
+): ResolvedModule {
+  const matchingPaths = modulePathCandidates(fromFilePath, moduleSpecifier).filter((path) =>
+    knownFilePaths.has(path)
+  );
+  if (matchingPaths.length !== 1 || matchingPaths[0] === undefined) {
+    return {
+      targetFilePath: null,
+      strategy: "unresolved",
+      configurationPaths: []
+    };
+  }
+
+  return {
+    targetFilePath: matchingPaths[0],
+    strategy: "relative",
+    configurationPaths: []
+  };
+}
+
+function moduleRuleId(strategy: ResolvedModule["strategy"]): string {
+  switch (strategy) {
+    case "relative":
+      return "module.relative-specifier";
+    case "tsconfig-paths":
+      return "module.tsconfig-paths";
+    case "tsconfig-base-url":
+      return "module.tsconfig-base-url";
+    case "unresolved":
+      return "module.unresolved-specifier";
+  }
+}
+
+function uniqueConfigurationPaths(configurationPaths: readonly (readonly string[])[]): readonly string[] {
+  const paths: string[] = [];
+  for (const candidatePaths of configurationPaths) {
+    for (const path of candidatePaths) {
+      if (!paths.includes(path)) {
+        paths.push(path);
+      }
+    }
+  }
+  return paths;
 }
 
 function buildFiles(
@@ -193,6 +253,8 @@ export function resolveProjectFacts(input: {
   readonly sourceDocuments: readonly SourceDocument[];
   readonly extractedFiles: readonly ExtractedFileFacts[];
   readonly indexedAt: string;
+  /** Optional for v0.2-compatible callers; the catalog supplies it for indexed projects. */
+  readonly moduleResolver?: ProjectModuleResolver;
 }): GraphSnapshot {
   const symbols = input.extractedFiles.flatMap((facts) => facts.symbols);
   const structuralEdges = input.extractedFiles.flatMap((facts) => facts.edges);
@@ -204,6 +266,7 @@ export function resolveProjectFacts(input: {
   const symbolsById = new Map(symbols.map((symbol) => [symbol.id, symbol]));
   const importTargetPathsByFile = new Map<string, Set<string>>();
   const importTargetPathBySpecifier = new Map<string, Map<string, string>>();
+  const importResolutionBySpecifier = new Map<string, Map<string, ResolvedModule>>();
   const importBindingsByFile = new Map<string, ExtractedFileFacts["importBindings"]>();
   const localBindingsByFile = new Map<string, ExtractedFileFacts["localBindings"]>();
   const referenceScopeIdsByReferenceId = new Map<string, readonly string[]>();
@@ -248,12 +311,18 @@ export function resolveProjectFacts(input: {
       continue;
     }
 
-    const matchingPaths = modulePathCandidates(reference.filePath, reference.referenceName).filter((path) =>
-      knownFilePaths.has(path)
-    );
-    const targetPath = matchingPaths.length === 1 ? matchingPaths[0] : undefined;
+    const moduleResolution = input.moduleResolver?.resolve(
+      reference.filePath,
+      reference.referenceName
+    ) ?? fallbackModuleResolution(knownFilePaths, reference.filePath, reference.referenceName);
+    const targetPath =
+      moduleResolution.strategy === "unresolved" ||
+      moduleResolution.targetFilePath === null ||
+      !knownFilePaths.has(moduleResolution.targetFilePath)
+        ? undefined
+        : moduleResolution.targetFilePath;
     const target = targetPath === undefined ? undefined : fileSymbols.get(targetPath);
-    const moduleCandidates = matchingPaths
+    const moduleCandidates = (targetPath === undefined ? [] : [targetPath])
       .map((path) => fileSymbols.get(path))
       .filter((candidate): candidate is SymbolNode => candidate !== undefined)
       .sort((left, right) => compareText(left.id, right.id));
@@ -268,7 +337,8 @@ export function resolveProjectFacts(input: {
           referenceEvidence(
             "module.unresolved-specifier",
             "unresolved",
-            candidateSymbolIds(moduleCandidates)
+            candidateSymbolIds(moduleCandidates),
+            moduleResolution.configurationPaths
           )
         )
       );
@@ -282,9 +352,10 @@ export function resolveProjectFacts(input: {
         "exact",
         1,
         referenceEvidence(
-          "module.relative-specifier",
+          moduleRuleId(moduleResolution.strategy),
           "module",
-          candidateSymbolIds(moduleCandidates)
+          candidateSymbolIds(moduleCandidates),
+          moduleResolution.configurationPaths
         )
       )
     );
@@ -296,6 +367,11 @@ export function resolveProjectFacts(input: {
       const pathsBySpecifier = importTargetPathBySpecifier.get(reference.filePath) ?? new Map<string, string>();
       pathsBySpecifier.set(reference.referenceName, target.filePath);
       importTargetPathBySpecifier.set(reference.filePath, pathsBySpecifier);
+
+      const resolutionsBySpecifier =
+        importResolutionBySpecifier.get(reference.filePath) ?? new Map<string, ResolvedModule>();
+      resolutionsBySpecifier.set(reference.referenceName, moduleResolution);
+      importResolutionBySpecifier.set(reference.filePath, resolutionsBySpecifier);
     }
   }
 
@@ -310,12 +386,19 @@ export function resolveProjectFacts(input: {
       localBindingsByFile.get(reference.filePath) ?? [],
       symbolsById
     );
-    const exactImportedCandidates = (importBindingsByFile.get(reference.filePath) ?? [])
+    const exactImportedBindings = (importBindingsByFile.get(reference.filePath) ?? [])
       .filter((binding) => binding.localName === reference.referenceName)
-      .flatMap((binding) => {
-        const targetPath = importTargetPathBySpecifier
+      .map((binding) => ({
+        binding,
+        targetPath: importTargetPathBySpecifier
           .get(reference.filePath)
-          ?.get(binding.moduleSpecifier);
+          ?.get(binding.moduleSpecifier),
+        resolution: importResolutionBySpecifier
+          .get(reference.filePath)
+          ?.get(binding.moduleSpecifier)
+      }));
+    const exactImportedCandidates = exactImportedBindings
+      .flatMap(({ binding, targetPath }) => {
         return targetPath === undefined
           ? []
           : (exportedCandidatesByFileAndName.get(bindingKey(targetPath, binding.importedName)) ?? []);
@@ -325,6 +408,11 @@ export function resolveProjectFacts(input: {
           candidates.findIndex((other) => other.id === candidate.id) === index
       )
       .sort((left, right) => compareText(left.id, right.id));
+    const exactImportedConfigurationPaths = uniqueConfigurationPaths(
+      exactImportedBindings
+        .filter(({ targetPath }) => targetPath !== undefined)
+        .map(({ resolution }) => resolution?.configurationPaths ?? [])
+    );
     const importedTargetPaths = importTargetPathsByFile.get(reference.filePath) ?? new Set<string>();
     const importedCandidates = uniqueSymbolCandidates(
       symbols,
@@ -384,7 +472,8 @@ export function resolveProjectFacts(input: {
           referenceEvidence(
             "module.explicit-import-binding",
             "module",
-            candidateSymbolIds(exactImportedCandidates)
+            candidateSymbolIds(exactImportedCandidates),
+            exactImportedConfigurationPaths
           )
         )
       );

@@ -12,7 +12,8 @@ import {
   type SymbolMatch
 } from "../domain/index.js";
 import { extractFileFacts } from "../extraction/index.js";
-import type { GraphStore, SourceCatalog } from "../ports/index.js";
+import type { GraphStore, ProjectScanOptions, SourceCatalog } from "../ports/index.js";
+import { ProjectConfigurationError } from "../domain/configuration.js";
 import { SymbolLatticeError } from "./errors.js";
 import { resolveProjectFacts } from "./resolution.js";
 import type {
@@ -28,6 +29,8 @@ import type {
 export interface IndexOptions {
   readonly projectPath: string;
   readonly force?: boolean;
+  /** Replaces the stored project scope for this explicit index operation. */
+  readonly scopeRoots?: readonly string[];
 }
 
 export interface FindOptions {
@@ -57,15 +60,14 @@ export class SymbolLatticeService {
 
   public async init(options: IndexOptions): Promise<GraphContext["status"]> {
     this.assertSafeProjectPath(options);
-    this.graphStore.initialize(resolve(options.projectPath));
     return this.index(options);
   }
 
   public async index(options: IndexOptions): Promise<GraphContext["status"]> {
     this.assertSafeProjectPath(options);
     const projectPath = resolve(options.projectPath);
-    this.graphStore.initialize(projectPath);
-    const sourceDocuments = await this.sourceCatalog.discover(projectPath);
+    const scan = await this.scanForIndex(projectPath, options);
+    const sourceDocuments = scan.sourceDocuments;
     const indexedAt = new Date().toISOString();
     const extractedFiles = sourceDocuments.map((document) =>
       extractFileFacts({
@@ -86,10 +88,17 @@ export class SymbolLatticeService {
     const snapshot = resolveProjectFacts({
       sourceDocuments,
       extractedFiles,
-      indexedAt
+      indexedAt,
+      moduleResolver: scan.moduleResolver
     });
 
-    this.graphStore.replaceProjectFacts({ projectPath, snapshot, indexedAt, artifactFacts });
+    this.graphStore.replaceProjectFacts({
+      projectPath,
+      snapshot,
+      indexedAt,
+      artifactFacts,
+      indexInputs: scan.indexInputs
+    });
     return this.getStatus(projectPath);
   }
 
@@ -113,13 +122,41 @@ export class SymbolLatticeService {
       return persistedStatus;
     }
 
-    const [sourceDocuments, snapshot] = await Promise.all([
-      this.sourceCatalog.discover(normalizedProjectPath),
-      Promise.resolve(this.graphStore.getSnapshot(normalizedProjectPath))
-    ]);
+    const persistedInputs = this.graphStore.getIndexInputs(normalizedProjectPath);
+    if (persistedInputs === null) {
+      return {
+        ...persistedStatus,
+        stale: true,
+        staleReasons: ["configuration-untracked"]
+      };
+    }
+
+    let scan;
+    try {
+      scan = await this.sourceCatalog.scan(normalizedProjectPath, {
+        scopeRoots: persistedInputs.scopeRoots
+      });
+    } catch (error) {
+      if (error instanceof ProjectConfigurationError) {
+        return {
+          ...persistedStatus,
+          stale: true,
+          staleReasons: ["configuration-invalid"]
+        };
+      }
+      throw error;
+    }
+    const snapshot = this.graphStore.getSnapshot(normalizedProjectPath);
+    const staleReasons = [
+      ...(filesMatch(scan.sourceDocuments, snapshot.files) ? [] : (["source-files-changed"] as const)),
+      ...(scan.indexInputs.fingerprint === persistedInputs.fingerprint
+        ? []
+        : (["project-inputs-changed"] as const))
+    ];
     return {
       ...persistedStatus,
-      stale: !filesMatch(sourceDocuments, snapshot.files)
+      stale: staleReasons.length > 0,
+      staleReasons
     };
   }
 
@@ -226,6 +263,24 @@ export class SymbolLatticeService {
         "INVALID_PROJECT_PATH",
         `Refusing to index ${projectPath}. Pass --force only when that broad scope is intentional.`
       );
+    }
+  }
+
+  private async scanForIndex(projectPath: string, options: IndexOptions) {
+    const previousInputs = this.graphStore.isInitialized(projectPath)
+      ? this.graphStore.getIndexInputs(projectPath)
+      : null;
+    const selectedScopeRoots = options.scopeRoots ?? previousInputs?.scopeRoots;
+    const scanOptions: ProjectScanOptions | undefined =
+      selectedScopeRoots === undefined ? undefined : { scopeRoots: selectedScopeRoots };
+
+    try {
+      return await this.sourceCatalog.scan(projectPath, scanOptions);
+    } catch (error) {
+      if (error instanceof ProjectConfigurationError) {
+        throw new SymbolLatticeError("INVALID_PROJECT_CONFIGURATION", error.message);
+      }
+      throw error;
     }
   }
 

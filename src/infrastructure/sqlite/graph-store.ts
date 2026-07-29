@@ -7,6 +7,7 @@ import type {
   ArtifactFacts,
   PersistedArtifactFacts
 } from "../../domain/facts.js";
+import type { ProjectIndexInputs } from "../../domain/index-inputs.js";
 import type {
   ArtifactLanguage,
   EdgeKind,
@@ -28,7 +29,8 @@ const DATABASE_FILE_NAME = "index.sqlite";
 const INDEXED_AT_META_KEY = "indexed_at";
 const ACTIVE_GENERATION_ID_META_KEY = "active_generation_id";
 const SCHEMA_VERSION_META_KEY = "schema_version";
-const SCHEMA_VERSION = "2";
+const SCHEMA_VERSION = "3";
+const PREVIOUS_SCHEMA_VERSION = "2";
 const LEGACY_SCHEMA_VERSION = "1";
 const RESOLVER_VERSION = "typescript-static-v1";
 
@@ -144,7 +146,26 @@ const GENERATION_SCHEMA = `
     ON edge_evidence(edge_id, generation_id);
 `;
 
-type SupportedSchemaVersion = typeof LEGACY_SCHEMA_VERSION | typeof SCHEMA_VERSION;
+/**
+ * v3 binds the inputs that selected a generation to that generation itself.
+ * Keeping the compact payload in one row makes the active pointer sufficient
+ * to select graph projection, raw facts, edge evidence, and freshness inputs
+ * from the same SQLite snapshot.
+ */
+const GENERATION_INDEX_INPUTS_SCHEMA = `
+  PRAGMA foreign_keys = ON;
+
+  CREATE TABLE IF NOT EXISTS generation_index_inputs (
+    generation_id TEXT PRIMARY KEY,
+    inputs_json TEXT NOT NULL,
+    FOREIGN KEY(generation_id) REFERENCES generations(id) ON DELETE CASCADE
+  ) STRICT;
+`;
+
+type SupportedSchemaVersion =
+  | typeof LEGACY_SCHEMA_VERSION
+  | typeof PREVIOUS_SCHEMA_VERSION
+  | typeof SCHEMA_VERSION;
 
 interface CountRow {
   readonly count: number;
@@ -209,6 +230,10 @@ interface ArtifactFactsRow {
   readonly language: ArtifactLanguage;
   readonly extractor_version: string;
   readonly facts_json: string;
+}
+
+interface GenerationIndexInputsRow {
+  readonly inputs_json: string;
 }
 
 function databasePathFor(projectPath: string): string {
@@ -296,7 +321,7 @@ function unsupportedSchemaError(version: string | null): Error {
   }
 
   return new Error(
-    `SymbolLattice index schema version \"${version}\" is unsupported by this release (supported: ${LEGACY_SCHEMA_VERSION}, ${SCHEMA_VERSION}). Rebuild with a compatible SymbolLattice version.`
+    `SymbolLattice index schema version \"${version}\" is unsupported by this release (supported: ${LEGACY_SCHEMA_VERSION}, ${PREVIOUS_SCHEMA_VERSION}, ${SCHEMA_VERSION}). Rebuild with a compatible SymbolLattice version.`
   );
 }
 
@@ -306,7 +331,11 @@ function readSchemaVersion(database: DatabaseSync): SupportedSchemaVersion {
   }
 
   const version = getMeta(database, SCHEMA_VERSION_META_KEY);
-  if (version === LEGACY_SCHEMA_VERSION || version === SCHEMA_VERSION) {
+  if (
+    version === LEGACY_SCHEMA_VERSION ||
+    version === PREVIOUS_SCHEMA_VERSION ||
+    version === SCHEMA_VERSION
+  ) {
     return version;
   }
 
@@ -317,6 +346,22 @@ function migrateLegacyDatabase(database: DatabaseSync): void {
   database.exec("BEGIN IMMEDIATE");
   try {
     database.exec(GENERATION_SCHEMA);
+    database.exec(GENERATION_INDEX_INPUTS_SCHEMA);
+    setMeta(database, SCHEMA_VERSION_META_KEY, SCHEMA_VERSION);
+    database.exec("COMMIT");
+  } catch (error) {
+    database.exec("ROLLBACK");
+    throw error;
+  }
+}
+
+function migratePreviousDatabase(database: DatabaseSync): void {
+  database.exec("BEGIN IMMEDIATE");
+  try {
+    // Re-run the v2 definitions in case an earlier initialization was
+    // interrupted before every additive side table was created.
+    database.exec(GENERATION_SCHEMA);
+    database.exec(GENERATION_INDEX_INPUTS_SCHEMA);
     setMeta(database, SCHEMA_VERSION_META_KEY, SCHEMA_VERSION);
     database.exec("COMMIT");
   } catch (error) {
@@ -330,6 +375,7 @@ function initializeNewDatabase(database: DatabaseSync): void {
   try {
     database.exec(SNAPSHOT_SCHEMA);
     database.exec(GENERATION_SCHEMA);
+    database.exec(GENERATION_INDEX_INPUTS_SCHEMA);
     setMeta(database, SCHEMA_VERSION_META_KEY, SCHEMA_VERSION);
     database.exec("COMMIT");
   } catch (error) {
@@ -350,14 +396,24 @@ function ensureSchema(database: DatabaseSync, databaseExisted: boolean): void {
     return;
   }
 
-  // A previous v2 initialization might have been interrupted after the main
+  if (schemaVersion === PREVIOUS_SCHEMA_VERSION) {
+    migratePreviousDatabase(database);
+    return;
+  }
+
+  // A previous v3 initialization might have been interrupted after the main
   // schema version was stored. The idempotent side tables can be restored
   // without changing graph data or its active generation.
   database.exec(GENERATION_SCHEMA);
+  database.exec(GENERATION_INDEX_INPUTS_SCHEMA);
 }
 
 function getActiveGenerationId(database: DatabaseSync): string | null {
   return getMeta(database, ACTIVE_GENERATION_ID_META_KEY);
+}
+
+function supportsGenerationData(schemaVersion: SupportedSchemaVersion): boolean {
+  return schemaVersion !== LEGACY_SCHEMA_VERSION;
 }
 
 function parseJson<T>(json: string, description: string): T {
@@ -523,6 +579,18 @@ function insertEdgeEvidence(database: DatabaseSync, generationId: string, edge: 
     .run(generationId, edge.id, JSON.stringify(edge.evidence));
 }
 
+function insertIndexInputs(
+  database: DatabaseSync,
+  generationId: string,
+  indexInputs: ProjectIndexInputs
+): void {
+  database
+    .prepare(
+      "INSERT INTO generation_index_inputs(generation_id, inputs_json) VALUES (?, ?)"
+    )
+    .run(generationId, JSON.stringify(indexInputs));
+}
+
 export class SqliteGraphStore implements GraphStore {
   public isInitialized(projectPath: string): boolean {
     return existsSync(databasePathFor(projectPath));
@@ -547,6 +615,7 @@ export class SqliteGraphStore implements GraphStore {
       return {
         initialized: false,
         stale: false,
+        staleReasons: [],
         projectPath: normalizedProjectPath,
         indexedAt: null,
         generationId: null,
@@ -559,10 +628,11 @@ export class SqliteGraphStore implements GraphStore {
       return readConsistently(database, () => {
         const schemaVersion = readSchemaVersion(database);
         const generationId =
-          schemaVersion === SCHEMA_VERSION ? getActiveGenerationId(database) : null;
+          supportsGenerationData(schemaVersion) ? getActiveGenerationId(database) : null;
         return {
           initialized: true,
           stale: false,
+          staleReasons: [],
           projectPath: normalizedProjectPath,
           indexedAt: getMeta(database, INDEXED_AT_META_KEY),
           generationId,
@@ -585,7 +655,7 @@ export class SqliteGraphStore implements GraphStore {
       return readConsistently(database, () => {
         const schemaVersion = readSchemaVersion(database);
         const activeGenerationId =
-          schemaVersion === SCHEMA_VERSION ? getActiveGenerationId(database) : null;
+          supportsGenerationData(schemaVersion) ? getActiveGenerationId(database) : null;
         const files = database
           .prepare("SELECT path, content_hash, language, indexed_at FROM files ORDER BY path")
           .all() as unknown as FileRow[];
@@ -704,6 +774,48 @@ export class SqliteGraphStore implements GraphStore {
     }
   }
 
+  public getIndexInputs(projectPath: string): ProjectIndexInputs | null {
+    const normalizedProjectPath = resolve(projectPath);
+    if (!this.isInitialized(normalizedProjectPath)) {
+      return null;
+    }
+
+    const database = new DatabaseSync(databasePathFor(normalizedProjectPath), { readOnly: true });
+    try {
+      return readConsistently(database, () => {
+        const schemaVersion = readSchemaVersion(database);
+        // v1 and v2 have no input identity to reconstruct. Returning null is
+        // intentional: the application can surface a configuration-untracked
+        // status rather than inventing provenance for a legacy generation.
+        if (schemaVersion !== SCHEMA_VERSION) {
+          return null;
+        }
+
+        const activeGenerationId = getActiveGenerationId(database);
+        if (activeGenerationId === null) {
+          return null;
+        }
+
+        const row = database
+          .prepare(
+            `SELECT inputs_json
+             FROM generation_index_inputs
+             WHERE generation_id = ?`
+          )
+          .get(activeGenerationId) as unknown as GenerationIndexInputsRow | undefined;
+
+        return row === undefined
+          ? null
+          : parseJson<ProjectIndexInputs>(
+              row.inputs_json,
+              `index inputs for generation ${activeGenerationId}`
+            );
+      });
+    } finally {
+      database.close();
+    }
+  }
+
   public replaceProjectFacts(input: ReplaceProjectFactsInput): void {
     const normalizedProjectPath = resolve(input.projectPath);
     this.initialize(normalizedProjectPath);
@@ -727,6 +839,8 @@ export class SqliteGraphStore implements GraphStore {
             extractorVersionFor(input.artifactFacts),
             RESOLVER_VERSION
           );
+
+        insertIndexInputs(database, generationId, input.indexInputs);
 
         for (const facts of input.artifactFacts) {
           insertArtifactFacts(database, generationId, facts);
@@ -762,6 +876,9 @@ export class SqliteGraphStore implements GraphStore {
         if (previousGenerationId !== null && previousGenerationId !== generationId) {
           database.prepare("DELETE FROM edge_evidence WHERE generation_id = ?").run(previousGenerationId);
           database.prepare("DELETE FROM artifact_facts WHERE generation_id = ?").run(previousGenerationId);
+          database
+            .prepare("DELETE FROM generation_index_inputs WHERE generation_id = ?")
+            .run(previousGenerationId);
           database.prepare("DELETE FROM generations WHERE id = ?").run(previousGenerationId);
         }
 

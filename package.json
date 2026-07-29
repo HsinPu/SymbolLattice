@@ -1,6 +1,6 @@
 {
   "name": "@hsinpu/symbol-lattice",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Evidence-first local code graph exploration for TypeScript and JavaScript projects.",
   "license": "MIT",
   "repository": {
@@ -34,6 +34,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
     "commander": "^15.0.0",
+    "ignore": "^7.0.5",
     "typescript": "^5.9.3",
     "zod": "^4.4.3"
   },

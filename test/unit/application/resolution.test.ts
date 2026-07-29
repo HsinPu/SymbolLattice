@@ -1,7 +1,69 @@
-import { describe, expect, it } from "vitest";
+import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { join, resolve } from "node:path";
+import { tmpdir } from "node:os";
+
+import { afterEach, describe, expect, it } from "vitest";
 
 import { resolveProjectFacts } from "../../../src/application/resolution.js";
+import { ProjectConfigurationError } from "../../../src/domain/configuration.js";
 import { extractFileFacts } from "../../../src/extraction/index.js";
+import { createTypeScriptProjectModuleResolver } from "../../../src/infrastructure/typescript/index.js";
+import type { SourceDocument } from "../../../src/ports/source-catalog.js";
+
+const temporaryProjectPaths: string[] = [];
+
+function languageForPath(relativePath: string): SourceDocument["language"] {
+  return /\.(?:[cm]?tsx?)$/i.test(relativePath) ? "typescript" : "javascript";
+}
+
+async function createConfiguredProject(
+  files: Readonly<Record<string, string>>
+): Promise<{ readonly projectPath: string; readonly sourceDocuments: readonly SourceDocument[] }> {
+  const projectPath = await mkdtemp(join(tmpdir(), "symbol-lattice-resolution-"));
+  temporaryProjectPaths.push(projectPath);
+  await Promise.all(
+    Object.entries(files).map(async ([relativePath, sourceText]) => {
+      const absolutePath = resolve(projectPath, ...relativePath.split("/"));
+      await mkdir(resolve(absolutePath, ".."), { recursive: true });
+      await writeFile(absolutePath, sourceText, "utf8");
+    })
+  );
+
+  return {
+    projectPath,
+    sourceDocuments: Object.entries(files)
+      .filter(([relativePath]) => /\.(?:[cm]?[jt]sx?)$/i.test(relativePath))
+      .map(([relativePath, sourceText]) => ({
+        absolutePath: resolve(projectPath, ...relativePath.split("/")),
+        relativePath,
+        language: languageForPath(relativePath),
+        sourceText,
+        contentHash: `test:${relativePath}:${sourceText.length}`
+      }))
+      .sort((left, right) => left.relativePath.localeCompare(right.relativePath))
+  };
+}
+
+function snapshotWithResolver(sourceDocuments: readonly SourceDocument[], moduleResolver: Parameters<typeof resolveProjectFacts>[0]["moduleResolver"]) {
+  return resolveProjectFacts({
+    sourceDocuments,
+    extractedFiles: sourceDocuments.map((document) =>
+      extractFileFacts({
+        filePath: document.relativePath,
+        sourceText: document.sourceText,
+        language: document.language
+      })
+    ),
+    indexedAt: "2026-07-29T00:00:00.000Z",
+    ...(moduleResolver === undefined ? {} : { moduleResolver })
+  });
+}
+
+afterEach(async () => {
+  await Promise.all(
+    temporaryProjectPaths.splice(0).map((projectPath) => rm(projectPath, { recursive: true, force: true }))
+  );
+});
 
 describe("project reference resolution", () => {
   it("resolves relative named imports through their explicit bindings", () => {
@@ -387,5 +449,259 @@ describe("project reference resolution", () => {
         sumCalls.find((edge) => edge.sourceId === parameter?.id)?.id
       ])
     );
+  });
+});
+
+describe("TypeScript configuration module resolution", () => {
+  it("resolves exact and wildcard paths aliases with deterministic import and call evidence", async () => {
+    const project = await createConfiguredProject({
+      "tsconfig.json": JSON.stringify({
+        compilerOptions: {
+          module: "ESNext",
+          moduleResolution: "Bundler",
+          baseUrl: ".",
+          paths: {
+            "@math": ["src/math.ts"],
+            "@lib/*": ["src/lib/*"]
+          }
+        }
+      }),
+      "src/math.ts": "export function calculate(value: number) { return value + 1; }",
+      "src/lib/double.ts": "export function double(value: number) { return value * 2; }",
+      "src/consumer.ts": `
+        import { calculate } from "@math";
+        import { double } from "@lib/double";
+        export function total() { return calculate(double(2)); }
+      `
+    });
+    const configuredResolver = createTypeScriptProjectModuleResolver(project);
+
+    expect(configuredResolver.moduleResolver.resolve("src/consumer.ts", "@math")).toEqual({
+      targetFilePath: "src/math.ts",
+      strategy: "tsconfig-paths",
+      configurationPaths: ["tsconfig.json"]
+    });
+    expect(configuredResolver.moduleResolver.resolve("src/consumer.ts", "@lib/double")).toEqual({
+      targetFilePath: "src/lib/double.ts",
+      strategy: "tsconfig-paths",
+      configurationPaths: ["tsconfig.json"]
+    });
+
+    const firstSnapshot = snapshotWithResolver(
+      project.sourceDocuments,
+      configuredResolver.moduleResolver
+    );
+    const secondSnapshot = snapshotWithResolver(
+      project.sourceDocuments,
+      configuredResolver.moduleResolver
+    );
+    const calculate = firstSnapshot.symbols.find(
+      (symbol) => symbol.qualifiedName === "src/math.ts#calculate"
+    );
+    const importEdge = firstSnapshot.edges.find(
+      (edge) => edge.kind === "imports" && edge.referenceName === "@math"
+    );
+    const callEdge = firstSnapshot.edges.find(
+      (edge) => edge.kind === "calls" && edge.referenceName === "calculate"
+    );
+
+    expect(importEdge).toMatchObject({ resolution: "exact" });
+    expect(importEdge?.evidence).toEqual({
+      ruleId: "module.tsconfig-paths",
+      stage: "module",
+      candidateSymbolIds: [firstSnapshot.symbols.find((symbol) => symbol.filePath === "src/math.ts" && symbol.kind === "file")?.id],
+      configurationPaths: ["tsconfig.json"]
+    });
+    expect(callEdge).toMatchObject({ targetId: calculate?.id, resolution: "exact", confidence: 1 });
+    expect(callEdge?.evidence).toEqual({
+      ruleId: "module.explicit-import-binding",
+      stage: "module",
+      candidateSymbolIds: [calculate?.id],
+      configurationPaths: ["tsconfig.json"]
+    });
+    expect(secondSnapshot.edges).toEqual(firstSnapshot.edges);
+  });
+
+  it("proves baseUrl resolution separately from paths mapping", async () => {
+    const project = await createConfiguredProject({
+      "tsconfig.json": JSON.stringify({
+        compilerOptions: {
+          module: "ESNext",
+          moduleResolution: "Bundler",
+          baseUrl: "./src"
+        }
+      }),
+      "src/math.ts": "export function increment(value: number) { return value + 1; }",
+      "src/consumer.ts": 'import { increment } from "math"; export const value = increment(1);'
+    });
+    const configuredResolver = createTypeScriptProjectModuleResolver(project);
+
+    expect(configuredResolver.moduleResolver.resolve("src/consumer.ts", "math")).toEqual({
+      targetFilePath: "src/math.ts",
+      strategy: "tsconfig-base-url",
+      configurationPaths: ["tsconfig.json"]
+    });
+  });
+
+  it("does not claim paths evidence when baseUrl independently produces a matching paths target", async () => {
+    const project = await createConfiguredProject({
+      "tsconfig.json": JSON.stringify({
+        compilerOptions: {
+          module: "ESNext",
+          moduleResolution: "Bundler",
+          baseUrl: "./src",
+          paths: { math: ["math"] }
+        }
+      }),
+      "src/math.ts": "export function increment(value: number) { return value + 1; }",
+      "src/consumer.ts": 'import { increment } from "math"; export const value = increment(1);'
+    });
+    const configuredResolver = createTypeScriptProjectModuleResolver(project);
+
+    expect(configuredResolver.moduleResolver.resolve("src/consumer.ts", "math")).toEqual({
+      targetFilePath: "src/math.ts",
+      strategy: "tsconfig-base-url",
+      configurationPaths: ["tsconfig.json"]
+    });
+  });
+
+  it("uses a project-local extends chain and reports it in alias evidence", async () => {
+    const project = await createConfiguredProject({
+      "tsconfig.json": JSON.stringify({
+        extends: "./config/base.json",
+        compilerOptions: { module: "ESNext", moduleResolution: "Bundler" }
+      }),
+      "config/base.json": JSON.stringify({
+        compilerOptions: {
+          baseUrl: "..",
+          paths: { "@shared/*": ["src/shared/*"] }
+        }
+      }),
+      "src/shared/math.ts": "export function add(left: number, right: number) { return left + right; }",
+      "src/consumer.ts": 'import { add } from "@shared/math"; export const value = add(1, 2);'
+    });
+    const configuredResolver = createTypeScriptProjectModuleResolver(project);
+
+    expect(configuredResolver.moduleResolver.resolve("src/consumer.ts", "@shared/math")).toEqual({
+      targetFilePath: "src/shared/math.ts",
+      strategy: "tsconfig-paths",
+      configurationPaths: ["tsconfig.json", "config/base.json"]
+    });
+    expect(configuredResolver.configurationInputs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: "tsconfig", path: "tsconfig.json", state: "present" }),
+        expect.objectContaining({ kind: "extends", path: "config/base.json", state: "present" })
+      ])
+    );
+  });
+
+  it("does not turn an alias target excluded from the scan into a graph edge", async () => {
+    const project = await createConfiguredProject({
+      "tsconfig.json": JSON.stringify({
+        compilerOptions: {
+          module: "ESNext",
+          moduleResolution: "Bundler",
+          baseUrl: ".",
+          paths: { "@private/*": ["src/private/*"] }
+        }
+      }),
+      "src/private/secret.ts": "export function secret() { return 42; }",
+      "src/consumer.ts": 'import { secret } from "@private/secret"; export const value = secret();'
+    });
+    const sourceDocuments = project.sourceDocuments.filter(
+      (document) => document.relativePath !== "src/private/secret.ts"
+    );
+    const configuredResolver = createTypeScriptProjectModuleResolver({
+      projectPath: project.projectPath,
+      sourceDocuments
+    });
+    const snapshot = snapshotWithResolver(sourceDocuments, configuredResolver.moduleResolver);
+    const importEdge = snapshot.edges.find(
+      (edge) => edge.kind === "imports" && edge.referenceName === "@private/secret"
+    );
+
+    expect(configuredResolver.moduleResolver.resolve("src/consumer.ts", "@private/secret")).toEqual({
+      targetFilePath: null,
+      strategy: "unresolved",
+      configurationPaths: ["tsconfig.json"]
+    });
+    expect(importEdge?.evidence).toEqual({
+      ruleId: "module.unresolved-specifier",
+      stage: "unresolved",
+      candidateSymbolIds: [],
+      configurationPaths: ["tsconfig.json"]
+    });
+    expect(snapshot.pendingReferences.map((reference) => reference.referenceName)).toContain("@private/secret");
+  });
+
+  it("prefers tsconfig and does not persist an ignored jsconfig as an input", async () => {
+    const project = await createConfiguredProject({
+      "tsconfig.json": JSON.stringify({
+        compilerOptions: {
+          module: "ESNext",
+          moduleResolution: "Bundler",
+          baseUrl: ".",
+          paths: { "@selected": ["src/from-tsconfig.ts"] }
+        }
+      }),
+      "jsconfig.json": JSON.stringify({
+        compilerOptions: {
+          moduleResolution: "Bundler",
+          baseUrl: ".",
+          paths: { "@selected": ["src/from-jsconfig.ts"] }
+        }
+      }),
+      "src/from-tsconfig.ts": "export const value = 1;",
+      "src/from-jsconfig.ts": "export const value = 2;",
+      "src/consumer.ts": 'import { value } from "@selected"; export const selected = value;'
+    });
+    const configuredResolver = createTypeScriptProjectModuleResolver(project);
+
+    expect(configuredResolver.moduleResolver.resolve("src/consumer.ts", "@selected")).toEqual({
+      targetFilePath: "src/from-tsconfig.ts",
+      strategy: "tsconfig-paths",
+      configurationPaths: ["tsconfig.json"]
+    });
+    expect(configuredResolver.configurationInputs).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ kind: "jsconfig", path: "jsconfig.json" })])
+    );
+  });
+
+  it("tracks an absent tsconfig when jsconfig is the selected configuration", async () => {
+    const project = await createConfiguredProject({
+      "jsconfig.json": JSON.stringify({
+        compilerOptions: {
+          moduleResolution: "Bundler",
+          baseUrl: ".",
+          paths: { "@selected": ["src/from-jsconfig.ts"] }
+        }
+      }),
+      "src/from-jsconfig.ts": "export const value = 2;",
+      "src/consumer.ts": 'import { value } from "@selected"; export const selected = value;'
+    });
+    const configuredResolver = createTypeScriptProjectModuleResolver(project);
+
+    expect(configuredResolver.moduleResolver.resolve("src/consumer.ts", "@selected")).toEqual({
+      targetFilePath: "src/from-jsconfig.ts",
+      strategy: "tsconfig-paths",
+      configurationPaths: ["jsconfig.json"]
+    });
+    expect(configuredResolver.configurationInputs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: "jsconfig", path: "jsconfig.json", state: "present" }),
+        expect.objectContaining({ kind: "tsconfig", path: "tsconfig.json", state: "absent" })
+      ])
+    );
+  });
+
+  it("normalizes malformed or external configs into ProjectConfigurationError", async () => {
+    const malformed = await createConfiguredProject({ "tsconfig.json": "{ invalid json" });
+    const external = await createConfiguredProject({
+      "tsconfig.json": JSON.stringify({ extends: "@tsconfig/node22/tsconfig.json" })
+    });
+
+    expect(() => createTypeScriptProjectModuleResolver(malformed)).toThrow(ProjectConfigurationError);
+    expect(() => createTypeScriptProjectModuleResolver(malformed)).not.toThrow(/Debug Failure/);
+    expect(() => createTypeScriptProjectModuleResolver(external)).toThrow(ProjectConfigurationError);
   });
 });

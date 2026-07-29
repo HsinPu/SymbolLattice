@@ -20,6 +20,7 @@ function exploreResult(): ExploreResult {
     status: {
       initialized: true,
       stale: false,
+      staleReasons: [],
       projectPath: "C:/project",
       indexedAt: "2026-07-29T00:00:00.000Z",
       generationId: "generation:test",
@@ -65,6 +66,7 @@ function explainEdgeResult(): ExplainEdgeResult {
     status: {
       initialized: true,
       stale: false,
+      staleReasons: [],
       projectPath: "C:/project",
       indexedAt: "2026-07-29T00:00:00.000Z",
       generationId: "generation:test",

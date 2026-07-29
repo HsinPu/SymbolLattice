@@ -1,4 +1,5 @@
 import type { EdgeEvidence } from "./facts.js";
+import type { IndexStalenessReason } from "./index-inputs.js";
 
 export const SYMBOL_KINDS = [
   "file",
@@ -83,6 +84,8 @@ export interface IndexCounts {
 export interface IndexStatus {
   readonly initialized: boolean;
   readonly stale: boolean;
+  /** Empty when the active generation is current. */
+  readonly staleReasons: readonly IndexStalenessReason[];
   readonly projectPath: string;
   readonly indexedAt: string | null;
   readonly generationId: string | null;

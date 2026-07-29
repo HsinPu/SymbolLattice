@@ -23,6 +23,10 @@ interface ProjectOptions extends OutputOptions {
   readonly force?: boolean;
 }
 
+interface IndexCommandOptions extends ProjectOptions {
+  readonly scope?: readonly string[];
+}
+
 interface FindCommandOptions extends ProjectOptions {
   readonly kind?: FindOptions["kind"];
   readonly limit?: number;
@@ -90,6 +94,25 @@ function addJsonOption(command: Command): Command {
   return command.option("--json", "Emit the stable JSON contract");
 }
 
+function collectScope(value: string, previous: readonly string[] = []): string[] {
+  return [...previous, value];
+}
+
+function addIndexOptions(command: Command): Command {
+  return command
+    .option("--force", "Allow indexing a filesystem root or the home directory")
+    .option(
+      "--scope <directory>",
+      "Limit indexing to a project-relative directory (repeatable; replaces the stored scope)",
+      collectScope
+    );
+}
+
+function toIndexOptions(projectPath: string, options: IndexCommandOptions) {
+  const base = { projectPath, force: options.force ?? false };
+  return options.scope === undefined ? base : { ...base, scopeRoots: options.scope };
+}
+
 export function createProgram(service = createService()): Command {
   const program = new Command();
   program
@@ -97,25 +120,31 @@ export function createProgram(service = createService()): Command {
     .description("Evidence-first local code graph exploration for TypeScript and JavaScript.")
     .version(SYMBOL_LATTICE_VERSION);
 
-  addJsonOption(addProjectOption(program.command("init [path]")))
-    .option("--force", "Allow indexing a filesystem root or the home directory")
-    .action(async (path: string | undefined, options: ProjectOptions) => {
+  addJsonOption(addIndexOptions(addProjectOption(program.command("init [path]"))))
+    .action(async (path: string | undefined, options: IndexCommandOptions) => {
       const projectPath = resolve(path ?? defaultProjectPath(options));
-      render(await service.init({ projectPath, force: options.force ?? false }), options);
+      render(
+        await service.init(toIndexOptions(projectPath, options)),
+        options
+      );
     });
 
-  addJsonOption(addProjectOption(program.command("index [path]")))
-    .option("--force", "Allow indexing a filesystem root or the home directory")
-    .action(async (path: string | undefined, options: ProjectOptions) => {
+  addJsonOption(addIndexOptions(addProjectOption(program.command("index [path]"))))
+    .action(async (path: string | undefined, options: IndexCommandOptions) => {
       const projectPath = resolve(path ?? defaultProjectPath(options));
-      render(await service.index({ projectPath, force: options.force ?? false }), options);
+      render(
+        await service.index(toIndexOptions(projectPath, options)),
+        options
+      );
     });
 
-  addJsonOption(addProjectOption(program.command("sync [path]")))
-    .option("--force", "Allow indexing a filesystem root or the home directory")
-    .action(async (path: string | undefined, options: ProjectOptions) => {
+  addJsonOption(addIndexOptions(addProjectOption(program.command("sync [path]"))))
+    .action(async (path: string | undefined, options: IndexCommandOptions) => {
       const projectPath = resolve(path ?? defaultProjectPath(options));
-      render(await service.sync({ projectPath, force: options.force ?? false }), options);
+      render(
+        await service.sync(toIndexOptions(projectPath, options)),
+        options
+      );
     });
 
   addJsonOption(addProjectOption(program.command("status [path]"))).action(

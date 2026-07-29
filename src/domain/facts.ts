@@ -33,6 +33,8 @@ export interface EdgeEvidence {
   readonly ruleId: string;
   readonly stage: EdgeEvidenceStage;
   readonly candidateSymbolIds: readonly string[];
+  /** Project-relative config files that participated in module resolution. */
+  readonly configurationPaths?: readonly string[];
 }
 
 /** A named import binding retained from syntax extraction for module resolution. */
