@@ -15,6 +15,7 @@ import {
   MAX_GENERATION_DIFF_LIMIT,
   MAX_GENERATION_HISTORY_LIMIT,
   MAX_GIT_HUNK_LIMIT,
+  MAX_HIERARCHY_LIMIT,
   MAX_ROUTE_LIMIT,
   ROUTE_METHODS
 } from "../application/types.js";
@@ -33,6 +34,8 @@ import type {
   GitAffectedTestsResult,
   GitHunksOptions,
   GitHunksResult,
+  HierarchyOptions,
+  HierarchyResult,
   NodeResult,
   RouteMethod,
   RoutesOptions,
@@ -102,6 +105,15 @@ export interface RoutesService {
   routes(projectPath: string, options?: RoutesOptions): Promise<RoutesResult>;
 }
 
+/** Additive direct-hierarchy seam for existing read-only embeddings. */
+export interface HierarchyService {
+  hierarchy(
+    projectPath: string,
+    reference: string,
+    options?: HierarchyOptions
+  ): Promise<HierarchyResult>;
+}
+
 /** Optional retained-snapshot listing seam for compatible read-only embeddings. */
 export interface GenerationHistoryService {
   history(
@@ -123,6 +135,7 @@ export type ReadOnlyMcpService = ExploreService & ExplainEdgeService;
 export type NodeMcpService = ExploreService & NodeService;
 export type SearchMcpService = ExploreService & SearchService;
 export type RoutesMcpService = ExploreService & RoutesService;
+export type HierarchyMcpService = ExploreService & HierarchyService;
 export type ContextMcpService = ExploreService & ContextService;
 export type AffectedTestsMcpService = ExploreService & AffectedTestsService;
 export type GitAffectedTestsMcpService = ExploreService & GitAffectedTestsService;
@@ -193,6 +206,12 @@ export interface RoutesToolArguments {
   readonly limit?: number | undefined;
 }
 
+export interface HierarchyToolArguments {
+  readonly projectPath?: string | undefined;
+  readonly reference: string;
+  readonly limit?: number | undefined;
+}
+
 export interface GenerationHistoryToolArguments {
   readonly projectPath?: string | undefined;
   readonly limit?: number | undefined;
@@ -224,6 +243,7 @@ export type GitHunksToolResponse = ReadOnlyToolResponse;
 export type ExplainEdgeToolResponse = ReadOnlyToolResponse;
 export type SearchToolResponse = ReadOnlyToolResponse;
 export type RoutesToolResponse = ReadOnlyToolResponse;
+export type HierarchyToolResponse = ReadOnlyToolResponse;
 export type GenerationHistoryToolResponse = ReadOnlyToolResponse;
 export type GenerationDiffToolResponse = ReadOnlyToolResponse;
 
@@ -478,6 +498,41 @@ const routesOutputSchema = z
   })
   .passthrough();
 
+const hierarchyOutputSchema = z
+  .object({
+    status: indexStatusOutputSchema,
+    symbol: z.object({}).passthrough(),
+    bounds: z.object({
+      limit: z.number().int().min(1).max(MAX_HIERARCHY_LIMIT),
+      maximumLimit: z.literal(MAX_HIERARCHY_LIMIT)
+    }),
+    parents: z
+      .array(
+        z
+          .object({
+            relation: z.enum(["extends", "implements"]),
+            edge: z.object({}).passthrough(),
+            parent: z.object({}).passthrough().nullable()
+          })
+          .passthrough()
+      )
+      .max(MAX_HIERARCHY_LIMIT),
+    children: z
+      .array(
+        z
+          .object({
+            relation: z.enum(["extends", "implements"]),
+            edge: z.object({}).passthrough(),
+            child: z.object({}).passthrough()
+          })
+          .passthrough()
+      )
+      .max(MAX_HIERARCHY_LIMIT),
+    parentsTruncated: z.boolean(),
+    childrenTruncated: z.boolean()
+  })
+  .passthrough();
+
 const generationSummaryOutputSchema = z
   .object({
     generationId: z.string(),
@@ -566,6 +621,10 @@ function supportsSearch(service: ExploreService): service is SearchMcpService {
 
 function supportsRoutes(service: ExploreService): service is RoutesMcpService {
   return "routes" in service && typeof service.routes === "function";
+}
+
+function supportsHierarchy(service: ExploreService): service is HierarchyMcpService {
+  return "hierarchy" in service && typeof service.hierarchy === "function";
 }
 
 function supportsContext(service: ExploreService): service is ContextMcpService {
@@ -790,6 +849,29 @@ export async function runRoutesTool(
       ...(arguments_.limit === undefined ? {} : { limit: arguments_.limit })
     };
     const result = await service.routes(arguments_.projectPath ?? defaultProjectPath, options);
+    return {
+      content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      structuredContent: result as unknown as Record<string, unknown>
+    };
+  } catch (error) {
+    return renderToolError(error);
+  }
+}
+
+/** Returns bounded direct hierarchy facts without ever triggering an index operation. */
+export async function runHierarchyTool(
+  service: HierarchyService,
+  defaultProjectPath: string,
+  arguments_: HierarchyToolArguments
+): Promise<HierarchyToolResponse> {
+  try {
+    const options: HierarchyOptions =
+      arguments_.limit === undefined ? {} : { limit: arguments_.limit };
+    const result = await service.hierarchy(
+      arguments_.projectPath ?? defaultProjectPath,
+      arguments_.reference,
+      options
+    );
     return {
       content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       structuredContent: result as unknown as Record<string, unknown>
@@ -1143,6 +1225,35 @@ export function createMcpServer(
         }
       },
       async (arguments_) => runRoutesTool(routesService, defaultProjectPath, arguments_)
+    );
+  }
+
+  const hierarchyService = supportsHierarchy(service) ? service : null;
+  if (hierarchyService !== null) {
+    server.registerTool(
+      "symbol_lattice_hierarchy",
+      {
+        title: "Inspect direct TypeScript declaration hierarchy",
+        description:
+          "Returns bounded direct extends and implements parents and children from an existing SymbolLattice generation. Parents can include unresolved evidence; this tool never recursively traverses, creates, refreshes, or synchronizes an index.",
+        inputSchema: {
+          projectPath: z.string().trim().min(1).optional().describe("Optional path to an already indexed project."),
+          reference: z.string().trim().min(1).describe("Exact indexed symbol reference for the hierarchy view."),
+          limit: z
+            .number()
+            .int()
+            .min(1)
+            .max(MAX_HIERARCHY_LIMIT)
+            .optional()
+            .describe(`Maximum direct parent and child records returned independently (1-${MAX_HIERARCHY_LIMIT}).`)
+        },
+        outputSchema: hierarchyOutputSchema,
+        annotations: {
+          readOnlyHint: true,
+          idempotentHint: true
+        }
+      },
+      async (arguments_) => runHierarchyTool(hierarchyService, defaultProjectPath, arguments_)
     );
   }
 

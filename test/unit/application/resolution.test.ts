@@ -452,6 +452,213 @@ describe("project reference resolution", () => {
   });
 });
 
+describe("direct TypeScript heritage resolution", () => {
+  it("resolves local, imported, and re-exported direct heritage with namespace proof", () => {
+    const sourceDocuments: readonly SourceDocument[] = [
+      {
+        absolutePath: "C:/project/src/base.ts",
+        relativePath: "src/base.ts",
+        language: "typescript",
+        sourceText: [
+          "export class ImportedBase {}",
+          "export interface ImportedContract {}",
+          "export type ImportedAlias = { value: string };"
+        ].join("\n"),
+        contentHash: "base"
+      },
+      {
+        absolutePath: "C:/project/src/barrel.ts",
+        relativePath: "src/barrel.ts",
+        language: "typescript",
+        sourceText:
+          'export { ImportedBase, ImportedContract, ImportedAlias } from "./base";',
+        contentHash: "barrel"
+      },
+      {
+        absolutePath: "C:/project/src/type-barrel.ts",
+        relativePath: "src/type-barrel.ts",
+        language: "typescript",
+        sourceText: 'export type { ImportedBase as TypeOnlyBase } from "./base";',
+        contentHash: "type-barrel"
+      },
+      {
+        absolutePath: "C:/project/src/local.ts",
+        relativePath: "src/local.ts",
+        language: "typescript",
+        sourceText: [
+          "export class LocalBase {}",
+          "export interface LocalContract {}",
+          "export type LocalAlias = { value: string };",
+          "export class LocalDerived extends LocalBase implements LocalContract, LocalAlias {}",
+          "export interface LocalChild extends LocalContract {}"
+        ].join("\n"),
+        contentHash: "local"
+      },
+      {
+        absolutePath: "C:/project/src/imported.ts",
+        relativePath: "src/imported.ts",
+        language: "typescript",
+        sourceText: [
+          'import { ImportedBase } from "./base";',
+          'import type { ImportedContract, ImportedAlias } from "./base";',
+          "export class ImportedDerived extends ImportedBase implements ImportedContract, ImportedAlias {}"
+        ].join("\n"),
+        contentHash: "imported"
+      },
+      {
+        absolutePath: "C:/project/src/reexported.ts",
+        relativePath: "src/reexported.ts",
+        language: "typescript",
+        sourceText: [
+          'import { ImportedBase } from "./barrel";',
+          'import type { ImportedContract } from "./barrel";',
+          "export class BarrelDerived extends ImportedBase implements ImportedContract {}"
+        ].join("\n"),
+        contentHash: "reexported"
+      },
+      {
+        absolutePath: "C:/project/src/unproven.ts",
+        relativePath: "src/unproven.ts",
+        language: "typescript",
+        sourceText: [
+          'import type { ImportedBase, ImportedContract } from "./base";',
+          'import { TypeOnlyBase } from "./type-barrel";',
+          "export class TypeOnlyImportDerived extends ImportedBase {}",
+          "export class TypeOnlyReexportDerived extends TypeOnlyBase {}",
+          "export class GlobalDerived extends LocalBase {}",
+          "export interface Shadowed<ImportedContract> extends ImportedContract {}"
+        ].join("\n"),
+        contentHash: "unproven"
+      }
+    ];
+    const snapshot = snapshotWithResolver(sourceDocuments, undefined);
+    const symbol = (qualifiedName: string) =>
+      snapshot.symbols.find((candidate) => candidate.qualifiedName === qualifiedName);
+    const heritageEdge = (sourceQualifiedName: string, referenceName: string) =>
+      snapshot.edges.find(
+        (edge) => edge.sourceId === symbol(sourceQualifiedName)?.id && edge.referenceName === referenceName
+      );
+
+    const localBase = symbol("src/local.ts#LocalBase");
+    const localContract = symbol("src/local.ts#LocalContract");
+    const localAlias = symbol("src/local.ts#LocalAlias");
+    const importedBase = symbol("src/base.ts#ImportedBase");
+    const importedContract = symbol("src/base.ts#ImportedContract");
+    const importedAlias = symbol("src/base.ts#ImportedAlias");
+
+    expect(heritageEdge("src/local.ts#LocalDerived", "LocalBase")).toMatchObject({
+      kind: "extends",
+      targetId: localBase?.id,
+      resolution: "exact",
+      evidence: { ruleId: "heritage.extends.local-value-binding", stage: "lexical" }
+    });
+    expect(heritageEdge("src/local.ts#LocalDerived", "LocalContract")).toMatchObject({
+      kind: "implements",
+      targetId: localContract?.id,
+      resolution: "exact",
+      evidence: { ruleId: "heritage.implements.local-type-binding", stage: "lexical" }
+    });
+    expect(heritageEdge("src/local.ts#LocalDerived", "LocalAlias")).toMatchObject({
+      kind: "implements",
+      targetId: localAlias?.id,
+      resolution: "exact",
+      evidence: { ruleId: "heritage.implements.local-type-binding", stage: "lexical" }
+    });
+    expect(heritageEdge("src/local.ts#LocalChild", "LocalContract")).toMatchObject({
+      kind: "extends",
+      targetId: localContract?.id,
+      resolution: "exact",
+      evidence: { ruleId: "heritage.extends.local-type-binding", stage: "lexical" }
+    });
+
+    expect(heritageEdge("src/imported.ts#ImportedDerived", "ImportedBase")).toMatchObject({
+      kind: "extends",
+      targetId: importedBase?.id,
+      resolution: "exact",
+      evidence: { ruleId: "heritage.extends.imported-target", stage: "module" }
+    });
+    expect(heritageEdge("src/imported.ts#ImportedDerived", "ImportedContract")).toMatchObject({
+      kind: "implements",
+      targetId: importedContract?.id,
+      resolution: "exact",
+      evidence: { ruleId: "heritage.implements.imported-target", stage: "module" }
+    });
+    expect(heritageEdge("src/imported.ts#ImportedDerived", "ImportedAlias")).toMatchObject({
+      kind: "implements",
+      targetId: importedAlias?.id,
+      resolution: "exact",
+      evidence: { ruleId: "heritage.implements.imported-target", stage: "module" }
+    });
+    expect(heritageEdge("src/reexported.ts#BarrelDerived", "ImportedBase")).toMatchObject({
+      kind: "extends",
+      targetId: importedBase?.id,
+      resolution: "exact",
+      evidence: { ruleId: "heritage.extends.reexported-target", stage: "module" }
+    });
+    expect(heritageEdge("src/reexported.ts#BarrelDerived", "ImportedContract")).toMatchObject({
+      kind: "implements",
+      targetId: importedContract?.id,
+      resolution: "exact",
+      evidence: { ruleId: "heritage.implements.reexported-target", stage: "module" }
+    });
+
+    for (const [sourceName, referenceName, relationKind] of [
+      ["TypeOnlyImportDerived", "ImportedBase", "extends"],
+      ["TypeOnlyReexportDerived", "TypeOnlyBase", "extends"],
+      ["GlobalDerived", "LocalBase", "extends"],
+      ["Shadowed", "ImportedContract", "extends"]
+    ] as const) {
+      expect(heritageEdge(`src/unproven.ts#${sourceName}`, referenceName)).toMatchObject({
+        kind: relationKind,
+        targetId: null,
+        resolution: "unresolved",
+        confidence: 0,
+        evidence: { ruleId: `heritage.${relationKind}.unresolved-target`, stage: "unresolved" }
+      });
+    }
+    expect(
+      snapshot.pendingReferences
+        .filter((reference) => reference.relationKind === "extends" || reference.relationKind === "implements")
+        .map((reference) => reference.referenceName)
+        .sort()
+    ).toEqual(["ImportedBase", "ImportedContract", "LocalBase", "TypeOnlyBase"]);
+  });
+
+  it("resolves a direct JavaScript class extends clause through a value import", () => {
+    const sourceDocuments: readonly SourceDocument[] = [
+      {
+        absolutePath: "C:/project/src/base.js",
+        relativePath: "src/base.js",
+        language: "javascript",
+        sourceText: "export class JavaScriptBase {}",
+        contentHash: "js-base"
+      },
+      {
+        absolutePath: "C:/project/src/child.js",
+        relativePath: "src/child.js",
+        language: "javascript",
+        sourceText:
+          'import { JavaScriptBase } from "./base.js"; export class JavaScriptChild extends JavaScriptBase {}',
+        contentHash: "js-child"
+      }
+    ];
+    const snapshot = snapshotWithResolver(sourceDocuments, undefined);
+    const base = snapshot.symbols.find((symbol) => symbol.qualifiedName === "src/base.js#JavaScriptBase");
+    const child = snapshot.symbols.find((symbol) => symbol.qualifiedName === "src/child.js#JavaScriptChild");
+    const edge = snapshot.edges.find(
+      (candidate) => candidate.sourceId === child?.id && candidate.kind === "extends"
+    );
+
+    expect(edge).toMatchObject({
+      targetId: base?.id,
+      resolution: "exact",
+      confidence: 1,
+      evidence: { ruleId: "heritage.extends.imported-target", stage: "module" }
+    });
+    expect(snapshot.pendingReferences).toEqual([]);
+  });
+});
+
 describe("literal route handler resolution", () => {
   it("resolves local, imported, and re-exported route handlers exactly", () => {
     const sourceDocuments: readonly SourceDocument[] = [

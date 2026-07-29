@@ -1,4 +1,9 @@
-import { type EdgeKind, type GraphEdge, type SymbolNode } from "./types.js";
+import {
+  type EdgeKind,
+  type GraphEdge,
+  type HierarchyRelationKind,
+  type SymbolNode
+} from "./types.js";
 
 const DEFAULT_IMPACT_EDGE_KINDS: readonly EdgeKind[] = ["calls", "routes", "imports"];
 
@@ -70,6 +75,21 @@ export type SymbolMatch =
 export interface GraphRelation {
   readonly symbol: SymbolNode;
   readonly edge: GraphEdge;
+}
+
+/** A direct parent relation proved by an outgoing `extends` or `implements` edge. */
+export interface ParentRelation {
+  readonly relation: HierarchyRelationKind;
+  readonly edge: GraphEdge;
+  /** Null when the persisted heritage reference remains unresolved. */
+  readonly parent: SymbolNode | null;
+}
+
+/** A direct child relation proved by an incoming exact `extends` or `implements` edge. */
+export interface ChildRelation {
+  readonly relation: HierarchyRelationKind;
+  readonly edge: GraphEdge;
+  readonly child: SymbolNode;
 }
 
 /** A literal route together with its persisted handler-resolution evidence. */
@@ -373,6 +393,113 @@ export function isResolvedGraphEdge(
 
 function compareRelations(left: GraphRelation, right: GraphRelation): number {
   return compareSymbolNodes(left.symbol, right.symbol) || compareGraphEdges(left.edge, right.edge);
+}
+
+function hierarchyRelationKind(edge: GraphEdge): HierarchyRelationKind | null {
+  return edge.kind === "extends" || edge.kind === "implements" ? edge.kind : null;
+}
+
+function isHierarchySource(symbol: SymbolNode | undefined): symbol is SymbolNode {
+  return symbol?.kind === "class" || symbol?.kind === "interface";
+}
+
+function compareParentRelations(left: ParentRelation, right: ParentRelation): number {
+  return (
+    compareGraphEdges(left.edge, right.edge) ||
+    compareText(left.relation, right.relation) ||
+    compareText(left.parent?.id ?? "", right.parent?.id ?? "")
+  );
+}
+
+function compareChildRelations(left: ChildRelation, right: ChildRelation): number {
+  return (
+    compareSymbolNodes(left.child, right.child) ||
+    compareGraphEdges(left.edge, right.edge) ||
+    compareText(left.relation, right.relation)
+  );
+}
+
+/**
+ * Returns direct TypeScript declaration parents for one class or interface.
+ *
+ * Heritage edges are directed from child to parent. Their source must be an
+ * indexed class or interface; exact records require an indexed target, whose
+ * type capability is established by resolution. Unresolved records are retained
+ * with a `null` parent so callers can expose missing type evidence without
+ * claiming a relationship. Heuristic and malformed persisted records are
+ * intentionally excluded. This pure helper applies no result limit or recursive
+ * traversal.
+ */
+export function getParents(graph: SymbolGraph, symbolId: string): readonly ParentRelation[] {
+  const symbolsById = createSymbolIndex(graph.symbols);
+  const child = symbolsById.get(symbolId);
+  if (!isHierarchySource(child)) {
+    return [];
+  }
+
+  const parents: ParentRelation[] = [];
+  for (const edge of graph.edges) {
+    const relation = hierarchyRelationKind(edge);
+    if (relation === null || edge.sourceId !== child.id) {
+      continue;
+    }
+
+    if (edge.resolution === "unresolved") {
+      if (edge.targetId === null) {
+        parents.push({ relation, edge, parent: null });
+      }
+      continue;
+    }
+
+    if (edge.resolution !== "exact" || edge.targetId === null) {
+      continue;
+    }
+
+    const parent = symbolsById.get(edge.targetId);
+    if (parent !== undefined) {
+      parents.push({ relation, edge, parent });
+    }
+  }
+
+  return parents.sort(compareParentRelations);
+}
+
+/**
+ * Returns direct TypeScript declaration children for one class or interface.
+ *
+ * Heritage edges are directed from child to parent, so this is the reverse of
+ * `getParents`. Only exact records with an indexed child are usable as child
+ * evidence; unresolved edges cannot prove which declaration is a child. The
+ * parent may be any indexed type-capable target accepted by resolution, while
+ * the child source must be a class or interface. This pure helper applies no
+ * result limit or recursive traversal.
+ */
+export function getChildren(graph: SymbolGraph, symbolId: string): readonly ChildRelation[] {
+  const symbolsById = createSymbolIndex(graph.symbols);
+  const parent = symbolsById.get(symbolId);
+  if (parent === undefined) {
+    return [];
+  }
+
+  const children: ChildRelation[] = [];
+  for (const edge of graph.edges) {
+    const relation = hierarchyRelationKind(edge);
+    if (
+      relation === null ||
+      edge.resolution !== "exact" ||
+      !isResolvedGraphEdge(edge) ||
+      edge.targetId !== parent.id
+    ) {
+      continue;
+    }
+
+    const child = symbolsById.get(edge.sourceId);
+    if (isHierarchySource(child)) {
+      children.push({ relation, edge, child });
+    }
+  }
+
+  return children.sort(compareChildRelations);
 }
 
 function parseRouteName(route: SymbolNode): Pick<RouteRecord, "method" | "path"> | null {

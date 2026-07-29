@@ -9,12 +9,12 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![License](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
 
-[Quick start](#quick-start) | [Express routes](#static-express-route-evidence) | [Node inspection](#generation-bound-node-inspection) | [History and diff](#retained-graph-history-and-structural-diff) | [Auto sync](#opt-in-foreground-watch) | [Affected tests](#affected-test-evidence) | [Git hunks](#immutable-git-hunk-declaration-attribution) | [Context packs](#bounded-multi-symbol-context) | [Commands](#command-reference) | [MCP](#mcp-server) | [Architecture](#architecture) | [Roadmap](#roadmap)
+[Quick start](#quick-start) | [Type hierarchy](#direct-type-hierarchy-evidence) | [Express routes](#static-express-route-evidence) | [Node inspection](#generation-bound-node-inspection) | [History and diff](#retained-graph-history-and-structural-diff) | [Auto sync](#opt-in-foreground-watch) | [Affected tests](#affected-test-evidence) | [Git hunks](#immutable-git-hunk-declaration-attribution) | [Context packs](#bounded-multi-symbol-context) | [Commands](#command-reference) | [MCP](#mcp-server) | [Architecture](#architecture) | [Roadmap](#roadmap)
 
 </div>
 
 > [!IMPORTANT]
-> **v0.14.0** is an early developer release. This public repository runs from source; its npm package is intentionally private and is not published to npm.
+> **v0.15.0** is an early developer release. This public repository runs from source; its npm package is intentionally private and is not published to npm.
 
 SymbolLattice builds a local symbol graph without hiding uncertainty. It keeps syntax-proven artifact facts, resolves cross-file relationships conservatively, and records why every resolved edge exists. The graph stays local to the inspected project under `.symbol-lattice/index.sqlite`.
 
@@ -28,6 +28,7 @@ SymbolLattice builds a local symbol graph without hiding uncertainty. It keeps s
 - **Generation-bound source evidence** - `search` and exact `explore` results use source captured with the active graph generation, even when the live project has since drifted.
 - **Declaration-focused node view** - exact `node` results return the full persisted declaration range plus a bounded declaration body, direct callers/callees, and explicit limits from one active generation without substituting live source text.
 - **Static HTTP entry evidence** - a narrow Express pack creates first-class `route` nodes and exact `routes` edges for statically proven literal registrations, so a handler can reveal the HTTP method and path that bind it.
+- **Direct type-hierarchy evidence** - AST-proven `extends` and `implements` edges preserve value/type namespace proof, type-only imports, re-export provenance, unresolved bases, and bounded direct parent/child views without pretending to have a full type checker.
 - **Bounded context packs** - ordered symbol references produce persisted source, capped relationship/impact summaries, and static directed evidence paths without guessing ambiguous symbols or dynamic behavior.
 - **Affected-test evidence** - changed indexed files map to conventionally named tests through bounded, exact import/export proof paths; explicit paths, `--working-tree`, and `--base <ref>` retain stale, scope, depth, visit, and result limits in the response.
 - **Immutable Git hunk attribution** - `git-hunks` compares a local merge base with `HEAD` through immutable Git blobs, returns zero-context hunks, and anchors declarations independently in each revision without an active graph or a cross-revision identity claim.
@@ -66,6 +67,7 @@ On Windows, use `npm.cmd` if `npm` is not available directly in PowerShell.
 node dist/cli/main.js find add --project /path/to/project
 node dist/cli/main.js callers "src/math.ts#add" --project /path/to/project
 node dist/cli/main.js node "src/math.ts#add" --project /path/to/project
+node dist/cli/main.js hierarchy "src/models.ts#User" --project /path/to/project --limit 25
 node dist/cli/main.js routes /path/to/project --method GET --path /api --limit 20
 node dist/cli/main.js search "session timeout" --project /path/to/project --path src
 node dist/cli/main.js context "src/consumer.ts#calculate" "src/math.ts#add" --project /path/to/project
@@ -97,19 +99,20 @@ One-shot data commands emit stable, pretty JSON. `watch` is the deliberate strea
 
 ## Capabilities
 
-| Area | v0.14.0 behavior |
+| Area | v0.15.0 behavior |
 | --- | --- |
 | Source files | TypeScript, TSX, JavaScript, and JSX |
 | Scope | Project root by default or repeatable, persisted `--scope` directories |
 | Discovery | Root `.gitignore` with negation; `.git`, `.symbol-lattice`, `coverage`, `dist`, and `node_modules` are always excluded |
 | Symbols | Files, classes, functions, methods, interfaces, types, variables, and static HTTP routes |
-| Relationships | `contains`, module imports/exports, direct identifier calls, and evidence-bearing `routes` bindings |
+| Relationships | `contains`, module imports/exports, direct identifier calls, evidence-bearing `routes`, and direct `extends` / `implements` |
 | Module resolution | Relative paths, TypeScript/JavaScript `baseUrl` and `paths`, then local workspace packages |
 | Workspaces | Root `package.json` workspaces array/object, local package root/subpath `exports`, and entrypoint fallback |
 | Re-exports | Named aliases, `export *`, default-through-named aliases, and namespace-export provenance |
 | Retrieval | Local deterministic FTS5 search across persisted source text and identifier parts; bounded path/language filters, source/symbol evidence, and exact `explore` excerpts from the same active generation |
 | Node inspection | Exact ID, qualified-name, simple-name, or `path:line[:column]` matches can return the persisted declaration range, capped direct callers/callees, source provenance, truncation, and active freshness from one generation |
 | Express routes | Static AST-proven `express` / `Router` literal registrations with bounded `routes` listing, exact handler proof when available, and unresolved route evidence when it is not |
+| Type hierarchy | Direct TS/JS class `extends`, TS class `implements`, and TS interface `extends`; exact lexical/import/re-export proof with value/type namespaces, plus bounded direct parents/children |
 | Context | Bounded packs for 1–8 ordered references: exact-match source excerpts, capped callers/callees and reverse impact, plus shortest static directed evidence paths between adjacent exact references |
 | Affected tests | Explicit changed files or local Git change sets feed exact persisted `imports` / `exports` paths, deterministic proof paths, conventional test-path classification, and explicit completeness limits |
 | Immutable Git hunks | Local merge-base-to-`HEAD` zero-context hunks from immutable blobs, independently anchored to revision-local declarations without an active SQLite graph |
@@ -172,6 +175,37 @@ If the terminal handler cannot be resolved through a lexical binding, explicit i
 
 > [!NOTE]
 > `routes` is a read-only active-generation query. Its `status` may be stale after a source edit, while every route/handler record remains evidence from the last successfully indexed generation. Run `sync` or `index` to publish newer route evidence.
+
+### Direct type hierarchy evidence
+
+v0.15 adds declaration-level hierarchy facts without borrowing a compiler type checker or using a project-wide name guess. A supported relationship is an AST-proven direct identifier in a class or interface heritage clause; SymbolLattice records the exact identifier range and preserves an unresolved relationship when its binding cannot be proved.
+
+```ts
+import { BaseModel } from "./base-model.js";
+import type { Auditable, Serializable } from "./contracts.js";
+
+export class User extends BaseModel implements Auditable, Serializable {}
+export interface AdminUser extends Auditable {}
+```
+
+```bash
+# Query only the persisted active-generation hierarchy.
+node dist/cli/main.js hierarchy "src/user.ts#User" --project /path/to/project
+node dist/cli/main.js hierarchy "src/base-model.ts#BaseModel" --project /path/to/project --limit 25
+```
+
+The graph edge direction is child to parent. `hierarchy` therefore returns direct outgoing parents and exact incoming children, bounded independently by a default of 25 and a maximum of 100. An unresolved parent remains visible as `parent: null`; unresolved edges never manufacture a child relationship.
+
+The evidence contract is intentionally narrow:
+
+- TypeScript and JavaScript class `extends` require a **value-space** proof and resolve only to an indexed class.
+- TypeScript class `implements` and interface `extends` use the **type space** and may resolve to an indexed class, interface, or type alias. `import type` and type-only re-export provenance are supported here, but never as runtime class bases.
+- Local lexical bindings, explicit imports, and re-export surfaces can prove a target. Explicit but incompatible, ambiguous, or missing bindings remain `unresolved`; SymbolLattice never falls back to a unique global name for heritage.
+- Direct identifier generic arguments such as `Base<T>` are accepted. Qualified names, mixin/call expressions, intersections, conditional types, and other complex heritage expressions are deliberately excluded.
+- The source surface is named class/interface declarations plus default-exported class expressions. Variable-held and nested class expressions do not receive separate hierarchy nodes in v0.15.
+
+> [!NOTE]
+> `hierarchy` is a read-only active-generation query, not a transitive traversal or override engine. Its status may be stale after a source edit, while its parents and children remain evidence from the last successful generation. Run `sync` or `index` to publish newer hierarchy facts.
 
 ### Indexed source search
 
@@ -456,6 +490,7 @@ The active generation fingerprints the root `.gitignore`, selected `tsconfig.jso
 | `find <query>` / `query <query>` | Search symbols by name, qualified name, ID, or location |
 | `search <query>` | Search persisted source and identifier evidence; accepts `--limit`, `--path`, and `--language` |
 | `node <reference>` | Return one exact symbol's bounded persisted declaration range, direct callers/callees, provenance, and freshness; never refreshes the index |
+| `hierarchy <reference>` | Return bounded direct `extends` / `implements` parents and exact children, including unresolved parent evidence; accepts `--limit` and never refreshes the index |
 | `routes [path]` | List bounded static Express route nodes and handler evidence; accepts `--method`, `--path`, and `--limit`; never refreshes the index |
 | `callers <symbol>` / `callees <symbol>` | Show direct graph relationships |
 | `impact <symbol>` | Trace reverse impact with optional `--depth` and explicit output `--limit` |
@@ -480,6 +515,7 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 | --- | --- |
 | `symbol_lattice_explore` | Return generation-bound source when available, callers, callees, impact, freshness, and structured output for an existing graph |
 | `symbol_lattice_node` | Return one exact node's bounded persisted declaration range, direct callers/callees, provenance, and freshness without refreshing an index |
+| `symbol_lattice_hierarchy` | Return bounded direct `extends` / `implements` parents and exact children from one active generation, including unresolved parent evidence, without refreshing an index |
 | `symbol_lattice_routes` | Return bounded static Express route nodes, method/path filters, handler-edge evidence, and freshness without refreshing an index |
 | `symbol_lattice_context` | Return bounded generation-bound source, relationships, reverse impact, and directed proof paths for ordered references without refreshing an index |
 | `symbol_lattice_affected` | Return bounded affected-test proofs for changed files, index coverage, and completeness limits without refreshing an index |
@@ -504,11 +540,13 @@ v0.13 adds no SQLite migration or index backfill. `node` reuses the optional act
 
 v0.14 adds no SQLite schema migration. It persists additive `route` symbols and `routes` edges through the existing graph and retained-snapshot tables, while the raw-fact/resolver version advance deliberately marks a pre-v0.14 active index as needing `sync` or `index` before it can make a route-coverage claim. The `routes` CLI/service works against the active generation only; an explore-only embedded MCP service does not register `symbol_lattice_routes` until it exposes that optional capability.
 
+v0.15 adds no SQLite schema migration. It persists additive `extends` and `implements` edges through the existing graph, raw-fact, and retained-snapshot storage. The extractor/resolver version advance deliberately marks a pre-v0.15 active index as needing `sync` or `index` before it can make a hierarchy-coverage claim; raw facts now retain value/type binding namespaces and type-only import/re-export markers. Existing generations remain readable. The `hierarchy` CLI/service reads only the active generation, and an explore-only embedded MCP service does not register `symbol_lattice_hierarchy` until it exposes that optional capability.
+
 ## Architecture
 
 ```mermaid
 flowchart LR
-  CLI["CLI: explicit init/index/sync/watch\nread-only routes/node/history/diff/git-hunks"] --> App["Application service"]
+  CLI["CLI: explicit init/index/sync/watch\nread-only hierarchy/routes/node/history/diff/git-hunks"] --> App["Application service"]
   Native["Native filesystem events\nfiltered + recursive"] --> Watch["Foreground watch\ndebounce + polling fallback"]
   Timer["Bounded polling safety sweep"] --> Watch
   Watch --> App
@@ -517,7 +555,7 @@ flowchart LR
   Catalog["Filesystem catalog\nscope + gitignore"] --> Inputs["Index inputs"]
   Catalog --> TS["TS alias resolver"]
   Catalog --> WS["Workspace resolver"]
-  Extractor["TypeScript AST extractor\nincluding static Express routes"] --> Facts["Reusable artifact facts"]
+  Extractor["TypeScript AST extractor\ndirect heritage + static Express routes"] --> Facts["Reusable artifact facts"]
   Catalog --> SourceDocs["Persisted source documents"]
   SourceDocs --> Retrieval["Generation-bound lexical projection"]
   Facts --> Resolver["Full project export surface"]
@@ -543,11 +581,12 @@ src/
 
 ## Deliberate boundaries
 
-v0.14.0 does not yet provide:
+v0.15.0 does not yet provide:
 
 - Daemon mode, background automatic sync after the foreground process exits, cross-process watch coordination, MCP per-query pending-file banners, worker pools, or historical source browsing.
 - pnpm workspace YAML, TypeScript project references, external/package `extends`, or nested `.gitignore` semantics.
 - CommonJS `require`, dynamic dispatch, decorators, reflection, arbitrary framework routes, or namespace property-call resolution. The v0.14 Express pack is intentionally limited to syntax-proven static registrations; it does not model mutable/aliased receivers, mounts, chained routers, inline callbacks, decorators, or runtime route composition.
+- Semantic type checking, transitive hierarchy traversal, declaration-merging semantics, override dispatch, mixin/qualified/conditional heritage expressions, or automatic framework decorator inference. v0.15 records only direct syntax-proven heritage identifiers and keeps unproven bases unresolved.
 - Parsers beyond TS/TSX/JS/JSX, external dependency indexing, telemetry, or multi-project routing.
 - Embedding-based or cloud retrieval, semantic ranking, arbitrary natural-language context assembly, semantic Git diff beyond immutable zero-context hunk-to-revision-local-declaration evidence, or reliable rename/move/cross-side identity attribution.
 
@@ -568,7 +607,9 @@ v0.14.0 does not yet provide:
 | `v0.12.0` | Bounded immutable local Git hunk attribution with zero-context hunks, revision-local declaration anchors, and read-only CLI/MCP support without an active graph |
 | `v0.13.0` | Exact persisted node inspection with bounded full declaration ranges, direct callers/callees, explicit source provenance, and additive read-only CLI/MCP support |
 | `v0.14.0` | First AST-proven Express framework pack: literal static route nodes/handler edges, route-aware graph traversal, and bounded read-only CLI/MCP listing |
-| `v0.15+` | Additional language adapters, framework packs, contract graphs, retained-generation source browsing, and further CodeGraph-parity work where evidence supports it |
+| `v0.15.0` | Direct AST-proven TypeScript/JavaScript `extends` / `implements` graph with value/type namespace proof, unresolved heritage evidence, and bounded read-only CLI/MCP hierarchy views |
+| `v0.16.0` | Planned AST-proven NestJS HTTP decorator pack built on the shared hierarchy and route-evidence boundaries |
+| `v0.17+` | Additional language adapters, framework packs, contract graphs, retained-generation source browsing, and further CodeGraph-parity work where evidence supports it |
 
 See [CHANGELOG.md](CHANGELOG.md) for release notes and migration history.
 
@@ -582,7 +623,7 @@ npm.cmd pack --dry-run
 git diff --check
 ```
 
-The suite covers discovery, input fingerprints, alias and workspace resolution, exact static Express route extraction and handler resolution, route-aware graph traversal, re-export semantics, exact affected-test proofs and completeness limits, local Git change-set parsing and selection, immutable revision-local Git hunk declaration attribution, bounded generation-bound node declaration evidence, generation-bound search and exploration source evidence, retained graph history and structural diffs, legacy snapshot backfill, stale-source evidence, incremental raw-fact reuse, bounded foreground pending-file disclosure, event debounce/polling fallback/retry receipts, no-op sync, schema migration, atomic rollback, MCP read-only behavior, CLI parsing, and architecture boundaries.
+The suite covers discovery, input fingerprints, alias and workspace resolution, exact direct TypeScript/JavaScript heritage extraction and namespace-aware local/import/re-export resolution, bounded hierarchy traversal, exact static Express route extraction and handler resolution, route-aware graph traversal, re-export semantics, exact affected-test proofs and completeness limits, local Git change-set parsing and selection, immutable revision-local Git hunk declaration attribution, bounded generation-bound node declaration evidence, generation-bound search and exploration source evidence, retained graph history and structural diffs, legacy snapshot backfill, stale-source evidence, incremental raw-fact reuse, bounded foreground pending-file disclosure, event debounce/polling fallback/retry receipts, no-op sync, schema migration, atomic rollback, MCP read-only behavior, CLI parsing, and architecture boundaries.
 
 ## Contributing
 

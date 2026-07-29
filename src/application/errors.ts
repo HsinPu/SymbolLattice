@@ -24,6 +24,7 @@ export class SymbolLatticeError extends Error {
       | "INVALID_GIT_BASE_REF"
       | "INVALID_GIT_HUNK_FILES"
       | "INVALID_GIT_HUNK_LIMIT"
+      | "INVALID_HIERARCHY_LIMIT"
       | "INVALID_IMPACT_DEPTH"
       | "INVALID_IMPACT_LIMIT"
       | "INVALID_PROJECT_CONFIGURATION"

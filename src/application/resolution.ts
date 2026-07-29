@@ -1,6 +1,7 @@
 import {
   compareStableText,
   createEdgeId,
+  type BindingSpace,
   type EdgeEvidence,
   type GraphEdge,
   type GraphSnapshot,
@@ -218,11 +219,15 @@ function resolveScopedBinding(
   referenceName: string,
   scopeIds: readonly string[],
   localBindings: ExtractedFileFacts["localBindings"],
-  symbolsById: ReadonlyMap<string, SymbolNode>
+  symbolsById: ReadonlyMap<string, SymbolNode>,
+  expectedSpace: BindingSpace = "value"
 ): ScopedBindingResolution {
   for (const scopeId of scopeIds) {
     const bindings = localBindings.filter(
-      (binding) => binding.scopeId === scopeId && binding.name === referenceName
+      (binding) =>
+        binding.scopeId === scopeId &&
+        binding.name === referenceName &&
+        (binding.space ?? "value") === expectedSpace
     );
     if (bindings.length === 0) {
       continue;
@@ -245,6 +250,8 @@ interface ExportCandidate {
   /** Exporter-to-declaration route, excluding the eventual importing file. */
   readonly path: readonly string[];
   readonly configurationPaths: readonly string[];
+  /** True when one or more export hops makes the declaration type-only. */
+  readonly isTypeOnly: boolean;
 }
 
 interface ExportSurfaceEntry {
@@ -261,6 +268,10 @@ function compareExportCandidates(left: ExportCandidate, right: ExportCandidate):
     return bySymbol;
   }
 
+  if (left.isTypeOnly !== right.isTypeOnly) {
+    return left.isTypeOnly ? 1 : -1;
+  }
+
   const byPath = compareStableText(left.path.join("\u0001"), right.path.join("\u0001"));
   return byPath === 0
     ? compareStableText(
@@ -273,7 +284,8 @@ function compareExportCandidates(left: ExportCandidate, right: ExportCandidate):
 function canonicalExportCandidates(candidates: readonly ExportCandidate[]): readonly ExportCandidate[] {
   const bySymbolId = new Map<string, ExportCandidate>();
   for (const candidate of [...candidates].sort(compareExportCandidates)) {
-    if (!bySymbolId.has(candidate.symbol.id)) {
+    const existing = bySymbolId.get(candidate.symbol.id);
+    if (existing === undefined || (existing.isTypeOnly && !candidate.isTypeOnly)) {
       bySymbolId.set(candidate.symbol.id, candidate);
     }
   }
@@ -312,11 +324,12 @@ function directExportSurface(facts: ExtractedFileFacts, filePath: string): Expor
       .filter((binding) => binding.exportedName === "default")
       .map((binding) => binding.localName)
   );
-  const addLocal = (exportedName: string, localName: string): boolean => {
+  const addLocal = (exportedName: string, localName: string, isTypeOnly = false): boolean => {
     const candidates = topLevelLocalCandidates(facts.symbols, filePath, localName).map((symbol) => ({
       symbol,
       path: [filePath],
-      configurationPaths: []
+      configurationPaths: [],
+      isTypeOnly
     }));
     if (candidates.length === 0) {
       return false;
@@ -336,7 +349,7 @@ function directExportSurface(facts: ExtractedFileFacts, filePath: string): Expor
     }
   }
   for (const binding of facts.exportBindings) {
-    addLocal(binding.exportedName, binding.localName);
+    addLocal(binding.exportedName, binding.localName, binding.isTypeOnly ?? false);
   }
 
   return surface;
@@ -345,7 +358,8 @@ function directExportSurface(facts: ExtractedFileFacts, filePath: string): Expor
 function reExportCandidate(
   sourceFilePath: string,
   resolution: ResolvedModule,
-  candidate: ExportCandidate
+  candidate: ExportCandidate,
+  isTypeOnly = false
 ): ExportCandidate {
   return {
     symbol: candidate.symbol,
@@ -353,7 +367,8 @@ function reExportCandidate(
     configurationPaths: uniqueConfigurationPaths([
       resolution.configurationPaths,
       candidate.configurationPaths
-    ])
+    ]),
+    isTypeOnly: isTypeOnly || candidate.isTypeOnly
   };
 }
 
@@ -364,7 +379,7 @@ function surfaceSignature(surface: ExportSurface): string {
       `${name}\u0002${entry.explicit ? "1" : "0"}\u0002${entry.ambiguous ? "1" : "0"}\u0002${entry.candidates
         .map(
           (candidate) =>
-            `${candidate.symbol.id}\u0003${candidate.path.join("\u0003")}\u0003${candidate.configurationPaths.join("\u0003")}`
+            `${candidate.symbol.id}\u0003${candidate.isTypeOnly ? "1" : "0"}\u0003${candidate.path.join("\u0003")}\u0003${candidate.configurationPaths.join("\u0003")}`
         )
         .join("\u0004")}`
     )
@@ -452,7 +467,12 @@ function resolveExportSurfaces(input: {
           if (targetEntry !== undefined && resolution !== undefined) {
             candidates.push(
               ...targetEntry.candidates.map((candidate) =>
-                reExportCandidate(filePath, resolution, candidate)
+                reExportCandidate(
+                  filePath,
+                  resolution,
+                  candidate,
+                  (binding.isTypeOnly ?? false) || (importedBinding.isTypeOnly ?? false)
+                )
               )
             );
             ambiguous ||= targetEntry.ambiguous;
@@ -486,7 +506,7 @@ function resolveExportSurfaces(input: {
           targetEntry === undefined || resolution === undefined
             ? []
             : targetEntry.candidates.map((candidate) =>
-                reExportCandidate(filePath, resolution, candidate)
+                reExportCandidate(filePath, resolution, candidate, binding.isTypeOnly ?? false)
               );
         surface.set(
           binding.exportedName,
@@ -515,7 +535,7 @@ function resolveExportSurfaces(input: {
             candidates: [
               ...(existing?.candidates ?? []),
               ...targetEntry.candidates.map((candidate) =>
-                reExportCandidate(filePath, resolution, candidate)
+                reExportCandidate(filePath, resolution, candidate, binding.isTypeOnly ?? false)
               )
             ],
             ambiguous: (existing?.ambiguous ?? false) || targetEntry.ambiguous
@@ -560,6 +580,70 @@ function allExportCandidatesForName(
         : (surface.get(exportedName)?.candidates ?? [])
     )
   );
+}
+
+interface HeritageReferenceContext {
+  readonly relationKind: "extends" | "implements";
+  /** Class extends clauses are runtime values; all other supported clauses are types. */
+  readonly expectedSpace: BindingSpace;
+}
+
+function isHeritageReference(
+  reference: PendingReference
+): reference is PendingReference & { readonly relationKind: "extends" | "implements" } {
+  return reference.relationKind === "extends" || reference.relationKind === "implements";
+}
+
+function heritageReferenceContext(
+  reference: PendingReference,
+  symbolsById: ReadonlyMap<string, SymbolNode>
+): HeritageReferenceContext | null {
+  if (!isHeritageReference(reference)) {
+    return null;
+  }
+
+  const source = symbolsById.get(reference.sourceId);
+  if (source?.kind === "class") {
+    return {
+      relationKind: reference.relationKind,
+      expectedSpace: reference.relationKind === "extends" ? "value" : "type"
+    };
+  }
+
+  if (source?.kind === "interface" && reference.relationKind === "extends") {
+    return { relationKind: "extends", expectedSpace: "type" };
+  }
+
+  return null;
+}
+
+function isHeritageTarget(
+  symbol: SymbolNode,
+  context: HeritageReferenceContext
+): boolean {
+  if (context.relationKind === "extends" && context.expectedSpace === "value") {
+    return symbol.kind === "class";
+  }
+
+  return symbol.kind === "class" || symbol.kind === "interface" || symbol.kind === "type";
+}
+
+function importBindingSupportsSpace(
+  binding: ExtractedFileFacts["importBindings"][number],
+  expectedSpace: BindingSpace
+): boolean {
+  return expectedSpace === "type" || binding.isTypeOnly !== true;
+}
+
+function exportCandidateSupportsSpace(candidate: ExportCandidate, expectedSpace: BindingSpace): boolean {
+  return expectedSpace === "type" || !candidate.isTypeOnly;
+}
+
+function heritageRuleId(
+  relationKind: HeritageReferenceContext["relationKind"],
+  suffix: "local-value-binding" | "local-type-binding" | "imported-target" | "reexported-target" | "unresolved-target"
+): string {
+  return `heritage.${relationKind}.${suffix}`;
 }
 
 /**
@@ -674,18 +758,39 @@ export function resolveProjectFacts(input: {
   });
 
   for (const reference of [...references].sort((left, right) => compareStableText(left.id, right.id))) {
-    if (reference.relationKind !== "calls" && reference.relationKind !== "routes") {
+    const isHeritage = isHeritageReference(reference);
+    if (reference.relationKind !== "calls" && reference.relationKind !== "routes" && !isHeritage) {
       continue;
     }
     const isRouteHandler = reference.relationKind === "routes";
+    const heritage = isHeritage ? heritageReferenceContext(reference, symbolsById) : null;
+    if (isHeritage && heritage === null) {
+      unresolvedReferences.push(reference);
+      resolvedEdges.push(
+        referenceEdge(
+          reference,
+          null,
+          "unresolved",
+          0,
+          referenceEvidence(
+            heritageRuleId(reference.relationKind, "unresolved-target"),
+            "unresolved",
+            []
+          )
+        )
+      );
+      continue;
+    }
+    const expectedSpace = heritage?.expectedSpace ?? "value";
 
     const scopedLocal = resolveScopedBinding(
       reference.referenceName,
       referenceScopeIdsByReferenceId.get(reference.id) ?? [],
       localBindingsByFile.get(reference.filePath) ?? [],
-      symbolsById
+      symbolsById,
+      expectedSpace
     );
-    const exactImportedBindings = (importBindingsByFile.get(reference.filePath) ?? [])
+    const matchingImportedBindings = (importBindingsByFile.get(reference.filePath) ?? [])
       .filter((binding) => binding.localName === reference.referenceName)
       .map((binding) => {
         const key = moduleKey(reference.filePath, binding.moduleSpecifier);
@@ -695,17 +800,32 @@ export function resolveProjectFacts(input: {
           resolution: moduleResolutionByKey.get(key)
         };
       });
-    const exactImportedCandidates = canonicalExportCandidates(
-      exactImportedBindings.flatMap(({ binding, targetPath }) =>
+    const exactImportedBindings = matchingImportedBindings.filter(({ binding }) =>
+      heritage === null ? true : importBindingSupportsSpace(binding, heritage.expectedSpace)
+    );
+    const allExactImportedCandidates = canonicalExportCandidates(
+      matchingImportedBindings.flatMap(({ binding, targetPath }) =>
         targetPath === undefined
           ? []
           : candidatesForExport(exportSurfaces, targetPath, binding.importedName)
       )
     );
+    const exactImportedCandidates = canonicalExportCandidates(
+      exactImportedBindings.flatMap(({ binding, targetPath }) =>
+        targetPath === undefined
+          ? []
+          : candidatesForExport(exportSurfaces, targetPath, binding.importedName)
+      ).filter((candidate) =>
+        heritage === null ||
+        (exportCandidateSupportsSpace(candidate, heritage.expectedSpace) &&
+          isHeritageTarget(candidate.symbol, heritage))
+      )
+    );
     const exactImportedSymbols = exactImportedCandidates.map((candidate) => candidate.symbol);
+    const allExactImportedSymbols = allExactImportedCandidates.map((candidate) => candidate.symbol);
     const exactImportedConfigurationPaths = uniqueConfigurationPaths([
-      ...exactImportedBindings.map(({ resolution }) => resolution?.configurationPaths ?? []),
-      ...exactImportedCandidates.map((candidate) => candidate.configurationPaths)
+      ...matchingImportedBindings.map(({ resolution }) => resolution?.configurationPaths ?? []),
+      ...allExactImportedCandidates.map((candidate) => candidate.configurationPaths)
     ]);
     const importedTargetPaths = importTargetPathsByFile.get(reference.filePath) ?? new Set<string>();
     const importedCandidates = allExportCandidatesForName(
@@ -714,17 +834,26 @@ export function resolveProjectFacts(input: {
       importedTargetPaths
     );
     const exportedCandidates = allExportCandidatesForName(exportSurfaces, reference.referenceName);
+    const scopedCandidates =
+      heritage === null
+        ? scopedLocal.candidates
+        : scopedLocal.candidates.filter((candidate) => isHeritageTarget(candidate, heritage));
 
     if (scopedLocal.hasBinding) {
-      if (scopedLocal.candidates.length === 1 && scopedLocal.candidates[0] !== undefined) {
+      if (scopedCandidates.length === 1 && scopedCandidates[0] !== undefined) {
         resolvedEdges.push(
           referenceEdge(
             reference,
-            scopedLocal.candidates[0].id,
+            scopedCandidates[0].id,
             "exact",
             1,
             referenceEvidence(
-              isRouteHandler
+              heritage !== null
+                ? heritageRuleId(
+                    heritage.relationKind,
+                    heritage.expectedSpace === "value" ? "local-value-binding" : "local-type-binding"
+                  )
+                : isRouteHandler
                 ? "framework.express.literal-route.local-handler"
                 : "lexical.local-binding",
               "lexical",
@@ -741,7 +870,9 @@ export function resolveProjectFacts(input: {
             "unresolved",
             0,
             referenceEvidence(
-              isRouteHandler
+              heritage !== null
+                ? heritageRuleId(heritage.relationKind, "unresolved-target")
+                : isRouteHandler
                 ? "framework.express.literal-route.unresolved-handler"
                 : "reference.unresolved",
               "unresolved",
@@ -772,7 +903,12 @@ export function resolveProjectFacts(input: {
           "exact",
           1,
           referenceEvidence(
-            isRouteHandler
+            heritage !== null
+              ? heritageRuleId(
+                  heritage.relationKind,
+                  resolutionPath.length === 0 ? "imported-target" : "reexported-target"
+                )
+              : isRouteHandler
               ? resolutionPath.length === 0
                 ? "framework.express.literal-route.imported-handler"
                 : "framework.express.literal-route.reexported-handler"
@@ -793,7 +929,7 @@ export function resolveProjectFacts(input: {
     // name match. If its requested export is absent, ambiguous, or unresolved,
     // do not let an unrelated global export turn that binding into a false call
     // edge (notably for `export * as namespace` module objects).
-    if (exactImportedBindings.length > 0) {
+    if (exactImportedBindings.length > 0 || (heritage !== null && matchingImportedBindings.length > 0)) {
       unresolvedReferences.push(reference);
       resolvedEdges.push(
         referenceEdge(
@@ -802,11 +938,36 @@ export function resolveProjectFacts(input: {
           "unresolved",
           0,
           referenceEvidence(
-            isRouteHandler
+            heritage !== null
+              ? heritageRuleId(heritage.relationKind, "unresolved-target")
+              : isRouteHandler
               ? "framework.express.literal-route.unresolved-handler"
               : "reference.unresolved",
             "unresolved",
-            candidateSymbolIds(exactImportedSymbols),
+            candidateSymbolIds(heritage === null ? exactImportedSymbols : allExactImportedSymbols),
+            exactImportedConfigurationPaths
+          )
+        )
+      );
+      continue;
+    }
+
+    // Heritage is deliberately stricter than ordinary calls. An identifier in
+    // `extends` or `implements` needs a direct lexical, import, or re-export
+    // proof in its required namespace; a project-wide name match would make a
+    // type relationship look certain when it is not.
+    if (heritage !== null) {
+      unresolvedReferences.push(reference);
+      resolvedEdges.push(
+        referenceEdge(
+          reference,
+          null,
+          "unresolved",
+          0,
+          referenceEvidence(
+            heritageRuleId(heritage.relationKind, "unresolved-target"),
+            "unresolved",
+            candidateSymbolIds(allExactImportedSymbols),
             exactImportedConfigurationPaths
           )
         )

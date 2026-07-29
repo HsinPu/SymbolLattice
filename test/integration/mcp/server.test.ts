@@ -16,6 +16,8 @@ import {
   type GitAffectedTestsResult,
   type GitHunksOptions,
   type GitHunksResult,
+  type HierarchyOptions,
+  type HierarchyResult,
   type NodeResult,
   type RoutesOptions,
   type RoutesResult,
@@ -31,6 +33,7 @@ import {
   runGenerationHistoryTool,
   runGitAffectedTestsTool,
   runGitHunksTool,
+  runHierarchyTool,
   runNodeTool,
   runRoutesTool,
   runSearchTool
@@ -108,6 +111,76 @@ function nodeResult(): NodeResult {
     },
     callers: { items: [], truncated: false },
     callees: { items: [], truncated: false }
+  };
+}
+
+function hierarchyResult(): HierarchyResult {
+  const base = {
+    id: "symbol:base",
+    name: "Base",
+    qualifiedName: "src/base.ts#Base",
+    kind: "class" as const,
+    filePath: "src/base.ts",
+    range: {
+      start: { line: 1, column: 1 },
+      end: { line: 1, column: 21 }
+    },
+    isExported: true,
+    declarationOrdinal: 0
+  };
+  const child = {
+    id: "symbol:child",
+    name: "Child",
+    qualifiedName: "src/child.ts#Child",
+    kind: "class" as const,
+    filePath: "src/child.ts",
+    range: {
+      start: { line: 1, column: 1 },
+      end: { line: 1, column: 27 }
+    },
+    isExported: true,
+    declarationOrdinal: 0
+  };
+  return {
+    status: exploreResult().status,
+    symbol: base,
+    bounds: { limit: 2, maximumLimit: 100 },
+    parents: [
+      {
+        relation: "implements",
+        edge: {
+          id: "edge:base:missing-contract",
+          sourceId: base.id,
+          targetId: null,
+          kind: "implements",
+          filePath: base.filePath,
+          range: base.range,
+          resolution: "unresolved",
+          confidence: 0,
+          referenceName: "MissingContract"
+        },
+        parent: null
+      }
+    ],
+    children: [
+      {
+        relation: "extends",
+        edge: {
+          id: "edge:child:base",
+          sourceId: child.id,
+          targetId: base.id,
+          kind: "extends",
+          filePath: child.filePath,
+          range: child.range,
+          resolution: "exact",
+          confidence: 1,
+          referenceName: "Base"
+        },
+        child
+      }
+    ],
+    parentsTruncated: false,
+    childrenTruncated: false
   };
 }
 
@@ -656,6 +729,91 @@ describe("SymbolLattice MCP server", () => {
     expect((await client.listTools()).tools.map((tool) => tool.name)).toEqual([
       "symbol_lattice_explore"
     ]);
+  });
+
+  it("registers bounded direct hierarchy only when the service supports it", async () => {
+    const hierarchyCalls: Array<{
+      projectPath: string;
+      reference: string;
+      options: HierarchyOptions;
+    }> = [];
+    const service = {
+      async explore(): Promise<ExploreResult> {
+        return exploreResult();
+      },
+      async hierarchy(
+        projectPath: string,
+        reference: string,
+        options: HierarchyOptions = {}
+      ): Promise<HierarchyResult> {
+        hierarchyCalls.push({ projectPath, reference, options });
+        return hierarchyResult();
+      }
+    };
+    const server = createMcpServer(service, "C:/default-project");
+    const client = new Client({ name: "symbol-lattice-hierarchy-test", version: "1.0.0" });
+    const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+    closeCallbacks.push(() => client.close(), () => server.close());
+
+    const tools = await client.listTools();
+    expect(tools.tools.map((tool) => tool.name)).toEqual([
+      "symbol_lattice_explore",
+      "symbol_lattice_hierarchy"
+    ]);
+    const hierarchyTool = tools.tools.find((tool) => tool.name === "symbol_lattice_hierarchy");
+    expect(hierarchyTool?.annotations).toMatchObject({ readOnlyHint: true, idempotentHint: true });
+    expect(hierarchyTool?.inputSchema).toMatchObject({
+      type: "object",
+      properties: {
+        reference: { type: "string" },
+        limit: { type: "integer", minimum: 1, maximum: 100 }
+      },
+      required: ["reference"]
+    });
+    expect(hierarchyTool?.outputSchema).toMatchObject({
+      type: "object",
+      properties: {
+        symbol: { type: "object" },
+        parents: { type: "array" },
+        children: { type: "array" },
+        parentsTruncated: { type: "boolean" },
+        childrenTruncated: { type: "boolean" }
+      }
+    });
+
+    const result = await client.callTool({
+      name: "symbol_lattice_hierarchy",
+      arguments: {
+        projectPath: "C:/chosen-project",
+        reference: "src/base.ts#Base",
+        limit: 2
+      }
+    });
+    expect(result.isError).not.toBe(true);
+    expect(result.structuredContent).toMatchObject({
+      symbol: { qualifiedName: "src/base.ts#Base" },
+      bounds: { limit: 2, maximumLimit: 100 },
+      parents: [{ relation: "implements", parent: null }],
+      children: [{ relation: "extends", child: { name: "Child" } }],
+      parentsTruncated: false,
+      childrenTruncated: false
+    });
+    expect(hierarchyCalls).toEqual([
+      {
+        projectPath: "C:/chosen-project",
+        reference: "src/base.ts#Base",
+        options: { limit: 2 }
+      }
+    ]);
+
+    const invalidLimit = await client.callTool({
+      name: "symbol_lattice_hierarchy",
+      arguments: { reference: "Base", limit: 101 }
+    });
+    expect(invalidLimit.isError).toBe(true);
+    expect(hierarchyCalls).toHaveLength(1);
   });
 
   it("registers exact node retrieval only when the service supports it", async () => {
@@ -1337,6 +1495,21 @@ describe("SymbolLattice MCP server", () => {
     expect(response.content[0]?.text).toContain("MISSING_INDEX");
   });
 
+  it("returns hierarchy errors without indexing", async () => {
+    const response = await runHierarchyTool(
+      {
+        async hierarchy(): Promise<HierarchyResult> {
+          throw new SymbolLatticeError("MISSING_INDEX", "Run symbol-lattice init first.");
+        }
+      },
+      "C:/project",
+      { reference: "src/base.ts#Base", limit: 3 }
+    );
+
+    expect(response).toMatchObject({ isError: true });
+    expect(response.content[0]?.text).toContain("MISSING_INDEX");
+  });
+
   it("returns retained-history and structural-diff errors without indexing", async () => {
     const history = await runGenerationHistoryTool(
       {
@@ -1415,6 +1588,9 @@ describe("SymbolLattice MCP server", () => {
       async routes(): Promise<RoutesResult> {
         return routesResult();
       },
+      async hierarchy(): Promise<HierarchyResult> {
+        return hierarchyResult();
+      },
       async history(): Promise<GenerationHistoryResult> {
         return generationHistoryResult();
       },
@@ -1443,6 +1619,7 @@ describe("SymbolLattice MCP server", () => {
     await runGitHunksTool(service, "C:/project", { baseRef: "origin/main" });
     await runSearchTool(service, "C:/project", { query: "user" });
     await runRoutesTool(service, "C:/project", { method: "GET", path: "/api" });
+    await runHierarchyTool(service, "C:/project", { reference: "src/base.ts#Base" });
     await runGenerationHistoryTool(service, "C:/project", {});
     await runGenerationDiffTool(service, "C:/project", { fromGenerationId: "generation:old" });
     await runExplainEdgeTool(service, "C:/project", { edgeId: "edge:caller-callee" });

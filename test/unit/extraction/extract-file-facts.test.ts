@@ -174,6 +174,160 @@ describe("TypeScript and JavaScript extraction", () => {
     ).toEqual(["twice"]);
   });
 
+  it("extracts direct TypeScript heritage identifiers with exact ranges and lexical scopes", () => {
+    const facts = extractFileFacts({
+      filePath: "src/heritage.ts",
+      language: "typescript",
+      sourceText: [
+        'import type { ImportedBase, ImportedContract } from "./external.js";',
+        "class LocalBase {}",
+        "interface LocalContract {}",
+        "class Derived extends LocalBase implements LocalContract, ImportedContract {}",
+        "interface Child extends ImportedBase<string>, LocalContract {}"
+      ].join("\n")
+    });
+
+    const derived = facts.symbols.find((symbol) => symbol.name === "Derived");
+    const child = facts.symbols.find((symbol) => symbol.name === "Child");
+    const heritageReferences = facts.pendingReferences.filter(
+      (reference) => reference.relationKind === "extends" || reference.relationKind === "implements"
+    );
+
+    expect(
+      heritageReferences.map((reference) => [
+        reference.sourceId,
+        reference.relationKind,
+        reference.referenceName,
+        reference.range
+      ])
+    ).toEqual([
+      [
+        derived?.id,
+        "extends",
+        "LocalBase",
+        {
+          start: { line: 4, column: 23 },
+          end: { line: 4, column: 32 }
+        }
+      ],
+      [
+        derived?.id,
+        "implements",
+        "LocalContract",
+        {
+          start: { line: 4, column: 44 },
+          end: { line: 4, column: 57 }
+        }
+      ],
+      [
+        derived?.id,
+        "implements",
+        "ImportedContract",
+        {
+          start: { line: 4, column: 59 },
+          end: { line: 4, column: 75 }
+        }
+      ],
+      [
+        child?.id,
+        "extends",
+        "ImportedBase",
+        {
+          start: { line: 5, column: 25 },
+          end: { line: 5, column: 37 }
+        }
+      ],
+      [
+        child?.id,
+        "extends",
+        "LocalContract",
+        {
+          start: { line: 5, column: 47 },
+          end: { line: 5, column: 60 }
+        }
+      ]
+    ]);
+
+    const scopesByReferenceId = new Map(
+      facts.referenceScopes.map((scope) => [scope.referenceId, scope.scopeIds])
+    );
+    for (const reference of heritageReferences) {
+      const scopeIds = scopesByReferenceId.get(reference.id);
+      expect(scopeIds).toBeDefined();
+      expect(scopeIds?.at(-1)).toMatch(/^\d+:0:\d+$/);
+    }
+    expect(scopesByReferenceId.get(heritageReferences[0]?.id ?? "")).toEqual([
+      expect.stringMatching(/^\d+:\d+:\d+$/),
+      expect.stringMatching(/^\d+:0:\d+$/)
+    ]);
+  });
+
+  it("rejects qualified, mixin, intersection, and non-identifier heritage shapes", () => {
+    const unsupportedSources = [
+      "class QualifiedBase extends Namespace.Base {}",
+      "interface QualifiedContract extends Namespace.Contract {}",
+      "class MixinBase extends mixin(Object) {}",
+      "class DynamicBase extends resolveBase() {}",
+      "class IntersectionContracts implements First & Second {}",
+      "interface IntersectionContract extends First & Second {}",
+      "class ArrayBase extends Base[] {}"
+    ];
+
+    for (const sourceText of unsupportedSources) {
+      const facts = extractFileFacts({
+        filePath: "src/unsupported-heritage.ts",
+        language: "typescript",
+        sourceText
+      });
+      expect(
+        facts.pendingReferences.filter(
+          (reference) => reference.relationKind === "extends" || reference.relationKind === "implements"
+        )
+      ).toEqual([]);
+    }
+  });
+
+  it("records type/value namespaces and type-only module facts for heritage resolution", () => {
+    const facts = extractFileFacts({
+      filePath: "src/namespaces.ts",
+      language: "typescript",
+      sourceText: [
+        'import type { ImportedContract } from "./contracts";',
+        'export type { ImportedContract as PublicContract } from "./contracts";',
+        "class Base {}",
+        "interface Contract {}",
+        "type Alias = { value: string };",
+        "class Child extends Base implements Contract, Alias {}",
+        "interface Generic<Contract> extends Contract {}"
+      ].join("\n")
+    });
+
+    expect(facts.importBindings).toEqual([
+      expect.objectContaining({
+        localName: "ImportedContract",
+        importedName: "ImportedContract",
+        isTypeOnly: true
+      })
+    ]);
+    expect(facts.reExportBindings).toEqual([
+      expect.objectContaining({
+        kind: "named",
+        importedName: "ImportedContract",
+        exportedName: "PublicContract",
+        isTypeOnly: true
+      })
+    ]);
+    expect(facts.localBindings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "Base", space: "value" }),
+        expect.objectContaining({ name: "Base", space: "type" }),
+        expect.objectContaining({ name: "Contract", space: "type" }),
+        expect.objectContaining({ name: "Alias", space: "type" }),
+        expect.objectContaining({ name: "Contract", symbolId: null, space: "type" })
+      ])
+    );
+  });
+
   it("extracts syntax-proven static Express routes with literal paths and named handlers", () => {
     const facts = extractFileFacts({
       filePath: "src/routes.ts",

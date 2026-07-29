@@ -6,6 +6,7 @@ import {
   ROUTE_METHODS,
   type ArtifactFacts,
   type ArtifactLanguage,
+  type BindingSpace,
   type EdgeKind,
   type ExportBinding,
   type GraphEdge,
@@ -179,7 +180,9 @@ function collectExplicitExportNames(sourceFile: ts.SourceFile): ReadonlySet<stri
       for (const element of statement.exportClause.elements) {
         // `export { localName as publicName }` exports the local declaration,
         // not a declaration named `publicName`.
-        names.add(element.propertyName?.text ?? element.name.text);
+        if (!statement.isTypeOnly && !element.isTypeOnly) {
+          names.add(element.propertyName?.text ?? element.name.text);
+        }
       }
     }
   }
@@ -194,6 +197,7 @@ function isLexicalScope(node: ts.Node): boolean {
     ts.isFunctionLike(node) ||
     ts.isClassDeclaration(node) ||
     ts.isClassExpression(node) ||
+    ts.isInterfaceDeclaration(node) ||
     ts.isForStatement(node) ||
     ts.isForInStatement(node) ||
     ts.isForOfStatement(node) ||
@@ -250,8 +254,34 @@ function declarationScopeId(
   return lexicalScope === undefined ? undefined : scopeIdFor(sourceFile, lexicalScope);
 }
 
-function hasValueBinding(info: DeclarationInfo): boolean {
-  return info.kind === "class" || info.kind === "function" || info.kind === "variable";
+function declaredBindingSpaces(info: DeclarationInfo): readonly BindingSpace[] {
+  switch (info.kind) {
+    case "class":
+      return ["value", "type"];
+    case "interface":
+    case "type":
+      return ["type"];
+    case "function":
+    case "variable":
+      return ["value"];
+    case "method":
+      return [];
+  }
+
+  return [];
+}
+
+function typeParametersFor(node: ts.Node): ts.NodeArray<ts.TypeParameterDeclaration> | undefined {
+  if (
+    ts.isClassDeclaration(node) ||
+    ts.isClassExpression(node) ||
+    ts.isInterfaceDeclaration(node) ||
+    ts.isTypeAliasDeclaration(node)
+  ) {
+    return node.typeParameters;
+  }
+
+  return ts.isFunctionLike(node) ? node.typeParameters : undefined;
 }
 
 interface ScopedRouteReceiverBindings {
@@ -275,6 +305,79 @@ interface StaticExpressRoute {
   readonly method: RouteMethod;
   readonly path: string;
   readonly handler: ts.Identifier;
+}
+
+/** A syntax-proven direct base or contract named in a TypeScript heritage clause. */
+interface StaticHeritageReference {
+  readonly relationKind: "extends" | "implements";
+  readonly identifier: ts.Identifier;
+}
+
+type HeritageDeclaration = ts.ClassDeclaration | ts.ClassExpression | ts.InterfaceDeclaration;
+
+function nextHeritageToken(sourceFile: ts.SourceFile, node: ts.Node): ts.SyntaxKind {
+  const scanner = ts.createScanner(
+    ts.ScriptTarget.Latest,
+    true,
+    ts.LanguageVariant.Standard,
+    sourceFile.text
+  );
+  scanner.setTextPos(node.getEnd());
+  return scanner.scan();
+}
+
+function hasSupportedHeritageDelimiter(
+  sourceFile: ts.SourceFile,
+  declaration: HeritageDeclaration,
+  clause: ts.HeritageClause,
+  type: ts.ExpressionWithTypeArguments
+): boolean {
+  const nextToken = nextHeritageToken(sourceFile, type);
+  if (nextToken === ts.SyntaxKind.CommaToken || nextToken === ts.SyntaxKind.OpenBraceToken) {
+    return true;
+  }
+
+  return (
+    ts.isClassDeclaration(declaration) || ts.isClassExpression(declaration)
+  ) && clause.token === ts.SyntaxKind.ExtendsKeyword && nextToken === ts.SyntaxKind.ImplementsKeyword;
+}
+
+/**
+ * Only record a heritage relation when TypeScript exposes a direct identifier base.
+ * This deliberately excludes qualified types, mixin calls, intersections, and other
+ * expressions whose target cannot be proven without semantic type resolution.
+ */
+function staticHeritageReferences(
+  sourceFile: ts.SourceFile,
+  declaration: HeritageDeclaration
+): readonly StaticHeritageReference[] {
+  const references: StaticHeritageReference[] = [];
+
+  for (const clause of declaration.heritageClauses ?? []) {
+    const relationKind =
+      clause.token === ts.SyntaxKind.ExtendsKeyword
+        ? "extends"
+        : clause.token === ts.SyntaxKind.ImplementsKeyword
+          ? "implements"
+          : null;
+    if (relationKind === null) {
+      continue;
+    }
+
+    for (const type of clause.types) {
+      if (
+        !ts.isExpressionWithTypeArguments(type) ||
+        !ts.isIdentifier(type.expression) ||
+        !hasSupportedHeritageDelimiter(sourceFile, declaration, clause, type)
+      ) {
+        continue;
+      }
+
+      references.push({ relationKind, identifier: type.expression });
+    }
+  }
+
+  return references;
 }
 
 function bindingNames(name: ts.BindingName): readonly string[] {
@@ -761,7 +864,8 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
           moduleSpecifier: node.moduleSpecifier.text,
           localName: importClause.name.text,
           importedName: "default",
-          range: sourceRange(sourceFile, importClause.name)
+          range: sourceRange(sourceFile, importClause.name),
+          ...(importClause.isTypeOnly ? { isTypeOnly: true } : {})
         });
       }
 
@@ -771,7 +875,8 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
             moduleSpecifier: node.moduleSpecifier.text,
             localName: element.name.text,
             importedName: element.propertyName?.text ?? element.name.text,
-            range: sourceRange(sourceFile, element)
+            range: sourceRange(sourceFile, element),
+            ...(importClause.isTypeOnly || element.isTypeOnly ? { isTypeOnly: true } : {})
           });
         }
       } else if (
@@ -784,7 +889,8 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
           moduleSpecifier: node.moduleSpecifier.text,
           localName: importClause.namedBindings.name.text,
           importedName: "*",
-          range: sourceRange(sourceFile, importClause.namedBindings)
+          range: sourceRange(sourceFile, importClause.namedBindings),
+          ...(importClause.isTypeOnly ? { isTypeOnly: true } : {})
         });
       }
     }
@@ -800,7 +906,8 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
         reExportBindings.push({
           kind: "wildcard",
           moduleSpecifier: node.moduleSpecifier.text,
-          range: sourceRange(sourceFile, node)
+          range: sourceRange(sourceFile, node),
+          ...(node.isTypeOnly ? { isTypeOnly: true } : {})
         });
       } else if (ts.isNamedExports(node.exportClause)) {
         for (const element of node.exportClause.elements) {
@@ -809,7 +916,8 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
             moduleSpecifier: node.moduleSpecifier.text,
             importedName: element.propertyName?.text ?? element.name.text,
             exportedName: element.name.text,
-            range: sourceRange(sourceFile, element)
+            range: sourceRange(sourceFile, element),
+            ...(node.isTypeOnly || element.isTypeOnly ? { isTypeOnly: true } : {})
           });
         }
       } else if (ts.isNamespaceExport(node.exportClause)) {
@@ -817,7 +925,8 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
           kind: "namespace",
           moduleSpecifier: node.moduleSpecifier.text,
           exportedName: node.exportClause.name.text,
-          range: sourceRange(sourceFile, node.exportClause)
+          range: sourceRange(sourceFile, node.exportClause),
+          ...(node.isTypeOnly ? { isTypeOnly: true } : {})
         });
       }
     }
@@ -832,7 +941,8 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
         exportBindings.push({
           localName: element.propertyName?.text ?? element.name.text,
           exportedName: element.name.text,
-          range: sourceRange(sourceFile, element)
+          range: sourceRange(sourceFile, element),
+          ...(node.isTypeOnly || element.isTypeOnly ? { isTypeOnly: true } : {})
         });
       }
     }
@@ -841,6 +951,12 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
     const exportAssignment = ts.isExportAssignment(node) ? node : null;
     const expressionInfo =
       exportAssignment === null ? null : defaultExportExpressionInfo(exportAssignment);
+    let heritageDeclaration: HeritageDeclaration | null = null;
+    if (ts.isClassDeclaration(node) || ts.isInterfaceDeclaration(node)) {
+      heritageDeclaration = node;
+    } else if (exportAssignment !== null && ts.isClassExpression(exportAssignment.expression)) {
+      heritageDeclaration = exportAssignment.expression;
+    }
     let declaredSymbol = info === null ? null : addDeclaration(node, info);
     if (declaredSymbol === null && expressionInfo !== null && exportAssignment !== null) {
       info = expressionInfo;
@@ -864,13 +980,39 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
         range: sourceRange(sourceFile, node)
       });
     }
-    if (info !== null && declaredSymbol !== null && hasValueBinding(info)) {
+    if (declaredSymbol !== null && heritageDeclaration !== null) {
+      for (const reference of staticHeritageReferences(sourceFile, heritageDeclaration)) {
+        addPendingReference(
+          declaredSymbol.id,
+          reference.identifier.text,
+          reference.relationKind,
+          reference.identifier
+        );
+      }
+    }
+    if (info !== null && declaredSymbol !== null) {
       const enclosingScopeId = declarationScopeId(sourceFile, node, info);
       if (enclosingScopeId !== undefined) {
+        for (const space of declaredBindingSpaces(info)) {
+          localBindings.push({
+            name: info.name,
+            symbolId: declaredSymbol.id,
+            scopeId: enclosingScopeId,
+            space
+          });
+        }
+      }
+    }
+
+    const typeParameters = typeParametersFor(node);
+    if (typeParameters !== undefined) {
+      const typeParameterScopeId = scopeIdFor(sourceFile, node);
+      for (const typeParameter of typeParameters) {
         localBindings.push({
-          name: info.name,
-          symbolId: declaredSymbol.id,
-          scopeId: enclosingScopeId
+          name: typeParameter.name.text,
+          symbolId: null,
+          scopeId: typeParameterScopeId,
+          space: "type"
         });
       }
     }
@@ -879,7 +1021,12 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
       const functionScopeId = scopeIdFor(sourceFile, node);
       for (const parameter of node.parameters) {
         if (ts.isIdentifier(parameter.name)) {
-          localBindings.push({ name: parameter.name.text, symbolId: null, scopeId: functionScopeId });
+          localBindings.push({
+            name: parameter.name.text,
+            symbolId: null,
+            scopeId: functionScopeId,
+            space: "value"
+          });
         }
       }
     }
@@ -892,7 +1039,8 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
       localBindings.push({
         name: node.variableDeclaration.name.text,
         symbolId: null,
-        scopeId: scopeIdFor(sourceFile, node)
+        scopeId: scopeIdFor(sourceFile, node),
+        space: "value"
       });
     }
     if (declaredSymbol !== null) {

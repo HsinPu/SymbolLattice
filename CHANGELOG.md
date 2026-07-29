@@ -6,6 +6,26 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.15.0] - 2026-07-30
+
+### Added
+
+- AST-proven direct declaration hierarchy facts: TypeScript and JavaScript class `extends`, TypeScript class `implements`, and TypeScript interface `extends`. Direct identifiers with generic arguments are retained with exact source ranges; qualified names, mixin/call expressions, intersections, arrays, and other complex heritage expressions remain outside the proof surface.
+- First-class `extends` and `implements` graph edges, direct parent/child graph helpers, and persistent unresolved-parent evidence. Heritage uses separate TypeScript value/type namespaces: class bases require a value-space class proof, while interfaces and implemented contracts use type-space class/interface/type-alias targets. Type-only imports and type-only re-export provenance are honored only where valid.
+- Read-only `hierarchy <reference> [--limit]` CLI command, `SymbolLatticeService.hierarchy`, and capability-gated `symbol_lattice_hierarchy` MCP tool. They return bounded direct parents and exact children from the active generation, disclose parent/child truncation independently, and never initialize, synchronize, or mutate an index.
+
+### Compatibility
+
+- No SQLite schema migration is required. Existing graph, artifact-fact, edge, pending-reference, and retained-snapshot storage carry the additive hierarchy shape; existing generations remain readable.
+- Extractor and resolver versions advance because raw facts now preserve value/type binding namespaces and type-only import/re-export markers. A pre-v0.15 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes hierarchy evidence. Explore-only MCP embeddings retain their tool list because hierarchy is capability-gated.
+- Existing callers, callees, reverse impact, affected-test, route, context, and ordinary call-resolution semantics deliberately remain unchanged; hierarchy is its own direct declaration query.
+
+### Deliberate limits
+
+- This is direct syntax evidence, not a semantic TypeScript checker. SymbolLattice does not infer declaration merging, structural type validity, transitive ancestry, overrides, or dynamic/mixin/qualified heritage expressions.
+- An unproven, incompatible, ambiguous, or explicitly type-only runtime base remains `unresolved`. SymbolLattice never promotes a project-wide matching name into an inheritance proof.
+- Named class/interface declarations and default-exported class expressions are in scope; variable-held and nested class expressions do not yet become independent hierarchy nodes.
+
 ## [0.14.0] - 2026-07-30
 
 ### Added
@@ -310,7 +330,8 @@ No unreleased changes.
 - Explicit full indexing, caller/callee/impact queries, and read-only MCP exploration.
 - `exact`, `heuristic`, and `unresolved` relationship states.
 
-[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.14.0...HEAD
+[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.15.0...HEAD
+[0.15.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.11.0...v0.12.0

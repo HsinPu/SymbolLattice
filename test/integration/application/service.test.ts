@@ -8,10 +8,12 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import {
   DEFAULT_GIT_HUNK_LIMIT,
+  DEFAULT_HIERARCHY_LIMIT,
   DEFAULT_ROUTE_LIMIT,
   MAX_GIT_HUNK_DECLARATION_ANCHORS,
   MAX_GIT_HUNK_LIMIT,
   MAX_GIT_HUNK_SOURCE_FILES,
+  MAX_HIERARCHY_LIMIT,
   MAX_ROUTE_LIMIT,
   MAX_GENERATION_DIFF_LIMIT,
   MAX_GENERATION_HISTORY_LIMIT,
@@ -418,6 +420,116 @@ afterEach(async () => {
       rm(directoryPath, { recursive: true, force: true })
     )
   );
+});
+
+describe("v0.15 direct hierarchy service", () => {
+  it("reads bounded direct parents and children from the active generation without mutation", async () => {
+    const projectPath = await createInlineProject({
+      "src/base.ts": "export class Base {}\n",
+      "src/contracts.ts": [
+        "export interface Contract {}",
+        "export type Alias = { value: string };",
+        ""
+      ].join("\n"),
+      "src/children.ts": [
+        'import { Base } from "./base";',
+        'import type { Contract, Alias } from "./contracts";',
+        "export class ChildOne extends Base implements Contract, Alias {}",
+        "export class ChildTwo extends Base {}",
+        "export class ChildThree extends Base {}",
+        "export interface Nested extends Contract {}",
+        "export class Missing extends Unresolved {}",
+        ""
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+    await service.init({ projectPath });
+    const initialGenerationId = (await service.getStatus(projectPath)).generationId;
+    const persistedChildrenFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "src/children.ts");
+    expect(persistedChildrenFacts?.pendingReferences).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ relationKind: "extends", referenceName: "Base" }),
+        expect.objectContaining({ relationKind: "implements", referenceName: "Contract" })
+      ])
+    );
+    expect(persistedChildrenFacts?.importBindings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ localName: "Contract", isTypeOnly: true })
+      ])
+    );
+
+    const base = await service.hierarchy(projectPath, "src/base.ts#Base", { limit: 2 });
+    const childOne = await service.hierarchy(projectPath, "src/children.ts#ChildOne", { limit: 2 });
+    const nested = await service.hierarchy(projectPath, "src/children.ts#Nested");
+    const missing = await service.hierarchy(projectPath, "src/children.ts#Missing");
+
+    expect(base).toMatchObject({
+      status: { generationId: initialGenerationId, stale: false },
+      bounds: { limit: 2, maximumLimit: MAX_HIERARCHY_LIMIT },
+      parents: [],
+      childrenTruncated: true,
+      parentsTruncated: false
+    });
+    expect(base.children.map((relation) => relation.child.name)).toEqual(["ChildOne", "ChildTwo"]);
+    expect(base.children.every((relation) => relation.relation === "extends")).toBe(true);
+    expect(childOne).toMatchObject({
+      bounds: { limit: 2, maximumLimit: MAX_HIERARCHY_LIMIT },
+      parentsTruncated: true,
+      childrenTruncated: false
+    });
+    expect(childOne.parents.map((relation) => [relation.relation, relation.parent?.name ?? null])).toEqual([
+      ["extends", "Base"],
+      ["implements", "Contract"]
+    ]);
+    expect(nested.parents).toMatchObject([
+      { relation: "extends", parent: { name: "Contract", kind: "interface" } }
+    ]);
+    expect(missing.parents).toMatchObject([
+      {
+        relation: "extends",
+        parent: null,
+        edge: { resolution: "unresolved", evidence: { ruleId: "heritage.extends.unresolved-target" } }
+      }
+    ]);
+
+    const defaultBound = await service.hierarchy(projectPath, "src/base.ts#Base");
+    expect(defaultBound.bounds).toEqual({
+      limit: DEFAULT_HIERARCHY_LIMIT,
+      maximumLimit: MAX_HIERARCHY_LIMIT
+    });
+    expect(defaultBound.children.map((relation) => relation.child.name)).toEqual([
+      "ChildOne",
+      "ChildTwo",
+      "ChildThree"
+    ]);
+
+    await writeFile(
+      join(projectPath, "src", "children.ts"),
+      'import { Base } from "./base"; export class LiveOnly extends Base {}\n',
+      "utf8"
+    );
+    const stale = await service.hierarchy(projectPath, "src/base.ts#Base");
+    expect(stale).toMatchObject({
+      status: { generationId: initialGenerationId, stale: true, staleReasons: ["source-files-changed"] }
+    });
+    expect(stale.children.map((relation) => relation.child.name)).toEqual([
+      "ChildOne",
+      "ChildTwo",
+      "ChildThree"
+    ]);
+    expect(stale.children.map((relation) => relation.child.name)).not.toContain("LiveOnly");
+    expect((await service.getStatus(projectPath)).generationId).toBe(initialGenerationId);
+
+    await expect(service.hierarchy(projectPath, "src/base.ts#Base", { limit: 0 })).rejects.toMatchObject({
+      code: "INVALID_HIERARCHY_LIMIT"
+    });
+    await expect(
+      service.hierarchy(projectPath, "src/base.ts#Base", { limit: MAX_HIERARCHY_LIMIT + 1 })
+    ).rejects.toMatchObject({ code: "INVALID_HIERARCHY_LIMIT" });
+  });
 });
 
 describe("SymbolLatticeService", () => {

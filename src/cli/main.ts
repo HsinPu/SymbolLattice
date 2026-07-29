@@ -15,6 +15,7 @@ import {
   MAX_GENERATION_DIFF_LIMIT,
   MAX_GENERATION_HISTORY_LIMIT,
   MAX_GIT_HUNK_LIMIT,
+  MAX_HIERARCHY_LIMIT,
   MAX_ROUTE_LIMIT,
   ROUTE_METHODS,
   DEFAULT_WATCH_INTERVAL_MS,
@@ -33,6 +34,7 @@ import {
   type GitAffectedTestsOptions,
   type GitHunksOptions,
   type FindOptions,
+  type HierarchyOptions,
   type SearchOptions,
   type RoutesOptions,
   type WatchReceipt
@@ -74,6 +76,10 @@ interface SearchCommandOptions extends ProjectOptions {
 interface RoutesCommandOptions extends ProjectOptions {
   readonly method?: NonNullable<RoutesOptions["method"]>;
   readonly path?: string;
+  readonly limit?: number;
+}
+
+interface HierarchyCommandOptions extends ProjectOptions {
   readonly limit?: number;
 }
 
@@ -517,6 +523,19 @@ export function createProgram(
         await service.routes(resolve(path ?? defaultProjectPath(options)), routeOptions),
         options
       );
+    });
+
+  addJsonOption(addProjectOption(program.command("hierarchy <reference>")))
+    .option(
+      "--limit <count>",
+      `Maximum direct parents and children returned independently (1-${MAX_HIERARCHY_LIMIT})`,
+      (value: string) => parseBoundedPositiveInteger(value, MAX_HIERARCHY_LIMIT)
+    )
+    .action(async (reference: string, options: HierarchyCommandOptions) => {
+      const hierarchyOptions: HierarchyOptions = {
+        ...(options.limit === undefined ? {} : { limit: options.limit })
+      };
+      render(await service.hierarchy(defaultProjectPath(options), reference, hierarchyOptions), options);
     });
 
   for (const commandName of ["callers", "callees"] as const) {

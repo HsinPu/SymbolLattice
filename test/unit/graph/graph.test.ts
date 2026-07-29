@@ -6,8 +6,10 @@ import {
   findEvidencePath,
   findSymbols,
   getCallees,
+  getChildren,
   getCallers,
   getImpactPaths,
+  getParents,
   getRoutes,
   matchSymbol,
   type GraphEdge,
@@ -50,20 +52,26 @@ function edge(input: {
   readonly targetId: string | null;
   readonly kind?: GraphEdge["kind"];
   readonly resolution?: GraphEdge["resolution"];
+  readonly filePath?: string;
+  readonly startLine?: number;
+  readonly startColumn?: number;
+  readonly referenceName?: string | null;
 }): GraphEdge {
+  const startLine = input.startLine ?? 1;
+  const startColumn = input.startColumn ?? 1;
   return {
     id: input.id,
     sourceId: input.sourceId,
     targetId: input.targetId,
     kind: input.kind ?? "calls",
-    filePath: "src/example.ts",
+    filePath: input.filePath ?? "src/example.ts",
     range: {
-      start: { line: 1, column: 1 },
-      end: { line: 1, column: 4 }
+      start: { line: startLine, column: startColumn },
+      end: { line: startLine, column: startColumn + 3 }
     },
     resolution: input.resolution ?? "exact",
     confidence: input.resolution === "heuristic" ? 0.7 : 1,
-    referenceName: null
+    referenceName: input.referenceName ?? null
   };
 }
 
@@ -117,6 +125,172 @@ describe("pure graph traversal", () => {
       "changed",
       "changed"
     ]);
+  });
+
+  it("returns direct exact and unresolved TypeScript parents, plus exact children", () => {
+    const base = symbol({ id: "base", name: "Base", filePath: "src/base.ts", kind: "class" });
+    const contract = symbol({
+      id: "contract",
+      name: "Contract",
+      filePath: "src/contract.ts",
+      kind: "type"
+    });
+    const child = symbol({ id: "child", name: "Child", filePath: "src/child.ts", kind: "class" });
+    const hierarchyGraph = {
+      symbols: [contract, child, base],
+      edges: [
+        edge({
+          id: "child-implements-missing",
+          sourceId: "child",
+          targetId: null,
+          kind: "implements",
+          resolution: "unresolved",
+          filePath: "src/child.ts",
+          startLine: 8
+        }),
+        edge({
+          id: "child-implements-contract",
+          sourceId: "child",
+          targetId: "contract",
+          kind: "implements",
+          filePath: "src/child.ts",
+          startLine: 7
+        }),
+        edge({
+          id: "child-extends-base",
+          sourceId: "child",
+          targetId: "base",
+          kind: "extends",
+          filePath: "src/child.ts",
+          startLine: 6
+        })
+      ]
+    };
+
+    expect(getParents(hierarchyGraph, "child")).toEqual([
+      { relation: "extends", edge: hierarchyGraph.edges[2], parent: base },
+      { relation: "implements", edge: hierarchyGraph.edges[1], parent: contract },
+      { relation: "implements", edge: hierarchyGraph.edges[0], parent: null }
+    ]);
+    expect(getChildren(hierarchyGraph, "base")).toEqual([
+      { relation: "extends", edge: hierarchyGraph.edges[2], child }
+    ]);
+    expect(getChildren(hierarchyGraph, "contract")).toEqual([
+      { relation: "implements", edge: hierarchyGraph.edges[1], child }
+    ]);
+  });
+
+  it("keeps hierarchy records deterministic, duplicate-preserving, and direction-safe", () => {
+    const base = symbol({ id: "base", name: "Base", filePath: "src/base.ts", kind: "class" });
+    const firstChild = symbol({
+      id: "first-child",
+      name: "FirstChild",
+      filePath: "src/a-child.ts",
+      kind: "class"
+    });
+    const secondChild = symbol({
+      id: "second-child",
+      name: "SecondChild",
+      filePath: "src/b-child.ts",
+      kind: "class"
+    });
+    const invalidSource = symbol({ id: "invalid-source", name: "helper", kind: "function" });
+    const hierarchyGraph = {
+      symbols: [secondChild, invalidSource, base, firstChild],
+      edges: [
+        edge({
+          id: "second-child-extends-base",
+          sourceId: "second-child",
+          targetId: "base",
+          kind: "extends",
+          filePath: "src/b-child.ts",
+          startLine: 4
+        }),
+        edge({
+          id: "first-child-duplicate-b",
+          sourceId: "first-child",
+          targetId: "base",
+          kind: "extends",
+          filePath: "src/a-child.ts",
+          startLine: 5
+        }),
+        edge({
+          id: "invalid-source-extends-base",
+          sourceId: "invalid-source",
+          targetId: "base",
+          kind: "extends",
+          filePath: "src/helper.ts",
+          startLine: 2
+        }),
+        edge({
+          id: "first-child-duplicate-a",
+          sourceId: "first-child",
+          targetId: "base",
+          kind: "extends",
+          filePath: "src/a-child.ts",
+          startLine: 5
+        }),
+        edge({
+          id: "invalid-source-targets-first-child",
+          sourceId: "invalid-source",
+          targetId: "first-child",
+          kind: "extends",
+          filePath: "src/helper.ts",
+          startLine: 2
+        })
+      ]
+    };
+
+    expect(getParents(hierarchyGraph, "first-child").map((relation) => relation.edge.id)).toEqual([
+      "first-child-duplicate-a",
+      "first-child-duplicate-b"
+    ]);
+    expect(getParents(hierarchyGraph, "invalid-source")).toEqual([]);
+    expect(
+      getParents(hierarchyGraph, "first-child").some(
+        (relation) => relation.edge.id === "invalid-source-targets-first-child"
+      )
+    ).toBe(false);
+    expect(getChildren(hierarchyGraph, "base").map((relation) => relation.child.id)).toEqual([
+      "first-child",
+      "first-child",
+      "second-child"
+    ]);
+    expect(
+      getChildren(hierarchyGraph, "first-child").some(
+        (relation) => relation.edge.id === "invalid-source-targets-first-child"
+      )
+    ).toBe(false);
+  });
+
+  it("keeps heritage edges out of callers, callees, impact, and affected-test selection", () => {
+    const parent = symbol({ id: "parent", name: "Parent", kind: "class" });
+    const child = symbol({ id: "child", name: "Child", kind: "class" });
+    const changedFile = symbol({ id: "changed-file", name: "changed.ts", filePath: "src/changed.ts", kind: "file" });
+    const testFile = symbol({
+      id: "test-file",
+      name: "changed.test.ts",
+      filePath: "test/changed.test.ts",
+      kind: "file"
+    });
+    const isolationGraph = {
+      symbols: [testFile, child, changedFile, parent],
+      edges: [
+        edge({ id: "child-extends-parent", sourceId: "child", targetId: "parent", kind: "extends" }),
+        edge({ id: "test-extends-changed", sourceId: "test-file", targetId: "changed-file", kind: "extends" })
+      ]
+    };
+
+    expect(getCallers(isolationGraph, "parent")).toEqual([]);
+    expect(getCallees(isolationGraph, "child")).toEqual([]);
+    expect(getImpactPaths(isolationGraph, "parent", 1)).toEqual([]);
+    expect(
+      findAffectedTestPaths(isolationGraph, "changed-file", {
+        maxDepth: 1,
+        maxResults: 5,
+        maxVisitedFiles: 20
+      }).paths
+    ).toEqual([]);
   });
 
   it("treats literal routes as static bindings for callers, callees, evidence, and impact", () => {

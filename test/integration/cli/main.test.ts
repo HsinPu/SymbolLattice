@@ -18,6 +18,8 @@ import {
   type GitHunksResult,
   type ImpactOptions,
   type ImpactResult,
+  type HierarchyOptions,
+  type HierarchyResult,
   type NodeResult,
   type RoutesOptions,
   type RoutesResult,
@@ -102,6 +104,31 @@ function routesResult(): RoutesResult {
       }
     ],
     truncated: false
+  };
+}
+
+function hierarchyResult(): HierarchyResult {
+  const base = {
+    id: "symbol:base",
+    name: "Base",
+    qualifiedName: "src/base.ts#Base",
+    kind: "class" as const,
+    filePath: "src/base.ts",
+    range: {
+      start: { line: 1, column: 1 },
+      end: { line: 1, column: 21 }
+    },
+    isExported: true,
+    declarationOrdinal: 0
+  };
+  return {
+    status: resultStatus(),
+    symbol: base,
+    bounds: { limit: 2, maximumLimit: 100 },
+    parents: [],
+    children: [],
+    parentsTruncated: false,
+    childrenTruncated: false
   };
 }
 
@@ -398,6 +425,72 @@ describe("symbol-lattice v0.14 routes CLI", () => {
       })
     ).rejects.toThrow(message);
     expect(routes).not.toHaveBeenCalled();
+  });
+});
+
+describe("symbol-lattice v0.15 hierarchy CLI", () => {
+  it("forwards a bounded direct hierarchy request and renders stable JSON without mutating", async () => {
+    const calls: Array<{ projectPath: string; reference: string; options: HierarchyOptions }> = [];
+    const mutationCalls: string[] = [];
+    const result = hierarchyResult();
+    const service = {
+      async hierarchy(
+        projectPath: string,
+        reference: string,
+        options: HierarchyOptions = {}
+      ): Promise<HierarchyResult> {
+        calls.push({ projectPath, reference, options });
+        return result;
+      },
+      async init(): Promise<void> {
+        mutationCalls.push("init");
+      },
+      async index(): Promise<void> {
+        mutationCalls.push("index");
+      },
+      async sync(): Promise<void> {
+        mutationCalls.push("sync");
+      }
+    } as unknown as SymbolLatticeService;
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+    await createProgram(service).parseAsync(
+      [
+        "node",
+        "symbol-lattice",
+        "hierarchy",
+        "src/base.ts#Base",
+        "--project",
+        "C:/indexed-project",
+        "--limit",
+        "2",
+        "--json"
+      ],
+      { from: "node" }
+    );
+
+    expect(calls).toEqual([
+      {
+        projectPath: resolve("C:/indexed-project"),
+        reference: "src/base.ts#Base",
+        options: { limit: 2 }
+      }
+    ]);
+    expect(mutationCalls).toEqual([]);
+    expect(write).toHaveBeenCalledWith(`${JSON.stringify(result, null, 2)}\n`);
+  });
+
+  it("rejects an out-of-range hierarchy limit before invoking the service", async () => {
+    const hierarchy = vi.fn();
+    const program = createProgram({ hierarchy } as unknown as SymbolLatticeService);
+    program.exitOverride();
+
+    await expect(
+      program.parseAsync(["node", "symbol-lattice", "hierarchy", "Base", "--limit", "101"], {
+        from: "node"
+      })
+    ).rejects.toThrow("Expected an integer between 1 and 100");
+    expect(hierarchy).not.toHaveBeenCalled();
   });
 });
 

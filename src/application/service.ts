@@ -12,8 +12,10 @@ import {
   findAffectedTestPaths,
   findSymbols,
   getCallees,
+  getChildren,
   getCallers,
   getImpactPaths,
+  getParents,
   getRoutes,
   MAX_SOURCE_SEARCH_LIMIT,
   matchSymbol,
@@ -82,6 +84,7 @@ import {
   DEFAULT_CONTEXT_RELATION_LIMIT,
   DEFAULT_GENERATION_DIFF_LIMIT,
   DEFAULT_GENERATION_HISTORY_LIMIT,
+  DEFAULT_HIERARCHY_LIMIT,
   DEFAULT_ROUTE_LIMIT,
   MAX_CONTEXT_IMPACT_DEPTH,
   MAX_CONTEXT_IMPACT_LIMIT,
@@ -90,6 +93,7 @@ import {
   MAX_CONTEXT_RELATION_LIMIT,
   MAX_GENERATION_DIFF_LIMIT,
   MAX_GENERATION_HISTORY_LIMIT,
+  MAX_HIERARCHY_LIMIT,
   MAX_GIT_HUNK_DECLARATION_ANCHORS,
   MAX_GIT_HUNK_LIMIT,
   MAX_GIT_HUNK_SOURCE_FILES,
@@ -128,6 +132,8 @@ import type {
   GenerationHistoryResult,
   GenerationHistorySummary,
   GraphContext,
+  HierarchyOptions,
+  HierarchyResult,
   ImpactOptions,
   ImpactResult,
   NodeBounds,
@@ -194,6 +200,10 @@ interface NormalizedGenerationDiffRequest {
 interface NormalizedRoutesRequest {
   readonly method?: RouteMethod;
   readonly pathPrefix?: string;
+  readonly limit: number;
+}
+
+interface NormalizedHierarchyRequest {
   readonly limit: number;
 }
 
@@ -1065,6 +1075,36 @@ export class SymbolLatticeService {
       },
       routes: matchingRoutes.slice(0, request.limit),
       truncated: matchingRoutes.length > request.limit
+    };
+  }
+
+  /**
+   * Lists direct TypeScript declaration parents and children from the active
+   * persisted graph generation. This is deliberately query-only and never
+   * initializes, indexes, or synchronizes a project.
+   */
+  public async hierarchy(
+    projectPath: string,
+    reference: string,
+    options: HierarchyOptions = {}
+  ): Promise<HierarchyResult> {
+    const request = this.hierarchyRequest(options);
+    const context = await this.requireGraph(projectPath);
+    const symbol = this.requireExactSymbol(context, reference);
+    const parents = getParents(context.snapshot, symbol.id);
+    const children = getChildren(context.snapshot, symbol.id);
+
+    return {
+      status: context.status,
+      symbol,
+      bounds: {
+        limit: request.limit,
+        maximumLimit: MAX_HIERARCHY_LIMIT
+      },
+      parents: parents.slice(0, request.limit),
+      children: children.slice(0, request.limit),
+      parentsTruncated: parents.length > request.limit,
+      childrenTruncated: children.length > request.limit
     };
   }
 
@@ -2263,6 +2303,18 @@ export class SymbolLatticeService {
       ...(method === undefined ? {} : { method }),
       ...(pathPrefix === undefined ? {} : { pathPrefix })
     };
+  }
+
+  private hierarchyRequest(options: HierarchyOptions): NormalizedHierarchyRequest {
+    const limit = options.limit ?? DEFAULT_HIERARCHY_LIMIT;
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > MAX_HIERARCHY_LIMIT) {
+      throw new SymbolLatticeError(
+        "INVALID_HIERARCHY_LIMIT",
+        `Hierarchy limit must be a whole number from 1 to ${MAX_HIERARCHY_LIMIT}.`
+      );
+    }
+
+    return { limit };
   }
 
   private normalizedSearchPathPrefix(pathPrefix: string): string | undefined {

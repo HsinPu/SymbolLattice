@@ -1,7 +1,9 @@
 import type {
+  ChildRelation,
   EvidencePath,
   GraphRelation,
   ImpactPath,
+  ParentRelation,
   RouteMethod,
   RouteRecord,
   SymbolMatch,
@@ -235,6 +237,36 @@ export interface RoutesResult {
   readonly routes: readonly RouteRecord[];
   /** True only when matching persisted records were omitted by `bounds.limit`. */
   readonly truncated: boolean;
+}
+
+/** Direct hierarchy retrieval remains independently bounded from graph size. */
+export const DEFAULT_HIERARCHY_LIMIT = 25;
+export const MAX_HIERARCHY_LIMIT = 100;
+
+/** Maximum parent and child records returned independently from a persisted hierarchy view. */
+export interface HierarchyOptions {
+  readonly limit?: number;
+}
+
+/** Fixed disclosure bounds reported with every direct hierarchy view. */
+export interface HierarchyBounds {
+  readonly limit: number;
+  readonly maximumLimit: number;
+}
+
+/**
+ * A read-only direct declaration hierarchy from the active persisted graph.
+ * Parents may contain unresolved evidence; children are exact relationships
+ * only. The query never recursively traverses, initializes, indexes, or syncs.
+ */
+export interface HierarchyResult {
+  readonly status: IndexStatus;
+  readonly symbol: SymbolNode;
+  readonly bounds: HierarchyBounds;
+  readonly parents: readonly ParentRelation[];
+  readonly children: readonly ChildRelation[];
+  readonly parentsTruncated: boolean;
+  readonly childrenTruncated: boolean;
 }
 
 export interface RelationResult {

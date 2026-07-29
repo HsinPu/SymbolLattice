@@ -15,7 +15,19 @@ export const SYMBOL_KINDS = [
 
 export type SymbolKind = (typeof SYMBOL_KINDS)[number];
 
-export const EDGE_KINDS = ["contains", "imports", "exports", "calls", "routes"] as const;
+/** Direct declaration-level TypeScript heritage relations. */
+export const HIERARCHY_RELATION_KINDS = ["extends", "implements"] as const;
+
+export type HierarchyRelationKind = (typeof HIERARCHY_RELATION_KINDS)[number];
+
+export const EDGE_KINDS = [
+  "contains",
+  "imports",
+  "exports",
+  "calls",
+  "routes",
+  ...HIERARCHY_RELATION_KINDS
+] as const;
 
 export type EdgeKind = (typeof EDGE_KINDS)[number];
 
@@ -72,7 +84,10 @@ export interface PendingReference {
   readonly sourceId: string;
   readonly filePath: string;
   readonly referenceName: string;
-  readonly relationKind: Extract<EdgeKind, "calls" | "imports" | "exports" | "routes">;
+  readonly relationKind: Extract<
+    EdgeKind,
+    "calls" | "imports" | "exports" | "routes" | HierarchyRelationKind
+  >;
   readonly range: SourceRange;
 }
 
