@@ -1,5 +1,6 @@
 import type {
   GraphSnapshot,
+  IndexCounts,
   IndexStatus
 } from "../domain/types.js";
 import type { PersistedArtifactFacts } from "../domain/facts.js";
@@ -59,6 +60,50 @@ export interface ActiveSourceDocumentsBundle extends ActiveGraphBundle {
   readonly documents: readonly IndexedSourceDocument[];
 }
 
+/** Metadata for one immutable snapshot retained by a history-capable store. */
+export interface GenerationHistoryEntry {
+  readonly generationId: string;
+  readonly indexedAt: string;
+  /** Version of the immutable snapshot JSON payload, not the SQLite schema. */
+  readonly snapshotVersion: number;
+  readonly counts: IndexCounts;
+  /** Null when this historical generation predates index-work telemetry. */
+  readonly indexWork: IndexWork | null;
+  readonly extractorVersion: string;
+  readonly resolverVersion: string;
+}
+
+/**
+ * A bounded retained-generation listing read with the current active
+ * projection. `status` remains available for callers that only need its
+ * metadata; `activeGraph` is the exact active projection read in the same
+ * store transaction as the retained list.
+ */
+export interface GenerationHistoryBundle {
+  readonly status: IndexStatus;
+  readonly activeGraph: ActiveGraphBundle;
+  readonly retentionLimit: number;
+  readonly generations: readonly GenerationHistoryEntry[];
+}
+
+/** A selected immutable retained snapshot read with the current active status. */
+export interface GenerationSnapshotBundle {
+  readonly status: IndexStatus;
+  readonly generation: GenerationHistoryEntry;
+  readonly snapshot: GraphSnapshot;
+}
+
+/**
+ * An atomic retained-generation comparison read. A missing selected snapshot
+ * is represented by `null` for that selection; a `null` store result means a
+ * trustworthy history itself is unavailable.
+ */
+export interface GenerationComparisonBundle {
+  readonly history: GenerationHistoryBundle;
+  readonly from: GenerationSnapshotBundle | null;
+  readonly to: GenerationSnapshotBundle | null;
+}
+
 export interface GraphStore {
   isInitialized(projectPath: string): boolean;
   initialize(projectPath: string): void;
@@ -83,5 +128,31 @@ export interface GraphStore {
     projectPath: string,
     filePaths: readonly string[]
   ): ActiveSourceDocumentsBundle;
+  /**
+   * Optional v0.11 retained-history capability. `null` means this adapter or
+   * index cannot provide a trustworthy history (including an active generation
+   * without an immutable snapshot).
+   */
+  getGenerationHistoryBundle?(projectPath: string): GenerationHistoryBundle | null;
+  /**
+   * Optional v0.11 retained-snapshot capability. `null` means unavailable or
+   * that the selected generation is no longer retained.
+   */
+  getGenerationSnapshotBundle?(
+    projectPath: string,
+    generationId: string
+  ): GenerationSnapshotBundle | null;
+  /**
+   * Optional v0.11 atomic comparison capability. The retained history, active
+   * projection, and both selected immutable snapshots are read from one
+   * consistent store snapshot. Omit `toGenerationId` to select the active
+   * generation. A null selection is no longer retained; a null result means
+   * trustworthy retained history is unavailable.
+   */
+  getGenerationComparisonBundle?(
+    projectPath: string,
+    fromGenerationId: string,
+    toGenerationId?: string
+  ): GenerationComparisonBundle | null;
   replaceProjectFacts(input: ReplaceProjectFactsInput): void;
 }

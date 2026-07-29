@@ -8,6 +8,10 @@ import {
   type ContextResult,
   type ExplainEdgeResult,
   type ExploreResult,
+  type GenerationDiffOptions,
+  type GenerationDiffResult,
+  type GenerationHistoryOptions,
+  type GenerationHistoryResult,
   type GitAffectedTestsOptions,
   type GitAffectedTestsResult,
   type SearchResult
@@ -18,6 +22,8 @@ import {
   runContextTool,
   runExplainEdgeTool,
   runExploreTool,
+  runGenerationDiffTool,
+  runGenerationHistoryTool,
   runGitAffectedTestsTool,
   runSearchTool
 } from "../../../src/mcp/index.js";
@@ -178,6 +184,64 @@ function searchResult(): SearchResult {
   };
 }
 
+function generationHistoryResult(): GenerationHistoryResult {
+  return {
+    activeStatus: exploreResult().status,
+    bounds: { limit: 5, maximumLimit: 100 },
+    retention: { capacity: 5, retained: 2, returned: 2, truncated: false },
+    generations: [
+      {
+        generationId: "generation:new",
+        indexedAt: "2026-07-30T00:00:01.000Z",
+        snapshotVersion: 1,
+        counts: { files: 2, symbols: 2, edges: 1, pendingReferences: 0 },
+        indexWork: null,
+        extractorVersion: "extractor:test",
+        resolverVersion: "resolver:test"
+      },
+      {
+        generationId: "generation:old",
+        indexedAt: "2026-07-30T00:00:00.000Z",
+        snapshotVersion: 1,
+        counts: { files: 1, symbols: 1, edges: 0, pendingReferences: 0 },
+        indexWork: null,
+        extractorVersion: "extractor:test",
+        resolverVersion: "resolver:test"
+      }
+    ]
+  };
+}
+
+function generationDiffResult(): GenerationDiffResult {
+  const history = generationHistoryResult();
+  return {
+    activeStatus: history.activeStatus,
+    bounds: { limit: 3, maximumLimit: 100 },
+    from: history.generations[1]!,
+    to: history.generations[0]!,
+    files: {
+      added: { items: [], total: 0, truncated: false },
+      removed: { items: [], total: 0, truncated: false },
+      modified: { items: [], total: 0, truncated: false }
+    },
+    symbols: {
+      added: { items: [], total: 0, truncated: false },
+      removed: { items: [], total: 0, truncated: false },
+      modified: { items: [], total: 0, truncated: false }
+    },
+    edges: {
+      added: { items: [], total: 0, truncated: false },
+      removed: { items: [], total: 0, truncated: false },
+      modified: { items: [], total: 0, truncated: false }
+    },
+    pendingReferences: {
+      added: { items: [], total: 0, truncated: false },
+      removed: { items: [], total: 0, truncated: false },
+      modified: { items: [], total: 0, truncated: false }
+    }
+  };
+}
+
 function explainEdgeResult(): ExplainEdgeResult {
   const source = {
     id: "symbol:caller",
@@ -329,6 +393,86 @@ describe("SymbolLattice MCP server", () => {
     });
     expect(explainCalls).toEqual([
       { projectPath: "C:/chosen-project", edgeId: "edge:caller-callee" }
+    ]);
+  });
+
+  it("exposes retained graph history and structural diff only when the service supports them", async () => {
+    const historyCalls: Array<{ projectPath: string; options: GenerationHistoryOptions }> = [];
+    const diffCalls: Array<{
+      projectPath: string;
+      fromGenerationId: string;
+      options: GenerationDiffOptions;
+    }> = [];
+    const service = {
+      async explore(): Promise<ExploreResult> {
+        return exploreResult();
+      },
+      async history(
+        projectPath: string,
+        options: GenerationHistoryOptions = {}
+      ): Promise<GenerationHistoryResult> {
+        historyCalls.push({ projectPath, options });
+        return generationHistoryResult();
+      },
+      async diff(
+        projectPath: string,
+        fromGenerationId: string,
+        options: GenerationDiffOptions = {}
+      ): Promise<GenerationDiffResult> {
+        diffCalls.push({ projectPath, fromGenerationId, options });
+        return generationDiffResult();
+      }
+    };
+    const server = createMcpServer(service, "C:/default-project");
+    const client = new Client({ name: "symbol-lattice-history-test", version: "1.0.0" });
+    const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+    closeCallbacks.push(() => client.close(), () => server.close());
+
+    expect((await client.listTools()).tools.map((tool) => tool.name)).toEqual([
+      "symbol_lattice_explore",
+      "symbol_lattice_history",
+      "symbol_lattice_diff"
+    ]);
+
+    const history = await client.callTool({
+      name: "symbol_lattice_history",
+      arguments: { projectPath: "C:/chosen-project", limit: 2 }
+    });
+    expect(history.isError).not.toBe(true);
+    expect(history.structuredContent).toMatchObject({
+      activeStatus: { generationId: "generation:test" },
+      retention: { capacity: 5, retained: 2 }
+    });
+    expect((history.structuredContent as { generations?: unknown }).generations).toEqual(
+      expect.arrayContaining([expect.objectContaining({ generationId: "generation:new" })])
+    );
+    expect(historyCalls).toEqual([
+      { projectPath: "C:/chosen-project", options: { limit: 2 } }
+    ]);
+
+    const diff = await client.callTool({
+      name: "symbol_lattice_diff",
+      arguments: {
+        projectPath: "C:/chosen-project",
+        fromGenerationId: "generation:old",
+        toGenerationId: "generation:new",
+        limit: 3
+      }
+    });
+    expect(diff.isError).not.toBe(true);
+    expect(diff.structuredContent).toMatchObject({
+      from: { generationId: "generation:old" },
+      to: { generationId: "generation:new" },
+      bounds: { limit: 3 }
+    });
+    expect(diffCalls).toEqual([
+      {
+        projectPath: "C:/chosen-project",
+        fromGenerationId: "generation:old",
+        options: { toGenerationId: "generation:new", limit: 3 }
+      }
     ]);
   });
 
@@ -705,6 +849,36 @@ describe("SymbolLattice MCP server", () => {
     expect(response.content[0]?.text).toContain("MISSING_INDEX");
   });
 
+  it("returns retained-history and structural-diff errors without indexing", async () => {
+    const history = await runGenerationHistoryTool(
+      {
+        async history(): Promise<GenerationHistoryResult> {
+          throw new SymbolLatticeError(
+            "GENERATION_HISTORY_UNAVAILABLE",
+            "Run an explicit sync or index before reading retained history."
+          );
+        }
+      },
+      "C:/project",
+      { limit: 2 }
+    );
+    const diff = await runGenerationDiffTool(
+      {
+        async diff(): Promise<GenerationDiffResult> {
+          throw new SymbolLatticeError(
+            "GENERATION_NOT_RETAINED",
+            "The requested generation is not retained."
+          );
+        }
+      },
+      "C:/project",
+      { fromGenerationId: "generation:old" }
+    );
+
+    expect(history.content[0]?.text).toContain("GENERATION_HISTORY_UNAVAILABLE");
+    expect(diff.content[0]?.text).toContain("GENERATION_NOT_RETAINED");
+  });
+
   it("returns edge lookup errors without indexing", async () => {
     const response = await runExplainEdgeTool(
       {
@@ -741,6 +915,12 @@ describe("SymbolLattice MCP server", () => {
       async search(): Promise<SearchResult> {
         return searchResult();
       },
+      async history(): Promise<GenerationHistoryResult> {
+        return generationHistoryResult();
+      },
+      async diff(): Promise<GenerationDiffResult> {
+        return generationDiffResult();
+      },
       async explainEdge(): Promise<ExplainEdgeResult> {
         return explainEdgeResult();
       },
@@ -760,6 +940,8 @@ describe("SymbolLattice MCP server", () => {
     await runAffectedTestsTool(service, "C:/project", { filePaths: ["src/missing.ts"] });
     await runGitAffectedTestsTool(service, "C:/project", {});
     await runSearchTool(service, "C:/project", { query: "user" });
+    await runGenerationHistoryTool(service, "C:/project", {});
+    await runGenerationDiffTool(service, "C:/project", { fromGenerationId: "generation:old" });
     await runExplainEdgeTool(service, "C:/project", { edgeId: "edge:caller-callee" });
 
     expect(mutationCalls).toEqual([]);

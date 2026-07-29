@@ -6,7 +6,12 @@ import { fileURLToPath } from "node:url";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { SymbolLatticeError, SymbolLatticeService } from "../../../src/application/index.js";
+import {
+  MAX_GENERATION_DIFF_LIMIT,
+  MAX_GENERATION_HISTORY_LIMIT,
+  SymbolLatticeError,
+  SymbolLatticeService
+} from "../../../src/application/index.js";
 import {
   ARTIFACT_FACTS_EXTRACTOR_VERSION,
   SOURCE_SEARCH_INDEX_VERSION,
@@ -21,6 +26,8 @@ import type {
   ActiveGraphBundle,
   ActiveGenerationBundle,
   ActiveSourceDocumentsBundle,
+  GenerationComparisonBundle,
+  GenerationHistoryEntry,
   GitChangeSet,
   GitChangeSetProvider,
   GraphStore,
@@ -212,6 +219,93 @@ function raceSourceDocumentsBundle(
   };
 }
 
+function raceGenerationHistoryEntry(generationId: string): GenerationHistoryEntry {
+  return {
+    generationId,
+    indexedAt: "2026-07-29T00:00:00.000Z",
+    snapshotVersion: 1,
+    counts: { files: 1, symbols: 1, edges: 0, pendingReferences: 0 },
+    indexWork: null,
+    extractorVersion: "race-extractor",
+    resolverVersion: "race-resolver"
+  };
+}
+
+function raceGenerationComparisonBundle(
+  fromGenerationId: string,
+  toGenerationId: string
+): GenerationComparisonBundle {
+  const from = raceGenerationHistoryEntry(fromGenerationId);
+  const to = raceGenerationHistoryEntry(toGenerationId);
+  const activeGraph: ActiveGraphBundle = {
+    status: raceStatus(toGenerationId),
+    snapshot: raceSnapshot("src/to.ts"),
+    indexInputs: null,
+    extractorVersion: null,
+    resolverVersion: null,
+    sourceSearchVersion: null
+  };
+  return {
+    history: {
+      status: activeGraph.status,
+      activeGraph,
+      retentionLimit: 5,
+      generations: [to, from]
+    },
+    from: {
+      status: activeGraph.status,
+      generation: from,
+      snapshot: raceSnapshot("src/from.ts")
+    },
+    to: {
+      status: activeGraph.status,
+      generation: to,
+      snapshot: raceSnapshot("src/to.ts")
+    }
+  };
+}
+
+function createAtomicComparisonOnlyGraphStore(
+  comparison: GenerationComparisonBundle
+): {
+  readonly graphStore: GraphStore;
+  readonly comparisonRequests: readonly {
+    readonly projectPath: string;
+    readonly fromGenerationId: string;
+    readonly toGenerationId: string | undefined;
+  }[];
+} {
+  const comparisonRequests: {
+    projectPath: string;
+    fromGenerationId: string;
+    toGenerationId: string | undefined;
+  }[] = [];
+  const separateRead = (name: string): never => {
+    throw new Error(`Diff must not perform a separate ${name} read.`);
+  };
+  const graphStore: GraphStore = {
+    isInitialized: () => separateRead("initialization"),
+    initialize: () => {},
+    getStatus: () => separateRead("status"),
+    getSnapshot: () => separateRead("snapshot"),
+    getArtifactFacts: () => [],
+    getIndexInputs: () => null,
+    getActiveGraphBundle: () => separateRead("active graph"),
+    getActiveGenerationBundle: () => separateRead("active generation"),
+    getGenerationHistoryBundle: () => separateRead("retained history"),
+    getGenerationSnapshotBundle: () => separateRead("retained snapshot"),
+    getGenerationComparisonBundle: (projectPath, fromGenerationId, toGenerationId) => {
+      comparisonRequests.push({ projectPath, fromGenerationId, toGenerationId });
+      if (comparisonRequests.length > 1) {
+        throw new Error("A second atomic comparison read would observe a changed generation.");
+      }
+      return comparison;
+    },
+    replaceProjectFacts: () => {}
+  };
+  return { graphStore, comparisonRequests };
+}
+
 function createSequencedSourceDocumentGraphStore(
   initialBundle: ActiveGraphBundle,
   sourceBundles: readonly ActiveSourceDocumentsBundle[]
@@ -330,6 +424,146 @@ describe("SymbolLatticeService", () => {
       match: { status: "exact" },
       source: null,
       sourceAvailability: "unavailable"
+    });
+  });
+
+  it("reports retained-generation history as unavailable on a legacy GraphStore adapter", async () => {
+    const projectPath = await createFixtureProject();
+    const service = new SymbolLatticeService(
+      createV03GraphStore(new SqliteGraphStore()),
+      new FileSystemSourceCatalog()
+    );
+    await service.init({ projectPath });
+
+    await expect(service.history(projectPath)).rejects.toMatchObject({
+      code: "GENERATION_HISTORY_UNAVAILABLE"
+    });
+    await expect(service.diff(projectPath, "generation:missing")).rejects.toMatchObject({
+      code: "GENERATION_HISTORY_UNAVAILABLE"
+    });
+  });
+
+  it("uses exactly one atomic comparison bundle for a retained-generation diff", async () => {
+    const projectPath = resolve("C:/symbol-lattice-race-project");
+    const fromGenerationId = "generation:from";
+    const toGenerationId = "generation:to";
+    const { graphStore, comparisonRequests } = createAtomicComparisonOnlyGraphStore(
+      raceGenerationComparisonBundle(fromGenerationId, toGenerationId)
+    );
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    const result = await service.diff(projectPath, fromGenerationId);
+
+    expect(comparisonRequests).toEqual([
+      {
+        projectPath,
+        fromGenerationId,
+        toGenerationId: undefined
+      }
+    ]);
+    expect(result).toMatchObject({
+      activeStatus: { generationId: toGenerationId },
+      from: { generationId: fromGenerationId },
+      to: { generationId: toGenerationId },
+      files: {
+        added: { items: [expect.objectContaining({ path: "src/to.ts" })] },
+        removed: { items: [expect.objectContaining({ path: "src/from.ts" })] }
+      }
+    });
+  });
+
+  it("lists bounded immutable history and compares explicit or active retained generations", async () => {
+    const projectPath = await createInlineProject({
+      "src/value.ts": "export const value = 1;\n"
+    });
+    const service = createService();
+    const first = await service.init({ projectPath });
+    const firstGenerationId = first.generationId;
+    if (firstGenerationId === null) {
+      throw new Error("Initial index must publish a generation.");
+    }
+
+    await writeFile(join(projectPath, "src", "value.ts"), "export const value = 2;\n", "utf8");
+    const second = await service.sync({ projectPath });
+    const secondGenerationId = second.generationId;
+    if (secondGenerationId === null) {
+      throw new Error("Synchronized index must publish a generation.");
+    }
+
+    // This live-only change must make active freshness stale without changing
+    // either immutable retained generation or causing a synchronization.
+    await writeFile(join(projectPath, "src", "value.ts"), "export const value = 3;\n", "utf8");
+
+    const history = await service.history(projectPath, { limit: 1 });
+    const defaultDiff = await service.diff(projectPath, firstGenerationId);
+    const explicitReverseDiff = await service.diff(projectPath, secondGenerationId, {
+      toGenerationId: firstGenerationId,
+      limit: 1
+    });
+    const afterReads = await service.getStatus(projectPath);
+
+    expect(history).toMatchObject({
+      activeStatus: { generationId: secondGenerationId, stale: true },
+      bounds: { limit: 1, maximumLimit: MAX_GENERATION_HISTORY_LIMIT },
+      retention: { retained: 2, returned: 1, truncated: true },
+      generations: [
+        expect.objectContaining({
+          generationId: secondGenerationId,
+          counts: second.counts,
+          indexWork: second.lastIndexWork ?? null,
+          extractorVersion: expect.any(String),
+          resolverVersion: expect.any(String)
+        })
+      ]
+    });
+    expect(history.retention.capacity).toBeGreaterThanOrEqual(2);
+    expect(defaultDiff).toMatchObject({
+      activeStatus: { generationId: secondGenerationId, stale: true },
+      from: { generationId: firstGenerationId },
+      to: { generationId: secondGenerationId },
+      files: {
+        modified: {
+          items: [expect.objectContaining({ path: "src/value.ts" })],
+          truncated: false
+        }
+      }
+    });
+    expect(explicitReverseDiff).toMatchObject({
+      bounds: { limit: 1, maximumLimit: MAX_GENERATION_DIFF_LIMIT },
+      from: { generationId: secondGenerationId },
+      to: { generationId: firstGenerationId },
+      files: {
+        modified: { items: [expect.objectContaining({ path: "src/value.ts" })] }
+      }
+    });
+    expect(afterReads).toMatchObject({ generationId: secondGenerationId, stale: true });
+  });
+
+  it("validates history and diff bounds, IDs, retained selection, and comparison direction", async () => {
+    const projectPath = await createInlineProject({
+      "src/value.ts": "export const value = 1;\n"
+    });
+    const service = createService();
+    const initial = await service.init({ projectPath });
+    const generationId = initial.generationId;
+    if (generationId === null) {
+      throw new Error("Initial index must publish a generation.");
+    }
+
+    await expect(
+      service.history(projectPath, { limit: MAX_GENERATION_HISTORY_LIMIT + 1 })
+    ).rejects.toMatchObject({ code: "INVALID_GENERATION_HISTORY_LIMIT" });
+    await expect(
+      service.diff(projectPath, generationId, { limit: MAX_GENERATION_DIFF_LIMIT + 1 })
+    ).rejects.toMatchObject({ code: "INVALID_GENERATION_DIFF_LIMIT" });
+    await expect(service.diff(projectPath, " ")).rejects.toMatchObject({
+      code: "INVALID_GENERATION_ID"
+    });
+    await expect(
+      service.diff(projectPath, generationId, { toGenerationId: generationId })
+    ).rejects.toMatchObject({ code: "INVALID_GENERATION_COMPARISON" });
+    await expect(service.diff(projectPath, "generation:not-retained")).rejects.toMatchObject({
+      code: "GENERATION_NOT_RETAINED"
     });
   });
 

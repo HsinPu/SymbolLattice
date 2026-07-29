@@ -6,6 +6,27 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.11.0] - 2026-07-30
+
+### Added
+
+- Immutable retained graph snapshots for up to five SymbolLattice generations, including the active generation. Each retained summary records captured graph counts, index-work telemetry when available, extractor/resolver versions, and the immutable snapshot-payload version.
+- Read-only `history [path]` and `diff <from-generation-id> [path]` CLI commands. `history` returns newest-first retained summaries and explicit retention/request bounds; `diff` compares retained graph snapshots with independently bounded added, removed, and modified file, symbol, edge, and pending-reference sections.
+- Read-only, idempotent `symbol_lattice_history` and `symbol_lattice_diff` MCP tools when a compatible service capability is present. Both preserve the tool surface of older explore-only embeddings.
+- Explicit `activeStatus` on history/diff responses. It reports the live-filesystem freshness of the current active generation without claiming freshness for an older immutable snapshot.
+- Additive `generation_snapshots` SQLite storage with active v2-v4 projection backfill on explicit initialization, deterministic retention pruning, manual FTS cleanup before generation deletion, and rollback-safe pointer-last replacement.
+
+### Compatibility
+
+- SQLite metadata remains at marker `4` so a v0.10 binary can still open and explicitly reindex after a rollback. The retained snapshot table is additive; an explicit `sync`, `index`, or `init` repairs/backfills a v2-v4 active generation without fabricating a v1 generation ID.
+- `history` and `diff` are strictly read-only. A legacy active generation without a saved immutable snapshot, or an older external `GraphStore` adapter without the optional capability, returns `GENERATION_HISTORY_UNAVAILABLE` instead of changing storage during a query.
+- Evicted, unknown, invalid, and same-generation comparisons report explicit generation errors. Existing graph, source-search, context, affected-test, watch, CLI, and MCP contracts remain unchanged.
+
+### Deliberate limits
+
+- This release compares retained **graph snapshots**, not Git commits, source hunks, historical source text, rename/move intent, or hunk-to-symbol attribution.
+- A stable graph ID with a changed persisted payload is reported as `modified`; without a stable identity, a change remains remove-plus-add rather than an inferred move or rename.
+
 ## [0.10.0] - 2026-07-30
 
 ### Added
@@ -234,7 +255,8 @@ No unreleased changes.
 - Explicit full indexing, caller/callee/impact queries, and read-only MCP exploration.
 - `exact`, `heuristic`, and `unresolved` relationship states.
 
-[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.7.0...v0.8.0

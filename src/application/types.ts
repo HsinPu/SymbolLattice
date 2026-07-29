@@ -5,10 +5,13 @@ import type {
   SymbolMatch,
   TestFileClassification
 } from "../domain/graph.js";
+import type { GenerationSnapshotDiff } from "../domain/generation-history.js";
+import type { IndexWork } from "../domain/index-work.js";
 import type {
   ArtifactLanguage,
   GraphEdge,
   GraphSnapshot,
+  IndexCounts,
   IndexStatus,
   SourceRange,
   SymbolNode
@@ -56,6 +59,84 @@ export const MAX_AFFECTED_MAX_DEPTH = 8;
 export const DEFAULT_AFFECTED_LIMIT = 25;
 export const MAX_AFFECTED_LIMIT = 100;
 export const AFFECTED_MAX_VISITED_FILES_PER_INPUT = 500;
+
+/** Retained-generation reads are bounded independently from store retention. */
+export const DEFAULT_GENERATION_HISTORY_LIMIT = 20;
+export const MAX_GENERATION_HISTORY_LIMIT = 100;
+export const DEFAULT_GENERATION_DIFF_LIMIT = 100;
+export const MAX_GENERATION_DIFF_LIMIT = 100;
+
+export interface GenerationHistoryOptions {
+  /** Maximum retained-generation summaries returned from the store-owned history. */
+  readonly limit?: number;
+}
+
+export interface GenerationDiffOptions {
+  /** Omit to compare the required `from` generation with the current active generation. */
+  readonly toGenerationId?: string;
+  /** Maximum items returned independently for every structural change category. */
+  readonly limit?: number;
+}
+
+/** Immutable metadata for one retained graph snapshot. */
+export interface GenerationHistorySummary {
+  readonly generationId: string;
+  readonly indexedAt: string;
+  readonly snapshotVersion: number;
+  readonly counts: IndexCounts;
+  /** Null means this older immutable generation predates index-work telemetry. */
+  readonly indexWork: IndexWork | null;
+  readonly extractorVersion: string;
+  readonly resolverVersion: string;
+}
+
+/** Store retention and request-bound disclosure for one history response. */
+export interface GenerationHistoryRetention {
+  /** Maximum immutable generations the configured store is allowed to retain. */
+  readonly capacity: number;
+  /** Immutable generations currently retained before applying this request's limit. */
+  readonly retained: number;
+  /** Number returned after the caller's bounded request was applied. */
+  readonly returned: number;
+  /** True when retained summaries were omitted only because of the request bound. */
+  readonly truncated: boolean;
+}
+
+export interface GenerationHistoryBounds {
+  readonly limit: number;
+  readonly maximumLimit: number;
+}
+
+/**
+ * Retained immutable summaries plus separately named live active freshness.
+ * `activeStatus` is a non-mutating freshness scan over the active graph read
+ * in the same store transaction as the retained history.
+ */
+export interface GenerationHistoryResult {
+  readonly activeStatus: IndexStatus;
+  readonly bounds: GenerationHistoryBounds;
+  readonly retention: GenerationHistoryRetention;
+  /** Ordered newest-first by immutable indexed timestamp, then generation ID. */
+  readonly generations: readonly GenerationHistorySummary[];
+}
+
+export interface GenerationDiffBounds {
+  /** Applied independently to every added, removed, and modified change category. */
+  readonly limit: number;
+  readonly maximumLimit: number;
+}
+
+/**
+ * Immutable structural comparison; no Git hunk, move, or live-source
+ * attribution is implied. `activeStatus` is a non-mutating live-freshness
+ * scan over the active graph captured with this atomic comparison read.
+ */
+export interface GenerationDiffResult extends GenerationSnapshotDiff {
+  readonly activeStatus: IndexStatus;
+  readonly bounds: GenerationDiffBounds;
+  readonly from: GenerationHistorySummary;
+  readonly to: GenerationHistorySummary;
+}
 
 export interface FindResult {
   readonly status: IndexStatus;

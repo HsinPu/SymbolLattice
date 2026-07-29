@@ -36,6 +36,10 @@ import type {
   ActiveGenerationBundle,
   ActiveSourceDocumentsBundle,
   ActiveSourceSearchBundle,
+  GenerationComparisonBundle,
+  GenerationHistoryBundle,
+  GenerationHistoryEntry,
+  GenerationSnapshotBundle,
   GraphStore,
   ReplaceProjectFactsInput
 } from "../../ports/graph-store.js";
@@ -57,6 +61,8 @@ const PRE_RELEASE_SOURCE_SEARCH_SCHEMA_VERSION = "5";
 const GENERATION_SCHEMA_VERSION = "2";
 const LEGACY_SCHEMA_VERSION = "1";
 const SOURCE_DOCUMENT_PATH_QUERY_BATCH_SIZE = 500;
+const GENERATION_SNAPSHOT_VERSION = 1;
+const MAX_RETAINED_GENERATIONS = 5;
 
 /**
  * The v0.1 snapshot tables remain deliberately unpartitioned. They are a fast
@@ -202,6 +208,22 @@ const GENERATION_INDEX_WORK_SCHEMA = `
 `;
 
 /**
+ * Retained snapshots preserve the immutable graph output for a bounded set of
+ * generations. The active v0.1 projection remains unpartitioned for ordinary
+ * graph reads and v0.10 compatibility.
+ */
+const GENERATION_SNAPSHOTS_SCHEMA = `
+  PRAGMA foreign_keys = ON;
+
+  CREATE TABLE IF NOT EXISTS generation_snapshots (
+    generation_id TEXT PRIMARY KEY,
+    snapshot_version INTEGER NOT NULL,
+    snapshot_json TEXT NOT NULL,
+    FOREIGN KEY(generation_id) REFERENCES generations(id) ON DELETE CASCADE
+  ) STRICT;
+`;
+
+/**
  * The v0.4 source-retrieval side tables remain additive while metadata stays
  * v4-compatible. The ordinary document table keeps raw source available to
  * callers, while FTS5 holds a derived corpus. A per-generation version row
@@ -333,6 +355,21 @@ interface GenerationSourceSearchRow {
   readonly source_search_version: string;
 }
 
+interface GenerationSnapshotRow {
+  readonly snapshot_version: number;
+  readonly snapshot_json: string;
+}
+
+interface GenerationHistoryRow {
+  readonly id: string;
+  readonly indexed_at: string;
+  readonly extractor_version: string;
+  readonly resolver_version: string;
+  readonly snapshot_version: number;
+  readonly snapshot_json: string;
+  readonly work_json: string | null;
+}
+
 interface SourceSearchRow {
   readonly file_path: string;
   readonly language: ArtifactLanguage;
@@ -458,6 +495,7 @@ function installCurrentAdditiveSchema(database: DatabaseSync): void {
   database.exec(GENERATION_SCHEMA);
   database.exec(GENERATION_INDEX_INPUTS_SCHEMA);
   database.exec(GENERATION_INDEX_WORK_SCHEMA);
+  database.exec(GENERATION_SNAPSHOTS_SCHEMA);
   database.exec(GENERATION_SOURCE_SEARCH_SCHEMA);
   database.exec(SOURCE_DOCUMENTS_SCHEMA);
   database.exec(SOURCE_SEARCH_SCHEMA);
@@ -490,6 +528,8 @@ function migrateDatabaseToCurrent(database: DatabaseSync): void {
     // upgrade that preserves the active graph and any raw facts already there.
     installCurrentAdditiveSchema(database);
     cleanOrphanedSourceSearchRows(database);
+    backfillActiveGenerationSnapshot(database);
+    pruneRetainedGenerations(database, getActiveGenerationId(database));
     setMeta(database, SCHEMA_VERSION_META_KEY, SCHEMA_VERSION);
     database.exec("COMMIT");
   } catch (error) {
@@ -503,6 +543,8 @@ function initializeNewDatabase(database: DatabaseSync): void {
   try {
     database.exec(SNAPSHOT_SCHEMA);
     installCurrentAdditiveSchema(database);
+    backfillActiveGenerationSnapshot(database);
+    pruneRetainedGenerations(database, getActiveGenerationId(database));
     setMeta(database, SCHEMA_VERSION_META_KEY, SCHEMA_VERSION);
     database.exec("COMMIT");
   } catch (error) {
@@ -523,13 +565,15 @@ function ensureSchema(database: DatabaseSync, databaseExisted: boolean): void {
     return;
   }
 
-  // A previous v0.4 initialization might have been interrupted after the main
-  // schema version was stored. Restore the additive tables, then clean any
-  // source FTS rows a v0.3 reindex left without matching documents.
+  // A previous additive initialization might have been interrupted after the
+  // main schema version was stored. Restore its tables, repair the active
+  // snapshot when the generation is real, then clean old FTS rows and prune.
   database.exec("BEGIN IMMEDIATE");
   try {
     installCurrentAdditiveSchema(database);
     cleanOrphanedSourceSearchRows(database);
+    backfillActiveGenerationSnapshot(database);
+    pruneRetainedGenerations(database, getActiveGenerationId(database));
     database.exec("COMMIT");
   } catch (error) {
     database.exec("ROLLBACK");
@@ -815,6 +859,246 @@ function readGeneration(database: DatabaseSync, generationId: string | null): Ge
     )
     .get(generationId) as unknown as GenerationRow | undefined;
   return row ?? null;
+}
+
+function snapshotCounts(snapshot: GraphSnapshot): IndexCounts {
+  return {
+    files: snapshot.files.length,
+    symbols: snapshot.symbols.length,
+    edges: snapshot.edges.length,
+    pendingReferences: snapshot.pendingReferences.length
+  };
+}
+
+function insertGenerationSnapshot(
+  database: DatabaseSync,
+  generationId: string,
+  snapshot: GraphSnapshot
+): void {
+  database
+    .prepare(
+      `INSERT INTO generation_snapshots(generation_id, snapshot_version, snapshot_json)
+       VALUES (?, ?, ?)`
+    )
+    .run(generationId, GENERATION_SNAPSHOT_VERSION, JSON.stringify(snapshot));
+}
+
+function readGenerationSnapshotRow(
+  database: DatabaseSync,
+  generationId: string
+): GenerationSnapshotRow | null {
+  if (!tableExists(database, "generation_snapshots")) {
+    return null;
+  }
+
+  const row = database
+    .prepare(
+      `SELECT snapshot_version, snapshot_json
+       FROM generation_snapshots
+       WHERE generation_id = ?`
+    )
+    .get(generationId) as unknown as GenerationSnapshotRow | undefined;
+  return row ?? null;
+}
+
+function hasGenerationSnapshot(database: DatabaseSync, generationId: string): boolean {
+  return readGenerationSnapshotRow(database, generationId) !== null;
+}
+
+function backfillActiveGenerationSnapshot(database: DatabaseSync): void {
+  const activeGenerationId = getActiveGenerationId(database);
+  if (
+    activeGenerationId === null ||
+    readGeneration(database, activeGenerationId) === null ||
+    hasGenerationSnapshot(database, activeGenerationId)
+  ) {
+    return;
+  }
+
+  insertGenerationSnapshot(
+    database,
+    activeGenerationId,
+    readSnapshotProjection(database, activeGenerationId)
+  );
+}
+
+function readRetainedGenerationHistoryEntries(
+  database: DatabaseSync,
+  activeGenerationId: string
+): readonly GenerationHistoryEntry[] {
+  if (!tableExists(database, "generation_snapshots")) {
+    return [];
+  }
+
+  const rows = database
+    .prepare(
+      `SELECT g.id, g.indexed_at, g.extractor_version, g.resolver_version,
+        s.snapshot_version, s.snapshot_json, w.work_json
+       FROM generations AS g
+       INNER JOIN generation_snapshots AS s ON s.generation_id = g.id
+       LEFT JOIN generation_index_work AS w ON w.generation_id = g.id
+       ORDER BY g.indexed_at DESC, g.id DESC
+       LIMIT ?`
+    )
+    .all(MAX_RETAINED_GENERATIONS) as unknown as GenerationHistoryRow[];
+  if (!rows.some((row) => row.id === activeGenerationId)) {
+    const activeRow = database
+      .prepare(
+        `SELECT g.id, g.indexed_at, g.extractor_version, g.resolver_version,
+          s.snapshot_version, s.snapshot_json, w.work_json
+         FROM generations AS g
+         INNER JOIN generation_snapshots AS s ON s.generation_id = g.id
+         LEFT JOIN generation_index_work AS w ON w.generation_id = g.id
+         WHERE g.id = ?`
+      )
+      .get(activeGenerationId) as unknown as GenerationHistoryRow | undefined;
+    if (activeRow !== undefined) {
+      rows.pop();
+      rows.push(activeRow);
+      rows.sort((left, right) => {
+        if (left.indexed_at !== right.indexed_at) {
+          return left.indexed_at < right.indexed_at ? 1 : -1;
+        }
+        if (left.id === right.id) {
+          return 0;
+        }
+        return left.id < right.id ? 1 : -1;
+      });
+    }
+  }
+
+  return rows.map((row) => {
+    const snapshot = parseJson<GraphSnapshot>(
+      row.snapshot_json,
+      `snapshot for generation ${row.id}`
+    );
+    return {
+      generationId: row.id,
+      indexedAt: row.indexed_at,
+      snapshotVersion: row.snapshot_version,
+      counts: snapshotCounts(snapshot),
+      indexWork:
+        row.work_json === null
+          ? null
+          : parseJson<IndexWork>(row.work_json, `index work for generation ${row.id}`),
+      extractorVersion: row.extractor_version,
+      resolverVersion: row.resolver_version
+    };
+  });
+}
+
+function readGenerationHistoryBundle(
+  database: DatabaseSync,
+  projectPath: string
+): GenerationHistoryBundle | null {
+  const activeGraphBundle = readActiveGraphBundle(database, projectPath);
+  const activeGenerationId = activeGraphBundle.status.generationId;
+  if (
+    activeGenerationId === null ||
+    !hasGenerationSnapshot(database, activeGenerationId)
+  ) {
+    return null;
+  }
+
+  const generations = readRetainedGenerationHistoryEntries(database, activeGenerationId);
+  if (!generations.some((generation) => generation.generationId === activeGenerationId)) {
+    return null;
+  }
+
+  return {
+    status: activeGraphBundle.status,
+    activeGraph: activeGraphBundle,
+    retentionLimit: MAX_RETAINED_GENERATIONS,
+    generations
+  };
+}
+
+function readGenerationSnapshotBundleFromHistory(
+  database: DatabaseSync,
+  history: GenerationHistoryBundle,
+  generationId: string
+): GenerationSnapshotBundle | null {
+  const generation = history.generations.find(
+    (candidate) => candidate.generationId === generationId
+  );
+  const snapshotRow = generation === undefined ? null : readGenerationSnapshotRow(database, generationId);
+  if (generation === undefined || snapshotRow === null) {
+    return null;
+  }
+
+  return {
+    status: history.status,
+    generation,
+    snapshot: parseJson<GraphSnapshot>(
+      snapshotRow.snapshot_json,
+      `snapshot for generation ${generationId}`
+    )
+  };
+}
+
+function readGenerationSnapshotBundle(
+  database: DatabaseSync,
+  projectPath: string,
+  generationId: string
+): GenerationSnapshotBundle | null {
+  const history = readGenerationHistoryBundle(database, projectPath);
+  return history === null
+    ? null
+    : readGenerationSnapshotBundleFromHistory(database, history, generationId);
+}
+
+function readGenerationComparisonBundle(
+  database: DatabaseSync,
+  projectPath: string,
+  fromGenerationId: string,
+  toGenerationId: string | undefined
+): GenerationComparisonBundle | null {
+  const history = readGenerationHistoryBundle(database, projectPath);
+  if (history === null) {
+    return null;
+  }
+
+  const resolvedToGenerationId = toGenerationId ?? history.activeGraph.status.generationId;
+  return {
+    history,
+    from: readGenerationSnapshotBundleFromHistory(database, history, fromGenerationId),
+    to:
+      resolvedToGenerationId === null
+        ? null
+        : readGenerationSnapshotBundleFromHistory(database, history, resolvedToGenerationId)
+  };
+}
+
+function pruneRetainedGenerations(
+  database: DatabaseSync,
+  activeGenerationId: string | null
+): void {
+  const rows = database
+    .prepare("SELECT id FROM generations ORDER BY indexed_at DESC, id DESC")
+    .all() as unknown as readonly { readonly id: string }[];
+  const retainedGenerationIds = new Set<string>();
+  if (activeGenerationId !== null && rows.some((row) => row.id === activeGenerationId)) {
+    retainedGenerationIds.add(activeGenerationId);
+  }
+  for (const row of rows) {
+    if (retainedGenerationIds.size >= MAX_RETAINED_GENERATIONS) {
+      break;
+    }
+    retainedGenerationIds.add(row.id);
+  }
+
+  const deleteSourceSearch = tableExists(database, "source_search")
+    ? database.prepare("DELETE FROM source_search WHERE generation_id = ?")
+    : null;
+  const deleteGeneration = database.prepare("DELETE FROM generations WHERE id = ?");
+  for (const row of rows) {
+    if (retainedGenerationIds.has(row.id)) {
+      continue;
+    }
+
+    deleteSourceSearch?.run(row.id);
+    deleteGeneration.run(row.id);
+  }
 }
 
 function readSnapshotProjection(
@@ -1330,6 +1614,66 @@ export class SqliteGraphStore implements GraphStore {
     }
   }
 
+  public getGenerationHistoryBundle(projectPath: string): GenerationHistoryBundle | null {
+    const normalizedProjectPath = resolve(projectPath);
+    if (!this.isInitialized(normalizedProjectPath)) {
+      return null;
+    }
+
+    const database = new DatabaseSync(databasePathFor(normalizedProjectPath), { readOnly: true });
+    try {
+      return readConsistently(database, () =>
+        readGenerationHistoryBundle(database, normalizedProjectPath)
+      );
+    } finally {
+      database.close();
+    }
+  }
+
+  public getGenerationSnapshotBundle(
+    projectPath: string,
+    generationId: string
+  ): GenerationSnapshotBundle | null {
+    const normalizedProjectPath = resolve(projectPath);
+    if (!this.isInitialized(normalizedProjectPath)) {
+      return null;
+    }
+
+    const database = new DatabaseSync(databasePathFor(normalizedProjectPath), { readOnly: true });
+    try {
+      return readConsistently(database, () =>
+        readGenerationSnapshotBundle(database, normalizedProjectPath, generationId)
+      );
+    } finally {
+      database.close();
+    }
+  }
+
+  public getGenerationComparisonBundle(
+    projectPath: string,
+    fromGenerationId: string,
+    toGenerationId?: string
+  ): GenerationComparisonBundle | null {
+    const normalizedProjectPath = resolve(projectPath);
+    if (!this.isInitialized(normalizedProjectPath)) {
+      return null;
+    }
+
+    const database = new DatabaseSync(databasePathFor(normalizedProjectPath), { readOnly: true });
+    try {
+      return readConsistently(database, () =>
+        readGenerationComparisonBundle(
+          database,
+          normalizedProjectPath,
+          fromGenerationId,
+          toGenerationId
+        )
+      );
+    } finally {
+      database.close();
+    }
+  }
+
   public replaceProjectFacts(input: ReplaceProjectFactsInput): void {
     const normalizedProjectPath = resolve(input.projectPath);
     this.initialize(normalizedProjectPath);
@@ -1339,7 +1683,6 @@ export class SqliteGraphStore implements GraphStore {
       database.exec("PRAGMA foreign_keys = ON;");
       database.exec("BEGIN IMMEDIATE");
       try {
-        const previousGenerationId = getActiveGenerationId(database);
         const generationId = `generation:${randomUUID()}`;
 
         database
@@ -1353,6 +1696,8 @@ export class SqliteGraphStore implements GraphStore {
             extractorVersionFor(input.artifactFacts),
             input.resolverVersion
           );
+
+        insertGenerationSnapshot(database, generationId, input.snapshot);
 
         insertIndexInputs(database, generationId, input.indexInputs);
         if (input.indexWork !== undefined) {
@@ -1398,25 +1743,10 @@ export class SqliteGraphStore implements GraphStore {
 
         setMeta(database, INDEXED_AT_META_KEY, input.indexedAt);
 
-        // Keep only the active facts/evidence generation. Every deletion remains
-        // inside this transaction, so a failed replacement rolls back to the old
-        // graph and its still-active evidence together.
-        if (previousGenerationId !== null && previousGenerationId !== generationId) {
-          database.prepare("DELETE FROM source_search WHERE generation_id = ?").run(previousGenerationId);
-          database.prepare("DELETE FROM source_documents WHERE generation_id = ?").run(previousGenerationId);
-          database
-            .prepare("DELETE FROM generation_source_search WHERE generation_id = ?")
-            .run(previousGenerationId);
-          database.prepare("DELETE FROM edge_evidence WHERE generation_id = ?").run(previousGenerationId);
-          database.prepare("DELETE FROM artifact_facts WHERE generation_id = ?").run(previousGenerationId);
-          database
-            .prepare("DELETE FROM generation_index_inputs WHERE generation_id = ?")
-            .run(previousGenerationId);
-          database
-            .prepare("DELETE FROM generation_index_work WHERE generation_id = ?")
-            .run(previousGenerationId);
-          database.prepare("DELETE FROM generations WHERE id = ?").run(previousGenerationId);
-        }
+        // Keep a bounded deterministic history. The virtual FTS rows are
+        // removed before their generation because they cannot use a foreign
+        // key; all ordinary generation side tables cascade from the parent.
+        pruneRetainedGenerations(database, generationId);
 
         // The active pointer is the last write before commit. Readers therefore
         // observe either the previous complete generation or this complete one.

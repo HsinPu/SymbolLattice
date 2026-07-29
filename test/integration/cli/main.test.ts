@@ -8,6 +8,10 @@ import {
   type ContextOptions,
   type ContextResult,
   type ForegroundWatchOptions,
+  type GenerationDiffOptions,
+  type GenerationDiffResult,
+  type GenerationHistoryOptions,
+  type GenerationHistoryResult,
   type GitAffectedTestsOptions,
   type GitAffectedTestsResult,
   type ImpactOptions,
@@ -133,6 +137,64 @@ function gitAffectedTestsResult(): GitAffectedTestsResult {
   };
 }
 
+function generationHistoryResult(): GenerationHistoryResult {
+  return {
+    activeStatus: resultStatus(),
+    bounds: { limit: 5, maximumLimit: 100 },
+    retention: { capacity: 5, retained: 2, returned: 2, truncated: false },
+    generations: [
+      {
+        generationId: "generation:new",
+        indexedAt: "2026-07-30T00:00:01.000Z",
+        snapshotVersion: 1,
+        counts: { files: 2, symbols: 2, edges: 1, pendingReferences: 0 },
+        indexWork: null,
+        extractorVersion: "extractor:test",
+        resolverVersion: "resolver:test"
+      },
+      {
+        generationId: "generation:old",
+        indexedAt: "2026-07-30T00:00:00.000Z",
+        snapshotVersion: 1,
+        counts: { files: 1, symbols: 1, edges: 0, pendingReferences: 0 },
+        indexWork: null,
+        extractorVersion: "extractor:test",
+        resolverVersion: "resolver:test"
+      }
+    ]
+  };
+}
+
+function generationDiffResult(): GenerationDiffResult {
+  const history = generationHistoryResult();
+  return {
+    activeStatus: history.activeStatus,
+    bounds: { limit: 7, maximumLimit: 100 },
+    from: history.generations[1]!,
+    to: history.generations[0]!,
+    files: {
+      added: { items: [], total: 0, truncated: false },
+      removed: { items: [], total: 0, truncated: false },
+      modified: { items: [], total: 0, truncated: false }
+    },
+    symbols: {
+      added: { items: [], total: 0, truncated: false },
+      removed: { items: [], total: 0, truncated: false },
+      modified: { items: [], total: 0, truncated: false }
+    },
+    edges: {
+      added: { items: [], total: 0, truncated: false },
+      removed: { items: [], total: 0, truncated: false },
+      modified: { items: [], total: 0, truncated: false }
+    },
+    pendingReferences: {
+      added: { items: [], total: 0, truncated: false },
+      removed: { items: [], total: 0, truncated: false },
+      modified: { items: [], total: 0, truncated: false }
+    }
+  };
+}
+
 describe("symbol-lattice search CLI", () => {
   it("forwards bounded source-search filters and renders the stable JSON result", async () => {
     const calls: Array<{ projectPath: string; query: string; options: SearchOptions }> = [];
@@ -190,6 +252,104 @@ describe("symbol-lattice search CLI", () => {
       )
     ).rejects.toThrow("Expected an integer between 1 and 100");
   });
+});
+
+describe("symbol-lattice v0.11 retained-generation CLI", () => {
+  it("forwards a bounded history request and renders the stable JSON result", async () => {
+    const calls: Array<{ projectPath: string; options: GenerationHistoryOptions }> = [];
+    const result = generationHistoryResult();
+    const service = {
+      async history(
+        projectPath: string,
+        options: GenerationHistoryOptions = {}
+      ): Promise<GenerationHistoryResult> {
+        calls.push({ projectPath, options });
+        return result;
+      }
+    } as unknown as SymbolLatticeService;
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+    await createProgram(service).parseAsync(
+      [
+        "node",
+        "symbol-lattice",
+        "history",
+        "C:/chosen-project",
+        "--limit",
+        "2",
+        "--json"
+      ],
+      { from: "node" }
+    );
+
+    expect(calls).toEqual([
+      { projectPath: resolve("C:/chosen-project"), options: { limit: 2 } }
+    ]);
+    expect(write).toHaveBeenCalledWith(`${JSON.stringify(result, null, 2)}\n`);
+  });
+
+  it("forwards explicit retained generation IDs, a target, and a bounded structural diff", async () => {
+    const calls: Array<{
+      projectPath: string;
+      fromGenerationId: string;
+      options: GenerationDiffOptions;
+    }> = [];
+    const result = generationDiffResult();
+    const service = {
+      async diff(
+        projectPath: string,
+        fromGenerationId: string,
+        options: GenerationDiffOptions = {}
+      ): Promise<GenerationDiffResult> {
+        calls.push({ projectPath, fromGenerationId, options });
+        return result;
+      }
+    } as unknown as SymbolLatticeService;
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+    await createProgram(service).parseAsync(
+      [
+        "node",
+        "symbol-lattice",
+        "diff",
+        "generation:old",
+        "C:/chosen-project",
+        "--to",
+        "generation:new",
+        "--limit",
+        "7",
+        "--json"
+      ],
+      { from: "node" }
+    );
+
+    expect(calls).toEqual([
+      {
+        projectPath: resolve("C:/chosen-project"),
+        fromGenerationId: "generation:old",
+        options: { toGenerationId: "generation:new", limit: 7 }
+      }
+    ]);
+    expect(write).toHaveBeenCalledWith(`${JSON.stringify(result, null, 2)}\n`);
+  });
+
+  for (const rangeCase of [
+    ["history", "101"],
+    ["diff", "generation:old", "101"]
+  ] as const) {
+    it(`rejects an out-of-range retained-generation bound: ${rangeCase.join(" ")}`, async () => {
+      const program = createProgram({} as SymbolLatticeService);
+      program.exitOverride();
+      const command =
+        rangeCase[0] === "history"
+          ? ["node", "symbol-lattice", "history", "--limit", rangeCase[1]]
+          : ["node", "symbol-lattice", "diff", rangeCase[1], "--limit", rangeCase[2]];
+
+      await expect(program.parseAsync(command, { from: "node" })).rejects.toThrow(
+        "Expected an integer between 1 and 100"
+      );
+    });
+  }
 });
 
 describe("symbol-lattice v0.5 context and impact CLI", () => {

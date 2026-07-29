@@ -11,7 +11,9 @@ import {
   MAX_CONTEXT_IMPACT_LIMIT,
   MAX_CONTEXT_MAX_HOPS,
   MAX_CONTEXT_REFERENCES,
-  MAX_CONTEXT_RELATION_LIMIT
+  MAX_CONTEXT_RELATION_LIMIT,
+  MAX_GENERATION_DIFF_LIMIT,
+  MAX_GENERATION_HISTORY_LIMIT
 } from "../application/types.js";
 import type {
   AffectedTestsOptions,
@@ -20,6 +22,10 @@ import type {
   ContextResult,
   ExplainEdgeResult,
   ExploreResult,
+  GenerationDiffOptions,
+  GenerationDiffResult,
+  GenerationHistoryOptions,
+  GenerationHistoryResult,
   GitAffectedTestsOptions,
   GitAffectedTestsResult,
   SearchOptions,
@@ -67,11 +73,30 @@ export interface SearchService {
   search(projectPath: string, query: string, options?: SearchOptions): Promise<SearchResult>;
 }
 
+/** Optional retained-snapshot listing seam for compatible read-only embeddings. */
+export interface GenerationHistoryService {
+  history(
+    projectPath: string,
+    options?: GenerationHistoryOptions
+  ): Promise<GenerationHistoryResult>;
+}
+
+/** Optional structural snapshot-diff seam for compatible read-only embeddings. */
+export interface GenerationDiffService {
+  diff(
+    projectPath: string,
+    fromGenerationId: string,
+    options?: GenerationDiffOptions
+  ): Promise<GenerationDiffResult>;
+}
+
 export type ReadOnlyMcpService = ExploreService & ExplainEdgeService;
 export type SearchMcpService = ExploreService & SearchService;
 export type ContextMcpService = ExploreService & ContextService;
 export type AffectedTestsMcpService = ExploreService & AffectedTestsService;
 export type GitAffectedTestsMcpService = ExploreService & GitAffectedTestsService;
+export type GenerationHistoryMcpService = ExploreService & GenerationHistoryService;
+export type GenerationDiffMcpService = ExploreService & GenerationDiffService;
 
 export interface ExploreToolArguments {
   readonly query: string;
@@ -116,6 +141,18 @@ export interface SearchToolArguments {
   readonly language?: "typescript" | "javascript" | undefined;
 }
 
+export interface GenerationHistoryToolArguments {
+  readonly projectPath?: string | undefined;
+  readonly limit?: number | undefined;
+}
+
+export interface GenerationDiffToolArguments {
+  readonly fromGenerationId: string;
+  readonly toGenerationId?: string | undefined;
+  readonly projectPath?: string | undefined;
+  readonly limit?: number | undefined;
+}
+
 export interface ReadOnlyToolResponse {
   readonly [key: string]: unknown;
   readonly content: {
@@ -132,6 +169,8 @@ export type AffectedTestsToolResponse = ReadOnlyToolResponse;
 export type GitAffectedTestsToolResponse = ReadOnlyToolResponse;
 export type ExplainEdgeToolResponse = ReadOnlyToolResponse;
 export type SearchToolResponse = ReadOnlyToolResponse;
+export type GenerationHistoryToolResponse = ReadOnlyToolResponse;
+export type GenerationDiffToolResponse = ReadOnlyToolResponse;
 
 const sourcePositionOutputSchema = z.object({
   line: z.number().int(),
@@ -307,6 +346,80 @@ const searchOutputSchema = z
   })
   .passthrough();
 
+const generationSummaryOutputSchema = z
+  .object({
+    generationId: z.string(),
+    indexedAt: z.string(),
+    snapshotVersion: z.number().int().positive(),
+    counts: z.object({
+      files: z.number().int().nonnegative(),
+      symbols: z.number().int().nonnegative(),
+      edges: z.number().int().nonnegative(),
+      pendingReferences: z.number().int().nonnegative()
+    }),
+    indexWork: z.object({}).passthrough().nullable(),
+    extractorVersion: z.string().nullable(),
+    resolverVersion: z.string().nullable()
+  })
+  .passthrough();
+
+const boundedGenerationChangesOutputSchema = z
+  .object({
+    items: z.array(z.object({}).passthrough()),
+    total: z.number().int().nonnegative(),
+    truncated: z.boolean()
+  })
+  .passthrough();
+
+const generationHistoryOutputSchema = z
+  .object({
+    activeStatus: indexStatusOutputSchema,
+    bounds: z.object({
+      limit: z.number().int().positive(),
+      maximumLimit: z.number().int().positive()
+    }),
+    retention: z.object({
+      capacity: z.number().int().positive(),
+      retained: z.number().int().nonnegative(),
+      returned: z.number().int().nonnegative(),
+      truncated: z.boolean()
+    }),
+    generations: z.array(generationSummaryOutputSchema)
+  })
+  .passthrough();
+
+const generationDiffOutputSchema = z
+  .object({
+    activeStatus: indexStatusOutputSchema,
+    bounds: z.object({
+      limit: z.number().int().positive(),
+      maximumLimit: z.number().int().positive()
+    }),
+    from: generationSummaryOutputSchema,
+    to: generationSummaryOutputSchema,
+    files: z.object({
+      added: boundedGenerationChangesOutputSchema,
+      removed: boundedGenerationChangesOutputSchema,
+      modified: boundedGenerationChangesOutputSchema
+    }),
+    symbols: z.object({
+      added: boundedGenerationChangesOutputSchema,
+      removed: boundedGenerationChangesOutputSchema,
+      modified: boundedGenerationChangesOutputSchema
+    }),
+    edges: z.object({
+      added: boundedGenerationChangesOutputSchema,
+      removed: boundedGenerationChangesOutputSchema,
+      modified: boundedGenerationChangesOutputSchema
+    }),
+    pendingReferences: z.object({
+      added: boundedGenerationChangesOutputSchema,
+      removed: boundedGenerationChangesOutputSchema,
+      modified: boundedGenerationChangesOutputSchema
+    })
+  })
+  .passthrough();
+
 function supportsExplainEdge(service: ExploreService): service is ReadOnlyMcpService {
   return "explainEdge" in service && typeof service.explainEdge === "function";
 }
@@ -321,6 +434,14 @@ function supportsContext(service: ExploreService): service is ContextMcpService 
 
 function supportsAffectedTests(service: ExploreService): service is AffectedTestsMcpService {
   return "affectedTests" in service && typeof service.affectedTests === "function";
+}
+
+function supportsGenerationHistory(service: ExploreService): service is GenerationHistoryMcpService {
+  return "history" in service && typeof service.history === "function";
+}
+
+function supportsGenerationDiff(service: ExploreService): service is GenerationDiffMcpService {
+  return "diff" in service && typeof service.diff === "function";
 }
 
 function supportsGitAffectedTests(service: ExploreService): service is GitAffectedTestsMcpService {
@@ -455,6 +576,55 @@ export async function runSearchTool(
     const result = await service.search(
       arguments_.projectPath ?? defaultProjectPath,
       arguments_.query,
+      options
+    );
+    return {
+      content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      structuredContent: result as unknown as Record<string, unknown>
+    };
+  } catch (error) {
+    return renderToolError(error);
+  }
+}
+
+/** Lists immutable retained graph generations without initializing or synchronizing. */
+export async function runGenerationHistoryTool(
+  service: GenerationHistoryService,
+  defaultProjectPath: string,
+  arguments_: GenerationHistoryToolArguments
+): Promise<GenerationHistoryToolResponse> {
+  try {
+    const options: GenerationHistoryOptions =
+      arguments_.limit === undefined ? {} : { limit: arguments_.limit };
+    const result = await service.history(
+      arguments_.projectPath ?? defaultProjectPath,
+      options
+    );
+    return {
+      content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      structuredContent: result as unknown as Record<string, unknown>
+    };
+  } catch (error) {
+    return renderToolError(error);
+  }
+}
+
+/** Compares two immutable retained graph generations without reading Git or live source. */
+export async function runGenerationDiffTool(
+  service: GenerationDiffService,
+  defaultProjectPath: string,
+  arguments_: GenerationDiffToolArguments
+): Promise<GenerationDiffToolResponse> {
+  try {
+    const options: GenerationDiffOptions = {
+      ...(arguments_.toGenerationId === undefined
+        ? {}
+        : { toGenerationId: arguments_.toGenerationId }),
+      ...(arguments_.limit === undefined ? {} : { limit: arguments_.limit })
+    };
+    const result = await service.diff(
+      arguments_.projectPath ?? defaultProjectPath,
+      arguments_.fromGenerationId,
       options
     );
     return {
@@ -668,6 +838,75 @@ export function createMcpServer(
         }
       },
       async (arguments_) => runSearchTool(searchService, defaultProjectPath, arguments_)
+    );
+  }
+
+  const generationHistoryService = supportsGenerationHistory(service) ? service : null;
+  if (generationHistoryService !== null) {
+    server.registerTool(
+      "symbol_lattice_history",
+      {
+        title: "List retained SymbolLattice graph generations",
+        description:
+          "Lists immutable graph generations retained by an existing SymbolLattice index, with the current active generation's live freshness reported separately. It never initializes, refreshes, or synchronizes an index.",
+        inputSchema: {
+          projectPath: z.string().trim().min(1).optional().describe("Optional path to an already indexed project."),
+          limit: z
+            .number()
+            .int()
+            .min(1)
+            .max(MAX_GENERATION_HISTORY_LIMIT)
+            .optional()
+            .describe("Maximum retained-generation summaries to return.")
+        },
+        outputSchema: generationHistoryOutputSchema,
+        annotations: {
+          readOnlyHint: true,
+          idempotentHint: true
+        }
+      },
+      async (arguments_) =>
+        runGenerationHistoryTool(generationHistoryService, defaultProjectPath, arguments_)
+    );
+  }
+
+  const generationDiffService = supportsGenerationDiff(service) ? service : null;
+  if (generationDiffService !== null) {
+    server.registerTool(
+      "symbol_lattice_diff",
+      {
+        title: "Compare retained SymbolLattice graph generations",
+        description:
+          "Compares two immutable retained graph snapshots structurally. This is not a Git commit, hunk, rename, or live-source diff, and it never initializes, refreshes, or synchronizes an index.",
+        inputSchema: {
+          fromGenerationId: z
+            .string()
+            .trim()
+            .min(1)
+            .describe("Required retained generation ID used as the comparison baseline."),
+          toGenerationId: z
+            .string()
+            .trim()
+            .min(1)
+            .optional()
+            .describe("Optional retained generation ID; defaults to the active generation."),
+          projectPath: z.string().trim().min(1).optional().describe("Optional path to an already indexed project."),
+          limit: z
+            .number()
+            .int()
+            .min(1)
+            .max(MAX_GENERATION_DIFF_LIMIT)
+            .optional()
+            .describe("Maximum changes returned independently for each structural category.")
+        },
+        outputSchema: generationDiffOutputSchema,
+        annotations: {
+          readOnlyHint: true,
+          idempotentHint: true
+        }
+      },
+      async (arguments_) =>
+        runGenerationDiffTool(generationDiffService, defaultProjectPath, arguments_)
     );
   }
 

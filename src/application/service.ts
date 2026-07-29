@@ -5,6 +5,7 @@ import {
   ARTIFACT_FACTS_EXTRACTOR_VERSION,
   ARTIFACT_LANGUAGES,
   classifyTestFile,
+  diffGenerationSnapshots,
   DEFAULT_SOURCE_SEARCH_LIMIT,
   findEvidencePath,
   findAffectedTestPaths,
@@ -19,6 +20,7 @@ import {
   SOURCE_SEARCH_INDEX_VERSION,
   sourceSearchTerms,
   type GraphSnapshot,
+  GenerationSnapshotComparisonError,
   type ImpactPath,
   type IndexedSourceDocument,
   type IndexedSourceSearchHit,
@@ -44,6 +46,9 @@ import {
 import type {
   ActiveGraphBundle,
   ActiveSourceDocumentsBundle,
+  GenerationComparisonBundle,
+  GenerationHistoryBundle,
+  GenerationHistoryEntry,
   GraphStore,
   ProjectScan,
   ProjectScanOptions,
@@ -63,11 +68,15 @@ import {
   DEFAULT_CONTEXT_IMPACT_LIMIT,
   DEFAULT_CONTEXT_MAX_HOPS,
   DEFAULT_CONTEXT_RELATION_LIMIT,
+  DEFAULT_GENERATION_DIFF_LIMIT,
+  DEFAULT_GENERATION_HISTORY_LIMIT,
   MAX_CONTEXT_IMPACT_DEPTH,
   MAX_CONTEXT_IMPACT_LIMIT,
   MAX_CONTEXT_MAX_HOPS,
   MAX_CONTEXT_REFERENCES,
   MAX_CONTEXT_RELATION_LIMIT,
+  MAX_GENERATION_DIFF_LIMIT,
+  MAX_GENERATION_HISTORY_LIMIT,
   MAX_AFFECTED_CHANGED_FILES,
   MAX_AFFECTED_LIMIT,
   MAX_AFFECTED_MAX_DEPTH,
@@ -88,6 +97,11 @@ import type {
   ContextResult,
   ExploreResult,
   FindResult,
+  GenerationDiffOptions,
+  GenerationDiffResult,
+  GenerationHistoryOptions,
+  GenerationHistoryResult,
+  GenerationHistorySummary,
   GraphContext,
   ImpactOptions,
   ImpactResult,
@@ -136,6 +150,12 @@ interface NormalizedAffectedTestsRequest {
   readonly bounds: AffectedTestsBounds;
 }
 
+interface NormalizedGenerationDiffRequest {
+  readonly fromGenerationId: string;
+  readonly toGenerationId: string | undefined;
+  readonly limit: number;
+}
+
 /** One graph/source snapshot used consistently for every item in a context pack. */
 interface ContextRead {
   readonly bundle: ActiveGraphBundle;
@@ -151,6 +171,16 @@ function compareText(left: string, right: string): number {
     return 1;
   }
   return 0;
+}
+
+function compareGenerationHistorySummaries(
+  left: GenerationHistorySummary,
+  right: GenerationHistorySummary
+): number {
+  return (
+    compareText(right.indexedAt, left.indexedAt) ||
+    compareText(right.generationId, left.generationId)
+  );
 }
 
 function compareAffectedTestEvidence(
@@ -616,6 +646,122 @@ export class SymbolLatticeService {
     const normalizedProjectPath = resolve(projectPath);
     const bundle = this.getActiveGraphBundle(normalizedProjectPath);
     return this.getStatusForBundle(normalizedProjectPath, bundle);
+  }
+
+  /**
+   * Lists immutable retained graph generations without indexing, synchronizing,
+   * or rewriting the active projection. Live freshness is deliberately named
+   * `activeStatus`: it applies only to the current active generation.
+   */
+  public async history(
+    projectPath: string,
+    options: GenerationHistoryOptions = {}
+  ): Promise<GenerationHistoryResult> {
+    const requestLimit = this.generationHistoryLimit(options);
+    const normalizedProjectPath = resolve(projectPath);
+    const history = this.readGenerationHistoryBundle(normalizedProjectPath);
+    this.requireInitializedHistoryProject(normalizedProjectPath, history.activeGraph);
+    const generations = history.generations
+      .map((generation) => this.toGenerationHistorySummary(generation))
+      .sort(compareGenerationHistorySummaries);
+    const returnedGenerations = generations.slice(0, requestLimit);
+
+    return {
+      activeStatus: await this.getStatusForBundle(normalizedProjectPath, history.activeGraph),
+      bounds: {
+        limit: requestLimit,
+        maximumLimit: MAX_GENERATION_HISTORY_LIMIT
+      },
+      retention: {
+        capacity: history.retentionLimit,
+        retained: generations.length,
+        returned: returnedGenerations.length,
+        truncated: generations.length > requestLimit
+      },
+      generations: returnedGenerations
+    };
+  }
+
+  /**
+   * Compares two immutable retained projections. Omit `toGenerationId` for the
+   * current active generation; no live file contents, Git hunks, moves, or
+   * synchronization are inferred by this read-only operation.
+   */
+  public async diff(
+    projectPath: string,
+    fromGenerationId: string,
+    options: GenerationDiffOptions = {}
+  ): Promise<GenerationDiffResult> {
+    const request = this.generationDiffRequest(fromGenerationId, options);
+    const normalizedProjectPath = resolve(projectPath);
+    const comparison = this.readGenerationComparisonBundle(
+      normalizedProjectPath,
+      request.fromGenerationId,
+      request.toGenerationId
+    );
+    this.requireInitializedHistoryProject(normalizedProjectPath, comparison.history.activeGraph);
+    const from = this.requireComparisonSnapshot(
+      normalizedProjectPath,
+      "from",
+      request.fromGenerationId,
+      comparison.from
+    );
+    const to = this.requireComparisonSnapshot(
+      normalizedProjectPath,
+      "to",
+      request.toGenerationId,
+      comparison.to
+    );
+
+    if (request.toGenerationId === undefined) {
+      const activeGenerationId = comparison.history.activeGraph.status.generationId;
+      if (activeGenerationId === null) {
+        throw new SymbolLatticeError(
+          "MISSING_INDEX",
+          `No active SymbolLattice generation exists for ${normalizedProjectPath}. Run "symbol-lattice init ${normalizedProjectPath}" first.`
+        );
+      }
+      if (to.generation.generationId !== activeGenerationId) {
+        throw new SymbolLatticeError(
+          "INVALID_GENERATION_COMPARISON",
+          `The atomic retained-generation comparison selected generation "${to.generation.generationId}" instead of active generation "${activeGenerationId}".`
+        );
+      }
+    }
+
+    if (from.generation.generationId === to.generation.generationId) {
+      throw new SymbolLatticeError(
+        "INVALID_GENERATION_COMPARISON",
+        "A retained-generation comparison requires distinct from and to generation IDs."
+      );
+    }
+
+    let changes;
+    try {
+      changes = diffGenerationSnapshots(from.snapshot, to.snapshot, { limit: request.limit });
+    } catch (error) {
+      if (error instanceof GenerationSnapshotComparisonError) {
+        throw new SymbolLatticeError(
+          "INVALID_GENERATION_COMPARISON",
+          `Retained-generation comparison is invalid: ${error.message}`
+        );
+      }
+      throw error;
+    }
+
+    return {
+      activeStatus: await this.getStatusForBundle(
+        normalizedProjectPath,
+        comparison.history.activeGraph
+      ),
+      bounds: {
+        limit: request.limit,
+        maximumLimit: MAX_GENERATION_DIFF_LIMIT
+      },
+      from: this.toGenerationHistorySummary(from.generation),
+      to: this.toGenerationHistorySummary(to.generation),
+      ...changes
+    };
   }
 
   /**
@@ -1783,6 +1929,166 @@ export class SymbolLatticeService {
       extractorVersion: legacyBundle.extractorVersion,
       resolverVersion: legacyBundle.resolverVersion,
       sourceSearchVersion: legacyBundle.sourceSearchVersion ?? null
+    };
+  }
+
+  private requireInitializedHistoryProject(
+    normalizedProjectPath: string,
+    activeBundle: ActiveGraphBundle
+  ): void {
+    if (!activeBundle.status.initialized) {
+      throw new SymbolLatticeError(
+        "MISSING_INDEX",
+        `No SymbolLattice index exists for ${normalizedProjectPath}. Run "symbol-lattice init ${normalizedProjectPath}" first.`
+      );
+    }
+  }
+
+  private generationHistoryLimit(options: GenerationHistoryOptions): number {
+    const limit = options.limit === undefined ? DEFAULT_GENERATION_HISTORY_LIMIT : options.limit;
+    if (
+      !Number.isSafeInteger(limit) ||
+      limit < 1 ||
+      limit > MAX_GENERATION_HISTORY_LIMIT
+    ) {
+      throw new SymbolLatticeError(
+        "INVALID_GENERATION_HISTORY_LIMIT",
+        `Generation history limit must be a whole number from 1 to ${MAX_GENERATION_HISTORY_LIMIT}.`
+      );
+    }
+    return limit;
+  }
+
+  private generationDiffRequest(
+    fromGenerationId: string,
+    options: GenerationDiffOptions
+  ): NormalizedGenerationDiffRequest {
+    const limit = options.limit === undefined ? DEFAULT_GENERATION_DIFF_LIMIT : options.limit;
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > MAX_GENERATION_DIFF_LIMIT) {
+      throw new SymbolLatticeError(
+        "INVALID_GENERATION_DIFF_LIMIT",
+        `Generation diff limit must be a whole number from 1 to ${MAX_GENERATION_DIFF_LIMIT}.`
+      );
+    }
+
+    return {
+      fromGenerationId: this.normalizeGenerationId(fromGenerationId),
+      toGenerationId:
+        options.toGenerationId === undefined
+          ? undefined
+          : this.normalizeGenerationId(options.toGenerationId),
+      limit
+    };
+  }
+
+  private normalizeGenerationId(generationId: unknown): string {
+    if (
+      typeof generationId !== "string" ||
+      generationId.length === 0 ||
+      generationId !== generationId.trim() ||
+      /[\u0000-\u001F\u007F]/u.test(generationId)
+    ) {
+      throw new SymbolLatticeError(
+        "INVALID_GENERATION_ID",
+        "Generation ID must be non-empty text without leading/trailing whitespace or control characters."
+      );
+    }
+    return generationId;
+  }
+
+  private readGenerationHistoryBundle(projectPath: string): GenerationHistoryBundle {
+    const readHistory = this.graphStore.getGenerationHistoryBundle;
+    if (typeof readHistory !== "function") {
+      throw new SymbolLatticeError(
+        "GENERATION_HISTORY_UNAVAILABLE",
+        `The configured SymbolLattice graph store for ${projectPath} does not expose immutable retained-generation history. Upgrade the adapter and run "symbol-lattice sync ${projectPath}" to create future snapshots.`
+      );
+    }
+
+    const history = readHistory.call(this.graphStore, projectPath);
+    if (history === null) {
+      if (!this.graphStore.isInitialized(projectPath)) {
+        throw new SymbolLatticeError(
+          "MISSING_INDEX",
+          `No SymbolLattice index exists for ${projectPath}. Run "symbol-lattice init ${projectPath}" first.`
+        );
+      }
+      throw new SymbolLatticeError(
+        "GENERATION_HISTORY_UNAVAILABLE",
+        `A trustworthy retained-generation history is unavailable for ${projectPath}. The active generation may predate immutable snapshot retention; run "symbol-lattice sync ${projectPath}" to create a retained snapshot.`
+      );
+    }
+    return history;
+  }
+
+  private readGenerationComparisonBundle(
+    projectPath: string,
+    fromGenerationId: string,
+    toGenerationId: string | undefined
+  ): GenerationComparisonBundle {
+    const readComparison = this.graphStore.getGenerationComparisonBundle;
+    if (typeof readComparison !== "function") {
+      throw new SymbolLatticeError(
+        "GENERATION_HISTORY_UNAVAILABLE",
+        `The configured SymbolLattice graph store for ${projectPath} does not expose atomic immutable retained-generation comparisons. Upgrade the adapter and run "symbol-lattice sync ${projectPath}" to create future snapshots.`
+      );
+    }
+
+    const comparison = readComparison.call(
+      this.graphStore,
+      projectPath,
+      fromGenerationId,
+      toGenerationId
+    );
+    if (comparison === null) {
+      if (!this.graphStore.isInitialized(projectPath)) {
+        throw new SymbolLatticeError(
+          "MISSING_INDEX",
+          `No SymbolLattice index exists for ${projectPath}. Run "symbol-lattice init ${projectPath}" first.`
+        );
+      }
+      throw new SymbolLatticeError(
+        "GENERATION_HISTORY_UNAVAILABLE",
+        `A trustworthy retained-generation comparison is unavailable for ${projectPath}. The active generation may predate immutable snapshot retention; run "symbol-lattice sync ${projectPath}" to create a retained snapshot.`
+      );
+    }
+    return comparison;
+  }
+
+  private requireComparisonSnapshot(
+    projectPath: string,
+    selection: "from" | "to",
+    requestedGenerationId: string | undefined,
+    bundle: GenerationComparisonBundle["from"]
+  ): NonNullable<GenerationComparisonBundle["from"]> {
+    if (bundle === null) {
+      const requested = requestedGenerationId === undefined ? "the active generation" : `generation "${requestedGenerationId}"`;
+      throw new SymbolLatticeError(
+        "GENERATION_NOT_RETAINED",
+        `${selection === "from" ? "From" : "To"} ${requested} is not retained for ${projectPath}. It may be unknown or have been evicted by the configured retention policy.`
+      );
+    }
+    if (
+      requestedGenerationId !== undefined &&
+      bundle.generation.generationId !== requestedGenerationId
+    ) {
+      throw new SymbolLatticeError(
+        "INVALID_GENERATION_COMPARISON",
+        `The atomic retained-generation comparison returned generation "${bundle.generation.generationId}" for requested ${selection} generation "${requestedGenerationId}".`
+      );
+    }
+    return bundle;
+  }
+
+  private toGenerationHistorySummary(entry: GenerationHistoryEntry): GenerationHistorySummary {
+    return {
+      generationId: entry.generationId,
+      indexedAt: entry.indexedAt,
+      snapshotVersion: entry.snapshotVersion,
+      counts: entry.counts,
+      indexWork: entry.indexWork ?? null,
+      extractorVersion: entry.extractorVersion,
+      resolverVersion: entry.resolverVersion
     };
   }
 

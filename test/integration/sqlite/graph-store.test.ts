@@ -227,6 +227,30 @@ function readTableCount(projectPath: string, tableName: string): number {
   }
 }
 
+function readSourceSearchGenerationIds(projectPath: string): readonly string[] {
+  const database = new DatabaseSync(databasePathFor(projectPath), { readOnly: true });
+  try {
+    return (
+      database
+        .prepare("SELECT DISTINCT generation_id FROM source_search ORDER BY generation_id")
+        .all() as readonly { readonly generation_id: string }[]
+    ).map((row) => row.generation_id);
+  } finally {
+    database.close();
+  }
+}
+
+function deleteGenerationSnapshot(projectPath: string, generationId: string): void {
+  const database = new DatabaseSync(databasePathFor(projectPath));
+  try {
+    database
+      .prepare("DELETE FROM generation_snapshots WHERE generation_id = ?")
+      .run(generationId);
+  } finally {
+    database.close();
+  }
+}
+
 function dropSourceSearchProjection(database: DatabaseSync): void {
   database.exec("DROP TABLE source_search;");
   database.exec("DROP TABLE source_documents;");
@@ -238,6 +262,7 @@ function downgradeCurrentIndexToV2(projectPath: string): void {
   try {
     database.exec("PRAGMA foreign_keys = OFF;");
     dropSourceSearchProjection(database);
+    database.exec("DROP TABLE generation_snapshots;");
     database.exec("DROP TABLE generation_index_work;");
     database.exec("DROP TABLE generation_index_inputs;");
     database.prepare("UPDATE meta SET value = ? WHERE key = ?").run("2", "schema_version");
@@ -254,6 +279,7 @@ function downgradeCurrentIndexToV3(
   try {
     database.exec("PRAGMA foreign_keys = OFF;");
     dropSourceSearchProjection(database);
+    database.exec("DROP TABLE generation_snapshots;");
     if (options.omitReExportBindings === true) {
       const rows = database
         .prepare("SELECT generation_id, file_path, facts_json FROM artifact_facts")
@@ -285,6 +311,7 @@ function downgradeCurrentIndexToV4(projectPath: string): void {
   try {
     database.exec("PRAGMA foreign_keys = OFF;");
     dropSourceSearchProjection(database);
+    database.exec("DROP TABLE generation_snapshots;");
     database.prepare("UPDATE meta SET value = ? WHERE key = ?").run("4", "schema_version");
   } finally {
     database.close();
@@ -522,6 +549,9 @@ describe("SqliteGraphStore", () => {
       sourceSearchVersion: null,
       documents: []
     });
+    expect(store.getGenerationHistoryBundle(projectPath)).toBeNull();
+    expect(store.getGenerationSnapshotBundle(projectPath, "generation:missing")).toBeNull();
+    expect(store.getGenerationComparisonBundle(projectPath, "generation:missing")).toBeNull();
   });
 
   it("persists active-generation artifact facts and edge evidence, then clears stale facts", async () => {
@@ -606,6 +636,10 @@ describe("SqliteGraphStore", () => {
       ]
     });
     const firstGenerationId = store.getStatus(projectPath).generationId;
+    expect(firstGenerationId).not.toBeNull();
+    if (firstGenerationId === null) {
+      throw new Error("Expected the first replacement to publish a generation.");
+    }
 
     const secondSnapshot = snapshot([symbol("only", "only")]);
     const secondFacts = persistedFacts(secondSnapshot);
@@ -653,6 +687,17 @@ describe("SqliteGraphStore", () => {
         }
       ]
     });
+    expect(store.getGenerationHistoryBundle(projectPath)?.generations).toMatchObject([
+      {
+        generationId: firstGenerationId,
+        indexedAt: "2026-07-29T01:00:00.000Z",
+        snapshotVersion: 1,
+        counts: { files: 1, symbols: 2, edges: 1, pendingReferences: 0 },
+        indexWork: firstWork,
+        extractorVersion: "test-extractor-v1",
+        resolverVersion: "test-resolver-v2"
+      }
+    ]);
 
     store.replaceProjectFacts({
       projectPath,
@@ -707,14 +752,209 @@ describe("SqliteGraphStore", () => {
       edges: 0,
       pendingReferences: 0
     });
-    expect(readTableCount(projectPath, "generations")).toBe(1);
-    expect(readTableCount(projectPath, "artifact_facts")).toBe(1);
-    expect(readTableCount(projectPath, "edge_evidence")).toBe(0);
-    expect(readTableCount(projectPath, "generation_index_inputs")).toBe(1);
-    expect(readTableCount(projectPath, "generation_index_work")).toBe(1);
-    expect(readTableCount(projectPath, "generation_source_search")).toBe(1);
-    expect(readTableCount(projectPath, "source_documents")).toBe(1);
-    expect(readTableCount(projectPath, "source_search")).toBe(1);
+    const history = store.getGenerationHistoryBundle(projectPath);
+    expect(history).not.toBeNull();
+    if (history === null) {
+      throw new Error("Expected retained generation history.");
+    }
+    expect(history).toMatchObject({
+      retentionLimit: 5,
+      status: { generationId: store.getStatus(projectPath).generationId },
+      generations: [
+        {
+          indexedAt: "2026-07-29T02:00:00.000Z",
+          counts: { files: 1, symbols: 1, edges: 0, pendingReferences: 0 },
+          indexWork: secondWork,
+          resolverVersion: "test-resolver-v3"
+        },
+        {
+          generationId: firstGenerationId,
+          indexedAt: "2026-07-29T01:00:00.000Z",
+          counts: { files: 1, symbols: 2, edges: 1, pendingReferences: 0 },
+          indexWork: firstWork,
+          resolverVersion: "test-resolver-v2"
+        }
+      ]
+    });
+    expect(store.getGenerationSnapshotBundle(projectPath, firstGenerationId)).toMatchObject({
+      generation: { generationId: firstGenerationId },
+      snapshot: firstSnapshot
+    });
+    expect(readTableCount(projectPath, "generations")).toBe(2);
+    expect(readTableCount(projectPath, "generation_snapshots")).toBe(2);
+    expect(readTableCount(projectPath, "artifact_facts")).toBe(2);
+    expect(readTableCount(projectPath, "edge_evidence")).toBe(1);
+    expect(readTableCount(projectPath, "generation_index_inputs")).toBe(2);
+    expect(readTableCount(projectPath, "generation_index_work")).toBe(2);
+    expect(readTableCount(projectPath, "generation_source_search")).toBe(2);
+    expect(readTableCount(projectPath, "source_documents")).toBe(2);
+    expect(readTableCount(projectPath, "source_search")).toBe(2);
+  });
+
+  it("reads comparison selections and the active projection from one retained state", async () => {
+    const projectPath = await temporaryProject();
+    const store = new SqliteGraphStore();
+    const firstSnapshot = snapshot([symbol("before", "before")]);
+    const secondSnapshot = snapshot([symbol("after", "after")]);
+
+    store.replaceProjectFacts({
+      projectPath,
+      snapshot: firstSnapshot,
+      indexedAt: "2026-07-29T02:10:00.000Z",
+      artifactFacts: persistedFacts(firstSnapshot),
+      indexInputs: indexInputs("comparison-before"),
+      resolverVersion: "test-resolver-comparison-before",
+      indexWork: indexWork("full", "comparison-before")
+    });
+    const firstGenerationId = store.getStatus(projectPath).generationId;
+    expect(firstGenerationId).not.toBeNull();
+    if (firstGenerationId === null) {
+      throw new Error("Expected the first retained generation.");
+    }
+
+    store.replaceProjectFacts({
+      projectPath,
+      snapshot: secondSnapshot,
+      indexedAt: "2026-07-29T02:20:00.000Z",
+      artifactFacts: persistedFacts(secondSnapshot),
+      indexInputs: indexInputs("comparison-after"),
+      resolverVersion: "test-resolver-comparison-after",
+      indexWork: indexWork("incremental", "comparison-after")
+    });
+    const activeGenerationId = store.getStatus(projectPath).generationId;
+    expect(activeGenerationId).not.toBeNull();
+    if (activeGenerationId === null) {
+      throw new Error("Expected the active retained generation.");
+    }
+
+    // Omitting `toGenerationId` resolves it from the same active status and
+    // projection read that supplies the retained-history listing.
+    const comparison = store.getGenerationComparisonBundle(projectPath, firstGenerationId);
+    expect(comparison).not.toBeNull();
+    if (comparison === null) {
+      throw new Error("Expected an atomic retained-generation comparison.");
+    }
+    expect(comparison.history).toMatchObject({
+      status: { generationId: activeGenerationId },
+      activeGraph: {
+        status: { generationId: activeGenerationId },
+        snapshot: secondSnapshot,
+        resolverVersion: "test-resolver-comparison-after"
+      },
+      generations: [
+        { generationId: activeGenerationId },
+        { generationId: firstGenerationId }
+      ]
+    });
+    expect(comparison.history.status).toEqual(comparison.history.activeGraph.status);
+    expect(comparison.from).toMatchObject({
+      status: { generationId: activeGenerationId },
+      generation: { generationId: firstGenerationId },
+      snapshot: firstSnapshot
+    });
+    expect(comparison.to).toMatchObject({
+      status: { generationId: activeGenerationId },
+      generation: { generationId: activeGenerationId },
+      snapshot: secondSnapshot
+    });
+    expect(comparison.to?.snapshot).toEqual(comparison.history.activeGraph.snapshot);
+
+    // Missing selections are explicit without invalidating the coherent
+    // history and separately selected retained snapshot.
+    const unavailableFrom = store.getGenerationComparisonBundle(
+      projectPath,
+      "generation:not-retained",
+      firstGenerationId
+    );
+    expect(unavailableFrom).toMatchObject({
+      history: {
+        status: { generationId: activeGenerationId },
+        activeGraph: { status: { generationId: activeGenerationId } }
+      },
+      from: null,
+      to: {
+        generation: { generationId: firstGenerationId },
+        snapshot: firstSnapshot
+      }
+    });
+    expect(
+      store.getGenerationComparisonBundle(
+        projectPath,
+        firstGenerationId,
+        "generation:not-retained"
+      )
+    ).toMatchObject({
+      from: {
+        generation: { generationId: firstGenerationId },
+        snapshot: firstSnapshot
+      },
+      to: null
+    });
+  });
+
+  it("retains five immutable snapshots, prunes older FTS rows, and hides stale history", async () => {
+    const projectPath = await temporaryProject();
+    const store = new SqliteGraphStore();
+    const generationIds: string[] = [];
+
+    for (let sequence = 1; sequence <= 6; sequence += 1) {
+      const graphSnapshot = snapshot([symbol(`history-${sequence}`, `history${sequence}`)]);
+      store.replaceProjectFacts({
+        projectPath,
+        snapshot: graphSnapshot,
+        // The active generation must be retained even when a caller supplies
+        // an older timestamp than the previous successful replacements.
+        indexedAt:
+          sequence === 6
+            ? "2026-07-28T00:00:00.000Z"
+            : `2026-07-29T0${sequence}:00:00.000Z`,
+        artifactFacts: persistedFacts(graphSnapshot),
+        indexInputs: indexInputs(`history-${sequence}`),
+        resolverVersion: `test-resolver-history-${sequence}`,
+        sourceDocuments: sourceDocuments(graphSnapshot, `export const retained${sequence} = true;`),
+        sourceSearchVersion: SOURCE_SEARCH_INDEX_VERSION,
+        indexWork: indexWork(sequence === 1 ? "full" : "incremental", `history-${sequence}`)
+      });
+      const generationId = store.getStatus(projectPath).generationId;
+      expect(generationId).not.toBeNull();
+      if (generationId === null) {
+        throw new Error("Expected a generation after replacement.");
+      }
+      generationIds.push(generationId);
+    }
+
+    const history = store.getGenerationHistoryBundle(projectPath);
+    expect(history).not.toBeNull();
+    if (history === null) {
+      throw new Error("Expected retained generation history.");
+    }
+    const retainedGenerationIds = generationIds.slice(1);
+    expect(history.generations.map((generation) => generation.generationId)).toEqual(
+      [generationIds[4], generationIds[3], generationIds[2], generationIds[1], generationIds[5]]
+    );
+    expect(history.generations).toHaveLength(5);
+    expect(history.generations.find((generation) => generation.generationId === generationIds[5])).toMatchObject({
+      counts: { files: 1, symbols: 1, edges: 0, pendingReferences: 0 },
+      indexWork: indexWork("incremental", "history-6"),
+      resolverVersion: "test-resolver-history-6"
+    });
+    expect(store.getGenerationSnapshotBundle(projectPath, generationIds[0] as string)).toBeNull();
+    expect(readTableCount(projectPath, "generations")).toBe(5);
+    expect(readTableCount(projectPath, "generation_snapshots")).toBe(5);
+    expect(readTableCount(projectPath, "source_search")).toBe(5);
+    expect(readSourceSearchGenerationIds(projectPath)).toEqual([...retainedGenerationIds].sort());
+
+    const activeGenerationId = store.getStatus(projectPath).generationId;
+    expect(activeGenerationId).not.toBeNull();
+    if (activeGenerationId === null) {
+      throw new Error("Expected an active retained generation.");
+    }
+    deleteGenerationSnapshot(projectPath, activeGenerationId);
+    expect(store.getGenerationHistoryBundle(projectPath)).toBeNull();
+    expect(store.getGenerationSnapshotBundle(projectPath, retainedGenerationIds[0] as string)).toBeNull();
+    expect(
+      store.getGenerationComparisonBundle(projectPath, retainedGenerationIds[0] as string)
+    ).toBeNull();
   });
 
   it("returns bounded active-generation FTS hits with language and path filters in stable order", async () => {
@@ -1014,6 +1254,8 @@ describe("SqliteGraphStore", () => {
       sourceSearchVersion: null,
       documents: []
     });
+    expect(store.getGenerationHistoryBundle(projectPath)).toBeNull();
+    expect(readTableCount(projectPath, "generation_snapshots")).toBe(0);
   });
 
   it("keeps a v2 active generation readable, then adds input tracking without fabricating it", async () => {
@@ -1045,6 +1287,7 @@ describe("SqliteGraphStore", () => {
     expect(store.getSnapshot(projectPath)).toEqual(beforeMigrationSnapshot);
     expect(store.getArtifactFacts(projectPath)).toEqual(v2Facts);
     expect(store.getIndexInputs(projectPath)).toBeNull();
+    expect(store.getGenerationHistoryBundle(projectPath)).toBeNull();
 
     store.initialize(projectPath);
 
@@ -1054,6 +1297,17 @@ describe("SqliteGraphStore", () => {
     expect(store.getIndexInputs(projectPath)).toBeNull();
     expect(readTableCount(projectPath, "generation_index_inputs")).toBe(0);
     expect(readTableCount(projectPath, "generation_index_work")).toBe(0);
+    expect(store.getGenerationHistoryBundle(projectPath)).toMatchObject({
+      generations: [
+        {
+          indexedAt: "2026-07-29T03:00:00.000Z",
+          snapshotVersion: 1,
+          counts: { files: 1, symbols: 2, edges: 1, pendingReferences: 0 },
+          indexWork: null,
+          resolverVersion: "test-resolver-v2"
+        }
+      ]
+    });
   });
 
   it("keeps a v3 generation's inputs and versions while leaving missing work and re-exports honest", async () => {
@@ -1087,6 +1341,7 @@ describe("SqliteGraphStore", () => {
     });
     expect(legacyBundle.status).not.toHaveProperty("lastIndexWork");
     expect(legacyBundle.artifactFacts[0]?.reExportBindings).toEqual([]);
+    expect(store.getGenerationHistoryBundle(projectPath)).toBeNull();
 
     store.initialize(projectPath);
 
@@ -1101,6 +1356,17 @@ describe("SqliteGraphStore", () => {
     expect(migratedBundle.status).not.toHaveProperty("lastIndexWork");
     expect(migratedBundle.artifactFacts[0]?.reExportBindings).toEqual([]);
     expect(readTableCount(projectPath, "generation_index_work")).toBe(0);
+    expect(store.getGenerationHistoryBundle(projectPath)).toMatchObject({
+      generations: [
+        {
+          indexedAt: "2026-07-29T04:00:00.000Z",
+          snapshotVersion: 1,
+          counts: { files: 1, symbols: 2, edges: 1, pendingReferences: 0 },
+          indexWork: null,
+          resolverVersion: "test-resolver-v3"
+        }
+      ]
+    });
   });
 
   it("upgrades v4 without fabricating a source search backfill", async () => {
@@ -1129,6 +1395,7 @@ describe("SqliteGraphStore", () => {
       sourceSearchVersion: null
     });
     expect(store.getActiveSourceSearchBundle(projectPath, sourceSearchRequest("needle")).hits).toEqual([]);
+    expect(store.getGenerationHistoryBundle(projectPath)).toBeNull();
 
     store.initialize(projectPath);
 
@@ -1145,6 +1412,30 @@ describe("SqliteGraphStore", () => {
     expect(readTableCount(projectPath, "generation_source_search")).toBe(0);
     expect(readTableCount(projectPath, "source_documents")).toBe(0);
     expect(readTableCount(projectPath, "source_search")).toBe(0);
+    const history = store.getGenerationHistoryBundle(projectPath);
+    expect(history).toMatchObject({
+      retentionLimit: 5,
+      generations: [
+        {
+          indexedAt: "2026-07-29T05:00:00.000Z",
+          snapshotVersion: 1,
+          counts: { files: 1, symbols: 1, edges: 0, pendingReferences: 0 },
+          indexWork: indexWork("full", "v4-before-downgrade"),
+          resolverVersion: "test-resolver-v4"
+        }
+      ]
+    });
+    const generationId = history?.generations[0]?.generationId;
+    expect(generationId).toBe(beforeMigration.status.generationId);
+    if (generationId === undefined) {
+      throw new Error("Expected the v4 migration to backfill its active snapshot.");
+    }
+    expect(store.getGenerationSnapshotBundle(projectPath, generationId)).toMatchObject({
+      generation: { generationId, snapshotVersion: 1 },
+      snapshot: beforeMigration.snapshot
+    });
+    store.initialize(projectPath);
+    expect(readTableCount(projectPath, "generation_snapshots")).toBe(1);
   });
 
   it("rejects a database written by a newer schema instead of changing it", async () => {

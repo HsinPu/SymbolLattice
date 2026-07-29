@@ -12,6 +12,8 @@ import {
   MAX_CONTEXT_IMPACT_LIMIT,
   MAX_CONTEXT_MAX_HOPS,
   MAX_CONTEXT_RELATION_LIMIT,
+  MAX_GENERATION_DIFF_LIMIT,
+  MAX_GENERATION_HISTORY_LIMIT,
   DEFAULT_WATCH_INTERVAL_MS,
   MAX_WATCH_INTERVAL_MS,
   MIN_WATCH_INTERVAL_MS,
@@ -22,6 +24,8 @@ import {
   validateWatchInterval,
   type ContextOptions,
   type AffectedTestsOptions,
+  type GenerationDiffOptions,
+  type GenerationHistoryOptions,
   type ForegroundWatchOptions,
   type GitAffectedTestsOptions,
   type FindOptions,
@@ -85,6 +89,15 @@ interface ContextCommandOptions extends ProjectOptions {
 interface WatchCommandOptions extends ProjectOptions {
   readonly interval?: number;
   readonly poll?: boolean;
+}
+
+interface GenerationHistoryCommandOptions extends ProjectOptions {
+  readonly limit?: number;
+}
+
+interface GenerationDiffCommandOptions extends ProjectOptions {
+  readonly to?: string;
+  readonly limit?: number;
 }
 
 /** Injectable CLI seam for a long-lived foreground watch command. */
@@ -344,6 +357,49 @@ export function createProgram(
       render(await service.getStatus(projectPath), options);
     }
   );
+
+  addJsonOption(addProjectOption(program.command("history [path]")))
+    .option(
+      "--limit <count>",
+      `Maximum retained generation summaries to return (1-${MAX_GENERATION_HISTORY_LIMIT})`,
+      (value: string) => parseBoundedPositiveInteger(value, MAX_GENERATION_HISTORY_LIMIT)
+    )
+    .action(async (path: string | undefined, options: GenerationHistoryCommandOptions) => {
+      const historyOptions: GenerationHistoryOptions =
+        options.limit === undefined ? {} : { limit: options.limit };
+      render(
+        await service.history(resolve(path ?? defaultProjectPath(options)), historyOptions),
+        options
+      );
+    });
+
+  addJsonOption(addProjectOption(program.command("diff <from-generation-id> [path]")))
+    .option("--to <generation-id>", "Retained generation ID to compare with (defaults to active)")
+    .option(
+      "--limit <count>",
+      `Maximum changes per structural category (1-${MAX_GENERATION_DIFF_LIMIT})`,
+      (value: string) => parseBoundedPositiveInteger(value, MAX_GENERATION_DIFF_LIMIT)
+    )
+    .action(
+      async (
+        fromGenerationId: string,
+        path: string | undefined,
+        options: GenerationDiffCommandOptions
+      ) => {
+        const diffOptions: GenerationDiffOptions = {
+          ...(options.to === undefined ? {} : { toGenerationId: options.to }),
+          ...(options.limit === undefined ? {} : { limit: options.limit })
+        };
+        render(
+          await service.diff(
+            resolve(path ?? defaultProjectPath(options)),
+            fromGenerationId,
+            diffOptions
+          ),
+          options
+        );
+      }
+    );
 
   addJsonOption(addProjectOption(program.command("find <query>")))
     .option("--kind <kind>", "Restrict results to a symbol kind")
