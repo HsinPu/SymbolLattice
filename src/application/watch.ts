@@ -10,6 +10,7 @@ export const DEFAULT_WATCH_INTERVAL_MS = 2_000;
 export const DEFAULT_WATCH_EVENT_DEBOUNCE_MS = 250;
 export const MIN_WATCH_INTERVAL_MS = 250;
 export const MAX_WATCH_INTERVAL_MS = 60_000;
+const MAX_WATCH_PENDING_FILES = 25;
 
 /**
  * A bounded, machine-readable receipt from the foreground watch lifecycle.
@@ -25,6 +26,8 @@ export interface WatchReceipt {
     | "status-failed"
     | "event-watch-active"
     | "event-watch-failed"
+    | "event-pending"
+    | "event-fresh"
     | "stopped";
   readonly observedAt: string;
   readonly projectPath: string;
@@ -38,6 +41,14 @@ export interface WatchReceipt {
   } | null;
   /** Present only when a failed check or sync will be retried. */
   readonly retryDelayMs: number | null;
+  /** Exact only when every pending event identified a path and none exceeded the cap. */
+  readonly pendingFileCount: number | null;
+  /** Bounded, lexically sorted paths observed from pending source-change events. */
+  readonly pendingFiles: readonly string[];
+  /** True when more than the bounded set of pending paths was observed. */
+  readonly pendingFilesTruncated: boolean;
+  /** True when at least one pending source-change event did not identify a path. */
+  readonly pendingFilesUnknown: boolean;
 }
 
 /** The narrow application surface needed by an automatic foreground sync. */
@@ -50,7 +61,7 @@ export interface IndexWatchService {
 
 /** Callbacks supplied to an optional local project-change event source. */
 export interface WatchEventCallbacks {
-  onChange(): void;
+  onChange(change?: { filePath: string | null }): void;
   onError(error: unknown): void;
 }
 
@@ -126,6 +137,35 @@ function retryDelay(intervalMs: number, consecutiveFailures: number): number {
   return Math.min(intervalMs * multiplier, MAX_WATCH_INTERVAL_MS);
 }
 
+/**
+ * Watch sources are pluggable, so never disclose arbitrary callback text in a
+ * receipt. Known paths use a portable, unambiguous project-relative form;
+ * anything else is reported as an unknown invalidation instead.
+ */
+function normalizePendingFilePath(filePath: unknown): string | null {
+  if (typeof filePath !== "string") {
+    return null;
+  }
+
+  const normalized = filePath.replaceAll("\\", "/");
+  if (
+    normalized.length === 0 ||
+    normalized.trim().length === 0 ||
+    normalized.startsWith("/") ||
+    /^[A-Za-z]:/.test(normalized) ||
+    /[\u0000-\u001F]/.test(normalized)
+  ) {
+    return null;
+  }
+
+  const segments = normalized.split("/");
+  if (segments.some((segment) => segment.length === 0 || segment === "." || segment === "..")) {
+    return null;
+  }
+
+  return normalized;
+}
+
 /** Validates an already parsed polling interval at the shared application boundary. */
 export function validateWatchInterval(intervalMs: number): number {
   if (
@@ -159,6 +199,10 @@ class ForegroundWatch implements ForegroundWatchSession {
   private eventSourceActive = false;
   private eventSubscription: WatchEventSubscription | null = null;
   private eventReconcilePending = false;
+  private pendingEventRevision = 0;
+  private readonly pendingFiles = new Set<string>();
+  private pendingFilesTruncated = false;
+  private pendingFilesUnknown = false;
 
   public constructor(
     private readonly service: IndexWatchService,
@@ -289,7 +333,7 @@ class ForegroundWatch implements ForegroundWatchSession {
     let subscription: WatchEventSubscription;
     try {
       subscription = source.subscribe(this.options.projectPath, {
-        onChange: () => this.handleEventChange(),
+        onChange: (change) => this.handleEventChange(change),
         onError: (error) => this.handleEventError(error)
       });
     } catch (error) {
@@ -313,7 +357,19 @@ class ForegroundWatch implements ForegroundWatchSession {
     );
   }
 
-  private handleEventChange(): void {
+  private handleEventChange(change?: { filePath: string | null }): void {
+    if (!this.eventSourceActive || this.stopped || this.finished) {
+      return;
+    }
+
+    this.recordPendingEvent(change);
+    this.emit(
+      "event-pending",
+      this.lastStatus,
+      statusGenerationId(this.lastStatus),
+      statusGenerationId(this.lastStatus)
+    );
+
     if (!this.eventSourceActive || this.stopped || this.finished) {
       return;
     }
@@ -399,6 +455,10 @@ class ForegroundWatch implements ForegroundWatchSession {
   }
 
   private async poll(): Promise<number | null> {
+    const pendingReconciliation = {
+      hadPendingEvents: this.hasPendingEvents(),
+      revision: this.pendingEventRevision
+    };
     let status: IndexStatus;
     try {
       status = await this.service.getStatus(this.options.projectPath);
@@ -423,12 +483,23 @@ class ForegroundWatch implements ForegroundWatchSession {
     }
 
     this.startEventWatch();
-    return this.reconcile(status);
+    return this.reconcile(status, pendingReconciliation);
   }
 
-  private async reconcile(status: IndexStatus): Promise<number | null> {
+  private async reconcile(
+    status: IndexStatus,
+    pendingReconciliation: { readonly hadPendingEvents: boolean; readonly revision: number } | null = null
+  ): Promise<number | null> {
     if (!status.stale || this.stopped) {
       this.consecutiveFailures = 0;
+      if (!this.stopped && this.clearPendingAfterSuccessfulReconciliation(pendingReconciliation)) {
+        this.emit(
+          "event-fresh",
+          status,
+          statusGenerationId(status),
+          statusGenerationId(status)
+        );
+      }
       return this.intervalMs;
     }
 
@@ -441,6 +512,7 @@ class ForegroundWatch implements ForegroundWatchSession {
       });
       this.lastStatus = synced;
       this.consecutiveFailures = 0;
+      this.clearPendingAfterSuccessfulReconciliation(pendingReconciliation);
       this.emit("synced", synced, previousGenerationId, statusGenerationId(synced));
       return this.intervalMs;
     } catch (error) {
@@ -467,6 +539,77 @@ class ForegroundWatch implements ForegroundWatchSession {
     return delayMs;
   }
 
+  private recordPendingEvent(change?: { filePath: string | null }): void {
+    this.pendingEventRevision += 1;
+    const filePath = normalizePendingFilePath(change?.filePath);
+    if (filePath === null) {
+      this.pendingFilesUnknown = true;
+      return;
+    }
+
+    if (this.pendingFiles.has(filePath)) {
+      return;
+    }
+
+    if (this.pendingFiles.size < MAX_WATCH_PENDING_FILES) {
+      this.pendingFiles.add(filePath);
+      return;
+    }
+
+    // Keep the bounded disclosure independent of native event ordering. The
+    // receipt always exposes the lexical first 25 paths from the observed
+    // batch rather than whichever 25 happened to arrive first.
+    this.pendingFilesTruncated = true;
+    const greatestRetainedPath = Array.from(this.pendingFiles).reduce(
+      (greatest, candidate) => (candidate > greatest ? candidate : greatest)
+    );
+    if (filePath < greatestRetainedPath) {
+      this.pendingFiles.delete(greatestRetainedPath);
+      this.pendingFiles.add(filePath);
+    }
+  }
+
+  private hasPendingEvents(): boolean {
+    return (
+      this.pendingFiles.size > 0 ||
+      this.pendingFilesTruncated ||
+      this.pendingFilesUnknown
+    );
+  }
+
+  private clearPendingAfterSuccessfulReconciliation(
+    pendingReconciliation: { readonly hadPendingEvents: boolean; readonly revision: number } | null
+  ): boolean {
+    if (
+      pendingReconciliation === null ||
+      !pendingReconciliation.hadPendingEvents ||
+      this.pendingEventRevision !== pendingReconciliation.revision
+    ) {
+      return false;
+    }
+
+    this.pendingFiles.clear();
+    this.pendingFilesTruncated = false;
+    this.pendingFilesUnknown = false;
+    this.eventReconcilePending = false;
+    this.cancelEventTimer();
+    return true;
+  }
+
+  private pendingReceiptFields(): Pick<
+    WatchReceipt,
+    "pendingFileCount" | "pendingFiles" | "pendingFilesTruncated" | "pendingFilesUnknown"
+  > {
+    const pendingFiles = Array.from(this.pendingFiles).sort();
+    return {
+      pendingFileCount:
+        this.pendingFilesUnknown || this.pendingFilesTruncated ? null : pendingFiles.length,
+      pendingFiles,
+      pendingFilesTruncated: this.pendingFilesTruncated,
+      pendingFilesUnknown: this.pendingFilesUnknown
+    };
+  }
+
   private emit(
     event: WatchReceipt["event"],
     status: IndexStatus | null,
@@ -483,7 +626,8 @@ class ForegroundWatch implements ForegroundWatchSession {
       generationId,
       lastIndexWork: statusIndexWork(status),
       error: overrides.error,
-      retryDelayMs: overrides.retryDelayMs
+      retryDelayMs: overrides.retryDelayMs,
+      ...this.pendingReceiptFields()
     });
   }
 

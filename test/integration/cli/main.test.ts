@@ -522,7 +522,7 @@ describe("symbol-lattice v0.6 affected-test CLI", () => {
   }
 });
 
-describe("symbol-lattice v0.9 foreground watch CLI", () => {
+describe("symbol-lattice v0.10 foreground watch CLI", () => {
   it("forwards the bounded interval and force flag, enables native events, and renders compact NDJSON receipts", async () => {
     const calls: ForegroundWatchOptions[] = [];
     const service = {} as SymbolLatticeService;
@@ -535,7 +535,11 @@ describe("symbol-lattice v0.9 foreground watch CLI", () => {
       generationId: "generation:test",
       lastIndexWork: null,
       error: null,
-      retryDelayMs: null
+      retryDelayMs: null,
+      pendingFileCount: 0,
+      pendingFiles: [],
+      pendingFilesTruncated: false,
+      pendingFilesUnknown: false
     };
     const watchRunner = async (
       _receivedService: SymbolLatticeService,

@@ -65,6 +65,34 @@ function toWatchFilename(filename: FileSystemWatchFilename): string | null {
 }
 
 /**
+ * Native watcher filenames are normally relative to the watched project, but
+ * that is not a guarantee. Only forward an exact, unambiguous relative path;
+ * all other notifications still invalidate the project without exposing a
+ * host path to the application layer.
+ */
+function toProjectRelativeWatchPath(filename: string | null): string | null {
+  if (filename === null) {
+    return null;
+  }
+
+  const normalized = filename.replaceAll("\\", "/");
+  if (
+    normalized.length === 0 ||
+    normalized.startsWith("/") ||
+    /^[A-Za-z]:/.test(normalized)
+  ) {
+    return null;
+  }
+
+  const segments = normalized.split("/");
+  if (segments.some((segment) => segment === "" || segment === "." || segment === "..")) {
+    return null;
+  }
+
+  return segments.join("/");
+}
+
+/**
  * Native filesystem event adapter. It deliberately lets watcher construction
  * errors escape so the application can retain its polling fallback.
  */
@@ -74,11 +102,25 @@ export class NodeFileSystemWatchSource implements WatchEventSource {
   public subscribe(projectPath: string, callbacks: WatchEventCallbacks): WatchEventSubscription {
     let closed = false;
     const onChange: FileSystemWatchListener = (_eventType, filename) => {
-      if (closed || !shouldTriggerProjectWatchEvent(toWatchFilename(filename))) {
+      const watchFilename = toWatchFilename(filename);
+      if (closed) {
         return;
       }
 
-      callbacks.onChange();
+      const projectRelativePath = toProjectRelativeWatchPath(watchFilename);
+      if (projectRelativePath === null) {
+        // Validate before applying directory exclusions: an untrusted absolute
+        // or traversal path may contain an excluded-looking segment but must
+        // still invalidate the project without exposing that path.
+        callbacks.onChange({ filePath: null });
+        return;
+      }
+
+      if (!shouldTriggerProjectWatchEvent(projectRelativePath)) {
+        return;
+      }
+
+      callbacks.onChange({ filePath: projectRelativePath });
     };
     const handle = this.watchFactory(projectPath, nativeWatchOptions, onChange);
     const onError = (error: Error): void => {

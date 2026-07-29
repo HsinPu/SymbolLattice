@@ -156,8 +156,8 @@ class FakeWatchEventSource implements WatchEventSource {
     };
   }
 
-  public emitChange(): void {
-    this.callbacks?.onChange();
+  public emitChange(filePath?: string | null): void {
+    this.callbacks?.onChange(filePath === undefined ? undefined : { filePath });
   }
 
   public emitError(error: unknown): void {
@@ -208,11 +208,21 @@ describe("foreground index watch", () => {
       generationId: "generation:two",
       lastIndexWork: indexWork(),
       error: null,
-      retryDelayMs: null
+      retryDelayMs: null,
+      pendingFileCount: 0,
+      pendingFiles: [],
+      pendingFilesTruncated: false,
+      pendingFilesUnknown: false
     });
 
     await session.stop();
     expect(receipts.at(-1)?.event).toBe("stopped");
+    expect(receipts.at(-1)).toMatchObject({
+      pendingFileCount: 0,
+      pendingFiles: [],
+      pendingFilesTruncated: false,
+      pendingFilesUnknown: false
+    });
   });
 
   it("backs off after a failed sync, retains the old generation in the receipt, then recovers", async () => {
@@ -417,12 +427,19 @@ describe("foreground index watch", () => {
     expect(receipts.map((receipt) => receipt.event)).toEqual(["started", "event-watch-active"]);
     expect(scheduler.scheduledDelays).toEqual([1_000]);
 
-    source.emitChange();
-    source.emitChange();
-    source.emitChange();
+    source.emitChange("src/z.ts");
+    source.emitChange("src/a.ts");
+    source.emitChange("src/z.ts");
 
     expect(service.getStatusCalls).toHaveLength(1);
     expect(scheduler.scheduledDelays).toEqual([1_000, DEFAULT_WATCH_EVENT_DEBOUNCE_MS]);
+    expect(receipts.at(-1)).toMatchObject({
+      event: "event-pending",
+      pendingFileCount: 2,
+      pendingFiles: ["src/a.ts", "src/z.ts"],
+      pendingFilesTruncated: false,
+      pendingFilesUnknown: false
+    });
 
     scheduler.fireNext();
     await settle();
@@ -432,10 +449,187 @@ describe("foreground index watch", () => {
     expect(receipts.map((receipt) => receipt.event)).toEqual([
       "started",
       "event-watch-active",
+      "event-pending",
+      "event-pending",
+      "event-pending",
       "stale-detected",
       "synced"
     ]);
+    expect(receipts.at(-1)).toMatchObject({
+      pendingFileCount: 0,
+      pendingFiles: [],
+      pendingFilesTruncated: false,
+      pendingFilesUnknown: false
+    });
     expect(scheduler.scheduledDelays).toEqual([1_000]);
+
+    await session.stop();
+  });
+
+  it("clears pending paths with event-fresh after a fresh event reconciliation", async () => {
+    const scheduler = new ManualScheduler();
+    const receipts: WatchReceipt[] = [];
+    const source = new FakeWatchEventSource();
+    const service = new FakeWatchService([status("generation:one"), status("generation:one")]);
+    const session = await startForegroundWatch(
+      service,
+      {
+        ...watchOptions(receipts),
+        intervalMs: 1_000,
+        eventSource: source
+      },
+      scheduler
+    );
+
+    source.emitChange("src/changed.ts");
+    scheduler.fireNext();
+    await settle();
+
+    expect(receipts.map((receipt) => receipt.event)).toEqual([
+      "started",
+      "event-watch-active",
+      "event-pending",
+      "event-fresh"
+    ]);
+    expect(receipts.at(-1)).toMatchObject({
+      pendingFileCount: 0,
+      pendingFiles: [],
+      pendingFilesTruncated: false,
+      pendingFilesUnknown: false
+    });
+    expect(scheduler.scheduledDelays).toEqual([1_000]);
+
+    await session.stop();
+  });
+
+  it("bounds pending path disclosure and sorts retained paths deterministically", async () => {
+    const scheduler = new ManualScheduler();
+    const receipts: WatchReceipt[] = [];
+    const source = new FakeWatchEventSource();
+    const service = new FakeWatchService([status("generation:one")]);
+    const session = await startForegroundWatch(
+      service,
+      {
+        ...watchOptions(receipts),
+        intervalMs: 1_000,
+        eventSource: source
+      },
+      scheduler
+    );
+    const observedPaths = Array.from(
+      { length: 26 },
+      (_, index) => `src/file-${String(26 - index).padStart(2, "0")}.ts`
+    );
+
+    for (const filePath of observedPaths) {
+      source.emitChange(filePath);
+    }
+
+    expect(receipts.at(-1)).toMatchObject({
+      event: "event-pending",
+      pendingFileCount: null,
+      pendingFiles: Array.from(
+        { length: 25 },
+        (_, index) => `src/file-${String(index + 1).padStart(2, "0")}.ts`
+      ),
+      pendingFilesTruncated: true,
+      pendingFilesUnknown: false
+    });
+
+    await session.stop();
+  });
+
+  it("treats missing and unsafe custom-source paths as unknown instead of disclosing them", async () => {
+    const scheduler = new ManualScheduler();
+    const receipts: WatchReceipt[] = [];
+    const source = new FakeWatchEventSource();
+    const service = new FakeWatchService([status("generation:one")]);
+    const session = await startForegroundWatch(
+      service,
+      {
+        ...watchOptions(receipts),
+        intervalMs: 1_000,
+        eventSource: source
+      },
+      scheduler
+    );
+
+    source.emitChange("src\\windows.ts");
+    source.emitChange();
+    source.emitChange(null);
+    source.emitChange("C:/outside.ts");
+    source.emitChange("../escape.ts");
+    source.emitChange("");
+
+    expect(receipts.at(-1)).toMatchObject({
+      event: "event-pending",
+      pendingFileCount: null,
+      pendingFiles: ["src/windows.ts"],
+      pendingFilesTruncated: false,
+      pendingFilesUnknown: true
+    });
+
+    await session.stop();
+  });
+
+  it("retains pending paths across status and sync failures until a later fresh reconciliation", async () => {
+    const scheduler = new ManualScheduler();
+    const receipts: WatchReceipt[] = [];
+    const source = new FakeWatchEventSource();
+    const service = new FakeWatchService(
+      [
+        status("generation:one"),
+        new Error("Temporary status failure."),
+        status("generation:one", true),
+        status("generation:one")
+      ],
+      [new Error("Temporary sync failure.")]
+    );
+    const session = await startForegroundWatch(
+      service,
+      {
+        ...watchOptions(receipts),
+        intervalMs: 1_000,
+        eventSource: source
+      },
+      scheduler
+    );
+
+    source.emitChange("src/retry.ts");
+    scheduler.fireNext();
+    await settle();
+
+    expect(receipts.at(-1)).toMatchObject({
+      event: "status-failed",
+      pendingFileCount: 1,
+      pendingFiles: ["src/retry.ts"],
+      pendingFilesTruncated: false,
+      pendingFilesUnknown: false
+    });
+    expect(scheduler.scheduledDelays).toEqual([1_000]);
+
+    scheduler.fireNext();
+    await settle();
+
+    expect(receipts.at(-1)).toMatchObject({
+      event: "sync-failed",
+      pendingFileCount: 1,
+      pendingFiles: ["src/retry.ts"],
+      pendingFilesTruncated: false,
+      pendingFilesUnknown: false
+    });
+    expect(scheduler.scheduledDelays).toEqual([4_000]);
+
+    scheduler.fireNext();
+    await settle();
+
+    expect(receipts.at(-1)).toMatchObject({
+      event: "event-fresh",
+      pendingFileCount: 0,
+      pendingFiles: [],
+      pendingFilesTruncated: false,
+      pendingFilesUnknown: false
+    });
 
     await session.stop();
   });
@@ -475,6 +669,70 @@ describe("foreground index watch", () => {
     await session.stop();
   });
 
+  it("rearms the safety sweep after its deadline fires during a slow event reconciliation", async () => {
+    let releaseStatus: ((result: IndexStatus) => void) | undefined;
+    const pendingStatus = new Promise<IndexStatus>((resolveStatus) => {
+      releaseStatus = resolveStatus;
+    });
+    const scheduler = new ManualScheduler();
+    const receipts: WatchReceipt[] = [];
+    const source = new FakeWatchEventSource();
+    let statusCalls = 0;
+    const service: IndexWatchService = {
+      assertSafeProjectPath(): void {},
+      async getStatus(): Promise<IndexStatus> {
+        statusCalls += 1;
+        if (statusCalls === 1) {
+          return status("generation:one");
+        }
+        if (statusCalls === 2) {
+          return pendingStatus;
+        }
+        return status("generation:one");
+      },
+      async sync(): Promise<IndexStatus> {
+        throw new Error("sync must not run for a fresh reconciliation");
+      }
+    };
+    const session = await startForegroundWatch(
+      service,
+      {
+        ...watchOptions(receipts),
+        intervalMs: 1_000,
+        eventSource: source
+      },
+      scheduler
+    );
+
+    source.emitChange("src/slow.ts");
+    scheduler.fireNext();
+    await settle();
+    expect(statusCalls).toBe(2);
+    expect(scheduler.scheduledDelays).toEqual([1_000]);
+
+    scheduler.fireNext();
+    expect(scheduler.scheduledDelays).toEqual([]);
+
+    releaseStatus?.(status("generation:one"));
+    await settle();
+
+    expect(receipts.at(-1)).toMatchObject({
+      event: "event-fresh",
+      pendingFileCount: 0,
+      pendingFiles: [],
+      pendingFilesTruncated: false,
+      pendingFilesUnknown: false
+    });
+    expect(scheduler.scheduledDelays).toEqual([1_000]);
+
+    scheduler.fireNext();
+    await settle();
+    expect(statusCalls).toBe(3);
+    expect(scheduler.scheduledDelays).toEqual([1_000]);
+
+    await session.stop();
+  });
+
   it("arms the polling safety sweep when an event arrives during subscription", async () => {
     const scheduler = new ManualScheduler();
     const receipts: WatchReceipt[] = [];
@@ -490,7 +748,11 @@ describe("foreground index watch", () => {
       scheduler
     );
 
-    expect(receipts.map((receipt) => receipt.event)).toEqual(["started", "event-watch-active"]);
+    expect(receipts.map((receipt) => receipt.event)).toEqual([
+      "started",
+      "event-pending",
+      "event-watch-active"
+    ]);
     expect(scheduler.scheduledDelays).toEqual([DEFAULT_WATCH_EVENT_DEBOUNCE_MS, 1_000]);
 
     await session.stop();
@@ -536,13 +798,13 @@ describe("foreground index watch", () => {
       scheduler
     );
 
-    source.emitChange();
+    source.emitChange("src/first.ts");
     scheduler.fireNext();
     await settle();
     expect(service.syncCalls).toHaveLength(1);
 
-    source.emitChange();
-    source.emitChange();
+    source.emitChange("src/second.ts");
+    source.emitChange("src/third.ts");
     expect(scheduler.scheduledDelays).toEqual([1_000, DEFAULT_WATCH_EVENT_DEBOUNCE_MS]);
     scheduler.fireNext();
     await settle();
@@ -555,6 +817,19 @@ describe("foreground index watch", () => {
     expect(service.statusCalls).toBe(3);
     expect(service.syncCalls).toHaveLength(1);
     expect(scheduler.scheduledDelays).toEqual([1_000]);
+    expect(receipts.find((receipt) => receipt.event === "synced")).toMatchObject({
+      pendingFileCount: 3,
+      pendingFiles: ["src/first.ts", "src/second.ts", "src/third.ts"],
+      pendingFilesTruncated: false,
+      pendingFilesUnknown: false
+    });
+    expect(receipts.at(-1)).toMatchObject({
+      event: "event-fresh",
+      pendingFileCount: 0,
+      pendingFiles: [],
+      pendingFilesTruncated: false,
+      pendingFilesUnknown: false
+    });
 
     await session.stop();
   });
@@ -677,7 +952,7 @@ describe("foreground index watch", () => {
       scheduler
     );
 
-    source.emitChange();
+    source.emitChange("src/pending.ts");
     expect(scheduler.scheduledDelays).toEqual([1_000, DEFAULT_WATCH_EVENT_DEBOUNCE_MS]);
 
     await session.stop();
@@ -685,6 +960,12 @@ describe("foreground index watch", () => {
     expect(source.closeCalls).toBe(1);
     expect(scheduler.scheduledDelays).toEqual([]);
     expect(receipts.at(-1)?.event).toBe("stopped");
+    expect(receipts.at(-1)).toMatchObject({
+      pendingFileCount: 1,
+      pendingFiles: ["src/pending.ts"],
+      pendingFilesTruncated: false,
+      pendingFilesUnknown: false
+    });
 
     source.emitChange();
     source.emitError(new Error("Late watcher error."));
@@ -733,6 +1014,7 @@ describe("foreground index watch", () => {
     expect(receipts.map((receipt) => receipt.event)).toEqual([
       "started",
       "event-watch-active",
+      "event-pending",
       "status-failed"
     ]);
   });

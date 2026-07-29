@@ -6,6 +6,24 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.10.0] - 2026-07-30
+
+### Added
+
+- Bounded pending-file disclosure in the native foreground `watch [path]` NDJSON stream. `event-pending` reports a lexically ordered sample of up to 25 project-relative paths, explicit unknown/overflow semantics, and retains the disclosure through failed status or sync work.
+- `event-fresh` receipt for an event-associated reconciliation that finds no drift. A successful `event-fresh` or `synced` receipt clears the pending state only when no newer event arrived during that reconciliation.
+- Native watcher path hygiene: Windows separators normalize to forward slashes; absolute, traversal, ambiguous, or missing filenames still invalidate safely but are disclosed as unknown rather than leaking host paths. Hard-excluded directories stay invisible.
+
+### Compatibility
+
+- No SQLite migration, daemon, MCP mutation, or cross-process state is added. `WatchEventSource` retains source compatibility because event callbacks may still be invoked without a path.
+- `WatchReceipt` now always includes `pendingFileCount`, `pendingFiles`, `pendingFilesTruncated`, and `pendingFilesUnknown`. TypeScript integrations that construct that public type must add the four fields; consumers should treat a `null` count as intentionally non-exact rather than as zero.
+
+### Deliberate limits
+
+- Pending paths exist only in the foreground watch process that observed native events. SymbolLattice does not yet persist them, expose an MCP per-query warning/banner, coordinate multiple watchers, or claim daemon-level freshness.
+- The disclosure is a scheduling and safety signal, not a per-file partial resolver: every reconciliation still evaluates complete live index freshness before publishing.
+
 ## [0.9.0] - 2026-07-30
 
 ### Added
@@ -216,7 +234,8 @@ No unreleased changes.
 - Explicit full indexing, caller/callee/impact queries, and read-only MCP exploration.
 - `exact`, `heuristic`, and `unresolved` relationship states.
 
-[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.6.0...v0.7.0

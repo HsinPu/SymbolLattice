@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> **v0.9.0** is an early developer release. This public repository runs from source; its npm package is intentionally private and is not published to npm.
+> **v0.10.0** is an early developer release. This public repository runs from source; its npm package is intentionally private and is not published to npm.
 
 SymbolLattice builds a local symbol graph without hiding uncertainty. It keeps syntax-proven artifact facts, resolves cross-file relationships conservatively, and records why every resolved edge exists. The graph stays local to the inspected project under `.symbol-lattice/index.sqlite`.
 
@@ -24,7 +24,7 @@ SymbolLattice builds a local symbol graph without hiding uncertainty. It keeps s
 - **Safe freshness** - source hashes and project inputs are stored with each active generation; `status` reports drift instead of silently rebuilding.
 - **Workspace-aware** - local npm/Yarn-style workspaces can resolve package roots and explicit subpath exports without reading `node_modules`.
 - **Incremental parsing, atomic publication** - `sync` only reparses changed source artifacts when their persisted facts are compatible, then atomically publishes one fresh project graph.
-- **Event-accelerated foreground freshness** - opt-in `watch` uses native filesystem events when the host supports them, coalesces saves, retains bounded polling as a safety sweep, invokes the same atomic `sync` only after drift, and emits one machine-readable receipt per lifecycle event.
+- **Event-accelerated foreground freshness** - opt-in `watch` uses native filesystem events when the host supports them, exposes bounded pending-path evidence in its own stream, coalesces saves, retains bounded polling as a safety sweep, and invokes the same atomic `sync` only after drift.
 - **Generation-bound source evidence** - `search` and exact `explore` results use source captured with the active graph generation, even when the live project has since drifted.
 - **Bounded context packs** - ordered symbol references produce persisted source, capped relationship/impact summaries, and static directed evidence paths without guessing ambiguous symbols or dynamic behavior.
 - **Affected-test evidence** - changed indexed files map to conventionally named tests through bounded, exact import/export proof paths; explicit paths, `--working-tree`, and `--base <ref>` retain stale, scope, depth, visit, and result limits in the response.
@@ -84,7 +84,7 @@ One-shot data commands emit stable, pretty JSON. `watch` is the deliberate strea
 
 ## Capabilities
 
-| Area | v0.9.0 behavior |
+| Area | v0.10.0 behavior |
 | --- | --- |
 | Source files | TypeScript, TSX, JavaScript, and JSX |
 | Scope | Project root by default or repeatable, persisted `--scope` directories |
@@ -99,7 +99,7 @@ One-shot data commands emit stable, pretty JSON. `watch` is the deliberate strea
 | Affected tests | Explicit changed files or local Git change sets feed exact persisted `imports` / `exports` paths, deterministic proof paths, conventional test-path classification, and explicit completeness limits |
 | Storage | Local SQLite v4 metadata with additive generation-bound source retrieval tables, raw artifact facts, edge evidence, index inputs, and index-work telemetry |
 | Freshness | Source hashes, configuration/workspace manifest fingerprints, extractor/resolver versions, and actionable stale reasons |
-| Foreground watch | Explicit native-event-accelerated monitor with a 250 ms debounce, compact NDJSON receipts, bounded polling fallback/retry, and the existing atomic incremental `sync` |
+| Foreground watch | Explicit native-event-accelerated monitor with a 250 ms debounce, bounded pending-file disclosure, compact NDJSON receipts, polling fallback/retry, and the existing atomic incremental `sync` |
 
 ### Resolution contract
 
@@ -288,18 +288,21 @@ node dist/cli/main.js watch /path/to/project --force
 
 At startup, SymbolLattice runs the same live freshness check used by `status`, completes an atomic `sync` only if that check finds drift, then subscribes to native project events. An event restarts one 250 ms debounce and runs the same status-to-sync path, while an independent bounded safety sweep remains armed even if events continue arriving. Events that arrive during a status check or sync coalesce into one later reconciliation, so scans and writes never overlap. The adapter ignores `.git`, `.symbol-lattice`, `coverage`, `dist`, and `node_modules` events; its own SQLite publication cannot trigger a feedback loop. The watch process reuses stored scope and intentionally exposes no `--scope`, so it cannot quietly replace the scope established by a prior `init`, `index`, or `sync`.
 
-Each stdout line is one compact NDJSON receipt. Every receipt has `event`, `observedAt`, `projectPath`, `status`, `previousGenerationId`, `generationId`, `lastIndexWork`, `error`, and `retryDelayMs`; values that do not apply are explicit `null` rather than omitted. `event-watch-active` confirms that native events are available. `event-watch-failed` carries either `WATCH_EVENTS_UNAVAILABLE` (setup) or `WATCH_EVENTS_FAILED` (a later watcher error), closes the event source, and leaves polling active. The abbreviated examples below show only the fields relevant to each transition.
+Each stdout line is one compact NDJSON receipt. Every receipt has `event`, `observedAt`, `projectPath`, `status`, `previousGenerationId`, `generationId`, `lastIndexWork`, `error`, `retryDelayMs`, `pendingFileCount`, `pendingFiles`, `pendingFilesTruncated`, and `pendingFilesUnknown`; values that do not apply are explicit `null` rather than omitted. `event-watch-active` confirms that native events are available. `event-watch-failed` carries either `WATCH_EVENTS_UNAVAILABLE` (setup) or `WATCH_EVENTS_FAILED` (a later watcher error), closes the event source, and leaves polling active.
+
+For native events, `event-pending` discloses the bounded project-relative paths that still need a successful freshness reconciliation. `pendingFiles` is lexically ordered and capped at 25 paths. `pendingFileCount` is exact only when no path was unknown and the cap was not reached; otherwise it is `null`, with `pendingFilesUnknown` or `pendingFilesTruncated` explaining why. A successful `event-fresh` or `synced` receipt clears the pending state; a `status-failed` or `sync-failed` receipt retains it. Polling-only mode never fabricates file paths. The abbreviated examples below show only the fields relevant to each transition.
 
 ```json
 {"event":"event-watch-active","error":null,"retryDelayMs":null}
+{"event":"event-pending","pendingFileCount":1,"pendingFiles":["src/math.ts"],"pendingFilesTruncated":false,"pendingFilesUnknown":false}
 {"event":"stale-detected","previousGenerationId":"generation:old","generationId":"generation:old","error":null,"retryDelayMs":null}
-{"event":"synced","previousGenerationId":"generation:old","generationId":"generation:new","lastIndexWork":{"mode":"incremental"},"error":null,"retryDelayMs":null}
+{"event":"synced","previousGenerationId":"generation:old","generationId":"generation:new","lastIndexWork":{"mode":"incremental"},"pendingFileCount":0,"pendingFiles":[],"pendingFilesTruncated":false,"pendingFilesUnknown":false,"error":null,"retryDelayMs":null}
 ```
 
 Temporary configuration or filesystem failures emit `sync-failed` or `status-failed` with an actionable error and a bounded exponential retry delay (at most 60000 ms). If native watching is unavailable or later fails, the existing polling loop remains the fallback rather than making freshness silently disappear. If the previously active index itself disappears, `watch` emits terminal `status-failed` with `MISSING_INDEX`, exits non-zero, and requires a new explicit `init` before restart. The current active generation remains available through ordinary refresh failures because `sync` publishes only after a successful full-project projection. Press `Ctrl+C` (or send `SIGTERM`) to close the event source and stop future work; an in-flight sync is allowed to finish before the final `stopped` receipt.
 
 > [!CAUTION]
-> This is an explicit foreground event accelerator with polling fallback, not a daemon or a durable background service. Native events are a scheduling hint: every reconciliation still scans the live catalog before deciding whether to publish. It does not claim per-file partial resolution, per-file staleness banners, semantic Git diff, or background freshness after the process exits.
+> This is an explicit foreground event accelerator with polling fallback, not a daemon or a durable background service. Native events are a scheduling hint: every reconciliation still scans the live catalog before deciding whether to publish. Pending paths are observable only by the foreground stream that observed them; SymbolLattice does not claim CodeGraph-style MCP response banners, cross-process pending state, per-file partial resolution, semantic Git diff, or background freshness after the process exits.
 
 ## Configuration and scope
 
@@ -331,7 +334,7 @@ The active generation fingerprints the root `.gitignore`, selected `tsconfig.jso
 | `init [path]` | Create the local database and build the first full generation |
 | `index [path]` | Explicitly perform a full extraction and rebuild |
 | `sync [path]` | Explicitly reuse compatible raw facts and publish a fresh graph when needed |
-| `watch [path]` | Keep an existing graph fresh in the foreground with native-event acceleration, a 250 ms debounce, `--interval 250-60000` polling fallback, `--poll` opt-out, compact NDJSON receipts, retry/backoff, and `--force` only for deliberate broad paths |
+| `watch [path]` | Keep an existing graph fresh in the foreground with native-event acceleration, a 250 ms debounce, capped pending-path disclosure, `--interval 250-60000` polling fallback, `--poll` opt-out, compact NDJSON receipts, retry/backoff, and `--force` only for deliberate broad paths |
 | `status [path]` | Report active generation, freshness, stale reasons, and latest index work |
 | `find <query>` / `query <query>` | Search symbols by name, qualified name, ID, or location |
 | `search <query>` | Search persisted source and identifier evidence; accepts `--limit`, `--path`, and `--language` |
@@ -366,7 +369,7 @@ None of these tools initializes, refreshes, starts a watcher, or otherwise mutat
 
 ## Upgrade notes
 
-SQLite v1 through v4 indexes remain readable. v0.4 adds generation-bound source documents and an FTS5 projection under the SQLite v4 metadata marker, so a v0.3 binary can still open and reindex after a rollback. A legacy generation has no historical source-search projection, so `search` reports an explicit availability error until a successful `sync` or `index` publishes one. That backfill can reuse compatible v0.3 raw artifact facts; it does not invent historical source evidence or telemetry. v0.4.1 adds no schema migration: when an embedded older GraphStore adapter or legacy active generation cannot supply the persisted source documents, exact `explore` remains graph-queryable with `source: null` and `sourceAvailability: "unavailable"`; it never reads a live file as substitute evidence. v0.5 adds no SQLite migration either: `context` reuses that same optional source-document bundle and keeps exact graph context available with source marked `unavailable` when an older adapter cannot supply it. v0.6 adds no SQLite migration: `affected` only reads the active graph bundle, so compatible legacy GraphStore adapters remain usable; older adapters expose `indexScope: null` instead of a fabricated scope. v0.7 also adds no SQLite migration: ordinary graph queries and explicit-path `affected` remain compatible with older adapters, while Git-selected affected tests are available only when a `GitChangeSetProvider` is injected; the CLI provides the local read-only adapter. v0.8 adds no SQLite migration: `watch` is a foreground CLI lifecycle around the existing status and sync service paths, so older embeddings and the read-only MCP tool surface remain unchanged. v0.9 also adds no SQLite migration: it injects an optional native event source into the existing foreground lifecycle, while older embeddings continue with polling only. A short-lived pre-release marker `5` is normalized to `4` by explicit `sync` or `index` before rollback.
+SQLite v1 through v4 indexes remain readable. v0.4 adds generation-bound source documents and an FTS5 projection under the SQLite v4 metadata marker, so a v0.3 binary can still open and reindex after a rollback. A legacy generation has no historical source-search projection, so `search` reports an explicit availability error until a successful `sync` or `index` publishes one. That backfill can reuse compatible v0.3 raw artifact facts; it does not invent historical source evidence or telemetry. v0.4.1 adds no schema migration: when an embedded older GraphStore adapter or legacy active generation cannot supply the persisted source documents, exact `explore` remains graph-queryable with `source: null` and `sourceAvailability: "unavailable"`; it never reads a live file as substitute evidence. v0.5 adds no SQLite migration either: `context` reuses that same optional source-document bundle and keeps exact graph context available with source marked `unavailable` when an older adapter cannot supply it. v0.6 adds no SQLite migration: `affected` only reads the active graph bundle, so compatible legacy GraphStore adapters remain usable; older adapters expose `indexScope: null` instead of a fabricated scope. v0.7 also adds no SQLite migration: ordinary graph queries and explicit-path `affected` remain compatible with older adapters, while Git-selected affected tests are available only when a `GitChangeSetProvider` is injected; the CLI provides the local read-only adapter. v0.8 adds no SQLite migration: `watch` is a foreground CLI lifecycle around the existing status and sync service paths, so older embeddings and the read-only MCP tool surface remain unchanged. v0.9 also adds no SQLite migration: it injects an optional native event source into the existing foreground lifecycle, while older embeddings continue with polling only. v0.10 adds no SQLite migration and keeps callback callers source-compatible, but TypeScript producers that construct `WatchReceipt` must supply the four pending-disclosure fields. A short-lived pre-release marker `5` is normalized to `4` by explicit `sync` or `index` before rollback.
 
 ## Architecture
 
@@ -405,9 +408,9 @@ src/
 
 ## Deliberate boundaries
 
-v0.9.0 does not yet provide:
+v0.10.0 does not yet provide:
 
-- Daemon mode, background automatic sync after the foreground process exits, cross-process watch coordination, worker pools, or historical graph generations.
+- Daemon mode, background automatic sync after the foreground process exits, cross-process watch coordination, MCP per-query pending-file banners, worker pools, or historical graph generations.
 - pnpm workspace YAML, TypeScript project references, external/package `extends`, or nested `.gitignore` semantics.
 - CommonJS `require`, dynamic dispatch, decorators, framework routes, reflection, or namespace property-call resolution.
 - Parsers beyond TS/TSX/JS/JSX, external dependency indexing, telemetry, or multi-project routing.
@@ -425,7 +428,8 @@ v0.9.0 does not yet provide:
 | `v0.7.0` | Local Git-aware changed-file selection for working trees or local merge bases, immutable change-set provenance, and read-only MCP support |
 | `v0.8.0` | Opt-in foreground freshness watch, compact NDJSON lifecycle receipts, bounded retry/backoff, and atomic incremental synchronization without MCP mutation |
 | `v0.9.0` | Native-event-accelerated foreground watch with debounce, hard-excluded event filtering, polling fallback, atomic sync reuse, and no MCP mutation |
-| `v0.10+` | Bounded retained graph generations with read-only history/diff, then revision-correct semantic Git hunk attribution, language adapters, framework packs, and contract graphs |
+| `v0.10.0` | Bounded foreground pending-file disclosure for native event batches, honest unknown/overflow semantics, and clear-after-success lifecycle evidence |
+| `v0.11+` | Bounded retained graph generations with read-only history/diff, then revision-correct semantic Git hunk attribution, language adapters, framework packs, and contract graphs |
 
 See [CHANGELOG.md](CHANGELOG.md) for release notes and migration history.
 
@@ -439,7 +443,7 @@ npm.cmd pack --dry-run
 git diff --check
 ```
 
-The suite covers discovery, input fingerprints, alias and workspace resolution, re-export semantics, exact affected-test proofs and completeness limits, local Git change-set parsing and selection, generation-bound search and exploration source evidence, legacy backfill, stale-source evidence, incremental raw-fact reuse, foreground event debounce/polling fallback/retry receipts, no-op sync, schema migration, atomic rollback, MCP read-only behavior, CLI parsing, and architecture boundaries.
+The suite covers discovery, input fingerprints, alias and workspace resolution, re-export semantics, exact affected-test proofs and completeness limits, local Git change-set parsing and selection, generation-bound search and exploration source evidence, legacy backfill, stale-source evidence, incremental raw-fact reuse, bounded foreground pending-file disclosure, event debounce/polling fallback/retry receipts, no-op sync, schema migration, atomic rollback, MCP read-only behavior, CLI parsing, and architecture boundaries.
 
 ## Contributing
 

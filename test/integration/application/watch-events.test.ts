@@ -95,10 +95,21 @@ describe("native foreground watch integration", () => {
       }
 
       const synced = receipts.find((receipt) => receipt.event === "synced");
+      const pending = receipts.find((receipt) => receipt.event === "event-pending");
+      expect(pending).toMatchObject({
+        pendingFileCount: 1,
+        pendingFiles: ["src/math.ts"],
+        pendingFilesTruncated: false,
+        pendingFilesUnknown: false
+      });
       expect(synced).toMatchObject({
         previousGenerationId: initial.generationId,
         error: null,
         retryDelayMs: null,
+        pendingFileCount: 0,
+        pendingFiles: [],
+        pendingFilesTruncated: false,
+        pendingFilesUnknown: false,
         status: {
           stale: false,
           lastIndexWork: {

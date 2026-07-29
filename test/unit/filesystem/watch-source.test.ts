@@ -81,7 +81,7 @@ describe("project filesystem watch events", () => {
     expect(shouldTriggerProjectWatchEvent(null)).toBe(true);
   });
 
-  it("creates a non-persistent recursive native subscription and forwards relevant changes", () => {
+  it("creates a non-persistent recursive native subscription and forwards normalized relative paths", () => {
     const handle = new FakeWatchHandle();
     const { watchFactory, requestedPaths, requestedOptions } = createWatchFactory(handle);
     const callbacks = createCallbacks();
@@ -91,13 +91,57 @@ describe("project filesystem watch events", () => {
     expect(requestedPaths).toEqual(["C:/project"]);
     expect(requestedOptions).toEqual([{ recursive: true, persistent: false }]);
 
-    handle.emitChange("src/index.ts");
+    handle.emitChange("src\\nested\\index.ts");
     handle.emitChange(Buffer.from("tsconfig.json"));
     handle.emitChange("dist/output.js");
     handle.emitChange(null);
 
     expect(callbacks.onChange).toHaveBeenCalledTimes(3);
+    expect(callbacks.onChange).toHaveBeenNthCalledWith(1, { filePath: "src/nested/index.ts" });
+    expect(callbacks.onChange).toHaveBeenNthCalledWith(2, { filePath: "tsconfig.json" });
+    expect(callbacks.onChange).toHaveBeenNthCalledWith(3, { filePath: null });
     expect(callbacks.onError).not.toHaveBeenCalled();
+  });
+
+  it("reconciles unknown, absolute, traversal, and ambiguous event paths without forwarding them", () => {
+    const handle = new FakeWatchHandle();
+    const { watchFactory } = createWatchFactory(handle);
+    const callbacks = createCallbacks();
+
+    new NodeFileSystemWatchSource(watchFactory).subscribe("C:/project", callbacks);
+
+    handle.emitChange(null);
+    handle.emitChange("/outside/secret.ts");
+    handle.emitChange("C:\\outside\\secret.ts");
+    handle.emitChange("../outside.ts");
+    handle.emitChange("src/../secret.ts");
+    handle.emitChange("src//ambiguous.ts");
+    handle.emitChange("../node_modules/secret.ts");
+
+    expect(callbacks.onChange).toHaveBeenCalledTimes(7);
+    expect(callbacks.onChange).toHaveBeenNthCalledWith(1, { filePath: null });
+    expect(callbacks.onChange).toHaveBeenNthCalledWith(2, { filePath: null });
+    expect(callbacks.onChange).toHaveBeenNthCalledWith(3, { filePath: null });
+    expect(callbacks.onChange).toHaveBeenNthCalledWith(4, { filePath: null });
+    expect(callbacks.onChange).toHaveBeenNthCalledWith(5, { filePath: null });
+    expect(callbacks.onChange).toHaveBeenNthCalledWith(6, { filePath: null });
+    expect(callbacks.onChange).toHaveBeenNthCalledWith(7, { filePath: null });
+  });
+
+  it("ignores hard-excluded directory events in both separator forms", () => {
+    const handle = new FakeWatchHandle();
+    const { watchFactory } = createWatchFactory(handle);
+    const callbacks = createCallbacks();
+
+    new NodeFileSystemWatchSource(watchFactory).subscribe("/project", callbacks);
+
+    handle.emitChange("node_modules/library/index.js");
+    handle.emitChange("src\\node_modules\\library\\index.js");
+    handle.emitChange(".symbol-lattice\\state.db");
+    handle.emitChange("coverage/report.json");
+    handle.emitChange("dist\\output.js");
+
+    expect(callbacks.onChange).not.toHaveBeenCalled();
   });
 
   it("forwards each active watcher error once", () => {
