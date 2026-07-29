@@ -2902,4 +2902,69 @@ describe("SymbolLatticeService", () => {
       code: "INVALID_ROUTE_LIMIT"
     });
   });
+
+  it("indexes NestJS decorator routes as persisted exact method evidence", async () => {
+    const projectPath = await createInlineProject({
+      "src/cats.controller.ts": [
+        'import { Controller as ApiController, Get, Post as Create } from "@nestjs/common";',
+        "@ApiController(\"api/cats\")",
+        "export class CatsController {",
+        "  @Get()",
+        "  findAll() { return []; }",
+        "",
+        "  @Create(\":id\")",
+        "  replaceOne() { return []; }",
+        "}"
+      ].join("\n")
+    });
+    const service = createService();
+
+    const indexed = await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+    const findAll = await service.find(projectPath, "src/cats.controller.ts#CatsController.findAll");
+    const handler = findAll.symbols[0];
+    if (handler === undefined) {
+      throw new Error("Expected indexed NestJS method handler.");
+    }
+    const callers = await service.callers(projectPath, handler.qualifiedName);
+
+    expect(indexed).toMatchObject({
+      stale: false,
+      counts: { files: 1, symbols: expect.any(Number), edges: expect.any(Number) }
+    });
+    expect(routes.routes).toMatchObject([
+      {
+        method: "GET",
+        path: "/api/cats",
+        route: { kind: "route", name: "GET /api/cats" },
+        edge: {
+          kind: "routes",
+          resolution: "exact",
+          evidence: { ruleId: "framework.nestjs.decorator-route.local-method", stage: "syntax" }
+        },
+        handler: { qualifiedName: "src/cats.controller.ts#CatsController.findAll" }
+      },
+      {
+        method: "POST",
+        path: "/api/cats/:id",
+        route: { kind: "route", name: "POST /api/cats/:id" },
+        edge: {
+          kind: "routes",
+          resolution: "exact",
+          evidence: { ruleId: "framework.nestjs.decorator-route.local-method", stage: "syntax" }
+        },
+        handler: { qualifiedName: "src/cats.controller.ts#CatsController.replaceOne" }
+      }
+    ]);
+    expect(callers.relations).toMatchObject([
+      {
+        symbol: { kind: "route", name: "GET /api/cats" },
+        edge: {
+          kind: "routes",
+          resolution: "exact",
+          evidence: { ruleId: "framework.nestjs.decorator-route.local-method", stage: "syntax" }
+        }
+      }
+    ]);
+  });
 });

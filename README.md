@@ -9,12 +9,12 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![License](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
 
-[Quick start](#quick-start) | [Type hierarchy](#direct-type-hierarchy-evidence) | [Express routes](#static-express-route-evidence) | [Node inspection](#generation-bound-node-inspection) | [History and diff](#retained-graph-history-and-structural-diff) | [Auto sync](#opt-in-foreground-watch) | [Affected tests](#affected-test-evidence) | [Git hunks](#immutable-git-hunk-declaration-attribution) | [Context packs](#bounded-multi-symbol-context) | [Commands](#command-reference) | [MCP](#mcp-server) | [Architecture](#architecture) | [Roadmap](#roadmap)
+[Quick start](#quick-start) | [Type hierarchy](#direct-type-hierarchy-evidence) | [HTTP routes](#static-express-route-evidence) | [Node inspection](#generation-bound-node-inspection) | [History and diff](#retained-graph-history-and-structural-diff) | [Auto sync](#opt-in-foreground-watch) | [Affected tests](#affected-test-evidence) | [Git hunks](#immutable-git-hunk-declaration-attribution) | [Context packs](#bounded-multi-symbol-context) | [Commands](#command-reference) | [MCP](#mcp-server) | [Architecture](#architecture) | [Roadmap](#roadmap)
 
 </div>
 
 > [!IMPORTANT]
-> **v0.15.0** is an early developer release. This public repository runs from source; its npm package is intentionally private and is not published to npm.
+> **v0.16.0** is an early developer release. This public repository runs from source; its npm package is intentionally private and is not published to npm.
 
 SymbolLattice builds a local symbol graph without hiding uncertainty. It keeps syntax-proven artifact facts, resolves cross-file relationships conservatively, and records why every resolved edge exists. The graph stays local to the inspected project under `.symbol-lattice/index.sqlite`.
 
@@ -27,7 +27,7 @@ SymbolLattice builds a local symbol graph without hiding uncertainty. It keeps s
 - **Event-accelerated foreground freshness** - opt-in `watch` uses native filesystem events when the host supports them, exposes bounded pending-path evidence in its own stream, coalesces saves, retains bounded polling as a safety sweep, and invokes the same atomic `sync` only after drift.
 - **Generation-bound source evidence** - `search` and exact `explore` results use source captured with the active graph generation, even when the live project has since drifted.
 - **Declaration-focused node view** - exact `node` results return the full persisted declaration range plus a bounded declaration body, direct callers/callees, and explicit limits from one active generation without substituting live source text.
-- **Static HTTP entry evidence** - a narrow Express pack creates first-class `route` nodes and exact `routes` edges for statically proven literal registrations, so a handler can reveal the HTTP method and path that bind it.
+- **Static HTTP entry evidence** - narrow Express and NestJS packs create first-class `route` nodes and exact `routes` edges only when the HTTP registration and handler binding are statically proven.
 - **Direct type-hierarchy evidence** - AST-proven `extends` and `implements` edges preserve value/type namespace proof, type-only imports, re-export provenance, unresolved bases, and bounded direct parent/child views without pretending to have a full type checker.
 - **Bounded context packs** - ordered symbol references produce persisted source, capped relationship/impact summaries, and static directed evidence paths without guessing ambiguous symbols or dynamic behavior.
 - **Affected-test evidence** - changed indexed files map to conventionally named tests through bounded, exact import/export proof paths; explicit paths, `--working-tree`, and `--base <ref>` retain stale, scope, depth, visit, and result limits in the response.
@@ -99,7 +99,7 @@ One-shot data commands emit stable, pretty JSON. `watch` is the deliberate strea
 
 ## Capabilities
 
-| Area | v0.15.0 behavior |
+| Area | v0.16.0 behavior |
 | --- | --- |
 | Source files | TypeScript, TSX, JavaScript, and JSX |
 | Scope | Project root by default or repeatable, persisted `--scope` directories |
@@ -111,7 +111,7 @@ One-shot data commands emit stable, pretty JSON. `watch` is the deliberate strea
 | Re-exports | Named aliases, `export *`, default-through-named aliases, and namespace-export provenance |
 | Retrieval | Local deterministic FTS5 search across persisted source text and identifier parts; bounded path/language filters, source/symbol evidence, and exact `explore` excerpts from the same active generation |
 | Node inspection | Exact ID, qualified-name, simple-name, or `path:line[:column]` matches can return the persisted declaration range, capped direct callers/callees, source provenance, truncation, and active freshness from one generation |
-| Express routes | Static AST-proven `express` / `Router` literal registrations with bounded `routes` listing, exact handler proof when available, and unresolved route evidence when it is not |
+| HTTP routes | Static AST-proven Express literal registrations plus direct NestJS controller decorators. Both use bounded `routes` listing and exact handler evidence; only Express can retain an unresolved terminal handler in this release |
 | Type hierarchy | Direct TS/JS class `extends`, TS class `implements`, and TS interface `extends`; exact lexical/import/re-export proof with value/type namespaces, plus bounded direct parents/children |
 | Context | Bounded packs for 1–8 ordered references: exact-match source excerpts, capped callers/callees and reverse impact, plus shortest static directed evidence paths between adjacent exact references |
 | Affected tests | Explicit changed files or local Git change sets feed exact persisted `imports` / `exports` paths, deterministic proof paths, conventional test-path classification, and explicit completeness limits |
@@ -175,6 +175,36 @@ If the terminal handler cannot be resolved through a lexical binding, explicit i
 
 > [!NOTE]
 > `routes` is a read-only active-generation query. Its `status` may be stale after a source edit, while every route/handler record remains evidence from the last successfully indexed generation. Run `sync` or `index` to publish newer route evidence.
+
+### NestJS decorator route evidence
+
+v0.16 adds an AST-proven NestJS HTTP pack to the same persisted `route` / `routes` graph contract. Nest combines the optional class-level controller prefix with a method decorator path; SymbolLattice performs that direct syntax join and points the route edge at the method declaration itself. This matches Nest's [documented controller-routing model](https://docs.nestjs.com/controllers) while retaining exact source and binding evidence.
+
+```ts
+import { Controller as ApiController, Get, Post } from "@nestjs/common";
+
+@ApiController("api/cats")
+export class CatsController {
+  @Get()
+  findAll() { return []; }
+
+  @Post(":id")
+  replaceOne() { return []; }
+}
+```
+
+The indexed route records are `GET /api/cats -> CatsController.findAll` and `POST /api/cats/:id -> CatsController.replaceOne`. No name lookup, module export surface, or project-wide fallback is used for these handler edges: a valid decorated method in the same controller is the proof.
+
+The v0.16 surface is deliberately strict:
+
+- TypeScript and JavaScript source are supported when the parser exposes decorators.
+- `Controller`, `Get`, `Post`, `Put`, `Patch`, `Delete`, `Head`, `Options`, and `All` must be non-type-only **named imports** from `@nestjs/common`; import aliases are supported.
+- `@Controller(...)` and the method decorator must be direct calls with zero arguments or one static string/template-literal path. Prefixes are normalized only at their join boundary, so `@Controller("api")` plus `@Get(":id")` becomes `/api/:id`.
+- Decorated instance methods with a body are accepted. Their `routes` edge is `exact` with `framework.nestjs.decorator-route.local-method` syntax evidence.
+- Namespace decorators, local barrels/re-exports, custom/composed decorators, dynamic/object/array decorator arguments, static or abstract methods, `RouterModule` prefixes, global prefixes, versioning, and non-HTTP Nest transports remain outside this release's proof surface.
+
+> [!NOTE]
+> `routes` does not need a new command or MCP tool for NestJS: the existing read-only route query returns Express and NestJS evidence from the active generation together.
 
 ### Direct type hierarchy evidence
 
@@ -491,7 +521,7 @@ The active generation fingerprints the root `.gitignore`, selected `tsconfig.jso
 | `search <query>` | Search persisted source and identifier evidence; accepts `--limit`, `--path`, and `--language` |
 | `node <reference>` | Return one exact symbol's bounded persisted declaration range, direct callers/callees, provenance, and freshness; never refreshes the index |
 | `hierarchy <reference>` | Return bounded direct `extends` / `implements` parents and exact children, including unresolved parent evidence; accepts `--limit` and never refreshes the index |
-| `routes [path]` | List bounded static Express route nodes and handler evidence; accepts `--method`, `--path`, and `--limit`; never refreshes the index |
+| `routes [path]` | List bounded static Express and direct NestJS route nodes with handler evidence; accepts `--method`, `--path`, and `--limit`; never refreshes the index |
 | `callers <symbol>` / `callees <symbol>` | Show direct graph relationships |
 | `impact <symbol>` | Trace reverse impact with optional `--depth` and explicit output `--limit` |
 | `affected [filePaths...]` | Select conventionally named tests from exact persisted import/export evidence; accepts direct paths or `--stdin`, plus local Git `--working-tree` or `--base <ref>`, `--depth`, and `--limit` |
@@ -516,7 +546,7 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 | `symbol_lattice_explore` | Return generation-bound source when available, callers, callees, impact, freshness, and structured output for an existing graph |
 | `symbol_lattice_node` | Return one exact node's bounded persisted declaration range, direct callers/callees, provenance, and freshness without refreshing an index |
 | `symbol_lattice_hierarchy` | Return bounded direct `extends` / `implements` parents and exact children from one active generation, including unresolved parent evidence, without refreshing an index |
-| `symbol_lattice_routes` | Return bounded static Express route nodes, method/path filters, handler-edge evidence, and freshness without refreshing an index |
+| `symbol_lattice_routes` | Return bounded static Express and direct NestJS route nodes, method/path filters, handler-edge evidence, and freshness without refreshing an index |
 | `symbol_lattice_context` | Return bounded generation-bound source, relationships, reverse impact, and directed proof paths for ordered references without refreshing an index |
 | `symbol_lattice_affected` | Return bounded affected-test proofs for changed files, index coverage, and completeness limits without refreshing an index |
 | `symbol_lattice_affected_git` | Read a local Git working-tree or merge-base change set, then return its provenance and bounded affected-test proofs without fetching, refreshing, or synchronizing an index |
@@ -542,6 +572,8 @@ v0.14 adds no SQLite schema migration. It persists additive `route` symbols and 
 
 v0.15 adds no SQLite schema migration. It persists additive `extends` and `implements` edges through the existing graph, raw-fact, and retained-snapshot storage. The extractor/resolver version advance deliberately marks a pre-v0.15 active index as needing `sync` or `index` before it can make a hierarchy-coverage claim; raw facts now retain value/type binding namespaces and type-only import/re-export markers. Existing generations remain readable. The `hierarchy` CLI/service reads only the active generation, and an explore-only embedded MCP service does not register `symbol_lattice_hierarchy` until it exposes that optional capability.
 
+v0.16 adds no SQLite schema migration or public query surface. It persists direct NestJS HTTP `route` symbols and exact `routes` edges through the existing graph and retained-snapshot tables. The extractor advances because raw facts now contain AST-proven Nest decorator edges, so a pre-v0.16 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes route evidence; the resolver version is unchanged because no name-resolution rule was added. Existing generations remain readable, and the existing `routes` CLI/service/MCP tool reads the active generation only.
+
 ## Architecture
 
 ```mermaid
@@ -555,7 +587,7 @@ flowchart LR
   Catalog["Filesystem catalog\nscope + gitignore"] --> Inputs["Index inputs"]
   Catalog --> TS["TS alias resolver"]
   Catalog --> WS["Workspace resolver"]
-  Extractor["TypeScript AST extractor\ndirect heritage + static Express routes"] --> Facts["Reusable artifact facts"]
+  Extractor["TypeScript AST extractor\ndirect heritage + Express/Nest HTTP routes"] --> Facts["Reusable artifact facts"]
   Catalog --> SourceDocs["Persisted source documents"]
   SourceDocs --> Retrieval["Generation-bound lexical projection"]
   Facts --> Resolver["Full project export surface"]
@@ -581,12 +613,12 @@ src/
 
 ## Deliberate boundaries
 
-v0.15.0 does not yet provide:
+v0.16.0 does not yet provide:
 
 - Daemon mode, background automatic sync after the foreground process exits, cross-process watch coordination, MCP per-query pending-file banners, worker pools, or historical source browsing.
 - pnpm workspace YAML, TypeScript project references, external/package `extends`, or nested `.gitignore` semantics.
-- CommonJS `require`, dynamic dispatch, decorators, reflection, arbitrary framework routes, or namespace property-call resolution. The v0.14 Express pack is intentionally limited to syntax-proven static registrations; it does not model mutable/aliased receivers, mounts, chained routers, inline callbacks, decorators, or runtime route composition.
-- Semantic type checking, transitive hierarchy traversal, declaration-merging semantics, override dispatch, mixin/qualified/conditional heritage expressions, or automatic framework decorator inference. v0.15 records only direct syntax-proven heritage identifiers and keeps unproven bases unresolved.
+- CommonJS `require`, dynamic dispatch, reflection, arbitrary framework routes, or namespace property-call resolution. The v0.14 Express pack remains limited to syntax-proven static registrations; it does not model mutable/aliased receivers, mounts, chained routers, inline callbacks, or runtime route composition.
+- Semantic type checking, transitive hierarchy traversal, declaration-merging semantics, override dispatch, mixin/qualified/conditional heritage expressions, or automatic framework decorator inference. v0.16 recognizes only direct imported NestJS HTTP decorators; it does not infer custom decorators, barrels, RouterModule/global/version prefixes, guards, or non-HTTP transports.
 - Parsers beyond TS/TSX/JS/JSX, external dependency indexing, telemetry, or multi-project routing.
 - Embedding-based or cloud retrieval, semantic ranking, arbitrary natural-language context assembly, semantic Git diff beyond immutable zero-context hunk-to-revision-local-declaration evidence, or reliable rename/move/cross-side identity attribution.
 
@@ -608,8 +640,9 @@ v0.15.0 does not yet provide:
 | `v0.13.0` | Exact persisted node inspection with bounded full declaration ranges, direct callers/callees, explicit source provenance, and additive read-only CLI/MCP support |
 | `v0.14.0` | First AST-proven Express framework pack: literal static route nodes/handler edges, route-aware graph traversal, and bounded read-only CLI/MCP listing |
 | `v0.15.0` | Direct AST-proven TypeScript/JavaScript `extends` / `implements` graph with value/type namespace proof, unresolved heritage evidence, and bounded read-only CLI/MCP hierarchy views |
-| `v0.16.0` | Planned AST-proven NestJS HTTP decorator pack built on the shared hierarchy and route-evidence boundaries |
-| `v0.17+` | Additional language adapters, framework packs, contract graphs, retained-generation source browsing, and further CodeGraph-parity work where evidence supports it |
+| `v0.16.0` | AST-proven NestJS HTTP controller decorators with direct method edges, imported-alias proof, and shared read-only route views |
+| `v0.17.0` | Planned NestJS RouterModule and explicit module-prefix evidence, retaining the same no-guessing route contract |
+| `v0.18+` | Additional language adapters, framework packs, contract graphs, retained-generation source browsing, and further CodeGraph-parity work where evidence supports it |
 
 See [CHANGELOG.md](CHANGELOG.md) for release notes and migration history.
 
@@ -623,7 +656,7 @@ npm.cmd pack --dry-run
 git diff --check
 ```
 
-The suite covers discovery, input fingerprints, alias and workspace resolution, exact direct TypeScript/JavaScript heritage extraction and namespace-aware local/import/re-export resolution, bounded hierarchy traversal, exact static Express route extraction and handler resolution, route-aware graph traversal, re-export semantics, exact affected-test proofs and completeness limits, local Git change-set parsing and selection, immutable revision-local Git hunk declaration attribution, bounded generation-bound node declaration evidence, generation-bound search and exploration source evidence, retained graph history and structural diffs, legacy snapshot backfill, stale-source evidence, incremental raw-fact reuse, bounded foreground pending-file disclosure, event debounce/polling fallback/retry receipts, no-op sync, schema migration, atomic rollback, MCP read-only behavior, CLI parsing, and architecture boundaries.
+The suite covers discovery, input fingerprints, alias and workspace resolution, exact direct TypeScript/JavaScript heritage extraction and namespace-aware local/import/re-export resolution, bounded hierarchy traversal, exact static Express route extraction and handler resolution, direct NestJS controller-decorator extraction with alias and shadow rejection, route-aware graph traversal, re-export semantics, exact affected-test proofs and completeness limits, local Git change-set parsing and selection, immutable revision-local Git hunk declaration attribution, bounded generation-bound node declaration evidence, generation-bound search and exploration source evidence, retained graph history and structural diffs, legacy snapshot backfill, stale-source evidence, incremental raw-fact reuse, bounded foreground pending-file disclosure, event debounce/polling fallback/retry receipts, no-op sync, schema migration, atomic rollback, MCP read-only behavior, CLI parsing, and architecture boundaries.
 
 ## Contributing
 

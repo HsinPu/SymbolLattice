@@ -758,6 +758,63 @@ describe("literal route handler resolution", () => {
     ).toEqual([]);
   });
 
+  it("preserves AST-proven NestJS controller routes as direct exact method edges", () => {
+    const sourceDocuments: readonly SourceDocument[] = [
+      {
+        absolutePath: "C:/project/src/cats.controller.ts",
+        relativePath: "src/cats.controller.ts",
+        language: "typescript",
+        sourceText: [
+          'import { Controller, Get, Post } from "@nestjs/common";',
+          "@Controller(\"cats\")",
+          "export class CatsController {",
+          "  @Get()",
+          "  findAll() { return []; }",
+          "  @Post(\"bulk\")",
+          "  createBulk() { return []; }",
+          "}"
+        ].join("\n"),
+        contentHash: "cats"
+      }
+    ];
+
+    const snapshot = snapshotWithResolver(sourceDocuments, undefined);
+    const findAll = snapshot.symbols.find(
+      (symbol) => symbol.qualifiedName === "src/cats.controller.ts#CatsController.findAll"
+    );
+    const createBulk = snapshot.symbols.find(
+      (symbol) => symbol.qualifiedName === "src/cats.controller.ts#CatsController.createBulk"
+    );
+    const getRoute = snapshot.edges.find(
+      (edge) => edge.kind === "routes" && edge.referenceName === "findAll"
+    );
+    const postRoute = snapshot.edges.find(
+      (edge) => edge.kind === "routes" && edge.referenceName === "createBulk"
+    );
+
+    expect(getRoute).toMatchObject({
+      targetId: findAll?.id,
+      resolution: "exact",
+      confidence: 1,
+      evidence: {
+        ruleId: "framework.nestjs.decorator-route.local-method",
+        stage: "syntax",
+        candidateSymbolIds: [findAll?.id]
+      }
+    });
+    expect(postRoute).toMatchObject({
+      targetId: createBulk?.id,
+      resolution: "exact",
+      confidence: 1,
+      evidence: {
+        ruleId: "framework.nestjs.decorator-route.local-method",
+        stage: "syntax",
+        candidateSymbolIds: [createBulk?.id]
+      }
+    });
+    expect(snapshot.pendingReferences.filter((reference) => reference.relationKind === "routes")).toEqual([]);
+  });
+
   it("keeps ambiguous and unproven route handlers unresolved without changing ordinary call heuristics", () => {
     const sourceDocuments: readonly SourceDocument[] = [
       {

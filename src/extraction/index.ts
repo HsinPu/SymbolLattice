@@ -307,6 +307,41 @@ interface StaticExpressRoute {
   readonly handler: ts.Identifier;
 }
 
+/** Lexical value bindings that can prove a NestJS HTTP decorator import. */
+interface ScopedNestDecoratorBindings {
+  readonly byScopeId: ReadonlyMap<string, ReadonlyMap<string, readonly NestDecoratorBinding[]>>;
+}
+
+type NestDecoratorBindingKind = "nest-controller" | "nest-route" | "other";
+
+interface NestDecoratorBinding {
+  readonly declaration: ts.Node;
+  readonly kind: NestDecoratorBindingKind;
+  /** Present only for a direct NestJS HTTP method decorator. */
+  readonly method: RouteMethod | null;
+}
+
+interface StaticNestRoute {
+  readonly method: RouteMethod;
+  readonly path: string;
+  readonly decorator: ts.Decorator;
+  readonly handler: ts.MethodDeclaration;
+}
+
+/** Direct HTTP decorators exported by `@nestjs/common`. */
+const NEST_HTTP_DECORATOR_METHODS: Readonly<Record<string, RouteMethod>> = {
+  Get: "GET",
+  Post: "POST",
+  Put: "PUT",
+  Patch: "PATCH",
+  Delete: "DELETE",
+  Head: "HEAD",
+  Options: "OPTIONS",
+  All: "ALL"
+};
+
+const NEST_OTHER_DECORATOR_BINDING = { kind: "other", method: null } as const;
+
 /** A syntax-proven direct base or contract named in a TypeScript heritage clause. */
 interface StaticHeritageReference {
   readonly relationKind: "extends" | "implements";
@@ -681,6 +716,273 @@ function staticExpressRoute(
   return { method, path: pathArgument.text, handler };
 }
 
+function isNestCommonImport(statement: ts.ImportDeclaration): boolean {
+  return (
+    ts.isStringLiteral(statement.moduleSpecifier) &&
+    statement.moduleSpecifier.text === "@nestjs/common" &&
+    statement.importClause?.isTypeOnly !== true
+  );
+}
+
+function nestDecoratorImportBinding(
+  statement: ts.ImportDeclaration,
+  element: ts.ImportSpecifier
+): Pick<NestDecoratorBinding, "kind" | "method"> {
+  if (!isNestCommonImport(statement) || element.isTypeOnly) {
+    return NEST_OTHER_DECORATOR_BINDING;
+  }
+
+  const importedName = element.propertyName?.text ?? element.name.text;
+  if (importedName === "Controller") {
+    return { kind: "nest-controller", method: null };
+  }
+
+  const method = NEST_HTTP_DECORATOR_METHODS[importedName];
+  return method === undefined ? NEST_OTHER_DECORATOR_BINDING : { kind: "nest-route", method };
+}
+
+function addScopedNestDecoratorBinding(
+  byScopeId: Map<string, Map<string, NestDecoratorBinding[]>>,
+  scopeId: string | undefined,
+  names: readonly string[],
+  declaration: ts.Node,
+  binding: Pick<NestDecoratorBinding, "kind" | "method"> = NEST_OTHER_DECORATOR_BINDING
+): void {
+  if (scopeId === undefined) {
+    return;
+  }
+
+  const bindings = byScopeId.get(scopeId) ?? new Map<string, NestDecoratorBinding[]>();
+  for (const name of names) {
+    const candidates = bindings.get(name) ?? [];
+    candidates.push({ declaration, ...binding });
+    bindings.set(name, candidates);
+  }
+  byScopeId.set(scopeId, bindings);
+}
+
+/**
+ * Collects only lexical value bindings so an imported Nest decorator cannot be
+ * inferred from its spelling. An inner declaration or duplicate binding blocks
+ * the import just as it does for Express receiver extraction.
+ */
+function collectScopedNestDecoratorBindings(sourceFile: ts.SourceFile): ScopedNestDecoratorBindings {
+  const byScopeId = new Map<string, Map<string, NestDecoratorBinding[]>>();
+  const rootScopeId = sourceScopeId(sourceFile);
+
+  function collectBindings(node: ts.Node): void {
+    if (ts.isImportDeclaration(node)) {
+      const importClause = node.importClause;
+      if (importClause?.name !== undefined) {
+        addScopedNestDecoratorBinding(byScopeId, rootScopeId, [importClause.name.text], importClause.name);
+      }
+      if (importClause?.namedBindings !== undefined) {
+        if (ts.isNamespaceImport(importClause.namedBindings)) {
+          addScopedNestDecoratorBinding(
+            byScopeId,
+            rootScopeId,
+            [importClause.namedBindings.name.text],
+            importClause.namedBindings.name
+          );
+        } else {
+          for (const element of importClause.namedBindings.elements) {
+            addScopedNestDecoratorBinding(
+              byScopeId,
+              rootScopeId,
+              [element.name.text],
+              element,
+              nestDecoratorImportBinding(node, element)
+            );
+          }
+        }
+      }
+    }
+
+    if (ts.isVariableDeclaration(node)) {
+      addScopedNestDecoratorBinding(
+        byScopeId,
+        variableBindingScopeId(sourceFile, node),
+        bindingNames(node.name),
+        node
+      );
+    }
+
+    if (
+      ts.isFunctionDeclaration(node) ||
+      ts.isClassDeclaration(node) ||
+      ts.isEnumDeclaration(node) ||
+      ts.isModuleDeclaration(node) ||
+      ts.isImportEqualsDeclaration(node)
+    ) {
+      if (node.name !== undefined) {
+        const scopeId = declarationScopeId(sourceFile, node, {
+          name: node.name.text,
+          kind: ts.isFunctionDeclaration(node) || ts.isClassDeclaration(node) ? "class" : "variable",
+          isExported: false
+        });
+        addScopedNestDecoratorBinding(byScopeId, scopeId, [node.name.text], node);
+      }
+    }
+
+    if (
+      (ts.isFunctionExpression(node) || ts.isClassExpression(node)) &&
+      node.name !== undefined
+    ) {
+      addScopedNestDecoratorBinding(byScopeId, scopeIdFor(sourceFile, node), [node.name.text], node);
+    }
+
+    if (ts.isFunctionLike(node)) {
+      const scopeId = scopeIdFor(sourceFile, node);
+      for (const parameter of node.parameters) {
+        addScopedNestDecoratorBinding(byScopeId, scopeId, bindingNames(parameter.name), parameter);
+      }
+    }
+
+    if (ts.isCatchClause(node) && node.variableDeclaration !== undefined) {
+      addScopedNestDecoratorBinding(
+        byScopeId,
+        scopeIdFor(sourceFile, node),
+        bindingNames(node.variableDeclaration.name),
+        node.variableDeclaration
+      );
+    }
+
+    ts.forEachChild(node, collectBindings);
+  }
+
+  ts.forEachChild(sourceFile, collectBindings);
+  return { byScopeId };
+}
+
+function visibleNestDecoratorBinding(
+  sourceFile: ts.SourceFile,
+  identifier: ts.Identifier,
+  bindings: ScopedNestDecoratorBindings
+): NestDecoratorBinding | null {
+  for (const scopeId of enclosingScopeIds(sourceFile, identifier)) {
+    const candidates = bindings.byScopeId.get(scopeId)?.get(identifier.text);
+    if (candidates !== undefined) {
+      return candidates.length === 1 ? candidates[0] ?? null : null;
+    }
+  }
+  return null;
+}
+
+function decoratorsFor(node: ts.Node): readonly ts.Decorator[] {
+  return ts.canHaveDecorators(node) ? ts.getDecorators(node) ?? [] : [];
+}
+
+function literalNestRoutePaths(arguments_: ts.NodeArray<ts.Expression>): readonly string[] | null {
+  if (arguments_.length === 0) {
+    return [""];
+  }
+  if (arguments_.length !== 1) {
+    return null;
+  }
+
+  const argument = arguments_[0];
+  if (
+    argument !== undefined &&
+    (ts.isStringLiteral(argument) || ts.isNoSubstitutionTemplateLiteral(argument))
+  ) {
+    return [argument.text];
+  }
+
+  return null;
+}
+
+interface StaticNestDecorator {
+  readonly decorator: ts.Decorator;
+  readonly binding: NestDecoratorBinding;
+  readonly paths: readonly string[];
+}
+
+function staticNestDecorator(
+  sourceFile: ts.SourceFile,
+  decorator: ts.Decorator,
+  bindings: ScopedNestDecoratorBindings
+): StaticNestDecorator | null {
+  const expression = decorator.expression;
+  if (
+    !ts.isCallExpression(expression) ||
+    expression.questionDotToken !== undefined ||
+    !ts.isIdentifier(expression.expression)
+  ) {
+    return null;
+  }
+
+  const binding = visibleNestDecoratorBinding(sourceFile, expression.expression, bindings);
+  const paths = literalNestRoutePaths(expression.arguments);
+  if (binding === null || binding.kind === "other" || paths === null) {
+    return null;
+  }
+
+  return { decorator, binding, paths };
+}
+
+function nestRoutePathPart(path: string): string {
+  return path.replace(/^\/+|\/+$/gu, "");
+}
+
+function joinNestRoutePath(controllerPath: string, methodPath: string): string {
+  const parts = [nestRoutePathPart(controllerPath), nestRoutePathPart(methodPath)].filter(
+    (part) => part.length > 0
+  );
+  return parts.length === 0 ? "/" : `/${parts.join("/")}`;
+}
+
+function isStaticMethod(method: ts.MethodDeclaration): boolean {
+  return (method as ModifierCarrier).modifiers?.some(
+    (modifier) => modifier.kind === ts.SyntaxKind.StaticKeyword
+  ) ?? false;
+}
+
+function staticNestRoutes(
+  sourceFile: ts.SourceFile,
+  declaration: ts.ClassDeclaration,
+  bindings: ScopedNestDecoratorBindings
+): readonly StaticNestRoute[] {
+  const controllers = decoratorsFor(declaration).flatMap((decorator) => {
+    const candidate = staticNestDecorator(sourceFile, decorator, bindings);
+    return candidate?.binding.kind === "nest-controller" ? [candidate] : [];
+  });
+  if (controllers.length !== 1) {
+    return [];
+  }
+
+  const controller = controllers[0];
+  if (controller === undefined) {
+    return [];
+  }
+
+  const routes: StaticNestRoute[] = [];
+  for (const member of declaration.members) {
+    if (!ts.isMethodDeclaration(member) || member.body === undefined || isStaticMethod(member)) {
+      continue;
+    }
+
+    for (const decorator of decoratorsFor(member)) {
+      const candidate = staticNestDecorator(sourceFile, decorator, bindings);
+      if (candidate?.binding.kind !== "nest-route" || candidate.binding.method === null) {
+        continue;
+      }
+
+      for (const controllerPath of controller.paths) {
+        for (const methodPath of candidate.paths) {
+          routes.push({
+            method: candidate.binding.method,
+            path: joinNestRoutePath(controllerPath, methodPath),
+            decorator: candidate.decorator,
+            handler: member
+          });
+        }
+      }
+    }
+  }
+
+  return routes;
+}
+
 function fileNodeFor(sourceFile: ts.SourceFile, input: ExtractFileFactsInput): SymbolNode {
   const fileName = input.filePath.split("/").at(-1) ?? input.filePath;
   return {
@@ -723,6 +1025,8 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
   const reExportBindings: ReExportBinding[] = [];
   const declarationOrdinals = new Map<string, number>();
   const routeReceiverBindings = collectScopedRouteReceiverBindings(sourceFile);
+  const nestDecoratorBindings = collectScopedNestDecoratorBindings(sourceFile);
+  const symbolsByDeclaration = new Map<ts.Node, SymbolNode>();
   const stack: SymbolNode[] = [];
 
   const fileNode = fileNodeFor(sourceFile, input);
@@ -799,8 +1103,8 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
     });
   }
 
-  function addStaticExpressRoute(node: ts.CallExpression, route: StaticExpressRoute): void {
-    const name = `${route.method} ${route.path}`;
+  function addRouteSymbol(node: ts.Node, method: RouteMethod, path: string): SymbolNode {
+    const name = `${method} ${path}`;
     const qualifiedName = `${input.filePath}#route:${name}`;
     const identity = `${qualifiedName}\u0000route`;
     const declarationOrdinal = declarationOrdinals.get(identity) ?? 0;
@@ -822,7 +1126,45 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
     };
     symbols.push(symbol);
     addResolvedEdge(fileNode.id, symbol.id, "contains", node, name);
+    return symbol;
+  }
+
+  function addStaticExpressRoute(node: ts.CallExpression, route: StaticExpressRoute): void {
+    const symbol = addRouteSymbol(node, route.method, route.path);
     addPendingReference(symbol.id, route.handler.text, "routes", route.handler);
+  }
+
+  function addStaticNestRoute(route: StaticNestRoute): void {
+    const handler = symbolsByDeclaration.get(route.handler);
+    if (handler?.kind !== "method") {
+      return;
+    }
+
+    const symbol = addRouteSymbol(route.decorator, route.method, route.path);
+    const range = sourceRange(sourceFile, route.decorator);
+    edges.push({
+      id: createEdgeId({
+        sourceId: symbol.id,
+        targetId: handler.id,
+        kind: "routes",
+        line: range.start.line,
+        column: range.start.column,
+        referenceName: handler.name
+      }),
+      sourceId: symbol.id,
+      targetId: handler.id,
+      kind: "routes",
+      filePath: input.filePath,
+      range,
+      resolution: "exact",
+      confidence: 1,
+      referenceName: handler.name,
+      evidence: {
+        ruleId: "framework.nestjs.decorator-route.local-method",
+        stage: "syntax",
+        candidateSymbolIds: [handler.id]
+      }
+    });
   }
 
   function addDeclaration(node: ts.Node, info: DeclarationInfo): SymbolNode {
@@ -850,6 +1192,7 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
       declarationOrdinal
     };
     symbols.push(symbol);
+    symbolsByDeclaration.set(node, symbol);
     addResolvedEdge(parent.id, symbol.id, "contains", node, info.name);
     return symbol;
   }
@@ -1060,17 +1403,23 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
 
   ts.forEachChild(sourceFile, visit);
 
-  function extractStaticExpressRoutes(node: ts.Node): void {
+  function extractStaticRoutes(node: ts.Node): void {
+    if (ts.isClassDeclaration(node)) {
+      for (const route of staticNestRoutes(sourceFile, node, nestDecoratorBindings)) {
+        addStaticNestRoute(route);
+      }
+    }
+
     if (ts.isCallExpression(node)) {
       const route = staticExpressRoute(sourceFile, node, routeReceiverBindings);
       if (route !== null) {
         addStaticExpressRoute(node, route);
       }
     }
-    ts.forEachChild(node, extractStaticExpressRoutes);
+    ts.forEachChild(node, extractStaticRoutes);
   }
 
-  ts.forEachChild(sourceFile, extractStaticExpressRoutes);
+  ts.forEachChild(sourceFile, extractStaticRoutes);
 
   return {
     symbols,

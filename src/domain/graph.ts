@@ -7,7 +7,7 @@ import {
 
 const DEFAULT_IMPACT_EDGE_KINDS: readonly EdgeKind[] = ["calls", "routes", "imports"];
 
-/** HTTP methods represented by literal Express route symbols. */
+/** HTTP methods represented by static route symbols. */
 export const ROUTE_METHODS = [
   "GET",
   "POST",

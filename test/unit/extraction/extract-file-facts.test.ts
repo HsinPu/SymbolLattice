@@ -533,4 +533,158 @@ describe("TypeScript and JavaScript extraction", () => {
         .map((reference) => reference.referenceName)
     ).toEqual(["handler"]);
   });
+
+  it("extracts AST-proven NestJS HTTP routes with aliased decorator imports and direct method evidence", () => {
+    const facts = extractFileFacts({
+      filePath: "src/users.controller.ts",
+      language: "typescript",
+      sourceText: [
+        'import { Controller as ApiController, Get as Read, Post } from "@nestjs/common";',
+        "@ApiController(\"/api/users/\")",
+        "export class UsersController {",
+        "  @Read()",
+        "  list(): string { return \"users\"; }",
+        "",
+        "  @Read(\":id\")",
+        "  findOne(): string { return \"user\"; }",
+        "",
+        "  @Post(\"bulk\")",
+        "  createBulk(): string { return \"created\"; }",
+        "}"
+      ].join("\n")
+    });
+
+    const routes = facts.symbols.filter((symbol) => symbol.kind === "route");
+    const methods = facts.symbols.filter((symbol) => symbol.kind === "method");
+    const routesByName = new Map(routes.map((route) => [route.name, route]));
+    const methodsByName = new Map(methods.map((method) => [method.name, method]));
+    const routeEdges = facts.edges.filter((edge) => edge.kind === "routes");
+
+    expect(routes.map((route) => [route.name, route.range.start.line])).toEqual([
+      ["GET /api/users", 4],
+      ["GET /api/users/:id", 7],
+      ["POST /api/users/bulk", 10]
+    ]);
+    expect(routeEdges).toEqual([
+      expect.objectContaining({
+        sourceId: routesByName.get("GET /api/users")?.id,
+        targetId: methodsByName.get("list")?.id,
+        resolution: "exact",
+        confidence: 1,
+        referenceName: "list",
+        evidence: {
+          ruleId: "framework.nestjs.decorator-route.local-method",
+          stage: "syntax",
+          candidateSymbolIds: [methodsByName.get("list")?.id]
+        }
+      }),
+      expect.objectContaining({
+        sourceId: routesByName.get("GET /api/users/:id")?.id,
+        targetId: methodsByName.get("findOne")?.id,
+        referenceName: "findOne"
+      }),
+      expect.objectContaining({
+        sourceId: routesByName.get("POST /api/users/bulk")?.id,
+        targetId: methodsByName.get("createBulk")?.id,
+        referenceName: "createBulk"
+      })
+    ]);
+    expect(facts.pendingReferences.filter((reference) => reference.relationKind === "routes")).toEqual([]);
+  });
+
+  it("supports direct NestJS HTTP decorators in JavaScript source", () => {
+    const facts = extractFileFacts({
+      filePath: "src/health.controller.js",
+      language: "javascript",
+      sourceText: [
+        'import { Controller, Get } from "@nestjs/common";',
+        "@Controller(\"health\")",
+        "export class HealthController {",
+        "  @Get()",
+        "  status() { return { ok: true }; }",
+        "}"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route")).toMatchObject([
+      { name: "GET /health", range: { start: { line: 4, column: 3 } } }
+    ]);
+    expect(facts.edges.filter((edge) => edge.kind === "routes")).toMatchObject([
+      {
+        resolution: "exact",
+        confidence: 1,
+        referenceName: "status",
+        evidence: { ruleId: "framework.nestjs.decorator-route.local-method", stage: "syntax" }
+      }
+    ]);
+  });
+
+  it("maps every supported direct NestJS HTTP decorator and root controller path", () => {
+    const facts = extractFileFacts({
+      filePath: "src/rest.controller.ts",
+      language: "typescript",
+      sourceText: [
+        'import { All, Controller, Delete, Get, Head, Options, Patch, Post, Put } from "@nestjs/common";',
+        "@Controller()",
+        "class RestController {",
+        "  @Get() get() {}",
+        "  @Post() post() {}",
+        "  @Put() put() {}",
+        "  @Patch() patch() {}",
+        "  @Delete() delete() {}",
+        "  @Head() head() {}",
+        "  @Options() options() {}",
+        "  @All(`fallback`) all() {}",
+        "}"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route").map((route) => route.name)).toEqual([
+      "GET /",
+      "POST /",
+      "PUT /",
+      "PATCH /",
+      "DELETE /",
+      "HEAD /",
+      "OPTIONS /",
+      "ALL /fallback"
+    ]);
+    expect(facts.edges.filter((edge) => edge.kind === "routes").map((edge) => edge.referenceName)).toEqual([
+      "get",
+      "post",
+      "put",
+      "patch",
+      "delete",
+      "head",
+      "options",
+      "all"
+    ]);
+  });
+
+  it("rejects type-only, non-Nest, shadowed, dynamic, namespace, and static NestJS route shapes", () => {
+    const facts = extractFileFacts({
+      filePath: "src/unproven.controller.ts",
+      language: "typescript",
+      sourceText: [
+        'import { Controller, Get, Post } from "@nestjs/common";',
+        'import type { Controller as TypeController, Get as TypeGet } from "@nestjs/common";',
+        'import { Controller as ForeignController, Get as ForeignGet } from "./not-nest";',
+        'import * as nest from "@nestjs/common";',
+        "const path = \"dynamic\";",
+        "const Get = () => undefined;",
+        "@TypeController(\"type-only\") class TypeOnlyController { @TypeGet() index() {} }",
+        "@ForeignController(\"foreign\") class ForeignControllerClass { @ForeignGet() index() {} }",
+        "@nest.Controller(\"namespace\") class NamespaceController { @nest.Get() index() {} }",
+        "@Controller(path) class DynamicController { @Post() index() {} }",
+        "@Controller(\"static\") class StaticController { @Post() static index() {} }",
+        "@Controller(\"shadowed\") class ShadowedController { @Get() index() {} }",
+        "@Controller({ path: \"options\" }) class OptionsController { @Post() index() {} }",
+        "@Controller(\"method-dynamic\") class DynamicMethodController { @Post(path) index() {} }",
+        "class NoController { @Post() index() {} }"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+  });
 });

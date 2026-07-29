@@ -6,6 +6,24 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.16.0] - 2026-07-30
+
+### Added
+
+- AST-proven NestJS HTTP controller extraction for TypeScript and JavaScript: direct `@Controller(...)` plus `@Get`, `@Post`, `@Put`, `@Patch`, `@Delete`, `@Head`, `@Options`, or `@All` method decorators create persisted `route` symbols with joined controller/method paths.
+- Direct exact `routes` edges from each Nest route to its decorated instance method. They carry `framework.nestjs.decorator-route.local-method` syntax evidence and participate in existing callers, callees, impact, context, exploration, edge explanation, CLI, and MCP route views without a name-resolution fallback.
+- Exact decorator-import proof for non-type-only named imports from `@nestjs/common`, including import aliases. The extractor rejects shadowed, namespace, foreign-module, dynamic, object, custom, static, and body-less method shapes instead of manufacturing route evidence.
+
+### Compatibility
+
+- No SQLite schema migration or public query contract change is required. Existing graph, artifact-fact, edge, and retained-snapshot storage persists the additive Nest route shape; existing generations remain readable.
+- The artifact extractor advances to `typescript-ast-v5`, so a pre-v0.16 active index reports `indexer-version-changed` until an explicit `sync` or `index` publishes Nest route evidence. The project resolver remains at `project-resolver-v4` because Nest routes are direct syntax edges, not a new cross-file resolution rule.
+
+### Deliberate limits
+
+- This is the direct NestJS HTTP controller surface, not a general Nest runtime model. It excludes local decorator barrels/re-exports, namespace or custom/composed decorators, literal arrays and object options, dynamic arguments, static/abstract handlers, RouterModule/global/version prefixes, guards, GraphQL, microservices, WebSockets, and SSE.
+- Decorator recognition is never inferred from a filename, package manifest, or an unbound identifier. A route needs an AST-proven direct named import from `@nestjs/common`, one supported controller decorator, one supported method decorator, and an indexed method declaration in the same class.
+
 ## [0.15.0] - 2026-07-30
 
 ### Added
@@ -330,7 +348,8 @@ No unreleased changes.
 - Explicit full indexing, caller/callee/impact queries, and read-only MCP exploration.
 - `exact`, `heuristic`, and `unresolved` relationship states.
 
-[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.15.0...HEAD
+[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.16.0...HEAD
+[0.16.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.12.0...v0.13.0
