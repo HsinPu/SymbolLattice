@@ -3794,6 +3794,168 @@ describe("source extraction", () => {
     expect(unterminatedString.symbols).toHaveLength(1);
   });
 
+  it("extracts direct Perl Dancer2 routes with exact and unresolved evidence", () => {
+    const facts = extractFileFacts({
+      filePath: "src/demo/app.pl",
+      language: "perl",
+      sourceText: [
+        "package Demo::App;",
+        "use Dancer2;",
+        "",
+        "sub health {",
+        "  return \"ok\";",
+        "}",
+        "",
+        "get \"/health\" => \\&health;",
+        "post \"/users\" => \\&create_user;",
+        "del \"/users/:id\" => \\&delete_user;"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(facts.symbols.filter((symbol) => symbol.kind === "class").map((symbol) => symbol.qualifiedName)).toEqual([
+      "src/demo/app.pl#Demo::App"
+    ]);
+    expect(facts.symbols.filter((symbol) => symbol.kind === "function").map((symbol) => symbol.qualifiedName)).toEqual([
+      "src/demo/app.pl#Demo::App.health"
+    ]);
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName ?? null,
+          edge.referenceName,
+          edge.evidence?.ruleId,
+          edge.resolution,
+          edge.confidence
+        ])
+    ).toEqual([
+      [
+        "GET /health",
+        "src/demo/app.pl#Demo::App.health",
+        "Demo::App::health",
+        "framework.dancer2.direct-route.literal-verb.local-sub",
+        "exact",
+        1
+      ],
+      [
+        "POST /users",
+        null,
+        "Demo::App::create_user",
+        "framework.dancer2.direct-route.literal-verb.unresolved-sub",
+        "unresolved",
+        0
+      ],
+      [
+        "DELETE /users/:id",
+        null,
+        "Demo::App::delete_user",
+        "framework.dancer2.direct-route.literal-verb.unresolved-sub",
+        "unresolved",
+        0
+      ]
+    ]);
+
+    const scriptFacts = extractFileFacts({
+      filePath: "bin/app.pl",
+      language: "perl",
+      sourceText: [
+        "use Dancer2;",
+        "sub status { return \"ok\"; }",
+        "get \"/status\" => \\&status;"
+      ].join("\n")
+    });
+    expect(scriptFacts.edges.filter((edge) => edge.kind === "routes")).toEqual([
+      expect.objectContaining({
+        resolution: "exact",
+        referenceName: "status",
+        evidence: expect.objectContaining({
+          ruleId: "framework.dancer2.direct-route.literal-verb.local-sub"
+        })
+      })
+    ]);
+  });
+
+  it("requires direct Dancer2 use, literal named coderef routes, and balanced Perl input", () => {
+    const importedDsl = extractFileFacts({
+      filePath: "src/imported.pl",
+      language: "perl",
+      sourceText: [
+        "use Dancer2 qw(get);",
+        "sub health { return \"ok\"; }",
+        "get \"/health\" => \\&health;"
+      ].join("\n")
+    });
+    const dynamicPath = extractFileFacts({
+      filePath: "src/dynamic.pl",
+      language: "perl",
+      sourceText: [
+        "use Dancer2;",
+        "my $path = \"/health\";",
+        "sub health { return \"ok\"; }",
+        "get $path => \\&health;"
+      ].join("\n")
+    });
+    const inlineHandler = extractFileFacts({
+      filePath: "src/inline.pl",
+      language: "perl",
+      sourceText: ["use Dancer2;", "get \"/health\" => sub { return \"ok\"; };"].join("\n")
+    });
+    const anyRoute = extractFileFacts({
+      filePath: "src/any.pl",
+      language: "perl",
+      sourceText: ["use Dancer2;", "any \"/health\" => \\&health;"].join("\n")
+    });
+    const nestedRoute = extractFileFacts({
+      filePath: "src/nested.pl",
+      language: "perl",
+      sourceText: [
+        "use Dancer2;",
+        "sub configure {",
+        "  get \"/health\" => \\&health;",
+        "}",
+        "sub health { return \"ok\"; }"
+      ].join("\n")
+    });
+    const repeatedUse = extractFileFacts({
+      filePath: "src/repeated.pl",
+      language: "perl",
+      sourceText: [
+        "use Dancer2;",
+        "use Dancer2;",
+        "sub health { return \"ok\"; }",
+        "get \"/health\" => \\&health;"
+      ].join("\n")
+    });
+    const broken = extractFileFacts({
+      filePath: "src/broken.pl",
+      language: "perl",
+      sourceText: "use Dancer2; sub health { return \"ok\"; get \"/health\" => \\&health;"
+    });
+    const unterminatedString = extractFileFacts({
+      filePath: "src/string.pl",
+      language: "perl",
+      sourceText: "use Dancer2; get \"/health => \\&health;"
+    });
+
+    for (const facts of [
+      importedDsl,
+      dynamicPath,
+      inlineHandler,
+      anyRoute,
+      nestedRoute,
+      repeatedUse,
+      broken,
+      unterminatedString
+    ]) {
+      expect(facts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+      expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+    }
+    expect(broken.symbols).toHaveLength(1);
+    expect(unterminatedString.symbols).toHaveLength(1);
+  });
+
   it("extracts direct C++ cpp-httplib named-handler routes with exact evidence", () => {
     const facts = extractFileFacts({
       filePath: "src/server.cpp",

@@ -4418,6 +4418,69 @@ describe("SymbolLatticeService", () => {
     expect(search.results).toMatchObject([{ filePath: "src/demo/routes.clj", language: "clojure" }]);
   });
 
+  it("indexes Perl Dancer2 routes and retains Perl source-search filtering", async () => {
+    const projectPath = await createInlineProject({
+      "src/Demo/App.pm": [
+        "package Demo::App;",
+        "use Dancer2;",
+        "",
+        "sub health {",
+        "  return \"ok\";",
+        "}",
+        "",
+        "get \"/health\" => \\&health;",
+        "post \"/users\" => \\&create_user;"
+      ].join("\n")
+    });
+    const service = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+    const getRoutes = await service.routes(projectPath, { method: "GET" });
+    const search = await service.search(projectPath, "health", { language: "perl" });
+
+    expect(routes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "GET",
+          path: "/health",
+          handler: expect.objectContaining({
+            qualifiedName: "src/Demo/App.pm#Demo::App.health"
+          }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.dancer2.direct-route.literal-verb.local-sub",
+              stage: "syntax"
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "POST",
+          path: "/users",
+          handler: null,
+          edge: expect.objectContaining({
+            resolution: "unresolved",
+            evidence: expect.objectContaining({
+              ruleId: "framework.dancer2.direct-route.literal-verb.unresolved-sub"
+            })
+          })
+        })
+      ])
+    );
+    expect(getRoutes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "GET",
+          path: "/health",
+          handler: expect.objectContaining({
+            qualifiedName: "src/Demo/App.pm#Demo::App.health"
+          })
+        })
+      ])
+    );
+    expect(search.results).toMatchObject([{ filePath: "src/Demo/App.pm", language: "perl" }]);
+  });
+
   it("indexes C# ASP.NET Core routes and retains C# source-search filtering", async () => {
     const projectPath = await createInlineProject({
       "src/Program.cs": [

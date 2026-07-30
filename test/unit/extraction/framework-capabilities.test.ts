@@ -28,6 +28,7 @@ describe("first-party framework capabilities", () => {
       "phoenix",
       "cowboy",
       "compojure",
+      "dancer2",
       "cpp-httplib",
       "aspnet-core",
       "rails",
@@ -182,6 +183,15 @@ describe("first-party framework capabilities", () => {
       surfaces: [
         "direct ns compojure.core refer proof",
         "direct defroutes literal verb routes with same-file named defn handler proof"
+      ]
+    });
+    expect(frameworkCapability("dancer2")).toMatchObject({
+      languages: ["perl"],
+      routeFramework: "dancer2",
+      routeRegistrations: [],
+      surfaces: [
+        "direct use Dancer2 proof",
+        "direct literal verb routes with same-file named sub coderef handler proof"
       ]
     });
     expect(frameworkCapability("cpp-httplib")).toMatchObject({

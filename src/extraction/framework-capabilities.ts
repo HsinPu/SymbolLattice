@@ -21,6 +21,7 @@ export const FRAMEWORK_CAPABILITY_IDS = [
   "phoenix",
   "cowboy",
   "compojure",
+  "dancer2",
   "cpp-httplib",
   "aspnet-core",
   "rails",
@@ -234,6 +235,16 @@ export const FRAMEWORK_CAPABILITIES = [
     surfaces: [
       "direct ns compojure.core refer proof",
       "direct defroutes literal verb routes with same-file named defn handler proof"
+    ]
+  },
+  {
+    id: "dancer2",
+    languages: ["perl"],
+    routeFramework: "dancer2",
+    routeRegistrations: [],
+    surfaces: [
+      "direct use Dancer2 proof",
+      "direct literal verb routes with same-file named sub coderef handler proof"
     ]
   },
   {

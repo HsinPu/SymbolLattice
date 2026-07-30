@@ -49,6 +49,8 @@ describe("source discovery", () => {
     await writeFile(join(projectPath, "src", "g.ex"), "defmodule Example do\nend\n", "utf8");
     await writeFile(join(projectPath, "src", "g.exs"), "IO.puts(\"example\")\n", "utf8");
     await writeFile(join(projectPath, "src", "g.lua"), "local answer = 42\n", "utf8");
+    await writeFile(join(projectPath, "src", "g.pl"), "use Dancer2;\n", "utf8");
+    await writeFile(join(projectPath, "src", "g.pm"), "package Sample;\n", "utf8");
     await writeFile(join(projectPath, "src", "g.R"), "answer <- 42\n", "utf8");
     await writeFile(join(projectPath, "src", "h.hpp"), "class Header {};\n", "utf8");
     await writeFile(join(projectPath, "src", "i.cs"), "public class Api {}\n", "utf8");
@@ -81,6 +83,8 @@ describe("source discovery", () => {
       "src/g.ex",
       "src/g.exs",
       "src/g.lua",
+      "src/g.pl",
+      "src/g.pm",
       "src/h.hpp",
       "src/i.cs",
       "src/j.rb",
@@ -107,6 +111,8 @@ describe("source discovery", () => {
       "elixir",
       "elixir",
       "lua",
+      "perl",
+      "perl",
       "cpp",
       "csharp",
       "ruby",

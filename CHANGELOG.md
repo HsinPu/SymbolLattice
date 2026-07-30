@@ -6,6 +6,24 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.54.0] - 2026-07-30
+
+### Added
+
+- Perl `.pl` / `.pm` source discovery, persisted source-search language filtering, CLI/MCP validation, and an isolated Perl lexical/delimiter-balancing extractor for an optional direct `package` plus simple top-level `sub` containment.
+- An executable first-party `dancer2` capability. Direct Dancer2 route facts require exactly one direct `use Dancer2;`, a direct top-level literal `get` / `post` / `put` / `patch` / `del` / `options` registration, and an exact `\&name` coderef. A unique same-file `sub` produces `framework.dancer2.direct-route.literal-verb.local-sub`; every other accepted handler remains explicit `unresolved` evidence.
+- Unit and integration coverage now verifies Perl discovery, direct package/function containment, exact and unresolved Dancer2 route-query/source-search behavior, import-list/dynamic/inline/`any`/nested/repeated-use rejection, malformed delimiter and unterminated quote fail-closed behavior, and CLI/MCP language validation. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.54.0.md`.
+
+### Compatibility
+
+- No SQLite schema migration or new query command is required. Perl symbols and Dancer2 routes reuse the existing file, symbol, edge, source-search, and route-query contracts; existing generations remain readable.
+- The artifact extractor advances to `multi-language-ast-v43`; the project resolver remains `project-resolver-v16` because all accepted Dancer2 callback proof is file-local. A pre-v0.54 active index reports `indexer-version-changed` until an explicit `sync` or `index` publishes Perl-capable facts.
+
+### Deliberate limits
+
+- The Perl extractor is a deliberately small lexical/delimiter-balancing implementation, not a full Perl parser. It retains only file symbols for unbalanced delimiters or unterminated quoted input, and does not claim generic Perl package, module, call, type, regex, heredoc, POD, or runtime analysis.
+- Dancer2 support accepts only exactly one direct `use Dancer2;`, at most one direct `package`, simple direct top-level `sub`, literal direct verb paths, and simple same-file named coderefs. It excludes import lists/aliases/multiple direct uses, `any`, named routes, prefixes/hooks/plugins, inline/qualified/wrapped/cross-file handlers, dynamic/escaped paths, prototypes/attributes/nested subs, generic package resolution, and runtime behavior. The local CodeGraph baseline does not list Perl in its indexed language set; SymbolLattice adds a narrow audited language/framework slice rather than claiming wider generic Perl parity.
+
 ## [0.53.0] - 2026-07-30
 
 ### Added

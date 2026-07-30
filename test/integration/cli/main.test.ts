@@ -517,7 +517,7 @@ describe("symbol-lattice search CLI", () => {
     expect(write).toHaveBeenCalled();
   });
 
-  it("accepts Clojure as a persisted source-search language filter", async () => {
+  it("accepts Perl as a persisted source-search language filter", async () => {
     const calls: Array<{ projectPath: string; query: string; options: SearchOptions }> = [];
     const service = {
       async search(
@@ -532,7 +532,7 @@ describe("symbol-lattice search CLI", () => {
     const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
 
     await createProgram(service).parseAsync(
-      ["node", "symbol-lattice", "search", "health", "--language", "clojure", "--json"],
+      ["node", "symbol-lattice", "search", "health", "--language", "perl", "--json"],
       { from: "node" }
     );
 
@@ -540,7 +540,7 @@ describe("symbol-lattice search CLI", () => {
       {
         projectPath: resolve(process.cwd()),
         query: "health",
-        options: { language: "clojure" }
+        options: { language: "perl" }
       }
     ]);
     expect(write).toHaveBeenCalled();
