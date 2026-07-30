@@ -6414,4 +6414,124 @@ describe("source extraction", () => {
     ]);
     expect(facts.edges).toEqual([]);
   });
+
+  it("extracts direct Vue SFC script declarations and an auditable default component export", () => {
+    const facts = extractFileFacts({
+      filePath: "src/views/HomeView.vue",
+      language: "vue",
+      sourceText: [
+        "<!-- <script>const fake = true;</script> -->",
+        "<template><main /></template>",
+        '<script lang="ts">',
+        'import { defineComponent } from "vue";',
+        "const HomeView = defineComponent({});",
+        'export function formatTitle() { return "home"; }',
+        "export default HomeView;",
+        "</script>"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.map((symbol) => [symbol.kind, symbol.name])).toEqual([
+      ["file", "HomeView.vue"],
+      ["variable", "HomeView"],
+      ["function", "formatTitle"]
+    ]);
+    expect(facts.exportBindings).toEqual([
+      expect.objectContaining({ localName: "HomeView", exportedName: "default" })
+    ]);
+    expect(facts.edges.filter((edge) => edge.kind === "contains")).toHaveLength(2);
+  });
+
+  it("extracts literal Vue option-object default exports but rejects ambiguous SFC script proof", () => {
+    const optionComponent = extractFileFacts({
+      filePath: "src/views/SettingsView.vue",
+      language: "vue",
+      sourceText: [
+        "<template><main /></template>",
+        "<script>",
+        'export default { name: "SettingsView" };',
+        "</script>"
+      ].join("\n")
+    });
+    const aliasedComponent = extractFileFacts({
+      filePath: "src/views/AliasedView.vue",
+      language: "vue",
+      sourceText: [
+        '<script lang="ts">',
+        'import { defineComponent as define } from "vue";',
+        "const AliasedView = define({});",
+        "export default AliasedView;",
+        "</script>"
+      ].join("\n")
+    });
+    const multipleScripts = extractFileFacts({
+      filePath: "src/views/Multiple.vue",
+      language: "vue",
+      sourceText: [
+        "<script>const first = true;</script>",
+        "<script setup>const second = true;</script>"
+      ].join("\n")
+    });
+
+    expect(optionComponent.symbols.map((symbol) => [symbol.kind, symbol.name])).toEqual([
+      ["file", "SettingsView.vue"],
+      ["variable", "default"]
+    ]);
+    expect(optionComponent.exportBindings).toEqual([
+      expect.objectContaining({ localName: "default", exportedName: "default" })
+    ]);
+    expect(aliasedComponent.exportBindings).toEqual([]);
+    expect(multipleScripts.symbols.map((symbol) => [symbol.kind, symbol.name])).toEqual([
+      ["file", "Multiple.vue"]
+    ]);
+  });
+
+  it("extracts direct Vue Router literal routes and leaves unsupported forms absent", () => {
+    const facts = extractFileFacts({
+      filePath: "src/router.ts",
+      language: "typescript",
+      sourceText: [
+        'import { createRouter, createWebHistory } from "vue-router";',
+        'import HomeView from "./views/HomeView";',
+        'import SettingsView from "./views/SettingsView";',
+        "",
+        'const dynamicPath = "/dynamic";',
+        "const routes = [",
+        '  { path: "/", component: HomeView },',
+        '  { path: "/settings", component: SettingsView, children: [{ path: "child" }] },',
+        "  { path: dynamicPath, component: HomeView },",
+        '  { path: "/lazy", component: () => import("./views/LazyView") }',
+        "];",
+        "",
+        "export const router = createRouter({",
+        "  history: createWebHistory(),",
+        "  routes",
+        "});"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route").map((symbol) => symbol.name)).toEqual([
+      "NAVIGATE /",
+      "NAVIGATE /settings"
+    ]);
+    expect(
+      facts.pendingReferences
+        .filter((reference) => reference.relationKind === "routes")
+        .map((reference) => [reference.referenceName, reference.routeFramework])
+    ).toEqual([
+      ["HomeView", "vue-router"],
+      ["SettingsView", "vue-router"]
+    ]);
+
+    const alias = extractFileFacts({
+      filePath: "src/alias-router.ts",
+      language: "typescript",
+      sourceText: [
+        'import { createRouter as routerFactory } from "vue-router";',
+        "const routes = [{ path: \"/alias\", component: AliasView }];",
+        "const router = routerFactory({ routes });"
+      ].join("\n")
+    });
+    expect(alias.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+  });
 });

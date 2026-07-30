@@ -6142,4 +6142,93 @@ describe("SymbolLatticeService", () => {
       }
     ]);
   });
+
+  it("indexes Vue SFC default components and resolves direct Vue Router routes across .vue modules", async () => {
+    const projectPath = await createInlineProject({
+      "src/views/HomeView.vue": [
+        "<template><main /></template>",
+        "<script>",
+        'export default { name: "HomeView" };',
+        "</script>"
+      ].join("\n"),
+      "src/views/SettingsView.vue": [
+        "<template><main /></template>",
+        '<script lang="ts">',
+        'import { defineComponent } from "vue";',
+        "const SettingsView = defineComponent({});",
+        "export default SettingsView;",
+        "</script>"
+      ].join("\n"),
+      "src/router/index.ts": [
+        'import { createRouter, createWebHistory } from "vue-router";',
+        'import HomeView from "../views/HomeView";',
+        'import SettingsView from "../views/SettingsView";',
+        "",
+        "const routes = [",
+        '  { path: "/", component: HomeView },',
+        '  { path: "/settings", component: SettingsView }',
+        "];",
+        "",
+        "export const router = createRouter({ history: createWebHistory(), routes });"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    const indexed = await service.init({ projectPath });
+    const routes = await service.routes(projectPath, { method: "NAVIGATE" });
+    const search = await service.search(projectPath, "View", { language: "vue" });
+    const persistedVueFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .filter((facts) => facts.language === "vue");
+
+    expect(indexed).toMatchObject({
+      stale: false,
+      counts: { files: 3, symbols: expect.any(Number), edges: expect.any(Number) }
+    });
+    expect(persistedVueFacts).toHaveLength(2);
+    expect(
+      persistedVueFacts.every(
+        (facts) => facts.extractorVersion === ARTIFACT_FACTS_EXTRACTOR_VERSION
+      )
+    ).toBe(true);
+    expect(routes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "NAVIGATE",
+          path: "/",
+          handler: expect.objectContaining({
+            qualifiedName: "src/views/HomeView.vue#default"
+          }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.vue-router.create-router.routes-option.imported-handler",
+              stage: "module"
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "NAVIGATE",
+          path: "/settings",
+          handler: expect.objectContaining({
+            qualifiedName: "src/views/SettingsView.vue#SettingsView"
+          }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.vue-router.create-router.routes-option.imported-handler",
+              stage: "module"
+            })
+          })
+        })
+      ])
+    );
+    expect(search.results).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ filePath: "src/views/HomeView.vue", language: "vue" }),
+        expect.objectContaining({ filePath: "src/views/SettingsView.vue", language: "vue" })
+      ])
+    );
+  });
 });

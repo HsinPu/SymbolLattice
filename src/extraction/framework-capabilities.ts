@@ -6,6 +6,7 @@ export const FRAMEWORK_CAPABILITY_IDS = [
   "fastify",
   "nestjs",
   "react-router",
+  "vue-router",
   "nextjs",
   "fastapi",
   "flask",
@@ -93,6 +94,16 @@ export const FRAMEWORK_CAPABILITIES = [
       "JSX Route elements",
       "createRoutesFromElements JSX trees",
       "v6.4+ data-router objects"
+    ]
+  },
+  {
+    id: "vue-router",
+    languages: ["typescript", "javascript"],
+    routeFramework: "vue-router",
+    routeRegistrations: [],
+    surfaces: [
+      "exactly one direct createRouter import",
+      "top-level literal createRouter routes options with named component identifiers"
     ]
   },
   {

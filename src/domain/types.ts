@@ -41,6 +41,7 @@ export type RouteFramework =
   | "fastify"
   | "nextjs"
   | "react-router"
+  | "vue-router"
   | "fastapi"
   | "flask"
   | "gin"
@@ -82,6 +83,7 @@ export type RouteRegistration =
 export const ARTIFACT_LANGUAGES = [
   "typescript",
   "javascript",
+  "vue",
   "python",
   "go",
   "rust",

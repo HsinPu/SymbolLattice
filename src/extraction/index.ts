@@ -24,6 +24,7 @@ import { extractPythonFileFacts } from "./python.js";
 import { extractRubyFileFacts } from "./ruby.js";
 import { extractRustFileFacts } from "./rust.js";
 import { extractSwiftFileFacts } from "./swift.js";
+import { extractVueFileFacts } from "./vue.js";
 import {
   frameworkCapability,
   type FrameworkCapability,
@@ -373,6 +374,11 @@ interface StaticReactRouterRoute {
   readonly method: "NAVIGATE";
   readonly path: string;
   readonly handler: ts.Identifier;
+}
+
+/** A direct Vue Router route from one top-level createRouter routes option. */
+interface StaticVueRouterRoute extends StaticReactRouterRoute {
+  readonly declaration: ts.ObjectLiteralExpression;
 }
 
 /** A direct data-router object route, retaining its exact registration range. */
@@ -2918,6 +2924,224 @@ function staticLiteralText(expression: ts.Expression | undefined): string | null
     : null;
 }
 
+function directVueRouterFactoryImport(sourceFile: ts.SourceFile): boolean {
+  let exactCount = 0;
+  let unsupported = false;
+
+  for (const statement of sourceFile.statements) {
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteral(statement.moduleSpecifier) ||
+      statement.moduleSpecifier.text !== "vue-router"
+    ) {
+      continue;
+    }
+    const importClause = statement.importClause;
+    if (importClause === undefined) {
+      continue;
+    }
+    const namedBindings = importClause.namedBindings;
+    if (namedBindings === undefined || !ts.isNamedImports(namedBindings)) {
+      continue;
+    }
+    for (const element of namedBindings.elements) {
+      const importedName = element.propertyName?.text ?? element.name.text;
+      if (importedName !== "createRouter") {
+        continue;
+      }
+      if (
+        !importClause.isTypeOnly &&
+        !element.isTypeOnly &&
+        element.propertyName === undefined &&
+        element.name.text === "createRouter"
+      ) {
+        exactCount += 1;
+      } else {
+        unsupported = true;
+      }
+    }
+  }
+
+  for (const statement of sourceFile.statements) {
+    if (ts.isFunctionDeclaration(statement) || ts.isClassDeclaration(statement)) {
+      if (statement.name?.text === "createRouter") {
+        unsupported = true;
+      }
+      continue;
+    }
+    if (!ts.isVariableStatement(statement)) {
+      continue;
+    }
+    for (const declaration of statement.declarationList.declarations) {
+      if (ts.isIdentifier(declaration.name) && declaration.name.text === "createRouter") {
+        unsupported = true;
+      }
+    }
+  }
+
+  return exactCount === 1 && !unsupported;
+}
+
+function directTopLevelVueRouterArrays(
+  sourceFile: ts.SourceFile
+): ReadonlyMap<string, ts.ArrayLiteralExpression | null> {
+  const arrays = new Map<string, ts.ArrayLiteralExpression | null>();
+  for (const statement of sourceFile.statements) {
+    if (
+      !ts.isVariableStatement(statement) ||
+      (statement.declarationList.flags & ts.NodeFlags.Const) === 0
+    ) {
+      continue;
+    }
+    for (const declaration of statement.declarationList.declarations) {
+      if (!ts.isIdentifier(declaration.name)) {
+        continue;
+      }
+      const array = declaration.initializer;
+      const value = array !== undefined && ts.isArrayLiteralExpression(array) ? array : null;
+      if (arrays.has(declaration.name.text)) {
+        arrays.set(declaration.name.text, null);
+      } else {
+        arrays.set(declaration.name.text, value);
+      }
+    }
+  }
+  return arrays;
+}
+
+function staticVueRouterRoutesOption(
+  options: ts.ObjectLiteralExpression
+): ts.Expression | null {
+  let routes: ts.Expression | undefined;
+  for (const property of options.properties) {
+    if (ts.isSpreadAssignment(property)) {
+      return null;
+    }
+    if (ts.isShorthandPropertyAssignment(property)) {
+      if (property.name.text !== "routes") {
+        continue;
+      }
+      if (routes !== undefined) {
+        return null;
+      }
+      routes = property.name;
+      continue;
+    }
+    if (!ts.isPropertyAssignment(property) || ts.isComputedPropertyName(property.name)) {
+      continue;
+    }
+    if (staticPropertyName(property.name) !== "routes") {
+      continue;
+    }
+    if (routes !== undefined) {
+      return null;
+    }
+    routes = property.initializer;
+  }
+  return routes ?? null;
+}
+
+function staticVueRouterRoute(element: ts.Expression): StaticVueRouterRoute | null {
+  if (!ts.isObjectLiteralExpression(element)) {
+    return null;
+  }
+
+  let path: string | undefined;
+  let handler: ts.Identifier | undefined;
+  for (const property of element.properties) {
+    if (ts.isSpreadAssignment(property)) {
+      return null;
+    }
+    if (!ts.isPropertyAssignment(property) || ts.isComputedPropertyName(property.name)) {
+      continue;
+    }
+    const name = staticPropertyName(property.name);
+    if (name === "path") {
+      if (path !== undefined) {
+        return null;
+      }
+      const literalPath = staticLiteralText(property.initializer);
+      if (literalPath === null || !literalPath.startsWith("/")) {
+        return null;
+      }
+      path = literalPath;
+      continue;
+    }
+    if (name === "component") {
+      if (handler !== undefined || !ts.isIdentifier(property.initializer)) {
+        return null;
+      }
+      handler = property.initializer;
+    }
+  }
+
+  return path === undefined || handler === undefined
+    ? null
+    : {
+        method: "NAVIGATE",
+        path,
+        handler,
+        declaration: element
+      };
+}
+
+function staticVueRouterRoutes(sourceFile: ts.SourceFile): readonly StaticVueRouterRoute[] {
+  if (!directVueRouterFactoryImport(sourceFile)) {
+    return [];
+  }
+
+  const directArrays = directTopLevelVueRouterArrays(sourceFile);
+  const routerCalls: ts.CallExpression[] = [];
+  for (const statement of sourceFile.statements) {
+    if (
+      !ts.isVariableStatement(statement) ||
+      (statement.declarationList.flags & ts.NodeFlags.Const) === 0
+    ) {
+      continue;
+    }
+    for (const declaration of statement.declarationList.declarations) {
+      const initializer = declaration.initializer;
+      if (
+        initializer !== undefined &&
+        ts.isCallExpression(initializer) &&
+        ts.isIdentifier(initializer.expression) &&
+        initializer.expression.text === "createRouter"
+      ) {
+        routerCalls.push(initializer);
+      }
+    }
+  }
+  if (routerCalls.length !== 1 || routerCalls[0] === undefined) {
+    return [];
+  }
+
+  const routerCall = routerCalls[0];
+  if (routerCall.arguments.length !== 1) {
+    return [];
+  }
+  const options = routerCall.arguments[0];
+  if (options === undefined || !ts.isObjectLiteralExpression(options)) {
+    return [];
+  }
+  const routesExpression = staticVueRouterRoutesOption(options);
+  if (routesExpression === null) {
+    return [];
+  }
+  const routesArray = ts.isArrayLiteralExpression(routesExpression)
+    ? routesExpression
+    : ts.isIdentifier(routesExpression)
+      ? directArrays.get(routesExpression.text) ?? null
+      : null;
+  if (routesArray === null) {
+    return [];
+  }
+
+  return routesArray.elements
+    .filter(ts.isExpression)
+    .map((element) => staticVueRouterRoute(element))
+    .filter((route): route is StaticVueRouterRoute => route !== null);
+}
+
 function staticGraphqlOptionsName(
   expression: ts.Expression | undefined
 ): string | null | undefined {
@@ -3495,6 +3719,9 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
   if (input.language === "scala") {
     return extractScalaFileFacts({ ...input, language: "scala" });
   }
+  if (input.language === "vue") {
+    return extractVueFileFacts({ ...input, language: "vue" });
+  }
 
   const sourceFile = ts.createSourceFile(
     input.filePath,
@@ -3675,7 +3902,12 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
 
   function addStaticRoute(
     node: ts.Node,
-    route: StaticExpressRoute | StaticFastifyRoute | StaticNextRoute | StaticReactRouterRoute,
+    route:
+      | StaticExpressRoute
+      | StaticFastifyRoute
+      | StaticNextRoute
+      | StaticReactRouterRoute
+      | StaticVueRouterRoute,
     routeFramework: NonNullable<PendingReference["routeFramework"]>,
     routeRegistration?: PendingReference["routeRegistration"]
   ): void {
@@ -3703,6 +3935,10 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
     route: StaticReactRouterRoute
   ): void {
     addStaticRoute(node, route, "react-router");
+  }
+
+  function addStaticVueRouterRoute(route: StaticVueRouterRoute): void {
+    addStaticRoute(route.declaration, route, "vue-router");
   }
 
   function addStaticReactRouterDataRoute(route: StaticReactRouterDataRoute): void {
@@ -4174,6 +4410,13 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
               addStaticReactRouterRoute(route.declaration, route);
             }
           }
+        }
+      }
+    }),
+    frameworkExtractionPass("vue-router", {
+      finalize() {
+        for (const route of staticVueRouterRoutes(sourceFile)) {
+          addStaticVueRouterRoute(route);
         }
       }
     }),

@@ -13,6 +13,7 @@ describe("first-party framework capabilities", () => {
       "fastify",
       "nestjs",
       "react-router",
+      "vue-router",
       "nextjs",
       "fastapi",
       "flask",
@@ -56,6 +57,15 @@ describe("first-party framework capabilities", () => {
         "JSX Route elements",
         "createRoutesFromElements JSX trees",
         "v6.4+ data-router objects"
+      ]
+    });
+    expect(frameworkCapability("vue-router")).toMatchObject({
+      languages: ["typescript", "javascript"],
+      routeFramework: "vue-router",
+      routeRegistrations: [],
+      surfaces: [
+        "exactly one direct createRouter import",
+        "top-level literal createRouter routes options with named component identifiers"
       ]
     });
     expect(frameworkCapability("nextjs")).toMatchObject({

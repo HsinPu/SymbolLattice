@@ -15,7 +15,7 @@ import type {
   SourceDocument
 } from "../../ports/source-catalog.js";
 
-const SOURCE_FILE_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx"] as const;
+const SOURCE_FILE_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".vue"] as const;
 
 export interface TypeScriptProjectModuleResolver {
   readonly moduleResolver: ProjectModuleResolver;
@@ -103,7 +103,7 @@ function modulePathCandidates(fromFilePath: string, moduleSpecifier: string): re
   }
 
   const rawPath = parts.join("/");
-  const extensionMatch = /\.(?:[cm]?[jt]sx?)$/i.exec(rawPath);
+  const extensionMatch = /\.(?:[cm]?[jt]sx?|vue)$/i.exec(rawPath);
   const withoutExtension = extensionMatch === null ? rawPath : rawPath.slice(0, -extensionMatch[0].length);
   const candidates = new Set<string>([rawPath]);
 

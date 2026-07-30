@@ -6,6 +6,25 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.60.0] - 2026-07-31
+
+### Added
+
+- Vue `.vue` source discovery, persisted source-search language filtering, CLI/MCP validation, and a bounded SFC extractor for one inline JavaScript/TypeScript `<script>` block. It retains direct top-level declarations and three auditable direct default-export forms: an object literal, a direct unaliased `defineComponent(...)` call, or a direct named variable initialized from that call.
+- An executable first-party `vue-router` capability. Client-navigation facts require exactly one direct, unaliased `createRouter` import from `vue-router`, exactly one top-level `createRouter({ routes })` expression, a literal route array/options form, slash-prefixed literal paths, and named component identifiers. A unique same-file or imported Vue default component produces exact `framework.vue-router.create-router.routes-option.*` evidence; all other accepted route targets remain explicit `unresolved` evidence.
+- Relative TypeScript/JavaScript resolution now considers a unique `.vue` candidate, enabling exact direct default-import route components without adding a generic Vue package resolver.
+- Unit and integration coverage now verifies Vue discovery, exports, malformed/multiple/`src`/non-JS script rejection, direct Vue Router static routes, alias/rebinding/lazy/dynamic rejection, `.vue` resolution, source-search/CLI/MCP language validation, and persisted route-query integration. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.60.0.md`.
+
+### Compatibility
+
+- No SQLite schema migration or new query command is required. Vue symbols and Vue Router navigation reuse the existing file, symbol, edge, source-search, and route-query contracts; existing generations remain readable.
+- The artifact extractor advances to `multi-language-ast-v49`; the project resolver advances to `project-resolver-v17` because a unique relative `.vue` candidate may now prove an exact TypeScript/JavaScript module binding. A pre-v0.60 active index reports `indexer-version-changed` until an explicit `sync` or `index` publishes Vue-capable facts.
+
+### Deliberate limits
+
+- The Vue extractor is a deliberately small SFC scanner, not the Vue compiler. It excludes `script setup` implicit compiler exports, templates/styles/custom blocks, multiple or `src` scripts, macros/composables, aliases/rebindings, generic Vue semantic analysis, and runtime behavior.
+- Vue Router support accepts only exact-one direct imports, one literal top-level router/routes form, literal slash-prefixed paths, and named component identifiers. It excludes child/nested route records, spreads, lazy/inline/dynamic components, aliases/factories, history/middleware configuration, cross-file router composition, and runtime navigation. The local CodeGraph baseline has a fuller Vue extractor that creates component nodes, processes script blocks, and scans template component usage; SymbolLattice gains a different narrow precision slice for direct router-to-component navigation rather than claiming equivalent Vue coverage.
+
 ## [0.59.0] - 2026-07-31
 
 ### Added
