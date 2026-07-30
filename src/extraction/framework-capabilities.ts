@@ -13,6 +13,7 @@ export const FRAMEWORK_CAPABILITY_IDS = [
   "arkui",
   "terraform",
   "shopify-liquid",
+  "twig",
   "nextjs",
   "fastapi",
   "flask",
@@ -158,6 +159,15 @@ export const FRAMEWORK_CAPABILITIES = [
     surfaces: [
       "complete direct literal render and include snippet tags",
       "complete direct literal section tags resolved against indexed local Liquid files"
+    ]
+  },
+  {
+    id: "twig",
+    languages: ["twig"],
+    routeRegistrations: [],
+    surfaces: [
+      "complete direct literal extends include and embed template tags",
+      "complete direct literal import and from macro tags resolved against indexed templates root files"
     ]
   },
   {

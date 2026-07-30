@@ -31,6 +31,7 @@ import { extractCfmlFileFacts } from "./cfml.js";
 import { extractNixFileFacts } from "./nix.js";
 import { extractVbnetFileFacts } from "./vbnet.js";
 import { extractLiquidFileFacts } from "./liquid.js";
+import { extractTwigFileFacts } from "./twig.js";
 import { extractRazorFileFacts } from "./razor.js";
 import { extractSolidityFileFacts } from "./solidity.js";
 import { extractTerraformFileFacts } from "./terraform.js";
@@ -3749,6 +3750,9 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
   }
   if (input.language === "liquid") {
     return extractLiquidFileFacts({ ...input, language: "liquid" });
+  }
+  if (input.language === "twig") {
+    return extractTwigFileFacts({ ...input, language: "twig" });
   }
   if (input.language === "solidity") {
     return extractSolidityFileFacts({ ...input, language: "solidity" });

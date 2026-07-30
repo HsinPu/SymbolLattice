@@ -122,6 +122,7 @@ export const ARTIFACT_LANGUAGES = [
   "scala",
   "terraform",
   "liquid",
+  "twig",
   "solidity",
   "cfml",
   "nix",

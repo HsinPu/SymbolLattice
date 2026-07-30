@@ -670,7 +670,10 @@ function artifactFactsPayload(facts: PersistedArtifactFacts): ArtifactFacts {
       ? {}
       : { fastApiRouterFacts: facts.fastApiRouterFacts }),
     ...(facts.scalaFacts === undefined ? {} : { scalaFacts: facts.scalaFacts }),
-    ...(facts.javaFacts === undefined ? {} : { javaFacts: facts.javaFacts })
+    ...(facts.javaFacts === undefined ? {} : { javaFacts: facts.javaFacts }),
+    ...(facts.liquidFacts === undefined ? {} : { liquidFacts: facts.liquidFacts }),
+    ...(facts.solidityFacts === undefined ? {} : { solidityFacts: facts.solidityFacts }),
+    ...(facts.twigFacts === undefined ? {} : { twigFacts: facts.twigFacts })
   };
 }
 

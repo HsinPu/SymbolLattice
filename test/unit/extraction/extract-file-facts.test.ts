@@ -6962,6 +6962,80 @@ describe("source extraction", () => {
     expect(facts.liquidFacts?.templateReferences).toEqual([]);
   });
 
+  it("extracts direct literal Twig template inheritance, inclusion, and macro references", () => {
+    const facts = extractFileFacts({
+      filePath: "templates/pages/home.html.twig",
+      language: "twig",
+      sourceText: [
+        '{% extends "base.html.twig" %}',
+        '{% include "partials/card.html.twig" only %}',
+        '{% embed "components/dialog.html.twig" %}',
+        '{% import "macros/forms.html.twig" as forms %}',
+        '{% from "macros/fields.html.twig" import input as form_input, textarea %}'
+      ].join("\n")
+    });
+
+    expect(facts.symbols.map((symbol) => [symbol.kind, symbol.name])).toEqual([
+      ["file", "home.html.twig"]
+    ]);
+    expect(facts.edges).toEqual([]);
+    expect(facts.twigFacts?.templateReferences).toEqual([
+      expect.objectContaining({
+        kind: "extends",
+        targetFilePath: "templates/base.html.twig",
+        referenceName: "extends templates/base.html.twig",
+        range: expect.objectContaining({ start: { line: 1, column: 0 } })
+      }),
+      expect.objectContaining({
+        kind: "include",
+        targetFilePath: "templates/partials/card.html.twig",
+        referenceName: "include templates/partials/card.html.twig",
+        range: expect.objectContaining({ start: { line: 2, column: 0 } })
+      }),
+      expect.objectContaining({
+        kind: "embed",
+        targetFilePath: "templates/components/dialog.html.twig",
+        referenceName: "embed templates/components/dialog.html.twig",
+        range: expect.objectContaining({ start: { line: 3, column: 0 } })
+      }),
+      expect.objectContaining({
+        kind: "import",
+        targetFilePath: "templates/macros/forms.html.twig",
+        referenceName: "import templates/macros/forms.html.twig",
+        range: expect.objectContaining({ start: { line: 4, column: 0 } })
+      }),
+      expect.objectContaining({
+        kind: "from",
+        targetFilePath: "templates/macros/fields.html.twig",
+        referenceName: "from templates/macros/fields.html.twig",
+        range: expect.objectContaining({ start: { line: 5, column: 0 } })
+      })
+    ]);
+  });
+
+  it("rejects commented, verbatim, dynamic, unsupported-tail, unsafe, and malformed Twig tags", () => {
+    const facts = extractFileFacts({
+      filePath: "templates/pages/invalid.html.twig",
+      language: "twig",
+      sourceText: [
+        "{# {% extends 'commented.html.twig' %} #}",
+        "{% verbatim %}{% include 'verbatim.html.twig' %}{% endverbatim %}",
+        "<!-- {% embed 'html-comment.html.twig' %} -->",
+        "{% include template_name %}",
+        "{% include 'partials/card.html.twig' ~ suffix %}",
+        "{% import 'macros/forms.html.twig' %}",
+        "{% include '../escape.html.twig' %}",
+        "{% extends 'incomplete.html.twig' "
+      ].join("\n")
+    });
+
+    expect(facts.symbols.map((symbol) => [symbol.kind, symbol.name])).toEqual([
+      ["file", "invalid.html.twig"]
+    ]);
+    expect(facts.edges).toEqual([]);
+    expect(facts.twigFacts?.templateReferences).toEqual([]);
+  });
+
   it("extracts complete Solidity containers, direct callable members, and simple inheritance facts", () => {
     const facts = extractFileFacts({
       filePath: "contracts/Token.sol",

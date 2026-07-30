@@ -11,13 +11,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v59";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v60";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v21";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v22";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -280,6 +280,27 @@ export interface LiquidFacts {
   readonly templateReferences: readonly LiquidTemplateReferenceFact[];
 }
 
+/** Direct literal Twig template tag kinds retained for project-local resolution. */
+export type TwigTemplateReferenceKind = "extends" | "include" | "embed" | "import" | "from";
+
+/** One complete direct literal Twig template reference. */
+export interface TwigTemplateReferenceFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly kind: TwigTemplateReferenceKind;
+  readonly targetFilePath: string;
+  readonly referenceName: string;
+  readonly range: SourceRange;
+}
+
+/**
+ * Syntax-only Twig facts projected into exact or explicitly unresolved calls
+ * only after the indexed project file catalog is available.
+ */
+export interface TwigFacts {
+  readonly templateReferences: readonly TwigTemplateReferenceFact[];
+}
+
 /** A direct simple Solidity `is Base` clause retained for same-file proof. */
 export interface SolidityInheritanceFact {
   readonly sourceId: string;
@@ -323,6 +344,8 @@ export interface ArtifactFacts {
   readonly liquidFacts?: LiquidFacts;
   /** Omitted only by artifact facts persisted before v0.67. */
   readonly solidityFacts?: SolidityFacts;
+  /** Omitted only by artifact facts persisted before v0.71. */
+  readonly twigFacts?: TwigFacts;
 }
 
 /**

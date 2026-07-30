@@ -6698,6 +6698,17 @@ describe("SymbolLatticeService", () => {
         (facts) => facts.extractorVersion === ARTIFACT_FACTS_EXTRACTOR_VERSION
       )
     ).toBe(true);
+    expect(
+      persistedLiquidFacts.find((facts) => facts.filePath === "templates/product.liquid")?.liquidFacts
+        ?.templateReferences
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "render",
+          targetFilePath: "snippets/product-card.liquid"
+        })
+      ])
+    );
     expect(search.results).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -6736,6 +6747,141 @@ describe("SymbolLatticeService", () => {
           evidence: expect.objectContaining({
             ruleId: "framework.shopify-liquid.section.literal-project-file.exact-target",
             stage: "module"
+          })
+        })
+      })
+    ]);
+  });
+
+  it("indexes Twig literal template calls against the conventional templates root", async () => {
+    const projectPath = await createInlineProject({
+      "templates/pages/home.html.twig": [
+        '{% extends "base.html.twig" %}',
+        '{% include "partials/card.html.twig" only %}',
+        '{% embed "components/dialog.html.twig" %}',
+        '{% import "macros/forms.html.twig" as forms %}',
+        '{% from "macros/fields.html.twig" import input %}',
+        '{% include "missing.html.twig" %}'
+      ].join("\n"),
+      "templates/base.html.twig": "<main>{% block body %}{% endblock %}</main>\n",
+      "templates/partials/card.html.twig": "<article>Card</article>\n",
+      "templates/components/dialog.html.twig": "<dialog></dialog>\n",
+      "templates/macros/forms.html.twig": "{% macro field() %}{% endmacro %}\n",
+      "templates/macros/fields.html.twig": "{% macro input() %}{% endmacro %}\n"
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    const indexed = await service.init({ projectPath });
+    const search = await service.search(projectPath, "main", { language: "twig" });
+    const base = (await service.find(projectPath, "templates/base.html.twig")).symbols[0];
+    const forms = (await service.find(projectPath, "templates/macros/forms.html.twig")).symbols[0];
+    if (base === undefined || forms === undefined) {
+      throw new Error("Expected indexed Twig target files.");
+    }
+    const baseCallers = await service.callers(projectPath, base.qualifiedName);
+    const formsCallers = await service.callers(projectPath, forms.qualifiedName);
+    const persistedTwigFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .filter((facts) => facts.language === "twig");
+    const missingEdge = graphStore
+      .getSnapshot(projectPath)
+      .edges.find((edge) => edge.referenceName === "include templates/missing.html.twig");
+
+    expect(indexed).toMatchObject({
+      stale: false,
+      counts: { files: 6, symbols: expect.any(Number), edges: expect.any(Number) }
+    });
+    expect(persistedTwigFacts).toHaveLength(6);
+    expect(
+      persistedTwigFacts.every(
+        (facts) => facts.extractorVersion === ARTIFACT_FACTS_EXTRACTOR_VERSION
+      )
+    ).toBe(true);
+    expect(
+      persistedTwigFacts.find((facts) => facts.filePath === "templates/pages/home.html.twig")
+        ?.twigFacts?.templateReferences
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "extends",
+          targetFilePath: "templates/base.html.twig"
+        }),
+        expect.objectContaining({
+          kind: "from",
+          targetFilePath: "templates/macros/fields.html.twig"
+        })
+      ])
+    );
+    expect(search.results).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          filePath: "templates/base.html.twig",
+          language: "twig"
+        })
+      ])
+    );
+    expect(baseCallers.relations).toEqual([
+      expect.objectContaining({
+        symbol: expect.objectContaining({
+          kind: "file",
+          qualifiedName: "templates/pages/home.html.twig"
+        }),
+        edge: expect.objectContaining({
+          kind: "calls",
+          resolution: "exact",
+          referenceName: "extends templates/base.html.twig",
+          evidence: expect.objectContaining({
+            ruleId: "framework.twig.extends.literal-templates-root.exact-target",
+            stage: "module"
+          })
+        })
+      })
+    ]);
+    expect(formsCallers.relations).toEqual([
+      expect.objectContaining({
+        symbol: expect.objectContaining({
+          kind: "file",
+          qualifiedName: "templates/pages/home.html.twig"
+        }),
+        edge: expect.objectContaining({
+          kind: "calls",
+          resolution: "exact",
+          referenceName: "import templates/macros/forms.html.twig",
+          evidence: expect.objectContaining({
+            ruleId: "framework.twig.import.literal-templates-root.exact-target",
+            stage: "module"
+          })
+        })
+      })
+    ]);
+    expect(missingEdge).toMatchObject({
+      kind: "calls",
+      resolution: "unresolved",
+      confidence: 0,
+      targetId: null,
+      evidence: {
+        ruleId: "framework.twig.include.literal-templates-root.unresolved-target",
+        stage: "module"
+      }
+    });
+
+    await writeFile(
+      join(projectPath, "templates", "base.html.twig"),
+      "<main>Updated base template</main>\n",
+      "utf8"
+    );
+    const synced = await service.sync({ projectPath });
+    const baseCallersAfterReuse = await service.callers(projectPath, base.qualifiedName);
+
+    expect(synced.lastIndexWork?.reusedArtifactFiles).toContain("templates/pages/home.html.twig");
+    expect(baseCallersAfterReuse.relations).toEqual([
+      expect.objectContaining({
+        edge: expect.objectContaining({
+          resolution: "exact",
+          referenceName: "extends templates/base.html.twig",
+          evidence: expect.objectContaining({
+            ruleId: "framework.twig.extends.literal-templates-root.exact-target"
           })
         })
       })
@@ -6787,6 +6933,15 @@ describe("SymbolLatticeService", () => {
         (facts) => facts.extractorVersion === ARTIFACT_FACTS_EXTRACTOR_VERSION
       )
     ).toBe(true);
+    expect(
+      persistedSolidityFacts[0]?.solidityFacts?.inheritanceReferences
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          baseName: "Ownable"
+        })
+      ])
+    );
     expect(search.results).toEqual(
       expect.arrayContaining([
         expect.objectContaining({

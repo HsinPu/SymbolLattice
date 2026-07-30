@@ -6,6 +6,25 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.71.0] - 2026-07-31
+
+### Added
+
+- Twig `.twig` source discovery, persisted source-search filtering, CLI language validation, and an independent offset-preserving lexical template-tag scanner. It retains only complete direct literal `extends`, `include`, `embed`, `import`, and `from ... import` forms outside HTML comments, Twig comments, and `verbatim` blocks.
+- An executable first-party `twig` capability. Safe literal names ending in `.twig` project only to the conventional indexed `templates/<name>.twig` root. Existing target files receive exact `calls` edges; missing targets remain explicit unresolved edges with rule-specific evidence instead of guessed loader, namespace, or bundle matches.
+- SQLite raw-artifact persistence now retains Liquid and Solidity facts as well as Twig facts. The v0.71 extractor-version bump forces an explicit re-extraction before stale facts can be reused.
+- Unit and integration coverage now verifies Twig discovery, direct template and macro references, exact and unresolved targets, raw-fact persistence, capability registration, comments/verbatim/dynamic/unsafe/malformed rejection, plus the Liquid and Solidity persistence regression. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.71.0.md`.
+
+### Compatibility
+
+- No SQLite schema migration or new query command is required. Twig reuses the existing file, `calls` edge, caller/callee, source-search, and raw-artifact contracts; existing generations remain readable.
+- The artifact extractor advances to `multi-language-ast-v60` and the resolver to `project-resolver-v22` because complete raw template facts are projected only after the full project file catalog is known. A pre-v0.71 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes Twig-capable facts and relations.
+
+### Deliberate limits
+
+- The Twig scanner is a deliberately narrow lexical tag scanner, not a Twig grammar, Symfony/PHP analyzer, loader resolver, compiler, or renderer. It accepts only complete literal `.twig` names and a small exact tag-tail grammar; malformed delimiters, unterminated comments or `verbatim` blocks, or nested tags fail closed.
+- Twig support does not infer template loader namespaces, bundles, configured roots, dynamic/conditional expressions, `with` maps, macro or block bodies, inheritance chains, PHP/Symfony services, compilation, or runtime rendering. The inspected local CodeGraph baseline currently records Twig at file level; SymbolLattice adds only independently implemented, project-local relationship evidence.
+
 ## [0.70.0] - 2026-07-31
 
 ### Added
