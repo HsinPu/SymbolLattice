@@ -8,12 +8,15 @@ import {
   classifyTestFile,
   diffGenerationSnapshots,
   DEFAULT_SOURCE_SEARCH_LIMIT,
+  ENTRYPOINT_OPERATIONS,
+  ENTRYPOINT_TRANSPORTS,
   findEvidencePath,
   findAffectedTestPaths,
   findSymbols,
   getCallees,
   getChildren,
   getCallers,
+  getEntrypoints,
   getImpactPaths,
   getParents,
   getRoutes,
@@ -25,6 +28,8 @@ import {
   SOURCE_SEARCH_INDEX_VERSION,
   sourceSearchTerms,
   type GraphSnapshot,
+  type EntryPointOperation,
+  type EntryPointTransport,
   type GitLineRange,
   type GitUnifiedHunk,
   GenerationSnapshotComparisonError,
@@ -82,6 +87,7 @@ import {
   DEFAULT_CONTEXT_IMPACT_LIMIT,
   DEFAULT_CONTEXT_MAX_HOPS,
   DEFAULT_CONTEXT_RELATION_LIMIT,
+  DEFAULT_ENTRYPOINT_LIMIT,
   DEFAULT_GENERATION_DIFF_LIMIT,
   DEFAULT_GENERATION_HISTORY_LIMIT,
   DEFAULT_HIERARCHY_LIMIT,
@@ -91,6 +97,7 @@ import {
   MAX_CONTEXT_MAX_HOPS,
   MAX_CONTEXT_REFERENCES,
   MAX_CONTEXT_RELATION_LIMIT,
+  MAX_ENTRYPOINT_LIMIT,
   MAX_GENERATION_DIFF_LIMIT,
   MAX_GENERATION_HISTORY_LIMIT,
   MAX_HIERARCHY_LIMIT,
@@ -124,6 +131,8 @@ import type {
   ContextEvidencePath,
   ContextOptions,
   ContextResult,
+  EntrypointsOptions,
+  EntrypointsResult,
   ExploreResult,
   FindResult,
   GenerationDiffOptions,
@@ -200,6 +209,13 @@ interface NormalizedGenerationDiffRequest {
 interface NormalizedRoutesRequest {
   readonly method?: RouteMethod;
   readonly pathPrefix?: string;
+  readonly limit: number;
+}
+
+interface NormalizedEntrypointsRequest {
+  readonly transport?: EntryPointTransport;
+  readonly operation?: EntryPointOperation;
+  readonly namePrefix?: string;
   readonly limit: number;
 }
 
@@ -1075,6 +1091,34 @@ export class SymbolLatticeService {
       },
       routes: matchingRoutes.slice(0, request.limit),
       truncated: matchingRoutes.length > request.limit
+    };
+  }
+
+  /**
+   * Lists persisted non-HTTP entrypoints without initializing, indexing, or
+   * synchronizing a project. HTTP route retrieval remains a separate method.
+   */
+  public async entrypoints(
+    projectPath: string,
+    options: EntrypointsOptions = {}
+  ): Promise<EntrypointsResult> {
+    const request = this.entrypointsRequest(options);
+    const context = await this.requireGraph(projectPath);
+    const matchingEntrypoints = getEntrypoints(context.snapshot).filter(
+      (entrypoint) =>
+        (request.transport === undefined || entrypoint.transport === request.transport) &&
+        (request.operation === undefined || entrypoint.operation === request.operation) &&
+        (request.namePrefix === undefined || entrypoint.name.startsWith(request.namePrefix))
+    );
+
+    return {
+      status: context.status,
+      bounds: {
+        limit: request.limit,
+        maximumLimit: MAX_ENTRYPOINT_LIMIT
+      },
+      entrypoints: matchingEntrypoints.slice(0, request.limit),
+      truncated: matchingEntrypoints.length > request.limit
     };
   }
 
@@ -2302,6 +2346,56 @@ export class SymbolLatticeService {
       limit,
       ...(method === undefined ? {} : { method }),
       ...(pathPrefix === undefined ? {} : { pathPrefix })
+    };
+  }
+
+  private entrypointsRequest(options: EntrypointsOptions): NormalizedEntrypointsRequest {
+    const limit = options.limit ?? DEFAULT_ENTRYPOINT_LIMIT;
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > MAX_ENTRYPOINT_LIMIT) {
+      throw new SymbolLatticeError(
+        "INVALID_ENTRYPOINT_LIMIT",
+        `Entrypoint limit must be a whole number from 1 to ${MAX_ENTRYPOINT_LIMIT}.`
+      );
+    }
+
+    const transport = options.transport;
+    if (
+      transport !== undefined &&
+      (typeof transport !== "string" || !ENTRYPOINT_TRANSPORTS.includes(transport as EntryPointTransport))
+    ) {
+      throw new SymbolLatticeError(
+        "INVALID_ENTRYPOINT_TRANSPORT",
+        `Entrypoint transport must be one of: ${ENTRYPOINT_TRANSPORTS.join(", ")}.`
+      );
+    }
+
+    const operation = options.operation;
+    if (
+      operation !== undefined &&
+      (typeof operation !== "string" || !ENTRYPOINT_OPERATIONS.includes(operation as EntryPointOperation))
+    ) {
+      throw new SymbolLatticeError(
+        "INVALID_ENTRYPOINT_OPERATION",
+        `Entrypoint operation must be one of: ${ENTRYPOINT_OPERATIONS.join(", ")}.`
+      );
+    }
+
+    const namePrefix = options.namePrefix;
+    if (
+      namePrefix !== undefined &&
+      (typeof namePrefix !== "string" || namePrefix.length === 0)
+    ) {
+      throw new SymbolLatticeError(
+        "INVALID_ENTRYPOINT_NAME_PREFIX",
+        "Entrypoint name prefix must be non-empty text."
+      );
+    }
+
+    return {
+      limit,
+      ...(transport === undefined ? {} : { transport }),
+      ...(operation === undefined ? {} : { operation }),
+      ...(namePrefix === undefined ? {} : { namePrefix })
     };
   }
 

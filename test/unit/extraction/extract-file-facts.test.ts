@@ -731,6 +731,113 @@ describe("TypeScript and JavaScript extraction", () => {
     expect(facts.nestRouteFacts?.routerModulePrefixes).toEqual([]);
   });
 
+  it("extracts AST-proven NestJS GraphQL, microservice, and WebSocket entrypoints", () => {
+    const facts = extractFileFacts({
+      filePath: "src/transports.ts",
+      language: "typescript",
+      sourceText: [
+        'import { Controller as ApiController } from "@nestjs/common";',
+        'import { Mutation as Change, Query as Read, Resolver as GraphResolver, Subscription as Stream } from "@nestjs/graphql";',
+        'import { EventPattern as Event, MessagePattern as Message } from "@nestjs/microservices";',
+        'import { SubscribeMessage as OnMessage, WebSocketGateway as Gateway } from "@nestjs/websockets";',
+        "@GraphResolver(() => Author)",
+        "class AuthorResolver {",
+        "  @Read(() => Author)",
+        "  author() { return {}; }",
+        "  @Change(() => Author, { name: \"renameAuthor\" })",
+        "  rename() { return {}; }",
+        "  @Stream(() => Author, { name: `authorUpdated` })",
+        "  publish() { return {}; }",
+        "  @Stream(\"commentAdded\", { filter: () => true })",
+        "  commentAdded() { return {}; }",
+        "}",
+        "@ApiController()",
+        "class MathController {",
+        "  @Message({ version: 1, cmd: \"sum\" })",
+        "  sum() { return 0; }",
+        "  @Event(`user.created`)",
+        "  onUserCreated() {}",
+        "}",
+        "@Gateway(80, { namespace: \"events\" })",
+        "class EventsGateway {",
+        "  @OnMessage(`created`)",
+        "  handleCreated() {}",
+        "}"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(facts.symbols.filter((symbol) => symbol.kind === "entrypoint").map((symbol) => symbol.name)).toEqual([
+      "graphql query author",
+      "graphql mutation renameAuthor",
+      "graphql subscription authorUpdated",
+      "graphql subscription commentAdded",
+      'microservice message {"cmd":"sum","version":1}',
+      "microservice event user.created",
+      "websocket subscribe events:created"
+    ]);
+    expect(facts.edges.filter((edge) => edge.kind === "handles").map((edge) => [
+      symbolsById.get(edge.sourceId)?.name,
+      symbolsById.get(edge.targetId ?? "")?.name,
+      edge.evidence?.ruleId,
+      edge.resolution,
+      edge.confidence
+    ])).toEqual([
+      ["graphql query author", "author", "framework.nestjs.graphql.operation.local-method", "exact", 1],
+      ["graphql mutation renameAuthor", "rename", "framework.nestjs.graphql.operation.local-method", "exact", 1],
+      ["graphql subscription authorUpdated", "publish", "framework.nestjs.graphql.operation.local-method", "exact", 1],
+      ["graphql subscription commentAdded", "commentAdded", "framework.nestjs.graphql.operation.local-method", "exact", 1],
+      [
+        'microservice message {"cmd":"sum","version":1}',
+        "sum",
+        "framework.nestjs.microservice.pattern.local-method",
+        "exact",
+        1
+      ],
+      ["microservice event user.created", "onUserCreated", "framework.nestjs.microservice.pattern.local-method", "exact", 1],
+      ["websocket subscribe events:created", "handleCreated", "framework.nestjs.websocket.subscribe-message.local-method", "exact", 1]
+    ]);
+  });
+
+  it("rejects unproven NestJS non-HTTP entrypoint decorators and dynamic identities", () => {
+    const facts = extractFileFacts({
+      filePath: "src/unproven-transports.ts",
+      language: "typescript",
+      sourceText: [
+        'import { Controller } from "@nestjs/common";',
+        'import { Mutation, Query, Resolver, Subscription } from "@nestjs/graphql";',
+        'import type { Query as TypeQuery, Resolver as TypeResolver } from "@nestjs/graphql";',
+        'import * as graphql from "@nestjs/graphql";',
+        'import { EventPattern, MessagePattern } from "@nestjs/microservices";',
+        'import { SubscribeMessage, WebSocketGateway } from "@nestjs/websockets";',
+        "const dynamicName = \"dynamic\";",
+        "const dynamicPattern = { cmd: \"dynamic\" };",
+        "const Query = () => undefined;",
+        "@TypeResolver() class TypeOnlyResolver { @TypeQuery() method() {} }",
+        "@Resolver() class DynamicResolver {",
+        "  @Query(dynamicName) query() {}",
+        "  @Mutation(() => Result, { name: dynamicName }) mutation() {}",
+        "  @graphql.Subscription() subscription() {}",
+        "}",
+        "@Controller() class DynamicController {",
+        "  @MessagePattern(dynamicName) message() {}",
+        "  @EventPattern({ ...dynamicPattern }) event() {}",
+        "  @MessagePattern({ __proto__: { cmd: \"unsafe\" } }) prototypePattern() {}",
+        "}",
+        "@WebSocketGateway({ namespace: dynamicName }) class DynamicGateway {",
+        "  @SubscribeMessage(\"created\") created() {}",
+        "}",
+        "@WebSocketGateway() class InvalidGateway {",
+        "  @SubscribeMessage(dynamicName) dynamic() {}",
+        "  @SubscribeMessage(\"created\") static invalid() {}",
+        "}"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "entrypoint")).toEqual([]);
+    expect(facts.edges.filter((edge) => edge.kind === "handles")).toEqual([]);
+  });
+
   it("rejects type-only, non-Nest, shadowed, dynamic, namespace, and static NestJS route shapes", () => {
     const facts = extractFileFacts({
       filePath: "src/unproven.controller.ts",

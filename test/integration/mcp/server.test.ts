@@ -6,6 +6,8 @@ import {
   type AffectedTestsResult,
   SymbolLatticeError,
   type ContextResult,
+  type EntrypointsOptions,
+  type EntrypointsResult,
   type ExplainEdgeResult,
   type ExploreResult,
   type GenerationDiffOptions,
@@ -27,6 +29,7 @@ import {
   createMcpServer,
   runAffectedTestsTool,
   runContextTool,
+  runEntrypointsTool,
   runExplainEdgeTool,
   runExploreTool,
   runGenerationDiffTool,
@@ -410,6 +413,60 @@ function routesResult(): RoutesResult {
   };
 }
 
+function entrypointsResult(): EntrypointsResult {
+  const entrypoint = {
+    id: "symbol:entrypoint:author",
+    name: "graphql query author",
+    qualifiedName: "src/authors.resolver.ts#entrypoint:graphql query author",
+    kind: "entrypoint" as const,
+    filePath: "src/authors.resolver.ts",
+    range: {
+      start: { line: 5, column: 3 },
+      end: { line: 5, column: 28 }
+    },
+    isExported: false,
+    declarationOrdinal: 0
+  };
+  const handler = {
+    id: "symbol:resolver:author",
+    name: "author",
+    qualifiedName: "src/authors.resolver.ts#AuthorsResolver.author",
+    kind: "method" as const,
+    filePath: "src/authors.resolver.ts",
+    range: {
+      start: { line: 6, column: 3 },
+      end: { line: 6, column: 32 }
+    },
+    isExported: false,
+    declarationOrdinal: 0
+  };
+  return {
+    status: exploreResult().status,
+    bounds: { limit: 7, maximumLimit: 100 },
+    entrypoints: [
+      {
+        transport: "graphql",
+        operation: "query",
+        name: "author",
+        entrypoint,
+        edge: {
+          id: "edge:entrypoint:author",
+          sourceId: entrypoint.id,
+          targetId: handler.id,
+          kind: "handles",
+          filePath: entrypoint.filePath,
+          range: entrypoint.range,
+          resolution: "exact",
+          confidence: 1,
+          referenceName: handler.name
+        },
+        handler
+      }
+    ],
+    truncated: false
+  };
+}
+
 function generationHistoryResult(): GenerationHistoryResult {
   return {
     activeStatus: exploreResult().status,
@@ -729,6 +786,89 @@ describe("SymbolLattice MCP server", () => {
     expect((await client.listTools()).tools.map((tool) => tool.name)).toEqual([
       "symbol_lattice_explore"
     ]);
+  });
+
+  it("registers bounded non-HTTP entrypoint inventory only when the service supports it", async () => {
+    const entrypointCalls: Array<{ projectPath: string; options: EntrypointsOptions }> = [];
+    const service = {
+      async explore(): Promise<ExploreResult> {
+        return exploreResult();
+      },
+      async entrypoints(
+        projectPath: string,
+        options: EntrypointsOptions = {}
+      ): Promise<EntrypointsResult> {
+        entrypointCalls.push({ projectPath, options });
+        return entrypointsResult();
+      }
+    };
+    const server = createMcpServer(service, "C:/default-project");
+    const client = new Client({ name: "symbol-lattice-entrypoints-test", version: "1.0.0" });
+    const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+    closeCallbacks.push(() => client.close(), () => server.close());
+
+    const tools = await client.listTools();
+    expect(tools.tools.map((tool) => tool.name)).toEqual([
+      "symbol_lattice_explore",
+      "symbol_lattice_entrypoints"
+    ]);
+    const entrypointTool = tools.tools.find((tool) => tool.name === "symbol_lattice_entrypoints");
+    expect(entrypointTool?.annotations).toMatchObject({ readOnlyHint: true, idempotentHint: true });
+    expect(entrypointTool?.inputSchema).toMatchObject({
+      type: "object",
+      properties: {
+        transport: expect.objectContaining({ type: "string" }),
+        operation: expect.objectContaining({ type: "string" }),
+        name: expect.objectContaining({ type: "string", minLength: 1 }),
+        limit: expect.objectContaining({ type: "integer", minimum: 1, maximum: 100 })
+      }
+    });
+    expect(JSON.stringify(entrypointTool?.inputSchema)).toContain("graphql");
+    expect(entrypointTool?.outputSchema).toMatchObject({
+      type: "object",
+      properties: {
+        status: { type: "object" },
+        bounds: { type: "object" },
+        entrypoints: { type: "array" },
+        truncated: { type: "boolean" }
+      }
+    });
+
+    const result = await client.callTool({
+      name: "symbol_lattice_entrypoints",
+      arguments: {
+        projectPath: "C:/chosen-project",
+        transport: "graphql",
+        operation: "query",
+        name: "auth",
+        limit: 7
+      }
+    });
+
+    expect(result.isError).not.toBe(true);
+    expect(result.structuredContent).toMatchObject({
+      status: { stale: false },
+      bounds: { limit: 7, maximumLimit: 100 },
+      entrypoints: [
+        { transport: "graphql", operation: "query", name: "author", handler: { name: "author" } }
+      ],
+      truncated: false
+    });
+    expect(entrypointCalls).toEqual([
+      {
+        projectPath: "C:/chosen-project",
+        options: { transport: "graphql", operation: "query", namePrefix: "auth", limit: 7 }
+      }
+    ]);
+
+    const unsupportedTransport = await client.callTool({
+      name: "symbol_lattice_entrypoints",
+      arguments: { transport: "http" }
+    });
+    expect(unsupportedTransport.isError).toBe(true);
+    expect(entrypointCalls).toHaveLength(1);
   });
 
   it("registers bounded direct hierarchy only when the service supports it", async () => {
@@ -1489,6 +1629,21 @@ describe("SymbolLattice MCP server", () => {
       },
       "C:/project",
       { method: "GET", path: "/api", limit: 3 }
+    );
+
+    expect(response).toMatchObject({ isError: true });
+    expect(response.content[0]?.text).toContain("MISSING_INDEX");
+  });
+
+  it("returns entrypoint inventory errors without indexing", async () => {
+    const response = await runEntrypointsTool(
+      {
+        async entrypoints(): Promise<EntrypointsResult> {
+          throw new SymbolLatticeError("MISSING_INDEX", "Run symbol-lattice init first.");
+        }
+      },
+      "C:/project",
+      { transport: "graphql", operation: "query", name: "author", limit: 3 }
     );
 
     expect(response).toMatchObject({ isError: true });

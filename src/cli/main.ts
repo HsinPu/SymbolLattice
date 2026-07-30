@@ -16,7 +16,10 @@ import {
   MAX_GENERATION_HISTORY_LIMIT,
   MAX_GIT_HUNK_LIMIT,
   MAX_HIERARCHY_LIMIT,
+  MAX_ENTRYPOINT_LIMIT,
   MAX_ROUTE_LIMIT,
+  ENTRYPOINT_OPERATIONS,
+  ENTRYPOINT_TRANSPORTS,
   ROUTE_METHODS,
   DEFAULT_WATCH_INTERVAL_MS,
   MAX_WATCH_INTERVAL_MS,
@@ -28,6 +31,7 @@ import {
   validateWatchInterval,
   type ContextOptions,
   type AffectedTestsOptions,
+  type EntrypointsOptions,
   type GenerationDiffOptions,
   type GenerationHistoryOptions,
   type ForegroundWatchOptions,
@@ -76,6 +80,13 @@ interface SearchCommandOptions extends ProjectOptions {
 interface RoutesCommandOptions extends ProjectOptions {
   readonly method?: NonNullable<RoutesOptions["method"]>;
   readonly path?: string;
+  readonly limit?: number;
+}
+
+interface EntrypointsCommandOptions extends ProjectOptions {
+  readonly transport?: NonNullable<EntrypointsOptions["transport"]>;
+  readonly operation?: NonNullable<EntrypointsOptions["operation"]>;
+  readonly name?: string;
   readonly limit?: number;
 }
 
@@ -209,6 +220,27 @@ function parseRouteMethod(value: string): NonNullable<RoutesOptions["method"]> {
 function parseRoutePathPrefix(value: string): string {
   if (value.length === 0 || !value.startsWith("/")) {
     throw new Error('Expected a non-empty route path prefix beginning with "/".');
+  }
+  return value;
+}
+
+function parseEntrypointTransport(value: string): NonNullable<EntrypointsOptions["transport"]> {
+  if (!ENTRYPOINT_TRANSPORTS.includes(value as NonNullable<EntrypointsOptions["transport"]>)) {
+    throw new Error(`Expected one of: ${ENTRYPOINT_TRANSPORTS.join(", ")}; received "${value}".`);
+  }
+  return value as NonNullable<EntrypointsOptions["transport"]>;
+}
+
+function parseEntrypointOperation(value: string): NonNullable<EntrypointsOptions["operation"]> {
+  if (!ENTRYPOINT_OPERATIONS.includes(value as NonNullable<EntrypointsOptions["operation"]>)) {
+    throw new Error(`Expected one of: ${ENTRYPOINT_OPERATIONS.join(", ")}; received "${value}".`);
+  }
+  return value as NonNullable<EntrypointsOptions["operation"]>;
+}
+
+function parseEntrypointNamePrefix(value: string): string {
+  if (value.length === 0) {
+    throw new Error("Expected a non-empty entrypoint name prefix.");
   }
   return value;
 }
@@ -521,6 +553,40 @@ export function createProgram(
       };
       render(
         await service.routes(resolve(path ?? defaultProjectPath(options)), routeOptions),
+        options
+      );
+    });
+
+  addJsonOption(addProjectOption(program.command("entrypoints [path]")))
+    .option(
+      "--transport <transport>",
+      `Restrict results to one transport (${ENTRYPOINT_TRANSPORTS.join(", ")})`,
+      parseEntrypointTransport
+    )
+    .option(
+      "--operation <operation>",
+      `Restrict results to one operation (${ENTRYPOINT_OPERATIONS.join(", ")})`,
+      parseEntrypointOperation
+    )
+    .option(
+      "--name <entrypoint-name-prefix>",
+      "Restrict results to a non-empty persisted entrypoint name prefix",
+      parseEntrypointNamePrefix
+    )
+    .option(
+      "--limit <count>",
+      `Maximum entrypoint records to return (1-${MAX_ENTRYPOINT_LIMIT})`,
+      (value: string) => parseBoundedPositiveInteger(value, MAX_ENTRYPOINT_LIMIT)
+    )
+    .action(async (path: string | undefined, options: EntrypointsCommandOptions) => {
+      const entrypointOptions: EntrypointsOptions = {
+        ...(options.transport === undefined ? {} : { transport: options.transport }),
+        ...(options.operation === undefined ? {} : { operation: options.operation }),
+        ...(options.name === undefined ? {} : { namePrefix: options.name }),
+        ...(options.limit === undefined ? {} : { limit: options.limit })
+      };
+      render(
+        await service.entrypoints(resolve(path ?? defaultProjectPath(options)), entrypointOptions),
         options
       );
     });

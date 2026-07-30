@@ -10,7 +10,8 @@ export const SYMBOL_KINDS = [
   "interface",
   "type",
   "variable",
-  "route"
+  "route",
+  "entrypoint"
 ] as const;
 
 export type SymbolKind = (typeof SYMBOL_KINDS)[number];
@@ -26,6 +27,7 @@ export const EDGE_KINDS = [
   "exports",
   "calls",
   "routes",
+  "handles",
   ...HIERARCHY_RELATION_KINDS
 ] as const;
 

@@ -7,6 +7,8 @@ import {
   type AffectedTestsResult,
   type ContextOptions,
   type ContextResult,
+  type EntrypointsOptions,
+  type EntrypointsResult,
   type ForegroundWatchOptions,
   type GenerationDiffOptions,
   type GenerationDiffResult,
@@ -96,6 +98,60 @@ function routesResult(): RoutesResult {
           kind: "routes",
           filePath: route.filePath,
           range: route.range,
+          resolution: "exact",
+          confidence: 1,
+          referenceName: handler.name
+        },
+        handler
+      }
+    ],
+    truncated: false
+  };
+}
+
+function entrypointsResult(): EntrypointsResult {
+  const entrypoint = {
+    id: "symbol:entrypoint:author",
+    name: "graphql query author",
+    qualifiedName: "src/authors.resolver.ts#entrypoint:graphql query author",
+    kind: "entrypoint" as const,
+    filePath: "src/authors.resolver.ts",
+    range: {
+      start: { line: 5, column: 3 },
+      end: { line: 5, column: 28 }
+    },
+    isExported: false,
+    declarationOrdinal: 0
+  };
+  const handler = {
+    id: "symbol:resolver:author",
+    name: "author",
+    qualifiedName: "src/authors.resolver.ts#AuthorsResolver.author",
+    kind: "method" as const,
+    filePath: "src/authors.resolver.ts",
+    range: {
+      start: { line: 6, column: 3 },
+      end: { line: 6, column: 32 }
+    },
+    isExported: false,
+    declarationOrdinal: 0
+  };
+  return {
+    status: resultStatus(),
+    bounds: { limit: 7, maximumLimit: 100 },
+    entrypoints: [
+      {
+        transport: "graphql",
+        operation: "query",
+        name: "author",
+        entrypoint,
+        edge: {
+          id: "edge:entrypoint:author",
+          sourceId: entrypoint.id,
+          targetId: handler.id,
+          kind: "handles",
+          filePath: entrypoint.filePath,
+          range: entrypoint.range,
           resolution: "exact",
           confidence: 1,
           referenceName: handler.name
@@ -425,6 +481,81 @@ describe("symbol-lattice v0.14 routes CLI", () => {
       })
     ).rejects.toThrow(message);
     expect(routes).not.toHaveBeenCalled();
+  });
+});
+
+describe("symbol-lattice v0.18 entrypoints CLI", () => {
+  it("forwards transport entrypoint filters and renders stable JSON without mutating", async () => {
+    const calls: Array<{ projectPath: string; options: EntrypointsOptions }> = [];
+    const mutationCalls: string[] = [];
+    const result = entrypointsResult();
+    const service = {
+      async entrypoints(
+        projectPath: string,
+        options: EntrypointsOptions = {}
+      ): Promise<EntrypointsResult> {
+        calls.push({ projectPath, options });
+        return result;
+      },
+      async init(): Promise<void> {
+        mutationCalls.push("init");
+      },
+      async index(): Promise<void> {
+        mutationCalls.push("index");
+      },
+      async sync(): Promise<void> {
+        mutationCalls.push("sync");
+      }
+    } as unknown as SymbolLatticeService;
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+    await createProgram(service).parseAsync(
+      [
+        "node",
+        "symbol-lattice",
+        "entrypoints",
+        "C:/positional-project",
+        "--project",
+        "C:/ignored-project",
+        "--transport",
+        "graphql",
+        "--operation",
+        "query",
+        "--name",
+        "auth",
+        "--limit",
+        "7",
+        "--json"
+      ],
+      { from: "node" }
+    );
+
+    expect(calls).toEqual([
+      {
+        projectPath: resolve("C:/positional-project"),
+        options: { transport: "graphql", operation: "query", namePrefix: "auth", limit: 7 }
+      }
+    ]);
+    expect(mutationCalls).toEqual([]);
+    expect(write).toHaveBeenCalledWith(`${JSON.stringify(result, null, 2)}\n`);
+  });
+
+  it.each([
+    [["--transport", "http"], "Expected one of: graphql, microservice, websocket"],
+    [["--operation", "route"], "Expected one of: query, mutation, subscription, message, event, subscribe"],
+    [["--name", ""], "Expected a non-empty entrypoint name prefix"],
+    [["--limit", "101"], "Expected an integer between 1 and 100"]
+  ])("rejects invalid entrypoint filter %j before invoking the service", async (arguments_, message) => {
+    const entrypoints = vi.fn();
+    const program = createProgram({ entrypoints } as unknown as SymbolLatticeService);
+    program.exitOverride();
+
+    await expect(
+      program.parseAsync(["node", "symbol-lattice", "entrypoints", ...arguments_], {
+        from: "node"
+      })
+    ).rejects.toThrow(message);
+    expect(entrypoints).not.toHaveBeenCalled();
   });
 });
 

@@ -1,5 +1,8 @@
 import type {
   ChildRelation,
+  EntryPointOperation,
+  EntryPointRecord,
+  EntryPointTransport,
   EvidencePath,
   GraphRelation,
   ImpactPath,
@@ -34,6 +37,10 @@ import type {
 /** Route extraction remains domain-owned; application callers consume these public records. */
 export { ROUTE_METHODS } from "../domain/graph.js";
 export type { RouteMethod, RouteRecord } from "../domain/graph.js";
+
+/** Non-HTTP transport inventory stays separate from the HTTP route contract. */
+export { ENTRYPOINT_OPERATIONS, ENTRYPOINT_TRANSPORTS } from "../domain/graph.js";
+export type { EntryPointOperation, EntryPointRecord, EntryPointTransport } from "../domain/graph.js";
 
 export interface GraphContext {
   readonly status: IndexStatus;
@@ -235,6 +242,41 @@ export interface RoutesResult {
   readonly status: IndexStatus;
   readonly bounds: RoutesBounds;
   readonly routes: readonly RouteRecord[];
+  /** True only when matching persisted records were omitted by `bounds.limit`. */
+  readonly truncated: boolean;
+}
+
+/** Public non-HTTP entrypoint listing remains independently bounded from route inventory. */
+export const DEFAULT_ENTRYPOINT_LIMIT = 50;
+export const MAX_ENTRYPOINT_LIMIT = 100;
+
+/** Optional transport, operation, and literal-name-prefix filters for persisted entrypoints. */
+export interface EntrypointsOptions {
+  /** One supported non-HTTP transport. */
+  readonly transport?: EntryPointTransport;
+  /** One operation supported by a transport extractor. */
+  readonly operation?: EntryPointOperation;
+  /** A nonempty exact prefix for the persisted transport-level entrypoint name. */
+  readonly namePrefix?: string;
+  /** Maximum persisted entrypoint records returned from the active generation. */
+  readonly limit?: number;
+}
+
+/** Fixed disclosure bounds reported with every active-generation entrypoint listing. */
+export interface EntrypointsBounds {
+  readonly limit: number;
+  readonly maximumLimit: number;
+}
+
+/**
+ * A read-only active-generation inventory for GraphQL, microservice, and
+ * WebSocket entrypoints. HTTP routes deliberately remain available only via
+ * `RoutesResult` so transport semantics cannot be conflated.
+ */
+export interface EntrypointsResult {
+  readonly status: IndexStatus;
+  readonly bounds: EntrypointsBounds;
+  readonly entrypoints: readonly EntryPointRecord[];
   /** True only when matching persisted records were omitted by `bounds.limit`. */
   readonly truncated: boolean;
 }

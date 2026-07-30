@@ -8,6 +8,7 @@ import {
   getCallees,
   getChildren,
   getCallers,
+  getEntrypoints,
   getImpactPaths,
   getParents,
   getRoutes,
@@ -350,6 +351,54 @@ describe("pure graph traversal", () => {
     ]);
     expect(getImpactPaths(routeGraph, "handler", 1).map((path) => path.symbols.at(-1)?.id)).toEqual([
       "local-route"
+    ]);
+  });
+
+  it("keeps non-HTTP entrypoints separate from routes while preserving handler evidence", () => {
+    const handler = symbol({ id: "handler", name: "author", filePath: "src/authors.resolver.ts", startLine: 20 });
+    const graphql = symbol({
+      id: "graphql-query",
+      name: "graphql query author",
+      filePath: "src/authors.resolver.ts",
+      startLine: 10,
+      kind: "entrypoint"
+    });
+    const message = symbol({
+      id: "message-pattern",
+      name: 'microservice message {"cmd":"sum"}',
+      filePath: "src/math.controller.ts",
+      startLine: 15,
+      kind: "entrypoint"
+    });
+    const graph = {
+      symbols: [handler, message, graphql],
+      edges: [
+        edge({ id: "graphql-handles-author", sourceId: graphql.id, targetId: handler.id, kind: "handles" }),
+        edge({ id: "message-handles-author", sourceId: message.id, targetId: handler.id, kind: "handles" })
+      ]
+    };
+
+    expect(getRoutes(graph)).toEqual([]);
+    expect(getEntrypoints(graph).map((entrypoint) => [
+      entrypoint.transport,
+      entrypoint.operation,
+      entrypoint.name,
+      entrypoint.handler?.id
+    ])).toEqual([
+      ["graphql", "query", "author", "handler"],
+      ["microservice", "message", '{"cmd":"sum"}', "handler"]
+    ]);
+    expect(getCallers(graph, handler.id).map((relation) => relation.edge.id)).toEqual([
+      "graphql-handles-author",
+      "message-handles-author"
+    ]);
+    expect(getCallees(graph, graphql.id).map((relation) => relation.symbol.id)).toEqual([handler.id]);
+    expect(findEvidencePath(graph, graphql.id, handler.id).path?.edges.map((edge) => edge.id)).toEqual([
+      "graphql-handles-author"
+    ]);
+    expect(getImpactPaths(graph, handler.id, 1).map((path) => path.symbols.at(-1)?.id)).toEqual([
+      "graphql-query",
+      "message-pattern"
     ]);
   });
 

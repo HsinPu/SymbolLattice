@@ -9,12 +9,12 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![License](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
 
-[Quick start](#quick-start) | [Type hierarchy](#direct-type-hierarchy-evidence) | [HTTP routes](#static-express-route-evidence) | [Node inspection](#generation-bound-node-inspection) | [History and diff](#retained-graph-history-and-structural-diff) | [Auto sync](#opt-in-foreground-watch) | [Affected tests](#affected-test-evidence) | [Git hunks](#immutable-git-hunk-declaration-attribution) | [Context packs](#bounded-multi-symbol-context) | [Commands](#command-reference) | [MCP](#mcp-server) | [Architecture](#architecture) | [Roadmap](#roadmap)
+[Quick start](#quick-start) | [Type hierarchy](#direct-type-hierarchy-evidence) | [HTTP routes](#static-express-route-evidence) | [Nest entrypoints](#nestjs-non-http-entrypoint-evidence) | [Node inspection](#generation-bound-node-inspection) | [History and diff](#retained-graph-history-and-structural-diff) | [Auto sync](#opt-in-foreground-watch) | [Affected tests](#affected-test-evidence) | [Git hunks](#immutable-git-hunk-declaration-attribution) | [Context packs](#bounded-multi-symbol-context) | [Commands](#command-reference) | [MCP](#mcp-server) | [Architecture](#architecture) | [Roadmap](#roadmap)
 
 </div>
 
 > [!IMPORTANT]
-> **v0.17.0** is an early developer release. This public repository runs from source; its npm package is intentionally private and is not published to npm.
+> **v0.18.0** is an early developer release. This public repository runs from source; its npm package is intentionally private and is not published to npm.
 
 SymbolLattice builds a local symbol graph without hiding uncertainty. It keeps syntax-proven artifact facts, resolves cross-file relationships conservatively, and records why every resolved edge exists. The graph stays local to the inspected project under `.symbol-lattice/index.sqlite`.
 
@@ -28,6 +28,7 @@ SymbolLattice builds a local symbol graph without hiding uncertainty. It keeps s
 - **Generation-bound source evidence** - `search` and exact `explore` results use source captured with the active graph generation, even when the live project has since drifted.
 - **Declaration-focused node view** - exact `node` results return the full persisted declaration range plus a bounded declaration body, direct callers/callees, and explicit limits from one active generation without substituting live source text.
 - **Static HTTP entry evidence** - narrow Express and NestJS packs create first-class `route` nodes and exact `routes` edges only when the HTTP registration and handler binding are statically proven.
+- **Non-HTTP transport evidence** - AST-proven NestJS GraphQL, microservice, and WebSocket entrypoints use distinct `entrypoint` nodes and exact `handles` edges, so a message pattern or subscription is never mislabeled as an HTTP route.
 - **Direct type-hierarchy evidence** - AST-proven `extends` and `implements` edges preserve value/type namespace proof, type-only imports, re-export provenance, unresolved bases, and bounded direct parent/child views without pretending to have a full type checker.
 - **Bounded context packs** - ordered symbol references produce persisted source, capped relationship/impact summaries, and static directed evidence paths without guessing ambiguous symbols or dynamic behavior.
 - **Affected-test evidence** - changed indexed files map to conventionally named tests through bounded, exact import/export proof paths; explicit paths, `--working-tree`, and `--base <ref>` retain stale, scope, depth, visit, and result limits in the response.
@@ -69,6 +70,7 @@ node dist/cli/main.js callers "src/math.ts#add" --project /path/to/project
 node dist/cli/main.js node "src/math.ts#add" --project /path/to/project
 node dist/cli/main.js hierarchy "src/models.ts#User" --project /path/to/project --limit 25
 node dist/cli/main.js routes /path/to/project --method GET --path /api --limit 20
+node dist/cli/main.js entrypoints /path/to/project --transport graphql --operation query --name author --limit 20
 node dist/cli/main.js search "session timeout" --project /path/to/project --path src
 node dist/cli/main.js context "src/consumer.ts#calculate" "src/math.ts#add" --project /path/to/project
 
@@ -99,19 +101,20 @@ One-shot data commands emit stable, pretty JSON. `watch` is the deliberate strea
 
 ## Capabilities
 
-| Area | v0.17.0 behavior |
+| Area | v0.18.0 behavior |
 | --- | --- |
 | Source files | TypeScript, TSX, JavaScript, and JSX |
 | Scope | Project root by default or repeatable, persisted `--scope` directories |
 | Discovery | Root `.gitignore` with negation; `.git`, `.symbol-lattice`, `coverage`, `dist`, and `node_modules` are always excluded |
-| Symbols | Files, classes, functions, methods, interfaces, types, variables, and static HTTP routes |
-| Relationships | `contains`, module imports/exports, direct identifier calls, evidence-bearing `routes`, and direct `extends` / `implements` |
+| Symbols | Files, classes, functions, methods, interfaces, types, variables, static HTTP routes, and non-HTTP transport entrypoints |
+| Relationships | `contains`, module imports/exports, direct identifier calls, evidence-bearing `routes` and `handles`, plus direct `extends` / `implements` |
 | Module resolution | Relative paths, TypeScript/JavaScript `baseUrl` and `paths`, then local workspace packages |
 | Workspaces | Root `package.json` workspaces array/object, local package root/subpath `exports`, and entrypoint fallback |
 | Re-exports | Named aliases, `export *`, default-through-named aliases, and namespace-export provenance |
 | Retrieval | Local deterministic FTS5 search across persisted source text and identifier parts; bounded path/language filters, source/symbol evidence, and exact `explore` excerpts from the same active generation |
 | Node inspection | Exact ID, qualified-name, simple-name, or `path:line[:column]` matches can return the persisted declaration range, capped direct callers/callees, source provenance, truncation, and active freshness from one generation |
 | HTTP routes | Static AST-proven Express literal registrations plus direct NestJS controller decorators and `RouterModule.register()` module-prefix projection. All use bounded `routes` listing and exact handler evidence; only Express can retain an unresolved terminal handler in this release |
+| Non-HTTP entrypoints | AST-proven direct NestJS GraphQL `Query` / `Mutation` / `Subscription`, microservice `MessagePattern` / `EventPattern`, and WebSocket `SubscribeMessage` handlers. Bounded `entrypoints` listing keeps transport/operation/name semantics and exact `handles` evidence separate from HTTP routes |
 | Type hierarchy | Direct TS/JS class `extends`, TS class `implements`, and TS interface `extends`; exact lexical/import/re-export proof with value/type namespaces, plus bounded direct parents/children |
 | Context | Bounded packs for 1–8 ordered references: exact-match source excerpts, capped callers/callees and reverse impact, plus shortest static directed evidence paths between adjacent exact references |
 | Affected tests | Explicit changed files or local Git change sets feed exact persisted `imports` / `exports` paths, deterministic proof paths, conventional test-path classification, and explicit completeness limits |
@@ -228,10 +231,59 @@ The v0.17 surface is deliberately strict:
 - Decorated instance methods with a body are accepted. Their `routes` edge is `exact` with `framework.nestjs.decorator-route.local-method` syntax evidence.
 - Module composition requires direct named `Module` and `RouterModule` imports from `@nestjs/common` and `@nestjs/core`, respectively; aliases are supported. Only a direct `RouterModule.register([...])` entry in a direct `@Module({ imports: [...] })` array is read.
 - The route tree accepts literal `path`, direct identifier `module`, and recursively static `children` entries. Controller/module targets need exact local, import, or re-export class proof. Dynamic, namespace, type-only, shadowed, duplicate, computed, or spread-based shapes are not promoted into a prefix.
-- If a module prefix cannot be proven, SymbolLattice retains the controller-local route rather than inventing a global route. `forRoot` / `forChild`, global prefixes, versioning, runtime adapters, guards, custom/composed decorators, GraphQL, microservices, WebSockets, and SSE remain outside this release's proof surface.
+- If a module prefix cannot be proven, SymbolLattice retains the controller-local route rather than inventing a global route. `forRoot` / `forChild`, global prefixes, versioning, runtime adapters, guards, custom/composed decorators, and SSE remain outside the HTTP route proof surface. The separate non-HTTP NestJS proof surface is documented below.
 
 > [!NOTE]
 > `routes` does not need a new command or MCP tool for NestJS: the existing read-only route query returns Express and NestJS evidence from the active generation together.
+
+### NestJS non-HTTP entrypoint evidence
+
+v0.18 adds a distinct transport graph contract for NestJS operations that are not HTTP routes. A supported declaration creates an `entrypoint` node named as `<transport> <operation> <name>` and an exact `handles` edge to its instance method. The edge participates in callers, callees, impact, context, `explore`, `node`, and `explain-edge`, but it never appears in `routes` or receives a fabricated HTTP method/path.
+
+```ts
+import { Controller } from "@nestjs/common";
+import { Query, Resolver } from "@nestjs/graphql";
+import { MessagePattern } from "@nestjs/microservices";
+import { SubscribeMessage, WebSocketGateway } from "@nestjs/websockets";
+
+@Resolver()
+export class AuthorsResolver {
+  @Query()
+  author() { return {}; }
+}
+
+@Controller()
+export class MathController {
+  @MessagePattern({ cmd: "sum" })
+  sum() { return 0; }
+}
+
+@WebSocketGateway({ namespace: "events" })
+export class EventsGateway {
+  @SubscribeMessage("created")
+  created() {}
+}
+```
+
+The persisted records are `graphql query author`, `microservice message {"cmd":"sum"}`, and `websocket subscribe events:created` respectively. Query them independently from HTTP routes:
+
+```bash
+# Read the active generation only; this never initializes or refreshes an index.
+node dist/cli/main.js entrypoints /path/to/project --transport graphql --operation query
+node dist/cli/main.js entrypoints /path/to/project --transport microservice --name '{"cmd"'
+node dist/cli/main.js entrypoints /path/to/project --transport websocket --operation subscribe --name events:
+```
+
+The contract follows Nest's documented [GraphQL resolver](https://docs.nestjs.com/graphql/resolvers) and [subscription](https://docs.nestjs.com/graphql/subscriptions), [microservice message/event](https://docs.nestjs.com/microservices/basics), and [WebSocket gateway](https://docs.nestjs.com/websockets/gateways) decorators while keeping only statically provable information:
+
+- Decorators must be direct, non-type-only named imports from their owning Nest package; aliases are supported. Namespace calls, local barrels, custom/composed decorators, foreign imports, and shadowed bindings are not promoted.
+- GraphQL requires one direct `@Resolver(...)` on the class plus direct `@Query`, `@Mutation`, or `@Subscription` instance-method decorators. A zero-argument or arrow-return-type operation uses the method name; a literal schema-first name or a static `{ name: "..." }` option is retained exactly. Dynamic or conflicting names remain outside the graph.
+- Microservices require one direct `@Controller(...)` class decorator plus direct `@MessagePattern` or `@EventPattern` methods. The first pattern argument may be a static string/template literal or a recursively static JSON-compatible object with ordinary data properties; object keys are canonicalized before persistence. An optional transport argument is not separately modeled.
+- WebSockets require one direct `@WebSocketGateway(...)` class decorator and a direct single-literal `@SubscribeMessage(...)` method decorator. A gateway with no options, a literal numeric port, or an object with an absent/static literal `namespace` is supported; a nonempty namespace is composed as `namespace:event`.
+- Handlers must be non-static methods with a body and a direct source-level name. Runtime schema generation, GraphQL field resolvers, dynamic pattern construction, dynamic gateway configuration, runtime transport selection, guards, adapters, and broker/server wiring are intentionally not inferred.
+
+> [!NOTE]
+> `entrypoints` is a read-only active-generation view with a default limit of 50 and a maximum of 100. Its status may be stale after source edits, while its records remain evidence from the last successful index. Run `sync` or `index` to publish newer transport facts.
 
 ### Direct type hierarchy evidence
 
@@ -321,7 +373,7 @@ node dist/cli/main.js context \
 
 The input accepts **1–8 ordered references**. Each result preserves the normal `exact`, `ambiguous`, or `not_found` match rather than selecting an ambiguous candidate. Ambiguous candidate lists cap at 25 and set `matchCandidatesTruncated` when more persisted candidates exist. Exact matches include a persisted source excerpt when the active generation can supply it, bounded direct callers/callees, and bounded reverse-impact paths.
 
-Adjacent exact references are also checked as a directed static route in the supplied order. A returned `path` is the deterministic shortest path through **exact** `calls`, `routes`, or `imports` edges only. SymbolLattice never reverses an edge, treats a heuristic edge as proof, or fabricates a dynamic-dispatch hop. Each pair reports one of `path`, `same-symbol`, `no-path`, `not-applicable`, or `truncated`.
+Adjacent exact references are also checked as a directed static path in the supplied order. A returned `path` is the deterministic shortest path through **exact** `calls`, `routes`, `handles`, or `imports` edges only. SymbolLattice never reverses an edge, treats a heuristic edge as proof, or fabricates a dynamic-dispatch hop. Each pair reports one of `path`, `same-symbol`, `no-path`, `not-applicable`, or `truncated`.
 
 | Option | Default | Range | Effect |
 | --- | ---: | ---: | --- |
@@ -549,6 +601,7 @@ The active generation fingerprints the root `.gitignore`, selected `tsconfig.jso
 | `node <reference>` | Return one exact symbol's bounded persisted declaration range, direct callers/callees, provenance, and freshness; never refreshes the index |
 | `hierarchy <reference>` | Return bounded direct `extends` / `implements` parents and exact children, including unresolved parent evidence; accepts `--limit` and never refreshes the index |
 | `routes [path]` | List bounded static Express and AST-proven NestJS route nodes, including exact `RouterModule.register()` prefix projections, with handler evidence; accepts `--method`, `--path`, and `--limit`; never refreshes the index |
+| `entrypoints [path]` | List bounded AST-proven NestJS GraphQL, microservice, and WebSocket entrypoints with exact handler evidence; accepts `--transport`, `--operation`, `--name`, and `--limit`; never refreshes the index |
 | `callers <symbol>` / `callees <symbol>` | Show direct graph relationships |
 | `impact <symbol>` | Trace reverse impact with optional `--depth` and explicit output `--limit` |
 | `affected [filePaths...]` | Select conventionally named tests from exact persisted import/export evidence; accepts direct paths or `--stdin`, plus local Git `--working-tree` or `--base <ref>`, `--depth`, and `--limit` |
@@ -574,6 +627,7 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 | `symbol_lattice_node` | Return one exact node's bounded persisted declaration range, direct callers/callees, provenance, and freshness without refreshing an index |
 | `symbol_lattice_hierarchy` | Return bounded direct `extends` / `implements` parents and exact children from one active generation, including unresolved parent evidence, without refreshing an index |
 | `symbol_lattice_routes` | Return bounded static Express and AST-proven NestJS route nodes, including exact RouterModule prefix projections, with method/path filters, handler-edge evidence, and freshness without refreshing an index |
+| `symbol_lattice_entrypoints` | Return bounded AST-proven NestJS GraphQL, microservice, and WebSocket entrypoints with transport/operation/name filters, exact `handles` evidence, and freshness without refreshing an index |
 | `symbol_lattice_context` | Return bounded generation-bound source, relationships, reverse impact, and directed proof paths for ordered references without refreshing an index |
 | `symbol_lattice_affected` | Return bounded affected-test proofs for changed files, index coverage, and completeness limits without refreshing an index |
 | `symbol_lattice_affected_git` | Read a local Git working-tree or merge-base change set, then return its provenance and bounded affected-test proofs without fetching, refreshing, or synchronizing an index |
@@ -603,11 +657,13 @@ v0.16 adds no SQLite schema migration or public query surface. It persists direc
 
 v0.17 adds no SQLite schema migration or public query surface. It persists additive Nest route-to-controller, module-to-controller, and `RouterModule.register()` prefix facts in the existing raw artifact-fact payload, then projects complete route symbols during full project resolution. Both extractor and resolver versions advance, so a pre-v0.17 active index requires an explicit `sync` or `index` before route coverage can include module prefixes. Existing generations remain readable; the current `routes` CLI/service/MCP surface reads only the active generation.
 
+v0.18 adds no SQLite schema migration. It persists additive `entrypoint` symbols and direct `handles` edges through existing graph, raw-fact, and retained-snapshot storage. The extractor advances to `typescript-ast-v7`, so a pre-v0.18 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes complete non-HTTP transport evidence; the resolver remains `project-resolver-v5` because these are file-local syntax edges. Existing generations remain readable. The new `entrypoints` CLI/service and `symbol_lattice_entrypoints` MCP tool are read-only; an explore-only embedding does not register the MCP tool until it exposes the additive capability.
+
 ## Architecture
 
 ```mermaid
 flowchart LR
-  CLI["CLI: explicit init/index/sync/watch\nread-only hierarchy/routes/node/history/diff/git-hunks"] --> App["Application service"]
+  CLI["CLI: explicit init/index/sync/watch\nread-only hierarchy/routes/entrypoints/node/history/diff/git-hunks"] --> App["Application service"]
   Native["Native filesystem events\nfiltered + recursive"] --> Watch["Foreground watch\ndebounce + polling fallback"]
   Timer["Bounded polling safety sweep"] --> Watch
   Watch --> App
@@ -616,7 +672,7 @@ flowchart LR
   Catalog["Filesystem catalog\nscope + gitignore"] --> Inputs["Index inputs"]
   Catalog --> TS["TS alias resolver"]
   Catalog --> WS["Workspace resolver"]
-  Extractor["TypeScript AST extractor\ndirect heritage + Express/Nest HTTP routes\nNest module-prefix facts"] --> Facts["Reusable artifact facts"]
+  Extractor["TypeScript AST extractor\ndirect heritage + Express/Nest HTTP routes\nNest non-HTTP entrypoints + module-prefix facts"] --> Facts["Reusable artifact facts"]
   Catalog --> SourceDocs["Persisted source documents"]
   SourceDocs --> Retrieval["Generation-bound lexical projection"]
   Facts --> Resolver["Full project export surface"]
@@ -642,12 +698,12 @@ src/
 
 ## Deliberate boundaries
 
-v0.17.0 does not yet provide:
+v0.18.0 does not yet provide:
 
 - Daemon mode, background automatic sync after the foreground process exits, cross-process watch coordination, MCP per-query pending-file banners, worker pools, or historical source browsing.
 - pnpm workspace YAML, TypeScript project references, external/package `extends`, or nested `.gitignore` semantics.
 - CommonJS `require`, dynamic dispatch, reflection, arbitrary framework routes, or namespace property-call resolution. The v0.14 Express pack remains limited to syntax-proven static registrations; it does not model mutable/aliased receivers, mounts, chained routers, inline callbacks, or runtime route composition.
-- Semantic type checking, transitive hierarchy traversal, declaration-merging semantics, override dispatch, mixin/qualified/conditional heritage expressions, or automatic framework decorator inference. v0.17 recognizes direct imported NestJS HTTP decorators and direct static `RouterModule.register()` prefixes only; it does not infer custom decorators, barrels, `forRoot` / `forChild`, global/version prefixes, guards, or non-HTTP transports.
+- Semantic type checking, transitive hierarchy traversal, declaration-merging semantics, override dispatch, mixin/qualified/conditional heritage expressions, or automatic framework decorator inference. v0.18 recognizes direct imported NestJS HTTP decorators, direct static `RouterModule.register()` prefixes, and the narrowly defined non-HTTP decorators documented above; it does not infer custom decorators, barrels, `forRoot` / `forChild`, global/version prefixes, guards, GraphQL field resolvers, dynamic patterns, dynamic gateway configuration, or runtime transport wiring.
 - Parsers beyond TS/TSX/JS/JSX, external dependency indexing, telemetry, or multi-project routing.
 - Embedding-based or cloud retrieval, semantic ranking, arbitrary natural-language context assembly, semantic Git diff beyond immutable zero-context hunk-to-revision-local-declaration evidence, or reliable rename/move/cross-side identity attribution.
 
@@ -671,8 +727,8 @@ v0.17.0 does not yet provide:
 | `v0.15.0` | Direct AST-proven TypeScript/JavaScript `extends` / `implements` graph with value/type namespace proof, unresolved heritage evidence, and bounded read-only CLI/MCP hierarchy views |
 | `v0.16.0` | AST-proven NestJS HTTP controller decorators with direct method edges, imported-alias proof, and shared read-only route views |
 | `v0.17.0` | AST-proven `RouterModule.register()` module prefixes, recursive static children, exact module/controller bindings, and complete Nest HTTP route projections |
-| `v0.18.0` | Planned AST-proven NestJS non-HTTP entrypoints: GraphQL operation decorators, microservice message/event patterns, and WebSocket subscriptions, with separate evidence contracts |
-| `v0.19+` | Additional language adapters, framework packs, contract graphs, retained-generation source browsing, and further CodeGraph-parity work where evidence supports it |
+| `v0.18.0` | AST-proven NestJS GraphQL operations, microservice message/event patterns, and WebSocket subscriptions as separate `entrypoint` / `handles` evidence, with bounded read-only CLI and MCP listing |
+| `v0.19+` | Additional language adapters, framework packs, GraphQL field-resolver and runtime-transport evidence where static proof is possible, contract graphs, retained-generation source browsing, and further CodeGraph-parity work |
 
 See [CHANGELOG.md](CHANGELOG.md) for release notes and migration history.
 
@@ -686,7 +742,7 @@ npm.cmd pack --dry-run
 git diff --check
 ```
 
-The suite covers discovery, input fingerprints, alias and workspace resolution, exact direct TypeScript/JavaScript heritage extraction and namespace-aware local/import/re-export resolution, bounded hierarchy traversal, exact static Express route extraction and handler resolution, direct NestJS controller decorators plus static `RouterModule.register()` prefix composition with alias, shadow, dynamic, nested-child, persistence, and incremental raw-fact reuse coverage, route-aware graph traversal, re-export semantics, exact affected-test proofs and completeness limits, local Git change-set parsing and selection, immutable revision-local Git hunk declaration attribution, bounded generation-bound node declaration evidence, generation-bound search and exploration source evidence, retained graph history and structural diffs, legacy snapshot backfill, stale-source evidence, bounded foreground pending-file disclosure, event debounce/polling fallback/retry receipts, no-op sync, schema migration, atomic rollback, MCP read-only behavior, CLI parsing, and architecture boundaries.
+The suite covers discovery, input fingerprints, alias and workspace resolution, exact direct TypeScript/JavaScript heritage extraction and namespace-aware local/import/re-export resolution, bounded hierarchy traversal, exact static Express route extraction and handler resolution, direct NestJS controller decorators plus static `RouterModule.register()` prefix composition and non-HTTP GraphQL/microservice/WebSocket entrypoint extraction with alias, shadow, dynamic, persistence, and incremental raw-fact reuse coverage, route- and entrypoint-aware graph traversal, re-export semantics, exact affected-test proofs and completeness limits, local Git change-set parsing and selection, immutable revision-local Git hunk declaration attribution, bounded generation-bound node declaration evidence, generation-bound search and exploration source evidence, retained graph history and structural diffs, legacy snapshot backfill, stale-source evidence, bounded foreground pending-file disclosure, event debounce/polling fallback/retry receipts, no-op sync, schema migration, atomic rollback, MCP read-only behavior, CLI parsing, and architecture boundaries.
 
 ## Contributing
 

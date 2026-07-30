@@ -16,7 +16,10 @@ import {
   MAX_GENERATION_HISTORY_LIMIT,
   MAX_GIT_HUNK_LIMIT,
   MAX_HIERARCHY_LIMIT,
+  MAX_ENTRYPOINT_LIMIT,
   MAX_ROUTE_LIMIT,
+  ENTRYPOINT_OPERATIONS,
+  ENTRYPOINT_TRANSPORTS,
   ROUTE_METHODS
 } from "../application/types.js";
 import type {
@@ -24,6 +27,8 @@ import type {
   AffectedTestsResult,
   ContextOptions,
   ContextResult,
+  EntrypointsOptions,
+  EntrypointsResult,
   ExplainEdgeResult,
   ExploreResult,
   GenerationDiffOptions,
@@ -37,6 +42,8 @@ import type {
   HierarchyOptions,
   HierarchyResult,
   NodeResult,
+  EntryPointOperation,
+  EntryPointTransport,
   RouteMethod,
   RoutesOptions,
   RoutesResult,
@@ -105,6 +112,11 @@ export interface RoutesService {
   routes(projectPath: string, options?: RoutesOptions): Promise<RoutesResult>;
 }
 
+/** Additive active-generation non-HTTP entrypoint inventory seam for read-only embeddings. */
+export interface EntrypointsService {
+  entrypoints(projectPath: string, options?: EntrypointsOptions): Promise<EntrypointsResult>;
+}
+
 /** Additive direct-hierarchy seam for existing read-only embeddings. */
 export interface HierarchyService {
   hierarchy(
@@ -135,6 +147,7 @@ export type ReadOnlyMcpService = ExploreService & ExplainEdgeService;
 export type NodeMcpService = ExploreService & NodeService;
 export type SearchMcpService = ExploreService & SearchService;
 export type RoutesMcpService = ExploreService & RoutesService;
+export type EntrypointsMcpService = ExploreService & EntrypointsService;
 export type HierarchyMcpService = ExploreService & HierarchyService;
 export type ContextMcpService = ExploreService & ContextService;
 export type AffectedTestsMcpService = ExploreService & AffectedTestsService;
@@ -206,6 +219,15 @@ export interface RoutesToolArguments {
   readonly limit?: number | undefined;
 }
 
+export interface EntrypointsToolArguments {
+  readonly projectPath?: string | undefined;
+  readonly transport?: EntryPointTransport | undefined;
+  readonly operation?: EntryPointOperation | undefined;
+  /** Nonempty persisted transport-level entrypoint name prefix. */
+  readonly name?: string | undefined;
+  readonly limit?: number | undefined;
+}
+
 export interface HierarchyToolArguments {
   readonly projectPath?: string | undefined;
   readonly reference: string;
@@ -243,6 +265,7 @@ export type GitHunksToolResponse = ReadOnlyToolResponse;
 export type ExplainEdgeToolResponse = ReadOnlyToolResponse;
 export type SearchToolResponse = ReadOnlyToolResponse;
 export type RoutesToolResponse = ReadOnlyToolResponse;
+export type EntrypointsToolResponse = ReadOnlyToolResponse;
 export type HierarchyToolResponse = ReadOnlyToolResponse;
 export type GenerationHistoryToolResponse = ReadOnlyToolResponse;
 export type GenerationDiffToolResponse = ReadOnlyToolResponse;
@@ -498,6 +521,29 @@ const routesOutputSchema = z
   })
   .passthrough();
 
+const entrypointsOutputSchema = z
+  .object({
+    status: indexStatusOutputSchema,
+    bounds: z.object({
+      limit: z.number().int().min(1).max(MAX_ENTRYPOINT_LIMIT),
+      maximumLimit: z.literal(MAX_ENTRYPOINT_LIMIT)
+    }),
+    entrypoints: z
+      .array(
+        z.object({
+          transport: z.enum(ENTRYPOINT_TRANSPORTS),
+          operation: z.enum(ENTRYPOINT_OPERATIONS),
+          name: z.string(),
+          entrypoint: z.object({}).passthrough(),
+          edge: z.object({}).passthrough(),
+          handler: z.object({}).passthrough().nullable()
+        })
+      )
+      .max(MAX_ENTRYPOINT_LIMIT),
+    truncated: z.boolean()
+  })
+  .passthrough();
+
 const hierarchyOutputSchema = z
   .object({
     status: indexStatusOutputSchema,
@@ -621,6 +667,10 @@ function supportsSearch(service: ExploreService): service is SearchMcpService {
 
 function supportsRoutes(service: ExploreService): service is RoutesMcpService {
   return "routes" in service && typeof service.routes === "function";
+}
+
+function supportsEntrypoints(service: ExploreService): service is EntrypointsMcpService {
+  return "entrypoints" in service && typeof service.entrypoints === "function";
 }
 
 function supportsHierarchy(service: ExploreService): service is HierarchyMcpService {
@@ -849,6 +899,29 @@ export async function runRoutesTool(
       ...(arguments_.limit === undefined ? {} : { limit: arguments_.limit })
     };
     const result = await service.routes(arguments_.projectPath ?? defaultProjectPath, options);
+    return {
+      content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      structuredContent: result as unknown as Record<string, unknown>
+    };
+  } catch (error) {
+    return renderToolError(error);
+  }
+}
+
+/** Lists bounded persisted non-HTTP entrypoints without ever triggering an index operation. */
+export async function runEntrypointsTool(
+  service: EntrypointsService,
+  defaultProjectPath: string,
+  arguments_: EntrypointsToolArguments
+): Promise<EntrypointsToolResponse> {
+  try {
+    const options: EntrypointsOptions = {
+      ...(arguments_.transport === undefined ? {} : { transport: arguments_.transport }),
+      ...(arguments_.operation === undefined ? {} : { operation: arguments_.operation }),
+      ...(arguments_.name === undefined ? {} : { namePrefix: arguments_.name }),
+      ...(arguments_.limit === undefined ? {} : { limit: arguments_.limit })
+    };
+    const result = await service.entrypoints(arguments_.projectPath ?? defaultProjectPath, options);
     return {
       content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       structuredContent: result as unknown as Record<string, unknown>
@@ -1225,6 +1298,47 @@ export function createMcpServer(
         }
       },
       async (arguments_) => runRoutesTool(routesService, defaultProjectPath, arguments_)
+    );
+  }
+
+  const entrypointsService = supportsEntrypoints(service) ? service : null;
+  if (entrypointsService !== null) {
+    server.registerTool(
+      "symbol_lattice_entrypoints",
+      {
+        title: "List non-HTTP entrypoints from a SymbolLattice generation",
+        description:
+          "Lists bounded persisted GraphQL, microservice, and WebSocket entrypoint facts with exact handler evidence from an existing SymbolLattice index. HTTP routes remain available through symbol_lattice_routes. This tool never creates or refreshes an index.",
+        inputSchema: {
+          projectPath: z.string().trim().min(1).optional().describe("Optional path to an already indexed project."),
+          transport: z
+            .enum(ENTRYPOINT_TRANSPORTS)
+            .optional()
+            .describe("Optional non-HTTP transport filter."),
+          operation: z
+            .enum(ENTRYPOINT_OPERATIONS)
+            .optional()
+            .describe("Optional transport operation filter."),
+          name: z
+            .string()
+            .min(1)
+            .optional()
+            .describe("Optional nonempty persisted entrypoint-name prefix."),
+          limit: z
+            .number()
+            .int()
+            .min(1)
+            .max(MAX_ENTRYPOINT_LIMIT)
+            .optional()
+            .describe(`Maximum entrypoint records to return (1-${MAX_ENTRYPOINT_LIMIT}).`)
+        },
+        outputSchema: entrypointsOutputSchema,
+        annotations: {
+          readOnlyHint: true,
+          idempotentHint: true
+        }
+      },
+      async (arguments_) => runEntrypointsTool(entrypointsService, defaultProjectPath, arguments_)
     );
   }
 

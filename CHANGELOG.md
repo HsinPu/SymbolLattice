@@ -6,6 +6,26 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.18.0] - 2026-07-30
+
+### Added
+
+- AST-proven NestJS non-HTTP entrypoints for TypeScript and JavaScript. Direct non-type-only named imports (including aliases) now recognize GraphQL `@Resolver` plus `@Query` / `@Mutation` / `@Subscription`, microservice `@Controller` plus `@MessagePattern` / `@EventPattern`, and `@WebSocketGateway` plus `@SubscribeMessage`.
+- First-class `entrypoint` graph symbols and exact `handles` edges. They retain transport (`graphql`, `microservice`, or `websocket`), operation, and literal operation name/pattern/namespace-qualified event without pretending that non-HTTP dispatch is an HTTP route. The edges participate in callers, callees, impact, context, exploration, node retrieval, and edge explanation.
+- Bounded read-only `entrypoints [path]` CLI command, `SymbolLatticeService.entrypoints`, and capability-gated `symbol_lattice_entrypoints` MCP tool. They expose transport, operation, and exact name-prefix filters with live freshness and explicit truncation while never initializing, indexing, or synchronizing a project.
+- Static GraphQL name derivation from a handler name, direct schema-first literal name, or static `{ name: "..." }` option; recursive static JSON-compatible microservice object patterns with canonicalized keys; and static WebSocket gateway namespace composition.
+
+### Compatibility
+
+- No SQLite schema migration is required. Existing graph, artifact-fact, edge, and retained-snapshot storage persist the additive symbols and edges; existing generations remain readable.
+- The artifact extractor advances to `typescript-ast-v7`. A pre-v0.18 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes entrypoint evidence. The project resolver remains `project-resolver-v5` because these edges are exact file-local syntax evidence.
+- The `entrypoints` MCP tool is additive and capability-gated, so explore-only or route-only embedded services retain their existing tool lists.
+
+### Deliberate limits
+
+- SymbolLattice does not execute Nest, build a GraphQL schema, connect to a broker, inspect WebSocket runtime adapters, or infer a runtime transport. It recognizes only direct AST bindings and decorated instance methods with a body.
+- Namespace imports, local decorator barrels, custom/composed decorators, type-only/foreign/shadowed imports, dynamic or conflicting GraphQL names, dynamic/prototype-setter microservice patterns, dynamic gateway namespace/event configuration, GraphQL field resolvers, and runtime guards/adapters remain outside the proof surface.
+
 ## [0.17.0] - 2026-07-30
 
 ### Added
@@ -366,7 +386,8 @@ No unreleased changes.
 - Explicit full indexing, caller/callee/impact queries, and read-only MCP exploration.
 - `exact`, `heuristic`, and `unresolved` relationship states.
 
-[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.17.0...HEAD
+[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.18.0...HEAD
+[0.18.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.14.0...v0.15.0

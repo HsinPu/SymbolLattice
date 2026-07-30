@@ -5,7 +5,12 @@ import {
   type SymbolNode
 } from "./types.js";
 
-const DEFAULT_IMPACT_EDGE_KINDS: readonly EdgeKind[] = ["calls", "routes", "imports"];
+const DEFAULT_IMPACT_EDGE_KINDS: readonly EdgeKind[] = [
+  "calls",
+  "routes",
+  "handles",
+  "imports"
+];
 
 /** HTTP methods represented by static route symbols. */
 export const ROUTE_METHODS = [
@@ -22,6 +27,26 @@ export const ROUTE_METHODS = [
 export type RouteMethod = (typeof ROUTE_METHODS)[number];
 
 const ROUTE_METHOD_SET = new Set<string>(ROUTE_METHODS);
+
+/** Non-HTTP transports represented by static entrypoint symbols. */
+export const ENTRYPOINT_TRANSPORTS = ["graphql", "microservice", "websocket"] as const;
+
+export type EntryPointTransport = (typeof ENTRYPOINT_TRANSPORTS)[number];
+
+/** Operations recognized within one supported entrypoint transport. */
+export const ENTRYPOINT_OPERATIONS = [
+  "query",
+  "mutation",
+  "subscription",
+  "message",
+  "event",
+  "subscribe"
+] as const;
+
+export type EntryPointOperation = (typeof ENTRYPOINT_OPERATIONS)[number];
+
+const ENTRYPOINT_TRANSPORT_SET = new Set<string>(ENTRYPOINT_TRANSPORTS);
+const ENTRYPOINT_OPERATION_SET = new Set<string>(ENTRYPOINT_OPERATIONS);
 
 /** Exact file-level edges trusted for affected-test selection. */
 export const AFFECTED_TEST_EDGE_KINDS = ["imports", "exports"] as const;
@@ -99,6 +124,18 @@ export interface RouteRecord {
   readonly route: SymbolNode;
   readonly edge: GraphEdge;
   /** Null when the route handler could not be resolved to an indexed symbol. */
+  readonly handler: SymbolNode | null;
+}
+
+/** A static non-HTTP transport entrypoint and its persisted handler evidence. */
+export interface EntryPointRecord {
+  readonly transport: EntryPointTransport;
+  readonly operation: EntryPointOperation;
+  /** Transport-level operation name, pattern, or namespace-qualified event. */
+  readonly name: string;
+  readonly entrypoint: SymbolNode;
+  readonly edge: GraphEdge;
+  /** Null when a future extractor records an unresolved handler binding. */
   readonly handler: SymbolNode | null;
 }
 
@@ -531,6 +568,39 @@ function compareRouteRecords(left: RouteRecord, right: RouteRecord): number {
   );
 }
 
+function parseEntrypointName(
+  entrypoint: SymbolNode
+): Pick<EntryPointRecord, "transport" | "operation" | "name"> | null {
+  // Synthetic names are encoded as `${transport} ${operation} ${literalName}`.
+  // Split only the two structural delimiters: literal names and canonicalized
+  // message patterns may themselves contain whitespace or newline escapes.
+  const firstDelimiter = entrypoint.name.indexOf(" ");
+  const secondDelimiter = entrypoint.name.indexOf(" ", firstDelimiter + 1);
+  if (firstDelimiter <= 0 || secondDelimiter <= firstDelimiter + 1) {
+    return null;
+  }
+
+  const transport = entrypoint.name.slice(0, firstDelimiter);
+  const operation = entrypoint.name.slice(firstDelimiter + 1, secondDelimiter);
+  if (!ENTRYPOINT_TRANSPORT_SET.has(transport) || !ENTRYPOINT_OPERATION_SET.has(operation)) {
+    return null;
+  }
+
+  return {
+    transport: transport as EntryPointTransport,
+    operation: operation as EntryPointOperation,
+    name: entrypoint.name.slice(secondDelimiter + 1)
+  };
+}
+
+function compareEntrypointRecords(left: EntryPointRecord, right: EntryPointRecord): number {
+  return (
+    compareSymbolNodes(left.entrypoint, right.entrypoint) ||
+    compareGraphEdges(left.edge, right.edge) ||
+    compareText(left.handler?.id ?? "", right.handler?.id ?? "")
+  );
+}
+
 /**
  * Returns literal route records in deterministic source order. A persisted route
  * edge is retained even when its handler is unresolved, in which case `handler`
@@ -566,7 +636,44 @@ export function getRoutes(graph: SymbolGraph): readonly RouteRecord[] {
   return routes.sort(compareRouteRecords);
 }
 
-/** Returns all resolved static call or route bindings whose target is the supplied symbol. */
+/**
+ * Returns static non-HTTP entrypoints in deterministic source order. A
+ * persisted handler edge is retained even when a future extractor cannot
+ * resolve its target, in which case `handler` is null. This remains separate
+ * from `getRoutes()` so HTTP method/path semantics are never manufactured for
+ * GraphQL, microservice, or WebSocket operations.
+ */
+export function getEntrypoints(graph: SymbolGraph): readonly EntryPointRecord[] {
+  const symbolsById = createSymbolIndex(graph.symbols);
+  const entrypoints: EntryPointRecord[] = [];
+
+  for (const edge of graph.edges) {
+    if (edge.kind !== "handles") {
+      continue;
+    }
+
+    const entrypoint = symbolsById.get(edge.sourceId);
+    if (entrypoint === undefined || entrypoint.kind !== "entrypoint") {
+      continue;
+    }
+
+    const parsed = parseEntrypointName(entrypoint);
+    if (parsed === null) {
+      continue;
+    }
+
+    entrypoints.push({
+      ...parsed,
+      entrypoint,
+      edge,
+      handler: isResolvedGraphEdge(edge) ? symbolsById.get(edge.targetId) ?? null : null
+    });
+  }
+
+  return entrypoints.sort(compareEntrypointRecords);
+}
+
+/** Returns all resolved static call, route, or entrypoint-handler bindings targeting a symbol. */
 export function getCallers(graph: SymbolGraph, symbolId: string): readonly GraphRelation[] {
   const symbolsById = createSymbolIndex(graph.symbols);
   if (!symbolsById.has(symbolId)) {
@@ -576,7 +683,7 @@ export function getCallers(graph: SymbolGraph, symbolId: string): readonly Graph
   const callers: GraphRelation[] = [];
   for (const edge of graph.edges) {
     if (
-      (edge.kind !== "calls" && edge.kind !== "routes") ||
+      (edge.kind !== "calls" && edge.kind !== "routes" && edge.kind !== "handles") ||
       !isResolvedGraphEdge(edge) ||
       edge.targetId !== symbolId
     ) {
@@ -592,7 +699,7 @@ export function getCallers(graph: SymbolGraph, symbolId: string): readonly Graph
   return callers.sort(compareRelations);
 }
 
-/** Returns all resolved static call or route binding targets referenced by the supplied symbol. */
+/** Returns all resolved static call, route, or entrypoint-handler targets referenced by a symbol. */
 export function getCallees(graph: SymbolGraph, symbolId: string): readonly GraphRelation[] {
   const symbolsById = createSymbolIndex(graph.symbols);
   if (!symbolsById.has(symbolId)) {
@@ -602,7 +709,7 @@ export function getCallees(graph: SymbolGraph, symbolId: string): readonly Graph
   const callees: GraphRelation[] = [];
   for (const edge of graph.edges) {
     if (
-      (edge.kind !== "calls" && edge.kind !== "routes") ||
+      (edge.kind !== "calls" && edge.kind !== "routes" && edge.kind !== "handles") ||
       !isResolvedGraphEdge(edge) ||
       edge.sourceId !== symbolId
     ) {
@@ -681,7 +788,7 @@ function assertPositiveVisitCap(maxVisitedSymbols: number): void {
 /**
  * Finds one deterministic shortest directed evidence path through exact,
  * resolved graph edges. The bounded breadth-first traversal follows calls,
- * routes, and imports by default, never revisits a symbol, and only reports truncation
+ * routes, entrypoint handlers, and imports by default, never revisits a symbol, and only reports truncation
  * when its visit cap prevented another unvisited candidate from entering the
  * search.
  */
@@ -954,7 +1061,7 @@ export function findAffectedTestPaths(
  *
  * The result excludes the root, keeps one deterministic shortest evidence path
  * per impacted symbol, never repeats a symbol, and follows static calls, routes,
- * and imports by default. Pass a subset of `EDGE_KINDS` to scope the dependency relation.
+ * entrypoint handlers, and imports by default. Pass a subset of `EDGE_KINDS` to scope the dependency relation.
  */
 export function getImpactPaths(
   graph: SymbolGraph,

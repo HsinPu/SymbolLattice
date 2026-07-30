@@ -8,6 +8,8 @@ import {
   type ArtifactLanguage,
   type BindingSpace,
   type EdgeKind,
+  type EntryPointOperation,
+  type EntryPointTransport,
   type ExportBinding,
   type GraphEdge,
   type ImportBinding,
@@ -319,6 +321,14 @@ type NestDecoratorBindingKind =
   | "nest-route"
   | "nest-module"
   | "nest-router-module"
+  | "nest-graphql-resolver"
+  | "nest-graphql-query"
+  | "nest-graphql-mutation"
+  | "nest-graphql-subscription"
+  | "nest-microservice-message"
+  | "nest-microservice-event"
+  | "nest-websocket-gateway"
+  | "nest-websocket-subscribe"
   | "other";
 
 interface NestDecoratorBinding {
@@ -333,6 +343,14 @@ interface StaticNestRoute {
   readonly path: string;
   readonly decorator: ts.Decorator;
   readonly controller: ts.ClassDeclaration;
+  readonly handler: ts.MethodDeclaration;
+}
+
+interface StaticNestEntrypoint {
+  readonly transport: EntryPointTransport;
+  readonly operation: EntryPointOperation;
+  readonly name: string;
+  readonly decorator: ts.Decorator;
   readonly handler: ts.MethodDeclaration;
 }
 
@@ -359,6 +377,21 @@ const NEST_HTTP_DECORATOR_METHODS: Readonly<Record<string, RouteMethod>> = {
 };
 
 const NEST_OTHER_DECORATOR_BINDING = { kind: "other", method: null } as const;
+
+const NEST_GRAPHQL_OPERATION_BY_BINDING: Readonly<
+  Partial<Record<NestDecoratorBindingKind, EntryPointOperation>>
+> = {
+  "nest-graphql-query": "query",
+  "nest-graphql-mutation": "mutation",
+  "nest-graphql-subscription": "subscription"
+};
+
+const NEST_MICROSERVICE_OPERATION_BY_BINDING: Readonly<
+  Partial<Record<NestDecoratorBindingKind, EntryPointOperation>>
+> = {
+  "nest-microservice-message": "message",
+  "nest-microservice-event": "event"
+};
 
 /** A syntax-proven direct base or contract named in a TypeScript heritage clause. */
 interface StaticHeritageReference {
@@ -750,6 +783,30 @@ function isNestCoreImport(statement: ts.ImportDeclaration): boolean {
   );
 }
 
+function isNestGraphqlImport(statement: ts.ImportDeclaration): boolean {
+  return (
+    ts.isStringLiteral(statement.moduleSpecifier) &&
+    statement.moduleSpecifier.text === "@nestjs/graphql" &&
+    statement.importClause?.isTypeOnly !== true
+  );
+}
+
+function isNestMicroservicesImport(statement: ts.ImportDeclaration): boolean {
+  return (
+    ts.isStringLiteral(statement.moduleSpecifier) &&
+    statement.moduleSpecifier.text === "@nestjs/microservices" &&
+    statement.importClause?.isTypeOnly !== true
+  );
+}
+
+function isNestWebsocketsImport(statement: ts.ImportDeclaration): boolean {
+  return (
+    ts.isStringLiteral(statement.moduleSpecifier) &&
+    statement.moduleSpecifier.text === "@nestjs/websockets" &&
+    statement.importClause?.isTypeOnly !== true
+  );
+}
+
 function nestDecoratorImportBinding(
   statement: ts.ImportDeclaration,
   element: ts.ImportSpecifier
@@ -761,6 +818,42 @@ function nestDecoratorImportBinding(
   const importedName = element.propertyName?.text ?? element.name.text;
   if (isNestCoreImport(statement) && importedName === "RouterModule") {
     return { kind: "nest-router-module", method: null };
+  }
+
+  if (isNestGraphqlImport(statement)) {
+    if (importedName === "Resolver") {
+      return { kind: "nest-graphql-resolver", method: null };
+    }
+    if (importedName === "Query") {
+      return { kind: "nest-graphql-query", method: null };
+    }
+    if (importedName === "Mutation") {
+      return { kind: "nest-graphql-mutation", method: null };
+    }
+    if (importedName === "Subscription") {
+      return { kind: "nest-graphql-subscription", method: null };
+    }
+    return NEST_OTHER_DECORATOR_BINDING;
+  }
+
+  if (isNestMicroservicesImport(statement)) {
+    if (importedName === "MessagePattern") {
+      return { kind: "nest-microservice-message", method: null };
+    }
+    if (importedName === "EventPattern") {
+      return { kind: "nest-microservice-event", method: null };
+    }
+    return NEST_OTHER_DECORATOR_BINDING;
+  }
+
+  if (isNestWebsocketsImport(statement)) {
+    if (importedName === "WebSocketGateway") {
+      return { kind: "nest-websocket-gateway", method: null };
+    }
+    if (importedName === "SubscribeMessage") {
+      return { kind: "nest-websocket-subscribe", method: null };
+    }
+    return NEST_OTHER_DECORATOR_BINDING;
   }
 
   if (!isNestCommonImport(statement)) {
@@ -935,11 +1028,17 @@ interface StaticNestDecorator {
   readonly paths: readonly string[];
 }
 
-function staticNestDecorator(
+interface DirectNestDecorator {
+  readonly decorator: ts.Decorator;
+  readonly binding: NestDecoratorBinding;
+  readonly expression: ts.CallExpression;
+}
+
+function directNestDecorator(
   sourceFile: ts.SourceFile,
   decorator: ts.Decorator,
   bindings: ScopedNestDecoratorBindings
-): StaticNestDecorator | null {
+): DirectNestDecorator | null {
   const expression = decorator.expression;
   if (
     !ts.isCallExpression(expression) ||
@@ -950,12 +1049,25 @@ function staticNestDecorator(
   }
 
   const binding = visibleNestDecoratorBinding(sourceFile, expression.expression, bindings);
-  const paths = literalNestRoutePaths(expression.arguments);
-  if (binding === null || binding.kind === "other" || paths === null) {
+  if (binding === null || binding.kind === "other") {
     return null;
   }
 
-  return { decorator, binding, paths };
+  return { decorator, binding, expression };
+}
+
+function staticNestDecorator(
+  sourceFile: ts.SourceFile,
+  decorator: ts.Decorator,
+  bindings: ScopedNestDecoratorBindings
+): StaticNestDecorator | null {
+  const direct = directNestDecorator(sourceFile, decorator, bindings);
+  if (direct === null) {
+    return null;
+  }
+
+  const paths = literalNestRoutePaths(direct.expression.arguments);
+  return paths === null ? null : { decorator, binding: direct.binding, paths };
 }
 
 function nestRoutePathPart(path: string): string {
@@ -1020,6 +1132,346 @@ function staticNestRoutes(
   }
 
   return routes;
+}
+
+function staticNestMethodName(method: ts.MethodDeclaration): string | null {
+  const name = method.name;
+  return ts.isIdentifier(name) || ts.isStringLiteral(name) || ts.isNoSubstitutionTemplateLiteral(name)
+    ? name.text
+    : null;
+}
+
+function directNestClassDecorators(
+  sourceFile: ts.SourceFile,
+  declaration: ts.ClassDeclaration,
+  bindings: ScopedNestDecoratorBindings,
+  kind: NestDecoratorBindingKind
+): readonly DirectNestDecorator[] {
+  return decoratorsFor(declaration).flatMap((decorator) => {
+    const candidate = directNestDecorator(sourceFile, decorator, bindings);
+    return candidate?.binding.kind === kind ? [candidate] : [];
+  });
+}
+
+function staticNestLiteralText(expression: ts.Expression | undefined): string | null {
+  return expression !== undefined &&
+    (ts.isStringLiteral(expression) || ts.isNoSubstitutionTemplateLiteral(expression))
+    ? expression.text
+    : null;
+}
+
+function staticGraphqlOptionsName(
+  expression: ts.Expression | undefined
+): string | null | undefined {
+  if (expression === undefined || !ts.isObjectLiteralExpression(expression)) {
+    return null;
+  }
+
+  const name = staticObjectProperty(expression, "name");
+  if (name === null) {
+    return null;
+  }
+  if (name === undefined) {
+    return undefined;
+  }
+
+  return staticNestLiteralText(name);
+}
+
+function staticGraphqlOperationName(
+  arguments_: ts.NodeArray<ts.Expression>,
+  handlerName: string
+): string | null {
+  if (arguments_.length === 0) {
+    return handlerName;
+  }
+
+  const first = arguments_[0];
+  const explicitName = staticNestLiteralText(first);
+  if (explicitName !== null) {
+    if (arguments_.length === 1) {
+      return explicitName;
+    }
+    if (arguments_.length !== 2) {
+      return null;
+    }
+    const optionName = staticGraphqlOptionsName(arguments_[1]);
+    return optionName === undefined || optionName === explicitName ? explicitName : null;
+  }
+
+  if (first === undefined || !ts.isArrowFunction(first)) {
+    return null;
+  }
+  if (arguments_.length === 1) {
+    return handlerName;
+  }
+  if (arguments_.length !== 2) {
+    return null;
+  }
+
+  const optionName = staticGraphqlOptionsName(arguments_[1]);
+  return optionName === undefined ? handlerName : optionName;
+}
+
+type StaticNestJsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | readonly StaticNestJsonValue[]
+  | { readonly [key: string]: StaticNestJsonValue };
+
+function staticNestJsonValue(expression: ts.Expression): StaticNestJsonValue | undefined {
+  if (ts.isStringLiteral(expression) || ts.isNoSubstitutionTemplateLiteral(expression)) {
+    return expression.text;
+  }
+  if (ts.isNumericLiteral(expression)) {
+    const value = Number(expression.text);
+    return Number.isFinite(value) ? value : undefined;
+  }
+  if (expression.kind === ts.SyntaxKind.TrueKeyword) {
+    return true;
+  }
+  if (expression.kind === ts.SyntaxKind.FalseKeyword) {
+    return false;
+  }
+  if (expression.kind === ts.SyntaxKind.NullKeyword) {
+    return null;
+  }
+  if (ts.isArrayLiteralExpression(expression)) {
+    const values: StaticNestJsonValue[] = [];
+    for (const element of expression.elements) {
+      if (!ts.isExpression(element)) {
+        return undefined;
+      }
+      const value = staticNestJsonValue(element);
+      if (value === undefined) {
+        return undefined;
+      }
+      values.push(value);
+    }
+    return values;
+  }
+  if (!ts.isObjectLiteralExpression(expression)) {
+    return undefined;
+  }
+
+  const entries: Array<readonly [string, StaticNestJsonValue]> = [];
+  const keys = new Set<string>();
+  for (const property of expression.properties) {
+    if (!ts.isPropertyAssignment(property) || ts.isComputedPropertyName(property.name)) {
+      return undefined;
+    }
+    const key = staticPropertyName(property.name);
+    const value = staticNestJsonValue(property.initializer);
+    // `__proto__` in an object literal is a prototype setter rather than an
+    // ordinary JSON data property. Treating it as a pattern key would claim a
+    // runtime object shape that the source does not prove.
+    if (key === null || key === "__proto__" || value === undefined || keys.has(key)) {
+      return undefined;
+    }
+    keys.add(key);
+    entries.push([key, value]);
+  }
+
+  const object = Object.create(null) as Record<string, StaticNestJsonValue>;
+  for (const [key, value] of entries.sort(([left], [right]) =>
+    left < right ? -1 : left > right ? 1 : 0
+  )) {
+    object[key] = value;
+  }
+  return object;
+}
+
+function staticNestMicroservicePattern(arguments_: ts.NodeArray<ts.Expression>): string | null {
+  const pattern = arguments_[0];
+  const literal = staticNestLiteralText(pattern);
+  if (literal !== null) {
+    return literal;
+  }
+  if (pattern === undefined || !ts.isObjectLiteralExpression(pattern)) {
+    return null;
+  }
+
+  const value = staticNestJsonValue(pattern);
+  const encoded = value === undefined ? undefined : JSON.stringify(value);
+  return encoded === undefined ? null : encoded;
+}
+
+function staticNestGatewayNamespace(arguments_: ts.NodeArray<ts.Expression>): string | null {
+  if (arguments_.length === 0) {
+    return "";
+  }
+
+  const first = arguments_[0];
+  const second = arguments_[1];
+  if (first === undefined) {
+    return null;
+  }
+  const options =
+    arguments_.length === 1 && ts.isObjectLiteralExpression(first)
+      ? first
+      : arguments_.length === 1 && ts.isNumericLiteral(first)
+        ? undefined
+        : arguments_.length === 2 && ts.isNumericLiteral(first) && second !== undefined && ts.isObjectLiteralExpression(second)
+          ? second
+          : null;
+  if (options === null) {
+    return null;
+  }
+  if (options === undefined) {
+    return "";
+  }
+
+  const namespace = staticObjectProperty(options, "namespace");
+  if (namespace === undefined) {
+    return "";
+  }
+  return namespace === null ? null : staticNestLiteralText(namespace);
+}
+
+function staticNestGraphqlEntrypoints(
+  sourceFile: ts.SourceFile,
+  declaration: ts.ClassDeclaration,
+  bindings: ScopedNestDecoratorBindings
+): readonly StaticNestEntrypoint[] {
+  if (directNestClassDecorators(sourceFile, declaration, bindings, "nest-graphql-resolver").length !== 1) {
+    return [];
+  }
+
+  const entrypoints: StaticNestEntrypoint[] = [];
+  for (const member of declaration.members) {
+    if (!ts.isMethodDeclaration(member) || member.body === undefined || isStaticMethod(member)) {
+      continue;
+    }
+    const handlerName = staticNestMethodName(member);
+    if (handlerName === null) {
+      continue;
+    }
+
+    for (const decorator of decoratorsFor(member)) {
+      const candidate = directNestDecorator(sourceFile, decorator, bindings);
+      if (candidate === null) {
+        continue;
+      }
+      const operation = NEST_GRAPHQL_OPERATION_BY_BINDING[candidate.binding.kind];
+      const name = staticGraphqlOperationName(candidate.expression.arguments, handlerName);
+      if (operation !== undefined && name !== null) {
+        entrypoints.push({
+          transport: "graphql",
+          operation,
+          name,
+          decorator: candidate.decorator,
+          handler: member
+        });
+      }
+    }
+  }
+  return entrypoints;
+}
+
+function staticNestMicroserviceEntrypoints(
+  sourceFile: ts.SourceFile,
+  declaration: ts.ClassDeclaration,
+  bindings: ScopedNestDecoratorBindings
+): readonly StaticNestEntrypoint[] {
+  if (directNestClassDecorators(sourceFile, declaration, bindings, "nest-controller").length !== 1) {
+    return [];
+  }
+
+  const entrypoints: StaticNestEntrypoint[] = [];
+  for (const member of declaration.members) {
+    if (!ts.isMethodDeclaration(member) || member.body === undefined || isStaticMethod(member)) {
+      continue;
+    }
+    if (staticNestMethodName(member) === null) {
+      continue;
+    }
+
+    for (const decorator of decoratorsFor(member)) {
+      const candidate = directNestDecorator(sourceFile, decorator, bindings);
+      if (candidate === null) {
+        continue;
+      }
+      const operation = NEST_MICROSERVICE_OPERATION_BY_BINDING[candidate.binding.kind];
+      const name = staticNestMicroservicePattern(candidate.expression.arguments);
+      if (operation !== undefined && name !== null) {
+        entrypoints.push({
+          transport: "microservice",
+          operation,
+          name,
+          decorator: candidate.decorator,
+          handler: member
+        });
+      }
+    }
+  }
+  return entrypoints;
+}
+
+function staticNestWebSocketEntrypoints(
+  sourceFile: ts.SourceFile,
+  declaration: ts.ClassDeclaration,
+  bindings: ScopedNestDecoratorBindings
+): readonly StaticNestEntrypoint[] {
+  const gateways = directNestClassDecorators(
+    sourceFile,
+    declaration,
+    bindings,
+    "nest-websocket-gateway"
+  );
+  if (gateways.length !== 1) {
+    return [];
+  }
+  const gateway = gateways[0];
+  if (gateway === undefined) {
+    return [];
+  }
+  const namespace = staticNestGatewayNamespace(gateway.expression.arguments);
+  if (namespace === null) {
+    return [];
+  }
+
+  const entrypoints: StaticNestEntrypoint[] = [];
+  for (const member of declaration.members) {
+    if (!ts.isMethodDeclaration(member) || member.body === undefined || isStaticMethod(member)) {
+      continue;
+    }
+    if (staticNestMethodName(member) === null) {
+      continue;
+    }
+
+    for (const decorator of decoratorsFor(member)) {
+      const candidate = directNestDecorator(sourceFile, decorator, bindings);
+      if (candidate?.binding.kind !== "nest-websocket-subscribe") {
+        continue;
+      }
+      const event = staticNestLiteralText(candidate.expression.arguments[0]);
+      if (event === null || candidate.expression.arguments.length !== 1) {
+        continue;
+      }
+      entrypoints.push({
+        transport: "websocket",
+        operation: "subscribe",
+        name: namespace.length === 0 ? event : `${namespace}:${event}`,
+        decorator: candidate.decorator,
+        handler: member
+      });
+    }
+  }
+  return entrypoints;
+}
+
+function staticNestEntrypoints(
+  sourceFile: ts.SourceFile,
+  declaration: ts.ClassDeclaration,
+  bindings: ScopedNestDecoratorBindings
+): readonly StaticNestEntrypoint[] {
+  return [
+    ...staticNestGraphqlEntrypoints(sourceFile, declaration, bindings),
+    ...staticNestMicroserviceEntrypoints(sourceFile, declaration, bindings),
+    ...staticNestWebSocketEntrypoints(sourceFile, declaration, bindings)
+  ];
 }
 
 function staticPropertyName(property: ts.PropertyName): string | null {
@@ -1344,6 +1796,37 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
     return symbol;
   }
 
+  function addEntrypointSymbol(
+    node: ts.Node,
+    transport: EntryPointTransport,
+    operation: EntryPointOperation,
+    name: string
+  ): SymbolNode {
+    const symbolName = `${transport} ${operation} ${name}`;
+    const qualifiedName = `${input.filePath}#entrypoint:${symbolName}`;
+    const identity = `${qualifiedName}\u0000entrypoint`;
+    const declarationOrdinal = declarationOrdinals.get(identity) ?? 0;
+    declarationOrdinals.set(identity, declarationOrdinal + 1);
+    const symbol: SymbolNode = {
+      id: createSymbolId({
+        filePath: input.filePath,
+        qualifiedName,
+        kind: "entrypoint",
+        declarationOrdinal
+      }),
+      name: symbolName,
+      qualifiedName,
+      kind: "entrypoint",
+      filePath: input.filePath,
+      range: sourceRange(sourceFile, node),
+      isExported: false,
+      declarationOrdinal
+    };
+    symbols.push(symbol);
+    addResolvedEdge(fileNode.id, symbol.id, "contains", node, symbolName);
+    return symbol;
+  }
+
   function addStaticExpressRoute(node: ts.CallExpression, route: StaticExpressRoute): void {
     const symbol = addRouteSymbol(node, route.method, route.path);
     addPendingReference(symbol.id, route.handler.text, "routes", route.handler);
@@ -1378,6 +1861,55 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
       referenceName: handler.name,
       evidence: {
         ruleId: "framework.nestjs.decorator-route.local-method",
+        stage: "syntax",
+        candidateSymbolIds: [handler.id]
+      }
+    });
+  }
+
+  function nestEntrypointEvidenceRuleId(transport: EntryPointTransport): string {
+    switch (transport) {
+      case "graphql":
+        return "framework.nestjs.graphql.operation.local-method";
+      case "microservice":
+        return "framework.nestjs.microservice.pattern.local-method";
+      case "websocket":
+        return "framework.nestjs.websocket.subscribe-message.local-method";
+    }
+  }
+
+  function addStaticNestEntrypoint(entrypoint: StaticNestEntrypoint): void {
+    const handler = symbolsByDeclaration.get(entrypoint.handler);
+    if (handler?.kind !== "method") {
+      return;
+    }
+
+    const symbol = addEntrypointSymbol(
+      entrypoint.decorator,
+      entrypoint.transport,
+      entrypoint.operation,
+      entrypoint.name
+    );
+    const range = sourceRange(sourceFile, entrypoint.decorator);
+    edges.push({
+      id: createEdgeId({
+        sourceId: symbol.id,
+        targetId: handler.id,
+        kind: "handles",
+        line: range.start.line,
+        column: range.start.column,
+        referenceName: handler.name
+      }),
+      sourceId: symbol.id,
+      targetId: handler.id,
+      kind: "handles",
+      filePath: input.filePath,
+      range,
+      resolution: "exact",
+      confidence: 1,
+      referenceName: handler.name,
+      evidence: {
+        ruleId: nestEntrypointEvidenceRuleId(entrypoint.transport),
         stage: "syntax",
         candidateSymbolIds: [handler.id]
       }
@@ -1645,6 +2177,9 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
     if (ts.isClassDeclaration(node)) {
       for (const route of staticNestRoutes(sourceFile, node, nestDecoratorBindings)) {
         addStaticNestRoute(route);
+      }
+      for (const entrypoint of staticNestEntrypoints(sourceFile, node, nestDecoratorBindings)) {
+        addStaticNestEntrypoint(entrypoint);
       }
       addStaticNestModuleFacts(node);
     }

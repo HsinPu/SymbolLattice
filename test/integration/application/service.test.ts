@@ -9,11 +9,13 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   DEFAULT_GIT_HUNK_LIMIT,
   DEFAULT_HIERARCHY_LIMIT,
+  DEFAULT_ENTRYPOINT_LIMIT,
   DEFAULT_ROUTE_LIMIT,
   MAX_GIT_HUNK_DECLARATION_ANCHORS,
   MAX_GIT_HUNK_LIMIT,
   MAX_GIT_HUNK_SOURCE_FILES,
   MAX_HIERARCHY_LIMIT,
+  MAX_ENTRYPOINT_LIMIT,
   MAX_ROUTE_LIMIT,
   MAX_GENERATION_DIFF_LIMIT,
   MAX_GENERATION_HISTORY_LIMIT,
@@ -2903,6 +2905,186 @@ describe("SymbolLatticeService", () => {
     });
   });
 
+  it("lists filtered persisted non-HTTP entrypoints without changing the active generation", async () => {
+    const projectPath = await createInlineProject({
+      "src/transports.ts": "export const persistedEntrypoints = true;\n"
+    });
+    const sourceCatalog = new FileSystemSourceCatalog();
+    const scan = await sourceCatalog.scan(projectPath);
+    const range = {
+      start: { line: 1, column: 1 },
+      end: { line: 1, column: 40 }
+    };
+    const author = {
+      id: "symbol:resolver:author",
+      name: "author",
+      qualifiedName: "src/transports.ts#AuthorResolver.author",
+      kind: "method" as const,
+      filePath: "src/transports.ts",
+      range,
+      isExported: false,
+      declarationOrdinal: 0
+    };
+    const sum = {
+      id: "symbol:controller:sum",
+      name: "sum",
+      qualifiedName: "src/transports.ts#MathController.sum",
+      kind: "method" as const,
+      filePath: "src/transports.ts",
+      range: { start: { line: 2, column: 1 }, end: { line: 2, column: 40 } },
+      isExported: false,
+      declarationOrdinal: 0
+    };
+    const created = {
+      id: "symbol:gateway:created",
+      name: "created",
+      qualifiedName: "src/transports.ts#EventsGateway.created",
+      kind: "method" as const,
+      filePath: "src/transports.ts",
+      range: { start: { line: 3, column: 1 }, end: { line: 3, column: 40 } },
+      isExported: false,
+      declarationOrdinal: 0
+    };
+    const entrypoints = [
+      { id: "symbol:entrypoint:query", name: "graphql query author", handler: author },
+      { id: "symbol:entrypoint:message", name: 'microservice message {"cmd":"sum"}', handler: sum },
+      { id: "symbol:entrypoint:subscribe", name: "websocket subscribe events:created", handler: created }
+    ].map((entrypoint, index) => ({
+      ...entrypoint,
+      qualifiedName: `src/transports.ts#entrypoint:${entrypoint.name}`,
+      kind: "entrypoint" as const,
+      filePath: "src/transports.ts",
+      range: {
+        start: { line: index + 10, column: 1 },
+        end: { line: index + 10, column: 40 }
+      },
+      isExported: false,
+      declarationOrdinal: index
+    }));
+    const snapshot: GraphSnapshot = {
+      files: scan.sourceDocuments.map((document) => ({
+        path: document.relativePath,
+        contentHash: document.contentHash,
+        language: document.language,
+        indexedAt: "2026-07-30T00:00:00.000Z"
+      })),
+      symbols: [author, sum, created, ...entrypoints],
+      edges: entrypoints.map((entrypoint) => ({
+        id: `edge:${entrypoint.id}`,
+        sourceId: entrypoint.id,
+        targetId: entrypoint.handler.id,
+        kind: "handles" as const,
+        filePath: entrypoint.filePath,
+        range: entrypoint.range,
+        resolution: "exact" as const,
+        confidence: 1,
+        referenceName: entrypoint.handler.name
+      })),
+      pendingReferences: []
+    };
+    const initialGenerationId = "generation:entrypoints";
+    const bundle: ActiveGraphBundle = {
+      status: {
+        initialized: true,
+        stale: false,
+        staleReasons: [],
+        projectPath,
+        indexedAt: "2026-07-30T00:00:00.000Z",
+        generationId: initialGenerationId,
+        counts: {
+          files: snapshot.files.length,
+          symbols: snapshot.symbols.length,
+          edges: snapshot.edges.length,
+          pendingReferences: 0
+        }
+      },
+      snapshot,
+      indexInputs: scan.indexInputs,
+      extractorVersion: ARTIFACT_FACTS_EXTRACTOR_VERSION,
+      resolverVersion: PROJECT_RESOLVER_VERSION,
+      sourceSearchVersion: SOURCE_SEARCH_INDEX_VERSION
+    };
+    const mutationCalls: string[] = [];
+    const graphStore: GraphStore = {
+      isInitialized: () => true,
+      initialize: () => {
+        mutationCalls.push("initialize");
+      },
+      getStatus: () => bundle.status,
+      getSnapshot: () => bundle.snapshot,
+      getArtifactFacts: () => [],
+      getIndexInputs: () => bundle.indexInputs,
+      getActiveGraphBundle: () => bundle,
+      getActiveGenerationBundle: () => ({ ...bundle, artifactFacts: [] }),
+      replaceProjectFacts: () => {
+        mutationCalls.push("replaceProjectFacts");
+      }
+    };
+    const service = new SymbolLatticeService(graphStore, sourceCatalog);
+
+    const defaultResult = await service.entrypoints(projectPath);
+    const graphql = await service.entrypoints(projectPath, {
+      transport: "graphql",
+      operation: "query",
+      namePrefix: "auth",
+      limit: 1
+    });
+
+    expect(defaultResult).toMatchObject({
+      status: { generationId: initialGenerationId, stale: false },
+      bounds: { limit: DEFAULT_ENTRYPOINT_LIMIT, maximumLimit: MAX_ENTRYPOINT_LIMIT },
+      truncated: false
+    });
+    expect(defaultResult.entrypoints.map((entrypoint) => [
+      entrypoint.transport,
+      entrypoint.operation,
+      entrypoint.name,
+      entrypoint.edge.kind
+    ])).toEqual([
+      ["graphql", "query", "author", "handles"],
+      ["microservice", "message", '{"cmd":"sum"}', "handles"],
+      ["websocket", "subscribe", "events:created", "handles"]
+    ]);
+    expect(graphql).toMatchObject({
+      bounds: { limit: 1, maximumLimit: MAX_ENTRYPOINT_LIMIT },
+      entrypoints: [
+        {
+          transport: "graphql",
+          operation: "query",
+          name: "author",
+          handler: { name: "author" }
+        }
+      ],
+      truncated: false
+    });
+
+    await writeFile(
+      join(projectPath, "src", "transports.ts"),
+      "export const liveOnly = true;\n",
+      "utf8"
+    );
+    const stale = await service.entrypoints(projectPath, { transport: "websocket" });
+    expect(stale).toMatchObject({
+      status: { generationId: initialGenerationId, stale: true, staleReasons: ["source-files-changed"] },
+      entrypoints: [{ name: "events:created", handler: { name: "created" } }]
+    });
+    expect((await service.getStatus(projectPath)).generationId).toBe(initialGenerationId);
+    expect(mutationCalls).toEqual([]);
+
+    await expect(
+      service.entrypoints(projectPath, { transport: "http" as "graphql" })
+    ).rejects.toMatchObject({ code: "INVALID_ENTRYPOINT_TRANSPORT" });
+    await expect(
+      service.entrypoints(projectPath, { operation: "route" as "query" })
+    ).rejects.toMatchObject({ code: "INVALID_ENTRYPOINT_OPERATION" });
+    await expect(service.entrypoints(projectPath, { namePrefix: "" })).rejects.toMatchObject({
+      code: "INVALID_ENTRYPOINT_NAME_PREFIX"
+    });
+    await expect(service.entrypoints(projectPath, { limit: 0 })).rejects.toMatchObject({
+      code: "INVALID_ENTRYPOINT_LIMIT"
+    });
+  });
+
   it("indexes NestJS decorator routes as persisted exact method evidence", async () => {
     const projectPath = await createInlineProject({
       "src/cats.controller.ts": [
@@ -2963,6 +3145,93 @@ describe("SymbolLatticeService", () => {
           kind: "routes",
           resolution: "exact",
           evidence: { ruleId: "framework.nestjs.decorator-route.local-method", stage: "syntax" }
+        }
+      }
+    ]);
+  });
+
+  it("indexes non-HTTP NestJS entrypoints as exact persisted handler evidence", async () => {
+    const projectPath = await createInlineProject({
+      "src/transports.ts": [
+        'import { Controller } from "@nestjs/common";',
+        'import { Query, Resolver } from "@nestjs/graphql";',
+        'import { MessagePattern } from "@nestjs/microservices";',
+        'import { SubscribeMessage, WebSocketGateway } from "@nestjs/websockets";',
+        "@Resolver()",
+        "export class AuthorsResolver {",
+        "  @Query()",
+        "  author() { return {}; }",
+        "}",
+        "@Controller()",
+        "export class MathController {",
+        "  @MessagePattern({ cmd: \"sum\" })",
+        "  sum() { return 0; }",
+        "}",
+        "@WebSocketGateway({ namespace: \"events\" })",
+        "export class EventsGateway {",
+        "  @SubscribeMessage(\"created\")",
+        "  created() {}",
+        "}"
+      ].join("\n")
+    });
+    const service = createService();
+
+    const indexed = await service.init({ projectPath });
+    const entrypoints = await service.entrypoints(projectPath);
+    const found = await service.find(projectPath, "src/transports.ts#AuthorsResolver.author");
+    const author = found.symbols[0];
+    if (author === undefined) {
+      throw new Error("Expected indexed GraphQL method handler.");
+    }
+    const callers = await service.callers(projectPath, author.qualifiedName);
+
+    expect(indexed).toMatchObject({
+      stale: false,
+      counts: { files: 1, symbols: expect.any(Number), edges: expect.any(Number) }
+    });
+    expect(entrypoints.entrypoints).toMatchObject([
+      {
+        transport: "graphql",
+        operation: "query",
+        name: "author",
+        entrypoint: { kind: "entrypoint", name: "graphql query author" },
+        edge: {
+          kind: "handles",
+          resolution: "exact",
+          evidence: { ruleId: "framework.nestjs.graphql.operation.local-method", stage: "syntax" }
+        },
+        handler: { qualifiedName: "src/transports.ts#AuthorsResolver.author" }
+      },
+      {
+        transport: "microservice",
+        operation: "message",
+        name: '{"cmd":"sum"}',
+        edge: {
+          kind: "handles",
+          resolution: "exact",
+          evidence: { ruleId: "framework.nestjs.microservice.pattern.local-method", stage: "syntax" }
+        },
+        handler: { qualifiedName: "src/transports.ts#MathController.sum" }
+      },
+      {
+        transport: "websocket",
+        operation: "subscribe",
+        name: "events:created",
+        edge: {
+          kind: "handles",
+          resolution: "exact",
+          evidence: { ruleId: "framework.nestjs.websocket.subscribe-message.local-method", stage: "syntax" }
+        },
+        handler: { qualifiedName: "src/transports.ts#EventsGateway.created" }
+      }
+    ]);
+    expect(callers.relations).toMatchObject([
+      {
+        symbol: { kind: "entrypoint", name: "graphql query author" },
+        edge: {
+          kind: "handles",
+          resolution: "exact",
+          evidence: { ruleId: "framework.nestjs.graphql.operation.local-method", stage: "syntax" }
         }
       }
     ]);
