@@ -3135,6 +3135,67 @@ describe("SymbolLatticeService", () => {
     ]);
   });
 
+  it("indexes Scala source plus Play conf/routes with source search and explicit unresolved handler evidence", async () => {
+    const projectPath = await createInlineProject({
+      "app/controllers/HealthController.scala": [
+        "package controllers",
+        "",
+        "class HealthController {",
+        "  def health(): String = \"ok\"",
+        "}"
+      ].join("\n"),
+      "conf/routes": "GET /health controllers.HealthController.health\n"
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    const indexed = await service.init({ projectPath });
+    const routes = await service.routes(projectPath, { method: "GET" });
+    const search = await service.search(projectPath, "health", { language: "scala" });
+    const persistedFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .filter((facts) => facts.language === "scala");
+
+    expect(indexed).toMatchObject({
+      stale: false,
+      counts: { files: 2, symbols: expect.any(Number), edges: expect.any(Number) }
+    });
+    expect(persistedFacts.map((facts) => facts.filePath)).toEqual([
+      "app/controllers/HealthController.scala",
+      "conf/routes"
+    ]);
+    expect(persistedFacts.every((facts) => facts.extractorVersion === ARTIFACT_FACTS_EXTRACTOR_VERSION)).toBe(true);
+    expect(routes.routes).toMatchObject([
+      {
+        method: "GET",
+        path: "/health",
+        route: { kind: "route", name: "GET /health" },
+        edge: {
+          kind: "routes",
+          targetId: null,
+          resolution: "unresolved",
+          evidence: {
+            ruleId: "framework.play.conf-routes.literal-controller-action.unresolved-handler",
+            stage: "syntax"
+          }
+        },
+        handler: null
+      }
+    ]);
+    expect(search.results).toMatchObject([
+      {
+        filePath: "conf/routes",
+        language: "scala",
+        matchingTerms: ["health"]
+      },
+      {
+        filePath: "app/controllers/HealthController.scala",
+        language: "scala",
+        matchingTerms: ["health"]
+      }
+    ]);
+  });
+
   it("indexes same-file FastAPI APIRouter routes through literal prefixes", async () => {
     const projectPath = await createInlineProject({
       "api/catalog.py": [

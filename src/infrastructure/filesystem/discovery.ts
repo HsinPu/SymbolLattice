@@ -29,7 +29,8 @@ export const SUPPORTED_EXTENSIONS: ReadonlyMap<string, SupportedLanguage> = new 
   [".rb", "ruby"],
   [".kt", "kotlin"],
   [".swift", "swift"],
-  [".dart", "dart"]
+  [".dart", "dart"],
+  [".scala", "scala"]
 ] as const);
 
 /**
@@ -134,6 +135,9 @@ export async function canonicalizeScopeRoots(
 }
 
 export function getSourceLanguage(filePath: string): SupportedLanguage | null {
+  if (isPlayRoutesFile(filePath)) {
+    return "scala";
+  }
   const extension = filePath.slice(filePath.lastIndexOf(".")).toLowerCase();
   return SUPPORTED_EXTENSIONS.get(extension) ?? null;
 }
@@ -217,7 +221,7 @@ async function collectSourcePaths(
 
     if (
       entry.isFile() &&
-      getSourceLanguage(entry.name) !== null &&
+      getSourceLanguage(entryRelativePath) !== null &&
       !ignoreMatcher.ignores(entryRelativePath)
     ) {
       sourcePaths.push(entryPath);
@@ -225,6 +229,11 @@ async function collectSourcePaths(
   }
 
   return sourcePaths;
+}
+
+function isPlayRoutesFile(filePath: string): boolean {
+  const normalized = filePath.replaceAll("\\", "/");
+  return /(?:^|\/)conf\/(?:routes|[^/]+\.routes)$/u.test(normalized);
 }
 
 async function loadRootGitignore(projectPath: string): Promise<Ignore> {

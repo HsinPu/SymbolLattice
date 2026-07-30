@@ -27,7 +27,8 @@ describe("first-party framework capabilities", () => {
       "rails",
       "ktor",
       "vapor",
-      "flutter"
+      "flutter",
+      "play"
     ]);
     expect(FRAMEWORK_CAPABILITIES.map((capability) => capability.id)).toEqual(
       FRAMEWORK_CAPABILITY_IDS
@@ -175,6 +176,15 @@ describe("first-party framework capabilities", () => {
       surfaces: [
         "direct MaterialApp literal routes maps",
         "same-file literal widget-builder classes"
+      ]
+    });
+    expect(frameworkCapability("play")).toMatchObject({
+      languages: ["scala"],
+      routeFramework: "play",
+      routeRegistrations: [],
+      surfaces: [
+        "direct conf/routes literal HTTP entries",
+        "explicit unresolved controller-action handlers"
       ]
     });
   });

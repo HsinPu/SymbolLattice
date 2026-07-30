@@ -6,6 +6,25 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.45.0] - 2026-07-30
+
+### Added
+
+- Scala `.scala` source discovery, persisted source-search language filtering, CLI/MCP validation, direct top-level class/object/trait/method/function containment, and a first-party `@ast-grep/lang-scala` AST adapter.
+- An executable first-party `play` capability. Play route discovery now includes only `conf/routes` and `conf/*.routes`; each accepted literal HTTP verb/path/controller-action row emits `framework.play.conf-routes.literal-controller-action.unresolved-handler` evidence and an explicitly unresolved `routes` edge.
+- The shared dynamic ast-grep language registry now registers C#, Ruby, Kotlin, Swift, Dart, and Scala together, preserving every first-party prebuilt grammar in the same long-lived process.
+- Capability, discovery, direct route-table extraction, explicit unresolved route-query behavior, class/object/trait/method/function containment, malformed/non-Play route-row and syntax-error rejection, source-search, CLI, and persisted route-query integration coverage. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.45.0.md`.
+
+### Compatibility
+
+- No SQLite schema migration or new query command is required. Scala symbols and Play route-table entries reuse the existing file, symbol, edge, source-search, and route-query contracts; existing generations remain readable.
+- The artifact extractor advances to `multi-language-ast-v34`; the project resolver remains `project-resolver-v14` because accepted Play controller handlers remain deliberately unresolved in this release. A pre-v0.45 active index reports `indexer-version-changed` until an explicit `sync` or `index` publishes the new facts.
+
+### Deliberate limits
+
+- Scala support accepts direct top-level class/object/trait/function forms and direct body `def` members only. Play support accepts only literal `conf/routes` / `conf/*.routes` controller-action rows and leaves all targets unresolved. It excludes `->` includes, prefixes/composition, `build.sbt` detection, controller/package/import/classpath/overload resolution, custom binders, reverse routing, Scala 3 contextual declarations, generic Scala call/type resolution, and runtime behavior.
+- CodeGraph's Play resolver is broader: it detects `build.sbt` or Play configuration, handles extensionless and included route files, parses controller-action argument forms, and resolves a `Controller.method` reference to an indexed action method. SymbolLattice v0.45 deliberately ships a separate AST-backed Scala symbol layer plus a conservative static route-table parser whose controller targets remain explicitly unresolved; it is behind CodeGraph's Play controller-resolution coverage.
+
 ## [0.44.0] - 2026-07-30
 
 ### Added

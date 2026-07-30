@@ -33,6 +33,7 @@ describe("source discovery", () => {
   it("discovers supported source files in deterministic relative-path order", async () => {
     const projectPath = await createProject();
     await mkdir(join(projectPath, "src"), { recursive: true });
+    await mkdir(join(projectPath, "conf"), { recursive: true });
     await mkdir(join(projectPath, "node_modules", "ignored"), { recursive: true });
     await writeFile(join(projectPath, "src", "z.ts"), "export const z = 1;", "utf8");
     await writeFile(join(projectPath, "src", "a.js"), "export const a = 1;", "utf8");
@@ -48,12 +49,17 @@ describe("source discovery", () => {
     await writeFile(join(projectPath, "src", "k.kt"), "class Api {}\n", "utf8");
     await writeFile(join(projectPath, "src", "l.swift"), "struct Api {}\n", "utf8");
     await writeFile(join(projectPath, "src", "m.dart"), "class Api {}\n", "utf8");
+    await writeFile(join(projectPath, "src", "n.scala"), "object Api {}\n", "utf8");
+    await writeFile(join(projectPath, "conf", "routes"), "GET /health controllers.HealthController.health\n", "utf8");
+    await writeFile(join(projectPath, "conf", "admin.routes"), "GET /admin controllers.AdminController.index\n", "utf8");
     await writeFile(join(projectPath, "README.md"), "ignored", "utf8");
     await writeFile(join(projectPath, "node_modules", "ignored", "index.js"), "ignored", "utf8");
 
     const files = await discoverSourceFiles(projectPath);
 
     expect(files.map((file) => file.relativePath)).toEqual([
+      "conf/admin.routes",
+      "conf/routes",
       "src/a.js",
       "src/b.py",
       "src/c.go",
@@ -67,9 +73,12 @@ describe("source discovery", () => {
       "src/k.kt",
       "src/l.swift",
       "src/m.dart",
+      "src/n.scala",
       "src/z.ts"
     ]);
     expect(files.map((file) => file.language)).toEqual([
+      "scala",
+      "scala",
       "javascript",
       "python",
       "go",
@@ -83,6 +92,7 @@ describe("source discovery", () => {
       "kotlin",
       "swift",
       "dart",
+      "scala",
       "typescript"
     ]);
   });

@@ -3768,6 +3768,125 @@ describe("source extraction", () => {
     expect(broken.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
   });
 
+  it("extracts direct Scala class, object, trait, method, and top-level function containment", () => {
+    const facts = extractFileFacts({
+      filePath: "app/controllers/HealthController.scala",
+      language: "scala",
+      sourceText: [
+        "package controllers",
+        "",
+        "class HealthController {",
+        "  def health(): String = \"ok\"",
+        "}",
+        "",
+        "object Application {",
+        "  def main(args: Array[String]): Unit = {}",
+        "}",
+        "",
+        "trait HealthService {",
+        "  def check(): String",
+        "}",
+        "",
+        "def utility(): Int = 1"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "class").map((symbol) => symbol.qualifiedName)).toEqual([
+      "app/controllers/HealthController.scala#HealthController",
+      "app/controllers/HealthController.scala#Application"
+    ]);
+    expect(facts.symbols.filter((symbol) => symbol.kind === "interface").map((symbol) => symbol.qualifiedName)).toEqual([
+      "app/controllers/HealthController.scala#HealthService"
+    ]);
+    expect(facts.symbols.filter((symbol) => symbol.kind === "method").map((symbol) => symbol.qualifiedName)).toEqual([
+      "app/controllers/HealthController.scala#HealthController.health",
+      "app/controllers/HealthController.scala#Application.main",
+      "app/controllers/HealthController.scala#HealthService.check"
+    ]);
+    expect(facts.symbols.filter((symbol) => symbol.kind === "function").map((symbol) => symbol.qualifiedName)).toEqual([
+      "app/controllers/HealthController.scala#utility"
+    ]);
+    expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+  });
+
+  it("extracts direct Play conf/routes literal controller actions with explicit unresolved evidence", () => {
+    const facts = extractFileFacts({
+      filePath: "conf/routes",
+      language: "scala",
+      sourceText: [
+        "# A static Play route table",
+        "GET     /health        controllers.HealthController.health",
+        "POST    /orders        controllers.OrderController.create(input: OrderInput)",
+        "GET     /assets/*file  controllers.Assets.versioned(path = \"/public\", file: Asset)",
+        "->      /api           api.Routes",
+        "GET     missing        controllers.InvalidController.missing",
+        "GET     /dynamic       controllers.DynamicController.handler + suffix"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route").map((symbol) => symbol.name)).toEqual([
+      "GET /health",
+      "POST /orders",
+      "GET /assets/*file"
+    ]);
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          edge.targetId,
+          edge.referenceName,
+          edge.evidence?.ruleId,
+          edge.resolution,
+          edge.confidence
+        ])
+    ).toEqual([
+      [
+        "GET /health",
+        null,
+        "HealthController.health",
+        "framework.play.conf-routes.literal-controller-action.unresolved-handler",
+        "unresolved",
+        0
+      ],
+      [
+        "POST /orders",
+        null,
+        "OrderController.create",
+        "framework.play.conf-routes.literal-controller-action.unresolved-handler",
+        "unresolved",
+        0
+      ],
+      [
+        "GET /assets/*file",
+        null,
+        "Assets.versioned",
+        "framework.play.conf-routes.literal-controller-action.unresolved-handler",
+        "unresolved",
+        0
+      ]
+    ]);
+  });
+
+  it("fails closed for malformed Scala syntax and does not treat non-Play config files as routes", () => {
+    const broken = extractFileFacts({
+      filePath: "app/Broken.scala",
+      language: "scala",
+      sourceText: "class Broken { def broken( = }"
+    });
+    const unsupportedConfig = extractFileFacts({
+      filePath: "routes",
+      language: "scala",
+      sourceText: "GET /health controllers.HealthController.health"
+    });
+
+    expect(broken.symbols.map((symbol) => symbol.kind)).toEqual(["file"]);
+    expect(broken.edges).toEqual([]);
+    expect(unsupportedConfig.symbols.map((symbol) => symbol.kind)).toEqual(["file"]);
+    expect(unsupportedConfig.edges).toEqual([]);
+  });
+
   it("extracts direct Rust Axum literal route-builder chains with exact evidence", () => {
     const facts = extractFileFacts({
       filePath: "src/http.rs",

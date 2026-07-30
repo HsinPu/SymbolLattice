@@ -54,7 +54,8 @@ export type RouteFramework =
   | "rails"
   | "ktor"
   | "vapor"
-  | "flutter";
+  | "flutter"
+  | "play";
 
 /** Additional static registration context retained when it changes route provenance or path. */
 export type RouteRegistration =
@@ -79,7 +80,8 @@ export const ARTIFACT_LANGUAGES = [
   "ruby",
   "kotlin",
   "swift",
-  "dart"
+  "dart",
+  "scala"
 ] as const;
 
 export type ArtifactLanguage = (typeof ARTIFACT_LANGUAGES)[number];

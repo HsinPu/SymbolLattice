@@ -20,7 +20,8 @@ export const FRAMEWORK_CAPABILITY_IDS = [
   "rails",
   "ktor",
   "vapor",
-  "flutter"
+  "flutter",
+  "play"
 ] as const;
 
 export type FrameworkCapabilityId = (typeof FRAMEWORK_CAPABILITY_IDS)[number];
@@ -227,6 +228,16 @@ export const FRAMEWORK_CAPABILITIES = [
     surfaces: [
       "direct MaterialApp literal routes maps",
       "same-file literal widget-builder classes"
+    ]
+  },
+  {
+    id: "play",
+    languages: ["scala"],
+    routeFramework: "play",
+    routeRegistrations: [],
+    surfaces: [
+      "direct conf/routes literal HTTP entries",
+      "explicit unresolved controller-action handlers"
     ]
   }
 ] as const satisfies readonly FrameworkCapability[];

@@ -1,7 +1,7 @@
 {
   "name": "@hsinpu/symbol-lattice",
-  "version": "0.44.0",
-  "description": "Evidence-first local code intelligence for TypeScript, JavaScript, Python, Go, Rust, Java, PHP, C++, C#, Ruby, Kotlin, Swift, and Dart projects.",
+  "version": "0.45.0",
+  "description": "Evidence-first local code intelligence for TypeScript, JavaScript, Python, Go, Rust, Java, PHP, C++, C#, Ruby, Kotlin, Swift, Dart, and Scala projects.",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -37,6 +37,7 @@
     "@ast-grep/lang-dart": "0.0.7",
     "@ast-grep/lang-kotlin": "0.0.7",
     "@ast-grep/lang-ruby": "0.0.7",
+    "@ast-grep/lang-scala": "0.0.7",
     "@ast-grep/lang-swift": "0.0.8",
     "@ast-grep/napi": "0.45.0",
     "@lezer/cpp": "1.1.6",
