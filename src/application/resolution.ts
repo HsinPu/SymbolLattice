@@ -124,7 +124,9 @@ function staticRouteHandlerRuleId(
     const registration =
       reference.routeRegistration === "fastify-inline-plugin-prefix"
         ? "inline-plugin-prefix"
-        : "static-route";
+        : reference.routeRegistration === "fastify-local-plugin-prefix"
+          ? "local-plugin-prefix"
+          : "static-route";
     return `framework.fastify.${registration}.${suffix}`;
   }
   return `framework.express.literal-route.${suffix}`;

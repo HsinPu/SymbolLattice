@@ -618,6 +618,83 @@ describe("TypeScript and JavaScript extraction", () => {
     ]);
   });
 
+  it("projects same-file named Fastify plugin prefixes in JavaScript", () => {
+    const facts = extractFileFacts({
+      filePath: "src/routes.js",
+      language: "javascript",
+      sourceText: [
+        'import Fastify from "fastify";',
+        "function listUsers() { return []; }",
+        "const usersPlugin = async (server) => {",
+        '  server.get("/users", listUsers);',
+        "};",
+        "const app = Fastify();",
+        'app.register(usersPlugin, { prefix: "/api" });'
+      ].join("\n")
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route").map((route) => route.name)).toEqual([
+      "GET /api/users"
+    ]);
+    expect(
+      facts.pendingReferences.filter((reference) => reference.relationKind === "routes")
+    ).toEqual([
+      expect.objectContaining({
+        referenceName: "listUsers",
+        routeFramework: "fastify",
+        routeRegistration: "fastify-local-plugin-prefix"
+      })
+    ]);
+  });
+
+  it("projects static named Fastify plugins through nested local callback composition", () => {
+    const facts = extractFileFacts({
+      filePath: "src/routes.ts",
+      language: "typescript",
+      sourceText: [
+        'import Fastify from "fastify";',
+        "function health() { return undefined; }",
+        "function listUsers() { return []; }",
+        "async function api(server: unknown) {",
+        '  server.get("/health", health);',
+        "  server.register(async (diagnostics: unknown) => {",
+        '    diagnostics.get("/status", health);',
+        '  }, { prefix: "/diagnostics" });',
+        '  server.register(v1, { prefix: "/v1" });',
+        "}",
+        "const v1 = async function(instance: unknown) {",
+        '  instance.route({ method: ["GET", "TRACE"], url: "/users", handler: listUsers });',
+        "};",
+        "const app = Fastify();",
+        'app.register(api, { prefix: "/api" });'
+      ].join("\n")
+    });
+
+    const routes = facts.symbols.filter((symbol) => symbol.kind === "route");
+    const routeReferences = facts.pendingReferences.filter(
+      (reference) => reference.relationKind === "routes"
+    );
+
+    expect(routes.map((route) => route.name)).toEqual([
+      "GET /api/health",
+      "GET /api/diagnostics/status",
+      "GET /api/v1/users",
+      "TRACE /api/v1/users"
+    ]);
+    expect(
+      routeReferences.map((reference) => [
+        reference.referenceName,
+        reference.routeFramework,
+        reference.routeRegistration
+      ])
+    ).toEqual([
+      ["health", "fastify", "fastify-local-plugin-prefix"],
+      ["health", "fastify", "fastify-local-plugin-prefix"],
+      ["listUsers", "fastify", "fastify-local-plugin-prefix"],
+      ["listUsers", "fastify", "fastify-local-plugin-prefix"]
+    ]);
+  });
+
   it("projects direct inline Fastify plugin prefixes through nested static callbacks", () => {
     const facts = extractFileFacts({
       filePath: "src/routes.ts",
@@ -668,6 +745,7 @@ describe("TypeScript and JavaScript extraction", () => {
         'import type TypeOnlyFastify from "fastify";',
         'import * as fastifyNamespace from "fastify";',
         'import { default as namedDefaultFastify } from "fastify";',
+        'import { importedPlugin } from "./plugins.js";',
         'import foreignFactory from "not-fastify";',
         "const app = Fastify();",
         "let mutable = Fastify();",
@@ -680,8 +758,24 @@ describe("TypeScript and JavaScript extraction", () => {
         "const dynamicPath = \"/dynamic\";",
         "const dynamicMethods = [\"GET\"];",
         "function handler() { return undefined; }",
-        "const namedPlugin = async (server: unknown) => {",
+        "let namedPlugin = async (server: unknown) => {",
         '  server.get("/named-plugin", handler);',
+        "};",
+        "const duplicatePlugin = async (server: unknown) => {",
+        '  server.get("/duplicate-plugin", handler);',
+        "};",
+        "const aliasedPlugin = async (server: unknown) => {",
+        '  server.get("/aliased-plugin", handler);',
+        "};",
+        "const pluginAlias = aliasedPlugin;",
+        "const wrappedPlugin = wrap(async (server: unknown) => {",
+        '  server.get("/wrapped-plugin", handler);',
+        "});",
+        "function reboundPlugin(server: unknown) {",
+        '  server.get("/rebound-plugin", handler);',
+        "}",
+        "reboundPlugin = async (server: unknown) => {",
+        '  server.get("/rebound-after-assignment", handler);',
         "};",
         'app.get("/real", handler);',
         "app.get(dynamicPath, handler);",
@@ -703,6 +797,12 @@ describe("TypeScript and JavaScript extraction", () => {
         'namedDefault.get("/named-default", handler);',
         'foreign.get("/foreign", handler);',
         'app.register(namedPlugin, { prefix: "/named" });',
+        'app.register(duplicatePlugin, { prefix: "/first" });',
+        'app.register(duplicatePlugin, { prefix: "/second" });',
+        'app.register(pluginAlias, { prefix: "/aliased" });',
+        'app.register(importedPlugin, { prefix: "/imported" });',
+        'app.register(wrappedPlugin, { prefix: "/wrapped" });',
+        'app.register(reboundPlugin, { prefix: "/rebound" });',
         "app.register(async (server) => {",
         '  server.get("/dynamic-plugin-prefix", handler);',
         "}, { prefix: dynamicPath });",

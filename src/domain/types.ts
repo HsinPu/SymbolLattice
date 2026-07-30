@@ -39,7 +39,9 @@ export type ResolutionKind = "exact" | "heuristic" | "unresolved";
 export type RouteFramework = "express" | "fastify";
 
 /** Additional static registration context retained when it changes the route path. */
-export type RouteRegistration = "fastify-inline-plugin-prefix";
+export type RouteRegistration =
+  | "fastify-inline-plugin-prefix"
+  | "fastify-local-plugin-prefix";
 
 export const ARTIFACT_LANGUAGES = ["typescript", "javascript"] as const;
 

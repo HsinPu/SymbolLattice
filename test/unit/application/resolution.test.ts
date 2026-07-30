@@ -839,6 +839,44 @@ describe("literal route handler resolution", () => {
     expect(snapshot.pendingReferences.filter((reference) => reference.relationKind === "routes")).toEqual([]);
   });
 
+  it("resolves same-file named Fastify plugin-prefix handlers with distinct evidence", () => {
+    const sourceDocuments: readonly SourceDocument[] = [
+      {
+        absolutePath: "C:/project/src/routes.ts",
+        relativePath: "src/routes.ts",
+        language: "typescript",
+        sourceText: [
+          'import Fastify from "fastify";',
+          "function listUsers() { return []; }",
+          "async function api(server: unknown) {",
+          '  server.get("/users", listUsers);',
+          "}",
+          "const app = Fastify();",
+          'app.register(api, { prefix: "/api" });'
+        ].join("\n"),
+        contentHash: "routes"
+      }
+    ];
+
+    const snapshot = snapshotWithResolver(sourceDocuments, undefined);
+    const route = snapshot.symbols.find(
+      (symbol) => symbol.kind === "route" && symbol.name === "GET /api/users"
+    );
+    const edge = snapshot.edges.find((candidate) => candidate.kind === "routes" && candidate.sourceId === route?.id);
+
+    expect(route).toMatchObject({ name: "GET /api/users", kind: "route" });
+    expect(edge).toMatchObject({
+      targetId: expect.any(String),
+      resolution: "exact",
+      confidence: 1,
+      evidence: {
+        ruleId: "framework.fastify.local-plugin-prefix.local-handler",
+        stage: "lexical"
+      }
+    });
+    expect(snapshot.pendingReferences.filter((reference) => reference.relationKind === "routes")).toEqual([]);
+  });
+
   it("preserves AST-proven NestJS controller routes as direct exact method edges", () => {
     const sourceDocuments: readonly SourceDocument[] = [
       {

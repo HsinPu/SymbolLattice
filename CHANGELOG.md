@@ -6,6 +6,24 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.21.0] - 2026-07-30
+
+### Added
+
+- AST-proven same-file Fastify named-plugin prefix composition for TypeScript and JavaScript. A direct `register(plugin, { prefix: "/..." })` call can now establish a scoped Fastify receiver when `plugin` resolves lexically to either a direct non-generator function declaration with no direct rebinding or an immutable `const` initialized by a direct function/arrow expression.
+- Nested static composition across those named local callbacks and existing direct inline callbacks. A local `api` plugin that registers a local `v1` plugin produces ordinary first-class paths such as `GET /api/users` and `TRACE /api/v1/jobs`, with the same bounded read-only route graph surface as v0.20.
+- Additive `routeRegistration: "fastify-local-plugin-prefix"` raw-fact provenance and `framework.fastify.local-plugin-prefix.*` handler evidence. Local, imported, re-exported, and unresolved terminal handlers retain the local-plugin prefix proof through project resolution.
+
+### Compatibility
+
+- No SQLite schema migration or new CLI/MCP command is required. The existing raw artifact-fact JSON gains one optional route-registration value; pre-v0.21 facts remain readable and retain their existing rule IDs.
+- The artifact extractor advances to `typescript-ast-v10` and the project resolver to `project-resolver-v8`. A pre-v0.21 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes named-plugin route evidence.
+
+### Deliberate limits
+
+- A local plugin must be in the same file and passed as the direct first argument of a direct `register` call. Accepted local definitions are direct function declarations with no direct rebinding, or direct function/arrow initializers of immutable `const` bindings. The callback still needs an identifier first receiver parameter with no lexical reassignment and the registration still needs exactly two arguments plus a literal slash-prefixed, non-root, non-trailing `prefix` object.
+- To avoid choosing one incomplete path surface, a local callback is excluded when its exact lexical binding is passed to more than one direct `.register(...)` call anywhere in the same source file. Imported/re-exported/aliased/wrapped (`fastify-plugin`), mutable, member, dynamic, computed, spread, duplicate, or otherwise ambiguous plugin registrations remain outside this release. Prefixed-plugin root routes remain excluded because `prefixTrailingSlash` can change Fastify's concrete runtime paths.
+
 ## [0.20.0] - 2026-07-30
 
 ### Added
@@ -422,7 +440,8 @@ No unreleased changes.
 - Explicit full indexing, caller/callee/impact queries, and read-only MCP exploration.
 - `exact`, `heuristic`, and `unresolved` relationship states.
 
-[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.20.0...HEAD
+[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.21.0...HEAD
+[0.21.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.17.0...v0.18.0
