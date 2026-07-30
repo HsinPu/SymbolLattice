@@ -877,6 +877,169 @@ describe("literal route handler resolution", () => {
     expect(snapshot.pendingReferences.filter((reference) => reference.relationKind === "routes")).toEqual([]);
   });
 
+  it("projects imported and re-exported Fastify plugin routes through nested prefixes", () => {
+    const sourceDocuments: readonly SourceDocument[] = [
+      {
+        absolutePath: "C:/project/src/handlers.ts",
+        relativePath: "src/handlers.ts",
+        language: "typescript",
+        sourceText: [
+          "export function listUsers() { return []; }",
+          "export function createJob() { return undefined; }"
+        ].join("\n"),
+        contentHash: "handlers"
+      },
+      {
+        absolutePath: "C:/project/src/jobs.ts",
+        relativePath: "src/jobs.ts",
+        language: "typescript",
+        sourceText: [
+          'import { createJob } from "./handlers.js";',
+          "export const jobsPlugin = async (server: unknown) => {",
+          '  server.route({ method: ["POST", "TRACE"], url: "/jobs", handler: createJob });',
+          "};"
+        ].join("\n"),
+        contentHash: "jobs"
+      },
+      {
+        absolutePath: "C:/project/src/jobs-barrel.ts",
+        relativePath: "src/jobs-barrel.ts",
+        language: "typescript",
+        sourceText: 'export { jobsPlugin } from "./jobs.js";',
+        contentHash: "jobs-barrel"
+      },
+      {
+        absolutePath: "C:/project/src/api.ts",
+        relativePath: "src/api.ts",
+        language: "typescript",
+        sourceText: [
+          'import { listUsers } from "./handlers.js";',
+          'import { jobsPlugin } from "./jobs-barrel.js";',
+          "export async function api(server: unknown) {",
+          '  server.get("/users", listUsers);',
+          '  server.register(jobsPlugin, { prefix: "/v1" });',
+          "}"
+        ].join("\n"),
+        contentHash: "api"
+      },
+      {
+        absolutePath: "C:/project/src/barrel.ts",
+        relativePath: "src/barrel.ts",
+        language: "typescript",
+        sourceText: 'export { api as publicApi } from "./api.js";',
+        contentHash: "barrel"
+      },
+      {
+        absolutePath: "C:/project/src/main.ts",
+        relativePath: "src/main.ts",
+        language: "typescript",
+        sourceText: [
+          'import Fastify from "fastify";',
+          'import { publicApi } from "./barrel.js";',
+          "const app = Fastify();",
+          'app.register(publicApi, { prefix: "/api" });'
+        ].join("\n"),
+        contentHash: "main"
+      }
+    ];
+
+    const snapshot = snapshotWithResolver(sourceDocuments, undefined);
+    const listUsers = snapshot.symbols.find(
+      (symbol) => symbol.qualifiedName === "src/handlers.ts#listUsers"
+    );
+    const createJob = snapshot.symbols.find(
+      (symbol) => symbol.qualifiedName === "src/handlers.ts#createJob"
+    );
+    const usersRoute = snapshot.symbols.find(
+      (symbol) => symbol.kind === "route" && symbol.name === "GET /api/users"
+    );
+    const postJobsRoute = snapshot.symbols.find(
+      (symbol) => symbol.kind === "route" && symbol.name === "POST /api/v1/jobs"
+    );
+    const traceJobsRoute = snapshot.symbols.find(
+      (symbol) => symbol.kind === "route" && symbol.name === "TRACE /api/v1/jobs"
+    );
+
+    expect(usersRoute).toMatchObject({ filePath: "src/api.ts", kind: "route" });
+    expect(postJobsRoute).toMatchObject({ filePath: "src/jobs.ts", kind: "route" });
+    expect(traceJobsRoute).toMatchObject({ filePath: "src/jobs.ts", kind: "route" });
+    expect(snapshot.edges.find((edge) => edge.kind === "routes" && edge.sourceId === usersRoute?.id)).toMatchObject({
+      targetId: listUsers?.id,
+      resolution: "exact",
+      confidence: 1,
+      evidence: {
+        ruleId: "framework.fastify.imported-plugin-prefix.imported-handler",
+        stage: "module"
+      }
+    });
+    for (const route of [postJobsRoute, traceJobsRoute]) {
+      expect(snapshot.edges.find((edge) => edge.kind === "routes" && edge.sourceId === route?.id)).toMatchObject({
+        targetId: createJob?.id,
+        resolution: "exact",
+        confidence: 1,
+        evidence: {
+          ruleId: "framework.fastify.imported-plugin-prefix.imported-handler",
+          stage: "module"
+        }
+      });
+    }
+    expect(snapshot.pendingReferences.filter((reference) => reference.relationKind === "routes")).toEqual([]);
+  });
+
+  it("stops Fastify imported-plugin projection at a recursive plugin boundary", () => {
+    const sourceDocuments: readonly SourceDocument[] = [
+      {
+        absolutePath: "C:/project/src/a.ts",
+        relativePath: "src/a.ts",
+        language: "typescript",
+        sourceText: [
+          'import { b } from "./b.js";',
+          "function handleA() { return undefined; }",
+          "export function a(server: unknown) {",
+          '  server.get("/a", handleA);',
+          '  server.register(b, { prefix: "/b" });',
+          "}"
+        ].join("\n"),
+        contentHash: "a"
+      },
+      {
+        absolutePath: "C:/project/src/b.ts",
+        relativePath: "src/b.ts",
+        language: "typescript",
+        sourceText: [
+          'import { a } from "./a.js";',
+          "function handleB() { return undefined; }",
+          "export function b(server: unknown) {",
+          '  server.get("/b", handleB);',
+          '  server.register(a, { prefix: "/a" });',
+          "}"
+        ].join("\n"),
+        contentHash: "b"
+      },
+      {
+        absolutePath: "C:/project/src/main.ts",
+        relativePath: "src/main.ts",
+        language: "typescript",
+        sourceText: [
+          'import Fastify from "fastify";',
+          'import { a } from "./a.js";',
+          "const app = Fastify();",
+          'app.register(a, { prefix: "/root" });'
+        ].join("\n"),
+        contentHash: "main"
+      }
+    ];
+
+    const snapshot = snapshotWithResolver(sourceDocuments, undefined);
+    const routes = snapshot.symbols
+      .filter((symbol) => symbol.kind === "route")
+      .map((symbol) => symbol.name)
+      .sort();
+
+    expect(routes).toEqual(["GET /root/a", "GET /root/b/b"]);
+    expect(snapshot.pendingReferences.filter((reference) => reference.relationKind === "routes")).toEqual([]);
+  });
+
   it("preserves AST-proven NestJS controller routes as direct exact method edges", () => {
     const sourceDocuments: readonly SourceDocument[] = [
       {

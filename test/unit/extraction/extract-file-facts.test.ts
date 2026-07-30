@@ -736,6 +736,91 @@ describe("TypeScript and JavaScript extraction", () => {
     ]);
   });
 
+  it("retains exact cross-file Fastify plugin route and registration facts", () => {
+    const pluginFacts = extractFileFacts({
+      filePath: "src/api.ts",
+      language: "typescript",
+      sourceText: [
+        'import { listUsers } from "./handlers.js";',
+        'import { jobsPlugin } from "./jobs.js";',
+        "export async function api(server: unknown) {",
+        '  server.get("/users", listUsers);',
+        '  server.register(jobsPlugin, { prefix: "/v1" });',
+        "}"
+      ].join("\n")
+    });
+    const api = pluginFacts.symbols.find(
+      (symbol) => symbol.kind === "function" && symbol.qualifiedName === "src/api.ts#api"
+    );
+
+    expect(pluginFacts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(pluginFacts.fastifyPluginFacts).toEqual({
+      routes: [
+        expect.objectContaining({
+          pluginId: api?.id,
+          method: "GET",
+          path: "/users",
+          handler: expect.objectContaining({ name: "listUsers" })
+        })
+      ],
+      childRegistrations: [
+        expect.objectContaining({
+          parentPluginId: api?.id,
+          plugin: expect.objectContaining({ name: "jobsPlugin" }),
+          prefix: "/v1"
+        })
+      ],
+      rootRegistrations: []
+    });
+
+    const rootFacts = extractFileFacts({
+      filePath: "src/main.ts",
+      language: "typescript",
+      sourceText: [
+        'import Fastify from "fastify";',
+        'import { api as publicApi } from "./barrel.js";',
+        "const app = Fastify();",
+        'app.register(publicApi, { prefix: "/api" });'
+      ].join("\n")
+    });
+
+    expect(rootFacts.fastifyPluginFacts).toEqual({
+      routes: [],
+      childRegistrations: [],
+      rootRegistrations: [
+        expect.objectContaining({
+          plugin: expect.objectContaining({ name: "publicApi" }),
+          prefix: "/api"
+        })
+      ]
+    });
+  });
+
+  it("retains direct JavaScript Fastify plugin facts for later module projection", () => {
+    const facts = extractFileFacts({
+      filePath: "src/api.js",
+      language: "javascript",
+      sourceText: [
+        'import { listUsers } from "./handlers.js";',
+        "export const api = async (server) => {",
+        '  server.route({ method: ["GET", "TRACE"], url: "/users", handler: listUsers });',
+        "};"
+      ].join("\n")
+    });
+    const api = facts.symbols.find(
+      (symbol) => symbol.kind === "variable" && symbol.qualifiedName === "src/api.js#api"
+    );
+
+    expect(facts.fastifyPluginFacts).toEqual({
+      routes: [
+        expect.objectContaining({ pluginId: api?.id, method: "GET", path: "/users" }),
+        expect.objectContaining({ pluginId: api?.id, method: "TRACE", path: "/users" })
+      ],
+      childRegistrations: [],
+      rootRegistrations: []
+    });
+  });
+
   it("rejects unproven, dynamic, and ambiguous Fastify route shapes", () => {
     const facts = extractFileFacts({
       filePath: "src/routes.ts",

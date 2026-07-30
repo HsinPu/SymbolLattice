@@ -3545,6 +3545,154 @@ describe("SymbolLatticeService", () => {
     ]);
   });
 
+  it("indexes cross-file Fastify plugin prefixes through re-exports and reuses persisted facts", async () => {
+    const projectPath = await createInlineProject({
+      "src/handlers.ts": [
+        "export function listUsers() { return []; }",
+        "export function createJob() { return undefined; }"
+      ].join("\n"),
+      "src/jobs.ts": [
+        'import { createJob } from "./handlers.js";',
+        "export const jobsPlugin = async (server: unknown) => {",
+        '  server.route({ method: ["POST", "TRACE"], url: "/jobs", handler: createJob });',
+        "};"
+      ].join("\n"),
+      "src/jobs-barrel.ts": 'export { jobsPlugin } from "./jobs.js";\n',
+      "src/api.ts": [
+        'import { listUsers } from "./handlers.js";',
+        'import { jobsPlugin } from "./jobs-barrel.js";',
+        "export async function api(server: unknown) {",
+        '  server.get("/users", listUsers);',
+        '  server.register(jobsPlugin, { prefix: "/v1" });',
+        "}"
+      ].join("\n"),
+      "src/barrel.ts": 'export { api as publicApi } from "./api.js";\n',
+      "src/main.ts": [
+        'import Fastify from "fastify";',
+        'import { publicApi } from "./barrel.js";',
+        "const app = Fastify();",
+        'app.register(publicApi, { prefix: "/api" });'
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    const indexed = await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+    const traceRoutes = await service.routes(projectPath, { method: "TRACE" });
+    const apiFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "src/api.ts");
+    const mainFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "src/main.ts");
+    const found = await service.find(projectPath, "src/handlers.ts#listUsers");
+    const listUsers = found.symbols[0];
+    if (listUsers === undefined) {
+      throw new Error("Expected indexed cross-file Fastify plugin handler.");
+    }
+    const callers = await service.callers(projectPath, listUsers.qualifiedName);
+
+    expect(indexed).toMatchObject({
+      stale: false,
+      counts: { files: 6, symbols: expect.any(Number), edges: expect.any(Number) }
+    });
+    expect(apiFacts?.fastifyPluginFacts).toMatchObject({
+      routes: [
+        {
+          method: "GET",
+          path: "/users",
+          handler: { name: "listUsers" }
+        }
+      ],
+      childRegistrations: [
+        {
+          plugin: { name: "jobsPlugin" },
+          prefix: "/v1"
+        }
+      ]
+    });
+    expect(mainFacts?.fastifyPluginFacts).toMatchObject({
+      rootRegistrations: [
+        {
+          plugin: { name: "publicApi" },
+          prefix: "/api"
+        }
+      ]
+    });
+    expect(routes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "GET",
+          path: "/api/users",
+          route: expect.objectContaining({ filePath: "src/api.ts", name: "GET /api/users" }),
+          edge: expect.objectContaining({
+            kind: "routes",
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.fastify.imported-plugin-prefix.imported-handler",
+              stage: "module"
+            })
+          }),
+          handler: expect.objectContaining({ qualifiedName: "src/handlers.ts#listUsers" })
+        }),
+        expect.objectContaining({
+          method: "POST",
+          path: "/api/v1/jobs",
+          route: expect.objectContaining({ filePath: "src/jobs.ts", name: "POST /api/v1/jobs" }),
+          handler: expect.objectContaining({ qualifiedName: "src/handlers.ts#createJob" })
+        }),
+        expect.objectContaining({
+          method: "TRACE",
+          path: "/api/v1/jobs",
+          route: expect.objectContaining({ filePath: "src/jobs.ts", name: "TRACE /api/v1/jobs" }),
+          handler: expect.objectContaining({ qualifiedName: "src/handlers.ts#createJob" })
+        })
+      ])
+    );
+    expect(traceRoutes.routes).toMatchObject([
+      {
+        method: "TRACE",
+        path: "/api/v1/jobs",
+        edge: { evidence: { ruleId: "framework.fastify.imported-plugin-prefix.imported-handler" } }
+      }
+    ]);
+    expect(callers.relations).toMatchObject([
+      {
+        symbol: { kind: "route", name: "GET /api/users", filePath: "src/api.ts" },
+        edge: {
+          kind: "routes",
+          resolution: "exact",
+          evidence: { ruleId: "framework.fastify.imported-plugin-prefix.imported-handler" }
+        }
+      }
+    ]);
+
+    await writeFile(join(projectPath, "src", "unrelated.ts"), "export const unrelated = true;\n", "utf8");
+    const synced = await service.sync({ projectPath });
+    const routesAfterReuse = await service.routes(projectPath, { method: "TRACE" });
+
+    expect(synced.lastIndexWork).toMatchObject({
+      mode: "incremental",
+      reExtractedFiles: ["src/unrelated.ts"],
+      reusedArtifactFiles: expect.arrayContaining([
+        "src/api.ts",
+        "src/barrel.ts",
+        "src/handlers.ts",
+        "src/jobs-barrel.ts",
+        "src/jobs.ts",
+        "src/main.ts"
+      ])
+    });
+    expect(routesAfterReuse.routes).toMatchObject([
+      {
+        method: "TRACE",
+        path: "/api/v1/jobs",
+        edge: { evidence: { ruleId: "framework.fastify.imported-plugin-prefix.imported-handler" } }
+      }
+    ]);
+  });
+
   it("indexes non-HTTP NestJS entrypoints as exact persisted handler evidence", async () => {
     const projectPath = await createInlineProject({
       "src/transports.ts": [

@@ -41,7 +41,8 @@ export type RouteFramework = "express" | "fastify";
 /** Additional static registration context retained when it changes the route path. */
 export type RouteRegistration =
   | "fastify-inline-plugin-prefix"
-  | "fastify-local-plugin-prefix";
+  | "fastify-local-plugin-prefix"
+  | "fastify-imported-plugin-prefix";
 
 export const ARTIFACT_LANGUAGES = ["typescript", "javascript"] as const;
 

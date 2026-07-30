@@ -6,6 +6,24 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.22.0] - 2026-07-30
+
+### Added
+
+- AST-proven cross-file Fastify plugin-prefix composition for TypeScript and JavaScript. A direct `app.register(importedPlugin, { prefix: "/..." })` root registration now resolves one value-space ESM import or re-export surface to an exported function or variable callback, projects literal source-plugin routes, and preserves the route declaration file.
+- Nested source-plugin composition. An exported plugin can directly `register(childPlugin, { prefix: "/..." })` through an exact local, imported, or re-exported identifier; literal prefixes compose into ordinary route nodes such as `GET /api/users` and `TRACE /api/v1/jobs`. A repeated plugin in one active ancestry is not expanded again, keeping cyclic source registrations finite and deterministic.
+- Additive `fastifyPluginFacts` raw artifact facts for source-plugin routes, child registrations, and imported root registrations, plus `routeRegistration: "fastify-imported-plugin-prefix"` and `framework.fastify.imported-plugin-prefix.*` terminal-handler evidence. Exact local, imported, re-exported, and unresolved handlers retain that provenance through the existing route/caller/impact/query surfaces.
+
+### Compatibility
+
+- No SQLite schema migration or new CLI/MCP command is required. The existing artifact-fact JSON stores the additive optional `fastifyPluginFacts` and imported-plugin route-registration provenance; old facts remain readable and retain their former evidence rules.
+- The artifact extractor advances to `typescript-ast-v11` and the project resolver to `project-resolver-v9`. A pre-v0.22 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes cross-file Fastify plugin evidence.
+
+### Deliberate limits
+
+- Cross-file composition accepts only direct identifiers, exact value-space ESM import/re-export surfaces, direct function declarations or immutable direct function/arrow `const` callbacks, exactly two-argument `register` calls, and static slash-prefixed non-root/non-trailing prefix objects. It excludes CommonJS, namespace/member access, assignment aliases, type-only or ambiguous exports, mutable/wrapped (`fastify-plugin`) callbacks, computed/spread/duplicate registrations, and dynamic prefixes.
+- Root routes inside any prefixed plugin remain excluded because Fastify `prefixTrailingSlash` can produce different concrete runtime paths. Hooks, schemas, custom methods, inline/member handlers, runtime route options, and runtime composition remain outside the static proof surface.
+
 ## [0.21.0] - 2026-07-30
 
 ### Added
@@ -440,7 +458,8 @@ No unreleased changes.
 - Explicit full indexing, caller/callee/impact queries, and read-only MCP exploration.
 - `exact`, `heuristic`, and `unresolved` relationship states.
 
-[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.21.0...HEAD
+[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.22.0...HEAD
+[0.22.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.18.0...v0.19.0

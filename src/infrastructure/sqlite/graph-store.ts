@@ -662,7 +662,10 @@ function artifactFactsPayload(facts: PersistedArtifactFacts): ArtifactFacts {
     importBindings: facts.importBindings,
     exportBindings: facts.exportBindings,
     reExportBindings: facts.reExportBindings,
-    ...(facts.nestRouteFacts === undefined ? {} : { nestRouteFacts: facts.nestRouteFacts })
+    ...(facts.nestRouteFacts === undefined ? {} : { nestRouteFacts: facts.nestRouteFacts }),
+    ...(facts.fastifyPluginFacts === undefined
+      ? {}
+      : { fastifyPluginFacts: facts.fastifyPluginFacts })
   };
 }
 

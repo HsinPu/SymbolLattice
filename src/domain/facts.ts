@@ -5,18 +5,19 @@ import type {
   SourceRange,
   SymbolNode
 } from "./types.js";
+import type { RouteMethod } from "./graph.js";
 
 /**
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "typescript-ast-v10";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "typescript-ast-v11";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v8";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v9";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -147,6 +148,46 @@ export interface NestRouteFacts {
   readonly routerModulePrefixes: readonly NestRouterModulePrefixFact[];
 }
 
+/** A direct identifier reference retained for exact Fastify plugin composition. */
+export interface FastifyPluginSymbolReference {
+  readonly name: string;
+  readonly range: SourceRange;
+  /** Lexical scopes visible at the identifier, nearest first. */
+  readonly scopeIds: readonly string[];
+}
+
+/** A literal Fastify route declared inside one local plugin callback. */
+export interface FastifyPluginRouteFact {
+  readonly pluginId: string;
+  readonly method: RouteMethod;
+  readonly path: string;
+  readonly handler: FastifyPluginSymbolReference;
+  readonly range: SourceRange;
+}
+
+/** A direct nested `server.register(plugin, { prefix })` callback relationship. */
+export interface FastifyPluginChildRegistrationFact {
+  readonly parentPluginId: string;
+  readonly plugin: FastifyPluginSymbolReference;
+  readonly prefix: string;
+}
+
+/** A direct Fastify-root registration of an imported or re-exported plugin. */
+export interface FastifyPluginRootRegistrationFact {
+  readonly plugin: FastifyPluginSymbolReference;
+  readonly prefix: string;
+}
+
+/**
+ * Syntax-only facts used to project routes from imported Fastify plugin modules
+ * through direct root and nested static registrations in the project resolver.
+ */
+export interface FastifyPluginFacts {
+  readonly routes: readonly FastifyPluginRouteFact[];
+  readonly childRegistrations: readonly FastifyPluginChildRegistrationFact[];
+  readonly rootRegistrations: readonly FastifyPluginRootRegistrationFact[];
+}
+
 /**
  * Syntax-proven, file-local facts. They deliberately retain unresolved source
  * references so later resolution stages can be recomputed without reparsing.
@@ -162,6 +203,8 @@ export interface ArtifactFacts {
   readonly reExportBindings: readonly ReExportBinding[];
   /** Omitted only by artifact facts persisted before v0.17. */
   readonly nestRouteFacts?: NestRouteFacts;
+  /** Omitted only by artifact facts persisted before v0.22. */
+  readonly fastifyPluginFacts?: FastifyPluginFacts;
 }
 
 /**

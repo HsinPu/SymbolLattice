@@ -10,6 +10,8 @@ import {
   type EntryPointOperation,
   type EntryPointTransport,
   type ExportBinding,
+  type FastifyPluginFacts,
+  type FastifyPluginSymbolReference,
   type GraphEdge,
   type ImportBinding,
   type LocalBinding,
@@ -27,6 +29,7 @@ import {
 export type {
   ArtifactFacts,
   ExportBinding,
+  FastifyPluginFacts,
   ImportBinding,
   LocalBinding,
   NestRouteFacts,
@@ -323,6 +326,13 @@ interface StaticFastifyRoute {
   readonly path: string;
   readonly handler: ts.Identifier;
   readonly routeRegistration?: RouteRegistration;
+}
+
+/** A literal Fastify route before a proven receiver provides any prefix context. */
+interface StaticFastifyRouteShape {
+  readonly method: RouteMethod;
+  readonly path: string;
+  readonly handler: ts.Identifier;
 }
 
 /** Lexical value bindings that can prove a NestJS HTTP decorator import. */
@@ -876,27 +886,43 @@ function hasStableFastifyLocalPluginBinding(
   return stable;
 }
 
-function staticLocalFastifyPluginCallback(
-  sourceFile: ts.SourceFile,
-  callback: ts.Expression,
-  bindings: ScopedRouteReceiverBindings
-): FastifyPluginCallback | null {
-  if (!ts.isIdentifier(callback)) {
-    return null;
-  }
+interface StaticLocalFastifyPluginCallback {
+  readonly declaration: ts.FunctionDeclaration | ts.VariableDeclaration;
+  readonly callback: FastifyPluginCallback;
+  readonly receiver: ts.ParameterDeclaration;
+}
 
-  const declaration = visibleRouteBinding(sourceFile, callback, bindings)?.declaration;
-  if (declaration !== undefined && ts.isFunctionDeclaration(declaration)) {
-    return declaration.body !== undefined &&
-      declaration.asteriskToken === undefined &&
-      hasStableFastifyLocalPluginBinding(sourceFile, declaration, bindings)
-      ? declaration
-      : null;
-  }
-  if (declaration === undefined || !ts.isVariableDeclaration(declaration)) {
-    return null;
+function staticFastifyPluginReceiver(
+  callback: FastifyPluginCallback
+): ts.ParameterDeclaration | null {
+  const receiver = callback.parameters[0];
+  return receiver !== undefined &&
+    ts.isIdentifier(receiver.name) &&
+    receiver.dotDotDotToken === undefined &&
+    receiver.initializer === undefined &&
+    hasStableFastifyPluginReceiver(callback, receiver.name)
+    ? receiver
+    : null;
+}
+
+function staticLocalFastifyPluginCallbackForDeclaration(
+  sourceFile: ts.SourceFile,
+  declaration: ts.Node,
+  bindings: ScopedRouteReceiverBindings
+): StaticLocalFastifyPluginCallback | null {
+  if (ts.isFunctionDeclaration(declaration)) {
+    if (
+      declaration.body === undefined ||
+      declaration.asteriskToken !== undefined ||
+      !hasStableFastifyLocalPluginBinding(sourceFile, declaration, bindings)
+    ) {
+      return null;
+    }
+    const receiver = staticFastifyPluginReceiver(declaration);
+    return receiver === null ? null : { declaration, callback: declaration, receiver };
   }
   if (
+    !ts.isVariableDeclaration(declaration) ||
     !ts.isIdentifier(declaration.name) ||
     !isConstVariableDeclaration(declaration) ||
     declaration.initializer === undefined ||
@@ -907,7 +933,51 @@ function staticLocalFastifyPluginCallback(
     return null;
   }
 
-  return declaration.initializer;
+  const receiver = staticFastifyPluginReceiver(declaration.initializer);
+  return receiver === null
+    ? null
+    : { declaration, callback: declaration.initializer, receiver };
+}
+
+function staticLocalFastifyPluginCallback(
+  sourceFile: ts.SourceFile,
+  callback: ts.Expression,
+  bindings: ScopedRouteReceiverBindings
+): FastifyPluginCallback | null {
+  if (!ts.isIdentifier(callback)) {
+    return null;
+  }
+
+  const declaration = visibleRouteBinding(sourceFile, callback, bindings)?.declaration;
+  const localCallback =
+    declaration === undefined
+      ? null
+      : staticLocalFastifyPluginCallbackForDeclaration(sourceFile, declaration, bindings);
+  return localCallback?.callback ?? null;
+}
+
+interface ScopedFastifyPluginCallbacks {
+  readonly byReceiverDeclaration: ReadonlyMap<ts.ParameterDeclaration, StaticLocalFastifyPluginCallback>;
+}
+
+function collectScopedFastifyPluginCallbacks(
+  sourceFile: ts.SourceFile,
+  bindings: ScopedRouteReceiverBindings
+): ScopedFastifyPluginCallbacks {
+  const byReceiverDeclaration = new Map<ts.ParameterDeclaration, StaticLocalFastifyPluginCallback>();
+  const visit = (node: ts.Node): void => {
+    const descriptor =
+      ts.isFunctionDeclaration(node) || ts.isVariableDeclaration(node)
+        ? staticLocalFastifyPluginCallbackForDeclaration(sourceFile, node, bindings)
+        : null;
+    if (descriptor !== null) {
+      byReceiverDeclaration.set(descriptor.receiver, descriptor);
+    }
+    ts.forEachChild(node, visit);
+  };
+
+  ts.forEachChild(sourceFile, visit);
+  return { byReceiverDeclaration };
 }
 
 function staticFastifyPluginCallback(
@@ -1390,11 +1460,9 @@ function staticFastifyObjectRouteMethods(expression: ts.Expression): readonly Ro
   return methods.length === 0 ? null : methods;
 }
 
-function staticFastifyRouteObject(
-  sourceFile: ts.SourceFile,
-  node: ts.CallExpression,
-  bindings: ScopedRouteReceiverBindings
-): readonly StaticFastifyRoute[] {
+function staticFastifyRouteObjectShapes(
+  node: ts.CallExpression
+): readonly StaticFastifyRouteShape[] {
   if (
     node.questionDotToken !== undefined ||
     !ts.isPropertyAccessExpression(node.expression) ||
@@ -1405,8 +1473,6 @@ function staticFastifyRouteObject(
   ) {
     return [];
   }
-
-  const receiver = node.expression.expression;
 
   const options = node.arguments[0];
   if (options === undefined || !ts.isObjectLiteralExpression(options)) {
@@ -1433,23 +1499,15 @@ function staticFastifyRouteObject(
 
   const staticPath = staticFastifyPath(url ?? path);
   const methods = staticFastifyObjectRouteMethods(method);
-  const projectedPath =
-    staticPath === null
-      ? null
-      : staticFastifyProjectedPath(sourceFile, receiver, staticPath, bindings);
-  if (methods === null || projectedPath === null) {
+  if (methods === null || staticPath === null) {
     return [];
   }
 
-  return methods.map((routeMethod) => ({ method: routeMethod, handler, ...projectedPath }));
+  return methods.map((routeMethod) => ({ method: routeMethod, path: staticPath, handler }));
 }
 
-function staticFastifyRoutes(
-  sourceFile: ts.SourceFile,
-  node: ts.CallExpression,
-  bindings: ScopedRouteReceiverBindings
-): readonly StaticFastifyRoute[] {
-  const objectRoutes = staticFastifyRouteObject(sourceFile, node, bindings);
+function staticFastifyRouteShapes(node: ts.CallExpression): readonly StaticFastifyRouteShape[] {
+  const objectRoutes = staticFastifyRouteObjectShapes(node);
   if (objectRoutes.length > 0) {
     return objectRoutes;
   }
@@ -1470,22 +1528,198 @@ function staticFastifyRoutes(
   const pathArgument = node.arguments[0];
   const handler = node.arguments.at(-1);
   const staticPath = staticFastifyPath(pathArgument);
-  const projectedPath =
-    staticPath === null
-      ? null
-      : staticFastifyProjectedPath(sourceFile, node.expression.expression, staticPath, bindings);
   if (
     method === undefined ||
     node.arguments.length < 2 ||
     node.arguments.length > 3 ||
-    projectedPath === null ||
+    staticPath === null ||
     handler === undefined ||
     !ts.isIdentifier(handler)
   ) {
     return [];
   }
 
-  return [{ method, handler, ...projectedPath }];
+  return [{ method, path: staticPath, handler }];
+}
+
+function staticFastifyRoutes(
+  sourceFile: ts.SourceFile,
+  node: ts.CallExpression,
+  bindings: ScopedRouteReceiverBindings
+): readonly StaticFastifyRoute[] {
+  if (
+    node.questionDotToken !== undefined ||
+    !ts.isPropertyAccessExpression(node.expression) ||
+    node.expression.questionDotToken !== undefined ||
+    !ts.isIdentifier(node.expression.expression)
+  ) {
+    return [];
+  }
+
+  const receiver = node.expression.expression;
+  return staticFastifyRouteShapes(node).flatMap((route) => {
+    const projectedPath = staticFastifyProjectedPath(sourceFile, receiver, route.path, bindings);
+    return projectedPath === null ? [] : [{ ...route, ...projectedPath }];
+  });
+}
+
+interface StaticFastifyPluginRegisterCall {
+  readonly receiver: ts.Identifier;
+  readonly plugin: ts.Identifier;
+  readonly prefix: string;
+}
+
+function staticFastifyPluginRegisterCall(
+  node: ts.CallExpression
+): StaticFastifyPluginRegisterCall | null {
+  if (
+    node.questionDotToken !== undefined ||
+    !ts.isPropertyAccessExpression(node.expression) ||
+    node.expression.questionDotToken !== undefined ||
+    node.expression.name.text !== "register" ||
+    !ts.isIdentifier(node.expression.expression) ||
+    node.arguments.length !== 2
+  ) {
+    return null;
+  }
+
+  const plugin = node.arguments[0];
+  const prefix = staticFastifyPluginPrefix(node.arguments[1]);
+  return plugin !== undefined && ts.isIdentifier(plugin) && prefix !== null
+    ? { receiver: node.expression.expression, plugin, prefix }
+    : null;
+}
+
+function fastifyPluginSymbolReference(
+  sourceFile: ts.SourceFile,
+  identifier: ts.Identifier
+): FastifyPluginSymbolReference {
+  return {
+    name: identifier.text,
+    range: sourceRange(sourceFile, identifier),
+    scopeIds: enclosingScopeIds(sourceFile, identifier)
+  };
+}
+
+function isRuntimeImportedValueBinding(declaration: ts.Node | undefined): boolean {
+  if (declaration === undefined) {
+    return false;
+  }
+  const importSpecifier = ts.isImportSpecifier(declaration)
+    ? declaration
+    : ts.isIdentifier(declaration) &&
+        ts.isImportSpecifier(declaration.parent) &&
+        declaration.parent.name === declaration
+      ? declaration.parent
+      : undefined;
+  if (importSpecifier !== undefined) {
+    const namedImports = importSpecifier.parent;
+    const importClause = namedImports.parent;
+    return (
+      !importSpecifier.isTypeOnly &&
+      ts.isNamedImports(namedImports) &&
+      ts.isImportClause(importClause) &&
+      importClause.isTypeOnly !== true
+    );
+  }
+  return (
+    ts.isIdentifier(declaration) &&
+    ts.isImportClause(declaration.parent) &&
+    declaration.parent.name === declaration &&
+    declaration.parent.isTypeOnly !== true
+  );
+}
+
+function staticFastifyImportedPluginRootRegistration(
+  sourceFile: ts.SourceFile,
+  node: ts.CallExpression,
+  bindings: ScopedRouteReceiverBindings
+): FastifyPluginFacts["rootRegistrations"][number] | null {
+  const registration = staticFastifyPluginRegisterCall(node);
+  if (
+    registration === null ||
+    visibleRouteBindingKind(sourceFile, registration.receiver, bindings) !== "fastify-receiver" ||
+    !isRuntimeImportedValueBinding(
+      visibleRouteBinding(sourceFile, registration.plugin, bindings)?.declaration
+    )
+  ) {
+    return null;
+  }
+
+  return {
+    plugin: fastifyPluginSymbolReference(sourceFile, registration.plugin),
+    prefix: registration.prefix
+  };
+}
+
+function staticFastifyPluginChildRegistration(input: {
+  readonly sourceFile: ts.SourceFile;
+  readonly node: ts.CallExpression;
+  readonly bindings: ScopedRouteReceiverBindings;
+  readonly callbacks: ScopedFastifyPluginCallbacks;
+  readonly symbolsByDeclaration: ReadonlyMap<ts.Node, SymbolNode>;
+}): FastifyPluginFacts["childRegistrations"][number] | null {
+  const registration = staticFastifyPluginRegisterCall(input.node);
+  if (registration === null) {
+    return null;
+  }
+
+  const receiverDeclaration = visibleRouteBinding(
+    input.sourceFile,
+    registration.receiver,
+    input.bindings
+  )?.declaration;
+  const callback =
+    receiverDeclaration !== undefined && ts.isParameter(receiverDeclaration)
+      ? input.callbacks.byReceiverDeclaration.get(receiverDeclaration)
+      : undefined;
+  const parentPlugin = callback === undefined
+    ? undefined
+    : input.symbolsByDeclaration.get(callback.declaration);
+  if (parentPlugin === undefined) {
+    return null;
+  }
+
+  return {
+    parentPluginId: parentPlugin.id,
+    plugin: fastifyPluginSymbolReference(input.sourceFile, registration.plugin),
+    prefix: registration.prefix
+  };
+}
+
+interface StaticFastifyPluginRouteCandidate {
+  readonly plugin: StaticLocalFastifyPluginCallback;
+  readonly route: StaticFastifyRouteShape;
+  readonly node: ts.CallExpression;
+}
+
+function staticFastifyPluginRouteCandidates(input: {
+  readonly sourceFile: ts.SourceFile;
+  readonly node: ts.CallExpression;
+  readonly bindings: ScopedRouteReceiverBindings;
+  readonly callbacks: ScopedFastifyPluginCallbacks;
+}): readonly StaticFastifyPluginRouteCandidate[] {
+  if (
+    input.node.questionDotToken !== undefined ||
+    !ts.isPropertyAccessExpression(input.node.expression) ||
+    input.node.expression.questionDotToken !== undefined ||
+    !ts.isIdentifier(input.node.expression.expression)
+  ) {
+    return [];
+  }
+
+  const receiverDeclaration = visibleRouteBinding(
+    input.sourceFile,
+    input.node.expression.expression,
+    input.bindings
+  )?.declaration;
+  const plugin =
+    receiverDeclaration !== undefined && ts.isParameter(receiverDeclaration)
+      ? input.callbacks.byReceiverDeclaration.get(receiverDeclaration)
+      : undefined;
+  return plugin === undefined
+    ? []
+    : staticFastifyRouteShapes(input.node).map((route) => ({ plugin, route, node: input.node }));
 }
 
 function isNestCommonImport(statement: ts.ImportDeclaration): boolean {
@@ -2413,8 +2647,18 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
   };
   const declarationOrdinals = new Map<string, number>();
   const routeReceiverBindings = collectScopedRouteReceiverBindings(sourceFile);
+  const fastifyPluginCallbacks = collectScopedFastifyPluginCallbacks(sourceFile, routeReceiverBindings);
   const nestDecoratorBindings = collectScopedNestDecoratorBindings(sourceFile);
   const symbolsByDeclaration = new Map<ts.Node, SymbolNode>();
+  const fastifyPluginFacts: {
+    routes: FastifyPluginFacts["routes"][number][];
+    childRegistrations: FastifyPluginFacts["childRegistrations"][number][];
+    rootRegistrations: FastifyPluginFacts["rootRegistrations"][number][];
+  } = {
+    routes: [],
+    childRegistrations: [],
+    rootRegistrations: []
+  };
   const stack: SymbolNode[] = [];
 
   const fileNode = fileNodeFor(sourceFile, input);
@@ -2575,6 +2819,47 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
 
   function addStaticFastifyRoute(node: ts.CallExpression, route: StaticFastifyRoute): void {
     addStaticRoute(node, route, "fastify", route.routeRegistration);
+  }
+
+  function addFastifyPluginFacts(node: ts.CallExpression): void {
+    for (const candidate of staticFastifyPluginRouteCandidates({
+      sourceFile,
+      node,
+      bindings: routeReceiverBindings,
+      callbacks: fastifyPluginCallbacks
+    })) {
+      const plugin = symbolsByDeclaration.get(candidate.plugin.declaration);
+      if (plugin?.kind !== "function" && plugin?.kind !== "variable") {
+        continue;
+      }
+      fastifyPluginFacts.routes.push({
+        pluginId: plugin.id,
+        method: candidate.route.method,
+        path: candidate.route.path,
+        handler: fastifyPluginSymbolReference(sourceFile, candidate.route.handler),
+        range: sourceRange(sourceFile, candidate.node)
+      });
+    }
+
+    const childRegistration = staticFastifyPluginChildRegistration({
+      sourceFile,
+      node,
+      bindings: routeReceiverBindings,
+      callbacks: fastifyPluginCallbacks,
+      symbolsByDeclaration
+    });
+    if (childRegistration !== null) {
+      fastifyPluginFacts.childRegistrations.push(childRegistration);
+    }
+
+    const rootRegistration = staticFastifyImportedPluginRootRegistration(
+      sourceFile,
+      node,
+      routeReceiverBindings
+    );
+    if (rootRegistration !== null) {
+      fastifyPluginFacts.rootRegistrations.push(rootRegistration);
+    }
   }
 
   function addStaticNestRoute(route: StaticNestRoute): void {
@@ -2937,6 +3222,7 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
       for (const route of staticFastifyRoutes(sourceFile, node, routeReceiverBindings)) {
         addStaticFastifyRoute(node, route);
       }
+      addFastifyPluginFacts(node);
     }
     ts.forEachChild(node, extractStaticRoutes);
   }
@@ -2952,6 +3238,7 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
     importBindings,
     exportBindings,
     reExportBindings,
-    nestRouteFacts
+    nestRouteFacts,
+    fastifyPluginFacts
   };
 }
