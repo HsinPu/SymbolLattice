@@ -3392,6 +3392,58 @@ describe("SymbolLatticeService", () => {
     );
   });
 
+  it("indexes Go net/http default and literal ServeMux routes with exact syntax evidence", async () => {
+    const projectPath = await createInlineProject({
+      "cmd/server/main.go": [
+        "package main",
+        "",
+        'import "net/http"',
+        "",
+        "func health(w http.ResponseWriter, r *http.Request) {}",
+        "func listUsers(w http.ResponseWriter, r *http.Request) {}",
+        "",
+        "func main() {",
+        "  http.HandleFunc(\"/health\", health)",
+        "  mux := http.NewServeMux()",
+        "  mux.HandleFunc(\"GET /users\", listUsers)",
+        "}"
+      ].join("\n")
+    });
+    const service = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+
+    expect(routes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "ALL",
+          path: "/health",
+          handler: expect.objectContaining({ qualifiedName: "cmd/server/main.go#health" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.net-http.default-serve-mux.handle-func.local-function",
+              stage: "syntax"
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "GET",
+          path: "/users",
+          handler: expect.objectContaining({ qualifiedName: "cmd/server/main.go#listUsers" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.net-http.serve-mux.handle-func.local-function",
+              stage: "syntax"
+            })
+          })
+        })
+      ])
+    );
+  });
+
   it("indexes NestJS decorator routes as persisted exact method evidence", async () => {
     const projectPath = await createInlineProject({
       "src/cats.controller.ts": [

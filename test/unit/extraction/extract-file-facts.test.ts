@@ -2223,6 +2223,68 @@ describe("source extraction", () => {
     ]);
   });
 
+  it("extracts direct Go net/http default and literal ServeMux HandleFunc routes with exact evidence", () => {
+    const facts = extractFileFacts({
+      filePath: "cmd/server/http.go",
+      language: "go",
+      sourceText: [
+        "package main",
+        "",
+        'import http "net/http"',
+        "",
+        "func health(w http.ResponseWriter, r *http.Request) {}",
+        "func listUsers(w http.ResponseWriter, r *http.Request) {}",
+        "func diagnostics(w http.ResponseWriter, r *http.Request) {}",
+        "",
+        "func main() {",
+        "  http.HandleFunc(\"/health\", health)",
+        "  mux := http.NewServeMux()",
+        "  mux.HandleFunc(\"GET /users\", listUsers)",
+        "  mux.HandleFunc(\"TRACE /diagnostics\", diagnostics)",
+        "}"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId,
+          edge.evidence?.stage,
+          edge.resolution,
+          edge.confidence
+        ])
+    ).toEqual([
+      [
+        "ALL /health",
+        "cmd/server/http.go#health",
+        "framework.net-http.default-serve-mux.handle-func.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "GET /users",
+        "cmd/server/http.go#listUsers",
+        "framework.net-http.serve-mux.handle-func.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "TRACE /diagnostics",
+        "cmd/server/http.go#diagnostics",
+        "framework.net-http.serve-mux.handle-func.local-function",
+        "syntax",
+        "exact",
+        1
+      ]
+    ]);
+  });
+
   it("rejects dynamic, shadowed, inline, middleware, and rebound Go Gin route shapes", () => {
     const facts = extractFileFacts({
       filePath: "cmd/server/unproven.go",
@@ -2253,6 +2315,42 @@ describe("source extraction", () => {
         "  api.GET(\"/dynamic-group\", health)",
         "  bad := second.Group(\"/api/\")",
         "  bad.GET(\"/trailing-prefix\", stable)",
+        "}"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+  });
+
+  it("rejects dynamic, shadowed, wrapper, unsupported, and rebound Go net/http route shapes", () => {
+    const facts = extractFileFacts({
+      filePath: "cmd/server/unproven-http.go",
+      language: "go",
+      sourceText: [
+        "package main",
+        "",
+        'import http "net/http"',
+        "",
+        "func health(w http.ResponseWriter, r *http.Request) {}",
+        "func stable(w http.ResponseWriter, r *http.Request) {}",
+        "",
+        "func shadowed(http int) {",
+        "  http.HandleFunc(\"/shadowed\", health)",
+        "}",
+        "",
+        "func main() {",
+        "  pattern := \"/dynamic\"",
+        "  http.HandleFunc(pattern, health)",
+        "  http.HandleFunc(\"/inline\", func(w http.ResponseWriter, r *http.Request) {})",
+        "  http.HandleFunc(\"/wrapped\", http.HandlerFunc(health))",
+        "  mux := http.NewServeMux()",
+        "  mux = buildMux()",
+        "  mux.HandleFunc(\"/rebound\", stable)",
+        "  var legacy = http.NewServeMux()",
+        "  legacy.HandleFunc(\"/var-binding\", stable)",
+        "  mux.Handle(\"/handle\", stable)",
+        "  http.HandleFunc(\"CONNECT /tunnel\", stable)",
         "}"
       ].join("\n")
     });

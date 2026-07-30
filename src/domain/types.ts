@@ -43,7 +43,8 @@ export type RouteFramework =
   | "react-router"
   | "fastapi"
   | "flask"
-  | "gin";
+  | "gin"
+  | "net-http";
 
 /** Additional static registration context retained when it changes route provenance or path. */
 export type RouteRegistration =

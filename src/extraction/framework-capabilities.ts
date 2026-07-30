@@ -9,7 +9,8 @@ export const FRAMEWORK_CAPABILITY_IDS = [
   "nextjs",
   "fastapi",
   "flask",
-  "gin"
+  "gin",
+  "net-http"
 ] as const;
 
 export type FrameworkCapabilityId = (typeof FRAMEWORK_CAPABILITY_IDS)[number];
@@ -106,6 +107,16 @@ export const FRAMEWORK_CAPABILITIES = [
     surfaces: [
       "direct Gin engine methods",
       "same-function literal RouterGroup prefixes"
+    ]
+  },
+  {
+    id: "net-http",
+    languages: ["go"],
+    routeFramework: "net-http",
+    routeRegistrations: [],
+    surfaces: [
+      "direct http.HandleFunc registrations",
+      "same-function literal ServeMux HandleFunc registrations"
     ]
   }
 ] as const satisfies readonly FrameworkCapability[];

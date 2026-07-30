@@ -6,6 +6,24 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.34.0] - 2026-07-30
+
+### Added
+
+- An executable first-party `net-http` capability for Go. Direct default-multiplexer `http.HandleFunc("/path", handler)` registrations now emit exact `ALL` route edges with `framework.net-http.default-serve-mux.handle-func.local-function` evidence.
+- Same-function direct short-variable `mux := http.NewServeMux()` bindings and literal `mux.HandleFunc(...)` registrations, including the deliberate Go 1.22 `GET /path` / `POST /path` / `PUT` / `PATCH` / `DELETE` / `HEAD` / `OPTIONS` / `TRACE` pattern subset. These emit exact `framework.net-http.serve-mux.handle-func.local-function` evidence.
+- Reusable exact Go import-alias extraction for the supported framework packs, plus capability, unit, integration, dynamic/shadow/wrapper/rebinding, method-pattern, and persisted route-query coverage. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.34.0.md`.
+
+### Compatibility
+
+- No SQLite schema migration or new query command is required. The additive `net-http` capability and exact Go syntax edges reuse the existing file, symbol, edge, source-search, and route-query contracts; existing generations remain readable.
+- The artifact extractor advances to `multi-language-ast-v23`; the project resolver remains `project-resolver-v14` because the supported `net/http` forms are file-local. A pre-v0.34 active index reports `indexer-version-changed` until an explicit `sync` or `index` publishes the new facts.
+
+### Deliberate limits
+
+- `net/http` support accepts only one direct non-dot/non-blank `net/http` import, a direct unshadowed `http.HandleFunc` or same-function `:= http.NewServeMux()` receiver, plain literal slash paths or the documented literal Go 1.22 method-pattern subset, and one named package-level function handler. `http.Handle`, `ServeMux.Handle`, `DefaultServeMux` member calls, `var`/factory/wrapper bindings, inline/wrapped handlers, dynamic/escaped/host/wildcard patterns, `CONNECT`, member handlers, cross-file receiver flow, generic Go imports/calls/type resolution, Go module/package resolution, semantic type checking, and runtime behavior remain excluded.
+- Gin remains the direct engine / literal same-function `RouterGroup` slice from v0.33. chi, Echo, Fiber, additional standard-library registration forms, and broader Go resolution remain future work.
+
 ## [0.33.0] - 2026-07-30
 
 ### Added
@@ -657,7 +675,8 @@ No unreleased changes.
 - Explicit full indexing, caller/callee/impact queries, and read-only MCP exploration.
 - `exact`, `heuristic`, and `unresolved` relationship states.
 
-[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.33.0...HEAD
+[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.34.0...HEAD
+[0.34.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.33.0...v0.34.0
 [0.33.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.32.0...v0.33.0
 [0.32.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.31.0...v0.32.0
 [0.31.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.30.0...v0.31.0

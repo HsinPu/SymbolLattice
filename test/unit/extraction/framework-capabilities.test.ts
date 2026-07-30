@@ -16,7 +16,8 @@ describe("first-party framework capabilities", () => {
       "nextjs",
       "fastapi",
       "flask",
-      "gin"
+      "gin",
+      "net-http"
     ]);
     expect(FRAMEWORK_CAPABILITIES.map((capability) => capability.id)).toEqual(
       FRAMEWORK_CAPABILITY_IDS
@@ -65,6 +66,15 @@ describe("first-party framework capabilities", () => {
       surfaces: [
         "direct Gin engine methods",
         "same-function literal RouterGroup prefixes"
+      ]
+    });
+    expect(frameworkCapability("net-http")).toMatchObject({
+      languages: ["go"],
+      routeFramework: "net-http",
+      routeRegistrations: [],
+      surfaces: [
+        "direct http.HandleFunc registrations",
+        "same-function literal ServeMux HandleFunc registrations"
       ]
     });
   });

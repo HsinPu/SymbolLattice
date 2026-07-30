@@ -45,7 +45,23 @@ interface StaticGinRoute {
   readonly node: GoSyntaxNode;
 }
 
+interface StaticNetHttpMuxBinding {
+  readonly name: string;
+}
+
+interface StaticNetHttpPattern {
+  readonly method: RouteMethod;
+  readonly path: string;
+}
+
+interface StaticNetHttpRoute extends StaticNetHttpPattern {
+  readonly receiver: "default-serve-mux" | "serve-mux";
+  readonly handlerName: string;
+  readonly node: GoSyntaxNode;
+}
+
 const GIN_PACKAGE_PATH = "github.com/gin-gonic/gin";
+const NET_HTTP_PACKAGE_PATH = "net/http";
 
 const GIN_ROUTE_METHODS: Readonly<Record<string, RouteMethod>> = {
   GET: "GET",
@@ -57,6 +73,17 @@ const GIN_ROUTE_METHODS: Readonly<Record<string, RouteMethod>> = {
   OPTIONS: "OPTIONS",
   Any: "ALL"
 };
+
+const NET_HTTP_PATTERN_METHODS = new Set<RouteMethod>([
+  "GET",
+  "POST",
+  "PUT",
+  "PATCH",
+  "DELETE",
+  "HEAD",
+  "OPTIONS",
+  "TRACE"
+]);
 
 function directChildren(node: GoSyntaxNode): readonly GoSyntaxNode[] {
   const children: GoSyntaxNode[] = [];
@@ -135,14 +162,47 @@ function staticPlainGoString(input: GoExtractFileFactsInput, node: GoSyntaxNode)
   return value.slice(1, -1);
 }
 
-function staticGinPath(input: GoExtractFileFactsInput, node: GoSyntaxNode): string | null {
+function staticLiteralSlashPath(input: GoExtractFileFactsInput, node: GoSyntaxNode): string | null {
   const path = staticPlainGoString(input, node);
   return path === null || !path.startsWith("/") || path.includes("//") ? null : path;
+}
+
+function staticGinPath(input: GoExtractFileFactsInput, node: GoSyntaxNode): string | null {
+  return staticLiteralSlashPath(input, node);
 }
 
 function staticGinGroupPrefix(input: GoExtractFileFactsInput, node: GoSyntaxNode): string | null {
   const prefix = staticGinPath(input, node);
   return prefix === null || prefix === "/" || prefix.endsWith("/") ? null : prefix;
+}
+
+/**
+ * Exact subset of Go 1.22 `net/http` patterns. A bare slash path represents
+ * every method; a supported explicit method preserves the source registration
+ * without synthesizing the implicit HEAD behavior of a GET handler.
+ */
+function staticNetHttpPattern(
+  input: GoExtractFileFactsInput,
+  node: GoSyntaxNode
+): StaticNetHttpPattern | null {
+  const barePath = staticLiteralSlashPath(input, node);
+  if (barePath !== null) {
+    return { method: "ALL", path: barePath };
+  }
+
+  const pattern = staticPlainGoString(input, node);
+  if (pattern === null) {
+    return null;
+  }
+  const match = /^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS|TRACE) (\/\S*)$/u.exec(pattern);
+  if (match === null) {
+    return null;
+  }
+  const method = match[1] as RouteMethod;
+  const path = match[2] ?? "";
+  return NET_HTTP_PATTERN_METHODS.has(method) && !path.includes("//")
+    ? { method, path }
+    : null;
 }
 
 function descendantsNamed(node: GoSyntaxNode, name: string): readonly GoSyntaxNode[] {
@@ -159,16 +219,18 @@ function descendantsNamed(node: GoSyntaxNode, name: string): readonly GoSyntaxNo
   return matches;
 }
 
-function staticGinImportAliases(
+function staticPackageImportAliases(
   input: GoExtractFileFactsInput,
-  root: GoSyntaxNode
+  root: GoSyntaxNode,
+  packagePath: string,
+  defaultAlias: string
 ): readonly string[] {
   const counts = new Map<string, number>();
   for (const declaration of directChildren(root).filter((node) => node.name === "ImportDecl")) {
     for (const specifier of descendantsNamed(declaration, "ImportSpec")) {
       const children = directChildren(specifier);
       const stringNode = children.find((child) => child.name === "String");
-      if (stringNode === undefined || staticPlainGoString(input, stringNode) !== GIN_PACKAGE_PATH) {
+      if (stringNode === undefined || staticPlainGoString(input, stringNode) !== packagePath) {
         continue;
       }
       const aliasNode = children.find(
@@ -177,7 +239,7 @@ function staticGinImportAliases(
       if (aliasNode?.name === ".") {
         continue;
       }
-      const alias = aliasNode === undefined ? "gin" : identifierText(input, aliasNode);
+      const alias = aliasNode === undefined ? defaultAlias : identifierText(input, aliasNode);
       if (alias === null || alias === "_") {
         continue;
       }
@@ -188,6 +250,20 @@ function staticGinImportAliases(
     .filter(([, count]) => count === 1)
     .map(([alias]) => alias)
     .sort();
+}
+
+function staticGinImportAliases(
+  input: GoExtractFileFactsInput,
+  root: GoSyntaxNode
+): readonly string[] {
+  return staticPackageImportAliases(input, root, GIN_PACKAGE_PATH, "gin");
+}
+
+function staticNetHttpImportAliases(
+  input: GoExtractFileFactsInput,
+  root: GoSyntaxNode
+): readonly string[] {
+  return staticPackageImportAliases(input, root, NET_HTTP_PACKAGE_PATH, "http");
 }
 
 function staticGoFunction(
@@ -364,6 +440,59 @@ function staticGinRoute(
   return { receiver, method, path, handlerName, node };
 }
 
+function staticNetHttpMuxBinding(
+  input: GoExtractFileFactsInput,
+  node: GoSyntaxNode,
+  netHttpAliases: ReadonlySet<string>,
+  shadowedNames: ReadonlySet<string>
+): StaticNetHttpMuxBinding | null {
+  const declaration = staticShortVariableCall(input, node);
+  if (
+    declaration === null ||
+    !netHttpAliases.has(declaration.receiverName) ||
+    shadowedNames.has(declaration.receiverName) ||
+    declaration.methodName !== "NewServeMux" ||
+    declaration.arguments_.length !== 0
+  ) {
+    return null;
+  }
+  return { name: declaration.name };
+}
+
+function staticNetHttpRoute(
+  input: GoExtractFileFactsInput,
+  node: GoSyntaxNode,
+  netHttpAliases: ReadonlySet<string>,
+  shadowedNames: ReadonlySet<string>,
+  muxes: ReadonlySet<string>
+): StaticNetHttpRoute | null {
+  if (node.name !== "ExprStatement") {
+    return null;
+  }
+  const expression = directChildren(node)[0];
+  if (expression === undefined) {
+    return null;
+  }
+  const call = staticSelectorCall(input, expression);
+  if (call === null || call.methodName !== "HandleFunc" || call.arguments_.length !== 2) {
+    return null;
+  }
+  const patternNode = call.arguments_[0];
+  const handlerNode = call.arguments_[1];
+  const pattern = patternNode === undefined ? null : staticNetHttpPattern(input, patternNode);
+  const handlerName =
+    handlerNode?.name === "VariableName" ? identifierText(input, handlerNode) : null;
+  const receiver =
+    netHttpAliases.has(call.receiverName) && !shadowedNames.has(call.receiverName)
+      ? "default-serve-mux"
+      : muxes.has(call.receiverName)
+        ? "serve-mux"
+        : null;
+  return receiver === null || pattern === null || handlerName === null
+    ? null
+    : { ...pattern, receiver, handlerName, node };
+}
+
 function directBoundNames(input: GoExtractFileFactsInput, node: GoSyntaxNode): readonly string[] {
   if (node.name === "Assignment") {
     const target = directChildren(node)[0];
@@ -397,13 +526,17 @@ function combinedRoutePath(...parts: readonly string[]): string {
 }
 
 /**
- * Extracts conservative Go file facts. The first Go slice deliberately proves
- * only direct Gin engine/group registrations with literal paths and one named
- * package-level handler, never runtime discovery or dynamic dispatch.
+ * Extracts conservative Go file facts. Each supported framework surface proves
+ * direct local registration, a literal pattern, and one named package-level
+ * handler; runtime discovery and dynamic dispatch remain intentionally absent.
  */
 export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFacts {
   const ginCapability = frameworkCapability("gin");
-  if (!ginCapability.languages.includes(input.language)) {
+  const netHttpCapability = frameworkCapability("net-http");
+  if (
+    !ginCapability.languages.includes(input.language) ||
+    !netHttpCapability.languages.includes(input.language)
+  ) {
     throw new Error("Go framework extraction was invoked for an unsupported source language.");
   }
 
@@ -482,14 +615,19 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
     return symbol;
   }
 
-  function addRoute(routeFact: StaticGinRoute, handler: SymbolNode): void {
-    const path = combinedRoutePath(routeFact.receiver.prefix, routeFact.path);
-    const routeName = `${routeFact.method} ${path}`;
+  function addResolvedRoute(
+    method: RouteMethod,
+    path: string,
+    node: GoSyntaxNode,
+    handler: SymbolNode,
+    ruleId: string
+  ): void {
+    const routeName = `${method} ${path}`;
     const qualifiedName = `${input.filePath}#route:${routeName}`;
     const identity = `${qualifiedName}\u0000route`;
     const declarationOrdinal = declarationOrdinals.get(identity) ?? 0;
     declarationOrdinals.set(identity, declarationOrdinal + 1);
-    const range = rangeFor(lineStarts, routeFact.node.from, routeFact.node.to);
+    const range = rangeFor(lineStarts, node.from, node.to);
     const route: SymbolNode = {
       id: createSymbolId({
         filePath: input.filePath,
@@ -506,7 +644,7 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
       declarationOrdinal
     };
     symbols.push(route);
-    addContainment(route, routeFact.node);
+    addContainment(route, node);
     edges.push({
       id: createEdgeId({
         sourceId: route.id,
@@ -525,14 +663,35 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
       confidence: 1,
       referenceName: handler.name,
       evidence: {
-        ruleId:
-          routeFact.receiver.kind === "engine"
-            ? "framework.gin.direct-engine.method.local-function"
-            : "framework.gin.direct-group.method.local-function",
+        ruleId,
         stage: "syntax",
         candidateSymbolIds: [handler.id]
       }
     });
+  }
+
+  function addGinRoute(routeFact: StaticGinRoute, handler: SymbolNode): void {
+    addResolvedRoute(
+      routeFact.method,
+      combinedRoutePath(routeFact.receiver.prefix, routeFact.path),
+      routeFact.node,
+      handler,
+      routeFact.receiver.kind === "engine"
+        ? "framework.gin.direct-engine.method.local-function"
+        : "framework.gin.direct-group.method.local-function"
+    );
+  }
+
+  function addNetHttpRoute(routeFact: StaticNetHttpRoute, handler: SymbolNode): void {
+    addResolvedRoute(
+      routeFact.method,
+      routeFact.path,
+      routeFact.node,
+      handler,
+      routeFact.receiver === "default-serve-mux"
+        ? "framework.net-http.default-serve-mux.handle-func.local-function"
+        : "framework.net-http.serve-mux.handle-func.local-function"
+    );
   }
 
   if (!hasSyntaxError(root)) {
@@ -548,11 +707,16 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
     }
 
     const ginAliases = staticGinImportAliases(input, root);
+    const netHttpAliases = staticNetHttpImportAliases(input, root);
     for (const functionDeclaration of functions) {
       const visibleGinAliases = new Set(
         ginAliases.filter((alias) => !functionDeclaration.parameterNames.includes(alias))
       );
-      const receivers = new Map<string, GinReceiver>();
+      const visibleNetHttpAliases = new Set(
+        netHttpAliases.filter((alias) => !functionDeclaration.parameterNames.includes(alias))
+      );
+      const ginReceivers = new Map<string, GinReceiver>();
+      const netHttpMuxes = new Set<string>();
       const shadowedNames = new Set(functionDeclaration.parameterNames);
       for (const statement of directChildren(functionDeclaration.body)) {
         const engineBinding = staticGinEngineBinding(
@@ -562,31 +726,63 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
           shadowedNames
         );
         if (engineBinding !== null) {
-          receivers.set(engineBinding.name, engineBinding.receiver);
+          ginReceivers.set(engineBinding.name, engineBinding.receiver);
         }
-        const groupBinding = staticGinGroupBinding(input, statement, receivers);
+        const groupBinding = staticGinGroupBinding(input, statement, ginReceivers);
         if (groupBinding !== null) {
-          receivers.set(groupBinding.name, groupBinding.receiver);
+          ginReceivers.set(groupBinding.name, groupBinding.receiver);
         }
-        const routeFact = staticGinRoute(input, statement, receivers);
-        if (routeFact !== null && !shadowedNames.has(routeFact.handlerName)) {
-          const candidates = functionsByName.get(routeFact.handlerName) ?? [];
+        const ginRoute = staticGinRoute(input, statement, ginReceivers);
+        if (ginRoute !== null && !shadowedNames.has(ginRoute.handlerName)) {
+          const candidates = functionsByName.get(ginRoute.handlerName) ?? [];
           if (candidates.length === 1) {
             const handler = candidates[0];
             if (handler !== undefined) {
-              addRoute(routeFact, handler);
+              addGinRoute(ginRoute, handler);
             }
           }
         }
 
-        const retainedBindings = new Set(
+        const muxBinding = staticNetHttpMuxBinding(
+          input,
+          statement,
+          visibleNetHttpAliases,
+          shadowedNames
+        );
+        if (muxBinding !== null) {
+          netHttpMuxes.add(muxBinding.name);
+        }
+        const netHttpRoute = staticNetHttpRoute(
+          input,
+          statement,
+          visibleNetHttpAliases,
+          shadowedNames,
+          netHttpMuxes
+        );
+        if (netHttpRoute !== null && !shadowedNames.has(netHttpRoute.handlerName)) {
+          const candidates = functionsByName.get(netHttpRoute.handlerName) ?? [];
+          if (candidates.length === 1) {
+            const handler = candidates[0];
+            if (handler !== undefined) {
+              addNetHttpRoute(netHttpRoute, handler);
+            }
+          }
+        }
+
+        const retainedGinBindings = new Set(
           [engineBinding?.name, groupBinding?.name].filter(
             (name): name is string => name !== undefined
           )
         );
+        const retainedNetHttpBindings = new Set(
+          [muxBinding?.name].filter((name): name is string => name !== undefined)
+        );
         for (const name of directBoundNames(input, statement)) {
-          if (!retainedBindings.has(name)) {
-            receivers.delete(name);
+          if (!retainedGinBindings.has(name)) {
+            ginReceivers.delete(name);
+          }
+          if (!retainedNetHttpBindings.has(name)) {
+            netHttpMuxes.delete(name);
           }
           shadowedNames.add(name);
         }
