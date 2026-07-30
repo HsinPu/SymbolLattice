@@ -3280,6 +3280,50 @@ describe("source extraction", () => {
     expect(broken.symbols.filter((symbol) => symbol.kind === "function")).toEqual([]);
   });
 
+  it("extracts Luau-compatible top-level functions while keeping Lua-only Lapis routes disabled", () => {
+    const facts = extractFileFacts({
+      filePath: "src/avatar.luau",
+      language: "luau",
+      sourceText: [
+        "--!strict",
+        "export type Avatar = { id: number }",
+        "",
+        "local function greet(avatar: Avatar): string",
+        '  return "hello"',
+        "end",
+        "",
+        "export function publish(avatar: Avatar): boolean",
+        "  return avatar.id > 0",
+        "end",
+        "",
+        'local app = require("lapis").Application()',
+        'app:get("/ignored", greet)'
+      ].join("\n")
+    });
+    const broken = extractFileFacts({
+      filePath: "src/broken.luau",
+      language: "luau",
+      sourceText: ["--!strict", "local function incomplete(value: number): number", "  return value"].join(
+        "\n"
+      )
+    });
+    const indirect = extractFileFacts({
+      filePath: "src/indirect.luau",
+      language: "luau",
+      sourceText: ["local callback = function not_a_declaration()", "  return true", "end"].join("\n")
+    });
+
+    expect(
+      facts.symbols.filter((symbol) => symbol.kind === "function").map((symbol) => symbol.qualifiedName)
+    ).toEqual(["src/avatar.luau#greet", "src/avatar.luau#publish"]);
+    expect(facts.symbols.find((symbol) => symbol.qualifiedName === "src/avatar.luau#publish")).toMatchObject({
+      isExported: true
+    });
+    expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+    expect(broken.symbols.map((symbol) => symbol.kind)).toEqual(["file"]);
+    expect(indirect.symbols.map((symbol) => symbol.kind)).toEqual(["file"]);
+  });
+
   it("extracts direct R Plumber annotation routes with exact evidence", () => {
     const facts = extractFileFacts({
       filePath: "src/plumber.R",

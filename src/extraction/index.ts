@@ -3680,8 +3680,8 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
   if (input.language === "c") {
     return extractCFileFacts({ ...input, language: "c" });
   }
-  if (input.language === "lua") {
-    return extractLuaFileFacts({ ...input, language: "lua" });
+  if (input.language === "lua" || input.language === "luau") {
+    return extractLuaFileFacts({ ...input, language: input.language });
   }
   if (input.language === "r") {
     return extractRFileFacts({ ...input, language: "r" });

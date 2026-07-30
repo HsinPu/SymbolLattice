@@ -4237,6 +4237,50 @@ describe("SymbolLatticeService", () => {
     expect(search.results).toMatchObject([{ filePath: "src/app.lua", language: "lua" }]);
   });
 
+  it("indexes Luau source while keeping Lua-only Lapis route inference disabled", async () => {
+    const projectPath = await createInlineProject({
+      "src/avatar.luau": [
+        "--!strict",
+        "export type Avatar = { id: number }",
+        "",
+        "local function greet(avatar: Avatar): string",
+        '  return "hello"',
+        "end",
+        "",
+        "export function publish(avatar: Avatar): boolean",
+        "  return avatar.id > 0",
+        "end",
+        "",
+        'local app = require("lapis").Application()',
+        'app:get("/ignored", greet)'
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    const indexed = await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+    const search = await service.search(projectPath, "publish", { language: "luau" });
+    const persistedFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "src/avatar.luau");
+    const publish = await service.find(projectPath, "src/avatar.luau#publish");
+
+    expect(indexed).toMatchObject({
+      stale: false,
+      counts: { files: 1, symbols: expect.any(Number), edges: expect.any(Number) }
+    });
+    expect(persistedFacts).toMatchObject({
+      language: "luau",
+      extractorVersion: ARTIFACT_FACTS_EXTRACTOR_VERSION
+    });
+    expect(publish.symbols).toMatchObject([
+      { kind: "function", qualifiedName: "src/avatar.luau#publish", isExported: true }
+    ]);
+    expect(routes.routes).toEqual([]);
+    expect(search.results).toMatchObject([{ filePath: "src/avatar.luau", language: "luau" }]);
+  });
+
   it("indexes R Plumber annotation routes and retains R source-search filtering", async () => {
     const projectPath = await createInlineProject({
       "src/plumber.R": [

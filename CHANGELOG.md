@@ -6,6 +6,23 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.74.0] - 2026-07-31
+
+### Added
+
+- Luau `.luau` source discovery, persisted source-search filtering, CLI/MCP language validation, and a conservative reuse of the balanced Lua lexical declaration surface. Valid Luau source now retains direct top-level `function`, `local function`, and `export function` declarations even when the file contains `--!strict`, type aliases, and parameter or return type annotations.
+- Luau deliberately does not activate the Lua-only `lapis` framework pass. A syntactically similar `require("lapis")` / `app:get(...)` sequence in a `.luau` file retains ordinary declarations but cannot fabricate a Lapis route. Unit and integration coverage verifies discovery, strict/type syntax, exported functions, fail-closed malformed input, persisted source search, and Lua-framework isolation. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.74.0.md`.
+
+### Compatibility
+
+- No SQLite schema migration or query command is required. `luau` is an additive artifact language using the existing file, symbol, containment, source-search, CLI, MCP, and incremental-index contracts; existing generations remain readable.
+- The artifact extractor advances to `multi-language-ast-v63`; the project resolver remains `project-resolver-v23` because this language slice is file-local and provides no module or framework projection. A pre-v0.74 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes Luau-capable facts.
+
+### Deliberate limits
+
+- This is not a Luau parser, type checker, Roblox project model, or runtime analyzer. It excludes `type` / `export type` symbols, generic function declarations, class-like tables/metatables, module/import/require resolution, calls, table fields, Roblox services/Instances/events/RemoteEvents, Roact/Fusion/framework conventions, Lapis routes, compilation, and runtime behavior.
+- The inspected local CodeGraph baseline uses a dedicated Tree-sitter Luau grammar and therefore has broader syntax coverage. SymbolLattice v0.74 deliberately keeps the existing lexical proof boundary and only accepts declaration forms shared safely with Lua; it is independently implemented and does not reuse CodeGraph source.
+
 ## [0.73.0] - 2026-07-31
 
 ### Added

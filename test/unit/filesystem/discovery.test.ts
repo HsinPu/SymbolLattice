@@ -51,6 +51,7 @@ describe("source discovery", () => {
     await writeFile(join(projectPath, "src", "g.hs"), "main = putStrLn \"example\"\n", "utf8");
     await writeFile(join(projectPath, "src", "g.jl"), "health() = \"ok\"\n", "utf8");
     await writeFile(join(projectPath, "src", "g.lua"), "local answer = 42\n", "utf8");
+    await writeFile(join(projectPath, "src", "g.luau"), "--!strict\nlocal answer: number = 42\n", "utf8");
     await writeFile(join(projectPath, "src", "g.ml"), "let answer = 42\n", "utf8");
     await writeFile(join(projectPath, "src", "g.fs"), "let answer = 42\n", "utf8");
     await writeFile(join(projectPath, "src", "g.nim"), "proc answer() = discard\n", "utf8");
@@ -106,6 +107,7 @@ describe("source discovery", () => {
       "src/g.hs",
       "src/g.jl",
       "src/g.lua",
+      "src/g.luau",
       "src/g.ml",
       "src/g.nim",
       "src/g.pl",
@@ -154,6 +156,7 @@ describe("source discovery", () => {
       "haskell",
       "julia",
       "lua",
+      "luau",
       "ocaml",
       "nim",
       "perl",

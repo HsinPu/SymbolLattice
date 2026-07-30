@@ -26,6 +26,7 @@ export const SUPPORTED_EXTENSIONS: ReadonlyMap<string, SupportedLanguage> = new 
   [".php", "php"],
   [".c", "c"],
   [".lua", "lua"],
+  [".luau", "luau"],
   [".r", "r"],
   [".ex", "elixir"],
   [".exs", "elixir"],

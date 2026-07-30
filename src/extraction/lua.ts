@@ -12,7 +12,8 @@ import { frameworkCapability } from "./framework-capabilities.js";
 export interface LuaExtractFileFactsInput {
   readonly filePath: string;
   readonly sourceText: string;
-  readonly language: "lua";
+  /** Lua receives the optional Lapis route pass; Luau receives declarations only. */
+  readonly language: "lua" | "luau";
 }
 
 type LuaTokenKind = "identifier" | "keyword" | "string" | "symbol";
@@ -423,7 +424,8 @@ function identifierText(token: LuaToken | undefined): string | null {
 
 function collectTopLevelFunctions(
   sourceText: string,
-  structure: LuaStructure
+  structure: LuaStructure,
+  language: LuaExtractFileFactsInput["language"]
 ): readonly StaticLuaFunction[] {
   const functions: StaticLuaFunction[] = [];
   for (let index = 0; index < structure.tokens.length; index += 1) {
@@ -432,8 +434,14 @@ function collectTopLevelFunctions(
       continue;
     }
     const previous = index > 0 ? structure.tokens[index - 1] : undefined;
+    const isDirect = startsDirectStatement(sourceText, structure.tokens, index);
     const isLocal =
       previous?.text === "local" &&
+      structure.depthBefore[index - 1] === 0 &&
+      startsDirectStatement(sourceText, structure.tokens, index - 1);
+    const isLuauExport =
+      language === "luau" &&
+      previous?.text === "export" &&
       structure.depthBefore[index - 1] === 0 &&
       startsDirectStatement(sourceText, structure.tokens, index - 1);
     const name = identifierText(structure.tokens[index + 1]);
@@ -443,6 +451,7 @@ function collectTopLevelFunctions(
     if (
       name === null ||
       openingParenthesis?.text !== "(" ||
+      (!isDirect && !isLocal && !isLuauExport) ||
       endIndex === undefined ||
       endToken === undefined ||
       !endsDirectStatement(sourceText, structure.tokens, endIndex)
@@ -728,14 +737,16 @@ function staticLapisRoute(
 }
 
 /**
- * Extracts Lua file/function symbols plus a narrow Lapis route subset. It
- * accepts only direct top-level local function handlers, direct Lapis module
- * and Application bindings, and literal `app:get/post/put/delete/match` calls.
+ * Extracts Lua-compatible file/function symbols. Lua also receives a narrow
+ * Lapis route subset: direct top-level local function handlers, direct Lapis
+ * module and Application bindings, and literal `app:get/post/put/delete/match` calls.
  */
 export function extractLuaFileFacts(input: LuaExtractFileFactsInput): ArtifactFacts {
-  const lapisCapability = frameworkCapability("lapis");
-  if (!lapisCapability.languages.includes(input.language)) {
-    throw new Error("Lapis extraction was invoked for an unsupported source language.");
+  if (input.language === "lua") {
+    const lapisCapability = frameworkCapability("lapis");
+    if (!lapisCapability.languages.includes(input.language)) {
+      throw new Error("Lapis extraction was invoked for an unsupported source language.");
+    }
   }
 
   const structure = analyzeLuaStructure(input.sourceText);
@@ -866,7 +877,7 @@ export function extractLuaFileFacts(input: LuaExtractFileFactsInput): ArtifactFa
   }
 
   if (structure.valid) {
-    const functions = collectTopLevelFunctions(input.sourceText, structure);
+    const functions = collectTopLevelFunctions(input.sourceText, structure, input.language);
     const functionsByName = new Map<string, { readonly declaration: StaticLuaFunction; readonly symbol: SymbolNode }[]>();
     for (const declaration of functions) {
       const symbol = addFunction(declaration);
@@ -874,34 +885,36 @@ export function extractLuaFileFacts(input: LuaExtractFileFactsInput): ArtifactFa
       functionsByName.set(declaration.name, [...existing, { declaration, symbol }]);
     }
 
-    const rebindings = collectTopLevelRebindings(input.sourceText, structure);
-    const applications = collectLapisApplicationBindings(input.sourceText, structure, rebindings);
-    for (let index = 0; index < structure.tokens.length; index += 1) {
-      const route = staticLapisRoute(input.sourceText, structure, index);
-      if (route === null) {
-        continue;
-      }
-      const applicationCandidates = applications.filter(
-        (application) =>
-          application.name === route.receiverName &&
-          application.end < route.start &&
-          !hasRebindingBetween(rebindings, application.name, application.end, route.start)
-      );
-      const handlerCandidates = (functionsByName.get(route.handlerName) ?? []).filter(
-        (candidate) =>
-          candidate.declaration.isLocal &&
-          candidate.declaration.end < route.start &&
-          !hasRebindingBetween(
-            rebindings,
-            route.handlerName,
-            candidate.declaration.end,
-            route.start
-          )
-      );
-      if (applicationCandidates.length === 1 && handlerCandidates.length === 1) {
-        const handler = handlerCandidates[0];
-        if (handler !== undefined) {
-          addLapisRoute(route, handler.symbol);
+    if (input.language === "lua") {
+      const rebindings = collectTopLevelRebindings(input.sourceText, structure);
+      const applications = collectLapisApplicationBindings(input.sourceText, structure, rebindings);
+      for (let index = 0; index < structure.tokens.length; index += 1) {
+        const route = staticLapisRoute(input.sourceText, structure, index);
+        if (route === null) {
+          continue;
+        }
+        const applicationCandidates = applications.filter(
+          (application) =>
+            application.name === route.receiverName &&
+            application.end < route.start &&
+            !hasRebindingBetween(rebindings, application.name, application.end, route.start)
+        );
+        const handlerCandidates = (functionsByName.get(route.handlerName) ?? []).filter(
+          (candidate) =>
+            candidate.declaration.isLocal &&
+            candidate.declaration.end < route.start &&
+            !hasRebindingBetween(
+              rebindings,
+              route.handlerName,
+              candidate.declaration.end,
+              route.start
+            )
+        );
+        if (applicationCandidates.length === 1 && handlerCandidates.length === 1) {
+          const handler = handlerCandidates[0];
+          if (handler !== undefined) {
+            addLapisRoute(route, handler.symbol);
+          }
         }
       }
     }
