@@ -6,6 +6,24 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.65.0] - 2026-07-31
+
+### Added
+
+- Terraform/OpenTofu `.tf`, `.tfvars`, and `.tofu` source discovery, persisted source-search language filtering, CLI/MCP validation, and a dedicated offset-preserving HCL block scanner. It retains only complete line-leading top-level literal `resource`, `data`, `module`, `variable`, and `output` blocks as auditable IaC declarations.
+- An executable first-party `terraform` capability. Accepted resource/data blocks use the additive `resource` symbol kind, module blocks use the additive `module` symbol kind, and output blocks are exported variable symbols; every retained declaration has exact local `contains` evidence.
+- Unit and integration coverage now verifies Terraform/OpenTofu discovery, resource/data/module/variable/output containment, output export/local bindings, comment/string/heredoc/dynamic/nested/malformed rejection, persisted source-search, CLI/MCP language validation, and exact resource lookup. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.65.0.md`.
+
+### Compatibility
+
+- No SQLite schema migration or new query command is required. The additive `resource` and `module` symbol kinds reuse the existing file, symbol, edge, binding, and source-search contracts; existing generations remain readable.
+- The artifact extractor advances to `multi-language-ast-v54`; the project resolver remains `project-resolver-v19` because this release does not resolve Terraform module sources, providers, or dependency expressions. A pre-v0.65 active index reports `indexer-version-changed` until an explicit `sync` or `index` publishes Terraform-capable facts.
+
+### Deliberate limits
+
+- The Terraform/OpenTofu extractor is a deliberately narrow lexical scanner, not an HCL parser, Terraform/OpenTofu compiler, or planner. It accepts only complete line-leading top-level blocks with literal ASCII labels; comments, quoted strings, heredocs, dynamic labels, nested blocks, malformed input, and unsupported top-level forms do not become IaC facts.
+- Terraform/OpenTofu support does not infer `terraform`, `provider`, `locals`, expression values, interpolation, `depends_on`, resource references, provider aliases, module source resolution, state, plan/apply behavior, generated configuration, or runtime cloud topology. The inspected local CodeGraph baseline uses a broader Tree-sitter Terraform grammar; SymbolLattice deliberately adds a smaller exact declaration-evidence surface rather than claiming full HCL parity.
+
 ## [0.64.0] - 2026-07-31
 
 ### Added

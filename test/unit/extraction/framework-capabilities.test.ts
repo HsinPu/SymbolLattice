@@ -18,6 +18,7 @@ describe("first-party framework capabilities", () => {
       "astro",
       "blazor",
       "arkui",
+      "terraform",
       "nextjs",
       "fastapi",
       "flask",
@@ -96,6 +97,14 @@ describe("first-party framework capabilities", () => {
       surfaces: [
         "complete direct @Component struct declarations",
         "direct @Entry @Component UI root entrypoints"
+      ]
+    });
+    expect(frameworkCapability("terraform")).toMatchObject({
+      languages: ["terraform"],
+      routeRegistrations: [],
+      surfaces: [
+        "complete top-level literal resource and data blocks",
+        "complete top-level literal module variable and output blocks"
       ]
     });
     expect(frameworkCapability("nextjs")).toMatchObject({

@@ -6815,4 +6815,83 @@ describe("source extraction", () => {
     expect(facts.localBindings).toEqual([]);
     expect(facts.exportBindings).toEqual([]);
   });
+
+  it("extracts complete top-level Terraform and OpenTofu declaration blocks", () => {
+    const facts = extractFileFacts({
+      filePath: "infra/main.tf",
+      language: "terraform",
+      sourceText: [
+        'resource "aws_instance" "web" {',
+        '  ami = "ami-123"',
+        "}",
+        "",
+        'data "aws_ami" "base" {}',
+        'module "network" {',
+        '  source = "./modules/network"',
+        "}",
+        'variable "region" {}',
+        'output "endpoint" {',
+        "  value = aws_instance.web.public_dns",
+        "}"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.map((symbol) => [symbol.kind, symbol.name, symbol.isExported])).toEqual([
+      ["file", "main.tf", true],
+      ["resource", "resource aws_instance.web", false],
+      ["resource", "data aws_ami.base", false],
+      ["module", "module network", false],
+      ["variable", "variable region", false],
+      ["variable", "output endpoint", true]
+    ]);
+    expect(facts.localBindings.map((binding) => [binding.name, binding.scopeId])).toEqual([
+      ["aws_instance.web", "terraform:file"],
+      ["data.aws_ami.base", "terraform:file"],
+      ["module.network", "terraform:file"],
+      ["var.region", "terraform:file"],
+      ["output.endpoint", "terraform:file"]
+    ]);
+    expect(facts.exportBindings).toEqual([
+      expect.objectContaining({ localName: "output.endpoint", exportedName: "endpoint" })
+    ]);
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "contains")
+        .map((edge) => [edge.referenceName, edge.resolution, edge.evidence?.ruleId])
+    ).toEqual([
+      ["resource aws_instance.web", "exact", "framework.terraform.resource.block"],
+      ["data aws_ami.base", "exact", "framework.terraform.data.block"],
+      ["module network", "exact", "framework.terraform.module.block"],
+      ["variable region", "exact", "framework.terraform.variable.block"],
+      ["output endpoint", "exact", "framework.terraform.output.block"]
+    ]);
+  });
+
+  it("rejects dynamic, nested, commented, heredoc, and malformed Terraform block shapes", () => {
+    const facts = extractFileFacts({
+      filePath: "infra/invalid.tofu",
+      language: "terraform",
+      sourceText: [
+        '# resource "aws_instance" "commented" {}',
+        'message = "resource \\"aws_instance\\" \\"string\\" {}"',
+        'resource var.type "dynamic" {}',
+        "locals {",
+        '  resource "aws_instance" "nested" {}',
+        "}",
+        'resource "aws_instance" "heredoc" {',
+        "  user_data = <<-SCRIPT",
+        'resource "aws_instance" "not_real" {}',
+        "SCRIPT",
+        "}",
+        'resource "aws_instance" "incomplete" {'
+      ].join("\n")
+    });
+
+    expect(facts.symbols.map((symbol) => [symbol.kind, symbol.name])).toEqual([
+      ["file", "invalid.tofu"]
+    ]);
+    expect(facts.edges).toEqual([]);
+    expect(facts.localBindings).toEqual([]);
+    expect(facts.exportBindings).toEqual([]);
+  });
 });

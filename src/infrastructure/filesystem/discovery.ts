@@ -49,7 +49,10 @@ export const SUPPORTED_EXTENSIONS: ReadonlyMap<string, SupportedLanguage> = new 
   [".kt", "kotlin"],
   [".swift", "swift"],
   [".dart", "dart"],
-  [".scala", "scala"]
+  [".scala", "scala"],
+  [".tf", "terraform"],
+  [".tfvars", "terraform"],
+  [".tofu", "terraform"]
 ] as const);
 
 /**

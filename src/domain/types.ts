@@ -10,6 +10,8 @@ export const SYMBOL_KINDS = [
   "interface",
   "type",
   "variable",
+  "resource",
+  "module",
   "route",
   "entrypoint"
 ] as const;
@@ -117,7 +119,8 @@ export const ARTIFACT_LANGUAGES = [
   "kotlin",
   "swift",
   "dart",
-  "scala"
+  "scala",
+  "terraform"
 ] as const;
 
 export type ArtifactLanguage = (typeof ARTIFACT_LANGUAGES)[number];

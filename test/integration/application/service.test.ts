@@ -6605,4 +6605,58 @@ describe("SymbolLatticeService", () => {
       })
     ]);
   });
+
+  it("indexes Terraform and OpenTofu block declarations as persisted IaC facts", async () => {
+    const projectPath = await createInlineProject({
+      "infra/main.tf": [
+        'resource "aws_instance" "web" {',
+        '  ami = "ami-123"',
+        "}",
+        'data "aws_ami" "base" {}',
+        'module "network" { source = "./modules/network" }',
+        'variable "region" {}',
+        'output "endpoint" { value = aws_instance.web.public_dns }'
+      ].join("\n"),
+      "infra/terraform.tfvars": 'region = "ap-northeast-1"\n',
+      "infra/invalid.tofu": 'resource "aws_instance" "incomplete" {'
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    const indexed = await service.init({ projectPath });
+    const search = await service.search(projectPath, "region", { language: "terraform" });
+    const resource = (await service.find(projectPath, "infra/main.tf#resource:aws_instance.web"))
+      .symbols[0];
+    const persistedTerraformFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .filter((facts) => facts.language === "terraform");
+
+    expect(indexed).toMatchObject({
+      stale: false,
+      counts: { files: 3, symbols: expect.any(Number), edges: expect.any(Number) }
+    });
+    expect(persistedTerraformFacts).toHaveLength(3);
+    expect(
+      persistedTerraformFacts.every(
+        (facts) => facts.extractorVersion === ARTIFACT_FACTS_EXTRACTOR_VERSION
+      )
+    ).toBe(true);
+    expect(resource).toMatchObject({
+      kind: "resource",
+      name: "resource aws_instance.web",
+      qualifiedName: "infra/main.tf#resource:aws_instance.web"
+    });
+    expect(search.results).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          filePath: "infra/main.tf",
+          language: "terraform"
+        }),
+        expect.objectContaining({
+          filePath: "infra/terraform.tfvars",
+          language: "terraform"
+        })
+      ])
+    );
+  });
 });

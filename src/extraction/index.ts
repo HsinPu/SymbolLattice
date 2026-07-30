@@ -28,6 +28,7 @@ import { extractSvelteFileFacts } from "./svelte.js";
 import { extractAstroFileFacts } from "./astro.js";
 import { extractArkTsFileFacts } from "./arkts.js";
 import { extractRazorFileFacts } from "./razor.js";
+import { extractTerraformFileFacts } from "./terraform.js";
 import { extractVueFileFacts } from "./vue.js";
 import {
   frameworkCapability,
@@ -3737,6 +3738,9 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
   }
   if (input.language === "arkts") {
     return extractArkTsFileFacts({ ...input, language: "arkts" });
+  }
+  if (input.language === "terraform") {
+    return extractTerraformFileFacts({ ...input, language: "terraform" });
   }
 
   const sourceFile = ts.createSourceFile(

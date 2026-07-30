@@ -11,6 +11,7 @@ export const FRAMEWORK_CAPABILITY_IDS = [
   "astro",
   "blazor",
   "arkui",
+  "terraform",
   "nextjs",
   "fastapi",
   "flask",
@@ -138,6 +139,15 @@ export const FRAMEWORK_CAPABILITIES = [
     surfaces: [
       "complete direct @Component struct declarations",
       "direct @Entry @Component UI root entrypoints"
+    ]
+  },
+  {
+    id: "terraform",
+    languages: ["terraform"],
+    routeRegistrations: [],
+    surfaces: [
+      "complete top-level literal resource and data blocks",
+      "complete top-level literal module variable and output blocks"
     ]
   },
   {
