@@ -7205,4 +7205,98 @@ describe("source extraction", () => {
     ]);
     expect(malformedTag.edges).toEqual([]);
   });
+
+  it("extracts Nix returned-attrset bindings, let bindings, inherit names, and literal imports", () => {
+    const facts = extractFileFacts({
+      filePath: "nix/default.nix",
+      language: "nix",
+      sourceText: [
+        "{ lib, ... }:",
+        "let",
+        "  helper = value: value;",
+        "  internal = import ./internal.nix;",
+        "in rec {",
+        "  package = { name = \"symbol-lattice\"; };",
+        "  build = args: import ./build.nix;",
+        "  nested.value = { };",
+        "  inherit lib;",
+        "}"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.map((symbol) => [symbol.kind, symbol.name, symbol.isExported])).toEqual([
+      ["file", "default.nix", true],
+      ["variable", "package", true],
+      ["function", "build", true],
+      ["variable", "nested.value", true],
+      ["variable", "lib", true],
+      ["function", "helper", false],
+      ["variable", "internal", false]
+    ]);
+    expect(facts.exportBindings.map((binding) => binding.exportedName)).toEqual([
+      "package",
+      "build",
+      "nested.value",
+      "lib"
+    ]);
+    expect(facts.pendingReferences.map((reference) => [reference.relationKind, reference.referenceName])).toEqual([
+      ["imports", "./internal.nix"],
+      ["imports", "./build.nix"]
+    ]);
+    expect(facts.edges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          referenceName: "build",
+          evidence: expect.objectContaining({
+            ruleId: "language.nix.returned-attrset.binding",
+            stage: "syntax"
+          })
+        }),
+        expect.objectContaining({
+          referenceName: "helper",
+          evidence: expect.objectContaining({
+            ruleId: "language.nix.let.binding",
+            stage: "syntax"
+          })
+        }),
+        expect.objectContaining({
+          referenceName: "lib",
+          evidence: expect.objectContaining({
+            ruleId: "language.nix.returned-attrset.inherit",
+            stage: "syntax"
+          })
+        })
+      ])
+    );
+  });
+
+  it("rejects malformed Nix and ignores declaration-looking comments and strings", () => {
+    const safe = extractFileFacts({
+      filePath: "nix/safe.nix",
+      language: "nix",
+      sourceText: [
+        "/* fake = value: value; */",
+        "{",
+        "  # hidden = value: value;",
+        "  marker = \"fake = value: value;\";",
+        "  live = value: value;",
+        "}"
+      ].join("\n")
+    });
+    const malformed = extractFileFacts({
+      filePath: "nix/broken.nix",
+      language: "nix",
+      sourceText: "{ live = value: value;"
+    });
+
+    expect(safe.symbols.map((symbol) => [symbol.kind, symbol.name])).toEqual([
+      ["file", "safe.nix"],
+      ["variable", "marker"],
+      ["function", "live"]
+    ]);
+    expect(malformed.symbols.map((symbol) => [symbol.kind, symbol.name])).toEqual([
+      ["file", "broken.nix"]
+    ]);
+    expect(malformed.edges).toEqual([]);
+  });
 });

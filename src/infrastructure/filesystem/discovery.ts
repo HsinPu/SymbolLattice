@@ -57,7 +57,8 @@ export const SUPPORTED_EXTENSIONS: ReadonlyMap<string, SupportedLanguage> = new 
   [".sol", "solidity"],
   [".cfc", "cfml"],
   [".cfm", "cfml"],
-  [".cfs", "cfml"]
+  [".cfs", "cfml"],
+  [".nix", "nix"]
 ] as const);
 
 /**

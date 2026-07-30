@@ -6,6 +6,24 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.69.0] - 2026-07-31
+
+### Added
+
+- Nix `.nix` source discovery, persisted source-search filtering, CLI language validation, and an independent offset-preserving lexical declaration scanner. It retains complete direct bindings of a returned literal attribute set, including `rec { ... }`, direct `let ... in` bindings, simple `inherit` names, and direct lambda-valued bindings as function symbols.
+- Complete literal project-relative `import ./path.nix` and `builtins.import ../path.nix` forms are retained as explicit pending `imports` references. They are evidence of source syntax only: v0.69 does not yet claim a Nix module target or evaluate the path.
+- Unit and integration coverage now verifies Nix discovery, returned attribute-set and `let` declaration scopes, function/value/inherit evidence, literal import facts, string/comment/malformed rejection, persisted source search, and CLI language filtering. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.69.0.md`.
+
+### Compatibility
+
+- No SQLite schema migration or new query command is required. Nix reuses the existing file, function, variable, containment-edge, pending-reference, source-search, and raw-artifact contracts; existing generations remain readable.
+- The artifact extractor advances to `multi-language-ast-v58`; the resolver remains `project-resolver-v21` because v0.69 retains literal import syntax without evaluating Nix expressions or projecting cross-file module edges. A pre-v0.69 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes Nix-capable facts.
+
+### Deliberate limits
+
+- The Nix scanner is a deliberately narrow lexical declaration scanner, not a Nix parser, evaluator, flake lock reader, package builder, or deployment planner. It accepts only complete literal structures whose delimiter and string/comment boundaries can be locally proved; malformed or ambiguous comments, strings, delimiters, and `let` forms fail closed.
+- Nix support does not infer quoted/dynamic attribute names, nested attribute-set members, `with`, assertions, overlays, derivations, flake inputs/outputs, angle-bracket lookups, import target resolution, `callPackage`, arbitrary calls, package dependencies, evaluation results, NixOS/Home Manager module composition, lock-file semantics, builds, or runtime deployment behavior. The inspected local CodeGraph baseline uses Tree-sitter and is broader for calls, `callPackage`, and module-list file imports; SymbolLattice deliberately begins with a smaller independently implemented declaration contract.
+
 ## [0.68.0] - 2026-07-31
 
 ### Added

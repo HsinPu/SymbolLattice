@@ -6916,4 +6916,56 @@ describe("SymbolLatticeService", () => {
       qualifiedName: "scripts/helpers.cfs#function:clean"
     });
   });
+
+  it("indexes Nix returned attributes and retained literal import references", async () => {
+    const projectPath = await createInlineProject({
+      "nix/default.nix": [
+        "{ lib, ... }:",
+        "let helper = value: value; in {",
+        "  package = import ./package.nix;",
+        "  build = args: args;",
+        "  inherit lib;",
+        "}"
+      ].join("\n"),
+      "nix/package.nix": "{ name = \"symbol-lattice\"; }\n"
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    const indexed = await service.init({ projectPath });
+    const search = await service.search(projectPath, "build", { language: "nix" });
+    const build = (await service.find(projectPath, "nix/default.nix#function:build")).symbols[0];
+    if (build === undefined) {
+      throw new Error("Expected indexed Nix declaration.");
+    }
+    const persistedNixFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .filter((facts) => facts.language === "nix");
+
+    expect(indexed).toMatchObject({
+      stale: false,
+      counts: { files: 2, symbols: expect.any(Number), edges: expect.any(Number) }
+    });
+    expect(persistedNixFacts).toHaveLength(2);
+    expect(
+      persistedNixFacts.every((facts) => facts.extractorVersion === ARTIFACT_FACTS_EXTRACTOR_VERSION)
+    ).toBe(true);
+    expect(search.results).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          filePath: "nix/default.nix",
+          language: "nix"
+        })
+      ])
+    );
+    expect(build).toMatchObject({
+      kind: "function",
+      qualifiedName: "nix/default.nix#function:build"
+    });
+    expect(
+      persistedNixFacts
+        .flatMap((facts) => facts.pendingReferences)
+        .map((reference) => [reference.relationKind, reference.referenceName])
+    ).toContainEqual(["imports", "./package.nix"]);
+  });
 });

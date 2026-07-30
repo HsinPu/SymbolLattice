@@ -75,6 +75,7 @@ describe("source discovery", () => {
     await writeFile(join(projectPath, "src", "w.cfc"), "component {}\n", "utf8");
     await writeFile(join(projectPath, "src", "x.cfm"), "<cfoutput>ok</cfoutput>\n", "utf8");
     await writeFile(join(projectPath, "src", "y.cfs"), "function ok() {}\n", "utf8");
+    await writeFile(join(projectPath, "src", "y.nix"), "{ answer = 42; }\n", "utf8");
     await writeFile(join(projectPath, "conf", "routes"), "GET /health controllers.HealthController.health\n", "utf8");
     await writeFile(join(projectPath, "conf", "admin.routes"), "GET /admin controllers.AdminController.index\n", "utf8");
     await writeFile(join(projectPath, "README.md"), "ignored", "utf8");
@@ -124,6 +125,7 @@ describe("source discovery", () => {
       "src/w.cfc",
       "src/x.cfm",
       "src/y.cfs",
+      "src/y.nix",
       "src/z.ts"
     ]);
     expect(files.map((file) => file.language)).toEqual([
@@ -168,6 +170,7 @@ describe("source discovery", () => {
       "cfml",
       "cfml",
       "cfml",
+      "nix",
       "typescript"
     ]);
   });
