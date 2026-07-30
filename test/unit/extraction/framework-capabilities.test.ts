@@ -20,7 +20,8 @@ describe("first-party framework capabilities", () => {
       "net-http",
       "chi",
       "axum",
-      "spring-web"
+      "spring-web",
+      "laravel"
     ]);
     expect(FRAMEWORK_CAPABILITIES.map((capability) => capability.id)).toEqual(
       FRAMEWORK_CAPABILITY_IDS
@@ -105,6 +106,15 @@ describe("first-party framework capabilities", () => {
       surfaces: [
         "direct imported or fully-qualified Spring controller annotations",
         "literal class and HTTP-method mapping annotations on direct local methods"
+      ]
+    });
+    expect(frameworkCapability("laravel")).toMatchObject({
+      languages: ["php"],
+      routeFramework: "laravel",
+      routeRegistrations: [],
+      surfaces: [
+        "direct imported or fully-qualified Route facade calls",
+        "literal controller-action arrays with same-file exact method evidence"
       ]
     });
   });

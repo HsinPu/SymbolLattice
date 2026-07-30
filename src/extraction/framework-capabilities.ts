@@ -13,7 +13,8 @@ export const FRAMEWORK_CAPABILITY_IDS = [
   "net-http",
   "chi",
   "axum",
-  "spring-web"
+  "spring-web",
+  "laravel"
 ] as const;
 
 export type FrameworkCapabilityId = (typeof FRAMEWORK_CAPABILITY_IDS)[number];
@@ -150,6 +151,16 @@ export const FRAMEWORK_CAPABILITIES = [
     surfaces: [
       "direct imported or fully-qualified Spring controller annotations",
       "literal class and HTTP-method mapping annotations on direct local methods"
+    ]
+  },
+  {
+    id: "laravel",
+    languages: ["php"],
+    routeFramework: "laravel",
+    routeRegistrations: [],
+    surfaces: [
+      "direct imported or fully-qualified Route facade calls",
+      "literal controller-action arrays with same-file exact method evidence"
     ]
   }
 ] as const satisfies readonly FrameworkCapability[];

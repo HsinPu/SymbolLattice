@@ -6,6 +6,24 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.38.0] - 2026-07-30
+
+### Added
+
+- PHP `.php` source discovery, persisted source-search language filtering, CLI/MCP validation, direct top-level class/method/function containment, and a first-party `@lezer/php` AST adapter.
+- An executable first-party `laravel` capability. A route now requires a direct `Illuminate\Support\Facades\Route` import (including one explicit alias) or fully-qualified facade, one literal URI, one direct `get` / `post` / `put` / `patch` / `delete` / `options` / `any` facade call, and a literal `[Controller::class, 'action']` array. Same-file unqualified controllers emit exact `framework.laravel.direct-facade.literal-controller-action.local-method` evidence; cross-file controllers retain an explicit `unresolved` `Controller@action` edge instead of a guessed target.
+- Capability, discovery, exact/unresolved route, alias, fully-qualified facade, dynamic/closure/resource rejection, malformed-source, source-search, CLI, and persisted route-query integration coverage. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.38.0.md`.
+
+### Compatibility
+
+- No SQLite schema migration or new query command is required. PHP symbols and Laravel routes reuse the existing file, symbol, edge, source-search, and route-query contracts; existing generations remain readable.
+- The artifact extractor advances to `multi-language-ast-v27`; the project resolver remains `project-resolver-v14` because PHP controller resolution is deliberately not inferred. A pre-v0.38 active index reports `indexer-version-changed` until an explicit `sync` or `index` publishes the new facts.
+
+### Deliberate limits
+
+- Laravel support accepts only direct/aliased imported or fully-qualified facade calls, one literal URI, and one literal controller-action array. It excludes controller/import/package resolution, route groups/prefixes/resources, `match`, closure/string/invokable handlers, redirects/views/fallbacks, middleware/configuration semantics, dynamic/escaped/interpolated values, grouped/wildcard imports, and runtime behavior. Cross-file controller action references are retained as unresolved evidence rather than mapped heuristically.
+- CodeGraph has broader regex-based Laravel route, controller, and resource extraction. SymbolLattice v0.38 intentionally trades that breadth for AST-proven facade/import, literal URI/action, and explicit exact-versus-unresolved handler evidence in its first PHP/Laravel slice.
+
 ## [0.37.0] - 2026-07-30
 
 ### Added

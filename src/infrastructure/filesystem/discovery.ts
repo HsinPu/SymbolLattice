@@ -17,7 +17,8 @@ export const SUPPORTED_EXTENSIONS: ReadonlyMap<string, SupportedLanguage> = new 
   [".py", "python"],
   [".go", "go"],
   [".rs", "rust"],
-  [".java", "java"]
+  [".java", "java"],
+  [".php", "php"]
 ] as const);
 
 /**

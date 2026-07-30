@@ -2718,6 +2718,149 @@ describe("source extraction", () => {
     expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
   });
 
+  it("extracts direct PHP Laravel facade controller routes with same-file exact method evidence", () => {
+    const facts = extractFileFacts({
+      filePath: "routes/api.php",
+      language: "php",
+      sourceText: [
+        "<?php",
+        "use Illuminate\\Support\\Facades\\Route;",
+        "",
+        "Route::get('/health', [HealthController::class, 'show']);",
+        "Route::post('health', [HealthController::class, 'replace']);",
+        "Route::any('/fallback', [HealthController::class, 'fallback']);",
+        "",
+        "class HealthController {",
+        "  public function show(): string { return 'ok'; }",
+        "  public function replace(): string { return 'saved'; }",
+        "  public function fallback(): string { return 'fallback'; }",
+        "}",
+        "",
+        "function standalone(): void {}"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(facts.symbols.filter((symbol) => symbol.kind === "function").map((symbol) => symbol.name)).toEqual([
+      "standalone"
+    ]);
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.referenceName,
+          edge.evidence?.ruleId,
+          edge.resolution,
+          edge.confidence
+        ])
+    ).toEqual([
+      [
+        "GET /health",
+        "routes/api.php#HealthController.show",
+        "HealthController@show",
+        "framework.laravel.direct-facade.literal-controller-action.local-method",
+        "exact",
+        1
+      ],
+      [
+        "POST /health",
+        "routes/api.php#HealthController.replace",
+        "HealthController@replace",
+        "framework.laravel.direct-facade.literal-controller-action.local-method",
+        "exact",
+        1
+      ],
+      [
+        "ALL /fallback",
+        "routes/api.php#HealthController.fallback",
+        "HealthController@fallback",
+        "framework.laravel.direct-facade.literal-controller-action.local-method",
+        "exact",
+        1
+      ]
+    ]);
+  });
+
+  it("retains explicit unresolved PHP Laravel controller actions without guessing cross-file targets", () => {
+    const facts = extractFileFacts({
+      filePath: "routes/web.php",
+      language: "php",
+      sourceText: [
+        "<?php",
+        "use Illuminate\\Support\\Facades\\Route as WebRoute;",
+        "",
+        "WebRoute::options('/users', [App\\Http\\Controllers\\UserController::class, 'options']);",
+        "\\Illuminate\\Support\\Facades\\Route::delete('/users/{user}', [UserController::class, 'destroy']);"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          edge.targetId,
+          edge.referenceName,
+          edge.evidence?.ruleId,
+          edge.resolution,
+          edge.confidence
+        ])
+    ).toEqual([
+      [
+        "OPTIONS /users",
+        null,
+        "App\\Http\\Controllers\\UserController@options",
+        "framework.laravel.direct-facade.literal-controller-action.unresolved-controller-method",
+        "unresolved",
+        0
+      ],
+      [
+        "DELETE /users/{user}",
+        null,
+        "UserController@destroy",
+        "framework.laravel.direct-facade.literal-controller-action.unresolved-controller-method",
+        "unresolved",
+        0
+      ]
+    ]);
+  });
+
+  it("rejects unproven or dynamic PHP Laravel route registrations and fails closed on syntax errors", () => {
+    const unproven = extractFileFacts({
+      filePath: "routes/unproven.php",
+      language: "php",
+      sourceText: [
+        "<?php",
+        "use Illuminate\\Support\\Facades\\Route;",
+        "",
+        "Route::get($path, [UsersController::class, 'index']);",
+        "Route::get('/closures', function () {});",
+        "Route::resource('/users', UsersController::class);",
+        "OtherRoute::get('/wrong', [UsersController::class, 'index']);"
+      ].join("\n")
+    });
+    const broken = extractFileFacts({
+      filePath: "routes/broken.php",
+      language: "php",
+      sourceText: [
+        "<?php",
+        "use Illuminate\\Support\\Facades\\Route;",
+        "Route::get('/health', [HealthController::class, 'show']);",
+        "class HealthController { public function show( { return 'ok'; } }"
+      ].join("\n")
+    });
+
+    expect(unproven.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(unproven.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+    expect(broken.symbols.filter((symbol) => symbol.kind === "class")).toEqual([]);
+    expect(broken.symbols.filter((symbol) => symbol.kind === "method")).toEqual([]);
+    expect(broken.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(broken.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+  });
+
   it("extracts direct Rust Axum literal route-builder chains with exact evidence", () => {
     const facts = extractFileFacts({
       filePath: "src/http.rs",

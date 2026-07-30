@@ -3631,6 +3631,52 @@ describe("SymbolLatticeService", () => {
     expect(search.results).toMatchObject([{ filePath: "src/api/StatusController.java", language: "java" }]);
   });
 
+  it("indexes PHP Laravel facade routes with explicit unresolved cross-file controller evidence", async () => {
+    const projectPath = await createInlineProject({
+      "routes/web.php": [
+        "<?php",
+        "use Illuminate\\Support\\Facades\\Route;",
+        "",
+        "Route::get('/catalog', [CatalogController::class, 'index']);"
+      ].join("\n"),
+      "app/Http/Controllers/CatalogController.php": [
+        "<?php",
+        "namespace App\\Http\\Controllers;",
+        "",
+        "class CatalogController {",
+        "  public function index(): string { return 'catalog'; }",
+        "}"
+      ].join("\n")
+    });
+    const service = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const getRoutes = await service.routes(projectPath, { method: "GET" });
+    const search = await service.search(projectPath, "catalog", { language: "php" });
+
+    expect(getRoutes.routes).toMatchObject([
+      {
+        method: "GET",
+        path: "/catalog",
+        handler: null,
+        edge: {
+          resolution: "unresolved",
+          confidence: 0,
+          referenceName: "CatalogController@index",
+          evidence: {
+            ruleId:
+              "framework.laravel.direct-facade.literal-controller-action.unresolved-controller-method",
+            stage: "syntax",
+            candidateSymbolIds: []
+          }
+        }
+      }
+    ]);
+    expect(search.results).toEqual(
+      expect.arrayContaining([expect.objectContaining({ filePath: "routes/web.php", language: "php" })])
+    );
+  });
+
   it("indexes NestJS decorator routes as persisted exact method evidence", async () => {
     const projectPath = await createInlineProject({
       "src/cats.controller.ts": [

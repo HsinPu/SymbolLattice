@@ -47,7 +47,8 @@ export type RouteFramework =
   | "net-http"
   | "chi"
   | "axum"
-  | "spring-web";
+  | "spring-web"
+  | "laravel";
 
 /** Additional static registration context retained when it changes route provenance or path. */
 export type RouteRegistration =
@@ -59,7 +60,15 @@ export type RouteRegistration =
   | "react-router-data-router"
   | "react-router-create-routes-from-elements";
 
-export const ARTIFACT_LANGUAGES = ["typescript", "javascript", "python", "go", "rust", "java"] as const;
+export const ARTIFACT_LANGUAGES = [
+  "typescript",
+  "javascript",
+  "python",
+  "go",
+  "rust",
+  "java",
+  "php"
+] as const;
 
 export type ArtifactLanguage = (typeof ARTIFACT_LANGUAGES)[number];
 

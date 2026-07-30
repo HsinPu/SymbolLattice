@@ -40,6 +40,7 @@ describe("source discovery", () => {
     await writeFile(join(projectPath, "src", "c.go"), "package main\n", "utf8");
     await writeFile(join(projectPath, "src", "d.rs"), "fn main() {}\n", "utf8");
     await writeFile(join(projectPath, "src", "e.java"), "class Example {}\n", "utf8");
+    await writeFile(join(projectPath, "src", "f.php"), "<?php\nfunction example() {}\n", "utf8");
     await writeFile(join(projectPath, "README.md"), "ignored", "utf8");
     await writeFile(join(projectPath, "node_modules", "ignored", "index.js"), "ignored", "utf8");
 
@@ -51,6 +52,7 @@ describe("source discovery", () => {
       "src/c.go",
       "src/d.rs",
       "src/e.java",
+      "src/f.php",
       "src/z.ts"
     ]);
     expect(files.map((file) => file.language)).toEqual([
@@ -59,6 +61,7 @@ describe("source discovery", () => {
       "go",
       "rust",
       "java",
+      "php",
       "typescript"
     ]);
   });
