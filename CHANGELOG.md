@@ -6,6 +6,24 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.51.0] - 2026-07-30
+
+### Added
+
+- Elixir `.ex` / `.exs` source discovery, persisted source-search language filtering, CLI/MCP validation, and a deliberately isolated Elixir lexical/block-balancing extractor for direct top-level `defmodule` containment plus direct module `def` / `defp` methods.
+- An executable first-party `phoenix` capability. Exact Phoenix route facts now require a direct module-level `use Phoenix.Router` (optionally `helpers: false`), literal nested `scope` prefixes, one direct literal `get` / `post` / `put` / `patch` / `delete` / `head` / `options` / `trace` / `connect` route, a full controller module, and an atom action. A unique direct same-file module method produces `framework.phoenix.direct-router.literal-verb.full-module-controller-action.local-method`; any other accepted controller action remains explicit `unresolved` evidence.
+- Unit and integration coverage now verifies Elixir discovery, direct module/method containment, nested scope composition, exact and unresolved route-query/source-search behavior, indirect/missing router proof, dynamic/unsupported/nested-route rejection, malformed block and unterminated string fail-closed behavior, and CLI/MCP language validation. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.51.0.md`.
+
+### Compatibility
+
+- No SQLite schema migration or new query command is required. Elixir symbols and Phoenix routes reuse the existing file, symbol, edge, source-search, and route-query contracts; existing generations remain readable.
+- The artifact extractor advances to `multi-language-ast-v40`; the project resolver remains `project-resolver-v16` because all accepted Elixir and Phoenix proof is file-local. A pre-v0.51 active index reports `indexer-version-changed` until an explicit `sync` or `index` publishes Elixir-capable facts.
+
+### Deliberate limits
+
+- The Elixir extractor is a deliberately small lexical/block-balancing implementation, not a full Elixir parser. It retains only file symbols for unmatched `do` / `end` or unterminated quoted/charlist/heredoc input, and does not claim generic Elixir import, alias, call, type, macro, protocol, OTP, or runtime analysis.
+- Phoenix support accepts only a direct `use Phoenix.Router` module binding, literal direct scopes, literal direct HTTP-verb paths, full-module controller atom actions, and direct same-file module methods. It excludes customary `use AppWeb, :router` macro expansion, aliases/imports, `resources`, `match`, `forward`, pipelines, router/controller factories, macro-generated forms, `def name, do:` methods, nested modules, dynamic/raw/escaped paths, generic cross-file resolution, and runtime behavior. The local CodeGraph baseline does not list Elixir in its indexed language set; SymbolLattice adds a narrow audited language/framework slice rather than claiming wider Elixir parity.
+
 ## [0.50.0] - 2026-07-30
 
 ### Added

@@ -3324,6 +3324,179 @@ describe("source extraction", () => {
     expect(broken.symbols.filter((symbol) => symbol.kind === "function")).toEqual([]);
   });
 
+  it("extracts direct Elixir Phoenix scope-composed routes with exact and unresolved evidence", () => {
+    const facts = extractFileFacts({
+      filePath: "lib/demo_web/router.ex",
+      language: "elixir",
+      sourceText: [
+        "defmodule DemoWeb.Router do",
+        "  use Phoenix.Router, helpers: false",
+        "",
+        "  scope \"/api\", DemoWeb do",
+        "    scope \"/v1\" do",
+        "      get \"/health\", DemoWeb.HealthController, :index",
+        "      post \"/users\", DemoWeb.UsersController, :create",
+        "    end",
+        "  end",
+        "end",
+        "",
+        "defmodule DemoWeb.HealthController do",
+        "  def index(conn, params) do",
+        "    {conn, params}",
+        "  end",
+        "",
+        "  defp private_helper(conn) do",
+        "    conn",
+        "  end",
+        "end"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(facts.symbols.filter((symbol) => symbol.kind === "class").map((symbol) => symbol.qualifiedName)).toEqual([
+      "lib/demo_web/router.ex#DemoWeb.Router",
+      "lib/demo_web/router.ex#DemoWeb.HealthController"
+    ]);
+    expect(
+      facts.symbols
+        .filter((symbol) => symbol.kind === "method")
+        .map((symbol) => [symbol.qualifiedName, symbol.isExported])
+    ).toEqual([
+      ["lib/demo_web/router.ex#DemoWeb.HealthController.index", true],
+      ["lib/demo_web/router.ex#DemoWeb.HealthController.private_helper", false]
+    ]);
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName ?? null,
+          edge.referenceName,
+          edge.evidence?.ruleId,
+          edge.resolution,
+          edge.confidence
+        ])
+    ).toEqual([
+      [
+        "GET /api/v1/health",
+        "lib/demo_web/router.ex#DemoWeb.HealthController.index",
+        "DemoWeb.HealthController#index",
+        "framework.phoenix.direct-router.literal-verb.full-module-controller-action.local-method",
+        "exact",
+        1
+      ],
+      [
+        "POST /api/v1/users",
+        null,
+        "DemoWeb.UsersController#create",
+        "framework.phoenix.direct-router.literal-verb.full-module-controller-action.unresolved-controller-method",
+        "unresolved",
+        0
+      ]
+    ]);
+  });
+
+  it("requires direct Phoenix.Router, literal direct scopes and routes, and balanced Elixir blocks", () => {
+    const indirectUse = extractFileFacts({
+      filePath: "lib/indirect.ex",
+      language: "elixir",
+      sourceText: [
+        "defmodule DemoWeb.Router do",
+        "  use DemoWeb, :router",
+        "  get \"/health\", DemoWeb.HealthController, :index",
+        "end"
+      ].join("\n")
+    });
+    const missingUse = extractFileFacts({
+      filePath: "lib/missing-use.ex",
+      language: "elixir",
+      sourceText: [
+        "defmodule DemoWeb.Router do",
+        "  get \"/health\", DemoWeb.HealthController, :index",
+        "end"
+      ].join("\n")
+    });
+    const unsupportedResource = extractFileFacts({
+      filePath: "lib/resources.ex",
+      language: "elixir",
+      sourceText: [
+        "defmodule DemoWeb.Router do",
+        "  use Phoenix.Router",
+        "  resources \"/users\", DemoWeb.UserController",
+        "end"
+      ].join("\n")
+    });
+    const nestedRoute = extractFileFacts({
+      filePath: "lib/nested.ex",
+      language: "elixir",
+      sourceText: [
+        "defmodule DemoWeb.Router do",
+        "  use Phoenix.Router",
+        "  if enabled do",
+        "    get \"/health\", DemoWeb.HealthController, :index",
+        "  end",
+        "end"
+      ].join("\n")
+    });
+    const dynamicPath = extractFileFacts({
+      filePath: "lib/dynamic.ex",
+      language: "elixir",
+      sourceText: [
+        "defmodule DemoWeb.Router do",
+        "  use Phoenix.Router",
+        "  get path, DemoWeb.HealthController, :index",
+        "end"
+      ].join("\n")
+    });
+    const trailingScope = extractFileFacts({
+      filePath: "lib/trailing-scope.ex",
+      language: "elixir",
+      sourceText: [
+        "defmodule DemoWeb.Router do",
+        "  use Phoenix.Router",
+        "  scope \"/api/\" do",
+        "    get \"/health\", DemoWeb.HealthController, :index",
+        "  end",
+        "end"
+      ].join("\n")
+    });
+    const broken = extractFileFacts({
+      filePath: "lib/broken.ex",
+      language: "elixir",
+      sourceText: [
+        "defmodule DemoWeb.Router do",
+        "  use Phoenix.Router",
+        "  get \"/health\", DemoWeb.HealthController, :index"
+      ].join("\n")
+    });
+    const unterminatedString = extractFileFacts({
+      filePath: "lib/string.ex",
+      language: "elixir",
+      sourceText: [
+        "defmodule DemoWeb.Router do",
+        "  use Phoenix.Router",
+        "  get \"/health, DemoWeb.HealthController, :index",
+        "end"
+      ].join("\n")
+    });
+
+    for (const facts of [
+      indirectUse,
+      missingUse,
+      unsupportedResource,
+      nestedRoute,
+      dynamicPath,
+      trailingScope,
+      broken,
+      unterminatedString
+    ]) {
+      expect(facts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+      expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+    }
+    expect(broken.symbols).toHaveLength(1);
+    expect(unterminatedString.symbols).toHaveLength(1);
+  });
+
   it("extracts direct C++ cpp-httplib named-handler routes with exact evidence", () => {
     const facts = extractFileFacts({
       filePath: "src/server.cpp",

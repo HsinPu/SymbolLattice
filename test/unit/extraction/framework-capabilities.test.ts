@@ -25,6 +25,7 @@ describe("first-party framework capabilities", () => {
       "civetweb",
       "lapis",
       "plumber",
+      "phoenix",
       "cpp-httplib",
       "aspnet-core",
       "rails",
@@ -152,6 +153,15 @@ describe("first-party framework capabilities", () => {
       surfaces: [
         "standalone #* or #' HTTP annotations",
         "literal routes immediately followed by top-level braced anonymous function handlers"
+      ]
+    });
+    expect(frameworkCapability("phoenix")).toMatchObject({
+      languages: ["elixir"],
+      routeFramework: "phoenix",
+      routeRegistrations: [],
+      surfaces: [
+        "direct use Phoenix.Router module bindings",
+        "literal scope-composed HTTP verb routes with full-module controller atom actions"
       ]
     });
     expect(frameworkCapability("cpp-httplib")).toMatchObject({

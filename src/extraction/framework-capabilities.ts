@@ -18,6 +18,7 @@ export const FRAMEWORK_CAPABILITY_IDS = [
   "civetweb",
   "lapis",
   "plumber",
+  "phoenix",
   "cpp-httplib",
   "aspnet-core",
   "rails",
@@ -201,6 +202,16 @@ export const FRAMEWORK_CAPABILITIES = [
     surfaces: [
       "standalone #* or #' HTTP annotations",
       "literal routes immediately followed by top-level braced anonymous function handlers"
+    ]
+  },
+  {
+    id: "phoenix",
+    languages: ["elixir"],
+    routeFramework: "phoenix",
+    routeRegistrations: [],
+    surfaces: [
+      "direct use Phoenix.Router module bindings",
+      "literal scope-composed HTTP verb routes with full-module controller atom actions"
     ]
   },
   {

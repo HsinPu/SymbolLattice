@@ -52,6 +52,7 @@ export type RouteFramework =
   | "civetweb"
   | "lapis"
   | "plumber"
+  | "phoenix"
   | "cpp-httplib"
   | "aspnet-core"
   | "rails"
@@ -81,6 +82,7 @@ export const ARTIFACT_LANGUAGES = [
   "c",
   "lua",
   "r",
+  "elixir",
   "cpp",
   "csharp",
   "ruby",

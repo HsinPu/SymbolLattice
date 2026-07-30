@@ -594,7 +594,7 @@ describe("SymbolLattice MCP server", () => {
     const searchCalls: Array<{
       projectPath: string;
       query: string;
-      options: { limit?: number; pathPrefix?: string; language?: "typescript" | "javascript" };
+      options: SearchOptions;
     }> = [];
     const service = {
       async explore(projectPath: string, reference: string): Promise<ExploreResult> {
@@ -604,7 +604,7 @@ describe("SymbolLattice MCP server", () => {
       async search(
         projectPath: string,
         query: string,
-        options: { limit?: number; pathPrefix?: string; language?: "typescript" | "javascript" } = {}
+        options: SearchOptions = {}
       ): Promise<SearchResult> {
         searchCalls.push({ projectPath, query, options });
         return searchResult();
@@ -648,7 +648,7 @@ describe("SymbolLattice MCP server", () => {
         projectPath: "C:/chosen-project",
         limit: 7,
         path: "src/",
-          language: "r"
+        language: "elixir"
       }
     });
     expect(search.isError).not.toBe(true);
@@ -660,7 +660,7 @@ describe("SymbolLattice MCP server", () => {
       {
         projectPath: "C:/chosen-project",
         query: "user",
-          options: { limit: 7, pathPrefix: "src/", language: "r" }
+        options: { limit: 7, pathPrefix: "src/", language: "elixir" }
       }
     ]);
 

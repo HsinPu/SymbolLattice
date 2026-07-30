@@ -4222,6 +4222,71 @@ describe("SymbolLatticeService", () => {
     expect(search.results).toMatchObject([{ filePath: "src/plumber.R", language: "r" }]);
   });
 
+  it("indexes Elixir Phoenix routes and retains Elixir source-search filtering", async () => {
+    const projectPath = await createInlineProject({
+      "src/router.ex": [
+        "defmodule DemoWeb.Router do",
+        "  use Phoenix.Router",
+        "",
+        "  scope \"/api\" do",
+        "    get \"/health\", DemoWeb.HealthController, :index",
+        "    post \"/users\", DemoWeb.UsersController, :create",
+        "  end",
+        "end",
+        "",
+        "defmodule DemoWeb.HealthController do",
+        "  def index(conn, params) do",
+        "    {conn, params}",
+        "  end",
+        "end"
+      ].join("\n")
+    });
+    const service = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+    const getRoutes = await service.routes(projectPath, { method: "GET" });
+    const search = await service.search(projectPath, "health", { language: "elixir" });
+
+    expect(routes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "GET",
+          path: "/api/health",
+          handler: expect.objectContaining({
+            qualifiedName: "src/router.ex#DemoWeb.HealthController.index"
+          }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.phoenix.direct-router.literal-verb.full-module-controller-action.local-method",
+              stage: "syntax"
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "POST",
+          path: "/api/users",
+          handler: null,
+          edge: expect.objectContaining({
+            resolution: "unresolved",
+            evidence: expect.objectContaining({
+              ruleId:
+                "framework.phoenix.direct-router.literal-verb.full-module-controller-action.unresolved-controller-method"
+            })
+          })
+        })
+      ])
+    );
+    expect(getRoutes.routes).toMatchObject([
+      {
+        method: "GET",
+        path: "/api/health",
+        handler: { qualifiedName: "src/router.ex#DemoWeb.HealthController.index" }
+      }
+    ]);
+    expect(search.results).toMatchObject([{ filePath: "src/router.ex", language: "elixir" }]);
+  });
+
   it("indexes C# ASP.NET Core routes and retains C# source-search filtering", async () => {
     const projectPath = await createInlineProject({
       "src/Program.cs": [
