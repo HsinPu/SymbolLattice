@@ -54,6 +54,7 @@ export type RouteFramework =
   | "plumber"
   | "phoenix"
   | "cowboy"
+  | "compojure"
   | "cpp-httplib"
   | "aspnet-core"
   | "rails"
@@ -85,6 +86,7 @@ export const ARTIFACT_LANGUAGES = [
   "r",
   "elixir",
   "erlang",
+  "clojure",
   "cpp",
   "csharp",
   "ruby",

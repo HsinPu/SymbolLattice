@@ -1870,6 +1870,7 @@ describe("source extraction", () => {
         1
       ]
     ]);
+
   });
 
   it("extracts same-file FastAPI APIRouter routes through direct literal inclusion", () => {
@@ -1923,6 +1924,7 @@ describe("source extraction", () => {
         1
       ]
     ]);
+
   });
 
   it("retains proven cross-file FastAPI router and package-relative inclusion facts", () => {
@@ -3636,6 +3638,152 @@ describe("source extraction", () => {
       binaryPath,
       indirectModule,
       constrainedPathTuple,
+      broken,
+      unterminatedString
+    ]) {
+      expect(facts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+      expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+    }
+    expect(broken.symbols).toHaveLength(1);
+    expect(unterminatedString.symbols).toHaveLength(1);
+  });
+
+  it("extracts direct Clojure Compojure routes with exact and unresolved evidence", () => {
+    const facts = extractFileFacts({
+      filePath: "src/demo/routes.clj",
+      language: "clojure",
+      sourceText: [
+        "(ns demo.routes",
+        "  (:require [compojure.core :refer [defroutes GET POST]]))",
+        "",
+        "(defn health [request]",
+        "  {:status 200})",
+        "",
+        "(defroutes app-routes",
+        "  (GET \"/health\" [] health)",
+        "  (POST \"/users\" [] create-user))"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(facts.symbols.filter((symbol) => symbol.kind === "class").map((symbol) => symbol.qualifiedName)).toEqual([
+      "src/demo/routes.clj#demo.routes"
+    ]);
+    expect(facts.symbols.filter((symbol) => symbol.kind === "function").map((symbol) => symbol.qualifiedName)).toEqual([
+      "src/demo/routes.clj#demo.routes.health"
+    ]);
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName ?? null,
+          edge.referenceName,
+          edge.evidence?.ruleId,
+          edge.resolution,
+          edge.confidence
+        ])
+    ).toEqual([
+      [
+        "GET /health",
+        "src/demo/routes.clj#demo.routes.health",
+        "demo.routes/health",
+        "framework.compojure.direct-defroutes.literal-verb.local-function",
+        "exact",
+        1
+      ],
+      [
+        "POST /users",
+        null,
+        "demo.routes/create-user",
+        "framework.compojure.direct-defroutes.literal-verb.unresolved-function",
+        "unresolved",
+        0
+      ]
+    ]);
+
+    const referAllFacts = extractFileFacts({
+      filePath: "src/demo/all.clj",
+      language: "clojure",
+      sourceText: [
+        "(ns demo.all (:require [compojure.core :refer :all]))",
+        "(defn status [request] {:status 200})",
+        "(defroutes routes (GET \"/status\" [] status))"
+      ].join("\n")
+    });
+    expect(referAllFacts.edges.filter((edge) => edge.kind === "routes")).toEqual([
+      expect.objectContaining({
+        resolution: "exact",
+        referenceName: "demo.all/status",
+        evidence: expect.objectContaining({
+          ruleId: "framework.compojure.direct-defroutes.literal-verb.local-function"
+        })
+      })
+    ]);
+  });
+
+  it("requires direct Compojure refer bindings, literal named routes, and balanced Clojure forms", () => {
+    const aliasedRequire = extractFileFacts({
+      filePath: "src/aliased.clj",
+      language: "clojure",
+      sourceText: [
+        "(ns demo.aliased (:require [compojure.core :as compojure]))",
+        "(defn health [request] {:status 200})",
+        "(compojure/defroutes routes (compojure/GET \"/health\" [] health))"
+      ].join("\n")
+    });
+    const dynamicPath = extractFileFacts({
+      filePath: "src/dynamic.clj",
+      language: "clojure",
+      sourceText: [
+        "(ns demo.dynamic (:require [compojure.core :refer [defroutes GET]]))",
+        "(defn health [request] {:status 200})",
+        "(def path \"/health\")",
+        "(defroutes routes (GET path [] health))"
+      ].join("\n")
+    });
+    const inlineHandler = extractFileFacts({
+      filePath: "src/inline.clj",
+      language: "clojure",
+      sourceText: [
+        "(ns demo.inline (:require [compojure.core :refer [defroutes GET]]))",
+        "(defroutes routes (GET \"/health\" [] (fn [_] {:status 200})))"
+      ].join("\n")
+    });
+    const nestedRoute = extractFileFacts({
+      filePath: "src/nested.clj",
+      language: "clojure",
+      sourceText: [
+        "(ns demo.nested (:require [compojure.core :refer [defroutes GET]]))",
+        "(defn health [request] {:status 200})",
+        "(defroutes routes (context \"/api\" [] (GET \"/health\" [] health)))"
+      ].join("\n")
+    });
+    const missingNamespace = extractFileFacts({
+      filePath: "src/missing.clj",
+      language: "clojure",
+      sourceText: [
+        "(defn health [request] {:status 200})",
+        "(defroutes routes (GET \"/health\" [] health))"
+      ].join("\n")
+    });
+    const broken = extractFileFacts({
+      filePath: "src/broken.clj",
+      language: "clojure",
+      sourceText: "(ns demo.broken (:require [compojure.core :refer [defroutes GET]])"
+    });
+    const unterminatedString = extractFileFacts({
+      filePath: "src/string.clj",
+      language: "clojure",
+      sourceText: "(ns demo.string (:require [compojure.core :refer [defroutes GET]])) (GET \"/health [] health)"
+    });
+
+    for (const facts of [
+      aliasedRequire,
+      dynamicPath,
+      inlineHandler,
+      nestedRoute,
+      missingNamespace,
       broken,
       unterminatedString
     ]) {

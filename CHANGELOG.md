@@ -6,6 +6,24 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.53.0] - 2026-07-30
+
+### Added
+
+- Clojure `.clj` source discovery, persisted source-search language filtering, CLI/MCP validation, and a deliberately isolated Clojure lexical/delimiter-balancing extractor for exactly one direct `ns` plus simple top-level `defn` containment.
+- An executable first-party `compojure` capability. Direct Compojure route facts now require a direct namespace `:require` proof containing exactly one `[compojure.core :refer :all]` or explicit `[compojure.core :refer [defroutes verb ...]]` vector, a top-level `defroutes`, literal direct HTTP-verb paths, and a simple named handler. A unique same-file `defn` produces `framework.compojure.direct-defroutes.literal-verb.local-function`; every other accepted handler remains explicit `unresolved` evidence.
+- Unit and integration coverage now verifies Clojure discovery, direct namespace/function containment, exact and unresolved Compojure route-query/source-search behavior, explicit `:refer :all` proof, alias/dynamic/inline/nested rejection, malformed delimiter and unterminated quote fail-closed behavior, and CLI/MCP language validation. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.53.0.md`.
+
+### Compatibility
+
+- No SQLite schema migration or new query command is required. Clojure symbols and Compojure routes reuse the existing file, symbol, edge, source-search, and route-query contracts; existing generations remain readable.
+- The artifact extractor advances to `multi-language-ast-v42`; the project resolver remains `project-resolver-v16` because all accepted Compojure callback proof is file-local. A pre-v0.53 active index reports `indexer-version-changed` until an explicit `sync` or `index` publishes Clojure-capable facts.
+
+### Deliberate limits
+
+- The Clojure extractor is a deliberately small lexical/delimiter-balancing implementation, not a full Clojure reader or parser. It retains only file symbols for unbalanced delimiters or unterminated quoted input, and does not claim generic Clojure namespace, macro, call, type, module, or runtime analysis.
+- Compojure support accepts only one direct `compojure.core` `:refer` proof, direct simple top-level `defn`, a top-level `defroutes`, literal direct verb paths, and simple same-file named handlers. It excludes aliases/namespaced macro calls, `:use` or dynamic dependency forms, `context` / `routes` / `ANY`, middleware, docstring/metadata/private/multi-arity `defn` forms, inline/qualified/cross-file handlers, dynamic/escaped paths, generic namespace resolution, and runtime behavior. The local CodeGraph baseline does not list Clojure in its indexed language set; SymbolLattice adds a narrow audited language/framework slice rather than claiming wider generic Clojure parity.
+
 ## [0.52.0] - 2026-07-30
 
 ### Added

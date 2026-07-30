@@ -20,6 +20,7 @@ export const FRAMEWORK_CAPABILITY_IDS = [
   "plumber",
   "phoenix",
   "cowboy",
+  "compojure",
   "cpp-httplib",
   "aspnet-core",
   "rails",
@@ -223,6 +224,16 @@ export const FRAMEWORK_CAPABILITIES = [
     surfaces: [
       "direct cowboy_router:compile literal wildcard-host dispatch lists",
       "literal three-item routes with same-module exported init/2 callback proof"
+    ]
+  },
+  {
+    id: "compojure",
+    languages: ["clojure"],
+    routeFramework: "compojure",
+    routeRegistrations: [],
+    surfaces: [
+      "direct ns compojure.core refer proof",
+      "direct defroutes literal verb routes with same-file named defn handler proof"
     ]
   },
   {

@@ -25,6 +25,7 @@ export const SUPPORTED_EXTENSIONS: ReadonlyMap<string, SupportedLanguage> = new 
   [".ex", "elixir"],
   [".exs", "elixir"],
   [".erl", "erlang"],
+  [".clj", "clojure"],
   [".cpp", "cpp"],
   [".cc", "cpp"],
   [".cxx", "cpp"],

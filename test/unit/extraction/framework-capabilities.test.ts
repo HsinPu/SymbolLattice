@@ -27,6 +27,7 @@ describe("first-party framework capabilities", () => {
       "plumber",
       "phoenix",
       "cowboy",
+      "compojure",
       "cpp-httplib",
       "aspnet-core",
       "rails",
@@ -172,6 +173,15 @@ describe("first-party framework capabilities", () => {
       surfaces: [
         "direct cowboy_router:compile literal wildcard-host dispatch lists",
         "literal three-item routes with same-module exported init/2 callback proof"
+      ]
+    });
+    expect(frameworkCapability("compojure")).toMatchObject({
+      languages: ["clojure"],
+      routeFramework: "compojure",
+      routeRegistrations: [],
+      surfaces: [
+        "direct ns compojure.core refer proof",
+        "direct defroutes literal verb routes with same-file named defn handler proof"
       ]
     });
     expect(frameworkCapability("cpp-httplib")).toMatchObject({

@@ -6,6 +6,7 @@ import { extractCppFileFacts } from "./cpp.js";
 import { extractDartFileFacts } from "./dart.js";
 import { extractElixirFileFacts } from "./elixir.js";
 import { extractErlangFileFacts } from "./erlang.js";
+import { extractClojureFileFacts } from "./clojure.js";
 import { extractScalaFileFacts } from "./scala.js";
 import { extractGoFileFacts } from "./go.js";
 import { extractJavaFileFacts } from "./java.js";
@@ -3445,6 +3446,9 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
   }
   if (input.language === "erlang") {
     return extractErlangFileFacts({ ...input, language: "erlang" });
+  }
+  if (input.language === "clojure") {
+    return extractClojureFileFacts({ ...input, language: "clojure" });
   }
   if (input.language === "cpp") {
     return extractCppFileFacts({ ...input, language: "cpp" });

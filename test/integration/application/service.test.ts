@@ -4355,6 +4355,69 @@ describe("SymbolLatticeService", () => {
     expect(search.results).toMatchObject([{ filePath: "src/demo_handler.erl", language: "erlang" }]);
   });
 
+  it("indexes Clojure Compojure routes and retains Clojure source-search filtering", async () => {
+    const projectPath = await createInlineProject({
+      "src/demo/routes.clj": [
+        "(ns demo.routes",
+        "  (:require [compojure.core :refer [defroutes GET POST]]))",
+        "",
+        "(defn health [request]",
+        "  {:status 200})",
+        "",
+        "(defroutes app-routes",
+        "  (GET \"/health\" [] health)",
+        "  (POST \"/users\" [] create-user))"
+      ].join("\n")
+    });
+    const service = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+    const getRoutes = await service.routes(projectPath, { method: "GET" });
+    const search = await service.search(projectPath, "health", { language: "clojure" });
+
+    expect(routes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "GET",
+          path: "/health",
+          handler: expect.objectContaining({
+            qualifiedName: "src/demo/routes.clj#demo.routes.health"
+          }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.compojure.direct-defroutes.literal-verb.local-function",
+              stage: "syntax"
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "POST",
+          path: "/users",
+          handler: null,
+          edge: expect.objectContaining({
+            resolution: "unresolved",
+            evidence: expect.objectContaining({
+              ruleId: "framework.compojure.direct-defroutes.literal-verb.unresolved-function"
+            })
+          })
+        })
+      ])
+    );
+    expect(getRoutes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "GET",
+          path: "/health",
+          handler: expect.objectContaining({
+            qualifiedName: "src/demo/routes.clj#demo.routes.health"
+          })
+        })
+      ])
+    );
+    expect(search.results).toMatchObject([{ filePath: "src/demo/routes.clj", language: "clojure" }]);
+  });
+
   it("indexes C# ASP.NET Core routes and retains C# source-search filtering", async () => {
     const projectPath = await createInlineProject({
       "src/Program.cs": [
