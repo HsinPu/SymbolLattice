@@ -3007,6 +3007,154 @@ describe("source extraction", () => {
     ]);
   });
 
+  it("extracts direct C# ASP.NET Core Minimal API and ApiController routes with exact evidence", () => {
+    const facts = extractFileFacts({
+      filePath: "src/Program.cs",
+      language: "csharp",
+      sourceText: [
+        "using Microsoft.AspNetCore.Mvc;",
+        "",
+        "var builder = WebApplication.CreateBuilder(args);",
+        "var app = builder.Build();",
+        "",
+        "app.MapGet(\"/health\", Health);",
+        "app.MapPost(\"/orders\", CreateOrder);",
+        "",
+        "static string Health() => \"ok\";",
+        "static void CreateOrder() {}",
+        "",
+        "namespace Store.Api {",
+        "  [ApiController]",
+        "  [Route(\"api/orders\")]",
+        "  public class OrdersController : ControllerBase {",
+        "    [HttpGet(\"{id}\")]",
+        "    public string GetById(int id) { return \"ok\"; }",
+        "    [HttpDelete]",
+        "    public void Delete() {}",
+        "  }",
+        "  public interface IOrders { void List(); }",
+        "}"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(facts.symbols.filter((symbol) => symbol.kind === "class").map((symbol) => symbol.qualifiedName)).toEqual([
+      "src/Program.cs#OrdersController"
+    ]);
+    expect(facts.symbols.filter((symbol) => symbol.kind === "interface").map((symbol) => symbol.qualifiedName)).toEqual([
+      "src/Program.cs#IOrders"
+    ]);
+    expect(facts.symbols.filter((symbol) => symbol.kind === "method").map((symbol) => symbol.qualifiedName)).toEqual([
+      "src/Program.cs#OrdersController.GetById",
+      "src/Program.cs#OrdersController.Delete",
+      "src/Program.cs#IOrders.List"
+    ]);
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId,
+          edge.resolution,
+          edge.confidence
+        ])
+    ).toEqual([
+      [
+        "GET /api/orders/{id}",
+        "src/Program.cs#OrdersController.GetById",
+        "framework.aspnet-core.direct-api-controller.literal-route.method",
+        "exact",
+        1
+      ],
+      [
+        "DELETE /api/orders",
+        "src/Program.cs#OrdersController.Delete",
+        "framework.aspnet-core.direct-api-controller.literal-route.method",
+        "exact",
+        1
+      ],
+      [
+        "GET /health",
+        "src/Program.cs#Health",
+        "framework.aspnet-core.direct-web-application.literal-route.local-function",
+        "exact",
+        1
+      ],
+      [
+        "POST /orders",
+        "src/Program.cs#CreateOrder",
+        "framework.aspnet-core.direct-web-application.literal-route.local-function",
+        "exact",
+        1
+      ]
+    ]);
+  });
+
+  it("requires direct C# ASP.NET Core bindings, literal routes, exact MVC evidence, and valid syntax", () => {
+    const unproven = extractFileFacts({
+      filePath: "src/unproven.cs",
+      language: "csharp",
+      sourceText: [
+        "var builder = WebApplication.CreateBuilder(args);",
+        "var app = builder.Build();",
+        "app.MapGet(route, Health);",
+        "app.MapGet(\"/lambda\", () => \"ok\");",
+        "app = CreateReplacement();",
+        "app.MapPost(\"/after-rebind\", Health);",
+        "static string Health() => \"ok\";"
+      ].join("\n")
+    });
+    const noMvcEvidence = extractFileFacts({
+      filePath: "src/no-mvc-evidence.cs",
+      language: "csharp",
+      sourceText: [
+        "[ApiController]",
+        "[Route(\"api/orders\")]",
+        "public class OrdersController {",
+        "  [HttpGet]",
+        "  public void List() {}",
+        "}"
+      ].join("\n")
+    });
+    const qualifiedMvc = extractFileFacts({
+      filePath: "src/qualified-mvc.cs",
+      language: "csharp",
+      sourceText: [
+        "[Microsoft.AspNetCore.Mvc.ApiController]",
+        "[Microsoft.AspNetCore.Mvc.Route(\"api/secure\")]",
+        "public class SecureController {",
+        "  [Microsoft.AspNetCore.Mvc.HttpHead(\"health\")]",
+        "  public void Health() {}",
+        "}"
+      ].join("\n")
+    });
+    const broken = extractFileFacts({
+      filePath: "src/broken.cs",
+      language: "csharp",
+      sourceText: [
+        "public class Broken {",
+        "  public void Get( {",
+        "}"
+      ].join("\n")
+    });
+
+    expect(unproven.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(unproven.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+    expect(noMvcEvidence.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(noMvcEvidence.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+    expect(qualifiedMvc.edges.filter((edge) => edge.kind === "routes").map((edge) => edge.evidence?.ruleId)).toEqual([
+      "framework.aspnet-core.direct-api-controller.literal-route.method"
+    ]);
+    expect(
+      qualifiedMvc.symbols.filter((symbol) => symbol.kind === "route").map((symbol) => symbol.name)
+    ).toEqual(["HEAD /api/secure/health"]);
+    expect(broken.symbols.filter((symbol) => symbol.kind === "class")).toEqual([]);
+    expect(broken.symbols.filter((symbol) => symbol.kind === "method")).toEqual([]);
+    expect(broken.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(broken.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+  });
+
   it("extracts direct Rust Axum literal route-builder chains with exact evidence", () => {
     const facts = extractFileFacts({
       filePath: "src/http.rs",

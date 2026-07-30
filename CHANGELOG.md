@@ -6,6 +6,24 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.40.0] - 2026-07-30
+
+### Added
+
+- C# `.cs` source discovery, persisted source-search language filtering, CLI/MCP validation, direct top-level class/interface/method/local-function containment, and a first-party `@ast-grep/napi` + `@ast-grep/lang-csharp` AST adapter with Windows prebuilt parser support.
+- An executable first-party `aspnet-core` capability. Minimal API routes now require direct `WebApplication.CreateBuilder(...).Build()` or direct builder/`Build()` bindings, one literal slash-prefixed `MapGet` / `MapPost` / `MapPut` / `MapPatch` / `MapDelete` registration, and one unique direct named top-level local function handler. Matching routes emit `framework.aspnet-core.direct-web-application.literal-route.local-function` evidence; direct receiver reassignment invalidates the binding.
+- Direct MVC controller evidence for a direct `Microsoft.AspNetCore.Mvc` import or fully-qualified MVC attributes, one `ApiController`, one literal `Route`, and one literal `Http*` method mapping on its direct local method. Matching routes emit `framework.aspnet-core.direct-api-controller.literal-route.method` evidence.
+- Capability, discovery, Minimal API, MVC, fully-qualified attribute, dynamic/lambda/rebinding/missing-import rejection, malformed-source, source-search, CLI, and persisted route-query integration coverage. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.40.0.md`.
+
+### Compatibility
+
+- No SQLite schema migration or new query command is required. C# symbols and ASP.NET Core routes reuse the existing file, symbol, edge, source-search, and route-query contracts; existing generations remain readable.
+- The artifact extractor advances to `multi-language-ast-v29`; the project resolver remains `project-resolver-v14` because all supported C# proof is file-local. A pre-v0.40 active index reports `indexer-version-changed` until an explicit `sync` or `index` publishes the new facts.
+
+### Deliberate limits
+
+- ASP.NET Core support accepts only the direct Minimal API and MVC forms above. It excludes `MapMethods`, `MapGroup`, endpoint filters/middleware, lambdas/delegates/member/cross-file handlers, controller tokens/aliases, inheritance/interface resolution, nested types/scopes, configuration/DI semantics, semantic type checking, and runtime behavior.
+
 ## [0.39.0] - 2026-07-30
 
 ### Added

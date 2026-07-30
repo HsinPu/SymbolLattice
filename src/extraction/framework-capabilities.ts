@@ -15,7 +15,8 @@ export const FRAMEWORK_CAPABILITY_IDS = [
   "axum",
   "spring-web",
   "laravel",
-  "cpp-httplib"
+  "cpp-httplib",
+  "aspnet-core"
 ] as const;
 
 export type FrameworkCapabilityId = (typeof FRAMEWORK_CAPABILITY_IDS)[number];
@@ -172,6 +173,16 @@ export const FRAMEWORK_CAPABILITIES = [
     surfaces: [
       "direct httplib::Server or httplib::SSLServer local bindings",
       "literal direct named-handler HTTP methods in one local function body"
+    ]
+  },
+  {
+    id: "aspnet-core",
+    languages: ["csharp"],
+    routeFramework: "aspnet-core",
+    routeRegistrations: [],
+    surfaces: [
+      "direct WebApplication builder bindings with literal Map routes",
+      "direct MVC ApiController Route and Http method attributes"
     ]
   }
 ] as const satisfies readonly FrameworkCapability[];

@@ -49,7 +49,8 @@ export type RouteFramework =
   | "axum"
   | "spring-web"
   | "laravel"
-  | "cpp-httplib";
+  | "cpp-httplib"
+  | "aspnet-core";
 
 /** Additional static registration context retained when it changes route provenance or path. */
 export type RouteRegistration =
@@ -69,7 +70,8 @@ export const ARTIFACT_LANGUAGES = [
   "rust",
   "java",
   "php",
-  "cpp"
+  "cpp",
+  "csharp"
 ] as const;
 
 export type ArtifactLanguage = (typeof ARTIFACT_LANGUAGES)[number];

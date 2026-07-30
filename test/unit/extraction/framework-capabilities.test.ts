@@ -22,7 +22,8 @@ describe("first-party framework capabilities", () => {
       "axum",
       "spring-web",
       "laravel",
-      "cpp-httplib"
+      "cpp-httplib",
+      "aspnet-core"
     ]);
     expect(FRAMEWORK_CAPABILITIES.map((capability) => capability.id)).toEqual(
       FRAMEWORK_CAPABILITY_IDS
@@ -125,6 +126,15 @@ describe("first-party framework capabilities", () => {
       surfaces: [
         "direct httplib::Server or httplib::SSLServer local bindings",
         "literal direct named-handler HTTP methods in one local function body"
+      ]
+    });
+    expect(frameworkCapability("aspnet-core")).toMatchObject({
+      languages: ["csharp"],
+      routeFramework: "aspnet-core",
+      routeRegistrations: [],
+      surfaces: [
+        "direct WebApplication builder bindings with literal Map routes",
+        "direct MVC ApiController Route and Http method attributes"
       ]
     });
   });

@@ -3737,6 +3737,69 @@ describe("SymbolLatticeService", () => {
     expect(search.results).toMatchObject([{ filePath: "src/server.cpp", language: "cpp" }]);
   });
 
+  it("indexes C# ASP.NET Core routes and retains C# source-search filtering", async () => {
+    const projectPath = await createInlineProject({
+      "src/Program.cs": [
+        "using Microsoft.AspNetCore.Mvc;",
+        "",
+        "var builder = WebApplication.CreateBuilder(args);",
+        "var app = builder.Build();",
+        "app.MapGet(\"/health\", Health);",
+        "static string Health() => \"ok\";",
+        "",
+        "[ApiController]",
+        "[Route(\"api/orders\")]",
+        "public class OrdersController {",
+        "  [HttpPost(\"create\")]",
+        "  public void Create() {}",
+        "}"
+      ].join("\n")
+    });
+    const service = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+    const getRoutes = await service.routes(projectPath, { method: "GET" });
+    const search = await service.search(projectPath, "health", { language: "csharp" });
+
+    expect(routes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "GET",
+          path: "/health",
+          handler: expect.objectContaining({ qualifiedName: "src/Program.cs#Health" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.aspnet-core.direct-web-application.literal-route.local-function",
+              stage: "syntax"
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "POST",
+          path: "/api/orders/create",
+          handler: expect.objectContaining({
+            qualifiedName: "src/Program.cs#OrdersController.Create"
+          }),
+          edge: expect.objectContaining({
+            evidence: expect.objectContaining({
+              ruleId: "framework.aspnet-core.direct-api-controller.literal-route.method"
+            })
+          })
+        })
+      ])
+    );
+    expect(getRoutes.routes).toMatchObject([
+      {
+        method: "GET",
+        path: "/health",
+        handler: { qualifiedName: "src/Program.cs#Health" }
+      }
+    ]);
+    expect(search.results).toMatchObject([{ filePath: "src/Program.cs", language: "csharp" }]);
+  });
+
   it("indexes NestJS decorator routes as persisted exact method evidence", async () => {
     const projectPath = await createInlineProject({
       "src/cats.controller.ts": [

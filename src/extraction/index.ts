@@ -1,5 +1,6 @@
 import ts from "typescript";
 
+import { extractCsharpFileFacts } from "./csharp.js";
 import { extractCppFileFacts } from "./cpp.js";
 import { extractGoFileFacts } from "./go.js";
 import { extractJavaFileFacts } from "./java.js";
@@ -3422,6 +3423,9 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
   }
   if (input.language === "cpp") {
     return extractCppFileFacts({ ...input, language: "cpp" });
+  }
+  if (input.language === "csharp") {
+    return extractCsharpFileFacts({ ...input, language: "csharp" });
   }
 
   const sourceFile = ts.createSourceFile(
