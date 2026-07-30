@@ -6534,4 +6534,80 @@ describe("source extraction", () => {
     });
     expect(alias.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
   });
+
+  it("extracts audited Svelte SFC declarations and static SvelteKit page navigation", () => {
+    const facts = extractFileFacts({
+      filePath: "src/routes/catalog/+page.svelte",
+      language: "svelte",
+      sourceText: [
+        "<!-- <script>const fake = true;</script> -->",
+        '<script context="module" lang="ts">',
+        "export const prerender = true;",
+        "</script>",
+        '<script lang="ts">',
+        "export let title: string;",
+        'function greeting() { return "catalog"; }',
+        "</script>",
+        "<main>{title}</main>"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.map((symbol) => [symbol.kind, symbol.name])).toEqual([
+      ["file", "+page.svelte"],
+      ["variable", "default"],
+      ["variable", "title"],
+      ["function", "greeting"],
+      ["route", "NAVIGATE /catalog"]
+    ]);
+    expect(facts.exportBindings).toEqual([
+      expect.objectContaining({ localName: "default", exportedName: "default" })
+    ]);
+    expect(facts.pendingReferences).toEqual([
+      expect.objectContaining({
+        referenceName: "default",
+        relationKind: "routes",
+        routeFramework: "sveltekit",
+        routeRegistration: "sveltekit-filesystem-page"
+      })
+    ]);
+    expect(facts.referenceScopes).toEqual([
+      expect.objectContaining({ scopeIds: ["svelte:file"] })
+    ]);
+  });
+
+  it("retains only a file for unsupported Svelte scripts and omits dynamic SvelteKit paths", () => {
+    const unsupportedScripts = extractFileFacts({
+      filePath: "src/routes/+page.svelte",
+      language: "svelte",
+      sourceText: [
+        '<script lang="coffee">answer = 42</script>',
+        "<main />"
+      ].join("\n")
+    });
+    const duplicateInstances = extractFileFacts({
+      filePath: "src/routes/+page.svelte",
+      language: "svelte",
+      sourceText: [
+        "<script>const one = 1;</script>",
+        "<script>const two = 2;</script>"
+      ].join("\n")
+    });
+    const dynamicPath = extractFileFacts({
+      filePath: "src/routes/blog/[slug]/+page.svelte",
+      language: "svelte",
+      sourceText: "<main />"
+    });
+
+    expect(unsupportedScripts.symbols.map((symbol) => [symbol.kind, symbol.name])).toEqual([
+      ["file", "+page.svelte"]
+    ]);
+    expect(duplicateInstances.symbols.map((symbol) => [symbol.kind, symbol.name])).toEqual([
+      ["file", "+page.svelte"]
+    ]);
+    expect(dynamicPath.symbols.map((symbol) => [symbol.kind, symbol.name])).toEqual([
+      ["file", "+page.svelte"],
+      ["variable", "default"]
+    ]);
+    expect(dynamicPath.pendingReferences).toEqual([]);
+  });
 });

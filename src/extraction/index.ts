@@ -24,6 +24,7 @@ import { extractPythonFileFacts } from "./python.js";
 import { extractRubyFileFacts } from "./ruby.js";
 import { extractRustFileFacts } from "./rust.js";
 import { extractSwiftFileFacts } from "./swift.js";
+import { extractSvelteFileFacts } from "./svelte.js";
 import { extractVueFileFacts } from "./vue.js";
 import {
   frameworkCapability,
@@ -3721,6 +3722,9 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
   }
   if (input.language === "vue") {
     return extractVueFileFacts({ ...input, language: "vue" });
+  }
+  if (input.language === "svelte") {
+    return extractSvelteFileFacts({ ...input, language: "svelte" });
   }
 
   const sourceFile = ts.createSourceFile(

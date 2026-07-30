@@ -7,6 +7,7 @@ export const FRAMEWORK_CAPABILITY_IDS = [
   "nestjs",
   "react-router",
   "vue-router",
+  "sveltekit",
   "nextjs",
   "fastapi",
   "flask",
@@ -105,6 +106,13 @@ export const FRAMEWORK_CAPABILITIES = [
       "exactly one direct createRouter import",
       "top-level literal createRouter routes options with named component identifiers"
     ]
+  },
+  {
+    id: "sveltekit",
+    languages: ["svelte"],
+    routeFramework: "sveltekit",
+    routeRegistrations: ["sveltekit-filesystem-page"],
+    surfaces: ["src/routes static +page.svelte convention-derived default components"]
   },
   {
     id: "nextjs",

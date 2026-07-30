@@ -6,6 +6,25 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.61.0] - 2026-07-31
+
+### Added
+
+- Svelte `.svelte` source discovery, persisted source-search language filtering, CLI/MCP validation, and a bounded SFC extractor. A validated file emits a conventional `default` component plus direct top-level instance-script functions, classes, interfaces, type aliases, and identifier variables. It accepts no script, or at most one inline JavaScript/TypeScript instance script and one inline JavaScript/TypeScript module script; module scripts are syntax-validated but their declarations are not yet indexed.
+- An executable first-party `sveltekit` capability. A static `src/routes/**/+page.svelte` path with literal filesystem segments emits a `NAVIGATE` route node and exact local-default-component `framework.sveltekit.filesystem-page.local-handler` evidence. Bracket, route-group, optional, and rest conventions are deliberately excluded instead of guessed.
+- Relative TypeScript/JavaScript resolution now considers a unique `.svelte` candidate, enabling exact direct conventional-default bindings without adding a generic Svelte package resolver.
+- Unit and integration coverage now verifies Svelte discovery, direct declarations, conventional default evidence, duplicate/`src`/non-JS/malformed script rejection, static/dynamic SvelteKit page handling, `.svelte` resolution, source-search/CLI/MCP language validation, and persisted route-query integration. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.61.0.md`.
+
+### Compatibility
+
+- No SQLite schema migration or new query command is required. Svelte symbols and SvelteKit navigation reuse the existing file, symbol, edge, source-search, and route-query contracts; existing generations remain readable.
+- The artifact extractor advances to `multi-language-ast-v50`; the project resolver advances to `project-resolver-v18` because a unique relative `.svelte` candidate may now prove an exact TypeScript/JavaScript module binding. A pre-v0.61 active index reports `indexer-version-changed` until an explicit `sync` or `index` publishes Svelte-capable facts.
+
+### Deliberate limits
+
+- The Svelte extractor is a deliberately small SFC scanner, not the Svelte compiler. It excludes templates/styles, component/call edges, runes/macros, compiler-generated exports, props semantics, module-script declarations, multiple or `src` scripts, non-JavaScript/TypeScript scripts, generic Svelte import/export/call/type analysis, and runtime behavior.
+- SvelteKit support accepts only static literal-segment `src/routes/**/+page.svelte` paths and the SFC's local conventional default component. It excludes layouts, endpoints, actions, hooks, dynamic/optional/rest bracket paths, route groups, client-router configuration, cross-file page composition, and runtime navigation. The inspected local CodeGraph baseline has a fuller Svelte extractor that processes script blocks and scans template component/call usage; no dedicated SvelteKit static filesystem route extractor was found in the inspected source, so SymbolLattice adds a different, narrowly proven navigation surface rather than claiming full Svelte parity.
+
 ## [0.60.0] - 2026-07-31
 
 ### Added

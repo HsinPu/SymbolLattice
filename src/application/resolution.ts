@@ -149,6 +149,9 @@ function staticRouteHandlerRuleId(
   if (reference.routeFramework === "vue-router") {
     return "framework.vue-router.create-router.routes-option." + suffix;
   }
+  if (reference.routeFramework === "sveltekit") {
+    return "framework.sveltekit.filesystem-page." + suffix;
+  }
   if (reference.routeFramework === "nextjs") {
     const registration =
       reference.routeRegistration === "nextjs-app-router" ? "app-router" : "pages-router";

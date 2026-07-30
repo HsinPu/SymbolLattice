@@ -13,6 +13,9 @@ import type { SourceDocument } from "../../../src/ports/source-catalog.js";
 const temporaryProjectPaths: string[] = [];
 
 function languageForPath(relativePath: string): SourceDocument["language"] {
+  if (/\.svelte$/i.test(relativePath)) {
+    return "svelte";
+  }
   return /\.(?:[cm]?tsx?)$/i.test(relativePath) ? "typescript" : "javascript";
 }
 
@@ -32,7 +35,7 @@ async function createConfiguredProject(
   return {
     projectPath,
     sourceDocuments: Object.entries(files)
-      .filter(([relativePath]) => /\.(?:[cm]?[jt]sx?)$/i.test(relativePath))
+      .filter(([relativePath]) => /\.(?:[cm]?[jt]sx?|svelte)$/i.test(relativePath))
       .map(([relativePath, sourceText]) => ({
         absolutePath: resolve(projectPath, ...relativePath.split("/")),
         relativePath,
@@ -66,6 +69,37 @@ afterEach(async () => {
 });
 
 describe("project reference resolution", () => {
+  it("resolves an extensionless TypeScript default import to a Svelte component", async () => {
+    const project = await createConfiguredProject({
+      "src/App.svelte": "<main>App</main>",
+      "src/main.ts": [
+        'import App from "./App";',
+        "export function boot() { return App(); }"
+      ].join("\n")
+    });
+    const configuredResolver = createTypeScriptProjectModuleResolver(project);
+    const snapshot = snapshotWithResolver(project.sourceDocuments, configuredResolver.moduleResolver);
+
+    expect(configuredResolver.moduleResolver.resolve("src/main.ts", "./App")).toEqual({
+      targetFilePath: "src/App.svelte",
+      strategy: "relative",
+      configurationPaths: []
+    });
+    expect(snapshot.edges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "calls",
+          resolution: "exact",
+          referenceName: "App",
+          evidence: expect.objectContaining({
+            ruleId: "module.explicit-import-binding",
+            stage: "module"
+          })
+        })
+      ])
+    );
+  });
+
   it("resolves relative named imports through their explicit bindings", () => {
     const sourceDocuments = [
       {

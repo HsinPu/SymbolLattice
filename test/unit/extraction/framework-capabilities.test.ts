@@ -14,6 +14,7 @@ describe("first-party framework capabilities", () => {
       "nestjs",
       "react-router",
       "vue-router",
+      "sveltekit",
       "nextjs",
       "fastapi",
       "flask",
@@ -67,6 +68,12 @@ describe("first-party framework capabilities", () => {
         "exactly one direct createRouter import",
         "top-level literal createRouter routes options with named component identifiers"
       ]
+    });
+    expect(frameworkCapability("sveltekit")).toMatchObject({
+      languages: ["svelte"],
+      routeFramework: "sveltekit",
+      routeRegistrations: ["sveltekit-filesystem-page"],
+      surfaces: ["src/routes static +page.svelte convention-derived default components"]
     });
     expect(frameworkCapability("nextjs")).toMatchObject({
       languages: ["typescript", "javascript"],

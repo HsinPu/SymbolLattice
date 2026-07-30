@@ -15,6 +15,7 @@ export const SUPPORTED_EXTENSIONS: ReadonlyMap<string, SupportedLanguage> = new 
   [".js", "javascript"],
   [".jsx", "javascript"],
   [".vue", "vue"],
+  [".svelte", "svelte"],
   [".py", "python"],
   [".go", "go"],
   [".rs", "rust"],

@@ -40,6 +40,7 @@ export type RouteFramework =
   | "express"
   | "fastify"
   | "nextjs"
+  | "sveltekit"
   | "react-router"
   | "vue-router"
   | "fastapi"
@@ -77,6 +78,7 @@ export type RouteRegistration =
   | "fastify-imported-plugin-prefix"
   | "nextjs-app-router"
   | "nextjs-pages-router"
+  | "sveltekit-filesystem-page"
   | "react-router-data-router"
   | "react-router-create-routes-from-elements";
 
@@ -84,6 +86,7 @@ export const ARTIFACT_LANGUAGES = [
   "typescript",
   "javascript",
   "vue",
+  "svelte",
   "python",
   "go",
   "rust",
