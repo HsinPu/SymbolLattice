@@ -2494,6 +2494,230 @@ describe("source extraction", () => {
     expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
   });
 
+  it("extracts direct Java Spring Web literal controller method mappings with exact evidence", () => {
+    const facts = extractFileFacts({
+      filePath: "src/api/UserController.java",
+      language: "java",
+      sourceText: [
+        "import org.springframework.web.bind.annotation.RestController;",
+        "import org.springframework.web.bind.annotation.RequestMapping;",
+        "import org.springframework.web.bind.annotation.GetMapping;",
+        "import org.springframework.web.bind.annotation.PostMapping;",
+        "import org.springframework.web.bind.annotation.DeleteMapping;",
+        "",
+        "@RestController",
+        "@RequestMapping(\"/api/users\")",
+        "public class UserController {",
+        "  @GetMapping",
+        "  public String listUsers() { return \"[]\"; }",
+        "",
+        "  @PostMapping(path = \"/\")",
+        "  public String createUser() { return \"created\"; }",
+        "",
+        "  @DeleteMapping(value = \"/{id}\")",
+        "  public void deleteUser() {}",
+        "}"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId,
+          edge.evidence?.stage,
+          edge.resolution,
+          edge.confidence
+        ])
+    ).toEqual([
+      [
+        "GET /api/users",
+        "src/api/UserController.java#UserController.listUsers",
+        "framework.spring-web.direct-controller.literal-method-mapping.local-method",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "POST /api/users",
+        "src/api/UserController.java#UserController.createUser",
+        "framework.spring-web.direct-controller.literal-method-mapping.local-method",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "DELETE /api/users/{id}",
+        "src/api/UserController.java#UserController.deleteUser",
+        "framework.spring-web.direct-controller.literal-method-mapping.local-method",
+        "syntax",
+        "exact",
+        1
+      ]
+    ]);
+  });
+
+  it("accepts fully-qualified Java Spring annotations as direct route evidence", () => {
+    const facts = extractFileFacts({
+      filePath: "src/api/StatusController.java",
+      language: "java",
+      sourceText: [
+        "@org.springframework.web.bind.annotation.RestController",
+        "@org.springframework.web.bind.annotation.RequestMapping(\"/system\")",
+        "class StatusController {",
+        "  @org.springframework.web.bind.annotation.GetMapping(\"/health\")",
+        "  String health() { return \"ok\"; }",
+        "}"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId
+        ])
+    ).toEqual([
+      [
+        "GET /system/health",
+        "src/api/StatusController.java#StatusController.health",
+        "framework.spring-web.direct-controller.literal-method-mapping.local-method"
+      ]
+    ]);
+  });
+
+  it("accepts direct Spring Controller, PutMapping, and PatchMapping imports", () => {
+    const facts = extractFileFacts({
+      filePath: "src/api/SettingsController.java",
+      language: "java",
+      sourceText: [
+        "import org.springframework.stereotype.Controller;",
+        "import org.springframework.web.bind.annotation.PutMapping;",
+        "import org.springframework.web.bind.annotation.PatchMapping;",
+        "",
+        "@Controller",
+        "class SettingsController {",
+        "  @PutMapping(\"/settings\")",
+        "  String replace() { return \"ok\"; }",
+        "",
+        "  @PatchMapping(value = \"/settings\")",
+        "  String patch() { return \"ok\"; }",
+        "}"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId
+        ])
+    ).toEqual([
+      [
+        "PUT /settings",
+        "src/api/SettingsController.java#SettingsController.replace",
+        "framework.spring-web.direct-controller.literal-method-mapping.local-method"
+      ],
+      [
+        "PATCH /settings",
+        "src/api/SettingsController.java#SettingsController.patch",
+        "framework.spring-web.direct-controller.literal-method-mapping.local-method"
+      ]
+    ]);
+  });
+
+  it("rejects Java Spring mappings without direct import proof or literal paths", () => {
+    const facts = extractFileFacts({
+      filePath: "src/api/UnprovenController.java",
+      language: "java",
+      sourceText: [
+        "import org.springframework.web.bind.annotation.RestController;",
+        "import org.springframework.web.bind.annotation.RequestMapping;",
+        "import org.springframework.web.bind.annotation.GetMapping;",
+        "",
+        "@RestController",
+        "@RequestMapping(basePath)",
+        "class DynamicPrefixController {",
+        "  @GetMapping(\"/users\")",
+        "  String users() { return \"[]\"; }",
+        "}",
+        "",
+        "@RestController",
+        "@RequestMapping(\"/unproved\")",
+        "class DynamicMethodController {",
+        "  @GetMapping(basePath)",
+        "  String dynamic() { return \"[]\"; }",
+        "}",
+        "",
+        "class PlainClass {",
+        "  @GetMapping(\"/not-a-controller\")",
+        "  String plain() { return \"[]\"; }",
+        "}",
+        "",
+        "@RestController",
+        "@RequestMapping(\"/legacy\")",
+        "class LegacyController {",
+        "  @RequestMapping(\"/request-mapping-method\")",
+        "  String legacy() { return \"[]\"; }",
+        "}"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+  });
+
+  it("requires direct Java Spring imports instead of trusting wildcard annotation imports", () => {
+    const facts = extractFileFacts({
+      filePath: "src/api/WildcardController.java",
+      language: "java",
+      sourceText: [
+        "import org.springframework.web.bind.annotation.RestController;",
+        "import org.springframework.web.bind.annotation.*;",
+        "",
+        "@RestController",
+        "class WildcardController {",
+        "  @GetMapping(\"/unproven\")",
+        "  String unproven() { return \"[]\"; }",
+        "}"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+  });
+
+  it("fails closed for Java syntax errors instead of emitting partial declarations or routes", () => {
+    const facts = extractFileFacts({
+      filePath: "src/api/BrokenController.java",
+      language: "java",
+      sourceText: [
+        "import org.springframework.web.bind.annotation.RestController;",
+        "import org.springframework.web.bind.annotation.GetMapping;",
+        "",
+        "@RestController",
+        "class BrokenController {",
+        "  @GetMapping(\"/health\")",
+        "  String health( { return \"ok\"; }",
+        "}"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "class")).toEqual([]);
+    expect(facts.symbols.filter((symbol) => symbol.kind === "method")).toEqual([]);
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+  });
+
   it("extracts direct Rust Axum literal route-builder chains with exact evidence", () => {
     const facts = extractFileFacts({
       filePath: "src/http.rs",

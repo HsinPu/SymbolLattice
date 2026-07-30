@@ -12,7 +12,8 @@ export const FRAMEWORK_CAPABILITY_IDS = [
   "gin",
   "net-http",
   "chi",
-  "axum"
+  "axum",
+  "spring-web"
 ] as const;
 
 export type FrameworkCapabilityId = (typeof FRAMEWORK_CAPABILITY_IDS)[number];
@@ -139,6 +140,16 @@ export const FRAMEWORK_CAPABILITIES = [
     surfaces: [
       "direct imported Router::new literal route builder chains",
       "direct imported method-router named local handlers"
+    ]
+  },
+  {
+    id: "spring-web",
+    languages: ["java"],
+    routeFramework: "spring-web",
+    routeRegistrations: [],
+    surfaces: [
+      "direct imported or fully-qualified Spring controller annotations",
+      "literal class and HTTP-method mapping annotations on direct local methods"
     ]
   }
 ] as const satisfies readonly FrameworkCapability[];

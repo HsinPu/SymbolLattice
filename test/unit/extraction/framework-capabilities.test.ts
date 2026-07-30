@@ -19,7 +19,8 @@ describe("first-party framework capabilities", () => {
       "gin",
       "net-http",
       "chi",
-      "axum"
+      "axum",
+      "spring-web"
     ]);
     expect(FRAMEWORK_CAPABILITIES.map((capability) => capability.id)).toEqual(
       FRAMEWORK_CAPABILITY_IDS
@@ -95,6 +96,15 @@ describe("first-party framework capabilities", () => {
       surfaces: [
         "direct imported Router::new literal route builder chains",
         "direct imported method-router named local handlers"
+      ]
+    });
+    expect(frameworkCapability("spring-web")).toMatchObject({
+      languages: ["java"],
+      routeFramework: "spring-web",
+      routeRegistrations: [],
+      surfaces: [
+        "direct imported or fully-qualified Spring controller annotations",
+        "literal class and HTTP-method mapping annotations on direct local methods"
       ]
     });
   });

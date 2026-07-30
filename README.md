@@ -2,7 +2,7 @@
 
 # SymbolLattice
 
-**Evidence-first local code intelligence for TypeScript, JavaScript, Python, Go, and Rust projects.**
+**Evidence-first local code intelligence for TypeScript, JavaScript, Python, Go, Rust, and Java projects.**
 
 [![Version](https://img.shields.io/github/v/tag/HsinPu/symbol-lattice?label=version)](https://github.com/HsinPu/symbol-lattice/tags)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D22.13-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> **v0.36.0** is an early developer release. This public repository runs from source; its npm package is intentionally private and is not published to npm.
+> **v0.37.0** is an early developer release. This public repository runs from source; its npm package is intentionally private and is not published to npm.
 
 SymbolLattice builds a local symbol graph without hiding uncertainty. It keeps syntax-proven artifact facts, resolves cross-file relationships conservatively, and records why every resolved edge exists. The graph stays local to the inspected project under `.symbol-lattice/index.sqlite`.
 
@@ -27,7 +27,7 @@ SymbolLattice builds a local symbol graph without hiding uncertainty. It keeps s
 - **Event-accelerated foreground freshness** - opt-in `watch` uses native filesystem events when the host supports them, exposes bounded pending-path evidence in its own stream, coalesces saves, retains bounded polling as a safety sweep, and invokes the same atomic `sync` only after drift.
 - **Generation-bound source evidence** - `search` and exact `explore` results use source captured with the active graph generation, even when the live project has since drifted.
 - **Declaration-focused node view** - exact `node` results return the full persisted declaration range plus a bounded declaration body, direct callers/callees, and explicit limits from one active generation without substituting live source text.
-- **Static route evidence** - narrow Express, Fastify, NestJS, Python FastAPI/Flask, Go Gin/`net/http`/Chi, and Rust Axum HTTP packs plus React Router and Next.js client-navigation routes create first-class `route` nodes and exact `routes` edges only when the registration and target binding are statically proven.
+- **Static route evidence** - narrow Express, Fastify, NestJS, Python FastAPI/Flask, Go Gin/`net/http`/Chi, Rust Axum, and Java Spring Web HTTP packs plus React Router and Next.js client-navigation routes create first-class `route` nodes and exact `routes` edges only when the registration and target binding are statically proven.
 - **Non-HTTP transport evidence** - AST-proven NestJS GraphQL, microservice, and WebSocket entrypoints use distinct `entrypoint` nodes and exact `handles` edges, so a message pattern or subscription is never mislabeled as an HTTP route.
 - **Direct type-hierarchy evidence** - AST-proven `extends` and `implements` edges preserve value/type namespace proof, type-only imports, re-export provenance, unresolved bases, and bounded direct parent/child views without pretending to have a full type checker.
 - **Bounded context packs** - ordered symbol references produce persisted source, capped relationship/impact summaries, and static directed evidence paths without guessing ambiguous symbols or dynamic behavior.
@@ -75,6 +75,7 @@ node dist/cli/main.js entrypoints /path/to/project --transport graphql --operati
 node dist/cli/main.js search "session timeout" --project /path/to/project --path src
 node dist/cli/main.js search "health" --project /path/to/project --language python
 node dist/cli/main.js search "health" --project /path/to/project --language go
+node dist/cli/main.js search "health" --project /path/to/project --language java
 node dist/cli/main.js context "src/consumer.ts#calculate" "src/math.ts#add" --project /path/to/project
 
 # Select affected tests from changed files already present in the active generation.
@@ -104,19 +105,19 @@ One-shot data commands emit stable, pretty JSON. `watch` is the deliberate strea
 
 ## Capabilities
 
-| Area | v0.36.0 behavior |
+| Area | v0.37.0 behavior |
 | --- | --- |
-| Source files | TypeScript, TSX, JavaScript, JSX, Python, Go, and Rust |
+| Source files | TypeScript, TSX, JavaScript, JSX, Python, Go, Rust, and Java |
 | Scope | Project root by default or repeatable, persisted `--scope` directories |
 | Discovery | Root `.gitignore` with negation; `.git`, `.symbol-lattice`, `coverage`, `dist`, and `node_modules` are always excluded |
-| Symbols | TypeScript/JavaScript: files, classes, functions, methods, interfaces, types, variables, routes, and entrypoints. Python: files, classes, functions, methods, and direct FastAPI / same-file or proven cross-file `APIRouter` / same-file Flask routes. Go: files, top-level functions, and direct Gin / `net/http` / Chi routes. Rust: files, top-level functions, and direct Axum routes |
-| Relationships | TypeScript/JavaScript: `contains`, module imports/exports, direct identifier calls, evidence-bearing `routes` and `handles`, plus direct `extends` / `implements`. Python: syntax-proven `contains` plus direct FastAPI and Flask `routes`. Go: syntax-proven `contains` plus direct Gin, `net/http`, and Chi `routes`. Rust: syntax-proven `contains` plus direct Axum `routes` |
-| Module resolution | Relative paths, TypeScript/JavaScript `baseUrl` and `paths`, then local workspace packages; Python has a deliberately narrow, regular-package proof for direct one-dot FastAPI router imports; Go and Rust have no generic module resolver in this release |
+| Symbols | TypeScript/JavaScript: files, classes, functions, methods, interfaces, types, variables, routes, and entrypoints. Python: files, classes, functions, methods, and direct FastAPI / same-file or proven cross-file `APIRouter` / same-file Flask routes. Go: files, top-level functions, and direct Gin / `net/http` / Chi routes. Rust: files, top-level functions, and direct Axum routes. Java: files, direct top-level classes and methods, and direct Spring Web routes |
+| Relationships | TypeScript/JavaScript: `contains`, module imports/exports, direct identifier calls, evidence-bearing `routes` and `handles`, plus direct `extends` / `implements`. Python: syntax-proven `contains` plus direct FastAPI and Flask `routes`. Go: syntax-proven `contains` plus direct Gin, `net/http`, and Chi `routes`. Rust: syntax-proven `contains` plus direct Axum `routes`. Java: syntax-proven `contains` plus direct Spring Web `routes` |
+| Module resolution | Relative paths, TypeScript/JavaScript `baseUrl` and `paths`, then local workspace packages; Python has a deliberately narrow, regular-package proof for direct one-dot FastAPI router imports; Go, Rust, and Java have no generic module resolver in this release |
 | Workspaces | Root `package.json` workspaces array/object, local package root/subpath `exports`, and entrypoint fallback |
 | Re-exports | Named aliases, `export *`, default-through-named aliases, and namespace-export provenance |
 | Retrieval | Local deterministic FTS5 search across persisted source text and identifier parts; bounded path/language filters, source/symbol evidence, and exact `explore` excerpts from the same active generation |
 | Node inspection | Exact ID, qualified-name, simple-name, or `path:line[:column]` matches can return the persisted declaration range, capped direct callers/callees, source provenance, truncation, and active freshness from one generation |
-| Routes | Static AST-proven Express literal registrations; Fastify shorthand/full-object registrations plus inline, same-file named, and imported/re-exported plugin `register(..., { prefix })` projection; direct NestJS controller decorators plus `RouterModule.register()` module-prefix projection; direct same-file FastAPI application decorators plus same-file and one-dot package-relative cross-file `APIRouter` / literal `include_router(...)` composition; direct Flask application decorators and same-file literal `Blueprint` / `register_blueprint(...)` composition; direct Go Gin engine / literal same-function `RouterGroup` composition, direct `net/http` `HandleFunc` / same-function `ServeMux` composition, and direct Chi `NewRouter` / `NewMux` method registrations; direct Rust Axum `Router::new().route(...)` builder chains; recursively composed literal React Router JSX `Route`, `createRoutesFromElements(...)`, and v6.4+ data-router navigation; and convention-derived Next.js Pages/App Router page routes. All use bounded `routes` listing and exact handler evidence; browser routes use `NAVIGATE`, never fabricated HTTP `GET` |
+| Routes | Static AST-proven Express literal registrations; Fastify shorthand/full-object registrations plus inline, same-file named, and imported/re-exported plugin `register(..., { prefix })` projection; direct NestJS controller decorators plus `RouterModule.register()` module-prefix projection; direct same-file FastAPI application decorators plus same-file and one-dot package-relative cross-file `APIRouter` / literal `include_router(...)` composition; direct Flask application decorators and same-file literal `Blueprint` / `register_blueprint(...)` composition; direct Go Gin engine / literal same-function `RouterGroup` composition, direct `net/http` `HandleFunc` / same-function `ServeMux` composition, and direct Chi `NewRouter` / `NewMux` method registrations; direct Rust Axum `Router::new().route(...)` builder chains; direct Java Spring Web controller method annotations with literal paths; recursively composed literal React Router JSX `Route`, `createRoutesFromElements(...)`, and v6.4+ data-router navigation; and convention-derived Next.js Pages/App Router page routes. All use bounded `routes` listing and exact handler evidence; browser routes use `NAVIGATE`, never fabricated HTTP `GET` |
 | Non-HTTP entrypoints | AST-proven direct NestJS GraphQL `Query` / `Mutation` / `Subscription`, microservice `MessagePattern` / `EventPattern`, and WebSocket `SubscribeMessage` handlers. Bounded `entrypoints` listing keeps transport/operation/name semantics and exact `handles` evidence separate from HTTP routes |
 | Type hierarchy | Direct TS/JS class `extends`, TS class `implements`, and TS interface `extends`; exact lexical/import/re-export proof with value/type namespaces, plus bounded direct parents/children |
 | Context | Bounded packs for 1–8 ordered references: exact-match source excerpts, capped callers/callees and reverse impact, plus shortest static directed evidence paths between adjacent exact references |
@@ -131,7 +132,7 @@ One-shot data commands emit stable, pretty JSON. `watch` is the deliberate strea
 
 Framework coverage is declared once and actively selects the extraction passes applicable to the parsed language. This is a stable integration boundary, not a runtime framework detector: every pass below still requires its own syntax proof before it emits facts.
 
-| Capability | Proven surfaces in v0.36 |
+| Capability | Proven surfaces in v0.37 |
 | --- | --- |
 | Express | Literal receiver methods and identifier handlers |
 | Fastify | Literal routes and static prefix composition |
@@ -142,6 +143,7 @@ Framework coverage is declared once and actively selects the extraction passes a
 | net/http | Go direct `http.HandleFunc` and same-function literal `http.NewServeMux().HandleFunc` registrations |
 | Chi | Go direct `chi.NewRouter()` / `chi.NewMux()` literal named-handler registrations |
 | Axum | Rust direct imported `Router::new()` literal route-builder chains and direct imported method-router named local handlers |
+| Spring Web | Java direct imported or fully-qualified `@RestController` / `@Controller`, a literal optional class `@RequestMapping`, and one literal `@GetMapping` / `@PostMapping` / `@PutMapping` / `@PatchMapping` / `@DeleteMapping` direct local method |
 | React Router | Recursive literal JSX `Route`, `createRoutesFromElements` JSX trees, and data-router object trees |
 | Next.js | Pages Router and App Router page default exports |
 
@@ -168,7 +170,7 @@ For an exact call that travels through a barrel, evidence uses `module.reexporte
 
 ### Static route and client-navigation evidence
 
-v0.14 introduced the first framework pack as a graph contract, not a regex guess; v0.25 adds an executable first-party capability registry and convention-derived Next.js page routes, v0.26 recursively composes proven literal React Router data-router paths, v0.27 brings the same bounded composition to literal JSX `Route` trees, v0.28 proves direct `createRoutesFromElements(...)` JSX trees independently, v0.29 adds the first Python/FastAPI slice, v0.30 composes direct same-file `APIRouter` registrations, v0.31 projects a strictly proven one-dot package-relative FastAPI router import, v0.32 adds direct Flask app and same-file Blueprint route evidence, v0.33 adds direct Go Gin engine and literal RouterGroup routes, v0.34 adds direct Go `net/http` `HandleFunc` routes, v0.35 adds direct Chi router routes, and v0.36 adds the first Rust/Axum route-builder slice. A supported registration creates a first-class `route` symbol such as `GET /users`, `GET /api/users`, `CONNECT /tunnel`, `ALL /health`, or `NAVIGATE /settings` and a distinct `routes` edge to its terminal handler. That edge remains visible in `callers`, `callees`, `impact`, `context`, `explore`, `node`, and `explain-edge`; its kind keeps HTTP dispatch and browser navigation separate from ordinary function calls.
+v0.14 introduced the first framework pack as a graph contract, not a regex guess; v0.25 adds an executable first-party capability registry and convention-derived Next.js page routes, v0.26 recursively composes proven literal React Router data-router paths, v0.27 brings the same bounded composition to literal JSX `Route` trees, v0.28 proves direct `createRoutesFromElements(...)` JSX trees independently, v0.29 adds the first Python/FastAPI slice, v0.30 composes direct same-file `APIRouter` registrations, v0.31 projects a strictly proven one-dot package-relative FastAPI router import, v0.32 adds direct Flask app and same-file Blueprint route evidence, v0.33 adds direct Go Gin engine and literal RouterGroup routes, v0.34 adds direct Go `net/http` `HandleFunc` routes, v0.35 adds direct Chi router routes, v0.36 adds the first Rust/Axum route-builder slice, and v0.37 adds direct Java/Spring Web controller method mappings. A supported registration creates a first-class `route` symbol such as `GET /users`, `GET /api/users`, `CONNECT /tunnel`, `ALL /health`, or `NAVIGATE /settings` and a distinct `routes` edge to its terminal handler. That edge remains visible in `callers`, `callees`, `impact`, `context`, `explore`, `node`, and `explain-edge`; its kind keeps HTTP dispatch and browser navigation separate from ordinary function calls.
 
 #### Express
 
@@ -471,6 +473,31 @@ fn app() {
 This emits `GET /health -> health` and `POST /users -> create_user`, each with `framework.axum.direct-router.route.local-function` evidence. Direct imported `get`, `post`, `put`, `patch`, `delete`, `head`, `options`, and `trace` helpers are supported; import aliases are accepted when their source path remains unambiguous. `get` is retained as the explicit `GET` registration rather than synthesizing Axum's implicit `HEAD` behavior.
 
 The contract deliberately excludes `route_service`, `nest`, `merge`, `with_state`, `layer`, typed or generic `Router` construction, trailing builder wrappers, `MethodRouter` method composition such as `get(a).post(b)`, inline/closure/wrapped/namespaced handlers, dynamic/escaped paths, `Router`/method-helper shadows, `pub use` or wildcard imports, mutable/factory/router-flow tracking, methods, cross-file Cargo/module resolution, semantic type checking, and runtime behavior. Syntax-error Rust files retain only their file symbol until repaired.
+
+#### Spring Web (Java)
+
+v0.37 adds Java `.java` discovery, direct top-level class/method containment, and the first `spring-web` capability. A route requires a direct (non-static, non-wildcard) import or a fully-qualified Spring annotation, a direct `@RestController` or `@Controller` class, an optional literal class `@RequestMapping` prefix, a single literal method shortcut annotation, and the exact direct local method declaration:
+
+```java
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+@RequestMapping("/api/users")
+public class UserController {
+  @GetMapping
+  public String listUsers() { return "[]"; }
+
+  @PostMapping(path = "/")
+  public String createUser() { return "created"; }
+}
+```
+
+This emits `GET /api/users -> UserController.listUsers` and `POST /api/users -> UserController.createUser`, each with `framework.spring-web.direct-controller.literal-method-mapping.local-method` evidence. It supports direct imported or fully-qualified `@RestController` / `@Controller`, optional `@RequestMapping`, and direct `@GetMapping`, `@PostMapping`, `@PutMapping`, `@PatchMapping`, or `@DeleteMapping` annotations. A bare method mapping contributes the controller prefix; the path argument may be a single literal positional value or one literal `path =` / `value =` value.
+
+It intentionally excludes method-level `@RequestMapping(method = ...)`, multi-path arrays, custom/composed annotations, placeholders or SpEL, multiple condition attributes, wildcard/static imports, nested types, inherited/interface handlers, generic Java package/classpath resolution, semantic Spring configuration, and runtime behavior. Java files with syntax errors retain only their file symbol until repaired.
 
 ### React Router client-navigation evidence
 
@@ -855,7 +882,7 @@ node dist/cli/main.js git-hunks /path/to/project --base origin/main
 node dist/cli/main.js git-hunks /path/to/project --base origin/main --limit 10
 ```
 
-The command has no working-tree, staged, or untracked-file selector. It does not read an active graph, select tests, fetch, index, synchronize, or mutate Git or SQLite state. Supported TS/TSX/JS/JSX/Python/Go/Rust source sides are read from the two resolved revisions only.
+The command has no working-tree, staged, or untracked-file selector. It does not read an active graph, select tests, fetch, index, synchronize, or mutate Git or SQLite state. Supported TS/TSX/JS/JSX/Python/Go/Rust/Java source sides are read from the two resolved revisions only.
 
 | Bound | Default | Range | Effect |
 | --- | ---: | ---: | --- |
@@ -1105,6 +1132,8 @@ v0.35 adds no SQLite schema migration or route-query command. It introduces an a
 
 v0.36 adds no SQLite schema migration or route-query command. It adds Rust `.rs` discovery, source-search/CLI/MCP language filtering, conservative top-level Rust function containment, and exact direct Axum route-builder facts. The extractor advances to `multi-language-ast-v25`; the resolver remains `project-resolver-v14` because all proof remains file-local. A pre-v0.36 active index requires an explicit `sync` or `index` before Rust or Axum route evidence can appear. Existing generations remain readable.
 
+v0.37 adds no SQLite schema migration or route-query command. It adds Java `.java` discovery, persisted Java source-search/CLI/MCP language filtering, conservative direct top-level Java class/method containment, and exact direct Spring Web route facts. The extractor advances to `multi-language-ast-v26`; the resolver remains `project-resolver-v14` because all proof remains file-local. A pre-v0.37 active index requires an explicit `sync` or `index` before Java or Spring Web route evidence can appear. Existing generations remain readable.
+
 ## Architecture
 
 ```mermaid
@@ -1118,7 +1147,7 @@ flowchart LR
   Catalog["Filesystem catalog\nscope + gitignore"] --> Inputs["Index inputs"]
   Catalog --> TS["TS alias resolver"]
   Catalog --> WS["Workspace resolver"]
-  Extractor["TypeScript AST extractor + Python/Go/Rust Lezer parsers\nfirst-party framework capability passes\nExpress/Fastify/Nest HTTP routes + Fastify plugin facts + FastAPI/Flask/Gin/net-http/Chi/Axum facts\nReact Router recursive literal JSX/factory/data-router + Next Pages/App navigation\nNest module-prefix facts + non-HTTP entrypoints"] --> Facts["Reusable artifact facts"]
+  Extractor["TypeScript AST extractor + Python/Go/Rust/Java Lezer parsers\nfirst-party framework capability passes\nExpress/Fastify/Nest HTTP routes + Fastify plugin facts + FastAPI/Flask/Gin/net-http/Chi/Axum/Spring Web facts\nReact Router recursive literal JSX/factory/data-router + Next Pages/App navigation\nNest module-prefix facts + non-HTTP entrypoints"] --> Facts["Reusable artifact facts"]
   Catalog --> SourceDocs["Persisted source documents"]
   SourceDocs --> Retrieval["Generation-bound lexical projection"]
   Facts --> Resolver["Full project export surface"]
@@ -1136,7 +1165,7 @@ src/
   application/     Use cases, incremental planning, and graph projection
   cli/             Commander-based CLI
   domain/          Graph, evidence, identity, and index-work contracts
-  extraction/      TypeScript AST plus Python, Go, and Rust Lezer fact extraction
+  extraction/      TypeScript AST plus Python, Go, Rust, and Java Lezer fact extraction
   infrastructure/  Filesystem, workspace, TypeScript, and SQLite adapters
   mcp/             Read-only MCP server
   ports/           Dependency boundaries
@@ -1144,7 +1173,7 @@ src/
 
 ## Deliberate boundaries
 
-v0.36.0 does not yet provide:
+v0.37.0 does not yet provide:
 
 - Daemon mode, background automatic sync after the foreground process exits, cross-process watch coordination, MCP per-query pending-file banners, worker pools, or historical source browsing.
 - pnpm workspace YAML, TypeScript project references, external/package `extends`, or nested `.gitignore` semantics.
@@ -1152,8 +1181,9 @@ v0.36.0 does not yet provide:
 - The Python/FastAPI surface proves one narrow cross-file router form: direct import aliases, direct `APIRouter` construction, literal router/include prefixes, same-file composition, and a one-dot regular-package direct router import are supported. Flask supports direct app and same-file Blueprint registrations with literal methods/prefixes. Neither pack resolves generic Python imports/exports/calls, parent-relative or namespace-package FastAPI imports, cross-file Flask Blueprints, member routers, import/re-export chains, nested routers, assignment aliases, dependencies or middleware as graph relationships, factory composition, star/keyword expansion, possible rebindings, dynamic/escaped paths or prefixes, or routers declared after inclusion. Syntax-error Python files retain only their file symbol until repaired.
 - The Go surface proves top-level functions, direct same-function `:= gin.Default()` / `gin.New()` receivers, literal one-handler Gin registrations with literal non-root/non-trailing `RouterGroup` prefixes, direct `http.HandleFunc`, same-function `mux := http.NewServeMux()` / `mux.HandleFunc` registrations, and direct `chi.NewRouter()` / `chi.NewMux()` receiver methods. It excludes `var` bindings, `Handle` / `Match`, static helpers, inline/multiple/middleware or wrapped handlers, path escaping/dynamic values, root/trailing/double-slash Gin group prefixes, Chi `Route` / `Group` / `Mount` composition, factory/wrapper/chained/mutable receiver flow, `DefaultServeMux` member calls, host/wildcard pattern semantics, cross-file module/package resolution, methods, generic Go imports/calls/types, and runtime framework behavior. Syntax-error Go files retain only their file symbol until repaired.
 - The Rust surface proves top-level functions and direct Axum `Router::new().route("/path", method(handler))` chains only when the `Router` and method helpers have direct unambiguous `axum` imports. It excludes `route_service`, `nest`, `merge`, state/layer/wrapper chains, generic constructors, `MethodRouter` composition, inline/wrapped/namespaced handlers, dynamic/escaped paths, wildcard or public re-exports, cross-file Cargo/module resolution, methods, semantic type checking, and runtime behavior. Syntax-error Rust files retain only their file symbol until repaired.
+- The Java surface proves direct top-level classes/methods and Spring Web routes only when direct non-static/non-wildcard imports (or fully-qualified annotations), one direct `@RestController` / `@Controller`, an optional literal class `@RequestMapping`, one literal shortcut method mapping, and its direct local method body are all present. It excludes method-level `@RequestMapping(method = ...)`, multi-path arrays, custom/composed annotations, placeholders/SpEL, additional conditions, nested/inherited/interface handlers, Java package/classpath resolution, generic Java import/call/type analysis, semantic Spring configuration, and runtime behavior. Syntax-error Java files retain only their file symbol until repaired.
 - Semantic type checking, transitive hierarchy traversal, declaration-merging semantics, override dispatch, mixin/qualified/conditional heritage expressions, or automatic framework decorator inference. v0.18 recognizes direct imported NestJS HTTP decorators, direct static `RouterModule.register()` prefixes, and the narrowly defined non-HTTP decorators documented above; it does not infer custom decorators, barrels, `forRoot` / `forChild`, global/version prefixes, guards, GraphQL field resolvers, dynamic patterns, dynamic gateway configuration, or runtime transport wiring.
-- Language adapters beyond TS/TSX/JS/JSX/Python/Go/Rust, external dependency indexing, telemetry, or multi-project routing.
+- Language adapters beyond TS/TSX/JS/JSX/Python/Go/Rust/Java, external dependency indexing, telemetry, or multi-project routing.
 - Embedding-based or cloud retrieval, semantic ranking, arbitrary natural-language context assembly, semantic Git diff beyond immutable zero-context hunk-to-revision-local-declaration evidence, or reliable rename/move/cross-side identity attribution.
 
 ## Roadmap
@@ -1195,13 +1225,14 @@ v0.36.0 does not yet provide:
 | `v0.34.0` | Go standard-library `http.HandleFunc` and same-function literal `ServeMux.HandleFunc` routes, including an exact Go 1.22 method-pattern subset and dynamic/rebound rejection |
 | `v0.35.0` | Go Chi `NewRouter` / `NewMux` direct literal route methods, `CONNECT` route-query support, and continued dynamic/shadow/rebinding rejection |
 | `v0.36.0` | Rust `.rs` discovery, top-level function containment, exact direct Axum `Router::new().route(...)` method-router chains, Rust source-search/CLI/MCP filters, and dynamic/shadow/wrapper rejection |
-| `v0.37+` | Axum route/MethodRouter composition, Rust Cargo/module resolution, Go Chi `Route` / `Group` / `Mount` composition, Echo/Fiber packs and broader Go resolution, React Router `<Routes>` boundary proof, deeper Next.js convention coverage, `fastify-plugin` wrapper proof, GraphQL field-resolver/runtime-transport evidence, contract graphs, retained-generation source browsing, and further CodeGraph-parity work |
+| `v0.37.0` | Java `.java` discovery, direct class/method containment, exact direct Spring Web controller shortcut mappings, Java source-search/CLI/MCP filters, and literal/import/syntax-error rejection |
+| `v0.38+` | Spring method-level `@RequestMapping` and richer literal annotation values, Java package/classpath resolution, Axum route/MethodRouter composition, Rust Cargo/module resolution, Go Chi `Route` / `Group` / `Mount` composition, Echo/Fiber packs and broader Go resolution, React Router `<Routes>` boundary proof, deeper Next.js convention coverage, `fastify-plugin` wrapper proof, GraphQL field-resolver/runtime-transport evidence, contract graphs, retained-generation source browsing, and further CodeGraph-parity work |
 
 See [CHANGELOG.md](CHANGELOG.md) for release notes and migration history.
 
 ## Release-by-release feature comparison
 
-Every release creates a verified standalone comparison report against the local CodeGraph baseline at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_vX.Y.Z.md` (for example, `FEATURE_COMPARISON_v0.36.0.md`). The version number is part of the filename, so each release retains an independent comparison record. It intentionally lives beside the local `symbol-lattice` and `codegraph` checkouts rather than inside either project. Starting with v0.28, these reports are written in Traditional Chinese. Each report distinguishes a proven precision advantage from broader-but-less-proven source coverage, and records remaining gaps instead of treating a version bump as parity.
+Every release creates a verified standalone comparison report against the local CodeGraph baseline at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_vX.Y.Z.md` (for example, `FEATURE_COMPARISON_v0.37.0.md`). The version number is part of the filename, so each release retains an independent comparison record. It intentionally lives beside the local `symbol-lattice` and `codegraph` checkouts rather than inside either project. Starting with v0.28, these reports are written in Traditional Chinese. Each report distinguishes a proven precision advantage from broader-but-less-proven source coverage, and records remaining gaps instead of treating a version bump as parity.
 
 ## Development
 
@@ -1220,6 +1251,8 @@ Python coverage includes `.py` discovery, direct declaration/containment extract
 Go coverage includes `.go` discovery, persisted source search and CLI/MCP language filters, conservative top-level function containment, direct/default-or-aliased Gin engine creation, direct literal engine and nested same-function `RouterGroup` routes, direct/default-or-aliased `net/http` `HandleFunc` plus same-function `ServeMux` routes, direct/default-or-aliased Chi `NewRouter` / `NewMux` routes, Go 1.22 literal method-pattern and `CONNECT` evidence, dynamic/shadow/rebinding rejection, malformed-source fail-closed behavior, and exact route-query integration.
 
 Rust coverage includes `.rs` discovery, persisted source search and CLI/MCP language filters, conservative top-level function containment, direct/default-or-aliased Axum `Router::new()` literal route-builder chains, imported `get` / `post` / `put` / `patch` / `delete` / `head` / `options` / `trace` method routers, dynamic/shadow/inline/composition/wrapper rejection, malformed-source fail-closed behavior, and exact route-query integration.
+
+Java coverage includes `.java` discovery, persisted source search and CLI/MCP language filters, direct top-level class/method containment, direct imported or fully-qualified Spring Web controller evidence, literal class prefix plus literal method mapping extraction, direct local-method route edges, wildcard/dynamic/multi-value/method-level-`RequestMapping` rejection, malformed-source fail-closed behavior, and exact route-query integration.
 
 ## Contributing
 

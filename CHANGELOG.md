@@ -6,6 +6,24 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.37.0] - 2026-07-30
+
+### Added
+
+- Java `.java` source discovery, persisted source-search language filtering, CLI/MCP validation, direct top-level class and direct method containment, and a first-party `@lezer/java` AST adapter.
+- An executable first-party `spring-web` capability. A route now requires direct non-static/non-wildcard Spring annotation imports (or fully-qualified annotations), a direct `@RestController` or `@Controller`, an optional literal class-level `@RequestMapping` prefix, one literal direct `@GetMapping` / `@PostMapping` / `@PutMapping` / `@PatchMapping` / `@DeleteMapping` method annotation, and its exact local method. Matching routes emit `framework.spring-web.direct-controller.literal-method-mapping.local-method` evidence.
+- Capability, discovery, exact route, fully-qualified annotation, import/dynamic/method-level-`RequestMapping` rejection, malformed-source, source-search, CLI, and persisted route-query integration coverage. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.37.0.md`.
+
+### Compatibility
+
+- No SQLite schema migration or new query command is required. Java symbols and Spring Web routes reuse the existing file, symbol, edge, source-search, and route-query contracts; existing generations remain readable.
+- The artifact extractor advances to `multi-language-ast-v26`; the project resolver remains `project-resolver-v14` because the supported Java and Spring Web forms are file-local. A pre-v0.37 active index reports `indexer-version-changed` until an explicit `sync` or `index` publishes the new facts.
+
+### Deliberate limits
+
+- Spring Web support accepts only direct non-static/non-wildcard annotation imports or fully-qualified annotations, a direct controller class, an optional one-literal class prefix, and one one-literal shortcut method mapping on a direct local method. Method-level `@RequestMapping(method = ...)`, annotation arrays or multiple paths/conditions, placeholders or SpEL, custom/composed annotations, wildcard/static imports, nested/inherited/interface handlers, Java package/classpath resolution, semantic Spring configuration, and runtime behavior remain excluded.
+- CodeGraph has broader Java declaration, project-level Spring detection, `@RequestMapping` method handling, Kotlin, configuration, and regex-based route extraction. SymbolLattice v0.37 intentionally trades that breadth for AST-proven annotation/import, literal-path, direct-controller, and exact local-method evidence in its first Java/Spring slice.
+
 ## [0.36.0] - 2026-07-30
 
 ### Added
