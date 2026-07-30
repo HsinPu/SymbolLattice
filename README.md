@@ -2,7 +2,7 @@
 
 # SymbolLattice
 
-**Evidence-first local code intelligence for TypeScript, JavaScript, ArkTS/ArkUI, Vue, Svelte, Astro, Razor/Blazor, Terraform/OpenTofu, Shopify Liquid, Python, Go, Rust, Java, PHP, C, Lua, R, Elixir, Erlang, Clojure, Perl, Julia, Haskell, OCaml, F#, Nim, C++, C#, Ruby, Kotlin, Swift, Dart, and Scala projects.**
+**Evidence-first local code intelligence for TypeScript, JavaScript, ArkTS/ArkUI, Vue, Svelte, Astro, Razor/Blazor, Terraform/OpenTofu, Shopify Liquid, Solidity, Python, Go, Rust, Java, PHP, C, Lua, R, Elixir, Erlang, Clojure, Perl, Julia, Haskell, OCaml, F#, Nim, C++, C#, Ruby, Kotlin, Swift, Dart, and Scala projects.**
 
 [![Version](https://img.shields.io/github/v/tag/HsinPu/symbol-lattice?label=version)](https://github.com/HsinPu/symbol-lattice/tags)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D22.13-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> **v0.66.0** is an early developer release. This public repository runs from source; its npm package is intentionally private and is not published to npm.
+> **v0.67.0** is an early developer release. This public repository runs from source; its npm package is intentionally private and is not published to npm.
 
 SymbolLattice builds a local symbol graph without hiding uncertainty. It keeps syntax-proven artifact facts, resolves cross-file relationships conservatively, and records why every resolved edge exists. The graph stays local to the inspected project under `.symbol-lattice/index.sqlite`.
 
@@ -35,6 +35,7 @@ SymbolLattice builds a local symbol graph without hiding uncertainty. It keeps s
 - **ArkTS + ArkUI root evidence** - complete direct `@Component struct` declarations in `.ets` files become components; a same-stack `@Entry` declaration creates an exact local `ui root` entrypoint rather than a guessed navigation route.
 - **Terraform/OpenTofu declaration evidence** - complete top-level literal `resource`, `data`, `module`, `variable`, and `output` blocks in `.tf`, `.tfvars`, and `.tofu` files become audited IaC symbols; outputs retain export evidence without fabricating dependency or deployment facts.
 - **Shopify Liquid template-call evidence** - complete literal `render`, `include`, and `section` tags in `.liquid` files become exact project-local calls to indexed snippet or section files when—and only when—the target path exists.
+- **Solidity declaration and hierarchy evidence** - complete top-level `contract`, `interface`, and `library` declarations plus their complete direct callable members become auditable symbols; a simple `is Base, Other` clause becomes a hierarchy edge only when a unique target in the same source file proves its kind.
 - **Non-HTTP and UI transport evidence** - AST-proven NestJS GraphQL, microservice, and WebSocket entrypoints, plus direct ArkUI UI roots, use distinct `entrypoint` nodes and exact `handles` edges, so a message pattern, subscription, or UI root is never mislabeled as an HTTP route.
 - **Direct type-hierarchy evidence** - AST-proven `extends` and `implements` edges preserve value/type namespace proof, type-only imports, re-export provenance, unresolved bases, and bounded direct parent/child views without pretending to have a full type checker.
 - **Bounded context packs** - ordered symbol references produce persisted source, capped relationship/impact summaries, and static directed evidence paths without guessing ambiguous symbols or dynamic behavior.
@@ -140,9 +141,9 @@ One-shot data commands emit stable, pretty JSON. `watch` is the deliberate strea
 
 ## Capabilities
 
-| Area | v0.66.0 behavior |
+| Area | v0.67.0 behavior |
 | --- | --- |
-| Source files | TypeScript, TSX, JavaScript, JSX, ArkTS/ArkUI, Vue SFC, Svelte SFC, Astro SFC, Razor/Blazor components, Terraform/OpenTofu HCL, Shopify Liquid, Python, Go, Rust, Java, PHP, C, Lua, R, Elixir, Erlang, Clojure, Perl, Julia, Haskell, OCaml, F#, Nim, C++, C#, Ruby, Kotlin, Swift, Dart, and Scala (`.ets`, `.vue`, `.svelte`, `.astro`, `.razor`, `.tf`, `.tfvars`, `.tofu`, `.liquid`, `.c`, `.lua`, `.r`, `.ex`, `.exs`, `.erl`, `.clj`, `.pl`, `.pm`, `.jl`, `.hs`, `.ml`, `.fs`, `.nim`, `.cpp`, `.cc`, `.cxx`, `.hpp`, `.hh`, `.hxx`, `.cs`, `.rb`, `.kt`, `.swift`, `.dart`, `.scala`; plus Play `conf/routes` and `conf/*.routes` route tables) |
+| Source files | TypeScript, TSX, JavaScript, JSX, ArkTS/ArkUI, Vue SFC, Svelte SFC, Astro SFC, Razor/Blazor components, Terraform/OpenTofu HCL, Shopify Liquid, Solidity, Python, Go, Rust, Java, PHP, C, Lua, R, Elixir, Erlang, Clojure, Perl, Julia, Haskell, OCaml, F#, Nim, C++, C#, Ruby, Kotlin, Swift, Dart, and Scala (`.ets`, `.vue`, `.svelte`, `.astro`, `.razor`, `.tf`, `.tfvars`, `.tofu`, `.liquid`, `.sol`, `.c`, `.lua`, `.r`, `.ex`, `.exs`, `.erl`, `.clj`, `.pl`, `.pm`, `.jl`, `.hs`, `.ml`, `.fs`, `.nim`, `.cpp`, `.cc`, `.cxx`, `.hpp`, `.hh`, `.hxx`, `.cs`, `.rb`, `.kt`, `.swift`, `.dart`, `.scala`; plus Play `conf/routes` and `conf/*.routes` route tables) |
 | F# + Giraffe | Direct top-level typed `HttpFunc` / `HttpContext` handlers plus exactly one `open Giraffe` proof and a direct literal `choose [` route table. Fixed HTTP verbs and plain `route "/..."` entries become exact same-file or explicit unresolved route evidence. |
 | Nim + Jester | Direct top-level zero-argument `proc` handlers plus exactly one direct `import` list containing `jester`, then a flat `routes:` or `router name:` literal route block. Fixed lowercase HTTP verbs become exact same-file or explicit unresolved route evidence. |
 | Vue + Vue Router | Vue `.vue` files contribute a file symbol plus direct inline JavaScript/TypeScript script declarations and an auditable default component export. In TypeScript/JavaScript router modules, exactly one direct `createRouter` import plus one top-level literal `routes` option emits `NAVIGATE` route evidence; direct default imports can resolve exactly through `.vue` modules. |
@@ -152,6 +153,7 @@ One-shot data commands emit stable, pretty JSON. `watch` is the deliberate strea
 | ArkTS + ArkUI | Complete direct `@Component struct` declarations in `.ets` files become component symbols. A direct same-stack `@Entry` component creates an exact `ui root` entrypoint and local `handles` evidence; it is not a route or navigation claim. |
 | Terraform / OpenTofu | Complete line-leading top-level literal `resource`, `data`, `module`, `variable`, and `output` blocks emit exact local declaration evidence. Resource/data blocks use the additive `resource` kind, modules use the additive `module` kind, and outputs retain export facts. |
 | Shopify Liquid | Complete literal `render`, `include`, and `section` tags emit an exact project-local `calls` edge only when the expected `snippets/<name>.liquid` or `sections/<name>.liquid` target exists; missing targets remain explicit unresolved evidence. |
+| Solidity | Complete top-level `contract`, `interface`, and `library` declarations plus complete direct callable members emit exact `contains` evidence. A simple literal `is Base, Other` clause emits an exact hierarchy edge only when one same-file declaration proves each target kind. |
 | Scope | Project root by default or repeatable, persisted `--scope` directories |
 | Discovery | Root `.gitignore` with negation; `.git`, `.symbol-lattice`, `coverage`, `dist`, and `node_modules` are always excluded |
 | Symbols | TypeScript/JavaScript: files, classes, functions, methods, interfaces, types, variables, routes, and entrypoints. Python: files, classes, functions, methods, and direct FastAPI / same-file or proven cross-file `APIRouter` / same-file Flask routes. Go: files, top-level functions, and direct Gin / `net/http` / Chi routes. Rust: files, top-level functions, and direct Axum routes. Java: files, direct top-level classes and methods, direct Spring Web routes, and direct package facts usable by Play controller resolution. PHP: files, direct top-level classes, methods, functions, and direct Laravel facade routes. C: files, direct top-level functions, and direct CivetWeb routes. Lua: files, direct top-level `function` / `local function` declarations, and direct Lapis routes. R: files, direct top-level braced `name <- function(...)` / `name = function(...)` declarations, and direct Plumber annotation routes. Elixir: files, direct top-level `defmodule` declarations represented by the existing `class` kind, direct module `def` / `defp` methods, and direct Phoenix Router routes. Erlang: files, direct `-module(...)` declarations represented by the existing `class` kind, direct simple top-level functions, and direct Cowboy dispatch routes. Clojure: files, direct `ns` declarations represented by the existing `class` kind, direct simple top-level `defn` functions, and direct Compojure routes. Perl: files, direct `package` declarations represented by the existing `class` kind, direct simple top-level `sub` functions, and direct Dancer2 routes. Julia: files, direct top-level one-line `name(...) = ...` functions, and direct Genie routes. C++: files, direct top-level classes, methods, functions, and direct cpp-httplib routes. C#: files, direct top-level classes, interfaces, methods, local functions, and direct ASP.NET Core routes. Ruby: files, direct top-level classes, methods, functions, and direct Rails routes. Kotlin: files, direct top-level classes, interfaces, methods, functions, and direct Ktor routes. Swift: files, direct top-level classes, structs, protocols, methods, functions, and direct Vapor routes. Dart: files, direct top-level classes, methods, functions, and direct Flutter named-navigation routes. Scala: files, direct top-level classes, objects, traits, methods, functions, direct Play route-table entries, and literal Play Router-mount nodes |
@@ -174,6 +176,8 @@ One-shot data commands emit stable, pretty JSON. `watch` is the deliberate strea
 | Terraform/OpenTofu module resolution | No Terraform/OpenTofu module-source, provider, dependency, plan, apply, state, or runtime resolver is claimed in this release. |
 | Shopify Liquid relationships | Complete literal `render` / `include` tags target only `snippets/<name>.liquid`; complete literal `section` tags target only `sections/<name>.liquid`. Existing indexed target files receive exact `calls` edges; missing targets receive explicit unresolved `calls` evidence. |
 | Shopify Liquid module resolution | No general Liquid import, layout, theme inheritance, remote snippet, JSON-template, schema, object/property, filter, or runtime resolver is claimed in this release. |
+| Solidity symbols and relationships | Complete top-level ASCII-named `contract`, `interface`, and `library` declarations emit class/interface symbols; complete direct `function`, `modifier`, `constructor`, `fallback`, and `receive` members emit contained method symbols. A simple `is Base, Other` clause yields exact same-file `extends` or `implements` evidence only when a unique target declaration proves the relation kind. |
+| Solidity module resolution | No Solidity import, cross-file inheritance, inherited constructor-argument, call, compiler, ABI, bytecode, storage, proxy, or runtime-chain resolver is claimed in this release. |
 | Workspaces | Root `package.json` workspaces array/object, local package root/subpath `exports`, and entrypoint fallback |
 | Re-exports | Named aliases, `export *`, default-through-named aliases, and namespace-export provenance |
 | Retrieval | Local deterministic FTS5 search across persisted source text and identifier parts; bounded path/language filters, source/symbol evidence, and exact `explore` excerpts from the same active generation |
@@ -652,6 +656,34 @@ When the project also contains the expected target file, the source file receive
 If the target is absent, the graph preserves an explicit unresolved `calls` edge with a `framework.shopify-liquid.*.literal-project-file.unresolved-target` rule instead of binding to a same-named file elsewhere. Tags within HTML comments, Liquid `comment` / `raw` blocks, dynamic names, path traversal, incomplete/nested tags, and malformed delimiters create no template facts.
 
 This release does not parse Liquid expressions or theme semantics: it excludes `assign`, capture/loop/condition/filter behavior, layouts, schema JSON, JSON templates/section groups, app blocks, objects/metafields/locales, render argument semantics, remote snippets, theme inheritance, and runtime storefront rendering.
+
+#### Solidity (same-file declaration and hierarchy evidence)
+
+v0.67 adds a deliberately small Solidity surface for complete `.sol` files:
+
+```solidity
+interface IReadable {}
+
+interface IAsset is IReadable {
+  function balanceOf(address account) external view returns (uint256);
+}
+
+contract Ownable {}
+
+contract Token is Ownable, IAsset {
+  constructor() {}
+  function balanceOf(address account) external view returns (uint256) { return 0; }
+}
+```
+
+| Accepted source form | Evidence |
+| --- | --- |
+| Complete top-level `contract` / `library` | A class-kind symbol with exact file containment |
+| Complete top-level `interface` | An interface-kind symbol with exact file containment |
+| Complete direct `function`, `modifier`, `constructor`, `fallback`, `receive` | A method-kind symbol contained by its declared contract/interface/library |
+| Complete simple `is Base, Other` | Exact same-file `extends` or `implements` only after a unique target declaration proves its kind |
+
+The scanner masks comments and single/double quoted strings while preserving source offsets. It fails closed for unclosed comments, strings, braces, and declarations. Import-based or cross-file inheritance, constructor arguments after a base type, calls, events, errors, state variables, ABI/bytecode, proxy behavior, compilation, and runtime-chain semantics are deliberately excluded.
 
 #### Express
 
@@ -1873,6 +1905,8 @@ v0.65 adds no SQLite schema migration or query command. It adds Terraform/OpenTo
 
 v0.66 adds no SQLite schema migration or query command. It adds Shopify Liquid `.liquid` discovery and direct literal `render` / `include` / `section` raw facts through the existing file, edge, source-search, caller/callee, and raw-artifact contracts. The extractor advances to `multi-language-ast-v55` and the resolver to `project-resolver-v20` because a Liquid tag is projected only after its exact local target file is known. A pre-v0.66 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes Liquid-capable facts and relations. Existing generations remain readable.
 
+v0.67 adds no SQLite schema migration or query command. It adds Solidity `.sol` discovery, complete top-level container and direct-member facts, and only same-file uniquely proven `extends` / `implements` edges through the existing file, symbol, hierarchy, source-search, and raw-artifact contracts. The extractor advances to `multi-language-ast-v56` and the resolver to `project-resolver-v21` because a Solidity `is` clause is interpreted only after the complete source file has supplied its declaration symbols. A pre-v0.67 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes Solidity-capable facts and hierarchy evidence. Existing generations remain readable.
+
 ## Architecture
 
 ```mermaid
@@ -1904,7 +1938,7 @@ src/
   application/     Use cases, incremental planning, and graph projection
   cli/             Commander-based CLI
   domain/          Graph, evidence, identity, and index-work contracts
-  extraction/      TypeScript AST, ArkTS/ArkUI lexical, Vue/Svelte/Astro SFC, Razor/Blazor directive, Terraform/OpenTofu HCL lexical, Shopify Liquid tag lexical, Python/Go/Rust/Java/PHP/C/C++ Lezer, Lua/R/Elixir/Erlang/Clojure/Perl/Julia/Haskell lexical, and C#/Ruby/Kotlin/Swift/Dart/Scala ast-grep fact extraction
+  extraction/      TypeScript AST, ArkTS/ArkUI lexical, Vue/Svelte/Astro SFC, Razor/Blazor directive, Terraform/OpenTofu HCL lexical, Shopify Liquid tag lexical, Solidity declaration lexical, Python/Go/Rust/Java/PHP/C/C++ Lezer, Lua/R/Elixir/Erlang/Clojure/Perl/Julia/Haskell lexical, and C#/Ruby/Kotlin/Swift/Dart/Scala ast-grep fact extraction
   infrastructure/  Filesystem, workspace, TypeScript, and SQLite adapters
   mcp/             Read-only MCP server
   ports/           Dependency boundaries
@@ -1912,7 +1946,7 @@ src/
 
 ## Deliberate boundaries
 
-v0.66.0 does not yet provide:
+v0.67.0 does not yet provide:
 
 - Daemon mode, background automatic sync after the foreground process exits, cross-process watch coordination, MCP per-query pending-file banners, worker pools, or historical source browsing.
 - pnpm workspace YAML, TypeScript project references, external/package `extends`, or nested `.gitignore` semantics.
@@ -1945,8 +1979,9 @@ v0.66.0 does not yet provide:
 - The ArkTS/ArkUI surface is a deliberately small lexical scanner, not an ArkTS compiler or TypeScript fallback. It accepts only a complete adjacent direct `@Component struct` declaration, and emits a `ui root` entrypoint only when that same decorator stack also contains `@Entry`. It excludes general ArkTS declarations, `build()` DSL calls, child components, `@Builder`/`@Extend`/`@Styles`, state/lifecycle semantics, navigation, modules/packages, and runtime UI behavior.
 - The Terraform/OpenTofu surface is a deliberately small lexical block scanner, not an HCL parser, compiler, or deployment planner. It accepts only complete line-leading top-level literal `resource`, `data`, `module`, `variable`, and `output` blocks, while masking comments, strings, and heredocs. It excludes `terraform`/`provider`/`locals`, dynamic labels, JSON configuration, expression/interpolation/reference analysis, `depends_on`, provider aliases, module source resolution, state, plan/apply, and runtime cloud topology.
 - The Shopify Liquid surface is a deliberately small lexical tag scanner, not a Liquid parser, Shopify theme compiler, or renderer. It accepts only complete literal `render`/`include`/`section` tags with safe path segments and then only exact indexed local `snippets`/`sections` file targets. It excludes tags in HTML comments or Liquid `comment`/`raw` blocks, dynamic/unsafe/incomplete/nested tags, `assign`/capture/loop/condition/filter semantics, layouts/schema/JSON templates/app blocks, objects/metafields/locales, remote snippets/theme inheritance, and runtime storefront behavior.
+- The Solidity surface is a deliberately small lexical declaration scanner, not a Solidity parser, compiler, EVM analyzer, or deployment simulator. It accepts only complete ASCII-named top-level `contract`/`interface`/`library` declarations, direct callable members, and a simple same-file `is Base, Other` clause with a unique compatible declaration target. It excludes imports/cross-file resolution, constructor arguments, events/errors/structs/enums/types/state, calls/emits/reverts/modifier application, assembly/Yul, visibility/override semantics, ABI/bytecode/storage/proxy behavior, compilation, and runtime chain behavior.
 - Semantic type checking, transitive hierarchy traversal, declaration-merging semantics, override dispatch, mixin/qualified/conditional heritage expressions, or automatic framework decorator inference. v0.18 recognizes direct imported NestJS HTTP decorators, direct static `RouterModule.register()` prefixes, and the narrowly defined non-HTTP decorators documented above; it does not infer custom decorators, barrels, `forRoot` / `forChild`, global/version prefixes, guards, GraphQL field resolvers, dynamic patterns, dynamic gateway configuration, or runtime transport wiring.
-- Language adapters beyond TS/TSX/JS/JSX/ArkTS/Vue/Svelte/Astro/Razor/Terraform/OpenTofu/Shopify-Liquid/Python/Go/Rust/Java/PHP/C/Lua/R/Elixir/Erlang/Clojure/Perl/Julia/Haskell/OCaml/F#/C++/C#/Ruby/Kotlin/Swift/Dart/Scala, external dependency indexing, telemetry, or multi-project routing.
+- Language adapters beyond TS/TSX/JS/JSX/ArkTS/Vue/Svelte/Astro/Razor/Terraform/OpenTofu/Shopify-Liquid/Solidity/Python/Go/Rust/Java/PHP/C/Lua/R/Elixir/Erlang/Clojure/Perl/Julia/Haskell/OCaml/F#/C++/C#/Ruby/Kotlin/Swift/Dart/Scala, external dependency indexing, telemetry, or multi-project routing.
 - Embedding-based or cloud retrieval, semantic ranking, arbitrary natural-language context assembly, semantic Git diff beyond immutable zero-context hunk-to-revision-local-declaration evidence, or reliable rename/move/cross-side identity attribution.
 
 ## Roadmap
@@ -2018,6 +2053,8 @@ v0.66.0 does not yet provide:
 | `v0.64.0` | ArkTS `.ets` discovery, line-leading complete ArkUI `@Component struct` component facts, exact local `@Entry` UI-root `entrypoint` evidence, ArkTS source-search/CLI/MCP filters, additive `ui/root` entrypoint filters, and comment/string/regex/detached/non-struct/malformed rejection |
 | `v0.65.0` | Terraform/OpenTofu `.tf` / `.tfvars` / `.tofu` discovery, literal top-level resource/data/module/variable/output facts, additive resource/module kinds, exported output bindings, Terraform source-search/CLI/MCP filters, and comment/string/heredoc/dynamic/nested/malformed rejection |
 | `v0.66.0` | Shopify Liquid `.liquid` discovery, literal render/include/section raw facts, exact project-local snippet/section `calls` edges, explicit missing-target evidence, Liquid source-search/CLI/MCP filters, and comment/raw/HTML-comment/dynamic/path-traversal/malformed rejection |
+| `v0.67.0` | Solidity `.sol` discovery, complete top-level contract/interface/library and direct callable-member facts, same-file unique `is` hierarchy projection, Solidity source-search/CLI filters, and comment/string/dynamic-constructor-argument/malformed rejection |
+| `v0.67+` | Solidity grammar validation, imports and cross-file inheritance, structs/enums/value types/state/events/errors, visibility/override/call/emit/revert facts, compiler/ABI/bytecode/storage/proxy evidence, and controlled EVM-aware analysis |
 | `v0.66+` | Liquid grammar validation, `assign`/capture/loop/condition/filter facts, layout/schema/app-block and JSON template/section-group relations, safe render-argument semantics, object/metafield/locale analysis, theme inheritance, and runtime storefront behavior |
 | `v0.65+` | HCL grammar validation, `terraform` / `provider` / `locals` facts, literal dependency/reference evidence, `depends_on`, provider aliases, local module source proof, JSON configuration, state/plan/apply awareness, and runtime cloud topology |
 | `v0.64+` | ArkTS general declarations/imports/exports/calls, ArkUI `build()` DSL and child-component edges, `@Builder`/`@Extend`/`@Styles` and state/lifecycle semantics, navigation, module/package/project resolution, ArkTS compiler checks, and runtime UI composition |
@@ -2032,7 +2069,7 @@ See [CHANGELOG.md](CHANGELOG.md) for release notes and migration history.
 
 ## Release-by-release feature comparison
 
-Every release creates a verified standalone comparison report against the local CodeGraph baseline at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_vX.Y.Z.md` (for example, `FEATURE_COMPARISON_v0.66.0.md`). The version number is part of the filename, so each release retains an independent comparison record. It intentionally lives beside the local `symbol-lattice` and `codegraph` checkouts rather than inside either project. Starting with v0.28, these reports are written in Traditional Chinese. Each report distinguishes a proven precision advantage from broader-but-less-proven source coverage, and records remaining gaps instead of treating a version bump as parity.
+Every release creates a verified standalone comparison report against the local CodeGraph baseline at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_vX.Y.Z.md` (for example, `FEATURE_COMPARISON_v0.67.0.md`). The version number is part of the filename, so each release retains an independent comparison record. It intentionally lives beside the local `symbol-lattice` and `codegraph` checkouts rather than inside either project. Starting with v0.28, these reports are written in Traditional Chinese. Each report distinguishes a proven precision advantage from broader-but-less-proven source coverage, and records remaining gaps instead of treating a version bump as parity.
 
 ## Development
 
@@ -2093,6 +2130,8 @@ ArkTS/ArkUI coverage includes `.ets` discovery, persisted source search and CLI/
 Terraform/OpenTofu coverage includes `.tf` / `.tfvars` / `.tofu` discovery, persisted source search and CLI/MCP language filters, complete line-leading top-level literal resource/data/module/variable/output containment, additive resource/module kinds, exported output bindings, exact local evidence, and comment/string/heredoc/dynamic-label/nested/malformed rejection.
 
 Shopify Liquid coverage includes `.liquid` discovery, persisted source search and CLI/MCP language filters, direct literal render/include/section raw facts, exact project-local snippet/section `calls` evidence, explicit missing-target evidence, and HTML-comment/Liquid-comment/raw/dynamic/path-traversal/incomplete/nested rejection.
+
+Solidity coverage includes `.sol` discovery, persisted source search and CLI language filters, complete top-level contract/interface/library symbols, complete direct function/modifier/constructor/fallback/receive containment, same-file unique `is` hierarchy projection, and comment/string/dynamic-constructor-argument/malformed rejection.
 
 C++ coverage includes `.cpp` / `.cc` / `.cxx` / `.hpp` / `.hh` / `.hxx` discovery, persisted source search and CLI/MCP language filters, direct top-level class/method/function containment, direct `httplib.h` include plus `httplib::Server` / `httplib::SSLServer` binding proof, literal direct named-handler HTTP routes, receiver-rebinding invalidation, dynamic/lambda/missing-header rejection, malformed-source fail-closed behavior, and persisted route-query integration.
 

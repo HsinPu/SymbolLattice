@@ -29,6 +29,7 @@ import { extractAstroFileFacts } from "./astro.js";
 import { extractArkTsFileFacts } from "./arkts.js";
 import { extractLiquidFileFacts } from "./liquid.js";
 import { extractRazorFileFacts } from "./razor.js";
+import { extractSolidityFileFacts } from "./solidity.js";
 import { extractTerraformFileFacts } from "./terraform.js";
 import { extractVueFileFacts } from "./vue.js";
 import {
@@ -3745,6 +3746,9 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
   }
   if (input.language === "liquid") {
     return extractLiquidFileFacts({ ...input, language: "liquid" });
+  }
+  if (input.language === "solidity") {
+    return extractSolidityFileFacts({ ...input, language: "solidity" });
   }
 
   const sourceFile = ts.createSourceFile(

@@ -6,6 +6,24 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.67.0] - 2026-07-31
+
+### Added
+
+- Solidity `.sol` source discovery, persisted source-search filtering, CLI language validation, and an independent offset-preserving lexical scanner. It retains only complete top-level literal `contract`, `interface`, and `library` declarations together with complete direct `function`, `modifier`, `constructor`, `fallback`, and `receive` members.
+- A same-file-only Solidity inheritance projection. A complete simple `is Base, Other` clause becomes an exact `extends` or `implements` edge only when one declaration in that same indexed file proves the target kind. Constructor-argument clauses, imports, missing, duplicate, and incompatible targets do not become hierarchy edges.
+- Unit and integration coverage now verifies Solidity discovery, symbols, member containment, string/comment and malformed-source rejection, persisted source search, CLI language filtering, and exact `hierarchy` parent/child evidence. The standalone Traditional Chinese comparison report is at `C:\\Users\\win10\\Desktop\\Graph\\FEATURE_COMPARISON_v0.67.0.md`.
+
+### Compatibility
+
+- No SQLite schema migration or new query command is required. Solidity reuses the existing file, class, interface, method, hierarchy-edge, source-search, and raw-artifact contracts; existing generations remain readable.
+- The artifact extractor advances to `multi-language-ast-v56` and the project resolver to `project-resolver-v21` because exact Solidity `is` relations are projected only after all symbols in the same complete source file are known. A pre-v0.67 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes Solidity-capable facts and edges.
+
+### Deliberate limits
+
+- The Solidity extractor is a deliberately narrow lexical declaration scanner, not a Solidity parser, compiler, EVM analyzer, or deployment simulator. It accepts only complete ASCII-named top-level containers and complete direct callable members while preserving string/comment offsets; malformed source and unclosed strings/comments fail closed.
+- Solidity support does not infer imports, cross-file inheritance, inherited constructor arguments, visibility/override semantics, structs, enums, user-defined value types, state variables, events, errors, free functions, calls, emits, reverts, modifiers applied to members, assembly, inline Yul, ABI/bytecode, storage layout, proxy/delegatecall behavior, external dependencies, compilation, or runtime chain behavior. The inspected local CodeGraph baseline has a broader Tree-sitter Solidity extractor for those surfaces; SymbolLattice deliberately begins with smaller exact declaration and same-file hierarchy evidence.
+
 ## [0.66.0] - 2026-07-31
 
 ### Added

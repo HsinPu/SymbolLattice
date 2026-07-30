@@ -720,6 +720,35 @@ describe("symbol-lattice search CLI", () => {
     expect(write).toHaveBeenCalled();
   });
 
+  it("accepts Solidity as a persisted source-search language filter", async () => {
+    const calls: Array<{ projectPath: string; query: string; options: SearchOptions }> = [];
+    const service = {
+      async search(
+        projectPath: string,
+        query: string,
+        options: SearchOptions = {}
+      ): Promise<SearchResult> {
+        calls.push({ projectPath, query, options });
+        return searchResult();
+      }
+    } as unknown as SymbolLatticeService;
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+    await createProgram(service).parseAsync(
+      ["node", "symbol-lattice", "search", "Token", "--language", "solidity", "--json"],
+      { from: "node" }
+    );
+
+    expect(calls).toEqual([
+      {
+        projectPath: resolve(process.cwd()),
+        query: "Token",
+        options: { language: "solidity" }
+      }
+    ]);
+    expect(write).toHaveBeenCalled();
+  });
+
   it("accepts C++ as a persisted source-search language filter", async () => {
     const calls: Array<{ projectPath: string; query: string; options: SearchOptions }> = [];
     const service = {

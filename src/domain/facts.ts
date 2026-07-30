@@ -11,13 +11,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v55";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v56";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v20";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v21";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -280,6 +280,22 @@ export interface LiquidFacts {
   readonly templateReferences: readonly LiquidTemplateReferenceFact[];
 }
 
+/** A direct simple Solidity `is Base` clause retained for same-file proof. */
+export interface SolidityInheritanceFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly baseName: string;
+  readonly range: SourceRange;
+}
+
+/**
+ * Syntax-only Solidity inheritance facts. They are resolved only against one
+ * complete indexed source file so contract/interface relation kind stays exact.
+ */
+export interface SolidityFacts {
+  readonly inheritanceReferences: readonly SolidityInheritanceFact[];
+}
+
 /**
  * Syntax-proven, file-local facts. They deliberately retain unresolved source
  * references so later resolution stages can be recomputed without reparsing.
@@ -305,6 +321,8 @@ export interface ArtifactFacts {
   readonly javaFacts?: JavaFacts;
   /** Omitted only by artifact facts persisted before v0.66. */
   readonly liquidFacts?: LiquidFacts;
+  /** Omitted only by artifact facts persisted before v0.67. */
+  readonly solidityFacts?: SolidityFacts;
 }
 
 /**

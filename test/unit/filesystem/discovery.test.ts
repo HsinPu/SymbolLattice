@@ -71,6 +71,7 @@ describe("source discovery", () => {
     await writeFile(join(projectPath, "src", "s.ets"), "@Component struct App {}\n", "utf8");
     await writeFile(join(projectPath, "src", "t.tf"), "resource \"aws_s3_bucket\" \"assets\" {}\n", "utf8");
     await writeFile(join(projectPath, "src", "u.liquid"), "{% render 'card' %}\n", "utf8");
+    await writeFile(join(projectPath, "src", "v.sol"), "contract Ledger {}\n", "utf8");
     await writeFile(join(projectPath, "conf", "routes"), "GET /health controllers.HealthController.health\n", "utf8");
     await writeFile(join(projectPath, "conf", "admin.routes"), "GET /admin controllers.AdminController.index\n", "utf8");
     await writeFile(join(projectPath, "README.md"), "ignored", "utf8");
@@ -116,6 +117,7 @@ describe("source discovery", () => {
       "src/s.ets",
       "src/t.tf",
       "src/u.liquid",
+      "src/v.sol",
       "src/z.ts"
     ]);
     expect(files.map((file) => file.language)).toEqual([
@@ -156,6 +158,7 @@ describe("source discovery", () => {
       "arkts",
       "terraform",
       "liquid",
+      "solidity",
       "typescript"
     ]);
   });

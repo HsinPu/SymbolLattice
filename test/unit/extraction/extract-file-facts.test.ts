@@ -6961,4 +6961,105 @@ describe("source extraction", () => {
     expect(facts.edges).toEqual([]);
     expect(facts.liquidFacts?.templateReferences).toEqual([]);
   });
+
+  it("extracts complete Solidity containers, direct callable members, and simple inheritance facts", () => {
+    const facts = extractFileFacts({
+      filePath: "contracts/Token.sol",
+      language: "solidity",
+      sourceText: [
+        "pragma solidity ^0.8.24;",
+        "interface IAsset {",
+        "  function balanceOf(address account) external view returns (uint256);",
+        "}",
+        "contract Base {",
+        "  function owner() public view returns (address) { return address(this); }",
+        "  modifier onlyOwner() { _; }",
+        "}",
+        "contract Token is Base, IAsset {",
+        "  constructor() {}",
+        "  function balanceOf(address account) external view returns (uint256) { return 0; }",
+        "  fallback() external payable {}",
+        "  receive() external payable {}",
+        "}",
+        "library Math { function add(uint a, uint b) internal pure returns (uint) { return a + b; } }"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.map((symbol) => [symbol.kind, symbol.name])).toEqual([
+      ["file", "Token.sol"],
+      ["interface", "IAsset"],
+      ["method", "balanceOf"],
+      ["class", "Base"],
+      ["method", "owner"],
+      ["method", "onlyOwner"],
+      ["class", "Token"],
+      ["method", "constructor"],
+      ["method", "balanceOf"],
+      ["method", "fallback"],
+      ["method", "receive"],
+      ["class", "Math"],
+      ["method", "add"]
+    ]);
+    expect(facts.edges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "contains",
+          sourceId: expect.stringContaining("contract%3AToken"),
+          referenceName: "balanceOf",
+          evidence: expect.objectContaining({
+            ruleId: "language.solidity.function.direct-member",
+            stage: "syntax"
+          })
+        }),
+        expect.objectContaining({
+          kind: "contains",
+          referenceName: "onlyOwner",
+          evidence: expect.objectContaining({
+            ruleId: "language.solidity.modifier.direct-member",
+            stage: "syntax"
+          })
+        })
+      ])
+    );
+    expect(facts.solidityFacts?.inheritanceReferences).toEqual([
+      expect.objectContaining({
+        baseName: "Base",
+        range: expect.objectContaining({ start: { line: 9, column: 18 } })
+      }),
+      expect.objectContaining({
+        baseName: "IAsset",
+        range: expect.objectContaining({ start: { line: 9, column: 24 } })
+      })
+    ]);
+  });
+
+  it("rejects Solidity declarations inside comments or strings and fails closed on malformed source", () => {
+    const dynamicFacts = extractFileFacts({
+      filePath: "contracts/Dynamic.sol",
+      language: "solidity",
+      sourceText: [
+        "// contract Commented {}",
+        'string constant marker = "interface Fake {}";',
+        "contract Dynamic is Base(owner) {",
+        "  function live() external {}",
+        "}"
+      ].join("\n")
+    });
+    const malformedFacts = extractFileFacts({
+      filePath: "contracts/Broken.sol",
+      language: "solidity",
+      sourceText: "contract Broken { function missing() external {"
+    });
+
+    expect(dynamicFacts.symbols.map((symbol) => [symbol.kind, symbol.name])).toEqual([
+      ["file", "Dynamic.sol"],
+      ["class", "Dynamic"],
+      ["method", "live"]
+    ]);
+    expect(dynamicFacts.solidityFacts?.inheritanceReferences).toEqual([]);
+    expect(malformedFacts.symbols.map((symbol) => [symbol.kind, symbol.name])).toEqual([
+      ["file", "Broken.sol"]
+    ]);
+    expect(malformedFacts.edges).toEqual([]);
+  });
 });

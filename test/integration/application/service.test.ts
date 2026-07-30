@@ -6741,4 +6741,113 @@ describe("SymbolLatticeService", () => {
       })
     ]);
   });
+
+  it("indexes Solidity declarations and proves same-file inheritance only when target kind is unique", async () => {
+    const projectPath = await createInlineProject({
+      "contracts/Token.sol": [
+        "pragma solidity ^0.8.24;",
+        "interface IReadable {}",
+        "interface IAsset is IReadable {",
+        "  function balanceOf(address account) external view returns (uint256);",
+        "}",
+        "contract Ownable {",
+        "  function owner() public view returns (address) { return address(this); }",
+        "}",
+        "contract Token is Ownable, IAsset {",
+        "  function balanceOf(address account) external view returns (uint256) { return 0; }",
+        "}",
+        "contract Dynamic is IAsset(msg.sender) {}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    const indexed = await service.init({ projectPath });
+    const search = await service.search(projectPath, "Token", { language: "solidity" });
+    const readable = (await service.find(projectPath, "contracts/Token.sol#interface:IReadable")).symbols[0];
+    const asset = (await service.find(projectPath, "contracts/Token.sol#interface:IAsset")).symbols[0];
+    const ownable = (await service.find(projectPath, "contracts/Token.sol#contract:Ownable")).symbols[0];
+    if (readable === undefined || asset === undefined || ownable === undefined) {
+      throw new Error("Expected indexed Solidity declarations.");
+    }
+    const readableHierarchy = await service.hierarchy(projectPath, readable.qualifiedName);
+    const assetHierarchy = await service.hierarchy(projectPath, asset.qualifiedName);
+    const ownableHierarchy = await service.hierarchy(projectPath, ownable.qualifiedName);
+    const persistedSolidityFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .filter((facts) => facts.language === "solidity");
+
+    expect(indexed).toMatchObject({
+      stale: false,
+      counts: { files: 1, symbols: expect.any(Number), edges: expect.any(Number) }
+    });
+    expect(persistedSolidityFacts).toHaveLength(1);
+    expect(
+      persistedSolidityFacts.every(
+        (facts) => facts.extractorVersion === ARTIFACT_FACTS_EXTRACTOR_VERSION
+      )
+    ).toBe(true);
+    expect(search.results).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          filePath: "contracts/Token.sol",
+          language: "solidity"
+        })
+      ])
+    );
+    expect(readableHierarchy.children).toEqual([
+      expect.objectContaining({
+        child: expect.objectContaining({
+          kind: "interface",
+          qualifiedName: "contracts/Token.sol#interface:IAsset"
+        }),
+        relation: "extends",
+        edge: expect.objectContaining({
+          kind: "extends",
+          resolution: "exact",
+          referenceName: "IReadable",
+          evidence: expect.objectContaining({
+            ruleId: "language.solidity.same-file.interface.extends",
+            stage: "module"
+          })
+        })
+      })
+    ]);
+    expect(assetHierarchy.children).toEqual([
+      expect.objectContaining({
+        child: expect.objectContaining({
+          kind: "class",
+          qualifiedName: "contracts/Token.sol#contract:Token"
+        }),
+        relation: "implements",
+        edge: expect.objectContaining({
+          kind: "implements",
+          resolution: "exact",
+          referenceName: "IAsset",
+          evidence: expect.objectContaining({
+            ruleId: "language.solidity.same-file.class.implements",
+            stage: "module"
+          })
+        })
+      })
+    ]);
+    expect(ownableHierarchy.children).toEqual([
+      expect.objectContaining({
+        child: expect.objectContaining({
+          kind: "class",
+          qualifiedName: "contracts/Token.sol#contract:Token"
+        }),
+        relation: "extends",
+        edge: expect.objectContaining({
+          kind: "extends",
+          resolution: "exact",
+          referenceName: "Ownable",
+          evidence: expect.objectContaining({
+            ruleId: "language.solidity.same-file.class.extends",
+            stage: "module"
+          })
+        })
+      })
+    ]);
+  });
 });
