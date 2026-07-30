@@ -4481,6 +4481,81 @@ describe("SymbolLatticeService", () => {
     expect(search.results).toMatchObject([{ filePath: "src/Demo/App.pm", language: "perl" }]);
   });
 
+  it("indexes Julia Genie routes and retains Julia source-search filtering", async () => {
+    const projectPath = await createInlineProject({
+      "src/app.jl": [
+        "using Genie, Genie.Requests",
+        "",
+        "health() = \"ok\"",
+        "create_user() = \"created\"",
+        "",
+        "route(\"/health\", health)",
+        "route(\"/users\", create_user, method = POST)",
+        "route(\"/missing\", missing, method = PATCH)"
+      ].join("\n")
+    });
+    const service = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+    const postRoutes = await service.routes(projectPath, { method: "POST" });
+    const search = await service.search(projectPath, "health", { language: "julia" });
+
+    expect(routes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "GET",
+          path: "/health",
+          handler: expect.objectContaining({
+            qualifiedName: "src/app.jl.health"
+          }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.genie.direct-route.literal-named-function.local-function",
+              stage: "syntax"
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "POST",
+          path: "/users",
+          handler: expect.objectContaining({
+            qualifiedName: "src/app.jl.create_user"
+          }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.genie.direct-route.literal-named-function.local-function"
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "PATCH",
+          path: "/missing",
+          handler: null,
+          edge: expect.objectContaining({
+            resolution: "unresolved",
+            evidence: expect.objectContaining({
+              ruleId: "framework.genie.direct-route.literal-named-function.unresolved"
+            })
+          })
+        })
+      ])
+    );
+    expect(postRoutes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "POST",
+          path: "/users",
+          handler: expect.objectContaining({
+            qualifiedName: "src/app.jl.create_user"
+          })
+        })
+      ])
+    );
+    expect(search.results).toMatchObject([{ filePath: "src/app.jl", language: "julia" }]);
+  });
+
   it("indexes C# ASP.NET Core routes and retains C# source-search filtering", async () => {
     const projectPath = await createInlineProject({
       "src/Program.cs": [

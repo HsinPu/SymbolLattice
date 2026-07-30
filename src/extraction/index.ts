@@ -7,6 +7,7 @@ import { extractDartFileFacts } from "./dart.js";
 import { extractElixirFileFacts } from "./elixir.js";
 import { extractErlangFileFacts } from "./erlang.js";
 import { extractClojureFileFacts } from "./clojure.js";
+import { extractJuliaFileFacts } from "./julia.js";
 import { extractPerlFileFacts } from "./perl.js";
 import { extractScalaFileFacts } from "./scala.js";
 import { extractGoFileFacts } from "./go.js";
@@ -3453,6 +3454,9 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
   }
   if (input.language === "perl") {
     return extractPerlFileFacts({ ...input, language: "perl" });
+  }
+  if (input.language === "julia") {
+    return extractJuliaFileFacts({ ...input, language: "julia" });
   }
   if (input.language === "cpp") {
     return extractCppFileFacts({ ...input, language: "cpp" });

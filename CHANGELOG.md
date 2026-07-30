@@ -6,6 +6,24 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.55.0] - 2026-07-31
+
+### Added
+
+- Julia `.jl` source discovery, persisted source-search language filtering, CLI/MCP validation, and an isolated Julia lexical/delimiter/block-balancing extractor for simple top-level one-line `name(...) = ...` function containment.
+- An executable first-party `genie` capability. Direct Genie route facts require exactly one direct top-level `using Genie` proof, a direct statement-start literal `route("/path", name)` registration, and either the default `GET` or an exact literal `method = GET/POST/PUT/PATCH/DELETE/OPTIONS` keyword. A unique same-file one-line function produces `framework.genie.direct-route.literal-named-function.local-function`; every other accepted handler remains explicit `unresolved` evidence.
+- Unit and integration coverage now verifies Julia discovery, direct function containment, exact and unresolved Genie route-query/source-search behavior, import/dynamic/inline/named/qualified-method/nested/repeated-use rejection, malformed delimiter/block and unterminated quote fail-closed behavior, and CLI/MCP language validation. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.55.0.md`.
+
+### Compatibility
+
+- No SQLite schema migration or new query command is required. Julia symbols and Genie routes reuse the existing file, symbol, edge, source-search, and route-query contracts; existing generations remain readable.
+- The artifact extractor advances to `multi-language-ast-v44`; the project resolver remains `project-resolver-v16` because all accepted Genie callback proof is file-local. A pre-v0.55 active index reports `indexer-version-changed` until an explicit `sync` or `index` publishes Julia-capable facts.
+
+### Deliberate limits
+
+- The Julia extractor is a deliberately small lexical/delimiter/block-balancing implementation, not a full Julia parser. It retains only file symbols for unbalanced delimiters or blocks, unterminated strings/comments, or unsupported char/triple-string input, and does not claim generic Julia module, macro, call, type, import, package, or runtime analysis.
+- Genie support accepts only exactly one direct top-level `using Genie` proof, simple direct top-level one-line function definitions, literal direct named-handler paths, and direct literal method keywords. It excludes `import Genie`, inline `do ... end` handlers, named routes, qualified constants, dynamic/escaped paths, generic wrapper/module/function/macro semantics, cross-file handlers, and runtime behavior. The local CodeGraph baseline does not list Julia in its indexed language set; SymbolLattice adds a narrow audited language/framework slice rather than claiming wider generic Julia parity.
+
 ## [0.54.0] - 2026-07-30
 
 ### Added

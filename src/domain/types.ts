@@ -56,6 +56,7 @@ export type RouteFramework =
   | "cowboy"
   | "compojure"
   | "dancer2"
+  | "genie"
   | "cpp-httplib"
   | "aspnet-core"
   | "rails"
@@ -89,6 +90,7 @@ export const ARTIFACT_LANGUAGES = [
   "erlang",
   "clojure",
   "perl",
+  "julia",
   "cpp",
   "csharp",
   "ruby",

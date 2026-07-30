@@ -28,6 +28,7 @@ export const SUPPORTED_EXTENSIONS: ReadonlyMap<string, SupportedLanguage> = new 
   [".clj", "clojure"],
   [".pl", "perl"],
   [".pm", "perl"],
+  [".jl", "julia"],
   [".cpp", "cpp"],
   [".cc", "cpp"],
   [".cxx", "cpp"],

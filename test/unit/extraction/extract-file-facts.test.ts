@@ -3956,6 +3956,190 @@ describe("source extraction", () => {
     expect(unterminatedString.symbols).toHaveLength(1);
   });
 
+  it("extracts direct Julia Genie routes with exact and unresolved evidence", () => {
+    const facts = extractFileFacts({
+      filePath: "src/demo/routes.jl",
+      language: "julia",
+      sourceText: [
+        "using Genie, Genie.Requests",
+        "",
+        "health() = \"ok\"",
+        "create_user() = \"created\"",
+        "",
+        "route(\"/health\", health)",
+        "route(\"/users\", create_user, method = POST)",
+        "route(\"/missing\", missing, method = PATCH)"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(
+      facts.symbols.filter((symbol) => symbol.kind === "function").map((symbol) => symbol.qualifiedName)
+    ).toEqual(["src/demo/routes.jl.health", "src/demo/routes.jl.create_user"]);
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName ?? null,
+          edge.referenceName,
+          edge.evidence?.ruleId,
+          edge.resolution,
+          edge.confidence
+        ])
+    ).toEqual([
+      [
+        "GET /health",
+        "src/demo/routes.jl.health",
+        "health",
+        "framework.genie.direct-route.literal-named-function.local-function",
+        "exact",
+        1
+      ],
+      [
+        "POST /users",
+        "src/demo/routes.jl.create_user",
+        "create_user",
+        "framework.genie.direct-route.literal-named-function.local-function",
+        "exact",
+        1
+      ],
+      [
+        "PATCH /missing",
+        null,
+        "missing",
+        "framework.genie.direct-route.literal-named-function.unresolved",
+        "unresolved",
+        0
+      ]
+    ]);
+  });
+
+  it("requires direct Genie use, top-level literal named routes, and balanced Julia input", () => {
+    const missingUse = extractFileFacts({
+      filePath: "src/missing-use.jl",
+      language: "julia",
+      sourceText: ["health() = \"ok\"", "route(\"/health\", health)"].join("\n")
+    });
+    const dynamicPath = extractFileFacts({
+      filePath: "src/dynamic.jl",
+      language: "julia",
+      sourceText: [
+        "using Genie",
+        "health() = \"ok\"",
+        "path = \"/health\"",
+        "route(path, health)"
+      ].join("\n")
+    });
+    const inlineHandler = extractFileFacts({
+      filePath: "src/inline.jl",
+      language: "julia",
+      sourceText: ["using Genie", "route(\"/health\", () -> \"ok\")"].join("\n")
+    });
+    const namedRoute = extractFileFacts({
+      filePath: "src/named.jl",
+      language: "julia",
+      sourceText: [
+        "using Genie",
+        "health() = \"ok\"",
+        "route(\"/health\", health, named = :health)"
+      ].join("\n")
+    });
+    const qualifiedMethod = extractFileFacts({
+      filePath: "src/qualified-method.jl",
+      language: "julia",
+      sourceText: [
+        "using Genie",
+        "health() = \"ok\"",
+        "route(\"/health\", health, method = Router.POST)"
+      ].join("\n")
+    });
+    const nestedRoute = extractFileFacts({
+      filePath: "src/nested.jl",
+      language: "julia",
+      sourceText: [
+        "using Genie",
+        "function configure()",
+        "  route(\"/health\", health)",
+        "end",
+        "health() = \"ok\""
+      ].join("\n")
+    });
+    const wrappedRoute = extractFileFacts({
+      filePath: "src/wrapped.jl",
+      language: "julia",
+      sourceText: [
+        "using Genie",
+        "health() = \"ok\"",
+        "route(\"/health\", health) do",
+        "  \"ignored\"",
+        "end"
+      ].join("\n")
+    });
+    const repeatedUse = extractFileFacts({
+      filePath: "src/repeated.jl",
+      language: "julia",
+      sourceText: [
+        "using Genie",
+        "using Genie",
+        "health() = \"ok\"",
+        "route(\"/health\", health)"
+      ].join("\n")
+    });
+    const broken = extractFileFacts({
+      filePath: "src/broken.jl",
+      language: "julia",
+      sourceText: "using Genie\nhealth() = \"ok\"\nroute(\"/health\", health"
+    });
+    const unterminatedString = extractFileFacts({
+      filePath: "src/string.jl",
+      language: "julia",
+      sourceText: "using Genie\nroute(\"/health, health)"
+    });
+    const unsupportedChar = extractFileFacts({
+      filePath: "src/char.jl",
+      language: "julia",
+      sourceText: "using Genie\nhealth() = 'x'\nroute(\"/health\", health)"
+    });
+    const wrappedFunction = extractFileFacts({
+      filePath: "src/wrapped-function.jl",
+      language: "julia",
+      sourceText: [
+        "using Genie",
+        "@eval health() = \"ok\"",
+        "route(\"/health\", health)"
+      ].join("\n")
+    });
+
+    for (const facts of [
+      missingUse,
+      dynamicPath,
+      inlineHandler,
+      namedRoute,
+      qualifiedMethod,
+      nestedRoute,
+      wrappedRoute,
+      repeatedUse,
+      broken,
+      unterminatedString,
+      unsupportedChar
+    ]) {
+      expect(facts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+      expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+    }
+    expect(broken.symbols).toHaveLength(1);
+    expect(unterminatedString.symbols).toHaveLength(1);
+    expect(unsupportedChar.symbols).toHaveLength(1);
+    expect(wrappedFunction.edges.filter((edge) => edge.kind === "routes")).toEqual([
+      expect.objectContaining({
+        resolution: "unresolved",
+        evidence: expect.objectContaining({
+          ruleId: "framework.genie.direct-route.literal-named-function.unresolved"
+        })
+      })
+    ]);
+  });
+
   it("extracts direct C++ cpp-httplib named-handler routes with exact evidence", () => {
     const facts = extractFileFacts({
       filePath: "src/server.cpp",

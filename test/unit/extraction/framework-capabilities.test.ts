@@ -29,6 +29,7 @@ describe("first-party framework capabilities", () => {
       "cowboy",
       "compojure",
       "dancer2",
+      "genie",
       "cpp-httplib",
       "aspnet-core",
       "rails",
@@ -192,6 +193,15 @@ describe("first-party framework capabilities", () => {
       surfaces: [
         "direct use Dancer2 proof",
         "direct literal verb routes with same-file named sub coderef handler proof"
+      ]
+    });
+    expect(frameworkCapability("genie")).toMatchObject({
+      languages: ["julia"],
+      routeFramework: "genie",
+      routeRegistrations: [],
+      surfaces: [
+        "direct using Genie proof",
+        "direct literal named-handler routes with optional literal method proof"
       ]
     });
     expect(frameworkCapability("cpp-httplib")).toMatchObject({

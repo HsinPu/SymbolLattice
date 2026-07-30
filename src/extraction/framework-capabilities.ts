@@ -22,6 +22,7 @@ export const FRAMEWORK_CAPABILITY_IDS = [
   "cowboy",
   "compojure",
   "dancer2",
+  "genie",
   "cpp-httplib",
   "aspnet-core",
   "rails",
@@ -245,6 +246,16 @@ export const FRAMEWORK_CAPABILITIES = [
     surfaces: [
       "direct use Dancer2 proof",
       "direct literal verb routes with same-file named sub coderef handler proof"
+    ]
+  },
+  {
+    id: "genie",
+    languages: ["julia"],
+    routeFramework: "genie",
+    routeRegistrations: [],
+    surfaces: [
+      "direct using Genie proof",
+      "direct literal named-handler routes with optional literal method proof"
     ]
   },
   {
