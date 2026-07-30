@@ -42,6 +42,7 @@ export type RouteFramework =
   | "nextjs"
   | "sveltekit"
   | "astro"
+  | "blazor"
   | "react-router"
   | "vue-router"
   | "fastapi"
@@ -81,6 +82,7 @@ export type RouteRegistration =
   | "nextjs-pages-router"
   | "sveltekit-filesystem-page"
   | "astro-filesystem-page"
+  | "blazor-page-directive"
   | "react-router-data-router"
   | "react-router-create-routes-from-elements";
 
@@ -90,6 +92,7 @@ export const ARTIFACT_LANGUAGES = [
   "vue",
   "svelte",
   "astro",
+  "razor",
   "python",
   "go",
   "rust",

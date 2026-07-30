@@ -1,7 +1,7 @@
 {
   "name": "@hsinpu/symbol-lattice",
-  "version": "0.62.0",
-  "description": "Evidence-first local code intelligence for TypeScript, JavaScript, Vue, Svelte, Astro, Python, Go, Rust, Java, PHP, C, Lua, R, Elixir, Erlang, Clojure, Perl, Julia, Haskell, OCaml, F#, Nim, C++, C#, Ruby, Kotlin, Swift, Dart, and Scala projects.",
+  "version": "0.63.0",
+  "description": "Evidence-first local code intelligence for TypeScript, JavaScript, Vue, Svelte, Astro, Razor/Blazor, Python, Go, Rust, Java, PHP, C, Lua, R, Elixir, Erlang, Clojure, Perl, Julia, Haskell, OCaml, F#, Nim, C++, C#, Ruby, Kotlin, Swift, Dart, and Scala projects.",
   "license": "MIT",
   "repository": {
     "type": "git",

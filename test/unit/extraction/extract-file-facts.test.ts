@@ -6683,4 +6683,66 @@ describe("source extraction", () => {
     ]);
     expect(privatePage.pendingReferences).toEqual([]);
   });
+
+  it("extracts literal Razor page directives as exact local Blazor navigation", () => {
+    const facts = extractFileFacts({
+      filePath: "Components/Catalog.razor",
+      language: "razor",
+      sourceText: [
+        '@page "/catalog"',
+        '@page "/catalog/{id:int}"',
+        "",
+        "<h1>Catalog</h1>"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.map((symbol) => [symbol.kind, symbol.name])).toEqual([
+      ["file", "Catalog.razor"],
+      ["variable", "default"],
+      ["route", "NAVIGATE /catalog"],
+      ["route", "NAVIGATE /catalog/{id:int}"]
+    ]);
+    expect(facts.exportBindings).toEqual([
+      expect.objectContaining({ localName: "default", exportedName: "default" })
+    ]);
+    expect(facts.pendingReferences).toEqual([
+      expect.objectContaining({
+        referenceName: "default",
+        relationKind: "routes",
+        routeFramework: "blazor",
+        routeRegistration: "blazor-page-directive"
+      }),
+      expect.objectContaining({
+        referenceName: "default",
+        relationKind: "routes",
+        routeFramework: "blazor",
+        routeRegistration: "blazor-page-directive"
+      })
+    ]);
+    expect(facts.referenceScopes).toEqual([
+      expect.objectContaining({ scopeIds: ["razor:file"] }),
+      expect.objectContaining({ scopeIds: ["razor:file"] })
+    ]);
+  });
+
+  it("omits commented, computed, and non-route Razor directives", () => {
+    const facts = extractFileFacts({
+      filePath: "Components/Catalog.razor",
+      language: "razor",
+      sourceText: [
+        "@*",
+        '@page "/commented"',
+        "*@",
+        "@page RoutePaths.Catalog",
+        '@page "/catalog?draft=1"',
+        '@attribute [Route("/attribute")]'
+      ].join("\n")
+    });
+
+    expect(facts.symbols.map((symbol) => [symbol.kind, symbol.name])).toEqual([
+      ["file", "Catalog.razor"],
+      ["variable", "default"]
+    ]);
+    expect(facts.pendingReferences).toEqual([]);
+  });
 });

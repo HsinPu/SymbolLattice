@@ -26,6 +26,7 @@ import { extractRustFileFacts } from "./rust.js";
 import { extractSwiftFileFacts } from "./swift.js";
 import { extractSvelteFileFacts } from "./svelte.js";
 import { extractAstroFileFacts } from "./astro.js";
+import { extractRazorFileFacts } from "./razor.js";
 import { extractVueFileFacts } from "./vue.js";
 import {
   frameworkCapability,
@@ -3729,6 +3730,9 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
   }
   if (input.language === "astro") {
     return extractAstroFileFacts({ ...input, language: "astro" });
+  }
+  if (input.language === "razor") {
+    return extractRazorFileFacts({ ...input, language: "razor" });
   }
 
   const sourceFile = ts.createSourceFile(

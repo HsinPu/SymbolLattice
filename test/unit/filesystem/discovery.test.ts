@@ -67,6 +67,7 @@ describe("source discovery", () => {
     await writeFile(join(projectPath, "src", "o.vue"), "<template><main /></template>\n", "utf8");
     await writeFile(join(projectPath, "src", "p.svelte"), "<main />\n", "utf8");
     await writeFile(join(projectPath, "src", "q.astro"), "<main />\n", "utf8");
+    await writeFile(join(projectPath, "src", "r.razor"), "<main />\n", "utf8");
     await writeFile(join(projectPath, "conf", "routes"), "GET /health controllers.HealthController.health\n", "utf8");
     await writeFile(join(projectPath, "conf", "admin.routes"), "GET /admin controllers.AdminController.index\n", "utf8");
     await writeFile(join(projectPath, "README.md"), "ignored", "utf8");
@@ -108,6 +109,7 @@ describe("source discovery", () => {
       "src/o.vue",
       "src/p.svelte",
       "src/q.astro",
+      "src/r.razor",
       "src/z.ts"
     ]);
     expect(files.map((file) => file.language)).toEqual([
@@ -144,6 +146,7 @@ describe("source discovery", () => {
       "vue",
       "svelte",
       "astro",
+      "razor",
       "typescript"
     ]);
   });

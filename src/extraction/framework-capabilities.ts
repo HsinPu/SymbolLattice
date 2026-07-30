@@ -9,6 +9,7 @@ export const FRAMEWORK_CAPABILITY_IDS = [
   "vue-router",
   "sveltekit",
   "astro",
+  "blazor",
   "nextjs",
   "fastapi",
   "flask",
@@ -121,6 +122,13 @@ export const FRAMEWORK_CAPABILITIES = [
     routeFramework: "astro",
     routeRegistrations: ["astro-filesystem-page"],
     surfaces: ["src/pages static .astro convention-derived default components"]
+  },
+  {
+    id: "blazor",
+    languages: ["razor"],
+    routeFramework: "blazor",
+    routeRegistrations: ["blazor-page-directive"],
+    surfaces: [".razor conventional components", "standalone literal @page directive routes"]
   },
   {
     id: "nextjs",

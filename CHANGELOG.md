@@ -6,6 +6,24 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.63.0] - 2026-07-31
+
+### Added
+
+- Razor/Blazor `.razor` source discovery, persisted source-search language filtering, CLI/MCP validation, and a bounded component extractor. Every discovered file emits a conventional local `default` component with auditable containment/export/local-binding facts.
+- An executable first-party `blazor` capability. Each standalone, unescaped, slash-prefixed string-literal `@page` directive emits a `NAVIGATE` route node and exact local-default-component `framework.blazor.page-directive.local-handler` evidence. Multiple literal route templates, including literal parameter templates, remain distinct.
+- Unit and integration coverage now verifies Razor discovery, conventional component evidence, literal/multiple directive routing, comment/computed/`@attribute`/query-fragment rejection, source-search/CLI/MCP language validation, persisted route-query integration, and exact caller evidence. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.63.0.md`.
+
+### Compatibility
+
+- No SQLite schema migration or new query command is required. Razor symbols and Blazor navigation reuse the existing file, symbol, edge, source-search, and route-query contracts; existing generations remain readable.
+- The artifact extractor advances to `multi-language-ast-v52`; the project resolver remains `project-resolver-v19` because every accepted route resolves only to a same-file conventional component. A pre-v0.63 active index reports `indexer-version-changed` until an explicit `sync` or `index` publishes Razor-capable facts.
+
+### Deliberate limits
+
+- The Razor extractor is a deliberately small directive scanner, not the Razor compiler or a C# parser. It excludes `@code`/`@functions` members, `@inject`/`@model`/`@inherits` references, template component tags, layouts/render modes, generic Razor namespace/project/package resolution, and runtime behavior.
+- Blazor navigation accepts only standalone unescaped literal `@page` directives in `.razor` files. It excludes `@attribute [Route(...)]`, computed/escaped/query/fragment forms, Razor comments, `.cshtml`, route configuration, and runtime behavior. The inspected local CodeGraph baseline has a broader Razor extractor for directive type references, Blazor component tags, and C# code blocks; SymbolLattice adds a distinct narrow precision surface by turning only direct literal `@page` declarations into exact local route evidence rather than claiming full Razor parity.
+
 ## [0.62.0] - 2026-07-31
 
 ### Added

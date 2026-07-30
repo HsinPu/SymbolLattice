@@ -6418,4 +6418,102 @@ describe("SymbolLatticeService", () => {
       ])
     );
   });
+
+  it("indexes Razor default components and literal Blazor page directives", async () => {
+    const projectPath = await createInlineProject({
+      "Components/Home.razor": ['@page "/"', "<h1>Home</h1>"].join("\n"),
+      "Components/Catalog.razor": [
+        '@page "/catalog"',
+        '@page "/catalog/{id:int}"',
+        "<h1>Catalog</h1>"
+      ].join("\n"),
+      "Components/Shared.razor": "<main>Shared</main>",
+      "Views/Legacy.cshtml": '@page "/legacy"'
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    const indexed = await service.init({ projectPath });
+    const routes = await service.routes(projectPath, { method: "NAVIGATE" });
+    const search = await service.search(projectPath, "Catalog", { language: "razor" });
+    const persistedRazorFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .filter((facts) => facts.language === "razor");
+    const page = (await service.find(projectPath, "Components/Catalog.razor#default")).symbols[0];
+    if (page === undefined) {
+      throw new Error("Expected indexed Razor default component.");
+    }
+    const callers = await service.callers(projectPath, page.qualifiedName);
+
+    expect(indexed).toMatchObject({
+      stale: false,
+      counts: { files: 3, symbols: expect.any(Number), edges: expect.any(Number) }
+    });
+    expect(persistedRazorFacts).toHaveLength(3);
+    expect(
+      persistedRazorFacts.every(
+        (facts) => facts.extractorVersion === ARTIFACT_FACTS_EXTRACTOR_VERSION
+      )
+    ).toBe(true);
+    expect(routes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "NAVIGATE",
+          path: "/",
+          handler: expect.objectContaining({
+            qualifiedName: "Components/Home.razor#default"
+          }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.blazor.page-directive.local-handler",
+              stage: "lexical"
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "NAVIGATE",
+          path: "/catalog",
+          handler: expect.objectContaining({
+            qualifiedName: "Components/Catalog.razor#default"
+          }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.blazor.page-directive.local-handler",
+              stage: "lexical"
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "NAVIGATE",
+          path: "/catalog/{id:int}",
+          handler: expect.objectContaining({
+            qualifiedName: "Components/Catalog.razor#default"
+          })
+        })
+      ])
+    );
+    expect(routes.routes.map((route) => route.path)).not.toContain("/legacy");
+    expect(search.results).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ filePath: "Components/Catalog.razor", language: "razor" })
+      ])
+    );
+    expect(callers.relations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          symbol: expect.objectContaining({ kind: "route", name: "NAVIGATE /catalog" }),
+          edge: expect.objectContaining({
+            kind: "routes",
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.blazor.page-directive.local-handler",
+              stage: "lexical"
+            })
+          })
+        })
+      ])
+    );
+  });
 });

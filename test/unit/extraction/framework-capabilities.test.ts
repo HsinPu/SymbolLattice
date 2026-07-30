@@ -16,6 +16,7 @@ describe("first-party framework capabilities", () => {
       "vue-router",
       "sveltekit",
       "astro",
+      "blazor",
       "nextjs",
       "fastapi",
       "flask",
@@ -81,6 +82,12 @@ describe("first-party framework capabilities", () => {
       routeFramework: "astro",
       routeRegistrations: ["astro-filesystem-page"],
       surfaces: ["src/pages static .astro convention-derived default components"]
+    });
+    expect(frameworkCapability("blazor")).toMatchObject({
+      languages: ["razor"],
+      routeFramework: "blazor",
+      routeRegistrations: ["blazor-page-directive"],
+      surfaces: [".razor conventional components", "standalone literal @page directive routes"]
     });
     expect(frameworkCapability("nextjs")).toMatchObject({
       languages: ["typescript", "javascript"],
