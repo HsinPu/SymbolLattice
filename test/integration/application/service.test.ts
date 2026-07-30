@@ -6850,4 +6850,70 @@ describe("SymbolLatticeService", () => {
       })
     ]);
   });
+
+  it("indexes CFML, CFScript, and tag-based component declarations", async () => {
+    const projectPath = await createInlineProject({
+      "services/OrderService.cfc": [
+        "component {",
+        "  public string function format(required string orderId) {",
+        "    return orderId;",
+        "  }",
+        "}"
+      ].join("\n"),
+      "legacy/Inventory.cfc": [
+        "<cfcomponent>",
+        "  <cffunction name=\"load\" access=\"public\">",
+        "  </cffunction>",
+        "</cfcomponent>"
+      ].join("\n"),
+      "scripts/helpers.cfs": "function clean() { return true; }\n"
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    const indexed = await service.init({ projectPath });
+    const search = await service.search(projectPath, "format", { language: "cfml" });
+    const orderService = (
+      await service.find(projectPath, "services/OrderService.cfc#component:OrderService")
+    ).symbols[0];
+    const inventory = (
+      await service.find(projectPath, "legacy/Inventory.cfc#component:Inventory")
+    ).symbols[0];
+    const helper = (await service.find(projectPath, "scripts/helpers.cfs#function:clean")).symbols[0];
+    if (orderService === undefined || inventory === undefined || helper === undefined) {
+      throw new Error("Expected indexed CFML declarations.");
+    }
+    const persistedCfmlFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .filter((facts) => facts.language === "cfml");
+
+    expect(indexed).toMatchObject({
+      stale: false,
+      counts: { files: 3, symbols: expect.any(Number), edges: expect.any(Number) }
+    });
+    expect(persistedCfmlFacts).toHaveLength(3);
+    expect(
+      persistedCfmlFacts.every((facts) => facts.extractorVersion === ARTIFACT_FACTS_EXTRACTOR_VERSION)
+    ).toBe(true);
+    expect(search.results).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          filePath: "services/OrderService.cfc",
+          language: "cfml"
+        })
+      ])
+    );
+    expect(orderService).toMatchObject({
+      kind: "class",
+      qualifiedName: "services/OrderService.cfc#component:OrderService"
+    });
+    expect(inventory).toMatchObject({
+      kind: "class",
+      qualifiedName: "legacy/Inventory.cfc#component:Inventory"
+    });
+    expect(helper).toMatchObject({
+      kind: "function",
+      qualifiedName: "scripts/helpers.cfs#function:clean"
+    });
+  });
 });

@@ -122,7 +122,8 @@ export const ARTIFACT_LANGUAGES = [
   "scala",
   "terraform",
   "liquid",
-  "solidity"
+  "solidity",
+  "cfml"
 ] as const;
 
 export type ArtifactLanguage = (typeof ARTIFACT_LANGUAGES)[number];

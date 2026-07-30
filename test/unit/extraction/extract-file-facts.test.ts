@@ -7062,4 +7062,147 @@ describe("source extraction", () => {
     ]);
     expect(malformedFacts.edges).toEqual([]);
   });
+
+  it("extracts complete CFML, CFScript, tag-based, and implicit CFC declarations", () => {
+    const scriptFacts = extractFileFacts({
+      filePath: "services/OrderService.cfc",
+      language: "cfml",
+      sourceText: [
+        "component {",
+        "  public string function format(required string orderId) {",
+        "    return orderId;",
+        "  }",
+        "  private void function audit() {}",
+        "}"
+      ].join("\n")
+    });
+    const interfaceFacts = extractFileFacts({
+      filePath: "contracts/IClock.cfs",
+      language: "cfml",
+      sourceText: [
+        "interface {",
+        "  public string function now();",
+        "}"
+      ].join("\n")
+    });
+    const tagFacts = extractFileFacts({
+      filePath: "legacy/Inventory.cfc",
+      language: "cfml",
+      sourceText: [
+        "<cfcomponent>",
+        "  <cffunction name=\"load\" access=\"public\">",
+        "  </cffunction>",
+        "</cfcomponent>"
+      ].join("\n")
+    });
+    const implicitFacts = extractFileFacts({
+      filePath: "legacy/Legacy.cfc",
+      language: "cfml",
+      sourceText: [
+        "public string function slugify(required string value) {",
+        "  return value;",
+        "}"
+      ].join("\n")
+    });
+    const bareFacts = extractFileFacts({
+      filePath: "scripts/helpers.cfs",
+      language: "cfml",
+      sourceText: "function clean() { return true; }\n"
+    });
+
+    expect(scriptFacts.symbols.map((symbol) => [symbol.kind, symbol.name])).toEqual([
+      ["file", "OrderService.cfc"],
+      ["class", "OrderService"],
+      ["method", "format"],
+      ["method", "audit"]
+    ]);
+    expect(scriptFacts.edges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "contains",
+          referenceName: "OrderService",
+          evidence: expect.objectContaining({
+            ruleId: "language.cfml.component.braced",
+            stage: "syntax"
+          })
+        }),
+        expect.objectContaining({
+          kind: "contains",
+          referenceName: "format",
+          evidence: expect.objectContaining({
+            ruleId: "language.cfml.function.direct-member",
+            stage: "syntax"
+          })
+        })
+      ])
+    );
+    expect(interfaceFacts.symbols.map((symbol) => [symbol.kind, symbol.name])).toEqual([
+      ["file", "IClock.cfs"],
+      ["interface", "IClock"],
+      ["method", "now"]
+    ]);
+    expect(tagFacts.symbols.map((symbol) => [symbol.kind, symbol.name])).toEqual([
+      ["file", "Inventory.cfc"],
+      ["class", "Inventory"],
+      ["method", "load"]
+    ]);
+    expect(tagFacts.edges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          referenceName: "load",
+          evidence: expect.objectContaining({
+            ruleId: "language.cfml.cffunction.tag",
+            stage: "syntax"
+          })
+        })
+      ])
+    );
+    expect(implicitFacts.symbols.map((symbol) => [symbol.kind, symbol.name])).toEqual([
+      ["file", "Legacy.cfc"],
+      ["class", "Legacy"],
+      ["method", "slugify"]
+    ]);
+    expect(bareFacts.symbols.map((symbol) => [symbol.kind, symbol.name])).toEqual([
+      ["file", "helpers.cfs"],
+      ["function", "clean"]
+    ]);
+  });
+
+  it("rejects commented, quoted, malformed, and incomplete CFML declarations", () => {
+    const facts = extractFileFacts({
+      filePath: "services/Safe.cfc",
+      language: "cfml",
+      sourceText: [
+        "<!--- <cfcomponent><cffunction name=\"hidden\"></cffunction></cfcomponent> --->",
+        "var marker = '<cffunction name=\"fake\"></cffunction>';",
+        "component {",
+        "  public function live() {}",
+        "}"
+      ].join("\n")
+    });
+    const malformedScript = extractFileFacts({
+      filePath: "services/Broken.cfc",
+      language: "cfml",
+      sourceText: "component {\n  public function missing()\n"
+    });
+    const malformedTag = extractFileFacts({
+      filePath: "services/BrokenTag.cfc",
+      language: "cfml",
+      sourceText: "<cfcomponent><cffunction name=\"missing\"></cfcomponent>"
+    });
+
+    expect(facts.symbols.map((symbol) => [symbol.kind, symbol.name])).toEqual([
+      ["file", "Safe.cfc"],
+      ["class", "Safe"],
+      ["method", "live"]
+    ]);
+    expect(malformedScript.symbols.map((symbol) => [symbol.kind, symbol.name])).toEqual([
+      ["file", "Broken.cfc"]
+    ]);
+    expect(malformedScript.edges).toEqual([]);
+    expect(malformedTag.symbols.map((symbol) => [symbol.kind, symbol.name])).toEqual([
+      ["file", "BrokenTag.cfc"]
+    ]);
+    expect(malformedTag.edges).toEqual([]);
+  });
 });

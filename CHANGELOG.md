@@ -6,6 +6,23 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.68.0] - 2026-07-31
+
+### Added
+
+- CFML / CFScript `.cfc`, `.cfm`, and `.cfs` source discovery, persisted source-search filtering, CLI language validation, and an independent offset-preserving declaration scanner. It retains only complete braced CFScript `component` / `interface` containers with direct named functions, complete tag-based `<cfcomponent>` / `<cfinterface>` containers with named `<cffunction>` members, and the conventional implicit CFC component form for complete top-level CFScript functions.
+- Unit and integration coverage now verifies CFML discovery, braced/tag/implicit declaration forms, direct containment evidence, quoted/commented/malformed/incomplete rejection, persisted source search, and CLI language filtering. The standalone Traditional Chinese comparison report is at `C:\\Users\\win10\\Desktop\\Graph\\FEATURE_COMPARISON_v0.68.0.md`.
+
+### Compatibility
+
+- No SQLite schema migration or new query command is required. CFML reuses the existing file, class, interface, function, method, containment-edge, source-search, and raw-artifact contracts; existing generations remain readable.
+- The artifact extractor advances to `multi-language-ast-v57`; the project resolver remains `project-resolver-v21` because this initial CFML slice does not project imports, includes, calls, or cross-file relationships. A pre-v0.68 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes CFML-capable facts.
+
+### Deliberate limits
+
+- The CFML scanner is a deliberately narrow declaration scanner, not a CFML parser, Adobe ColdFusion/Lucee runtime, template renderer, query analyzer, or framework analyzer. It accepts only complete literal forms whose parent structure can be locally proved; unclosed comments, strings, braces, tags, and function declarations fail closed.
+- CFML support does not infer `cfinclude`, `import`, component inheritance, accessors, annotations, dynamic names, closures, nested/member functions, `cfscript` blocks inside tag-based components, CFQuery SQL or hash expressions, calls, ORM/DI/framework conventions, request lifecycle, remote services, compilation, or runtime behavior. The inspected local CodeGraph baseline uses Tree-sitter and is broader for CFScript imports, variables, calls, and embedded CFQuery; SymbolLattice deliberately begins with a smaller independently implemented declaration contract.
+
 ## [0.67.0] - 2026-07-31
 
 ### Added
