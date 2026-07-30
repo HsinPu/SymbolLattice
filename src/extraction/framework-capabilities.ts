@@ -8,6 +8,7 @@ export const FRAMEWORK_CAPABILITY_IDS = [
   "react-router",
   "vue-router",
   "sveltekit",
+  "astro",
   "nextjs",
   "fastapi",
   "flask",
@@ -113,6 +114,13 @@ export const FRAMEWORK_CAPABILITIES = [
     routeFramework: "sveltekit",
     routeRegistrations: ["sveltekit-filesystem-page"],
     surfaces: ["src/routes static +page.svelte convention-derived default components"]
+  },
+  {
+    id: "astro",
+    languages: ["astro"],
+    routeFramework: "astro",
+    routeRegistrations: ["astro-filesystem-page"],
+    surfaces: ["src/pages static .astro convention-derived default components"]
   },
   {
     id: "nextjs",

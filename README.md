@@ -2,7 +2,7 @@
 
 # SymbolLattice
 
-**Evidence-first local code intelligence for TypeScript, JavaScript, Vue, Svelte, Python, Go, Rust, Java, PHP, C, Lua, R, Elixir, Erlang, Clojure, Perl, Julia, Haskell, OCaml, F#, Nim, C++, C#, Ruby, Kotlin, Swift, Dart, and Scala projects.**
+**Evidence-first local code intelligence for TypeScript, JavaScript, Vue, Svelte, Astro, Python, Go, Rust, Java, PHP, C, Lua, R, Elixir, Erlang, Clojure, Perl, Julia, Haskell, OCaml, F#, Nim, C++, C#, Ruby, Kotlin, Swift, Dart, and Scala projects.**
 
 [![Version](https://img.shields.io/github/v/tag/HsinPu/symbol-lattice?label=version)](https://github.com/HsinPu/symbol-lattice/tags)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D22.13-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> **v0.61.0** is an early developer release. This public repository runs from source; its npm package is intentionally private and is not published to npm.
+> **v0.62.0** is an early developer release. This public repository runs from source; its npm package is intentionally private and is not published to npm.
 
 SymbolLattice builds a local symbol graph without hiding uncertainty. It keeps syntax-proven artifact facts, resolves cross-file relationships conservatively, and records why every resolved edge exists. The graph stays local to the inspected project under `.symbol-lattice/index.sqlite`.
 
@@ -27,9 +27,10 @@ SymbolLattice builds a local symbol graph without hiding uncertainty. It keeps s
 - **Event-accelerated foreground freshness** - opt-in `watch` uses native filesystem events when the host supports them, exposes bounded pending-path evidence in its own stream, coalesces saves, retains bounded polling as a safety sweep, and invokes the same atomic `sync` only after drift.
 - **Generation-bound source evidence** - `search` and exact `explore` results use source captured with the active graph generation, even when the live project has since drifted.
 - **Declaration-focused node view** - exact `node` results return the full persisted declaration range plus a bounded declaration body, direct callers/callees, and explicit limits from one active generation without substituting live source text.
-- **Static route evidence** - narrow Express, Fastify, NestJS, Python FastAPI/Flask, Go Gin/`net/http`/Chi, Rust Axum, Java Spring Web, PHP Laravel, C CivetWeb, Lua Lapis, R Plumber, Elixir Phoenix, Erlang Cowboy, Clojure Compojure, Perl Dancer2, Julia Genie, Haskell Scotty, OCaml Dream, F# Giraffe, Nim Jester, C++ cpp-httplib, C# ASP.NET Core, Ruby Rails, Kotlin Ktor, Swift Vapor, Scala/Java Play HTTP packs, and Flutter, Vue Router, SvelteKit, React Router, and Next.js client-navigation routes create first-class `route` nodes and evidence-bearing `routes` edges only when the registration and handler form are statically proven. Literal Play `->` Router mounts are retained separately as evidence-bearing `handles` relationships, never fabricated HTTP endpoints.
+- **Static route evidence** - narrow Express, Fastify, NestJS, Python FastAPI/Flask, Go Gin/`net/http`/Chi, Rust Axum, Java Spring Web, PHP Laravel, C CivetWeb, Lua Lapis, R Plumber, Elixir Phoenix, Erlang Cowboy, Clojure Compojure, Perl Dancer2, Julia Genie, Haskell Scotty, OCaml Dream, F# Giraffe, Nim Jester, C++ cpp-httplib, C# ASP.NET Core, Ruby Rails, Kotlin Ktor, Swift Vapor, Scala/Java Play HTTP packs, and Flutter, Vue Router, SvelteKit, Astro, React Router, and Next.js client-navigation routes create first-class `route` nodes and evidence-bearing `routes` edges only when the registration and handler form are statically proven. Literal Play `->` Router mounts are retained separately as evidence-bearing `handles` relationships, never fabricated HTTP endpoints.
 - **Vue SFC + Vue Router navigation evidence** - direct `.vue` default component exports and a narrowly proven `createRouter({ routes })` configuration can form exact cross-file `NAVIGATE` edges through a unique relative Vue module, with the same route query and source-search surfaces as every other indexed language.
 - **Svelte SFC + SvelteKit navigation evidence** - validated `.svelte` files expose a conventional default component plus direct instance-script declarations; static `src/routes/**/+page.svelte` paths form exact local `NAVIGATE` evidence only for literal filesystem segments.
+- **Astro SFC + Astro page navigation evidence** - validated `.astro` frontmatter exposes a conventional default component plus direct declarations; static `src/pages/**/*.astro` paths form exact local `NAVIGATE` evidence only for literal page segments.
 - **Non-HTTP transport evidence** - AST-proven NestJS GraphQL, microservice, and WebSocket entrypoints use distinct `entrypoint` nodes and exact `handles` edges, so a message pattern or subscription is never mislabeled as an HTTP route.
 - **Direct type-hierarchy evidence** - AST-proven `extends` and `implements` edges preserve value/type namespace proof, type-only imports, re-export provenance, unresolved bases, and bounded direct parent/child views without pretending to have a full type checker.
 - **Bounded context packs** - ordered symbol references produce persisted source, capped relationship/impact summaries, and static directed evidence paths without guessing ambiguous symbols or dynamic behavior.
@@ -100,6 +101,7 @@ node dist/cli/main.js search "health" --project /path/to/project --language dart
 node dist/cli/main.js search "health" --project /path/to/project --language scala
 node dist/cli/main.js search "HomeView" --project /path/to/project --language vue
 node dist/cli/main.js search "Catalog" --project /path/to/project --language svelte
+node dist/cli/main.js search "Catalog" --project /path/to/project --language astro
 node dist/cli/main.js context "src/consumer.ts#calculate" "src/math.ts#add" --project /path/to/project
 
 # Select affected tests from changed files already present in the active generation.
@@ -129,13 +131,14 @@ One-shot data commands emit stable, pretty JSON. `watch` is the deliberate strea
 
 ## Capabilities
 
-| Area | v0.61.0 behavior |
+| Area | v0.62.0 behavior |
 | --- | --- |
-| Source files | TypeScript, TSX, JavaScript, JSX, Vue SFC, Svelte SFC, Python, Go, Rust, Java, PHP, C, Lua, R, Elixir, Erlang, Clojure, Perl, Julia, Haskell, OCaml, F#, Nim, C++, C#, Ruby, Kotlin, Swift, Dart, and Scala (`.vue`, `.svelte`, `.c`, `.lua`, `.r`, `.ex`, `.exs`, `.erl`, `.clj`, `.pl`, `.pm`, `.jl`, `.hs`, `.ml`, `.fs`, `.nim`, `.cpp`, `.cc`, `.cxx`, `.hpp`, `.hh`, `.hxx`, `.cs`, `.rb`, `.kt`, `.swift`, `.dart`, `.scala`; plus Play `conf/routes` and `conf/*.routes` route tables) |
+| Source files | TypeScript, TSX, JavaScript, JSX, Vue SFC, Svelte SFC, Astro SFC, Python, Go, Rust, Java, PHP, C, Lua, R, Elixir, Erlang, Clojure, Perl, Julia, Haskell, OCaml, F#, Nim, C++, C#, Ruby, Kotlin, Swift, Dart, and Scala (`.vue`, `.svelte`, `.astro`, `.c`, `.lua`, `.r`, `.ex`, `.exs`, `.erl`, `.clj`, `.pl`, `.pm`, `.jl`, `.hs`, `.ml`, `.fs`, `.nim`, `.cpp`, `.cc`, `.cxx`, `.hpp`, `.hh`, `.hxx`, `.cs`, `.rb`, `.kt`, `.swift`, `.dart`, `.scala`; plus Play `conf/routes` and `conf/*.routes` route tables) |
 | F# + Giraffe | Direct top-level typed `HttpFunc` / `HttpContext` handlers plus exactly one `open Giraffe` proof and a direct literal `choose [` route table. Fixed HTTP verbs and plain `route "/..."` entries become exact same-file or explicit unresolved route evidence. |
 | Nim + Jester | Direct top-level zero-argument `proc` handlers plus exactly one direct `import` list containing `jester`, then a flat `routes:` or `router name:` literal route block. Fixed lowercase HTTP verbs become exact same-file or explicit unresolved route evidence. |
 | Vue + Vue Router | Vue `.vue` files contribute a file symbol plus direct inline JavaScript/TypeScript script declarations and an auditable default component export. In TypeScript/JavaScript router modules, exactly one direct `createRouter` import plus one top-level literal `routes` option emits `NAVIGATE` route evidence; direct default imports can resolve exactly through `.vue` modules. |
 | Svelte + SvelteKit | Validated Svelte `.svelte` files contribute a conventional default component and direct instance-script declarations. Static `src/routes/**/+page.svelte` files with literal path segments emit exact local `NAVIGATE` route evidence; bracket and route-group conventions are intentionally excluded. |
+| Astro | Validated Astro `.astro` frontmatter contributes a conventional default component and direct declarations. Static `src/pages/**/*.astro` files with literal page segments emit exact local `NAVIGATE` route evidence; bracket, leading-underscore, endpoint, and runtime forms are intentionally excluded. |
 | Scope | Project root by default or repeatable, persisted `--scope` directories |
 | Discovery | Root `.gitignore` with negation; `.git`, `.symbol-lattice`, `coverage`, `dist`, and `node_modules` are always excluded |
 | Symbols | TypeScript/JavaScript: files, classes, functions, methods, interfaces, types, variables, routes, and entrypoints. Python: files, classes, functions, methods, and direct FastAPI / same-file or proven cross-file `APIRouter` / same-file Flask routes. Go: files, top-level functions, and direct Gin / `net/http` / Chi routes. Rust: files, top-level functions, and direct Axum routes. Java: files, direct top-level classes and methods, direct Spring Web routes, and direct package facts usable by Play controller resolution. PHP: files, direct top-level classes, methods, functions, and direct Laravel facade routes. C: files, direct top-level functions, and direct CivetWeb routes. Lua: files, direct top-level `function` / `local function` declarations, and direct Lapis routes. R: files, direct top-level braced `name <- function(...)` / `name = function(...)` declarations, and direct Plumber annotation routes. Elixir: files, direct top-level `defmodule` declarations represented by the existing `class` kind, direct module `def` / `defp` methods, and direct Phoenix Router routes. Erlang: files, direct `-module(...)` declarations represented by the existing `class` kind, direct simple top-level functions, and direct Cowboy dispatch routes. Clojure: files, direct `ns` declarations represented by the existing `class` kind, direct simple top-level `defn` functions, and direct Compojure routes. Perl: files, direct `package` declarations represented by the existing `class` kind, direct simple top-level `sub` functions, and direct Dancer2 routes. Julia: files, direct top-level one-line `name(...) = ...` functions, and direct Genie routes. C++: files, direct top-level classes, methods, functions, and direct cpp-httplib routes. C#: files, direct top-level classes, interfaces, methods, local functions, and direct ASP.NET Core routes. Ruby: files, direct top-level classes, methods, functions, and direct Rails routes. Kotlin: files, direct top-level classes, interfaces, methods, functions, and direct Ktor routes. Swift: files, direct top-level classes, structs, protocols, methods, functions, and direct Vapor routes. Dart: files, direct top-level classes, methods, functions, and direct Flutter named-navigation routes. Scala: files, direct top-level classes, objects, traits, methods, functions, direct Play route-table entries, and literal Play Router-mount nodes |
@@ -148,6 +151,8 @@ One-shot data commands emit stable, pretty JSON. `watch` is the deliberate strea
 | Vue module resolution | Relative TypeScript/JavaScript module resolution includes a unique `.vue` candidate. Only audited direct Vue SFC default-export forms participate; implicit `script setup` compiler exports remain deliberately unresolved. |
 | Svelte symbols and relationships | A validated Svelte SFC emits a conventional `default` component plus direct top-level instance-script functions, classes, interfaces, type aliases, and identifier variables. A static SvelteKit page emits a `NAVIGATE` `routes` reference to that local default component. |
 | Svelte module resolution | Relative TypeScript/JavaScript module resolution includes a unique `.svelte` candidate. Only the conventional SFC default component participates; template semantics and compiler-generated exports remain deliberately unresolved. |
+| Astro symbols and relationships | A validated optional opening frontmatter fence emits a conventional `default` component plus direct frontmatter functions, classes, interfaces, type aliases, and identifier variables. A static Astro page emits a `NAVIGATE` `routes` reference to that local default component. |
+| Astro module resolution | Relative TypeScript/JavaScript module resolution includes a unique `.astro` candidate. Only the conventional SFC default component participates; frontmatter imports and template/client-script semantics remain deliberately unresolved. |
 | Workspaces | Root `package.json` workspaces array/object, local package root/subpath `exports`, and entrypoint fallback |
 | Re-exports | Named aliases, `export *`, default-through-named aliases, and namespace-export provenance |
 | Retrieval | Local deterministic FTS5 search across persisted source text and identifier parts; bounded path/language filters, source/symbol evidence, and exact `explore` excerpts from the same active generation |
@@ -155,6 +160,7 @@ One-shot data commands emit stable, pretty JSON. `watch` is the deliberate strea
 | Routes | Static AST-proven Express literal registrations; Fastify shorthand/full-object registrations plus inline, same-file named, and imported/re-exported plugin `register(..., { prefix })` projection; direct NestJS controller decorators plus `RouterModule.register()` module-prefix projection; direct same-file FastAPI application decorators plus same-file and one-dot package-relative cross-file `APIRouter` / literal `include_router(...)` composition; direct Flask application decorators and same-file literal `Blueprint` / `register_blueprint(...)` composition; direct Go Gin engine / literal same-function `RouterGroup` composition, direct `net/http` `HandleFunc` / same-function `ServeMux` composition, and direct Chi `NewRouter` / `NewMux` method registrations; direct Rust Axum `Router::new().route(...)` builder chains; direct Java Spring Web controller method annotations with literal paths; direct PHP Laravel facade controller-action routes; direct C CivetWeb literal `mg_set_request_handler(...)` routes represented as `ALL`; direct Lua Lapis literal `get` / `post` / `put` / `delete` / `match` routes with prior local handlers; direct R Plumber `#*` / `#'` literal `@get` / `@post` / `@put` / `@delete` annotations with immediately following braced anonymous handlers; direct Elixir Phoenix Router module-level `use Phoenix.Router`, literal `scope` composition, and full-module controller atom-action verb routes; direct Erlang Cowboy `cowboy_router:compile([{'_', [{"/literal", handler_module, InitialState}]}])` wildcard-host dispatch routes; direct Clojure Compojure `ns` `compojure.core` refer proof plus `defroutes` literal verb routes with direct named handlers; direct Perl Dancer2 named-coderef routes; direct Julia Genie named-handler routes with a literal optional method keyword; direct C++ cpp-httplib named-handler routes; direct C# `WebApplication` Minimal API `Map*` and `ApiController` MVC method attributes; direct Ruby `Rails.application.routes.draw` literal controller-action routes; direct Kotlin Ktor `Application.module` `routing` callable-reference routes; direct Swift Vapor `routes(_ app: Application)` literal segment routes with same-file named handlers; direct Dart Flutter `MaterialApp(routes: {...})` same-file widget navigation; direct Scala/Java Play `conf/routes` literal controller-action entries with exact unique package-class-method handlers or explicit unresolved evidence, plus literal `->` Router mount `handles` evidence; recursively composed literal React Router JSX `Route`, `createRoutesFromElements(...)`, and v6.4+ data-router navigation; and convention-derived Next.js Pages/App Router page routes. All concrete HTTP/browser registrations use bounded `routes` listing and exact or deliberately unresolved handler evidence; browser routes use `NAVIGATE`, never fabricated HTTP `GET` |
 | Vue Router routes | Exactly one direct, unaliased `createRouter` import from `vue-router`, exactly one top-level `createRouter({ routes })` form, and literal slash-prefixed route records with named component identifiers. These become `NAVIGATE` routes, with exact same-file/imported component evidence only when the binding is unique. |
 | SvelteKit routes | Static `src/routes/**/+page.svelte` filesystem pages with literal segments only. The conventional local `default` component becomes the exact `NAVIGATE` handler; dynamic brackets, route groups, layouts, endpoints, and runtime router behavior are excluded. |
+| Astro routes | Static `src/pages/**/*.astro` filesystem pages with literal segments only; `index.astro` maps to its containing path. The conventional local `default` component becomes the exact `NAVIGATE` handler; dynamic brackets, leading-underscore segments, endpoints, Markdown/MDX/HTML pages, and runtime navigation are excluded. |
 | Perl Dancer2 | Direct `use Dancer2;` proof, top-level literal `get` / `post` / `put` / `patch` / `del` / `options` registrations, and direct `\&named_sub` handlers; unique simple same-file `sub` targets are exact and all other accepted coderefs are explicit `unresolved` |
 | Julia Genie | Direct `using Genie` proof, top-level literal `route("/path", named_function)` registrations, and an optional literal `method = GET/POST/PUT/PATCH/DELETE/OPTIONS` keyword; unique same-file one-line function targets are exact and all other accepted handlers are explicit `unresolved` |
 | Haskell Scotty | Direct `import Web.Scotty` proof, a top-level literal-port `scotty ... $ do` block, and direct block-level literal `get/post/put/delete/patch/options` named handlers; unique same-file zero-argument functions are exact and all other accepted handlers are explicit `unresolved` |
@@ -173,7 +179,7 @@ One-shot data commands emit stable, pretty JSON. `watch` is the deliberate strea
 
 Framework coverage is declared once and actively selects the extraction passes applicable to the parsed language. This is a stable integration boundary, not a runtime framework detector: every pass below still requires its own syntax proof before it emits facts.
 
-| Capability | Proven surfaces in v0.61 |
+| Capability | Proven surfaces in v0.62 |
 | --- | --- |
 | Express | Literal receiver methods and identifier handlers |
 | Fastify | Literal routes and static prefix composition |
@@ -206,6 +212,7 @@ Framework coverage is declared once and actively selects the extraction passes a
 | Flutter | Dart direct `MaterialApp(routes: {...})` literal named-navigation routes with same-file widget classes |
 | Vue Router | TypeScript/JavaScript direct `createRouter` import plus a top-level literal `routes` option with named Vue component identifiers |
 | SvelteKit | Svelte `src/routes` static `+page.svelte` convention-derived default components |
+| Astro | Astro `src/pages` static `.astro` convention-derived default components |
 | Play | Scala `conf/routes` / `conf/*.routes` literal controller-action entries with exact unique Scala-or-Java package-class-method handlers, plus literal static `->` Router-mount `handles` evidence |
 | React Router | Recursive literal JSX `Route`, `createRoutesFromElements` JSX trees, and data-router object trees |
 | Next.js | Pages Router and App Router page default exports |
@@ -509,6 +516,26 @@ The official [Svelte documentation](https://svelte.dev/docs/svelte/overview) des
 The validated SFC emits a conventional local `default` component, its direct instance-script declarations, and a `NAVIGATE /catalog -> default` edge with `framework.sveltekit.filesystem-page.local-handler` evidence. The scanner accepts no script, or at most one inline instance script and one inline module script, each in JavaScript or TypeScript. Module scripts are syntax-validated but their declarations are not yet indexed; this keeps the component and route claim explicit rather than treating Svelte compiler output as an ordinary ES module.
 
 It deliberately excludes `src` scripts, non-JavaScript/TypeScript or repeated scripts, malformed script input, template component/call edges, styles, runes/macros, compiler-generated exports, props semantics, SvelteKit layouts/endpoints/actions/hooks, dynamic bracket segments such as `[slug]`, route groups such as `(marketing)`, rest/optional parameters, and runtime navigation. Only literal directories beneath `src/routes` ending in `+page.svelte` become route nodes.
+
+#### Astro (Astro SFC + static filesystem pages)
+
+The official [Astro component documentation](https://docs.astro.build/en/basics/astro-components/) describes a component script fenced by `---`; the [Astro Pages guide](https://docs.astro.build/en/basics/astro-pages/) documents file-based pages beneath `src/pages/`. v0.62 proves the following narrow static form:
+
+```astro
+---
+export const title = "Catalog"
+
+export function greeting(): string {
+  return title
+}
+---
+
+<main>{title}</main>
+```
+
+For `src/pages/catalog/index.astro`, the validated component emits a conventional local `default` symbol, direct frontmatter declarations, and a `NAVIGATE /catalog -> default` edge with `framework.astro.filesystem-page.local-handler` evidence. `src/pages/index.astro` maps to `/`; a non-index static page keeps its literal file stem in the route.
+
+The scanner accepts no frontmatter or one exact opening frontmatter fence at the start of the file, parsed as TypeScript. An initial incomplete/malformed fence or invalid frontmatter syntax retains only the file node. It deliberately excludes frontmatter imports and re-exports, template component/call edges, client `<script>` tags, styles/directives/islands, `Astro` global and props semantics, `.ts`/`.js` endpoints, Markdown/MDX/HTML pages, dynamic brackets such as `[slug]`, leading-underscore segments, route configuration, and runtime navigation.
 
 #### Express
 
@@ -1717,6 +1744,8 @@ v0.60 adds no SQLite schema migration or route-query command. It adds Vue `.vue`
 
 v0.61 adds no SQLite schema migration or query command. It adds Svelte `.svelte` discovery, validated SFC default-component/direct instance-script facts, static SvelteKit `src/routes/**/+page.svelte` navigation facts, and a unique relative `.svelte` TypeScript/JavaScript module candidate through the existing file, symbol, edge, source-search, and route-query contracts. The extractor advances to `multi-language-ast-v50`; the resolver advances to `project-resolver-v18`. A pre-v0.61 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes Svelte-capable facts. Existing generations remain readable.
 
+v0.62 adds no SQLite schema migration or query command. It adds Astro `.astro` discovery, validated frontmatter conventional-default/direct declaration facts, static Astro `src/pages/**/*.astro` navigation facts, and a unique relative `.astro` TypeScript/JavaScript module candidate through the existing file, symbol, edge, source-search, and route-query contracts. The extractor advances to `multi-language-ast-v51`; the resolver advances to `project-resolver-v19`. A pre-v0.62 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes Astro-capable facts. Existing generations remain readable.
+
 ## Architecture
 
 ```mermaid
@@ -1730,7 +1759,7 @@ flowchart LR
   Catalog["Filesystem catalog\nscope + gitignore"] --> Inputs["Index inputs"]
   Catalog --> TS["TS alias resolver"]
   Catalog --> WS["Workspace resolver"]
-  Extractor["TypeScript AST extractor + Vue/Svelte SFC scanners + Python/Go/Rust/Java/PHP/C/C++ Lezer parsers + Lua/R/Elixir/Erlang/Clojure/Perl/Julia/Haskell lexical extractors + C#/Ruby/Kotlin/Swift/Dart/Scala ast-grep parsers\nfirst-party framework capability passes\nExpress/Fastify/Nest HTTP routes + Fastify plugin facts + FastAPI/Flask/Gin/net-http/Chi/Axum/Spring Web/Laravel/CivetWeb/Lapis/Plumber/Phoenix/Cowboy/Compojure/Dancer2/Genie/Scotty/cpp-httplib/ASP.NET Core/Rails/Ktor/Vapor/Flutter/Play facts\nFlutter/Vue Router/SvelteKit/React Router/Next client navigation\nNest module-prefix facts + non-HTTP entrypoints"] --> Facts["Reusable artifact facts"]
+  Extractor["TypeScript AST extractor + Vue/Svelte/Astro SFC scanners + Python/Go/Rust/Java/PHP/C/C++ Lezer parsers + Lua/R/Elixir/Erlang/Clojure/Perl/Julia/Haskell lexical extractors + C#/Ruby/Kotlin/Swift/Dart/Scala ast-grep parsers\nfirst-party framework capability passes\nExpress/Fastify/Nest HTTP routes + Fastify plugin facts + FastAPI/Flask/Gin/net-http/Chi/Axum/Spring Web/Laravel/CivetWeb/Lapis/Plumber/Phoenix/Cowboy/Compojure/Dancer2/Genie/Scotty/cpp-httplib/ASP.NET Core/Rails/Ktor/Vapor/Flutter/Play facts\nFlutter/Vue Router/SvelteKit/Astro/React Router/Next client navigation\nNest module-prefix facts + non-HTTP entrypoints"] --> Facts["Reusable artifact facts"]
   Catalog --> SourceDocs["Persisted source documents"]
   SourceDocs --> Retrieval["Generation-bound lexical projection"]
   Facts --> Resolver["Full project export surface"]
@@ -1748,7 +1777,7 @@ src/
   application/     Use cases, incremental planning, and graph projection
   cli/             Commander-based CLI
   domain/          Graph, evidence, identity, and index-work contracts
-  extraction/      TypeScript AST, Vue/Svelte SFC scanners, Python/Go/Rust/Java/PHP/C/C++ Lezer, Lua/R/Elixir/Erlang/Clojure/Perl/Julia/Haskell lexical, and C#/Ruby/Kotlin/Swift/Dart/Scala ast-grep fact extraction
+  extraction/      TypeScript AST, Vue/Svelte/Astro SFC scanners, Python/Go/Rust/Java/PHP/C/C++ Lezer, Lua/R/Elixir/Erlang/Clojure/Perl/Julia/Haskell lexical, and C#/Ruby/Kotlin/Swift/Dart/Scala ast-grep fact extraction
   infrastructure/  Filesystem, workspace, TypeScript, and SQLite adapters
   mcp/             Read-only MCP server
   ports/           Dependency boundaries
@@ -1756,7 +1785,7 @@ src/
 
 ## Deliberate boundaries
 
-v0.61.0 does not yet provide:
+v0.62.0 does not yet provide:
 
 - Daemon mode, background automatic sync after the foreground process exits, cross-process watch coordination, MCP per-query pending-file banners, worker pools, or historical source browsing.
 - pnpm workspace YAML, TypeScript project references, external/package `extends`, or nested `.gitignore` semantics.
@@ -1784,8 +1813,9 @@ v0.61.0 does not yet provide:
 - The Scala surface proves direct top-level classes, objects, traits, methods, and functions through the Scala AST. The Play surface proves an `exact` handler only for literal `conf/routes` / `conf/*.routes` entries whose fully static controller action has one direct matching Scala-or-Java package declaration, class/object, and body method; every other accepted entry remains `unresolved`. It also preserves a literal static fully-qualified `->` Router mount as a `handles` edge, not a concrete endpoint. It excludes dynamic/wildcard prefixes, Router-interface type checking, recursive mounted-router endpoint expansion, `build.sbt` detection, imported/classpath controller resolution, overload resolution, custom binders, reverse routing, Scala 3 contextual declarations, generic Scala/Java call/type analysis, and runtime Play behavior. Syntax-error Scala files retain only their file symbol until repaired.
 - The Vue surface is a deliberately small SFC scanner, not the Vue compiler. It accepts one inline JavaScript/TypeScript `<script>` block and only direct top-level declarations plus one of three auditable default-export forms: an object literal, a direct unaliased `defineComponent(...)` call, or a direct named variable initialized from that call. It excludes multiple/`src`/non-JS scripts, `script setup` implicit compiler exports, templates/styles/custom blocks, macro expansion, composables, TypeScript component inference, aliases/rebindings, generic Vue import/export/call/type analysis, and runtime behavior. Vue Router accepts only an exact-one direct `createRouter` import, one direct top-level literal routes option/array, slash-prefixed literal paths, and named component identifiers; it excludes aliases, repeated/rebound imports, nested/child records, spreads, lazy/inline components, dynamic paths, router factories, history/middleware configuration, and runtime navigation.
 - The Svelte surface is a deliberately small SFC scanner, not the Svelte compiler. It emits a conventional `default` component for a validated file and direct instance-script functions, classes, interfaces, type aliases, and identifier variables. It accepts no script, or at most one inline JavaScript/TypeScript instance script and one inline JavaScript/TypeScript module script; module declarations are syntax-validated but not indexed. SvelteKit navigation accepts only literal directories under `src/routes` ending in `+page.svelte` and links the route to that local conventional default component. It excludes `src`, non-JS/TS, duplicate or malformed scripts, template/styles/runes/macros, compiler-generated exports, props semantics, dynamic/optional/rest bracket paths, route groups, layouts/endpoints/actions/hooks, generic Svelte module/call/type analysis, and runtime behavior.
+- The Astro surface is a deliberately small SFC scanner, not the Astro compiler. It emits a conventional `default` component for a file with no frontmatter or one valid opening frontmatter fence, and direct frontmatter functions, classes, interfaces, type aliases, and identifier variables. Astro page navigation accepts only literal segments under `src/pages` ending in `.astro`; `index.astro` maps to the containing route. It excludes malformed starting fences or TypeScript frontmatter, frontmatter imports/re-exports, template/client-script/style/directive/island semantics, `Astro` global/props semantics, endpoints, Markdown/MDX/HTML pages, bracket/dynamic paths, leading-underscore segments, route configuration, generic Astro module/call/type analysis, and runtime behavior.
 - Semantic type checking, transitive hierarchy traversal, declaration-merging semantics, override dispatch, mixin/qualified/conditional heritage expressions, or automatic framework decorator inference. v0.18 recognizes direct imported NestJS HTTP decorators, direct static `RouterModule.register()` prefixes, and the narrowly defined non-HTTP decorators documented above; it does not infer custom decorators, barrels, `forRoot` / `forChild`, global/version prefixes, guards, GraphQL field resolvers, dynamic patterns, dynamic gateway configuration, or runtime transport wiring.
-- Language adapters beyond TS/TSX/JS/JSX/Vue/Svelte/Python/Go/Rust/Java/PHP/C/Lua/R/Elixir/Erlang/Clojure/Perl/Julia/Haskell/OCaml/F#/C++/C#/Ruby/Kotlin/Swift/Dart/Scala, external dependency indexing, telemetry, or multi-project routing.
+- Language adapters beyond TS/TSX/JS/JSX/Vue/Svelte/Astro/Python/Go/Rust/Java/PHP/C/Lua/R/Elixir/Erlang/Clojure/Perl/Julia/Haskell/OCaml/F#/C++/C#/Ruby/Kotlin/Swift/Dart/Scala, external dependency indexing, telemetry, or multi-project routing.
 - Embedding-based or cloud retrieval, semantic ranking, arbitrary natural-language context assembly, semantic Git diff beyond immutable zero-context hunk-to-revision-local-declaration evidence, or reliable rename/move/cross-side identity attribution.
 
 ## Roadmap
@@ -1852,6 +1882,8 @@ v0.61.0 does not yet provide:
 | `v0.59.0` | Nim `.nim` discovery, direct top-level zero-argument `proc` containment, exact-one direct import-list Jester proof, flat direct `routes:` / `router name:` literal routes, Nim source-search/CLI/MCP filters, exact same-file function evidence, explicit unresolved handler evidence, and missing-import/dynamic/inline/multi-statement/nested/repeated-import/unbalanced/tab-layout rejection |
 | `v0.60.0` | Vue `.vue` discovery, audited inline script declarations/default exports, unique relative Vue module resolution, direct exact-one `vue-router` `createRouter({ routes })` navigation evidence, Vue source-search/CLI/MCP filters, and dynamic/alias/rebound/lazy/inline/`script setup` rejection |
 | `v0.61.0` | Svelte `.svelte` discovery, validated SFC conventional-default/direct instance-script facts, unique relative Svelte module resolution, static literal-segment SvelteKit `+page.svelte` navigation evidence, Svelte source-search/CLI/MCP filters, and duplicate/`src`/non-JS/malformed/dynamic-path rejection |
+| `v0.62.0` | Astro `.astro` discovery, validated optional frontmatter conventional-default/direct declaration facts, unique relative Astro module resolution, static literal-segment `src/pages/**/*.astro` navigation evidence, Astro source-search/CLI/MCP filters, and malformed-fence/dynamic/private-page rejection |
+| `v0.62+` | Astro frontmatter imports/re-exports and template component/call edges, client-script/style/directive/island semantics, props/`Astro` globals, static `.md`/`.mdx`/`.html` pages, endpoint facts, dynamic/rest routes, routing configuration, and broader Astro module resolution |
 | `v0.61+` | Svelte template component/call edges, module-script declarations, `script` attributes/macros/runes/props semantics, SvelteKit layouts/endpoints/actions/hooks, dynamic/group/rest/optional filesystem routes, client-router configuration, and broader Svelte module resolution |
 | `v0.60+` | Vue `script setup` compiler exports, template component/call edges, multiple script blocks, TypeScript Vue inference, Vue Router children/nesting, lazy/dynamic components, aliases/factories/history configuration, and cross-file router composition |
 | `v0.59+` | Jester `from jester import` / alias proof, `before` / `after` / `error` handlers, special or regex route patterns, parameterized/async handlers, route composition, macro expansion, Nim package/module resolution, and proven cross-file callbacks |
@@ -1861,7 +1893,7 @@ See [CHANGELOG.md](CHANGELOG.md) for release notes and migration history.
 
 ## Release-by-release feature comparison
 
-Every release creates a verified standalone comparison report against the local CodeGraph baseline at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_vX.Y.Z.md` (for example, `FEATURE_COMPARISON_v0.61.0.md`). The version number is part of the filename, so each release retains an independent comparison record. It intentionally lives beside the local `symbol-lattice` and `codegraph` checkouts rather than inside either project. Starting with v0.28, these reports are written in Traditional Chinese. Each report distinguishes a proven precision advantage from broader-but-less-proven source coverage, and records remaining gaps instead of treating a version bump as parity.
+Every release creates a verified standalone comparison report against the local CodeGraph baseline at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_vX.Y.Z.md` (for example, `FEATURE_COMPARISON_v0.62.0.md`). The version number is part of the filename, so each release retains an independent comparison record. It intentionally lives beside the local `symbol-lattice` and `codegraph` checkouts rather than inside either project. Starting with v0.28, these reports are written in Traditional Chinese. Each report distinguishes a proven precision advantage from broader-but-less-proven source coverage, and records remaining gaps instead of treating a version bump as parity.
 
 ## Development
 
@@ -1912,6 +1944,8 @@ Nim coverage includes `.nim` discovery, persisted source search and CLI/MCP lang
 Vue coverage includes `.vue` discovery, persisted source search and CLI/MCP language filters, one inline JavaScript/TypeScript script block, direct top-level declaration extraction, three auditable direct default-export forms, unique relative `.vue` module resolution, direct exact-one unaliased `vue-router` `createRouter` import proof, direct top-level literal routes-option/array navigation, exact same-file or imported default-component evidence, and multiple-script/`src`/non-JS/`script setup`/alias/rebound/spread/lazy/inline/dynamic rejection.
 
 Svelte coverage includes `.svelte` discovery, persisted source search and CLI/MCP language filters, validated optional inline JavaScript/TypeScript module and instance scripts, conventional default-component evidence, direct instance-script declaration extraction, unique relative `.svelte` module resolution, static literal-segment SvelteKit `src/routes/**/+page.svelte` navigation, exact local default-component route evidence, and duplicate/`src`/non-JS/malformed/template/dynamic-bracket/route-group rejection.
+
+Astro coverage includes `.astro` discovery, persisted source search and CLI/MCP language filters, validated optional initial TypeScript frontmatter, conventional default-component evidence, direct frontmatter declaration extraction, unique relative `.astro` module resolution, static literal-segment Astro `src/pages/**/*.astro` navigation with `index.astro` normalization, exact local default-component route evidence, and malformed-fence/frontmatter/dynamic-bracket/leading-underscore rejection.
 
 C++ coverage includes `.cpp` / `.cc` / `.cxx` / `.hpp` / `.hh` / `.hxx` discovery, persisted source search and CLI/MCP language filters, direct top-level class/method/function containment, direct `httplib.h` include plus `httplib::Server` / `httplib::SSLServer` binding proof, literal direct named-handler HTTP routes, receiver-rebinding invalidation, dynamic/lambda/missing-header rejection, malformed-source fail-closed behavior, and persisted route-query integration.
 

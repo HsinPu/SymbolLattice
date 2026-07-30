@@ -152,6 +152,9 @@ function staticRouteHandlerRuleId(
   if (reference.routeFramework === "sveltekit") {
     return "framework.sveltekit.filesystem-page." + suffix;
   }
+  if (reference.routeFramework === "astro") {
+    return "framework.astro.filesystem-page." + suffix;
+  }
   if (reference.routeFramework === "nextjs") {
     const registration =
       reference.routeRegistration === "nextjs-app-router" ? "app-router" : "pages-router";

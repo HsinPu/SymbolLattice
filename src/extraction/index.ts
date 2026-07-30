@@ -25,6 +25,7 @@ import { extractRubyFileFacts } from "./ruby.js";
 import { extractRustFileFacts } from "./rust.js";
 import { extractSwiftFileFacts } from "./swift.js";
 import { extractSvelteFileFacts } from "./svelte.js";
+import { extractAstroFileFacts } from "./astro.js";
 import { extractVueFileFacts } from "./vue.js";
 import {
   frameworkCapability,
@@ -3725,6 +3726,9 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
   }
   if (input.language === "svelte") {
     return extractSvelteFileFacts({ ...input, language: "svelte" });
+  }
+  if (input.language === "astro") {
+    return extractAstroFileFacts({ ...input, language: "astro" });
   }
 
   const sourceFile = ts.createSourceFile(

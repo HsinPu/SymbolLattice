@@ -6,6 +6,25 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.62.0] - 2026-07-31
+
+### Added
+
+- Astro `.astro` source discovery, persisted source-search language filtering, CLI/MCP validation, and a bounded SFC extractor. A file with no frontmatter, or one valid opening TypeScript frontmatter fence, emits a conventional `default` component plus direct frontmatter functions, classes, interfaces, type aliases, and identifier variables. An incomplete/malformed starting fence or invalid frontmatter syntax fails closed to the file node.
+- An executable first-party `astro` capability. A static literal-segment `src/pages/**/*.astro` file emits a `NAVIGATE` route node and exact local-default-component `framework.astro.filesystem-page.local-handler` evidence; `index.astro` maps to its containing path. Dynamic brackets and leading-underscore segments are deliberately excluded instead of guessed.
+- Relative TypeScript/JavaScript resolution now considers a unique `.astro` candidate, enabling exact direct conventional-default bindings without adding a generic Astro package resolver.
+- Unit and integration coverage now verifies Astro discovery, frontmatter declarations, conventional default evidence, malformed-fence/frontmatter rejection, static/dynamic/private Astro page handling, `.astro` resolution, source-search/CLI/MCP language validation, and persisted route-query integration. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.62.0.md`.
+
+### Compatibility
+
+- No SQLite schema migration or new query command is required. Astro symbols and Astro page navigation reuse the existing file, symbol, edge, source-search, and route-query contracts; existing generations remain readable.
+- The artifact extractor advances to `multi-language-ast-v51`; the project resolver advances to `project-resolver-v19` because a unique relative `.astro` candidate may now prove an exact TypeScript/JavaScript module binding. A pre-v0.62 active index reports `indexer-version-changed` until an explicit `sync` or `index` publishes Astro-capable facts.
+
+### Deliberate limits
+
+- The Astro extractor is a deliberately small SFC scanner, not the Astro compiler. It excludes frontmatter imports/re-exports, template components/calls, client `<script>` tags, styles/directives/islands, `Astro` global/props semantics, generic Astro import/export/call/type analysis, and runtime behavior.
+- Astro routing accepts only static `.astro` pages with literal non-private segments under `src/pages`; it excludes Markdown/MDX/HTML pages, `.ts`/`.js` endpoints, dynamic/rest parameters, routing configuration, middleware, cross-file page composition, and runtime navigation. The inspected local CodeGraph baseline processes Astro frontmatter and client scripts, scans template component/call usage, and maps broader `src/pages` route forms including dynamic parameters and JavaScript/TypeScript endpoints. SymbolLattice adds a different narrow precision slice: every accepted page route is tied to its local conventional component with exact evidence rather than claiming full Astro parity.
+
 ## [0.61.0] - 2026-07-31
 
 ### Added

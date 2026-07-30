@@ -6610,4 +6610,77 @@ describe("source extraction", () => {
     ]);
     expect(dynamicPath.pendingReferences).toEqual([]);
   });
+
+  it("extracts Astro frontmatter declarations and static Astro page navigation", () => {
+    const facts = extractFileFacts({
+      filePath: "src/pages/catalog/index.astro",
+      language: "astro",
+      sourceText: [
+        "---",
+        'export const title = "Catalog";',
+        'export function greeting(): string { return title; }',
+        "interface Props { title: string; }",
+        "---",
+        "<main>{title}</main>"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.map((symbol) => [symbol.kind, symbol.name])).toEqual([
+      ["file", "index.astro"],
+      ["variable", "default"],
+      ["variable", "title"],
+      ["function", "greeting"],
+      ["interface", "Props"],
+      ["route", "NAVIGATE /catalog"]
+    ]);
+    expect(facts.exportBindings).toEqual([
+      expect.objectContaining({ localName: "default", exportedName: "default" })
+    ]);
+    expect(facts.pendingReferences).toEqual([
+      expect.objectContaining({
+        referenceName: "default",
+        relationKind: "routes",
+        routeFramework: "astro",
+        routeRegistration: "astro-filesystem-page"
+      })
+    ]);
+    expect(facts.referenceScopes).toEqual([
+      expect.objectContaining({ scopeIds: ["astro:file"] })
+    ]);
+  });
+
+  it("fails closed for malformed Astro frontmatter and omits dynamic or private Astro pages", () => {
+    const malformedFrontmatter = extractFileFacts({
+      filePath: "src/pages/index.astro",
+      language: "astro",
+      sourceText: [
+        "---",
+        "const title = 1;"
+      ].join("\n")
+    });
+    const dynamicPage = extractFileFacts({
+      filePath: "src/pages/blog/[slug].astro",
+      language: "astro",
+      sourceText: "<main>Dynamic</main>"
+    });
+    const privatePage = extractFileFacts({
+      filePath: "src/pages/_draft.astro",
+      language: "astro",
+      sourceText: "<main>Draft</main>"
+    });
+
+    expect(malformedFrontmatter.symbols.map((symbol) => [symbol.kind, symbol.name])).toEqual([
+      ["file", "index.astro"]
+    ]);
+    expect(dynamicPage.symbols.map((symbol) => [symbol.kind, symbol.name])).toEqual([
+      ["file", "[slug].astro"],
+      ["variable", "default"]
+    ]);
+    expect(dynamicPage.pendingReferences).toEqual([]);
+    expect(privatePage.symbols.map((symbol) => [symbol.kind, symbol.name])).toEqual([
+      ["file", "_draft.astro"],
+      ["variable", "default"]
+    ]);
+    expect(privatePage.pendingReferences).toEqual([]);
+  });
 });

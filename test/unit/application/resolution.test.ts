@@ -16,6 +16,9 @@ function languageForPath(relativePath: string): SourceDocument["language"] {
   if (/\.svelte$/i.test(relativePath)) {
     return "svelte";
   }
+  if (/\.astro$/i.test(relativePath)) {
+    return "astro";
+  }
   return /\.(?:[cm]?tsx?)$/i.test(relativePath) ? "typescript" : "javascript";
 }
 
@@ -35,7 +38,7 @@ async function createConfiguredProject(
   return {
     projectPath,
     sourceDocuments: Object.entries(files)
-      .filter(([relativePath]) => /\.(?:[cm]?[jt]sx?|svelte)$/i.test(relativePath))
+      .filter(([relativePath]) => /\.(?:[cm]?[jt]sx?|svelte|astro)$/i.test(relativePath))
       .map(([relativePath, sourceText]) => ({
         absolutePath: resolve(projectPath, ...relativePath.split("/")),
         relativePath,
@@ -91,6 +94,37 @@ describe("project reference resolution", () => {
           kind: "calls",
           resolution: "exact",
           referenceName: "App",
+          evidence: expect.objectContaining({
+            ruleId: "module.explicit-import-binding",
+            stage: "module"
+          })
+        })
+      ])
+    );
+  });
+
+  it("resolves an extensionless TypeScript default import to an Astro component", async () => {
+    const project = await createConfiguredProject({
+      "src/Card.astro": "<article>Card</article>",
+      "src/main.ts": [
+        'import Card from "./Card";',
+        "export function boot() { return Card(); }"
+      ].join("\n")
+    });
+    const configuredResolver = createTypeScriptProjectModuleResolver(project);
+    const snapshot = snapshotWithResolver(project.sourceDocuments, configuredResolver.moduleResolver);
+
+    expect(configuredResolver.moduleResolver.resolve("src/main.ts", "./Card")).toEqual({
+      targetFilePath: "src/Card.astro",
+      strategy: "relative",
+      configurationPaths: []
+    });
+    expect(snapshot.edges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "calls",
+          resolution: "exact",
+          referenceName: "Card",
           evidence: expect.objectContaining({
             ruleId: "module.explicit-import-binding",
             stage: "module"

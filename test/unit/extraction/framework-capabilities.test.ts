@@ -15,6 +15,7 @@ describe("first-party framework capabilities", () => {
       "react-router",
       "vue-router",
       "sveltekit",
+      "astro",
       "nextjs",
       "fastapi",
       "flask",
@@ -74,6 +75,12 @@ describe("first-party framework capabilities", () => {
       routeFramework: "sveltekit",
       routeRegistrations: ["sveltekit-filesystem-page"],
       surfaces: ["src/routes static +page.svelte convention-derived default components"]
+    });
+    expect(frameworkCapability("astro")).toMatchObject({
+      languages: ["astro"],
+      routeFramework: "astro",
+      routeRegistrations: ["astro-filesystem-page"],
+      surfaces: ["src/pages static .astro convention-derived default components"]
     });
     expect(frameworkCapability("nextjs")).toMatchObject({
       languages: ["typescript", "javascript"],
