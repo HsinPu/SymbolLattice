@@ -43,6 +43,12 @@ interface StaticPlayRoute {
   readonly range: SourceRange;
 }
 
+interface StaticPlayRouterMount {
+  readonly prefix: string;
+  readonly routerName: string;
+  readonly range: SourceRange;
+}
+
 const PLAY_ROUTE_METHODS: Readonly<Record<string, RouteMethod>> = {
   GET: "GET",
   POST: "POST",
@@ -55,6 +61,9 @@ const PLAY_ROUTE_METHODS: Readonly<Record<string, RouteMethod>> = {
 
 const PLAY_ROUTE_LINE =
   /^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s+(\/[^\s]*)\s+((?:[A-Za-z_][A-Za-z0-9_]*\.)+[A-Za-z_][A-Za-z0-9_]*)(?:\s*\([^)]*\))?\s*$/u;
+
+const PLAY_ROUTER_MOUNT_LINE =
+  /^->\s+(\/\S*)\s+((?:[A-Za-z_][A-Za-z0-9_]*\.)+[A-Za-z_][A-Za-z0-9_]*)\s*$/u;
 
 function directChildren(node: ScalaSyntaxNode): readonly ScalaSyntaxNode[] {
   return node.children();
@@ -185,6 +194,15 @@ function isPlayRoutesFile(filePath: string): boolean {
   return /(?:^|\/)conf\/(?:routes|[^/]+\.routes)$/u.test(normalized);
 }
 
+function isLiteralPlayRouterPrefix(prefix: string): boolean {
+  return (
+    prefix === "/" ||
+    /^\/[A-Za-z0-9._~!$&'()+,;=@%-]+(?:\/[A-Za-z0-9._~!$&'()+,;=@%-]+)*\/?$/u.test(
+      prefix
+    )
+  );
+}
+
 function staticPlayRoutes(
   sourceText: string,
   lineStarts: readonly number[]
@@ -230,6 +248,47 @@ function staticPlayRoutes(
   return routes;
 }
 
+/**
+ * Captures only a literal slash-prefix Play router mount. The target is kept as
+ * a fully-qualified Router class name; later project resolution decides whether
+ * one indexed Scala or Java class proves that reference.
+ */
+function staticPlayRouterMounts(
+  sourceText: string,
+  lineStarts: readonly number[]
+): readonly StaticPlayRouterMount[] {
+  const mounts: StaticPlayRouterMount[] = [];
+  let offset = 0;
+  for (const rawLine of sourceText.split(/\r\n|\r|\n/u)) {
+    const trimmed = rawLine.trim();
+    const leadingOffset = rawLine.length - rawLine.trimStart().length;
+    const match = PLAY_ROUTER_MOUNT_LINE.exec(trimmed);
+    const prefix = match?.[1];
+    const routerName = match?.[2];
+    if (
+      prefix !== undefined &&
+      routerName !== undefined &&
+      isLiteralPlayRouterPrefix(prefix)
+    ) {
+      mounts.push({
+        prefix,
+        routerName,
+        range: rangeForSpan(
+          lineStarts,
+          offset + leadingOffset,
+          offset + leadingOffset + trimmed.length
+        )
+      });
+    }
+    offset += rawLine.length;
+    const nextStart = lineStarts.find((start) => start > offset);
+    if (nextStart !== undefined) {
+      offset = nextStart;
+    }
+  }
+  return mounts;
+}
+
 export function extractScalaFileFacts(input: ScalaExtractFileFactsInput): ArtifactFacts {
   const playCapability = frameworkCapability("play");
   if (!playCapability.languages.includes(input.language)) {
@@ -241,6 +300,12 @@ export function extractScalaFileFacts(input: ScalaExtractFileFactsInput): Artifa
   const edges: GraphEdge[] = [];
   const pendingReferences: PendingReference[] = [];
   const scalaClassFacts: Array<{ symbolId: string; packageName: string }> = [];
+  const playRouterMountFacts: Array<{
+    symbolId: string;
+    prefix: string;
+    routerName: string;
+    range: SourceRange;
+  }> = [];
   const declarationOrdinals = new Map<string, number>();
   const fileName = input.filePath.split(/[\\/]/u).at(-1) ?? input.filePath;
   const fileNode: SymbolNode = {
@@ -407,9 +472,41 @@ export function extractScalaFileFacts(input: ScalaExtractFileFactsInput): Artifa
     });
   }
 
+  function addPlayRouterMount(mount: StaticPlayRouterMount): void {
+    const name = "MOUNT " + mount.prefix + " -> " + mount.routerName;
+    const qualifiedName = input.filePath + "#play-router-mount:" + name;
+    const declarationOrdinal = nextOrdinal(qualifiedName, "route");
+    const mountSymbol: SymbolNode = {
+      id: createSymbolId({
+        filePath: input.filePath,
+        qualifiedName,
+        kind: "route",
+        declarationOrdinal
+      }),
+      name,
+      qualifiedName,
+      kind: "route",
+      filePath: input.filePath,
+      range: mount.range,
+      isExported: false,
+      declarationOrdinal
+    };
+    symbols.push(mountSymbol);
+    addContainment(fileNode, mountSymbol, mount.range);
+    playRouterMountFacts.push({
+      symbolId: mountSymbol.id,
+      prefix: mount.prefix,
+      routerName: mount.routerName,
+      range: mount.range
+    });
+  }
+
   if (isPlayRoutesFile(input.filePath)) {
     for (const route of staticPlayRoutes(input.sourceText, lineStarts)) {
       addPlayRoute(route);
+    }
+    for (const mount of staticPlayRouterMounts(input.sourceText, lineStarts)) {
+      addPlayRouterMount(mount);
     }
   } else {
     const root = parse("scala", input.sourceText).root();
@@ -459,7 +556,8 @@ export function extractScalaFileFacts(input: ScalaExtractFileFactsInput): Artifa
       importedRouterInclusions: []
     },
     scalaFacts: {
-      classes: scalaClassFacts
+      classes: scalaClassFacts,
+      routerMounts: playRouterMountFacts
     }
   };
 }

@@ -3838,9 +3838,18 @@ describe("source extraction", () => {
     expect(facts.symbols.filter((symbol) => symbol.kind === "route").map((symbol) => symbol.name)).toEqual([
       "GET /health",
       "POST /orders",
-      "GET /assets/*file"
+      "GET /assets/*file",
+      "MOUNT /api -> api.Routes"
     ]);
     expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+    expect(facts.scalaFacts?.routerMounts.map((mount) => [
+      symbolsById.get(mount.symbolId)?.name,
+      mount.prefix,
+      mount.routerName,
+      mount.range.start.line
+    ])).toEqual([
+      ["MOUNT /api -> api.Routes", "/api", "api.Routes", 5]
+    ]);
     expect(
       facts.pendingReferences.map((reference) => [
         symbolsById.get(reference.sourceId)?.name,
@@ -3867,6 +3876,51 @@ describe("source extraction", () => {
         "play",
         "routes"
       ]
+    ]);
+  });
+
+  it("records direct Java package facts for cross-file Play controller resolution", () => {
+    const facts = extractFileFacts({
+      filePath: "app/controllers/HealthController.java",
+      language: "java",
+      sourceText: [
+        "package controllers;",
+        "",
+        "public class HealthController {",
+        "  public String health() { return \"ok\"; }",
+        "}"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(facts.javaFacts?.classes.map((fact) => [
+      symbolsById.get(fact.symbolId)?.name,
+      fact.packageName
+    ])).toEqual([
+      ["HealthController", "controllers"]
+    ]);
+    expect(facts.symbols.filter((symbol) => symbol.kind === "method").map((symbol) => symbol.qualifiedName)).toEqual([
+      "app/controllers/HealthController.java#HealthController.health"
+    ]);
+  });
+
+  it("fails closed for dynamic Play router-mount prefixes", () => {
+    const facts = extractFileFacts({
+      filePath: "conf/routes",
+      language: "scala",
+      sourceText: [
+        "-> /api api.Routes",
+        "-> /:tenant api.DynamicRoutes",
+        "-> /api/*tail api.WildcardRoutes",
+        "-> /api api.Routes + suffix"
+      ].join("\n")
+    });
+
+    expect(facts.scalaFacts?.routerMounts.map((mount) => [mount.prefix, mount.routerName])).toEqual([
+      ["/api", "api.Routes"]
+    ]);
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route").map((symbol) => symbol.name)).toEqual([
+      "MOUNT /api -> api.Routes"
     ]);
   });
 

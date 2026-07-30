@@ -279,6 +279,28 @@ function staticJavaImports(
   return imports;
 }
 
+function staticJavaPackage(
+  input: JavaExtractFileFactsInput,
+  root: JavaSyntaxNode
+): string | null {
+  const declarations = directChildren(root).filter(
+    (node) => node.name === "PackageDeclaration"
+  );
+  if (declarations.length === 0) {
+    return "";
+  }
+  const declaration = declarations[0];
+  if (declarations.length !== 1 || declaration === undefined) {
+    return null;
+  }
+  const packageNameNode = directChildren(declaration).find(
+    (node) => node.name === "ScopedIdentifier" || node.name === "Identifier"
+  );
+  return packageNameNode === undefined
+    ? null
+    : staticDottedIdentifier(input, packageNameNode);
+}
+
 function annotationMatches(
   annotation: StaticJavaAnnotation,
   expectedPath: string,
@@ -427,6 +449,7 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
   const lineStarts = lineStartsFor(input.sourceText);
   const symbols: SymbolNode[] = [];
   const edges: GraphEdge[] = [];
+  const javaClassFacts: Array<{ symbolId: string; packageName: string }> = [];
   const declarationOrdinals = new Map<string, number>();
   const fileName = input.filePath.split(/[\\/]/u).at(-1) ?? input.filePath;
   const fileNode: SymbolNode = {
@@ -480,7 +503,7 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
     });
   }
 
-  function addClass(declaration: StaticJavaClass): SymbolNode {
+  function addClass(declaration: StaticJavaClass, packageName: string | null): SymbolNode {
     const qualifiedName = `${input.filePath}#${declaration.name}`;
     const declarationOrdinal = nextOrdinal(qualifiedName, "class");
     const symbol: SymbolNode = {
@@ -500,6 +523,9 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
     };
     symbols.push(symbol);
     addContainment(fileNode, symbol, declaration.node);
+    if (packageName !== null) {
+      javaClassFacts.push({ symbolId: symbol.id, packageName });
+    }
     return symbol;
   }
 
@@ -579,12 +605,13 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
 
   if (!hasSyntaxError(root)) {
     const imports = staticJavaImports(input, root);
+    const packageName = staticJavaPackage(input, root);
     const classes = directChildren(root)
       .map((node) => staticJavaClass(input, node))
       .filter((candidate): candidate is StaticJavaClass => candidate !== null);
 
     for (const classDeclaration of classes) {
-      const classSymbol = addClass(classDeclaration);
+      const classSymbol = addClass(classDeclaration, packageName);
       const methods = directChildren(classDeclaration.body)
         .map((node) => staticJavaMethod(input, node))
         .filter((candidate): candidate is StaticJavaMethod => candidate !== null);
@@ -637,6 +664,9 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
       routers: [],
       routes: [],
       importedRouterInclusions: []
+    },
+    javaFacts: {
+      classes: javaClassFacts
     }
   };
 }

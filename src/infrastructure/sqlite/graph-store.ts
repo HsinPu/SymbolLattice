@@ -668,7 +668,9 @@ function artifactFactsPayload(facts: PersistedArtifactFacts): ArtifactFacts {
       : { fastifyPluginFacts: facts.fastifyPluginFacts }),
     ...(facts.fastApiRouterFacts === undefined
       ? {}
-      : { fastApiRouterFacts: facts.fastApiRouterFacts })
+      : { fastApiRouterFacts: facts.fastApiRouterFacts }),
+    ...(facts.scalaFacts === undefined ? {} : { scalaFacts: facts.scalaFacts }),
+    ...(facts.javaFacts === undefined ? {} : { javaFacts: facts.javaFacts })
   };
 }
 

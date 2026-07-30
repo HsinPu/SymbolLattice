@@ -6,6 +6,25 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.47.0] - 2026-07-30
+
+### Added
+
+- Play controller-action resolution now accepts one uniquely proven direct Java package/class/method target as well as the existing Scala proof. Java package facts are additive raw artifact facts; a same-name Scala and Java candidate remains explicitly unresolved rather than selecting one by language.
+- Literal Play `-> /prefix package.Router` rows now emit a `MOUNT ...` route-kind node and an exact or unresolved `handles` edge. Exact mounts use `framework.play.conf-routes.literal-router-mount.package-class` evidence; missing or ambiguous Router class targets retain `framework.play.conf-routes.literal-router-mount.unresolved-router` evidence. A mount is deliberately absent from the concrete HTTP `routes` inventory.
+- SQLite raw artifact persistence now writes both `scalaFacts` and `javaFacts`. This closes the v0.46 omission that could drop Scala package facts on a later incremental sync, while preserving older artifact payloads as readable.
+- Unit and integration coverage now verifies Java package facts, exact Java Play controller resolution, Scala/Java raw-fact reuse across unrelated `sync` runs, literal Router mount exact/unresolved evidence, and rejection of dynamic/wildcard Router prefixes. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.47.0.md`.
+
+### Compatibility
+
+- No SQLite schema migration or new query command is required. `scalaFacts`, `javaFacts`, and Router-mount facts are additive JSON payload fields inside the existing raw artifact-facts store; existing generations remain readable.
+- The artifact extractor advances to `multi-language-ast-v36` and the project resolver to `project-resolver-v16`. A pre-v0.47 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes persisted Scala/Java package facts and Play mount evidence.
+
+### Deliberate limits
+
+- The accepted mount form is only a literal slash-prefix and fully qualified Router class name. Dynamic/wildcard prefixes, unqualified Router names, Router-interface type checking, recursive mounted-router endpoint expansion, `build.sbt` detection, imported/classpath Router targets, and runtime behavior remain outside this release.
+- Play controller actions still require exactly one direct package/class/object and exactly one direct method. Overloads, binders, reverse routing, generic Scala/Java type resolution, and runtime semantics remain deliberately unresolved. CodeGraph remains broader in Play project detection and action matching; SymbolLattice v0.47 adds a narrow audited mount edge that CodeGraph currently skips.
+
 ## [0.46.0] - 2026-07-30
 
 ### Added

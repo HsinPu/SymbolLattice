@@ -3155,6 +3155,9 @@ describe("SymbolLatticeService", () => {
     const persistedFacts = graphStore
       .getArtifactFacts(projectPath)
       .filter((facts) => facts.language === "scala");
+    const controllerFacts = persistedFacts.find(
+      (facts) => facts.filePath === "app/controllers/HealthController.scala"
+    );
 
     expect(indexed).toMatchObject({
       stale: false,
@@ -3165,6 +3168,7 @@ describe("SymbolLatticeService", () => {
       "conf/routes"
     ]);
     expect(persistedFacts.every((facts) => facts.extractorVersion === ARTIFACT_FACTS_EXTRACTOR_VERSION)).toBe(true);
+    expect(controllerFacts?.scalaFacts?.classes).toHaveLength(1);
     expect(routes.routes).toMatchObject([
       {
         method: "GET",
@@ -3194,6 +3198,174 @@ describe("SymbolLatticeService", () => {
         filePath: "app/controllers/HealthController.scala",
         language: "scala",
         matchingTerms: ["health"]
+      }
+    ]);
+
+    await writeFile(join(projectPath, "app", "controllers", "Unrelated.scala"), "class Unrelated {}\n", "utf8");
+    const synced = await service.sync({ projectPath });
+    const routesAfterReuse = await service.routes(projectPath, { method: "GET" });
+
+    expect(synced.lastIndexWork).toMatchObject({
+      mode: "incremental",
+      reExtractedFiles: ["app/controllers/Unrelated.scala"],
+      reusedArtifactFiles: expect.arrayContaining([
+        "app/controllers/HealthController.scala",
+        "conf/routes"
+      ])
+    });
+    expect(routesAfterReuse.routes).toMatchObject([
+      {
+        path: "/health",
+        edge: {
+          resolution: "exact",
+          evidence: {
+            ruleId: "framework.play.conf-routes.literal-controller-action.package-class-method"
+          }
+        },
+        handler: {
+          qualifiedName: "app/controllers/HealthController.scala#HealthController.health"
+        }
+      }
+    ]);
+  });
+
+  it("indexes Java source plus Play conf/routes with exact package-class-method handler proof", async () => {
+    const projectPath = await createInlineProject({
+      "app/controllers/HealthController.java": [
+        "package controllers;",
+        "",
+        "public class HealthController {",
+        "  public String health() { return \"ok\"; }",
+        "}"
+      ].join("\n"),
+      "conf/routes": "GET /health controllers.HealthController.health\n"
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath, { method: "GET" });
+    const persistedFacts = graphStore.getArtifactFacts(projectPath);
+
+    expect(
+      persistedFacts.map((facts) => [facts.filePath, facts.language, facts.javaFacts?.classes.length])
+    ).toEqual([
+      ["app/controllers/HealthController.java", "java", 1],
+      ["conf/routes", "scala", undefined]
+    ]);
+    expect(routes.routes).toMatchObject([
+      {
+        method: "GET",
+        path: "/health",
+        edge: {
+          kind: "routes",
+          resolution: "exact",
+          evidence: {
+            ruleId: "framework.play.conf-routes.literal-controller-action.package-class-method",
+            stage: "module"
+          }
+        },
+        handler: {
+          qualifiedName: "app/controllers/HealthController.java#HealthController.health"
+        }
+      }
+    ]);
+
+    await writeFile(join(projectPath, "app", "Unrelated.java"), "class Unrelated {}\n", "utf8");
+    const synced = await service.sync({ projectPath });
+    const routesAfterReuse = await service.routes(projectPath, { method: "GET" });
+
+    expect(synced.lastIndexWork).toMatchObject({
+      mode: "incremental",
+      reExtractedFiles: ["app/Unrelated.java"],
+      reusedArtifactFiles: expect.arrayContaining([
+        "app/controllers/HealthController.java",
+        "conf/routes"
+      ])
+    });
+    expect(routesAfterReuse.routes).toMatchObject([
+      {
+        path: "/health",
+        edge: {
+          resolution: "exact",
+          evidence: {
+            ruleId: "framework.play.conf-routes.literal-controller-action.package-class-method"
+          }
+        },
+        handler: {
+          qualifiedName: "app/controllers/HealthController.java#HealthController.health"
+        }
+      }
+    ]);
+  });
+
+  it("models literal Play router mounts as exact or unresolved handles without fabricating HTTP routes", async () => {
+    const projectPath = await createInlineProject({
+      "app/api/Routes.scala": [
+        "package api",
+        "",
+        "object Routes {",
+        "  def routes(): String = \"mounted\"",
+        "}"
+      ].join("\n"),
+      "conf/routes": [
+        "-> /api api.Routes",
+        "-> /missing missing.Routes"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const snapshot = graphStore.getSnapshot(projectPath);
+    const exactMount = snapshot.symbols.find(
+      (symbol) => symbol.kind === "route" && symbol.name === "MOUNT /api -> api.Routes"
+    );
+    const unresolvedMount = snapshot.symbols.find(
+      (symbol) => symbol.kind === "route" && symbol.name === "MOUNT /missing -> missing.Routes"
+    );
+    if (exactMount === undefined || unresolvedMount === undefined) {
+      throw new Error("Expected indexed Play router mount symbols.");
+    }
+    const exactEdge = snapshot.edges.find(
+      (edge) => edge.sourceId === exactMount.id && edge.kind === "handles"
+    );
+    const unresolvedEdge = snapshot.edges.find(
+      (edge) => edge.sourceId === unresolvedMount.id && edge.kind === "handles"
+    );
+    const routes = await service.routes(projectPath);
+    const callees = await service.callees(projectPath, exactMount.id);
+
+    expect(exactEdge).toMatchObject({
+      kind: "handles",
+      resolution: "exact",
+      referenceName: "api.Routes",
+      evidence: {
+        ruleId: "framework.play.conf-routes.literal-router-mount.package-class",
+        stage: "module"
+      }
+    });
+    expect(unresolvedEdge).toMatchObject({
+      kind: "handles",
+      targetId: null,
+      resolution: "unresolved",
+      referenceName: "missing.Routes",
+      evidence: {
+        ruleId: "framework.play.conf-routes.literal-router-mount.unresolved-router",
+        stage: "unresolved"
+      }
+    });
+    expect(routes.routes).toEqual([]);
+    expect(callees.relations).toMatchObject([
+      {
+        symbol: { qualifiedName: "app/api/Routes.scala#Routes" },
+        edge: {
+          kind: "handles",
+          resolution: "exact",
+          evidence: {
+            ruleId: "framework.play.conf-routes.literal-router-mount.package-class"
+          }
+        }
       }
     ]);
   });

@@ -11,13 +11,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v35";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v36";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v15";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v16";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -234,9 +234,29 @@ export interface ScalaClassFact {
   readonly packageName: string;
 }
 
-/** Syntax-only facts retained for exact Play controller-action resolution. */
+/** A Java class declaration with its direct package-declaration proof. */
+export interface JavaClassFact {
+  readonly symbolId: string;
+  readonly packageName: string;
+}
+
+/** A literal Play `->` router mount retained from a `conf/routes` table. */
+export interface PlayRouterMountFact {
+  readonly symbolId: string;
+  readonly prefix: string;
+  readonly routerName: string;
+  readonly range: SourceRange;
+}
+
+/** Syntax-only facts retained for exact Play controller-action and router-mount resolution. */
 export interface ScalaFacts {
   readonly classes: readonly ScalaClassFact[];
+  readonly routerMounts: readonly PlayRouterMountFact[];
+}
+
+/** Syntax-only Java package facts retained for exact Play controller-action resolution. */
+export interface JavaFacts {
+  readonly classes: readonly JavaClassFact[];
 }
 
 /**
@@ -260,6 +280,8 @@ export interface ArtifactFacts {
   readonly fastApiRouterFacts?: FastApiRouterFacts;
   /** Omitted only by artifact facts persisted before v0.46. */
   readonly scalaFacts?: ScalaFacts;
+  /** Omitted only by artifact facts persisted before v0.47. */
+  readonly javaFacts?: JavaFacts;
 }
 
 /**
