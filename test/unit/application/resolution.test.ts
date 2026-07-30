@@ -831,8 +831,10 @@ describe("literal route handler resolution", () => {
           'import { PublicAccountPage } from "./pages-barrel.js";',
           "export function AppRoutes() {",
           "  return <>",
-          '    <AppRoute path="/settings" element={<SettingsPage />} />',
-          '    <AppRoute path="/account" Component={PublicAccountPage} />',
+          '    <AppRoute path="/settings">',
+          '      <AppRoute index element={<SettingsPage />} />',
+          '      <AppRoute path="account" Component={PublicAccountPage} />',
+          "    </AppRoute>",
           "  </>;",
           "}"
         ].join("\n"),
@@ -851,7 +853,7 @@ describe("literal route handler resolution", () => {
       (symbol) => symbol.kind === "route" && symbol.name === "NAVIGATE /settings"
     );
     const accountRoute = snapshot.symbols.find(
-      (symbol) => symbol.kind === "route" && symbol.name === "NAVIGATE /account"
+      (symbol) => symbol.kind === "route" && symbol.name === "NAVIGATE /settings/account"
     );
     const edge = snapshot.edges.find(
       (candidate) => candidate.kind === "routes" && candidate.sourceId === route?.id

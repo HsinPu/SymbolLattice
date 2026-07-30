@@ -3278,7 +3278,7 @@ describe("SymbolLatticeService", () => {
         'import { Route as AppRoute } from "react-router-dom";',
         'import { SettingsPage } from "./pages.js";',
         "export function AppRoutes() {",
-        '  return <AppRoute path="/settings" element={<SettingsPage />} />;',
+        '  return <AppRoute path="/workspace"><AppRoute path="settings" element={<SettingsPage />} /></AppRoute>;',
         "}"
       ].join("\n")
     });
@@ -3308,8 +3308,8 @@ describe("SymbolLatticeService", () => {
     expect(navigationRoutes.routes).toMatchObject([
       {
         method: "NAVIGATE",
-        path: "/settings",
-        route: { kind: "route", name: "NAVIGATE /settings" },
+        path: "/workspace/settings",
+        route: { kind: "route", name: "NAVIGATE /workspace/settings" },
         edge: {
           kind: "routes",
           resolution: "exact",
@@ -3323,7 +3323,7 @@ describe("SymbolLatticeService", () => {
     ]);
     expect(callers.relations).toMatchObject([
       {
-        symbol: { kind: "route", name: "NAVIGATE /settings" },
+        symbol: { kind: "route", name: "NAVIGATE /workspace/settings" },
         edge: {
           kind: "routes",
           resolution: "exact",
@@ -3344,7 +3344,7 @@ describe("SymbolLatticeService", () => {
     expect(routesAfterReuse.routes).toMatchObject([
       {
         method: "NAVIGATE",
-        path: "/settings",
+        path: "/workspace/settings",
         edge: { evidence: { ruleId: "framework.react-router.jsx-route.imported-handler" } }
       }
     ]);

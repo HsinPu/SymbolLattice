@@ -594,6 +594,86 @@ describe("TypeScript and JavaScript extraction", () => {
     ]);
   });
 
+  it("composes nested JSX relative and index routes through a pathless layout", () => {
+    const facts = extractFileFacts({
+      filePath: "src/app-routes.tsx",
+      language: "typescript",
+      sourceText: [
+        'import { Route } from "react-router-dom";',
+        "function Shell() { return <main />; }",
+        "function DashboardPage() { return <main />; }",
+        "function OverviewPage() { return <main />; }",
+        "function SettingsPage() { return <main />; }",
+        "function TabPage() { return <main />; }",
+        "export function AppRoutes() {",
+        "  return (",
+        "    <Route element={<Shell />}>",
+        "      <>",
+        '        <Route path="dashboard" Component={DashboardPage}>',
+        "          <Route index element={<OverviewPage />} />",
+        '          <Route path="settings" Component={SettingsPage}>',
+        '            <Route path=":tab" element={<TabPage />} />',
+        "          </Route>",
+        "        </Route>",
+        "      </>",
+        "    </Route>",
+        "  );",
+        "}"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route").map((route) => route.name)).toEqual([
+      "NAVIGATE /dashboard",
+      "NAVIGATE /dashboard",
+      "NAVIGATE /dashboard/settings",
+      "NAVIGATE /dashboard/settings/:tab"
+    ]);
+    expect(
+      facts.pendingReferences
+        .filter((reference) => reference.relationKind === "routes")
+        .map((reference) => reference.referenceName)
+    ).toEqual(["DashboardPage", "OverviewPage", "SettingsPage", "TabPage"]);
+  });
+
+  it("retains proven JSX ancestors while rejecting unproven nested path shapes", () => {
+    const facts = extractFileFacts({
+      filePath: "src/app-routes.tsx",
+      language: "typescript",
+      sourceText: [
+        'import { Route } from "react-router";',
+        'const dynamicPath = "dynamic";',
+        "function ParentPage() { return <main />; }",
+        "function KeptPage() { return <main />; }",
+        "function RejectedPage() { return <main />; }",
+        "export function AppRoutes() {",
+        "  return (",
+        '    <Route path="/parent" Component={ParentPage}>',
+        '      <Route path="kept" Component={KeptPage} />',
+        '      <Route path={dynamicPath} Component={RejectedPage} />',
+        '      <Route path="../escape" Component={RejectedPage} />',
+        '      <Route path="/absolute" Component={RejectedPage} />',
+        '      <Route path="legacy" component={RejectedPage} />',
+        '      <Route index path="invalid" Component={RejectedPage} />',
+        "      <Route index Component={RejectedPage}>",
+        '        <Route path="index-child" Component={RejectedPage} />',
+        "      </Route>",
+        "    </Route>",
+        "  );",
+        "}"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route").map((route) => route.name)).toEqual([
+      "NAVIGATE /parent",
+      "NAVIGATE /parent/kept"
+    ]);
+    expect(
+      facts.pendingReferences
+        .filter((reference) => reference.relationKind === "routes")
+        .map((reference) => reference.referenceName)
+    ).toEqual(["ParentPage", "KeptPage"]);
+  });
+
   it("extracts AST-proven React Router data-router object routes with direct page handlers", () => {
     const facts = extractFileFacts({
       filePath: "src/data-routes.tsx",

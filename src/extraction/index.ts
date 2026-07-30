@@ -354,6 +354,11 @@ interface StaticReactRouterDataRoute extends StaticReactRouterRoute {
   readonly declaration: ts.ObjectLiteralExpression;
 }
 
+/** A JSX `Route` record retaining the exact element that declared it. */
+interface StaticReactRouterJsxRoute extends StaticReactRouterRoute {
+  readonly declaration: ReactRouterJsxRouteElement;
+}
+
 /** One literal data-router object before its parent path is composed. */
 interface StaticReactRouterDataRouteDefinition {
   readonly declaration: ts.ObjectLiteralExpression;
@@ -362,6 +367,18 @@ interface StaticReactRouterDataRouteDefinition {
   readonly index: boolean;
   readonly handler: ts.Identifier | null;
   readonly children: readonly StaticReactRouterDataRouteDefinition[];
+}
+
+/** One literal JSX `Route` before its parent navigation path is composed. */
+interface StaticReactRouterJsxRouteDefinition {
+  readonly declaration: ReactRouterJsxRouteElement;
+  /** `null` is a pathless layout route, which may still establish child context. */
+  readonly path: string | null;
+  readonly index: boolean;
+  /** v5 `component` has no v6 nested-route composition proof. */
+  readonly legacyComponent: boolean;
+  readonly handler: ts.Identifier | null;
+  readonly children: readonly StaticReactRouterJsxRouteDefinition[];
 }
 
 /** A convention-derived Next.js navigation route with a direct default export. */
@@ -1459,19 +1476,18 @@ function staticExpressRoute(
 
 type ReactRouterJsxRouteElement = ts.JsxOpeningElement | ts.JsxSelfClosingElement;
 
-function staticReactRouterPath(initializer: ts.JsxAttribute["initializer"]): string | null {
+function staticReactRouterJsxPath(initializer: ts.JsxAttribute["initializer"]): string | null {
   if (initializer === undefined) {
     return null;
   }
   if (ts.isStringLiteral(initializer)) {
-    return initializer.text.startsWith("/") ? initializer.text : null;
+    return initializer.text;
   }
   if (!ts.isJsxExpression(initializer) || initializer.expression === undefined) {
     return null;
   }
 
-  const path = staticLiteralText(initializer.expression);
-  return path !== null && path.startsWith("/") ? path : null;
+  return staticLiteralText(initializer.expression);
 }
 
 function staticReactRouterElementHandler(expression: ts.Expression): ts.Identifier | null {
@@ -1525,15 +1541,15 @@ function staticReactRouterDataRouteIndex(expression: ts.Expression): boolean | n
   return null;
 }
 
-function staticReactRouterRelativeDataRoutePath(path: string): boolean {
+function staticReactRouterRelativePath(path: string): boolean {
   if (path.length === 0 || path.startsWith("/")) {
     return false;
   }
   return path.split("/").every((segment) => segment.length > 0 && segment !== "." && segment !== "..");
 }
 
-function joinedReactRouterDataRoutePath(parentPath: string, childPath: string): string | null {
-  if (!parentPath.startsWith("/") || !staticReactRouterRelativeDataRoutePath(childPath)) {
+function joinedReactRouterRoutePath(parentPath: string, childPath: string): string | null {
+  if (!parentPath.startsWith("/") || !staticReactRouterRelativePath(childPath)) {
     return null;
   }
   const normalizedParent = parentPath === "/" ? "" : parentPath.replace(/\/+$/u, "");
@@ -1658,7 +1674,7 @@ function staticReactRouterDataRouteTree(
       ? parentPath
       : root
         ? (route.path.startsWith("/") ? route.path : null)
-        : joinedReactRouterDataRoutePath(parentPath, route.path);
+        : joinedReactRouterRoutePath(parentPath, route.path);
   if (routePath === null) {
     return [];
   }
@@ -1855,26 +1871,87 @@ function staticNextRoute(sourceFile: ts.SourceFile): StaticNextRoute | null {
       };
 }
 
+function isStaticReactRouterJsxRouteElement(
+  sourceFile: ts.SourceFile,
+  node: ts.Node,
+  bindings: ScopedRouteReceiverBindings
+): node is ReactRouterJsxRouteElement {
+  return (
+    (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) &&
+    ts.isIdentifier(node.tagName) &&
+    visibleRouteBindingKind(sourceFile, node.tagName, bindings) === "react-router-route"
+  );
+}
+
+function staticReactRouterJsxIndex(initializer: ts.JsxAttribute["initializer"]): boolean | null {
+  if (initializer === undefined) {
+    return true;
+  }
+  if (!ts.isJsxExpression(initializer) || initializer.expression === undefined) {
+    return null;
+  }
+  return staticReactRouterDataRouteIndex(initializer.expression);
+}
+
+function reactRouterJsxElement(node: ReactRouterJsxRouteElement): ts.JsxElement | null {
+  return ts.isJsxOpeningElement(node) && ts.isJsxElement(node.parent) ? node.parent : null;
+}
+
+function hasSubstantiveReactRouterJsxChild(child: ts.JsxChild): boolean {
+  if (ts.isJsxText(child)) {
+    return child.getText().trim().length > 0;
+  }
+  if (ts.isJsxExpression(child)) {
+    return child.expression !== undefined;
+  }
+  if (ts.isJsxFragment(child)) {
+    return child.children.some(hasSubstantiveReactRouterJsxChild);
+  }
+  return true;
+}
+
+function staticReactRouterJsxRouteDefinitions(
+  sourceFile: ts.SourceFile,
+  children: readonly ts.JsxChild[],
+  bindings: ScopedRouteReceiverBindings
+): readonly StaticReactRouterJsxRouteDefinition[] {
+  const definitions: StaticReactRouterJsxRouteDefinition[] = [];
+  for (const child of children) {
+    if (ts.isJsxFragment(child)) {
+      definitions.push(...staticReactRouterJsxRouteDefinitions(sourceFile, child.children, bindings));
+      continue;
+    }
+    const routeElement = ts.isJsxElement(child) ? child.openingElement : child;
+    if (!isStaticReactRouterJsxRouteElement(sourceFile, routeElement, bindings)) {
+      continue;
+    }
+    const definition = staticReactRouterJsxRouteDefinition(sourceFile, routeElement, bindings);
+    if (definition !== null) {
+      definitions.push(definition);
+    }
+  }
+  return definitions;
+}
+
 /**
- * Supports only an imported `Route` component with one literal path and one
- * direct page-component form: v5 `component`, v6 `Component`, or v6 `element`.
- * Any spread, duplicate, member expression, or runtime value would make the
- * rendered route surface ambiguous, so it remains outside the proof boundary.
+ * Reads one imported JSX `Route` without assigning it a public URL yet. Only
+ * direct literal route children (including direct fragments) are traversed;
+ * conditional or arbitrary JSX descendants never become guessed navigation.
  */
-function staticReactRouterJsxRoute(
+function staticReactRouterJsxRouteDefinition(
   sourceFile: ts.SourceFile,
   node: ReactRouterJsxRouteElement,
   bindings: ScopedRouteReceiverBindings
-): StaticReactRouterRoute | null {
-  if (
-    !ts.isIdentifier(node.tagName) ||
-    visibleRouteBindingKind(sourceFile, node.tagName, bindings) !== "react-router-route"
-  ) {
+): StaticReactRouterJsxRouteDefinition | null {
+  if (!isStaticReactRouterJsxRouteElement(sourceFile, node, bindings)) {
     return null;
   }
 
   let path: string | undefined;
   let handler: ts.Identifier | undefined;
+  let index = false;
+  let hasIndex = false;
+  let legacyComponent = false;
   for (const property of node.attributes.properties) {
     if (!ts.isJsxAttribute(property) || !ts.isIdentifier(property.name)) {
       return null;
@@ -1885,7 +1962,7 @@ function staticReactRouterJsxRoute(
       if (path !== undefined) {
         return null;
       }
-      const staticPath = staticReactRouterPath(property.initializer);
+      const staticPath = staticReactRouterJsxPath(property.initializer);
       if (staticPath === null) {
         return null;
       }
@@ -1902,12 +1979,110 @@ function staticReactRouterJsxRoute(
         return null;
       }
       handler = staticHandler;
+      legacyComponent = attributeName === "component";
+      continue;
+    }
+
+    if (attributeName === "index") {
+      if (hasIndex) {
+        return null;
+      }
+      const staticIndex = staticReactRouterJsxIndex(property.initializer);
+      if (staticIndex === null) {
+        return null;
+      }
+      index = staticIndex;
+      hasIndex = true;
     }
   }
 
-  return path === undefined || handler === undefined
-    ? null
-    : { method: "NAVIGATE", path, handler };
+  const element = reactRouterJsxElement(node);
+  const children = element === null
+    ? []
+    : staticReactRouterJsxRouteDefinitions(sourceFile, element.children, bindings);
+  const hasChildren = element !== null && element.children.some(hasSubstantiveReactRouterJsxChild);
+  if (index && (path !== undefined || hasChildren)) {
+    return null;
+  }
+
+  return {
+    declaration: node,
+    path: path ?? null,
+    index,
+    legacyComponent,
+    handler: handler ?? null,
+    children
+  };
+}
+
+function staticReactRouterJsxRouteTree(
+  route: StaticReactRouterJsxRouteDefinition,
+  parentPath: string,
+  root: boolean
+): readonly StaticReactRouterJsxRoute[] {
+  if (route.index) {
+    return route.legacyComponent || route.handler === null
+      ? []
+      : [
+          {
+            method: "NAVIGATE",
+            path: parentPath,
+            handler: route.handler,
+            declaration: route.declaration
+          }
+        ];
+  }
+
+  const routePath =
+    route.path === null
+      ? parentPath
+      : root
+        ? (route.path.startsWith("/") ? route.path : null)
+        : joinedReactRouterRoutePath(parentPath, route.path);
+  if (routePath === null) {
+    return [];
+  }
+
+  if (!root && route.legacyComponent) {
+    return [];
+  }
+
+  const staticRoutes: StaticReactRouterJsxRoute[] = [];
+  if (route.path !== null && route.handler !== null) {
+    staticRoutes.push({
+      method: "NAVIGATE",
+      path: routePath,
+      handler: route.handler,
+      declaration: route.declaration
+    });
+  }
+  if (route.legacyComponent) {
+    return staticRoutes;
+  }
+  for (const child of route.children) {
+    staticRoutes.push(...staticReactRouterJsxRouteTree(child, routePath, false));
+  }
+  return staticRoutes;
+}
+
+function staticReactRouterJsxRouteHasRouteAncestor(
+  sourceFile: ts.SourceFile,
+  node: ReactRouterJsxRouteElement,
+  bindings: ScopedRouteReceiverBindings
+): boolean {
+  let ancestor: ts.Node | undefined = ts.isJsxOpeningElement(node) ? node.parent.parent : node.parent;
+  while (ancestor !== undefined) {
+    if (
+      (ts.isJsxElement(ancestor) &&
+        isStaticReactRouterJsxRouteElement(sourceFile, ancestor.openingElement, bindings)) ||
+      (ts.isJsxSelfClosingElement(ancestor) &&
+        isStaticReactRouterJsxRouteElement(sourceFile, ancestor, bindings))
+    ) {
+      return true;
+    }
+    ancestor = ancestor.parent;
+  }
+  return false;
 }
 
 function staticRouteMethodForName(
@@ -3815,9 +3990,14 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
           }
         }
         if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
-          const route = staticReactRouterJsxRoute(sourceFile, node, routeReceiverBindings);
-          if (route !== null) {
-            addStaticReactRouterRoute(node, route);
+          if (staticReactRouterJsxRouteHasRouteAncestor(sourceFile, node, routeReceiverBindings)) {
+            return;
+          }
+          const definition = staticReactRouterJsxRouteDefinition(sourceFile, node, routeReceiverBindings);
+          if (definition !== null) {
+            for (const route of staticReactRouterJsxRouteTree(definition, "/", true)) {
+              addStaticReactRouterRoute(route.declaration, route);
+            }
           }
         }
       }

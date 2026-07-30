@@ -6,6 +6,24 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.27.0] - 2026-07-30
+
+### Added
+
+- Recursive, AST-proven React Router JSX route trees. Direct literal child `Route` elements, including direct JSX fragments, now compose relative child paths, index routes, and pathless layouts from a slash-prefixed root route into first-class `NAVIGATE` symbols.
+- Nested JSX output preserves the existing exact local, imported, re-exported, and unresolved page-handler evidence with distinct `framework.react-router.jsx-route.*` rule IDs. v6 `Component` / `element` handlers can participate in recursive composition; an existing v5 `component` route remains a direct standalone proof and never projects child routes.
+- A standalone v0.27 comparison report at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.27.0.md`, following the versioned workspace-root report convention.
+
+### Compatibility
+
+- No SQLite schema migration or new route-query command is required. Existing route symbols and facts remain readable; recursive JSX routes use the established `NAVIGATE`, route-framework, and edge-evidence contracts.
+- The artifact extractor advances to `typescript-ast-v16`. A pre-v0.27 active index reports `indexer-version-changed` until an explicit `sync` or `index` publishes recursive JSX facts. The project resolver remains `project-resolver-v12` because handler resolution is unchanged.
+
+### Deliberate limits
+
+- This pack supports only direct literal JSX route children and direct fragments. Conditional expressions, arbitrary wrapper descendants, `createRoutesFromElements`, `basename`, dynamic paths, absolute child paths, `.` / `..` child segments, spread attributes, duplicate attributes, and runtime router configuration are not inferred.
+- A pathless layout supplies URL context to supported children but is not emitted as a public navigation route. An index route must have no path or substantive JSX children. The legacy v5 `component` form stays supported for direct routes only because it cannot prove v6 nested-route semantics.
+
 ## [0.26.0] - 2026-07-30
 
 ### Added
@@ -529,7 +547,8 @@ No unreleased changes.
 - Explicit full indexing, caller/callee/impact queries, and read-only MCP exploration.
 - `exact`, `heuristic`, and `unresolved` relationship states.
 
-[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.26.0...HEAD
+[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.27.0...HEAD
+[0.27.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.26.0...v0.27.0
 [0.26.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.25.0...v0.26.0
 [0.25.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.24.0...v0.25.0
 [0.24.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.23.0...v0.24.0
