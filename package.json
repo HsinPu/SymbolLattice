@@ -1,6 +1,6 @@
 {
   "name": "@hsinpu/symbol-lattice",
-  "version": "0.45.0",
+  "version": "0.46.0",
   "description": "Evidence-first local code intelligence for TypeScript, JavaScript, Python, Go, Rust, Java, PHP, C++, C#, Ruby, Kotlin, Swift, Dart, and Scala projects.",
   "license": "MIT",
   "repository": {

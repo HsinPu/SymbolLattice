@@ -5,6 +5,7 @@ import {
   createSymbolId,
   type ArtifactFacts,
   type GraphEdge,
+  type PendingReference,
   type RouteMethod,
   type SourcePosition,
   type SourceRange,
@@ -137,16 +138,10 @@ function staticScalaOwner(node: ScalaSyntaxNode): StaticScalaOwner | null {
     return null;
   }
   const children = directChildren(node);
-  const identifiers = children
-    .filter((child) => child.kind() === "identifier")
-    .map((child) => identifierText(child))
-    .filter((candidate): candidate is string => candidate !== null);
   const body = children.find((child) => child.kind() === "template_body");
-  if (identifiers.length !== 1 || body === undefined) {
-    return null;
-  }
-  const name = identifiers[0];
-  if (name === undefined) {
+  const nameNode = children.find((child) => child.kind() === "identifier");
+  const name = nameNode === undefined ? null : identifierText(nameNode);
+  if (name === null || body === undefined) {
     return null;
   }
   return {
@@ -161,15 +156,28 @@ function staticScalaFunction(node: ScalaSyntaxNode): StaticScalaFunction | null 
   if (node.kind() !== "function_definition" && node.kind() !== "function_declaration") {
     return null;
   }
-  const identifiers = directChildren(node)
-    .filter((child) => child.kind() === "identifier")
-    .map((child) => identifierText(child))
-    .filter((candidate): candidate is string => candidate !== null);
-  if (identifiers.length !== 1) {
+  const nameNode = directChildren(node).find((child) => child.kind() === "identifier");
+  const name = nameNode === undefined ? null : identifierText(nameNode);
+  return name === null ? null : { name, node };
+}
+
+function staticScalaPackage(root: ScalaSyntaxNode): string | null {
+  const packageClauses = directChildren(root).filter((node) => node.kind() === "package_clause");
+  if (packageClauses.length === 0) {
+    return "";
+  }
+  const clause = packageClauses[0];
+  if (packageClauses.length !== 1 || clause === undefined) {
     return null;
   }
-  const name = identifiers[0];
-  return name === undefined ? null : { name, node };
+  const packageIdentifier = directChildren(clause).find(
+    (node) => node.kind() === "package_identifier"
+  );
+  const packageName = packageIdentifier === undefined ? null : nodeText(packageIdentifier);
+  return packageName !== null &&
+    /^(?:[A-Za-z_][A-Za-z0-9_]*)(?:\.[A-Za-z_][A-Za-z0-9_]*)*$/u.test(packageName)
+    ? packageName
+    : null;
 }
 
 function isPlayRoutesFile(filePath: string): boolean {
@@ -197,8 +205,8 @@ function staticPlayRoutes(
       if (method !== undefined && path !== undefined && actionPath !== undefined) {
         const actionParts = actionPath.split(".");
         const action = actionParts.at(-1);
-        const controller = actionParts.at(-2);
-        if (action !== undefined && controller !== undefined) {
+        const controller = actionParts.slice(0, -1).join(".");
+        if (action !== undefined && controller.length > 0) {
           routes.push({
             method,
             path,
@@ -231,6 +239,8 @@ export function extractScalaFileFacts(input: ScalaExtractFileFactsInput): Artifa
   const lineStarts = lineStartsFor(input.sourceText);
   const symbols: SymbolNode[] = [];
   const edges: GraphEdge[] = [];
+  const pendingReferences: PendingReference[] = [];
+  const scalaClassFacts: Array<{ symbolId: string; packageName: string }> = [];
   const declarationOrdinals = new Map<string, number>();
   const fileName = input.filePath.split(/[\\/]/u).at(-1) ?? input.filePath;
   const fileNode: SymbolNode = {
@@ -287,7 +297,7 @@ export function extractScalaFileFacts(input: ScalaExtractFileFactsInput): Artifa
     });
   }
 
-  function addOwner(declaration: StaticScalaOwner): SymbolNode {
+  function addOwner(declaration: StaticScalaOwner, packageName: string | null): SymbolNode {
     const qualifiedName = input.filePath + "#" + declaration.name;
     const declarationOrdinal = nextOrdinal(qualifiedName, declaration.kind);
     const symbol: SymbolNode = {
@@ -307,6 +317,9 @@ export function extractScalaFileFacts(input: ScalaExtractFileFactsInput): Artifa
     };
     symbols.push(symbol);
     addContainment(fileNode, symbol, rangeForNode(declaration.node));
+    if (declaration.kind === "class" && packageName !== null) {
+      scalaClassFacts.push({ symbolId: symbol.id, packageName });
+    }
     return symbol;
   }
 
@@ -376,7 +389,7 @@ export function extractScalaFileFacts(input: ScalaExtractFileFactsInput): Artifa
     symbols.push(route);
     addContainment(fileNode, route, routeFact.range);
     const referenceName = routeFact.controller + "." + routeFact.action;
-    edges.push({
+    pendingReferences.push({
       id: createEdgeId({
         sourceId: route.id,
         targetId: null,
@@ -386,18 +399,11 @@ export function extractScalaFileFacts(input: ScalaExtractFileFactsInput): Artifa
         referenceName
       }),
       sourceId: route.id,
-      targetId: null,
-      kind: "routes",
       filePath: input.filePath,
       range: routeFact.range,
-      resolution: "unresolved",
-      confidence: 0,
       referenceName,
-      evidence: {
-        ruleId: "framework.play.conf-routes.literal-controller-action.unresolved-handler",
-        stage: "syntax",
-        candidateSymbolIds: []
-      }
+      relationKind: "routes",
+      routeFramework: "play"
     });
   }
 
@@ -409,10 +415,11 @@ export function extractScalaFileFacts(input: ScalaExtractFileFactsInput): Artifa
     const root = parse("scala", input.sourceText).root();
     if (!hasSyntaxError(root)) {
       const topLevel = directChildren(root);
+      const packageName = staticScalaPackage(root);
       for (const declaration of topLevel
         .map((node) => staticScalaOwner(node))
         .filter((candidate): candidate is StaticScalaOwner => candidate !== null)) {
-        const owner = addOwner(declaration);
+        const owner = addOwner(declaration, packageName);
         for (const method of directChildren(declaration.body)
           .map((node) => staticScalaFunction(node))
           .filter((candidate): candidate is StaticScalaFunction => candidate !== null)) {
@@ -430,7 +437,7 @@ export function extractScalaFileFacts(input: ScalaExtractFileFactsInput): Artifa
   return {
     symbols,
     edges,
-    pendingReferences: [],
+    pendingReferences,
     localBindings: [],
     referenceScopes: [],
     importBindings: [],
@@ -450,6 +457,9 @@ export function extractScalaFileFacts(input: ScalaExtractFileFactsInput): Artifa
       routers: [],
       routes: [],
       importedRouterInclusions: []
+    },
+    scalaFacts: {
+      classes: scalaClassFacts
     }
   };
 }

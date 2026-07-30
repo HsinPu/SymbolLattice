@@ -3791,6 +3791,7 @@ describe("source extraction", () => {
       ].join("\n")
     });
 
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
     expect(facts.symbols.filter((symbol) => symbol.kind === "class").map((symbol) => symbol.qualifiedName)).toEqual([
       "app/controllers/HealthController.scala#HealthController",
       "app/controllers/HealthController.scala#Application"
@@ -3806,10 +3807,19 @@ describe("source extraction", () => {
     expect(facts.symbols.filter((symbol) => symbol.kind === "function").map((symbol) => symbol.qualifiedName)).toEqual([
       "app/controllers/HealthController.scala#utility"
     ]);
+    expect(
+      facts.scalaFacts?.classes.map((fact) => [
+        symbolsById.get(fact.symbolId)?.name,
+        fact.packageName
+      ])
+    ).toEqual([
+      ["HealthController", "controllers"],
+      ["Application", "controllers"]
+    ]);
     expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
   });
 
-  it("extracts direct Play conf/routes literal controller actions with explicit unresolved evidence", () => {
+  it("extracts direct Play conf/routes literal controller actions as pending references", () => {
     const facts = extractFileFacts({
       filePath: "conf/routes",
       language: "scala",
@@ -3830,41 +3840,32 @@ describe("source extraction", () => {
       "POST /orders",
       "GET /assets/*file"
     ]);
+    expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
     expect(
-      facts.edges
-        .filter((edge) => edge.kind === "routes")
-        .map((edge) => [
-          symbolsById.get(edge.sourceId)?.name,
-          edge.targetId,
-          edge.referenceName,
-          edge.evidence?.ruleId,
-          edge.resolution,
-          edge.confidence
+      facts.pendingReferences.map((reference) => [
+        symbolsById.get(reference.sourceId)?.name,
+        reference.referenceName,
+        reference.routeFramework,
+        reference.relationKind
         ])
     ).toEqual([
       [
         "GET /health",
-        null,
-        "HealthController.health",
-        "framework.play.conf-routes.literal-controller-action.unresolved-handler",
-        "unresolved",
-        0
+        "controllers.HealthController.health",
+        "play",
+        "routes"
       ],
       [
         "POST /orders",
-        null,
-        "OrderController.create",
-        "framework.play.conf-routes.literal-controller-action.unresolved-handler",
-        "unresolved",
-        0
+        "controllers.OrderController.create",
+        "play",
+        "routes"
       ],
       [
         "GET /assets/*file",
-        null,
-        "Assets.versioned",
-        "framework.play.conf-routes.literal-controller-action.unresolved-handler",
-        "unresolved",
-        0
+        "controllers.Assets.versioned",
+        "play",
+        "routes"
       ]
     ]);
   });

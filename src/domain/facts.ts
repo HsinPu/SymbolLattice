@@ -11,13 +11,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v34";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v35";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v14";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v15";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -228,6 +228,17 @@ export interface FastApiRouterFacts {
   readonly importedRouterInclusions: readonly FastApiImportedRouterInclusionFact[];
 }
 
+/** A Scala class or object declaration with its direct package-clause proof. */
+export interface ScalaClassFact {
+  readonly symbolId: string;
+  readonly packageName: string;
+}
+
+/** Syntax-only facts retained for exact Play controller-action resolution. */
+export interface ScalaFacts {
+  readonly classes: readonly ScalaClassFact[];
+}
+
 /**
  * Syntax-proven, file-local facts. They deliberately retain unresolved source
  * references so later resolution stages can be recomputed without reparsing.
@@ -247,6 +258,8 @@ export interface ArtifactFacts {
   readonly fastifyPluginFacts?: FastifyPluginFacts;
   /** Omitted only by artifact facts persisted before v0.31. */
   readonly fastApiRouterFacts?: FastApiRouterFacts;
+  /** Omitted only by artifact facts persisted before v0.46. */
+  readonly scalaFacts?: ScalaFacts;
 }
 
 /**

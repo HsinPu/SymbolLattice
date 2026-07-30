@@ -6,6 +6,25 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.46.0] - 2026-07-30
+
+### Added
+
+- Play route extraction now preserves the full controller-action spelling as a `PendingReference`, while Scala source facts retain the direct package proof for every indexed class/object symbol.
+- The project resolver now emits an exact `routes` edge with `framework.play.conf-routes.literal-controller-action.package-class-method` evidence only when one fully static controller action has exactly one direct package match, exactly one class/object, and exactly one direct body method. Candidate class and method symbol IDs remain auditable in the edge evidence.
+- Missing methods and wrong-package handlers remain explicitly unresolved with `framework.play.conf-routes.literal-controller-action.unresolved-handler`; this resolver never uses a global simple-name guess.
+- Unit and integration coverage now verifies raw Play pending facts, full controller-action names, exact cross-file route resolution, and fail-closed incomplete package-class-method proof. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.46.0.md`.
+
+### Compatibility
+
+- No SQLite schema migration or new query command is required. The existing file, symbol, edge, source-search, and route-query contracts are reused; `scalaFacts` is additive in the raw artifact-fact payload and existing generations remain readable.
+- The artifact extractor advances to `multi-language-ast-v35` and the project resolver to `project-resolver-v15`. A pre-v0.46 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes the full Play controller-action facts and exact project projection.
+
+### Deliberate limits
+
+- Play exact resolution is deliberately narrower than generic Scala name resolution: it accepts only literal `conf/routes` / `conf/*.routes` entries whose fully static action can be proven through one direct package clause, one class/object, and one direct body method. It excludes `->` includes, route prefixes/composition, `build.sbt` detection, imported/classpath controller resolution, overload resolution, binders, reverse routing, Scala 3 contextual declarations, and runtime behavior.
+- CodeGraph's Play resolver remains broader in project detection, route-file composition, and controller-action resolution. SymbolLattice v0.46 adds independently auditable package-class-method uniqueness proof, but it does not claim general Scala or Play parity.
+
 ## [0.45.0] - 2026-07-30
 
 ### Added

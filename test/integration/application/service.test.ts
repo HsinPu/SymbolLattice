@@ -3135,16 +3135,16 @@ describe("SymbolLatticeService", () => {
     ]);
   });
 
-  it("indexes Scala source plus Play conf/routes with source search and explicit unresolved handler evidence", async () => {
+  it("indexes Scala source plus Play conf/routes with exact package-class-method handler proof", async () => {
     const projectPath = await createInlineProject({
       "app/controllers/HealthController.scala": [
         "package controllers",
         "",
-        "class HealthController {",
-        "  def health(): String = \"ok\"",
+        "class HealthController(dependency: String) {",
+        "  def health(request: String): String = request",
         "}"
       ].join("\n"),
-      "conf/routes": "GET /health controllers.HealthController.health\n"
+      "conf/routes": "GET /health controllers.HealthController.health(request: String)\n"
     });
     const graphStore = new SqliteGraphStore();
     const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
@@ -3172,14 +3172,16 @@ describe("SymbolLatticeService", () => {
         route: { kind: "route", name: "GET /health" },
         edge: {
           kind: "routes",
-          targetId: null,
-          resolution: "unresolved",
+          targetId: expect.any(String),
+          resolution: "exact",
           evidence: {
-            ruleId: "framework.play.conf-routes.literal-controller-action.unresolved-handler",
-            stage: "syntax"
+            ruleId: "framework.play.conf-routes.literal-controller-action.package-class-method",
+            stage: "module"
           }
         },
-        handler: null
+        handler: {
+          qualifiedName: "app/controllers/HealthController.scala#HealthController.health"
+        }
       }
     ]);
     expect(search.results).toMatchObject([
@@ -3194,6 +3196,89 @@ describe("SymbolLatticeService", () => {
         matchingTerms: ["health"]
       }
     ]);
+  });
+
+  it("keeps Play routes unresolved when package-class-method proof is incomplete", async () => {
+    const projectPath = await createInlineProject({
+      "app/controllers/HealthController.scala": [
+        "package controllers",
+        "",
+        "class HealthController {",
+        "  def health(): String = \"ok\"",
+        "}"
+      ].join("\n"),
+      "conf/routes": [
+        "GET /missing controllers.HealthController.missing",
+        "GET /wrong-package other.HealthController.health"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath, { method: "GET" });
+
+    expect(routes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: "/missing",
+          edge: expect.objectContaining({
+            resolution: "unresolved",
+            evidence: expect.objectContaining({
+              ruleId: "framework.play.conf-routes.literal-controller-action.unresolved-handler",
+              stage: "unresolved"
+            })
+          }),
+          handler: null
+        }),
+        expect.objectContaining({
+          path: "/wrong-package",
+          edge: expect.objectContaining({
+            resolution: "unresolved",
+            evidence: expect.objectContaining({
+              ruleId: "framework.play.conf-routes.literal-controller-action.unresolved-handler",
+              stage: "unresolved"
+            })
+          }),
+          handler: null
+        })
+      ])
+    );
+  });
+
+  it("keeps Play routes unresolved for overloaded direct controller methods", async () => {
+    const projectPath = await createInlineProject({
+      "app/controllers/HealthController.scala": [
+        "package controllers",
+        "",
+        "class HealthController {",
+        "  def health(): String = \"ok\"",
+        "  def health(value: String): String = value",
+        "}"
+      ].join("\n"),
+      "conf/routes": "GET /health controllers.HealthController.health\n"
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath, { method: "GET" });
+
+    expect(routes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: "/health",
+          edge: expect.objectContaining({
+            resolution: "unresolved",
+            evidence: expect.objectContaining({
+              ruleId: "framework.play.conf-routes.literal-controller-action.unresolved-handler",
+              stage: "unresolved"
+            })
+          }),
+          handler: null
+        })
+      ])
+    );
   });
 
   it("indexes same-file FastAPI APIRouter routes through literal prefixes", async () => {

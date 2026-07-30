@@ -154,7 +154,90 @@ function staticRouteHandlerRuleId(
   if (reference.routeFramework === "fastapi") {
     return `framework.fastapi.direct-app.decorator.${suffix}`;
   }
+  if (reference.routeFramework === "play") {
+    return "framework.play.conf-routes.literal-controller-action." + suffix;
+  }
   return `framework.express.literal-route.${suffix}`;
+}
+
+interface PlayRouteHandlerResolution {
+  readonly classCandidates: readonly SymbolNode[];
+  readonly methodCandidates: readonly SymbolNode[];
+  readonly target: SymbolNode | null;
+}
+
+function parsePlayControllerAction(reference: PendingReference): {
+  readonly packageName: string;
+  readonly controllerName: string;
+  readonly actionName: string;
+} | null {
+  if (reference.routeFramework !== "play") {
+    return null;
+  }
+  const parts = reference.referenceName.split(".");
+  if (
+    parts.length < 2 ||
+    !parts.every((part) => /^[A-Za-z_][A-Za-z0-9_]*$/u.test(part))
+  ) {
+    return null;
+  }
+  const actionName = parts.at(-1);
+  const controllerName = parts.at(-2);
+  if (actionName === undefined || controllerName === undefined) {
+    return null;
+  }
+  return {
+    packageName: parts.slice(0, -2).join("."),
+    controllerName,
+    actionName
+  };
+}
+
+/**
+ * Play's conf/routes references name controller actions rather than lexical
+ * bindings. A route is exact only when its package, class, and direct method
+ * each have one syntax-proven candidate in the indexed project.
+ */
+function resolveExactPlayRouteHandler(input: {
+  readonly reference: PendingReference;
+  readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
+  readonly symbolsById: ReadonlyMap<string, SymbolNode>;
+}): PlayRouteHandlerResolution | null {
+  const action = parsePlayControllerAction(input.reference);
+  if (action === null) {
+    return null;
+  }
+  const classCandidates = [...input.factsByFile.values()]
+    .flatMap((facts) => facts.scalaFacts?.classes ?? [])
+    .filter((fact) => fact.packageName === action.packageName)
+    .map((fact) => input.symbolsById.get(fact.symbolId))
+    .filter(
+      (symbol): symbol is SymbolNode =>
+        symbol !== undefined &&
+        symbol.kind === "class" &&
+        symbol.name === action.controllerName
+    )
+    .sort((left, right) => compareStableText(left.id, right.id));
+  const controller = classCandidates.length === 1 ? classCandidates[0] : undefined;
+  const methodCandidates =
+    controller === undefined
+      ? []
+      : [...input.symbolsById.values()]
+          .filter(
+            (symbol) =>
+              symbol.kind === "method" &&
+              symbol.qualifiedName === controller.qualifiedName + "." + action.actionName
+          )
+          .sort((left, right) => compareStableText(left.id, right.id));
+
+  return {
+    classCandidates,
+    methodCandidates,
+    target:
+      classCandidates.length === 1 && methodCandidates.length === 1
+        ? methodCandidates[0] ?? null
+        : null
+  };
 }
 
 function fallbackModuleResolution(
@@ -1798,6 +1881,46 @@ export function resolveProjectFacts(input: {
       continue;
     }
     const expectedSpace = heritage?.expectedSpace ?? "value";
+    const playRouteResolution = isRouteHandler
+      ? resolveExactPlayRouteHandler({ reference, factsByFile, symbolsById })
+      : null;
+    if (playRouteResolution !== null) {
+      const candidates = candidateSymbolIds(
+        playRouteResolution.classCandidates,
+        playRouteResolution.methodCandidates
+      );
+      if (playRouteResolution.target !== null) {
+        resolvedEdges.push(
+          referenceEdge(
+            reference,
+            playRouteResolution.target.id,
+            "exact",
+            1,
+            referenceEvidence(
+              "framework.play.conf-routes.literal-controller-action.package-class-method",
+              "module",
+              candidates
+            )
+          )
+        );
+      } else {
+        unresolvedReferences.push(reference);
+        resolvedEdges.push(
+          referenceEdge(
+            reference,
+            null,
+            "unresolved",
+            0,
+            referenceEvidence(
+              "framework.play.conf-routes.literal-controller-action.unresolved-handler",
+              "unresolved",
+              candidates
+            )
+          )
+        );
+      }
+      continue;
+    }
 
     const scopedLocal = resolveScopedBinding(
       reference.referenceName,
