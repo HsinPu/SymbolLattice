@@ -11,13 +11,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v60";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v61";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v22";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v23";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -301,6 +301,27 @@ export interface TwigFacts {
   readonly templateReferences: readonly TwigTemplateReferenceFact[];
 }
 
+/** Direct literal Laravel Blade view directive kinds retained for project-local resolution. */
+export type BladeTemplateReferenceKind = "extends" | "include" | "component" | "each";
+
+/** One complete direct literal Laravel Blade view directive reference. */
+export interface BladeTemplateReferenceFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly kind: BladeTemplateReferenceKind;
+  readonly targetFilePath: string;
+  readonly referenceName: string;
+  readonly range: SourceRange;
+}
+
+/**
+ * Syntax-only Blade facts projected into exact or explicitly unresolved calls
+ * only after the indexed project file catalog is available.
+ */
+export interface BladeFacts {
+  readonly templateReferences: readonly BladeTemplateReferenceFact[];
+}
+
 /** A direct simple Solidity `is Base` clause retained for same-file proof. */
 export interface SolidityInheritanceFact {
   readonly sourceId: string;
@@ -346,6 +367,8 @@ export interface ArtifactFacts {
   readonly solidityFacts?: SolidityFacts;
   /** Omitted only by artifact facts persisted before v0.71. */
   readonly twigFacts?: TwigFacts;
+  /** Omitted only by artifact facts persisted before v0.72. */
+  readonly bladeFacts?: BladeFacts;
 }
 
 /**

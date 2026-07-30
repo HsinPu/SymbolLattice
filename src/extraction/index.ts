@@ -32,6 +32,7 @@ import { extractNixFileFacts } from "./nix.js";
 import { extractVbnetFileFacts } from "./vbnet.js";
 import { extractLiquidFileFacts } from "./liquid.js";
 import { extractTwigFileFacts } from "./twig.js";
+import { extractBladeFileFacts } from "./blade.js";
 import { extractRazorFileFacts } from "./razor.js";
 import { extractSolidityFileFacts } from "./solidity.js";
 import { extractTerraformFileFacts } from "./terraform.js";
@@ -3672,6 +3673,9 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
   }
   if (input.language === "php") {
     return extractPhpFileFacts({ ...input, language: "php" });
+  }
+  if (input.language === "blade") {
+    return extractBladeFileFacts({ ...input, language: "blade" });
   }
   if (input.language === "c") {
     return extractCFileFacts({ ...input, language: "c" });

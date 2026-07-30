@@ -30,6 +30,7 @@ describe("first-party framework capabilities", () => {
       "axum",
       "spring-web",
       "laravel",
+      "laravel-blade",
       "civetweb",
       "lapis",
       "plumber",
@@ -201,6 +202,14 @@ describe("first-party framework capabilities", () => {
       surfaces: [
         "direct imported or fully-qualified Route facade calls",
         "literal controller-action arrays with same-file exact method evidence"
+      ]
+    });
+    expect(frameworkCapability("laravel-blade")).toMatchObject({
+      languages: ["blade"],
+      routeRegistrations: [],
+      surfaces: [
+        "complete direct literal extends and include view directives",
+        "complete direct literal component and each view directives resolved against indexed Laravel resources/views files"
       ]
     });
     expect(frameworkCapability("civetweb")).toMatchObject({

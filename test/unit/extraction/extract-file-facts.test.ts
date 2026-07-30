@@ -7036,6 +7036,76 @@ describe("source extraction", () => {
     expect(facts.twigFacts?.templateReferences).toEqual([]);
   });
 
+  it("extracts direct literal Laravel Blade layout and view relationships", () => {
+    const facts = extractFileFacts({
+      filePath: "resources/views/pages/home.blade.php",
+      language: "blade",
+      sourceText: [
+        "@extends('layouts.app')",
+        "@include('partials.card', ['product' => $product])",
+        "@component('components.alert')",
+        "@each('partials.row', $rows, 'row')"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.map((symbol) => [symbol.kind, symbol.name])).toEqual([
+      ["file", "home.blade.php"]
+    ]);
+    expect(facts.edges).toEqual([]);
+    expect(facts.bladeFacts?.templateReferences).toEqual([
+      expect.objectContaining({
+        kind: "extends",
+        targetFilePath: "resources/views/layouts/app.blade.php",
+        referenceName: "extends resources/views/layouts/app.blade.php",
+        range: expect.objectContaining({ start: { line: 1, column: 0 } })
+      }),
+      expect.objectContaining({
+        kind: "include",
+        targetFilePath: "resources/views/partials/card.blade.php",
+        referenceName: "include resources/views/partials/card.blade.php",
+        range: expect.objectContaining({ start: { line: 2, column: 0 } })
+      }),
+      expect.objectContaining({
+        kind: "component",
+        targetFilePath: "resources/views/components/alert.blade.php",
+        referenceName: "component resources/views/components/alert.blade.php",
+        range: expect.objectContaining({ start: { line: 3, column: 0 } })
+      }),
+      expect.objectContaining({
+        kind: "each",
+        targetFilePath: "resources/views/partials/row.blade.php",
+        referenceName: "each resources/views/partials/row.blade.php",
+        range: expect.objectContaining({ start: { line: 4, column: 0 } })
+      })
+    ]);
+  });
+
+  it("rejects commented, literal-block, dynamic, unsafe, escaped, and malformed Blade directives", () => {
+    const facts = extractFileFacts({
+      filePath: "resources/views/pages/invalid.blade.php",
+      language: "blade",
+      sourceText: [
+        "{{-- @include('commented.card') --}}",
+        "@verbatim @extends('ignored.layout') @endverbatim",
+        "<!-- @component('ignored.component') -->",
+        "@php $fake = \"@include('ignored.php')\"; @endphp",
+        "<?php $fake = \"@include('ignored.raw-php')\"; ?>",
+        "@@include('escaped.card')",
+        "@include($dynamic)",
+        "@include('partials.card' . $suffix)",
+        "@each('partials.row', $rows)",
+        "@include('../escape')",
+        "@extends('layouts.app'"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.map((symbol) => [symbol.kind, symbol.name])).toEqual([
+      ["file", "invalid.blade.php"]
+    ]);
+    expect(facts.edges).toEqual([]);
+    expect(facts.bladeFacts?.templateReferences).toEqual([]);
+  });
+
   it("extracts complete Solidity containers, direct callable members, and simple inheritance facts", () => {
     const facts = extractFileFacts({
       filePath: "contracts/Token.sol",

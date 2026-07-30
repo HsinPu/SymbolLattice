@@ -673,7 +673,8 @@ function artifactFactsPayload(facts: PersistedArtifactFacts): ArtifactFacts {
     ...(facts.javaFacts === undefined ? {} : { javaFacts: facts.javaFacts }),
     ...(facts.liquidFacts === undefined ? {} : { liquidFacts: facts.liquidFacts }),
     ...(facts.solidityFacts === undefined ? {} : { solidityFacts: facts.solidityFacts }),
-    ...(facts.twigFacts === undefined ? {} : { twigFacts: facts.twigFacts })
+    ...(facts.twigFacts === undefined ? {} : { twigFacts: facts.twigFacts }),
+    ...(facts.bladeFacts === undefined ? {} : { bladeFacts: facts.bladeFacts })
   };
 }
 

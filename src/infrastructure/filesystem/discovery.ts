@@ -168,6 +168,9 @@ export function getSourceLanguage(filePath: string): SupportedLanguage | null {
   if (isPlayRoutesFile(filePath)) {
     return "scala";
   }
+  if (filePath.toLowerCase().endsWith(".blade.php")) {
+    return "blade";
+  }
   const extension = filePath.slice(filePath.lastIndexOf(".")).toLowerCase();
   return SUPPORTED_EXTENSIONS.get(extension) ?? null;
 }

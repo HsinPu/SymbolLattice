@@ -23,6 +23,7 @@ export const FRAMEWORK_CAPABILITY_IDS = [
   "axum",
   "spring-web",
   "laravel",
+  "laravel-blade",
   "civetweb",
   "lapis",
   "plumber",
@@ -255,6 +256,15 @@ export const FRAMEWORK_CAPABILITIES = [
     surfaces: [
       "direct imported or fully-qualified Route facade calls",
       "literal controller-action arrays with same-file exact method evidence"
+    ]
+  },
+  {
+    id: "laravel-blade",
+    languages: ["blade"],
+    routeRegistrations: [],
+    surfaces: [
+      "complete direct literal extends and include view directives",
+      "complete direct literal component and each view directives resolved against indexed Laravel resources/views files"
     ]
   },
   {

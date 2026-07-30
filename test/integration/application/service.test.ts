@@ -6888,6 +6888,141 @@ describe("SymbolLatticeService", () => {
     ]);
   });
 
+  it("indexes Laravel Blade literal view directives against resources/views", async () => {
+    const projectPath = await createInlineProject({
+      "resources/views/pages/home.blade.php": [
+        "@extends('layouts.app')",
+        "@include('partials.card', ['product' => $product])",
+        "@component('components.alert')",
+        "@each('partials.row', $rows, 'row')",
+        "@include('missing.view')"
+      ].join("\n"),
+      "resources/views/layouts/app.blade.php": "<main>@yield('content')</main>\n",
+      "resources/views/partials/card.blade.php": "<article>Card</article>\n",
+      "resources/views/components/alert.blade.php": "<aside>Alert</aside>\n",
+      "resources/views/partials/row.blade.php": "<li>{{ $row }}</li>\n"
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    const indexed = await service.init({ projectPath });
+    const search = await service.search(projectPath, "Card", { language: "blade" });
+    const layout = (await service.find(projectPath, "resources/views/layouts/app.blade.php")).symbols[0];
+    const card = (await service.find(projectPath, "resources/views/partials/card.blade.php")).symbols[0];
+    if (layout === undefined || card === undefined) {
+      throw new Error("Expected indexed Laravel Blade target files.");
+    }
+    const layoutCallers = await service.callers(projectPath, layout.qualifiedName);
+    const cardCallers = await service.callers(projectPath, card.qualifiedName);
+    const persistedBladeFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .filter((facts) => facts.language === "blade");
+    const missingEdge = graphStore
+      .getSnapshot(projectPath)
+      .edges.find((edge) => edge.referenceName === "include resources/views/missing/view.blade.php");
+
+    expect(indexed).toMatchObject({
+      stale: false,
+      counts: { files: 5, symbols: expect.any(Number), edges: expect.any(Number) }
+    });
+    expect(persistedBladeFacts).toHaveLength(5);
+    expect(
+      persistedBladeFacts.every(
+        (facts) => facts.extractorVersion === ARTIFACT_FACTS_EXTRACTOR_VERSION
+      )
+    ).toBe(true);
+    expect(
+      persistedBladeFacts.find((facts) => facts.filePath === "resources/views/pages/home.blade.php")
+        ?.bladeFacts?.templateReferences
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "extends",
+          targetFilePath: "resources/views/layouts/app.blade.php"
+        }),
+        expect.objectContaining({
+          kind: "each",
+          targetFilePath: "resources/views/partials/row.blade.php"
+        })
+      ])
+    );
+    expect(search.results).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          filePath: "resources/views/partials/card.blade.php",
+          language: "blade"
+        })
+      ])
+    );
+    expect(layoutCallers.relations).toEqual([
+      expect.objectContaining({
+        symbol: expect.objectContaining({
+          kind: "file",
+          qualifiedName: "resources/views/pages/home.blade.php"
+        }),
+        edge: expect.objectContaining({
+          kind: "calls",
+          resolution: "exact",
+          referenceName: "extends resources/views/layouts/app.blade.php",
+          evidence: expect.objectContaining({
+            ruleId: "framework.laravel-blade.extends.literal-resources-views.exact-target",
+            stage: "module"
+          })
+        })
+      })
+    ]);
+    expect(cardCallers.relations).toEqual([
+      expect.objectContaining({
+        symbol: expect.objectContaining({
+          kind: "file",
+          qualifiedName: "resources/views/pages/home.blade.php"
+        }),
+        edge: expect.objectContaining({
+          kind: "calls",
+          resolution: "exact",
+          referenceName: "include resources/views/partials/card.blade.php",
+          evidence: expect.objectContaining({
+            ruleId: "framework.laravel-blade.include.literal-resources-views.exact-target",
+            stage: "module"
+          })
+        })
+      })
+    ]);
+    expect(missingEdge).toMatchObject({
+      kind: "calls",
+      resolution: "unresolved",
+      confidence: 0,
+      targetId: null,
+      evidence: {
+        ruleId: "framework.laravel-blade.include.literal-resources-views.unresolved-target",
+        stage: "module"
+      }
+    });
+
+    await writeFile(
+      join(projectPath, "resources", "views", "layouts", "app.blade.php"),
+      "<main>Updated layout</main>\n",
+      "utf8"
+    );
+    const synced = await service.sync({ projectPath });
+    const layoutCallersAfterReuse = await service.callers(projectPath, layout.qualifiedName);
+
+    expect(synced.lastIndexWork?.reusedArtifactFiles).toContain(
+      "resources/views/pages/home.blade.php"
+    );
+    expect(layoutCallersAfterReuse.relations).toEqual([
+      expect.objectContaining({
+        edge: expect.objectContaining({
+          resolution: "exact",
+          referenceName: "extends resources/views/layouts/app.blade.php",
+          evidence: expect.objectContaining({
+            ruleId: "framework.laravel-blade.extends.literal-resources-views.exact-target"
+          })
+        })
+      })
+    ]);
+  });
+
   it("indexes Solidity declarations and proves same-file inheritance only when target kind is unique", async () => {
     const projectPath = await createInlineProject({
       "contracts/Token.sol": [

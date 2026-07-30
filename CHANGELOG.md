@@ -6,6 +6,24 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.72.0] - 2026-07-31
+
+### Added
+
+- Laravel Blade `.blade.php` source discovery, persisted source-search filtering, CLI/MCP language validation, and an independent offset-preserving lexical directive scanner. It retains only complete direct literal `@extends`, `@include`, `@component`, and `@each` forms outside HTML comments, Blade comments, raw PHP, `@php ... @endphp`, and `@verbatim ... @endverbatim` blocks.
+- An executable first-party `laravel-blade` capability. A safe dotted logical view name projects only to the conventional indexed `resources/views/<name-as-path>.blade.php` file. Existing targets receive exact `calls` edges; missing targets remain explicit unresolved evidence with rule-specific provenance rather than guessed namespaced/package/configured-view matches.
+- Unit and integration coverage now verifies Blade discovery, exact and unresolved layout/view callers, raw-fact persistence, language search, capability registration, reuse/reprojection after target changes, and comment/literal-block/dynamic/path-traversal/escaped/malformed rejection. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.72.0.md`.
+
+### Compatibility
+
+- No SQLite schema migration or new query command is required. Blade reuses the existing file, `calls` edge, caller/callee, source-search, and raw-artifact contracts; existing generations remain readable.
+- The artifact extractor advances to `multi-language-ast-v61` and the resolver to `project-resolver-v23` because complete raw Blade facts are projected only after the full indexed file catalog is known. A pre-v0.72 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes Blade-capable facts and relations.
+
+### Deliberate limits
+
+- The Blade scanner is a deliberately narrow lexical directive scanner, not a Blade/PHP grammar, Laravel compiler, container analyzer, view finder, or renderer. It accepts only complete direct literal dotted view names with a small exact argument-tail grammar; unterminated protected blocks or directive parentheses fail closed.
+- Blade support does not infer `view()` / `View::make()` calls, component tag syntax, anonymous components, layouts/sections/stacks, slots, `@includeWhen` / `@includeFirst`, namespaced or package views, custom finder roots, dynamic or conditional expressions, PHP/Laravel service integration, compilation, or runtime rendering. The inspected local CodeGraph baseline has Laravel PHP route resolution but no Blade-specific `.blade.php` extractor or resolver; SymbolLattice adds only independently implemented project-local template relationship evidence.
+
 ## [0.71.0] - 2026-07-31
 
 ### Added

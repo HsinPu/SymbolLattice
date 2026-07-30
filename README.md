@@ -2,7 +2,7 @@
 
 # SymbolLattice
 
-**Evidence-first local code intelligence for TypeScript, JavaScript, ArkTS/ArkUI, Vue, Svelte, Astro, Razor/Blazor, Terraform/OpenTofu, Shopify Liquid, Twig, Solidity, CFML/CFScript, Nix, VB.NET, Python, Go, Rust, Java, PHP, C, Lua, R, Elixir, Erlang, Clojure, Perl, Julia, Haskell, OCaml, F#, Nim, C++, C#, Ruby, Kotlin, Swift, Dart, and Scala projects.**
+**Evidence-first local code intelligence for TypeScript, JavaScript, ArkTS/ArkUI, Vue, Svelte, Astro, Razor/Blazor, Terraform/OpenTofu, Shopify Liquid, Twig, Laravel Blade, Solidity, CFML/CFScript, Nix, VB.NET, Python, Go, Rust, Java, PHP, C, Lua, R, Elixir, Erlang, Clojure, Perl, Julia, Haskell, OCaml, F#, Nim, C++, C#, Ruby, Kotlin, Swift, Dart, and Scala projects.**
 
 [![Version](https://img.shields.io/github/v/tag/HsinPu/symbol-lattice?label=version)](https://github.com/HsinPu/symbol-lattice/tags)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D22.13-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> **v0.71.0** is an early developer release. This public repository runs from source; its npm package is intentionally private and is not published to npm.
+> **v0.72.0** is an early developer release. This public repository runs from source; its npm package is intentionally private and is not published to npm.
 
 SymbolLattice builds a local symbol graph without hiding uncertainty. It keeps syntax-proven artifact facts, resolves cross-file relationships conservatively, and records why every resolved edge exists. The graph stays local to the inspected project under `.symbol-lattice/index.sqlite`.
 
@@ -36,6 +36,7 @@ SymbolLattice builds a local symbol graph without hiding uncertainty. It keeps s
 - **Terraform/OpenTofu declaration evidence** - complete top-level literal `resource`, `data`, `module`, `variable`, and `output` blocks in `.tf`, `.tfvars`, and `.tofu` files become audited IaC symbols; outputs retain export evidence without fabricating dependency or deployment facts.
 - **Shopify Liquid template-call evidence** - complete literal `render`, `include`, and `section` tags in `.liquid` files become exact project-local calls to indexed snippet or section files when—and only when—the target path exists.
 - **Twig template-relationship evidence** - complete literal `extends`, `include`, `embed`, `import`, and `from ... import` tags in `.twig` files become exact project-local calls to indexed `templates/` files when—and only when—the target path exists.
+- **Laravel Blade template-relationship evidence** - complete direct literal `@extends`, `@include`, `@component`, and `@each` directives in `.blade.php` files become exact project-local calls to indexed `resources/views/` files when—and only when—the dotted view target exists.
 - **Solidity declaration and hierarchy evidence** - complete top-level `contract`, `interface`, and `library` declarations plus their complete direct callable members become auditable symbols; a simple `is Base, Other` clause becomes a hierarchy edge only when a unique target in the same source file proves its kind.
 - **CFML / CFScript declaration evidence** - complete braced `component` / `interface` declarations, tag-based `<cfcomponent>` / `<cfinterface>` containers, and conventional CFC components become auditable symbols only with complete direct named function members.
 - **Nix declaration and import-syntax evidence** - direct bindings of returned literal attribute sets, direct `let ... in` bindings, simple `inherit` names, and literal project-relative `import` expressions become auditable symbols or explicit pending import references without claiming evaluation or module-target resolution.
@@ -117,6 +118,7 @@ node dist/cli/main.js search "Home" --project /path/to/project --language arkts
 node dist/cli/main.js search "aws_instance" --project /path/to/project --language terraform
 node dist/cli/main.js search "product-card" --project /path/to/project --language liquid
 node dist/cli/main.js search "base" --project /path/to/project --language twig
+node dist/cli/main.js search "layout" --project /path/to/project --language blade
 node dist/cli/main.js search "format" --project /path/to/project --language cfml
 node dist/cli/main.js search "package" --project /path/to/project --language nix
 node dist/cli/main.js search "Worker" --project /path/to/project --language vbnet
@@ -149,9 +151,9 @@ One-shot data commands emit stable, pretty JSON. `watch` is the deliberate strea
 
 ## Capabilities
 
-| Area | v0.71.0 behavior |
+| Area | v0.72.0 behavior |
 | --- | --- |
-| Source files | TypeScript, TSX, JavaScript, JSX, ArkTS/ArkUI, Vue SFC, Svelte SFC, Astro SFC, Razor/Blazor components, Terraform/OpenTofu HCL, Shopify Liquid, Twig, Solidity, CFML/CFScript, Nix, VB.NET, Python, Go, Rust, Java, PHP, C, Lua, R, Elixir, Erlang, Clojure, Perl, Julia, Haskell, OCaml, F#, Nim, C++, C#, Ruby, Kotlin, Swift, Dart, and Scala (`.ets`, `.vue`, `.svelte`, `.astro`, `.razor`, `.tf`, `.tfvars`, `.tofu`, `.liquid`, `.twig`, `.sol`, `.cfc`, `.cfm`, `.cfs`, `.nix`, `.vb`, `.c`, `.lua`, `.r`, `.ex`, `.exs`, `.erl`, `.clj`, `.pl`, `.pm`, `.jl`, `.hs`, `.ml`, `.fs`, `.nim`, `.cpp`, `.cc`, `.cxx`, `.hpp`, `.hh`, `.hxx`, `.cs`, `.rb`, `.kt`, `.swift`, `.dart`, `.scala`; plus Play `conf/routes` and `conf/*.routes` route tables) |
+| Source files | TypeScript, TSX, JavaScript, JSX, ArkTS/ArkUI, Vue SFC, Svelte SFC, Astro SFC, Razor/Blazor components, Terraform/OpenTofu HCL, Shopify Liquid, Twig, Laravel Blade, Solidity, CFML/CFScript, Nix, VB.NET, Python, Go, Rust, Java, PHP, C, Lua, R, Elixir, Erlang, Clojure, Perl, Julia, Haskell, OCaml, F#, Nim, C++, C#, Ruby, Kotlin, Swift, Dart, and Scala (`.ets`, `.vue`, `.svelte`, `.astro`, `.razor`, `.tf`, `.tfvars`, `.tofu`, `.liquid`, `.twig`, `.blade.php`, `.sol`, `.cfc`, `.cfm`, `.cfs`, `.nix`, `.vb`, `.c`, `.lua`, `.r`, `.ex`, `.exs`, `.erl`, `.clj`, `.pl`, `.pm`, `.jl`, `.hs`, `.ml`, `.fs`, `.nim`, `.cpp`, `.cc`, `.cxx`, `.hpp`, `.hh`, `.hxx`, `.cs`, `.rb`, `.kt`, `.swift`, `.dart`, `.scala`; plus Play `conf/routes` and `conf/*.routes` route tables) |
 | F# + Giraffe | Direct top-level typed `HttpFunc` / `HttpContext` handlers plus exactly one `open Giraffe` proof and a direct literal `choose [` route table. Fixed HTTP verbs and plain `route "/..."` entries become exact same-file or explicit unresolved route evidence. |
 | Nim + Jester | Direct top-level zero-argument `proc` handlers plus exactly one direct `import` list containing `jester`, then a flat `routes:` or `router name:` literal route block. Fixed lowercase HTTP verbs become exact same-file or explicit unresolved route evidence. |
 | Vue + Vue Router | Vue `.vue` files contribute a file symbol plus direct inline JavaScript/TypeScript script declarations and an auditable default component export. In TypeScript/JavaScript router modules, exactly one direct `createRouter` import plus one top-level literal `routes` option emits `NAVIGATE` route evidence; direct default imports can resolve exactly through `.vue` modules. |
@@ -162,6 +164,10 @@ One-shot data commands emit stable, pretty JSON. `watch` is the deliberate strea
 | Terraform / OpenTofu | Complete line-leading top-level literal `resource`, `data`, `module`, `variable`, and `output` blocks emit exact local declaration evidence. Resource/data blocks use the additive `resource` kind, modules use the additive `module` kind, and outputs retain export facts. |
 | Shopify Liquid | Complete literal `render`, `include`, and `section` tags emit an exact project-local `calls` edge only when the expected `snippets/<name>.liquid` or `sections/<name>.liquid` target exists; missing targets remain explicit unresolved evidence. |
 | Twig | Complete direct literal `extends`, `include`, `embed`, `import`, and `from ... import` tags emit an exact project-local `calls` edge only when the expected safe `templates/<name>.twig` target exists; missing targets remain explicit unresolved evidence. |
+| Laravel Blade | Complete direct literal `@extends`, `@include`, `@component`, and `@each` directives emit an exact project-local `calls` edge only when the expected safe dotted `resources/views/<name-as-path>.blade.php` target exists; missing targets remain explicit unresolved evidence. |
+| Blade symbols | Each `.blade.php` file contributes its auditable file symbol. This narrow template scanner does not treat Blade as generic PHP or claim PHP declarations inside the template. |
+| Blade relationships | Complete direct literal `@extends`, `@include`, `@component`, and three-argument `@each` directives can create exact or explicitly unresolved project-local `calls` evidence. |
+| Blade module resolution | No general Laravel view finder, package, namespace, custom-root, component-tag, `view()` / `View::make()`, PHP, compiler, or runtime resolver is claimed in this release. |
 | Solidity | Complete top-level `contract`, `interface`, and `library` declarations plus complete direct callable members emit exact `contains` evidence. A simple literal `is Base, Other` clause emits an exact hierarchy edge only when one same-file declaration proves each target kind. |
 | CFML / CFScript | Complete braced `component` / `interface` declarations, complete tag-based `<cfcomponent>` / `<cfinterface>` containers with named `<cffunction>` members, and conventional implicit CFC components emit exact local `contains` evidence. |
 | Nix | Complete direct returned-attribute-set and `let ... in` bindings emit function or variable symbols; simple `inherit` names emit variable symbols; literal project-relative `import` paths are retained as explicit pending `imports` references without a target-resolution claim. |
@@ -221,7 +227,7 @@ One-shot data commands emit stable, pretty JSON. `watch` is the deliberate strea
 
 Framework coverage is declared once and actively selects the extraction passes applicable to the parsed language. This is a stable integration boundary, not a runtime framework detector: every pass below still requires its own syntax proof before it emits facts.
 
-| Capability | Proven surfaces in v0.66 |
+| Capability | Proven surfaces in v0.72 |
 | --- | --- |
 | Express | Literal receiver methods and identifier handlers |
 | Fastify | Literal routes and static prefix composition |
@@ -234,6 +240,7 @@ Framework coverage is declared once and actively selects the extraction passes a
 | Axum | Rust direct imported `Router::new()` literal route-builder chains and direct imported method-router named local handlers |
 | Spring Web | Java direct imported or fully-qualified `@RestController` / `@Controller`, a literal optional class `@RequestMapping`, and one literal `@GetMapping` / `@PostMapping` / `@PutMapping` / `@PatchMapping` / `@DeleteMapping` direct local method |
 | Laravel | PHP direct imported/fully-qualified route facade calls with literal controller-action arrays |
+| Laravel Blade | Direct literal `@extends`, `@include`, `@component`, and `@each` directives resolved only against indexed conventional `resources/views/` Blade templates |
 | CivetWeb | C direct [`mg_set_request_handler(context, uri, handler, cbdata)`](https://civetweb.github.io/civetweb/api/mg_set_request_handler.html) registration after `civetweb.h` inclusion, with unique unshadowed same-file handlers; represented as `ALL` because registration has no method argument |
 | Lapis | Lua direct [`require("lapis")` / `Application()`](https://leafo.net/lapis/reference/lua_getting_started.html) bindings with literal `get` / `post` / `put` / `delete` / `match` registrations and unique, prior, un-rebound same-file local function handlers |
 | Plumber | R direct [`#*` / `#'` annotations](https://www.rplumber.io/) with literal `@get` / `@post` / `@put` / `@delete` slash paths and immediately following top-level braced anonymous function handlers |
@@ -698,6 +705,27 @@ v0.71 adds a deliberately small Twig relation surface for conventional project l
 The extractor records a `calls` edge only for a safe literal relative name ending in `.twig`. The target is anchored to the project-local `templates/` root; an already prefixed `templates/...` name is retained as-is. Existing indexed files receive exact evidence, while a missing target becomes an explicit unresolved `framework.twig.*.literal-templates-root.unresolved-target` edge. HTML comments, Twig `{# ... #}` comments, `verbatim` blocks, dynamic or concatenated names, namespace names, traversal, unsupported `with` context forms, malformed delimiters, and nested tags create no facts.
 
 This is not a Twig parser or Symfony runtime resolver. It deliberately excludes loader namespaces, bundle paths, configuration-defined template roots, conditional/dynamic templates, macro bodies, blocks, `with` maps, inheritance-chain flattening, PHP/Symfony discovery, compilation, and rendering behavior.
+
+#### Laravel Blade (literal `resources/views` relationships)
+
+v0.72 adds a deliberately small Laravel Blade relationship surface for the conventional view root:
+
+```blade
+@extends('layouts.app')
+@include('partials.card', ['product' => $product])
+@component('components.alert')
+@each('partials.row', $rows, 'row')
+```
+
+| Accepted directive | Required form | Exact project-local target |
+| --- | --- | --- |
+| `@extends` | one complete direct safe dotted literal view name | `resources/views/<name-as-path>.blade.php` |
+| `@include` / `@component` | a complete direct safe dotted literal name, optionally followed by non-empty additional arguments | `resources/views/<name-as-path>.blade.php` |
+| `@each` | a complete direct safe dotted literal name plus two non-empty top-level remaining arguments | `resources/views/<name-as-path>.blade.php` |
+
+The extractor records a `calls` edge only for a safe dotted relative view name. Dots map to nested directories under the project-local `resources/views/` root. Existing indexed files receive exact evidence; a missing target becomes an explicit unresolved `framework.laravel-blade.*.literal-resources-views.unresolved-target` edge. HTML comments, Blade comments, raw PHP, `@php ... @endphp`, `@verbatim ... @endverbatim`, escaped `@@` directives, dynamic or concatenated names, namespace/package names, traversal, incomplete directives, and unsupported tails create no facts.
+
+This is not a Blade/PHP parser or Laravel view resolver. It deliberately excludes `view()` / `View::make()`, component tag syntax, anonymous components, sections/stacks/slots, `@includeWhen` / `@includeFirst`, namespaced/package/custom-root views, dynamic/conditional expressions, PHP/Laravel service discovery, compilation, and rendering behavior.
 
 #### Solidity (same-file declaration and hierarchy evidence)
 
@@ -2037,6 +2065,8 @@ v0.70 adds no SQLite schema migration or query command. It adds VB.NET `.vb` dis
 
 v0.71 adds no SQLite schema migration or query command. It adds Twig `.twig` discovery, raw facts for exact direct literal template relationships, and executable `twig` capability registration. The resolver advances to `project-resolver-v22` because these facts are projected only after the indexed `templates/` root is known. The artifact extractor advances to `multi-language-ast-v60`; its raw-artifact payload now also retains the previously introduced Liquid and Solidity facts instead of silently dropping them during SQLite persistence. A pre-v0.71 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes the complete facts. Existing generations remain readable.
 
+v0.72 adds no SQLite schema migration or query command. It adds Laravel Blade `.blade.php` discovery, exact direct literal layout/view raw facts, and executable `laravel-blade` capability registration. The resolver advances to `project-resolver-v23` because a safe dotted logical view is projected only after the indexed conventional `resources/views/` root is known. The artifact extractor advances to `multi-language-ast-v61`; its raw-artifact payload retains Blade facts together with all previously persisted template and language facts. A pre-v0.72 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes the complete facts. Existing generations remain readable.
+
 ## Architecture
 
 ```mermaid
@@ -2063,6 +2093,8 @@ flowchart LR
   App --> SQLite
 ```
 
+The Laravel Blade adapter is intentionally separate from the PHP parser: it retains only project-local template evidence, then the resolver turns persisted raw facts into exact or explicit unresolved `calls` edges once the complete file catalog is known.
+
 ```text
 src/
   application/     Use cases, incremental planning, and graph projection
@@ -2076,7 +2108,7 @@ src/
 
 ## Deliberate boundaries
 
-v0.71.0 does not yet provide:
+v0.72.0 does not yet provide:
 
 - Daemon mode, background automatic sync after the foreground process exits, cross-process watch coordination, MCP per-query pending-file banners, worker pools, or historical source browsing.
 - pnpm workspace YAML, TypeScript project references, external/package `extends`, or nested `.gitignore` semantics.
@@ -2110,12 +2142,13 @@ v0.71.0 does not yet provide:
 - The Terraform/OpenTofu surface is a deliberately small lexical block scanner, not an HCL parser, compiler, or deployment planner. It accepts only complete line-leading top-level literal `resource`, `data`, `module`, `variable`, and `output` blocks, while masking comments, strings, and heredocs. It excludes `terraform`/`provider`/`locals`, dynamic labels, JSON configuration, expression/interpolation/reference analysis, `depends_on`, provider aliases, module source resolution, state, plan/apply, and runtime cloud topology.
 - The Shopify Liquid surface is a deliberately small lexical tag scanner, not a Liquid parser, Shopify theme compiler, or renderer. It accepts only complete literal `render`/`include`/`section` tags with safe path segments and then only exact indexed local `snippets`/`sections` file targets. It excludes tags in HTML comments or Liquid `comment`/`raw` blocks, dynamic/unsafe/incomplete/nested tags, `assign`/capture/loop/condition/filter semantics, layouts/schema/JSON templates/app blocks, objects/metafields/locales, remote snippets/theme inheritance, and runtime storefront behavior.
 - The Twig surface is a deliberately small lexical tag scanner, not a Twig parser, Symfony resolver, PHP analyzer, or renderer. It accepts only complete direct literal `extends`/`include`/`embed`/`import`/`from` forms with a safe `.twig` logical name and then only exact indexed local `templates/` targets. It excludes comments/verbatim blocks, dynamic or namespaced paths, `with` context maps, macro bodies, blocks, inheritance-chain traversal, loader/bundle/configured roots, PHP/Symfony integration, compilation, and runtime rendering.
+- The Laravel Blade surface is a deliberately small lexical directive scanner, not a Blade/PHP parser, Laravel compiler, view finder, or renderer. It accepts only complete direct literal dotted `@extends`/`@include`/`@component`/`@each` view forms and then only exact indexed local `resources/views/` targets. It excludes HTML/Blade comments, raw PHP, `@php`/`@verbatim` blocks, dynamic/namespaced/package/custom-root views, `view()` / `View::make()`, component tags, sections/stacks/slots, conditional include directives, PHP/Laravel service integration, compilation, and runtime rendering.
 - The Solidity surface is a deliberately small lexical declaration scanner, not a Solidity parser, compiler, EVM analyzer, or deployment simulator. It accepts only complete ASCII-named top-level `contract`/`interface`/`library` declarations, direct callable members, and a simple same-file `is Base, Other` clause with a unique compatible declaration target. It excludes imports/cross-file resolution, constructor arguments, events/errors/structs/enums/types/state, calls/emits/reverts/modifier application, assembly/Yul, visibility/override semantics, ABI/bytecode/storage/proxy behavior, compilation, and runtime chain behavior.
 - The CFML / CFScript surface is a deliberately small lexical declaration scanner, not a CFML parser, Adobe ColdFusion/Lucee runtime, template renderer, CFQuery analyzer, or framework analyzer. It accepts only complete braced `component`/`interface` declarations, complete tag-based `<cfcomponent>`/`<cfinterface>` and named `<cffunction>` pairs, conventional CFC components, and complete direct named functions. It excludes `cfinclude`/`import`, inheritance, accessors/annotations, dynamic names, closures/nested functions, tag-based `<cfscript>` bodies, CFQuery, calls, framework conventions, compilation, and runtime behavior.
 - The Nix surface is a deliberately small lexical declaration scanner, not a Nix parser, evaluator, flake reader, package builder, or deployment planner. It accepts only complete direct returned-attribute-set and `let ... in` bindings, simple `inherit` names, and literal project-relative import syntax. It excludes quoted/dynamic attributes, nested members, `with`, assertions, overlays/derivations, flakes/lock files, target resolution, `callPackage`, arbitrary calls, dependency/evaluation semantics, NixOS/Home Manager module composition, builds, and runtime deployment behavior.
 - The VB.NET surface is a deliberately small line-oriented declaration scanner, not a VB.NET parser, Roslyn compiler, CLR analyzer, UI framework analyzer, or runtime debugger. It accepts only complete namespace/type/`Sub`/`Function` blocks, bodyless interface/`MustOverride` signatures, and simple file-level `Imports`. It excludes attributes/aliases, fields/properties/events/delegates/P-Invoke, generic/overload/type/inheritance/`Handles` semantics, calls/lambdas/local functions, partial types, project/assembly/package/MSBuild resolution, compilation, designer resources, and runtime behavior.
 - Semantic type checking, transitive hierarchy traversal, declaration-merging semantics, override dispatch, mixin/qualified/conditional heritage expressions, or automatic framework decorator inference. v0.18 recognizes direct imported NestJS HTTP decorators, direct static `RouterModule.register()` prefixes, and the narrowly defined non-HTTP decorators documented above; it does not infer custom decorators, barrels, `forRoot` / `forChild`, global/version prefixes, guards, GraphQL field resolvers, dynamic patterns, dynamic gateway configuration, or runtime transport wiring.
-- Language adapters beyond TS/TSX/JS/JSX/ArkTS/Vue/Svelte/Astro/Razor/Terraform/OpenTofu/Shopify-Liquid/Twig/Solidity/CFML-CFScript/Nix/VB.NET/Python/Go/Rust/Java/PHP/C/Lua/R/Elixir/Erlang/Clojure/Perl/Julia/Haskell/OCaml/F#/C++/C#/Ruby/Kotlin/Swift/Dart/Scala, external dependency indexing, telemetry, or multi-project routing.
+- Language adapters beyond TS/TSX/JS/JSX/ArkTS/Vue/Svelte/Astro/Razor/Terraform/OpenTofu/Shopify-Liquid/Twig/Laravel-Blade/Solidity/CFML-CFScript/Nix/VB.NET/Python/Go/Rust/Java/PHP/C/Lua/R/Elixir/Erlang/Clojure/Perl/Julia/Haskell/OCaml/F#/C++/C#/Ruby/Kotlin/Swift/Dart/Scala, external dependency indexing, telemetry, or multi-project routing.
 - Embedding-based or cloud retrieval, semantic ranking, arbitrary natural-language context assembly, semantic Git diff beyond immutable zero-context hunk-to-revision-local-declaration evidence, or reliable rename/move/cross-side identity attribution.
 
 ## Roadmap
@@ -2192,6 +2225,8 @@ v0.71.0 does not yet provide:
 | `v0.69.0` | Nix `.nix` discovery, complete direct returned-attribute-set / `let ... in` / simple `inherit` declarations, literal project-relative pending import references, Nix source-search/CLI filters, and comment/string/delimiter/malformed rejection |
 | `v0.70.0` | VB.NET `.vb` discovery, complete namespace/type/`Sub`/`Function` declaration containment, bodyless interface/`MustOverride` signatures, simple pending `Imports` references, VB.NET source-search/CLI filters, and comment/string/incomplete-or-mismatched-`End` rejection |
 | `v0.71.0` | Twig `.twig` discovery, literal `extends`/`include`/`embed`/`import`/`from` raw facts, exact project-local `templates/` `calls` edges, explicit missing-target evidence, persisted facts, and comment/verbatim/dynamic/path-traversal/malformed rejection |
+| `v0.72.0` | Laravel Blade `.blade.php` discovery, literal `@extends`/`@include`/`@component`/`@each` raw facts, exact project-local `resources/views/` `calls` edges, explicit missing-target evidence, persisted facts, and comment/raw-PHP/`@php`/verbatim/dynamic/path-traversal/escaped/malformed rejection |
+| `v0.72+` | Blade grammar validation, `view()` / `View::make()` call facts, component tags and anonymous components, layouts/sections/stacks/slots, conditional/first-view directives, namespace/package/custom-root resolution, PHP/Laravel service integration, compiler validation, and runtime-render evidence |
 | `v0.71+` | Twig grammar validation, configurable and namespace template loaders, literal `with` context semantics, blocks/macros/inheritance chains, PHP/Symfony integration, compiler validation, and runtime-render evidence |
 | `v0.70+` | VB.NET grammar/Roslyn validation, attributes and import aliases, fields/properties/events/delegates/P-Invoke, generic/overload/type/inheritance/`Handles` facts, call evidence, partial types, project/assembly/NuGet/MSBuild resolution, WinForms/WPF resources, compiler validation, and runtime analysis |
 | `v0.69+` | Nix grammar validation, quoted/dynamic and nested attribute paths, target-resolved imports and `callPackage`, calls/dependency facts, flakes/lock files, overlays/derivations, NixOS/Home Manager module composition, evaluation/build evidence, and controlled deployment analysis |
@@ -2211,7 +2246,7 @@ See [CHANGELOG.md](CHANGELOG.md) for release notes and migration history.
 
 ## Release-by-release feature comparison
 
-Every release creates a verified standalone comparison report against the local CodeGraph baseline at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_vX.Y.Z.md` (for example, `FEATURE_COMPARISON_v0.71.0.md`). The version number is part of the filename, so each release retains an independent comparison record. It intentionally lives beside the local `symbol-lattice` and `codegraph` checkouts rather than inside either project. Starting with v0.28, these reports are written in Traditional Chinese. Each report distinguishes a proven precision advantage from broader-but-less-proven source coverage, and records remaining gaps instead of treating a version bump as parity.
+Every release creates a verified standalone comparison report against the local CodeGraph baseline at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_vX.Y.Z.md` (for example, `FEATURE_COMPARISON_v0.72.0.md`). The version number is part of the filename, so each release retains an independent comparison record. It intentionally lives beside the local `symbol-lattice` and `codegraph` checkouts rather than inside either project. Starting with v0.28, these reports are written in Traditional Chinese. Each report distinguishes a proven precision advantage from broader-but-less-proven source coverage, and records remaining gaps instead of treating a version bump as parity.
 
 ## Development
 
@@ -2274,6 +2309,8 @@ Terraform/OpenTofu coverage includes `.tf` / `.tfvars` / `.tofu` discovery, pers
 Shopify Liquid coverage includes `.liquid` discovery, persisted source search and CLI/MCP language filters, direct literal render/include/section raw facts, exact project-local snippet/section `calls` evidence, explicit missing-target evidence, and HTML-comment/Liquid-comment/raw/dynamic/path-traversal/incomplete/nested rejection.
 
 Twig coverage includes `.twig` discovery, persisted source search and CLI language filters, complete direct literal extends/include/embed/import/from raw facts, exact project-local `templates/` `calls` evidence, explicit missing-target evidence, persisted raw facts, and HTML-comment/Twig-comment/verbatim/dynamic/path-traversal/incomplete/nested rejection.
+
+Laravel Blade coverage includes `.blade.php` discovery, persisted source search and CLI/MCP language filters, complete direct literal `@extends`/`@include`/`@component`/`@each` raw facts, exact project-local `resources/views/` `calls` evidence, explicit missing-target evidence, persisted raw facts, reuse/reprojection after target changes, and HTML-comment/Blade-comment/raw-PHP/`@php`/verbatim/dynamic/path-traversal/escaped/incomplete rejection.
 
 Solidity coverage includes `.sol` discovery, persisted source search and CLI language filters, complete top-level contract/interface/library symbols, complete direct function/modifier/constructor/fallback/receive containment, same-file unique `is` hierarchy projection, and comment/string/dynamic-constructor-argument/malformed rejection.
 

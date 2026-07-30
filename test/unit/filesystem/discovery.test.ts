@@ -70,6 +70,7 @@ describe("source discovery", () => {
     await writeFile(join(projectPath, "src", "r.razor"), "<main />\n", "utf8");
     await writeFile(join(projectPath, "src", "s.ets"), "@Component struct App {}\n", "utf8");
     await writeFile(join(projectPath, "src", "t.tf"), "resource \"aws_s3_bucket\" \"assets\" {}\n", "utf8");
+    await writeFile(join(projectPath, "src", "u.blade.php"), "@extends('layouts.app')\n", "utf8");
     await writeFile(join(projectPath, "src", "u.liquid"), "{% render 'card' %}\n", "utf8");
     await writeFile(join(projectPath, "src", "u.twig"), "{% extends \"base.html.twig\" %}\n", "utf8");
     await writeFile(join(projectPath, "src", "v.sol"), "contract Ledger {}\n", "utf8");
@@ -122,6 +123,7 @@ describe("source discovery", () => {
       "src/r.razor",
       "src/s.ets",
       "src/t.tf",
+      "src/u.blade.php",
       "src/u.liquid",
       "src/u.twig",
       "src/v.sol",
@@ -169,6 +171,7 @@ describe("source discovery", () => {
       "razor",
       "arkts",
       "terraform",
+      "blade",
       "liquid",
       "twig",
       "solidity",

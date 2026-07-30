@@ -101,6 +101,7 @@ export const ARTIFACT_LANGUAGES = [
   "rust",
   "java",
   "php",
+  "blade",
   "c",
   "lua",
   "r",
