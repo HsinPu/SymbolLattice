@@ -6,6 +6,24 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.49.0] - 2026-07-30
+
+### Added
+
+- Lua `.lua` source discovery, persisted source-search language filtering, CLI/MCP validation, and a deliberately isolated Lua lexical extractor for direct top-level `function` and `local function` containment.
+- An executable first-party `lapis` capability. Exact route facts now require direct `local lapis = require("lapis")` followed by `local app = lapis.Application()`, or direct `local app = require("lapis").Application()`, then one direct literal `app:get`, `app:post`, `app:put`, `app:delete`, or `app:match` registration with exactly one unique, prior, un-rebound same-file `local function` handler. `match` is represented as `ALL`; verb shortcuts retain their matching HTTP method and every accepted edge carries `framework.lapis.direct-application.literal-route.local-function` evidence.
+- Unit and integration coverage now verifies Lua discovery, top-level function containment, Lapis two-step/direct application bindings, named route forms, exact route-query/source-search behavior, dynamic path/inline-handler/missing-framework/rebound/late-handler rejection, unbalanced-source fail-closed behavior, and CLI/MCP language validation. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.49.0.md`.
+
+### Compatibility
+
+- No SQLite schema migration or new query command is required. Lua symbols and Lapis routes reuse the existing file, symbol, edge, source-search, and route-query contracts; existing generations remain readable.
+- The artifact extractor advances to `multi-language-ast-v38`; the project resolver remains `project-resolver-v16` because all accepted Lua and Lapis proof is file-local. A pre-v0.49 active index reports `indexer-version-changed` until an explicit `sync` or `index` publishes Lua-capable facts.
+
+### Deliberate limits
+
+- The Lua extractor is a deliberately small lexical/block-balancing implementation, not a full Lua parser. It retains only file symbols for unbalanced block/parenthesis or unterminated string/comment input, and does not claim generic Lua import, call, table, type, module, coroutine, metatable, macro, or runtime analysis.
+- Lapis support accepts only parenthesized `require("lapis")`, direct local `Application()` bindings, top-level `get` / `post` / `put` / `delete` / `match` calls, plain literal slash-prefixed paths, and direct prior local function handlers. It excludes MoonScript, `Application:extend`, `include`, `respond_to`, route tables, inline/global/imported/cross-file handlers, aliases/wrappers, groups/prefixes, dynamic/raw/escaped paths, receiver/handler rebinding, nested control flow, method dispatch inside an action, and runtime behavior. The local CodeGraph baseline has broader generic Lua indexing through its dedicated grammar but no Lapis resolver; SymbolLattice adds a narrow audited framework surface rather than claiming Lua parity.
+
 ## [0.48.0] - 2026-07-30
 
 ### Added

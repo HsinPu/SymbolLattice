@@ -3009,6 +3009,197 @@ describe("source extraction", () => {
     expect(broken.symbols.filter((symbol) => symbol.kind === "function")).toEqual([]);
   });
 
+  it("extracts direct Lua Lapis literal routes with exact evidence", () => {
+    const facts = extractFileFacts({
+      filePath: "src/app.lua",
+      language: "lua",
+      sourceText: [
+        'local lapis = require("lapis")',
+        "local app = lapis.Application()",
+        "",
+        "local function health(self)",
+        '  return "ok"',
+        "end",
+        "local function create_user(self)",
+        '  return "created"',
+        "end",
+        "local function remove_user(self)",
+        '  return "deleted"',
+        "end",
+        "",
+        'app:get("/health", health)',
+        'app:post("create-user", "/users", create_user)',
+        'app:match("/users/:id", remove_user)'
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(
+      facts.symbols.filter((symbol) => symbol.kind === "function").map((symbol) => symbol.qualifiedName)
+    ).toEqual(["src/app.lua#health", "src/app.lua#create_user", "src/app.lua#remove_user"]);
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId,
+          edge.resolution,
+          edge.confidence
+        ])
+    ).toEqual([
+      [
+        "GET /health",
+        "src/app.lua#health",
+        "framework.lapis.direct-application.literal-route.local-function",
+        "exact",
+        1
+      ],
+      [
+        "POST /users",
+        "src/app.lua#create_user",
+        "framework.lapis.direct-application.literal-route.local-function",
+        "exact",
+        1
+      ],
+      [
+        "ALL /users/:id",
+        "src/app.lua#remove_user",
+        "framework.lapis.direct-application.literal-route.local-function",
+        "exact",
+        1
+      ]
+    ]);
+  });
+
+  it("accepts a direct Lua require(\"lapis\").Application binding", () => {
+    const facts = extractFileFacts({
+      filePath: "src/direct.lua",
+      language: "lua",
+      sourceText: [
+        'local app = require("lapis").Application()',
+        "local function remove_user(self)",
+        '  return "deleted"',
+        "end",
+        'app:delete("/users/:id", remove_user)'
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId
+        ])
+    ).toEqual([
+      [
+        "DELETE /users/:id",
+        "src/direct.lua#remove_user",
+        "framework.lapis.direct-application.literal-route.local-function"
+      ]
+    ]);
+  });
+
+  it("requires direct Lua Lapis bindings, literal paths, local handlers before registration, no rebinding, and balanced syntax", () => {
+    const missingFramework = extractFileFacts({
+      filePath: "src/missing-framework.lua",
+      language: "lua",
+      sourceText: [
+        "local app = make_app()",
+        "local function health(self)",
+        "end",
+        'app:get("/health", health)'
+      ].join("\n")
+    });
+    const dynamicPath = extractFileFacts({
+      filePath: "src/dynamic.lua",
+      language: "lua",
+      sourceText: [
+        'local lapis = require("lapis")',
+        "local app = lapis.Application()",
+        "local function health(self)",
+        "end",
+        'local path = "/health"',
+        "app:get(path, health)"
+      ].join("\n")
+    });
+    const inlineHandler = extractFileFacts({
+      filePath: "src/inline.lua",
+      language: "lua",
+      sourceText: [
+        'local lapis = require("lapis")',
+        "local app = lapis.Application()",
+        'app:get("/health", function(self)',
+        "  return \"ok\"",
+        "end)"
+      ].join("\n")
+    });
+    const reboundHandler = extractFileFacts({
+      filePath: "src/rebound.lua",
+      language: "lua",
+      sourceText: [
+        'local lapis = require("lapis")',
+        "local app = lapis.Application()",
+        "local function health(self)",
+        "end",
+        "fallback, health = fallback, fallback",
+        'app:get("/health", health)'
+      ].join("\n")
+    });
+    const lateHandler = extractFileFacts({
+      filePath: "src/late.lua",
+      language: "lua",
+      sourceText: [
+        'local lapis = require("lapis")',
+        "local app = lapis.Application()",
+        'app:get("/health", health)',
+        "local function health(self)",
+        "end"
+      ].join("\n")
+    });
+    const tableWrappedRoute = extractFileFacts({
+      filePath: "src/table.lua",
+      language: "lua",
+      sourceText: [
+        'local lapis = require("lapis")',
+        "local app = lapis.Application()",
+        "local function health(self)",
+        "end",
+        "local routes = {",
+        '  app:get("/health", health)',
+        "}"
+      ].join("\n")
+    });
+    const broken = extractFileFacts({
+      filePath: "src/broken.lua",
+      language: "lua",
+      sourceText: [
+        'local lapis = require("lapis")',
+        "local app = lapis.Application()",
+        "local function health(self)",
+        '  return "ok"',
+        'app:get("/health", health)'
+      ].join("\n")
+    });
+
+    for (const facts of [
+      missingFramework,
+      dynamicPath,
+      inlineHandler,
+      reboundHandler,
+      lateHandler,
+      tableWrappedRoute,
+      broken
+    ]) {
+      expect(facts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+      expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+    }
+    expect(broken.symbols.filter((symbol) => symbol.kind === "function")).toEqual([]);
+  });
+
   it("extracts direct C++ cpp-httplib named-handler routes with exact evidence", () => {
     const facts = extractFileFacts({
       filePath: "src/server.cpp",

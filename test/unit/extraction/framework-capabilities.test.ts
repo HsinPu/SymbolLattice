@@ -23,6 +23,7 @@ describe("first-party framework capabilities", () => {
       "spring-web",
       "laravel",
       "civetweb",
+      "lapis",
       "cpp-httplib",
       "aspnet-core",
       "rails",
@@ -132,6 +133,15 @@ describe("first-party framework capabilities", () => {
       surfaces: [
         "direct civetweb.h request-handler registration",
         "literal URI routes with unique unshadowed local function handlers"
+      ]
+    });
+    expect(frameworkCapability("lapis")).toMatchObject({
+      languages: ["lua"],
+      routeFramework: "lapis",
+      routeRegistrations: [],
+      surfaces: [
+        'direct require("lapis") and Application local bindings',
+        "literal direct get/post/put/delete/match routes with unique unshadowed local function handlers"
       ]
     });
     expect(frameworkCapability("cpp-httplib")).toMatchObject({

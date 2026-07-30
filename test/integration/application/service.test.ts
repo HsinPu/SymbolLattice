@@ -4112,6 +4112,61 @@ describe("SymbolLatticeService", () => {
     expect(search.results).toMatchObject([{ filePath: "src/server.c", language: "c" }]);
   });
 
+  it("indexes Lua Lapis routes and retains Lua source-search filtering", async () => {
+    const projectPath = await createInlineProject({
+      "src/app.lua": [
+        'local lapis = require("lapis")',
+        "local app = lapis.Application()",
+        "",
+        "local function health(self)",
+        '  return "ok"',
+        "end",
+        "local function create_user(self)",
+        '  return "created"',
+        "end",
+        "",
+        'app:get("/health", health)',
+        'app:post("create-user", "/users", create_user)'
+      ].join("\n")
+    });
+    const service = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+    const getRoutes = await service.routes(projectPath, { method: "GET" });
+    const search = await service.search(projectPath, "health", { language: "lua" });
+
+    expect(routes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "GET",
+          path: "/health",
+          handler: expect.objectContaining({ qualifiedName: "src/app.lua#health" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.lapis.direct-application.literal-route.local-function",
+              stage: "syntax"
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "POST",
+          path: "/users",
+          handler: expect.objectContaining({ qualifiedName: "src/app.lua#create_user" })
+        })
+      ])
+    );
+    expect(getRoutes.routes).toMatchObject([
+      {
+        method: "GET",
+        path: "/health",
+        handler: { qualifiedName: "src/app.lua#health" }
+      }
+    ]);
+    expect(search.results).toMatchObject([{ filePath: "src/app.lua", language: "lua" }]);
+  });
+
   it("indexes C# ASP.NET Core routes and retains C# source-search filtering", async () => {
     const projectPath = await createInlineProject({
       "src/Program.cs": [
