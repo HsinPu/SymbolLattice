@@ -532,7 +532,7 @@ describe("symbol-lattice search CLI", () => {
     const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
 
     await createProgram(service).parseAsync(
-      ["node", "symbol-lattice", "search", "health", "--language", "lua", "--json"],
+      ["node", "symbol-lattice", "search", "health", "--language", "r", "--json"],
       { from: "node" }
     );
 
@@ -540,7 +540,7 @@ describe("symbol-lattice search CLI", () => {
       {
         projectPath: resolve(process.cwd()),
         query: "health",
-        options: { language: "lua" }
+        options: { language: "r" }
       }
     ]);
     expect(write).toHaveBeenCalled();

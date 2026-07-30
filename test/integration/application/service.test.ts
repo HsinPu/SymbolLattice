@@ -4167,6 +4167,61 @@ describe("SymbolLatticeService", () => {
     expect(search.results).toMatchObject([{ filePath: "src/app.lua", language: "lua" }]);
   });
 
+  it("indexes R Plumber annotation routes and retains R source-search filtering", async () => {
+    const projectPath = await createInlineProject({
+      "src/plumber.R": [
+        "#* @get /health",
+        "function() {",
+        '  list(status = "ok")',
+        "}",
+        "",
+        "#* @post /users",
+        "function(name) {",
+        "  list(name = name)",
+        "}"
+      ].join("\n")
+    });
+    const service = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+    const getRoutes = await service.routes(projectPath, { method: "GET" });
+    const search = await service.search(projectPath, "health", { language: "r" });
+
+    expect(routes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "GET",
+          path: "/health",
+          handler: expect.objectContaining({
+            qualifiedName: "src/plumber.R#handler:GET:/health"
+          }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.plumber.annotation.literal-route.braced-handler",
+              stage: "syntax"
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "POST",
+          path: "/users",
+          handler: expect.objectContaining({
+            qualifiedName: "src/plumber.R#handler:POST:/users"
+          })
+        })
+      ])
+    );
+    expect(getRoutes.routes).toMatchObject([
+      {
+        method: "GET",
+        path: "/health",
+        handler: { qualifiedName: "src/plumber.R#handler:GET:/health" }
+      }
+    ]);
+    expect(search.results).toMatchObject([{ filePath: "src/plumber.R", language: "r" }]);
+  });
+
   it("indexes C# ASP.NET Core routes and retains C# source-search filtering", async () => {
     const projectPath = await createInlineProject({
       "src/Program.cs": [

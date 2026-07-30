@@ -51,6 +51,7 @@ export type RouteFramework =
   | "laravel"
   | "civetweb"
   | "lapis"
+  | "plumber"
   | "cpp-httplib"
   | "aspnet-core"
   | "rails"
@@ -79,6 +80,7 @@ export const ARTIFACT_LANGUAGES = [
   "php",
   "c",
   "lua",
+  "r",
   "cpp",
   "csharp",
   "ruby",

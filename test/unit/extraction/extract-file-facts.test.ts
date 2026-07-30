@@ -3200,6 +3200,130 @@ describe("source extraction", () => {
     expect(broken.symbols.filter((symbol) => symbol.kind === "function")).toEqual([]);
   });
 
+  it("extracts direct R Plumber annotation routes with exact evidence", () => {
+    const facts = extractFileFacts({
+      filePath: "src/plumber.R",
+      language: "r",
+      sourceText: [
+        "#* Echo a message",
+        "#* @get /echo",
+        'function(msg = "") {',
+        '  list(message = paste0("}", msg))',
+        "}",
+        "",
+        "#' @post /sum",
+        "function(a, b) {",
+        "  a + b",
+        "}",
+        "",
+        "status_check <- function() {",
+        '  "ok"',
+        "}"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(
+      facts.symbols.filter((symbol) => symbol.kind === "function").map((symbol) => symbol.qualifiedName)
+    ).toEqual([
+      "src/plumber.R#handler:GET:/echo",
+      "src/plumber.R#handler:POST:/sum",
+      "src/plumber.R#status_check"
+    ]);
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId,
+          edge.resolution,
+          edge.confidence
+        ])
+    ).toEqual([
+      [
+        "GET /echo",
+        "src/plumber.R#handler:GET:/echo",
+        "framework.plumber.annotation.literal-route.braced-handler",
+        "exact",
+        1
+      ],
+      [
+        "POST /sum",
+        "src/plumber.R#handler:POST:/sum",
+        "framework.plumber.annotation.literal-route.braced-handler",
+        "exact",
+        1
+      ]
+    ]);
+  });
+
+  it("requires standalone literal R Plumber annotations, immediate braced handlers, and balanced syntax", () => {
+    const unmarkedComment = extractFileFacts({
+      filePath: "src/unmarked.R",
+      language: "r",
+      sourceText: ["# @get /health", "function() {}"].join("\n")
+    });
+    const unsupportedMethod = extractFileFacts({
+      filePath: "src/patch.R",
+      language: "r",
+      sourceText: ["#* @patch /health", "function() {}"].join("\n")
+    });
+    const dynamicPath = extractFileFacts({
+      filePath: "src/path.R",
+      language: "r",
+      sourceText: ["#* @get health", "function() {}"].join("\n")
+    });
+    const nonImmediateHandler = extractFileFacts({
+      filePath: "src/non-immediate.R",
+      language: "r",
+      sourceText: ["#* @get /health", "#* endpoint description", "function() {}"].join("\n")
+    });
+    const namedHandler = extractFileFacts({
+      filePath: "src/named.R",
+      language: "r",
+      sourceText: ["#* @get /health", "health <- function() {}"].join("\n")
+    });
+    const assignmentContinuation = extractFileFacts({
+      filePath: "src/continuation.R",
+      language: "r",
+      sourceText: ["health <-", "#* @get /health", "function() {}"].join("\n")
+    });
+    const nested = extractFileFacts({
+      filePath: "src/nested.R",
+      language: "r",
+      sourceText: [
+        "wrapper <- function() {",
+        "  #* @get /health",
+        "  function() {}",
+        "}"
+      ].join("\n")
+    });
+    const broken = extractFileFacts({
+      filePath: "src/broken.R",
+      language: "r",
+      sourceText: ["#* @get /broken", "function() {"].join("\n")
+    });
+
+    for (const facts of [
+      unmarkedComment,
+      unsupportedMethod,
+      dynamicPath,
+      nonImmediateHandler,
+      namedHandler,
+      assignmentContinuation,
+      nested,
+      broken
+    ]) {
+      expect(facts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+      expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+    }
+    expect(namedHandler.symbols.filter((symbol) => symbol.kind === "function").map((symbol) => symbol.name)).toEqual([
+      "health"
+    ]);
+    expect(broken.symbols.filter((symbol) => symbol.kind === "function")).toEqual([]);
+  });
+
   it("extracts direct C++ cpp-httplib named-handler routes with exact evidence", () => {
     const facts = extractFileFacts({
       filePath: "src/server.cpp",

@@ -17,6 +17,7 @@ export const FRAMEWORK_CAPABILITY_IDS = [
   "laravel",
   "civetweb",
   "lapis",
+  "plumber",
   "cpp-httplib",
   "aspnet-core",
   "rails",
@@ -190,6 +191,16 @@ export const FRAMEWORK_CAPABILITIES = [
     surfaces: [
       "direct require(\"lapis\") and Application local bindings",
       "literal direct get/post/put/delete/match routes with unique unshadowed local function handlers"
+    ]
+  },
+  {
+    id: "plumber",
+    languages: ["r"],
+    routeFramework: "plumber",
+    routeRegistrations: [],
+    surfaces: [
+      "standalone #* or #' HTTP annotations",
+      "literal routes immediately followed by top-level braced anonymous function handlers"
     ]
   },
   {

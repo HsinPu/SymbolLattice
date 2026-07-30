@@ -9,6 +9,7 @@ import { extractGoFileFacts } from "./go.js";
 import { extractJavaFileFacts } from "./java.js";
 import { extractKotlinFileFacts } from "./kotlin.js";
 import { extractLuaFileFacts } from "./lua.js";
+import { extractRFileFacts } from "./r.js";
 import { extractPhpFileFacts } from "./php.js";
 import { extractPythonFileFacts } from "./python.js";
 import { extractRubyFileFacts } from "./ruby.js";
@@ -3433,6 +3434,9 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
   }
   if (input.language === "lua") {
     return extractLuaFileFacts({ ...input, language: "lua" });
+  }
+  if (input.language === "r") {
+    return extractRFileFacts({ ...input, language: "r" });
   }
   if (input.language === "cpp") {
     return extractCppFileFacts({ ...input, language: "cpp" });

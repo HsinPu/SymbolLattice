@@ -6,6 +6,24 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.50.0] - 2026-07-30
+
+### Added
+
+- R `.r` / `.R` source discovery, persisted source-search language filtering, CLI/MCP validation, and a deliberately isolated R lexical/delimiter-balancing extractor for direct top-level braced `name <- function(...)` and `name = function(...)` containment.
+- An executable first-party `plumber` capability. Exact route facts now require a standalone top-level `#*` or `#'` annotation with a literal slash-prefixed `@get`, `@post`, `@put`, or `@delete` path immediately followed by a top-level braced anonymous `function(...) { ... }` handler. Every accepted edge carries `framework.plumber.annotation.literal-route.braced-handler` evidence.
+- Unit and integration coverage now verifies R discovery, direct function containment, `#*` and `#'` annotations, exact route-query/source-search behavior, dynamic/unsupported/non-immediate/named/nested rejection, assignment-continuation rejection, unbalanced delimiter or unterminated quoted/backtick fail-closed behavior, and CLI/MCP language validation. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.50.0.md`.
+
+### Compatibility
+
+- No SQLite schema migration or new query command is required. R symbols and Plumber routes reuse the existing file, symbol, edge, source-search, and route-query contracts; existing generations remain readable.
+- The artifact extractor advances to `multi-language-ast-v39`; the project resolver remains `project-resolver-v16` because all accepted R and Plumber proof is file-local. A pre-v0.50 active index reports `indexer-version-changed` until an explicit `sync` or `index` publishes R-capable facts.
+
+### Deliberate limits
+
+- The R extractor is a deliberately small lexical/delimiter-balancing implementation, not a full R parser. It retains only file symbols for unbalanced delimiters or unterminated quoted/backtick input, and does not claim generic R package, import, call, type, expression, S3/S4, or runtime analysis.
+- Plumber support accepts only standalone top-level `#*` / `#'` annotations, plain literal slash-prefixed paths, `get` / `post` / `put` / `delete` directives, and immediately following top-level braced anonymous function handlers. It excludes `head`, `patch`, programmatic `pr_*` / `Plumber$handle` registration, filters, mounts, route groups, OpenAPI annotations, named/inline/nested handlers, aliases/wrappers, dynamic/raw/escaped paths, generic R package resolution, and runtime behavior. The local CodeGraph baseline has broader generic R indexing through its dedicated grammar but no Plumber-specific resolver; SymbolLattice adds a narrow audited framework surface rather than claiming R parity.
+
 ## [0.49.0] - 2026-07-30
 
 ### Added

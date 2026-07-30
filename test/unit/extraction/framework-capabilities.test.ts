@@ -24,6 +24,7 @@ describe("first-party framework capabilities", () => {
       "laravel",
       "civetweb",
       "lapis",
+      "plumber",
       "cpp-httplib",
       "aspnet-core",
       "rails",
@@ -142,6 +143,15 @@ describe("first-party framework capabilities", () => {
       surfaces: [
         'direct require("lapis") and Application local bindings',
         "literal direct get/post/put/delete/match routes with unique unshadowed local function handlers"
+      ]
+    });
+    expect(frameworkCapability("plumber")).toMatchObject({
+      languages: ["r"],
+      routeFramework: "plumber",
+      routeRegistrations: [],
+      surfaces: [
+        "standalone #* or #' HTTP annotations",
+        "literal routes immediately followed by top-level braced anonymous function handlers"
       ]
     });
     expect(frameworkCapability("cpp-httplib")).toMatchObject({
