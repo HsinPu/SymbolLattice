@@ -2235,12 +2235,14 @@ describe("source extraction", () => {
         "func health(w http.ResponseWriter, r *http.Request) {}",
         "func listUsers(w http.ResponseWriter, r *http.Request) {}",
         "func diagnostics(w http.ResponseWriter, r *http.Request) {}",
+        "func tunnel(w http.ResponseWriter, r *http.Request) {}",
         "",
         "func main() {",
         "  http.HandleFunc(\"/health\", health)",
         "  mux := http.NewServeMux()",
         "  mux.HandleFunc(\"GET /users\", listUsers)",
         "  mux.HandleFunc(\"TRACE /diagnostics\", diagnostics)",
+        "  mux.HandleFunc(\"CONNECT /tunnel\", tunnel)",
         "}"
       ].join("\n")
     });
@@ -2277,6 +2279,14 @@ describe("source extraction", () => {
       [
         "TRACE /diagnostics",
         "cmd/server/http.go#diagnostics",
+        "framework.net-http.serve-mux.handle-func.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "CONNECT /tunnel",
+        "cmd/server/http.go#tunnel",
         "framework.net-http.serve-mux.handle-func.local-function",
         "syntax",
         "exact",
@@ -2350,7 +2360,132 @@ describe("source extraction", () => {
         "  var legacy = http.NewServeMux()",
         "  legacy.HandleFunc(\"/var-binding\", stable)",
         "  mux.Handle(\"/handle\", stable)",
-        "  http.HandleFunc(\"CONNECT /tunnel\", stable)",
+        "}"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+  });
+
+  it("extracts direct Go Chi NewRouter and NewMux routes with exact evidence", () => {
+    const facts = extractFileFacts({
+      filePath: "cmd/server/chi.go",
+      language: "go",
+      sourceText: [
+        "package main",
+        "",
+        "import (",
+        '  http "net/http"',
+        '  "github.com/go-chi/chi/v5"',
+        ")",
+        "",
+        "func health(w http.ResponseWriter, r *http.Request) {}",
+        "func createUser(w http.ResponseWriter, r *http.Request) {}",
+        "func tunnel(w http.ResponseWriter, r *http.Request) {}",
+        "func all(w http.ResponseWriter, r *http.Request) {}",
+        "func diagnostics(w http.ResponseWriter, r *http.Request) {}",
+        "",
+        "func main() {",
+        "  router := chi.NewRouter()",
+        "  router.Get(\"/health\", health)",
+        "  router.Post(\"/users\", createUser)",
+        "  router.Connect(\"/tunnel\", tunnel)",
+        "  router.HandleFunc(\"/all\", all)",
+        "  secondary := chi.NewMux()",
+        "  secondary.Trace(\"/diagnostics\", diagnostics)",
+        "}"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId,
+          edge.evidence?.stage,
+          edge.resolution,
+          edge.confidence
+        ])
+    ).toEqual([
+      [
+        "GET /health",
+        "cmd/server/chi.go#health",
+        "framework.chi.direct-router.method.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "POST /users",
+        "cmd/server/chi.go#createUser",
+        "framework.chi.direct-router.method.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "CONNECT /tunnel",
+        "cmd/server/chi.go#tunnel",
+        "framework.chi.direct-router.method.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "ALL /all",
+        "cmd/server/chi.go#all",
+        "framework.chi.direct-router.method.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "TRACE /diagnostics",
+        "cmd/server/chi.go#diagnostics",
+        "framework.chi.direct-router.method.local-function",
+        "syntax",
+        "exact",
+        1
+      ]
+    ]);
+  });
+
+  it("rejects shadowed, dynamic, inline, wrapped, rebounded, and composed Go Chi route shapes", () => {
+    const facts = extractFileFacts({
+      filePath: "cmd/server/unproven-chi.go",
+      language: "go",
+      sourceText: [
+        "package main",
+        "",
+        "import (",
+        '  http "net/http"',
+        '  chi "github.com/go-chi/chi/v5"',
+        ")",
+        "",
+        "func health(w http.ResponseWriter, r *http.Request) {}",
+        "func stable(w http.ResponseWriter, r *http.Request) {}",
+        "",
+        "func shadowed(chi int) {",
+        "  router := chi.NewRouter()",
+        "  router.Get(\"/shadowed\", health)",
+        "}",
+        "",
+        "func main() {",
+        "  path := \"/dynamic\"",
+        "  router := chi.NewRouter()",
+        "  router.Get(path, health)",
+        "  router.Get(\"/inline\", func(w http.ResponseWriter, r *http.Request) {})",
+        "  router.Get(\"/wrapped\", http.HandlerFunc(health))",
+        "  router = makeRouter()",
+        "  router.Post(\"/rebound\", stable)",
+        "  var legacy = chi.NewRouter()",
+        "  legacy.Get(\"/var-binding\", stable)",
+        "  router.MethodFunc(\"GET\", \"/method\", stable)",
+        "  router.Route(\"/api\", func(r chi.Router) { r.Get(\"/users\", stable) })",
         "}"
       ].join("\n")
     });

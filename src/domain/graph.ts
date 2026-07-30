@@ -25,6 +25,7 @@ export const ROUTE_METHODS = [
   "HEAD",
   "OPTIONS",
   "TRACE",
+  "CONNECT",
   "ALL",
   "NAVIGATE"
 ] as const;

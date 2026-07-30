@@ -10,7 +10,8 @@ export const FRAMEWORK_CAPABILITY_IDS = [
   "fastapi",
   "flask",
   "gin",
-  "net-http"
+  "net-http",
+  "chi"
 ] as const;
 
 export type FrameworkCapabilityId = (typeof FRAMEWORK_CAPABILITY_IDS)[number];
@@ -117,6 +118,16 @@ export const FRAMEWORK_CAPABILITIES = [
     surfaces: [
       "direct http.HandleFunc registrations",
       "same-function literal ServeMux HandleFunc registrations"
+    ]
+  },
+  {
+    id: "chi",
+    languages: ["go"],
+    routeFramework: "chi",
+    routeRegistrations: [],
+    surfaces: [
+      "direct chi.NewRouter and chi.NewMux router methods",
+      "literal direct named-handler HTTP registrations"
     ]
   }
 ] as const satisfies readonly FrameworkCapability[];

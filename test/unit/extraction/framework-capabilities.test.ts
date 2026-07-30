@@ -17,7 +17,8 @@ describe("first-party framework capabilities", () => {
       "fastapi",
       "flask",
       "gin",
-      "net-http"
+      "net-http",
+      "chi"
     ]);
     expect(FRAMEWORK_CAPABILITIES.map((capability) => capability.id)).toEqual(
       FRAMEWORK_CAPABILITY_IDS
@@ -75,6 +76,15 @@ describe("first-party framework capabilities", () => {
       surfaces: [
         "direct http.HandleFunc registrations",
         "same-function literal ServeMux HandleFunc registrations"
+      ]
+    });
+    expect(frameworkCapability("chi")).toMatchObject({
+      languages: ["go"],
+      routeFramework: "chi",
+      routeRegistrations: [],
+      surfaces: [
+        "direct chi.NewRouter and chi.NewMux router methods",
+        "literal direct named-handler HTTP registrations"
       ]
     });
   });

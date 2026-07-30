@@ -44,7 +44,8 @@ export type RouteFramework =
   | "fastapi"
   | "flask"
   | "gin"
-  | "net-http";
+  | "net-http"
+  | "chi";
 
 /** Additional static registration context retained when it changes route provenance or path. */
 export type RouteRegistration =

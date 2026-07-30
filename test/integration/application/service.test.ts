@@ -3444,6 +3444,68 @@ describe("SymbolLatticeService", () => {
     );
   });
 
+  it("indexes Go Chi routes and filters CONNECT evidence through the persisted route query", async () => {
+    const projectPath = await createInlineProject({
+      "cmd/server/main.go": [
+        "package main",
+        "",
+        "import (",
+        '  "net/http"',
+        '  chi "github.com/go-chi/chi/v5"',
+        ")",
+        "",
+        "func health(w http.ResponseWriter, r *http.Request) {}",
+        "func tunnel(w http.ResponseWriter, r *http.Request) {}",
+        "func fallback(w http.ResponseWriter, r *http.Request) {}",
+        "",
+        "func main() {",
+        "  router := chi.NewRouter()",
+        "  router.Get(\"/health\", health)",
+        "  router.Connect(\"/tunnel\", tunnel)",
+        "  router.HandleFunc(\"/fallback\", fallback)",
+        "}"
+      ].join("\n")
+    });
+    const service = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+    const connectRoutes = await service.routes(projectPath, { method: "CONNECT" });
+
+    expect(routes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "GET",
+          path: "/health",
+          handler: expect.objectContaining({ qualifiedName: "cmd/server/main.go#health" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.chi.direct-router.method.local-function",
+              stage: "syntax"
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "ALL",
+          path: "/fallback",
+          handler: expect.objectContaining({ qualifiedName: "cmd/server/main.go#fallback" })
+        })
+      ])
+    );
+    expect(connectRoutes.routes).toMatchObject([
+      {
+        method: "CONNECT",
+        path: "/tunnel",
+        handler: { qualifiedName: "cmd/server/main.go#tunnel" },
+        edge: {
+          resolution: "exact",
+          evidence: { ruleId: "framework.chi.direct-router.method.local-function", stage: "syntax" }
+        }
+      }
+    ]);
+  });
+
   it("indexes NestJS decorator routes as persisted exact method evidence", async () => {
     const projectPath = await createInlineProject({
       "src/cats.controller.ts": [

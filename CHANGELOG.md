@@ -6,6 +6,24 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.35.0] - 2026-07-30
+
+### Added
+
+- An executable first-party Chi capability for direct non-dot/non-blank `github.com/go-chi/chi/v5` imports. Direct same-function `router := chi.NewRouter()` or `chi.NewMux()` receivers now emit exact route edges for `Get`, `Post`, `Put`, `Patch`, `Delete`, `Head`, `Options`, `Trace`, `Connect`, and `HandleFunc` with `framework.chi.direct-router.method.local-function` evidence.
+- Additive `CONNECT` route-method support throughout the existing route symbol, query, CLI, and MCP contracts. Direct Chi `Connect("/path", handler)` routes and literal Go 1.22 `net/http` `"CONNECT /path"` `HandleFunc` patterns now remain exact route records instead of being rejected.
+- Capability, unit, integration, dynamic/shadow/inline/wrapper/rebinding/composition-rejection, `CONNECT` filtering, and persisted route-query coverage. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.35.0.md`.
+
+### Compatibility
+
+- No SQLite schema migration or new query command is required. The additive `chi` capability and `CONNECT` method reuse existing file, symbol, edge, source-search, and route-query contracts; existing generations remain readable.
+- The artifact extractor advances to `multi-language-ast-v24`; the project resolver remains `project-resolver-v14` because all Chi and `net/http` proof remains file-local. A pre-v0.35 active index reports `indexer-version-changed` until an explicit `sync` or `index` publishes the new facts.
+
+### Deliberate limits
+
+- Chi support accepts only a direct `github.com/go-chi/chi/v5` import, a direct unshadowed same-function `:= chi.NewRouter()` or `chi.NewMux()` binding, a literal slash-prefixed path, and one named package-level function handler. `Route`/`Group`/`Mount` composition, `With` middleware chains, `Handle`, `Method`/`MethodFunc`, `Query`, inline/wrapped handlers, dynamic/escaped paths, `var`/factory/wrapper bindings, receiver methods, cross-file router flow, generic Go imports/calls/type resolution, Go module/package resolution, semantic type checking, and runtime behavior remain excluded.
+- The new `CONNECT` value is deliberately limited to direct Chi `Connect` and literal `net/http` `HandleFunc` method patterns. It does not imply semantic HTTP validation, host/wildcard pattern support, or arbitrary user-defined method registration.
+
 ## [0.34.0] - 2026-07-30
 
 ### Added
@@ -675,7 +693,8 @@ No unreleased changes.
 - Explicit full indexing, caller/callee/impact queries, and read-only MCP exploration.
 - `exact`, `heuristic`, and `unresolved` relationship states.
 
-[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.34.0...HEAD
+[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.35.0...HEAD
+[0.35.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.34.0...v0.35.0
 [0.34.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.33.0...v0.34.0
 [0.33.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.32.0...v0.33.0
 [0.32.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.31.0...v0.32.0

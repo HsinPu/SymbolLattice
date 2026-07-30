@@ -60,8 +60,20 @@ interface StaticNetHttpRoute extends StaticNetHttpPattern {
   readonly node: GoSyntaxNode;
 }
 
+interface StaticChiRouterBinding {
+  readonly name: string;
+}
+
+interface StaticChiRoute {
+  readonly method: RouteMethod;
+  readonly path: string;
+  readonly handlerName: string;
+  readonly node: GoSyntaxNode;
+}
+
 const GIN_PACKAGE_PATH = "github.com/gin-gonic/gin";
 const NET_HTTP_PACKAGE_PATH = "net/http";
+const CHI_PACKAGE_PATHS = ["github.com/go-chi/chi/v5"] as const;
 
 const GIN_ROUTE_METHODS: Readonly<Record<string, RouteMethod>> = {
   GET: "GET",
@@ -82,8 +94,22 @@ const NET_HTTP_PATTERN_METHODS = new Set<RouteMethod>([
   "DELETE",
   "HEAD",
   "OPTIONS",
-  "TRACE"
+  "TRACE",
+  "CONNECT"
 ]);
+
+const CHI_ROUTE_METHODS: Readonly<Record<string, RouteMethod>> = {
+  Get: "GET",
+  Post: "POST",
+  Put: "PUT",
+  Patch: "PATCH",
+  Delete: "DELETE",
+  Head: "HEAD",
+  Options: "OPTIONS",
+  Trace: "TRACE",
+  Connect: "CONNECT",
+  HandleFunc: "ALL"
+};
 
 function directChildren(node: GoSyntaxNode): readonly GoSyntaxNode[] {
   const children: GoSyntaxNode[] = [];
@@ -194,7 +220,7 @@ function staticNetHttpPattern(
   if (pattern === null) {
     return null;
   }
-  const match = /^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS|TRACE) (\/\S*)$/u.exec(pattern);
+  const match = /^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS|TRACE|CONNECT) (\/\S*)$/u.exec(pattern);
   if (match === null) {
     return null;
   }
@@ -222,7 +248,7 @@ function descendantsNamed(node: GoSyntaxNode, name: string): readonly GoSyntaxNo
 function staticPackageImportAliases(
   input: GoExtractFileFactsInput,
   root: GoSyntaxNode,
-  packagePath: string,
+  packagePaths: readonly string[],
   defaultAlias: string
 ): readonly string[] {
   const counts = new Map<string, number>();
@@ -230,7 +256,9 @@ function staticPackageImportAliases(
     for (const specifier of descendantsNamed(declaration, "ImportSpec")) {
       const children = directChildren(specifier);
       const stringNode = children.find((child) => child.name === "String");
-      if (stringNode === undefined || staticPlainGoString(input, stringNode) !== packagePath) {
+      const packagePath =
+        stringNode === undefined ? null : staticPlainGoString(input, stringNode);
+      if (packagePath === null || !packagePaths.includes(packagePath)) {
         continue;
       }
       const aliasNode = children.find(
@@ -256,14 +284,21 @@ function staticGinImportAliases(
   input: GoExtractFileFactsInput,
   root: GoSyntaxNode
 ): readonly string[] {
-  return staticPackageImportAliases(input, root, GIN_PACKAGE_PATH, "gin");
+  return staticPackageImportAliases(input, root, [GIN_PACKAGE_PATH], "gin");
 }
 
 function staticNetHttpImportAliases(
   input: GoExtractFileFactsInput,
   root: GoSyntaxNode
 ): readonly string[] {
-  return staticPackageImportAliases(input, root, NET_HTTP_PACKAGE_PATH, "http");
+  return staticPackageImportAliases(input, root, [NET_HTTP_PACKAGE_PATH], "http");
+}
+
+function staticChiImportAliases(
+  input: GoExtractFileFactsInput,
+  root: GoSyntaxNode
+): readonly string[] {
+  return staticPackageImportAliases(input, root, CHI_PACKAGE_PATHS, "chi");
 }
 
 function staticGoFunction(
@@ -493,6 +528,52 @@ function staticNetHttpRoute(
     : { ...pattern, receiver, handlerName, node };
 }
 
+function staticChiRouterBinding(
+  input: GoExtractFileFactsInput,
+  node: GoSyntaxNode,
+  chiAliases: ReadonlySet<string>,
+  shadowedNames: ReadonlySet<string>
+): StaticChiRouterBinding | null {
+  const declaration = staticShortVariableCall(input, node);
+  if (
+    declaration === null ||
+    !chiAliases.has(declaration.receiverName) ||
+    shadowedNames.has(declaration.receiverName) ||
+    !["NewRouter", "NewMux"].includes(declaration.methodName) ||
+    declaration.arguments_.length !== 0
+  ) {
+    return null;
+  }
+  return { name: declaration.name };
+}
+
+function staticChiRoute(
+  input: GoExtractFileFactsInput,
+  node: GoSyntaxNode,
+  receivers: ReadonlySet<string>
+): StaticChiRoute | null {
+  if (node.name !== "ExprStatement") {
+    return null;
+  }
+  const expression = directChildren(node)[0];
+  if (expression === undefined) {
+    return null;
+  }
+  const call = staticSelectorCall(input, expression);
+  if (call === null || call.arguments_.length !== 2) {
+    return null;
+  }
+  const method = CHI_ROUTE_METHODS[call.methodName];
+  const pathNode = call.arguments_[0];
+  const handlerNode = call.arguments_[1];
+  const path = pathNode === undefined ? null : staticLiteralSlashPath(input, pathNode);
+  const handlerName =
+    handlerNode?.name === "VariableName" ? identifierText(input, handlerNode) : null;
+  return !receivers.has(call.receiverName) || method === undefined || path === null || handlerName === null
+    ? null
+    : { method, path, handlerName, node };
+}
+
 function directBoundNames(input: GoExtractFileFactsInput, node: GoSyntaxNode): readonly string[] {
   if (node.name === "Assignment") {
     const target = directChildren(node)[0];
@@ -533,9 +614,11 @@ function combinedRoutePath(...parts: readonly string[]): string {
 export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFacts {
   const ginCapability = frameworkCapability("gin");
   const netHttpCapability = frameworkCapability("net-http");
+  const chiCapability = frameworkCapability("chi");
   if (
     !ginCapability.languages.includes(input.language) ||
-    !netHttpCapability.languages.includes(input.language)
+    !netHttpCapability.languages.includes(input.language) ||
+    !chiCapability.languages.includes(input.language)
   ) {
     throw new Error("Go framework extraction was invoked for an unsupported source language.");
   }
@@ -694,6 +777,16 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
     );
   }
 
+  function addChiRoute(routeFact: StaticChiRoute, handler: SymbolNode): void {
+    addResolvedRoute(
+      routeFact.method,
+      routeFact.path,
+      routeFact.node,
+      handler,
+      "framework.chi.direct-router.method.local-function"
+    );
+  }
+
   if (!hasSyntaxError(root)) {
     const functions = directChildren(root)
       .map((node) => staticGoFunction(input, node))
@@ -708,6 +801,7 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
 
     const ginAliases = staticGinImportAliases(input, root);
     const netHttpAliases = staticNetHttpImportAliases(input, root);
+    const chiAliases = staticChiImportAliases(input, root);
     for (const functionDeclaration of functions) {
       const visibleGinAliases = new Set(
         ginAliases.filter((alias) => !functionDeclaration.parameterNames.includes(alias))
@@ -715,8 +809,12 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
       const visibleNetHttpAliases = new Set(
         netHttpAliases.filter((alias) => !functionDeclaration.parameterNames.includes(alias))
       );
+      const visibleChiAliases = new Set(
+        chiAliases.filter((alias) => !functionDeclaration.parameterNames.includes(alias))
+      );
       const ginReceivers = new Map<string, GinReceiver>();
       const netHttpMuxes = new Set<string>();
+      const chiReceivers = new Set<string>();
       const shadowedNames = new Set(functionDeclaration.parameterNames);
       for (const statement of directChildren(functionDeclaration.body)) {
         const engineBinding = staticGinEngineBinding(
@@ -769,6 +867,26 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
           }
         }
 
+        const chiBinding = staticChiRouterBinding(
+          input,
+          statement,
+          visibleChiAliases,
+          shadowedNames
+        );
+        if (chiBinding !== null) {
+          chiReceivers.add(chiBinding.name);
+        }
+        const chiRoute = staticChiRoute(input, statement, chiReceivers);
+        if (chiRoute !== null && !shadowedNames.has(chiRoute.handlerName)) {
+          const candidates = functionsByName.get(chiRoute.handlerName) ?? [];
+          if (candidates.length === 1) {
+            const handler = candidates[0];
+            if (handler !== undefined) {
+              addChiRoute(chiRoute, handler);
+            }
+          }
+        }
+
         const retainedGinBindings = new Set(
           [engineBinding?.name, groupBinding?.name].filter(
             (name): name is string => name !== undefined
@@ -777,12 +895,18 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
         const retainedNetHttpBindings = new Set(
           [muxBinding?.name].filter((name): name is string => name !== undefined)
         );
+        const retainedChiBindings = new Set(
+          [chiBinding?.name].filter((name): name is string => name !== undefined)
+        );
         for (const name of directBoundNames(input, statement)) {
           if (!retainedGinBindings.has(name)) {
             ginReceivers.delete(name);
           }
           if (!retainedNetHttpBindings.has(name)) {
             netHttpMuxes.delete(name);
+          }
+          if (!retainedChiBindings.has(name)) {
+            chiReceivers.delete(name);
           }
           shadowedNames.add(name);
         }
