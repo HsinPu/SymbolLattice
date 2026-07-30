@@ -9,6 +9,7 @@ import { extractPhpFileFacts } from "./php.js";
 import { extractPythonFileFacts } from "./python.js";
 import { extractRubyFileFacts } from "./ruby.js";
 import { extractRustFileFacts } from "./rust.js";
+import { extractSwiftFileFacts } from "./swift.js";
 import {
   frameworkCapability,
   type FrameworkCapability,
@@ -3434,6 +3435,9 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
   }
   if (input.language === "kotlin") {
     return extractKotlinFileFacts({ ...input, language: "kotlin" });
+  }
+  if (input.language === "swift") {
+    return extractSwiftFileFacts({ ...input, language: "swift" });
   }
 
   const sourceFile = ts.createSourceFile(

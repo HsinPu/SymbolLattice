@@ -6,6 +6,25 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.43.0] - 2026-07-30
+
+### Added
+
+- Swift `.swift` source discovery, persisted source-search language filtering, CLI/MCP validation, direct top-level class/struct/protocol/method/function containment, and a first-party `@ast-grep/lang-swift` AST adapter.
+- An executable first-party `vapor` capability. Vapor routes now require a direct `import Vapor`, a direct `routes(_ app: Application)` function, a direct `app.` HTTP verb call, zero or more literal path segments, and one unique direct top-level same-file `use: handler` function. Matching routes emit exact `framework.vapor.direct-routes-application.literal-segment-route.use.local-function` evidence.
+- The shared dynamic ast-grep language registry now registers C#, Ruby, Kotlin, and Swift together, preserving every first-party prebuilt grammar in the same long-lived process.
+- Capability, discovery, exact route, class/struct/protocol/method/function containment, dynamic/closure/missing-import/wrong-function/wrong-parameter/missing-handler/malformed-source rejection, source-search, CLI, and persisted route-query integration coverage. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.43.0.md`.
+
+### Compatibility
+
+- No SQLite schema migration or new query command is required. Swift symbols and Vapor routes reuse the existing file, symbol, edge, source-search, and route-query contracts; existing generations remain readable.
+- The artifact extractor advances to `multi-language-ast-v32`; the project resolver remains `project-resolver-v14` because all supported Swift proof is file-local. A pre-v0.43 active index reports `indexer-version-changed` until an explicit `sync` or `index` publishes the new facts.
+
+### Deliberate limits
+
+- Vapor support accepts only the direct literal `routes(_ app: Application)` / `app.<verb>(..., use: handler)` form. It excludes aliased imports/receivers, groups or prefixes, middleware, closure/member/qualified handlers, dynamic/interpolated/escaped path segments, overload/cross-file resolution, Swift package/module/type resolution, Fluent/controller semantics, and runtime behavior.
+- CodeGraph has a broader regex-based Vapor resolver: it detects Vapor from `Package.swift` or imports, tracks direct `grouped` and `group` prefix variables, accepts routes on generic builders, and resolves a handler name through its framework-resolution flow. SymbolLattice v0.43 deliberately adds a narrower AST-proven direct route form with exact same-file handler evidence; it remains behind CodeGraph's broader Swift/Vapor coverage.
+
 ## [0.42.0] - 2026-07-30
 
 ### Added

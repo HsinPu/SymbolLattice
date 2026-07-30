@@ -46,6 +46,7 @@ describe("source discovery", () => {
     await writeFile(join(projectPath, "src", "i.cs"), "public class Api {}\n", "utf8");
     await writeFile(join(projectPath, "src", "j.rb"), "class Api\nend\n", "utf8");
     await writeFile(join(projectPath, "src", "k.kt"), "class Api {}\n", "utf8");
+    await writeFile(join(projectPath, "src", "l.swift"), "struct Api {}\n", "utf8");
     await writeFile(join(projectPath, "README.md"), "ignored", "utf8");
     await writeFile(join(projectPath, "node_modules", "ignored", "index.js"), "ignored", "utf8");
 
@@ -63,6 +64,7 @@ describe("source discovery", () => {
       "src/i.cs",
       "src/j.rb",
       "src/k.kt",
+      "src/l.swift",
       "src/z.ts"
     ]);
     expect(files.map((file) => file.language)).toEqual([
@@ -77,6 +79,7 @@ describe("source discovery", () => {
       "csharp",
       "ruby",
       "kotlin",
+      "swift",
       "typescript"
     ]);
   });

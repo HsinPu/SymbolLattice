@@ -1,0 +1,618 @@
+import { parse, type SgNode } from "./ast-grep-languages.js";
+
+import {
+  createEdgeId,
+  createSymbolId,
+  type ArtifactFacts,
+  type GraphEdge,
+  type RouteMethod,
+  type SourcePosition,
+  type SourceRange,
+  type SymbolNode
+} from "../domain/index.js";
+import { frameworkCapability } from "./framework-capabilities.js";
+
+/** Swift uses the shared prebuilt ast-grep Tree-sitter language registry. */
+
+export interface SwiftExtractFileFactsInput {
+  readonly filePath: string;
+  readonly sourceText: string;
+  readonly language: "swift";
+}
+
+type SwiftSyntaxNode = SgNode;
+
+interface StaticSwiftType {
+  readonly kind: "class" | "interface";
+  readonly name: string;
+  readonly node: SwiftSyntaxNode;
+  readonly body: SwiftSyntaxNode;
+}
+
+interface StaticSwiftFunction {
+  readonly name: string;
+  readonly node: SwiftSyntaxNode;
+  readonly body: SwiftSyntaxNode | null;
+}
+
+interface StaticVaporRoute {
+  readonly method: RouteMethod;
+  readonly path: string;
+  readonly handlerName: string;
+  readonly node: SwiftSyntaxNode;
+}
+
+interface StaticSwiftMemberCall {
+  readonly receiverName: string;
+  readonly name: string;
+  readonly suffix: SwiftSyntaxNode;
+}
+
+const VAPOR_ROUTE_METHODS: Readonly<Record<string, RouteMethod>> = {
+  get: "GET",
+  post: "POST",
+  put: "PUT",
+  patch: "PATCH",
+  delete: "DELETE",
+  head: "HEAD",
+  options: "OPTIONS"
+};
+
+const VAPOR_IMPORT = "Vapor";
+
+function directChildren(node: SwiftSyntaxNode): readonly SwiftSyntaxNode[] {
+  return node.children();
+}
+
+function nodeText(node: SwiftSyntaxNode): string {
+  return node.text();
+}
+
+function lineStartsFor(sourceText: string): readonly number[] {
+  const starts = [0];
+  for (let index = 0; index < sourceText.length; index += 1) {
+    const character = sourceText.charCodeAt(index);
+    if (character === 13) {
+      if (sourceText.charCodeAt(index + 1) === 10) {
+        index += 1;
+      }
+      starts.push(index + 1);
+    } else if (character === 10) {
+      starts.push(index + 1);
+    }
+  }
+  return starts;
+}
+
+function positionFor(lineStarts: readonly number[], offset: number): SourcePosition {
+  let lower = 0;
+  let upper = lineStarts.length;
+  while (lower + 1 < upper) {
+    const middle = Math.floor((lower + upper) / 2);
+    const start = lineStarts[middle];
+    if (start === undefined || start > offset) {
+      upper = middle;
+    } else {
+      lower = middle;
+    }
+  }
+  const lineStart = lineStarts[lower] ?? 0;
+  return { line: lower + 1, column: offset - lineStart + 1 };
+}
+
+function rangeForNode(node: SwiftSyntaxNode): SourceRange {
+  const range = node.range();
+  return {
+    start: { line: range.start.line + 1, column: range.start.column + 1 },
+    end: { line: range.end.line + 1, column: range.end.column + 1 }
+  };
+}
+
+function rangeForSpan(
+  lineStarts: readonly number[],
+  from: number,
+  to: number
+): SourceRange {
+  return {
+    start: positionFor(lineStarts, from),
+    end: positionFor(lineStarts, to)
+  };
+}
+
+function hasSyntaxError(node: SwiftSyntaxNode): boolean {
+  return (
+    node.kind() === "ERROR" ||
+    (node.kind() !== "source_file" && nodeText(node).length === 0) ||
+    directChildren(node).some((child) => hasSyntaxError(child))
+  );
+}
+
+function identifierText(node: SwiftSyntaxNode): string | null {
+  const value = nodeText(node);
+  return /^[A-Za-z_][A-Za-z0-9_]*$/u.test(value) ? value : null;
+}
+
+function staticSwiftType(node: SwiftSyntaxNode): StaticSwiftType | null {
+  if (node.kind() === "class_declaration") {
+    const children = directChildren(node);
+    const declarationKind = children.find(
+      (child) => child.kind() === "class" || child.kind() === "struct"
+    );
+    const typeIdentifiers = children.filter((child) => child.kind() === "type_identifier");
+    const nameNode = typeIdentifiers[0];
+    const body = children.find((child) => child.kind() === "class_body");
+    const name = nameNode === undefined ? null : identifierText(nameNode);
+    if (
+      declarationKind === undefined ||
+      name === null ||
+      body === undefined ||
+      typeIdentifiers.length !== 1
+    ) {
+      return null;
+    }
+    return { kind: "class", name, node, body };
+  }
+
+  if (node.kind() === "protocol_declaration") {
+    const children = directChildren(node);
+    const protocols = children.filter((child) => child.kind() === "protocol");
+    const typeIdentifiers = children.filter((child) => child.kind() === "type_identifier");
+    const nameNode = typeIdentifiers[0];
+    const body = children.find((child) => child.kind() === "protocol_body");
+    const name = nameNode === undefined ? null : identifierText(nameNode);
+    if (protocols.length !== 1 || name === null || body === undefined || typeIdentifiers.length !== 1) {
+      return null;
+    }
+    return { kind: "interface", name, node, body };
+  }
+
+  return null;
+}
+
+function staticSwiftFunction(node: SwiftSyntaxNode): StaticSwiftFunction | null {
+  if (
+    node.kind() !== "function_declaration" &&
+    node.kind() !== "protocol_function_declaration"
+  ) {
+    return null;
+  }
+  const identifiers = directChildren(node).filter((child) => child.kind() === "simple_identifier");
+  const nameNode = identifiers[0];
+  const name = nameNode === undefined || identifiers.length !== 1 ? null : identifierText(nameNode);
+  if (name === null) {
+    return null;
+  }
+  const body = directChildren(node).find((child) => child.kind() === "function_body") ?? null;
+  return { name, node, body };
+}
+
+function hasDirectVaporImport(root: SwiftSyntaxNode): boolean {
+  return directChildren(root).some(
+    (node) =>
+      node.kind() === "import_declaration" &&
+      nodeText(node).replace(/\s+/gu, " ") === "import " + VAPOR_IMPORT
+  );
+}
+
+function staticDirectMemberCall(node: SwiftSyntaxNode): StaticSwiftMemberCall | null {
+  if (node.kind() !== "call_expression") {
+    return null;
+  }
+  const children = directChildren(node);
+  const navigation = children[0];
+  const suffix = children[1];
+  if (
+    navigation?.kind() !== "navigation_expression" ||
+    suffix?.kind() !== "call_suffix" ||
+    children.length !== 2
+  ) {
+    return null;
+  }
+  const navigationChildren = directChildren(navigation);
+  const receiver = navigationChildren[0];
+  const memberSuffix = navigationChildren[1];
+  if (
+    receiver === undefined ||
+    memberSuffix?.kind() !== "navigation_suffix" ||
+    navigationChildren.length !== 2
+  ) {
+    return null;
+  }
+  const receiverName = identifierText(receiver);
+  const suffixChildren = directChildren(memberSuffix);
+  const nameNode = suffixChildren.find((child) => child.kind() === "simple_identifier");
+  const name = nameNode === undefined ? null : identifierText(nameNode);
+  if (
+    receiverName === null ||
+    name === null ||
+    suffixChildren.filter((child) => child.kind() === "simple_identifier").length !== 1
+  ) {
+    return null;
+  }
+  return { receiverName, name, suffix };
+}
+
+function staticValueArguments(
+  callSuffix: SwiftSyntaxNode
+): readonly SwiftSyntaxNode[] | null {
+  const suffixChildren = directChildren(callSuffix);
+  const valueArguments = suffixChildren[0];
+  if (valueArguments?.kind() !== "value_arguments" || suffixChildren.length !== 1) {
+    return null;
+  }
+  return directChildren(valueArguments).filter((child) => child.kind() === "value_argument");
+}
+
+function staticPlainVaporSegment(node: SwiftSyntaxNode): string | null {
+  if (node.kind() !== "value_argument") {
+    return null;
+  }
+  const children = directChildren(node);
+  const stringLiteral = children[0];
+  if (stringLiteral?.kind() !== "line_string_literal" || children.length !== 1) {
+    return null;
+  }
+  const value = nodeText(stringLiteral);
+  if (
+    value.length < 3 ||
+    value[0] !== "\"" ||
+    value.at(-1) !== "\"" ||
+    value.includes("\\") ||
+    value.includes("//")
+  ) {
+    return null;
+  }
+  return value.slice(1, -1);
+}
+
+function staticVaporPath(segments: readonly string[]): string | null {
+  if (segments.some((segment) => segment.length === 0 || segment.includes("//"))) {
+    return null;
+  }
+  if (segments.length === 0) {
+    return "/";
+  }
+  const joined = segments.join("/");
+  const path = joined.startsWith("/") ? joined : "/" + joined;
+  return path.includes("//") ? null : path;
+}
+
+function staticUseHandler(node: SwiftSyntaxNode): string | null {
+  if (node.kind() !== "value_argument") {
+    return null;
+  }
+  const children = directChildren(node);
+  const label = children[0];
+  const colon = children[1];
+  const handler = children[2];
+  if (
+    label?.kind() !== "value_argument_label" ||
+    nodeText(label) !== "use" ||
+    colon?.kind() !== ":" ||
+    handler === undefined ||
+    children.length !== 3
+  ) {
+    return null;
+  }
+  return identifierText(handler);
+}
+
+function staticVaporRoute(node: SwiftSyntaxNode): StaticVaporRoute | null {
+  const call = staticDirectMemberCall(node);
+  const method = call === null ? undefined : VAPOR_ROUTE_METHODS[call.name];
+  if (call === null || call.receiverName !== "app" || method === undefined) {
+    return null;
+  }
+  const arguments_ = staticValueArguments(call.suffix);
+  if (arguments_ === null || arguments_.length === 0) {
+    return null;
+  }
+  const handlerArgument = arguments_.at(-1);
+  if (handlerArgument === undefined) {
+    return null;
+  }
+  const handlerName = staticUseHandler(handlerArgument);
+  const segments = arguments_
+    .slice(0, -1)
+    .map((argument) => staticPlainVaporSegment(argument));
+  if (handlerName === null || segments.some((segment) => segment === null)) {
+    return null;
+  }
+  const path = staticVaporPath(segments as readonly string[]);
+  return path === null ? null : { method, path, handlerName, node };
+}
+
+function isDirectRoutesApplicationFunction(functionDeclaration: StaticSwiftFunction): boolean {
+  if (functionDeclaration.name !== "routes") {
+    return false;
+  }
+  const parameters = directChildren(functionDeclaration.node).filter(
+    (child) => child.kind() === "parameter"
+  );
+  const parameter = parameters[0];
+  if (parameter === undefined || parameters.length !== 1) {
+    return false;
+  }
+  const children = directChildren(parameter);
+  const externalName = children[0];
+  const localName = children[1];
+  const colon = children[2];
+  const type = children[3];
+  return (
+    externalName !== undefined &&
+    nodeText(externalName) === "_" &&
+    localName !== undefined &&
+    identifierText(localName) === "app" &&
+    colon?.kind() === ":" &&
+    type?.kind() === "user_type" &&
+    nodeText(type) === "Application" &&
+    children.length === 4
+  );
+}
+
+function staticVaporRouteStatements(
+  functionDeclaration: StaticSwiftFunction
+): readonly SwiftSyntaxNode[] {
+  if (!isDirectRoutesApplicationFunction(functionDeclaration) || functionDeclaration.body === null) {
+    return [];
+  }
+  const bodyStatements = directChildren(functionDeclaration.body).filter(
+    (child) => child.kind() === "statements"
+  );
+  if (bodyStatements.length !== 1 || bodyStatements[0] === undefined) {
+    return [];
+  }
+  return directChildren(bodyStatements[0]);
+}
+
+export function extractSwiftFileFacts(input: SwiftExtractFileFactsInput): ArtifactFacts {
+  const vaporCapability = frameworkCapability("vapor");
+  if (!vaporCapability.languages.includes(input.language)) {
+    throw new Error("Vapor framework extraction was invoked for an unsupported source language.");
+  }
+
+  const root = parse("swift", input.sourceText).root();
+  const lineStarts = lineStartsFor(input.sourceText);
+  const symbols: SymbolNode[] = [];
+  const edges: GraphEdge[] = [];
+  const declarationOrdinals = new Map<string, number>();
+  const fileName = input.filePath.split(/[\\/]/u).at(-1) ?? input.filePath;
+  const fileNode: SymbolNode = {
+    id: createSymbolId({
+      filePath: input.filePath,
+      qualifiedName: input.filePath,
+      kind: "file",
+      declarationOrdinal: 0
+    }),
+    name: fileName,
+    qualifiedName: input.filePath,
+    kind: "file",
+    filePath: input.filePath,
+    range: rangeForSpan(lineStarts, 0, input.sourceText.length),
+    isExported: true,
+    declarationOrdinal: 0
+  };
+  symbols.push(fileNode);
+
+  function nextOrdinal(qualifiedName: string, kind: SymbolNode["kind"]): number {
+    const identity = qualifiedName + "\u0000" + kind;
+    const ordinal = declarationOrdinals.get(identity) ?? 0;
+    declarationOrdinals.set(identity, ordinal + 1);
+    return ordinal;
+  }
+
+  function addContainment(parent: SymbolNode, child: SymbolNode, node: SwiftSyntaxNode): void {
+    const range = rangeForNode(node);
+    edges.push({
+      id: createEdgeId({
+        sourceId: parent.id,
+        targetId: child.id,
+        kind: "contains",
+        line: range.start.line,
+        column: range.start.column,
+        referenceName: child.name
+      }),
+      sourceId: parent.id,
+      targetId: child.id,
+      kind: "contains",
+      filePath: input.filePath,
+      range,
+      resolution: "exact",
+      confidence: 1,
+      referenceName: child.name,
+      evidence: {
+        ruleId: "syntax.containment",
+        stage: "syntax",
+        candidateSymbolIds: [child.id]
+      }
+    });
+  }
+
+  function addType(declaration: StaticSwiftType): SymbolNode {
+    const qualifiedName = input.filePath + "#" + declaration.name;
+    const declarationOrdinal = nextOrdinal(qualifiedName, declaration.kind);
+    const symbol: SymbolNode = {
+      id: createSymbolId({
+        filePath: input.filePath,
+        qualifiedName,
+        kind: declaration.kind,
+        declarationOrdinal
+      }),
+      name: declaration.name,
+      qualifiedName,
+      kind: declaration.kind,
+      filePath: input.filePath,
+      range: rangeForNode(declaration.node),
+      isExported: true,
+      declarationOrdinal
+    };
+    symbols.push(symbol);
+    addContainment(fileNode, symbol, declaration.node);
+    return symbol;
+  }
+
+  function addMethod(parent: SymbolNode, declaration: StaticSwiftFunction): SymbolNode {
+    const qualifiedName = parent.qualifiedName + "." + declaration.name;
+    const declarationOrdinal = nextOrdinal(qualifiedName, "method");
+    const symbol: SymbolNode = {
+      id: createSymbolId({
+        filePath: input.filePath,
+        qualifiedName,
+        kind: "method",
+        declarationOrdinal
+      }),
+      name: declaration.name,
+      qualifiedName,
+      kind: "method",
+      filePath: input.filePath,
+      range: rangeForNode(declaration.node),
+      isExported: true,
+      declarationOrdinal
+    };
+    symbols.push(symbol);
+    addContainment(parent, symbol, declaration.node);
+    return symbol;
+  }
+
+  function addFunction(declaration: StaticSwiftFunction): SymbolNode {
+    const qualifiedName = input.filePath + "#" + declaration.name;
+    const declarationOrdinal = nextOrdinal(qualifiedName, "function");
+    const symbol: SymbolNode = {
+      id: createSymbolId({
+        filePath: input.filePath,
+        qualifiedName,
+        kind: "function",
+        declarationOrdinal
+      }),
+      name: declaration.name,
+      qualifiedName,
+      kind: "function",
+      filePath: input.filePath,
+      range: rangeForNode(declaration.node),
+      isExported: true,
+      declarationOrdinal
+    };
+    symbols.push(symbol);
+    addContainment(fileNode, symbol, declaration.node);
+    return symbol;
+  }
+
+  function addVaporRoute(routeFact: StaticVaporRoute, handler: SymbolNode): void {
+    const routeName = routeFact.method + " " + routeFact.path;
+    const qualifiedName = input.filePath + "#route:" + routeName;
+    const declarationOrdinal = nextOrdinal(qualifiedName, "route");
+    const range = rangeForNode(routeFact.node);
+    const route: SymbolNode = {
+      id: createSymbolId({
+        filePath: input.filePath,
+        qualifiedName,
+        kind: "route",
+        declarationOrdinal
+      }),
+      name: routeName,
+      qualifiedName,
+      kind: "route",
+      filePath: input.filePath,
+      range,
+      isExported: false,
+      declarationOrdinal
+    };
+    symbols.push(route);
+    addContainment(fileNode, route, routeFact.node);
+    edges.push({
+      id: createEdgeId({
+        sourceId: route.id,
+        targetId: handler.id,
+        kind: "routes",
+        line: range.start.line,
+        column: range.start.column,
+        referenceName: handler.name
+      }),
+      sourceId: route.id,
+      targetId: handler.id,
+      kind: "routes",
+      filePath: input.filePath,
+      range,
+      resolution: "exact",
+      confidence: 1,
+      referenceName: handler.name,
+      evidence: {
+        ruleId:
+          "framework.vapor.direct-routes-application.literal-segment-route.use.local-function",
+        stage: "syntax",
+        candidateSymbolIds: [handler.id]
+      }
+    });
+  }
+
+  if (!hasSyntaxError(root)) {
+    const topLevel = directChildren(root);
+    const topLevelFunctions = topLevel
+      .filter((node) => node.kind() === "function_declaration")
+      .map((node) => staticSwiftFunction(node))
+      .filter((candidate): candidate is StaticSwiftFunction => candidate !== null);
+    const functionsByName = new Map<string, SymbolNode[]>();
+
+    for (const declaration of topLevel
+      .map((node) => staticSwiftType(node))
+      .filter((candidate): candidate is StaticSwiftType => candidate !== null)) {
+      const typeSymbol = addType(declaration);
+      for (const methodDeclaration of directChildren(declaration.body)
+        .map((node) => staticSwiftFunction(node))
+        .filter((candidate): candidate is StaticSwiftFunction => candidate !== null)) {
+        addMethod(typeSymbol, methodDeclaration);
+      }
+    }
+
+    for (const functionDeclaration of topLevelFunctions) {
+      const symbol = addFunction(functionDeclaration);
+      const candidates = functionsByName.get(functionDeclaration.name) ?? [];
+      candidates.push(symbol);
+      functionsByName.set(functionDeclaration.name, candidates);
+    }
+
+    if (hasDirectVaporImport(root)) {
+      for (const functionDeclaration of topLevelFunctions) {
+        for (const statement of staticVaporRouteStatements(functionDeclaration)) {
+          const route = staticVaporRoute(statement);
+          if (route === null) {
+            continue;
+          }
+          const handlerCandidates = functionsByName.get(route.handlerName) ?? [];
+          if (handlerCandidates.length === 1) {
+            const handler = handlerCandidates[0];
+            if (handler !== undefined) {
+              addVaporRoute(route, handler);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return {
+    symbols,
+    edges,
+    pendingReferences: [],
+    localBindings: [],
+    referenceScopes: [],
+    importBindings: [],
+    exportBindings: [],
+    reExportBindings: [],
+    nestRouteFacts: {
+      routeControllers: [],
+      moduleControllers: [],
+      routerModulePrefixes: []
+    },
+    fastifyPluginFacts: {
+      routes: [],
+      childRegistrations: [],
+      rootRegistrations: []
+    },
+    fastApiRouterFacts: {
+      routers: [],
+      routes: [],
+      importedRouterInclusions: []
+    }
+  };
+}

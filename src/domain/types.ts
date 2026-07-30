@@ -52,7 +52,8 @@ export type RouteFramework =
   | "cpp-httplib"
   | "aspnet-core"
   | "rails"
-  | "ktor";
+  | "ktor"
+  | "vapor";
 
 /** Additional static registration context retained when it changes route provenance or path. */
 export type RouteRegistration =
@@ -75,7 +76,8 @@ export const ARTIFACT_LANGUAGES = [
   "cpp",
   "csharp",
   "ruby",
-  "kotlin"
+  "kotlin",
+  "swift"
 ] as const;
 
 export type ArtifactLanguage = (typeof ARTIFACT_LANGUAGES)[number];

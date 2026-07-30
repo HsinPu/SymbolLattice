@@ -25,7 +25,8 @@ describe("first-party framework capabilities", () => {
       "cpp-httplib",
       "aspnet-core",
       "rails",
-      "ktor"
+      "ktor",
+      "vapor"
     ]);
     expect(FRAMEWORK_CAPABILITIES.map((capability) => capability.id)).toEqual(
       FRAMEWORK_CAPABILITY_IDS
@@ -155,6 +156,15 @@ describe("first-party framework capabilities", () => {
       surfaces: [
         "direct Application.module routing blocks",
         "literal direct verb routes with local callable-reference handlers"
+      ]
+    });
+    expect(frameworkCapability("vapor")).toMatchObject({
+      languages: ["swift"],
+      routeFramework: "vapor",
+      routeRegistrations: [],
+      surfaces: [
+        "direct routes(_ app: Application) functions",
+        "literal direct verb routes with same-file named handlers"
       ]
     });
   });

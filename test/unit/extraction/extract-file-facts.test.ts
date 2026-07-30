@@ -3450,6 +3450,166 @@ describe("source extraction", () => {
     expect(broken.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
   });
 
+  it("extracts direct Swift Vapor routes(_ app: Application) routes with exact local evidence", () => {
+    const facts = extractFileFacts({
+      filePath: "Sources/App/routes.swift",
+      language: "swift",
+      sourceText: [
+        "import Vapor",
+        "",
+        "public func routes(_ app: Application) throws {",
+        "  app.get(\"health\", use: health)",
+        "  app.post(\"orders\", \":id\", use: updateOrder)",
+        "  app.head(use: status)",
+        "}",
+        "",
+        "class HealthController {",
+        "  func show() {}",
+        "}",
+        "",
+        "struct Checkpoint {",
+        "  func verify() {}",
+        "}",
+        "",
+        "protocol HealthCheck {",
+        "  func check()",
+        "}",
+        "",
+        "func health(req: Request) throws -> String { \"ok\" }",
+        "func updateOrder(req: Request) throws -> String { \"updated\" }",
+        "func status(req: Request) throws -> String { \"ready\" }"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(facts.symbols.filter((symbol) => symbol.kind === "class").map((symbol) => symbol.qualifiedName)).toEqual([
+      "Sources/App/routes.swift#HealthController",
+      "Sources/App/routes.swift#Checkpoint"
+    ]);
+    expect(
+      facts.symbols.filter((symbol) => symbol.kind === "interface").map((symbol) => symbol.qualifiedName)
+    ).toEqual(["Sources/App/routes.swift#HealthCheck"]);
+    expect(facts.symbols.filter((symbol) => symbol.kind === "method").map((symbol) => symbol.qualifiedName)).toEqual([
+      "Sources/App/routes.swift#HealthController.show",
+      "Sources/App/routes.swift#Checkpoint.verify",
+      "Sources/App/routes.swift#HealthCheck.check"
+    ]);
+    expect(facts.symbols.filter((symbol) => symbol.kind === "function").map((symbol) => symbol.qualifiedName)).toEqual([
+      "Sources/App/routes.swift#routes",
+      "Sources/App/routes.swift#health",
+      "Sources/App/routes.swift#updateOrder",
+      "Sources/App/routes.swift#status"
+    ]);
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId,
+          edge.resolution,
+          edge.confidence
+        ])
+    ).toEqual([
+      [
+        "GET /health",
+        "Sources/App/routes.swift#health",
+        "framework.vapor.direct-routes-application.literal-segment-route.use.local-function",
+        "exact",
+        1
+      ],
+      [
+        "POST /orders/:id",
+        "Sources/App/routes.swift#updateOrder",
+        "framework.vapor.direct-routes-application.literal-segment-route.use.local-function",
+        "exact",
+        1
+      ],
+      [
+        "HEAD /",
+        "Sources/App/routes.swift#status",
+        "framework.vapor.direct-routes-application.literal-segment-route.use.local-function",
+        "exact",
+        1
+      ]
+    ]);
+  });
+
+  it("requires direct Swift Vapor imports, routes(_ app: Application), literal named routes, and valid syntax", () => {
+    const unproven = extractFileFacts({
+      filePath: "Sources/App/routes.swift",
+      language: "swift",
+      sourceText: [
+        "import Vapor",
+        "",
+        "func routes(_ app: Application) throws {",
+        "  app.get(path, use: health)",
+        "  app.get(\"lambda\") { request in \"ok\" }",
+        "  app.get(\"extra\", use: health, middleware: health)",
+        "  app.get(\"missing\", use: missing)",
+        "}",
+        "",
+        "func health(req: Request) throws -> String { \"ok\" }"
+      ].join("\n")
+    });
+    const missingImport = extractFileFacts({
+      filePath: "Sources/App/routes.swift",
+      language: "swift",
+      sourceText: [
+        "func routes(_ app: Application) throws {",
+        "  app.get(\"without-import\", use: health)",
+        "}",
+        "",
+        "func health(req: Request) throws -> String { \"ok\" }"
+      ].join("\n")
+    });
+    const wrongRoutesFunction = extractFileFacts({
+      filePath: "Sources/App/routes.swift",
+      language: "swift",
+      sourceText: [
+        "import Vapor",
+        "",
+        "func configure(_ app: Application) throws {",
+        "  app.get(\"wrong-function\", use: health)",
+        "}",
+        "",
+        "func health(req: Request) throws -> String { \"ok\" }"
+      ].join("\n")
+    });
+    const wrongParameter = extractFileFacts({
+      filePath: "Sources/App/routes.swift",
+      language: "swift",
+      sourceText: [
+        "import Vapor",
+        "",
+        "func routes(_ server: Application) throws {",
+        "  server.get(\"wrong-parameter\", use: health)",
+        "}",
+        "",
+        "func health(req: Request) throws -> String { \"ok\" }"
+      ].join("\n")
+    });
+    const broken = extractFileFacts({
+      filePath: "Sources/App/routes.swift",
+      language: "swift",
+      sourceText: [
+        "import Vapor",
+        "",
+        "func routes(_ app: Application) throws {",
+        "  app.get(\"broken\", use: health)"
+      ].join("\n")
+    });
+
+    expect(unproven.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(unproven.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+    expect(missingImport.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(wrongRoutesFunction.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(wrongParameter.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(broken.symbols.filter((symbol) => symbol.kind === "function")).toEqual([]);
+    expect(broken.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(broken.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+  });
+
   it("extracts direct Rust Axum literal route-builder chains with exact evidence", () => {
     const facts = extractFileFacts({
       filePath: "src/http.rs",

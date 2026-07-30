@@ -18,7 +18,8 @@ export const FRAMEWORK_CAPABILITY_IDS = [
   "cpp-httplib",
   "aspnet-core",
   "rails",
-  "ktor"
+  "ktor",
+  "vapor"
 ] as const;
 
 export type FrameworkCapabilityId = (typeof FRAMEWORK_CAPABILITY_IDS)[number];
@@ -205,6 +206,16 @@ export const FRAMEWORK_CAPABILITIES = [
     surfaces: [
       "direct Application.module routing blocks",
       "literal direct verb routes with local callable-reference handlers"
+    ]
+  },
+  {
+    id: "vapor",
+    languages: ["swift"],
+    routeFramework: "vapor",
+    routeRegistrations: [],
+    surfaces: [
+      "direct routes(_ app: Application) functions",
+      "literal direct verb routes with same-file named handlers"
     ]
   }
 ] as const satisfies readonly FrameworkCapability[];
