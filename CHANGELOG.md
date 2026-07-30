@@ -6,6 +6,25 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.42.0] - 2026-07-30
+
+### Added
+
+- Kotlin `.kt` source discovery, persisted source-search language filtering, CLI/MCP validation, direct top-level class/interface/method/function containment, and a first-party `@ast-grep/lang-kotlin` AST adapter.
+- An executable first-party `ktor` capability. Ktor routes now require direct unaliased imports of `io.ktor.server.application.Application`, `io.ktor.server.routing.routing`, and the used verb; a direct `fun Application.module()` function; one direct `routing { ... }` block; one literal slash-prefixed path; and one unique direct top-level `::handler` callable reference. Matching routes emit exact `framework.ktor.direct-application-module.routing.literal-route.callable-reference.local-function` evidence.
+- The shared dynamic ast-grep language registry now registers C#, Ruby, and Kotlin together, preserving all previously supported prebuilt grammars in the same long-lived process.
+- Capability, discovery, exact route, class/interface/method/function containment, dynamic/lambda/missing-import/wrong-module/missing-handler/malformed-source rejection, source-search, CLI, and persisted route-query integration coverage. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.42.0.md`.
+
+### Compatibility
+
+- No SQLite schema migration or new query command is required. Kotlin symbols and Ktor routes reuse the existing file, symbol, edge, source-search, and route-query contracts; existing generations remain readable.
+- The artifact extractor advances to `multi-language-ast-v31`; the project resolver remains `project-resolver-v14` because all supported Kotlin proof is file-local. A pre-v0.42 active index reports `indexer-version-changed` until an explicit `sync` or `index` publishes the new facts.
+
+### Deliberate limits
+
+- Ktor support accepts only the direct literal `Application.module`/`routing` callable-reference form above. It excludes star/aliased imports, alternative module names/receivers, `route` / `authenticate` / `static` composition, lambda/member/qualified handlers, named arguments, dynamic/interpolated/escaped paths, overload/cross-file resolution, plugins/pipelines, generic Kotlin import/package/call/type resolution, and runtime behavior.
+- CodeGraph indexes Kotlin in the local baseline but its current `src/resolution` source has no Ktor framework resolver. SymbolLattice v0.42 therefore introduces a narrow AST-proven Ktor route surface that CodeGraph does not currently expose, while remaining far behind CodeGraph's overall multi-language breadth.
+
 ## [0.41.0] - 2026-07-30
 
 ### Added

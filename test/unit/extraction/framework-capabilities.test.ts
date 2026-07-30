@@ -24,7 +24,8 @@ describe("first-party framework capabilities", () => {
       "laravel",
       "cpp-httplib",
       "aspnet-core",
-      "rails"
+      "rails",
+      "ktor"
     ]);
     expect(FRAMEWORK_CAPABILITIES.map((capability) => capability.id)).toEqual(
       FRAMEWORK_CAPABILITY_IDS
@@ -145,6 +146,15 @@ describe("first-party framework capabilities", () => {
       surfaces: [
         "direct Rails.application.routes.draw blocks",
         "literal direct verb routes with controller-action strings"
+      ]
+    });
+    expect(frameworkCapability("ktor")).toMatchObject({
+      languages: ["kotlin"],
+      routeFramework: "ktor",
+      routeRegistrations: [],
+      surfaces: [
+        "direct Application.module routing blocks",
+        "literal direct verb routes with local callable-reference handlers"
       ]
     });
   });

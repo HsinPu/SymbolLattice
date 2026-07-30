@@ -3865,6 +3865,64 @@ describe("SymbolLatticeService", () => {
     );
   });
 
+  it("indexes Kotlin Ktor callable-reference routes as persisted exact function evidence", async () => {
+    const projectPath = await createInlineProject({
+      "src/Application.kt": [
+        "import io.ktor.server.application.Application",
+        "import io.ktor.server.routing.routing",
+        "import io.ktor.server.routing.get",
+        "import io.ktor.server.routing.post",
+        "",
+        "fun Application.module() {",
+        "  routing {",
+        "    get(\"/health\", ::health)",
+        "    post(\"/orders\", ::createOrder)",
+        "  }",
+        "}",
+        "",
+        "fun health() {}",
+        "fun createOrder() {}"
+      ].join("\n")
+    });
+    const service = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+    const getRoutes = await service.routes(projectPath, { method: "GET" });
+    const search = await service.search(projectPath, "health", { language: "kotlin" });
+
+    expect(routes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "GET",
+          path: "/health",
+          handler: expect.objectContaining({ qualifiedName: "src/Application.kt#health" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId:
+                "framework.ktor.direct-application-module.routing.literal-route.callable-reference.local-function",
+              stage: "syntax"
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "POST",
+          path: "/orders",
+          handler: expect.objectContaining({ qualifiedName: "src/Application.kt#createOrder" })
+        })
+      ])
+    );
+    expect(getRoutes.routes).toMatchObject([
+      {
+        method: "GET",
+        path: "/health",
+        handler: { qualifiedName: "src/Application.kt#health" }
+      }
+    ]);
+    expect(search.results).toMatchObject([{ filePath: "src/Application.kt", language: "kotlin" }]);
+  });
+
   it("indexes NestJS decorator routes as persisted exact method evidence", async () => {
     const projectPath = await createInlineProject({
       "src/cats.controller.ts": [

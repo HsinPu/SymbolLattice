@@ -4,6 +4,7 @@ import { extractCsharpFileFacts } from "./csharp.js";
 import { extractCppFileFacts } from "./cpp.js";
 import { extractGoFileFacts } from "./go.js";
 import { extractJavaFileFacts } from "./java.js";
+import { extractKotlinFileFacts } from "./kotlin.js";
 import { extractPhpFileFacts } from "./php.js";
 import { extractPythonFileFacts } from "./python.js";
 import { extractRubyFileFacts } from "./ruby.js";
@@ -3430,6 +3431,9 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
   }
   if (input.language === "ruby") {
     return extractRubyFileFacts({ ...input, language: "ruby" });
+  }
+  if (input.language === "kotlin") {
+    return extractKotlinFileFacts({ ...input, language: "kotlin" });
   }
 
   const sourceFile = ts.createSourceFile(

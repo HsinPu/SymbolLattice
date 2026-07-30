@@ -51,7 +51,8 @@ export type RouteFramework =
   | "laravel"
   | "cpp-httplib"
   | "aspnet-core"
-  | "rails";
+  | "rails"
+  | "ktor";
 
 /** Additional static registration context retained when it changes route provenance or path. */
 export type RouteRegistration =
@@ -73,7 +74,8 @@ export const ARTIFACT_LANGUAGES = [
   "php",
   "cpp",
   "csharp",
-  "ruby"
+  "ruby",
+  "kotlin"
 ] as const;
 
 export type ArtifactLanguage = (typeof ARTIFACT_LANGUAGES)[number];

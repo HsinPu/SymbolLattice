@@ -17,7 +17,8 @@ export const FRAMEWORK_CAPABILITY_IDS = [
   "laravel",
   "cpp-httplib",
   "aspnet-core",
-  "rails"
+  "rails",
+  "ktor"
 ] as const;
 
 export type FrameworkCapabilityId = (typeof FRAMEWORK_CAPABILITY_IDS)[number];
@@ -194,6 +195,16 @@ export const FRAMEWORK_CAPABILITIES = [
     surfaces: [
       "direct Rails.application.routes.draw blocks",
       "literal direct verb routes with controller-action strings"
+    ]
+  },
+  {
+    id: "ktor",
+    languages: ["kotlin"],
+    routeFramework: "ktor",
+    routeRegistrations: [],
+    surfaces: [
+      "direct Application.module routing blocks",
+      "literal direct verb routes with local callable-reference handlers"
     ]
   }
 ] as const satisfies readonly FrameworkCapability[];

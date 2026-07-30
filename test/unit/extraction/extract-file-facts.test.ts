@@ -3288,6 +3288,168 @@ describe("source extraction", () => {
     expect(broken.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
   });
 
+  it("extracts direct Kotlin Ktor Application.module callable-reference routes with exact local evidence", () => {
+    const facts = extractFileFacts({
+      filePath: "src/Application.kt",
+      language: "kotlin",
+      sourceText: [
+        "import io.ktor.server.application.Application",
+        "import io.ktor.server.routing.routing",
+        "import io.ktor.server.routing.get",
+        "import io.ktor.server.routing.post",
+        "import io.ktor.server.routing.head",
+        "",
+        "fun Application.module() {",
+        "  routing {",
+        "    get(\"/health\", ::health)",
+        "    post(\"/orders\", ::createOrder)",
+        "    head(\"/status\", ::status)",
+        "  }",
+        "}",
+        "",
+        "class HealthController {",
+        "  fun show() {}",
+        "}",
+        "",
+        "interface HealthCheck {",
+        "  fun check()",
+        "}",
+        "",
+        "fun health() {}",
+        "suspend fun createOrder() {}",
+        "fun status() {}"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(facts.symbols.filter((symbol) => symbol.kind === "class").map((symbol) => symbol.qualifiedName)).toEqual([
+      "src/Application.kt#HealthController"
+    ]);
+    expect(
+      facts.symbols.filter((symbol) => symbol.kind === "interface").map((symbol) => symbol.qualifiedName)
+    ).toEqual(["src/Application.kt#HealthCheck"]);
+    expect(facts.symbols.filter((symbol) => symbol.kind === "method").map((symbol) => symbol.qualifiedName)).toEqual([
+      "src/Application.kt#HealthController.show",
+      "src/Application.kt#HealthCheck.check"
+    ]);
+    expect(facts.symbols.filter((symbol) => symbol.kind === "function").map((symbol) => symbol.qualifiedName)).toEqual([
+      "src/Application.kt#module",
+      "src/Application.kt#health",
+      "src/Application.kt#createOrder",
+      "src/Application.kt#status"
+    ]);
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId,
+          edge.resolution,
+          edge.confidence
+        ])
+    ).toEqual([
+      [
+        "GET /health",
+        "src/Application.kt#health",
+        "framework.ktor.direct-application-module.routing.literal-route.callable-reference.local-function",
+        "exact",
+        1
+      ],
+      [
+        "POST /orders",
+        "src/Application.kt#createOrder",
+        "framework.ktor.direct-application-module.routing.literal-route.callable-reference.local-function",
+        "exact",
+        1
+      ],
+      [
+        "HEAD /status",
+        "src/Application.kt#status",
+        "framework.ktor.direct-application-module.routing.literal-route.callable-reference.local-function",
+        "exact",
+        1
+      ]
+    ]);
+  });
+
+  it("requires direct Kotlin Ktor imports, Application.module shape, literal callable-reference routes, and valid syntax", () => {
+    const unproven = extractFileFacts({
+      filePath: "src/Application.kt",
+      language: "kotlin",
+      sourceText: [
+        "import io.ktor.server.application.Application",
+        "import io.ktor.server.routing.routing",
+        "import io.ktor.server.routing.get",
+        "",
+        "fun Application.module() {",
+        "  routing {",
+        "    get(path, ::health)",
+        "    get(\"/lambda\") {}",
+        "    get(\"/extra\", ::health, ::health)",
+        "    get(\"/missing\", ::missing)",
+        "  }",
+        "}",
+        "",
+        "fun health() {}"
+      ].join("\n")
+    });
+    const missingImport = extractFileFacts({
+      filePath: "src/Application.kt",
+      language: "kotlin",
+      sourceText: [
+        "import io.ktor.server.application.Application",
+        "import io.ktor.server.routing.routing",
+        "",
+        "fun Application.module() {",
+        "  routing {",
+        "    get(\"/without-import\", ::health)",
+        "  }",
+        "}",
+        "",
+        "fun health() {}"
+      ].join("\n")
+    });
+    const wrongModule = extractFileFacts({
+      filePath: "src/Application.kt",
+      language: "kotlin",
+      sourceText: [
+        "import io.ktor.server.application.Application",
+        "import io.ktor.server.routing.routing",
+        "import io.ktor.server.routing.get",
+        "",
+        "fun module() {",
+        "  routing {",
+        "    get(\"/wrong-module\", ::health)",
+        "  }",
+        "}",
+        "",
+        "fun health() {}"
+      ].join("\n")
+    });
+    const broken = extractFileFacts({
+      filePath: "src/Application.kt",
+      language: "kotlin",
+      sourceText: [
+        "import io.ktor.server.application.Application",
+        "import io.ktor.server.routing.routing",
+        "import io.ktor.server.routing.get",
+        "",
+        "fun Application.module() {",
+        "  routing {",
+        "    get(\"/broken\", ::health)"
+      ].join("\n")
+    });
+
+    expect(unproven.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(unproven.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+    expect(missingImport.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(wrongModule.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(broken.symbols.filter((symbol) => symbol.kind === "function")).toEqual([]);
+    expect(broken.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(broken.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+  });
+
   it("extracts direct Rust Axum literal route-builder chains with exact evidence", () => {
     const facts = extractFileFacts({
       filePath: "src/http.rs",
