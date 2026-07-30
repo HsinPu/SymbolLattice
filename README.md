@@ -2,7 +2,7 @@
 
 # SymbolLattice
 
-**Evidence-first local code intelligence for TypeScript, JavaScript, Python, Go, Rust, Java, PHP, C++, C#, Ruby, Kotlin, and Swift projects.**
+**Evidence-first local code intelligence for TypeScript, JavaScript, Python, Go, Rust, Java, PHP, C++, C#, Ruby, Kotlin, Swift, and Dart projects.**
 
 [![Version](https://img.shields.io/github/v/tag/HsinPu/symbol-lattice?label=version)](https://github.com/HsinPu/symbol-lattice/tags)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D22.13-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> **v0.43.0** is an early developer release. This public repository runs from source; its npm package is intentionally private and is not published to npm.
+> **v0.44.0** is an early developer release. This public repository runs from source; its npm package is intentionally private and is not published to npm.
 
 SymbolLattice builds a local symbol graph without hiding uncertainty. It keeps syntax-proven artifact facts, resolves cross-file relationships conservatively, and records why every resolved edge exists. The graph stays local to the inspected project under `.symbol-lattice/index.sqlite`.
 
@@ -27,7 +27,7 @@ SymbolLattice builds a local symbol graph without hiding uncertainty. It keeps s
 - **Event-accelerated foreground freshness** - opt-in `watch` uses native filesystem events when the host supports them, exposes bounded pending-path evidence in its own stream, coalesces saves, retains bounded polling as a safety sweep, and invokes the same atomic `sync` only after drift.
 - **Generation-bound source evidence** - `search` and exact `explore` results use source captured with the active graph generation, even when the live project has since drifted.
 - **Declaration-focused node view** - exact `node` results return the full persisted declaration range plus a bounded declaration body, direct callers/callees, and explicit limits from one active generation without substituting live source text.
-- **Static route evidence** - narrow Express, Fastify, NestJS, Python FastAPI/Flask, Go Gin/`net/http`/Chi, Rust Axum, Java Spring Web, PHP Laravel, C++ cpp-httplib, C# ASP.NET Core, Ruby Rails, and Kotlin Ktor HTTP packs plus React Router and Next.js client-navigation routes create first-class `route` nodes and evidence-bearing `routes` edges only when the registration and handler form are statically proven.
+- **Static route evidence** - narrow Express, Fastify, NestJS, Python FastAPI/Flask, Go Gin/`net/http`/Chi, Rust Axum, Java Spring Web, PHP Laravel, C++ cpp-httplib, C# ASP.NET Core, Ruby Rails, Kotlin Ktor, and Swift Vapor HTTP packs plus Flutter, React Router, and Next.js client-navigation routes create first-class `route` nodes and evidence-bearing `routes` edges only when the registration and handler form are statically proven.
 - **Non-HTTP transport evidence** - AST-proven NestJS GraphQL, microservice, and WebSocket entrypoints use distinct `entrypoint` nodes and exact `handles` edges, so a message pattern or subscription is never mislabeled as an HTTP route.
 - **Direct type-hierarchy evidence** - AST-proven `extends` and `implements` edges preserve value/type namespace proof, type-only imports, re-export provenance, unresolved bases, and bounded direct parent/child views without pretending to have a full type checker.
 - **Bounded context packs** - ordered symbol references produce persisted source, capped relationship/impact summaries, and static directed evidence paths without guessing ambiguous symbols or dynamic behavior.
@@ -82,6 +82,7 @@ node dist/cli/main.js search "health" --project /path/to/project --language csha
 node dist/cli/main.js search "health" --project /path/to/project --language ruby
 node dist/cli/main.js search "health" --project /path/to/project --language kotlin
 node dist/cli/main.js search "health" --project /path/to/project --language swift
+node dist/cli/main.js search "health" --project /path/to/project --language dart
 node dist/cli/main.js context "src/consumer.ts#calculate" "src/math.ts#add" --project /path/to/project
 
 # Select affected tests from changed files already present in the active generation.
@@ -111,19 +112,19 @@ One-shot data commands emit stable, pretty JSON. `watch` is the deliberate strea
 
 ## Capabilities
 
-| Area | v0.43.0 behavior |
+| Area | v0.44.0 behavior |
 | --- | --- |
-| Source files | TypeScript, TSX, JavaScript, JSX, Python, Go, Rust, Java, PHP, C++, C#, Ruby, Kotlin, and Swift (`.cpp`, `.cc`, `.cxx`, `.hpp`, `.hh`, `.hxx`, `.cs`, `.rb`, `.kt`, `.swift`) |
+| Source files | TypeScript, TSX, JavaScript, JSX, Python, Go, Rust, Java, PHP, C++, C#, Ruby, Kotlin, Swift, and Dart (`.cpp`, `.cc`, `.cxx`, `.hpp`, `.hh`, `.hxx`, `.cs`, `.rb`, `.kt`, `.swift`, `.dart`) |
 | Scope | Project root by default or repeatable, persisted `--scope` directories |
 | Discovery | Root `.gitignore` with negation; `.git`, `.symbol-lattice`, `coverage`, `dist`, and `node_modules` are always excluded |
-| Symbols | TypeScript/JavaScript: files, classes, functions, methods, interfaces, types, variables, routes, and entrypoints. Python: files, classes, functions, methods, and direct FastAPI / same-file or proven cross-file `APIRouter` / same-file Flask routes. Go: files, top-level functions, and direct Gin / `net/http` / Chi routes. Rust: files, top-level functions, and direct Axum routes. Java: files, direct top-level classes and methods, and direct Spring Web routes. PHP: files, direct top-level classes, methods, functions, and direct Laravel facade routes. C++: files, direct top-level classes, methods, functions, and direct cpp-httplib routes. C#: files, direct top-level classes, interfaces, methods, local functions, and direct ASP.NET Core routes. Ruby: files, direct top-level classes, methods, functions, and direct Rails routes. Kotlin: files, direct top-level classes, interfaces, methods, functions, and direct Ktor routes. Swift: files, direct top-level classes, structs, protocols, methods, functions, and direct Vapor routes |
-| Relationships | TypeScript/JavaScript: `contains`, module imports/exports, direct identifier calls, evidence-bearing `routes` and `handles`, plus direct `extends` / `implements`. Python: syntax-proven `contains` plus direct FastAPI and Flask `routes`. Go: syntax-proven `contains` plus direct Gin, `net/http`, and Chi `routes`. Rust: syntax-proven `contains` plus direct Axum `routes`. Java: syntax-proven `contains` plus direct Spring Web `routes`. PHP: syntax-proven `contains` plus direct Laravel `routes`, exact only for same-file controller methods and explicitly unresolved otherwise. C++: syntax-proven `contains` plus direct cpp-httplib `routes` to exact same-file top-level functions. C#: syntax-proven `contains` plus direct ASP.NET Core Minimal API and MVC controller `routes` to exact same-file handlers. Ruby: syntax-proven `contains` plus direct Rails `routes`, exact only for same-file non-namespaced controller methods and explicitly unresolved otherwise. Kotlin: syntax-proven `contains` plus direct Ktor `routes` to exact same-file top-level callable-reference functions. Swift: syntax-proven `contains` plus direct Vapor `routes` to exact same-file named functions |
-| Module resolution | Relative paths, TypeScript/JavaScript `baseUrl` and `paths`, then local workspace packages; Python has a deliberately narrow, regular-package proof for direct one-dot FastAPI router imports; Go, Rust, Java, PHP, C++, C#, Ruby, Kotlin, and Swift have no generic module resolver in this release |
+| Symbols | TypeScript/JavaScript: files, classes, functions, methods, interfaces, types, variables, routes, and entrypoints. Python: files, classes, functions, methods, and direct FastAPI / same-file or proven cross-file `APIRouter` / same-file Flask routes. Go: files, top-level functions, and direct Gin / `net/http` / Chi routes. Rust: files, top-level functions, and direct Axum routes. Java: files, direct top-level classes and methods, and direct Spring Web routes. PHP: files, direct top-level classes, methods, functions, and direct Laravel facade routes. C++: files, direct top-level classes, methods, functions, and direct cpp-httplib routes. C#: files, direct top-level classes, interfaces, methods, local functions, and direct ASP.NET Core routes. Ruby: files, direct top-level classes, methods, functions, and direct Rails routes. Kotlin: files, direct top-level classes, interfaces, methods, functions, and direct Ktor routes. Swift: files, direct top-level classes, structs, protocols, methods, functions, and direct Vapor routes. Dart: files, direct top-level classes, methods, functions, and direct Flutter named-navigation routes |
+| Relationships | TypeScript/JavaScript: `contains`, module imports/exports, direct identifier calls, evidence-bearing `routes` and `handles`, plus direct `extends` / `implements`. Python: syntax-proven `contains` plus direct FastAPI and Flask `routes`. Go: syntax-proven `contains` plus direct Gin, `net/http`, and Chi `routes`. Rust: syntax-proven `contains` plus direct Axum `routes`. Java: syntax-proven `contains` plus direct Spring Web `routes`. PHP: syntax-proven `contains` plus direct Laravel `routes`, exact only for same-file controller methods and explicitly unresolved otherwise. C++: syntax-proven `contains` plus direct cpp-httplib `routes` to exact same-file top-level functions. C#: syntax-proven `contains` plus direct ASP.NET Core Minimal API and MVC controller `routes` to exact same-file handlers. Ruby: syntax-proven `contains` plus direct Rails `routes`, exact only for same-file non-namespaced controller methods and explicitly unresolved otherwise. Kotlin: syntax-proven `contains` plus direct Ktor `routes` to exact same-file top-level callable-reference functions. Swift: syntax-proven `contains` plus direct Vapor `routes` to exact same-file named functions. Dart: syntax-proven `contains` plus direct Flutter `NAVIGATE` routes to exact same-file widget classes |
+| Module resolution | Relative paths, TypeScript/JavaScript `baseUrl` and `paths`, then local workspace packages; Python has a deliberately narrow, regular-package proof for direct one-dot FastAPI router imports; Go, Rust, Java, PHP, C++, C#, Ruby, Kotlin, Swift, and Dart have no generic module resolver in this release |
 | Workspaces | Root `package.json` workspaces array/object, local package root/subpath `exports`, and entrypoint fallback |
 | Re-exports | Named aliases, `export *`, default-through-named aliases, and namespace-export provenance |
 | Retrieval | Local deterministic FTS5 search across persisted source text and identifier parts; bounded path/language filters, source/symbol evidence, and exact `explore` excerpts from the same active generation |
 | Node inspection | Exact ID, qualified-name, simple-name, or `path:line[:column]` matches can return the persisted declaration range, capped direct callers/callees, source provenance, truncation, and active freshness from one generation |
-| Routes | Static AST-proven Express literal registrations; Fastify shorthand/full-object registrations plus inline, same-file named, and imported/re-exported plugin `register(..., { prefix })` projection; direct NestJS controller decorators plus `RouterModule.register()` module-prefix projection; direct same-file FastAPI application decorators plus same-file and one-dot package-relative cross-file `APIRouter` / literal `include_router(...)` composition; direct Flask application decorators and same-file literal `Blueprint` / `register_blueprint(...)` composition; direct Go Gin engine / literal same-function `RouterGroup` composition, direct `net/http` `HandleFunc` / same-function `ServeMux` composition, and direct Chi `NewRouter` / `NewMux` method registrations; direct Rust Axum `Router::new().route(...)` builder chains; direct Java Spring Web controller method annotations with literal paths; direct PHP Laravel facade controller-action routes; direct C++ cpp-httplib named-handler routes; direct C# `WebApplication` Minimal API `Map*` and `ApiController` MVC method attributes; direct Ruby `Rails.application.routes.draw` literal controller-action routes; direct Kotlin Ktor `Application.module` `routing` callable-reference routes; direct Swift Vapor `routes(_ app: Application)` literal segment routes with same-file named handlers; recursively composed literal React Router JSX `Route`, `createRoutesFromElements(...)`, and v6.4+ data-router navigation; and convention-derived Next.js Pages/App Router page routes. All use bounded `routes` listing and exact or deliberately unresolved handler evidence; browser routes use `NAVIGATE`, never fabricated HTTP `GET` |
+| Routes | Static AST-proven Express literal registrations; Fastify shorthand/full-object registrations plus inline, same-file named, and imported/re-exported plugin `register(..., { prefix })` projection; direct NestJS controller decorators plus `RouterModule.register()` module-prefix projection; direct same-file FastAPI application decorators plus same-file and one-dot package-relative cross-file `APIRouter` / literal `include_router(...)` composition; direct Flask application decorators and same-file literal `Blueprint` / `register_blueprint(...)` composition; direct Go Gin engine / literal same-function `RouterGroup` composition, direct `net/http` `HandleFunc` / same-function `ServeMux` composition, and direct Chi `NewRouter` / `NewMux` method registrations; direct Rust Axum `Router::new().route(...)` builder chains; direct Java Spring Web controller method annotations with literal paths; direct PHP Laravel facade controller-action routes; direct C++ cpp-httplib named-handler routes; direct C# `WebApplication` Minimal API `Map*` and `ApiController` MVC method attributes; direct Ruby `Rails.application.routes.draw` literal controller-action routes; direct Kotlin Ktor `Application.module` `routing` callable-reference routes; direct Swift Vapor `routes(_ app: Application)` literal segment routes with same-file named handlers; direct Dart Flutter `MaterialApp(routes: {...})` same-file widget navigation; recursively composed literal React Router JSX `Route`, `createRoutesFromElements(...)`, and v6.4+ data-router navigation; and convention-derived Next.js Pages/App Router page routes. All use bounded `routes` listing and exact or deliberately unresolved handler evidence; browser routes use `NAVIGATE`, never fabricated HTTP `GET` |
 | Non-HTTP entrypoints | AST-proven direct NestJS GraphQL `Query` / `Mutation` / `Subscription`, microservice `MessagePattern` / `EventPattern`, and WebSocket `SubscribeMessage` handlers. Bounded `entrypoints` listing keeps transport/operation/name semantics and exact `handles` evidence separate from HTTP routes |
 | Type hierarchy | Direct TS/JS class `extends`, TS class `implements`, and TS interface `extends`; exact lexical/import/re-export proof with value/type namespaces, plus bounded direct parents/children |
 | Context | Bounded packs for 1–8 ordered references: exact-match source excerpts, capped callers/callees and reverse impact, plus shortest static directed evidence paths between adjacent exact references |
@@ -138,7 +139,7 @@ One-shot data commands emit stable, pretty JSON. `watch` is the deliberate strea
 
 Framework coverage is declared once and actively selects the extraction passes applicable to the parsed language. This is a stable integration boundary, not a runtime framework detector: every pass below still requires its own syntax proof before it emits facts.
 
-| Capability | Proven surfaces in v0.43 |
+| Capability | Proven surfaces in v0.44 |
 | --- | --- |
 | Express | Literal receiver methods and identifier handlers |
 | Fastify | Literal routes and static prefix composition |
@@ -156,6 +157,7 @@ Framework coverage is declared once and actively selects the extraction passes a
 | Rails | Ruby direct `Rails.application.routes.draw` literal controller-action routes |
 | Ktor | Kotlin direct `Application.module` / `routing` literal callable-reference routes |
 | Vapor | Swift direct `routes(_ app: Application)` literal segment routes with same-file named handlers |
+| Flutter | Dart direct `MaterialApp(routes: {...})` literal named-navigation routes with same-file widget classes |
 | React Router | Recursive literal JSX `Route`, `createRoutesFromElements` JSX trees, and data-router object trees |
 | Next.js | Pages Router and App Router page default exports |
 
@@ -182,7 +184,7 @@ For an exact call that travels through a barrel, evidence uses `module.reexporte
 
 ### Static route and client-navigation evidence
 
-v0.14 introduced the first framework pack as a graph contract, not a regex guess; v0.25 adds an executable first-party capability registry and convention-derived Next.js page routes, v0.26 recursively composes proven literal React Router data-router paths, v0.27 brings the same bounded composition to literal JSX `Route` trees, v0.28 proves direct `createRoutesFromElements(...)` JSX trees independently, v0.29 adds the first Python/FastAPI slice, v0.30 composes direct same-file `APIRouter` registrations, v0.31 projects a strictly proven one-dot package-relative FastAPI router import, v0.32 adds direct Flask app and same-file Blueprint route evidence, v0.33 adds direct Go Gin engine and literal RouterGroup routes, v0.34 adds direct Go `net/http` `HandleFunc` routes, v0.35 adds direct Chi router routes, v0.36 adds the first Rust/Axum route-builder slice, v0.37 adds direct Java/Spring Web controller method mappings, v0.38 adds PHP/Laravel, v0.39 adds C++/cpp-httplib, v0.40 adds C#/ASP.NET Core, v0.41 adds Ruby/Rails, v0.42 adds Kotlin/Ktor, and v0.43 adds Swift/Vapor. A supported registration creates a first-class `route` symbol such as `GET /users`, `GET /api/users`, `CONNECT /tunnel`, `ALL /health`, or `NAVIGATE /settings` and a distinct `routes` edge to its terminal handler. That edge remains visible in `callers`, `callees`, `impact`, `context`, `explore`, `node`, and `explain-edge`; its kind keeps HTTP dispatch and browser navigation separate from ordinary function calls.
+v0.14 introduced the first framework pack as a graph contract, not a regex guess; v0.25 adds an executable first-party capability registry and convention-derived Next.js page routes, v0.26 recursively composes proven literal React Router data-router paths, v0.27 brings the same bounded composition to literal JSX `Route` trees, v0.28 proves direct `createRoutesFromElements(...)` JSX trees independently, v0.29 adds the first Python/FastAPI slice, v0.30 composes direct same-file `APIRouter` registrations, v0.31 projects a strictly proven one-dot package-relative FastAPI router import, v0.32 adds direct Flask app and same-file Blueprint route evidence, v0.33 adds direct Go Gin engine and literal RouterGroup routes, v0.34 adds direct Go `net/http` `HandleFunc` routes, v0.35 adds direct Chi router routes, v0.36 adds the first Rust/Axum route-builder slice, v0.37 adds direct Java/Spring Web controller method mappings, v0.38 adds PHP/Laravel, v0.39 adds C++/cpp-httplib, v0.40 adds C#/ASP.NET Core, v0.41 adds Ruby/Rails, v0.42 adds Kotlin/Ktor, v0.43 adds Swift/Vapor, and v0.44 adds Dart/Flutter named navigation. A supported registration creates a first-class `route` symbol such as `GET /users`, `GET /api/users`, `CONNECT /tunnel`, `ALL /health`, or `NAVIGATE /settings` and a distinct `routes` edge to its terminal handler. That edge remains visible in `callers`, `callees`, `impact`, `context`, `explore`, `node`, and `explain-edge`; its kind keeps HTTP dispatch and browser navigation separate from ordinary function calls.
 
 #### Express
 
@@ -652,6 +654,33 @@ func updateOrder(req: Request) throws -> String { "updated" }
 This emits `GET /health -> health` and `POST /orders/:id -> updateOrder` with `framework.vapor.direct-routes-application.literal-segment-route.use.local-function` evidence. The handler must be one unique direct top-level function in the same file, so every accepted Vapor edge is `exact` rather than a guessed closure, controller member, or cross-file target.
 
 It intentionally excludes aliases, non-`app` receivers, `group` / `grouped` / middleware composition, closure/member/qualified handlers, dynamic/interpolated/escaped path segments, overload or cross-file resolution, generic Swift package/import/call/type analysis, Fluent models/controllers, and runtime Vapor behavior. Swift files with syntax errors retain only their file symbol until repaired.
+
+#### Flutter (Dart)
+
+v0.44 adds Dart `.dart` discovery, direct top-level class/method/function containment, and a first `flutter` capability backed by the shared prebuilt Tree-sitter registry. A navigation route requires a direct `import 'package:flutter/material.dart';`, one direct `MaterialApp` construction, one direct literal `routes` map, a slash-prefixed literal key, a one-parameter arrow builder, and a unique same-file widget class:
+
+```dart
+import 'package:flutter/material.dart';
+
+class MyApp extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      routes: {
+        '/': (context) => const HomePage(),
+        '/settings': (context) => SettingsPage(),
+      },
+    );
+  }
+}
+
+class HomePage extends StatelessWidget {}
+class SettingsPage extends StatelessWidget {}
+```
+
+This emits `NAVIGATE / -> HomePage` and `NAVIGATE /settings -> SettingsPage` with `framework.flutter.direct-material-app.literal-routes-map.local-widget-class` evidence. Each accepted edge targets exactly one direct same-file class, so navigation remains `exact` rather than guessing a dynamic builder, a router delegate, or a widget defined elsewhere.
+
+It intentionally excludes `MaterialApp.router`, `CupertinoApp`, `home` / `onGenerateRoute` / `Navigator` calls, aliases, spreads or typed/dynamic maps, nonliteral paths, closures, constructors with arguments, non-class targets, and cross-file widget resolution. Dart files with syntax errors retain only their file symbol until repaired.
 
 ### React Router client-navigation evidence
 
@@ -1300,6 +1329,8 @@ v0.42 adds no SQLite schema migration or route-query command. It adds Kotlin `.k
 
 v0.43 adds no SQLite schema migration or route-query command. It adds Swift `.swift` discovery, persisted Swift source-search/CLI/MCP language filtering, direct top-level class/struct/protocol/method/function containment, and exact direct Vapor `routes(_ app: Application)` literal-segment route facts. The shared ast-grep adapter registers C#, Ruby, Kotlin, and Swift grammars together so all four extractors can run in one process. The extractor advances to `multi-language-ast-v32`; the resolver remains `project-resolver-v14` because all supported Swift proof remains file-local. A pre-v0.43 active index requires an explicit `sync` or `index` before Swift or Vapor route evidence can appear. Existing generations remain readable.
 
+v0.44 adds no SQLite schema migration or route-query command. It adds Dart `.dart` discovery, persisted Dart source-search/CLI/MCP language filtering, direct top-level class/method/function containment, and exact direct Flutter `MaterialApp(routes: {...})` named-navigation facts. The shared ast-grep adapter registers C#, Ruby, Kotlin, Swift, and Dart grammars together so all five extractors can run in one process. The extractor advances to `multi-language-ast-v33`; the resolver remains `project-resolver-v14` because all supported Flutter proof remains file-local. A pre-v0.44 active index requires an explicit `sync` or `index` before Dart or Flutter route evidence can appear. Existing generations remain readable.
+
 ## Architecture
 
 ```mermaid
@@ -1313,7 +1344,7 @@ flowchart LR
   Catalog["Filesystem catalog\nscope + gitignore"] --> Inputs["Index inputs"]
   Catalog --> TS["TS alias resolver"]
   Catalog --> WS["Workspace resolver"]
-  Extractor["TypeScript AST extractor + Python/Go/Rust/Java/PHP/C++ Lezer parsers + C#/Ruby/Kotlin/Swift ast-grep parsers\nfirst-party framework capability passes\nExpress/Fastify/Nest HTTP routes + Fastify plugin facts + FastAPI/Flask/Gin/net-http/Chi/Axum/Spring Web/Laravel/cpp-httplib/ASP.NET Core/Rails/Ktor/Vapor facts\nReact Router recursive literal JSX/factory/data-router + Next Pages/App navigation\nNest module-prefix facts + non-HTTP entrypoints"] --> Facts["Reusable artifact facts"]
+  Extractor["TypeScript AST extractor + Python/Go/Rust/Java/PHP/C++ Lezer parsers + C#/Ruby/Kotlin/Swift/Dart ast-grep parsers\nfirst-party framework capability passes\nExpress/Fastify/Nest HTTP routes + Fastify plugin facts + FastAPI/Flask/Gin/net-http/Chi/Axum/Spring Web/Laravel/cpp-httplib/ASP.NET Core/Rails/Ktor/Vapor/Flutter facts\nFlutter/React Router/Next client navigation\nNest module-prefix facts + non-HTTP entrypoints"] --> Facts["Reusable artifact facts"]
   Catalog --> SourceDocs["Persisted source documents"]
   SourceDocs --> Retrieval["Generation-bound lexical projection"]
   Facts --> Resolver["Full project export surface"]
@@ -1331,7 +1362,7 @@ src/
   application/     Use cases, incremental planning, and graph projection
   cli/             Commander-based CLI
   domain/          Graph, evidence, identity, and index-work contracts
-  extraction/      TypeScript AST plus Python, Go, Rust, Java, PHP, C++ Lezer and C#/Ruby/Kotlin/Swift ast-grep fact extraction
+  extraction/      TypeScript AST plus Python, Go, Rust, Java, PHP, C++ Lezer and C#/Ruby/Kotlin/Swift/Dart ast-grep fact extraction
   infrastructure/  Filesystem, workspace, TypeScript, and SQLite adapters
   mcp/             Read-only MCP server
   ports/           Dependency boundaries
@@ -1339,7 +1370,7 @@ src/
 
 ## Deliberate boundaries
 
-v0.43.0 does not yet provide:
+v0.44.0 does not yet provide:
 
 - Daemon mode, background automatic sync after the foreground process exits, cross-process watch coordination, MCP per-query pending-file banners, worker pools, or historical source browsing.
 - pnpm workspace YAML, TypeScript project references, external/package `extends`, or nested `.gitignore` semantics.
@@ -1354,8 +1385,9 @@ v0.43.0 does not yet provide:
 - The Ruby surface proves direct top-level classes/methods/functions and Rails routes only inside a direct `Rails.application.routes.draw` block with one supported direct verb, one literal slash-prefixed path, and exactly one literal `to: "controller#action"` pair. It resolves only a non-namespaced same-file controller class and method; all other valid controller-action references remain explicitly unresolved. It excludes `resources` / `resource`, `namespace` / `scope`, constraints, dynamic strings, block/lambda handlers, controller aliases, generic Ruby module/call/type resolution, cross-file controller resolution, and runtime Rails behavior. Syntax-error Ruby files retain only their file symbol until repaired.
 - The Kotlin surface proves direct top-level classes/interfaces/methods/functions and Ktor routes only after direct unaliased imports of `io.ktor.server.application.Application`, `io.ktor.server.routing.routing`, and the used HTTP verb; a direct `fun Application.module()` body; a direct `routing` block; a literal path; and one unique direct top-level `::handler` reference. It excludes wildcard/aliased imports, alternate module/receiver names, route groups/plugins/pipeline composition, lambda/member/qualified/overloaded/cross-file handlers, dynamic strings, generic Kotlin import/package/call/type resolution, and runtime Ktor behavior. Syntax-error Kotlin files retain only their file symbol until repaired.
 - The Swift surface proves direct top-level classes/structs/protocols/methods/functions and Vapor routes only after a direct `import Vapor`, a direct `routes(_ app: Application)` function, direct `app` verb calls, zero or more literal path segments, and one unique direct same-file `use: handler` function. It excludes groups/prefixes/middleware, closure/member/qualified/overloaded/cross-file handlers, dynamic/escaped/interpolated strings, generic Swift package/import/call/type resolution, Fluent/controller semantics, and runtime Vapor behavior. Syntax-error Swift files retain only their file symbol until repaired.
+- The Dart surface proves direct top-level classes/methods/functions and Flutter navigation only after a direct `package:flutter/material.dart` import, one direct `MaterialApp` literal `routes` map, a slash-prefixed literal key, a one-parameter arrow builder that calls a no-argument class constructor, and exactly one same-file class target. It excludes `MaterialApp.router`, `CupertinoApp`, `home` / `onGenerateRoute` / `Navigator` calls, aliases, typed/dynamic or spread maps, dynamic/escaped/interpolated paths, closures, constructor arguments, non-class/cross-file targets, generic Dart import/package/call/type resolution, and runtime Flutter behavior. Syntax-error Dart files retain only their file symbol until repaired.
 - Semantic type checking, transitive hierarchy traversal, declaration-merging semantics, override dispatch, mixin/qualified/conditional heritage expressions, or automatic framework decorator inference. v0.18 recognizes direct imported NestJS HTTP decorators, direct static `RouterModule.register()` prefixes, and the narrowly defined non-HTTP decorators documented above; it does not infer custom decorators, barrels, `forRoot` / `forChild`, global/version prefixes, guards, GraphQL field resolvers, dynamic patterns, dynamic gateway configuration, or runtime transport wiring.
-- Language adapters beyond TS/TSX/JS/JSX/Python/Go/Rust/Java/PHP/C++/C#/Ruby/Kotlin/Swift, external dependency indexing, telemetry, or multi-project routing.
+- Language adapters beyond TS/TSX/JS/JSX/Python/Go/Rust/Java/PHP/C++/C#/Ruby/Kotlin/Swift/Dart, external dependency indexing, telemetry, or multi-project routing.
 - Embedding-based or cloud retrieval, semantic ranking, arbitrary natural-language context assembly, semantic Git diff beyond immutable zero-context hunk-to-revision-local-declaration evidence, or reliable rename/move/cross-side identity attribution.
 
 ## Roadmap
@@ -1404,13 +1436,14 @@ v0.43.0 does not yet provide:
 | `v0.41.0` | Ruby `.rb` discovery, direct Ruby declaration containment, AST-proven direct Rails `routes.draw` controller-action routes, exact same-file method evidence, explicit cross-file unresolved evidence, shared C#/Ruby ast-grep registry, and Ruby source-search/CLI/MCP filters |
 | `v0.42.0` | Kotlin `.kt` discovery, class/interface/method/function containment, AST-proven Ktor direct `Application.module` / `routing` callable-reference routes, Kotlin source-search/CLI/MCP filters, shared C#/Ruby/Kotlin ast-grep registry, and dynamic/lambda/import/syntax-error rejection |
 | `v0.43.0` | Swift `.swift` discovery, class/struct/protocol/method/function containment, AST-proven direct Vapor `routes(_ app: Application)` literal-segment routes, Swift source-search/CLI/MCP filters, shared C#/Ruby/Kotlin/Swift ast-grep registry, and dynamic/closure/import/syntax-error rejection |
-| `v0.44+` | Vapor group/prefix composition and proven cross-file handler resolution, Ktor `route` / `authenticate` composition and proven cross-file handler resolution, Rails controller/import/package resolution and `resources` / namespace composition, Laravel controller/import/package resolution and route-group/resource composition, deeper cpp-httplib scope/handler and C++ include/namespace resolution, ASP.NET Core `MapGroup` / `MapMethods` and controller-token resolution, Spring method-level `@RequestMapping` and richer literal annotation values, Java package/classpath resolution, Axum route/MethodRouter composition, Rust Cargo/module resolution, Go Chi `Route` / `Group` / `Mount` composition, Echo/Fiber packs and broader Go resolution, React Router `<Routes>` boundary proof, deeper Next.js convention coverage, `fastify-plugin` wrapper proof, GraphQL field-resolver/runtime-transport evidence, contract graphs, retained-generation source browsing, and further CodeGraph-parity work |
+| `v0.44.0` | Dart `.dart` discovery, class/method/function containment, AST-proven Flutter `MaterialApp(routes: {...})` named navigation, Dart source-search/CLI/MCP filters, shared C#/Ruby/Kotlin/Swift/Dart ast-grep registry, and dynamic/closure/import/syntax-error rejection |
+| `v0.45+` | Flutter `MaterialApp.router` / `onGenerateRoute` / `Navigator` evidence and proven cross-file widget resolution, Vapor group/prefix composition and proven cross-file handler resolution, Ktor `route` / `authenticate` composition and proven cross-file handler resolution, Rails controller/import/package resolution and `resources` / namespace composition, Laravel controller/import/package resolution and route-group/resource composition, deeper cpp-httplib scope/handler and C++ include/namespace resolution, ASP.NET Core `MapGroup` / `MapMethods` and controller-token resolution, Spring method-level `@RequestMapping` and richer literal annotation values, Java package/classpath resolution, Axum route/MethodRouter composition, Rust Cargo/module resolution, Go Chi `Route` / `Group` / `Mount` composition, Echo/Fiber packs and broader Go resolution, React Router `<Routes>` boundary proof, deeper Next.js convention coverage, `fastify-plugin` wrapper proof, GraphQL field-resolver/runtime-transport evidence, contract graphs, retained-generation source browsing, and further CodeGraph-parity work |
 
 See [CHANGELOG.md](CHANGELOG.md) for release notes and migration history.
 
 ## Release-by-release feature comparison
 
-Every release creates a verified standalone comparison report against the local CodeGraph baseline at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_vX.Y.Z.md` (for example, `FEATURE_COMPARISON_v0.43.0.md`). The version number is part of the filename, so each release retains an independent comparison record. It intentionally lives beside the local `symbol-lattice` and `codegraph` checkouts rather than inside either project. Starting with v0.28, these reports are written in Traditional Chinese. Each report distinguishes a proven precision advantage from broader-but-less-proven source coverage, and records remaining gaps instead of treating a version bump as parity.
+Every release creates a verified standalone comparison report against the local CodeGraph baseline at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_vX.Y.Z.md` (for example, `FEATURE_COMPARISON_v0.44.0.md`). The version number is part of the filename, so each release retains an independent comparison record. It intentionally lives beside the local `symbol-lattice` and `codegraph` checkouts rather than inside either project. Starting with v0.28, these reports are written in Traditional Chinese. Each report distinguishes a proven precision advantage from broader-but-less-proven source coverage, and records remaining gaps instead of treating a version bump as parity.
 
 ## Development
 
@@ -1443,6 +1476,8 @@ Ruby coverage includes `.rb` discovery, persisted source search and CLI/MCP lang
 Kotlin coverage includes `.kt` discovery, persisted source search and CLI/MCP language filters, direct top-level class/interface/method/function containment, direct `Application.module`/`routing` literal callable-reference route proof, exact same-file top-level function handlers, dynamic/lambda/missing-import/wrong-module rejection, malformed-source fail-closed behavior, and persisted route-query integration.
 
 Swift coverage includes `.swift` discovery, persisted source search and CLI/MCP language filters, direct top-level class/struct/protocol/method/function containment, direct `import Vapor` plus `routes(_ app: Application)` literal segment/`use: handler` route proof, exact same-file top-level function handlers, dynamic/closure/missing-import/wrong-function/wrong-parameter rejection, malformed-source fail-closed behavior, and persisted route-query integration.
+
+Dart coverage includes `.dart` discovery, persisted source search and CLI/MCP language filters, direct top-level class/method/function containment, direct `import 'package:flutter/material.dart';` plus `MaterialApp(routes: {...})` literal named-navigation proof, exact same-file widget-class targets, dynamic/closure/missing-import/wrong-app/missing-target rejection, malformed-source fail-closed behavior, and persisted route-query integration.
 
 ## Contributing
 

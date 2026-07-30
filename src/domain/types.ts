@@ -53,7 +53,8 @@ export type RouteFramework =
   | "aspnet-core"
   | "rails"
   | "ktor"
-  | "vapor";
+  | "vapor"
+  | "flutter";
 
 /** Additional static registration context retained when it changes route provenance or path. */
 export type RouteRegistration =
@@ -77,7 +78,8 @@ export const ARTIFACT_LANGUAGES = [
   "csharp",
   "ruby",
   "kotlin",
-  "swift"
+  "swift",
+  "dart"
 ] as const;
 
 export type ArtifactLanguage = (typeof ARTIFACT_LANGUAGES)[number];

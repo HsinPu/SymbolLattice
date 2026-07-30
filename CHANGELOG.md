@@ -6,6 +6,25 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.44.0] - 2026-07-30
+
+### Added
+
+- Dart `.dart` source discovery, persisted source-search language filtering, CLI/MCP validation, direct top-level class/method/function containment, and a first-party `@ast-grep/lang-dart` AST adapter.
+- An executable first-party `flutter` capability. Flutter navigation now requires a direct `import 'package:flutter/material.dart';`, a direct `MaterialApp` literal `routes` map, a literal slash-prefixed key, a one-parameter arrow builder, and one unique direct same-file widget class. Matching routes emit exact `framework.flutter.direct-material-app.literal-routes-map.local-widget-class` evidence with `NAVIGATE` semantics.
+- The shared dynamic ast-grep language registry now registers C#, Ruby, Kotlin, Swift, and Dart together, preserving every first-party prebuilt grammar in the same long-lived process.
+- Capability, discovery, exact navigation, class/method/function containment, dynamic/closure/missing-import/wrong-app/missing-target/malformed-source rejection, source-search, CLI, and persisted route-query integration coverage. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.44.0.md`.
+
+### Compatibility
+
+- No SQLite schema migration or new query command is required. Dart symbols and Flutter navigation reuse the existing file, symbol, edge, source-search, and route-query contracts; existing generations remain readable.
+- The artifact extractor advances to `multi-language-ast-v33`; the project resolver remains `project-resolver-v14` because all supported Flutter proof is file-local. A pre-v0.44 active index reports `indexer-version-changed` until an explicit `sync` or `index` publishes the new facts.
+
+### Deliberate limits
+
+- Flutter support accepts only the direct literal `MaterialApp(routes: {...})` form with one-parameter arrow builders that instantiate a unique same-file no-argument class. It excludes `MaterialApp.router`, `CupertinoApp`, `home` / `onGenerateRoute` / `Navigator` calls, aliases, spreads or typed/dynamic maps, dynamic/interpolated/escaped paths, closures, constructor arguments, non-class/cross-file targets, Dart package/module/type resolution, and runtime behavior.
+- The checked CodeGraph baseline indexes Dart source files but has no Dart/Flutter framework resolver under `src/resolution/frameworks`. SymbolLattice v0.44 deliberately adds a narrow AST-proven Flutter navigation form with exact same-file widget evidence; CodeGraph remains broader across its other supported language and framework surfaces.
+
 ## [0.43.0] - 2026-07-30
 
 ### Added

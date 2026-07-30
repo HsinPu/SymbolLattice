@@ -3610,6 +3610,164 @@ describe("source extraction", () => {
     expect(broken.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
   });
 
+  it("extracts direct Dart Flutter MaterialApp literal routes maps with exact local evidence", () => {
+    const facts = extractFileFacts({
+      filePath: "lib/main.dart",
+      language: "dart",
+      sourceText: [
+        "import 'package:flutter/material.dart';",
+        "",
+        "class MyApp extends StatelessWidget {",
+        "  Widget build(BuildContext context) {",
+        "    return MaterialApp(",
+        "      routes: {",
+        "        '/': (context) => const HomePage(),",
+        "        '/settings': (context) => SettingsPage(),",
+        "      },",
+        "    );",
+        "  }",
+        "}",
+        "",
+        "class HomePage extends StatelessWidget {",
+        "  const HomePage();",
+        "}",
+        "",
+        "class SettingsPage extends StatelessWidget {",
+        "  SettingsPage();",
+        "}",
+        "",
+        "abstract class HealthCheck {",
+        "  void check();",
+        "}",
+        "",
+        "void main() {}"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(facts.symbols.filter((symbol) => symbol.kind === "class").map((symbol) => symbol.qualifiedName)).toEqual([
+      "lib/main.dart#MyApp",
+      "lib/main.dart#HomePage",
+      "lib/main.dart#SettingsPage",
+      "lib/main.dart#HealthCheck"
+    ]);
+    expect(facts.symbols.filter((symbol) => symbol.kind === "method").map((symbol) => symbol.qualifiedName)).toEqual([
+      "lib/main.dart#MyApp.build",
+      "lib/main.dart#HealthCheck.check"
+    ]);
+    expect(facts.symbols.filter((symbol) => symbol.kind === "function").map((symbol) => symbol.qualifiedName)).toEqual([
+      "lib/main.dart#main"
+    ]);
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId,
+          edge.resolution,
+          edge.confidence
+        ])
+    ).toEqual([
+      [
+        "NAVIGATE /",
+        "lib/main.dart#HomePage",
+        "framework.flutter.direct-material-app.literal-routes-map.local-widget-class",
+        "exact",
+        1
+      ],
+      [
+        "NAVIGATE /settings",
+        "lib/main.dart#SettingsPage",
+        "framework.flutter.direct-material-app.literal-routes-map.local-widget-class",
+        "exact",
+        1
+      ]
+    ]);
+  });
+
+  it("requires direct Dart Flutter imports, literal MaterialApp routes maps, local widget classes, and valid syntax", () => {
+    const unproven = extractFileFacts({
+      filePath: "lib/main.dart",
+      language: "dart",
+      sourceText: [
+        "import 'package:flutter/material.dart';",
+        "",
+        "class HomePage extends StatelessWidget {}",
+        "",
+        "void build() {",
+        "  MaterialApp(routes: {",
+        "    path: (context) => const HomePage(),",
+        "    '/closure': (context) { return const HomePage(); },",
+        "    '/missing': (context) => const MissingPage(),",
+        "  });",
+        "}"
+      ].join("\n")
+    });
+    const missingImport = extractFileFacts({
+      filePath: "lib/main.dart",
+      language: "dart",
+      sourceText: [
+        "class HomePage extends StatelessWidget {}",
+        "",
+        "void build() {",
+        "  MaterialApp(routes: {",
+        "    '/missing-import': (context) => const HomePage(),",
+        "  });",
+        "}"
+      ].join("\n")
+    });
+    const wrongApp = extractFileFacts({
+      filePath: "lib/main.dart",
+      language: "dart",
+      sourceText: [
+        "import 'package:flutter/material.dart';",
+        "",
+        "class HomePage extends StatelessWidget {}",
+        "",
+        "void build() {",
+        "  CupertinoApp(routes: {",
+        "    '/wrong-app': (context) => const HomePage(),",
+        "  });",
+        "}"
+      ].join("\n")
+    });
+    const missingRoutes = extractFileFacts({
+      filePath: "lib/main.dart",
+      language: "dart",
+      sourceText: [
+        "import 'package:flutter/material.dart';",
+        "",
+        "class HomePage extends StatelessWidget {}",
+        "",
+        "void build() {",
+        "  MaterialApp(home: const HomePage());",
+        "}"
+      ].join("\n")
+    });
+    const broken = extractFileFacts({
+      filePath: "lib/main.dart",
+      language: "dart",
+      sourceText: [
+        "import 'package:flutter/material.dart';",
+        "",
+        "class MyApp extends StatelessWidget {",
+        "  Widget build(BuildContext context) {",
+        "    return MaterialApp(routes: {",
+        "      '/broken': (context) => const HomePage(),"
+      ].join("\n")
+    });
+
+    expect(unproven.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(unproven.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+    expect(missingImport.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(wrongApp.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(missingRoutes.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(broken.symbols.filter((symbol) => symbol.kind === "class")).toEqual([]);
+    expect(broken.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(broken.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+  });
+
   it("extracts direct Rust Axum literal route-builder chains with exact evidence", () => {
     const facts = extractFileFacts({
       filePath: "src/http.rs",

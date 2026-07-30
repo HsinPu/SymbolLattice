@@ -19,7 +19,8 @@ export const FRAMEWORK_CAPABILITY_IDS = [
   "aspnet-core",
   "rails",
   "ktor",
-  "vapor"
+  "vapor",
+  "flutter"
 ] as const;
 
 export type FrameworkCapabilityId = (typeof FRAMEWORK_CAPABILITY_IDS)[number];
@@ -216,6 +217,16 @@ export const FRAMEWORK_CAPABILITIES = [
     surfaces: [
       "direct routes(_ app: Application) functions",
       "literal direct verb routes with same-file named handlers"
+    ]
+  },
+  {
+    id: "flutter",
+    languages: ["dart"],
+    routeFramework: "flutter",
+    routeRegistrations: [],
+    surfaces: [
+      "direct MaterialApp literal routes maps",
+      "same-file literal widget-builder classes"
     ]
   }
 ] as const satisfies readonly FrameworkCapability[];

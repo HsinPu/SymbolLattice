@@ -2,6 +2,7 @@ import ts from "typescript";
 
 import { extractCsharpFileFacts } from "./csharp.js";
 import { extractCppFileFacts } from "./cpp.js";
+import { extractDartFileFacts } from "./dart.js";
 import { extractGoFileFacts } from "./go.js";
 import { extractJavaFileFacts } from "./java.js";
 import { extractKotlinFileFacts } from "./kotlin.js";
@@ -3438,6 +3439,9 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
   }
   if (input.language === "swift") {
     return extractSwiftFileFacts({ ...input, language: "swift" });
+  }
+  if (input.language === "dart") {
+    return extractDartFileFacts({ ...input, language: "dart" });
   }
 
   const sourceFile = ts.createSourceFile(

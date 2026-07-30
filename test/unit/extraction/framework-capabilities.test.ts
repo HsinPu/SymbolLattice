@@ -26,7 +26,8 @@ describe("first-party framework capabilities", () => {
       "aspnet-core",
       "rails",
       "ktor",
-      "vapor"
+      "vapor",
+      "flutter"
     ]);
     expect(FRAMEWORK_CAPABILITIES.map((capability) => capability.id)).toEqual(
       FRAMEWORK_CAPABILITY_IDS
@@ -165,6 +166,15 @@ describe("first-party framework capabilities", () => {
       surfaces: [
         "direct routes(_ app: Application) functions",
         "literal direct verb routes with same-file named handlers"
+      ]
+    });
+    expect(frameworkCapability("flutter")).toMatchObject({
+      languages: ["dart"],
+      routeFramework: "flutter",
+      routeRegistrations: [],
+      surfaces: [
+        "direct MaterialApp literal routes maps",
+        "same-file literal widget-builder classes"
       ]
     });
   });

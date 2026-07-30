@@ -28,7 +28,8 @@ export const SUPPORTED_EXTENSIONS: ReadonlyMap<string, SupportedLanguage> = new 
   [".cs", "csharp"],
   [".rb", "ruby"],
   [".kt", "kotlin"],
-  [".swift", "swift"]
+  [".swift", "swift"],
+  [".dart", "dart"]
 ] as const);
 
 /**
