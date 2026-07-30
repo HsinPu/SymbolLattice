@@ -12,7 +12,7 @@ No unreleased changes.
 
 - Recursive, AST-proven React Router v6.4+ data-router trees. Direct literal `children` arrays now compose relative child paths, index routes, and pathless layout traversal from an eligible slash-prefixed root route into first-class `NAVIGATE` route symbols.
 - Existing local, imported, re-exported, and unresolved page-handler resolution remains intact for every emitted nested route. Nested output keeps `routeRegistration: "react-router-data-router"` and its distinct `framework.react-router.data-router.*` evidence.
-- Root-level [FEATURE_COMPARISON.md](FEATURE_COMPARISON.md), a cumulative release-by-release comparison against the local CodeGraph baseline. Every later version must add its verified capability, evidence, deliberate limits, and a plain-language assessment to that file.
+- A cumulative workspace-root comparison report at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON.md`, maintained outside the project checkout so it can compare the local SymbolLattice and CodeGraph checkouts side by side. Every later version must add its verified capability, evidence, deliberate limits, and a plain-language assessment to that file.
 
 ### Compatibility
 

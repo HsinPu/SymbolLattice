@@ -943,7 +943,7 @@ See [CHANGELOG.md](CHANGELOG.md) for release notes and migration history.
 
 ## Release-by-release feature comparison
 
-Every release adds a verified comparison entry against the local CodeGraph baseline to [FEATURE_COMPARISON.md](FEATURE_COMPARISON.md). The report distinguishes a proven precision advantage from broader-but-less-proven source coverage, and records remaining gaps instead of treating a version bump as parity.
+Every release adds a verified comparison entry against the local CodeGraph baseline to `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON.md`. It intentionally lives beside the local `symbol-lattice` and `codegraph` checkouts rather than inside either project. The report distinguishes a proven precision advantage from broader-but-less-proven source coverage, and records remaining gaps instead of treating a version bump as parity.
 
 ## Development
 
