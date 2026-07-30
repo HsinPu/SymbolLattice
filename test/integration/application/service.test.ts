@@ -3150,6 +3150,127 @@ describe("SymbolLatticeService", () => {
     ]);
   });
 
+  it("indexes Fastify shorthand and full-object routes with exact imported handler evidence", async () => {
+    const projectPath = await createInlineProject({
+      "src/handlers.ts": [
+        "export function listUsers() { return []; }",
+        "export function createJob() { return undefined; }"
+      ].join("\n"),
+      "src/routes.ts": [
+        'import Fastify from "fastify";',
+        'import { createJob, listUsers } from "./handlers.js";',
+        "const app = Fastify();",
+        'app.get("/users", listUsers);',
+        'app.route({ method: ["POST", "TRACE"], url: "/jobs", handler: createJob });'
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    const indexed = await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+    const traceRoutes = await service.routes(projectPath, { method: "TRACE" });
+    const persistedFastifyFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "src/routes.ts");
+    const found = await service.find(projectPath, "src/handlers.ts#listUsers");
+    const listUsers = found.symbols[0];
+    if (listUsers === undefined) {
+      throw new Error("Expected indexed Fastify handler.");
+    }
+    const callers = await service.callers(projectPath, listUsers.qualifiedName);
+
+    expect(indexed).toMatchObject({
+      stale: false,
+      counts: { files: 2, symbols: expect.any(Number), edges: expect.any(Number) }
+    });
+    expect(
+      persistedFastifyFacts?.pendingReferences
+        .filter((reference) => reference.relationKind === "routes")
+        .map((reference) => reference.routeFramework)
+    ).toEqual(["fastify", "fastify", "fastify"]);
+    expect(routes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "GET",
+          path: "/users",
+          route: expect.objectContaining({ kind: "route", name: "GET /users" }),
+          edge: expect.objectContaining({
+            kind: "routes",
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.fastify.static-route.imported-handler",
+              stage: "module"
+            })
+          }),
+          handler: expect.objectContaining({ qualifiedName: "src/handlers.ts#listUsers" })
+        }),
+        expect.objectContaining({
+          method: "POST",
+          path: "/jobs",
+          route: expect.objectContaining({ kind: "route", name: "POST /jobs" }),
+          edge: expect.objectContaining({
+            kind: "routes",
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.fastify.static-route.imported-handler",
+              stage: "module"
+            })
+          }),
+          handler: expect.objectContaining({ qualifiedName: "src/handlers.ts#createJob" })
+        }),
+        expect.objectContaining({
+          method: "TRACE",
+          path: "/jobs",
+          route: expect.objectContaining({ kind: "route", name: "TRACE /jobs" }),
+          edge: expect.objectContaining({
+            kind: "routes",
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.fastify.static-route.imported-handler",
+              stage: "module"
+            })
+          }),
+          handler: expect.objectContaining({ qualifiedName: "src/handlers.ts#createJob" })
+        })
+      ])
+    );
+    expect(traceRoutes.routes).toMatchObject([
+      {
+        method: "TRACE",
+        path: "/jobs",
+        handler: { qualifiedName: "src/handlers.ts#createJob" }
+      }
+    ]);
+    expect(callers.relations).toMatchObject([
+      {
+        symbol: { kind: "route", name: "GET /users" },
+        edge: {
+          kind: "routes",
+          resolution: "exact",
+          evidence: { ruleId: "framework.fastify.static-route.imported-handler", stage: "module" }
+        }
+      }
+    ]);
+
+    await writeFile(join(projectPath, "src", "unrelated.ts"), "export const unrelated = true;\n", "utf8");
+    const synced = await service.sync({ projectPath });
+    const routesAfterReuse = await service.routes(projectPath, { method: "TRACE" });
+
+    expect(synced.lastIndexWork).toMatchObject({
+      mode: "incremental",
+      reExtractedFiles: ["src/unrelated.ts"],
+      reusedArtifactFiles: ["src/handlers.ts", "src/routes.ts"]
+    });
+    expect(routesAfterReuse.routes).toMatchObject([
+      {
+        method: "TRACE",
+        path: "/jobs",
+        edge: { evidence: { ruleId: "framework.fastify.static-route.imported-handler" } }
+      }
+    ]);
+  });
+
   it("indexes non-HTTP NestJS entrypoints as exact persisted handler evidence", async () => {
     const projectPath = await createInlineProject({
       "src/transports.ts": [

@@ -3,7 +3,6 @@ import ts from "typescript";
 import {
   createEdgeId,
   createSymbolId,
-  ROUTE_METHODS,
   type ArtifactFacts,
   type ArtifactLanguage,
   type BindingSpace,
@@ -289,7 +288,7 @@ function typeParametersFor(node: ts.Node): ts.NodeArray<ts.TypeParameterDeclarat
 }
 
 interface ScopedRouteReceiverBindings {
-  /** The closest value binding decides whether a receiver is known to be Express. */
+  /** The closest value binding decides whether a receiver is known to be a supported framework. */
   readonly byScopeId: ReadonlyMap<string, ReadonlyMap<string, readonly RouteBinding[]>>;
 }
 
@@ -298,6 +297,8 @@ type RouteBindingKind =
   | "express-default-factory"
   | "express-namespace"
   | "express-router-factory"
+  | "fastify-receiver"
+  | "fastify-default-factory"
   | "other";
 
 interface RouteBinding {
@@ -306,6 +307,12 @@ interface RouteBinding {
 }
 
 interface StaticExpressRoute {
+  readonly method: RouteMethod;
+  readonly path: string;
+  readonly handler: ts.Identifier;
+}
+
+interface StaticFastifyRoute {
   readonly method: RouteMethod;
   readonly path: string;
   readonly handler: ts.Identifier;
@@ -375,6 +382,40 @@ const NEST_HTTP_DECORATOR_METHODS: Readonly<Record<string, RouteMethod>> = {
   Options: "OPTIONS",
   All: "ALL"
 };
+
+const EXPRESS_ROUTE_METHODS = [
+  "GET",
+  "POST",
+  "PUT",
+  "PATCH",
+  "DELETE",
+  "HEAD",
+  "OPTIONS",
+  "ALL"
+] as const satisfies readonly RouteMethod[];
+
+const FASTIFY_SHORTHAND_ROUTE_METHODS = [
+  "GET",
+  "HEAD",
+  "TRACE",
+  "DELETE",
+  "OPTIONS",
+  "PATCH",
+  "PUT",
+  "POST",
+  "ALL"
+] as const satisfies readonly RouteMethod[];
+
+const FASTIFY_OBJECT_ROUTE_METHODS = [
+  "GET",
+  "HEAD",
+  "TRACE",
+  "DELETE",
+  "OPTIONS",
+  "PATCH",
+  "PUT",
+  "POST"
+] as const satisfies readonly RouteMethod[];
 
 const NEST_OTHER_DECORATOR_BINDING = { kind: "other", method: null } as const;
 
@@ -511,6 +552,14 @@ function isExpressImport(statement: ts.ImportDeclaration): boolean {
   );
 }
 
+function isFastifyImport(statement: ts.ImportDeclaration): boolean {
+  return (
+    ts.isStringLiteral(statement.moduleSpecifier) &&
+    statement.moduleSpecifier.text === "fastify" &&
+    statement.importClause?.isTypeOnly !== true
+  );
+}
+
 function namedExpressImportBindingKind(
   statement: ts.ImportDeclaration,
   element: ts.ImportSpecifier
@@ -570,6 +619,19 @@ function isExpressReceiverInitializer(
   return binding === "express-default-factory" || binding === "express-namespace";
 }
 
+function isFastifyReceiverInitializer(
+  sourceFile: ts.SourceFile,
+  initializer: ts.Expression,
+  bindings: ScopedRouteReceiverBindings
+): boolean {
+  return (
+    ts.isCallExpression(initializer) &&
+    initializer.questionDotToken === undefined &&
+    ts.isIdentifier(initializer.expression) &&
+    visibleRouteBindingKind(sourceFile, initializer.expression, bindings) === "fastify-default-factory"
+  );
+}
+
 function addScopedValueBinding(
   byScopeId: Map<string, Map<string, RouteBinding[]>>,
   scopeId: string | undefined,
@@ -590,10 +652,11 @@ function addScopedValueBinding(
   byScopeId.set(scopeId, bindings);
 }
 
-function markExpressRouteReceiver(
+function markRouteReceiver(
   byScopeId: Map<string, Map<string, RouteBinding[]>>,
   scopeId: string | undefined,
-  declaration: ts.VariableDeclaration
+  declaration: ts.VariableDeclaration,
+  bindingKind: "express-receiver" | "fastify-receiver"
 ): void {
   if (scopeId === undefined || !ts.isIdentifier(declaration.name)) {
     return;
@@ -604,13 +667,13 @@ function markExpressRouteReceiver(
     ?.get(declaration.name.text)
     ?.find((candidate) => candidate.declaration === declaration);
   if (binding !== undefined) {
-    binding.kind = "express-receiver";
+    binding.kind = bindingKind;
   }
 }
 
 /**
  * Finds value bindings before route extraction so a receiver cannot be inferred
- * from its spelling. A lexical shadow always wins over an outer Express receiver.
+ * from its spelling. A lexical shadow always wins over an outer framework receiver.
  */
 function collectScopedRouteReceiverBindings(sourceFile: ts.SourceFile): ScopedRouteReceiverBindings {
   const byScopeId = new Map<string, Map<string, RouteBinding[]>>();
@@ -625,7 +688,11 @@ function collectScopedRouteReceiverBindings(sourceFile: ts.SourceFile): ScopedRo
           rootScopeId,
           [importClause.name.text],
           importClause.name,
-          isExpressImport(node) ? "express-default-factory" : "other"
+          isExpressImport(node)
+            ? "express-default-factory"
+            : isFastifyImport(node)
+              ? "fastify-default-factory"
+              : "other"
         );
       }
       if (importClause?.namedBindings !== undefined) {
@@ -710,7 +777,25 @@ function collectScopedRouteReceiverBindings(sourceFile: ts.SourceFile): ScopedRo
       isConstVariableDeclaration(node) &&
       isExpressReceiverInitializer(sourceFile, node.initializer, { byScopeId })
     ) {
-      markExpressRouteReceiver(byScopeId, variableBindingScopeId(sourceFile, node), node);
+      markRouteReceiver(
+        byScopeId,
+        variableBindingScopeId(sourceFile, node),
+        node,
+        "express-receiver"
+      );
+    } else if (
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.initializer !== undefined &&
+      isConstVariableDeclaration(node) &&
+      isFastifyReceiverInitializer(sourceFile, node.initializer, { byScopeId })
+    ) {
+      markRouteReceiver(
+        byScopeId,
+        variableBindingScopeId(sourceFile, node),
+        node,
+        "fastify-receiver"
+      );
     }
 
     ts.forEachChild(node, collectReceivers);
@@ -729,6 +814,14 @@ function isExpressRouteReceiver(
   return visibleRouteBindingKind(sourceFile, receiver, bindings) === "express-receiver";
 }
 
+function isFastifyRouteReceiver(
+  sourceFile: ts.SourceFile,
+  receiver: ts.Identifier,
+  bindings: ScopedRouteReceiverBindings
+): boolean {
+  return visibleRouteBindingKind(sourceFile, receiver, bindings) === "fastify-receiver";
+}
+
 function staticExpressRoute(
   sourceFile: ts.SourceFile,
   node: ts.CallExpression,
@@ -745,7 +838,7 @@ function staticExpressRoute(
   }
 
   const methodName = node.expression.name.text;
-  const method = ROUTE_METHODS.find((candidate) => candidate.toLowerCase() === methodName);
+  const method = staticRouteMethodForName(methodName, EXPRESS_ROUTE_METHODS);
   if (method === undefined) {
     return null;
   }
@@ -765,6 +858,169 @@ function staticExpressRoute(
   }
 
   return { method, path: pathArgument.text, handler };
+}
+
+function staticRouteMethodForName(
+  methodName: string,
+  supportedMethods: readonly RouteMethod[]
+): RouteMethod | undefined {
+  return supportedMethods.find((candidate) => candidate.toLowerCase() === methodName);
+}
+
+function staticFastifyPath(expression: ts.Expression | undefined): string | null {
+  const path = staticLiteralText(expression);
+  return path !== null && path.startsWith("/") ? path : null;
+}
+
+/**
+ * Like staticObjectProperty, but permits the one direct handler shorthand
+ * that Fastify route objects commonly use: { method: "GET", url: "/x", handler }.
+ */
+function staticFastifyObjectProperty(
+  object: ts.ObjectLiteralExpression,
+  propertyName: string
+): ts.Expression | null | undefined {
+  let result: ts.Expression | undefined;
+  for (const property of object.properties) {
+    if (ts.isShorthandPropertyAssignment(property)) {
+      if (property.name.text !== "handler" || property.objectAssignmentInitializer !== undefined) {
+        return null;
+      }
+      if (propertyName !== "handler") {
+        continue;
+      }
+      if (result !== undefined) {
+        return null;
+      }
+      result = property.name;
+      continue;
+    }
+
+    if (!ts.isPropertyAssignment(property) || ts.isComputedPropertyName(property.name)) {
+      return null;
+    }
+    if (staticPropertyName(property.name) !== propertyName) {
+      continue;
+    }
+    if (result !== undefined) {
+      return null;
+    }
+    result = property.initializer;
+  }
+  return result;
+}
+
+function staticFastifyObjectRouteMethods(expression: ts.Expression): readonly RouteMethod[] | null {
+  const staticMethod = (candidate: ts.Expression): RouteMethod | null => {
+    const method = staticLiteralText(candidate);
+    return method !== null && (FASTIFY_OBJECT_ROUTE_METHODS as readonly RouteMethod[]).includes(method as RouteMethod)
+      ? (method as RouteMethod)
+      : null;
+  };
+
+  if (!ts.isArrayLiteralExpression(expression)) {
+    const method = staticMethod(expression);
+    return method === null ? null : [method];
+  }
+
+  const methods: RouteMethod[] = [];
+  for (const element of expression.elements) {
+    const method = ts.isExpression(element) ? staticMethod(element) : null;
+    if (method === null || methods.includes(method)) {
+      return null;
+    }
+    methods.push(method);
+  }
+  return methods.length === 0 ? null : methods;
+}
+
+function staticFastifyRouteObject(
+  sourceFile: ts.SourceFile,
+  node: ts.CallExpression,
+  bindings: ScopedRouteReceiverBindings
+): readonly StaticFastifyRoute[] {
+  if (
+    node.questionDotToken !== undefined ||
+    !ts.isPropertyAccessExpression(node.expression) ||
+    node.expression.questionDotToken !== undefined ||
+    !ts.isIdentifier(node.expression.expression) ||
+    node.expression.name.text !== "route" ||
+    !isFastifyRouteReceiver(sourceFile, node.expression.expression, bindings) ||
+    node.arguments.length !== 1
+  ) {
+    return [];
+  }
+
+  const options = node.arguments[0];
+  if (options === undefined || !ts.isObjectLiteralExpression(options)) {
+    return [];
+  }
+
+  const method = staticFastifyObjectProperty(options, "method");
+  const url = staticFastifyObjectProperty(options, "url");
+  const path = staticFastifyObjectProperty(options, "path");
+  const handler = staticFastifyObjectProperty(options, "handler");
+  if (
+    method === undefined ||
+    method === null ||
+    url === null ||
+    path === null ||
+    handler === undefined ||
+    handler === null ||
+    (url === undefined && path === undefined) ||
+    (url !== undefined && path !== undefined) ||
+    !ts.isIdentifier(handler)
+  ) {
+    return [];
+  }
+
+  const staticPath = staticFastifyPath(url ?? path);
+  const methods = staticFastifyObjectRouteMethods(method);
+  if (staticPath === null || methods === null) {
+    return [];
+  }
+
+  return methods.map((routeMethod) => ({ method: routeMethod, path: staticPath, handler }));
+}
+
+function staticFastifyRoutes(
+  sourceFile: ts.SourceFile,
+  node: ts.CallExpression,
+  bindings: ScopedRouteReceiverBindings
+): readonly StaticFastifyRoute[] {
+  const objectRoutes = staticFastifyRouteObject(sourceFile, node, bindings);
+  if (objectRoutes.length > 0) {
+    return objectRoutes;
+  }
+
+  if (
+    node.questionDotToken !== undefined ||
+    !ts.isPropertyAccessExpression(node.expression) ||
+    node.expression.questionDotToken !== undefined ||
+    !ts.isIdentifier(node.expression.expression) ||
+    !isFastifyRouteReceiver(sourceFile, node.expression.expression, bindings)
+  ) {
+    return [];
+  }
+
+  const method = staticRouteMethodForName(
+    node.expression.name.text,
+    FASTIFY_SHORTHAND_ROUTE_METHODS
+  );
+  const pathArgument = node.arguments[0];
+  const handler = node.arguments.at(-1);
+  if (
+    method === undefined ||
+    node.arguments.length < 2 ||
+    node.arguments.length > 3 ||
+    staticFastifyPath(pathArgument) === null ||
+    handler === undefined ||
+    !ts.isIdentifier(handler)
+  ) {
+    return [];
+  }
+
+  return [{ method, path: staticFastifyPath(pathArgument)!, handler }];
 }
 
 function isNestCommonImport(statement: ts.ImportDeclaration): boolean {
@@ -1153,7 +1409,7 @@ function directNestClassDecorators(
   });
 }
 
-function staticNestLiteralText(expression: ts.Expression | undefined): string | null {
+function staticLiteralText(expression: ts.Expression | undefined): string | null {
   return expression !== undefined &&
     (ts.isStringLiteral(expression) || ts.isNoSubstitutionTemplateLiteral(expression))
     ? expression.text
@@ -1175,7 +1431,7 @@ function staticGraphqlOptionsName(
     return undefined;
   }
 
-  return staticNestLiteralText(name);
+  return staticLiteralText(name);
 }
 
 function staticGraphqlOperationName(
@@ -1187,7 +1443,7 @@ function staticGraphqlOperationName(
   }
 
   const first = arguments_[0];
-  const explicitName = staticNestLiteralText(first);
+  const explicitName = staticLiteralText(first);
   if (explicitName !== null) {
     if (arguments_.length === 1) {
       return explicitName;
@@ -1285,7 +1541,7 @@ function staticNestJsonValue(expression: ts.Expression): StaticNestJsonValue | u
 
 function staticNestMicroservicePattern(arguments_: ts.NodeArray<ts.Expression>): string | null {
   const pattern = arguments_[0];
-  const literal = staticNestLiteralText(pattern);
+  const literal = staticLiteralText(pattern);
   if (literal !== null) {
     return literal;
   }
@@ -1327,7 +1583,7 @@ function staticNestGatewayNamespace(arguments_: ts.NodeArray<ts.Expression>): st
   if (namespace === undefined) {
     return "";
   }
-  return namespace === null ? null : staticNestLiteralText(namespace);
+  return namespace === null ? null : staticLiteralText(namespace);
 }
 
 function staticNestGraphqlEntrypoints(
@@ -1446,7 +1702,7 @@ function staticNestWebSocketEntrypoints(
       if (candidate?.binding.kind !== "nest-websocket-subscribe") {
         continue;
       }
-      const event = staticNestLiteralText(candidate.expression.arguments[0]);
+      const event = staticLiteralText(candidate.expression.arguments[0]);
       if (event === null || candidate.expression.arguments.length !== 1) {
         continue;
       }
@@ -1745,7 +2001,8 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
     sourceId: string,
     referenceName: string,
     relationKind: PendingReference["relationKind"],
-    node: ts.Node
+    node: ts.Node,
+    routeFramework?: PendingReference["routeFramework"]
   ): void {
     const range = sourceRange(sourceFile, node);
     const reference: PendingReference = {
@@ -1761,7 +2018,8 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
       filePath: input.filePath,
       referenceName,
       relationKind,
-      range
+      range,
+      ...(routeFramework === undefined ? {} : { routeFramework })
     };
     pendingReferences.push(reference);
     referenceScopes.push({
@@ -1827,9 +2085,21 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
     return symbol;
   }
 
-  function addStaticExpressRoute(node: ts.CallExpression, route: StaticExpressRoute): void {
+  function addStaticRoute(
+    node: ts.CallExpression,
+    route: StaticExpressRoute | StaticFastifyRoute,
+    routeFramework: NonNullable<PendingReference["routeFramework"]>
+  ): void {
     const symbol = addRouteSymbol(node, route.method, route.path);
-    addPendingReference(symbol.id, route.handler.text, "routes", route.handler);
+    addPendingReference(symbol.id, route.handler.text, "routes", route.handler, routeFramework);
+  }
+
+  function addStaticExpressRoute(node: ts.CallExpression, route: StaticExpressRoute): void {
+    addStaticRoute(node, route, "express");
+  }
+
+  function addStaticFastifyRoute(node: ts.CallExpression, route: StaticFastifyRoute): void {
+    addStaticRoute(node, route, "fastify");
   }
 
   function addStaticNestRoute(route: StaticNestRoute): void {
@@ -2188,6 +2458,9 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
       const route = staticExpressRoute(sourceFile, node, routeReceiverBindings);
       if (route !== null) {
         addStaticExpressRoute(node, route);
+      }
+      for (const route of staticFastifyRoutes(sourceFile, node, routeReceiverBindings)) {
+        addStaticFastifyRoute(node, route);
       }
     }
     ts.forEachChild(node, extractStaticRoutes);

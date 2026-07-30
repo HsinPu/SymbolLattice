@@ -758,6 +758,50 @@ describe("literal route handler resolution", () => {
     ).toEqual([]);
   });
 
+  it("does not resolve a Fastify runtime handler through a type-only import", () => {
+    const sourceDocuments: readonly SourceDocument[] = [
+      {
+        absolutePath: "C:/project/src/contracts.ts",
+        relativePath: "src/contracts.ts",
+        language: "typescript",
+        sourceText: "export type Handler = () => void;",
+        contentHash: "contracts"
+      },
+      {
+        absolutePath: "C:/project/src/routes.ts",
+        relativePath: "src/routes.ts",
+        language: "typescript",
+        sourceText: [
+          'import Fastify from "fastify";',
+          'import type { Handler } from "./contracts";',
+          "const app = Fastify();",
+          'app.get("/type-only", Handler);'
+        ].join("\n"),
+        contentHash: "routes"
+      }
+    ];
+
+    const snapshot = snapshotWithResolver(sourceDocuments, undefined);
+    const route = snapshot.edges.find((edge) => edge.kind === "routes");
+
+    expect(route).toMatchObject({
+      targetId: null,
+      resolution: "unresolved",
+      confidence: 0,
+      evidence: {
+        ruleId: "framework.fastify.static-route.unresolved-handler",
+        stage: "unresolved"
+      }
+    });
+    expect(snapshot.pendingReferences.filter((reference) => reference.relationKind === "routes")).toEqual([
+      expect.objectContaining({
+        relationKind: "routes",
+        referenceName: "Handler",
+        routeFramework: "fastify"
+      })
+    ]);
+  });
+
   it("preserves AST-proven NestJS controller routes as direct exact method edges", () => {
     const sourceDocuments: readonly SourceDocument[] = [
       {

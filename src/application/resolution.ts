@@ -116,6 +116,15 @@ function referenceEvidence(
   };
 }
 
+function staticRouteHandlerRuleId(
+  reference: PendingReference,
+  suffix: "local-handler" | "imported-handler" | "reexported-handler" | "unresolved-handler"
+): string {
+  return reference.routeFramework === "fastify"
+    ? `framework.fastify.static-route.${suffix}`
+    : `framework.express.literal-route.${suffix}`;
+}
+
 function fallbackModuleResolution(
   knownFilePaths: ReadonlySet<string>,
   fromFilePath: string,
@@ -1157,7 +1166,9 @@ export function resolveProjectFacts(input: {
         };
       });
     const exactImportedBindings = matchingImportedBindings.filter(({ binding }) =>
-      heritage === null ? true : importBindingSupportsSpace(binding, heritage.expectedSpace)
+      heritage !== null
+        ? importBindingSupportsSpace(binding, heritage.expectedSpace)
+        : !isRouteHandler || binding.isTypeOnly !== true
     );
     const allExactImportedCandidates = canonicalExportCandidates(
       matchingImportedBindings.flatMap(({ binding, targetPath }) =>
@@ -1171,11 +1182,15 @@ export function resolveProjectFacts(input: {
         targetPath === undefined
           ? []
           : candidatesForExport(exportSurfaces, targetPath, binding.importedName)
-      ).filter((candidate) =>
-        heritage === null ||
-        (exportCandidateSupportsSpace(candidate, heritage.expectedSpace) &&
-          isHeritageTarget(candidate.symbol, heritage))
-      )
+      ).filter((candidate) => {
+        if (heritage !== null) {
+          return (
+            exportCandidateSupportsSpace(candidate, heritage.expectedSpace) &&
+            isHeritageTarget(candidate.symbol, heritage)
+          );
+        }
+        return !isRouteHandler || !candidate.isTypeOnly;
+      })
     );
     const exactImportedSymbols = exactImportedCandidates.map((candidate) => candidate.symbol);
     const allExactImportedSymbols = allExactImportedCandidates.map((candidate) => candidate.symbol);
@@ -1210,7 +1225,7 @@ export function resolveProjectFacts(input: {
                     heritage.expectedSpace === "value" ? "local-value-binding" : "local-type-binding"
                   )
                 : isRouteHandler
-                ? "framework.express.literal-route.local-handler"
+                ? staticRouteHandlerRuleId(reference, "local-handler")
                 : "lexical.local-binding",
               "lexical",
               candidateSymbolIds(scopedLocal.candidates)
@@ -1229,7 +1244,7 @@ export function resolveProjectFacts(input: {
               heritage !== null
                 ? heritageRuleId(heritage.relationKind, "unresolved-target")
                 : isRouteHandler
-                ? "framework.express.literal-route.unresolved-handler"
+                ? staticRouteHandlerRuleId(reference, "unresolved-handler")
                 : "reference.unresolved",
               "unresolved",
               candidateSymbolIds(scopedLocal.candidates)
@@ -1266,8 +1281,8 @@ export function resolveProjectFacts(input: {
                 )
               : isRouteHandler
               ? resolutionPath.length === 0
-                ? "framework.express.literal-route.imported-handler"
-                : "framework.express.literal-route.reexported-handler"
+                ? staticRouteHandlerRuleId(reference, "imported-handler")
+                : staticRouteHandlerRuleId(reference, "reexported-handler")
               : resolutionPath.length === 0
                 ? "module.explicit-import-binding"
                 : "module.reexported-import-binding",
@@ -1297,7 +1312,7 @@ export function resolveProjectFacts(input: {
             heritage !== null
               ? heritageRuleId(heritage.relationKind, "unresolved-target")
               : isRouteHandler
-              ? "framework.express.literal-route.unresolved-handler"
+              ? staticRouteHandlerRuleId(reference, "unresolved-handler")
               : "reference.unresolved",
             "unresolved",
             candidateSymbolIds(heritage === null ? exactImportedSymbols : allExactImportedSymbols),
@@ -1343,7 +1358,7 @@ export function resolveProjectFacts(input: {
           "unresolved",
           0,
           referenceEvidence(
-            "framework.express.literal-route.unresolved-handler",
+            staticRouteHandlerRuleId(reference, "unresolved-handler"),
             "unresolved",
             candidateSymbolIds(
               exactImportedSymbols,

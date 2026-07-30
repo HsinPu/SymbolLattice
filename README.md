@@ -9,12 +9,12 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![License](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
 
-[Quick start](#quick-start) | [Type hierarchy](#direct-type-hierarchy-evidence) | [HTTP routes](#static-express-route-evidence) | [Nest entrypoints](#nestjs-non-http-entrypoint-evidence) | [Node inspection](#generation-bound-node-inspection) | [History and diff](#retained-graph-history-and-structural-diff) | [Auto sync](#opt-in-foreground-watch) | [Affected tests](#affected-test-evidence) | [Git hunks](#immutable-git-hunk-declaration-attribution) | [Context packs](#bounded-multi-symbol-context) | [Commands](#command-reference) | [MCP](#mcp-server) | [Architecture](#architecture) | [Roadmap](#roadmap)
+[Quick start](#quick-start) | [Type hierarchy](#direct-type-hierarchy-evidence) | [HTTP routes](#static-http-route-evidence) | [Nest entrypoints](#nestjs-non-http-entrypoint-evidence) | [Node inspection](#generation-bound-node-inspection) | [History and diff](#retained-graph-history-and-structural-diff) | [Auto sync](#opt-in-foreground-watch) | [Affected tests](#affected-test-evidence) | [Git hunks](#immutable-git-hunk-declaration-attribution) | [Context packs](#bounded-multi-symbol-context) | [Commands](#command-reference) | [MCP](#mcp-server) | [Architecture](#architecture) | [Roadmap](#roadmap)
 
 </div>
 
 > [!IMPORTANT]
-> **v0.18.0** is an early developer release. This public repository runs from source; its npm package is intentionally private and is not published to npm.
+> **v0.19.0** is an early developer release. This public repository runs from source; its npm package is intentionally private and is not published to npm.
 
 SymbolLattice builds a local symbol graph without hiding uncertainty. It keeps syntax-proven artifact facts, resolves cross-file relationships conservatively, and records why every resolved edge exists. The graph stays local to the inspected project under `.symbol-lattice/index.sqlite`.
 
@@ -27,7 +27,7 @@ SymbolLattice builds a local symbol graph without hiding uncertainty. It keeps s
 - **Event-accelerated foreground freshness** - opt-in `watch` uses native filesystem events when the host supports them, exposes bounded pending-path evidence in its own stream, coalesces saves, retains bounded polling as a safety sweep, and invokes the same atomic `sync` only after drift.
 - **Generation-bound source evidence** - `search` and exact `explore` results use source captured with the active graph generation, even when the live project has since drifted.
 - **Declaration-focused node view** - exact `node` results return the full persisted declaration range plus a bounded declaration body, direct callers/callees, and explicit limits from one active generation without substituting live source text.
-- **Static HTTP entry evidence** - narrow Express and NestJS packs create first-class `route` nodes and exact `routes` edges only when the HTTP registration and handler binding are statically proven.
+- **Static HTTP entry evidence** - narrow Express, Fastify, and NestJS packs create first-class `route` nodes and exact `routes` edges only when the HTTP registration and handler binding are statically proven.
 - **Non-HTTP transport evidence** - AST-proven NestJS GraphQL, microservice, and WebSocket entrypoints use distinct `entrypoint` nodes and exact `handles` edges, so a message pattern or subscription is never mislabeled as an HTTP route.
 - **Direct type-hierarchy evidence** - AST-proven `extends` and `implements` edges preserve value/type namespace proof, type-only imports, re-export provenance, unresolved bases, and bounded direct parent/child views without pretending to have a full type checker.
 - **Bounded context packs** - ordered symbol references produce persisted source, capped relationship/impact summaries, and static directed evidence paths without guessing ambiguous symbols or dynamic behavior.
@@ -101,7 +101,7 @@ One-shot data commands emit stable, pretty JSON. `watch` is the deliberate strea
 
 ## Capabilities
 
-| Area | v0.18.0 behavior |
+| Area | v0.19.0 behavior |
 | --- | --- |
 | Source files | TypeScript, TSX, JavaScript, and JSX |
 | Scope | Project root by default or repeatable, persisted `--scope` directories |
@@ -113,7 +113,7 @@ One-shot data commands emit stable, pretty JSON. `watch` is the deliberate strea
 | Re-exports | Named aliases, `export *`, default-through-named aliases, and namespace-export provenance |
 | Retrieval | Local deterministic FTS5 search across persisted source text and identifier parts; bounded path/language filters, source/symbol evidence, and exact `explore` excerpts from the same active generation |
 | Node inspection | Exact ID, qualified-name, simple-name, or `path:line[:column]` matches can return the persisted declaration range, capped direct callers/callees, source provenance, truncation, and active freshness from one generation |
-| HTTP routes | Static AST-proven Express literal registrations plus direct NestJS controller decorators and `RouterModule.register()` module-prefix projection. All use bounded `routes` listing and exact handler evidence; only Express can retain an unresolved terminal handler in this release |
+| HTTP routes | Static AST-proven Express literal registrations, Fastify shorthand/full-object registrations, and direct NestJS controller decorators plus `RouterModule.register()` module-prefix projection. All use bounded `routes` listing and exact handler evidence; Express and Fastify retain unresolved named handlers rather than guessing |
 | Non-HTTP entrypoints | AST-proven direct NestJS GraphQL `Query` / `Mutation` / `Subscription`, microservice `MessagePattern` / `EventPattern`, and WebSocket `SubscribeMessage` handlers. Bounded `entrypoints` listing keeps transport/operation/name semantics and exact `handles` evidence separate from HTTP routes |
 | Type hierarchy | Direct TS/JS class `extends`, TS class `implements`, and TS interface `extends`; exact lexical/import/re-export proof with value/type namespaces, plus bounded direct parents/children |
 | Context | Bounded packs for 1–8 ordered references: exact-match source excerpts, capped callers/callees and reverse impact, plus shortest static directed evidence paths between adjacent exact references |
@@ -145,9 +145,11 @@ For an exact call that travels through a barrel, evidence uses `module.reexporte
 }
 ```
 
-### Static Express route evidence
+### Static HTTP route evidence
 
-v0.14 adds the first framework pack as a graph contract, not a regex guess. A supported registration creates a file-contained `route` symbol such as `GET /users` and a distinct `routes` edge to its terminal handler. That edge remains visible in `callers`, `callees`, `impact`, `context`, `explore`, `node`, and `explain-edge`; its kind keeps HTTP dispatch separate from an ordinary function call.
+v0.14 introduced the first framework pack as a graph contract, not a regex guess; v0.19 adds Fastify on the same evidence-first terms. A supported registration creates a file-contained `route` symbol such as `GET /users` and a distinct `routes` edge to its terminal handler. That edge remains visible in `callers`, `callees`, `impact`, `context`, `explore`, `node`, and `explain-edge`; its kind keeps HTTP dispatch separate from an ordinary function call.
+
+#### Express
 
 ```ts
 import express, { Router } from "express";
@@ -173,6 +175,34 @@ The pack accepts only static proofs:
 - one of `get`, `post`, `put`, `patch`, `delete`, `head`, `options`, or `all`;
 - a slash-prefixed string literal path; and
 - identifier-only middleware/handler arguments, with the final identifier as the terminal handler.
+
+#### Fastify
+
+SymbolLattice follows the direct registration forms documented in the official [Fastify Routes reference](https://fastify.dev/docs/v5.6.x/Reference/Routes/), while retaining only facts it can prove from the source AST:
+
+```ts
+import Fastify from "fastify";
+import { createJob, listUsers } from "./handlers.js";
+
+const server = Fastify({ logger: true });
+
+server.get("/users", listUsers);
+server.post("/jobs", { schema: {} }, createJob);
+server.route({
+  method: ["GET", "TRACE"],
+  url: "/diagnostics",
+  handler: listUsers
+});
+```
+
+The v0.19 pack accepts only:
+
+- a direct non-type-only ESM default import from `fastify`;
+- an immutable, lexically unshadowed `const server = Fastify(...)` receiver;
+- shorthand `get`, `head`, `trace`, `delete`, `options`, `patch`, `put`, `post`, or `all` calls with a slash-prefixed string or no-substitution template path and a terminal identifier handler; or
+- one direct `server.route({ ... })` object with one uppercase static HTTP method (or nonempty duplicate-free static method array), exactly one literal `url` or `path`, and a direct identifier `handler` (either `handler: name` or `{ handler }`) with a value-space lexical/import/re-export proof.
+
+Every Fastify route handler must resolve in value space; type-only imports or re-exports remain unresolved rather than becoming a runtime edge. The optional Fastify shorthand options slot is retained as call context but not interpreted. `register(..., { prefix })`, hooks, schemas, custom methods, runtime route options, CommonJS/namespace factories, mutable/aliased receivers, dynamic values, inline/member handlers, computed/spread/duplicate object fields, and conflicting `url` plus `path` are deliberately outside this release.
 
 If the terminal handler cannot be resolved through a lexical binding, explicit import, or re-export surface, the route and its `routes` edge remain persisted as `unresolved`. SymbolLattice does not promote a unique global name to a route handler.
 
@@ -234,7 +264,7 @@ The v0.17 surface is deliberately strict:
 - If a module prefix cannot be proven, SymbolLattice retains the controller-local route rather than inventing a global route. `forRoot` / `forChild`, global prefixes, versioning, runtime adapters, guards, custom/composed decorators, and SSE remain outside the HTTP route proof surface. The separate non-HTTP NestJS proof surface is documented below.
 
 > [!NOTE]
-> `routes` does not need a new command or MCP tool for NestJS: the existing read-only route query returns Express and NestJS evidence from the active generation together.
+> `routes` does not need a new command or MCP tool for Fastify or NestJS: the existing read-only route query returns Express, Fastify, and NestJS evidence from the active generation together.
 
 ### NestJS non-HTTP entrypoint evidence
 
@@ -600,7 +630,7 @@ The active generation fingerprints the root `.gitignore`, selected `tsconfig.jso
 | `search <query>` | Search persisted source and identifier evidence; accepts `--limit`, `--path`, and `--language` |
 | `node <reference>` | Return one exact symbol's bounded persisted declaration range, direct callers/callees, provenance, and freshness; never refreshes the index |
 | `hierarchy <reference>` | Return bounded direct `extends` / `implements` parents and exact children, including unresolved parent evidence; accepts `--limit` and never refreshes the index |
-| `routes [path]` | List bounded static Express and AST-proven NestJS route nodes, including exact `RouterModule.register()` prefix projections, with handler evidence; accepts `--method`, `--path`, and `--limit`; never refreshes the index |
+| `routes [path]` | List bounded static Express and Fastify route nodes plus AST-proven NestJS route nodes, including exact `RouterModule.register()` prefix projections, with handler evidence; accepts `--method` (including `TRACE`), `--path`, and `--limit`; never refreshes the index |
 | `entrypoints [path]` | List bounded AST-proven NestJS GraphQL, microservice, and WebSocket entrypoints with exact handler evidence; accepts `--transport`, `--operation`, `--name`, and `--limit`; never refreshes the index |
 | `callers <symbol>` / `callees <symbol>` | Show direct graph relationships |
 | `impact <symbol>` | Trace reverse impact with optional `--depth` and explicit output `--limit` |
@@ -626,7 +656,7 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 | `symbol_lattice_explore` | Return generation-bound source when available, callers, callees, impact, freshness, and structured output for an existing graph |
 | `symbol_lattice_node` | Return one exact node's bounded persisted declaration range, direct callers/callees, provenance, and freshness without refreshing an index |
 | `symbol_lattice_hierarchy` | Return bounded direct `extends` / `implements` parents and exact children from one active generation, including unresolved parent evidence, without refreshing an index |
-| `symbol_lattice_routes` | Return bounded static Express and AST-proven NestJS route nodes, including exact RouterModule prefix projections, with method/path filters, handler-edge evidence, and freshness without refreshing an index |
+| `symbol_lattice_routes` | Return bounded static Express and Fastify route nodes plus AST-proven NestJS route nodes, including exact RouterModule prefix projections, with method/path filters, handler-edge evidence, and freshness without refreshing an index |
 | `symbol_lattice_entrypoints` | Return bounded AST-proven NestJS GraphQL, microservice, and WebSocket entrypoints with transport/operation/name filters, exact `handles` evidence, and freshness without refreshing an index |
 | `symbol_lattice_context` | Return bounded generation-bound source, relationships, reverse impact, and directed proof paths for ordered references without refreshing an index |
 | `symbol_lattice_affected` | Return bounded affected-test proofs for changed files, index coverage, and completeness limits without refreshing an index |
@@ -659,6 +689,8 @@ v0.17 adds no SQLite schema migration or public query surface. It persists addit
 
 v0.18 adds no SQLite schema migration. It persists additive `entrypoint` symbols and direct `handles` edges through existing graph, raw-fact, and retained-snapshot storage. The extractor advances to `typescript-ast-v7`, so a pre-v0.18 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes complete non-HTTP transport evidence; the resolver remains `project-resolver-v5` because these are file-local syntax edges. Existing generations remain readable. The new `entrypoints` CLI/service and `symbol_lattice_entrypoints` MCP tool are read-only; an explore-only embedding does not register the MCP tool until it exposes the additive capability.
 
+v0.19 adds no SQLite schema migration or new route-query surface. It retains optional Fastify route provenance in the existing raw artifact-fact JSON and reuses the existing `routes` CLI/service/MCP tool. The extractor advances to `typescript-ast-v8` and the resolver to `project-resolver-v6`, so a pre-v0.19 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes Fastify facts. Route handlers now require value-space lexical/import/re-export proof, preventing type-only imports or re-exports from appearing as runtime handler edges. Existing Express facts without Fastify provenance remain readable and preserve their established Express evidence rule IDs.
+
 ## Architecture
 
 ```mermaid
@@ -672,7 +704,7 @@ flowchart LR
   Catalog["Filesystem catalog\nscope + gitignore"] --> Inputs["Index inputs"]
   Catalog --> TS["TS alias resolver"]
   Catalog --> WS["Workspace resolver"]
-  Extractor["TypeScript AST extractor\ndirect heritage + Express/Nest HTTP routes\nNest non-HTTP entrypoints + module-prefix facts"] --> Facts["Reusable artifact facts"]
+  Extractor["TypeScript AST extractor\ndirect heritage + Express/Fastify/Nest HTTP routes\nNest non-HTTP entrypoints + module-prefix facts"] --> Facts["Reusable artifact facts"]
   Catalog --> SourceDocs["Persisted source documents"]
   SourceDocs --> Retrieval["Generation-bound lexical projection"]
   Facts --> Resolver["Full project export surface"]
@@ -698,11 +730,11 @@ src/
 
 ## Deliberate boundaries
 
-v0.18.0 does not yet provide:
+v0.19.0 does not yet provide:
 
 - Daemon mode, background automatic sync after the foreground process exits, cross-process watch coordination, MCP per-query pending-file banners, worker pools, or historical source browsing.
 - pnpm workspace YAML, TypeScript project references, external/package `extends`, or nested `.gitignore` semantics.
-- CommonJS `require`, dynamic dispatch, reflection, arbitrary framework routes, or namespace property-call resolution. The v0.14 Express pack remains limited to syntax-proven static registrations; it does not model mutable/aliased receivers, mounts, chained routers, inline callbacks, or runtime route composition.
+- CommonJS `require`, dynamic dispatch, reflection, arbitrary framework routes, or namespace property-call resolution. The Express and Fastify packs remain limited to syntax-proven direct static registrations; they do not model mutable/aliased receivers, mounts, chained routers, Fastify plugin-prefix composition, hooks, inline callbacks, or runtime route composition.
 - Semantic type checking, transitive hierarchy traversal, declaration-merging semantics, override dispatch, mixin/qualified/conditional heritage expressions, or automatic framework decorator inference. v0.18 recognizes direct imported NestJS HTTP decorators, direct static `RouterModule.register()` prefixes, and the narrowly defined non-HTTP decorators documented above; it does not infer custom decorators, barrels, `forRoot` / `forChild`, global/version prefixes, guards, GraphQL field resolvers, dynamic patterns, dynamic gateway configuration, or runtime transport wiring.
 - Parsers beyond TS/TSX/JS/JSX, external dependency indexing, telemetry, or multi-project routing.
 - Embedding-based or cloud retrieval, semantic ranking, arbitrary natural-language context assembly, semantic Git diff beyond immutable zero-context hunk-to-revision-local-declaration evidence, or reliable rename/move/cross-side identity attribution.
@@ -728,7 +760,8 @@ v0.18.0 does not yet provide:
 | `v0.16.0` | AST-proven NestJS HTTP controller decorators with direct method edges, imported-alias proof, and shared read-only route views |
 | `v0.17.0` | AST-proven `RouterModule.register()` module prefixes, recursive static children, exact module/controller bindings, and complete Nest HTTP route projections |
 | `v0.18.0` | AST-proven NestJS GraphQL operations, microservice message/event patterns, and WebSocket subscriptions as separate `entrypoint` / `handles` evidence, with bounded read-only CLI and MCP listing |
-| `v0.19+` | Additional language adapters, framework packs, GraphQL field-resolver and runtime-transport evidence where static proof is possible, contract graphs, retained-generation source browsing, and further CodeGraph-parity work |
+| `v0.19.0` | AST-proven Fastify shorthand and full-object route registrations, Fastify-specific handler evidence, and `TRACE` route filtering through the existing read-only route views |
+| `v0.20+` | Additional language adapters, framework packs, Fastify plugin-prefix and GraphQL field-resolver/runtime-transport evidence where static proof is possible, contract graphs, retained-generation source browsing, and further CodeGraph-parity work |
 
 See [CHANGELOG.md](CHANGELOG.md) for release notes and migration history.
 
@@ -742,7 +775,7 @@ npm.cmd pack --dry-run
 git diff --check
 ```
 
-The suite covers discovery, input fingerprints, alias and workspace resolution, exact direct TypeScript/JavaScript heritage extraction and namespace-aware local/import/re-export resolution, bounded hierarchy traversal, exact static Express route extraction and handler resolution, direct NestJS controller decorators plus static `RouterModule.register()` prefix composition and non-HTTP GraphQL/microservice/WebSocket entrypoint extraction with alias, shadow, dynamic, persistence, and incremental raw-fact reuse coverage, route- and entrypoint-aware graph traversal, re-export semantics, exact affected-test proofs and completeness limits, local Git change-set parsing and selection, immutable revision-local Git hunk declaration attribution, bounded generation-bound node declaration evidence, generation-bound search and exploration source evidence, retained graph history and structural diffs, legacy snapshot backfill, stale-source evidence, bounded foreground pending-file disclosure, event debounce/polling fallback/retry receipts, no-op sync, schema migration, atomic rollback, MCP read-only behavior, CLI parsing, and architecture boundaries.
+The suite covers discovery, input fingerprints, alias and workspace resolution, exact direct TypeScript/JavaScript heritage extraction and namespace-aware local/import/re-export resolution, bounded hierarchy traversal, exact static Express and Fastify route extraction plus handler resolution, direct NestJS controller decorators plus static `RouterModule.register()` prefix composition and non-HTTP GraphQL/microservice/WebSocket entrypoint extraction with alias, shadow, dynamic, persistence, and incremental raw-fact reuse coverage, route- and entrypoint-aware graph traversal, re-export semantics, exact affected-test proofs and completeness limits, local Git change-set parsing and selection, immutable revision-local Git hunk declaration attribution, bounded generation-bound node declaration evidence, generation-bound search and exploration source evidence, retained graph history and structural diffs, legacy snapshot backfill, stale-source evidence, bounded foreground pending-file disclosure, event debounce/polling fallback/retry receipts, no-op sync, schema migration, atomic rollback, MCP read-only behavior, CLI parsing, and architecture boundaries.
 
 ## Contributing
 

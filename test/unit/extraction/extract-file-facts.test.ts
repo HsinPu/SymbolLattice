@@ -514,6 +514,7 @@ describe("TypeScript and JavaScript extraction", () => {
         'app.get("/member", controller.handler);',
         'app["get"]("/computed", handler);',
         'app.use("/mount", handler);',
+        'app.trace("/not-an-express-method", handler);',
         'wrongModule.get("/wrong-module", handler);',
         'legacyApp.get("/require", handler);',
         'unknown.get("/unknown", handler);',
@@ -532,6 +533,136 @@ describe("TypeScript and JavaScript extraction", () => {
         .filter((reference) => reference.relationKind === "routes")
         .map((reference) => reference.referenceName)
     ).toEqual(["handler"]);
+  });
+
+  it("extracts syntax-proven Fastify shorthand and full-object routes with framework provenance", () => {
+    const facts = extractFileFacts({
+      filePath: "src/routes.ts",
+      language: "typescript",
+      sourceText: [
+        'import Fastify from "fastify";',
+        "const app = Fastify({ logger: true });",
+        "function listUsers() { return []; }",
+        "function createUser() { return undefined; }",
+        "function traceDiagnostics() { return undefined; }",
+        "function debug() { return undefined; }",
+        "function listReports() { return []; }",
+        "function health() { return undefined; }",
+        "function handler() { return undefined; }",
+        'app.get("/users", listUsers);',
+        'app.post("/users", { schema: {} }, createUser);',
+        'app.trace("/diagnostics", traceDiagnostics);',
+        'app.all("/debug", debug);',
+        'app.route({ method: ["GET", "POST"], url: "/reports", handler: listReports });',
+        'app.route({ method: "HEAD", path: "/health", handler: health });',
+        'app.route({ method: "GET", url: "/shorthand-handler", handler });'
+      ].join("\n")
+    });
+
+    const routes = facts.symbols.filter((symbol) => symbol.kind === "route");
+    const routeReferences = facts.pendingReferences.filter(
+      (reference) => reference.relationKind === "routes"
+    );
+
+    expect(routes.map((route) => route.name)).toEqual([
+      "GET /users",
+      "POST /users",
+      "TRACE /diagnostics",
+      "ALL /debug",
+      "GET /reports",
+      "POST /reports",
+      "HEAD /health",
+      "GET /shorthand-handler"
+    ]);
+    expect(routeReferences.map((reference) => [reference.referenceName, reference.routeFramework])).toEqual([
+      ["listUsers", "fastify"],
+      ["createUser", "fastify"],
+      ["traceDiagnostics", "fastify"],
+      ["debug", "fastify"],
+      ["listReports", "fastify"],
+      ["listReports", "fastify"],
+      ["health", "fastify"],
+      ["handler", "fastify"]
+    ]);
+  });
+
+  it("extracts direct Fastify default imports in JavaScript", () => {
+    const facts = extractFileFacts({
+      filePath: "src/routes.js",
+      language: "javascript",
+      sourceText: [
+        'import Fastify from "fastify";',
+        "const app = Fastify();",
+        "function health() { return undefined; }",
+        'app.head("/health", health);'
+      ].join("\n")
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route").map((route) => route.name)).toEqual([
+      "HEAD /health"
+    ]);
+    expect(
+      facts.pendingReferences.filter((reference) => reference.relationKind === "routes")
+    ).toEqual([
+      expect.objectContaining({ referenceName: "health", routeFramework: "fastify" })
+    ]);
+  });
+
+  it("rejects unproven, dynamic, and ambiguous Fastify route shapes", () => {
+    const facts = extractFileFacts({
+      filePath: "src/routes.ts",
+      language: "typescript",
+      sourceText: [
+        'import Fastify from "fastify";',
+        'import type TypeOnlyFastify from "fastify";',
+        'import * as fastifyNamespace from "fastify";',
+        'import { default as namedDefaultFastify } from "fastify";',
+        'import foreignFactory from "not-fastify";',
+        "const app = Fastify();",
+        "let mutable = Fastify();",
+        "const optionalFactory = Fastify?.();",
+        "const typeOnly = TypeOnlyFastify();",
+        "const namespace = fastifyNamespace();",
+        "const namedDefault = namedDefaultFastify();",
+        "const foreign = foreignFactory();",
+        "const controller = { handler: () => undefined };",
+        "const dynamicPath = \"/dynamic\";",
+        "const dynamicMethods = [\"GET\"];",
+        "function handler() { return undefined; }",
+        'app.get("/real", handler);',
+        "app.get(dynamicPath, handler);",
+        'app.get("/inline", () => undefined);',
+        'app.get("/member", controller.handler);',
+        'app.get("/too-many", {}, {}, handler);',
+        'app.route({ method: "get", url: "/lowercase", handler });',
+        'app.route({ method: dynamicMethods, url: "/dynamic-method", handler });',
+        'app.route({ method: ["GET", "GET"], url: "/duplicate-method", handler });',
+        'app.route({ method: "GET", url: "/both", path: "/both", handler });',
+        'app.route({ method: "GET", url: "not-slash-prefixed", handler });',
+        'app.route({ method: "GET", url: "/missing-handler" });',
+        'app.route({ method: "GET", url: "/member-handler", handler: controller.handler });',
+        'app.route({ method: "GET", url: "/spread", ...controller, handler });',
+        'mutable.get("/mutable", handler);',
+        'optionalFactory.get("/optional", handler);',
+        'typeOnly.get("/type-only", handler);',
+        'namespace.get("/namespace", handler);',
+        'namedDefault.get("/named-default", handler);',
+        'foreign.get("/foreign", handler);',
+        "function shadow(Fastify: () => unknown) {",
+        "  const shadowed = Fastify();",
+        '  shadowed.get("/shadowed", handler);',
+        "}"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route").map((route) => route.name)).toEqual([
+      "GET /real"
+    ]);
+    expect(
+      facts.pendingReferences
+        .filter((reference) => reference.relationKind === "routes")
+        .map((reference) => [reference.referenceName, reference.routeFramework])
+    ).toEqual([["handler", "fastify"]]);
   });
 
   it("extracts AST-proven NestJS HTTP routes with aliased decorator imports and direct method evidence", () => {

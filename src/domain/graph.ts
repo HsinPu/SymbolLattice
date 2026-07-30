@@ -21,6 +21,7 @@ export const ROUTE_METHODS = [
   "DELETE",
   "HEAD",
   "OPTIONS",
+  "TRACE",
   "ALL"
 ] as const;
 

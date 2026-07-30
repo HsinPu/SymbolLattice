@@ -6,6 +6,24 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.19.0] - 2026-07-30
+
+### Added
+
+- AST-proven Fastify HTTP routes for TypeScript and JavaScript. A direct non-type-only default import from `fastify`, a lexical unshadowed immutable `const server = Fastify(...)` receiver, a literal slash-prefixed path, and a direct identifier handler now create first-class `route` symbols and `routes` edges.
+- Fastify shorthand registrations for `get`, `head`, `trace`, `delete`, `options`, `patch`, `put`, `post`, and `all`, plus direct `server.route({ method, url | path, handler })` objects. Full objects accept one uppercase method or a nonempty duplicate-free static method array, with either explicit `handler: name` or `{ handler }` shorthand; `url` and its documented `path` alias remain mutually exclusive.
+- Framework-specific pending-route provenance and `framework.fastify.static-route.*` resolver evidence for local, imported, re-exported, and unresolved handlers. Fastify routes reuse the existing bounded read-only `routes` CLI, service, and MCP views; `TRACE` is now an accepted route filter across those views.
+
+### Compatibility
+
+- No SQLite schema migration is required. The additive optional `routeFramework` field lives in existing raw artifact-fact storage, while existing Express facts without it retain their `framework.express.literal-route.*` evidence on resolution.
+- The artifact extractor advances to `typescript-ast-v8` and the project resolver advances to `project-resolver-v6`. A pre-v0.19 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes Fastify route evidence. Route handlers now require value-space lexical/import/re-export proof, so a type-only import or re-export is never promoted into a runtime handler edge.
+
+### Deliberate limits
+
+- This is a static Fastify route surface, not runtime framework execution. It excludes CommonJS, namespace/named-default factories, mutable or aliased receivers, `register(..., { prefix })` composition, hooks, schema interpretation, custom methods, dynamic method/path/handler values, inline or member handlers, and nonliteral paths or methods. A shorthand options slot can be present but is not interpreted.
+- A Fastify full-route object must be a direct object literal with direct `method`, exactly one of `url` or `path`, and a direct identifier `handler`. Computed, spread, duplicate, conflicting, dynamic, or ambiguous shapes are intentionally not promoted into graph facts.
+
 ## [0.18.0] - 2026-07-30
 
 ### Added
@@ -386,7 +404,8 @@ No unreleased changes.
 - Explicit full indexing, caller/callee/impact queries, and read-only MCP exploration.
 - `exact`, `heuristic`, and `unresolved` relationship states.
 
-[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.18.0...HEAD
+[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.19.0...HEAD
+[0.19.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.15.0...v0.16.0

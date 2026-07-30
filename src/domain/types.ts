@@ -35,6 +35,9 @@ export type EdgeKind = (typeof EDGE_KINDS)[number];
 
 export type ResolutionKind = "exact" | "heuristic" | "unresolved";
 
+/** Framework provenance retained for syntax-proven static HTTP routes. */
+export type RouteFramework = "express" | "fastify";
+
 export const ARTIFACT_LANGUAGES = ["typescript", "javascript"] as const;
 
 export type ArtifactLanguage = (typeof ARTIFACT_LANGUAGES)[number];
@@ -90,6 +93,8 @@ export interface PendingReference {
     EdgeKind,
     "calls" | "imports" | "exports" | "routes" | HierarchyRelationKind
   >;
+  /** Present only for syntax-proven framework route handlers. */
+  readonly routeFramework?: RouteFramework;
   readonly range: SourceRange;
 }
 
