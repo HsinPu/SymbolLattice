@@ -1823,7 +1823,7 @@ describe("source extraction", () => {
       filePath: "app/main.py",
       language: "python",
       sourceText: [
-        "from fastapi import FastAPI as Api",
+        "from fastapi import Depends, FastAPI as Api",
         "app = Api(title=\"Example\")",
         "",
         "@app.get(\"/health\", tags=[\"system\"])",
@@ -1870,6 +1870,110 @@ describe("source extraction", () => {
         1
       ]
     ]);
+  });
+
+  it("extracts same-file FastAPI APIRouter routes through direct literal inclusion", () => {
+    const facts = extractFileFacts({
+      filePath: "app/catalog.py",
+      language: "python",
+      sourceText: [
+        "from fastapi import Depends, FastAPI as Api, APIRouter as Router",
+        "app = Api()",
+        "router = Router(prefix=\"/catalog\", tags=[\"catalog\"])",
+        "",
+        "@router.get(\"/\")",
+        "async def list_items():",
+        "    return []",
+        "",
+        "@router.post(\"/{item_id}\", dependencies=[Depends(check_access)])",
+        "async def create_item(item_id: str):",
+        "    return {\"item_id\": item_id}",
+        "",
+        "app.include_router(router, prefix=\"/api\", tags=[\"public\"])"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId,
+          edge.evidence?.stage,
+          edge.resolution,
+          edge.confidence
+        ])
+    ).toEqual([
+      [
+        "GET /api/catalog/",
+        "app/catalog.py#list_items",
+        "framework.fastapi.direct-router.include-router.decorator.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "POST /api/catalog/{item_id}",
+        "app/catalog.py#create_item",
+        "framework.fastapi.direct-router.include-router.decorator.local-function",
+        "syntax",
+        "exact",
+        1
+      ]
+    ]);
+  });
+
+  it("rejects dynamic, unmounted, rebound, and late-included Python APIRouter routes", () => {
+    const facts = extractFileFacts({
+      filePath: "app/unproven-router.py",
+      language: "python",
+      sourceText: [
+        "from fastapi import APIRouter, FastAPI",
+        "app = FastAPI()",
+        "",
+        "unmounted = APIRouter()",
+        "@unmounted.get(\"/unmounted\")",
+        "async def unmounted_handler():",
+        "    return {}",
+        "",
+        "dynamic_router = APIRouter(prefix=base_path)",
+        "@dynamic_router.get(\"/dynamic-router\")",
+        "async def dynamic_router_handler():",
+        "    return {}",
+        "app.include_router(dynamic_router)",
+        "",
+        "dynamic_include = APIRouter()",
+        "@dynamic_include.get(\"/dynamic-include\")",
+        "async def dynamic_include_handler():",
+        "    return {}",
+        "app.include_router(dynamic_include, prefix=api_prefix)",
+        "",
+        "late = APIRouter()",
+        "app.include_router(late)",
+        "@late.get(\"/late\")",
+        "async def late_handler():",
+        "    return {}",
+        "",
+        "rebound = APIRouter()",
+        "@rebound.get(\"/rebound\")",
+        "async def rebound_handler():",
+        "    return {}",
+        "if enabled:",
+        "    rebound = APIRouter()",
+        "app.include_router(rebound)",
+        "",
+        "from fastapi import FastAPI as ambiguous, Depends as ambiguous",
+        "app_like = ambiguous()",
+        "@app_like.get(\"/ambiguous-import\")",
+        "async def ambiguous_import_handler():",
+        "    return {}"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
   });
 
   it("rejects dynamic and unproven Python FastAPI route shapes", () => {

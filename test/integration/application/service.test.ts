@@ -3135,6 +3135,51 @@ describe("SymbolLatticeService", () => {
     ]);
   });
 
+  it("indexes same-file FastAPI APIRouter routes through literal prefixes", async () => {
+    const projectPath = await createInlineProject({
+      "api/catalog.py": [
+        "from fastapi import APIRouter, FastAPI",
+        "app = FastAPI()",
+        "router = APIRouter(prefix=\"/catalog\")",
+        "",
+        "@router.get(\"/health\")",
+        "async def health():",
+        "    return {\"ok\": True}",
+        "",
+        "app.include_router(router, prefix=\"/api\")"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath, { method: "GET" });
+    const persistedFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "api/catalog.py");
+
+    expect(persistedFacts).toMatchObject({
+      language: "python",
+      extractorVersion: ARTIFACT_FACTS_EXTRACTOR_VERSION
+    });
+    expect(routes.routes).toMatchObject([
+      {
+        method: "GET",
+        path: "/api/catalog/health",
+        route: { kind: "route", name: "GET /api/catalog/health" },
+        edge: {
+          kind: "routes",
+          resolution: "exact",
+          evidence: {
+            ruleId: "framework.fastapi.direct-router.include-router.decorator.local-function",
+            stage: "syntax"
+          }
+        },
+        handler: { qualifiedName: "api/catalog.py#health" }
+      }
+    ]);
+  });
+
   it("indexes NestJS decorator routes as persisted exact method evidence", async () => {
     const projectPath = await createInlineProject({
       "src/cats.controller.ts": [

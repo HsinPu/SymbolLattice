@@ -42,7 +42,10 @@ describe("first-party framework capabilities", () => {
       languages: ["python"],
       routeFramework: "fastapi",
       routeRegistrations: [],
-      surfaces: ["direct FastAPI application decorators"]
+      surfaces: [
+        "direct FastAPI application decorators",
+        "same-file APIRouter decorators through direct include_router"
+      ]
     });
   });
 });

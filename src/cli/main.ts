@@ -369,7 +369,7 @@ export function createProgram(
   const program = new Command();
   program
     .name("symbol-lattice")
-    .description("Evidence-first local code graph exploration for TypeScript and JavaScript.")
+    .description("Evidence-first local code graph exploration for TypeScript, JavaScript, and Python.")
     .version(SYMBOL_LATTICE_VERSION);
 
   addJsonOption(addIndexOptions(addProjectOption(program.command("init [path]"))))

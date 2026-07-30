@@ -21,21 +21,37 @@ export interface PythonExtractFileFactsInput {
 
 type PythonSyntaxNode = ReturnType<typeof parser.parse>["topNode"];
 
+type FastApiImportedConstructor = "FastAPI" | "APIRouter";
+
 interface FastApiImport {
+  readonly importedName: string;
   readonly alias: string;
   readonly node: PythonSyntaxNode;
 }
 
-interface FastApiApplication {
+interface FastApiDirectInstance {
   readonly name: string;
   readonly constructorName: string;
   readonly node: PythonSyntaxNode;
+}
+
+interface FastApiApplication extends FastApiDirectInstance {}
+
+interface FastApiRouter extends FastApiDirectInstance {
+  readonly prefix: string;
 }
 
 interface StaticFastApiDecorator {
   readonly receiver: string;
   readonly method: RouteMethod;
   readonly path: string;
+  readonly node: PythonSyntaxNode;
+}
+
+interface StaticFastApiRouterInclusion {
+  readonly applicationName: string;
+  readonly routerName: string;
+  readonly prefix: string;
   readonly node: PythonSyntaxNode;
 }
 
@@ -142,17 +158,41 @@ function isTopLevelFunction(node: PythonSyntaxNode): boolean {
   return statement.parent?.name === "Script";
 }
 
-function staticFastApiImport(
+function staticFastApiImports(
   input: PythonExtractFileFactsInput,
   node: PythonSyntaxNode
-): FastApiImport | null {
+): readonly FastApiImport[] {
   if (node.name !== "ImportStatement") {
-    return null;
+    return [];
   }
-  const match = /^from[ \t]+fastapi[ \t]+import[ \t]+FastAPI(?:[ \t]+as[ \t]+([A-Za-z_][A-Za-z0-9_]*))?[ \t]*$/u.exec(
-    nodeText(input, node)
+  const match = /^from[ \t]+fastapi[ \t]+import[ \t]+(.+?)[ \t]*$/u.exec(nodeText(input, node));
+  if (match?.[1] === undefined) {
+    return [];
+  }
+
+  const namedImports = match[1]
+    .split(",")
+    .map((entry) => {
+      const parsed = /^([A-Za-z_][A-Za-z0-9_]*)(?:[ \t]+as[ \t]+([A-Za-z_][A-Za-z0-9_]*))?$/u.exec(
+        entry.trim()
+      );
+      return parsed === null ? null : { importedName: parsed[1] ?? "", alias: parsed[2] };
+    });
+  if (namedImports.some((entry) => entry === null)) {
+    return [];
+  }
+
+  return namedImports.flatMap((entry) =>
+    entry === null
+      ? []
+      : [
+          {
+            importedName: entry.importedName,
+            alias: entry.alias ?? entry.importedName,
+            node
+          }
+        ]
   );
-  return match === null ? null : { alias: match[1] ?? "FastAPI", node };
 }
 
 function directAssignmentName(
@@ -166,11 +206,11 @@ function directAssignmentName(
   return target?.name === "VariableName" ? declarationName(input, target) : null;
 }
 
-function staticFastApiApplication(
+function staticFastApiConstructorAssignment(
   input: PythonExtractFileFactsInput,
   node: PythonSyntaxNode,
   constructorNames: ReadonlySet<string>
-): FastApiApplication | null {
+): (FastApiDirectInstance & { readonly arguments_: PythonSyntaxNode }) | null {
   if (node.name !== "AssignStatement") {
     return null;
   }
@@ -203,7 +243,86 @@ function staticFastApiApplication(
   const constructorName = declarationName(input, constructor);
   return constructorName === null || !constructorNames.has(constructorName)
     ? null
-    : { name, constructorName, node };
+    : { name, constructorName, node, arguments_ };
+}
+
+function staticFastApiApplication(
+  input: PythonExtractFileFactsInput,
+  node: PythonSyntaxNode,
+  constructorNames: ReadonlySet<string>
+): FastApiApplication | null {
+  const assignment = staticFastApiConstructorAssignment(input, node, constructorNames);
+  return assignment === null
+    ? null
+    : { name: assignment.name, constructorName: assignment.constructorName, node: assignment.node };
+}
+
+function staticArgumentEntries(argumentList: PythonSyntaxNode): readonly PythonSyntaxNode[] {
+  return directChildren(argumentList).filter(
+    (child) => child.name !== "(" && child.name !== ")" && child.name !== ","
+  );
+}
+
+function staticKeywordArguments(
+  input: PythonExtractFileFactsInput,
+  entries: readonly PythonSyntaxNode[]
+): ReadonlyMap<string, PythonSyntaxNode> | null {
+  const arguments_ = new Map<string, PythonSyntaxNode>();
+  for (let index = 0; index < entries.length; index += 3) {
+    const nameNode = entries[index];
+    const operator = entries[index + 1];
+    const value = entries[index + 2];
+    if (nameNode?.name !== "VariableName" || operator?.name !== "AssignOp" || value === undefined) {
+      return null;
+    }
+    const name = declarationName(input, nameNode);
+    if (name === null || arguments_.has(name)) {
+      return null;
+    }
+    arguments_.set(name, value);
+  }
+  return arguments_;
+}
+
+function staticFastApiPrefix(
+  input: PythonExtractFileFactsInput,
+  keywordArguments: ReadonlyMap<string, PythonSyntaxNode>
+): string | null {
+  const prefixNode = keywordArguments.get("prefix");
+  if (prefixNode === undefined) {
+    return "";
+  }
+  if (prefixNode.name !== "String") {
+    return null;
+  }
+  const prefix = staticPlainPythonString(input, prefixNode);
+  return prefix === null || (prefix !== "" && (!prefix.startsWith("/") || prefix.endsWith("/")))
+    ? null
+    : prefix;
+}
+
+function staticFastApiRouter(
+  input: PythonExtractFileFactsInput,
+  node: PythonSyntaxNode,
+  constructorNames: ReadonlySet<string>
+): FastApiRouter | null {
+  const assignment = staticFastApiConstructorAssignment(input, node, constructorNames);
+  if (assignment === null) {
+    return null;
+  }
+  const keywordArguments = staticKeywordArguments(input, staticArgumentEntries(assignment.arguments_));
+  if (keywordArguments === null) {
+    return null;
+  }
+  const prefix = staticFastApiPrefix(input, keywordArguments);
+  return prefix === null
+    ? null
+    : {
+        name: assignment.name,
+        constructorName: assignment.constructorName,
+        prefix,
+        node: assignment.node
+      };
 }
 
 function directVariableNames(
@@ -368,6 +487,110 @@ function staticFastApiDecorator(
   return path === null || !path.startsWith("/") ? null : { receiver, method, path, node };
 }
 
+function staticFastApiRouterInclusion(
+  input: PythonExtractFileFactsInput,
+  node: PythonSyntaxNode
+): StaticFastApiRouterInclusion | null {
+  if (node.name !== "ExpressionStatement") {
+    return null;
+  }
+  const expression = directChildren(node)[0];
+  if (expression?.name !== "CallExpression") {
+    return null;
+  }
+  const callChildren = directChildren(expression);
+  const member = callChildren[0];
+  const argumentList = callChildren[1];
+  if (callChildren.length !== 2 || member?.name !== "MemberExpression" || argumentList?.name !== "ArgList") {
+    return null;
+  }
+  const memberChildren = directChildren(member);
+  const applicationNode = memberChildren[0];
+  const methodNode = memberChildren[2];
+  if (
+    memberChildren.length !== 3 ||
+    applicationNode?.name !== "VariableName" ||
+    methodNode?.name !== "PropertyName" ||
+    nodeText(input, methodNode) !== "include_router"
+  ) {
+    return null;
+  }
+  const applicationName = declarationName(input, applicationNode);
+  const entries = staticArgumentEntries(argumentList);
+  const routerNode = entries[0];
+  if (applicationName === null || routerNode?.name !== "VariableName") {
+    return null;
+  }
+  const routerName = declarationName(input, routerNode);
+  const keywordArguments = staticKeywordArguments(input, entries.slice(1));
+  if (routerName === null || keywordArguments === null) {
+    return null;
+  }
+  const prefix = staticFastApiPrefix(input, keywordArguments);
+  return prefix === null ? null : { applicationName, routerName, prefix, node };
+}
+
+function hasUnambiguousFastApiImportAlias(
+  imports: readonly FastApiImport[],
+  candidate: FastApiImport
+): boolean {
+  return (
+    imports.filter(
+      (other) => other.alias === candidate.alias && nodeKey(other.node) === nodeKey(candidate.node)
+    ).length === 1
+  );
+}
+
+function latestProvenFastApiInstance<T extends FastApiDirectInstance>(
+  input: PythonExtractFileFactsInput,
+  topLevelNodes: readonly PythonSyntaxNode[],
+  imports: readonly FastApiImport[],
+  instances: readonly T[],
+  receiverName: string,
+  before: number,
+  importedConstructor: FastApiImportedConstructor
+): T | null {
+  const candidates = instances
+    .filter(
+      (instance) =>
+        instance.name === receiverName &&
+        instance.node.to <= before &&
+        !hasTopLevelRebinding(
+          input,
+          topLevelNodes,
+          instance.name,
+          instance.node.to,
+          before
+        )
+    )
+    .sort((left, right) => right.node.from - left.node.from);
+
+  for (const instance of candidates) {
+    const imported = imports
+      .filter(
+        (candidate) =>
+          candidate.importedName === importedConstructor &&
+          candidate.alias === instance.constructorName &&
+          hasUnambiguousFastApiImportAlias(imports, candidate) &&
+          candidate.node.to <= instance.node.from &&
+          !hasTopLevelRebinding(
+            input,
+            topLevelNodes,
+            candidate.alias,
+            candidate.node.to,
+            instance.node.from
+          )
+      )
+      .sort((left, right) => right.node.from - left.node.from)
+      .at(0);
+    if (imported !== undefined) {
+      return instance;
+    }
+  }
+
+  return null;
+}
+
 function latestProvenFastApiApplication(
   input: PythonExtractFileFactsInput,
   topLevelNodes: readonly PythonSyntaxNode[],
@@ -375,48 +598,25 @@ function latestProvenFastApiApplication(
   applications: readonly FastApiApplication[],
   decorator: StaticFastApiDecorator
 ): FastApiApplication | null {
-  const candidates = applications
-    .filter(
-      (application) =>
-        application.name === decorator.receiver &&
-        application.node.to <= decorator.node.from &&
-        !hasTopLevelRebinding(
-          input,
-          topLevelNodes,
-          application.name,
-          application.node.to,
-          decorator.node.from
-        )
-    )
-    .sort((left, right) => right.node.from - left.node.from);
+  return latestProvenFastApiInstance(
+    input,
+    topLevelNodes,
+    imports,
+    applications,
+    decorator.receiver,
+    decorator.node.from,
+    "FastAPI"
+  );
+}
 
-  for (const application of candidates) {
-    const imported = imports
-      .filter(
-        (candidate) =>
-          candidate.alias === application.constructorName &&
-          candidate.node.to <= application.node.from &&
-          !hasTopLevelRebinding(
-            input,
-            topLevelNodes,
-            candidate.alias,
-            candidate.node.to,
-            application.node.from
-          )
-      )
-      .sort((left, right) => right.node.from - left.node.from)
-      .at(0);
-    if (imported !== undefined) {
-      return application;
-    }
-  }
-
-  return null;
+function combinedFastApiPath(...parts: readonly string[]): string {
+  return parts.join("");
 }
 
 /**
- * Extracts conservative Python file facts. The initial Python surface records
- * declarations, containment, and same-file FastAPI decorator routes only.
+ * Extracts conservative Python file facts. The Python surface records
+ * declarations, containment, direct FastAPI decorators, and direct same-file
+ * APIRouter composition only when every binding and path is syntax-proven.
  */
 export function extractPythonFileFacts(input: PythonExtractFileFactsInput): ArtifactFacts {
   const capability = frameworkCapability("fastapi");
@@ -522,19 +722,86 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
     }
   }
 
+  function addFastApiRoute(
+    decorator: StaticFastApiDecorator,
+    handler: SymbolNode,
+    path: string,
+    ruleId: string
+  ): void {
+    const routeName = `${decorator.method} ${path}`;
+    const qualifiedName = `${input.filePath}#route:${routeName}`;
+    const identity = `${qualifiedName}\u0000route`;
+    const declarationOrdinal = declarationOrdinals.get(identity) ?? 0;
+    declarationOrdinals.set(identity, declarationOrdinal + 1);
+    const range = rangeFor(lineStarts, decorator.node.from, decorator.node.to);
+    const route: SymbolNode = {
+      id: createSymbolId({
+        filePath: input.filePath,
+        qualifiedName,
+        kind: "route",
+        declarationOrdinal
+      }),
+      name: routeName,
+      qualifiedName,
+      kind: "route",
+      filePath: input.filePath,
+      range,
+      isExported: false,
+      declarationOrdinal
+    };
+    symbols.push(route);
+    addContainment(fileNode, route, decorator.node);
+    edges.push({
+      id: createEdgeId({
+        sourceId: route.id,
+        targetId: handler.id,
+        kind: "routes",
+        line: range.start.line,
+        column: range.start.column,
+        referenceName: handler.name
+      }),
+      sourceId: route.id,
+      targetId: handler.id,
+      kind: "routes",
+      filePath: input.filePath,
+      range,
+      resolution: "exact",
+      confidence: 1,
+      referenceName: handler.name,
+      evidence: {
+        ruleId,
+        stage: "syntax",
+        candidateSymbolIds: [handler.id]
+      }
+    });
+  }
+
   if (!hasSyntaxError(root)) {
     const topLevelNodes = directChildren(root);
     for (const node of topLevelNodes) {
       visit(node, fileNode);
     }
 
-    const imports = topLevelNodes
-      .map((node) => staticFastApiImport(input, node))
-      .filter((candidate): candidate is FastApiImport => candidate !== null);
-    const constructorNames = new Set(imports.map((candidate) => candidate.alias));
+    const imports = topLevelNodes.flatMap((node) => staticFastApiImports(input, node));
+    const applicationConstructorNames = new Set(
+      imports
+        .filter((candidate) => candidate.importedName === "FastAPI")
+        .map((candidate) => candidate.alias)
+    );
+    const routerConstructorNames = new Set(
+      imports
+        .filter((candidate) => candidate.importedName === "APIRouter")
+        .map((candidate) => candidate.alias)
+    );
     const applications = topLevelNodes
-      .map((node) => staticFastApiApplication(input, node, constructorNames))
+      .map((node) => staticFastApiApplication(input, node, applicationConstructorNames))
       .filter((candidate): candidate is FastApiApplication => candidate !== null);
+    const routers = topLevelNodes
+      .map((node) => staticFastApiRouter(input, node, routerConstructorNames))
+      .filter((candidate): candidate is FastApiRouter => candidate !== null);
+    const inclusions = topLevelNodes
+      .map((node) => staticFastApiRouterInclusion(input, node))
+      .filter((candidate): candidate is StaticFastApiRouterInclusion => candidate !== null);
 
     for (const statement of topLevelNodes) {
       const functionNode = decoratedDefinition(statement);
@@ -547,65 +814,72 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
       }
       for (const decoratorNode of directChildren(statement).filter((node) => node.name === "Decorator")) {
         const decorator = staticFastApiDecorator(input, decoratorNode);
+        if (decorator === null) {
+          continue;
+        }
         if (
-          decorator === null ||
           latestProvenFastApiApplication(
             input,
             topLevelNodes,
             imports,
             applications,
             decorator
-          ) === null
+          ) !== null
         ) {
-          continue;
+          addFastApiRoute(
+            decorator,
+            handler,
+            decorator.path,
+            "framework.fastapi.direct-app.decorator.local-function"
+          );
         }
 
-        const routeName = `${decorator.method} ${decorator.path}`;
-        const qualifiedName = `${input.filePath}#route:${routeName}`;
-        const identity = `${qualifiedName}\u0000route`;
-        const declarationOrdinal = declarationOrdinals.get(identity) ?? 0;
-        declarationOrdinals.set(identity, declarationOrdinal + 1);
-        const range = rangeFor(lineStarts, decorator.node.from, decorator.node.to);
-        const route: SymbolNode = {
-          id: createSymbolId({
-            filePath: input.filePath,
-            qualifiedName,
-            kind: "route",
-            declarationOrdinal
-          }),
-          name: routeName,
-          qualifiedName,
-          kind: "route",
-          filePath: input.filePath,
-          range,
-          isExported: false,
-          declarationOrdinal
-        };
-        symbols.push(route);
-        addContainment(fileNode, route, decorator.node);
-        edges.push({
-          id: createEdgeId({
-            sourceId: route.id,
-            targetId: handler.id,
-            kind: "routes",
-            line: range.start.line,
-            column: range.start.column,
-            referenceName: handler.name
-          }),
-          sourceId: route.id,
-          targetId: handler.id,
-          kind: "routes",
-          filePath: input.filePath,
-          range,
-          resolution: "exact",
-          confidence: 1,
-          referenceName: handler.name,
-          evidence: {
-            ruleId: "framework.fastapi.direct-app.decorator.local-function",
-            stage: "syntax",
-            candidateSymbolIds: [handler.id]
+        for (const inclusion of inclusions) {
+          if (decorator.receiver !== inclusion.routerName || statement.to > inclusion.node.from) {
+            continue;
           }
-        });
+          const routerAtDecorator = latestProvenFastApiInstance(
+            input,
+            topLevelNodes,
+            imports,
+            routers,
+            decorator.receiver,
+            decorator.node.from,
+            "APIRouter"
+          );
+          const routerAtInclusion = latestProvenFastApiInstance(
+            input,
+            topLevelNodes,
+            imports,
+            routers,
+            inclusion.routerName,
+            inclusion.node.from,
+            "APIRouter"
+          );
+          const applicationAtInclusion = latestProvenFastApiInstance(
+            input,
+            topLevelNodes,
+            imports,
+            applications,
+            inclusion.applicationName,
+            inclusion.node.from,
+            "FastAPI"
+          );
+          if (
+            routerAtDecorator === null ||
+            routerAtInclusion === null ||
+            applicationAtInclusion === null ||
+            routerAtDecorator.node.from !== routerAtInclusion.node.from
+          ) {
+            continue;
+          }
+          addFastApiRoute(
+            decorator,
+            handler,
+            combinedFastApiPath(inclusion.prefix, routerAtInclusion.prefix, decorator.path),
+            "framework.fastapi.direct-router.include-router.decorator.local-function"
+          );
+        }
       }
     }
   }

@@ -6,6 +6,24 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.30.0] - 2026-07-30
+
+### Added
+
+- AST-proven same-file FastAPI `APIRouter` route composition. A direct one-line named import from `fastapi` may include `FastAPI` and `APIRouter` together (including direct import aliases); direct top-level `APIRouter(...)` construction, literal router prefixes, direct top-level decorated functions, and direct `app.include_router(router, prefix="/...")` calls now produce first-class exact route nodes such as `GET /api/catalog/items`.
+- Exact `framework.fastapi.direct-router.include-router.decorator.local-function` syntax evidence for the composed route-to-handler edge. Existing direct application decorator evidence remains unchanged, while dynamic prefixes, star/keyword expansion, possible rebinding, unmounted routers, and routes declared after their inclusion are rejected instead of guessed.
+- Capability, unit, integration, persistence, and route-query coverage for direct same-file router composition, plus a Traditional Chinese comparison report at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.30.0.md`.
+
+### Compatibility
+
+- No SQLite schema migration or new query command is required. The additive behavior stays in the existing Python artifact-fact and graph payloads; existing generations remain readable.
+- The artifact extractor advances to `multi-language-ast-v19`; the project resolver remains `project-resolver-v13`. A pre-v0.30 active index reports `indexer-version-changed` until an explicit `sync` or `index` publishes APIRouter-capable facts.
+
+### Deliberate limits
+
+- This remains a narrow, file-local FastAPI proof. Cross-file/module-member routers, nested routers, assignment aliases, factory wrappers, dynamic or escaped paths/prefixes, import-list continuations, and generic Python import/export/call resolution are intentionally excluded.
+- Flask, Django, Python type hierarchy, semantic type checking, and runtime framework behavior are not modeled in v0.30.
+
 ## [0.29.0] - 2026-07-30
 
 ### Added
@@ -583,7 +601,8 @@ No unreleased changes.
 - Explicit full indexing, caller/callee/impact queries, and read-only MCP exploration.
 - `exact`, `heuristic`, and `unresolved` relationship states.
 
-[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.29.0...HEAD
+[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.30.0...HEAD
+[0.30.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.29.0...v0.30.0
 [0.29.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.28.0...v0.29.0
 [0.28.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.27.0...v0.28.0
 [0.27.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.26.0...v0.27.0

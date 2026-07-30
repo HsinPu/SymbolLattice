@@ -81,7 +81,10 @@ export const FRAMEWORK_CAPABILITIES = [
     languages: ["python"],
     routeFramework: "fastapi",
     routeRegistrations: [],
-    surfaces: ["direct FastAPI application decorators"]
+    surfaces: [
+      "direct FastAPI application decorators",
+      "same-file APIRouter decorators through direct include_router"
+    ]
   }
 ] as const satisfies readonly FrameworkCapability[];
 
