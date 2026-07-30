@@ -50,6 +50,7 @@ import type {
   SearchOptions,
   SearchResult
 } from "../application/types.js";
+import { ARTIFACT_LANGUAGES } from "../domain/index.js";
 import { SYMBOL_LATTICE_VERSION } from "../version.js";
 
 export interface ExploreService {
@@ -208,7 +209,7 @@ export interface SearchToolArguments {
   readonly limit?: number | undefined;
   /** Project-relative source-path prefix. */
   readonly path?: string | undefined;
-  readonly language?: "typescript" | "javascript" | undefined;
+  readonly language?: SearchOptions["language"];
 }
 
 export interface RoutesToolArguments {
@@ -482,7 +483,7 @@ const searchOutputSchema = z
         .object({
           rank: z.number().int().positive(),
           filePath: z.string(),
-          language: z.enum(["typescript", "javascript"]),
+          language: z.enum(ARTIFACT_LANGUAGES),
           range: sourceRangeOutputSchema,
           excerpt: sourceExcerptOutputSchema,
           matchingTerms: z.array(z.string()),
@@ -1251,7 +1252,7 @@ export function createMcpServer(
           projectPath: z.string().trim().min(1).optional().describe("Optional path to an already indexed project."),
           limit: z.number().int().min(1).max(100).optional().describe("Maximum results to return (1-100)."),
           path: z.string().trim().min(1).optional().describe("Optional project-relative source-path prefix."),
-          language: z.enum(["typescript", "javascript"]).optional().describe("Optional indexed source language filter.")
+          language: z.enum(ARTIFACT_LANGUAGES).optional().describe("Optional indexed source language filter.")
         },
         outputSchema: searchOutputSchema,
         annotations: {

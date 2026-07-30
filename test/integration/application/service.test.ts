@@ -2138,7 +2138,7 @@ describe("SymbolLatticeService", () => {
       service.search(projectPath, "needle", { pathPrefix: "../outside" })
     ).rejects.toMatchObject({ code: "INVALID_SEARCH_PATH_PREFIX" });
     await expect(
-      service.search(projectPath, "needle", { language: "python" as "typescript" })
+      service.search(projectPath, "needle", { language: "go" as "typescript" })
     ).rejects.toMatchObject({ code: "INVALID_SEARCH_LANGUAGE" });
   });
 
@@ -3083,6 +3083,56 @@ describe("SymbolLatticeService", () => {
     await expect(service.entrypoints(projectPath, { limit: 0 })).rejects.toMatchObject({
       code: "INVALID_ENTRYPOINT_LIMIT"
     });
+  });
+
+  it("indexes Python FastAPI decorator routes and supports Python source search", async () => {
+    const projectPath = await createInlineProject({
+      "api/main.py": [
+        "from fastapi import FastAPI",
+        "app = FastAPI()",
+        "",
+        "@app.get(\"/health\")",
+        "async def health():",
+        "    return {\"ok\": True}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    const indexed = await service.init({ projectPath });
+    const routes = await service.routes(projectPath, { method: "GET" });
+    const search = await service.search(projectPath, "health", { language: "python" });
+    const persistedFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "api/main.py");
+
+    expect(indexed).toMatchObject({
+      stale: false,
+      counts: { files: 1, symbols: expect.any(Number), edges: expect.any(Number) }
+    });
+    expect(persistedFacts).toMatchObject({
+      language: "python",
+      extractorVersion: ARTIFACT_FACTS_EXTRACTOR_VERSION
+    });
+    expect(routes.routes).toMatchObject([
+      {
+        method: "GET",
+        path: "/health",
+        route: { kind: "route", name: "GET /health" },
+        edge: {
+          kind: "routes",
+          resolution: "exact",
+          evidence: {
+            ruleId: "framework.fastapi.direct-app.decorator.local-function",
+            stage: "syntax"
+          }
+        },
+        handler: { qualifiedName: "api/main.py#health" }
+      }
+    ]);
+    expect(search.results).toMatchObject([
+      { filePath: "api/main.py", language: "python", matchingTerms: ["health"] }
+    ]);
   });
 
   it("indexes NestJS decorator routes as persisted exact method evidence", async () => {

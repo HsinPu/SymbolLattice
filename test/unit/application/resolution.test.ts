@@ -802,6 +802,46 @@ describe("literal route handler resolution", () => {
     ]);
   });
 
+  it("preserves FastAPI pending-route provenance without falling back to Express evidence", () => {
+    const sourceDocument: SourceDocument = {
+      absolutePath: "C:/project/src/routes.ts",
+      relativePath: "src/routes.ts",
+      language: "typescript",
+      sourceText: [
+        'import express from "express";',
+        "const app = express();",
+        "function health() { return 1; }",
+        'app.get("/health", health);'
+      ].join("\n"),
+      contentHash: "routes"
+    };
+    const extracted = extractFileFacts({
+      filePath: sourceDocument.relativePath,
+      sourceText: sourceDocument.sourceText,
+      language: sourceDocument.language
+    });
+    const snapshot = resolveProjectFacts({
+      sourceDocuments: [sourceDocument],
+      extractedFiles: [{
+        ...extracted,
+        pendingReferences: extracted.pendingReferences.map((reference) =>
+          reference.relationKind === "routes"
+            ? { ...reference, routeFramework: "fastapi" as const }
+            : reference
+        )
+      }],
+      indexedAt: "2026-07-30T00:00:00.000Z"
+    });
+
+    expect(snapshot.edges.find((edge) => edge.kind === "routes")).toMatchObject({
+      resolution: "exact",
+      evidence: {
+        ruleId: "framework.fastapi.direct-app.decorator.local-handler",
+        stage: "lexical"
+      }
+    });
+  });
+
   it("resolves React Router JSX page components with distinct navigation evidence", () => {
     const sourceDocuments: readonly SourceDocument[] = [
       {

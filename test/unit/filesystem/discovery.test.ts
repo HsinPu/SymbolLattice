@@ -36,13 +36,14 @@ describe("source discovery", () => {
     await mkdir(join(projectPath, "node_modules", "ignored"), { recursive: true });
     await writeFile(join(projectPath, "src", "z.ts"), "export const z = 1;", "utf8");
     await writeFile(join(projectPath, "src", "a.js"), "export const a = 1;", "utf8");
+    await writeFile(join(projectPath, "src", "b.py"), "def b():\n    return 1\n", "utf8");
     await writeFile(join(projectPath, "README.md"), "ignored", "utf8");
     await writeFile(join(projectPath, "node_modules", "ignored", "index.js"), "ignored", "utf8");
 
     const files = await discoverSourceFiles(projectPath);
 
-    expect(files.map((file) => file.relativePath)).toEqual(["src/a.js", "src/z.ts"]);
-    expect(files.map((file) => file.language)).toEqual(["javascript", "typescript"]);
+    expect(files.map((file) => file.relativePath)).toEqual(["src/a.js", "src/b.py", "src/z.ts"]);
+    expect(files.map((file) => file.language)).toEqual(["javascript", "python", "typescript"]);
   });
 
   it("applies only the root gitignore with case-sensitive anchored, glob, and negation rules", async () => {

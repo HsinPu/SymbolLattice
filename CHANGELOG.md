@@ -6,6 +6,24 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.29.0] - 2026-07-30
+
+### Added
+
+- Python `.py` discovery and a `@lezer/python` AST adapter. Valid Python files now emit conservative file, class, function, method, and exact `contains` facts; malformed source fails closed to its file symbol.
+- A first Python framework pack for direct same-file FastAPI routes. A direct `from fastapi import FastAPI` import (with an optional alias), direct top-level application assignment, literal-path HTTP decorator, and top-level `def`/`async def` handler emit an exact `GET`/`POST`/`PUT`/`PATCH`/`DELETE`/`HEAD`/`OPTIONS`/`TRACE` route edge with `framework.fastapi.direct-app.decorator.local-function` syntax evidence.
+- Python language filters through persisted source search, CLI, MCP, and Git source-path selection, plus extraction/persistence/incremental coverage and a Traditional Chinese comparison report at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.29.0.md`.
+
+### Compatibility
+
+- No SQLite schema migration or new query command is required. Python facts use the existing artifact-fact and graph payloads; existing generations remain readable.
+- The artifact extractor advances to `multi-language-ast-v18`; the project resolver remains `project-resolver-v13`. A pre-v0.29 active index reports `indexer-version-changed` until an explicit `sync` or `index` publishes Python-capable facts.
+
+### Deliberate limits
+
+- This is a narrow, file-local FastAPI proof. `APIRouter`, `include_router`, cross-file Python imports, mixed import lists, factory composition, dynamic/multiline/escaped paths, and non-direct/rebound application shapes are intentionally excluded.
+- Generic Python import/export/call resolution, type hierarchy, semantic type checking, and runtime framework behavior are not modeled in v0.29.
+
 ## [0.28.0] - 2026-07-30
 
 ### Added
@@ -565,7 +583,8 @@ No unreleased changes.
 - Explicit full indexing, caller/callee/impact queries, and read-only MCP exploration.
 - `exact`, `heuristic`, and `unresolved` relationship states.
 
-[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.28.0...HEAD
+[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.29.0...HEAD
+[0.29.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.28.0...v0.29.0
 [0.28.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.27.0...v0.28.0
 [0.27.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.26.0...v0.27.0
 [0.26.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.25.0...v0.26.0

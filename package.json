@@ -1,7 +1,7 @@
 {
   "name": "@hsinpu/symbol-lattice",
-  "version": "0.28.0",
-  "description": "Evidence-first local code graph exploration for TypeScript and JavaScript projects.",
+  "version": "0.29.0",
+  "description": "Evidence-first local code intelligence for TypeScript, JavaScript, and Python projects.",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -33,6 +33,7 @@
     "start": "node dist/cli/main.js"
   },
   "dependencies": {
+    "@lezer/python": "1.1.19",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "commander": "^15.0.0",
     "ignore": "^7.0.5",

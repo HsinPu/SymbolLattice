@@ -71,10 +71,10 @@ describe("Git change-set NUL parsers", () => {
 
   it("selects only supported source paths while retaining both rename sides", () => {
     const changes = parseGitNameStatusZ(
-      "R90\u0000src/old.ts\u0000src/new.ts\u0000M\u0000README.md\u0000D\u0000src/legacy.jsx\u0000A\u0000node_modules/example.ts\u0000"
+      "R90\u0000src/old.ts\u0000src/new.ts\u0000M\u0000README.md\u0000D\u0000src/legacy.jsx\u0000A\u0000src/api.py\u0000A\u0000node_modules/example.ts\u0000"
     );
 
-    expect(gitSourcePaths(changes)).toEqual(["src/legacy.jsx", "src/new.ts", "src/old.ts"]);
+    expect(gitSourcePaths(changes)).toEqual(["src/api.py", "src/legacy.jsx", "src/new.ts", "src/old.ts"]);
   });
 });
 

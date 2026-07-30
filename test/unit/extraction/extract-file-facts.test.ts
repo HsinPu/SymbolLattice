@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { extractFileFacts } from "../../../src/extraction/index.js";
 
-describe("TypeScript and JavaScript extraction", () => {
+describe("source extraction", () => {
   it("collects declarations, containment, module references, and direct calls", () => {
     const facts = extractFileFacts({
       filePath: "src/consumer.ts",
@@ -1816,5 +1816,113 @@ describe("TypeScript and JavaScript extraction", () => {
 
     expect(facts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
     expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+  });
+
+  it("extracts Python declarations and direct FastAPI decorator routes with syntax evidence", () => {
+    const facts = extractFileFacts({
+      filePath: "app/main.py",
+      language: "python",
+      sourceText: [
+        "from fastapi import FastAPI as Api",
+        "app = Api(title=\"Example\")",
+        "",
+        "@app.get(\"/health\", tags=[\"system\"])",
+        "async def health():",
+        "    return {\"ok\": True}",
+        "",
+        "class Service:",
+        "    def run(self):",
+        "        return \"ready\""
+      ].join("\n")
+    });
+
+    expect(
+      facts.symbols.map((symbol) => [symbol.kind, symbol.qualifiedName, symbol.name])
+    ).toEqual(
+      expect.arrayContaining([
+        ["file", "app/main.py", "main.py"],
+        ["function", "app/main.py#health", "health"],
+        ["class", "app/main.py#Service", "Service"],
+        ["method", "app/main.py#Service.run", "run"],
+        ["route", "app/main.py#route:GET /health", "GET /health"]
+      ])
+    );
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId,
+          edge.evidence?.stage,
+          edge.resolution,
+          edge.confidence
+        ])
+    ).toEqual([
+      [
+        "GET /health",
+        "app/main.py#health",
+        "framework.fastapi.direct-app.decorator.local-function",
+        "syntax",
+        "exact",
+        1
+      ]
+    ]);
+  });
+
+  it("rejects dynamic and unproven Python FastAPI route shapes", () => {
+    const facts = extractFileFacts({
+      filePath: "app/unproven.py",
+      language: "python",
+      sourceText: [
+        "from fastapi import FastAPI",
+        "path = \"/dynamic\"",
+        "app = build_application(FastAPI)",
+        "@app.get(\"/not-proven\")",
+        "async def not_proven():",
+        "    return {}",
+        "",
+        "other = FastAPI()",
+        "@other.get(path)",
+        "async def dynamic_path():",
+        "    return {}",
+        "",
+        "rebound = FastAPI()",
+        "rebound = build_application()",
+        "@rebound.get(\"/rebound\")",
+        "async def rebound_handler():",
+        "    return {}",
+        "",
+        "conditional = FastAPI()",
+        "if enabled:",
+        "    conditional = build_application()",
+        "@conditional.get(\"/conditional\")",
+        "async def conditional_handler():",
+        "    return {}"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+  });
+
+  it("fails closed for Python syntax errors instead of emitting partial declarations or routes", () => {
+    const facts = extractFileFacts({
+      filePath: "app/broken.py",
+      language: "python",
+      sourceText: [
+        "from fastapi import FastAPI",
+        "app = FastAPI()",
+        "@app.get(\"/broken\")",
+        "async def broken(:"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.map((symbol) => [symbol.kind, symbol.name])).toEqual([
+      ["file", "broken.py"]
+    ]);
+    expect(facts.edges).toEqual([]);
   });
 });

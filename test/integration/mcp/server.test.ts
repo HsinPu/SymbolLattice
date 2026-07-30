@@ -648,7 +648,7 @@ describe("SymbolLattice MCP server", () => {
         projectPath: "C:/chosen-project",
         limit: 7,
         path: "src/",
-        language: "typescript"
+        language: "python"
       }
     });
     expect(search.isError).not.toBe(true);
@@ -660,7 +660,7 @@ describe("SymbolLattice MCP server", () => {
       {
         projectPath: "C:/chosen-project",
         query: "user",
-        options: { limit: 7, pathPrefix: "src/", language: "typescript" }
+        options: { limit: 7, pathPrefix: "src/", language: "python" }
       }
     ]);
 

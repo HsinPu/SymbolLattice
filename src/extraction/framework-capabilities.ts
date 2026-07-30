@@ -6,7 +6,8 @@ export const FRAMEWORK_CAPABILITY_IDS = [
   "fastify",
   "nestjs",
   "react-router",
-  "nextjs"
+  "nextjs",
+  "fastapi"
 ] as const;
 
 export type FrameworkCapabilityId = (typeof FRAMEWORK_CAPABILITY_IDS)[number];
@@ -74,6 +75,13 @@ export const FRAMEWORK_CAPABILITIES = [
     routeFramework: "nextjs",
     routeRegistrations: ["nextjs-pages-router", "nextjs-app-router"],
     surfaces: ["Pages Router default exports", "App Router page default exports"]
+  },
+  {
+    id: "fastapi",
+    languages: ["python"],
+    routeFramework: "fastapi",
+    routeRegistrations: [],
+    surfaces: ["direct FastAPI application decorators"]
   }
 ] as const satisfies readonly FrameworkCapability[];
 

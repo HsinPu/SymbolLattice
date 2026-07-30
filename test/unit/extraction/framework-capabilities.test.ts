@@ -13,7 +13,8 @@ describe("first-party framework capabilities", () => {
       "fastify",
       "nestjs",
       "react-router",
-      "nextjs"
+      "nextjs",
+      "fastapi"
     ]);
     expect(FRAMEWORK_CAPABILITIES.map((capability) => capability.id)).toEqual(
       FRAMEWORK_CAPABILITY_IDS
@@ -36,6 +37,12 @@ describe("first-party framework capabilities", () => {
       routeFramework: "nextjs",
       routeRegistrations: ["nextjs-pages-router", "nextjs-app-router"],
       surfaces: ["Pages Router default exports", "App Router page default exports"]
+    });
+    expect(frameworkCapability("fastapi")).toMatchObject({
+      languages: ["python"],
+      routeFramework: "fastapi",
+      routeRegistrations: [],
+      surfaces: ["direct FastAPI application decorators"]
     });
   });
 });

@@ -148,6 +148,9 @@ function staticRouteHandlerRuleId(
       reference.routeRegistration === "nextjs-app-router" ? "app-router" : "pages-router";
     return `framework.nextjs.${registration}.${suffix}`;
   }
+  if (reference.routeFramework === "fastapi") {
+    return `framework.fastapi.direct-app.decorator.${suffix}`;
+  }
   return `framework.express.literal-route.${suffix}`;
 }
 

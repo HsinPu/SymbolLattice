@@ -36,7 +36,7 @@ export type EdgeKind = (typeof EDGE_KINDS)[number];
 export type ResolutionKind = "exact" | "heuristic" | "unresolved";
 
 /** Framework provenance retained for syntax-proven static HTTP or client-navigation routes. */
-export type RouteFramework = "express" | "fastify" | "nextjs" | "react-router";
+export type RouteFramework = "express" | "fastify" | "nextjs" | "react-router" | "fastapi";
 
 /** Additional static registration context retained when it changes route provenance or path. */
 export type RouteRegistration =
@@ -48,7 +48,7 @@ export type RouteRegistration =
   | "react-router-data-router"
   | "react-router-create-routes-from-elements";
 
-export const ARTIFACT_LANGUAGES = ["typescript", "javascript"] as const;
+export const ARTIFACT_LANGUAGES = ["typescript", "javascript", "python"] as const;
 
 export type ArtifactLanguage = (typeof ARTIFACT_LANGUAGES)[number];
 

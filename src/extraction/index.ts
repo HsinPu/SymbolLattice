@@ -1,5 +1,6 @@
 import ts from "typescript";
 
+import { extractPythonFileFacts } from "./python.js";
 import {
   frameworkCapability,
   type FrameworkCapability,
@@ -3398,6 +3399,10 @@ function fileNodeFor(sourceFile: ts.SourceFile, input: ExtractFileFactsInput): S
  * left to the application layer so an unresolved reference cannot become a false edge.
  */
 export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFacts {
+  if (input.language === "python") {
+    return extractPythonFileFacts({ ...input, language: "python" });
+  }
+
   const sourceFile = ts.createSourceFile(
     input.filePath,
     input.sourceText,

@@ -51,7 +51,7 @@ export interface GitChangeSet {
   readonly headCommit: string;
   readonly includesUntracked: boolean;
   readonly changes: readonly GitChangeRecord[];
-  /** Sorted, unique TypeScript/JavaScript old/current paths from `changes`. */
+  /** Sorted, unique supported-language old/current paths from `changes`. */
   readonly sourcePaths: readonly string[];
 }
 

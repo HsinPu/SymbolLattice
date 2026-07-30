@@ -43,7 +43,7 @@ import {
   type RoutesOptions,
   type WatchReceipt
 } from "../application/index.js";
-import { MAX_SOURCE_SEARCH_LIMIT } from "../domain/index.js";
+import { ARTIFACT_LANGUAGES, MAX_SOURCE_SEARCH_LIMIT } from "../domain/index.js";
 import {
   FileSystemSourceCatalog,
   NodeFileSystemWatchSource
@@ -202,12 +202,10 @@ function parseSearchPath(value: string): string {
 
 function parseSearchLanguage(value: string): NonNullable<SearchOptions["language"]> {
   const language = value.trim();
-  if (language !== "typescript" && language !== "javascript") {
-    throw new Error(
-      `Expected \"typescript\" or \"javascript\", received \"${value}\".`
-    );
+  if (!ARTIFACT_LANGUAGES.includes(language as NonNullable<SearchOptions["language"]>)) {
+    throw new Error(`Expected one of: ${ARTIFACT_LANGUAGES.join(", ")}; received "${value}".`);
   }
-  return language;
+  return language as NonNullable<SearchOptions["language"]>;
 }
 
 function parseRouteMethod(value: string): NonNullable<RoutesOptions["method"]> {
@@ -513,8 +511,8 @@ export function createProgram(
     )
     .option("--path <project-relative-prefix>", "Restrict results to a project-relative source-path prefix", parseSearchPath)
     .option(
-      "--language <typescript|javascript>",
-      "Restrict results to TypeScript or JavaScript",
+      "--language <typescript|javascript|python>",
+      "Restrict results to TypeScript, JavaScript, or Python",
       parseSearchLanguage
     )
     .action(async (query: string, options: SearchCommandOptions) => {

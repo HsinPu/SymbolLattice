@@ -5,13 +5,16 @@ import { isAbsolute, parse, relative, resolve, sep } from "node:path";
 
 import ignore, { type Ignore } from "ignore";
 
-export type SupportedLanguage = "typescript" | "javascript";
+import type { ArtifactLanguage } from "../../domain/index.js";
+
+export type SupportedLanguage = ArtifactLanguage;
 
 export const SUPPORTED_EXTENSIONS: ReadonlyMap<string, SupportedLanguage> = new Map([
   [".ts", "typescript"],
   [".tsx", "typescript"],
   [".js", "javascript"],
-  [".jsx", "javascript"]
+  [".jsx", "javascript"],
+  [".py", "python"]
 ] as const);
 
 /**

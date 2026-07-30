@@ -385,7 +385,7 @@ describe("symbol-lattice search CLI", () => {
         "--path",
         " src/ ",
         "--language",
-        "typescript",
+        "python",
         "--json"
       ],
       { from: "node" }
@@ -395,7 +395,7 @@ describe("symbol-lattice search CLI", () => {
       {
         projectPath: resolve("C:/chosen-project"),
         query: "User Token",
-        options: { limit: 7, pathPrefix: "src/", language: "typescript" }
+        options: { limit: 7, pathPrefix: "src/", language: "python" }
       }
     ]);
     expect(write).toHaveBeenCalledWith(`${JSON.stringify(result, null, 2)}\n`);
