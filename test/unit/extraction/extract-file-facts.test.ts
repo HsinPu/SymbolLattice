@@ -4745,6 +4745,296 @@ describe("source extraction", () => {
     ]);
   });
 
+  it("extracts direct Nim Jester route blocks with exact and unresolved evidence", () => {
+    const facts = extractFileFacts({
+      filePath: "src/app.nim",
+      language: "nim",
+      sourceText: [
+        "import asyncdispatch, jester",
+        "",
+        "#[",
+        "  #[",
+        "  get \"/ignored\":",
+        "    ignored()",
+        "  ]#",
+        "]#",
+        "",
+        "proc health*() =",
+        "  discard",
+        "",
+        "proc createUser() =",
+        "  discard",
+        "",
+        "routes:",
+        "  get \"/health\":",
+        "    health()",
+        "  post \"/users\":",
+        "    createUser()",
+        "  patch \"/missing\":",
+        "    missing()",
+        "",
+        "router admin:",
+        "  delete \"/users\":",
+        "    health()"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(
+      facts.symbols.filter((symbol) => symbol.kind === "function").map((symbol) => symbol.qualifiedName)
+    ).toEqual(["src/app.nim.health", "src/app.nim.createUser"]);
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName ?? null,
+          edge.referenceName,
+          edge.evidence?.ruleId,
+          edge.resolution,
+          edge.confidence
+        ])
+    ).toEqual([
+      [
+        "GET /health",
+        "src/app.nim.health",
+        "health",
+        "framework.jester.direct-route-block.literal-named-proc.local-proc",
+        "exact",
+        1
+      ],
+      [
+        "POST /users",
+        "src/app.nim.createUser",
+        "createUser",
+        "framework.jester.direct-route-block.literal-named-proc.local-proc",
+        "exact",
+        1
+      ],
+      [
+        "PATCH /missing",
+        null,
+        "missing",
+        "framework.jester.direct-route-block.literal-named-proc.unresolved",
+        "unresolved",
+        0
+      ],
+      [
+        "DELETE /users",
+        "src/app.nim.health",
+        "health",
+        "framework.jester.direct-route-block.literal-named-proc.local-proc",
+        "exact",
+        1
+      ]
+    ]);
+  });
+
+  it("requires direct Jester proof, literal route blocks, one direct proc call, and valid Nim layout", () => {
+    const missingImport = extractFileFacts({
+      filePath: "src/missing-import.nim",
+      language: "nim",
+      sourceText: [
+        "proc health() =",
+        "  discard",
+        "routes:",
+        "  get \"/health\":",
+        "    health()"
+      ].join("\n")
+    });
+    const aliasedImport = extractFileFacts({
+      filePath: "src/aliased-import.nim",
+      language: "nim",
+      sourceText: [
+        "import jester as web",
+        "proc health() =",
+        "  discard",
+        "routes:",
+        "  get \"/health\":",
+        "    health()"
+      ].join("\n")
+    });
+    const repeatedImport = extractFileFacts({
+      filePath: "src/repeated-import.nim",
+      language: "nim",
+      sourceText: [
+        "import jester",
+        "import jester",
+        "proc health() =",
+        "  discard",
+        "routes:",
+        "  get \"/health\":",
+        "    health()"
+      ].join("\n")
+    });
+    const mixedAliasImport = extractFileFacts({
+      filePath: "src/mixed-alias-import.nim",
+      language: "nim",
+      sourceText: [
+        "import jester, jester as web",
+        "proc health() =",
+        "  discard",
+        "routes:",
+        "  get \"/health\":",
+        "    health()"
+      ].join("\n")
+    });
+    const fromImport = extractFileFacts({
+      filePath: "src/from-import.nim",
+      language: "nim",
+      sourceText: [
+        "from jester import routes, get",
+        "proc health() =",
+        "  discard",
+        "routes:",
+        "  get \"/health\":",
+        "    health()"
+      ].join("\n")
+    });
+    const dynamicPath = extractFileFacts({
+      filePath: "src/dynamic.nim",
+      language: "nim",
+      sourceText: [
+        "import jester",
+        "const healthPath = \"/health\"",
+        "proc health() =",
+        "  discard",
+        "routes:",
+        "  get healthPath:",
+        "    health()"
+      ].join("\n")
+    });
+    const inlineHandler = extractFileFacts({
+      filePath: "src/inline.nim",
+      language: "nim",
+      sourceText: [
+        "import jester",
+        "routes:",
+        "  get \"/health\":",
+        "    resp \"ok\""
+      ].join("\n")
+    });
+    const multiStatementHandler = extractFileFacts({
+      filePath: "src/multi.nim",
+      language: "nim",
+      sourceText: [
+        "import jester",
+        "proc health() =",
+        "  discard",
+        "routes:",
+        "  get \"/health\":",
+        "    health()",
+        "    discard"
+      ].join("\n")
+    });
+    const nestedRoute = extractFileFacts({
+      filePath: "src/nested.nim",
+      language: "nim",
+      sourceText: [
+        "import jester",
+        "proc health() =",
+        "  discard",
+        "routes:",
+        "  if true:",
+        "    get \"/health\":",
+        "      health()"
+      ].join("\n")
+    });
+    const longStringRoute = extractFileFacts({
+      filePath: "src/string.nim",
+      language: "nim",
+      sourceText: [
+        "import jester",
+        "let documentation = \"\"\"",
+        "routes:",
+        "  get \"/health\":",
+        "    health()",
+        "\"\"\""
+      ].join("\n")
+    });
+    const shadowedRoute = extractFileFacts({
+      filePath: "src/shadowed.nim",
+      language: "nim",
+      sourceText: [
+        "import jester",
+        "proc get() =",
+        "  discard",
+        "proc health() =",
+        "  discard",
+        "routes:",
+        "  get \"/health\":",
+        "    health()"
+      ].join("\n")
+    });
+    const malformed = extractFileFacts({
+      filePath: "src/malformed.nim",
+      language: "nim",
+      sourceText: "import jester\nroutes:\n  get \"/health\":\n    health("
+    });
+    const unterminatedComment = extractFileFacts({
+      filePath: "src/comment.nim",
+      language: "nim",
+      sourceText: "#[ import jester\nroutes:"
+    });
+    const tabbed = extractFileFacts({
+      filePath: "src/tabbed.nim",
+      language: "nim",
+      sourceText: [
+        "import jester",
+        "proc health() =",
+        "\tdiscard",
+        "routes:",
+        "  get \"/health\":",
+        "    health()"
+      ].join("\n")
+    });
+    const duplicateHandler = extractFileFacts({
+      filePath: "src/duplicate.nim",
+      language: "nim",
+      sourceText: [
+        "import jester",
+        "proc health() =",
+        "  discard",
+        "proc health() =",
+        "  discard",
+        "routes:",
+        "  get \"/health\":",
+        "    health()"
+      ].join("\n")
+    });
+
+    for (const facts of [
+      missingImport,
+      aliasedImport,
+      repeatedImport,
+      mixedAliasImport,
+      fromImport,
+      dynamicPath,
+      inlineHandler,
+      multiStatementHandler,
+      nestedRoute,
+      longStringRoute,
+      shadowedRoute,
+      malformed,
+      unterminatedComment,
+      tabbed
+    ]) {
+      expect(facts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+      expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+    }
+    expect(malformed.symbols).toHaveLength(1);
+    expect(unterminatedComment.symbols).toHaveLength(1);
+    expect(tabbed.symbols).toHaveLength(1);
+    expect(duplicateHandler.edges.filter((edge) => edge.kind === "routes")).toEqual([
+      expect.objectContaining({
+        resolution: "unresolved",
+        evidence: expect.objectContaining({
+          ruleId: "framework.jester.direct-route-block.literal-named-proc.unresolved"
+        })
+      })
+    ]);
+  });
+
   it("extracts direct C++ cpp-httplib named-handler routes with exact evidence", () => {
     const facts = extractFileFacts({
       filePath: "src/server.cpp",

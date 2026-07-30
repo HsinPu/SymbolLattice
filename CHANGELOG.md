@@ -6,6 +6,24 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.59.0] - 2026-07-31
+
+### Added
+
+- Nim `.nim` source discovery, persisted source-search language filtering, CLI/MCP validation, and an isolated Nim lexical/comment/delimiter/layout extractor for direct top-level zero-argument `proc` containment.
+- An executable first-party `jester` capability. Direct Jester route facts require exactly one top-level direct `import` list containing `jester`, a direct top-level `routes:` or `router name:` block, a direct baseline-indented literal `get` / `post` / `put` / `patch` / `delete` / `head` / `options` / `trace` / `connect` route, and one simple named zero-argument call in its body. A unique same-file zero-argument `proc` produces `framework.jester.direct-route-block.literal-named-proc.local-proc`; every other accepted handler remains explicit `unresolved` evidence.
+- Unit and integration coverage now verifies Nim discovery, direct zero-argument `proc` containment, exact and unresolved Jester route-query/source-search behavior, missing/aliased/repeated-import, dynamic/inline/multi-statement/nested/long-string/shadowed rejection, malformed delimiter/comment and tab-layout fail-closed behavior, and CLI/MCP language validation. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.59.0.md`.
+
+### Compatibility
+
+- No SQLite schema migration or new query command is required. Nim symbols and Jester routes reuse the existing file, symbol, edge, source-search, and route-query contracts; existing generations remain readable.
+- The artifact extractor advances to `multi-language-ast-v48`; the project resolver remains `project-resolver-v16` because all accepted Jester callback proof is file-local. A pre-v0.59 active index reports `indexer-version-changed` until an explicit `sync` or `index` publishes Nim-capable facts.
+
+### Deliberate limits
+
+- The Nim extractor is a deliberately small lexical/comment/delimiter/layout implementation, not a full Nim parser. It retains only file symbols for unbalanced delimiters, unterminated strings/comments, or tab-indented code, and does not claim generic Nim module, type, call, package, macro, or runtime analysis.
+- Jester support accepts only exactly one direct top-level import list containing unaliased `jester`, direct top-level `routes:` / simple `router name:` blocks, one flat baseline of literal unescaped slash-prefixed paths, simple named zero-argument calls, and unique same-file zero-argument `proc` handlers. It excludes `from jester import`, aliases, repeated imports, `before` / `after` / `error` handlers, dynamic/special/regex/escaped paths, inline or multi-statement route bodies, nested control-flow/composition, top-level Jester-DSL rebinding, parameterized/generic/async/cross-file procedures, and runtime behavior. The local CodeGraph baseline does not list Nim in its indexed language set; SymbolLattice adds a narrow audited language/framework slice rather than claiming wider generic Nim parity.
+
 ## [0.58.0] - 2026-07-31
 
 ### Added

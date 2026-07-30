@@ -2,7 +2,7 @@
 
 # SymbolLattice
 
-**Evidence-first local code intelligence for TypeScript, JavaScript, Python, Go, Rust, Java, PHP, C, Lua, R, Elixir, Erlang, Clojure, Perl, Julia, Haskell, OCaml, F#, C++, C#, Ruby, Kotlin, Swift, Dart, and Scala projects.**
+**Evidence-first local code intelligence for TypeScript, JavaScript, Python, Go, Rust, Java, PHP, C, Lua, R, Elixir, Erlang, Clojure, Perl, Julia, Haskell, OCaml, F#, Nim, C++, C#, Ruby, Kotlin, Swift, Dart, and Scala projects.**
 
 [![Version](https://img.shields.io/github/v/tag/HsinPu/symbol-lattice?label=version)](https://github.com/HsinPu/symbol-lattice/tags)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D22.13-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> **v0.58.0** is an early developer release. This public repository runs from source; its npm package is intentionally private and is not published to npm.
+> **v0.59.0** is an early developer release. This public repository runs from source; its npm package is intentionally private and is not published to npm.
 
 SymbolLattice builds a local symbol graph without hiding uncertainty. It keeps syntax-proven artifact facts, resolves cross-file relationships conservatively, and records why every resolved edge exists. The graph stays local to the inspected project under `.symbol-lattice/index.sqlite`.
 
@@ -27,7 +27,7 @@ SymbolLattice builds a local symbol graph without hiding uncertainty. It keeps s
 - **Event-accelerated foreground freshness** - opt-in `watch` uses native filesystem events when the host supports them, exposes bounded pending-path evidence in its own stream, coalesces saves, retains bounded polling as a safety sweep, and invokes the same atomic `sync` only after drift.
 - **Generation-bound source evidence** - `search` and exact `explore` results use source captured with the active graph generation, even when the live project has since drifted.
 - **Declaration-focused node view** - exact `node` results return the full persisted declaration range plus a bounded declaration body, direct callers/callees, and explicit limits from one active generation without substituting live source text.
-- **Static route evidence** - narrow Express, Fastify, NestJS, Python FastAPI/Flask, Go Gin/`net/http`/Chi, Rust Axum, Java Spring Web, PHP Laravel, C CivetWeb, Lua Lapis, R Plumber, Elixir Phoenix, Erlang Cowboy, Clojure Compojure, Perl Dancer2, Julia Genie, Haskell Scotty, OCaml Dream, F# Giraffe, C++ cpp-httplib, C# ASP.NET Core, Ruby Rails, Kotlin Ktor, Swift Vapor, Scala/Java Play HTTP packs, and Flutter, React Router, and Next.js client-navigation routes create first-class `route` nodes and evidence-bearing `routes` edges only when the registration and handler form are statically proven. Literal Play `->` Router mounts are retained separately as evidence-bearing `handles` relationships, never fabricated HTTP endpoints.
+- **Static route evidence** - narrow Express, Fastify, NestJS, Python FastAPI/Flask, Go Gin/`net/http`/Chi, Rust Axum, Java Spring Web, PHP Laravel, C CivetWeb, Lua Lapis, R Plumber, Elixir Phoenix, Erlang Cowboy, Clojure Compojure, Perl Dancer2, Julia Genie, Haskell Scotty, OCaml Dream, F# Giraffe, Nim Jester, C++ cpp-httplib, C# ASP.NET Core, Ruby Rails, Kotlin Ktor, Swift Vapor, Scala/Java Play HTTP packs, and Flutter, React Router, and Next.js client-navigation routes create first-class `route` nodes and evidence-bearing `routes` edges only when the registration and handler form are statically proven. Literal Play `->` Router mounts are retained separately as evidence-bearing `handles` relationships, never fabricated HTTP endpoints.
 - **Non-HTTP transport evidence** - AST-proven NestJS GraphQL, microservice, and WebSocket entrypoints use distinct `entrypoint` nodes and exact `handles` edges, so a message pattern or subscription is never mislabeled as an HTTP route.
 - **Direct type-hierarchy evidence** - AST-proven `extends` and `implements` edges preserve value/type namespace proof, type-only imports, re-export provenance, unresolved bases, and bounded direct parent/child views without pretending to have a full type checker.
 - **Bounded context packs** - ordered symbol references produce persisted source, capped relationship/impact summaries, and static directed evidence paths without guessing ambiguous symbols or dynamic behavior.
@@ -88,6 +88,7 @@ node dist/cli/main.js search "health" --project /path/to/project --language juli
 node dist/cli/main.js search "health" --project /path/to/project --language haskell
 node dist/cli/main.js search "health" --project /path/to/project --language ocaml
 node dist/cli/main.js search "health" --project /path/to/project --language fsharp
+node dist/cli/main.js search "health" --project /path/to/project --language nim
 node dist/cli/main.js search "health" --project /path/to/project --language cpp
 node dist/cli/main.js search "health" --project /path/to/project --language csharp
 node dist/cli/main.js search "health" --project /path/to/project --language ruby
@@ -124,16 +125,19 @@ One-shot data commands emit stable, pretty JSON. `watch` is the deliberate strea
 
 ## Capabilities
 
-| Area | v0.58.0 behavior |
+| Area | v0.59.0 behavior |
 | --- | --- |
-| Source files | TypeScript, TSX, JavaScript, JSX, Python, Go, Rust, Java, PHP, C, Lua, R, Elixir, Erlang, Clojure, Perl, Julia, Haskell, OCaml, F#, C++, C#, Ruby, Kotlin, Swift, Dart, and Scala (`.c`, `.lua`, `.r`, `.ex`, `.exs`, `.erl`, `.clj`, `.pl`, `.pm`, `.jl`, `.hs`, `.ml`, `.fs`, `.cpp`, `.cc`, `.cxx`, `.hpp`, `.hh`, `.hxx`, `.cs`, `.rb`, `.kt`, `.swift`, `.dart`, `.scala`; plus Play `conf/routes` and `conf/*.routes` route tables) |
+| Source files | TypeScript, TSX, JavaScript, JSX, Python, Go, Rust, Java, PHP, C, Lua, R, Elixir, Erlang, Clojure, Perl, Julia, Haskell, OCaml, F#, Nim, C++, C#, Ruby, Kotlin, Swift, Dart, and Scala (`.c`, `.lua`, `.r`, `.ex`, `.exs`, `.erl`, `.clj`, `.pl`, `.pm`, `.jl`, `.hs`, `.ml`, `.fs`, `.nim`, `.cpp`, `.cc`, `.cxx`, `.hpp`, `.hh`, `.hxx`, `.cs`, `.rb`, `.kt`, `.swift`, `.dart`, `.scala`; plus Play `conf/routes` and `conf/*.routes` route tables) |
 | F# + Giraffe | Direct top-level typed `HttpFunc` / `HttpContext` handlers plus exactly one `open Giraffe` proof and a direct literal `choose [` route table. Fixed HTTP verbs and plain `route "/..."` entries become exact same-file or explicit unresolved route evidence. |
+| Nim + Jester | Direct top-level zero-argument `proc` handlers plus exactly one direct `import` list containing `jester`, then a flat `routes:` or `router name:` literal route block. Fixed lowercase HTTP verbs become exact same-file or explicit unresolved route evidence. |
 | Scope | Project root by default or repeatable, persisted `--scope` directories |
 | Discovery | Root `.gitignore` with negation; `.git`, `.symbol-lattice`, `coverage`, `dist`, and `node_modules` are always excluded |
 | Symbols | TypeScript/JavaScript: files, classes, functions, methods, interfaces, types, variables, routes, and entrypoints. Python: files, classes, functions, methods, and direct FastAPI / same-file or proven cross-file `APIRouter` / same-file Flask routes. Go: files, top-level functions, and direct Gin / `net/http` / Chi routes. Rust: files, top-level functions, and direct Axum routes. Java: files, direct top-level classes and methods, direct Spring Web routes, and direct package facts usable by Play controller resolution. PHP: files, direct top-level classes, methods, functions, and direct Laravel facade routes. C: files, direct top-level functions, and direct CivetWeb routes. Lua: files, direct top-level `function` / `local function` declarations, and direct Lapis routes. R: files, direct top-level braced `name <- function(...)` / `name = function(...)` declarations, and direct Plumber annotation routes. Elixir: files, direct top-level `defmodule` declarations represented by the existing `class` kind, direct module `def` / `defp` methods, and direct Phoenix Router routes. Erlang: files, direct `-module(...)` declarations represented by the existing `class` kind, direct simple top-level functions, and direct Cowboy dispatch routes. Clojure: files, direct `ns` declarations represented by the existing `class` kind, direct simple top-level `defn` functions, and direct Compojure routes. Perl: files, direct `package` declarations represented by the existing `class` kind, direct simple top-level `sub` functions, and direct Dancer2 routes. Julia: files, direct top-level one-line `name(...) = ...` functions, and direct Genie routes. C++: files, direct top-level classes, methods, functions, and direct cpp-httplib routes. C#: files, direct top-level classes, interfaces, methods, local functions, and direct ASP.NET Core routes. Ruby: files, direct top-level classes, methods, functions, and direct Rails routes. Kotlin: files, direct top-level classes, interfaces, methods, functions, and direct Ktor routes. Swift: files, direct top-level classes, structs, protocols, methods, functions, and direct Vapor routes. Dart: files, direct top-level classes, methods, functions, and direct Flutter named-navigation routes. Scala: files, direct top-level classes, objects, traits, methods, functions, direct Play route-table entries, and literal Play Router-mount nodes |
 | Relationships | TypeScript/JavaScript: `contains`, module imports/exports, direct identifier calls, evidence-bearing `routes` and `handles`, plus direct `extends` / `implements`. Python: syntax-proven `contains` plus direct FastAPI and Flask `routes`. Go: syntax-proven `contains` plus direct Gin, `net/http`, and Chi `routes`. Rust: syntax-proven `contains` plus direct Axum `routes`. Java: syntax-proven `contains` plus direct Spring Web `routes` and exact Play controller-action targets when one direct Java package/class/method proves the route. PHP: syntax-proven `contains` plus direct Laravel `routes`, exact only for same-file controller methods and explicitly unresolved otherwise. C: syntax-proven `contains` plus direct CivetWeb `ALL` routes to exact same-file top-level functions. Lua: lexical `contains` plus direct Lapis `GET` / `POST` / `PUT` / `DELETE` / `ALL` routes to exact same-file prior local-function handlers. R: lexical `contains` plus direct Plumber `GET` / `POST` / `PUT` / `DELETE` annotation routes to exact same-file braced anonymous function handlers. Elixir: lexical `contains` plus direct Phoenix `GET` / `POST` / `PUT` / `PATCH` / `DELETE` / `HEAD` / `OPTIONS` / `TRACE` / `CONNECT` routes; a full-module controller atom action resolves exactly only to one direct same-file module method, otherwise remains explicit `unresolved`. Erlang: lexical `contains` plus direct Cowboy `ALL` wildcard-host routes; a handler resolves exactly only to one same-module exported `init/2` method, otherwise remains explicit `unresolved`. Clojure: lexical `contains` plus direct Compojure `GET` / `POST` / `PUT` / `PATCH` / `DELETE` / `HEAD` / `OPTIONS` routes; a handler resolves exactly only to one same-file `defn`, otherwise remains explicit `unresolved`. Perl: lexical `contains` plus direct Dancer2 `GET` / `POST` / `PUT` / `PATCH` / `DELETE` / `OPTIONS` routes; a handler resolves exactly only to one same-file simple `sub`, otherwise remains explicit `unresolved`. Julia: lexical `contains` plus direct Genie `GET` default and literal `POST` / `PUT` / `PATCH` / `DELETE` / `OPTIONS` method-keyword routes; a handler resolves exactly only to one same-file one-line function, otherwise remains explicit `unresolved`. C++: syntax-proven `contains` plus direct cpp-httplib `routes` to exact same-file top-level functions. C#: syntax-proven `contains` plus direct ASP.NET Core Minimal API and MVC controller `routes` to exact same-file handlers. Ruby: syntax-proven `contains` plus direct Rails `routes`, exact only for same-file non-namespaced controller methods and explicitly unresolved otherwise. Kotlin: syntax-proven `contains` plus direct Ktor `routes` to exact same-file top-level callable-reference functions. Swift: syntax-proven `contains` plus direct Vapor `routes` to exact same-file named functions. Dart: syntax-proven `contains` plus direct Flutter `NAVIGATE` routes to exact same-file widget classes. Scala: syntax-proven `contains` plus direct Play `conf/routes` entries that resolve exactly only with one direct Scala-or-Java package, one matching indexed class/object, and one direct method; literal `->` Router mounts become exact or unresolved `handles` edges and never appear as concrete `routes` results |
 | Module resolution | Relative paths, TypeScript/JavaScript `baseUrl` and `paths`, then local workspace packages; Python has a deliberately narrow, regular-package proof for direct one-dot FastAPI router imports; Go, Rust, Java, PHP, C, Lua, R, Elixir, Erlang, Clojure, Perl, Julia, Haskell, OCaml, C++, C#, Ruby, Kotlin, Swift, Dart, and Scala have no generic module resolver in this release |
 | F# module resolution | No generic F# module, project, package, or cross-file handler resolver in this release. |
+| Nim symbols and routes | Files, direct top-level zero-argument `proc` declarations, and direct Jester routes with exact same-file or explicit unresolved evidence. |
+| Nim module resolution | No generic Nim module, package, macro, project, or cross-file handler resolver in this release. |
 | Workspaces | Root `package.json` workspaces array/object, local package root/subpath `exports`, and entrypoint fallback |
 | Re-exports | Named aliases, `export *`, default-through-named aliases, and namespace-export provenance |
 | Retrieval | Local deterministic FTS5 search across persisted source text and identifier parts; bounded path/language filters, source/symbol evidence, and exact `explore` excerpts from the same active generation |
@@ -157,7 +161,7 @@ One-shot data commands emit stable, pretty JSON. `watch` is the deliberate strea
 
 Framework coverage is declared once and actively selects the extraction passes applicable to the parsed language. This is a stable integration boundary, not a runtime framework detector: every pass below still requires its own syntax proof before it emits facts.
 
-| Capability | Proven surfaces in v0.58 |
+| Capability | Proven surfaces in v0.59 |
 | --- | --- |
 | Express | Literal receiver methods and identifier handlers |
 | Fastify | Literal routes and static prefix composition |
@@ -181,6 +185,7 @@ Framework coverage is declared once and actively selects the extraction passes a
 | Scotty | Haskell direct [`Web.Scotty`](https://hackage-content.haskell.org/package/scotty-0.30/docs/Web-Scotty.html) import proof, literal-port `scotty ... $ do` blocks, and literal named `get/post/put/delete/patch/options` handlers |
 | Dream | OCaml direct [Dream router](https://ocaml.org/p/dream/latest/doc/dream/Dream/index.html) literal lists, direct `Dream.run` pipelines, and literal named `Dream.get/post/put/delete/head/connect/options/trace/patch/any` handlers |
 | Giraffe | F# direct [Giraffe routing](https://giraffe.wiki/docs) `open Giraffe` proof, flat top-level `choose` lists, literal verb/`route` compositions, and typed local named handlers |
+| Jester | Nim direct [Jester route blocks](https://github.com/dom96/jester) with exactly one direct import-list proof, flat `routes:` / `router name:` blocks, literal fixed-verb paths, and one named zero-argument local `proc` call |
 | cpp-httplib | C++ direct local server bindings with literal named-handler HTTP methods |
 | ASP.NET Core | C# direct `WebApplication` Minimal API bindings and `ApiController` MVC attributes |
 | Rails | Ruby direct `Rails.application.routes.draw` literal controller-action routes |
@@ -416,6 +421,30 @@ let webApp =
 ```
 
 This emits `GET /health -> health`, `POST /users -> createUser`, and `ALL /all -> health` with `framework.giraffe.direct-choose.literal-named-function.local-function` evidence. `PATCH /missing` remains explicit `unresolved` evidence because no unique direct same-file typed `missing` handler exists. The extractor requires exactly one top-level `open Giraffe`, a direct top-level `let name = choose [` list or its immediately following indented `choose [` form, one flat baseline of literal routes, and direct top-level handlers whose two parameter types are `HttpFunc` and `HttpContext`. It excludes `GET_HEAD`, `subRoute` / nested composition, aliases or top-level `route` / HTTP-handler rebinding, dynamic or escaped paths, inline or qualified handlers, untyped/annotated/pattern/local functions, multiple or qualified opens, generic F# module/type/call/package analysis, cross-file callbacks, and runtime behavior. Unbalanced delimiters, unterminated strings/comments, or tab-indented code retain only the file symbol until repaired.
+
+#### Jester (Nim)
+
+The official [Jester README](https://github.com/dom96/jester) documents the `routes:` DSL, lowercase fixed HTTP verbs, literal route patterns, and custom `router myrouter:` blocks. v0.59 recognizes one deliberately small static-evidence subset:
+
+```nim
+import asyncdispatch, jester
+
+proc health*() =
+  discard
+
+proc createUser() =
+  discard
+
+routes:
+  get "/health":
+    health()
+  post "/users":
+    createUser()
+  patch "/missing":
+    missing()
+```
+
+This emits `GET /health -> health` and `POST /users -> createUser` with `framework.jester.direct-route-block.literal-named-proc.local-proc` evidence. `PATCH /missing` remains explicit `unresolved` evidence because no unique direct same-file zero-argument `missing` `proc` exists. The extractor requires exactly one top-level direct `import` list containing `jester`, a direct top-level `routes:` or simple `router name:` block, one flat baseline of literal routes, and a route body containing exactly one simple zero-argument named call. It excludes `from jester import`, aliases, repeated imports, dynamic/special/regex/escaped paths, inline or multi-statement route bodies, nested control-flow/composition, `before` / `after` / `error` handlers, top-level DSL rebinding, parameterized/generic/cross-file procedures, and runtime behavior. Unbalanced delimiters, unterminated strings/comments, or tab-indented code retain only the file symbol until repaired.
 
 #### Express
 
@@ -1618,6 +1647,8 @@ v0.57 adds no SQLite schema migration or route-query command. It adds OCaml `.ml
 
 v0.58 adds no SQLite schema migration or route-query command. It adds F# `.fs` discovery, direct top-level typed `HttpFunc` / `HttpContext` function containment, and direct Giraffe `choose` literal named-handler routes through the existing file, symbol, edge, source-search, and route-query contracts. The extractor advances to `multi-language-ast-v47`; the resolver remains `project-resolver-v16` because accepted Giraffe proof resolves only a same-file callback. A pre-v0.58 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes F#-capable facts. Existing generations remain readable.
 
+v0.59 adds no SQLite schema migration or route-query command. It adds Nim `.nim` discovery, direct top-level zero-argument `proc` containment, and direct Jester literal named-proc route blocks through the existing file, symbol, edge, source-search, and route-query contracts. The extractor advances to `multi-language-ast-v48`; the resolver remains `project-resolver-v16` because accepted Jester proof resolves only a same-file callback. A pre-v0.59 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes Nim-capable facts. Existing generations remain readable.
+
 ## Architecture
 
 ```mermaid
@@ -1748,13 +1779,15 @@ v0.56.0 does not yet provide:
 | `v0.56.0` | Haskell `.hs` discovery, direct column-zero zero-argument function containment, lexical Scotty `import Web.Scotty` proof, literal-port `scotty ... $ do` block routes, Haskell source-search/CLI/MCP filters, exact same-file function evidence, explicit unresolved handler evidence, and dynamic/inline/nested/unbalanced/tab-layout rejection |
 | `v0.57.0` | OCaml `.ml` discovery, direct top-level one-parameter function containment, lexical Dream literal router-list and narrow `Dream.run` pipeline routes, OCaml source-search/CLI/MCP filters, exact same-file function evidence, explicit unresolved handler evidence, and dynamic/inline/qualified/scoped/unbalanced-source rejection |
 | `v0.58.0` | F# `.fs` discovery, direct top-level typed handler containment, exact-one `open Giraffe` proof, flat direct `choose` literal routes, F# source-search/CLI/MCP filters, exact same-file function evidence, explicit unresolved handler evidence, and dynamic/inline/nested/unbalanced/tab-layout rejection |
+| `v0.59.0` | Nim `.nim` discovery, direct top-level zero-argument `proc` containment, exact-one direct import-list Jester proof, flat direct `routes:` / `router name:` literal routes, Nim source-search/CLI/MCP filters, exact same-file function evidence, explicit unresolved handler evidence, and missing-import/dynamic/inline/multi-statement/nested/repeated-import/unbalanced/tab-layout rejection |
+| `v0.59+` | Jester `from jester import` / alias proof, `before` / `after` / `error` handlers, special or regex route patterns, parameterized/async handlers, route composition, macro expansion, Nim package/module resolution, and proven cross-file callbacks |
 | `v0.58+` | Giraffe `GET_HEAD`, `subRoute` / `choose` composition, endpoint-routing integration, aliases, broader handler signatures, cross-file proof, F# project/package/module resolution; Scotty qualified/selective imports, `scottyT`, dynamic ports, `addroute`/`matchAny`, route composition, local callback proof, generic Haskell package/module resolution, and proven cross-file functions; Play `build.sbt`/configuration detection, recursive mounted-router endpoint expansion with Router-interface proof, imported/classpath/overload controller resolution; Phoenix customary `use AppWeb, :router` expansion, aliases/imports, `resources` / `match` / `forward`, pipelines, and proven cross-file controller resolution; Cowboy multiple/specific hosts, constraints, binary paths, dispatch variables, behaviour/callback proof, and cross-file handler resolution; Compojure aliases, qualified macros, `context` / `routes` / `ANY`, middleware, `defn` metadata/docstring/multi-arity forms, handler composition, and proven cross-file namespace resolution; Dancer2 inline/anonymous coderefs, `any`, named-route syntax, prefixes/hooks/plugins, import/alias/package and cross-file sub resolution; Genie inline `do ... end` handlers, named routes, qualified method constants, modules/multiline functions, macro expansion, dynamic patterns, import aliases, and proven cross-file function resolution; Flutter `MaterialApp.router` / `onGenerateRoute` / `Navigator` evidence and proven cross-file widget resolution; Vapor group/prefix composition and proven cross-file handler resolution; Ktor `route` / `authenticate` composition and proven cross-file handler resolution; Rails controller/import/package resolution and `resources` / namespace composition; Laravel controller/import/package resolution and route-group/resource composition; deeper C/CivetWeb, Lua/Lapis, R/Plumber, and cpp-httplib scope/handler and include resolution; ASP.NET Core `MapGroup` / `MapMethods` and controller-token resolution; Spring method-level `@RequestMapping` and richer literal annotation values; Java classpath resolution; Axum route/MethodRouter composition; Rust Cargo/module resolution; Go Chi `Route` / `Group` / `Mount` composition; Echo/Fiber packs and broader Go resolution; React Router `<Routes>` boundary proof; deeper Next.js convention coverage; `fastify-plugin` wrapper proof; GraphQL field-resolver/runtime-transport evidence; contract graphs, retained-generation source browsing, and further CodeGraph-parity work |
 
 See [CHANGELOG.md](CHANGELOG.md) for release notes and migration history.
 
 ## Release-by-release feature comparison
 
-Every release creates a verified standalone comparison report against the local CodeGraph baseline at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_vX.Y.Z.md` (for example, `FEATURE_COMPARISON_v0.58.0.md`). The version number is part of the filename, so each release retains an independent comparison record. It intentionally lives beside the local `symbol-lattice` and `codegraph` checkouts rather than inside either project. Starting with v0.28, these reports are written in Traditional Chinese. Each report distinguishes a proven precision advantage from broader-but-less-proven source coverage, and records remaining gaps instead of treating a version bump as parity.
+Every release creates a verified standalone comparison report against the local CodeGraph baseline at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_vX.Y.Z.md` (for example, `FEATURE_COMPARISON_v0.59.0.md`). The version number is part of the filename, so each release retains an independent comparison record. It intentionally lives beside the local `symbol-lattice` and `codegraph` checkouts rather than inside either project. Starting with v0.28, these reports are written in Traditional Chinese. Each report distinguishes a proven precision advantage from broader-but-less-proven source coverage, and records remaining gaps instead of treating a version bump as parity.
 
 ## Development
 
@@ -1799,6 +1832,8 @@ Haskell coverage includes `.hs` discovery, persisted source search and CLI/MCP l
 OCaml coverage includes `.ml` discovery, persisted source search and CLI/MCP language filters, direct top-level one-parameter `let name arg = ...` function containment, direct literal `Dream.router` lists and narrow direct `Dream.run` pipelines, literal `Dream.get`/`post`/`put`/`delete`/`head`/`connect`/`options`/`trace`/`patch`/`any` named-handler routes, exact same-file function routes, explicit unresolved handler routes, dynamic/inline/qualified/scoped/local/wrong-entrypoint/unbalanced/unterminated rejection, and persisted route-query integration.
 
 F# coverage includes `.fs` discovery, persisted source search and CLI/MCP language filters, direct top-level typed `HttpFunc` / `HttpContext` function containment, exactly one direct `open Giraffe` proof, direct top-level flat `choose` literal routes with fixed HTTP verb or implicit `ALL` proof, exact same-file function routes, explicit unresolved handler routes, dynamic/inline/qualified/nested/repeated-open/unbalanced/unterminated/tab-layout rejection, and persisted route-query integration.
+
+Nim coverage includes `.nim` discovery, persisted source search and CLI/MCP language filters, direct top-level zero-argument `proc` containment, exactly one direct top-level import list containing `jester`, direct top-level flat `routes:` / `router name:` literal blocks, exact same-file function routes, explicit unresolved handler routes, aliased/repeated/missing-import, dynamic/inline/multi-statement/nested/shadowed/unbalanced/unterminated/tab-layout rejection, and persisted route-query integration.
 
 C++ coverage includes `.cpp` / `.cc` / `.cxx` / `.hpp` / `.hh` / `.hxx` discovery, persisted source search and CLI/MCP language filters, direct top-level class/method/function containment, direct `httplib.h` include plus `httplib::Server` / `httplib::SSLServer` binding proof, literal direct named-handler HTTP routes, receiver-rebinding invalidation, dynamic/lambda/missing-header rejection, malformed-source fail-closed behavior, and persisted route-query integration.
 

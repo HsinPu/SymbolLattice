@@ -26,6 +26,7 @@ export const FRAMEWORK_CAPABILITY_IDS = [
   "scotty",
   "dream",
   "giraffe",
+  "jester",
   "cpp-httplib",
   "aspnet-core",
   "rails",
@@ -289,6 +290,16 @@ export const FRAMEWORK_CAPABILITIES = [
     surfaces: [
       "exactly one direct open Giraffe proof",
       "direct top-level choose literal routes with typed local named handlers"
+    ]
+  },
+  {
+    id: "jester",
+    languages: ["nim"],
+    routeFramework: "jester",
+    routeRegistrations: [],
+    surfaces: [
+      "exactly one direct top-level import list containing jester",
+      "direct top-level routes or router literal blocks with one named local proc call"
     ]
   },
   {

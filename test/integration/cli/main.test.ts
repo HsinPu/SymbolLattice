@@ -517,7 +517,7 @@ describe("symbol-lattice search CLI", () => {
     expect(write).toHaveBeenCalled();
   });
 
-  it("accepts F# as a persisted source-search language filter", async () => {
+  it("accepts Nim as a persisted source-search language filter", async () => {
     const calls: Array<{ projectPath: string; query: string; options: SearchOptions }> = [];
     const service = {
       async search(
@@ -532,7 +532,7 @@ describe("symbol-lattice search CLI", () => {
     const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
 
     await createProgram(service).parseAsync(
-      ["node", "symbol-lattice", "search", "health", "--language", "fsharp", "--json"],
+      ["node", "symbol-lattice", "search", "health", "--language", "nim", "--json"],
       { from: "node" }
     );
 
@@ -540,7 +540,7 @@ describe("symbol-lattice search CLI", () => {
       {
         projectPath: resolve(process.cwd()),
         query: "health",
-        options: { language: "fsharp" }
+        options: { language: "nim" }
       }
     ]);
     expect(write).toHaveBeenCalled();

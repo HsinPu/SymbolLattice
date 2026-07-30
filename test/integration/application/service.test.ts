@@ -4772,6 +4772,86 @@ describe("SymbolLatticeService", () => {
     expect(search.results).toMatchObject([{ filePath: "src/App.fs", language: "fsharp" }]);
   });
 
+  it("indexes Nim Jester routes and retains Nim source-search filtering", async () => {
+    const projectPath = await createInlineProject({
+      "src/app.nim": [
+        "import asyncdispatch, jester",
+        "",
+        "proc health*() =",
+        "  discard",
+        "",
+        "proc createUser() =",
+        "  discard",
+        "",
+        "routes:",
+        "  get \"/health\":",
+        "    health()",
+        "  post \"/users\":",
+        "    createUser()",
+        "  patch \"/missing\":",
+        "    missing()",
+        "",
+        "router admin:",
+        "  delete \"/users\":",
+        "    health()"
+      ].join("\n")
+    });
+    const service = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+    const postRoutes = await service.routes(projectPath, { method: "POST" });
+    const search = await service.search(projectPath, "health", { language: "nim" });
+
+    expect(routes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "GET",
+          path: "/health",
+          handler: expect.objectContaining({
+            qualifiedName: "src/app.nim.health"
+          }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.jester.direct-route-block.literal-named-proc.local-proc",
+              stage: "syntax"
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "PATCH",
+          path: "/missing",
+          handler: null,
+          edge: expect.objectContaining({
+            resolution: "unresolved",
+            evidence: expect.objectContaining({
+              ruleId: "framework.jester.direct-route-block.literal-named-proc.unresolved"
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "DELETE",
+          path: "/users",
+          handler: expect.objectContaining({
+            qualifiedName: "src/app.nim.health"
+          })
+        })
+      ])
+    );
+    expect(postRoutes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "POST",
+          path: "/users",
+          handler: expect.objectContaining({
+            qualifiedName: "src/app.nim.createUser"
+          })
+        })
+      ])
+    );
+    expect(search.results).toMatchObject([{ filePath: "src/app.nim", language: "nim" }]);
+  });
+
   it("indexes C# ASP.NET Core routes and retains C# source-search filtering", async () => {
     const projectPath = await createInlineProject({
       "src/Program.cs": [
