@@ -4,6 +4,9 @@ import {
   createSymbolId,
   type BindingSpace,
   type EdgeEvidence,
+  type FastApiImportedRouterInclusionFact,
+  type FastApiRouterDeclarationFact,
+  type FastApiRouterRouteFact,
   type FastifyPluginRouteFact,
   type FastifyPluginSymbolReference,
   type GraphEdge,
@@ -1050,6 +1053,274 @@ function projectFastifyImportedPluginRoutes(input: {
   return { symbols, structuralEdges, references, referenceScopes };
 }
 
+function isStaticFastApiPrefix(value: string): boolean {
+  return value === "" || (value.startsWith("/") && !value.endsWith("/"));
+}
+
+function fastApiImportedRouterPath(
+  inclusionPrefix: string,
+  routerPrefix: string,
+  routePath: string
+): string | null {
+  if (
+    !isStaticFastApiPrefix(inclusionPrefix) ||
+    !isStaticFastApiPrefix(routerPrefix) ||
+    !routePath.startsWith("/")
+  ) {
+    return null;
+  }
+  return `${inclusionPrefix}${routerPrefix}${routePath}`;
+}
+
+/**
+ * Resolves the intentionally narrow v0.31 FastAPI import surface. A direct
+ * `from .module import router` is accepted only when both files live in one
+ * regular package whose traversed directories contain `__init__.py` markers.
+ * This excludes namespace packages, parent-relative imports, import chains,
+ * and circular self-imports until they have dedicated fact models.
+ */
+function resolveFastApiRelativeRouterModule(
+  knownFilePaths: ReadonlySet<string>,
+  fromFilePath: string,
+  moduleSpecifier: string
+): string | null {
+  const normalizedFromPath = fromFilePath.replace(/\\/gu, "/");
+  const match = /^\.([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)$/u.exec(
+    moduleSpecifier
+  );
+  if (match?.[1] === undefined) {
+    return null;
+  }
+
+  const packageParts = normalizedFromPath.split("/").slice(0, -1);
+  if (packageParts.length === 0) {
+    return null;
+  }
+  const moduleParts = match[1].split(".");
+  const moduleBase = [...packageParts, ...moduleParts].join("/");
+  const targetCandidates = [`${moduleBase}.py`, `${moduleBase}/__init__.py`].filter((candidate) =>
+    knownFilePaths.has(candidate)
+  );
+  if (targetCandidates.length !== 1 || targetCandidates[0] === undefined) {
+    return null;
+  }
+  const targetFilePath = targetCandidates[0];
+  if (targetFilePath === normalizedFromPath) {
+    return null;
+  }
+
+  const targetDirectoryParts = targetFilePath.split("/").slice(0, -1);
+  if (
+    targetDirectoryParts.length < packageParts.length ||
+    packageParts.some((part, index) => targetDirectoryParts[index] !== part)
+  ) {
+    return null;
+  }
+  for (let length = packageParts.length; length <= targetDirectoryParts.length; length += 1) {
+    const marker = `${targetDirectoryParts.slice(0, length).join("/")}/__init__.py`;
+    if (!knownFilePaths.has(marker)) {
+      return null;
+    }
+  }
+
+  return targetFilePath;
+}
+
+interface ProjectedFastApiImportedRouterRoute {
+  readonly inclusionFilePath: string;
+  readonly routerFilePath: string;
+  readonly inclusion: FastApiImportedRouterInclusionFact;
+  readonly route: FastApiRouterRouteFact;
+  readonly handler: SymbolNode;
+  readonly path: string;
+}
+
+function compareProjectedFastApiImportedRouterRoute(
+  left: ProjectedFastApiImportedRouterRoute,
+  right: ProjectedFastApiImportedRouterRoute
+): number {
+  return (
+    compareStableText(left.inclusionFilePath, right.inclusionFilePath) ||
+    left.inclusion.range.start.line - right.inclusion.range.start.line ||
+    left.inclusion.range.start.column - right.inclusion.range.start.column ||
+    compareStableText(left.routerFilePath, right.routerFilePath) ||
+    left.route.range.start.line - right.route.range.start.line ||
+    left.route.range.start.column - right.route.range.start.column ||
+    compareStableText(left.route.method, right.route.method) ||
+    compareStableText(left.path, right.path) ||
+    compareStableText(left.handler.id, right.handler.id)
+  );
+}
+
+interface FastApiImportedRouterRouteProjection {
+  readonly symbols: readonly SymbolNode[];
+  readonly structuralEdges: readonly GraphEdge[];
+}
+
+/**
+ * Projects literal handler routes declared on an imported, direct FastAPI
+ * router. Its evidence names both the mounting module and the declaration
+ * module so a stored route remains auditable after indexing.
+ */
+function projectFastApiImportedRouterRoutes(input: {
+  readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
+  readonly knownFilePaths: ReadonlySet<string>;
+  readonly fileSymbols: ReadonlyMap<string, SymbolNode>;
+  readonly symbolsById: ReadonlyMap<string, SymbolNode>;
+}): FastApiImportedRouterRouteProjection {
+  const candidates: ProjectedFastApiImportedRouterRoute[] = [];
+
+  for (const [inclusionFilePath, facts] of [...input.factsByFile.entries()].sort(([left], [right]) =>
+    compareStableText(left, right)
+  )) {
+    const inclusionFacts = facts.fastApiRouterFacts;
+    if (inclusionFacts === undefined) {
+      continue;
+    }
+
+    for (const inclusion of inclusionFacts.importedRouterInclusions) {
+      const routerFilePath = resolveFastApiRelativeRouterModule(
+        input.knownFilePaths,
+        inclusionFilePath,
+        inclusion.moduleSpecifier
+      );
+      if (routerFilePath === null) {
+        continue;
+      }
+      const routerFacts = input.factsByFile.get(routerFilePath)?.fastApiRouterFacts;
+      if (routerFacts === undefined) {
+        continue;
+      }
+      const routers = routerFacts.routers.filter(
+        (router) => router.name === inclusion.importedRouterName
+      );
+      if (routers.length !== 1 || routers[0] === undefined) {
+        continue;
+      }
+      const router = routers[0];
+
+      for (const route of routerFacts.routes) {
+        if (route.routerName !== router.name) {
+          continue;
+        }
+        const handler = input.symbolsById.get(route.handlerId);
+        if (handler?.kind !== "function" || handler.filePath !== routerFilePath) {
+          continue;
+        }
+        const path = fastApiImportedRouterPath(inclusion.prefix, router.prefix, route.path);
+        if (path === null) {
+          continue;
+        }
+        candidates.push({
+          inclusionFilePath,
+          routerFilePath,
+          inclusion,
+          route,
+          handler,
+          path
+        });
+      }
+    }
+  }
+
+  const symbols: SymbolNode[] = [];
+  const structuralEdges: GraphEdge[] = [];
+  const declarationOrdinals = new Map<string, number>();
+  const seen = new Set<string>();
+  for (const candidate of [...candidates].sort(compareProjectedFastApiImportedRouterRoute)) {
+    const dedupeKey = [
+      candidate.inclusionFilePath,
+      candidate.inclusion.range.start.line,
+      candidate.inclusion.range.start.column,
+      candidate.routerFilePath,
+      candidate.route.range.start.line,
+      candidate.route.range.start.column,
+      candidate.route.method,
+      candidate.path,
+      candidate.handler.id
+    ].join("\u0000");
+    if (seen.has(dedupeKey)) {
+      continue;
+    }
+    seen.add(dedupeKey);
+
+    const file = input.fileSymbols.get(candidate.routerFilePath);
+    if (file === undefined) {
+      continue;
+    }
+    const name = `${candidate.route.method} ${candidate.path}`;
+    const qualifiedName = `${candidate.routerFilePath}#route:${name}`;
+    const declarationOrdinal = declarationOrdinals.get(qualifiedName) ?? 0;
+    declarationOrdinals.set(qualifiedName, declarationOrdinal + 1);
+    const route: SymbolNode = {
+      id: createSymbolId({
+        filePath: candidate.routerFilePath,
+        qualifiedName,
+        kind: "route",
+        declarationOrdinal
+      }),
+      name,
+      qualifiedName,
+      kind: "route",
+      filePath: candidate.routerFilePath,
+      range: candidate.route.range,
+      isExported: false,
+      declarationOrdinal
+    };
+    symbols.push(route);
+    structuralEdges.push({
+      id: createEdgeId({
+        sourceId: file.id,
+        targetId: route.id,
+        kind: "contains",
+        line: candidate.route.range.start.line,
+        column: candidate.route.range.start.column,
+        referenceName: route.name
+      }),
+      sourceId: file.id,
+      targetId: route.id,
+      kind: "contains",
+      filePath: candidate.routerFilePath,
+      range: candidate.route.range,
+      resolution: "exact",
+      confidence: 1,
+      referenceName: route.name,
+      evidence: {
+        ruleId: "syntax.containment",
+        stage: "syntax",
+        candidateSymbolIds: [route.id]
+      }
+    });
+    structuralEdges.push({
+      id: createEdgeId({
+        sourceId: route.id,
+        targetId: candidate.handler.id,
+        kind: "routes",
+        line: candidate.route.range.start.line,
+        column: candidate.route.range.start.column,
+        referenceName: candidate.handler.name
+      }),
+      sourceId: route.id,
+      targetId: candidate.handler.id,
+      kind: "routes",
+      filePath: candidate.routerFilePath,
+      range: candidate.route.range,
+      resolution: "exact",
+      confidence: 1,
+      referenceName: candidate.handler.name,
+      evidence: referenceEvidence(
+        "framework.fastapi.imported-router.include-router.decorator.local-function",
+        "module",
+        [candidate.handler.id],
+        [],
+        [candidate.inclusionFilePath, candidate.routerFilePath]
+      )
+    });
+  }
+
+  return { symbols, structuralEdges };
+}
+
 function routePathFromSymbol(route: SymbolNode): string | null {
   const separator = route.name.indexOf(" ");
   if (separator <= 0) {
@@ -1488,6 +1759,18 @@ export function resolveProjectFacts(input: {
   }
   for (const [referenceId, scopeIds] of fastifyPluginRouteProjection.referenceScopes) {
     referenceScopeIdsByReferenceId.set(referenceId, scopeIds);
+  }
+
+  const fastApiImportedRouterRouteProjection = projectFastApiImportedRouterRoutes({
+    factsByFile,
+    knownFilePaths,
+    fileSymbols,
+    symbolsById
+  });
+  symbols.push(...fastApiImportedRouterRouteProjection.symbols);
+  structuralEdges.push(...fastApiImportedRouterRouteProjection.structuralEdges);
+  for (const symbol of fastApiImportedRouterRouteProjection.symbols) {
+    symbolsById.set(symbol.id, symbol);
   }
 
   for (const reference of [...references].sort((left, right) => compareStableText(left.id, right.id))) {

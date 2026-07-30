@@ -36,6 +36,7 @@ import {
 export type {
   ArtifactFacts,
   ExportBinding,
+  FastApiRouterFacts,
   FastifyPluginFacts,
   ImportBinding,
   LocalBinding,

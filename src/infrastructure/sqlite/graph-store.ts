@@ -665,7 +665,10 @@ function artifactFactsPayload(facts: PersistedArtifactFacts): ArtifactFacts {
     ...(facts.nestRouteFacts === undefined ? {} : { nestRouteFacts: facts.nestRouteFacts }),
     ...(facts.fastifyPluginFacts === undefined
       ? {}
-      : { fastifyPluginFacts: facts.fastifyPluginFacts })
+      : { fastifyPluginFacts: facts.fastifyPluginFacts }),
+    ...(facts.fastApiRouterFacts === undefined
+      ? {}
+      : { fastApiRouterFacts: facts.fastApiRouterFacts })
   };
 }
 

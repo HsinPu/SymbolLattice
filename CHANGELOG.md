@@ -6,6 +6,25 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.31.0] - 2026-07-30
+
+### Added
+
+- Exact cross-file FastAPI `APIRouter` projection for one direct package-relative import: `from .routers.catalog import router [as local_router]`, followed by a direct literal `app.include_router(local_router, prefix="/...")`, now projects literal decorated routes from the router module into first-class route nodes such as `GET /api/catalog/health`.
+- Additive persisted `fastApiRouterFacts` record final direct router declarations, their literal local-handler decorators, and direct relative inclusion facts independently from ordinary Python import/call resolution. A regular-package boundary is proven with `__init__.py` markers for the importing directory and each traversed child package.
+- Exact `framework.fastapi.imported-router.include-router.decorator.local-function` module evidence, including the mounting and declaration file path. Unit, integration, persistence, and unsafe-boundary coverage verify aliases and reject absent package markers, parent-relative imports, import lists, dynamic/rebound shapes, and ambiguous module targets.
+- A Traditional Chinese comparison report at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.31.0.md`.
+
+### Compatibility
+
+- No SQLite schema migration or new query command is required. The additive `fastApiRouterFacts` payload keeps prior generations readable while new generations retain auditable Python router-composition evidence.
+- The artifact extractor advances to `multi-language-ast-v20` and the project resolver to `project-resolver-v14`. A pre-v0.31 active index reports `indexer-version-changed` until an explicit `sync` or `index` publishes cross-file FastAPI router facts.
+
+### Deliberate limits
+
+- The supported Python module surface is intentionally narrow: only a single-leading-dot, one-name relative import in a regular package is projected. Parent-relative/namespace/package-only imports, wildcard or multi-name imports, re-export chains, module members, nested routers, router aliases by assignment, factories/wrappers, and generic Python import/export/call resolution remain excluded.
+- Flask, Django, Python type hierarchy, semantic type checking, and runtime framework behavior are not modeled in v0.31.
+
 ## [0.30.0] - 2026-07-30
 
 ### Added
@@ -601,7 +620,8 @@ No unreleased changes.
 - Explicit full indexing, caller/callee/impact queries, and read-only MCP exploration.
 - `exact`, `heuristic`, and `unresolved` relationship states.
 
-[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.30.0...HEAD
+[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.31.0...HEAD
+[0.31.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.30.0...v0.31.0
 [0.30.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.29.0...v0.30.0
 [0.29.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.28.0...v0.29.0
 [0.28.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.27.0...v0.28.0

@@ -1925,6 +1925,98 @@ describe("source extraction", () => {
     ]);
   });
 
+  it("retains proven cross-file FastAPI router and package-relative inclusion facts", () => {
+    const routerFacts = extractFileFacts({
+      filePath: "api/routers/catalog.py",
+      language: "python",
+      sourceText: [
+        "from fastapi import APIRouter",
+        "router = APIRouter(prefix=\"/catalog\")",
+        "",
+        "@router.get(\"/health\")",
+        "async def health():",
+        "    return {\"ok\": True}"
+      ].join("\n")
+    });
+    const mainFacts = extractFileFacts({
+      filePath: "api/main.py",
+      language: "python",
+      sourceText: [
+        "from fastapi import FastAPI as Api",
+        "from .routers.catalog import router as catalog_router",
+        "app = Api()",
+        "app.include_router(catalog_router, prefix=\"/api\")"
+      ].join("\n")
+    });
+
+    expect(routerFacts.fastApiRouterFacts).toMatchObject({
+      routers: [{ name: "router", prefix: "/catalog" }],
+      routes: [
+        {
+          routerName: "router",
+          method: "GET",
+          path: "/health",
+          handlerId: expect.any(String)
+        }
+      ],
+      importedRouterInclusions: []
+    });
+    expect(mainFacts.fastApiRouterFacts).toMatchObject({
+      routers: [],
+      routes: [],
+      importedRouterInclusions: [
+        {
+          applicationName: "app",
+          routerName: "catalog_router",
+          importedRouterName: "router",
+          moduleSpecifier: ".routers.catalog",
+          prefix: "/api"
+        }
+      ]
+    });
+  });
+
+  it("rejects parent-relative and rebound FastAPI router import inclusions", () => {
+    const facts = extractFileFacts({
+      filePath: "api/main.py",
+      language: "python",
+      sourceText: [
+        "from fastapi import FastAPI",
+        "from ..routers.catalog import router",
+        "app = FastAPI()",
+        "app.include_router(router)",
+        "",
+        "from .routers.catalog import router as catalog_router",
+        "catalog_router = build_router()",
+        "app.include_router(catalog_router)"
+      ].join("\n")
+    });
+
+    expect(facts.fastApiRouterFacts?.importedRouterInclusions).toEqual([]);
+  });
+
+  it("does not retain cross-file router facts when the source router is later rebound", () => {
+    const facts = extractFileFacts({
+      filePath: "api/routers/catalog.py",
+      language: "python",
+      sourceText: [
+        "from fastapi import APIRouter",
+        "router = APIRouter()",
+        "",
+        "@router.get(\"/health\")",
+        "async def health():",
+        "    return {\"ok\": True}",
+        "",
+        "router = build_router()"
+      ].join("\n")
+    });
+
+    expect(facts.fastApiRouterFacts).toMatchObject({
+      routers: [],
+      routes: []
+    });
+  });
+
   it("rejects dynamic, unmounted, rebound, and late-included Python APIRouter routes", () => {
     const facts = extractFileFacts({
       filePath: "app/unproven-router.py",

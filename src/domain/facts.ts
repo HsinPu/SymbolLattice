@@ -11,13 +11,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v19";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v20";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v13";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v14";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -188,6 +188,46 @@ export interface FastifyPluginFacts {
   readonly rootRegistrations: readonly FastifyPluginRootRegistrationFact[];
 }
 
+/** A direct, top-level FastAPI `APIRouter` binding with a literal prefix. */
+export interface FastApiRouterDeclarationFact {
+  readonly name: string;
+  readonly prefix: string;
+  readonly range: SourceRange;
+}
+
+/** A literal route decorated directly on a syntax-proven FastAPI router. */
+export interface FastApiRouterRouteFact {
+  readonly routerName: string;
+  readonly method: RouteMethod;
+  readonly path: string;
+  /** Stable symbol identity of the directly decorated local handler. */
+  readonly handlerId: string;
+  readonly range: SourceRange;
+}
+
+/**
+ * A direct, single-name, package-relative import mounted through a direct
+ * FastAPI application's literal `include_router` call.
+ */
+export interface FastApiImportedRouterInclusionFact {
+  readonly applicationName: string;
+  readonly routerName: string;
+  readonly importedRouterName: string;
+  readonly moduleSpecifier: string;
+  readonly prefix: string;
+  readonly range: SourceRange;
+}
+
+/**
+ * Syntax-only facts used to project literal routes through a directly imported
+ * FastAPI `APIRouter` in another module of the same proven Python package.
+ */
+export interface FastApiRouterFacts {
+  readonly routers: readonly FastApiRouterDeclarationFact[];
+  readonly routes: readonly FastApiRouterRouteFact[];
+  readonly importedRouterInclusions: readonly FastApiImportedRouterInclusionFact[];
+}
+
 /**
  * Syntax-proven, file-local facts. They deliberately retain unresolved source
  * references so later resolution stages can be recomputed without reparsing.
@@ -205,6 +245,8 @@ export interface ArtifactFacts {
   readonly nestRouteFacts?: NestRouteFacts;
   /** Omitted only by artifact facts persisted before v0.22. */
   readonly fastifyPluginFacts?: FastifyPluginFacts;
+  /** Omitted only by artifact facts persisted before v0.31. */
+  readonly fastApiRouterFacts?: FastApiRouterFacts;
 }
 
 /**

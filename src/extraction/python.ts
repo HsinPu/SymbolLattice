@@ -4,6 +4,9 @@ import {
   createEdgeId,
   createSymbolId,
   type ArtifactFacts,
+  type FastApiImportedRouterInclusionFact,
+  type FastApiRouterDeclarationFact,
+  type FastApiRouterRouteFact,
   type GraphEdge,
   type RouteMethod,
   type SourcePosition,
@@ -52,6 +55,14 @@ interface StaticFastApiRouterInclusion {
   readonly applicationName: string;
   readonly routerName: string;
   readonly prefix: string;
+  readonly node: PythonSyntaxNode;
+}
+
+/** A one-dot, single-name Python relative import that can carry an APIRouter. */
+interface StaticFastApiRelativeRouterImport {
+  readonly moduleSpecifier: string;
+  readonly importedRouterName: string;
+  readonly routerName: string;
   readonly node: PythonSyntaxNode;
 }
 
@@ -193,6 +204,36 @@ function staticFastApiImports(
           }
         ]
   );
+}
+
+/**
+ * Retains only the deliberately narrow import form supported by the project
+ * resolver: `from .package.module import router [as local_router]`.
+ *
+ * A single leading dot keeps the package calculation local and testable. Parent
+ * imports, wildcard imports, import lists, and package-only imports remain
+ * unsupported until they can be modeled with equally strong evidence.
+ */
+function staticFastApiRelativeRouterImport(
+  input: PythonExtractFileFactsInput,
+  node: PythonSyntaxNode
+): StaticFastApiRelativeRouterImport | null {
+  if (node.name !== "ImportStatement") {
+    return null;
+  }
+  const match = /^from[ \t]+(\.[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)[ \t]+import[ \t]+([A-Za-z_][A-Za-z0-9_]*)(?:[ \t]+as[ \t]+([A-Za-z_][A-Za-z0-9_]*))?[ \t]*$/u.exec(
+    nodeText(input, node)
+  );
+  if (match?.[1] === undefined || match[2] === undefined) {
+    return null;
+  }
+
+  return {
+    moduleSpecifier: match[1],
+    importedRouterName: match[2],
+    routerName: match[3] ?? match[2],
+    node
+  };
 }
 
 function directAssignmentName(
@@ -609,6 +650,34 @@ function latestProvenFastApiApplication(
   );
 }
 
+/**
+ * Finds the one direct relative import still bound to the router argument at a
+ * literal `include_router` call. A later assignment or import shadows an
+ * earlier import and therefore removes it from consideration.
+ */
+function latestProvenFastApiRelativeRouterImport(
+  input: PythonExtractFileFactsInput,
+  topLevelNodes: readonly PythonSyntaxNode[],
+  imports: readonly StaticFastApiRelativeRouterImport[],
+  inclusion: StaticFastApiRouterInclusion
+): StaticFastApiRelativeRouterImport | null {
+  const candidates = imports
+    .filter(
+      (candidate) =>
+        candidate.routerName === inclusion.routerName &&
+        candidate.node.to <= inclusion.node.from &&
+        !hasTopLevelRebinding(
+          input,
+          topLevelNodes,
+          candidate.routerName,
+          candidate.node.to,
+          inclusion.node.from
+        )
+    )
+    .sort((left, right) => right.node.from - left.node.from);
+  return candidates.length === 1 ? candidates[0] ?? null : null;
+}
+
 function combinedFastApiPath(...parts: readonly string[]): string {
   return parts.join("");
 }
@@ -630,6 +699,15 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
   const edges: GraphEdge[] = [];
   const declarationOrdinals = new Map<string, number>();
   const symbolsByNodeKey = new Map<string, SymbolNode>();
+  const fastApiRouterFacts: {
+    readonly routers: FastApiRouterDeclarationFact[];
+    readonly routes: FastApiRouterRouteFact[];
+    readonly importedRouterInclusions: FastApiImportedRouterInclusionFact[];
+  } = {
+    routers: [],
+    routes: [],
+    importedRouterInclusions: []
+  };
   const fileName = input.filePath.split(/[\\/]/u).at(-1) ?? input.filePath;
   const fileNode: SymbolNode = {
     id: createSymbolId({
@@ -783,6 +861,9 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
     }
 
     const imports = topLevelNodes.flatMap((node) => staticFastApiImports(input, node));
+    const relativeRouterImports = topLevelNodes
+      .map((node) => staticFastApiRelativeRouterImport(input, node))
+      .filter((candidate): candidate is StaticFastApiRelativeRouterImport => candidate !== null);
     const applicationConstructorNames = new Set(
       imports
         .filter((candidate) => candidate.importedName === "FastAPI")
@@ -802,6 +883,58 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
     const inclusions = topLevelNodes
       .map((node) => staticFastApiRouterInclusion(input, node))
       .filter((candidate): candidate is StaticFastApiRouterInclusion => candidate !== null);
+    const finalRouters = routers.filter((router) => {
+      const finalRouter = latestProvenFastApiInstance(
+        input,
+        topLevelNodes,
+        imports,
+        routers,
+        router.name,
+        input.sourceText.length,
+        "APIRouter"
+      );
+      return finalRouter !== null && nodeKey(finalRouter.node) === nodeKey(router.node);
+    });
+    for (const router of finalRouters) {
+      fastApiRouterFacts.routers.push({
+        name: router.name,
+        prefix: router.prefix,
+        range: rangeFor(lineStarts, router.node.from, router.node.to)
+      });
+    }
+
+    for (const inclusion of inclusions) {
+      if (
+        latestProvenFastApiInstance(
+          input,
+          topLevelNodes,
+          imports,
+          applications,
+          inclusion.applicationName,
+          inclusion.node.from,
+          "FastAPI"
+        ) === null
+      ) {
+        continue;
+      }
+      const importedRouter = latestProvenFastApiRelativeRouterImport(
+        input,
+        topLevelNodes,
+        relativeRouterImports,
+        inclusion
+      );
+      if (importedRouter === null) {
+        continue;
+      }
+      fastApiRouterFacts.importedRouterInclusions.push({
+        applicationName: inclusion.applicationName,
+        routerName: importedRouter.routerName,
+        importedRouterName: importedRouter.importedRouterName,
+        moduleSpecifier: importedRouter.moduleSpecifier,
+        prefix: inclusion.prefix,
+        range: rangeFor(lineStarts, inclusion.node.from, inclusion.node.to)
+      });
+    }
 
     for (const statement of topLevelNodes) {
       const functionNode = decoratedDefinition(statement);
@@ -816,6 +949,27 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
         const decorator = staticFastApiDecorator(input, decoratorNode);
         if (decorator === null) {
           continue;
+        }
+        const routerAtDecorator = latestProvenFastApiInstance(
+          input,
+          topLevelNodes,
+          imports,
+          routers,
+          decorator.receiver,
+          decorator.node.from,
+          "APIRouter"
+        );
+        const finalRouter = finalRouters.find(
+          (router) => routerAtDecorator !== null && nodeKey(router.node) === nodeKey(routerAtDecorator.node)
+        );
+        if (finalRouter !== undefined) {
+          fastApiRouterFacts.routes.push({
+            routerName: finalRouter.name,
+            method: decorator.method,
+            path: decorator.path,
+            handlerId: handler.id,
+            range: rangeFor(lineStarts, decorator.node.from, decorator.node.to)
+          });
         }
         if (
           latestProvenFastApiApplication(
@@ -902,6 +1056,7 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
       routes: [],
       childRegistrations: [],
       rootRegistrations: []
-    }
+    },
+    fastApiRouterFacts
   };
 }
