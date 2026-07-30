@@ -11,7 +11,7 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "typescript-ast-v14";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "typescript-ast-v15";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way

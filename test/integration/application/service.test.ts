@@ -3356,7 +3356,7 @@ describe("SymbolLatticeService", () => {
       "src/data-routes.tsx": [
         'import { createBrowserRouter as makeRouter } from "react-router-dom";',
         'import { SettingsPage } from "./pages.js";',
-        'export const router = makeRouter([{ path: "/settings", Component: SettingsPage }]);'
+        'export const router = makeRouter([{ path: "/workspace", children: [{ path: "settings", Component: SettingsPage }] }]);'
       ].join("\n")
     });
     const graphStore = new SqliteGraphStore();
@@ -3389,8 +3389,8 @@ describe("SymbolLatticeService", () => {
     expect(navigationRoutes.routes).toMatchObject([
       {
         method: "NAVIGATE",
-        path: "/settings",
-        route: { kind: "route", name: "NAVIGATE /settings" },
+        path: "/workspace/settings",
+        route: { kind: "route", name: "NAVIGATE /workspace/settings" },
         edge: {
           kind: "routes",
           resolution: "exact",
@@ -3404,7 +3404,7 @@ describe("SymbolLatticeService", () => {
     ]);
     expect(callers.relations).toMatchObject([
       {
-        symbol: { kind: "route", name: "NAVIGATE /settings" },
+        symbol: { kind: "route", name: "NAVIGATE /workspace/settings" },
         edge: {
           kind: "routes",
           resolution: "exact",
@@ -3425,7 +3425,7 @@ describe("SymbolLatticeService", () => {
     expect(routesAfterReuse.routes).toMatchObject([
       {
         method: "NAVIGATE",
-        path: "/settings",
+        path: "/workspace/settings",
         edge: { evidence: { ruleId: "framework.react-router.data-router.imported-handler" } }
       }
     ]);

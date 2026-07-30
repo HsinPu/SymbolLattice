@@ -354,6 +354,16 @@ interface StaticReactRouterDataRoute extends StaticReactRouterRoute {
   readonly declaration: ts.ObjectLiteralExpression;
 }
 
+/** One literal data-router object before its parent path is composed. */
+interface StaticReactRouterDataRouteDefinition {
+  readonly declaration: ts.ObjectLiteralExpression;
+  /** `null` is a pathless layout route, which may still establish child context. */
+  readonly path: string | null;
+  readonly index: boolean;
+  readonly handler: ts.Identifier | null;
+  readonly children: readonly StaticReactRouterDataRouteDefinition[];
+}
+
 /** A convention-derived Next.js navigation route with a direct default export. */
 interface StaticNextRoute extends StaticReactRouterRoute {
   readonly declaration: ts.Node;
@@ -1493,8 +1503,7 @@ function staticReactRouterHandler(
 }
 
 function staticReactRouterDataRoutePath(expression: ts.Expression): string | null {
-  const path = staticLiteralText(expression);
-  return path !== null && path.startsWith("/") ? path : null;
+  return staticLiteralText(expression);
 }
 
 function staticReactRouterDataRouteHandler(
@@ -1506,14 +1515,40 @@ function staticReactRouterDataRouteHandler(
     : staticReactRouterElementHandler(expression);
 }
 
+function staticReactRouterDataRouteIndex(expression: ts.Expression): boolean | null {
+  if (expression.kind === ts.SyntaxKind.TrueKeyword) {
+    return true;
+  }
+  if (expression.kind === ts.SyntaxKind.FalseKeyword) {
+    return false;
+  }
+  return null;
+}
+
+function staticReactRouterRelativeDataRoutePath(path: string): boolean {
+  if (path.length === 0 || path.startsWith("/")) {
+    return false;
+  }
+  return path.split("/").every((segment) => segment.length > 0 && segment !== "." && segment !== "..");
+}
+
+function joinedReactRouterDataRoutePath(parentPath: string, childPath: string): string | null {
+  if (!parentPath.startsWith("/") || !staticReactRouterRelativeDataRoutePath(childPath)) {
+    return null;
+  }
+  const normalizedParent = parentPath === "/" ? "" : parentPath.replace(/\/+$/u, "");
+  return `${normalizedParent}/${childPath}`;
+}
+
 /**
- * Keep data-router extraction at one direct object depth. A root route may
- * retain ordinary route metadata or child definitions, but the route itself
- * is reported only when its public path and page handler are both direct.
- * `lazy` may replace the rendered page at runtime, so it is intentionally
- * outside this syntax-proof boundary.
+ * Reads one direct route object without assigning it a public URL yet. A
+ * `children` array is independently traversable only when it is a literal;
+ * a dynamic child definition never turns into a guessed route. `lazy` may
+ * replace the rendered page at runtime, so it rejects the whole object.
  */
-function staticReactRouterDataRouteObject(expression: ts.Expression): StaticReactRouterDataRoute | null {
+function staticReactRouterDataRouteObject(
+  expression: ts.Expression
+): StaticReactRouterDataRouteDefinition | null {
   if (!ts.isObjectLiteralExpression(expression)) {
     return null;
   }
@@ -1521,6 +1556,9 @@ function staticReactRouterDataRouteObject(expression: ts.Expression): StaticReac
   const propertyNames = new Set<string>();
   let path: string | undefined;
   let handler: ts.Identifier | undefined;
+  let index = false;
+  let hasChildren = false;
+  const children: StaticReactRouterDataRouteDefinition[] = [];
   for (const property of expression.properties) {
     if (!ts.isPropertyAssignment(property) || ts.isComputedPropertyName(property.name)) {
       return null;
@@ -1553,21 +1591,99 @@ function staticReactRouterDataRouteObject(expression: ts.Expression): StaticReac
       continue;
     }
 
+    if (propertyName === "index") {
+      const staticIndex = staticReactRouterDataRouteIndex(property.initializer);
+      if (staticIndex === null) {
+        return null;
+      }
+      index = staticIndex;
+      continue;
+    }
+
+    if (propertyName === "children") {
+      hasChildren = true;
+      if (!ts.isArrayLiteralExpression(property.initializer)) {
+        continue;
+      }
+      for (const child of property.initializer.elements) {
+        if (!ts.isExpression(child)) {
+          continue;
+        }
+        const staticChild = staticReactRouterDataRouteObject(child);
+        if (staticChild !== null) {
+          children.push(staticChild);
+        }
+      }
+      continue;
+    }
+
     if (propertyName === "lazy") {
       return null;
     }
   }
 
-  return path === undefined || handler === undefined
-    ? null
-    : { method: "NAVIGATE", path, handler, declaration: expression };
+  if (index && (path !== undefined || hasChildren)) {
+    return null;
+  }
+
+  return {
+    declaration: expression,
+    path: path ?? null,
+    index,
+    handler: handler ?? null,
+    children
+  };
+}
+
+function staticReactRouterDataRouteTree(
+  route: StaticReactRouterDataRouteDefinition,
+  parentPath: string,
+  root: boolean
+): readonly StaticReactRouterDataRoute[] {
+  if (route.index) {
+    return route.handler === null
+      ? []
+      : [
+          {
+            method: "NAVIGATE",
+            path: parentPath,
+            handler: route.handler,
+            declaration: route.declaration
+          }
+        ];
+  }
+
+  const routePath =
+    route.path === null
+      ? parentPath
+      : root
+        ? (route.path.startsWith("/") ? route.path : null)
+        : joinedReactRouterDataRoutePath(parentPath, route.path);
+  if (routePath === null) {
+    return [];
+  }
+
+  const staticRoutes: StaticReactRouterDataRoute[] = [];
+  if (route.path !== null && route.handler !== null) {
+    staticRoutes.push({
+      method: "NAVIGATE",
+      path: routePath,
+      handler: route.handler,
+      declaration: route.declaration
+    });
+  }
+  for (const child of route.children) {
+    staticRoutes.push(...staticReactRouterDataRouteTree(child, routePath, false));
+  }
+  return staticRoutes;
 }
 
 /**
  * Supports direct v6.4+ data-router factories imported from React Router.
  * Factory options can change the public URL base, so only the one-argument
- * form is accepted. Route entries remain independent proof units: unsupported
- * siblings are skipped rather than making a proven direct object ambiguous.
+ * form is accepted. Root routes require slash-prefixed literal paths; literal
+ * children can compose non-empty relative paths or `index: true` routes from
+ * that root. Unsupported siblings are skipped independently.
  */
 function staticReactRouterDataRoutes(
   sourceFile: ts.SourceFile,
@@ -1593,9 +1709,9 @@ function staticReactRouterDataRoutes(
     if (!ts.isExpression(route)) {
       continue;
     }
-    const staticRoute = staticReactRouterDataRouteObject(route);
-    if (staticRoute !== null) {
-      staticRoutes.push(staticRoute);
+    const definition = staticReactRouterDataRouteObject(route);
+    if (definition !== null) {
+      staticRoutes.push(...staticReactRouterDataRouteTree(definition, "/", true));
     }
   }
   return staticRoutes;

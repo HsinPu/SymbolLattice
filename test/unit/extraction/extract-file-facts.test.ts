@@ -660,7 +660,7 @@ describe("TypeScript and JavaScript extraction", () => {
     ]);
   });
 
-  it("retains direct data-router root-route evidence without deriving unsupported siblings or children", () => {
+  it("composes direct data-router child routes while retaining independent root-route proof", () => {
     const facts = extractFileFacts({
       filePath: "src/data-routes.tsx",
       language: "typescript",
@@ -677,11 +677,93 @@ describe("TypeScript and JavaScript extraction", () => {
     });
 
     expect(facts.symbols.filter((symbol) => symbol.kind === "route").map((route) => route.name)).toEqual([
-      "NAVIGATE /parent"
+      "NAVIGATE /parent",
+      "NAVIGATE /parent/child"
     ]);
-    expect(facts.pendingReferences.filter((reference) => reference.relationKind === "routes")).toEqual([
-      expect.objectContaining({ referenceName: "ParentPage", routeRegistration: "react-router-data-router" })
+    expect(
+      facts.pendingReferences
+        .filter((reference) => reference.relationKind === "routes")
+        .map((reference) => [reference.referenceName, reference.routeRegistration])
+    ).toEqual([
+      ["ParentPage", "react-router-data-router"],
+      ["ChildPage", "react-router-data-router"]
     ]);
+  });
+
+  it("composes nested relative and index data-router routes through a pathless layout", () => {
+    const facts = extractFileFacts({
+      filePath: "src/data-routes.tsx",
+      language: "typescript",
+      sourceText: [
+        'import { createMemoryRouter } from "react-router";',
+        "function Shell() { return <main />; }",
+        "function DashboardPage() { return <main />; }",
+        "function OverviewPage() { return <main />; }",
+        "function SettingsPage() { return <main />; }",
+        "function TabPage() { return <main />; }",
+        "export const router = createMemoryRouter([",
+        "  {",
+        "    Component: Shell,",
+        "    children: [",
+        '      { path: "dashboard", Component: DashboardPage, children: [',
+        "        { index: true, element: <OverviewPage /> },",
+        '        { path: "settings", Component: SettingsPage, children: [{ path: ":tab", Component: TabPage }] }',
+        "      ] }",
+        "    ]",
+        "  }",
+        "]);"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route").map((route) => route.name)).toEqual([
+      "NAVIGATE /dashboard",
+      "NAVIGATE /dashboard",
+      "NAVIGATE /dashboard/settings",
+      "NAVIGATE /dashboard/settings/:tab"
+    ]);
+    expect(
+      facts.pendingReferences
+        .filter((reference) => reference.relationKind === "routes")
+        .map((reference) => reference.referenceName)
+    ).toEqual(["DashboardPage", "OverviewPage", "SettingsPage", "TabPage"]);
+  });
+
+  it("retains proven data-router ancestors while rejecting unproven nested path shapes", () => {
+    const facts = extractFileFacts({
+      filePath: "src/data-routes.tsx",
+      language: "typescript",
+      sourceText: [
+        'import { createBrowserRouter } from "react-router-dom";',
+        'const dynamicPath = "dynamic";',
+        "function ParentPage() { return <main />; }",
+        "function KeptPage() { return <main />; }",
+        "function RejectedPage() { return <main />; }",
+        "export const router = createBrowserRouter([",
+        "  {",
+        '    path: "/parent",',
+        "    Component: ParentPage,",
+        "    children: [",
+        '      { path: "kept", Component: KeptPage },',
+        '      { path: dynamicPath, Component: RejectedPage },',
+        '      { path: "../escape", Component: RejectedPage },',
+        '      { path: "/absolute", Component: RejectedPage },',
+        '      { index: true, path: "invalid", Component: RejectedPage },',
+        "      { index: true, Component: RejectedPage, children: [] }",
+        "    ]",
+        "  }",
+        "]);"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route").map((route) => route.name)).toEqual([
+      "NAVIGATE /parent",
+      "NAVIGATE /parent/kept"
+    ]);
+    expect(
+      facts.pendingReferences
+        .filter((reference) => reference.relationKind === "routes")
+        .map((reference) => reference.referenceName)
+    ).toEqual(["ParentPage", "KeptPage"]);
   });
 
   it("rejects unproven, dynamic, spread, and ambiguous React Router data-router objects", () => {

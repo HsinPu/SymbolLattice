@@ -6,6 +6,24 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.26.0] - 2026-07-30
+
+### Added
+
+- Recursive, AST-proven React Router v6.4+ data-router trees. Direct literal `children` arrays now compose relative child paths, index routes, and pathless layout traversal from an eligible slash-prefixed root route into first-class `NAVIGATE` route symbols.
+- Existing local, imported, re-exported, and unresolved page-handler resolution remains intact for every emitted nested route. Nested output keeps `routeRegistration: "react-router-data-router"` and its distinct `framework.react-router.data-router.*` evidence.
+- Root-level [FEATURE_COMPARISON.md](FEATURE_COMPARISON.md), a cumulative release-by-release comparison against the local CodeGraph baseline. Every later version must add its verified capability, evidence, deliberate limits, and a plain-language assessment to that file.
+
+### Compatibility
+
+- No SQLite schema migration or new route-query command is required. Existing route facts remain readable; nested routes use the existing `NAVIGATE`, route-framework, registration, and edge-evidence contracts.
+- The artifact extractor advances to `typescript-ast-v15`. A pre-v0.26 active index reports `indexer-version-changed` until an explicit `sync` or `index` publishes recursive data-router facts. The project resolver remains `project-resolver-v12` because the existing handler-resolution semantics are unchanged.
+
+### Deliberate limits
+
+- This pack supports direct literal `children` arrays only. Dynamic child arrays, spreads, `lazy`, factory options or `basename`, nested JSX `Route` composition, route-array variables, absolute child paths, `.` / `..` child segments, and runtime router configuration are not inferred.
+- A pathless layout can pass its parent's URL context to static children, but does not become a separate public navigation route itself. An index child must have no path or children; malformed children are excluded independently without removing a separately proven ancestor or sibling.
+
 ## [0.25.0] - 2026-07-30
 
 ### Added
@@ -511,7 +529,8 @@ No unreleased changes.
 - Explicit full indexing, caller/callee/impact queries, and read-only MCP exploration.
 - `exact`, `heuristic`, and `unresolved` relationship states.
 
-[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.25.0...HEAD
+[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.26.0...HEAD
+[0.26.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.25.0...v0.26.0
 [0.25.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.24.0...v0.25.0
 [0.24.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.23.0...v0.24.0
 [0.23.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.22.0...v0.23.0
