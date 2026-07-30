@@ -3274,6 +3274,71 @@ describe("SymbolLatticeService", () => {
     });
   });
 
+  it("indexes direct Flask and same-file Blueprint routes with exact syntax evidence", async () => {
+    const projectPath = await createInlineProject({
+      "app/main.py": [
+        "from flask import Blueprint as BP, Flask as App",
+        "app = App(__name__)",
+        "catalog = BP(\"catalog\", __name__, url_prefix=\"/catalog\")",
+        "",
+        "@app.route(\"/health\", methods=[\"GET\", \"POST\"])",
+        "def health():",
+        "    return {\"ok\": True}",
+        "",
+        "@catalog.get(\"/items\")",
+        "def items():",
+        "    return []",
+        "",
+        "app.register_blueprint(catalog, url_prefix=\"/api\")"
+      ].join("\n")
+    });
+    const service = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+
+    expect(routes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "GET",
+          path: "/health",
+          handler: expect.objectContaining({ qualifiedName: "app/main.py#health" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.flask.direct-app.decorator.local-function",
+              stage: "syntax"
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "POST",
+          path: "/health",
+          handler: expect.objectContaining({ qualifiedName: "app/main.py#health" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.flask.direct-app.decorator.local-function",
+              stage: "syntax"
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "GET",
+          path: "/api/catalog/items",
+          handler: expect.objectContaining({ qualifiedName: "app/main.py#items" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.flask.direct-blueprint.register-blueprint.decorator.local-function",
+              stage: "syntax"
+            })
+          })
+        })
+      ])
+    );
+  });
+
   it("indexes NestJS decorator routes as persisted exact method evidence", async () => {
     const projectPath = await createInlineProject({
       "src/cats.controller.ts": [

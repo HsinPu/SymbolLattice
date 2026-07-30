@@ -6,6 +6,24 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.32.0] - 2026-07-30
+
+### Added
+
+- An executable first-party Flask framework capability for Python, with AST-proven direct application `@app.get` / `post` / `put` / `patch` / `delete` routes and direct `@app.route("/...", methods=[...])` or tuple-method registrations. Literal unique uppercase methods emit independent exact route nodes and `framework.flask.direct-app.decorator.local-function` syntax evidence.
+- Same-file literal Flask Blueprint composition: a direct `Blueprint(...)` binding with an optional literal `url_prefix`, direct top-level decorated local handlers, and a later direct `app.register_blueprint(blueprint, url_prefix="/...")` now project exact paths such as `GET /api/catalog/items` with `framework.flask.direct-blueprint.register-blueprint.decorator.local-function` evidence.
+- Capability, unit, integration, route-query, alias, prefix-composition, dynamic-method/prefix, factory, and rebinding coverage, plus a Traditional Chinese comparison report at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.32.0.md`.
+
+### Compatibility
+
+- No SQLite schema migration or new query command is required. Flask routes use the existing graph edge and route query contracts; existing generations remain readable.
+- The artifact extractor advances to `multi-language-ast-v21`; the project resolver remains `project-resolver-v14` because this Flask slice emits only direct same-file syntax evidence. A pre-v0.32 active index reports `indexer-version-changed` until an explicit `sync` or `index` publishes Flask-capable facts.
+
+### Deliberate limits
+
+- Cross-file Blueprints, `add_url_rule`, nested/factory Blueprints, custom route wrappers, dynamic methods or endpoints, star/keyword expansion, member receivers, runtime route configuration, middleware, and Flask request lifecycle behavior are intentionally excluded.
+- Django, Starlette, generic Python import/export/call resolution, Python type hierarchy, semantic type checking, and runtime framework behavior are not modeled in v0.32.
+
 ## [0.31.0] - 2026-07-30
 
 ### Added
@@ -620,7 +638,8 @@ No unreleased changes.
 - Explicit full indexing, caller/callee/impact queries, and read-only MCP exploration.
 - `exact`, `heuristic`, and `unresolved` relationship states.
 
-[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.31.0...HEAD
+[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.32.0...HEAD
+[0.32.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.31.0...v0.32.0
 [0.31.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.30.0...v0.31.0
 [0.30.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.29.0...v0.30.0
 [0.29.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.28.0...v0.29.0

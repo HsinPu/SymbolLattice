@@ -24,23 +24,29 @@ export interface PythonExtractFileFactsInput {
 
 type PythonSyntaxNode = ReturnType<typeof parser.parse>["topNode"];
 
-type FastApiImportedConstructor = "FastAPI" | "APIRouter";
+type FrameworkImportedConstructor = "FastAPI" | "APIRouter" | "Flask" | "Blueprint";
 
-interface FastApiImport {
+interface FrameworkNamedImport {
   readonly importedName: string;
   readonly alias: string;
   readonly node: PythonSyntaxNode;
 }
 
-interface FastApiDirectInstance {
+interface FrameworkDirectInstance {
   readonly name: string;
   readonly constructorName: string;
   readonly node: PythonSyntaxNode;
 }
 
-interface FastApiApplication extends FastApiDirectInstance {}
+interface FastApiApplication extends FrameworkDirectInstance {}
 
-interface FastApiRouter extends FastApiDirectInstance {
+interface FastApiRouter extends FrameworkDirectInstance {
+  readonly prefix: string;
+}
+
+interface FlaskApplication extends FrameworkDirectInstance {}
+
+interface FlaskBlueprint extends FrameworkDirectInstance {
   readonly prefix: string;
 }
 
@@ -54,6 +60,20 @@ interface StaticFastApiDecorator {
 interface StaticFastApiRouterInclusion {
   readonly applicationName: string;
   readonly routerName: string;
+  readonly prefix: string;
+  readonly node: PythonSyntaxNode;
+}
+
+interface StaticFlaskDecorator {
+  readonly receiver: string;
+  readonly methods: readonly RouteMethod[];
+  readonly path: string;
+  readonly node: PythonSyntaxNode;
+}
+
+interface StaticFlaskBlueprintRegistration {
+  readonly applicationName: string;
+  readonly blueprintName: string;
   readonly prefix: string;
   readonly node: PythonSyntaxNode;
 }
@@ -76,6 +96,25 @@ const FASTAPI_DECORATOR_METHODS: Readonly<Record<string, RouteMethod>> = {
   options: "OPTIONS",
   trace: "TRACE"
 };
+
+const FLASK_SHORTCUT_DECORATOR_METHODS: Readonly<Record<string, RouteMethod>> = {
+  get: "GET",
+  post: "POST",
+  put: "PUT",
+  patch: "PATCH",
+  delete: "DELETE"
+};
+
+const FLASK_ROUTE_METHODS = new Set<RouteMethod>([
+  "GET",
+  "POST",
+  "PUT",
+  "PATCH",
+  "DELETE",
+  "HEAD",
+  "OPTIONS",
+  "TRACE"
+]);
 
 function directChildren(node: PythonSyntaxNode): readonly PythonSyntaxNode[] {
   const children: PythonSyntaxNode[] = [];
@@ -169,14 +208,19 @@ function isTopLevelFunction(node: PythonSyntaxNode): boolean {
   return statement.parent?.name === "Script";
 }
 
-function staticFastApiImports(
+function staticNamedFrameworkImports(
   input: PythonExtractFileFactsInput,
-  node: PythonSyntaxNode
-): readonly FastApiImport[] {
+  node: PythonSyntaxNode,
+  packageName: string
+): readonly FrameworkNamedImport[] {
   if (node.name !== "ImportStatement") {
     return [];
   }
-  const match = /^from[ \t]+fastapi[ \t]+import[ \t]+(.+?)[ \t]*$/u.exec(nodeText(input, node));
+  const escapedPackageName = packageName.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+  const match = new RegExp(
+    `^from[ \\t]+${escapedPackageName}[ \\t]+import[ \\t]+(.+?)[ \\t]*$`,
+    "u"
+  ).exec(nodeText(input, node));
   if (match?.[1] === undefined) {
     return [];
   }
@@ -204,6 +248,20 @@ function staticFastApiImports(
           }
         ]
   );
+}
+
+function staticFastApiImports(
+  input: PythonExtractFileFactsInput,
+  node: PythonSyntaxNode
+): readonly FrameworkNamedImport[] {
+  return staticNamedFrameworkImports(input, node, "fastapi");
+}
+
+function staticFlaskImports(
+  input: PythonExtractFileFactsInput,
+  node: PythonSyntaxNode
+): readonly FrameworkNamedImport[] {
+  return staticNamedFrameworkImports(input, node, "flask");
 }
 
 /**
@@ -247,11 +305,11 @@ function directAssignmentName(
   return target?.name === "VariableName" ? declarationName(input, target) : null;
 }
 
-function staticFastApiConstructorAssignment(
+function staticFrameworkConstructorAssignment(
   input: PythonExtractFileFactsInput,
   node: PythonSyntaxNode,
   constructorNames: ReadonlySet<string>
-): (FastApiDirectInstance & { readonly arguments_: PythonSyntaxNode }) | null {
+): (FrameworkDirectInstance & { readonly arguments_: PythonSyntaxNode }) | null {
   if (node.name !== "AssignStatement") {
     return null;
   }
@@ -292,7 +350,7 @@ function staticFastApiApplication(
   node: PythonSyntaxNode,
   constructorNames: ReadonlySet<string>
 ): FastApiApplication | null {
-  const assignment = staticFastApiConstructorAssignment(input, node, constructorNames);
+  const assignment = staticFrameworkConstructorAssignment(input, node, constructorNames);
   return assignment === null
     ? null
     : { name: assignment.name, constructorName: assignment.constructorName, node: assignment.node };
@@ -325,6 +383,67 @@ function staticKeywordArguments(
   return arguments_;
 }
 
+/**
+ * Reads keyword arguments after a required first positional argument. Flask
+ * constructors and decorators use this shape, while every later positional or
+ * star expansion would make the supported static interpretation ambiguous.
+ */
+function staticKeywordArgumentsAfterFirst(
+  input: PythonExtractFileFactsInput,
+  entries: readonly PythonSyntaxNode[]
+): ReadonlyMap<string, PythonSyntaxNode> | null {
+  const arguments_ = new Map<string, PythonSyntaxNode>();
+  for (let index = 1; index < entries.length; index += 3) {
+    const nameNode = entries[index];
+    const operator = entries[index + 1];
+    const value = entries[index + 2];
+    if (nameNode?.name !== "VariableName" || operator?.name !== "AssignOp" || value === undefined) {
+      return null;
+    }
+    const name = declarationName(input, nameNode);
+    if (name === null || arguments_.has(name)) {
+      return null;
+    }
+    arguments_.set(name, value);
+  }
+  return arguments_;
+}
+
+/**
+ * Flask's Blueprint accepts two required positional arguments. Keep those
+ * values opaque, but require every remaining argument to be a direct keyword
+ * so a literal `url_prefix` cannot be hidden behind a spread or a duplicate.
+ */
+function staticKeywordArgumentsAfterPositions(
+  input: PythonExtractFileFactsInput,
+  entries: readonly PythonSyntaxNode[],
+  positionalCount: number
+): ReadonlyMap<string, PythonSyntaxNode> | null {
+  if (
+    entries.length < positionalCount ||
+    entries.slice(0, positionalCount).some((entry) =>
+      ["*", "**", "AssignOp"].includes(entry.name)
+    )
+  ) {
+    return null;
+  }
+  const arguments_ = new Map<string, PythonSyntaxNode>();
+  for (let index = positionalCount; index < entries.length; index += 3) {
+    const nameNode = entries[index];
+    const operator = entries[index + 1];
+    const value = entries[index + 2];
+    if (nameNode?.name !== "VariableName" || operator?.name !== "AssignOp" || value === undefined) {
+      return null;
+    }
+    const name = declarationName(input, nameNode);
+    if (name === null || arguments_.has(name)) {
+      return null;
+    }
+    arguments_.set(name, value);
+  }
+  return arguments_;
+}
+
 function staticFastApiPrefix(
   input: PythonExtractFileFactsInput,
   keywordArguments: ReadonlyMap<string, PythonSyntaxNode>
@@ -342,12 +461,29 @@ function staticFastApiPrefix(
     : prefix;
 }
 
+function staticFlaskPrefix(
+  input: PythonExtractFileFactsInput,
+  keywordArguments: ReadonlyMap<string, PythonSyntaxNode>
+): string | null {
+  const prefixNode = keywordArguments.get("url_prefix");
+  if (prefixNode === undefined) {
+    return "";
+  }
+  if (prefixNode.name !== "String") {
+    return null;
+  }
+  const prefix = staticPlainPythonString(input, prefixNode);
+  return prefix === null || (prefix !== "" && (!prefix.startsWith("/") || prefix.endsWith("/")))
+    ? null
+    : prefix;
+}
+
 function staticFastApiRouter(
   input: PythonExtractFileFactsInput,
   node: PythonSyntaxNode,
   constructorNames: ReadonlySet<string>
 ): FastApiRouter | null {
-  const assignment = staticFastApiConstructorAssignment(input, node, constructorNames);
+  const assignment = staticFrameworkConstructorAssignment(input, node, constructorNames);
   if (assignment === null) {
     return null;
   }
@@ -356,6 +492,45 @@ function staticFastApiRouter(
     return null;
   }
   const prefix = staticFastApiPrefix(input, keywordArguments);
+  return prefix === null
+    ? null
+    : {
+        name: assignment.name,
+        constructorName: assignment.constructorName,
+        prefix,
+        node: assignment.node
+      };
+}
+
+function staticFlaskApplication(
+  input: PythonExtractFileFactsInput,
+  node: PythonSyntaxNode,
+  constructorNames: ReadonlySet<string>
+): FlaskApplication | null {
+  const assignment = staticFrameworkConstructorAssignment(input, node, constructorNames);
+  return assignment === null
+    ? null
+    : { name: assignment.name, constructorName: assignment.constructorName, node: assignment.node };
+}
+
+function staticFlaskBlueprint(
+  input: PythonExtractFileFactsInput,
+  node: PythonSyntaxNode,
+  constructorNames: ReadonlySet<string>
+): FlaskBlueprint | null {
+  const assignment = staticFrameworkConstructorAssignment(input, node, constructorNames);
+  if (assignment === null) {
+    return null;
+  }
+  const keywordArguments = staticKeywordArgumentsAfterPositions(
+    input,
+    staticArgumentEntries(assignment.arguments_),
+    2
+  );
+  if (keywordArguments === null) {
+    return null;
+  }
+  const prefix = staticFlaskPrefix(input, keywordArguments);
   return prefix === null
     ? null
     : {
@@ -571,9 +746,131 @@ function staticFastApiRouterInclusion(
   return prefix === null ? null : { applicationName, routerName, prefix, node };
 }
 
-function hasUnambiguousFastApiImportAlias(
-  imports: readonly FastApiImport[],
-  candidate: FastApiImport
+function staticFlaskRouteMethods(
+  input: PythonExtractFileFactsInput,
+  node: PythonSyntaxNode
+): readonly RouteMethod[] | null {
+  if (node.name !== "ArrayExpression" && node.name !== "TupleExpression") {
+    return null;
+  }
+  const entries = directChildren(node).filter(
+    (child) => !["[", "]", "(", ")", ","].includes(child.name)
+  );
+  if (entries.length === 0) {
+    return null;
+  }
+  const methods: RouteMethod[] = [];
+  for (const entry of entries) {
+    if (entry.name !== "String") {
+      return null;
+    }
+    const method = staticPlainPythonString(input, entry);
+    if (method === null || !FLASK_ROUTE_METHODS.has(method as RouteMethod)) {
+      return null;
+    }
+    const normalized = method as RouteMethod;
+    if (methods.includes(normalized)) {
+      return null;
+    }
+    methods.push(normalized);
+  }
+  return methods;
+}
+
+function staticFlaskDecorator(
+  input: PythonExtractFileFactsInput,
+  node: PythonSyntaxNode
+): StaticFlaskDecorator | null {
+  if (node.name !== "Decorator") {
+    return null;
+  }
+  const children = directChildren(node);
+  const members = children.filter(
+    (child) => child.name === "VariableName" || child.name === "PropertyName"
+  );
+  const arguments_ = children.filter((child) => child.name === "ArgList");
+  if (members.length !== 2 || arguments_.length !== 1) {
+    return null;
+  }
+  const receiver = declarationName(input, members[0] ?? node);
+  const methodName = nodeText(input, members[1] ?? node);
+  const argumentList = arguments_[0];
+  if (receiver === null || argumentList === undefined) {
+    return null;
+  }
+  const entries = staticArgumentEntries(argumentList);
+  const pathNode = entries[0];
+  const keywordArguments = staticKeywordArgumentsAfterFirst(input, entries);
+  if (pathNode?.name !== "String" || keywordArguments === null) {
+    return null;
+  }
+  const path = staticPlainPythonString(input, pathNode);
+  if (path === null || !path.startsWith("/")) {
+    return null;
+  }
+
+  if (methodName === "route") {
+    const methodsNode = keywordArguments.get("methods");
+    const methods = methodsNode === undefined ? ["GET" as const] : staticFlaskRouteMethods(input, methodsNode);
+    return methods === null ? null : { receiver, methods, path, node };
+  }
+
+  const method = FLASK_SHORTCUT_DECORATOR_METHODS[methodName];
+  if (method === undefined || keywordArguments.has("methods")) {
+    return null;
+  }
+  return { receiver, methods: [method], path, node };
+}
+
+function staticFlaskBlueprintRegistration(
+  input: PythonExtractFileFactsInput,
+  node: PythonSyntaxNode
+): StaticFlaskBlueprintRegistration | null {
+  if (node.name !== "ExpressionStatement") {
+    return null;
+  }
+  const expression = directChildren(node)[0];
+  if (expression?.name !== "CallExpression") {
+    return null;
+  }
+  const callChildren = directChildren(expression);
+  const member = callChildren[0];
+  const argumentList = callChildren[1];
+  if (callChildren.length !== 2 || member?.name !== "MemberExpression" || argumentList?.name !== "ArgList") {
+    return null;
+  }
+  const memberChildren = directChildren(member);
+  const applicationNode = memberChildren[0];
+  const methodNode = memberChildren[2];
+  if (
+    memberChildren.length !== 3 ||
+    applicationNode?.name !== "VariableName" ||
+    methodNode?.name !== "PropertyName" ||
+    nodeText(input, methodNode) !== "register_blueprint"
+  ) {
+    return null;
+  }
+  const applicationName = declarationName(input, applicationNode);
+  const entries = staticArgumentEntries(argumentList);
+  const blueprintNode = entries[0];
+  const keywordArguments = staticKeywordArgumentsAfterFirst(input, entries);
+  if (
+    applicationName === null ||
+    blueprintNode?.name !== "VariableName" ||
+    keywordArguments === null
+  ) {
+    return null;
+  }
+  const blueprintName = declarationName(input, blueprintNode);
+  const prefix = staticFlaskPrefix(input, keywordArguments);
+  return blueprintName === null || prefix === null
+    ? null
+    : { applicationName, blueprintName, prefix, node };
+}
+
+function hasUnambiguousFrameworkImportAlias(
+  imports: readonly FrameworkNamedImport[],
+  candidate: FrameworkNamedImport
 ): boolean {
   return (
     imports.filter(
@@ -582,14 +879,14 @@ function hasUnambiguousFastApiImportAlias(
   );
 }
 
-function latestProvenFastApiInstance<T extends FastApiDirectInstance>(
+function latestProvenFrameworkInstance<T extends FrameworkDirectInstance>(
   input: PythonExtractFileFactsInput,
   topLevelNodes: readonly PythonSyntaxNode[],
-  imports: readonly FastApiImport[],
+  imports: readonly FrameworkNamedImport[],
   instances: readonly T[],
   receiverName: string,
   before: number,
-  importedConstructor: FastApiImportedConstructor
+  importedConstructor: FrameworkImportedConstructor
 ): T | null {
   const candidates = instances
     .filter(
@@ -612,7 +909,7 @@ function latestProvenFastApiInstance<T extends FastApiDirectInstance>(
         (candidate) =>
           candidate.importedName === importedConstructor &&
           candidate.alias === instance.constructorName &&
-          hasUnambiguousFastApiImportAlias(imports, candidate) &&
+          hasUnambiguousFrameworkImportAlias(imports, candidate) &&
           candidate.node.to <= instance.node.from &&
           !hasTopLevelRebinding(
             input,
@@ -635,11 +932,11 @@ function latestProvenFastApiInstance<T extends FastApiDirectInstance>(
 function latestProvenFastApiApplication(
   input: PythonExtractFileFactsInput,
   topLevelNodes: readonly PythonSyntaxNode[],
-  imports: readonly FastApiImport[],
+  imports: readonly FrameworkNamedImport[],
   applications: readonly FastApiApplication[],
   decorator: StaticFastApiDecorator
 ): FastApiApplication | null {
-  return latestProvenFastApiInstance(
+  return latestProvenFrameworkInstance(
     input,
     topLevelNodes,
     imports,
@@ -647,6 +944,25 @@ function latestProvenFastApiApplication(
     decorator.receiver,
     decorator.node.from,
     "FastAPI"
+  );
+}
+
+function latestProvenFlaskApplication(
+  input: PythonExtractFileFactsInput,
+  topLevelNodes: readonly PythonSyntaxNode[],
+  imports: readonly FrameworkNamedImport[],
+  applications: readonly FlaskApplication[],
+  receiverName: string,
+  before: number
+): FlaskApplication | null {
+  return latestProvenFrameworkInstance(
+    input,
+    topLevelNodes,
+    imports,
+    applications,
+    receiverName,
+    before,
+    "Flask"
   );
 }
 
@@ -678,19 +994,24 @@ function latestProvenFastApiRelativeRouterImport(
   return candidates.length === 1 ? candidates[0] ?? null : null;
 }
 
-function combinedFastApiPath(...parts: readonly string[]): string {
+function combinedRoutePath(...parts: readonly string[]): string {
   return parts.join("");
 }
 
 /**
  * Extracts conservative Python file facts. The Python surface records
- * declarations, containment, direct FastAPI decorators, and direct same-file
- * APIRouter composition only when every binding and path is syntax-proven.
+ * declarations, containment, direct FastAPI/Flask decorators, and direct
+ * same-file router or Blueprint composition only when every binding and path
+ * is syntax-proven.
  */
 export function extractPythonFileFacts(input: PythonExtractFileFactsInput): ArtifactFacts {
-  const capability = frameworkCapability("fastapi");
-  if (!capability.languages.includes(input.language)) {
-    throw new Error("FastAPI extraction was invoked for an unsupported source language.");
+  const fastApiCapability = frameworkCapability("fastapi");
+  const flaskCapability = frameworkCapability("flask");
+  if (
+    !fastApiCapability.languages.includes(input.language) ||
+    !flaskCapability.languages.includes(input.language)
+  ) {
+    throw new Error("Python framework extraction was invoked for an unsupported source language.");
   }
 
   const root = parser.parse(input.sourceText).topNode;
@@ -800,18 +1121,19 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
     }
   }
 
-  function addFastApiRoute(
-    decorator: StaticFastApiDecorator,
+  function addPythonRoute(
+    method: RouteMethod,
+    declarationNode: PythonSyntaxNode,
     handler: SymbolNode,
     path: string,
     ruleId: string
   ): void {
-    const routeName = `${decorator.method} ${path}`;
+    const routeName = `${method} ${path}`;
     const qualifiedName = `${input.filePath}#route:${routeName}`;
     const identity = `${qualifiedName}\u0000route`;
     const declarationOrdinal = declarationOrdinals.get(identity) ?? 0;
     declarationOrdinals.set(identity, declarationOrdinal + 1);
-    const range = rangeFor(lineStarts, decorator.node.from, decorator.node.to);
+    const range = rangeFor(lineStarts, declarationNode.from, declarationNode.to);
     const route: SymbolNode = {
       id: createSymbolId({
         filePath: input.filePath,
@@ -828,7 +1150,7 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
       declarationOrdinal
     };
     symbols.push(route);
-    addContainment(fileNode, route, decorator.node);
+    addContainment(fileNode, route, declarationNode);
     edges.push({
       id: createEdgeId({
         sourceId: route.id,
@@ -852,6 +1174,15 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
         candidateSymbolIds: [handler.id]
       }
     });
+  }
+
+  function addFastApiRoute(
+    decorator: StaticFastApiDecorator,
+    handler: SymbolNode,
+    path: string,
+    ruleId: string
+  ): void {
+    addPythonRoute(decorator.method, decorator.node, handler, path, ruleId);
   }
 
   if (!hasSyntaxError(root)) {
@@ -883,8 +1214,28 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
     const inclusions = topLevelNodes
       .map((node) => staticFastApiRouterInclusion(input, node))
       .filter((candidate): candidate is StaticFastApiRouterInclusion => candidate !== null);
+    const flaskImports = topLevelNodes.flatMap((node) => staticFlaskImports(input, node));
+    const flaskApplicationConstructorNames = new Set(
+      flaskImports
+        .filter((candidate) => candidate.importedName === "Flask")
+        .map((candidate) => candidate.alias)
+    );
+    const flaskBlueprintConstructorNames = new Set(
+      flaskImports
+        .filter((candidate) => candidate.importedName === "Blueprint")
+        .map((candidate) => candidate.alias)
+    );
+    const flaskApplications = topLevelNodes
+      .map((node) => staticFlaskApplication(input, node, flaskApplicationConstructorNames))
+      .filter((candidate): candidate is FlaskApplication => candidate !== null);
+    const flaskBlueprints = topLevelNodes
+      .map((node) => staticFlaskBlueprint(input, node, flaskBlueprintConstructorNames))
+      .filter((candidate): candidate is FlaskBlueprint => candidate !== null);
+    const flaskBlueprintRegistrations = topLevelNodes
+      .map((node) => staticFlaskBlueprintRegistration(input, node))
+      .filter((candidate): candidate is StaticFlaskBlueprintRegistration => candidate !== null);
     const finalRouters = routers.filter((router) => {
-      const finalRouter = latestProvenFastApiInstance(
+      const finalRouter = latestProvenFrameworkInstance(
         input,
         topLevelNodes,
         imports,
@@ -905,7 +1256,7 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
 
     for (const inclusion of inclusions) {
       if (
-        latestProvenFastApiInstance(
+        latestProvenFrameworkInstance(
           input,
           topLevelNodes,
           imports,
@@ -947,52 +1298,8 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
       }
       for (const decoratorNode of directChildren(statement).filter((node) => node.name === "Decorator")) {
         const decorator = staticFastApiDecorator(input, decoratorNode);
-        if (decorator === null) {
-          continue;
-        }
-        const routerAtDecorator = latestProvenFastApiInstance(
-          input,
-          topLevelNodes,
-          imports,
-          routers,
-          decorator.receiver,
-          decorator.node.from,
-          "APIRouter"
-        );
-        const finalRouter = finalRouters.find(
-          (router) => routerAtDecorator !== null && nodeKey(router.node) === nodeKey(routerAtDecorator.node)
-        );
-        if (finalRouter !== undefined) {
-          fastApiRouterFacts.routes.push({
-            routerName: finalRouter.name,
-            method: decorator.method,
-            path: decorator.path,
-            handlerId: handler.id,
-            range: rangeFor(lineStarts, decorator.node.from, decorator.node.to)
-          });
-        }
-        if (
-          latestProvenFastApiApplication(
-            input,
-            topLevelNodes,
-            imports,
-            applications,
-            decorator
-          ) !== null
-        ) {
-          addFastApiRoute(
-            decorator,
-            handler,
-            decorator.path,
-            "framework.fastapi.direct-app.decorator.local-function"
-          );
-        }
-
-        for (const inclusion of inclusions) {
-          if (decorator.receiver !== inclusion.routerName || statement.to > inclusion.node.from) {
-            continue;
-          }
-          const routerAtDecorator = latestProvenFastApiInstance(
+        if (decorator !== null) {
+          const routerAtDecorator = latestProvenFrameworkInstance(
             input,
             topLevelNodes,
             imports,
@@ -1001,38 +1308,162 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
             decorator.node.from,
             "APIRouter"
           );
-          const routerAtInclusion = latestProvenFastApiInstance(
-            input,
-            topLevelNodes,
-            imports,
-            routers,
-            inclusion.routerName,
-            inclusion.node.from,
-            "APIRouter"
+          const finalRouter = finalRouters.find(
+            (router) => routerAtDecorator !== null && nodeKey(router.node) === nodeKey(routerAtDecorator.node)
           );
-          const applicationAtInclusion = latestProvenFastApiInstance(
-            input,
-            topLevelNodes,
-            imports,
-            applications,
-            inclusion.applicationName,
-            inclusion.node.from,
-            "FastAPI"
-          );
+          if (finalRouter !== undefined) {
+            fastApiRouterFacts.routes.push({
+              routerName: finalRouter.name,
+              method: decorator.method,
+              path: decorator.path,
+              handlerId: handler.id,
+              range: rangeFor(lineStarts, decorator.node.from, decorator.node.to)
+            });
+          }
           if (
-            routerAtDecorator === null ||
-            routerAtInclusion === null ||
-            applicationAtInclusion === null ||
-            routerAtDecorator.node.from !== routerAtInclusion.node.from
+            latestProvenFastApiApplication(
+              input,
+              topLevelNodes,
+              imports,
+              applications,
+              decorator
+            ) !== null
+          ) {
+            addFastApiRoute(
+              decorator,
+              handler,
+              decorator.path,
+              "framework.fastapi.direct-app.decorator.local-function"
+            );
+          }
+
+          for (const inclusion of inclusions) {
+            if (decorator.receiver !== inclusion.routerName || statement.to > inclusion.node.from) {
+              continue;
+            }
+            const routerAtDecorator = latestProvenFrameworkInstance(
+              input,
+              topLevelNodes,
+              imports,
+              routers,
+              decorator.receiver,
+              decorator.node.from,
+              "APIRouter"
+            );
+            const routerAtInclusion = latestProvenFrameworkInstance(
+              input,
+              topLevelNodes,
+              imports,
+              routers,
+              inclusion.routerName,
+              inclusion.node.from,
+              "APIRouter"
+            );
+            const applicationAtInclusion = latestProvenFrameworkInstance(
+              input,
+              topLevelNodes,
+              imports,
+              applications,
+              inclusion.applicationName,
+              inclusion.node.from,
+              "FastAPI"
+            );
+            if (
+              routerAtDecorator === null ||
+              routerAtInclusion === null ||
+              applicationAtInclusion === null ||
+              routerAtDecorator.node.from !== routerAtInclusion.node.from
+            ) {
+              continue;
+            }
+            addFastApiRoute(
+              decorator,
+              handler,
+              combinedRoutePath(inclusion.prefix, routerAtInclusion.prefix, decorator.path),
+              "framework.fastapi.direct-router.include-router.decorator.local-function"
+            );
+          }
+        }
+
+        const flaskDecorator = staticFlaskDecorator(input, decoratorNode);
+        if (flaskDecorator === null) {
+          continue;
+        }
+        if (
+          latestProvenFlaskApplication(
+            input,
+            topLevelNodes,
+            flaskImports,
+            flaskApplications,
+            flaskDecorator.receiver,
+            flaskDecorator.node.from
+          ) !== null
+        ) {
+          for (const method of flaskDecorator.methods) {
+            addPythonRoute(
+              method,
+              flaskDecorator.node,
+              handler,
+              flaskDecorator.path,
+              "framework.flask.direct-app.decorator.local-function"
+            );
+          }
+        }
+
+        for (const registration of flaskBlueprintRegistrations) {
+          if (
+            flaskDecorator.receiver !== registration.blueprintName ||
+            statement.to > registration.node.from
           ) {
             continue;
           }
-          addFastApiRoute(
-            decorator,
-            handler,
-            combinedFastApiPath(inclusion.prefix, routerAtInclusion.prefix, decorator.path),
-            "framework.fastapi.direct-router.include-router.decorator.local-function"
+          const blueprintAtDecorator = latestProvenFrameworkInstance(
+            input,
+            topLevelNodes,
+            flaskImports,
+            flaskBlueprints,
+            flaskDecorator.receiver,
+            flaskDecorator.node.from,
+            "Blueprint"
           );
+          const blueprintAtRegistration = latestProvenFrameworkInstance(
+            input,
+            topLevelNodes,
+            flaskImports,
+            flaskBlueprints,
+            registration.blueprintName,
+            registration.node.from,
+            "Blueprint"
+          );
+          const applicationAtRegistration = latestProvenFlaskApplication(
+            input,
+            topLevelNodes,
+            flaskImports,
+            flaskApplications,
+            registration.applicationName,
+            registration.node.from
+          );
+          if (
+            blueprintAtDecorator === null ||
+            blueprintAtRegistration === null ||
+            applicationAtRegistration === null ||
+            blueprintAtDecorator.node.from !== blueprintAtRegistration.node.from
+          ) {
+            continue;
+          }
+          for (const method of flaskDecorator.methods) {
+            addPythonRoute(
+              method,
+              flaskDecorator.node,
+              handler,
+              combinedRoutePath(
+                registration.prefix,
+                blueprintAtRegistration.prefix,
+                flaskDecorator.path
+              ),
+              "framework.flask.direct-blueprint.register-blueprint.decorator.local-function"
+            );
+          }
         }
       }
     }

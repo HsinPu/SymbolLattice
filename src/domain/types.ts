@@ -36,7 +36,13 @@ export type EdgeKind = (typeof EDGE_KINDS)[number];
 export type ResolutionKind = "exact" | "heuristic" | "unresolved";
 
 /** Framework provenance retained for syntax-proven static HTTP or client-navigation routes. */
-export type RouteFramework = "express" | "fastify" | "nextjs" | "react-router" | "fastapi";
+export type RouteFramework =
+  | "express"
+  | "fastify"
+  | "nextjs"
+  | "react-router"
+  | "fastapi"
+  | "flask";
 
 /** Additional static registration context retained when it changes route provenance or path. */
 export type RouteRegistration =

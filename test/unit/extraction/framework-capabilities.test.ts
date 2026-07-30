@@ -14,7 +14,8 @@ describe("first-party framework capabilities", () => {
       "nestjs",
       "react-router",
       "nextjs",
-      "fastapi"
+      "fastapi",
+      "flask"
     ]);
     expect(FRAMEWORK_CAPABILITIES.map((capability) => capability.id)).toEqual(
       FRAMEWORK_CAPABILITY_IDS
@@ -45,6 +46,15 @@ describe("first-party framework capabilities", () => {
       surfaces: [
         "direct FastAPI application decorators",
         "same-file APIRouter decorators through direct include_router"
+      ]
+    });
+    expect(frameworkCapability("flask")).toMatchObject({
+      languages: ["python"],
+      routeFramework: "flask",
+      routeRegistrations: [],
+      surfaces: [
+        "direct Flask application decorators",
+        "same-file Blueprint decorators through direct register_blueprint"
       ]
     });
   });

@@ -7,7 +7,8 @@ export const FRAMEWORK_CAPABILITY_IDS = [
   "nestjs",
   "react-router",
   "nextjs",
-  "fastapi"
+  "fastapi",
+  "flask"
 ] as const;
 
 export type FrameworkCapabilityId = (typeof FRAMEWORK_CAPABILITY_IDS)[number];
@@ -84,6 +85,16 @@ export const FRAMEWORK_CAPABILITIES = [
     surfaces: [
       "direct FastAPI application decorators",
       "same-file APIRouter decorators through direct include_router"
+    ]
+  },
+  {
+    id: "flask",
+    languages: ["python"],
+    routeFramework: "flask",
+    routeRegistrations: [],
+    surfaces: [
+      "direct Flask application decorators",
+      "same-file Blueprint decorators through direct register_blueprint"
     ]
   }
 ] as const satisfies readonly FrameworkCapability[];

@@ -2017,6 +2017,138 @@ describe("source extraction", () => {
     });
   });
 
+  it("extracts direct Flask shortcut and literal route-method decorators", () => {
+    const facts = extractFileFacts({
+      filePath: "app/flask_app.py",
+      language: "python",
+      sourceText: [
+        "from flask import Flask as App",
+        "app = App(__name__)",
+        "",
+        "@app.get(\"/health\")",
+        "def health():",
+        "    return {\"ok\": True}",
+        "",
+        "@app.route(\"/jobs\", methods=[\"GET\", \"POST\"])",
+        "def jobs():",
+        "    return []"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId,
+          edge.evidence?.stage,
+          edge.resolution,
+          edge.confidence
+        ])
+    ).toEqual([
+      [
+        "GET /health",
+        "app/flask_app.py#health",
+        "framework.flask.direct-app.decorator.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "GET /jobs",
+        "app/flask_app.py#jobs",
+        "framework.flask.direct-app.decorator.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "POST /jobs",
+        "app/flask_app.py#jobs",
+        "framework.flask.direct-app.decorator.local-function",
+        "syntax",
+        "exact",
+        1
+      ]
+    ]);
+  });
+
+  it("extracts same-file Flask Blueprint routes through literal registration prefixes", () => {
+    const facts = extractFileFacts({
+      filePath: "app/catalog.py",
+      language: "python",
+      sourceText: [
+        "from flask import Blueprint as BP, Flask as App",
+        "app = App(__name__)",
+        "catalog = BP(\"catalog\", __name__, url_prefix=\"/catalog\")",
+        "",
+        "@catalog.route(\"/items\", methods=(\"GET\", \"POST\"))",
+        "def items():",
+        "    return []",
+        "",
+        "app.register_blueprint(catalog, url_prefix=\"/api\")"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId
+        ])
+    ).toEqual([
+      [
+        "GET /api/catalog/items",
+        "app/catalog.py#items",
+        "framework.flask.direct-blueprint.register-blueprint.decorator.local-function"
+      ],
+      [
+        "POST /api/catalog/items",
+        "app/catalog.py#items",
+        "framework.flask.direct-blueprint.register-blueprint.decorator.local-function"
+      ]
+    ]);
+  });
+
+  it("rejects dynamic and rebound Flask route shapes", () => {
+    const facts = extractFileFacts({
+      filePath: "app/unproven_flask.py",
+      language: "python",
+      sourceText: [
+        "from flask import Blueprint, Flask",
+        "app = build_app(Flask)",
+        "@app.get(\"/factory\")",
+        "def factory():",
+        "    return {}",
+        "",
+        "known = Flask(__name__)",
+        "@known.route(\"/dynamic\", methods=allowed_methods)",
+        "def dynamic_methods():",
+        "    return {}",
+        "",
+        "bp = Blueprint(\"catalog\", __name__, url_prefix=base_path)",
+        "@bp.get(\"/items\")",
+        "def dynamic_blueprint():",
+        "    return {}",
+        "known.register_blueprint(bp)",
+        "",
+        "rebound = Flask(__name__)",
+        "rebound = build_app()",
+        "@rebound.get(\"/rebound\")",
+        "def rebound_handler():",
+        "    return {}"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+  });
+
   it("rejects dynamic, unmounted, rebound, and late-included Python APIRouter routes", () => {
     const facts = extractFileFacts({
       filePath: "app/unproven-router.py",
