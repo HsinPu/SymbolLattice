@@ -26,6 +26,7 @@ import { extractRustFileFacts } from "./rust.js";
 import { extractSwiftFileFacts } from "./swift.js";
 import { extractSvelteFileFacts } from "./svelte.js";
 import { extractAstroFileFacts } from "./astro.js";
+import { extractArkTsFileFacts } from "./arkts.js";
 import { extractRazorFileFacts } from "./razor.js";
 import { extractVueFileFacts } from "./vue.js";
 import {
@@ -481,7 +482,7 @@ interface StaticNestRoute {
 }
 
 interface StaticNestEntrypoint {
-  readonly transport: EntryPointTransport;
+  readonly transport: Exclude<EntryPointTransport, "ui">;
   readonly operation: EntryPointOperation;
   readonly name: string;
   readonly decorator: ts.Decorator;
@@ -3734,6 +3735,9 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
   if (input.language === "razor") {
     return extractRazorFileFacts({ ...input, language: "razor" });
   }
+  if (input.language === "arkts") {
+    return extractArkTsFileFacts({ ...input, language: "arkts" });
+  }
 
   const sourceFile = ts.createSourceFile(
     input.filePath,
@@ -4046,7 +4050,7 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
     });
   }
 
-  function nestEntrypointEvidenceRuleId(transport: EntryPointTransport): string {
+  function nestEntrypointEvidenceRuleId(transport: Exclude<EntryPointTransport, "ui">): string {
     switch (transport) {
       case "graphql":
         return "framework.nestjs.graphql.operation.local-method";

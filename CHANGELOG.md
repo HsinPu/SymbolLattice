@@ -6,6 +6,24 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.64.0] - 2026-07-31
+
+### Added
+
+- ArkTS `.ets` source discovery, persisted source-search language filtering, CLI/MCP validation, and a dedicated offset-preserving ArkTS scanner. It retains only complete direct `@Component struct` declarations as auditable component symbols; a directly positioned `export` is retained as an export binding.
+- An executable first-party `arkui` capability. A complete direct `@Entry @Component struct` declaration emits a `ui root <Component>` entrypoint and an exact local `framework.arkui.entry-component.local-struct` `handles` edge. The existing read-only `entrypoints` contract now accepts the additive `ui` transport and `root` operation.
+- Unit and integration coverage now verifies `.ets` discovery, component/root containment and exact handler evidence, exported component bindings, comment/string/non-struct/malformed rejection, persisted entrypoint-query integration, source-search, and CLI/MCP language validation. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.64.0.md`.
+
+### Compatibility
+
+- No SQLite schema migration or new query command is required. ArkTS component symbols and ArkUI root entrypoints reuse the existing file, symbol, edge, source-search, and entrypoint-query contracts. The `ui` / `root` filter values are additive; existing generations remain readable.
+- The artifact extractor advances to `multi-language-ast-v53`; the project resolver remains `project-resolver-v19` because every accepted ArkUI root edge is proved inside one `.ets` file. A pre-v0.64 active index reports `indexer-version-changed` until an explicit `sync` or `index` publishes ArkTS-capable facts.
+
+### Deliberate limits
+
+- The ArkTS extractor is a deliberately narrow lexical scanner, not an ArkTS compiler or a TypeScript fallback. It retains only complete line-leading direct `@Component struct` declarations, with `@Entry` accepted only when it belongs to the same adjacent decorator stack. Comments, strings, regex literals, malformed bodies, detached decorators, non-struct declarations, generic ArkTS declarations, and general TypeScript syntax do not become component facts.
+- ArkUI support does not infer `build()` DSL calls, child-component usage, `@Builder`/`@Extend`/`@Styles`, state decorators, lifecycle behavior, navigation, bundles, modules, packages, or runtime UI composition. The inspected local CodeGraph baseline has a broader Tree-sitter ArkTS extractor for struct members, decorators, and ArkUI call shapes; SymbolLattice deliberately adds a smaller UI-root evidence surface rather than claiming full ArkTS parity.
+
 ## [0.63.0] - 2026-07-31
 
 ### Added

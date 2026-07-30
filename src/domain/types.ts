@@ -89,6 +89,7 @@ export type RouteRegistration =
 export const ARTIFACT_LANGUAGES = [
   "typescript",
   "javascript",
+  "arkts",
   "vue",
   "svelte",
   "astro",

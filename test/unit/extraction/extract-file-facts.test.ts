@@ -6745,4 +6745,74 @@ describe("source extraction", () => {
     ]);
     expect(facts.pendingReferences).toEqual([]);
   });
+
+  it("extracts complete ArkTS ArkUI component structs and direct UI roots", () => {
+    const facts = extractFileFacts({
+      filePath: "entry/src/main/ets/pages/Home.ets",
+      language: "arkts",
+      sourceText: [
+        "@Entry",
+        "@Component",
+        "struct Home {",
+        "  build() {",
+        "    Column() {}",
+        "  }",
+        "}",
+        "",
+        "@Component",
+        "export struct Detail {",
+        "  build() {}",
+        "}"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.map((symbol) => [symbol.kind, symbol.name])).toEqual([
+      ["file", "Home.ets"],
+      ["class", "Home"],
+      ["entrypoint", "ui root Home"],
+      ["class", "Detail"]
+    ]);
+    expect(facts.localBindings).toEqual([
+      expect.objectContaining({ name: "Home", scopeId: "arkts:file" }),
+      expect.objectContaining({ name: "Detail", scopeId: "arkts:file" })
+    ]);
+    expect(facts.exportBindings).toEqual([
+      expect.objectContaining({ localName: "Detail", exportedName: "Detail" })
+    ]);
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "handles")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.name,
+          edge.resolution,
+          edge.evidence?.ruleId
+        ])
+    ).toEqual([
+      ["ui root Home", "Home", "exact", "framework.arkui.entry-component.local-struct"]
+    ]);
+  });
+
+  it("rejects non-direct, commented, and malformed ArkTS ArkUI component shapes", () => {
+    const facts = extractFileFacts({
+      filePath: "entry/src/main/ets/pages/Invalid.ets",
+      language: "arkts",
+      sourceText: [
+        "// @Entry @Component struct Commented {}",
+        'const display = "@Entry @Component struct StringValue {}";',
+        "const pattern = /@Entry @Component struct RegexValue {}/;",
+        "@Component class NotAStruct {}",
+        "@Entry struct MissingComponent {}",
+        "@Component struct Incomplete {"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.map((symbol) => [symbol.kind, symbol.name])).toEqual([
+      ["file", "Invalid.ets"]
+    ]);
+    expect(facts.edges).toEqual([]);
+    expect(facts.localBindings).toEqual([]);
+    expect(facts.exportBindings).toEqual([]);
+  });
 });

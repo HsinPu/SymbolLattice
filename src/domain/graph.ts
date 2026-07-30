@@ -35,7 +35,7 @@ export type RouteMethod = (typeof ROUTE_METHODS)[number];
 const ROUTE_METHOD_SET = new Set<string>(ROUTE_METHODS);
 
 /** Non-HTTP transports represented by static entrypoint symbols. */
-export const ENTRYPOINT_TRANSPORTS = ["graphql", "microservice", "websocket"] as const;
+export const ENTRYPOINT_TRANSPORTS = ["graphql", "microservice", "websocket", "ui"] as const;
 
 export type EntryPointTransport = (typeof ENTRYPOINT_TRANSPORTS)[number];
 
@@ -46,7 +46,8 @@ export const ENTRYPOINT_OPERATIONS = [
   "subscription",
   "message",
   "event",
-  "subscribe"
+  "subscribe",
+  "root"
 ] as const;
 
 export type EntryPointOperation = (typeof ENTRYPOINT_OPERATIONS)[number];

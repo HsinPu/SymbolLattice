@@ -6516,4 +6516,93 @@ describe("SymbolLatticeService", () => {
       ])
     );
   });
+
+  it("indexes ArkTS ArkUI components and direct UI root entrypoints", async () => {
+    const projectPath = await createInlineProject({
+      "entry/src/main/ets/pages/Home.ets": [
+        "@Entry",
+        "@Component",
+        "struct Home {",
+        "  build() {",
+        "    Column() {}",
+        "  }",
+        "}"
+      ].join("\n"),
+      "entry/src/main/ets/components/Detail.ets": [
+        "@Component",
+        "export struct Detail {",
+        "  build() {}",
+        "}"
+      ].join("\n"),
+      "entry/src/main/ets/pages/Invalid.ets": "@Component struct Incomplete {"
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    const indexed = await service.init({ projectPath });
+    const entrypoints = await service.entrypoints(projectPath, {
+      transport: "ui",
+      operation: "root"
+    });
+    const search = await service.search(projectPath, "Home", { language: "arkts" });
+    const persistedArkTsFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .filter((facts) => facts.language === "arkts");
+    const component = (await service.find(projectPath, "entry/src/main/ets/pages/Home.ets#Home"))
+      .symbols[0];
+    if (component === undefined) {
+      throw new Error("Expected indexed ArkTS Home component.");
+    }
+    const callers = await service.callers(projectPath, component.qualifiedName);
+
+    expect(indexed).toMatchObject({
+      stale: false,
+      counts: { files: 3, symbols: expect.any(Number), edges: expect.any(Number) }
+    });
+    expect(persistedArkTsFacts).toHaveLength(3);
+    expect(
+      persistedArkTsFacts.every(
+        (facts) => facts.extractorVersion === ARTIFACT_FACTS_EXTRACTOR_VERSION
+      )
+    ).toBe(true);
+    expect(entrypoints.entrypoints).toEqual([
+      expect.objectContaining({
+        transport: "ui",
+        operation: "root",
+        name: "Home",
+        handler: expect.objectContaining({
+          qualifiedName: "entry/src/main/ets/pages/Home.ets#Home"
+        }),
+        edge: expect.objectContaining({
+          kind: "handles",
+          resolution: "exact",
+          evidence: expect.objectContaining({
+            ruleId: "framework.arkui.entry-component.local-struct",
+            stage: "syntax"
+          })
+        })
+      })
+    ]);
+    expect(search.results).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          filePath: "entry/src/main/ets/pages/Home.ets",
+          language: "arkts"
+        })
+      ])
+    );
+    expect(callers.relations).toEqual([
+      expect.objectContaining({
+        symbol: expect.objectContaining({ kind: "entrypoint", name: "ui root Home" }),
+        edge: expect.objectContaining({
+          kind: "handles",
+          resolution: "exact",
+          evidence: expect.objectContaining({
+            ruleId: "framework.arkui.entry-component.local-struct",
+            stage: "syntax"
+          })
+        })
+      })
+    ]);
+  });
 });

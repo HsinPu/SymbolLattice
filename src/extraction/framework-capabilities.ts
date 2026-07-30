@@ -10,6 +10,7 @@ export const FRAMEWORK_CAPABILITY_IDS = [
   "sveltekit",
   "astro",
   "blazor",
+  "arkui",
   "nextjs",
   "fastapi",
   "flask",
@@ -129,6 +130,15 @@ export const FRAMEWORK_CAPABILITIES = [
     routeFramework: "blazor",
     routeRegistrations: ["blazor-page-directive"],
     surfaces: [".razor conventional components", "standalone literal @page directive routes"]
+  },
+  {
+    id: "arkui",
+    languages: ["arkts"],
+    routeRegistrations: [],
+    surfaces: [
+      "complete direct @Component struct declarations",
+      "direct @Entry @Component UI root entrypoints"
+    ]
   },
   {
     id: "nextjs",

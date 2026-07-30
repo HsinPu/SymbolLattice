@@ -2,7 +2,7 @@
 
 # SymbolLattice
 
-**Evidence-first local code intelligence for TypeScript, JavaScript, Vue, Svelte, Astro, Razor/Blazor, Python, Go, Rust, Java, PHP, C, Lua, R, Elixir, Erlang, Clojure, Perl, Julia, Haskell, OCaml, F#, Nim, C++, C#, Ruby, Kotlin, Swift, Dart, and Scala projects.**
+**Evidence-first local code intelligence for TypeScript, JavaScript, ArkTS/ArkUI, Vue, Svelte, Astro, Razor/Blazor, Python, Go, Rust, Java, PHP, C, Lua, R, Elixir, Erlang, Clojure, Perl, Julia, Haskell, OCaml, F#, Nim, C++, C#, Ruby, Kotlin, Swift, Dart, and Scala projects.**
 
 [![Version](https://img.shields.io/github/v/tag/HsinPu/symbol-lattice?label=version)](https://github.com/HsinPu/symbol-lattice/tags)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D22.13-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> **v0.63.0** is an early developer release. This public repository runs from source; its npm package is intentionally private and is not published to npm.
+> **v0.64.0** is an early developer release. This public repository runs from source; its npm package is intentionally private and is not published to npm.
 
 SymbolLattice builds a local symbol graph without hiding uncertainty. It keeps syntax-proven artifact facts, resolves cross-file relationships conservatively, and records why every resolved edge exists. The graph stays local to the inspected project under `.symbol-lattice/index.sqlite`.
 
@@ -32,7 +32,8 @@ SymbolLattice builds a local symbol graph without hiding uncertainty. It keeps s
 - **Svelte SFC + SvelteKit navigation evidence** - validated `.svelte` files expose a conventional default component plus direct instance-script declarations; static `src/routes/**/+page.svelte` paths form exact local `NAVIGATE` evidence only for literal filesystem segments.
 - **Astro SFC + Astro page navigation evidence** - validated `.astro` frontmatter exposes a conventional default component plus direct declarations; static `src/pages/**/*.astro` paths form exact local `NAVIGATE` evidence only for literal page segments.
 - **Razor + Blazor navigation evidence** - each `.razor` component exposes a conventional local component; each standalone, literal `@page` directive forms an exact local `NAVIGATE` edge, including literal parameter templates.
-- **Non-HTTP transport evidence** - AST-proven NestJS GraphQL, microservice, and WebSocket entrypoints use distinct `entrypoint` nodes and exact `handles` edges, so a message pattern or subscription is never mislabeled as an HTTP route.
+- **ArkTS + ArkUI root evidence** - complete direct `@Component struct` declarations in `.ets` files become components; a same-stack `@Entry` declaration creates an exact local `ui root` entrypoint rather than a guessed navigation route.
+- **Non-HTTP and UI transport evidence** - AST-proven NestJS GraphQL, microservice, and WebSocket entrypoints, plus direct ArkUI UI roots, use distinct `entrypoint` nodes and exact `handles` edges, so a message pattern, subscription, or UI root is never mislabeled as an HTTP route.
 - **Direct type-hierarchy evidence** - AST-proven `extends` and `implements` edges preserve value/type namespace proof, type-only imports, re-export provenance, unresolved bases, and bounded direct parent/child views without pretending to have a full type checker.
 - **Bounded context packs** - ordered symbol references produce persisted source, capped relationship/impact summaries, and static directed evidence paths without guessing ambiguous symbols or dynamic behavior.
 - **Affected-test evidence** - changed indexed files map to conventionally named tests through bounded, exact import/export proof paths; explicit paths, `--working-tree`, and `--base <ref>` retain stale, scope, depth, visit, and result limits in the response.
@@ -76,6 +77,7 @@ node dist/cli/main.js hierarchy "src/models.ts#User" --project /path/to/project 
 node dist/cli/main.js routes /path/to/project --method GET --path /api --limit 20
 node dist/cli/main.js routes /path/to/project --method NAVIGATE --path /settings --limit 20
 node dist/cli/main.js entrypoints /path/to/project --transport graphql --operation query --name author --limit 20
+node dist/cli/main.js entrypoints /path/to/project --transport ui --operation root --name Home --limit 20
 node dist/cli/main.js search "session timeout" --project /path/to/project --path src
 node dist/cli/main.js search "health" --project /path/to/project --language python
 node dist/cli/main.js search "health" --project /path/to/project --language go
@@ -104,6 +106,7 @@ node dist/cli/main.js search "HomeView" --project /path/to/project --language vu
 node dist/cli/main.js search "Catalog" --project /path/to/project --language svelte
 node dist/cli/main.js search "Catalog" --project /path/to/project --language astro
 node dist/cli/main.js search "Catalog" --project /path/to/project --language razor
+node dist/cli/main.js search "Home" --project /path/to/project --language arkts
 node dist/cli/main.js context "src/consumer.ts#calculate" "src/math.ts#add" --project /path/to/project
 
 # Select affected tests from changed files already present in the active generation.
@@ -133,15 +136,16 @@ One-shot data commands emit stable, pretty JSON. `watch` is the deliberate strea
 
 ## Capabilities
 
-| Area | v0.63.0 behavior |
+| Area | v0.64.0 behavior |
 | --- | --- |
-| Source files | TypeScript, TSX, JavaScript, JSX, Vue SFC, Svelte SFC, Astro SFC, Razor/Blazor components, Python, Go, Rust, Java, PHP, C, Lua, R, Elixir, Erlang, Clojure, Perl, Julia, Haskell, OCaml, F#, Nim, C++, C#, Ruby, Kotlin, Swift, Dart, and Scala (`.vue`, `.svelte`, `.astro`, `.razor`, `.c`, `.lua`, `.r`, `.ex`, `.exs`, `.erl`, `.clj`, `.pl`, `.pm`, `.jl`, `.hs`, `.ml`, `.fs`, `.nim`, `.cpp`, `.cc`, `.cxx`, `.hpp`, `.hh`, `.hxx`, `.cs`, `.rb`, `.kt`, `.swift`, `.dart`, `.scala`; plus Play `conf/routes` and `conf/*.routes` route tables) |
+| Source files | TypeScript, TSX, JavaScript, JSX, ArkTS/ArkUI, Vue SFC, Svelte SFC, Astro SFC, Razor/Blazor components, Python, Go, Rust, Java, PHP, C, Lua, R, Elixir, Erlang, Clojure, Perl, Julia, Haskell, OCaml, F#, Nim, C++, C#, Ruby, Kotlin, Swift, Dart, and Scala (`.ets`, `.vue`, `.svelte`, `.astro`, `.razor`, `.c`, `.lua`, `.r`, `.ex`, `.exs`, `.erl`, `.clj`, `.pl`, `.pm`, `.jl`, `.hs`, `.ml`, `.fs`, `.nim`, `.cpp`, `.cc`, `.cxx`, `.hpp`, `.hh`, `.hxx`, `.cs`, `.rb`, `.kt`, `.swift`, `.dart`, `.scala`; plus Play `conf/routes` and `conf/*.routes` route tables) |
 | F# + Giraffe | Direct top-level typed `HttpFunc` / `HttpContext` handlers plus exactly one `open Giraffe` proof and a direct literal `choose [` route table. Fixed HTTP verbs and plain `route "/..."` entries become exact same-file or explicit unresolved route evidence. |
 | Nim + Jester | Direct top-level zero-argument `proc` handlers plus exactly one direct `import` list containing `jester`, then a flat `routes:` or `router name:` literal route block. Fixed lowercase HTTP verbs become exact same-file or explicit unresolved route evidence. |
 | Vue + Vue Router | Vue `.vue` files contribute a file symbol plus direct inline JavaScript/TypeScript script declarations and an auditable default component export. In TypeScript/JavaScript router modules, exactly one direct `createRouter` import plus one top-level literal `routes` option emits `NAVIGATE` route evidence; direct default imports can resolve exactly through `.vue` modules. |
 | Svelte + SvelteKit | Validated Svelte `.svelte` files contribute a conventional default component and direct instance-script declarations. Static `src/routes/**/+page.svelte` files with literal path segments emit exact local `NAVIGATE` route evidence; bracket and route-group conventions are intentionally excluded. |
 | Astro | Validated Astro `.astro` frontmatter contributes a conventional default component and direct declarations. Static `src/pages/**/*.astro` files with literal page segments emit exact local `NAVIGATE` route evidence; bracket, leading-underscore, endpoint, and runtime forms are intentionally excluded. |
 | Razor + Blazor | Every `.razor` file contributes a conventional local `default` component. Only standalone, unescaped, slash-prefixed literal `@page` directives become exact local `NAVIGATE` evidence; multiple literal route templates are preserved. |
+| ArkTS + ArkUI | Complete direct `@Component struct` declarations in `.ets` files become component symbols. A direct same-stack `@Entry` component creates an exact `ui root` entrypoint and local `handles` evidence; it is not a route or navigation claim. |
 | Scope | Project root by default or repeatable, persisted `--scope` directories |
 | Discovery | Root `.gitignore` with negation; `.git`, `.symbol-lattice`, `coverage`, `dist`, and `node_modules` are always excluded |
 | Symbols | TypeScript/JavaScript: files, classes, functions, methods, interfaces, types, variables, routes, and entrypoints. Python: files, classes, functions, methods, and direct FastAPI / same-file or proven cross-file `APIRouter` / same-file Flask routes. Go: files, top-level functions, and direct Gin / `net/http` / Chi routes. Rust: files, top-level functions, and direct Axum routes. Java: files, direct top-level classes and methods, direct Spring Web routes, and direct package facts usable by Play controller resolution. PHP: files, direct top-level classes, methods, functions, and direct Laravel facade routes. C: files, direct top-level functions, and direct CivetWeb routes. Lua: files, direct top-level `function` / `local function` declarations, and direct Lapis routes. R: files, direct top-level braced `name <- function(...)` / `name = function(...)` declarations, and direct Plumber annotation routes. Elixir: files, direct top-level `defmodule` declarations represented by the existing `class` kind, direct module `def` / `defp` methods, and direct Phoenix Router routes. Erlang: files, direct `-module(...)` declarations represented by the existing `class` kind, direct simple top-level functions, and direct Cowboy dispatch routes. Clojure: files, direct `ns` declarations represented by the existing `class` kind, direct simple top-level `defn` functions, and direct Compojure routes. Perl: files, direct `package` declarations represented by the existing `class` kind, direct simple top-level `sub` functions, and direct Dancer2 routes. Julia: files, direct top-level one-line `name(...) = ...` functions, and direct Genie routes. C++: files, direct top-level classes, methods, functions, and direct cpp-httplib routes. C#: files, direct top-level classes, interfaces, methods, local functions, and direct ASP.NET Core routes. Ruby: files, direct top-level classes, methods, functions, and direct Rails routes. Kotlin: files, direct top-level classes, interfaces, methods, functions, and direct Ktor routes. Swift: files, direct top-level classes, structs, protocols, methods, functions, and direct Vapor routes. Dart: files, direct top-level classes, methods, functions, and direct Flutter named-navigation routes. Scala: files, direct top-level classes, objects, traits, methods, functions, direct Play route-table entries, and literal Play Router-mount nodes |
@@ -158,6 +162,8 @@ One-shot data commands emit stable, pretty JSON. `watch` is the deliberate strea
 | Astro module resolution | Relative TypeScript/JavaScript module resolution includes a unique `.astro` candidate. Only the conventional SFC default component participates; frontmatter imports and template/client-script semantics remain deliberately unresolved. |
 | Razor/Blazor symbols and relationships | Each `.razor` file emits a file symbol and a conventional local `default` component. Every accepted literal `@page` directive emits one `NAVIGATE` route and an exact local component `routes` edge. |
 | Razor/Blazor module resolution | No generic Razor namespace, project, package, template-component, or C# code-block resolver is claimed in this release. |
+| ArkTS/ArkUI symbols and relationships | A complete direct `@Component struct` emits a local class-kind component symbol. A same adjacent decorator stack containing `@Entry` emits `ui root <Component>` and an exact local `handles` edge; direct `export` immediately before `struct` is retained as an export binding. |
+| ArkTS/ArkUI module resolution | No generic ArkTS module, package, UI DSL, state-decorator, or cross-file component resolver is claimed in this release. |
 | Workspaces | Root `package.json` workspaces array/object, local package root/subpath `exports`, and entrypoint fallback |
 | Re-exports | Named aliases, `export *`, default-through-named aliases, and namespace-export provenance |
 | Retrieval | Local deterministic FTS5 search across persisted source text and identifier parts; bounded path/language filters, source/symbol evidence, and exact `explore` excerpts from the same active generation |
@@ -171,7 +177,7 @@ One-shot data commands emit stable, pretty JSON. `watch` is the deliberate strea
 | Julia Genie | Direct `using Genie` proof, top-level literal `route("/path", named_function)` registrations, and an optional literal `method = GET/POST/PUT/PATCH/DELETE/OPTIONS` keyword; unique same-file one-line function targets are exact and all other accepted handlers are explicit `unresolved` |
 | Haskell Scotty | Direct `import Web.Scotty` proof, a top-level literal-port `scotty ... $ do` block, and direct block-level literal `get/post/put/delete/patch/options` named handlers; unique same-file zero-argument functions are exact and all other accepted handlers are explicit `unresolved` |
 | OCaml Dream | Direct [Dream router](https://ocaml.org/p/dream/latest/doc/dream/Dream/index.html) literal lists and direct `Dream.run` pipelines with literal `Dream.get/post/put/delete/head/connect/options/trace/patch/any` named handlers; unique same-file one-parameter functions are exact and all other accepted handlers are explicit `unresolved` |
-| Non-HTTP entrypoints | AST-proven direct NestJS GraphQL `Query` / `Mutation` / `Subscription`, microservice `MessagePattern` / `EventPattern`, and WebSocket `SubscribeMessage` handlers. Bounded `entrypoints` listing keeps transport/operation/name semantics and exact `handles` evidence separate from HTTP routes |
+| Non-HTTP and UI entrypoints | AST-proven direct NestJS GraphQL `Query` / `Mutation` / `Subscription`, microservice `MessagePattern` / `EventPattern`, WebSocket `SubscribeMessage` handlers, and ArkUI `@Entry @Component struct` UI roots. Bounded `entrypoints` listing keeps transport/operation/name semantics and exact `handles` evidence separate from HTTP routes |
 | Type hierarchy | Direct TS/JS class `extends`, TS class `implements`, and TS interface `extends`; exact lexical/import/re-export proof with value/type namespaces, plus bounded direct parents/children |
 | Context | Bounded packs for 1–8 ordered references: exact-match source excerpts, capped callers/callees and reverse impact, plus shortest static directed evidence paths between adjacent exact references |
 | Affected tests | Explicit changed files or local Git change sets feed exact persisted `imports` / `exports` paths, deterministic proof paths, conventional test-path classification, and explicit completeness limits |
@@ -185,7 +191,7 @@ One-shot data commands emit stable, pretty JSON. `watch` is the deliberate strea
 
 Framework coverage is declared once and actively selects the extraction passes applicable to the parsed language. This is a stable integration boundary, not a runtime framework detector: every pass below still requires its own syntax proof before it emits facts.
 
-| Capability | Proven surfaces in v0.63 |
+| Capability | Proven surfaces in v0.64 |
 | --- | --- |
 | Express | Literal receiver methods and identifier handlers |
 | Fastify | Literal routes and static prefix composition |
@@ -220,6 +226,7 @@ Framework coverage is declared once and actively selects the extraction passes a
 | SvelteKit | Svelte `src/routes` static `+page.svelte` convention-derived default components |
 | Astro | Astro `src/pages` static `.astro` convention-derived default components |
 | Blazor | Razor `.razor` conventional components and standalone literal `@page` directive routes |
+| ArkUI | ArkTS complete direct `@Component struct` declarations and direct `@Entry @Component` UI root entrypoints |
 | Play | Scala `conf/routes` / `conf/*.routes` literal controller-action entries with exact unique Scala-or-Java package-class-method handlers, plus literal static `->` Router-mount `handles` evidence |
 | React Router | Recursive literal JSX `Route`, `createRoutesFromElements` JSX trees, and data-router object trees |
 | Next.js | Pages Router and App Router page default exports |
@@ -559,6 +566,30 @@ Microsoft's [Blazor routing documentation](https://learn.microsoft.com/en-us/asp
 The file emits a conventional local `default` component. Each standalone, unescaped, slash-prefixed string-literal `@page` directive emits its own `NAVIGATE` route and an exact `framework.blazor.page-directive.local-handler` edge to that component. Multiple literal route templates, including a literal parameter template, are retained independently.
 
 It deliberately excludes `@attribute [Route(...)]`, computed or escaped route values, query/fragment forms, directives inside Razor comments, `.cshtml` pages, C# `@code`/`@functions` member extraction, `@inject`/`@model`/`@inherits` semantic references, template component tags, layouts, render modes, routing configuration, generic Razor namespace/project/package resolution, and runtime router behavior.
+
+#### ArkTS / ArkUI (direct component roots)
+
+Huawei's official [ArkUI reference example](https://developer.huawei.com/consumer/en/doc/harmonyos-references-V2/ts-universal-attributes-overlay-0000001427744788-V2) shows the declarative `@Entry`, `@Component`, and `struct` form used for an ArkUI page. v0.64 retains only this complete, source-local declaration shape:
+
+```ts
+@Entry
+@Component
+struct Home {
+  build() {
+    Column() {
+      Text("Hello")
+    }
+  }
+}
+```
+
+The `.ets` file emits a `Home` component symbol and a `ui root Home` entrypoint with an exact `framework.arkui.entry-component.local-struct` `handles` edge to that component. Query UI roots through the existing read-only entrypoint surface:
+
+```bash
+node dist/cli/main.js entrypoints /path/to/project --transport ui --operation root
+```
+
+The scanner accepts a direct adjacent decorator stack ending in `struct Name { ... }`, with an optional direct `export` immediately before `struct`. It intentionally rejects declarations inside comments/strings, detached decorators, non-struct forms, malformed bodies, and generic ArkTS syntax. It does not infer `build()` DSL calls, child component use, `@Builder`/`@Extend`/`@Styles`, state decorators, lifecycle wiring, navigation, module/package resolution, or runtime UI behavior.
 
 #### Express
 
@@ -1294,7 +1325,10 @@ The persisted records are `graphql query author`, `microservice message {"cmd":"
 node dist/cli/main.js entrypoints /path/to/project --transport graphql --operation query
 node dist/cli/main.js entrypoints /path/to/project --transport microservice --name '{"cmd"'
 node dist/cli/main.js entrypoints /path/to/project --transport websocket --operation subscribe --name events:
+node dist/cli/main.js entrypoints /path/to/project --transport ui --operation root --name Home
 ```
+
+v0.64 also records a complete direct ArkUI `@Entry @Component struct Home { ... }` declaration as `ui root Home` with an exact local `handles` edge to the `Home` component. A UI root is not a browser-navigation route, so it never appears in `routes` or receives an invented HTTP method/path.
 
 The contract follows Nest's documented [GraphQL resolver](https://docs.nestjs.com/graphql/resolvers) and [subscription](https://docs.nestjs.com/graphql/subscriptions), [microservice message/event](https://docs.nestjs.com/microservices/basics), and [WebSocket gateway](https://docs.nestjs.com/websockets/gateways) decorators while keeping only statically provable information:
 
@@ -1623,7 +1657,7 @@ The active generation fingerprints the root `.gitignore`, selected `tsconfig.jso
 | `node <reference>` | Return one exact symbol's bounded persisted declaration range, direct callers/callees, provenance, and freshness; never refreshes the index |
 | `hierarchy <reference>` | Return bounded direct `extends` / `implements` parents and exact children, including unresolved parent evidence; accepts `--limit` and never refreshes the index |
 | `routes [path]` | List bounded static Express, Fastify, Flask, FastAPI, Gin, `net/http`, Chi, and Axum route nodes (including direct inline, same-file named, and imported/re-exported Fastify plugin-prefix projections) plus AST-proven NestJS route nodes with exact `RouterModule.register()` prefix projections; accepts `--method` (including `TRACE` and `CONNECT`), `--path`, and `--limit`; never refreshes the index |
-| `entrypoints [path]` | List bounded AST-proven NestJS GraphQL, microservice, and WebSocket entrypoints with exact handler evidence; accepts `--transport`, `--operation`, `--name`, and `--limit`; never refreshes the index |
+| `entrypoints [path]` | List bounded AST-proven NestJS GraphQL, microservice, WebSocket, and ArkUI UI-root entrypoints with exact handler evidence; accepts `--transport`, `--operation`, `--name`, and `--limit`; never refreshes the index |
 | `callers <symbol>` / `callees <symbol>` | Show direct graph relationships |
 | `impact <symbol>` | Trace reverse impact with optional `--depth` and explicit output `--limit` |
 | `affected [filePaths...]` | Select conventionally named tests from exact persisted import/export evidence; accepts direct paths or `--stdin`, plus local Git `--working-tree` or `--base <ref>`, `--depth`, and `--limit` |
@@ -1649,7 +1683,7 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 | `symbol_lattice_node` | Return one exact node's bounded persisted declaration range, direct callers/callees, provenance, and freshness without refreshing an index |
 | `symbol_lattice_hierarchy` | Return bounded direct `extends` / `implements` parents and exact children from one active generation, including unresolved parent evidence, without refreshing an index |
 | `symbol_lattice_routes` | Return bounded static Express and Fastify route nodes, including direct inline, same-file named, and imported/re-exported Fastify plugin-prefix projections, plus AST-proven NestJS route nodes with exact RouterModule prefix projections, method/path filters, handler-edge evidence, and freshness without refreshing an index |
-| `symbol_lattice_entrypoints` | Return bounded AST-proven NestJS GraphQL, microservice, and WebSocket entrypoints with transport/operation/name filters, exact `handles` evidence, and freshness without refreshing an index |
+| `symbol_lattice_entrypoints` | Return bounded AST-proven NestJS GraphQL, microservice, WebSocket, and ArkUI UI-root entrypoints with transport/operation/name filters, exact `handles` evidence, and freshness without refreshing an index |
 | `symbol_lattice_context` | Return bounded generation-bound source, relationships, reverse impact, and directed proof paths for ordered references without refreshing an index |
 | `symbol_lattice_affected` | Return bounded affected-test proofs for changed files, index coverage, and completeness limits without refreshing an index |
 | `symbol_lattice_affected_git` | Read a local Git working-tree or merge-base change set, then return its provenance and bounded affected-test proofs without fetching, refreshing, or synchronizing an index |
@@ -1771,6 +1805,8 @@ v0.62 adds no SQLite schema migration or query command. It adds Astro `.astro` d
 
 v0.63 adds no SQLite schema migration or query command. It adds Razor `.razor` discovery, a conventional local Razor component fact, and standalone unescaped literal Blazor `@page` directive navigation facts through the existing file, symbol, edge, source-search, and route-query contracts. The extractor advances to `multi-language-ast-v52`; the resolver remains `project-resolver-v19` because every accepted route resolves only to a local conventional component. A pre-v0.63 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes Razor-capable facts. Existing generations remain readable.
 
+v0.64 adds no SQLite schema migration or query command. It adds ArkTS `.ets` discovery, complete direct `@Component struct` component facts, and direct `@Entry @Component` UI-root entrypoint facts through the existing file, symbol, edge, source-search, and entrypoint-query contracts. The `ui` transport and `root` operation are additive entrypoint filters. The extractor advances to `multi-language-ast-v53`; the resolver remains `project-resolver-v19` because every accepted UI root resolves only to a local component. A pre-v0.64 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes ArkTS-capable facts. Existing generations remain readable.
+
 ## Architecture
 
 ```mermaid
@@ -1784,7 +1820,7 @@ flowchart LR
   Catalog["Filesystem catalog\nscope + gitignore"] --> Inputs["Index inputs"]
   Catalog --> TS["TS alias resolver"]
   Catalog --> WS["Workspace resolver"]
-  Extractor["TypeScript AST extractor + Vue/Svelte/Astro SFC scanners + Razor/Blazor directive scanner + Python/Go/Rust/Java/PHP/C/C++ Lezer parsers + Lua/R/Elixir/Erlang/Clojure/Perl/Julia/Haskell lexical extractors + C#/Ruby/Kotlin/Swift/Dart/Scala ast-grep parsers\nfirst-party framework capability passes\nExpress/Fastify/Nest HTTP routes + Fastify plugin facts + FastAPI/Flask/Gin/net-http/Chi/Axum/Spring Web/Laravel/CivetWeb/Lapis/Plumber/Phoenix/Cowboy/Compojure/Dancer2/Genie/Scotty/cpp-httplib/ASP.NET Core/Rails/Ktor/Vapor/Flutter/Play facts\nFlutter/Vue Router/SvelteKit/Astro/Blazor/React Router/Next client navigation\nNest module-prefix facts + non-HTTP entrypoints"] --> Facts["Reusable artifact facts"]
+  Extractor["TypeScript AST extractor + ArkTS/ArkUI lexical scanner + Vue/Svelte/Astro SFC scanners + Razor/Blazor directive scanner + Python/Go/Rust/Java/PHP/C/C++ Lezer parsers + Lua/R/Elixir/Erlang/Clojure/Perl/Julia/Haskell lexical extractors + C#/Ruby/Kotlin/Swift/Dart/Scala ast-grep parsers\nfirst-party framework capability passes\nExpress/Fastify/Nest HTTP routes + Fastify plugin facts + FastAPI/Flask/Gin/net-http/Chi/Axum/Spring Web/Laravel/CivetWeb/Lapis/Plumber/Phoenix/Cowboy/Compojure/Dancer2/Genie/Scotty/cpp-httplib/ASP.NET Core/Rails/Ktor/Vapor/Flutter/Play facts\nFlutter/Vue Router/SvelteKit/Astro/Blazor/React Router/Next client navigation\nNest module-prefix facts + non-HTTP and ArkUI UI-root entrypoints"] --> Facts["Reusable artifact facts"]
   Catalog --> SourceDocs["Persisted source documents"]
   SourceDocs --> Retrieval["Generation-bound lexical projection"]
   Facts --> Resolver["Full project export surface"]
@@ -1802,7 +1838,7 @@ src/
   application/     Use cases, incremental planning, and graph projection
   cli/             Commander-based CLI
   domain/          Graph, evidence, identity, and index-work contracts
-  extraction/      TypeScript AST, Vue/Svelte/Astro SFC scanners, Razor/Blazor directive scanning, Python/Go/Rust/Java/PHP/C/C++ Lezer, Lua/R/Elixir/Erlang/Clojure/Perl/Julia/Haskell lexical, and C#/Ruby/Kotlin/Swift/Dart/Scala ast-grep fact extraction
+  extraction/      TypeScript AST, ArkTS/ArkUI lexical, Vue/Svelte/Astro SFC, Razor/Blazor directive, Python/Go/Rust/Java/PHP/C/C++ Lezer, Lua/R/Elixir/Erlang/Clojure/Perl/Julia/Haskell lexical, and C#/Ruby/Kotlin/Swift/Dart/Scala ast-grep fact extraction
   infrastructure/  Filesystem, workspace, TypeScript, and SQLite adapters
   mcp/             Read-only MCP server
   ports/           Dependency boundaries
@@ -1810,7 +1846,7 @@ src/
 
 ## Deliberate boundaries
 
-v0.62.0 does not yet provide:
+v0.64.0 does not yet provide:
 
 - Daemon mode, background automatic sync after the foreground process exits, cross-process watch coordination, MCP per-query pending-file banners, worker pools, or historical source browsing.
 - pnpm workspace YAML, TypeScript project references, external/package `extends`, or nested `.gitignore` semantics.
@@ -1840,8 +1876,9 @@ v0.62.0 does not yet provide:
 - The Svelte surface is a deliberately small SFC scanner, not the Svelte compiler. It emits a conventional `default` component for a validated file and direct instance-script functions, classes, interfaces, type aliases, and identifier variables. It accepts no script, or at most one inline JavaScript/TypeScript instance script and one inline JavaScript/TypeScript module script; module declarations are syntax-validated but not indexed. SvelteKit navigation accepts only literal directories under `src/routes` ending in `+page.svelte` and links the route to that local conventional default component. It excludes `src`, non-JS/TS, duplicate or malformed scripts, template/styles/runes/macros, compiler-generated exports, props semantics, dynamic/optional/rest bracket paths, route groups, layouts/endpoints/actions/hooks, generic Svelte module/call/type analysis, and runtime behavior.
 - The Astro surface is a deliberately small SFC scanner, not the Astro compiler. It emits a conventional `default` component for a file with no frontmatter or one valid opening frontmatter fence, and direct frontmatter functions, classes, interfaces, type aliases, and identifier variables. Astro page navigation accepts only literal segments under `src/pages` ending in `.astro`; `index.astro` maps to the containing route. It excludes malformed starting fences or TypeScript frontmatter, frontmatter imports/re-exports, template/client-script/style/directive/island semantics, `Astro` global/props semantics, endpoints, Markdown/MDX/HTML pages, bracket/dynamic paths, leading-underscore segments, route configuration, generic Astro module/call/type analysis, and runtime behavior.
 - The Razor/Blazor surface is a deliberately small directive scanner, not the Razor compiler or a C# parser. Every `.razor` file emits a conventional local `default` component. It accepts only standalone, unescaped, slash-prefixed string-literal `@page` directives and links each accepted route exactly to that local component. It excludes `@attribute` routes, computed/escaped/query/fragment values, Razor comments, `.cshtml`, C# `@code`/`@functions`, component tags, `@inject`/`@model`/`@inherits` semantics, layouts, render modes, generic Razor namespace/project/package resolution, and runtime behavior.
+- The ArkTS/ArkUI surface is a deliberately small lexical scanner, not an ArkTS compiler or TypeScript fallback. It accepts only a complete adjacent direct `@Component struct` declaration, and emits a `ui root` entrypoint only when that same decorator stack also contains `@Entry`. It excludes general ArkTS declarations, `build()` DSL calls, child components, `@Builder`/`@Extend`/`@Styles`, state/lifecycle semantics, navigation, modules/packages, and runtime UI behavior.
 - Semantic type checking, transitive hierarchy traversal, declaration-merging semantics, override dispatch, mixin/qualified/conditional heritage expressions, or automatic framework decorator inference. v0.18 recognizes direct imported NestJS HTTP decorators, direct static `RouterModule.register()` prefixes, and the narrowly defined non-HTTP decorators documented above; it does not infer custom decorators, barrels, `forRoot` / `forChild`, global/version prefixes, guards, GraphQL field resolvers, dynamic patterns, dynamic gateway configuration, or runtime transport wiring.
-- Language adapters beyond TS/TSX/JS/JSX/Vue/Svelte/Astro/Razor/Python/Go/Rust/Java/PHP/C/Lua/R/Elixir/Erlang/Clojure/Perl/Julia/Haskell/OCaml/F#/C++/C#/Ruby/Kotlin/Swift/Dart/Scala, external dependency indexing, telemetry, or multi-project routing.
+- Language adapters beyond TS/TSX/JS/JSX/ArkTS/Vue/Svelte/Astro/Razor/Python/Go/Rust/Java/PHP/C/Lua/R/Elixir/Erlang/Clojure/Perl/Julia/Haskell/OCaml/F#/C++/C#/Ruby/Kotlin/Swift/Dart/Scala, external dependency indexing, telemetry, or multi-project routing.
 - Embedding-based or cloud retrieval, semantic ranking, arbitrary natural-language context assembly, semantic Git diff beyond immutable zero-context hunk-to-revision-local-declaration evidence, or reliable rename/move/cross-side identity attribution.
 
 ## Roadmap
@@ -1910,6 +1947,8 @@ v0.62.0 does not yet provide:
 | `v0.61.0` | Svelte `.svelte` discovery, validated SFC conventional-default/direct instance-script facts, unique relative Svelte module resolution, static literal-segment SvelteKit `+page.svelte` navigation evidence, Svelte source-search/CLI/MCP filters, and duplicate/`src`/non-JS/malformed/dynamic-path rejection |
 | `v0.62.0` | Astro `.astro` discovery, validated optional frontmatter conventional-default/direct declaration facts, unique relative Astro module resolution, static literal-segment `src/pages/**/*.astro` navigation evidence, Astro source-search/CLI/MCP filters, and malformed-fence/dynamic/private-page rejection |
 | `v0.63.0` | Razor `.razor` discovery, conventional local component facts, standalone literal Blazor `@page` navigation evidence, Razor source-search/CLI/MCP filters, exact local route evidence, and comment/computed/`@attribute`/query-fragment/`.cshtml` rejection |
+| `v0.64.0` | ArkTS `.ets` discovery, line-leading complete ArkUI `@Component struct` component facts, exact local `@Entry` UI-root `entrypoint` evidence, ArkTS source-search/CLI/MCP filters, additive `ui/root` entrypoint filters, and comment/string/regex/detached/non-struct/malformed rejection |
+| `v0.64+` | ArkTS general declarations/imports/exports/calls, ArkUI `build()` DSL and child-component edges, `@Builder`/`@Extend`/`@Styles` and state/lifecycle semantics, navigation, module/package/project resolution, ArkTS compiler checks, and runtime UI composition |
 | `v0.63+` | Razor `@code`/`@functions` member extraction, `@inject`/`@model`/`@inherits` references, template component/tag semantics, layouts/render modes, `@attribute` route constants, Razor Pages/`.cshtml`, generic Razor namespace/project/package resolution, and runtime router behavior |
 | `v0.62+` | Astro frontmatter imports/re-exports and template component/call edges, client-script/style/directive/island semantics, props/`Astro` globals, static `.md`/`.mdx`/`.html` pages, endpoint facts, dynamic/rest routes, routing configuration, and broader Astro module resolution |
 | `v0.61+` | Svelte template component/call edges, module-script declarations, `script` attributes/macros/runes/props semantics, SvelteKit layouts/endpoints/actions/hooks, dynamic/group/rest/optional filesystem routes, client-router configuration, and broader Svelte module resolution |
@@ -1921,7 +1960,7 @@ See [CHANGELOG.md](CHANGELOG.md) for release notes and migration history.
 
 ## Release-by-release feature comparison
 
-Every release creates a verified standalone comparison report against the local CodeGraph baseline at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_vX.Y.Z.md` (for example, `FEATURE_COMPARISON_v0.63.0.md`). The version number is part of the filename, so each release retains an independent comparison record. It intentionally lives beside the local `symbol-lattice` and `codegraph` checkouts rather than inside either project. Starting with v0.28, these reports are written in Traditional Chinese. Each report distinguishes a proven precision advantage from broader-but-less-proven source coverage, and records remaining gaps instead of treating a version bump as parity.
+Every release creates a verified standalone comparison report against the local CodeGraph baseline at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_vX.Y.Z.md` (for example, `FEATURE_COMPARISON_v0.64.0.md`). The version number is part of the filename, so each release retains an independent comparison record. It intentionally lives beside the local `symbol-lattice` and `codegraph` checkouts rather than inside either project. Starting with v0.28, these reports are written in Traditional Chinese. Each report distinguishes a proven precision advantage from broader-but-less-proven source coverage, and records remaining gaps instead of treating a version bump as parity.
 
 ## Development
 
@@ -1933,7 +1972,7 @@ npm.cmd pack --dry-run
 git diff --check
 ```
 
-The suite covers discovery, input fingerprints, alias and workspace resolution, exact direct TypeScript/JavaScript heritage extraction and namespace-aware local/import/re-export resolution, bounded hierarchy traversal, executable framework-capability registration, exact static Express and Fastify route extraction including inline, same-file named, and cross-file imported/re-exported plugin-prefix composition plus handler resolution, recursive literal React Router JSX, `createRoutesFromElements`, and data-router client-navigation extraction with direct fragments, relative children, index routes, pathless layouts, unsafe-shape rejection, factory-specific evidence, and exact handler resolution, direct Next.js Pages/App Router convention extraction with handler resolution, import/type/shadow/spread/lazy/factory-option boundary checks, CLI/MCP `NAVIGATE` filtering, and incremental raw-fact reuse, direct NestJS controller decorators plus static `RouterModule.register()` prefix composition and non-HTTP GraphQL/microservice/WebSocket entrypoint extraction with alias, shadow, dynamic, persistence, and incremental raw-fact reuse coverage, route- and entrypoint-aware graph traversal, re-export semantics, exact affected-test proofs and completeness limits, local Git change-set parsing and selection, immutable revision-local Git hunk declaration attribution, bounded generation-bound node declaration evidence, generation-bound search and exploration source evidence, retained graph history and structural diffs, legacy snapshot backfill, stale-source evidence, bounded foreground pending-file disclosure, event debounce/polling fallback/retry receipts, no-op sync, schema migration, atomic rollback, MCP read-only behavior, CLI parsing, and architecture boundaries.
+The suite covers discovery, input fingerprints, alias and workspace resolution, exact direct TypeScript/JavaScript heritage extraction and namespace-aware local/import/re-export resolution, bounded hierarchy traversal, executable framework-capability registration, exact static Express and Fastify route extraction including inline, same-file named, and cross-file imported/re-exported plugin-prefix composition plus handler resolution, recursive literal React Router JSX, `createRoutesFromElements`, and data-router client-navigation extraction with direct fragments, relative children, index routes, pathless layouts, unsafe-shape rejection, factory-specific evidence, and exact handler resolution, direct Next.js Pages/App Router convention extraction with handler resolution, import/type/shadow/spread/lazy/factory-option boundary checks, CLI/MCP `NAVIGATE` filtering, and incremental raw-fact reuse, direct NestJS controller decorators plus static `RouterModule.register()` prefix composition and non-HTTP GraphQL/microservice/WebSocket entrypoint extraction, direct ArkTS `@Entry @Component struct` UI-root extraction, route- and entrypoint-aware graph traversal, re-export semantics, exact affected-test proofs and completeness limits, local Git change-set parsing and selection, immutable revision-local Git hunk declaration attribution, bounded generation-bound node declaration evidence, generation-bound search and exploration source evidence, retained graph history and structural diffs, legacy snapshot backfill, stale-source evidence, bounded foreground pending-file disclosure, event debounce/polling fallback/retry receipts, no-op sync, schema migration, atomic rollback, MCP read-only behavior, CLI parsing, and architecture boundaries.
 
 Python coverage includes `.py` discovery, direct declaration/containment extraction, malformed-source fail-closed behavior, direct FastAPI alias/application/decorator evidence, same-file plus one-dot regular-package cross-file `APIRouter` literal-prefix/`include_router` composition, direct Flask app and same-file `Blueprint` literal-prefix routes, persisted fact/evidence boundaries, source search, CLI/MCP language filters, and incremental indexing.
 
@@ -1976,6 +2015,8 @@ Svelte coverage includes `.svelte` discovery, persisted source search and CLI/MC
 Astro coverage includes `.astro` discovery, persisted source search and CLI/MCP language filters, validated optional initial TypeScript frontmatter, conventional default-component evidence, direct frontmatter declaration extraction, unique relative `.astro` module resolution, static literal-segment Astro `src/pages/**/*.astro` navigation with `index.astro` normalization, exact local default-component route evidence, and malformed-fence/frontmatter/dynamic-bracket/leading-underscore rejection.
 
 Razor/Blazor coverage includes `.razor` discovery, persisted source search and CLI/MCP language filters, conventional local default-component evidence, standalone unescaped literal `@page` directive navigation, multiple literal template preservation, exact local route evidence, and Razor-comment/computed/`@attribute`/query-fragment/`.cshtml` rejection.
+
+ArkTS/ArkUI coverage includes `.ets` discovery, persisted source search and CLI/MCP language filters, complete line-leading direct `@Component struct` component containment, direct same-stack `@Entry` UI-root entrypoints, exact local `handles` evidence, exported component bindings, and comment/string/regex/non-struct/detached/malformed rejection.
 
 C++ coverage includes `.cpp` / `.cc` / `.cxx` / `.hpp` / `.hh` / `.hxx` discovery, persisted source search and CLI/MCP language filters, direct top-level class/method/function containment, direct `httplib.h` include plus `httplib::Server` / `httplib::SSLServer` binding proof, literal direct named-handler HTTP routes, receiver-rebinding invalidation, dynamic/lambda/missing-header rejection, malformed-source fail-closed behavior, and persisted route-query integration.
 

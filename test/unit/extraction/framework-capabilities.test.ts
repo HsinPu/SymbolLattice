@@ -17,6 +17,7 @@ describe("first-party framework capabilities", () => {
       "sveltekit",
       "astro",
       "blazor",
+      "arkui",
       "nextjs",
       "fastapi",
       "flask",
@@ -88,6 +89,14 @@ describe("first-party framework capabilities", () => {
       routeFramework: "blazor",
       routeRegistrations: ["blazor-page-directive"],
       surfaces: [".razor conventional components", "standalone literal @page directive routes"]
+    });
+    expect(frameworkCapability("arkui")).toMatchObject({
+      languages: ["arkts"],
+      routeRegistrations: [],
+      surfaces: [
+        "complete direct @Component struct declarations",
+        "direct @Entry @Component UI root entrypoints"
+      ]
     });
     expect(frameworkCapability("nextjs")).toMatchObject({
       languages: ["typescript", "javascript"],

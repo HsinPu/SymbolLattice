@@ -633,6 +633,35 @@ describe("symbol-lattice search CLI", () => {
     expect(write).toHaveBeenCalled();
   });
 
+  it("accepts ArkTS as a persisted source-search language filter", async () => {
+    const calls: Array<{ projectPath: string; query: string; options: SearchOptions }> = [];
+    const service = {
+      async search(
+        projectPath: string,
+        query: string,
+        options: SearchOptions = {}
+      ): Promise<SearchResult> {
+        calls.push({ projectPath, query, options });
+        return searchResult();
+      }
+    } as unknown as SymbolLatticeService;
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+    await createProgram(service).parseAsync(
+      ["node", "symbol-lattice", "search", "catalog", "--language", "arkts", "--json"],
+      { from: "node" }
+    );
+
+    expect(calls).toEqual([
+      {
+        projectPath: resolve(process.cwd()),
+        query: "catalog",
+        options: { language: "arkts" }
+      }
+    ]);
+    expect(write).toHaveBeenCalled();
+  });
+
   it("accepts C++ as a persisted source-search language filter", async () => {
     const calls: Array<{ projectPath: string; query: string; options: SearchOptions }> = [];
     const service = {
@@ -931,8 +960,8 @@ describe("symbol-lattice v0.18 entrypoints CLI", () => {
   });
 
   it.each([
-    [["--transport", "http"], "Expected one of: graphql, microservice, websocket"],
-    [["--operation", "route"], "Expected one of: query, mutation, subscription, message, event, subscribe"],
+    [["--transport", "http"], "Expected one of: graphql, microservice, websocket, ui"],
+    [["--operation", "route"], "Expected one of: query, mutation, subscription, message, event, subscribe, root"],
     [["--name", ""], "Expected a non-empty entrypoint name prefix"],
     [["--limit", "101"], "Expected an integer between 1 and 100"]
   ])("rejects invalid entrypoint filter %j before invoking the service", async (arguments_, message) => {
