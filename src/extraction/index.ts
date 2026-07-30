@@ -9,6 +9,7 @@ import { extractErlangFileFacts } from "./erlang.js";
 import { extractClojureFileFacts } from "./clojure.js";
 import { extractHaskellFileFacts } from "./haskell.js";
 import { extractJuliaFileFacts } from "./julia.js";
+import { extractOcamlFileFacts } from "./ocaml.js";
 import { extractPerlFileFacts } from "./perl.js";
 import { extractScalaFileFacts } from "./scala.js";
 import { extractGoFileFacts } from "./go.js";
@@ -3461,6 +3462,9 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
   }
   if (input.language === "haskell") {
     return extractHaskellFileFacts({ ...input, language: "haskell" });
+  }
+  if (input.language === "ocaml") {
+    return extractOcamlFileFacts({ ...input, language: "ocaml" });
   }
   if (input.language === "cpp") {
     return extractCppFileFacts({ ...input, language: "cpp" });

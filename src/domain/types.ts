@@ -58,6 +58,7 @@ export type RouteFramework =
   | "dancer2"
   | "genie"
   | "scotty"
+  | "dream"
   | "cpp-httplib"
   | "aspnet-core"
   | "rails"
@@ -93,6 +94,7 @@ export const ARTIFACT_LANGUAGES = [
   "perl",
   "julia",
   "haskell",
+  "ocaml",
   "cpp",
   "csharp",
   "ruby",

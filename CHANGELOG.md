@@ -6,6 +6,24 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.57.0] - 2026-07-31
+
+### Added
+
+- OCaml `.ml` source discovery, persisted source-search language filtering, CLI/MCP validation, and an isolated OCaml lexical/comment/delimiter extractor for direct top-level one-parameter `let name arg = ...` function containment.
+- An executable first-party `dream` capability. Direct Dream route facts require either a top-level direct `let name = Dream.router [` list or one of the documented direct `Dream.run` / `@@ Dream.router [` forms, a direct baseline-indented literal `Dream.get/post/put/delete/head/connect/options/trace/patch/any` registration, and a simple named handler. A unique same-file one-parameter function produces `framework.dream.direct-router.literal-named-function.local-function`; every other accepted handler remains explicit `unresolved` evidence.
+- Unit and integration coverage now verifies OCaml discovery, direct function containment, exact and unresolved Dream route-query/source-search behavior, dynamic/inline/qualified/scoped/local/wrong-entrypoint rejection, malformed delimiter/comment/raw-string fail-closed behavior, and CLI/MCP language validation. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.57.0.md`.
+
+### Compatibility
+
+- No SQLite schema migration or new query command is required. OCaml symbols and Dream routes reuse the existing file, symbol, edge, source-search, and route-query contracts; existing generations remain readable.
+- The artifact extractor advances to `multi-language-ast-v46`; the project resolver remains `project-resolver-v16` because all accepted Dream callback proof is file-local. A pre-v0.57 active index reports `indexer-version-changed` until an explicit `sync` or `index` publishes OCaml-capable facts.
+
+### Deliberate limits
+
+- The OCaml extractor is a deliberately small lexical/comment/delimiter implementation, not a full OCaml parser. It retains only file symbols for unbalanced delimiters or unterminated strings, raw strings, or nested comments, and does not claim generic OCaml module, type, call, import, package, or runtime analysis.
+- Dream support accepts only direct top-level literal `Dream.router` lists, the three specified direct `Dream.run` pipeline forms, simple direct one-parameter top-level `let` functions, literal unescaped slash-prefixed paths, and simple same-file named handlers. It excludes `Dream.scope`, `Dream.serve`, runtime options/composition, anonymous/qualified/cross-file handlers, dynamic/escaped paths, local or typed/pattern handlers, and runtime behavior. The local CodeGraph baseline does not list OCaml in its indexed language set; SymbolLattice adds a narrow audited language/framework slice rather than claiming wider generic OCaml parity.
+
 ## [0.56.0] - 2026-07-31
 
 ### Added

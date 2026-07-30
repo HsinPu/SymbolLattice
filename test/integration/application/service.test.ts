@@ -4632,6 +4632,70 @@ describe("SymbolLatticeService", () => {
     expect(search.results).toMatchObject([{ filePath: "src/App.hs", language: "haskell" }]);
   });
 
+  it("indexes OCaml Dream routes and retains OCaml source-search filtering", async () => {
+    const projectPath = await createInlineProject({
+      "src/app.ml": [
+        "let health _ = Dream.html \"ok\"",
+        "let create_user _ = Dream.html \"created\"",
+        "",
+        "let () =",
+        "  Dream.run",
+        "  @@ Dream.router [",
+        "    Dream.get \"/health\" health;",
+        "    Dream.post \"/users\" @@ create_user;",
+        "    Dream.any \"/missing\" missing;",
+        "  ]"
+      ].join("\n")
+    });
+    const service = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+    const postRoutes = await service.routes(projectPath, { method: "POST" });
+    const search = await service.search(projectPath, "health", { language: "ocaml" });
+
+    expect(routes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "GET",
+          path: "/health",
+          handler: expect.objectContaining({
+            qualifiedName: "src/app.ml.health"
+          }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.dream.direct-router.literal-named-function.local-function",
+              stage: "syntax"
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "ALL",
+          path: "/missing",
+          handler: null,
+          edge: expect.objectContaining({
+            resolution: "unresolved",
+            evidence: expect.objectContaining({
+              ruleId: "framework.dream.direct-router.literal-named-function.unresolved"
+            })
+          })
+        })
+      ])
+    );
+    expect(postRoutes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "POST",
+          path: "/users",
+          handler: expect.objectContaining({
+            qualifiedName: "src/app.ml.create_user"
+          })
+        })
+      ])
+    );
+    expect(search.results).toMatchObject([{ filePath: "src/app.ml", language: "ocaml" }]);
+  });
+
   it("indexes C# ASP.NET Core routes and retains C# source-search filtering", async () => {
     const projectPath = await createInlineProject({
       "src/Program.cs": [

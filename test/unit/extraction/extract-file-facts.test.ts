@@ -4325,6 +4325,187 @@ describe("source extraction", () => {
     ]);
   });
 
+  it("extracts direct OCaml Dream routes with exact and unresolved evidence", () => {
+    const facts = extractFileFacts({
+      filePath: "src/demo/app.ml",
+      language: "ocaml",
+      sourceText: [
+        "let health _ = Dream.html \"ok\"",
+        "let create_user _ = Dream.html \"created\"",
+        "",
+        "let () =",
+        "  Dream.run",
+        "  @@ Dream.router [",
+        "    Dream.get \"/health\" health;",
+        "    Dream.post \"/users\" @@ create_user;",
+        "    Dream.any \"/missing\" missing;",
+        "  ]"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(
+      facts.symbols.filter((symbol) => symbol.kind === "function").map((symbol) => symbol.qualifiedName)
+    ).toEqual(["src/demo/app.ml.health", "src/demo/app.ml.create_user"]);
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName ?? null,
+          edge.referenceName,
+          edge.evidence?.ruleId,
+          edge.resolution,
+          edge.confidence
+        ])
+    ).toEqual([
+      [
+        "GET /health",
+        "src/demo/app.ml.health",
+        "health",
+        "framework.dream.direct-router.literal-named-function.local-function",
+        "exact",
+        1
+      ],
+      [
+        "POST /users",
+        "src/demo/app.ml.create_user",
+        "create_user",
+        "framework.dream.direct-router.literal-named-function.local-function",
+        "exact",
+        1
+      ],
+      [
+        "ALL /missing",
+        null,
+        "missing",
+        "framework.dream.direct-router.literal-named-function.unresolved",
+        "unresolved",
+        0
+      ]
+    ]);
+  });
+
+  it("requires direct top-level Dream router lists, literal named handlers, and balanced OCaml input", () => {
+    const dynamicPath = extractFileFacts({
+      filePath: "src/dynamic.ml",
+      language: "ocaml",
+      sourceText: [
+        "let health _ = Dream.html \"ok\"",
+        "let path = \"/health\"",
+        "let app = Dream.router [",
+        "  Dream.get path health;",
+        "]"
+      ].join("\n")
+    });
+    const inlineHandler = extractFileFacts({
+      filePath: "src/inline.ml",
+      language: "ocaml",
+      sourceText: [
+        "let app = Dream.router [",
+        "  Dream.get \"/health\" (fun _ -> Dream.html \"ok\");",
+        "]"
+      ].join("\n")
+    });
+    const qualifiedHandler = extractFileFacts({
+      filePath: "src/qualified.ml",
+      language: "ocaml",
+      sourceText: [
+        "let app = Dream.router [",
+        "  Dream.get \"/health\" Handlers.health;",
+        "]"
+      ].join("\n")
+    });
+    const nestedScope = extractFileFacts({
+      filePath: "src/scope.ml",
+      language: "ocaml",
+      sourceText: [
+        "let health _ = Dream.html \"ok\"",
+        "let app = Dream.router [",
+        "  Dream.scope \"/api\" [] [",
+        "    Dream.get \"/health\" health;",
+        "  ];",
+        "]"
+      ].join("\n")
+    });
+    const localRouter = extractFileFacts({
+      filePath: "src/local.ml",
+      language: "ocaml",
+      sourceText: [
+        "let health _ = Dream.html \"ok\"",
+        "let configure _ =",
+        "  let app = Dream.router [",
+        "    Dream.get \"/health\" health;",
+        "  ] in",
+        "  app"
+      ].join("\n")
+    });
+    const wrongEntrypoint = extractFileFacts({
+      filePath: "src/wrong-entrypoint.ml",
+      language: "ocaml",
+      sourceText: [
+        "let health _ = Dream.html \"ok\"",
+        "let () =",
+        "  Dream.serve",
+        "  @@ Dream.router [",
+        "    Dream.get \"/health\" health;",
+        "  ]"
+      ].join("\n")
+    });
+    const malformed = extractFileFacts({
+      filePath: "src/malformed.ml",
+      language: "ocaml",
+      sourceText: "let app = Dream.router [\n  Dream.get \"/health\" health;"
+    });
+    const unterminatedComment = extractFileFacts({
+      filePath: "src/comment.ml",
+      language: "ocaml",
+      sourceText: "(* open\nlet app = Dream.router ["
+    });
+    const unterminatedRawString = extractFileFacts({
+      filePath: "src/raw.ml",
+      language: "ocaml",
+      sourceText: "let note = {| open\nlet app = Dream.router ["
+    });
+    const duplicateHandler = extractFileFacts({
+      filePath: "src/duplicate.ml",
+      language: "ocaml",
+      sourceText: [
+        "let health _ = Dream.html \"one\"",
+        "let health _ = Dream.html \"two\"",
+        "let app = Dream.router [",
+        "  Dream.get \"/health\" health;",
+        "]"
+      ].join("\n")
+    });
+
+    for (const facts of [
+      dynamicPath,
+      inlineHandler,
+      qualifiedHandler,
+      nestedScope,
+      localRouter,
+      wrongEntrypoint,
+      malformed,
+      unterminatedComment,
+      unterminatedRawString
+    ]) {
+      expect(facts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+      expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+    }
+    expect(malformed.symbols).toHaveLength(1);
+    expect(unterminatedComment.symbols).toHaveLength(1);
+    expect(unterminatedRawString.symbols).toHaveLength(1);
+    expect(duplicateHandler.edges.filter((edge) => edge.kind === "routes")).toEqual([
+      expect.objectContaining({
+        resolution: "unresolved",
+        evidence: expect.objectContaining({
+          ruleId: "framework.dream.direct-router.literal-named-function.unresolved"
+        })
+      })
+    ]);
+  });
+
   it("extracts direct C++ cpp-httplib named-handler routes with exact evidence", () => {
     const facts = extractFileFacts({
       filePath: "src/server.cpp",

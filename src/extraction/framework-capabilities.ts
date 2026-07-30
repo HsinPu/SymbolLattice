@@ -24,6 +24,7 @@ export const FRAMEWORK_CAPABILITY_IDS = [
   "dancer2",
   "genie",
   "scotty",
+  "dream",
   "cpp-httplib",
   "aspnet-core",
   "rails",
@@ -267,6 +268,16 @@ export const FRAMEWORK_CAPABILITIES = [
     surfaces: [
       "direct import Web.Scotty proof",
       "direct literal-port scotty do blocks with literal named-handler routes"
+    ]
+  },
+  {
+    id: "dream",
+    languages: ["ocaml"],
+    routeFramework: "dream",
+    routeRegistrations: [],
+    surfaces: [
+      "direct top-level Dream.router literal lists",
+      "direct literal named-handler HTTP routes"
     ]
   },
   {

@@ -31,6 +31,7 @@ describe("first-party framework capabilities", () => {
       "dancer2",
       "genie",
       "scotty",
+      "dream",
       "cpp-httplib",
       "aspnet-core",
       "rails",
@@ -212,6 +213,15 @@ describe("first-party framework capabilities", () => {
       surfaces: [
         "direct import Web.Scotty proof",
         "direct literal-port scotty do blocks with literal named-handler routes"
+      ]
+    });
+    expect(frameworkCapability("dream")).toMatchObject({
+      languages: ["ocaml"],
+      routeFramework: "dream",
+      routeRegistrations: [],
+      surfaces: [
+        "direct top-level Dream.router literal lists",
+        "direct literal named-handler HTTP routes"
       ]
     });
     expect(frameworkCapability("cpp-httplib")).toMatchObject({
