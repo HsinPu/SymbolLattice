@@ -532,7 +532,7 @@ export function createProgram(
   addJsonOption(addProjectOption(program.command("routes [path]")))
     .option(
       "--method <method>",
-      `Restrict results to one uppercase HTTP method (${ROUTE_METHODS.join(", ")})`,
+      `Restrict results to one uppercase HTTP method or NAVIGATE (${ROUTE_METHODS.join(", ")})`,
       parseRouteMethod
     )
     .option(

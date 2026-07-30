@@ -304,6 +304,7 @@ type RouteBindingKind =
   | "fastify-receiver"
   | "fastify-default-factory"
   | "fastify-plugin-receiver"
+  | "react-router-route"
   | "other";
 
 interface RouteBinding {
@@ -326,6 +327,13 @@ interface StaticFastifyRoute {
   readonly path: string;
   readonly handler: ts.Identifier;
   readonly routeRegistration?: RouteRegistration;
+}
+
+/** A direct React Router JSX route with a statically identifiable page component. */
+interface StaticReactRouterRoute {
+  readonly method: "NAVIGATE";
+  readonly path: string;
+  readonly handler: ts.Identifier;
 }
 
 /** A literal Fastify route before a proven receiver provides any prefix context. */
@@ -577,6 +585,15 @@ function isFastifyImport(statement: ts.ImportDeclaration): boolean {
   );
 }
 
+function isReactRouterImport(statement: ts.ImportDeclaration): boolean {
+  return (
+    ts.isStringLiteral(statement.moduleSpecifier) &&
+    (statement.moduleSpecifier.text === "react-router" ||
+      statement.moduleSpecifier.text === "react-router-dom") &&
+    statement.importClause?.isTypeOnly !== true
+  );
+}
+
 function namedExpressImportBindingKind(
   statement: ts.ImportDeclaration,
   element: ts.ImportSpecifier
@@ -592,6 +609,27 @@ function namedExpressImportBindingKind(
     return "express-router-factory";
   }
   return "other";
+}
+
+function namedReactRouterImportBindingKind(
+  statement: ts.ImportDeclaration,
+  element: ts.ImportSpecifier
+): RouteBindingKind {
+  if (!isReactRouterImport(statement) || element.isTypeOnly) {
+    return "other";
+  }
+  const importedName = element.propertyName?.text ?? element.name.text;
+  return importedName === "Route" ? "react-router-route" : "other";
+}
+
+function namedRouteImportBindingKind(
+  statement: ts.ImportDeclaration,
+  element: ts.ImportSpecifier
+): RouteBindingKind {
+  const expressBinding = namedExpressImportBindingKind(statement, element);
+  return expressBinding === "other"
+    ? namedReactRouterImportBindingKind(statement, element)
+    : expressBinding;
 }
 
 function visibleRouteBinding(
@@ -1178,7 +1216,7 @@ function collectScopedRouteReceiverBindings(sourceFile: ts.SourceFile): ScopedRo
               rootScopeId,
               [element.name.text],
               element.name,
-              namedExpressImportBindingKind(node, element)
+              namedRouteImportBindingKind(node, element)
             );
           }
         }
@@ -1356,6 +1394,106 @@ function staticExpressRoute(
   }
 
   return { method, path: pathArgument.text, handler };
+}
+
+type ReactRouterJsxRouteElement = ts.JsxOpeningElement | ts.JsxSelfClosingElement;
+
+function staticReactRouterPath(initializer: ts.JsxAttribute["initializer"]): string | null {
+  if (initializer === undefined) {
+    return null;
+  }
+  if (ts.isStringLiteral(initializer)) {
+    return initializer.text.startsWith("/") ? initializer.text : null;
+  }
+  if (!ts.isJsxExpression(initializer) || initializer.expression === undefined) {
+    return null;
+  }
+
+  const path = staticLiteralText(initializer.expression);
+  return path !== null && path.startsWith("/") ? path : null;
+}
+
+function staticReactRouterElementHandler(expression: ts.Expression): ts.Identifier | null {
+  if (ts.isJsxSelfClosingElement(expression)) {
+    return ts.isIdentifier(expression.tagName) ? expression.tagName : null;
+  }
+  if (ts.isJsxElement(expression)) {
+    return ts.isIdentifier(expression.openingElement.tagName)
+      ? expression.openingElement.tagName
+      : null;
+  }
+  return null;
+}
+
+function staticReactRouterHandler(
+  attributeName: "component" | "Component" | "element",
+  initializer: ts.JsxAttribute["initializer"]
+): ts.Identifier | null {
+  if (initializer === undefined) {
+    return null;
+  }
+  if (!ts.isJsxExpression(initializer) || initializer.expression === undefined) {
+    return null;
+  }
+  if (attributeName === "element") {
+    return staticReactRouterElementHandler(initializer.expression);
+  }
+  return ts.isIdentifier(initializer.expression) ? initializer.expression : null;
+}
+
+/**
+ * Supports only an imported `Route` component with one literal path and one
+ * direct page-component form: v5 `component`, v6 `Component`, or v6 `element`.
+ * Any spread, duplicate, member expression, or runtime value would make the
+ * rendered route surface ambiguous, so it remains outside the proof boundary.
+ */
+function staticReactRouterJsxRoute(
+  sourceFile: ts.SourceFile,
+  node: ReactRouterJsxRouteElement,
+  bindings: ScopedRouteReceiverBindings
+): StaticReactRouterRoute | null {
+  if (
+    !ts.isIdentifier(node.tagName) ||
+    visibleRouteBindingKind(sourceFile, node.tagName, bindings) !== "react-router-route"
+  ) {
+    return null;
+  }
+
+  let path: string | undefined;
+  let handler: ts.Identifier | undefined;
+  for (const property of node.attributes.properties) {
+    if (!ts.isJsxAttribute(property) || !ts.isIdentifier(property.name)) {
+      return null;
+    }
+
+    const attributeName = property.name.text;
+    if (attributeName === "path") {
+      if (path !== undefined) {
+        return null;
+      }
+      const staticPath = staticReactRouterPath(property.initializer);
+      if (staticPath === null) {
+        return null;
+      }
+      path = staticPath;
+      continue;
+    }
+
+    if (attributeName === "component" || attributeName === "Component" || attributeName === "element") {
+      if (handler !== undefined) {
+        return null;
+      }
+      const staticHandler = staticReactRouterHandler(attributeName, property.initializer);
+      if (staticHandler === null) {
+        return null;
+      }
+      handler = staticHandler;
+    }
+  }
+
+  return path === undefined || handler === undefined
+    ? null
+    : { method: "NAVIGATE", path, handler };
 }
 
 function staticRouteMethodForName(
@@ -2797,8 +2935,8 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
   }
 
   function addStaticRoute(
-    node: ts.CallExpression,
-    route: StaticExpressRoute | StaticFastifyRoute,
+    node: ts.Node,
+    route: StaticExpressRoute | StaticFastifyRoute | StaticReactRouterRoute,
     routeFramework: NonNullable<PendingReference["routeFramework"]>,
     routeRegistration?: PendingReference["routeRegistration"]
   ): void {
@@ -2819,6 +2957,13 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
 
   function addStaticFastifyRoute(node: ts.CallExpression, route: StaticFastifyRoute): void {
     addStaticRoute(node, route, "fastify", route.routeRegistration);
+  }
+
+  function addStaticReactRouterRoute(
+    node: ReactRouterJsxRouteElement,
+    route: StaticReactRouterRoute
+  ): void {
+    addStaticRoute(node, route, "react-router");
   }
 
   function addFastifyPluginFacts(node: ts.CallExpression): void {
@@ -3223,6 +3368,12 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
         addStaticFastifyRoute(node, route);
       }
       addFastifyPluginFacts(node);
+    }
+    if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
+      const route = staticReactRouterJsxRoute(sourceFile, node, routeReceiverBindings);
+      if (route !== null) {
+        addStaticReactRouterRoute(node, route);
+      }
     }
     ts.forEachChild(node, extractStaticRoutes);
   }

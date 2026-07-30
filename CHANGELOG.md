@@ -6,6 +6,23 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.23.0] - 2026-07-30
+
+### Added
+
+- AST-proven React Router JSX client-navigation routes for TypeScript/TSX and JavaScript/JSX. A direct non-type-only named `Route` import from `react-router` or `react-router-dom` now recognizes literal slash-prefixed `path` attributes paired with exactly one direct v5 `component`, v6 `Component`, or v6 `element={<Page />}` page reference.
+- Explicit `NAVIGATE` route discriminator for client-side navigation. React Router records become first-class route symbols such as `NAVIGATE /settings`, retain ordinary `routes` edges to local, imported, re-exported, or unresolved page components, and remain queryable through the existing CLI, service, and MCP route views without being mislabeled as HTTP `GET` requests.
+- Framework-specific `framework.react-router.jsx-route.*` evidence, including exact lexical/module/re-export provenance and unresolved component evidence. Route/import binding checks reject type-only, shadowed, spread, duplicate, member-expression, or runtime-shaped JSX registrations before they reach graph resolution.
+
+### Compatibility
+
+- No SQLite schema migration or new route-query command is required. `NAVIGATE` is an additive route-method value and `react-router` is an additive optional `routeFramework` provenance value in the existing raw artifact-fact payload; existing HTTP routes and persisted facts remain readable.
+- The artifact extractor advances to `typescript-ast-v12` and the project resolver to `project-resolver-v10`. A pre-v0.23 active index reports `indexer-version-changed` until an explicit `sync` or `index` publishes React Router navigation evidence.
+
+### Deliberate limits
+
+- This pack supports JSX `<Route>` elements only. It excludes direct data-router route-object arrays passed to `createBrowserRouter`, `createHashRouter`, and similar APIs, plus lazy/wrapped/inline or member-expression page handlers, spreads, dynamic paths, nested-path composition, runtime router configuration, and Next.js file-system conventions. The `NAVIGATE` discriminator intentionally represents browser navigation rather than an HTTP method.
+
 ## [0.22.0] - 2026-07-30
 
 ### Added
@@ -458,7 +475,8 @@ No unreleased changes.
 - Explicit full indexing, caller/callee/impact queries, and read-only MCP exploration.
 - `exact`, `heuristic`, and `unresolved` relationship states.
 
-[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.22.0...HEAD
+[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.23.0...HEAD
+[0.23.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.19.0...v0.20.0

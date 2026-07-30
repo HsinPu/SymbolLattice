@@ -802,6 +802,88 @@ describe("literal route handler resolution", () => {
     ]);
   });
 
+  it("resolves React Router JSX page components with distinct navigation evidence", () => {
+    const sourceDocuments: readonly SourceDocument[] = [
+      {
+        absolutePath: "C:/project/src/pages.tsx",
+        relativePath: "src/pages.tsx",
+        language: "typescript",
+        sourceText: [
+          "export function SettingsPage() { return <main>Settings</main>; }",
+          "export function AccountPage() { return <main>Account</main>; }"
+        ].join("\n"),
+        contentHash: "pages"
+      },
+      {
+        absolutePath: "C:/project/src/pages-barrel.ts",
+        relativePath: "src/pages-barrel.ts",
+        language: "typescript",
+        sourceText: 'export { AccountPage as PublicAccountPage } from "./pages.js";',
+        contentHash: "barrel"
+      },
+      {
+        absolutePath: "C:/project/src/app-routes.tsx",
+        relativePath: "src/app-routes.tsx",
+        language: "typescript",
+        sourceText: [
+          'import { Route as AppRoute } from "react-router-dom";',
+          'import { SettingsPage } from "./pages.js";',
+          'import { PublicAccountPage } from "./pages-barrel.js";',
+          "export function AppRoutes() {",
+          "  return <>",
+          '    <AppRoute path="/settings" element={<SettingsPage />} />',
+          '    <AppRoute path="/account" Component={PublicAccountPage} />',
+          "  </>;",
+          "}"
+        ].join("\n"),
+        contentHash: "routes"
+      }
+    ];
+
+    const snapshot = snapshotWithResolver(sourceDocuments, undefined);
+    const page = snapshot.symbols.find(
+      (symbol) => symbol.filePath === "src/pages.tsx" && symbol.name === "SettingsPage"
+    );
+    const accountPage = snapshot.symbols.find(
+      (symbol) => symbol.filePath === "src/pages.tsx" && symbol.name === "AccountPage"
+    );
+    const route = snapshot.symbols.find(
+      (symbol) => symbol.kind === "route" && symbol.name === "NAVIGATE /settings"
+    );
+    const accountRoute = snapshot.symbols.find(
+      (symbol) => symbol.kind === "route" && symbol.name === "NAVIGATE /account"
+    );
+    const edge = snapshot.edges.find(
+      (candidate) => candidate.kind === "routes" && candidate.sourceId === route?.id
+    );
+    const accountEdge = snapshot.edges.find(
+      (candidate) => candidate.kind === "routes" && candidate.sourceId === accountRoute?.id
+    );
+
+    expect(edge).toMatchObject({
+      targetId: page?.id,
+      resolution: "exact",
+      confidence: 1,
+      evidence: {
+        ruleId: "framework.react-router.jsx-route.imported-handler",
+        stage: "module",
+        candidateSymbolIds: [page?.id]
+      }
+    });
+    expect(accountEdge).toMatchObject({
+      targetId: accountPage?.id,
+      resolution: "exact",
+      confidence: 1,
+      evidence: {
+        ruleId: "framework.react-router.jsx-route.reexported-handler",
+        stage: "module",
+        candidateSymbolIds: [accountPage?.id],
+        resolutionPath: ["src/app-routes.tsx", "src/pages-barrel.ts", "src/pages.tsx"]
+      }
+    });
+    expect(snapshot.pendingReferences.filter((reference) => reference.relationKind === "routes")).toEqual([]);
+  });
+
   it("resolves direct inline Fastify plugin-prefix handlers with distinct evidence", () => {
     const sourceDocuments: readonly SourceDocument[] = [
       {

@@ -3271,6 +3271,85 @@ describe("SymbolLatticeService", () => {
     ]);
   });
 
+  it("indexes React Router JSX navigation routes with exact imported page evidence", async () => {
+    const projectPath = await createInlineProject({
+      "src/pages.tsx": "export function SettingsPage() { return <main>Settings</main>; }\n",
+      "src/app-routes.tsx": [
+        'import { Route as AppRoute } from "react-router-dom";',
+        'import { SettingsPage } from "./pages.js";',
+        "export function AppRoutes() {",
+        '  return <AppRoute path="/settings" element={<SettingsPage />} />;',
+        "}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    const indexed = await service.init({ projectPath });
+    const navigationRoutes = await service.routes(projectPath, { method: "NAVIGATE" });
+    const persistedFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "src/app-routes.tsx");
+    const page = (await service.find(projectPath, "src/pages.tsx#SettingsPage")).symbols[0];
+    if (page === undefined) {
+      throw new Error("Expected indexed React Router page component.");
+    }
+    const callers = await service.callers(projectPath, page.qualifiedName);
+
+    expect(indexed).toMatchObject({
+      stale: false,
+      counts: { files: 2, symbols: expect.any(Number), edges: expect.any(Number) }
+    });
+    expect(
+      persistedFacts?.pendingReferences
+        .filter((reference) => reference.relationKind === "routes")
+        .map((reference) => [reference.referenceName, reference.routeFramework])
+    ).toEqual([["SettingsPage", "react-router"]]);
+    expect(navigationRoutes.routes).toMatchObject([
+      {
+        method: "NAVIGATE",
+        path: "/settings",
+        route: { kind: "route", name: "NAVIGATE /settings" },
+        edge: {
+          kind: "routes",
+          resolution: "exact",
+          evidence: {
+            ruleId: "framework.react-router.jsx-route.imported-handler",
+            stage: "module"
+          }
+        },
+        handler: { qualifiedName: "src/pages.tsx#SettingsPage" }
+      }
+    ]);
+    expect(callers.relations).toMatchObject([
+      {
+        symbol: { kind: "route", name: "NAVIGATE /settings" },
+        edge: {
+          kind: "routes",
+          resolution: "exact",
+          evidence: { ruleId: "framework.react-router.jsx-route.imported-handler", stage: "module" }
+        }
+      }
+    ]);
+
+    await writeFile(join(projectPath, "src", "unrelated.ts"), "export const unrelated = true;\n", "utf8");
+    const synced = await service.sync({ projectPath });
+    const routesAfterReuse = await service.routes(projectPath, { method: "NAVIGATE" });
+
+    expect(synced.lastIndexWork).toMatchObject({
+      mode: "incremental",
+      reExtractedFiles: ["src/unrelated.ts"],
+      reusedArtifactFiles: ["src/app-routes.tsx", "src/pages.tsx"]
+    });
+    expect(routesAfterReuse.routes).toMatchObject([
+      {
+        method: "NAVIGATE",
+        path: "/settings",
+        edge: { evidence: { ruleId: "framework.react-router.jsx-route.imported-handler" } }
+      }
+    ]);
+  });
+
   it("indexes direct inline Fastify plugin-prefix routes with nested static composition", async () => {
     const projectPath = await createInlineProject({
       "src/handlers.ts": [

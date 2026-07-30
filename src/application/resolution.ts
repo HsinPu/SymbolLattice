@@ -134,6 +134,9 @@ function staticRouteHandlerRuleId(
           : "static-route";
     return `framework.fastify.${registration}.${suffix}`;
   }
+  if (reference.routeFramework === "react-router") {
+    return `framework.react-router.jsx-route.${suffix}`;
+  }
   return `framework.express.literal-route.${suffix}`;
 }
 

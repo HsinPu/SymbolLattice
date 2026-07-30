@@ -35,8 +35,8 @@ export type EdgeKind = (typeof EDGE_KINDS)[number];
 
 export type ResolutionKind = "exact" | "heuristic" | "unresolved";
 
-/** Framework provenance retained for syntax-proven static HTTP routes. */
-export type RouteFramework = "express" | "fastify";
+/** Framework provenance retained for syntax-proven static HTTP or client-navigation routes. */
+export type RouteFramework = "express" | "fastify" | "react-router";
 
 /** Additional static registration context retained when it changes the route path. */
 export type RouteRegistration =
@@ -99,7 +99,7 @@ export interface PendingReference {
     EdgeKind,
     "calls" | "imports" | "exports" | "routes" | HierarchyRelationKind
   >;
-  /** Present only for syntax-proven framework route handlers. */
+  /** Present only for syntax-proven framework route or client-navigation handlers. */
   readonly routeFramework?: RouteFramework;
   /** Present when a statically proven registration projects a framework route path. */
   readonly routeRegistration?: RouteRegistration;

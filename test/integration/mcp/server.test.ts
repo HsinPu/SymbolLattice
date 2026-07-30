@@ -716,6 +716,7 @@ describe("SymbolLattice MCP server", () => {
       }
     });
     expect(JSON.stringify(routeTool?.inputSchema)).toContain("GET");
+    expect(JSON.stringify(routeTool?.inputSchema)).toContain("NAVIGATE");
     expect(routeTool?.outputSchema).toMatchObject({
       type: "object",
       properties: {
@@ -753,19 +754,35 @@ describe("SymbolLattice MCP server", () => {
       }
     ]);
 
+    const navigation = await client.callTool({
+      name: "symbol_lattice_routes",
+      arguments: { method: "NAVIGATE" }
+    });
+    expect(navigation.isError).not.toBe(true);
+    expect(routeCalls).toEqual([
+      {
+        projectPath: "C:/chosen-project",
+        options: { method: "GET", pathPrefix: "/api", limit: 7 }
+      },
+      {
+        projectPath: "C:/default-project",
+        options: { method: "NAVIGATE" }
+      }
+    ]);
+
     const unsupportedMethod = await client.callTool({
       name: "symbol_lattice_routes",
       arguments: { method: "get" }
     });
     expect(unsupportedMethod.isError).toBe(true);
-    expect(routeCalls).toHaveLength(1);
+    expect(routeCalls).toHaveLength(2);
 
     const invalidPath = await client.callTool({
       name: "symbol_lattice_routes",
       arguments: { path: "api" }
     });
     expect(invalidPath.isError).toBe(true);
-    expect(routeCalls).toHaveLength(1);
+    expect(routeCalls).toHaveLength(2);
   });
 
   it("does not register routes for an explore-only embedding", async () => {

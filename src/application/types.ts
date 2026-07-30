@@ -34,7 +34,7 @@ import type {
   GitRevisionSourceAvailability
 } from "../ports/git-change-set.js";
 
-/** Route extraction remains domain-owned; application callers consume these public records. */
+/** HTTP and client-navigation route extraction remains domain-owned; application callers consume these public records. */
 export { ROUTE_METHODS } from "../domain/graph.js";
 export type { RouteMethod, RouteRecord } from "../domain/graph.js";
 
@@ -217,9 +217,9 @@ export interface SearchResult {
 export const DEFAULT_ROUTE_LIMIT = 50;
 export const MAX_ROUTE_LIMIT = 100;
 
-/** Optional exact method and prefix filters for persisted route records. */
+/** Optional exact discriminator and prefix filters for persisted route records. */
 export interface RoutesOptions {
-  /** One supported uppercase HTTP method, including ALL when indexed. */
+  /** One supported uppercase HTTP method, ALL, or the NAVIGATE client-route discriminator. */
   readonly method?: RouteMethod;
   /** A nonempty route-path prefix beginning with a forward slash. */
   readonly pathPrefix?: string;

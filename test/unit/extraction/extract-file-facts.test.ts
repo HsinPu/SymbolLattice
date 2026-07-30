@@ -535,6 +535,96 @@ describe("TypeScript and JavaScript extraction", () => {
     ).toEqual(["handler"]);
   });
 
+  it("extracts AST-proven React Router JSX navigation routes with direct component handlers", () => {
+    const facts = extractFileFacts({
+      filePath: "src/app-routes.tsx",
+      language: "typescript",
+      sourceText: [
+        'import { Route as AppRoute } from "react-router-dom";',
+        "function HomePage() { return <main>Home</main>; }",
+        "function SettingsPage() { return <main>Settings</main>; }",
+        "function LegacyPage() { return <main>Legacy</main>; }",
+        "export function AppRoutes() {",
+        "  return (",
+        "    <>",
+        '      <AppRoute path="/" element={<HomePage />} />',
+        '      <AppRoute path={"/settings"} Component={SettingsPage} />',
+        '      <AppRoute path="/legacy" component={LegacyPage} />',
+        "    </>",
+        "  );",
+        "}"
+      ].join("\n")
+    });
+
+    const routes = facts.symbols.filter((symbol) => symbol.kind === "route");
+    expect(routes.map((route) => route.name)).toEqual([
+      "NAVIGATE /",
+      "NAVIGATE /settings",
+      "NAVIGATE /legacy"
+    ]);
+    expect(
+      facts.pendingReferences
+        .filter((reference) => reference.relationKind === "routes")
+        .map((reference) => [reference.referenceName, reference.routeFramework])
+    ).toEqual([
+      ["HomePage", "react-router"],
+      ["SettingsPage", "react-router"],
+      ["LegacyPage", "react-router"]
+    ]);
+  });
+
+  it("extracts React Router JSX navigation routes in JavaScript source", () => {
+    const facts = extractFileFacts({
+      filePath: "src/app-routes.jsx",
+      language: "javascript",
+      sourceText: [
+        'import { Route } from "react-router";',
+        "function Page() { return <main>Page</main>; }",
+        "export function AppRoutes() {",
+        '  return <Route path="/jsx" element={<Page />} />;',
+        "}"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route").map((route) => route.name)).toEqual([
+      "NAVIGATE /jsx"
+    ]);
+    expect(facts.pendingReferences.filter((reference) => reference.relationKind === "routes")).toEqual([
+      expect.objectContaining({ referenceName: "Page", routeFramework: "react-router" })
+    ]);
+  });
+
+  it("rejects dynamic, type-only, shadowed, spread, and ambiguous React Router JSX routes", () => {
+    const facts = extractFileFacts({
+      filePath: "src/app-routes.tsx",
+      language: "typescript",
+      sourceText: [
+        'import { Route } from "react-router";',
+        'import type { Route as TypeRoute } from "react-router-dom";',
+        'const dynamicPath = "/dynamic";',
+        'const attributes = { path: "/spread" };',
+        "function Page() { return <main>Page</main>; }",
+        "function shadow(Route: unknown) {",
+        '  return <Route path="/shadowed" element={<Page />} />;',
+        "}",
+        "export function AppRoutes() {",
+        "  return (",
+        "    <>",
+        '      <Route path={dynamicPath} element={<Page />} />',
+        '      <Route {...attributes} path="/spread" element={<Page />} />',
+        '      <Route path="/member" element={<pages.Page />} />',
+        '      <Route path="/ambiguous" Component={Page} element={<Page />} />',
+        '      <TypeRoute path="/type-only" element={<Page />} />',
+        "    </>",
+        "  );",
+        "}"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(facts.pendingReferences.filter((reference) => reference.relationKind === "routes")).toEqual([]);
+  });
+
   it("extracts syntax-proven Fastify shorthand and full-object routes with framework provenance", () => {
     const facts = extractFileFacts({
       filePath: "src/routes.ts",

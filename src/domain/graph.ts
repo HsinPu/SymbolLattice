@@ -12,7 +12,10 @@ const DEFAULT_IMPACT_EDGE_KINDS: readonly EdgeKind[] = [
   "imports"
 ];
 
-/** HTTP methods represented by static route symbols. */
+/**
+ * HTTP methods plus the explicit client-navigation discriminator represented
+ * by static route symbols. `NAVIGATE` is not an HTTP method.
+ */
 export const ROUTE_METHODS = [
   "GET",
   "POST",
@@ -22,7 +25,8 @@ export const ROUTE_METHODS = [
   "HEAD",
   "OPTIONS",
   "TRACE",
-  "ALL"
+  "ALL",
+  "NAVIGATE"
 ] as const;
 
 export type RouteMethod = (typeof ROUTE_METHODS)[number];
@@ -118,7 +122,7 @@ export interface ChildRelation {
   readonly child: SymbolNode;
 }
 
-/** A literal route together with its persisted handler-resolution evidence. */
+/** A literal HTTP or client-navigation route with persisted handler-resolution evidence. */
 export interface RouteRecord {
   readonly method: RouteMethod;
   readonly path: string;

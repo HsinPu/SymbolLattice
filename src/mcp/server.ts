@@ -1276,7 +1276,7 @@ export function createMcpServer(
           method: z
             .enum(ROUTE_METHODS)
             .optional()
-            .describe("Optional supported uppercase HTTP method filter."),
+            .describe("Optional supported uppercase HTTP method or NAVIGATE client-route filter."),
           path: z
             .string()
             .min(1)

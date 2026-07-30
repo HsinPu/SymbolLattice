@@ -466,8 +466,29 @@ describe("symbol-lattice v0.14 routes CLI", () => {
     expect(write).toHaveBeenCalledWith(`${JSON.stringify(result, null, 2)}\n`);
   });
 
+  it("forwards the NAVIGATE client-route discriminator without treating it as HTTP", async () => {
+    const calls: Array<{ projectPath: string; options: RoutesOptions }> = [];
+    const service = {
+      async routes(projectPath: string, options: RoutesOptions = {}): Promise<RoutesResult> {
+        calls.push({ projectPath, options });
+        return routesResult();
+      }
+    } as unknown as SymbolLatticeService;
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+    await createProgram(service).parseAsync(
+      ["node", "symbol-lattice", "routes", "--project", "C:/project", "--method", "NAVIGATE"],
+      { from: "node" }
+    );
+
+    expect(calls).toEqual([
+      { projectPath: resolve("C:/project"), options: { method: "NAVIGATE" } }
+    ]);
+    expect(write).toHaveBeenCalledWith(`${JSON.stringify(routesResult(), null, 2)}\n`);
+  });
+
   it.each([
-    [["--method", "get"], "Expected one of: GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS, TRACE, ALL"],
+    [["--method", "get"], "Expected one of: GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS, TRACE, ALL, NAVIGATE"],
     [["--path", "api"], "Expected a non-empty route path prefix beginning with"],
     [["--limit", "101"], "Expected an integer between 1 and 100"]
   ])("rejects invalid route filter %j before invoking the service", async (arguments_, message) => {
