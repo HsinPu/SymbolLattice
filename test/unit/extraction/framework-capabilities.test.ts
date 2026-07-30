@@ -19,6 +19,7 @@ describe("first-party framework capabilities", () => {
       "blazor",
       "arkui",
       "terraform",
+      "shopify-liquid",
       "nextjs",
       "fastapi",
       "flask",
@@ -105,6 +106,14 @@ describe("first-party framework capabilities", () => {
       surfaces: [
         "complete top-level literal resource and data blocks",
         "complete top-level literal module variable and output blocks"
+      ]
+    });
+    expect(frameworkCapability("shopify-liquid")).toMatchObject({
+      languages: ["liquid"],
+      routeRegistrations: [],
+      surfaces: [
+        "complete direct literal render and include snippet tags",
+        "complete direct literal section tags resolved against indexed local Liquid files"
       ]
     });
     expect(frameworkCapability("nextjs")).toMatchObject({

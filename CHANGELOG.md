@@ -6,6 +6,24 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.66.0] - 2026-07-31
+
+### Added
+
+- Shopify Liquid `.liquid` source discovery, persisted source-search language filtering, CLI/MCP validation, and a dedicated offset-preserving template-tag scanner. It retains only complete direct literal `render`, `include`, and `section` tags outside HTML comments and Liquid `comment` / `raw` blocks.
+- An executable first-party `shopify-liquid` capability. A literal `render` or `include` target projects to the exact indexed `snippets/<name>.liquid` file; a literal `section` target projects to the exact indexed `sections/<name>.liquid` file. Missing targets remain explicit unresolved `calls` edges with rule-specific evidence instead of guessed global matches.
+- Unit and integration coverage now verifies Liquid discovery, literal render/include/section facts, exact local snippet/section callers, comment/raw/HTML-comment/dynamic/path-traversal/malformed rejection, persisted source-search, and CLI/MCP language validation. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.66.0.md`.
+
+### Compatibility
+
+- No SQLite schema migration or new query command is required. Liquid facts reuse the existing file, graph-edge, source-search, caller/callee, and SQLite raw-artifact contracts; existing generations remain readable.
+- The artifact extractor advances to `multi-language-ast-v55` and the project resolver to `project-resolver-v20` because literal Liquid targets are projected only after the complete indexed file set is available. A pre-v0.66 active index reports `indexer-version-changed` until an explicit `sync` or `index` publishes Liquid-capable facts and edges.
+
+### Deliberate limits
+
+- The Liquid extractor is a deliberately narrow tag scanner, not a Liquid parser, Shopify theme compiler, or renderer. It accepts only direct literal names made from safe path segments; dynamic names, path traversal, incomplete/nested tags, comment/raw/HTML-comment contents, and malformed delimiters do not become template facts.
+- Shopify support does not infer `assign`, captures, loops, conditions, filters, object/property references, layouts, schema JSON, app blocks, {% render %} parameter semantics, JSON template/section-group references, metafields, locales, theme configuration, remote snippets, theme inheritance, or runtime storefront behavior. The inspected local CodeGraph baseline has broader Liquid extraction for snippet/section references, schema, assignments, and Shopify JSON section references; SymbolLattice deliberately starts with a smaller exact cross-file call contract rather than claiming full Liquid parity.
+
 ## [0.65.0] - 2026-07-31
 
 ### Added

@@ -6659,4 +6659,86 @@ describe("SymbolLatticeService", () => {
       ])
     );
   });
+
+  it("indexes Shopify Liquid literal template calls against local snippets and sections", async () => {
+    const projectPath = await createInlineProject({
+      "templates/product.liquid": [
+        "{% render 'product-card', product: product %}",
+        "{% section 'recommendations' %}",
+        "{% include 'missing' %}",
+        "{% render dynamic_name %}"
+      ].join("\n"),
+      "snippets/product-card.liquid": "<article>{{ product.title }}</article>\n",
+      "sections/recommendations.liquid": "<section>Recommendations</section>\n",
+      "snippets/unused.liquid": "<aside>Unused</aside>\n"
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    const indexed = await service.init({ projectPath });
+    const search = await service.search(projectPath, "product-card", { language: "liquid" });
+    const snippet = (await service.find(projectPath, "snippets/product-card.liquid")).symbols[0];
+    const section = (await service.find(projectPath, "sections/recommendations.liquid")).symbols[0];
+    if (snippet === undefined || section === undefined) {
+      throw new Error("Expected indexed Shopify Liquid target files.");
+    }
+    const snippetCallers = await service.callers(projectPath, snippet.qualifiedName);
+    const sectionCallers = await service.callers(projectPath, section.qualifiedName);
+    const persistedLiquidFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .filter((facts) => facts.language === "liquid");
+
+    expect(indexed).toMatchObject({
+      stale: false,
+      counts: { files: 4, symbols: expect.any(Number), edges: expect.any(Number) }
+    });
+    expect(persistedLiquidFacts).toHaveLength(4);
+    expect(
+      persistedLiquidFacts.every(
+        (facts) => facts.extractorVersion === ARTIFACT_FACTS_EXTRACTOR_VERSION
+      )
+    ).toBe(true);
+    expect(search.results).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          filePath: "templates/product.liquid",
+          language: "liquid"
+        })
+      ])
+    );
+    expect(snippetCallers.relations).toEqual([
+      expect.objectContaining({
+        symbol: expect.objectContaining({
+          kind: "file",
+          qualifiedName: "templates/product.liquid"
+        }),
+        edge: expect.objectContaining({
+          kind: "calls",
+          resolution: "exact",
+          referenceName: "render snippets/product-card.liquid",
+          evidence: expect.objectContaining({
+            ruleId: "framework.shopify-liquid.render.literal-project-file.exact-target",
+            stage: "module"
+          })
+        })
+      })
+    ]);
+    expect(sectionCallers.relations).toEqual([
+      expect.objectContaining({
+        symbol: expect.objectContaining({
+          kind: "file",
+          qualifiedName: "templates/product.liquid"
+        }),
+        edge: expect.objectContaining({
+          kind: "calls",
+          resolution: "exact",
+          referenceName: "section sections/recommendations.liquid",
+          evidence: expect.objectContaining({
+            ruleId: "framework.shopify-liquid.section.literal-project-file.exact-target",
+            stage: "module"
+          })
+        })
+      })
+    ]);
+  });
 });

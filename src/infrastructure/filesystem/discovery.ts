@@ -52,7 +52,8 @@ export const SUPPORTED_EXTENSIONS: ReadonlyMap<string, SupportedLanguage> = new 
   [".scala", "scala"],
   [".tf", "terraform"],
   [".tfvars", "terraform"],
-  [".tofu", "terraform"]
+  [".tofu", "terraform"],
+  [".liquid", "liquid"]
 ] as const);
 
 /**

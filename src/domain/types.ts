@@ -120,7 +120,8 @@ export const ARTIFACT_LANGUAGES = [
   "swift",
   "dart",
   "scala",
-  "terraform"
+  "terraform",
+  "liquid"
 ] as const;
 
 export type ArtifactLanguage = (typeof ARTIFACT_LANGUAGES)[number];

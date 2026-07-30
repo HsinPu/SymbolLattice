@@ -2,7 +2,7 @@
 
 # SymbolLattice
 
-**Evidence-first local code intelligence for TypeScript, JavaScript, ArkTS/ArkUI, Vue, Svelte, Astro, Razor/Blazor, Terraform/OpenTofu, Python, Go, Rust, Java, PHP, C, Lua, R, Elixir, Erlang, Clojure, Perl, Julia, Haskell, OCaml, F#, Nim, C++, C#, Ruby, Kotlin, Swift, Dart, and Scala projects.**
+**Evidence-first local code intelligence for TypeScript, JavaScript, ArkTS/ArkUI, Vue, Svelte, Astro, Razor/Blazor, Terraform/OpenTofu, Shopify Liquid, Python, Go, Rust, Java, PHP, C, Lua, R, Elixir, Erlang, Clojure, Perl, Julia, Haskell, OCaml, F#, Nim, C++, C#, Ruby, Kotlin, Swift, Dart, and Scala projects.**
 
 [![Version](https://img.shields.io/github/v/tag/HsinPu/symbol-lattice?label=version)](https://github.com/HsinPu/symbol-lattice/tags)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D22.13-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> **v0.65.0** is an early developer release. This public repository runs from source; its npm package is intentionally private and is not published to npm.
+> **v0.66.0** is an early developer release. This public repository runs from source; its npm package is intentionally private and is not published to npm.
 
 SymbolLattice builds a local symbol graph without hiding uncertainty. It keeps syntax-proven artifact facts, resolves cross-file relationships conservatively, and records why every resolved edge exists. The graph stays local to the inspected project under `.symbol-lattice/index.sqlite`.
 
@@ -34,6 +34,7 @@ SymbolLattice builds a local symbol graph without hiding uncertainty. It keeps s
 - **Razor + Blazor navigation evidence** - each `.razor` component exposes a conventional local component; each standalone, literal `@page` directive forms an exact local `NAVIGATE` edge, including literal parameter templates.
 - **ArkTS + ArkUI root evidence** - complete direct `@Component struct` declarations in `.ets` files become components; a same-stack `@Entry` declaration creates an exact local `ui root` entrypoint rather than a guessed navigation route.
 - **Terraform/OpenTofu declaration evidence** - complete top-level literal `resource`, `data`, `module`, `variable`, and `output` blocks in `.tf`, `.tfvars`, and `.tofu` files become audited IaC symbols; outputs retain export evidence without fabricating dependency or deployment facts.
+- **Shopify Liquid template-call evidence** - complete literal `render`, `include`, and `section` tags in `.liquid` files become exact project-local calls to indexed snippet or section files when—and only when—the target path exists.
 - **Non-HTTP and UI transport evidence** - AST-proven NestJS GraphQL, microservice, and WebSocket entrypoints, plus direct ArkUI UI roots, use distinct `entrypoint` nodes and exact `handles` edges, so a message pattern, subscription, or UI root is never mislabeled as an HTTP route.
 - **Direct type-hierarchy evidence** - AST-proven `extends` and `implements` edges preserve value/type namespace proof, type-only imports, re-export provenance, unresolved bases, and bounded direct parent/child views without pretending to have a full type checker.
 - **Bounded context packs** - ordered symbol references produce persisted source, capped relationship/impact summaries, and static directed evidence paths without guessing ambiguous symbols or dynamic behavior.
@@ -109,6 +110,7 @@ node dist/cli/main.js search "Catalog" --project /path/to/project --language ast
 node dist/cli/main.js search "Catalog" --project /path/to/project --language razor
 node dist/cli/main.js search "Home" --project /path/to/project --language arkts
 node dist/cli/main.js search "aws_instance" --project /path/to/project --language terraform
+node dist/cli/main.js search "product-card" --project /path/to/project --language liquid
 node dist/cli/main.js context "src/consumer.ts#calculate" "src/math.ts#add" --project /path/to/project
 
 # Select affected tests from changed files already present in the active generation.
@@ -138,9 +140,9 @@ One-shot data commands emit stable, pretty JSON. `watch` is the deliberate strea
 
 ## Capabilities
 
-| Area | v0.65.0 behavior |
+| Area | v0.66.0 behavior |
 | --- | --- |
-| Source files | TypeScript, TSX, JavaScript, JSX, ArkTS/ArkUI, Vue SFC, Svelte SFC, Astro SFC, Razor/Blazor components, Terraform/OpenTofu HCL, Python, Go, Rust, Java, PHP, C, Lua, R, Elixir, Erlang, Clojure, Perl, Julia, Haskell, OCaml, F#, Nim, C++, C#, Ruby, Kotlin, Swift, Dart, and Scala (`.ets`, `.vue`, `.svelte`, `.astro`, `.razor`, `.tf`, `.tfvars`, `.tofu`, `.c`, `.lua`, `.r`, `.ex`, `.exs`, `.erl`, `.clj`, `.pl`, `.pm`, `.jl`, `.hs`, `.ml`, `.fs`, `.nim`, `.cpp`, `.cc`, `.cxx`, `.hpp`, `.hh`, `.hxx`, `.cs`, `.rb`, `.kt`, `.swift`, `.dart`, `.scala`; plus Play `conf/routes` and `conf/*.routes` route tables) |
+| Source files | TypeScript, TSX, JavaScript, JSX, ArkTS/ArkUI, Vue SFC, Svelte SFC, Astro SFC, Razor/Blazor components, Terraform/OpenTofu HCL, Shopify Liquid, Python, Go, Rust, Java, PHP, C, Lua, R, Elixir, Erlang, Clojure, Perl, Julia, Haskell, OCaml, F#, Nim, C++, C#, Ruby, Kotlin, Swift, Dart, and Scala (`.ets`, `.vue`, `.svelte`, `.astro`, `.razor`, `.tf`, `.tfvars`, `.tofu`, `.liquid`, `.c`, `.lua`, `.r`, `.ex`, `.exs`, `.erl`, `.clj`, `.pl`, `.pm`, `.jl`, `.hs`, `.ml`, `.fs`, `.nim`, `.cpp`, `.cc`, `.cxx`, `.hpp`, `.hh`, `.hxx`, `.cs`, `.rb`, `.kt`, `.swift`, `.dart`, `.scala`; plus Play `conf/routes` and `conf/*.routes` route tables) |
 | F# + Giraffe | Direct top-level typed `HttpFunc` / `HttpContext` handlers plus exactly one `open Giraffe` proof and a direct literal `choose [` route table. Fixed HTTP verbs and plain `route "/..."` entries become exact same-file or explicit unresolved route evidence. |
 | Nim + Jester | Direct top-level zero-argument `proc` handlers plus exactly one direct `import` list containing `jester`, then a flat `routes:` or `router name:` literal route block. Fixed lowercase HTTP verbs become exact same-file or explicit unresolved route evidence. |
 | Vue + Vue Router | Vue `.vue` files contribute a file symbol plus direct inline JavaScript/TypeScript script declarations and an auditable default component export. In TypeScript/JavaScript router modules, exactly one direct `createRouter` import plus one top-level literal `routes` option emits `NAVIGATE` route evidence; direct default imports can resolve exactly through `.vue` modules. |
@@ -149,6 +151,7 @@ One-shot data commands emit stable, pretty JSON. `watch` is the deliberate strea
 | Razor + Blazor | Every `.razor` file contributes a conventional local `default` component. Only standalone, unescaped, slash-prefixed literal `@page` directives become exact local `NAVIGATE` evidence; multiple literal route templates are preserved. |
 | ArkTS + ArkUI | Complete direct `@Component struct` declarations in `.ets` files become component symbols. A direct same-stack `@Entry` component creates an exact `ui root` entrypoint and local `handles` evidence; it is not a route or navigation claim. |
 | Terraform / OpenTofu | Complete line-leading top-level literal `resource`, `data`, `module`, `variable`, and `output` blocks emit exact local declaration evidence. Resource/data blocks use the additive `resource` kind, modules use the additive `module` kind, and outputs retain export facts. |
+| Shopify Liquid | Complete literal `render`, `include`, and `section` tags emit an exact project-local `calls` edge only when the expected `snippets/<name>.liquid` or `sections/<name>.liquid` target exists; missing targets remain explicit unresolved evidence. |
 | Scope | Project root by default or repeatable, persisted `--scope` directories |
 | Discovery | Root `.gitignore` with negation; `.git`, `.symbol-lattice`, `coverage`, `dist`, and `node_modules` are always excluded |
 | Symbols | TypeScript/JavaScript: files, classes, functions, methods, interfaces, types, variables, routes, and entrypoints. Python: files, classes, functions, methods, and direct FastAPI / same-file or proven cross-file `APIRouter` / same-file Flask routes. Go: files, top-level functions, and direct Gin / `net/http` / Chi routes. Rust: files, top-level functions, and direct Axum routes. Java: files, direct top-level classes and methods, direct Spring Web routes, and direct package facts usable by Play controller resolution. PHP: files, direct top-level classes, methods, functions, and direct Laravel facade routes. C: files, direct top-level functions, and direct CivetWeb routes. Lua: files, direct top-level `function` / `local function` declarations, and direct Lapis routes. R: files, direct top-level braced `name <- function(...)` / `name = function(...)` declarations, and direct Plumber annotation routes. Elixir: files, direct top-level `defmodule` declarations represented by the existing `class` kind, direct module `def` / `defp` methods, and direct Phoenix Router routes. Erlang: files, direct `-module(...)` declarations represented by the existing `class` kind, direct simple top-level functions, and direct Cowboy dispatch routes. Clojure: files, direct `ns` declarations represented by the existing `class` kind, direct simple top-level `defn` functions, and direct Compojure routes. Perl: files, direct `package` declarations represented by the existing `class` kind, direct simple top-level `sub` functions, and direct Dancer2 routes. Julia: files, direct top-level one-line `name(...) = ...` functions, and direct Genie routes. C++: files, direct top-level classes, methods, functions, and direct cpp-httplib routes. C#: files, direct top-level classes, interfaces, methods, local functions, and direct ASP.NET Core routes. Ruby: files, direct top-level classes, methods, functions, and direct Rails routes. Kotlin: files, direct top-level classes, interfaces, methods, functions, and direct Ktor routes. Swift: files, direct top-level classes, structs, protocols, methods, functions, and direct Vapor routes. Dart: files, direct top-level classes, methods, functions, and direct Flutter named-navigation routes. Scala: files, direct top-level classes, objects, traits, methods, functions, direct Play route-table entries, and literal Play Router-mount nodes |
@@ -169,6 +172,8 @@ One-shot data commands emit stable, pretty JSON. `watch` is the deliberate strea
 | ArkTS/ArkUI module resolution | No generic ArkTS module, package, UI DSL, state-decorator, or cross-file component resolver is claimed in this release. |
 | Terraform/OpenTofu symbols and relationships | Complete line-leading top-level literal `resource`, `data`, `module`, `variable`, and `output` blocks emit evidence-bearing `contains` relationships. `resource` / `data` use the additive `resource` kind, `module` uses the additive `module` kind, and `output` becomes an exported variable symbol. |
 | Terraform/OpenTofu module resolution | No Terraform/OpenTofu module-source, provider, dependency, plan, apply, state, or runtime resolver is claimed in this release. |
+| Shopify Liquid relationships | Complete literal `render` / `include` tags target only `snippets/<name>.liquid`; complete literal `section` tags target only `sections/<name>.liquid`. Existing indexed target files receive exact `calls` edges; missing targets receive explicit unresolved `calls` evidence. |
+| Shopify Liquid module resolution | No general Liquid import, layout, theme inheritance, remote snippet, JSON-template, schema, object/property, filter, or runtime resolver is claimed in this release. |
 | Workspaces | Root `package.json` workspaces array/object, local package root/subpath `exports`, and entrypoint fallback |
 | Re-exports | Named aliases, `export *`, default-through-named aliases, and namespace-export provenance |
 | Retrieval | Local deterministic FTS5 search across persisted source text and identifier parts; bounded path/language filters, source/symbol evidence, and exact `explore` excerpts from the same active generation |
@@ -196,7 +201,7 @@ One-shot data commands emit stable, pretty JSON. `watch` is the deliberate strea
 
 Framework coverage is declared once and actively selects the extraction passes applicable to the parsed language. This is a stable integration boundary, not a runtime framework detector: every pass below still requires its own syntax proof before it emits facts.
 
-| Capability | Proven surfaces in v0.65 |
+| Capability | Proven surfaces in v0.66 |
 | --- | --- |
 | Express | Literal receiver methods and identifier handlers |
 | Fastify | Literal routes and static prefix composition |
@@ -233,6 +238,7 @@ Framework coverage is declared once and actively selects the extraction passes a
 | Blazor | Razor `.razor` conventional components and standalone literal `@page` directive routes |
 | ArkUI | ArkTS complete direct `@Component struct` declarations and direct `@Entry @Component` UI root entrypoints |
 | Terraform/OpenTofu | Complete line-leading top-level literal `resource`, `data`, `module`, `variable`, and `output` declaration blocks |
+| Shopify Liquid | Complete direct literal `render` / `include` snippet tags and `section` tags resolved only against indexed local Liquid files |
 | Play | Scala `conf/routes` / `conf/*.routes` literal controller-action entries with exact unique Scala-or-Java package-class-method handlers, plus literal static `->` Router-mount `handles` evidence |
 | React Router | Recursive literal JSX `Route`, `createRoutesFromElements` JSX trees, and data-router object trees |
 | Next.js | Pages Router and App Router page default exports |
@@ -625,6 +631,27 @@ output "instance_id" {
 The file emits `resource aws_instance.web`, `data aws_ami.base`, `module network`, `variable region`, and `output instance_id` symbols with exact local `contains` evidence. Resource/data declarations use the additive `resource` kind, module declarations use the additive `module` kind, and an output is retained as an exported variable binding.
 
 The scanner checks block structure while masking comments, quoted strings, and heredocs, so a declaration-looking string or heredoc body cannot become a cloud-resource fact. It intentionally excludes `terraform` / `provider` / `locals` blocks, dynamic labels, expressions and interpolation, resource references, `depends_on`, provider aliases, module source resolution, JSON configuration, state, plan/apply behavior, and runtime cloud topology.
+
+#### Shopify Liquid (literal local template calls)
+
+v0.66 introduces a deliberately small Shopify Liquid relation surface. It recognizes a complete direct literal target at the start of the tag payload; trailing render arguments are not interpreted:
+
+```liquid
+{% render 'product-card', product: product %}
+{%- include "legacy-card" -%}
+{% section 'recommendations' %}
+```
+
+When the project also contains the expected target file, the source file receives an exact `calls` edge:
+
+| Tag | Only accepted target | Exact project-local target |
+| --- | --- | --- |
+| `render` / `include` | a safe literal snippet name | `snippets/<name>.liquid` |
+| `section` | a safe literal section name | `sections/<name>.liquid` |
+
+If the target is absent, the graph preserves an explicit unresolved `calls` edge with a `framework.shopify-liquid.*.literal-project-file.unresolved-target` rule instead of binding to a same-named file elsewhere. Tags within HTML comments, Liquid `comment` / `raw` blocks, dynamic names, path traversal, incomplete/nested tags, and malformed delimiters create no template facts.
+
+This release does not parse Liquid expressions or theme semantics: it excludes `assign`, capture/loop/condition/filter behavior, layouts, schema JSON, JSON templates/section groups, app blocks, objects/metafields/locales, render argument semantics, remote snippets, theme inheritance, and runtime storefront rendering.
 
 #### Express
 
@@ -1844,6 +1871,8 @@ v0.64 adds no SQLite schema migration or query command. It adds ArkTS `.ets` dis
 
 v0.65 adds no SQLite schema migration or query command. It adds Terraform/OpenTofu `.tf`, `.tfvars`, and `.tofu` discovery plus complete top-level literal `resource`, `data`, `module`, `variable`, and `output` declaration facts through the existing file, symbol, edge, binding, and source-search contracts. The additive `resource` and `module` symbol kinds keep existing generations readable. The extractor advances to `multi-language-ast-v54`; the resolver remains `project-resolver-v19` because v0.65 does not resolve HCL module sources, providers, or dependency expressions. A pre-v0.65 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes Terraform-capable facts.
 
+v0.66 adds no SQLite schema migration or query command. It adds Shopify Liquid `.liquid` discovery and direct literal `render` / `include` / `section` raw facts through the existing file, edge, source-search, caller/callee, and raw-artifact contracts. The extractor advances to `multi-language-ast-v55` and the resolver to `project-resolver-v20` because a Liquid tag is projected only after its exact local target file is known. A pre-v0.66 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes Liquid-capable facts and relations. Existing generations remain readable.
+
 ## Architecture
 
 ```mermaid
@@ -1857,7 +1886,7 @@ flowchart LR
   Catalog["Filesystem catalog\nscope + gitignore"] --> Inputs["Index inputs"]
   Catalog --> TS["TS alias resolver"]
   Catalog --> WS["Workspace resolver"]
-  Extractor["TypeScript AST extractor + ArkTS/ArkUI lexical scanner + Vue/Svelte/Astro SFC scanners + Razor/Blazor directive scanner + Terraform/OpenTofu HCL lexical scanner + Python/Go/Rust/Java/PHP/C/C++ Lezer parsers + Lua/R/Elixir/Erlang/Clojure/Perl/Julia/Haskell lexical extractors + C#/Ruby/Kotlin/Swift/Dart/Scala ast-grep parsers\nfirst-party framework capability passes\nExpress/Fastify/Nest HTTP routes + Fastify plugin facts + FastAPI/Flask/Gin/net-http/Chi/Axum/Spring Web/Laravel/CivetWeb/Lapis/Plumber/Phoenix/Cowboy/Compojure/Dancer2/Genie/Scotty/cpp-httplib/ASP.NET Core/Rails/Ktor/Vapor/Flutter/Play facts\nFlutter/Vue Router/SvelteKit/Astro/Blazor/React Router/Next client navigation\nNest module-prefix facts + non-HTTP and ArkUI UI-root entrypoints + Terraform/OpenTofu IaC declaration facts"] --> Facts["Reusable artifact facts"]
+  Extractor["TypeScript AST extractor + ArkTS/ArkUI lexical scanner + Vue/Svelte/Astro SFC scanners + Razor/Blazor directive scanner + Terraform/OpenTofu HCL lexical scanner + Shopify Liquid tag scanner + Python/Go/Rust/Java/PHP/C/C++ Lezer parsers + Lua/R/Elixir/Erlang/Clojure/Perl/Julia/Haskell lexical extractors + C#/Ruby/Kotlin/Swift/Dart/Scala ast-grep parsers\nfirst-party framework capability passes\nExpress/Fastify/Nest HTTP routes + Fastify plugin facts + FastAPI/Flask/Gin/net-http/Chi/Axum/Spring Web/Laravel/CivetWeb/Lapis/Plumber/Phoenix/Cowboy/Compojure/Dancer2/Genie/Scotty/cpp-httplib/ASP.NET Core/Rails/Ktor/Vapor/Flutter/Play facts\nFlutter/Vue Router/SvelteKit/Astro/Blazor/React Router/Next client navigation\nNest module-prefix facts + non-HTTP and ArkUI UI-root entrypoints + Terraform/OpenTofu IaC declaration facts + Shopify Liquid local template calls"] --> Facts["Reusable artifact facts"]
   Catalog --> SourceDocs["Persisted source documents"]
   SourceDocs --> Retrieval["Generation-bound lexical projection"]
   Facts --> Resolver["Full project export surface"]
@@ -1875,7 +1904,7 @@ src/
   application/     Use cases, incremental planning, and graph projection
   cli/             Commander-based CLI
   domain/          Graph, evidence, identity, and index-work contracts
-  extraction/      TypeScript AST, ArkTS/ArkUI lexical, Vue/Svelte/Astro SFC, Razor/Blazor directive, Terraform/OpenTofu HCL lexical, Python/Go/Rust/Java/PHP/C/C++ Lezer, Lua/R/Elixir/Erlang/Clojure/Perl/Julia/Haskell lexical, and C#/Ruby/Kotlin/Swift/Dart/Scala ast-grep fact extraction
+  extraction/      TypeScript AST, ArkTS/ArkUI lexical, Vue/Svelte/Astro SFC, Razor/Blazor directive, Terraform/OpenTofu HCL lexical, Shopify Liquid tag lexical, Python/Go/Rust/Java/PHP/C/C++ Lezer, Lua/R/Elixir/Erlang/Clojure/Perl/Julia/Haskell lexical, and C#/Ruby/Kotlin/Swift/Dart/Scala ast-grep fact extraction
   infrastructure/  Filesystem, workspace, TypeScript, and SQLite adapters
   mcp/             Read-only MCP server
   ports/           Dependency boundaries
@@ -1883,7 +1912,7 @@ src/
 
 ## Deliberate boundaries
 
-v0.65.0 does not yet provide:
+v0.66.0 does not yet provide:
 
 - Daemon mode, background automatic sync after the foreground process exits, cross-process watch coordination, MCP per-query pending-file banners, worker pools, or historical source browsing.
 - pnpm workspace YAML, TypeScript project references, external/package `extends`, or nested `.gitignore` semantics.
@@ -1915,8 +1944,9 @@ v0.65.0 does not yet provide:
 - The Razor/Blazor surface is a deliberately small directive scanner, not the Razor compiler or a C# parser. Every `.razor` file emits a conventional local `default` component. It accepts only standalone, unescaped, slash-prefixed string-literal `@page` directives and links each accepted route exactly to that local component. It excludes `@attribute` routes, computed/escaped/query/fragment values, Razor comments, `.cshtml`, C# `@code`/`@functions`, component tags, `@inject`/`@model`/`@inherits` semantics, layouts, render modes, generic Razor namespace/project/package resolution, and runtime behavior.
 - The ArkTS/ArkUI surface is a deliberately small lexical scanner, not an ArkTS compiler or TypeScript fallback. It accepts only a complete adjacent direct `@Component struct` declaration, and emits a `ui root` entrypoint only when that same decorator stack also contains `@Entry`. It excludes general ArkTS declarations, `build()` DSL calls, child components, `@Builder`/`@Extend`/`@Styles`, state/lifecycle semantics, navigation, modules/packages, and runtime UI behavior.
 - The Terraform/OpenTofu surface is a deliberately small lexical block scanner, not an HCL parser, compiler, or deployment planner. It accepts only complete line-leading top-level literal `resource`, `data`, `module`, `variable`, and `output` blocks, while masking comments, strings, and heredocs. It excludes `terraform`/`provider`/`locals`, dynamic labels, JSON configuration, expression/interpolation/reference analysis, `depends_on`, provider aliases, module source resolution, state, plan/apply, and runtime cloud topology.
+- The Shopify Liquid surface is a deliberately small lexical tag scanner, not a Liquid parser, Shopify theme compiler, or renderer. It accepts only complete literal `render`/`include`/`section` tags with safe path segments and then only exact indexed local `snippets`/`sections` file targets. It excludes tags in HTML comments or Liquid `comment`/`raw` blocks, dynamic/unsafe/incomplete/nested tags, `assign`/capture/loop/condition/filter semantics, layouts/schema/JSON templates/app blocks, objects/metafields/locales, remote snippets/theme inheritance, and runtime storefront behavior.
 - Semantic type checking, transitive hierarchy traversal, declaration-merging semantics, override dispatch, mixin/qualified/conditional heritage expressions, or automatic framework decorator inference. v0.18 recognizes direct imported NestJS HTTP decorators, direct static `RouterModule.register()` prefixes, and the narrowly defined non-HTTP decorators documented above; it does not infer custom decorators, barrels, `forRoot` / `forChild`, global/version prefixes, guards, GraphQL field resolvers, dynamic patterns, dynamic gateway configuration, or runtime transport wiring.
-- Language adapters beyond TS/TSX/JS/JSX/ArkTS/Vue/Svelte/Astro/Razor/Terraform/OpenTofu/Python/Go/Rust/Java/PHP/C/Lua/R/Elixir/Erlang/Clojure/Perl/Julia/Haskell/OCaml/F#/C++/C#/Ruby/Kotlin/Swift/Dart/Scala, external dependency indexing, telemetry, or multi-project routing.
+- Language adapters beyond TS/TSX/JS/JSX/ArkTS/Vue/Svelte/Astro/Razor/Terraform/OpenTofu/Shopify-Liquid/Python/Go/Rust/Java/PHP/C/Lua/R/Elixir/Erlang/Clojure/Perl/Julia/Haskell/OCaml/F#/C++/C#/Ruby/Kotlin/Swift/Dart/Scala, external dependency indexing, telemetry, or multi-project routing.
 - Embedding-based or cloud retrieval, semantic ranking, arbitrary natural-language context assembly, semantic Git diff beyond immutable zero-context hunk-to-revision-local-declaration evidence, or reliable rename/move/cross-side identity attribution.
 
 ## Roadmap
@@ -1987,6 +2017,8 @@ v0.65.0 does not yet provide:
 | `v0.63.0` | Razor `.razor` discovery, conventional local component facts, standalone literal Blazor `@page` navigation evidence, Razor source-search/CLI/MCP filters, exact local route evidence, and comment/computed/`@attribute`/query-fragment/`.cshtml` rejection |
 | `v0.64.0` | ArkTS `.ets` discovery, line-leading complete ArkUI `@Component struct` component facts, exact local `@Entry` UI-root `entrypoint` evidence, ArkTS source-search/CLI/MCP filters, additive `ui/root` entrypoint filters, and comment/string/regex/detached/non-struct/malformed rejection |
 | `v0.65.0` | Terraform/OpenTofu `.tf` / `.tfvars` / `.tofu` discovery, literal top-level resource/data/module/variable/output facts, additive resource/module kinds, exported output bindings, Terraform source-search/CLI/MCP filters, and comment/string/heredoc/dynamic/nested/malformed rejection |
+| `v0.66.0` | Shopify Liquid `.liquid` discovery, literal render/include/section raw facts, exact project-local snippet/section `calls` edges, explicit missing-target evidence, Liquid source-search/CLI/MCP filters, and comment/raw/HTML-comment/dynamic/path-traversal/malformed rejection |
+| `v0.66+` | Liquid grammar validation, `assign`/capture/loop/condition/filter facts, layout/schema/app-block and JSON template/section-group relations, safe render-argument semantics, object/metafield/locale analysis, theme inheritance, and runtime storefront behavior |
 | `v0.65+` | HCL grammar validation, `terraform` / `provider` / `locals` facts, literal dependency/reference evidence, `depends_on`, provider aliases, local module source proof, JSON configuration, state/plan/apply awareness, and runtime cloud topology |
 | `v0.64+` | ArkTS general declarations/imports/exports/calls, ArkUI `build()` DSL and child-component edges, `@Builder`/`@Extend`/`@Styles` and state/lifecycle semantics, navigation, module/package/project resolution, ArkTS compiler checks, and runtime UI composition |
 | `v0.63+` | Razor `@code`/`@functions` member extraction, `@inject`/`@model`/`@inherits` references, template component/tag semantics, layouts/render modes, `@attribute` route constants, Razor Pages/`.cshtml`, generic Razor namespace/project/package resolution, and runtime router behavior |
@@ -2000,7 +2032,7 @@ See [CHANGELOG.md](CHANGELOG.md) for release notes and migration history.
 
 ## Release-by-release feature comparison
 
-Every release creates a verified standalone comparison report against the local CodeGraph baseline at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_vX.Y.Z.md` (for example, `FEATURE_COMPARISON_v0.65.0.md`). The version number is part of the filename, so each release retains an independent comparison record. It intentionally lives beside the local `symbol-lattice` and `codegraph` checkouts rather than inside either project. Starting with v0.28, these reports are written in Traditional Chinese. Each report distinguishes a proven precision advantage from broader-but-less-proven source coverage, and records remaining gaps instead of treating a version bump as parity.
+Every release creates a verified standalone comparison report against the local CodeGraph baseline at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_vX.Y.Z.md` (for example, `FEATURE_COMPARISON_v0.66.0.md`). The version number is part of the filename, so each release retains an independent comparison record. It intentionally lives beside the local `symbol-lattice` and `codegraph` checkouts rather than inside either project. Starting with v0.28, these reports are written in Traditional Chinese. Each report distinguishes a proven precision advantage from broader-but-less-proven source coverage, and records remaining gaps instead of treating a version bump as parity.
 
 ## Development
 
@@ -2059,6 +2091,8 @@ Razor/Blazor coverage includes `.razor` discovery, persisted source search and C
 ArkTS/ArkUI coverage includes `.ets` discovery, persisted source search and CLI/MCP language filters, complete line-leading direct `@Component struct` component containment, direct same-stack `@Entry` UI-root entrypoints, exact local `handles` evidence, exported component bindings, and comment/string/regex/non-struct/detached/malformed rejection.
 
 Terraform/OpenTofu coverage includes `.tf` / `.tfvars` / `.tofu` discovery, persisted source search and CLI/MCP language filters, complete line-leading top-level literal resource/data/module/variable/output containment, additive resource/module kinds, exported output bindings, exact local evidence, and comment/string/heredoc/dynamic-label/nested/malformed rejection.
+
+Shopify Liquid coverage includes `.liquid` discovery, persisted source search and CLI/MCP language filters, direct literal render/include/section raw facts, exact project-local snippet/section `calls` evidence, explicit missing-target evidence, and HTML-comment/Liquid-comment/raw/dynamic/path-traversal/incomplete/nested rejection.
 
 C++ coverage includes `.cpp` / `.cc` / `.cxx` / `.hpp` / `.hh` / `.hxx` discovery, persisted source search and CLI/MCP language filters, direct top-level class/method/function containment, direct `httplib.h` include plus `httplib::Server` / `httplib::SSLServer` binding proof, literal direct named-handler HTTP routes, receiver-rebinding invalidation, dynamic/lambda/missing-header rejection, malformed-source fail-closed behavior, and persisted route-query integration.
 

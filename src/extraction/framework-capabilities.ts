@@ -12,6 +12,7 @@ export const FRAMEWORK_CAPABILITY_IDS = [
   "blazor",
   "arkui",
   "terraform",
+  "shopify-liquid",
   "nextjs",
   "fastapi",
   "flask",
@@ -148,6 +149,15 @@ export const FRAMEWORK_CAPABILITIES = [
     surfaces: [
       "complete top-level literal resource and data blocks",
       "complete top-level literal module variable and output blocks"
+    ]
+  },
+  {
+    id: "shopify-liquid",
+    languages: ["liquid"],
+    routeRegistrations: [],
+    surfaces: [
+      "complete direct literal render and include snippet tags",
+      "complete direct literal section tags resolved against indexed local Liquid files"
     ]
   },
   {

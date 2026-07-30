@@ -11,13 +11,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v54";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v55";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v19";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v20";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -259,6 +259,27 @@ export interface JavaFacts {
   readonly classes: readonly JavaClassFact[];
 }
 
+/** Direct literal Shopify Liquid template tag kinds retained for project-local resolution. */
+export type LiquidTemplateReferenceKind = "render" | "include" | "section";
+
+/** One complete direct literal Liquid template reference. */
+export interface LiquidTemplateReferenceFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly kind: LiquidTemplateReferenceKind;
+  readonly targetFilePath: string;
+  readonly referenceName: string;
+  readonly range: SourceRange;
+}
+
+/**
+ * Syntax-only Liquid facts projected into exact or explicitly unresolved
+ * project-local template calls after all indexed file symbols are available.
+ */
+export interface LiquidFacts {
+  readonly templateReferences: readonly LiquidTemplateReferenceFact[];
+}
+
 /**
  * Syntax-proven, file-local facts. They deliberately retain unresolved source
  * references so later resolution stages can be recomputed without reparsing.
@@ -282,6 +303,8 @@ export interface ArtifactFacts {
   readonly scalaFacts?: ScalaFacts;
   /** Omitted only by artifact facts persisted before v0.47. */
   readonly javaFacts?: JavaFacts;
+  /** Omitted only by artifact facts persisted before v0.66. */
+  readonly liquidFacts?: LiquidFacts;
 }
 
 /**

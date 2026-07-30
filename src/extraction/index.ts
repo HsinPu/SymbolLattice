@@ -27,6 +27,7 @@ import { extractSwiftFileFacts } from "./swift.js";
 import { extractSvelteFileFacts } from "./svelte.js";
 import { extractAstroFileFacts } from "./astro.js";
 import { extractArkTsFileFacts } from "./arkts.js";
+import { extractLiquidFileFacts } from "./liquid.js";
 import { extractRazorFileFacts } from "./razor.js";
 import { extractTerraformFileFacts } from "./terraform.js";
 import { extractVueFileFacts } from "./vue.js";
@@ -3741,6 +3742,9 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
   }
   if (input.language === "terraform") {
     return extractTerraformFileFacts({ ...input, language: "terraform" });
+  }
+  if (input.language === "liquid") {
+    return extractLiquidFileFacts({ ...input, language: "liquid" });
   }
 
   const sourceFile = ts.createSourceFile(

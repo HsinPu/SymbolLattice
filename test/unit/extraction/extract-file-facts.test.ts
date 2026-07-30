@@ -6894,4 +6894,71 @@ describe("source extraction", () => {
     expect(facts.localBindings).toEqual([]);
     expect(facts.exportBindings).toEqual([]);
   });
+
+  it("extracts direct literal Shopify Liquid snippet and section references", () => {
+    const facts = extractFileFacts({
+      filePath: "templates/product.liquid",
+      language: "liquid",
+      sourceText: [
+        "{% render 'product-card', product: product %}",
+        '{%- include "legacy-card" -%}',
+        "{% section 'announcement-bar' %}",
+        "{% render 'price/card' %}"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.map((symbol) => [symbol.kind, symbol.name])).toEqual([
+      ["file", "product.liquid"]
+    ]);
+    expect(facts.edges).toEqual([]);
+    expect(facts.liquidFacts?.templateReferences).toEqual([
+      expect.objectContaining({
+        kind: "render",
+        targetFilePath: "snippets/product-card.liquid",
+        referenceName: "render snippets/product-card.liquid",
+        range: expect.objectContaining({ start: { line: 1, column: 0 } })
+      }),
+      expect.objectContaining({
+        kind: "include",
+        targetFilePath: "snippets/legacy-card.liquid",
+        referenceName: "include snippets/legacy-card.liquid",
+        range: expect.objectContaining({ start: { line: 2, column: 0 } })
+      }),
+      expect.objectContaining({
+        kind: "section",
+        targetFilePath: "sections/announcement-bar.liquid",
+        referenceName: "section sections/announcement-bar.liquid",
+        range: expect.objectContaining({ start: { line: 3, column: 0 } })
+      }),
+      expect.objectContaining({
+        kind: "render",
+        targetFilePath: "snippets/price/card.liquid",
+        referenceName: "render snippets/price/card.liquid",
+        range: expect.objectContaining({ start: { line: 4, column: 0 } })
+      })
+    ]);
+  });
+
+  it("rejects commented, raw, dynamic, unsafe, and malformed Shopify Liquid tag shapes", () => {
+    const facts = extractFileFacts({
+      filePath: "templates/invalid.liquid",
+      language: "liquid",
+      sourceText: [
+        "{% comment %}",
+        "{% render 'commented' %}",
+        "{% endcomment %}",
+        "{% raw %}{% section 'raw' %}{% endraw %}",
+        "<!-- {% include 'html-comment' %} -->",
+        "{% render dynamic_name %}",
+        "{% render '../escape' %}",
+        "{% render 'incomplete' "
+      ].join("\n")
+    });
+
+    expect(facts.symbols.map((symbol) => [symbol.kind, symbol.name])).toEqual([
+      ["file", "invalid.liquid"]
+    ]);
+    expect(facts.edges).toEqual([]);
+    expect(facts.liquidFacts?.templateReferences).toEqual([]);
+  });
 });
