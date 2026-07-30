@@ -3135,6 +3135,76 @@ describe("SymbolLatticeService", () => {
     ]);
   });
 
+  it("indexes direct final Django urlpatterns routes with exact local handler proof", async () => {
+    const projectPath = await createInlineProject({
+      "config/urls.py": [
+        "from django.urls import path as url",
+        "",
+        "def home(request):",
+        "    return \"home\"",
+        "",
+        "def user_detail(request, user_id):",
+        "    return str(user_id)",
+        "",
+        "urlpatterns = [",
+        "    url(\"\", home, name=\"home\"),",
+        "    url(\"users/<int:user_id>/\", user_detail, name=\"user-detail\"),",
+        "]"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    const indexed = await service.init({ projectPath });
+    const routes = await service.routes(projectPath, { method: "ALL" });
+    const search = await service.search(projectPath, "user_detail", { language: "python" });
+    const persistedFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "config/urls.py");
+
+    expect(indexed).toMatchObject({
+      stale: false,
+      counts: { files: 1, symbols: expect.any(Number), edges: expect.any(Number) }
+    });
+    expect(persistedFacts).toMatchObject({
+      language: "python",
+      extractorVersion: ARTIFACT_FACTS_EXTRACTOR_VERSION
+    });
+    expect(routes.routes).toMatchObject([
+      {
+        method: "ALL",
+        path: "/",
+        route: { kind: "route", name: "ALL /" },
+        edge: {
+          kind: "routes",
+          resolution: "exact",
+          evidence: {
+            ruleId: "framework.django.direct-urlpatterns.path.local-function",
+            stage: "syntax"
+          }
+        },
+        handler: { qualifiedName: "config/urls.py#home" }
+      },
+      {
+        method: "ALL",
+        path: "/users/<int:user_id>/",
+        route: { kind: "route", name: "ALL /users/<int:user_id>/" },
+        edge: {
+          kind: "routes",
+          resolution: "exact",
+          evidence: {
+            ruleId: "framework.django.direct-urlpatterns.path.local-function",
+            stage: "syntax"
+          }
+        },
+        handler: { qualifiedName: "config/urls.py#user_detail" }
+      }
+    ]);
+    expect(search.results).toMatchObject([
+      { filePath: "config/urls.py", language: "python", matchingTerms: ["user_detail"] }
+    ]);
+  });
+
   it("indexes Scala source plus Play conf/routes with exact package-class-method handler proof", async () => {
     const projectPath = await createInlineProject({
       "app/controllers/HealthController.scala": [

@@ -49,6 +49,7 @@ export type RouteFramework =
   | "vue-router"
   | "fastapi"
   | "flask"
+  | "django"
   | "gin"
   | "net-http"
   | "chi"

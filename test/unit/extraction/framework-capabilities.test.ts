@@ -24,6 +24,7 @@ describe("first-party framework capabilities", () => {
       "nextjs",
       "fastapi",
       "flask",
+      "django",
       "gin",
       "net-http",
       "chi",
@@ -148,6 +149,15 @@ describe("first-party framework capabilities", () => {
       surfaces: [
         "direct Flask application decorators",
         "same-file Blueprint decorators through direct register_blueprint"
+      ]
+    });
+    expect(frameworkCapability("django")).toMatchObject({
+      languages: ["python"],
+      routeFramework: "django",
+      routeRegistrations: [],
+      surfaces: [
+        "direct django.urls path imports",
+        "final literal urlpatterns lists with same-file top-level function handlers"
       ]
     });
     expect(frameworkCapability("gin")).toMatchObject({

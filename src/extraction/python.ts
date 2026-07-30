@@ -78,6 +78,19 @@ interface StaticFlaskBlueprintRegistration {
   readonly node: PythonSyntaxNode;
 }
 
+/** One direct literal `django.urls.path(...)` entry in a final `urlpatterns` list. */
+interface StaticDjangoPathRoute {
+  readonly factoryName: string;
+  readonly path: string;
+  readonly handlerName: string;
+  readonly node: PythonSyntaxNode;
+}
+
+interface StaticDjangoUrlPatternList {
+  readonly node: PythonSyntaxNode;
+  readonly routes: readonly StaticDjangoPathRoute[];
+}
+
 /** A one-dot, single-name Python relative import that can carry an APIRouter. */
 interface StaticFastApiRelativeRouterImport {
   readonly moduleSpecifier: string;
@@ -262,6 +275,13 @@ function staticFlaskImports(
   node: PythonSyntaxNode
 ): readonly FrameworkNamedImport[] {
   return staticNamedFrameworkImports(input, node, "flask");
+}
+
+function staticDjangoUrlImports(
+  input: PythonExtractFileFactsInput,
+  node: PythonSyntaxNode
+): readonly FrameworkNamedImport[] {
+  return staticNamedFrameworkImports(input, node, "django.urls");
 }
 
 /**
@@ -670,6 +690,90 @@ function staticPlainPythonString(
   return inner.includes("\\") || /[\r\n]/u.test(inner) ? null : inner;
 }
 
+function staticDjangoRoutePath(value: string): string | null {
+  if (
+    value.startsWith("/") ||
+    value.includes("\\") ||
+    value.includes("?") ||
+    value.includes("#") ||
+    value.split("/").includes("..")
+  ) {
+    return null;
+  }
+  return "/" + value;
+}
+
+function staticDjangoPathRoute(
+  input: PythonExtractFileFactsInput,
+  node: PythonSyntaxNode,
+  pathFactoryNames: ReadonlySet<string>
+): StaticDjangoPathRoute | null {
+  if (node.name !== "CallExpression") {
+    return null;
+  }
+  const callChildren = directChildren(node);
+  const factoryNode = callChildren[0];
+  const arguments_ = callChildren[1];
+  if (
+    callChildren.length !== 2 ||
+    factoryNode?.name !== "VariableName" ||
+    arguments_?.name !== "ArgList"
+  ) {
+    return null;
+  }
+  const factoryName = declarationName(input, factoryNode);
+  if (factoryName === null || !pathFactoryNames.has(factoryName)) {
+    return null;
+  }
+  const entries = staticArgumentEntries(arguments_);
+  const pathNode = entries[0];
+  const handlerNode = entries[1];
+  const keywordArguments = staticKeywordArgumentsAfterPositions(input, entries, 2);
+  if (
+    pathNode?.name !== "String" ||
+    handlerNode?.name !== "VariableName" ||
+    keywordArguments === null ||
+    [...keywordArguments.keys()].some((name) => name !== "name")
+  ) {
+    return null;
+  }
+  const routeNameNode = keywordArguments.get("name");
+  if (routeNameNode !== undefined && (routeNameNode.name !== "String" || staticPlainPythonString(input, routeNameNode) === null)) {
+    return null;
+  }
+  const rawPath = staticPlainPythonString(input, pathNode);
+  const path = rawPath === null ? null : staticDjangoRoutePath(rawPath);
+  const handlerName = declarationName(input, handlerNode);
+  return path === null || handlerName === null ? null : { factoryName, path, handlerName, node };
+}
+
+function staticDjangoUrlPatternList(
+  input: PythonExtractFileFactsInput,
+  node: PythonSyntaxNode,
+  pathFactoryNames: ReadonlySet<string>
+): StaticDjangoUrlPatternList | null {
+  if (node.name !== "AssignStatement") {
+    return null;
+  }
+  const children = directChildren(node);
+  const target = children[0];
+  const operator = children[1];
+  const value = children[2];
+  if (
+    children.length !== 3 ||
+    target?.name !== "VariableName" ||
+    operator?.name !== "AssignOp" ||
+    value?.name !== "ArrayExpression" ||
+    declarationName(input, target) !== "urlpatterns"
+  ) {
+    return null;
+  }
+  const routes = directChildren(value)
+    .map((candidate) => staticDjangoPathRoute(input, candidate, pathFactoryNames))
+    .filter((candidate): candidate is StaticDjangoPathRoute => candidate !== null);
+  return { node, routes };
+}
+
 function staticFastApiDecorator(
   input: PythonExtractFileFactsInput,
   node: PythonSyntaxNode
@@ -966,6 +1070,26 @@ function latestProvenFlaskApplication(
   );
 }
 
+function latestProvenDjangoPathImport(
+  input: PythonExtractFileFactsInput,
+  topLevelNodes: readonly PythonSyntaxNode[],
+  imports: readonly FrameworkNamedImport[],
+  factoryName: string,
+  before: number
+): FrameworkNamedImport | null {
+  const candidates = imports
+    .filter(
+      (candidate) =>
+        candidate.importedName === "path" &&
+        candidate.alias === factoryName &&
+        hasUnambiguousFrameworkImportAlias(imports, candidate) &&
+        candidate.node.to <= before &&
+        !hasTopLevelRebinding(input, topLevelNodes, candidate.alias, candidate.node.to, before)
+    )
+    .sort((left, right) => right.node.from - left.node.from);
+  return candidates.length === 1 ? candidates[0] ?? null : null;
+}
+
 /**
  * Finds the one direct relative import still bound to the router argument at a
  * literal `include_router` call. A later assignment or import shadows an
@@ -1000,16 +1124,18 @@ function combinedRoutePath(...parts: readonly string[]): string {
 
 /**
  * Extracts conservative Python file facts. The Python surface records
- * declarations, containment, direct FastAPI/Flask decorators, and direct
- * same-file router or Blueprint composition only when every binding and path
- * is syntax-proven.
+ * declarations, containment, direct FastAPI/Flask decorators, direct Django
+ * URL patterns, and direct same-file router or Blueprint composition only when
+ * every binding and path is syntax-proven.
  */
 export function extractPythonFileFacts(input: PythonExtractFileFactsInput): ArtifactFacts {
   const fastApiCapability = frameworkCapability("fastapi");
   const flaskCapability = frameworkCapability("flask");
+  const djangoCapability = frameworkCapability("django");
   if (
     !fastApiCapability.languages.includes(input.language) ||
-    !flaskCapability.languages.includes(input.language)
+    !flaskCapability.languages.includes(input.language) ||
+    !djangoCapability.languages.includes(input.language)
   ) {
     throw new Error("Python framework extraction was invoked for an unsupported source language.");
   }
@@ -1234,6 +1360,30 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
     const flaskBlueprintRegistrations = topLevelNodes
       .map((node) => staticFlaskBlueprintRegistration(input, node))
       .filter((candidate): candidate is StaticFlaskBlueprintRegistration => candidate !== null);
+    const djangoUrlImports = topLevelNodes.flatMap((node) => staticDjangoUrlImports(input, node));
+    const djangoPathFactoryNames = new Set(
+      djangoUrlImports
+        .filter((candidate) => candidate.importedName === "path")
+        .map((candidate) => candidate.alias)
+    );
+    const djangoUrlPatternLists = topLevelNodes
+      .map((node) => staticDjangoUrlPatternList(input, node, djangoPathFactoryNames))
+      .filter((candidate): candidate is StaticDjangoUrlPatternList => candidate !== null);
+    const topLevelFunctions = topLevelNodes.flatMap((statement) => {
+      const functionNode =
+        decoratedDefinition(statement) ??
+        (statement.name === "FunctionDefinition" ? statement : null);
+      if (
+        functionNode === null ||
+        functionNode.name !== "FunctionDefinition" ||
+        !isTopLevelFunction(functionNode)
+      ) {
+        return [];
+      }
+      const name = declarationName(input, functionNode);
+      const symbol = symbolsByNodeKey.get(nodeKey(functionNode));
+      return name === null || symbol?.kind !== "function" ? [] : [{ name, node: functionNode, symbol }];
+    });
     const finalRouters = routers.filter((router) => {
       const finalRouter = latestProvenFrameworkInstance(
         input,
@@ -1252,6 +1402,59 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
         prefix: router.prefix,
         range: rangeFor(lineStarts, router.node.from, router.node.to)
       });
+    }
+
+    for (const patterns of djangoUrlPatternLists) {
+      if (
+        hasTopLevelRebinding(
+          input,
+          topLevelNodes,
+          "urlpatterns",
+          patterns.node.to,
+          input.sourceText.length
+        )
+      ) {
+        continue;
+      }
+      for (const route of patterns.routes) {
+        if (
+          latestProvenDjangoPathImport(
+            input,
+            topLevelNodes,
+            djangoUrlImports,
+            route.factoryName,
+            patterns.node.from
+          ) === null
+        ) {
+          continue;
+        }
+        const handlers = topLevelFunctions.filter(
+          (candidate) =>
+            candidate.name === route.handlerName &&
+            candidate.node.to <= patterns.node.from &&
+            !hasTopLevelRebinding(
+              input,
+              topLevelNodes,
+              candidate.name,
+              candidate.node.to,
+              patterns.node.from
+            )
+        );
+        if (handlers.length !== 1) {
+          continue;
+        }
+        const handler = handlers[0];
+        if (handler === undefined) {
+          continue;
+        }
+        addPythonRoute(
+          "ALL",
+          route.node,
+          handler.symbol,
+          route.path,
+          "framework.django.direct-urlpatterns.path.local-function"
+        );
+      }
     }
 
     for (const inclusion of inclusions) {

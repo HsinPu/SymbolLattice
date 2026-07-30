@@ -6,6 +6,23 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.73.0] - 2026-07-31
+
+### Added
+
+- A first conservative Django framework capability for Python: a direct `from django.urls import path [as alias]`, the final literal top-level `urlpatterns = [...]` list, and a prior same-file top-level function handler now create exact `ALL` route nodes and `framework.django.direct-urlpatterns.path.local-function` syntax evidence. The conventional empty path maps to `/`, and literal Django converters such as `users/<int:user_id>/` are retained verbatim.
+- Unit and integration coverage verifies direct aliases, final-assignment and rebinding proof, exact local handlers, source search, persisted extractor provenance, and rejection of leading-slash paths, dynamic values, missing or late handlers, nonlocal handler shapes, `re_path`, `include`, class-based views, metadata other than a literal `name`, and unsupported `kwargs`. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.73.0.md`.
+
+### Compatibility
+
+- No SQLite schema migration or query command is required. `django` is an additive route-framework value and `ALL` Django facts reuse the existing route, edge-evidence, source-search, and capability contracts; existing generations remain readable.
+- The artifact extractor advances to `multi-language-ast-v62`; the project resolver remains `project-resolver-v23` because this initial Django slice produces only same-file syntax evidence. A pre-v0.73 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes Django-capable facts.
+
+### Deliberate limits
+
+- This is not a generic Django resolver or runtime model. It intentionally excludes `re_path` / legacy `url`, `include`, routers, REST framework registrations, class-based `as_view` handlers, dotted or imported handlers, cross-file URLConf/view resolution, nested URL patterns, `urlpatterns +=`, assignment aliases, `path` calls with options other than a literal `name`, dynamic/escaped/query/fragment paths, middleware/settings/namespace/app-name semantics, and runtime URL resolution.
+- The inspected local CodeGraph baseline recognizes a broader Django surface, including `path`, `re_path`, `url`, `include`, class-based handlers, and DRF router registration patterns. SymbolLattice v0.73 deliberately trades that breadth for AST-proven direct-import, final-binding, and exact local-handler evidence; it is independently implemented and does not reuse CodeGraph source.
+
 ## [0.72.0] - 2026-07-31
 
 ### Added

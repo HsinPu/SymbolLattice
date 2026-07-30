@@ -17,6 +17,7 @@ export const FRAMEWORK_CAPABILITY_IDS = [
   "nextjs",
   "fastapi",
   "flask",
+  "django",
   "gin",
   "net-http",
   "chi",
@@ -196,6 +197,16 @@ export const FRAMEWORK_CAPABILITIES = [
     surfaces: [
       "direct Flask application decorators",
       "same-file Blueprint decorators through direct register_blueprint"
+    ]
+  },
+  {
+    id: "django",
+    languages: ["python"],
+    routeFramework: "django",
+    routeRegistrations: [],
+    surfaces: [
+      "direct django.urls path imports",
+      "final literal urlpatterns lists with same-file top-level function handlers"
     ]
   },
   {

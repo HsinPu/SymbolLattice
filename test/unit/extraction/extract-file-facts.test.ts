@@ -2151,6 +2151,84 @@ describe("source extraction", () => {
     expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
   });
 
+  it("extracts final direct Django urlpatterns paths with exact same-file handlers", () => {
+    const facts = extractFileFacts({
+      filePath: "project/urls.py",
+      language: "python",
+      sourceText: [
+        "from django.urls import path as url",
+        "",
+        "def home(request):",
+        "    return None",
+        "",
+        "def user_detail(request):",
+        "    return None",
+        "",
+        "urlpatterns = [",
+        "    url('', home, name='home'),",
+        "    url('users/<int:user_id>/', user_detail),",
+        "]"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId,
+          edge.evidence?.stage,
+          edge.resolution,
+          edge.confidence
+        ])
+    ).toEqual([
+      [
+        "ALL /",
+        "project/urls.py#home",
+        "framework.django.direct-urlpatterns.path.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "ALL /users/<int:user_id>/",
+        "project/urls.py#user_detail",
+        "framework.django.direct-urlpatterns.path.local-function",
+        "syntax",
+        "exact",
+        1
+      ]
+    ]);
+  });
+
+  it("rejects non-final, dynamic, non-local, unsupported, and rebound Django path forms", () => {
+    const facts = extractFileFacts({
+      filePath: "project/urls.py",
+      language: "python",
+      sourceText: [
+        "from django.urls import path",
+        "",
+        "def health(request):",
+        "    return None",
+        "",
+        "urlpatterns = [path('old/', health)]",
+        "urlpatterns = [",
+        "    path('/leading-slash/', health),",
+        "    path('dynamic/', build_handler()),",
+        "    path('unknown/', missing_handler),",
+        "    path('kwargs/', health, kwargs={}),",
+        "]",
+        "path = replacement",
+        "urlpatterns = [path('rebound/', health)]"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+  });
+
   it("extracts direct Go Gin engine and nested literal group routes with exact evidence", () => {
     const facts = extractFileFacts({
       filePath: "cmd/server/main.go",
