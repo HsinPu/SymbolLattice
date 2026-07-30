@@ -594,17 +594,68 @@ describe("TypeScript and JavaScript extraction", () => {
         'import Fastify from "fastify";',
         "const app = Fastify();",
         "function health() { return undefined; }",
-        'app.head("/health", health);'
+        "function listUsers() { return []; }",
+        'app.head("/health", health);',
+        "app.register(async (api) => {",
+        '  api.get("/users", listUsers);',
+        '}, { prefix: "/api" });'
       ].join("\n")
     });
 
     expect(facts.symbols.filter((symbol) => symbol.kind === "route").map((route) => route.name)).toEqual([
-      "HEAD /health"
+      "HEAD /health",
+      "GET /api/users"
     ]);
     expect(
       facts.pendingReferences.filter((reference) => reference.relationKind === "routes")
     ).toEqual([
-      expect.objectContaining({ referenceName: "health", routeFramework: "fastify" })
+      expect.objectContaining({ referenceName: "health", routeFramework: "fastify" }),
+      expect.objectContaining({
+        referenceName: "listUsers",
+        routeFramework: "fastify",
+        routeRegistration: "fastify-inline-plugin-prefix"
+      })
+    ]);
+  });
+
+  it("projects direct inline Fastify plugin prefixes through nested static callbacks", () => {
+    const facts = extractFileFacts({
+      filePath: "src/routes.ts",
+      language: "typescript",
+      sourceText: [
+        'import Fastify from "fastify";',
+        "const app = Fastify();",
+        "function health() { return undefined; }",
+        "function listUsers() { return []; }",
+        "app.register(async (api) => {",
+        '  api.get("/health", health);',
+        "  api.register(async function v1(instance) {",
+        '    instance.route({ method: ["GET", "TRACE"], url: "/users", handler: listUsers });',
+        '  }, { prefix: "/v1" });',
+        '}, { prefix: "/api" });'
+      ].join("\n")
+    });
+
+    const routes = facts.symbols.filter((symbol) => symbol.kind === "route");
+    const routeReferences = facts.pendingReferences.filter(
+      (reference) => reference.relationKind === "routes"
+    );
+
+    expect(routes.map((route) => route.name)).toEqual([
+      "GET /api/health",
+      "GET /api/v1/users",
+      "TRACE /api/v1/users"
+    ]);
+    expect(
+      routeReferences.map((reference) => [
+        reference.referenceName,
+        reference.routeFramework,
+        reference.routeRegistration
+      ])
+    ).toEqual([
+      ["health", "fastify", "fastify-inline-plugin-prefix"],
+      ["listUsers", "fastify", "fastify-inline-plugin-prefix"],
+      ["listUsers", "fastify", "fastify-inline-plugin-prefix"]
     ]);
   });
 
@@ -629,6 +680,9 @@ describe("TypeScript and JavaScript extraction", () => {
         "const dynamicPath = \"/dynamic\";",
         "const dynamicMethods = [\"GET\"];",
         "function handler() { return undefined; }",
+        "const namedPlugin = async (server: unknown) => {",
+        '  server.get("/named-plugin", handler);',
+        "};",
         'app.get("/real", handler);',
         "app.get(dynamicPath, handler);",
         'app.get("/inline", () => undefined);',
@@ -648,6 +702,29 @@ describe("TypeScript and JavaScript extraction", () => {
         'namespace.get("/namespace", handler);',
         'namedDefault.get("/named-default", handler);',
         'foreign.get("/foreign", handler);',
+        'app.register(namedPlugin, { prefix: "/named" });',
+        "app.register(async (server) => {",
+        '  server.get("/dynamic-plugin-prefix", handler);',
+        "}, { prefix: dynamicPath });",
+        "app.register(async (server) => {",
+        '  server.get("/trailing-plugin-prefix", handler);',
+        '}, { prefix: "/trailing/" });',
+        "app.register(async (server) => {",
+        '  server.get("/spread-plugin-prefix", handler);',
+        '}, { ...controller, prefix: "/spread" });',
+        "app.register(async (server) => {",
+        '  server.get("/", handler);',
+        '}, { prefix: "/root" });',
+        "app.register(async function* (server) {",
+        '  server.get("/generator-plugin", handler);',
+        '}, { prefix: "/generator" });',
+        "app.register(async (server) => {",
+        "  server = { get: () => undefined };",
+        '  server.get("/reassigned-plugin", handler);',
+        '}, { prefix: "/reassigned" });',
+        "app.register(async (server) => {",
+        '  server.get("/without-prefix", handler);',
+        "}, {});",
         "function shadow(Fastify: () => unknown) {",
         "  const shadowed = Fastify();",
         '  shadowed.get("/shadowed", handler);',

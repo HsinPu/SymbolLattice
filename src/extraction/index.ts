@@ -17,6 +17,7 @@ import {
   type PendingReference,
   type ReExportBinding,
   type ReferenceScope,
+  type RouteRegistration,
   type RouteMethod,
   type SourceRange,
   type SymbolKind,
@@ -299,11 +300,14 @@ type RouteBindingKind =
   | "express-router-factory"
   | "fastify-receiver"
   | "fastify-default-factory"
+  | "fastify-plugin-receiver"
   | "other";
 
 interface RouteBinding {
   readonly declaration: ts.Node;
   kind: RouteBindingKind;
+  /** Static Fastify prefix inherited by a direct inline plugin callback. */
+  prefix?: string;
 }
 
 interface StaticExpressRoute {
@@ -316,6 +320,7 @@ interface StaticFastifyRoute {
   readonly method: RouteMethod;
   readonly path: string;
   readonly handler: ts.Identifier;
+  readonly routeRegistration?: RouteRegistration;
 }
 
 /** Lexical value bindings that can prove a NestJS HTTP decorator import. */
@@ -577,20 +582,28 @@ function namedExpressImportBindingKind(
   return "other";
 }
 
-function visibleRouteBindingKind(
+function visibleRouteBinding(
   sourceFile: ts.SourceFile,
   identifier: ts.Identifier,
   bindings: ScopedRouteReceiverBindings
-): RouteBindingKind | undefined {
+): RouteBinding | undefined {
   for (const scopeId of enclosingScopeIds(sourceFile, identifier)) {
     const candidates = bindings.byScopeId.get(scopeId)?.get(identifier.text);
     if (candidates !== undefined) {
       // A duplicate declaration is ambiguous. It must block lookup rather than
       // allowing an outer Express import to prove a synthetic receiver.
-      return candidates.length === 1 ? candidates[0]?.kind : undefined;
+      return candidates.length === 1 ? candidates[0] : undefined;
     }
   }
   return undefined;
+}
+
+function visibleRouteBindingKind(
+  sourceFile: ts.SourceFile,
+  identifier: ts.Identifier,
+  bindings: ScopedRouteReceiverBindings
+): RouteBindingKind | undefined {
+  return visibleRouteBinding(sourceFile, identifier, bindings)?.kind;
 }
 
 function isExpressReceiverInitializer(
@@ -669,6 +682,208 @@ function markRouteReceiver(
   if (binding !== undefined) {
     binding.kind = bindingKind;
   }
+}
+
+type FastifyInlinePlugin = ts.FunctionExpression | ts.ArrowFunction;
+
+interface StaticFastifyInlinePluginRegistration {
+  readonly callback: FastifyInlinePlugin;
+  /** Includes every statically proven enclosing plugin prefix. */
+  readonly prefix: string;
+}
+
+/**
+ * Retain only literal non-root, non-trailing plugin prefixes. Fastify has
+ * runtime-configurable special handling for a root route inside a prefixed
+ * plugin, so this narrow static surface avoids inventing one canonical route.
+ */
+function staticFastifyPluginPrefix(options: ts.Expression | undefined): string | null {
+  if (options === undefined || !ts.isObjectLiteralExpression(options)) {
+    return null;
+  }
+
+  const propertyNames = new Set<string>();
+  let prefix: string | undefined;
+  for (const property of options.properties) {
+    if (!ts.isPropertyAssignment(property) || ts.isComputedPropertyName(property.name)) {
+      return null;
+    }
+    const name = staticPropertyName(property.name);
+    if (name === null || propertyNames.has(name)) {
+      return null;
+    }
+    propertyNames.add(name);
+
+    if (name !== "prefix") {
+      continue;
+    }
+    const value = staticLiteralText(property.initializer);
+    if (
+      value === null ||
+      !value.startsWith("/") ||
+      value.length <= 1 ||
+      value.endsWith("/")
+    ) {
+      return null;
+    }
+    prefix = value;
+  }
+
+  return prefix ?? null;
+}
+
+function isAssignmentOperatorKind(kind: ts.SyntaxKind): boolean {
+  return (
+    kind === ts.SyntaxKind.EqualsToken ||
+    kind === ts.SyntaxKind.PlusEqualsToken ||
+    kind === ts.SyntaxKind.MinusEqualsToken ||
+    kind === ts.SyntaxKind.AsteriskEqualsToken ||
+    kind === ts.SyntaxKind.AsteriskAsteriskEqualsToken ||
+    kind === ts.SyntaxKind.SlashEqualsToken ||
+    kind === ts.SyntaxKind.PercentEqualsToken ||
+    kind === ts.SyntaxKind.LessThanLessThanEqualsToken ||
+    kind === ts.SyntaxKind.GreaterThanGreaterThanEqualsToken ||
+    kind === ts.SyntaxKind.GreaterThanGreaterThanGreaterThanEqualsToken ||
+    kind === ts.SyntaxKind.AmpersandEqualsToken ||
+    kind === ts.SyntaxKind.BarEqualsToken ||
+    kind === ts.SyntaxKind.CaretEqualsToken ||
+    kind === ts.SyntaxKind.BarBarEqualsToken ||
+    kind === ts.SyntaxKind.AmpersandAmpersandEqualsToken ||
+    kind === ts.SyntaxKind.QuestionQuestionEqualsToken
+  );
+}
+
+function directAssignmentTargetIdentifier(expression: ts.Expression): ts.Identifier | null {
+  let target = expression;
+  while (
+    ts.isParenthesizedExpression(target) ||
+    ts.isAsExpression(target) ||
+    ts.isTypeAssertionExpression(target) ||
+    ts.isNonNullExpression(target)
+  ) {
+    target = target.expression;
+  }
+  return ts.isIdentifier(target) ? target : null;
+}
+
+/**
+ * A callback parameter is writable, unlike the immutable root Fastify receiver.
+ * Do not classify it as a framework receiver when its own lexical body replaces it.
+ */
+function hasStableFastifyPluginReceiver(
+  callback: FastifyInlinePlugin,
+  receiver: ts.Identifier
+): boolean {
+  let stable = true;
+  const visit = (node: ts.Node): void => {
+    if (!stable || (ts.isFunctionLike(node) && node !== callback)) {
+      return;
+    }
+
+    if (
+      ts.isBinaryExpression(node) &&
+      isAssignmentOperatorKind(node.operatorToken.kind) &&
+      directAssignmentTargetIdentifier(node.left)?.text === receiver.text
+    ) {
+      stable = false;
+      return;
+    }
+    if (
+      (ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node)) &&
+      (node.operator === ts.SyntaxKind.PlusPlusToken || node.operator === ts.SyntaxKind.MinusMinusToken) &&
+      directAssignmentTargetIdentifier(node.operand)?.text === receiver.text
+    ) {
+      stable = false;
+      return;
+    }
+    if (
+      (ts.isForInStatement(node) || ts.isForOfStatement(node)) &&
+      ts.isIdentifier(node.initializer) &&
+      node.initializer.text === receiver.text
+    ) {
+      stable = false;
+      return;
+    }
+
+    ts.forEachChild(node, visit);
+  };
+
+  ts.forEachChild(callback.body, visit);
+  return stable;
+}
+
+function staticFastifyInlinePluginRegistration(
+  sourceFile: ts.SourceFile,
+  node: ts.CallExpression,
+  bindings: ScopedRouteReceiverBindings
+): StaticFastifyInlinePluginRegistration | null {
+  if (
+    node.questionDotToken !== undefined ||
+    !ts.isPropertyAccessExpression(node.expression) ||
+    node.expression.questionDotToken !== undefined ||
+    node.expression.name.text !== "register" ||
+    !ts.isIdentifier(node.expression.expression) ||
+    node.arguments.length !== 2
+  ) {
+    return null;
+  }
+
+  const parentPrefix = fastifyRouteReceiverPrefix(
+    sourceFile,
+    node.expression.expression,
+    bindings
+  );
+  const callback = node.arguments[0];
+  const prefix = staticFastifyPluginPrefix(node.arguments[1]);
+  if (
+    parentPrefix === undefined ||
+    callback === undefined ||
+    (!ts.isFunctionExpression(callback) && !ts.isArrowFunction(callback)) ||
+    (ts.isFunctionExpression(callback) && callback.asteriskToken !== undefined) ||
+    callback.parameters.length === 0 ||
+    prefix === null
+  ) {
+    return null;
+  }
+
+  const receiver = callback.parameters[0];
+  if (
+    receiver === undefined ||
+    !ts.isIdentifier(receiver.name) ||
+    receiver.dotDotDotToken !== undefined ||
+    receiver.initializer !== undefined ||
+    !hasStableFastifyPluginReceiver(callback, receiver.name)
+  ) {
+    return null;
+  }
+
+  return { callback, prefix: `${parentPrefix}${prefix}` };
+}
+
+function markFastifyInlinePluginReceiver(
+  sourceFile: ts.SourceFile,
+  byScopeId: Map<string, Map<string, RouteBinding[]>>,
+  registration: StaticFastifyInlinePluginRegistration
+): void {
+  const receiver = registration.callback.parameters[0];
+  if (receiver === undefined || !ts.isIdentifier(receiver.name)) {
+    return;
+  }
+
+  const candidates = byScopeId
+    .get(scopeIdFor(sourceFile, registration.callback))
+    ?.get(receiver.name.text);
+  if (candidates === undefined || candidates.length !== 1) {
+    return;
+  }
+
+  const binding = candidates[0];
+  if (binding === undefined || binding.declaration !== receiver || binding.kind !== "other") {
+    return;
+  }
+
+  binding.kind = "fastify-plugin-receiver";
+  binding.prefix = registration.prefix;
 }
 
 /**
@@ -798,6 +1013,13 @@ function collectScopedRouteReceiverBindings(sourceFile: ts.SourceFile): ScopedRo
       );
     }
 
+    if (ts.isCallExpression(node)) {
+      const registration = staticFastifyInlinePluginRegistration(sourceFile, node, { byScopeId });
+      if (registration !== null) {
+        markFastifyInlinePluginReceiver(sourceFile, byScopeId, registration);
+      }
+    }
+
     ts.forEachChild(node, collectReceivers);
   }
 
@@ -814,12 +1036,19 @@ function isExpressRouteReceiver(
   return visibleRouteBindingKind(sourceFile, receiver, bindings) === "express-receiver";
 }
 
-function isFastifyRouteReceiver(
+function fastifyRouteReceiverPrefix(
   sourceFile: ts.SourceFile,
   receiver: ts.Identifier,
   bindings: ScopedRouteReceiverBindings
-): boolean {
-  return visibleRouteBindingKind(sourceFile, receiver, bindings) === "fastify-receiver";
+): string | undefined {
+  const binding = visibleRouteBinding(sourceFile, receiver, bindings);
+  if (binding?.kind === "fastify-receiver") {
+    return "";
+  }
+  if (binding?.kind === "fastify-plugin-receiver") {
+    return binding.prefix;
+  }
+  return undefined;
 }
 
 function staticExpressRoute(
@@ -870,6 +1099,28 @@ function staticRouteMethodForName(
 function staticFastifyPath(expression: ts.Expression | undefined): string | null {
   const path = staticLiteralText(expression);
   return path !== null && path.startsWith("/") ? path : null;
+}
+
+function staticFastifyProjectedPath(
+  sourceFile: ts.SourceFile,
+  receiver: ts.Identifier,
+  routePath: string,
+  bindings: ScopedRouteReceiverBindings
+): Pick<StaticFastifyRoute, "path" | "routeRegistration"> | null {
+  const prefix = fastifyRouteReceiverPrefix(sourceFile, receiver, bindings);
+  if (prefix === undefined) {
+    return null;
+  }
+  if (prefix.length === 0) {
+    return { path: routePath };
+  }
+  // Fastify's `prefixTrailingSlash` setting can emit one or two concrete
+  // routes for `/` inside a prefixed plugin. Preserve that uncertainty rather
+  // than selecting a path that source alone cannot prove.
+  if (routePath === "/") {
+    return null;
+  }
+  return { path: `${prefix}${routePath}`, routeRegistration: "fastify-inline-plugin-prefix" };
 }
 
 /**
@@ -945,11 +1196,12 @@ function staticFastifyRouteObject(
     node.expression.questionDotToken !== undefined ||
     !ts.isIdentifier(node.expression.expression) ||
     node.expression.name.text !== "route" ||
-    !isFastifyRouteReceiver(sourceFile, node.expression.expression, bindings) ||
     node.arguments.length !== 1
   ) {
     return [];
   }
+
+  const receiver = node.expression.expression;
 
   const options = node.arguments[0];
   if (options === undefined || !ts.isObjectLiteralExpression(options)) {
@@ -976,11 +1228,15 @@ function staticFastifyRouteObject(
 
   const staticPath = staticFastifyPath(url ?? path);
   const methods = staticFastifyObjectRouteMethods(method);
-  if (staticPath === null || methods === null) {
+  const projectedPath =
+    staticPath === null
+      ? null
+      : staticFastifyProjectedPath(sourceFile, receiver, staticPath, bindings);
+  if (methods === null || projectedPath === null) {
     return [];
   }
 
-  return methods.map((routeMethod) => ({ method: routeMethod, path: staticPath, handler }));
+  return methods.map((routeMethod) => ({ method: routeMethod, handler, ...projectedPath }));
 }
 
 function staticFastifyRoutes(
@@ -997,8 +1253,7 @@ function staticFastifyRoutes(
     node.questionDotToken !== undefined ||
     !ts.isPropertyAccessExpression(node.expression) ||
     node.expression.questionDotToken !== undefined ||
-    !ts.isIdentifier(node.expression.expression) ||
-    !isFastifyRouteReceiver(sourceFile, node.expression.expression, bindings)
+    !ts.isIdentifier(node.expression.expression)
   ) {
     return [];
   }
@@ -1009,18 +1264,23 @@ function staticFastifyRoutes(
   );
   const pathArgument = node.arguments[0];
   const handler = node.arguments.at(-1);
+  const staticPath = staticFastifyPath(pathArgument);
+  const projectedPath =
+    staticPath === null
+      ? null
+      : staticFastifyProjectedPath(sourceFile, node.expression.expression, staticPath, bindings);
   if (
     method === undefined ||
     node.arguments.length < 2 ||
     node.arguments.length > 3 ||
-    staticFastifyPath(pathArgument) === null ||
+    projectedPath === null ||
     handler === undefined ||
     !ts.isIdentifier(handler)
   ) {
     return [];
   }
 
-  return [{ method, path: staticFastifyPath(pathArgument)!, handler }];
+  return [{ method, handler, ...projectedPath }];
 }
 
 function isNestCommonImport(statement: ts.ImportDeclaration): boolean {
@@ -2002,7 +2262,8 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
     referenceName: string,
     relationKind: PendingReference["relationKind"],
     node: ts.Node,
-    routeFramework?: PendingReference["routeFramework"]
+    routeFramework?: PendingReference["routeFramework"],
+    routeRegistration?: PendingReference["routeRegistration"]
   ): void {
     const range = sourceRange(sourceFile, node);
     const reference: PendingReference = {
@@ -2019,7 +2280,8 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
       referenceName,
       relationKind,
       range,
-      ...(routeFramework === undefined ? {} : { routeFramework })
+      ...(routeFramework === undefined ? {} : { routeFramework }),
+      ...(routeRegistration === undefined ? {} : { routeRegistration })
     };
     pendingReferences.push(reference);
     referenceScopes.push({
@@ -2088,10 +2350,18 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
   function addStaticRoute(
     node: ts.CallExpression,
     route: StaticExpressRoute | StaticFastifyRoute,
-    routeFramework: NonNullable<PendingReference["routeFramework"]>
+    routeFramework: NonNullable<PendingReference["routeFramework"]>,
+    routeRegistration?: PendingReference["routeRegistration"]
   ): void {
     const symbol = addRouteSymbol(node, route.method, route.path);
-    addPendingReference(symbol.id, route.handler.text, "routes", route.handler, routeFramework);
+    addPendingReference(
+      symbol.id,
+      route.handler.text,
+      "routes",
+      route.handler,
+      routeFramework,
+      routeRegistration
+    );
   }
 
   function addStaticExpressRoute(node: ts.CallExpression, route: StaticExpressRoute): void {
@@ -2099,7 +2369,7 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
   }
 
   function addStaticFastifyRoute(node: ts.CallExpression, route: StaticFastifyRoute): void {
-    addStaticRoute(node, route, "fastify");
+    addStaticRoute(node, route, "fastify", route.routeRegistration);
   }
 
   function addStaticNestRoute(route: StaticNestRoute): void {

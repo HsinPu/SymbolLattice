@@ -6,6 +6,24 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.20.0] - 2026-07-30
+
+### Added
+
+- AST-proven Fastify inline-plugin prefix composition for TypeScript and JavaScript. A direct inline function or arrow callback passed to a direct `server.register(callback, { prefix: "/..." })` call now establishes a scoped Fastify receiver, so its shorthand and full-object routes become first-class paths such as `GET /api/users`.
+- Nested direct inline registrations compose their literal non-trailing prefixes before route extraction. `app.register(api => api.register(v1 => v1.route(...), { prefix: "/v1" }), { prefix: "/api" })` produces the same bounded read-only route graph surface as an ordinary Fastify route, including `TRACE` and multi-method full objects.
+- Additive `routeRegistration: "fastify-inline-plugin-prefix"` raw-fact provenance and `framework.fastify.inline-plugin-prefix.*` handler evidence. Local, imported, re-exported, and unresolved handlers retain the route's plugin-prefix proof instead of being reported as an unqualified registration.
+
+### Compatibility
+
+- No SQLite schema migration or new CLI/MCP command is required. The existing raw artifact-fact JSON gains one optional route-registration field; existing Fastify and Express facts remain readable and retain their prior evidence rules.
+- The artifact extractor advances to `typescript-ast-v9` and the project resolver to `project-resolver-v7`. A pre-v0.20 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes inline-plugin route evidence.
+
+### Deliberate limits
+
+- Prefix composition accepts only a direct, non-optional `register` call on a proven Fastify receiver, with a direct non-generator inline callback, an identifier first parameter that is not reassigned in its lexical body, exactly two arguments, and a direct object-literal slash-prefixed non-root/non-trailing `prefix`. Named, imported, re-exported, wrapped (`fastify-plugin`), mutable, aliased, dynamic, computed, spread, duplicate, or otherwise ambiguous plugin registrations remain outside this release.
+- Root routes inside prefixed plugins remain excluded because Fastify's runtime `prefixTrailingSlash` setting can register different concrete path surfaces. Direct root routes without a plugin prefix remain supported by the v0.19 pack.
+
 ## [0.19.0] - 2026-07-30
 
 ### Added
@@ -404,7 +422,8 @@ No unreleased changes.
 - Explicit full indexing, caller/callee/impact queries, and read-only MCP exploration.
 - `exact`, `heuristic`, and `unresolved` relationship states.
 
-[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.19.0...HEAD
+[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.20.0...HEAD
+[0.20.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.16.0...v0.17.0

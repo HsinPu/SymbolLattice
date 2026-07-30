@@ -120,9 +120,14 @@ function staticRouteHandlerRuleId(
   reference: PendingReference,
   suffix: "local-handler" | "imported-handler" | "reexported-handler" | "unresolved-handler"
 ): string {
-  return reference.routeFramework === "fastify"
-    ? `framework.fastify.static-route.${suffix}`
-    : `framework.express.literal-route.${suffix}`;
+  if (reference.routeFramework === "fastify") {
+    const registration =
+      reference.routeRegistration === "fastify-inline-plugin-prefix"
+        ? "inline-plugin-prefix"
+        : "static-route";
+    return `framework.fastify.${registration}.${suffix}`;
+  }
+  return `framework.express.literal-route.${suffix}`;
 }
 
 function fallbackModuleResolution(

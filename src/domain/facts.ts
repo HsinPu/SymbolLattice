@@ -10,13 +10,13 @@ import type {
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "typescript-ast-v8";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "typescript-ast-v9";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v6";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v7";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",

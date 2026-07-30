@@ -38,6 +38,9 @@ export type ResolutionKind = "exact" | "heuristic" | "unresolved";
 /** Framework provenance retained for syntax-proven static HTTP routes. */
 export type RouteFramework = "express" | "fastify";
 
+/** Additional static registration context retained when it changes the route path. */
+export type RouteRegistration = "fastify-inline-plugin-prefix";
+
 export const ARTIFACT_LANGUAGES = ["typescript", "javascript"] as const;
 
 export type ArtifactLanguage = (typeof ARTIFACT_LANGUAGES)[number];
@@ -95,6 +98,8 @@ export interface PendingReference {
   >;
   /** Present only for syntax-proven framework route handlers. */
   readonly routeFramework?: RouteFramework;
+  /** Present when a statically proven registration projects a framework route path. */
+  readonly routeRegistration?: RouteRegistration;
   readonly range: SourceRange;
 }
 
