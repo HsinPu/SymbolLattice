@@ -6,6 +6,24 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.70.0] - 2026-07-31
+
+### Added
+
+- VB.NET `.vb` source discovery, persisted source-search filtering, CLI language validation, and an independent offset-preserving lexical declaration scanner. It retains complete `Namespace`, `Class`, `Module`, `Interface`, `Structure`, and `Enum` containers, plus complete direct `Sub` / `Function` declarations and bodyless direct interface / `MustOverride` signatures.
+- Complete file-level, unaliased `Imports Namespace.Name` statements are retained as explicit pending `imports` references. They are source-syntax evidence only; this release does not claim .NET assembly or project reference resolution.
+- Unit and integration coverage now verifies VB.NET discovery, nested namespace/container/member containment, interface signatures, simple imports, comments/strings/malformed rejection, persisted source search, and CLI language filtering. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.70.0.md`.
+
+### Compatibility
+
+- No SQLite schema migration or new query command is required. VB.NET reuses the existing file, module, class, interface, type, function, method, containment-edge, pending-reference, source-search, and raw-artifact contracts; existing generations remain readable.
+- The artifact extractor advances to `multi-language-ast-v59`; the resolver remains `project-resolver-v21` because v0.70 does not resolve `Imports` through assemblies, projects, packages, or source files. A pre-v0.70 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes VB.NET-capable facts.
+
+### Deliberate limits
+
+- The VB.NET scanner is a deliberately narrow line-oriented declaration scanner, not a VB.NET parser, Roslyn compiler, CLR analyzer, WinForms/WPF analyzer, or runtime debugger. It accepts only complete literal block forms whose closing `End ...` structure can be locally proved; unclosed strings and malformed/mismatched supported blocks fail closed.
+- VB.NET support does not infer attributes, aliases/static imports, fields, properties, events, delegates, P/Invoke, generic/overload/type semantics, inheritance, `Handles`, calls, lambda/local functions, partial-type merging, project/assembly/NuGet resolution, MSBuild, compilation, UI designer resources, or runtime behavior. The inspected local CodeGraph baseline uses Tree-sitter and is broader for these surfaces; SymbolLattice deliberately begins with a smaller independently implemented declaration contract.
+
 ## [0.69.0] - 2026-07-31
 
 ### Added

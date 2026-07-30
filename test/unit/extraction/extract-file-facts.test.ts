@@ -7299,4 +7299,104 @@ describe("source extraction", () => {
     ]);
     expect(malformed.edges).toEqual([]);
   });
+
+  it("extracts complete VB.NET namespaces, containers, callable members, and Imports", () => {
+    const facts = extractFileFacts({
+      filePath: "vb/Worker.vb",
+      language: "vbnet",
+      sourceText: [
+        "Imports System.Text",
+        "Namespace Acme.Tools",
+        "  Public Class Worker",
+        "    Public Function Format(value As String) As String",
+        "      Return value",
+        "    End Function",
+        "    Private Sub Audit()",
+        "    End Sub",
+        "  End Class",
+        "  Public Interface IClock",
+        "    Function Now() As String",
+        "  End Interface",
+        "  Public Module Program",
+        "    Public Sub Main()",
+        "    End Sub",
+        "  End Module",
+        "  Public Structure Point",
+        "  End Structure",
+        "  Public Enum Mode",
+        "  End Enum",
+        "End Namespace"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.map((symbol) => [symbol.kind, symbol.name])).toEqual([
+      ["file", "Worker.vb"],
+      ["module", "Acme.Tools"],
+      ["class", "Worker"],
+      ["method", "Format"],
+      ["method", "Audit"],
+      ["interface", "IClock"],
+      ["method", "Now"],
+      ["module", "Program"],
+      ["method", "Main"],
+      ["type", "Point"],
+      ["type", "Mode"]
+    ]);
+    expect(facts.pendingReferences.map((reference) => [reference.relationKind, reference.referenceName])).toEqual([
+      ["imports", "System.Text"]
+    ]);
+    expect(facts.edges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          referenceName: "Worker",
+          evidence: expect.objectContaining({
+            ruleId: "language.vbnet.class.complete-block",
+            stage: "syntax"
+          })
+        }),
+        expect.objectContaining({
+          referenceName: "Format",
+          evidence: expect.objectContaining({
+            ruleId: "language.vbnet.method.complete-block",
+            stage: "syntax"
+          })
+        }),
+        expect.objectContaining({
+          referenceName: "Now",
+          evidence: expect.objectContaining({
+            ruleId: "language.vbnet.method.bodyless-signature",
+            stage: "syntax"
+          })
+        })
+      ])
+    );
+  });
+
+  it("rejects malformed VB.NET and ignores declaration-looking comments and strings", () => {
+    const safe = extractFileFacts({
+      filePath: "vb/Safe.vb",
+      language: "vbnet",
+      sourceText: [
+        "' Public Class Hidden",
+        "Rem Public Class AlsoHidden",
+        "Dim marker = \"Public Class Quoted\"",
+        "Public Class Live",
+        "End Class"
+      ].join("\n")
+    });
+    const malformed = extractFileFacts({
+      filePath: "vb/Broken.vb",
+      language: "vbnet",
+      sourceText: "Public Class Broken\n"
+    });
+
+    expect(safe.symbols.map((symbol) => [symbol.kind, symbol.name])).toEqual([
+      ["file", "Safe.vb"],
+      ["class", "Live"]
+    ]);
+    expect(malformed.symbols.map((symbol) => [symbol.kind, symbol.name])).toEqual([
+      ["file", "Broken.vb"]
+    ]);
+    expect(malformed.edges).toEqual([]);
+  });
 });

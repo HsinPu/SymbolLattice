@@ -29,6 +29,7 @@ import { extractAstroFileFacts } from "./astro.js";
 import { extractArkTsFileFacts } from "./arkts.js";
 import { extractCfmlFileFacts } from "./cfml.js";
 import { extractNixFileFacts } from "./nix.js";
+import { extractVbnetFileFacts } from "./vbnet.js";
 import { extractLiquidFileFacts } from "./liquid.js";
 import { extractRazorFileFacts } from "./razor.js";
 import { extractSolidityFileFacts } from "./solidity.js";
@@ -3757,6 +3758,9 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
   }
   if (input.language === "nix") {
     return extractNixFileFacts({ ...input, language: "nix" });
+  }
+  if (input.language === "vbnet") {
+    return extractVbnetFileFacts({ ...input, language: "vbnet" });
   }
 
   const sourceFile = ts.createSourceFile(

@@ -2,7 +2,7 @@
 
 # SymbolLattice
 
-**Evidence-first local code intelligence for TypeScript, JavaScript, ArkTS/ArkUI, Vue, Svelte, Astro, Razor/Blazor, Terraform/OpenTofu, Shopify Liquid, Solidity, CFML/CFScript, Nix, Python, Go, Rust, Java, PHP, C, Lua, R, Elixir, Erlang, Clojure, Perl, Julia, Haskell, OCaml, F#, Nim, C++, C#, Ruby, Kotlin, Swift, Dart, and Scala projects.**
+**Evidence-first local code intelligence for TypeScript, JavaScript, ArkTS/ArkUI, Vue, Svelte, Astro, Razor/Blazor, Terraform/OpenTofu, Shopify Liquid, Solidity, CFML/CFScript, Nix, VB.NET, Python, Go, Rust, Java, PHP, C, Lua, R, Elixir, Erlang, Clojure, Perl, Julia, Haskell, OCaml, F#, Nim, C++, C#, Ruby, Kotlin, Swift, Dart, and Scala projects.**
 
 [![Version](https://img.shields.io/github/v/tag/HsinPu/symbol-lattice?label=version)](https://github.com/HsinPu/symbol-lattice/tags)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D22.13-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> **v0.69.0** is an early developer release. This public repository runs from source; its npm package is intentionally private and is not published to npm.
+> **v0.70.0** is an early developer release. This public repository runs from source; its npm package is intentionally private and is not published to npm.
 
 SymbolLattice builds a local symbol graph without hiding uncertainty. It keeps syntax-proven artifact facts, resolves cross-file relationships conservatively, and records why every resolved edge exists. The graph stays local to the inspected project under `.symbol-lattice/index.sqlite`.
 
@@ -38,6 +38,7 @@ SymbolLattice builds a local symbol graph without hiding uncertainty. It keeps s
 - **Solidity declaration and hierarchy evidence** - complete top-level `contract`, `interface`, and `library` declarations plus their complete direct callable members become auditable symbols; a simple `is Base, Other` clause becomes a hierarchy edge only when a unique target in the same source file proves its kind.
 - **CFML / CFScript declaration evidence** - complete braced `component` / `interface` declarations, tag-based `<cfcomponent>` / `<cfinterface>` containers, and conventional CFC components become auditable symbols only with complete direct named function members.
 - **Nix declaration and import-syntax evidence** - direct bindings of returned literal attribute sets, direct `let ... in` bindings, simple `inherit` names, and literal project-relative `import` expressions become auditable symbols or explicit pending import references without claiming evaluation or module-target resolution.
+- **VB.NET declaration and Imports-syntax evidence** - complete `Namespace`, primary type containers, direct `Sub` / `Function` declarations, and simple unaliased file-level `Imports` statements become auditable symbols or explicit pending import references without claiming CLR/project resolution.
 - **Non-HTTP and UI transport evidence** - AST-proven NestJS GraphQL, microservice, and WebSocket entrypoints, plus direct ArkUI UI roots, use distinct `entrypoint` nodes and exact `handles` edges, so a message pattern, subscription, or UI root is never mislabeled as an HTTP route.
 - **Direct type-hierarchy evidence** - AST-proven `extends` and `implements` edges preserve value/type namespace proof, type-only imports, re-export provenance, unresolved bases, and bounded direct parent/child views without pretending to have a full type checker.
 - **Bounded context packs** - ordered symbol references produce persisted source, capped relationship/impact summaries, and static directed evidence paths without guessing ambiguous symbols or dynamic behavior.
@@ -116,6 +117,7 @@ node dist/cli/main.js search "aws_instance" --project /path/to/project --languag
 node dist/cli/main.js search "product-card" --project /path/to/project --language liquid
 node dist/cli/main.js search "format" --project /path/to/project --language cfml
 node dist/cli/main.js search "package" --project /path/to/project --language nix
+node dist/cli/main.js search "Worker" --project /path/to/project --language vbnet
 node dist/cli/main.js context "src/consumer.ts#calculate" "src/math.ts#add" --project /path/to/project
 
 # Select affected tests from changed files already present in the active generation.
@@ -145,9 +147,9 @@ One-shot data commands emit stable, pretty JSON. `watch` is the deliberate strea
 
 ## Capabilities
 
-| Area | v0.69.0 behavior |
+| Area | v0.70.0 behavior |
 | --- | --- |
-| Source files | TypeScript, TSX, JavaScript, JSX, ArkTS/ArkUI, Vue SFC, Svelte SFC, Astro SFC, Razor/Blazor components, Terraform/OpenTofu HCL, Shopify Liquid, Solidity, CFML/CFScript, Nix, Python, Go, Rust, Java, PHP, C, Lua, R, Elixir, Erlang, Clojure, Perl, Julia, Haskell, OCaml, F#, Nim, C++, C#, Ruby, Kotlin, Swift, Dart, and Scala (`.ets`, `.vue`, `.svelte`, `.astro`, `.razor`, `.tf`, `.tfvars`, `.tofu`, `.liquid`, `.sol`, `.cfc`, `.cfm`, `.cfs`, `.nix`, `.c`, `.lua`, `.r`, `.ex`, `.exs`, `.erl`, `.clj`, `.pl`, `.pm`, `.jl`, `.hs`, `.ml`, `.fs`, `.nim`, `.cpp`, `.cc`, `.cxx`, `.hpp`, `.hh`, `.hxx`, `.cs`, `.rb`, `.kt`, `.swift`, `.dart`, `.scala`; plus Play `conf/routes` and `conf/*.routes` route tables) |
+| Source files | TypeScript, TSX, JavaScript, JSX, ArkTS/ArkUI, Vue SFC, Svelte SFC, Astro SFC, Razor/Blazor components, Terraform/OpenTofu HCL, Shopify Liquid, Solidity, CFML/CFScript, Nix, VB.NET, Python, Go, Rust, Java, PHP, C, Lua, R, Elixir, Erlang, Clojure, Perl, Julia, Haskell, OCaml, F#, Nim, C++, C#, Ruby, Kotlin, Swift, Dart, and Scala (`.ets`, `.vue`, `.svelte`, `.astro`, `.razor`, `.tf`, `.tfvars`, `.tofu`, `.liquid`, `.sol`, `.cfc`, `.cfm`, `.cfs`, `.nix`, `.vb`, `.c`, `.lua`, `.r`, `.ex`, `.exs`, `.erl`, `.clj`, `.pl`, `.pm`, `.jl`, `.hs`, `.ml`, `.fs`, `.nim`, `.cpp`, `.cc`, `.cxx`, `.hpp`, `.hh`, `.hxx`, `.cs`, `.rb`, `.kt`, `.swift`, `.dart`, `.scala`; plus Play `conf/routes` and `conf/*.routes` route tables) |
 | F# + Giraffe | Direct top-level typed `HttpFunc` / `HttpContext` handlers plus exactly one `open Giraffe` proof and a direct literal `choose [` route table. Fixed HTTP verbs and plain `route "/..."` entries become exact same-file or explicit unresolved route evidence. |
 | Nim + Jester | Direct top-level zero-argument `proc` handlers plus exactly one direct `import` list containing `jester`, then a flat `routes:` or `router name:` literal route block. Fixed lowercase HTTP verbs become exact same-file or explicit unresolved route evidence. |
 | Vue + Vue Router | Vue `.vue` files contribute a file symbol plus direct inline JavaScript/TypeScript script declarations and an auditable default component export. In TypeScript/JavaScript router modules, exactly one direct `createRouter` import plus one top-level literal `routes` option emits `NAVIGATE` route evidence; direct default imports can resolve exactly through `.vue` modules. |
@@ -160,11 +162,12 @@ One-shot data commands emit stable, pretty JSON. `watch` is the deliberate strea
 | Solidity | Complete top-level `contract`, `interface`, and `library` declarations plus complete direct callable members emit exact `contains` evidence. A simple literal `is Base, Other` clause emits an exact hierarchy edge only when one same-file declaration proves each target kind. |
 | CFML / CFScript | Complete braced `component` / `interface` declarations, complete tag-based `<cfcomponent>` / `<cfinterface>` containers with named `<cffunction>` members, and conventional implicit CFC components emit exact local `contains` evidence. |
 | Nix | Complete direct returned-attribute-set and `let ... in` bindings emit function or variable symbols; simple `inherit` names emit variable symbols; literal project-relative `import` paths are retained as explicit pending `imports` references without a target-resolution claim. |
+| VB.NET | Complete `Namespace`, `Class`, `Module`, `Interface`, `Structure`, and `Enum` blocks plus direct complete `Sub` / `Function` members emit exact local `contains` evidence; simple file-level `Imports` syntax is retained as a pending reference. |
 | Scope | Project root by default or repeatable, persisted `--scope` directories |
 | Discovery | Root `.gitignore` with negation; `.git`, `.symbol-lattice`, `coverage`, `dist`, and `node_modules` are always excluded |
 | Symbols | TypeScript/JavaScript: files, classes, functions, methods, interfaces, types, variables, routes, and entrypoints. Python: files, classes, functions, methods, and direct FastAPI / same-file or proven cross-file `APIRouter` / same-file Flask routes. Go: files, top-level functions, and direct Gin / `net/http` / Chi routes. Rust: files, top-level functions, and direct Axum routes. Java: files, direct top-level classes and methods, direct Spring Web routes, and direct package facts usable by Play controller resolution. PHP: files, direct top-level classes, methods, functions, and direct Laravel facade routes. C: files, direct top-level functions, and direct CivetWeb routes. Lua: files, direct top-level `function` / `local function` declarations, and direct Lapis routes. R: files, direct top-level braced `name <- function(...)` / `name = function(...)` declarations, and direct Plumber annotation routes. Elixir: files, direct top-level `defmodule` declarations represented by the existing `class` kind, direct module `def` / `defp` methods, and direct Phoenix Router routes. Erlang: files, direct `-module(...)` declarations represented by the existing `class` kind, direct simple top-level functions, and direct Cowboy dispatch routes. Clojure: files, direct `ns` declarations represented by the existing `class` kind, direct simple top-level `defn` functions, and direct Compojure routes. Perl: files, direct `package` declarations represented by the existing `class` kind, direct simple top-level `sub` functions, and direct Dancer2 routes. Julia: files, direct top-level one-line `name(...) = ...` functions, and direct Genie routes. C++: files, direct top-level classes, methods, functions, and direct cpp-httplib routes. C#: files, direct top-level classes, interfaces, methods, local functions, and direct ASP.NET Core routes. Ruby: files, direct top-level classes, methods, functions, and direct Rails routes. Kotlin: files, direct top-level classes, interfaces, methods, functions, and direct Ktor routes. Swift: files, direct top-level classes, structs, protocols, methods, functions, and direct Vapor routes. Dart: files, direct top-level classes, methods, functions, and direct Flutter named-navigation routes. Scala: files, direct top-level classes, objects, traits, methods, functions, direct Play route-table entries, and literal Play Router-mount nodes. CFML/CFScript: files, complete braced or tag-based component/interface containers, conventional implicit CFC component classes, direct named methods, and standalone complete top-level CFScript functions. |
 | Relationships | TypeScript/JavaScript: `contains`, module imports/exports, direct identifier calls, evidence-bearing `routes` and `handles`, plus direct `extends` / `implements`. Python: syntax-proven `contains` plus direct FastAPI and Flask `routes`. Go: syntax-proven `contains` plus direct Gin, `net/http`, and Chi `routes`. Rust: syntax-proven `contains` plus direct Axum `routes`. Java: syntax-proven `contains` plus direct Spring Web `routes` and exact Play controller-action targets when one direct Java package/class/method proves the route. PHP: syntax-proven `contains` plus direct Laravel `routes`, exact only for same-file controller methods and explicitly unresolved otherwise. C: syntax-proven `contains` plus direct CivetWeb `ALL` routes to exact same-file top-level functions. Lua: lexical `contains` plus direct Lapis `GET` / `POST` / `PUT` / `DELETE` / `ALL` routes to exact same-file prior local-function handlers. R: lexical `contains` plus direct Plumber `GET` / `POST` / `PUT` / `DELETE` annotation routes to exact same-file braced anonymous function handlers. Elixir: lexical `contains` plus direct Phoenix `GET` / `POST` / `PUT` / `PATCH` / `DELETE` / `HEAD` / `OPTIONS` / `TRACE` / `CONNECT` routes; a full-module controller atom action resolves exactly only to one direct same-file module method, otherwise remains explicit `unresolved`. Erlang: lexical `contains` plus direct Cowboy `ALL` wildcard-host routes; a handler resolves exactly only to one same-module exported `init/2` method, otherwise remains explicit `unresolved`. Clojure: lexical `contains` plus direct Compojure `GET` / `POST` / `PUT` / `PATCH` / `DELETE` / `HEAD` / `OPTIONS` routes; a handler resolves exactly only to one same-file `defn`, otherwise remains explicit `unresolved`. Perl: lexical `contains` plus direct Dancer2 `GET` / `POST` / `PUT` / `PATCH` / `DELETE` / `OPTIONS` routes; a handler resolves exactly only to one same-file simple `sub`, otherwise remains explicit `unresolved`. Julia: lexical `contains` plus direct Genie `GET` default and literal `POST` / `PUT` / `PATCH` / `DELETE` / `OPTIONS` method-keyword routes; a handler resolves exactly only to one same-file one-line function, otherwise remains explicit `unresolved`. C++: syntax-proven `contains` plus direct cpp-httplib `routes` to exact same-file top-level functions. C#: syntax-proven `contains` plus direct ASP.NET Core Minimal API and MVC controller `routes` to exact same-file handlers. Ruby: syntax-proven `contains` plus direct Rails `routes`, exact only for same-file non-namespaced controller methods and explicitly unresolved otherwise. Kotlin: syntax-proven `contains` plus direct Ktor `routes` to exact same-file top-level callable-reference functions. Swift: syntax-proven `contains` plus direct Vapor `routes` to exact same-file named functions. Dart: syntax-proven `contains` plus direct Flutter `NAVIGATE` routes to exact same-file widget classes. Scala: syntax-proven `contains` plus direct Play `conf/routes` entries that resolve exactly only with one direct Scala-or-Java package, one matching indexed class/object, and one direct method; literal `->` Router mounts become exact or unresolved `handles` edges and never appear as concrete `routes` results |
-| Module resolution | Relative paths, TypeScript/JavaScript `baseUrl` and `paths`, then local workspace packages; Python has a deliberately narrow, regular-package proof for direct one-dot FastAPI router imports; Go, Rust, Java, PHP, C, Lua, R, Elixir, Erlang, Clojure, Perl, Julia, Haskell, OCaml, C++, C#, Ruby, Kotlin, Swift, Dart, Scala, CFML, and Nix have no generic module resolver in this release |
+| Module resolution | Relative paths, TypeScript/JavaScript `baseUrl` and `paths`, then local workspace packages; Python has a deliberately narrow, regular-package proof for direct one-dot FastAPI router imports; Go, Rust, Java, PHP, C, Lua, R, Elixir, Erlang, Clojure, Perl, Julia, Haskell, OCaml, C++, C#, Ruby, Kotlin, Swift, Dart, Scala, CFML, Nix, and VB.NET have no generic module resolver in this release |
 | F# module resolution | No generic F# module, project, package, or cross-file handler resolver in this release. |
 | Nim symbols and routes | Files, direct top-level zero-argument `proc` declarations, and direct Jester routes with exact same-file or explicit unresolved evidence. |
 | Nim module resolution | No generic Nim module, package, macro, project, or cross-file handler resolver in this release. |
@@ -253,6 +256,7 @@ Framework coverage is declared once and actively selects the extraction passes a
 | Shopify Liquid | Complete direct literal `render` / `include` snippet tags and `section` tags resolved only against indexed local Liquid files |
 | CFML / CFScript | Complete braced component/interface declarations, complete tag-based component/interface plus named function pairs, and conventional implicit CFC components |
 | Nix | Complete direct returned-attribute-set, `let ... in`, and simple `inherit` declarations plus literal project-relative import syntax |
+| VB.NET | Complete namespace/type/callable declaration blocks plus simple file-level `Imports` syntax |
 | Play | Scala `conf/routes` / `conf/*.routes` literal controller-action entries with exact unique Scala-or-Java package-class-method handlers, plus literal static `->` Router-mount `handles` evidence |
 | React Router | Recursive literal JSX `Route`, `createRoutesFromElements` JSX trees, and data-router object trees |
 | Next.js | Pages Router and App Router page default exports |
@@ -748,6 +752,32 @@ in rec {
 | Literal project-relative `import ./file.nix` or `builtins.import ../file.nix` | An explicit pending `imports` reference, without a guessed target edge |
 
 The scanner masks Nix line/block comments plus double-quoted and basic indented strings while preserving source offsets. It fails closed for unclosed or ambiguous comments, strings, delimiters, and `let` expressions. It deliberately excludes quoted/dynamic attribute names, nested attribute members, `with`, assertions, overlays, derivations, flake inputs/outputs, angle-bracket lookups, import-target resolution, `callPackage`, arbitrary calls, package dependency/evaluation semantics, NixOS/Home Manager module composition, lock files, builds, and runtime deployment behavior.
+
+#### VB.NET (complete declaration and Imports evidence)
+
+v0.70 adds a deliberately narrow `.vb` declaration surface:
+
+```vb
+Imports System.Text
+
+Namespace Acme.Tools
+  Public Class Worker
+    Public Function Format(value As String) As String
+      Return value
+    End Function
+  End Class
+End Namespace
+```
+
+| Accepted source form | Evidence |
+| --- | --- |
+| Complete `Namespace ... End Namespace` | A module-kind namespace symbol |
+| Complete `Class` / `Module` / `Interface` / `Structure` / `Enum` block | A contained class/module/interface/type symbol |
+| Complete direct `Sub ... End Sub` / `Function ... End Function` | A direct function or member method symbol |
+| Direct interface or `MustOverride` callable signature | A bodyless method symbol |
+| File-level unaliased `Imports Namespace.Name` | An explicit pending `imports` reference, without a CLR/project target-resolution claim |
+
+The scanner masks apostrophe / `Rem` comments and double-quoted strings while preserving source offsets. It fails closed for unclosed strings and mismatched or incomplete supported `End ...` blocks. It deliberately excludes attributes, import aliases, fields, properties, events, delegates, P/Invoke, generic/overload/type semantics, inheritance, `Handles`, calls, lambdas/local functions, partial-type merging, project/assembly/NuGet/MSBuild resolution, compilation, designer resources, and runtime UI behavior.
 
 #### Express
 
@@ -1975,6 +2005,8 @@ v0.68 adds no SQLite schema migration or query command. It adds CFML / CFScript 
 
 v0.69 adds no SQLite schema migration or query command. It adds Nix `.nix` discovery plus complete direct returned-attribute-set, `let ... in`, and simple `inherit` declaration facts through the existing file, symbol, containment-edge, source-search, pending-reference, and raw-artifact contracts. Literal project-relative `import` syntax is retained without a module target-resolution claim. The extractor advances to `multi-language-ast-v58`; the resolver remains `project-resolver-v21` because v0.69 does not evaluate Nix expressions or project cross-file Nix module edges. A pre-v0.69 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes Nix-capable facts. Existing generations remain readable.
 
+v0.70 adds no SQLite schema migration or query command. It adds VB.NET `.vb` discovery plus complete namespace, primary type, and direct callable facts through the existing file, module/class/interface/type/function/method, containment-edge, source-search, pending-reference, and raw-artifact contracts. Simple file-level unaliased `Imports` syntax is retained without an assembly/project target-resolution claim. The extractor advances to `multi-language-ast-v59`; the resolver remains `project-resolver-v21` because v0.70 does not resolve CLR assemblies, projects, packages, or source relationships. A pre-v0.70 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes VB.NET-capable facts. Existing generations remain readable.
+
 ## Architecture
 
 ```mermaid
@@ -1988,7 +2020,7 @@ flowchart LR
   Catalog["Filesystem catalog\nscope + gitignore"] --> Inputs["Index inputs"]
   Catalog --> TS["TS alias resolver"]
   Catalog --> WS["Workspace resolver"]
-  Extractor["TypeScript AST extractor + ArkTS/ArkUI lexical scanner + Vue/Svelte/Astro SFC scanners + Razor/Blazor directive scanner + Terraform/OpenTofu HCL lexical scanner + Shopify Liquid tag scanner + Solidity, CFML/CFScript, and Nix declaration scanners + Python/Go/Rust/Java/PHP/C/C++ Lezer parsers + Lua/R/Elixir/Erlang/Clojure/Perl/Julia/Haskell lexical extractors + C#/Ruby/Kotlin/Swift/Dart/Scala ast-grep parsers\nfirst-party framework capability passes\nExpress/Fastify/Nest HTTP routes + Fastify plugin facts + FastAPI/Flask/Gin/net-http/Chi/Axum/Spring Web/Laravel/CivetWeb/Lapis/Plumber/Phoenix/Cowboy/Compojure/Dancer2/Genie/Scotty/cpp-httplib/ASP.NET Core/Rails/Ktor/Vapor/Flutter/Play facts\nFlutter/Vue Router/SvelteKit/Astro/Blazor/React Router/Next client navigation\nNest module-prefix facts + non-HTTP and ArkUI UI-root entrypoints + Terraform/OpenTofu IaC declaration facts + Shopify Liquid local template calls + Solidity hierarchy + CFML/CFScript and Nix declaration facts"] --> Facts["Reusable artifact facts"]
+  Extractor["TypeScript AST extractor + ArkTS/ArkUI lexical scanner + Vue/Svelte/Astro SFC scanners + Razor/Blazor directive scanner + Terraform/OpenTofu HCL lexical scanner + Shopify Liquid tag scanner + Solidity, CFML/CFScript, Nix, and VB.NET declaration scanners + Python/Go/Rust/Java/PHP/C/C++ Lezer parsers + Lua/R/Elixir/Erlang/Clojure/Perl/Julia/Haskell lexical extractors + C#/Ruby/Kotlin/Swift/Dart/Scala ast-grep parsers\nfirst-party framework capability passes\nExpress/Fastify/Nest HTTP routes + Fastify plugin facts + FastAPI/Flask/Gin/net-http/Chi/Axum/Spring Web/Laravel/CivetWeb/Lapis/Plumber/Phoenix/Cowboy/Compojure/Dancer2/Genie/Scotty/cpp-httplib/ASP.NET Core/Rails/Ktor/Vapor/Flutter/Play facts\nFlutter/Vue Router/SvelteKit/Astro/Blazor/React Router/Next client navigation\nNest module-prefix facts + non-HTTP and ArkUI UI-root entrypoints + Terraform/OpenTofu IaC declaration facts + Shopify Liquid local template calls + Solidity hierarchy + CFML/CFScript, Nix, and VB.NET declaration facts"] --> Facts["Reusable artifact facts"]
   Catalog --> SourceDocs["Persisted source documents"]
   SourceDocs --> Retrieval["Generation-bound lexical projection"]
   Facts --> Resolver["Full project export surface"]
@@ -2006,7 +2038,7 @@ src/
   application/     Use cases, incremental planning, and graph projection
   cli/             Commander-based CLI
   domain/          Graph, evidence, identity, and index-work contracts
-  extraction/      TypeScript AST, ArkTS/ArkUI lexical, Vue/Svelte/Astro SFC, Razor/Blazor directive, Terraform/OpenTofu HCL lexical, Shopify Liquid tag lexical, Solidity declaration lexical, CFML/CFScript declaration lexical, Nix declaration lexical, Python/Go/Rust/Java/PHP/C/C++ Lezer, Lua/R/Elixir/Erlang/Clojure/Perl/Julia/Haskell lexical, and C#/Ruby/Kotlin/Swift/Dart/Scala ast-grep fact extraction
+  extraction/      TypeScript AST, ArkTS/ArkUI lexical, Vue/Svelte/Astro SFC, Razor/Blazor directive, Terraform/OpenTofu HCL lexical, Shopify Liquid tag lexical, Solidity declaration lexical, CFML/CFScript declaration lexical, Nix declaration lexical, VB.NET declaration lexical, Python/Go/Rust/Java/PHP/C/C++ Lezer, Lua/R/Elixir/Erlang/Clojure/Perl/Julia/Haskell lexical, and C#/Ruby/Kotlin/Swift/Dart/Scala ast-grep fact extraction
   infrastructure/  Filesystem, workspace, TypeScript, and SQLite adapters
   mcp/             Read-only MCP server
   ports/           Dependency boundaries
@@ -2014,7 +2046,7 @@ src/
 
 ## Deliberate boundaries
 
-v0.69.0 does not yet provide:
+v0.70.0 does not yet provide:
 
 - Daemon mode, background automatic sync after the foreground process exits, cross-process watch coordination, MCP per-query pending-file banners, worker pools, or historical source browsing.
 - pnpm workspace YAML, TypeScript project references, external/package `extends`, or nested `.gitignore` semantics.
@@ -2050,8 +2082,9 @@ v0.69.0 does not yet provide:
 - The Solidity surface is a deliberately small lexical declaration scanner, not a Solidity parser, compiler, EVM analyzer, or deployment simulator. It accepts only complete ASCII-named top-level `contract`/`interface`/`library` declarations, direct callable members, and a simple same-file `is Base, Other` clause with a unique compatible declaration target. It excludes imports/cross-file resolution, constructor arguments, events/errors/structs/enums/types/state, calls/emits/reverts/modifier application, assembly/Yul, visibility/override semantics, ABI/bytecode/storage/proxy behavior, compilation, and runtime chain behavior.
 - The CFML / CFScript surface is a deliberately small lexical declaration scanner, not a CFML parser, Adobe ColdFusion/Lucee runtime, template renderer, CFQuery analyzer, or framework analyzer. It accepts only complete braced `component`/`interface` declarations, complete tag-based `<cfcomponent>`/`<cfinterface>` and named `<cffunction>` pairs, conventional CFC components, and complete direct named functions. It excludes `cfinclude`/`import`, inheritance, accessors/annotations, dynamic names, closures/nested functions, tag-based `<cfscript>` bodies, CFQuery, calls, framework conventions, compilation, and runtime behavior.
 - The Nix surface is a deliberately small lexical declaration scanner, not a Nix parser, evaluator, flake reader, package builder, or deployment planner. It accepts only complete direct returned-attribute-set and `let ... in` bindings, simple `inherit` names, and literal project-relative import syntax. It excludes quoted/dynamic attributes, nested members, `with`, assertions, overlays/derivations, flakes/lock files, target resolution, `callPackage`, arbitrary calls, dependency/evaluation semantics, NixOS/Home Manager module composition, builds, and runtime deployment behavior.
+- The VB.NET surface is a deliberately small line-oriented declaration scanner, not a VB.NET parser, Roslyn compiler, CLR analyzer, UI framework analyzer, or runtime debugger. It accepts only complete namespace/type/`Sub`/`Function` blocks, bodyless interface/`MustOverride` signatures, and simple file-level `Imports`. It excludes attributes/aliases, fields/properties/events/delegates/P-Invoke, generic/overload/type/inheritance/`Handles` semantics, calls/lambdas/local functions, partial types, project/assembly/package/MSBuild resolution, compilation, designer resources, and runtime behavior.
 - Semantic type checking, transitive hierarchy traversal, declaration-merging semantics, override dispatch, mixin/qualified/conditional heritage expressions, or automatic framework decorator inference. v0.18 recognizes direct imported NestJS HTTP decorators, direct static `RouterModule.register()` prefixes, and the narrowly defined non-HTTP decorators documented above; it does not infer custom decorators, barrels, `forRoot` / `forChild`, global/version prefixes, guards, GraphQL field resolvers, dynamic patterns, dynamic gateway configuration, or runtime transport wiring.
-- Language adapters beyond TS/TSX/JS/JSX/ArkTS/Vue/Svelte/Astro/Razor/Terraform/OpenTofu/Shopify-Liquid/Solidity/CFML-CFScript/Nix/Python/Go/Rust/Java/PHP/C/Lua/R/Elixir/Erlang/Clojure/Perl/Julia/Haskell/OCaml/F#/C++/C#/Ruby/Kotlin/Swift/Dart/Scala, external dependency indexing, telemetry, or multi-project routing.
+- Language adapters beyond TS/TSX/JS/JSX/ArkTS/Vue/Svelte/Astro/Razor/Terraform/OpenTofu/Shopify-Liquid/Solidity/CFML-CFScript/Nix/VB.NET/Python/Go/Rust/Java/PHP/C/Lua/R/Elixir/Erlang/Clojure/Perl/Julia/Haskell/OCaml/F#/C++/C#/Ruby/Kotlin/Swift/Dart/Scala, external dependency indexing, telemetry, or multi-project routing.
 - Embedding-based or cloud retrieval, semantic ranking, arbitrary natural-language context assembly, semantic Git diff beyond immutable zero-context hunk-to-revision-local-declaration evidence, or reliable rename/move/cross-side identity attribution.
 
 ## Roadmap
@@ -2126,6 +2159,8 @@ v0.69.0 does not yet provide:
 | `v0.67.0` | Solidity `.sol` discovery, complete top-level contract/interface/library and direct callable-member facts, same-file unique `is` hierarchy projection, Solidity source-search/CLI filters, and comment/string/dynamic-constructor-argument/malformed rejection |
 | `v0.68.0` | CFML / CFScript `.cfc` / `.cfm` / `.cfs` discovery, complete braced/tag-based/implicit-CFC declarations, direct function containment, CFML source-search/CLI filters, and comment/string/incomplete-container-or-tag/malformed rejection |
 | `v0.69.0` | Nix `.nix` discovery, complete direct returned-attribute-set / `let ... in` / simple `inherit` declarations, literal project-relative pending import references, Nix source-search/CLI filters, and comment/string/delimiter/malformed rejection |
+| `v0.70.0` | VB.NET `.vb` discovery, complete namespace/type/`Sub`/`Function` declaration containment, bodyless interface/`MustOverride` signatures, simple pending `Imports` references, VB.NET source-search/CLI filters, and comment/string/incomplete-or-mismatched-`End` rejection |
+| `v0.70+` | VB.NET grammar/Roslyn validation, attributes and import aliases, fields/properties/events/delegates/P-Invoke, generic/overload/type/inheritance/`Handles` facts, call evidence, partial types, project/assembly/NuGet/MSBuild resolution, WinForms/WPF resources, compiler validation, and runtime analysis |
 | `v0.69+` | Nix grammar validation, quoted/dynamic and nested attribute paths, target-resolved imports and `callPackage`, calls/dependency facts, flakes/lock files, overlays/derivations, NixOS/Home Manager module composition, evaluation/build evidence, and controlled deployment analysis |
 | `v0.68+` | CFML grammar validation, `cfinclude`/`import` and cross-file relationships, inheritance/accessors/annotations, tag-based `<cfscript>`, CFQuery, calls, framework-specific application/request facts, compiler validation, and runtime analysis |
 | `v0.67+` | Solidity grammar validation, imports and cross-file inheritance, structs/enums/value types/state/events/errors, visibility/override/call/emit/revert facts, compiler/ABI/bytecode/storage/proxy evidence, and controlled EVM-aware analysis |
@@ -2143,7 +2178,7 @@ See [CHANGELOG.md](CHANGELOG.md) for release notes and migration history.
 
 ## Release-by-release feature comparison
 
-Every release creates a verified standalone comparison report against the local CodeGraph baseline at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_vX.Y.Z.md` (for example, `FEATURE_COMPARISON_v0.69.0.md`). The version number is part of the filename, so each release retains an independent comparison record. It intentionally lives beside the local `symbol-lattice` and `codegraph` checkouts rather than inside either project. Starting with v0.28, these reports are written in Traditional Chinese. Each report distinguishes a proven precision advantage from broader-but-less-proven source coverage, and records remaining gaps instead of treating a version bump as parity.
+Every release creates a verified standalone comparison report against the local CodeGraph baseline at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_vX.Y.Z.md` (for example, `FEATURE_COMPARISON_v0.70.0.md`). The version number is part of the filename, so each release retains an independent comparison record. It intentionally lives beside the local `symbol-lattice` and `codegraph` checkouts rather than inside either project. Starting with v0.28, these reports are written in Traditional Chinese. Each report distinguishes a proven precision advantage from broader-but-less-proven source coverage, and records remaining gaps instead of treating a version bump as parity.
 
 ## Development
 
@@ -2210,6 +2245,8 @@ Solidity coverage includes `.sol` discovery, persisted source search and CLI lan
 CFML / CFScript coverage includes `.cfc` / `.cfm` / `.cfs` discovery, persisted source search and CLI language filters, complete braced component/interface symbols, complete tag-based component/interface with named function containment, conventional implicit-CFC component facts, and comment/string/incomplete/malformed rejection.
 
 Nix coverage includes `.nix` discovery, persisted source search and CLI language filters, complete direct returned-attribute-set and `let ... in` function/value symbols, simple `inherit` variables, literal project-relative pending import references, and comment/string/delimiter/malformed rejection.
+
+VB.NET coverage includes `.vb` discovery, persisted source search and CLI language filters, complete namespace/class/module/interface/structure/enum and direct `Sub`/`Function` containment, bodyless interface/`MustOverride` signatures, simple pending `Imports` references, and comment/string/incomplete-or-mismatched-`End` rejection.
 
 C++ coverage includes `.cpp` / `.cc` / `.cxx` / `.hpp` / `.hh` / `.hxx` discovery, persisted source search and CLI/MCP language filters, direct top-level class/method/function containment, direct `httplib.h` include plus `httplib::Server` / `httplib::SSLServer` binding proof, literal direct named-handler HTTP routes, receiver-rebinding invalidation, dynamic/lambda/missing-header rejection, malformed-source fail-closed behavior, and persisted route-query integration.
 

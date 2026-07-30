@@ -6968,4 +6968,62 @@ describe("SymbolLatticeService", () => {
         .map((reference) => [reference.relationKind, reference.referenceName])
     ).toContainEqual(["imports", "./package.nix"]);
   });
+
+  it("indexes complete VB.NET declarations and simple Imports syntax", async () => {
+    const projectPath = await createInlineProject({
+      "vb/Worker.vb": [
+        "Imports System.Text",
+        "Namespace Acme.Tools",
+        "  Public Class Worker",
+        "    Public Function Format(value As String) As String",
+        "      Return value",
+        "    End Function",
+        "  End Class",
+        "End Namespace"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    const indexed = await service.init({ projectPath });
+    const search = await service.search(projectPath, "Format", { language: "vbnet" });
+    const worker = (
+      await service.find(projectPath, "vb/Worker.vb#module:Acme.Tools::class:Worker")
+    ).symbols[0];
+    if (worker === undefined) {
+      throw new Error("Expected indexed VB.NET declaration.");
+    }
+    const persistedVbnetFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .filter((facts) => facts.language === "vbnet");
+
+    expect(indexed).toMatchObject({
+      stale: false,
+      counts: { files: 1, symbols: expect.any(Number), edges: expect.any(Number) }
+    });
+    expect(persistedVbnetFacts).toHaveLength(1);
+    expect(
+      persistedVbnetFacts.every((facts) => facts.extractorVersion === ARTIFACT_FACTS_EXTRACTOR_VERSION)
+    ).toBe(true);
+    expect(search.results).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          filePath: "vb/Worker.vb",
+          language: "vbnet"
+        })
+      ])
+    );
+    expect(worker).toMatchObject({
+      kind: "class",
+      qualifiedName: "vb/Worker.vb#module:Acme.Tools::class:Worker"
+    });
+    expect(persistedVbnetFacts[0]?.pendingReferences).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          relationKind: "imports",
+          referenceName: "System.Text"
+        })
+      ])
+    );
+  });
 });
