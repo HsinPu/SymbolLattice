@@ -1,7 +1,7 @@
 {
   "name": "@hsinpu/symbol-lattice",
-  "version": "0.38.0",
-  "description": "Evidence-first local code intelligence for TypeScript, JavaScript, Python, Go, Rust, Java, and PHP projects.",
+  "version": "0.39.0",
+  "description": "Evidence-first local code intelligence for TypeScript, JavaScript, Python, Go, Rust, Java, PHP, and C++ projects.",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -33,6 +33,7 @@
     "start": "node dist/cli/main.js"
   },
   "dependencies": {
+    "@lezer/cpp": "1.1.6",
     "@lezer/go": "1.0.1",
     "@lezer/java": "1.1.3",
     "@lezer/php": "1.0.5",

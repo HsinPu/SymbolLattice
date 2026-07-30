@@ -2861,6 +2861,152 @@ describe("source extraction", () => {
     expect(broken.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
   });
 
+  it("extracts direct C++ cpp-httplib named-handler routes with exact evidence", () => {
+    const facts = extractFileFacts({
+      filePath: "src/server.cpp",
+      language: "cpp",
+      sourceText: [
+        "#include <httplib.h>",
+        "",
+        "void health(const httplib::Request &, httplib::Response &) {}",
+        "void create_user(const httplib::Request &, httplib::Response &) {}",
+        "void delete_user(const httplib::Request &, httplib::Response &) {}",
+        "",
+        "class HealthApi {",
+        "public:",
+        "  void ping() {}",
+        "};",
+        "",
+        "int main() {",
+        "  httplib::Server server;",
+        "  server.Get(\"/health\", health);",
+        "  server.Post(\"/users\", create_user);",
+        "  server.Delete(\"/users/:id\", delete_user);",
+        "}"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(facts.symbols.filter((symbol) => symbol.kind === "method").map((symbol) => symbol.qualifiedName)).toEqual([
+      "src/server.cpp#HealthApi.ping"
+    ]);
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId,
+          edge.resolution,
+          edge.confidence
+        ])
+    ).toEqual([
+      [
+        "GET /health",
+        "src/server.cpp#health",
+        "framework.cpp-httplib.direct-server.literal-route.local-function",
+        "exact",
+        1
+      ],
+      [
+        "POST /users",
+        "src/server.cpp#create_user",
+        "framework.cpp-httplib.direct-server.literal-route.local-function",
+        "exact",
+        1
+      ],
+      [
+        "DELETE /users/:id",
+        "src/server.cpp#delete_user",
+        "framework.cpp-httplib.direct-server.literal-route.local-function",
+        "exact",
+        1
+      ]
+    ]);
+  });
+
+  it("requires direct C++ httplib include, local server binding, literal path, and unrebound named handler", () => {
+    const unproven = extractFileFacts({
+      filePath: "src/unproven.cpp",
+      language: "cpp",
+      sourceText: [
+        "void health() {}",
+        "int main() {",
+        "  httplib::Server server;",
+        "  server.Get(\"/without-header\", health);",
+        "}"
+      ].join("\n")
+    });
+    const dynamic = extractFileFacts({
+      filePath: "src/dynamic.cpp",
+      language: "cpp",
+      sourceText: [
+        "#include <httplib.h>",
+        "void health() {}",
+        "int main() {",
+        "  httplib::Server server;",
+        "  const char *path = \"/dynamic\";",
+        "  server.Get(path, health);",
+        "  server = make_server();",
+        "  server.Get(\"/rebound\", health);",
+        "  server.Get(\"/missing\", missing);",
+        "}"
+      ].join("\n")
+    });
+    const broken = extractFileFacts({
+      filePath: "src/broken.cpp",
+      language: "cpp",
+      sourceText: [
+        "#include <httplib.h>",
+        "void health() {}",
+        "int main( {",
+        "  httplib::Server server;",
+        "  server.Get(\"/broken\", health);",
+        "}"
+      ].join("\n")
+    });
+
+    expect(unproven.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(unproven.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+    expect(dynamic.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(dynamic.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+    expect(broken.symbols.filter((symbol) => symbol.kind === "function")).toEqual([]);
+    expect(broken.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(broken.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+  });
+
+  it("accepts direct quoted cpp-httplib headers and SSLServer bindings", () => {
+    const facts = extractFileFacts({
+      filePath: "src/secure.cpp",
+      language: "cpp",
+      sourceText: [
+        '#include "httplib.h"',
+        "void health(const httplib::Request &, httplib::Response &) {}",
+        "int main() {",
+        "  httplib::SSLServer secure;",
+        "  secure.Head(\"/health\", health);",
+        "}"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId
+        ])
+    ).toEqual([
+      [
+        "HEAD /health",
+        "src/secure.cpp#health",
+        "framework.cpp-httplib.direct-server.literal-route.local-function"
+      ]
+    ]);
+  });
+
   it("extracts direct Rust Axum literal route-builder chains with exact evidence", () => {
     const facts = extractFileFacts({
       filePath: "src/http.rs",

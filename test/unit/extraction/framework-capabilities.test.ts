@@ -21,7 +21,8 @@ describe("first-party framework capabilities", () => {
       "chi",
       "axum",
       "spring-web",
-      "laravel"
+      "laravel",
+      "cpp-httplib"
     ]);
     expect(FRAMEWORK_CAPABILITIES.map((capability) => capability.id)).toEqual(
       FRAMEWORK_CAPABILITY_IDS
@@ -115,6 +116,15 @@ describe("first-party framework capabilities", () => {
       surfaces: [
         "direct imported or fully-qualified Route facade calls",
         "literal controller-action arrays with same-file exact method evidence"
+      ]
+    });
+    expect(frameworkCapability("cpp-httplib")).toMatchObject({
+      languages: ["cpp"],
+      routeFramework: "cpp-httplib",
+      routeRegistrations: [],
+      surfaces: [
+        "direct httplib::Server or httplib::SSLServer local bindings",
+        "literal direct named-handler HTTP methods in one local function body"
       ]
     });
   });

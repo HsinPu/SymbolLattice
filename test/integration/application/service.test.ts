@@ -3677,6 +3677,66 @@ describe("SymbolLatticeService", () => {
     );
   });
 
+  it("indexes C++ cpp-httplib routes and retains C++ source-search filtering", async () => {
+    const projectPath = await createInlineProject({
+      "src/server.cpp": [
+        "#include <httplib.h>",
+        "",
+        "void health(const httplib::Request &, httplib::Response &) {}",
+        "void create_user(const httplib::Request &, httplib::Response &) {}",
+        "",
+        "int main() {",
+        "  httplib::Server server;",
+        "  server.Get(\"/health\", health);",
+        "  server.Post(\"/users\", create_user);",
+        "}"
+      ].join("\n")
+    });
+    const service = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+    const getRoutes = await service.routes(projectPath, { method: "GET" });
+    const search = await service.search(projectPath, "health", { language: "cpp" });
+
+    expect(routes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "GET",
+          path: "/health",
+          handler: expect.objectContaining({ qualifiedName: "src/server.cpp#health" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.cpp-httplib.direct-server.literal-route.local-function",
+              stage: "syntax"
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "POST",
+          path: "/users",
+          handler: expect.objectContaining({ qualifiedName: "src/server.cpp#create_user" })
+        })
+      ])
+    );
+    expect(getRoutes.routes).toMatchObject([
+      {
+        method: "GET",
+        path: "/health",
+        handler: { qualifiedName: "src/server.cpp#health" },
+        edge: {
+          resolution: "exact",
+          evidence: {
+            ruleId: "framework.cpp-httplib.direct-server.literal-route.local-function",
+            stage: "syntax"
+          }
+        }
+      }
+    ]);
+    expect(search.results).toMatchObject([{ filePath: "src/server.cpp", language: "cpp" }]);
+  });
+
   it("indexes NestJS decorator routes as persisted exact method evidence", async () => {
     const projectPath = await createInlineProject({
       "src/cats.controller.ts": [

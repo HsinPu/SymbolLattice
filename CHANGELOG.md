@@ -6,6 +6,24 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.39.0] - 2026-07-30
+
+### Added
+
+- C++ `.cpp`, `.cc`, `.cxx`, `.hpp`, `.hh`, and `.hxx` source discovery, persisted source-search language filtering, CLI/MCP validation, direct top-level class/method/function containment, and a first-party `@lezer/cpp` AST adapter.
+- An executable first-party `cpp-httplib` capability. A route now requires direct `#include <httplib.h>` or `"httplib.h"` evidence, a direct `httplib::Server` or `httplib::SSLServer` local declaration in one direct top-level function body, one literal slash-prefixed URI, and one unique direct named top-level function handler. Matching routes emit `framework.cpp-httplib.direct-server.literal-route.local-function` evidence. Direct receiver assignment invalidates that receiver before later route extraction.
+- Capability, discovery, exact route, include, dynamic/lambda/missing-handler/rebinding rejection, malformed-source, source-search, CLI, and persisted route-query integration coverage. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.39.0.md`.
+
+### Compatibility
+
+- No SQLite schema migration or new query command is required. C++ symbols and cpp-httplib routes reuse the existing file, symbol, edge, source-search, and route-query contracts; existing generations remain readable.
+- The artifact extractor advances to `multi-language-ast-v28`; the project resolver remains `project-resolver-v14` because all supported C++ proof is file-local. A pre-v0.39 active index reports `indexer-version-changed` until an explicit `sync` or `index` publishes the new facts.
+
+### Deliberate limits
+
+- cpp-httplib support accepts only direct header inclusion, direct scoped server declarations, direct local function-body receiver methods, literal paths, and unique top-level named function handlers. It excludes `using namespace`, aliases, factories, wrappers, nested scopes, lambdas/member/callback handlers, regex/raw/escaped/dynamic paths, cross-file or overload resolution, middleware hooks, and runtime behavior.
+- CodeGraph has broader C++ language indexing but no equivalent dedicated cpp-httplib route pack in its current framework resolver set. SymbolLattice v0.39 intentionally adds a narrow AST-proven C++ HTTP route surface while remaining far behind CodeGraph's overall multi-language breadth.
+
 ## [0.38.0] - 2026-07-30
 
 ### Added

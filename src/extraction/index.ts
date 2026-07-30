@@ -1,5 +1,6 @@
 import ts from "typescript";
 
+import { extractCppFileFacts } from "./cpp.js";
 import { extractGoFileFacts } from "./go.js";
 import { extractJavaFileFacts } from "./java.js";
 import { extractPhpFileFacts } from "./php.js";
@@ -3418,6 +3419,9 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
   }
   if (input.language === "php") {
     return extractPhpFileFacts({ ...input, language: "php" });
+  }
+  if (input.language === "cpp") {
+    return extractCppFileFacts({ ...input, language: "cpp" });
   }
 
   const sourceFile = ts.createSourceFile(

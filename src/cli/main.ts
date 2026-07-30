@@ -511,7 +511,7 @@ export function createProgram(
     )
     .option("--path <project-relative-prefix>", "Restrict results to a project-relative source-path prefix", parseSearchPath)
     .option(
-      "--language <typescript|javascript|python|go|rust|java|php>",
+      "--language <typescript|javascript|python|go|rust|java|php|cpp>",
       "Restrict results to one supported indexed source language",
       parseSearchLanguage
     )

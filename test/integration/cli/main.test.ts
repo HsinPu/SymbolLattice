@@ -488,6 +488,35 @@ describe("symbol-lattice search CLI", () => {
     expect(write).toHaveBeenCalled();
   });
 
+  it("accepts C++ as a persisted source-search language filter", async () => {
+    const calls: Array<{ projectPath: string; query: string; options: SearchOptions }> = [];
+    const service = {
+      async search(
+        projectPath: string,
+        query: string,
+        options: SearchOptions = {}
+      ): Promise<SearchResult> {
+        calls.push({ projectPath, query, options });
+        return searchResult();
+      }
+    } as unknown as SymbolLatticeService;
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+    await createProgram(service).parseAsync(
+      ["node", "symbol-lattice", "search", "health", "--language", "cpp", "--json"],
+      { from: "node" }
+    );
+
+    expect(calls).toEqual([
+      {
+        projectPath: resolve(process.cwd()),
+        query: "health",
+        options: { language: "cpp" }
+      }
+    ]);
+    expect(write).toHaveBeenCalled();
+  });
+
   it("rejects search limits above the persisted retrieval bound", async () => {
     const service = { async search(): Promise<SearchResult> { return searchResult(); } } as unknown as SymbolLatticeService;
     const program = createProgram(service);

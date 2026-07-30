@@ -14,7 +14,8 @@ export const FRAMEWORK_CAPABILITY_IDS = [
   "chi",
   "axum",
   "spring-web",
-  "laravel"
+  "laravel",
+  "cpp-httplib"
 ] as const;
 
 export type FrameworkCapabilityId = (typeof FRAMEWORK_CAPABILITY_IDS)[number];
@@ -161,6 +162,16 @@ export const FRAMEWORK_CAPABILITIES = [
     surfaces: [
       "direct imported or fully-qualified Route facade calls",
       "literal controller-action arrays with same-file exact method evidence"
+    ]
+  },
+  {
+    id: "cpp-httplib",
+    languages: ["cpp"],
+    routeFramework: "cpp-httplib",
+    routeRegistrations: [],
+    surfaces: [
+      "direct httplib::Server or httplib::SSLServer local bindings",
+      "literal direct named-handler HTTP methods in one local function body"
     ]
   }
 ] as const satisfies readonly FrameworkCapability[];

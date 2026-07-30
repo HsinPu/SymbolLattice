@@ -2,7 +2,7 @@
 
 # SymbolLattice
 
-**Evidence-first local code intelligence for TypeScript, JavaScript, Python, Go, Rust, Java, and PHP projects.**
+**Evidence-first local code intelligence for TypeScript, JavaScript, Python, Go, Rust, Java, PHP, and C++ projects.**
 
 [![Version](https://img.shields.io/github/v/tag/HsinPu/symbol-lattice?label=version)](https://github.com/HsinPu/symbol-lattice/tags)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D22.13-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> **v0.38.0** is an early developer release. This public repository runs from source; its npm package is intentionally private and is not published to npm.
+> **v0.39.0** is an early developer release. This public repository runs from source; its npm package is intentionally private and is not published to npm.
 
 SymbolLattice builds a local symbol graph without hiding uncertainty. It keeps syntax-proven artifact facts, resolves cross-file relationships conservatively, and records why every resolved edge exists. The graph stays local to the inspected project under `.symbol-lattice/index.sqlite`.
 
@@ -27,7 +27,7 @@ SymbolLattice builds a local symbol graph without hiding uncertainty. It keeps s
 - **Event-accelerated foreground freshness** - opt-in `watch` uses native filesystem events when the host supports them, exposes bounded pending-path evidence in its own stream, coalesces saves, retains bounded polling as a safety sweep, and invokes the same atomic `sync` only after drift.
 - **Generation-bound source evidence** - `search` and exact `explore` results use source captured with the active graph generation, even when the live project has since drifted.
 - **Declaration-focused node view** - exact `node` results return the full persisted declaration range plus a bounded declaration body, direct callers/callees, and explicit limits from one active generation without substituting live source text.
-- **Static route evidence** - narrow Express, Fastify, NestJS, Python FastAPI/Flask, Go Gin/`net/http`/Chi, Rust Axum, Java Spring Web, and PHP Laravel HTTP packs plus React Router and Next.js client-navigation routes create first-class `route` nodes and evidence-bearing `routes` edges only when the registration and handler form are statically proven.
+- **Static route evidence** - narrow Express, Fastify, NestJS, Python FastAPI/Flask, Go Gin/`net/http`/Chi, Rust Axum, Java Spring Web, PHP Laravel, and C++ cpp-httplib HTTP packs plus React Router and Next.js client-navigation routes create first-class `route` nodes and evidence-bearing `routes` edges only when the registration and handler form are statically proven.
 - **Non-HTTP transport evidence** - AST-proven NestJS GraphQL, microservice, and WebSocket entrypoints use distinct `entrypoint` nodes and exact `handles` edges, so a message pattern or subscription is never mislabeled as an HTTP route.
 - **Direct type-hierarchy evidence** - AST-proven `extends` and `implements` edges preserve value/type namespace proof, type-only imports, re-export provenance, unresolved bases, and bounded direct parent/child views without pretending to have a full type checker.
 - **Bounded context packs** - ordered symbol references produce persisted source, capped relationship/impact summaries, and static directed evidence paths without guessing ambiguous symbols or dynamic behavior.
@@ -77,6 +77,7 @@ node dist/cli/main.js search "health" --project /path/to/project --language pyth
 node dist/cli/main.js search "health" --project /path/to/project --language go
 node dist/cli/main.js search "health" --project /path/to/project --language java
 node dist/cli/main.js search "health" --project /path/to/project --language php
+node dist/cli/main.js search "health" --project /path/to/project --language cpp
 node dist/cli/main.js context "src/consumer.ts#calculate" "src/math.ts#add" --project /path/to/project
 
 # Select affected tests from changed files already present in the active generation.
@@ -106,14 +107,14 @@ One-shot data commands emit stable, pretty JSON. `watch` is the deliberate strea
 
 ## Capabilities
 
-| Area | v0.38.0 behavior |
+| Area | v0.39.0 behavior |
 | --- | --- |
-| Source files | TypeScript, TSX, JavaScript, JSX, Python, Go, Rust, Java, and PHP |
+| Source files | TypeScript, TSX, JavaScript, JSX, Python, Go, Rust, Java, PHP, and C++ (`.cpp`, `.cc`, `.cxx`, `.hpp`, `.hh`, `.hxx`) |
 | Scope | Project root by default or repeatable, persisted `--scope` directories |
 | Discovery | Root `.gitignore` with negation; `.git`, `.symbol-lattice`, `coverage`, `dist`, and `node_modules` are always excluded |
-| Symbols | TypeScript/JavaScript: files, classes, functions, methods, interfaces, types, variables, routes, and entrypoints. Python: files, classes, functions, methods, and direct FastAPI / same-file or proven cross-file `APIRouter` / same-file Flask routes. Go: files, top-level functions, and direct Gin / `net/http` / Chi routes. Rust: files, top-level functions, and direct Axum routes. Java: files, direct top-level classes and methods, and direct Spring Web routes. PHP: files, direct top-level classes, methods, functions, and direct Laravel facade routes |
-| Relationships | TypeScript/JavaScript: `contains`, module imports/exports, direct identifier calls, evidence-bearing `routes` and `handles`, plus direct `extends` / `implements`. Python: syntax-proven `contains` plus direct FastAPI and Flask `routes`. Go: syntax-proven `contains` plus direct Gin, `net/http`, and Chi `routes`. Rust: syntax-proven `contains` plus direct Axum `routes`. Java: syntax-proven `contains` plus direct Spring Web `routes`. PHP: syntax-proven `contains` plus direct Laravel `routes`, exact only for same-file controller methods and explicitly unresolved otherwise |
-| Module resolution | Relative paths, TypeScript/JavaScript `baseUrl` and `paths`, then local workspace packages; Python has a deliberately narrow, regular-package proof for direct one-dot FastAPI router imports; Go, Rust, Java, and PHP have no generic module resolver in this release |
+| Symbols | TypeScript/JavaScript: files, classes, functions, methods, interfaces, types, variables, routes, and entrypoints. Python: files, classes, functions, methods, and direct FastAPI / same-file or proven cross-file `APIRouter` / same-file Flask routes. Go: files, top-level functions, and direct Gin / `net/http` / Chi routes. Rust: files, top-level functions, and direct Axum routes. Java: files, direct top-level classes and methods, and direct Spring Web routes. PHP: files, direct top-level classes, methods, functions, and direct Laravel facade routes. C++: files, direct top-level classes, methods, functions, and direct cpp-httplib routes |
+| Relationships | TypeScript/JavaScript: `contains`, module imports/exports, direct identifier calls, evidence-bearing `routes` and `handles`, plus direct `extends` / `implements`. Python: syntax-proven `contains` plus direct FastAPI and Flask `routes`. Go: syntax-proven `contains` plus direct Gin, `net/http`, and Chi `routes`. Rust: syntax-proven `contains` plus direct Axum `routes`. Java: syntax-proven `contains` plus direct Spring Web `routes`. PHP: syntax-proven `contains` plus direct Laravel `routes`, exact only for same-file controller methods and explicitly unresolved otherwise. C++: syntax-proven `contains` plus direct cpp-httplib `routes` to exact same-file top-level functions |
+| Module resolution | Relative paths, TypeScript/JavaScript `baseUrl` and `paths`, then local workspace packages; Python has a deliberately narrow, regular-package proof for direct one-dot FastAPI router imports; Go, Rust, Java, PHP, and C++ have no generic module resolver in this release |
 | Workspaces | Root `package.json` workspaces array/object, local package root/subpath `exports`, and entrypoint fallback |
 | Re-exports | Named aliases, `export *`, default-through-named aliases, and namespace-export provenance |
 | Retrieval | Local deterministic FTS5 search across persisted source text and identifier parts; bounded path/language filters, source/symbol evidence, and exact `explore` excerpts from the same active generation |
@@ -521,6 +522,27 @@ class HealthController {
 This emits `GET /health -> HealthController.show` and `POST /health -> HealthController.replace`, each with `framework.laravel.direct-facade.literal-controller-action.local-method` evidence. A typical controller in another PHP file remains useful but honest: SymbolLattice records the literal route and `Controller@action` reference with `unresolved` evidence rather than guessing a cross-file target.
 
 It intentionally excludes controller/import/package resolution, route groups and prefixes, `resource` / `apiResource`, closures, invokable/string handlers, `match`, redirects/views/fallbacks, middleware, route-model binding, route-cache/configuration semantics, dynamic or escaped/interpolated values, grouped/wildcard imports, aliases beyond one direct facade binding, trait/interface/anonymous declarations, and runtime behavior. PHP files with syntax errors retain only their file symbol until repaired.
+
+#### cpp-httplib (C++)
+
+v0.39 adds C++ `.cpp`, `.cc`, `.cxx`, `.hpp`, `.hh`, and `.hxx` discovery, direct top-level class/method/function containment, and the first `cpp-httplib` capability. A route requires a direct `#include <httplib.h>` (or `"httplib.h"`), a direct `httplib::Server` or `httplib::SSLServer` binding in one direct top-level function body, a literal slash-prefixed path, and one unique named top-level local function handler:
+
+```cpp
+#include <httplib.h>
+
+void health(const httplib::Request &, httplib::Response &) {}
+void create_user(const httplib::Request &, httplib::Response &) {}
+
+int main() {
+  httplib::Server server;
+  server.Get("/health", health);
+  server.Post("/users", create_user);
+}
+```
+
+This emits `GET /health -> health` and `POST /users -> create_user`, each with `framework.cpp-httplib.direct-server.literal-route.local-function` evidence. Direct `Get`, `Post`, `Put`, `Patch`, `Delete`, `Head`, and `Options` registrations are supported. A direct receiver reassignment invalidates the binding before later route extraction.
+
+It intentionally excludes `using namespace httplib`, wrapper/factory/mutable server flow beyond direct rebinding invalidation, nested blocks, routes declared through class/member/lambda/callback handlers, regex/raw/escaped/dynamic paths, server/client aliases, cross-file handlers, generic include resolution, middleware/pre/post routing handlers, C++ overload/template/namespace resolution, and runtime behavior. C++ files with syntax errors retain only their file symbol until repaired.
 
 ### React Router client-navigation evidence
 
@@ -1159,6 +1181,8 @@ v0.37 adds no SQLite schema migration or route-query command. It adds Java `.jav
 
 v0.38 adds no SQLite schema migration or route-query command. It adds PHP `.php` discovery, persisted PHP source-search/CLI/MCP language filtering, direct top-level PHP class/method/function containment, and direct Laravel facade route facts. The extractor advances to `multi-language-ast-v27`; the resolver remains `project-resolver-v14`. A pre-v0.38 active index requires an explicit `sync` or `index` before PHP or Laravel route evidence can appear. Existing generations remain readable.
 
+v0.39 adds no SQLite schema migration or route-query command. It adds C++ source/header discovery, persisted C++ source-search/CLI/MCP language filtering, direct top-level C++ class/method/function containment, and exact direct cpp-httplib route facts. The extractor advances to `multi-language-ast-v28`; the resolver remains `project-resolver-v14` because all supported C++ proof remains file-local. A pre-v0.39 active index requires an explicit `sync` or `index` before C++ or cpp-httplib route evidence can appear. Existing generations remain readable.
+
 ## Architecture
 
 ```mermaid
@@ -1190,7 +1214,7 @@ src/
   application/     Use cases, incremental planning, and graph projection
   cli/             Commander-based CLI
   domain/          Graph, evidence, identity, and index-work contracts
-  extraction/      TypeScript AST plus Python, Go, Rust, Java, and PHP Lezer fact extraction
+  extraction/      TypeScript AST plus Python, Go, Rust, Java, PHP, and C++ Lezer fact extraction
   infrastructure/  Filesystem, workspace, TypeScript, and SQLite adapters
   mcp/             Read-only MCP server
   ports/           Dependency boundaries
@@ -1198,7 +1222,7 @@ src/
 
 ## Deliberate boundaries
 
-v0.38.0 does not yet provide:
+v0.39.0 does not yet provide:
 
 - Daemon mode, background automatic sync after the foreground process exits, cross-process watch coordination, MCP per-query pending-file banners, worker pools, or historical source browsing.
 - pnpm workspace YAML, TypeScript project references, external/package `extends`, or nested `.gitignore` semantics.
@@ -1208,8 +1232,9 @@ v0.38.0 does not yet provide:
 - The Rust surface proves top-level functions and direct Axum `Router::new().route("/path", method(handler))` chains only when the `Router` and method helpers have direct unambiguous `axum` imports. It excludes `route_service`, `nest`, `merge`, state/layer/wrapper chains, generic constructors, `MethodRouter` composition, inline/wrapped/namespaced handlers, dynamic/escaped paths, wildcard or public re-exports, cross-file Cargo/module resolution, methods, semantic type checking, and runtime behavior. Syntax-error Rust files retain only their file symbol until repaired.
 - The Java surface proves direct top-level classes/methods and Spring Web routes only when direct non-static/non-wildcard imports (or fully-qualified annotations), one direct `@RestController` / `@Controller`, an optional literal class `@RequestMapping`, one literal shortcut method mapping, and its direct local method body are all present. It excludes method-level `@RequestMapping(method = ...)`, multi-path arrays, custom/composed annotations, placeholders/SpEL, additional conditions, nested/inherited/interface handlers, Java package/classpath resolution, generic Java import/call/type analysis, semantic Spring configuration, and runtime behavior. Syntax-error Java files retain only their file symbol until repaired.
 - The PHP surface proves direct top-level classes/methods/functions and literal Laravel facade controller-action routes only after one direct facade import/alias or fully-qualified facade proof. It resolves only an unqualified same-file controller method; imported or cross-file controllers stay explicitly unresolved. It excludes `match`, group/prefix/resource composition, closures and other handler forms, generic PHP import/package/call/type resolution, dynamic/escaped/interpolated paths or actions, middleware/configuration semantics, and runtime behavior. Syntax-error PHP files retain only their file symbol until repaired.
+- The C++ surface proves direct top-level classes/methods/functions and cpp-httplib routes only after a direct `httplib.h` include, one direct `httplib::Server` / `httplib::SSLServer` local binding, a literal path, and a unique direct named local function handler. It excludes `using namespace`, aliases/wrappers/factories/nested scopes, lambda/member/callback handlers, dynamic/raw/escaped paths, generic include/namespace/template/overload/cross-file resolution, middleware hooks, and runtime behavior. Syntax-error C++ files retain only their file symbol until repaired.
 - Semantic type checking, transitive hierarchy traversal, declaration-merging semantics, override dispatch, mixin/qualified/conditional heritage expressions, or automatic framework decorator inference. v0.18 recognizes direct imported NestJS HTTP decorators, direct static `RouterModule.register()` prefixes, and the narrowly defined non-HTTP decorators documented above; it does not infer custom decorators, barrels, `forRoot` / `forChild`, global/version prefixes, guards, GraphQL field resolvers, dynamic patterns, dynamic gateway configuration, or runtime transport wiring.
-- Language adapters beyond TS/TSX/JS/JSX/Python/Go/Rust/Java/PHP, external dependency indexing, telemetry, or multi-project routing.
+- Language adapters beyond TS/TSX/JS/JSX/Python/Go/Rust/Java/PHP/C++, external dependency indexing, telemetry, or multi-project routing.
 - Embedding-based or cloud retrieval, semantic ranking, arbitrary natural-language context assembly, semantic Git diff beyond immutable zero-context hunk-to-revision-local-declaration evidence, or reliable rename/move/cross-side identity attribution.
 
 ## Roadmap
@@ -1253,13 +1278,14 @@ v0.38.0 does not yet provide:
 | `v0.36.0` | Rust `.rs` discovery, top-level function containment, exact direct Axum `Router::new().route(...)` method-router chains, Rust source-search/CLI/MCP filters, and dynamic/shadow/wrapper rejection |
 | `v0.37.0` | Java `.java` discovery, direct class/method containment, exact direct Spring Web controller shortcut mappings, Java source-search/CLI/MCP filters, and literal/import/syntax-error rejection |
 | `v0.38.0` | PHP `.php` discovery, direct PHP declaration containment, AST-proven direct Laravel facade controller-action routes, exact same-file method evidence, explicit cross-file unresolved evidence, and PHP source-search/CLI/MCP filters |
-| `v0.39+` | Laravel controller/import/package resolution and route-group/resource composition, Spring method-level `@RequestMapping` and richer literal annotation values, Java package/classpath resolution, Axum route/MethodRouter composition, Rust Cargo/module resolution, Go Chi `Route` / `Group` / `Mount` composition, Echo/Fiber packs and broader Go resolution, React Router `<Routes>` boundary proof, deeper Next.js convention coverage, `fastify-plugin` wrapper proof, GraphQL field-resolver/runtime-transport evidence, contract graphs, retained-generation source browsing, and further CodeGraph-parity work |
+| `v0.39.0` | C++ source/header discovery, direct C++ declaration containment, AST-proven cpp-httplib direct named-handler routes, C++ source-search/CLI/MCP filters, direct receiver-rebinding invalidation, and dynamic/lambda/syntax-error rejection |
+| `v0.40+` | Laravel controller/import/package resolution and route-group/resource composition, deeper cpp-httplib scope/handler and C++ include/namespace resolution, Spring method-level `@RequestMapping` and richer literal annotation values, Java package/classpath resolution, Axum route/MethodRouter composition, Rust Cargo/module resolution, Go Chi `Route` / `Group` / `Mount` composition, Echo/Fiber packs and broader Go resolution, React Router `<Routes>` boundary proof, deeper Next.js convention coverage, `fastify-plugin` wrapper proof, GraphQL field-resolver/runtime-transport evidence, contract graphs, retained-generation source browsing, and further CodeGraph-parity work |
 
 See [CHANGELOG.md](CHANGELOG.md) for release notes and migration history.
 
 ## Release-by-release feature comparison
 
-Every release creates a verified standalone comparison report against the local CodeGraph baseline at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_vX.Y.Z.md` (for example, `FEATURE_COMPARISON_v0.38.0.md`). The version number is part of the filename, so each release retains an independent comparison record. It intentionally lives beside the local `symbol-lattice` and `codegraph` checkouts rather than inside either project. Starting with v0.28, these reports are written in Traditional Chinese. Each report distinguishes a proven precision advantage from broader-but-less-proven source coverage, and records remaining gaps instead of treating a version bump as parity.
+Every release creates a verified standalone comparison report against the local CodeGraph baseline at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_vX.Y.Z.md` (for example, `FEATURE_COMPARISON_v0.39.0.md`). The version number is part of the filename, so each release retains an independent comparison record. It intentionally lives beside the local `symbol-lattice` and `codegraph` checkouts rather than inside either project. Starting with v0.28, these reports are written in Traditional Chinese. Each report distinguishes a proven precision advantage from broader-but-less-proven source coverage, and records remaining gaps instead of treating a version bump as parity.
 
 ## Development
 
@@ -1282,6 +1308,8 @@ Rust coverage includes `.rs` discovery, persisted source search and CLI/MCP lang
 Java coverage includes `.java` discovery, persisted source search and CLI/MCP language filters, direct top-level class/method containment, direct imported or fully-qualified Spring Web controller evidence, literal class prefix plus literal method mapping extraction, direct local-method route edges, wildcard/dynamic/multi-value/method-level-`RequestMapping` rejection, malformed-source fail-closed behavior, and exact route-query integration.
 
 PHP coverage includes `.php` discovery, persisted source search and CLI/MCP language filters, direct or aliased/fully-qualified Laravel facade evidence, literal URI and controller-action extraction, exact same-file local-method routes, explicit unresolved cross-file-controller routes, dynamic/closure/resource rejection, malformed-source fail-closed behavior, and persisted route-query integration.
+
+C++ coverage includes `.cpp` / `.cc` / `.cxx` / `.hpp` / `.hh` / `.hxx` discovery, persisted source search and CLI/MCP language filters, direct top-level class/method/function containment, direct `httplib.h` include plus `httplib::Server` / `httplib::SSLServer` binding proof, literal direct named-handler HTTP routes, receiver-rebinding invalidation, dynamic/lambda/missing-header rejection, malformed-source fail-closed behavior, and persisted route-query integration.
 
 ## Contributing
 
