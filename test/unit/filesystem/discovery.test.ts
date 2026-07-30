@@ -48,6 +48,7 @@ describe("source discovery", () => {
     await writeFile(join(projectPath, "src", "g.erl"), "-module(example).\n", "utf8");
     await writeFile(join(projectPath, "src", "g.ex"), "defmodule Example do\nend\n", "utf8");
     await writeFile(join(projectPath, "src", "g.exs"), "IO.puts(\"example\")\n", "utf8");
+    await writeFile(join(projectPath, "src", "g.hs"), "main = putStrLn \"example\"\n", "utf8");
     await writeFile(join(projectPath, "src", "g.jl"), "health() = \"ok\"\n", "utf8");
     await writeFile(join(projectPath, "src", "g.lua"), "local answer = 42\n", "utf8");
     await writeFile(join(projectPath, "src", "g.pl"), "use Dancer2;\n", "utf8");
@@ -83,6 +84,7 @@ describe("source discovery", () => {
       "src/g.erl",
       "src/g.ex",
       "src/g.exs",
+      "src/g.hs",
       "src/g.jl",
       "src/g.lua",
       "src/g.pl",
@@ -112,6 +114,7 @@ describe("source discovery", () => {
       "erlang",
       "elixir",
       "elixir",
+      "haskell",
       "julia",
       "lua",
       "perl",

@@ -30,6 +30,7 @@ describe("first-party framework capabilities", () => {
       "compojure",
       "dancer2",
       "genie",
+      "scotty",
       "cpp-httplib",
       "aspnet-core",
       "rails",
@@ -202,6 +203,15 @@ describe("first-party framework capabilities", () => {
       surfaces: [
         "direct using Genie proof",
         "direct literal named-handler routes with optional literal method proof"
+      ]
+    });
+    expect(frameworkCapability("scotty")).toMatchObject({
+      languages: ["haskell"],
+      routeFramework: "scotty",
+      routeRegistrations: [],
+      surfaces: [
+        "direct import Web.Scotty proof",
+        "direct literal-port scotty do blocks with literal named-handler routes"
       ]
     });
     expect(frameworkCapability("cpp-httplib")).toMatchObject({

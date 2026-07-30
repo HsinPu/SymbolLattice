@@ -4140,6 +4140,191 @@ describe("source extraction", () => {
     ]);
   });
 
+  it("extracts direct Haskell Scotty routes with exact and unresolved evidence", () => {
+    const facts = extractFileFacts({
+      filePath: "src/demo/App.hs",
+      language: "haskell",
+      sourceText: [
+        "import Web.Scotty",
+        "",
+        "main = scotty 3000 $ do",
+        "  get \"/health\" health",
+        "  post \"/users\" $ createUser",
+        "  patch \"/missing\" missing",
+        "",
+        "health = text \"ok\"",
+        "createUser = text \"created\""
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(
+      facts.symbols.filter((symbol) => symbol.kind === "function").map((symbol) => symbol.qualifiedName)
+    ).toEqual(["src/demo/App.hs.main", "src/demo/App.hs.health", "src/demo/App.hs.createUser"]);
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName ?? null,
+          edge.referenceName,
+          edge.evidence?.ruleId,
+          edge.resolution,
+          edge.confidence
+        ])
+    ).toEqual([
+      [
+        "GET /health",
+        "src/demo/App.hs.health",
+        "health",
+        "framework.scotty.direct-block.literal-named-function.local-function",
+        "exact",
+        1
+      ],
+      [
+        "POST /users",
+        "src/demo/App.hs.createUser",
+        "createUser",
+        "framework.scotty.direct-block.literal-named-function.local-function",
+        "exact",
+        1
+      ],
+      [
+        "PATCH /missing",
+        null,
+        "missing",
+        "framework.scotty.direct-block.literal-named-function.unresolved",
+        "unresolved",
+        0
+      ]
+    ]);
+  });
+
+  it("requires direct Scotty import, literal-port blocks, direct named routes, and balanced Haskell input", () => {
+    const missingImport = extractFileFacts({
+      filePath: "src/missing-import.hs",
+      language: "haskell",
+      sourceText: [
+        "main = scotty 3000 $ do",
+        "  get \"/health\" health",
+        "health = text \"ok\""
+      ].join("\n")
+    });
+    const qualifiedImport = extractFileFacts({
+      filePath: "src/qualified.hs",
+      language: "haskell",
+      sourceText: [
+        "import qualified Web.Scotty as S",
+        "main = scotty 3000 $ do",
+        "  get \"/health\" health",
+        "health = text \"ok\""
+      ].join("\n")
+    });
+    const dynamicPort = extractFileFacts({
+      filePath: "src/dynamic-port.hs",
+      language: "haskell",
+      sourceText: [
+        "import Web.Scotty",
+        "main = scotty port $ do",
+        "  get \"/health\" health",
+        "health = text \"ok\""
+      ].join("\n")
+    });
+    const dynamicPath = extractFileFacts({
+      filePath: "src/dynamic-path.hs",
+      language: "haskell",
+      sourceText: [
+        "import Web.Scotty",
+        "main = scotty 3000 $ do",
+        "  get path health",
+        "health = text \"ok\""
+      ].join("\n")
+    });
+    const inlineHandler = extractFileFacts({
+      filePath: "src/inline.hs",
+      language: "haskell",
+      sourceText: [
+        "import Web.Scotty",
+        "main = scotty 3000 $ do",
+        "  get \"/health\" $ text \"ok\""
+      ].join("\n")
+    });
+    const nestedRoute = extractFileFacts({
+      filePath: "src/nested.hs",
+      language: "haskell",
+      sourceText: [
+        "import Web.Scotty",
+        "main = scotty 3000 $ do",
+        "  when enabled $ do",
+        "    get \"/health\" health",
+        "health = text \"ok\""
+      ].join("\n")
+    });
+    const repeatedImport = extractFileFacts({
+      filePath: "src/repeated.hs",
+      language: "haskell",
+      sourceText: [
+        "import Web.Scotty",
+        "import Web.Scotty",
+        "main = scotty 3000 $ do",
+        "  get \"/health\" health",
+        "health = text \"ok\""
+      ].join("\n")
+    });
+    const malformed = extractFileFacts({
+      filePath: "src/malformed.hs",
+      language: "haskell",
+      sourceText: "import Web.Scotty\nmain = scotty 3000 $ do\n  get (\"/health\" health"
+    });
+    const unterminatedComment = extractFileFacts({
+      filePath: "src/comment.hs",
+      language: "haskell",
+      sourceText: "import Web.Scotty\n{- open\nmain = scotty 3000 $ do"
+    });
+    const tabbed = extractFileFacts({
+      filePath: "src/tabbed.hs",
+      language: "haskell",
+      sourceText: "import Web.Scotty\nmain = scotty 3000 $ do\n\tget \"/health\" health"
+    });
+    const localLetHandler = extractFileFacts({
+      filePath: "src/local-let.hs",
+      language: "haskell",
+      sourceText: [
+        "import Web.Scotty",
+        "main = scotty 3000 $ do",
+        "  let health = text \"ok\"",
+        "  get \"/health\" health"
+      ].join("\n")
+    });
+
+    for (const facts of [
+      missingImport,
+      qualifiedImport,
+      dynamicPort,
+      dynamicPath,
+      inlineHandler,
+      nestedRoute,
+      repeatedImport,
+      malformed,
+      unterminatedComment,
+      tabbed
+    ]) {
+      expect(facts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+      expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+    }
+    expect(malformed.symbols).toHaveLength(1);
+    expect(unterminatedComment.symbols).toHaveLength(1);
+    expect(tabbed.symbols).toHaveLength(1);
+    expect(localLetHandler.edges.filter((edge) => edge.kind === "routes")).toEqual([
+      expect.objectContaining({
+        resolution: "unresolved",
+        evidence: expect.objectContaining({
+          ruleId: "framework.scotty.direct-block.literal-named-function.unresolved"
+        })
+      })
+    ]);
+  });
+
   it("extracts direct C++ cpp-httplib named-handler routes with exact evidence", () => {
     const facts = extractFileFacts({
       filePath: "src/server.cpp",

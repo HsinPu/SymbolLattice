@@ -57,6 +57,7 @@ export type RouteFramework =
   | "compojure"
   | "dancer2"
   | "genie"
+  | "scotty"
   | "cpp-httplib"
   | "aspnet-core"
   | "rails"
@@ -91,6 +92,7 @@ export const ARTIFACT_LANGUAGES = [
   "clojure",
   "perl",
   "julia",
+  "haskell",
   "cpp",
   "csharp",
   "ruby",

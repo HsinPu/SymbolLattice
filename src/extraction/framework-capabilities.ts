@@ -23,6 +23,7 @@ export const FRAMEWORK_CAPABILITY_IDS = [
   "compojure",
   "dancer2",
   "genie",
+  "scotty",
   "cpp-httplib",
   "aspnet-core",
   "rails",
@@ -256,6 +257,16 @@ export const FRAMEWORK_CAPABILITIES = [
     surfaces: [
       "direct using Genie proof",
       "direct literal named-handler routes with optional literal method proof"
+    ]
+  },
+  {
+    id: "scotty",
+    languages: ["haskell"],
+    routeFramework: "scotty",
+    routeRegistrations: [],
+    surfaces: [
+      "direct import Web.Scotty proof",
+      "direct literal-port scotty do blocks with literal named-handler routes"
     ]
   },
   {

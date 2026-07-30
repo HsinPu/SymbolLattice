@@ -6,6 +6,24 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.56.0] - 2026-07-31
+
+### Added
+
+- Haskell `.hs` source discovery, persisted source-search language filtering, CLI/MCP validation, and an isolated Haskell lexical/comment/delimiter/layout extractor for simple column-zero zero-argument `name = ...` function containment.
+- An executable first-party `scotty` capability. Direct Scotty route facts require exactly one column-zero `import Web.Scotty` proof, a column-zero `name = scotty <decimal-port> $ do` header, a direct baseline-indented literal `get/post/put/delete/patch/options` registration, and a simple named handler. A unique same-file zero-argument function produces `framework.scotty.direct-block.literal-named-function.local-function`; every other accepted handler remains explicit `unresolved` evidence.
+- Unit and integration coverage now verifies Haskell discovery, direct function containment, exact and unresolved Scotty route-query/source-search behavior, qualified-import/dynamic-port/dynamic-path/inline/nested/repeated-import rejection, malformed delimiter/comment and tab-layout fail-closed behavior, and CLI/MCP language validation. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.56.0.md`.
+
+### Compatibility
+
+- No SQLite schema migration or new query command is required. Haskell symbols and Scotty routes reuse the existing file, symbol, edge, source-search, and route-query contracts; existing generations remain readable.
+- The artifact extractor advances to `multi-language-ast-v45`; the project resolver remains `project-resolver-v16` because all accepted Scotty callback proof is file-local. A pre-v0.56 active index reports `indexer-version-changed` until an explicit `sync` or `index` publishes Haskell-capable facts.
+
+### Deliberate limits
+
+- The Haskell extractor is a deliberately small lexical/layout-aware implementation, not a full Haskell parser. It retains only file symbols for unbalanced delimiters, unterminated strings/comments, or tabs, and does not claim generic Haskell module, type, call, import, package, or runtime analysis.
+- Scotty support accepts only exactly one direct `import Web.Scotty`, literal decimal-port `scotty ... $ do` blocks, simple direct block-level named routes, and direct top-level zero-argument functions. It excludes qualified/selective/repeated imports, `scottyT`, dynamic ports/paths, `addroute`/`matchAny`, inline `do` handlers, nested statements, local callbacks, cross-file handlers, and runtime behavior. The local CodeGraph baseline does not list Haskell in its indexed language set; SymbolLattice adds a narrow audited language/framework slice rather than claiming wider generic Haskell parity.
+
 ## [0.55.0] - 2026-07-31
 
 ### Added
