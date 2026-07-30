@@ -2138,7 +2138,7 @@ describe("SymbolLatticeService", () => {
       service.search(projectPath, "needle", { pathPrefix: "../outside" })
     ).rejects.toMatchObject({ code: "INVALID_SEARCH_PATH_PREFIX" });
     await expect(
-      service.search(projectPath, "needle", { language: "go" as "typescript" })
+      service.search(projectPath, "needle", { language: "not-a-language" as "typescript" })
     ).rejects.toMatchObject({ code: "INVALID_SEARCH_LANGUAGE" });
   });
 
@@ -3331,6 +3331,59 @@ describe("SymbolLatticeService", () => {
             resolution: "exact",
             evidence: expect.objectContaining({
               ruleId: "framework.flask.direct-blueprint.register-blueprint.decorator.local-function",
+              stage: "syntax"
+            })
+          })
+        })
+      ])
+    );
+  });
+
+  it("indexes Go Gin engine and literal group routes with exact syntax evidence", async () => {
+    const projectPath = await createInlineProject({
+      "cmd/server/main.go": [
+        "package main",
+        "",
+        'import "github.com/gin-gonic/gin"',
+        "",
+        "func health(c *gin.Context) {}",
+        "func listUsers(c *gin.Context) {}",
+        "",
+        "func main() {",
+        "  router := gin.Default()",
+        "  router.GET(\"/health\", health)",
+        "  api := router.Group(\"/api\")",
+        "  api.GET(\"/users\", listUsers)",
+        "}"
+      ].join("\n")
+    });
+    const service = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+
+    expect(routes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "GET",
+          path: "/health",
+          handler: expect.objectContaining({ qualifiedName: "cmd/server/main.go#health" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.gin.direct-engine.method.local-function",
+              stage: "syntax"
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "GET",
+          path: "/api/users",
+          handler: expect.objectContaining({ qualifiedName: "cmd/server/main.go#listUsers" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.gin.direct-group.method.local-function",
               stage: "syntax"
             })
           })

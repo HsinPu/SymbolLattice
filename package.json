@@ -1,6 +1,6 @@
 {
   "name": "@hsinpu/symbol-lattice",
-  "version": "0.32.0",
+  "version": "0.33.0",
   "description": "Evidence-first local code intelligence for TypeScript, JavaScript, and Python projects.",
   "license": "MIT",
   "repository": {
@@ -33,6 +33,7 @@
     "start": "node dist/cli/main.js"
   },
   "dependencies": {
+    "@lezer/go": "1.0.1",
     "@lezer/python": "1.1.19",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "commander": "^15.0.0",

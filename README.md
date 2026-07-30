@@ -2,7 +2,7 @@
 
 # SymbolLattice
 
-**Evidence-first local code intelligence for TypeScript, JavaScript, and Python projects.**
+**Evidence-first local code intelligence for TypeScript, JavaScript, Python, and Go projects.**
 
 [![Version](https://img.shields.io/github/v/tag/HsinPu/symbol-lattice?label=version)](https://github.com/HsinPu/symbol-lattice/tags)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D22.13-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> **v0.32.0** is an early developer release. This public repository runs from source; its npm package is intentionally private and is not published to npm.
+> **v0.33.0** is an early developer release. This public repository runs from source; its npm package is intentionally private and is not published to npm.
 
 SymbolLattice builds a local symbol graph without hiding uncertainty. It keeps syntax-proven artifact facts, resolves cross-file relationships conservatively, and records why every resolved edge exists. The graph stays local to the inspected project under `.symbol-lattice/index.sqlite`.
 
@@ -27,7 +27,7 @@ SymbolLattice builds a local symbol graph without hiding uncertainty. It keeps s
 - **Event-accelerated foreground freshness** - opt-in `watch` uses native filesystem events when the host supports them, exposes bounded pending-path evidence in its own stream, coalesces saves, retains bounded polling as a safety sweep, and invokes the same atomic `sync` only after drift.
 - **Generation-bound source evidence** - `search` and exact `explore` results use source captured with the active graph generation, even when the live project has since drifted.
 - **Declaration-focused node view** - exact `node` results return the full persisted declaration range plus a bounded declaration body, direct callers/callees, and explicit limits from one active generation without substituting live source text.
-- **Static route evidence** - narrow Express, Fastify, NestJS, and Python FastAPI/Flask HTTP packs plus React Router and Next.js client-navigation routes create first-class `route` nodes and exact `routes` edges only when the registration and target binding are statically proven.
+- **Static route evidence** - narrow Express, Fastify, NestJS, Python FastAPI/Flask, and Go Gin HTTP packs plus React Router and Next.js client-navigation routes create first-class `route` nodes and exact `routes` edges only when the registration and target binding are statically proven.
 - **Non-HTTP transport evidence** - AST-proven NestJS GraphQL, microservice, and WebSocket entrypoints use distinct `entrypoint` nodes and exact `handles` edges, so a message pattern or subscription is never mislabeled as an HTTP route.
 - **Direct type-hierarchy evidence** - AST-proven `extends` and `implements` edges preserve value/type namespace proof, type-only imports, re-export provenance, unresolved bases, and bounded direct parent/child views without pretending to have a full type checker.
 - **Bounded context packs** - ordered symbol references produce persisted source, capped relationship/impact summaries, and static directed evidence paths without guessing ambiguous symbols or dynamic behavior.
@@ -74,6 +74,7 @@ node dist/cli/main.js routes /path/to/project --method NAVIGATE --path /settings
 node dist/cli/main.js entrypoints /path/to/project --transport graphql --operation query --name author --limit 20
 node dist/cli/main.js search "session timeout" --project /path/to/project --path src
 node dist/cli/main.js search "health" --project /path/to/project --language python
+node dist/cli/main.js search "health" --project /path/to/project --language go
 node dist/cli/main.js context "src/consumer.ts#calculate" "src/math.ts#add" --project /path/to/project
 
 # Select affected tests from changed files already present in the active generation.
@@ -103,19 +104,19 @@ One-shot data commands emit stable, pretty JSON. `watch` is the deliberate strea
 
 ## Capabilities
 
-| Area | v0.32.0 behavior |
+| Area | v0.33.0 behavior |
 | --- | --- |
-| Source files | TypeScript, TSX, JavaScript, JSX, and Python |
+| Source files | TypeScript, TSX, JavaScript, JSX, Python, and Go |
 | Scope | Project root by default or repeatable, persisted `--scope` directories |
 | Discovery | Root `.gitignore` with negation; `.git`, `.symbol-lattice`, `coverage`, `dist`, and `node_modules` are always excluded |
-| Symbols | TypeScript/JavaScript: files, classes, functions, methods, interfaces, types, variables, routes, and entrypoints. Python: files, classes, functions, methods, and direct FastAPI / same-file or proven cross-file `APIRouter` / same-file Flask routes |
-| Relationships | TypeScript/JavaScript: `contains`, module imports/exports, direct identifier calls, evidence-bearing `routes` and `handles`, plus direct `extends` / `implements`. Python: syntax-proven `contains` plus direct FastAPI and Flask `routes` |
-| Module resolution | Relative paths, TypeScript/JavaScript `baseUrl` and `paths`, then local workspace packages; Python has a deliberately narrow, regular-package proof for direct one-dot FastAPI router imports |
+| Symbols | TypeScript/JavaScript: files, classes, functions, methods, interfaces, types, variables, routes, and entrypoints. Python: files, classes, functions, methods, and direct FastAPI / same-file or proven cross-file `APIRouter` / same-file Flask routes. Go: files, top-level functions, and direct Gin routes |
+| Relationships | TypeScript/JavaScript: `contains`, module imports/exports, direct identifier calls, evidence-bearing `routes` and `handles`, plus direct `extends` / `implements`. Python: syntax-proven `contains` plus direct FastAPI and Flask `routes`. Go: syntax-proven `contains` plus direct Gin `routes` |
+| Module resolution | Relative paths, TypeScript/JavaScript `baseUrl` and `paths`, then local workspace packages; Python has a deliberately narrow, regular-package proof for direct one-dot FastAPI router imports; Go has no generic module resolver in this release |
 | Workspaces | Root `package.json` workspaces array/object, local package root/subpath `exports`, and entrypoint fallback |
 | Re-exports | Named aliases, `export *`, default-through-named aliases, and namespace-export provenance |
 | Retrieval | Local deterministic FTS5 search across persisted source text and identifier parts; bounded path/language filters, source/symbol evidence, and exact `explore` excerpts from the same active generation |
 | Node inspection | Exact ID, qualified-name, simple-name, or `path:line[:column]` matches can return the persisted declaration range, capped direct callers/callees, source provenance, truncation, and active freshness from one generation |
-| Routes | Static AST-proven Express literal registrations; Fastify shorthand/full-object registrations plus inline, same-file named, and imported/re-exported plugin `register(..., { prefix })` projection; direct NestJS controller decorators plus `RouterModule.register()` module-prefix projection; direct same-file FastAPI application decorators plus same-file and one-dot package-relative cross-file `APIRouter` / literal `include_router(...)` composition; direct Flask application decorators and same-file literal `Blueprint` / `register_blueprint(...)` composition; recursively composed literal React Router JSX `Route`, `createRoutesFromElements(...)`, and v6.4+ data-router navigation; and convention-derived Next.js Pages/App Router page routes. All use bounded `routes` listing and exact handler evidence; browser routes use `NAVIGATE`, never fabricated HTTP `GET` |
+| Routes | Static AST-proven Express literal registrations; Fastify shorthand/full-object registrations plus inline, same-file named, and imported/re-exported plugin `register(..., { prefix })` projection; direct NestJS controller decorators plus `RouterModule.register()` module-prefix projection; direct same-file FastAPI application decorators plus same-file and one-dot package-relative cross-file `APIRouter` / literal `include_router(...)` composition; direct Flask application decorators and same-file literal `Blueprint` / `register_blueprint(...)` composition; direct Go Gin engine and literal same-function `RouterGroup` composition; recursively composed literal React Router JSX `Route`, `createRoutesFromElements(...)`, and v6.4+ data-router navigation; and convention-derived Next.js Pages/App Router page routes. All use bounded `routes` listing and exact handler evidence; browser routes use `NAVIGATE`, never fabricated HTTP `GET` |
 | Non-HTTP entrypoints | AST-proven direct NestJS GraphQL `Query` / `Mutation` / `Subscription`, microservice `MessagePattern` / `EventPattern`, and WebSocket `SubscribeMessage` handlers. Bounded `entrypoints` listing keeps transport/operation/name semantics and exact `handles` evidence separate from HTTP routes |
 | Type hierarchy | Direct TS/JS class `extends`, TS class `implements`, and TS interface `extends`; exact lexical/import/re-export proof with value/type namespaces, plus bounded direct parents/children |
 | Context | Bounded packs for 1–8 ordered references: exact-match source excerpts, capped callers/callees and reverse impact, plus shortest static directed evidence paths between adjacent exact references |
@@ -130,13 +131,14 @@ One-shot data commands emit stable, pretty JSON. `watch` is the deliberate strea
 
 Framework coverage is declared once and actively selects the extraction passes applicable to the parsed language. This is a stable integration boundary, not a runtime framework detector: every pass below still requires its own syntax proof before it emits facts.
 
-| Capability | Proven surfaces in v0.32 |
+| Capability | Proven surfaces in v0.33 |
 | --- | --- |
 | Express | Literal receiver methods and identifier handlers |
 | Fastify | Literal routes and static prefix composition |
 | NestJS | HTTP decorators, non-HTTP entrypoints, and module prefixes |
 | FastAPI | Python direct application decorators plus same-file and direct one-dot package-relative `APIRouter` routes through literal `include_router` prefixes |
 | Flask | Python direct app shortcut / `route` decorators plus same-file `Blueprint` routes through literal `register_blueprint` prefixes |
+| Gin | Go direct engine methods plus same-function literal `RouterGroup` prefixes |
 | React Router | Recursive literal JSX `Route`, `createRoutesFromElements` JSX trees, and data-router object trees |
 | Next.js | Pages Router and App Router page default exports |
 
@@ -163,7 +165,7 @@ For an exact call that travels through a barrel, evidence uses `module.reexporte
 
 ### Static route and client-navigation evidence
 
-v0.14 introduced the first framework pack as a graph contract, not a regex guess; v0.25 adds an executable first-party capability registry and convention-derived Next.js page routes, v0.26 recursively composes proven literal React Router data-router paths, v0.27 brings the same bounded composition to literal JSX `Route` trees, v0.28 proves direct `createRoutesFromElements(...)` JSX trees independently, v0.29 adds the first Python/FastAPI slice, v0.30 composes direct same-file `APIRouter` registrations, v0.31 projects a strictly proven one-dot package-relative FastAPI router import, and v0.32 adds direct Flask app and same-file Blueprint route evidence. A supported registration creates a first-class `route` symbol such as `GET /users`, `GET /api/users`, `GET /health`, or `NAVIGATE /settings` and a distinct `routes` edge to its terminal handler. That edge remains visible in `callers`, `callees`, `impact`, `context`, `explore`, `node`, and `explain-edge`; its kind keeps HTTP dispatch and browser navigation separate from ordinary function calls.
+v0.14 introduced the first framework pack as a graph contract, not a regex guess; v0.25 adds an executable first-party capability registry and convention-derived Next.js page routes, v0.26 recursively composes proven literal React Router data-router paths, v0.27 brings the same bounded composition to literal JSX `Route` trees, v0.28 proves direct `createRoutesFromElements(...)` JSX trees independently, v0.29 adds the first Python/FastAPI slice, v0.30 composes direct same-file `APIRouter` registrations, v0.31 projects a strictly proven one-dot package-relative FastAPI router import, v0.32 adds direct Flask app and same-file Blueprint route evidence, and v0.33 adds direct Go Gin engine and literal RouterGroup routes. A supported registration creates a first-class `route` symbol such as `GET /users`, `GET /api/users`, `GET /health`, or `NAVIGATE /settings` and a distinct `routes` edge to its terminal handler. That edge remains visible in `callers`, `callees`, `impact`, `context`, `explore`, `node`, and `explain-edge`; its kind keeps HTTP dispatch and browser navigation separate from ordinary function calls.
 
 #### Express
 
@@ -359,6 +361,39 @@ The v0.32 Flask contract accepts only:
 - a plain, unescaped literal `url_prefix` with no trailing slash. Blueprint constructor positional values and unrelated keyword options remain configuration, not graph evidence.
 
 It intentionally excludes cross-file Blueprints, `add_url_rule`, nested or factory Blueprints, `before_request` / middleware / dependency behavior, dynamic methods or endpoints, star/keyword expansion, member receivers, custom decorator wrappers, escaped/dynamic prefixes, and runtime routing configuration.
+
+#### Gin (Go)
+
+v0.33 adds a first Go framework pack using the `@lezer/go` AST adapter. It proves only direct Gin engine and same-function literal `RouterGroup` registrations:
+
+```go
+package main
+
+import gin "github.com/gin-gonic/gin"
+
+func health(c *gin.Context) {}
+func listUsers(c *gin.Context) {}
+
+func main() {
+  router := gin.Default()
+  router.GET("/health", health)
+
+  api := router.Group("/api")
+  api.GET("/users", listUsers)
+}
+```
+
+This emits `GET /health -> health` with `framework.gin.direct-engine.method.local-function` evidence and `GET /api/users -> listUsers` with `framework.gin.direct-group.method.local-function` evidence. Direct `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD`, and `OPTIONS` methods are supported; `Any` is represented as `ALL`.
+
+The v0.33 Gin contract accepts only:
+
+- a syntactically valid `.go` file and one direct non-dot/non-blank import of `github.com/gin-gonic/gin`, using the default `gin` name or a direct alias;
+- a same-function short-variable engine binding such as `router := gin.Default()` or `router := gin.New()`, whose package alias is not shadowed before the binding;
+- direct `group := receiver.Group("/prefix")` bindings with one literal slash-prefixed, non-root, non-trailing, non-duplicated-slash prefix; nested proven groups compose their literal prefixes;
+- a direct receiver HTTP method with one literal slash-prefixed path and exactly one named package-level function handler; and
+- no local shadowing of the handler name before the proven registration.
+
+It intentionally excludes `var` engine declarations, `Handle`, `Match`, static-file helpers, inline/multiple/middleware handlers, dynamic or escaped paths, root/trailing/double-slash group prefixes, group middleware, chained/member receivers, factory/wrapper construction, cross-file receiver flow, Go module/package resolution, methods, and runtime routing behavior.
 
 ### React Router client-navigation evidence
 
@@ -710,7 +745,7 @@ node dist/cli/main.js affected --base origin/main --project /path/to/project
 
 The two Git modes are mutually exclusive and cannot be combined with explicit paths or `--stdin`. They require a repository with a resolvable `HEAD`. Git is run with argv-only process execution, `--no-ext-diff`, and `--no-textconv`; SymbolLattice never fetches, commits, stages, initializes, indexes, or syncs as part of this query.
 
-Git output is preserved under `changeSet.changes`, including non-source files and both sides of renames or copies. Only supported TypeScript/JavaScript/Python paths outside `.git`, `.symbol-lattice`, `coverage`, `dist`, and `node_modules` become `changeSet.sourcePaths`; those paths are capped at `50` and are the only inputs sent to graph analysis. If a Git change set has no supported source paths, the response returns its provenance with `affected: null` rather than inventing an empty graph traversal.
+Git output is preserved under `changeSet.changes`, including non-source files and both sides of renames or copies. Only supported TypeScript/JavaScript/Python/Go paths outside `.git`, `.symbol-lattice`, `coverage`, `dist`, and `node_modules` become `changeSet.sourcePaths`; those paths are capped at `50` and are the only inputs sent to graph analysis. If a Git change set has no supported source paths, the response returns its provenance with `affected: null` rather than inventing an empty graph traversal.
 
 > [!CAUTION]
 > Git selection is **file-level**, not semantic Git diff. It does not map hunks to declarations, infer runtime behavior, or run a test runner. A base comparison may also be stale relative to the active graph generation; use the returned freshness and completeness fields before treating the selected tests as complete.
@@ -743,7 +778,7 @@ node dist/cli/main.js git-hunks /path/to/project --base origin/main
 node dist/cli/main.js git-hunks /path/to/project --base origin/main --limit 10
 ```
 
-The command has no working-tree, staged, or untracked-file selector. It does not read an active graph, select tests, fetch, index, synchronize, or mutate Git or SQLite state. Supported TS/TSX/JS/JSX/Python source sides are read from the two resolved revisions only.
+The command has no working-tree, staged, or untracked-file selector. It does not read an active graph, select tests, fetch, index, synchronize, or mutate Git or SQLite state. Supported TS/TSX/JS/JSX/Python/Go source sides are read from the two resolved revisions only.
 
 | Bound | Default | Range | Effect |
 | --- | ---: | ---: | --- |
@@ -898,7 +933,7 @@ The active generation fingerprints the root `.gitignore`, selected `tsconfig.jso
 | `search <query>` | Search persisted source and identifier evidence; accepts `--limit`, `--path`, and `--language` |
 | `node <reference>` | Return one exact symbol's bounded persisted declaration range, direct callers/callees, provenance, and freshness; never refreshes the index |
 | `hierarchy <reference>` | Return bounded direct `extends` / `implements` parents and exact children, including unresolved parent evidence; accepts `--limit` and never refreshes the index |
-| `routes [path]` | List bounded static Express and Fastify route nodes (including direct inline, same-file named, and imported/re-exported Fastify plugin-prefix projections) plus AST-proven NestJS route nodes with exact `RouterModule.register()` prefix projections; accepts `--method` (including `TRACE`), `--path`, and `--limit`; never refreshes the index |
+| `routes [path]` | List bounded static Express, Fastify, Flask, FastAPI, and Gin route nodes (including direct inline, same-file named, and imported/re-exported Fastify plugin-prefix projections) plus AST-proven NestJS route nodes with exact `RouterModule.register()` prefix projections; accepts `--method` (including `TRACE`), `--path`, and `--limit`; never refreshes the index |
 | `entrypoints [path]` | List bounded AST-proven NestJS GraphQL, microservice, and WebSocket entrypoints with exact handler evidence; accepts `--transport`, `--operation`, `--name`, and `--limit`; never refreshes the index |
 | `callers <symbol>` / `callees <symbol>` | Show direct graph relationships |
 | `impact <symbol>` | Trace reverse impact with optional `--depth` and explicit output `--limit` |
@@ -985,6 +1020,8 @@ v0.31 adds no SQLite schema migration or route-query command. It persists additi
 
 v0.32 adds no SQLite schema migration or route-query command. It introduces an additive `flask` framework capability and direct Python syntax edges for literal Flask app and same-file Blueprint registrations; no generic Python module resolver is added. The extractor advances to `multi-language-ast-v21`; the resolver remains `project-resolver-v14`. A pre-v0.32 active index requires an explicit `sync` or `index` before Flask route evidence can appear. Existing generations remain readable.
 
+v0.33 adds no SQLite schema migration or route-query command. It adds Go `.go` discovery, persisted Go language filters, conservative top-level function containment, and direct Gin engine / same-function literal RouterGroup route evidence. The extractor advances to `multi-language-ast-v22`; the resolver remains `project-resolver-v14`. A pre-v0.33 active index requires an explicit `sync` or `index` before Go and Gin evidence can appear. Existing generations remain readable.
+
 ## Architecture
 
 ```mermaid
@@ -998,7 +1035,7 @@ flowchart LR
   Catalog["Filesystem catalog\nscope + gitignore"] --> Inputs["Index inputs"]
   Catalog --> TS["TS alias resolver"]
   Catalog --> WS["Workspace resolver"]
-  Extractor["TypeScript AST extractor + Python Lezer parser\nfirst-party framework capability passes\nExpress/Fastify/Nest HTTP routes + Fastify plugin facts + FastAPI and Flask facts\nReact Router recursive literal JSX/factory/data-router + Next Pages/App navigation\nNest module-prefix facts + non-HTTP entrypoints"] --> Facts["Reusable artifact facts"]
+  Extractor["TypeScript AST extractor + Python/Go Lezer parsers\nfirst-party framework capability passes\nExpress/Fastify/Nest HTTP routes + Fastify plugin facts + FastAPI/Flask/Gin facts\nReact Router recursive literal JSX/factory/data-router + Next Pages/App navigation\nNest module-prefix facts + non-HTTP entrypoints"] --> Facts["Reusable artifact facts"]
   Catalog --> SourceDocs["Persisted source documents"]
   SourceDocs --> Retrieval["Generation-bound lexical projection"]
   Facts --> Resolver["Full project export surface"]
@@ -1016,7 +1053,7 @@ src/
   application/     Use cases, incremental planning, and graph projection
   cli/             Commander-based CLI
   domain/          Graph, evidence, identity, and index-work contracts
-  extraction/      TypeScript AST and Python Lezer fact extraction
+  extraction/      TypeScript AST plus Python and Go Lezer fact extraction
   infrastructure/  Filesystem, workspace, TypeScript, and SQLite adapters
   mcp/             Read-only MCP server
   ports/           Dependency boundaries
@@ -1024,14 +1061,15 @@ src/
 
 ## Deliberate boundaries
 
-v0.32.0 does not yet provide:
+v0.33.0 does not yet provide:
 
 - Daemon mode, background automatic sync after the foreground process exits, cross-process watch coordination, MCP per-query pending-file banners, worker pools, or historical source browsing.
 - pnpm workspace YAML, TypeScript project references, external/package `extends`, or nested `.gitignore` semantics.
 - CommonJS `require`, dynamic dispatch, reflection, arbitrary framework routes, or namespace property-call resolution. The Express and Fastify packs remain limited to syntax-proven direct static registrations; Fastify now projects direct imported/re-exported plugin callbacks and nested direct identifier registrations, but it does not model mutable/assignment aliases, namespace/member access, `fastify-plugin` wrappers, dynamic prefixes, prefixed-plugin root-route variants, hooks, inline route handlers, or runtime route composition. The React Router pack accepts only direct literal JSX `Route` trees with direct child routes/fragments, direct one-argument `createRoutesFromElements(...)` literal JSX trees, or direct one-argument data-router literal trees with direct page identifiers; it does not model `basename`, `lazy`, array variables/spreads, v5 nested `component` trees, dynamic children, JSX conditionals/arbitrary wrapper descendants, absolute child paths, dynamic/optional/multiple-argument factory calls, or runtime router configuration. The Next.js pack accepts only convention-derived Pages/App page files with one direct named default export; it excludes API and App Route handlers, wrappers, parallel/intercepting routes, layouts, middleware, and runtime configuration.
 - The Python/FastAPI surface proves one narrow cross-file router form: direct import aliases, direct `APIRouter` construction, literal router/include prefixes, same-file composition, and a one-dot regular-package direct router import are supported. Flask supports direct app and same-file Blueprint registrations with literal methods/prefixes. Neither pack resolves generic Python imports/exports/calls, parent-relative or namespace-package FastAPI imports, cross-file Flask Blueprints, member routers, import/re-export chains, nested routers, assignment aliases, dependencies or middleware as graph relationships, factory composition, star/keyword expansion, possible rebindings, dynamic/escaped paths or prefixes, or routers declared after inclusion. Syntax-error Python files retain only their file symbol until repaired.
+- The Go/Gin surface proves top-level functions plus direct same-function `:= gin.Default()` / `gin.New()` receivers, literal one-handler HTTP registrations, and literal non-root/non-trailing `RouterGroup` prefix composition. It excludes `var` bindings, `Handle` / `Match`, static helpers, inline/multiple/middleware handlers, path escaping/dynamic values, root/trailing/double-slash group prefixes, factory/wrapper/chained/mutable receiver flow, cross-file module/package resolution, methods, generic Go imports/calls/types, and runtime framework behavior. Syntax-error Go files retain only their file symbol until repaired.
 - Semantic type checking, transitive hierarchy traversal, declaration-merging semantics, override dispatch, mixin/qualified/conditional heritage expressions, or automatic framework decorator inference. v0.18 recognizes direct imported NestJS HTTP decorators, direct static `RouterModule.register()` prefixes, and the narrowly defined non-HTTP decorators documented above; it does not infer custom decorators, barrels, `forRoot` / `forChild`, global/version prefixes, guards, GraphQL field resolvers, dynamic patterns, dynamic gateway configuration, or runtime transport wiring.
-- Language adapters beyond TS/TSX/JS/JSX/Python, external dependency indexing, telemetry, or multi-project routing.
+- Language adapters beyond TS/TSX/JS/JSX/Python/Go, external dependency indexing, telemetry, or multi-project routing.
 - Embedding-based or cloud retrieval, semantic ranking, arbitrary natural-language context assembly, semantic Git diff beyond immutable zero-context hunk-to-revision-local-declaration evidence, or reliable rename/move/cross-side identity attribution.
 
 ## Roadmap
@@ -1069,14 +1107,14 @@ v0.32.0 does not yet provide:
 | `v0.30.0` | AST-proven same-file FastAPI `APIRouter` decorators projected through direct literal `include_router(...)` prefixes, including direct import aliases, static prefix composition, exact local handlers, and rejection of dynamic/rebound/late shapes |
 | `v0.31.0` | Python cross-file one-dot regular-package direct router facts and exact literal `include_router` projection, with source/target package-boundary proof and auditable module evidence |
 | `v0.32.0` | Flask direct application shortcut / `route` decorators and same-file Blueprint prefix composition, with exact local handlers and dynamic/rebound rejection |
-| `v0.33.0` | Go `.go` discovery plus a first `net/http` / Gin literal route pack, then further language adapters/framework packs |
-| `v0.34+` | Go chi/router-group composition, React Router `<Routes>` boundary proof, deeper Next.js convention coverage, `fastify-plugin` wrapper proof, GraphQL field-resolver/runtime-transport evidence, contract graphs, retained-generation source browsing, and further CodeGraph-parity work |
+| `v0.33.0` | Go `.go` discovery, conservative top-level function containment, direct Gin engine methods, and nested same-function literal `RouterGroup` prefix composition with exact local handlers |
+| `v0.34+` | Go `net/http`, chi/Echo/Fiber packs and broader Go resolution, React Router `<Routes>` boundary proof, deeper Next.js convention coverage, `fastify-plugin` wrapper proof, GraphQL field-resolver/runtime-transport evidence, contract graphs, retained-generation source browsing, and further CodeGraph-parity work |
 
 See [CHANGELOG.md](CHANGELOG.md) for release notes and migration history.
 
 ## Release-by-release feature comparison
 
-Every release creates a verified standalone comparison report against the local CodeGraph baseline at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_vX.Y.Z.md` (for example, `FEATURE_COMPARISON_v0.32.0.md`). The version number is part of the filename, so each release retains an independent comparison record. It intentionally lives beside the local `symbol-lattice` and `codegraph` checkouts rather than inside either project. Starting with v0.28, these reports are written in Traditional Chinese. Each report distinguishes a proven precision advantage from broader-but-less-proven source coverage, and records remaining gaps instead of treating a version bump as parity.
+Every release creates a verified standalone comparison report against the local CodeGraph baseline at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_vX.Y.Z.md` (for example, `FEATURE_COMPARISON_v0.33.0.md`). The version number is part of the filename, so each release retains an independent comparison record. It intentionally lives beside the local `symbol-lattice` and `codegraph` checkouts rather than inside either project. Starting with v0.28, these reports are written in Traditional Chinese. Each report distinguishes a proven precision advantage from broader-but-less-proven source coverage, and records remaining gaps instead of treating a version bump as parity.
 
 ## Development
 
@@ -1091,6 +1129,8 @@ git diff --check
 The suite covers discovery, input fingerprints, alias and workspace resolution, exact direct TypeScript/JavaScript heritage extraction and namespace-aware local/import/re-export resolution, bounded hierarchy traversal, executable framework-capability registration, exact static Express and Fastify route extraction including inline, same-file named, and cross-file imported/re-exported plugin-prefix composition plus handler resolution, recursive literal React Router JSX, `createRoutesFromElements`, and data-router client-navigation extraction with direct fragments, relative children, index routes, pathless layouts, unsafe-shape rejection, factory-specific evidence, and exact handler resolution, direct Next.js Pages/App Router convention extraction with handler resolution, import/type/shadow/spread/lazy/factory-option boundary checks, CLI/MCP `NAVIGATE` filtering, and incremental raw-fact reuse, direct NestJS controller decorators plus static `RouterModule.register()` prefix composition and non-HTTP GraphQL/microservice/WebSocket entrypoint extraction with alias, shadow, dynamic, persistence, and incremental raw-fact reuse coverage, route- and entrypoint-aware graph traversal, re-export semantics, exact affected-test proofs and completeness limits, local Git change-set parsing and selection, immutable revision-local Git hunk declaration attribution, bounded generation-bound node declaration evidence, generation-bound search and exploration source evidence, retained graph history and structural diffs, legacy snapshot backfill, stale-source evidence, bounded foreground pending-file disclosure, event debounce/polling fallback/retry receipts, no-op sync, schema migration, atomic rollback, MCP read-only behavior, CLI parsing, and architecture boundaries.
 
 Python coverage includes `.py` discovery, direct declaration/containment extraction, malformed-source fail-closed behavior, direct FastAPI alias/application/decorator evidence, same-file plus one-dot regular-package cross-file `APIRouter` literal-prefix/`include_router` composition, direct Flask app and same-file `Blueprint` literal-prefix routes, persisted fact/evidence boundaries, source search, CLI/MCP language filters, and incremental indexing.
+
+Go coverage includes `.go` discovery, persisted source search and CLI/MCP language filters, conservative top-level function containment, direct/default-or-aliased Gin engine creation, direct literal engine and nested same-function `RouterGroup` routes, `Any` to `ALL` evidence, dynamic/shadow/rebinding rejection, malformed-source fail-closed behavior, and exact route-query integration.
 
 ## Contributing
 

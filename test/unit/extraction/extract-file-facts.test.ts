@@ -2149,6 +2149,138 @@ describe("source extraction", () => {
     expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
   });
 
+  it("extracts direct Go Gin engine and nested literal group routes with exact evidence", () => {
+    const facts = extractFileFacts({
+      filePath: "cmd/server/main.go",
+      language: "go",
+      sourceText: [
+        "package main",
+        "",
+        'import g "github.com/gin-gonic/gin"',
+        "",
+        "func health(c *g.Context) {}",
+        "func createUser(c *g.Context) {}",
+        "func listUsers(c *g.Context) {}",
+        "func search(c *g.Context) {}",
+        "",
+        "func main() {",
+        "  router := g.Default()",
+        "  router.GET(\"/health\", health)",
+        "  router.POST(\"/users\", createUser)",
+        "  api := router.Group(\"/api\")",
+        "  v1 := api.Group(\"/v1\")",
+        "  v1.GET(\"/users\", listUsers)",
+        "  v1.Any(\"/search\", search)",
+        "}"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId,
+          edge.evidence?.stage,
+          edge.resolution,
+          edge.confidence
+        ])
+    ).toEqual([
+      [
+        "GET /health",
+        "cmd/server/main.go#health",
+        "framework.gin.direct-engine.method.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "POST /users",
+        "cmd/server/main.go#createUser",
+        "framework.gin.direct-engine.method.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "GET /api/v1/users",
+        "cmd/server/main.go#listUsers",
+        "framework.gin.direct-group.method.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "ALL /api/v1/search",
+        "cmd/server/main.go#search",
+        "framework.gin.direct-group.method.local-function",
+        "syntax",
+        "exact",
+        1
+      ]
+    ]);
+  });
+
+  it("rejects dynamic, shadowed, inline, middleware, and rebound Go Gin route shapes", () => {
+    const facts = extractFileFacts({
+      filePath: "cmd/server/unproven.go",
+      language: "go",
+      sourceText: [
+        "package main",
+        "",
+        'import gin "github.com/gin-gonic/gin"',
+        "",
+        "func health(c *gin.Context) {}",
+        "func stable(c *gin.Context) {}",
+        "",
+        "func main() {",
+        "  router := gin.Default()",
+        "  path := \"/dynamic\"",
+        "  router.GET(path, health)",
+        "  router.GET(\"/inline\", func(c *gin.Context) {})",
+        "  router.GET(\"/middleware\", auth, health)",
+        "  health := fallback",
+        "  router.GET(\"/shadowed\", health)",
+        "  router = buildRouter()",
+        "  router.GET(\"/rebound\", health)",
+        "  var legacy = gin.Default()",
+        "  legacy.GET(\"/var-binding\", stable)",
+        "  second := gin.New()",
+        "  prefix := \"/api\"",
+        "  api := second.Group(prefix)",
+        "  api.GET(\"/dynamic-group\", health)",
+        "  bad := second.Group(\"/api/\")",
+        "  bad.GET(\"/trailing-prefix\", stable)",
+        "}"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+  });
+
+  it("fails closed for Go syntax errors instead of emitting partial declarations or routes", () => {
+    const facts = extractFileFacts({
+      filePath: "cmd/server/broken.go",
+      language: "go",
+      sourceText: [
+        "package main",
+        'import "github.com/gin-gonic/gin"',
+        "func health(c *gin.Context) {}",
+        "func main( {",
+        "  router := gin.Default()",
+        "  router.GET(\"/health\", health)",
+        "}"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "function")).toEqual([]);
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+  });
+
   it("rejects dynamic, unmounted, rebound, and late-included Python APIRouter routes", () => {
     const facts = extractFileFacts({
       filePath: "app/unproven-router.py",

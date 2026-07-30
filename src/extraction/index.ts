@@ -1,5 +1,6 @@
 import ts from "typescript";
 
+import { extractGoFileFacts } from "./go.js";
 import { extractPythonFileFacts } from "./python.js";
 import {
   frameworkCapability,
@@ -3402,6 +3403,9 @@ function fileNodeFor(sourceFile: ts.SourceFile, input: ExtractFileFactsInput): S
 export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFacts {
   if (input.language === "python") {
     return extractPythonFileFacts({ ...input, language: "python" });
+  }
+  if (input.language === "go") {
+    return extractGoFileFacts({ ...input, language: "go" });
   }
 
   const sourceFile = ts.createSourceFile(

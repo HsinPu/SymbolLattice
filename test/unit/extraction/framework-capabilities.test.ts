@@ -15,7 +15,8 @@ describe("first-party framework capabilities", () => {
       "react-router",
       "nextjs",
       "fastapi",
-      "flask"
+      "flask",
+      "gin"
     ]);
     expect(FRAMEWORK_CAPABILITIES.map((capability) => capability.id)).toEqual(
       FRAMEWORK_CAPABILITY_IDS
@@ -55,6 +56,15 @@ describe("first-party framework capabilities", () => {
       surfaces: [
         "direct Flask application decorators",
         "same-file Blueprint decorators through direct register_blueprint"
+      ]
+    });
+    expect(frameworkCapability("gin")).toMatchObject({
+      languages: ["go"],
+      routeFramework: "gin",
+      routeRegistrations: [],
+      surfaces: [
+        "direct Gin engine methods",
+        "same-function literal RouterGroup prefixes"
       ]
     });
   });

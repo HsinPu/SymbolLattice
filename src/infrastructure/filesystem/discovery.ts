@@ -14,7 +14,8 @@ export const SUPPORTED_EXTENSIONS: ReadonlyMap<string, SupportedLanguage> = new 
   [".tsx", "typescript"],
   [".js", "javascript"],
   [".jsx", "javascript"],
-  [".py", "python"]
+  [".py", "python"],
+  [".go", "go"]
 ] as const);
 
 /**

@@ -8,7 +8,8 @@ export const FRAMEWORK_CAPABILITY_IDS = [
   "react-router",
   "nextjs",
   "fastapi",
-  "flask"
+  "flask",
+  "gin"
 ] as const;
 
 export type FrameworkCapabilityId = (typeof FRAMEWORK_CAPABILITY_IDS)[number];
@@ -95,6 +96,16 @@ export const FRAMEWORK_CAPABILITIES = [
     surfaces: [
       "direct Flask application decorators",
       "same-file Blueprint decorators through direct register_blueprint"
+    ]
+  },
+  {
+    id: "gin",
+    languages: ["go"],
+    routeFramework: "gin",
+    routeRegistrations: [],
+    surfaces: [
+      "direct Gin engine methods",
+      "same-function literal RouterGroup prefixes"
     ]
   }
 ] as const satisfies readonly FrameworkCapability[];

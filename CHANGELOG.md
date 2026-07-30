@@ -6,6 +6,25 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.33.0] - 2026-07-30
+
+### Added
+
+- Go `.go` discovery, persisted language filters, and a `@lezer/go` AST adapter. Valid Go files now retain conservative file and top-level function containment facts; malformed source fails closed to its file symbol.
+- An executable first-party Gin framework capability for direct `gin.Default()` / `gin.New()` short-variable receivers, direct uppercase HTTP methods plus `Any`, and named package-level handlers. Every accepted registration emits an exact `routes` edge with `framework.gin.direct-engine.method.local-function` evidence.
+- Same-function literal `RouterGroup` composition, including nested group prefixes. Direct `group.GET("/users", handler)` registrations now project exact paths such as `GET /api/v1/users` with `framework.gin.direct-group.method.local-function` evidence.
+- Capability, discovery, source-search language-validation, unit, integration, dynamic/shadow/rebinding, literal-prefix, malformed-source, and exact route-query coverage, plus a Traditional Chinese comparison report at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.33.0.md`.
+
+### Compatibility
+
+- No SQLite schema migration or new query command is required. Go facts and Gin routes use existing file, symbol, edge, source-search, and route-query contracts; existing generations remain readable.
+- The artifact extractor advances to `multi-language-ast-v22`; the project resolver remains `project-resolver-v14` because this first Go slice emits only exact file-local syntax facts. A pre-v0.33 active index reports `indexer-version-changed` until an explicit `sync` or `index` publishes Go-capable facts.
+
+### Deliberate limits
+
+- Gin support accepts only a direct non-dot/non-blank import of `github.com/gin-gonic/gin`, a direct same-function `:=` engine binding, one named handler argument, static slash-prefixed paths, and literal non-root/non-trailing `Group` prefixes. `var` engine declarations, `Handle`, `Match`, static-file helpers, inline/multiple/middleware handlers, dynamic or escaped paths, group middleware, member/chained receivers, factory/wrapper construction, cross-file receiver flow, methods, and runtime configuration are intentionally excluded.
+- `net/http`, chi, Echo, Fiber, generic Go imports/calls/type resolution, Go module/package resolution, semantic type checking, and runtime framework behavior are not modeled in v0.33.
+
 ## [0.32.0] - 2026-07-30
 
 ### Added
@@ -638,7 +657,8 @@ No unreleased changes.
 - Explicit full indexing, caller/callee/impact queries, and read-only MCP exploration.
 - `exact`, `heuristic`, and `unresolved` relationship states.
 
-[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.32.0...HEAD
+[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.33.0...HEAD
+[0.33.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.32.0...v0.33.0
 [0.32.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.31.0...v0.32.0
 [0.31.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.30.0...v0.31.0
 [0.30.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.29.0...v0.30.0
