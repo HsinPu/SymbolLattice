@@ -58,6 +58,7 @@ export type RouteFramework =
   | "laravel"
   | "civetweb"
   | "lapis"
+  | "horse"
   | "plumber"
   | "phoenix"
   | "cowboy"

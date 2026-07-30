@@ -4320,6 +4320,76 @@ describe("SymbolLatticeService", () => {
     expect(search.results).toMatchObject([{ filePath: "src/health.pas", language: "pascal" }]);
   });
 
+  it("indexes proven Pascal Horse routes with their prior local handlers", async () => {
+    const projectPath = await createInlineProject({
+      "src/server.pas": [
+        "program Server;",
+        "",
+        "uses Horse;",
+        "",
+        "procedure Health(Req: THorseRequest; Res: THorseResponse);",
+        "begin",
+        "end;",
+        "",
+        "procedure CreateUser(Req: THorseRequest; Res: THorseResponse);",
+        "begin",
+        "end;",
+        "",
+        "begin",
+        "  THorse.Get('/health', health);",
+        "  THorse.Post('/users', CreateUser);",
+        "end."
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+    const getRoutes = await service.routes(projectPath, { method: "GET" });
+    const search = await service.search(projectPath, "CreateUser", { language: "pascal" });
+    const persistedFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "src/server.pas");
+
+    expect(persistedFacts).toMatchObject({
+      language: "pascal",
+      extractorVersion: ARTIFACT_FACTS_EXTRACTOR_VERSION
+    });
+    expect(routes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "GET",
+          path: "/health",
+          handler: expect.objectContaining({ qualifiedName: "src/server.pas#Health" }),
+          edge: expect.objectContaining({
+            kind: "routes",
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.horse.direct-uses.literal-route.local-routine",
+              stage: "syntax"
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "POST",
+          path: "/users",
+          handler: expect.objectContaining({ qualifiedName: "src/server.pas#CreateUser" }),
+          edge: expect.objectContaining({
+            kind: "routes",
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.horse.direct-uses.literal-route.local-routine",
+              stage: "syntax"
+            })
+          })
+        })
+      ])
+    );
+    expect(getRoutes.routes).toMatchObject([{ method: "GET", path: "/health" }]);
+    expect(search.results).toMatchObject([{ filePath: "src/server.pas", language: "pascal" }]);
+  });
+
   it("indexes R Plumber annotation routes and retains R source-search filtering", async () => {
     const projectPath = await createInlineProject({
       "src/plumber.R": [

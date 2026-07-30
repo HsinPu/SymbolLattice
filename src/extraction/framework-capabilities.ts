@@ -27,6 +27,7 @@ export const FRAMEWORK_CAPABILITY_IDS = [
   "laravel-blade",
   "civetweb",
   "lapis",
+  "horse",
   "plumber",
   "phoenix",
   "cowboy",
@@ -296,6 +297,16 @@ export const FRAMEWORK_CAPABILITIES = [
     surfaces: [
       "direct require(\"lapis\") and Application local bindings",
       "literal direct get/post/put/delete/match routes with unique unshadowed local function handlers"
+    ]
+  },
+  {
+    id: "horse",
+    languages: ["pascal"],
+    routeFramework: "horse",
+    routeRegistrations: [],
+    surfaces: [
+      "exactly one direct uses Horse proof",
+      "direct program-main-block THorse Get/Post literal routes with unique prior same-file routine handlers"
     ]
   },
   {

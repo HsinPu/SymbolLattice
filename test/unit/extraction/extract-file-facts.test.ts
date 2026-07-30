@@ -3389,6 +3389,132 @@ describe("source extraction", () => {
     expect(malformed.symbols.map((symbol) => symbol.kind)).toEqual(["file"]);
   });
 
+  it("extracts direct Horse Get/Post routes only from a proven Pascal program main block", () => {
+    const facts = extractFileFacts({
+      filePath: "src/server.dpr",
+      language: "pascal",
+      sourceText: [
+        "program Server;",
+        "",
+        "uses Horse;",
+        "",
+        "procedure Health(Req: THorseRequest; Res: THorseResponse);",
+        "begin",
+        "end;",
+        "",
+        "procedure CreateUser(Req: THorseRequest; Res: THorseResponse);",
+        "begin",
+        "end;",
+        "",
+        "begin",
+        "  THorse.Get('/health', health);",
+        "  THorse.Post('/users', CreateUser);",
+        "  THorse.Put('/unsupported', Health);",
+        "  if True then",
+        "  begin",
+        "    THorse.Get('/nested', Health);",
+        "  end;",
+        "end."
+      ].join("\n")
+    });
+    const missingProof = extractFileFacts({
+      filePath: "src/missing-proof.dpr",
+      language: "pascal",
+      sourceText: [
+        "program MissingProof;",
+        "",
+        "uses System.SysUtils;",
+        "",
+        "procedure Health;",
+        "begin",
+        "end;",
+        "",
+        "begin",
+        "  THorse.Get('/ignored', Health);",
+        "end."
+      ].join("\n")
+    });
+    const combinedUses = extractFileFacts({
+      filePath: "src/combined-uses.dpr",
+      language: "pascal",
+      sourceText: [
+        "program CombinedUses;",
+        "",
+        "uses Horse, System.SysUtils;",
+        "",
+        "procedure Health;",
+        "begin",
+        "end;",
+        "",
+        "begin",
+        "  THorse.Get('/ignored', Health);",
+        "end."
+      ].join("\n")
+    });
+    const duplicateUses = extractFileFacts({
+      filePath: "src/duplicate-uses.dpr",
+      language: "pascal",
+      sourceText: [
+        "program DuplicateUses;",
+        "",
+        "uses Horse;",
+        "uses Horse;",
+        "",
+        "procedure Health;",
+        "begin",
+        "end;",
+        "",
+        "begin",
+        "  THorse.Get('/ignored', Health);",
+        "end."
+      ].join("\n")
+    });
+    const lateHandler = extractFileFacts({
+      filePath: "src/late-handler.dpr",
+      language: "pascal",
+      sourceText: [
+        "program LateHandler;",
+        "",
+        "uses Horse;",
+        "",
+        "begin",
+        "  THorse.Get('/ignored', Health);",
+        "end.",
+        "",
+        "procedure Health;",
+        "begin",
+        "end;"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route").map((symbol) => symbol.name)).toEqual([
+      "GET /health",
+      "POST /users"
+    ]);
+    expect(facts.edges.filter((edge) => edge.kind === "routes")).toMatchObject([
+      {
+        referenceName: "Health",
+        resolution: "exact",
+        evidence: {
+          ruleId: "framework.horse.direct-uses.literal-route.local-routine",
+          candidateSymbolIds: expect.any(Array)
+        }
+      },
+      {
+        referenceName: "CreateUser",
+        resolution: "exact",
+        evidence: {
+          ruleId: "framework.horse.direct-uses.literal-route.local-routine",
+          candidateSymbolIds: expect.any(Array)
+        }
+      }
+    ]);
+    expect(missingProof.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(combinedUses.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(duplicateUses.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(lateHandler.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+  });
+
   it("extracts direct R Plumber annotation routes with exact evidence", () => {
     const facts = extractFileFacts({
       filePath: "src/plumber.R",

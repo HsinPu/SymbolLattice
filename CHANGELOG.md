@@ -6,6 +6,23 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.76.0] - 2026-07-31
+
+### Added
+
+- A first conservative Pascal Horse HTTP framework capability. One source file now emits exact `GET` / `POST` route facts only when it proves exactly one direct `uses Horse;`, exactly one direct `program` main block, a one-line literal `THorse.Get` or `THorse.Post` registration at the main-block level, and one unique prior same-file complete Pascal routine handler.
+- Accepted registrations use the existing `route` node and `routes` edge contracts with `framework.horse.direct-uses.literal-route.local-routine` syntax evidence. Route handler lookup follows Pascal's case-insensitive identifier semantics, while source-search, CLI/MCP `pascal` filtering, persisted artifact facts, and the existing bounded route query remain unchanged. Unit and integration coverage verifies handler resolution, `GET` / `POST` selection, nested-route rejection, absent-`Horse` proof rejection, persisted source search, and route queries. The standalone Traditional Chinese comparison report is at `C:\\Users\\win10\\Desktop\\Graph\\FEATURE_COMPARISON_v0.76.0.md`.
+
+### Compatibility
+
+- No SQLite schema migration or query command is required. `horse` is an additive framework capability and route-framework value using the existing Pascal artifact, graph, source-search, CLI, MCP, and incremental-index contracts; existing generations remain readable.
+- The artifact extractor advances to `multi-language-ast-v65`; the project resolver remains `project-resolver-v23` because every accepted Horse route and handler proof is file-local. A pre-v0.76 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes Horse-capable facts.
+
+### Deliberate limits
+
+- This is not general Horse or Pascal framework analysis. It deliberately rejects combined or aliased `uses` clauses, no-program/unit source, inline or multiline registrations, `Put` / `Delete` / other methods, dynamic/query/fragment/double-slash paths, late/ambiguous/dynamic/cross-file handlers, nested or routine-local registrations, groups, middleware, prefixes, aliases, wrappers, `THorse` subclasses, compilation, and runtime behavior.
+- The inspected local CodeGraph baseline has Tree-sitter Pascal extraction plus `.dfm` / `.fmx` form and callback support, which is broader Pascal coverage. Its local source search found no dedicated `Horse` / `THorse` rule. SymbolLattice v0.76 independently adds a smaller evidence-bearing Horse route subset rather than copying CodeGraph source or claiming full Horse parity.
+
 ## [0.75.0] - 2026-07-31
 
 ### Added

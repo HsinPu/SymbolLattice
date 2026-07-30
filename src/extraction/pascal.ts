@@ -7,6 +7,7 @@ import {
   type SourceRange,
   type SymbolNode
 } from "../domain/index.js";
+import { frameworkCapability } from "./framework-capabilities.js";
 
 export interface PascalExtractFileFactsInput {
   readonly filePath: string;
@@ -27,6 +28,20 @@ interface StaticPascalRoutine {
   readonly end: number;
 }
 
+interface StaticHorseRoute {
+  readonly method: HorseRouteMethod;
+  readonly path: string;
+  readonly handlerName: string;
+  readonly start: number;
+  readonly end: number;
+}
+
+interface PascalProgramBlock {
+  readonly declarationLine: number;
+  readonly startLine: number;
+  readonly endLine: number;
+}
+
 interface PascalRoutineHeader {
   readonly name: string;
   readonly start: number;
@@ -39,9 +54,15 @@ interface SanitizedPascalSource {
 }
 
 type PascalBlockCloser = "end" | "until";
+type HorseRouteMethod = "GET" | "POST";
 
 const PASCAL_ROUTINE_HEADER =
   /^(?:(?:class|static)\s+)?(?:procedure|function)\s+([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)\s*(?:\([^)]*\))?\s*(?::\s*[A-Za-z_][A-Za-z0-9_.]*)?\s*;\s*(begin\b.*)?$/iu;
+
+const HORSE_ROUTE_METHODS: ReadonlyMap<string, HorseRouteMethod> = new Map([
+  ["get", "GET"],
+  ["post", "POST"]
+]);
 
 function lineStartsFor(sourceText: string): readonly number[] {
   const starts = [0];
@@ -260,7 +281,11 @@ function beginsPascalTypeBlock(tokens: readonly string[], index: number): boolea
   );
 }
 
-function directRoutineEnd(lines: readonly PascalLine[], bodyStart: number): number | null {
+function directBlockEndLine(
+  lines: readonly PascalLine[],
+  bodyStart: number,
+  terminator: ";" | "."
+): number | null {
   const blocks: PascalBlockCloser[] = [];
 
   for (let lineIndex = bodyStart; lineIndex < lines.length; lineIndex += 1) {
@@ -301,12 +326,21 @@ function directRoutineEnd(lines: readonly PascalLine[], bodyStart: number): numb
         return null;
       }
       if (blocks.length === 0) {
-        return /\bend\s*;\s*$/iu.test(line.content) ? line.end : null;
+        const endsCorrectly =
+          terminator === ";"
+            ? /\bend\s*;\s*$/iu.test(line.content)
+            : /\bend\s*\.\s*$/iu.test(line.content);
+        return endsCorrectly ? lineIndex : null;
       }
     }
   }
 
   return null;
+}
+
+function directRoutineEnd(lines: readonly PascalLine[], bodyStart: number): number | null {
+  const endLine = directBlockEndLine(lines, bodyStart, ";");
+  return endLine === null ? null : (lines[endLine]?.end ?? null);
 }
 
 function collectDirectPascalRoutines(lines: readonly PascalLine[]): readonly StaticPascalRoutine[] {
@@ -332,12 +366,180 @@ function collectDirectPascalRoutines(lines: readonly PascalLine[]): readonly Sta
   return routines;
 }
 
+function isDirectPascalProgramDeclaration(line: PascalLine): boolean {
+  return (
+    line.indent === 0 &&
+    /^program\s+[A-Za-z_][A-Za-z0-9_]*\s*;\s*$/iu.test(line.content)
+  );
+}
+
+function lineIsInsideRoutine(line: PascalLine, routines: readonly StaticPascalRoutine[]): boolean {
+  return routines.some((routine) => routine.start <= line.start && line.end <= routine.end);
+}
+
+function directPascalProgramBlock(
+  lines: readonly PascalLine[],
+  routines: readonly StaticPascalRoutine[]
+): PascalProgramBlock | null {
+  const programDeclarations = lines
+    .map((line, index) => ({ line, index }))
+    .filter(({ line }) => isDirectPascalProgramDeclaration(line));
+  if (programDeclarations.length !== 1) {
+    return null;
+  }
+  const program = programDeclarations[0];
+  if (program === undefined) {
+    return null;
+  }
+
+  const blocks: PascalProgramBlock[] = [];
+  for (let index = program.index + 1; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (
+      line === undefined ||
+      line.indent !== 0 ||
+      !/^begin\s*$/iu.test(line.content) ||
+      lineIsInsideRoutine(line, routines)
+    ) {
+      continue;
+    }
+    const endLine = directBlockEndLine(lines, index, ".");
+    if (endLine !== null) {
+      blocks.push({ declarationLine: program.index, startLine: index, endLine });
+    }
+  }
+  return blocks.length === 1 ? (blocks[0] ?? null) : null;
+}
+
+function hasExactlyOneDirectHorseUses(
+  lines: readonly PascalLine[],
+  program: PascalProgramBlock
+): boolean {
+  const horseUses = lines
+    .map((line, index) => ({ line, index }))
+    .filter(({ line }) => line.indent === 0 && /^uses\s+Horse\s*;\s*$/iu.test(line.content));
+  const horseUse = horseUses[0];
+  return (
+    horseUses.length === 1 &&
+    horseUse !== undefined &&
+    horseUse.index > program.declarationLine &&
+    horseUse.index < program.startLine
+  );
+}
+
+function blockDepthBeforeLines(
+  lines: readonly PascalLine[],
+  startLine: number,
+  endLine: number
+): ReadonlyMap<number, number> | null {
+  const depths = new Map<number, number>();
+  const blocks: PascalBlockCloser[] = [];
+
+  for (let lineIndex = startLine; lineIndex <= endLine; lineIndex += 1) {
+    const line = lines[lineIndex];
+    if (line === undefined) {
+      return null;
+    }
+    depths.set(lineIndex, blocks.length);
+    const tokens = pascalTokens(line.content);
+    for (let tokenIndex = 0; tokenIndex < tokens.length; tokenIndex += 1) {
+      const token = tokens[tokenIndex]?.toLowerCase();
+      if (token === undefined) {
+        continue;
+      }
+      if (
+        token === "begin" ||
+        token === "case" ||
+        token === "try" ||
+        token === "asm" ||
+        beginsPascalTypeBlock(tokens, tokenIndex)
+      ) {
+        blocks.push("end");
+        continue;
+      }
+      if (token === "repeat") {
+        blocks.push("until");
+        continue;
+      }
+      if (token === "until") {
+        if (blocks.pop() !== "until") {
+          return null;
+        }
+        continue;
+      }
+      if (token === "end" && blocks.pop() !== "end") {
+        return null;
+      }
+    }
+  }
+
+  return blocks.length === 0 ? depths : null;
+}
+
+function staticHorsePath(value: string): string | null {
+  const path = value.replaceAll("''", "'");
+  return path.startsWith("/") && !path.includes("//") && !/[?#]/u.test(path) ? path : null;
+}
+
+function directHorseRoute(rawLine: PascalLine): StaticHorseRoute | null {
+  const match =
+    /^THorse\.(Get|Post)\(\s*'((?:''|[^'\r\n])*)'\s*,\s*([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)\s*\)\s*;\s*$/iu.exec(
+      rawLine.content
+    );
+  const method = match?.[1] === undefined ? undefined : HORSE_ROUTE_METHODS.get(match[1].toLowerCase());
+  const path = match?.[2] === undefined ? null : staticHorsePath(match[2]);
+  const handlerName = match?.[3];
+  if (method === undefined || path === null || handlerName === undefined) {
+    return null;
+  }
+  return { method, path, handlerName, start: rawLine.start, end: rawLine.end };
+}
+
+function collectDirectHorseRoutes(
+  rawLines: readonly PascalLine[],
+  sanitizedLines: readonly PascalLine[],
+  routines: readonly StaticPascalRoutine[]
+): readonly StaticHorseRoute[] {
+  if (rawLines.length !== sanitizedLines.length) {
+    return [];
+  }
+  const program = directPascalProgramBlock(sanitizedLines, routines);
+  if (program === null || !hasExactlyOneDirectHorseUses(sanitizedLines, program)) {
+    return [];
+  }
+  const depths = blockDepthBeforeLines(sanitizedLines, program.startLine, program.endLine);
+  if (depths === null) {
+    return [];
+  }
+
+  const routes: StaticHorseRoute[] = [];
+  for (let lineIndex = program.startLine + 1; lineIndex < program.endLine; lineIndex += 1) {
+    if (depths.get(lineIndex) !== 1) {
+      continue;
+    }
+    const rawLine = rawLines[lineIndex];
+    if (rawLine === undefined) {
+      continue;
+    }
+    const route = directHorseRoute(rawLine);
+    if (route !== null) {
+      routes.push(route);
+    }
+  }
+  return routes;
+}
+
 /**
- * Extracts a deliberately small Pascal surface: direct column-one procedure
- * and function implementations with a complete begin/end body. It does not
- * claim type, unit, class, import, call, or framework semantics.
+ * Extracts direct Pascal routines plus a narrow Horse route subset. Horse
+ * requires exactly one direct `uses Horse;` proof, one complete program main
+ * block, direct literal `THorse.Get/Post` registrations, and prior same-file
+ * direct routine handlers.
  */
 export function extractPascalFileFacts(input: PascalExtractFileFactsInput): ArtifactFacts {
+  const horseCapability = frameworkCapability("horse");
+  if (!horseCapability.languages.includes(input.language)) {
+    throw new Error("Horse extraction was invoked for an unsupported source language.");
+  }
   const sanitized = sanitizePascal(input.sourceText);
   const lineStarts = lineStartsFor(input.sourceText);
   const symbols: SymbolNode[] = [];
@@ -368,7 +570,7 @@ export function extractPascalFileFacts(input: PascalExtractFileFactsInput): Arti
     return ordinal;
   }
 
-  function addRoutine(routine: StaticPascalRoutine): void {
+  function addRoutine(routine: StaticPascalRoutine): SymbolNode {
     const qualifiedName = `${input.filePath}#${routine.name}`;
     const declarationOrdinal = nextOrdinal(qualifiedName, "function");
     const symbol: SymbolNode = {
@@ -411,11 +613,104 @@ export function extractPascalFileFacts(input: PascalExtractFileFactsInput): Arti
         candidateSymbolIds: [symbol.id]
       }
     });
+    return symbol;
+  }
+
+  function addHorseRoute(routeFact: StaticHorseRoute, handler: SymbolNode): void {
+    const routeName = `${routeFact.method} ${routeFact.path}`;
+    const qualifiedName = `${fileNode.qualifiedName}#route:${routeName}`;
+    const declarationOrdinal = nextOrdinal(qualifiedName, "route");
+    const range = rangeFor(lineStarts, routeFact.start, routeFact.end);
+    const route: SymbolNode = {
+      id: createSymbolId({
+        filePath: input.filePath,
+        qualifiedName,
+        kind: "route",
+        declarationOrdinal
+      }),
+      name: routeName,
+      qualifiedName,
+      kind: "route",
+      filePath: input.filePath,
+      range,
+      isExported: false,
+      declarationOrdinal
+    };
+    symbols.push(route);
+    edges.push({
+      id: createEdgeId({
+        sourceId: fileNode.id,
+        targetId: route.id,
+        kind: "contains",
+        line: range.start.line,
+        column: range.start.column,
+        referenceName: routeName
+      }),
+      sourceId: fileNode.id,
+      targetId: route.id,
+      kind: "contains",
+      filePath: input.filePath,
+      range,
+      resolution: "exact",
+      confidence: 1,
+      referenceName: routeName,
+      evidence: {
+        ruleId: "syntax.containment",
+        stage: "syntax",
+        candidateSymbolIds: [route.id]
+      }
+    });
+    edges.push({
+      id: createEdgeId({
+        sourceId: route.id,
+        targetId: handler.id,
+        kind: "routes",
+        line: range.start.line,
+        column: range.start.column,
+        referenceName: handler.name
+      }),
+      sourceId: route.id,
+      targetId: handler.id,
+      kind: "routes",
+      filePath: input.filePath,
+      range,
+      resolution: "exact",
+      confidence: 1,
+      referenceName: handler.name,
+      evidence: {
+        ruleId: "framework.horse.direct-uses.literal-route.local-routine",
+        stage: "syntax",
+        candidateSymbolIds: [handler.id]
+      }
+    });
   }
 
   if (sanitized.valid) {
-    for (const routine of collectDirectPascalRoutines(linesFor(sanitized.text))) {
-      addRoutine(routine);
+    const sanitizedLines = linesFor(sanitized.text);
+    const routines = collectDirectPascalRoutines(sanitizedLines);
+    const routinesByName = new Map<string, Array<{ routine: StaticPascalRoutine; symbol: SymbolNode }>>();
+    for (const routine of routines) {
+      const symbol = addRoutine(routine);
+      const normalizedName = routine.name.toLowerCase();
+      const existing = routinesByName.get(normalizedName) ?? [];
+      existing.push({ routine, symbol });
+      routinesByName.set(normalizedName, existing);
+    }
+
+    for (const routeFact of collectDirectHorseRoutes(
+      linesFor(input.sourceText),
+      sanitizedLines,
+      routines
+    )) {
+      const candidates = (routinesByName.get(routeFact.handlerName.toLowerCase()) ?? []).filter(
+        (candidate) => candidate.routine.end < routeFact.start
+      );
+      if (candidates.length === 1) {
+        const candidate = candidates[0];
+        if (candidate !== undefined) {
+          addHorseRoute(routeFact, candidate.symbol);
+        }
+      }
     }
   }
 
