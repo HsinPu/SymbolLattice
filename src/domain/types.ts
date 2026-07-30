@@ -59,6 +59,7 @@ export type RouteFramework =
   | "genie"
   | "scotty"
   | "dream"
+  | "giraffe"
   | "cpp-httplib"
   | "aspnet-core"
   | "rails"
@@ -95,6 +96,7 @@ export const ARTIFACT_LANGUAGES = [
   "julia",
   "haskell",
   "ocaml",
+  "fsharp",
   "cpp",
   "csharp",
   "ruby",

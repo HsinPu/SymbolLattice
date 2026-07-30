@@ -32,6 +32,7 @@ describe("first-party framework capabilities", () => {
       "genie",
       "scotty",
       "dream",
+      "giraffe",
       "cpp-httplib",
       "aspnet-core",
       "rails",
@@ -222,6 +223,15 @@ describe("first-party framework capabilities", () => {
       surfaces: [
         "direct top-level Dream.router literal lists",
         "direct literal named-handler HTTP routes"
+      ]
+    });
+    expect(frameworkCapability("giraffe")).toMatchObject({
+      languages: ["fsharp"],
+      routeFramework: "giraffe",
+      routeRegistrations: [],
+      surfaces: [
+        "exactly one direct open Giraffe proof",
+        "direct top-level choose literal routes with typed local named handlers"
       ]
     });
     expect(frameworkCapability("cpp-httplib")).toMatchObject({

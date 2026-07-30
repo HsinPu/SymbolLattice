@@ -31,6 +31,7 @@ export const SUPPORTED_EXTENSIONS: ReadonlyMap<string, SupportedLanguage> = new 
   [".jl", "julia"],
   [".hs", "haskell"],
   [".ml", "ocaml"],
+  [".fs", "fsharp"],
   [".cpp", "cpp"],
   [".cc", "cpp"],
   [".cxx", "cpp"],

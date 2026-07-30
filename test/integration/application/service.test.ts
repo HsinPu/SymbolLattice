@@ -4696,6 +4696,82 @@ describe("SymbolLatticeService", () => {
     expect(search.results).toMatchObject([{ filePath: "src/app.ml", language: "ocaml" }]);
   });
 
+  it("indexes F# Giraffe routes and retains F# source-search filtering", async () => {
+    const projectPath = await createInlineProject({
+      "src/App.fs": [
+        "open Giraffe",
+        "",
+        "let health (next : HttpFunc) (ctx : HttpContext) =",
+        "  text \"ok\" next ctx",
+        "",
+        "let createUser (next : HttpFunc) (ctx : HttpContext) =",
+        "  text \"created\" next ctx",
+        "",
+        "let webApp =",
+        "  choose [",
+        "    GET >=> route \"/health\" >=> health",
+        "    POST >=> route \"/users\" >=> createUser",
+        "    route \"/all\" >=> health",
+        "    PATCH >=> route \"/missing\" >=> missing",
+        "  ]"
+      ].join("\n")
+    });
+    const service = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+    const postRoutes = await service.routes(projectPath, { method: "POST" });
+    const search = await service.search(projectPath, "health", { language: "fsharp" });
+
+    expect(routes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "GET",
+          path: "/health",
+          handler: expect.objectContaining({
+            qualifiedName: "src/App.fs.health"
+          }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.giraffe.direct-choose.literal-named-function.local-function",
+              stage: "syntax"
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "ALL",
+          path: "/all",
+          handler: expect.objectContaining({
+            qualifiedName: "src/App.fs.health"
+          })
+        }),
+        expect.objectContaining({
+          method: "PATCH",
+          path: "/missing",
+          handler: null,
+          edge: expect.objectContaining({
+            resolution: "unresolved",
+            evidence: expect.objectContaining({
+              ruleId: "framework.giraffe.direct-choose.literal-named-function.unresolved"
+            })
+          })
+        })
+      ])
+    );
+    expect(postRoutes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "POST",
+          path: "/users",
+          handler: expect.objectContaining({
+            qualifiedName: "src/App.fs.createUser"
+          })
+        })
+      ])
+    );
+    expect(search.results).toMatchObject([{ filePath: "src/App.fs", language: "fsharp" }]);
+  });
+
   it("indexes C# ASP.NET Core routes and retains C# source-search filtering", async () => {
     const projectPath = await createInlineProject({
       "src/Program.cs": [

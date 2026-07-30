@@ -6,6 +6,7 @@ import { extractCppFileFacts } from "./cpp.js";
 import { extractDartFileFacts } from "./dart.js";
 import { extractElixirFileFacts } from "./elixir.js";
 import { extractErlangFileFacts } from "./erlang.js";
+import { extractFsharpFileFacts } from "./fsharp.js";
 import { extractClojureFileFacts } from "./clojure.js";
 import { extractHaskellFileFacts } from "./haskell.js";
 import { extractJuliaFileFacts } from "./julia.js";
@@ -3465,6 +3466,9 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
   }
   if (input.language === "ocaml") {
     return extractOcamlFileFacts({ ...input, language: "ocaml" });
+  }
+  if (input.language === "fsharp") {
+    return extractFsharpFileFacts({ ...input, language: "fsharp" });
   }
   if (input.language === "cpp") {
     return extractCppFileFacts({ ...input, language: "cpp" });

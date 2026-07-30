@@ -25,6 +25,7 @@ export const FRAMEWORK_CAPABILITY_IDS = [
   "genie",
   "scotty",
   "dream",
+  "giraffe",
   "cpp-httplib",
   "aspnet-core",
   "rails",
@@ -278,6 +279,16 @@ export const FRAMEWORK_CAPABILITIES = [
     surfaces: [
       "direct top-level Dream.router literal lists",
       "direct literal named-handler HTTP routes"
+    ]
+  },
+  {
+    id: "giraffe",
+    languages: ["fsharp"],
+    routeFramework: "giraffe",
+    routeRegistrations: [],
+    surfaces: [
+      "exactly one direct open Giraffe proof",
+      "direct top-level choose literal routes with typed local named handlers"
     ]
   },
   {

@@ -6,6 +6,24 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.58.0] - 2026-07-31
+
+### Added
+
+- F# `.fs` source discovery, persisted source-search language filtering, CLI/MCP validation, and an isolated F# lexical/comment/delimiter/layout extractor for direct top-level typed `HttpFunc` / `HttpContext` function containment.
+- An executable first-party `giraffe` capability. Direct Giraffe route facts require exactly one top-level `open Giraffe` proof, a direct top-level `let name = choose [` list or its immediately following indented `choose [` form, direct baseline-indented literal `GET` / `POST` / `PUT` / `PATCH` / `DELETE` / `HEAD` / `OPTIONS` / `TRACE` / `CONNECT` / unqualified `route` registrations, and a simple named handler. A unique same-file typed function produces `framework.giraffe.direct-choose.literal-named-function.local-function`; every other accepted handler remains explicit `unresolved` evidence.
+- Unit and integration coverage now verifies F# discovery, direct typed function containment, exact and unresolved Giraffe route-query/source-search behavior, dynamic/inline/qualified/nested/repeated-open rejection, malformed delimiter/comment and tab-layout fail-closed behavior, and CLI/MCP language validation. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.58.0.md`.
+
+### Compatibility
+
+- No SQLite schema migration or new query command is required. F# symbols and Giraffe routes reuse the existing file, symbol, edge, source-search, and route-query contracts; existing generations remain readable.
+- The artifact extractor advances to `multi-language-ast-v47`; the project resolver remains `project-resolver-v16` because all accepted Giraffe callback proof is file-local. A pre-v0.58 active index reports `indexer-version-changed` until an explicit `sync` or `index` publishes F#-capable facts.
+
+### Deliberate limits
+
+- The F# extractor is a deliberately small lexical/comment/delimiter/layout implementation, not a full F# parser. It retains only file symbols for unbalanced delimiters, unterminated strings/comments, or tab-indented code, and does not claim generic F# module, type, call, project, package, or runtime analysis.
+- Giraffe support accepts only exactly one direct top-level `open Giraffe`, direct top-level literal `choose` lists, simple direct one-level method / `route` compositions, literal unescaped slash-prefixed paths, and simple same-file typed named handlers. It excludes `GET_HEAD`, `subRoute` / nested composition, aliases or top-level `route` / HTTP-handler rebinding, endpoint-routing integration, dynamic/escaped paths, anonymous/qualified/cross-file handlers, untyped/annotated/pattern/local handler forms, and runtime behavior. The local CodeGraph baseline does not list F# in its indexed language set; SymbolLattice adds a narrow audited language/framework slice rather than claiming wider generic F# parity.
+
 ## [0.57.0] - 2026-07-31
 
 ### Added

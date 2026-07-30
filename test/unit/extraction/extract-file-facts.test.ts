@@ -4506,6 +4506,245 @@ describe("source extraction", () => {
     ]);
   });
 
+  it("extracts direct F# Giraffe choose routes with exact and unresolved evidence", () => {
+    const facts = extractFileFacts({
+      filePath: "src/App.fs",
+      language: "fsharp",
+      sourceText: [
+        "open Giraffe",
+        "",
+        "let health (next : HttpFunc) (ctx : HttpContext) =",
+        "  text \"ok\" next ctx",
+        "",
+        "let createUser (next : HttpFunc) (ctx : HttpContext) =",
+        "  text \"created\" next ctx",
+        "",
+        "let webApp =",
+        "  choose [",
+        "    GET >=> route \"/health\" >=> health",
+        "    POST >=> route \"/users\" >=> createUser",
+        "    route \"/all\" >=> health",
+        "    PATCH >=> route \"/missing\" >=> missing",
+        "  ]"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(
+      facts.symbols.filter((symbol) => symbol.kind === "function").map((symbol) => symbol.qualifiedName)
+    ).toEqual(["src/App.fs.health", "src/App.fs.createUser"]);
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName ?? null,
+          edge.referenceName,
+          edge.evidence?.ruleId,
+          edge.resolution,
+          edge.confidence
+        ])
+    ).toEqual([
+      [
+        "GET /health",
+        "src/App.fs.health",
+        "health",
+        "framework.giraffe.direct-choose.literal-named-function.local-function",
+        "exact",
+        1
+      ],
+      [
+        "POST /users",
+        "src/App.fs.createUser",
+        "createUser",
+        "framework.giraffe.direct-choose.literal-named-function.local-function",
+        "exact",
+        1
+      ],
+      [
+        "ALL /all",
+        "src/App.fs.health",
+        "health",
+        "framework.giraffe.direct-choose.literal-named-function.local-function",
+        "exact",
+        1
+      ],
+      [
+        "PATCH /missing",
+        null,
+        "missing",
+        "framework.giraffe.direct-choose.literal-named-function.unresolved",
+        "unresolved",
+        0
+      ]
+    ]);
+  });
+
+  it("requires direct Giraffe proof, direct typed handlers, literal paths, flat choose routes, and balanced F# input", () => {
+    const missingOpen = extractFileFacts({
+      filePath: "src/missing-open.fs",
+      language: "fsharp",
+      sourceText: [
+        "let health (next : HttpFunc) (ctx : HttpContext) =",
+        "  text \"ok\" next ctx",
+        "let webApp = choose [",
+        "  GET >=> route \"/health\" >=> health",
+        "]"
+      ].join("\n")
+    });
+    const qualifiedOpen = extractFileFacts({
+      filePath: "src/qualified-open.fs",
+      language: "fsharp",
+      sourceText: [
+        "open Giraffe.HttpHandlers",
+        "let health (next : HttpFunc) (ctx : HttpContext) =",
+        "  text \"ok\" next ctx",
+        "let webApp = choose [",
+        "  GET >=> route \"/health\" >=> health",
+        "]"
+      ].join("\n")
+    });
+    const dynamicPath = extractFileFacts({
+      filePath: "src/dynamic.fs",
+      language: "fsharp",
+      sourceText: [
+        "open Giraffe",
+        "let health (next : HttpFunc) (ctx : HttpContext) =",
+        "  text \"ok\" next ctx",
+        "let path = \"/health\"",
+        "let webApp = choose [",
+        "  GET >=> route path >=> health",
+        "]"
+      ].join("\n")
+    });
+    const inlineHandler = extractFileFacts({
+      filePath: "src/inline.fs",
+      language: "fsharp",
+      sourceText: [
+        "open Giraffe",
+        "let webApp = choose [",
+        "  GET >=> route \"/health\" >=> text \"ok\"",
+        "]"
+      ].join("\n")
+    });
+    const nestedRoute = extractFileFacts({
+      filePath: "src/nested.fs",
+      language: "fsharp",
+      sourceText: [
+        "open Giraffe",
+        "let health (next : HttpFunc) (ctx : HttpContext) =",
+        "  text \"ok\" next ctx",
+        "let webApp = choose [",
+        "  subRoute \"/api\" (",
+        "    choose [",
+        "      GET >=> route \"/health\" >=> health",
+        "    ])",
+        "]"
+      ].join("\n")
+    });
+    const tripleQuotedRoute = extractFileFacts({
+      filePath: "src/string.fs",
+      language: "fsharp",
+      sourceText: [
+        "open Giraffe",
+        "let documentation = \"\"\"",
+        "let webApp = choose [",
+        "  GET >=> route \"/health\" >=> health",
+        "]",
+        "\"\"\""
+      ].join("\n")
+    });
+    const interpolatedTripleQuotedRoute = extractFileFacts({
+      filePath: "src/interpolated-string.fs",
+      language: "fsharp",
+      sourceText: [
+        "open Giraffe",
+        "let documentation = $\"\"\"",
+        "let webApp = choose [",
+        "  GET >=> route \"/health\" >=> health",
+        "]",
+        "\"\"\""
+      ].join("\n")
+    });
+    const shadowedRoute = extractFileFacts({
+      filePath: "src/shadowed.fs",
+      language: "fsharp",
+      sourceText: [
+        "open Giraffe",
+        "let route _ = fun next ctx -> text \"custom\" next ctx",
+        "let health (next : HttpFunc) (ctx : HttpContext) =",
+        "  text \"ok\" next ctx",
+        "let webApp = choose [",
+        "  GET >=> route \"/health\" >=> health",
+        "]"
+      ].join("\n")
+    });
+    const duplicateHandler = extractFileFacts({
+      filePath: "src/duplicate.fs",
+      language: "fsharp",
+      sourceText: [
+        "open Giraffe",
+        "let health (next : HttpFunc) (ctx : HttpContext) =",
+        "  text \"one\" next ctx",
+        "let health (next : HttpFunc) (ctx : HttpContext) =",
+        "  text \"two\" next ctx",
+        "let webApp = choose [",
+        "  GET >=> route \"/health\" >=> health",
+        "]"
+      ].join("\n")
+    });
+    const malformed = extractFileFacts({
+      filePath: "src/malformed.fs",
+      language: "fsharp",
+      sourceText: "open Giraffe\nlet webApp = choose [\n  GET >=> route \"/health\" >=> health"
+    });
+    const unterminatedComment = extractFileFacts({
+      filePath: "src/comment.fs",
+      language: "fsharp",
+      sourceText: "(* open Giraffe\nlet webApp = choose ["
+    });
+    const tabbed = extractFileFacts({
+      filePath: "src/tabbed.fs",
+      language: "fsharp",
+      sourceText: [
+        "open Giraffe",
+        "let health (next : HttpFunc) (ctx : HttpContext) =",
+        "\ttext \"ok\" next ctx",
+        "let webApp = choose [",
+        "  GET >=> route \"/health\" >=> health",
+        "]"
+      ].join("\n")
+    });
+
+    for (const facts of [
+      missingOpen,
+      qualifiedOpen,
+      dynamicPath,
+      inlineHandler,
+      nestedRoute,
+      tripleQuotedRoute,
+      interpolatedTripleQuotedRoute,
+      shadowedRoute,
+      malformed,
+      unterminatedComment,
+      tabbed
+    ]) {
+      expect(facts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+      expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+    }
+    expect(malformed.symbols).toHaveLength(1);
+    expect(unterminatedComment.symbols).toHaveLength(1);
+    expect(tabbed.symbols).toHaveLength(1);
+    expect(duplicateHandler.edges.filter((edge) => edge.kind === "routes")).toEqual([
+      expect.objectContaining({
+        resolution: "unresolved",
+        evidence: expect.objectContaining({
+          ruleId: "framework.giraffe.direct-choose.literal-named-function.unresolved"
+        })
+      })
+    ]);
+  });
+
   it("extracts direct C++ cpp-httplib named-handler routes with exact evidence", () => {
     const facts = extractFileFacts({
       filePath: "src/server.cpp",
