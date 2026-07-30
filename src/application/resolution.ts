@@ -135,7 +135,9 @@ function staticRouteHandlerRuleId(
     return `framework.fastify.${registration}.${suffix}`;
   }
   if (reference.routeFramework === "react-router") {
-    return `framework.react-router.jsx-route.${suffix}`;
+    const registration =
+      reference.routeRegistration === "react-router-data-router" ? "data-router" : "jsx-route";
+    return `framework.react-router.${registration}.${suffix}`;
   }
   return `framework.express.literal-route.${suffix}`;
 }

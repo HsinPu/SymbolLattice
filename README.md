@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> **v0.23.0** is an early developer release. This public repository runs from source; its npm package is intentionally private and is not published to npm.
+> **v0.24.0** is an early developer release. This public repository runs from source; its npm package is intentionally private and is not published to npm.
 
 SymbolLattice builds a local symbol graph without hiding uncertainty. It keeps syntax-proven artifact facts, resolves cross-file relationships conservatively, and records why every resolved edge exists. The graph stays local to the inspected project under `.symbol-lattice/index.sqlite`.
 
@@ -27,7 +27,7 @@ SymbolLattice builds a local symbol graph without hiding uncertainty. It keeps s
 - **Event-accelerated foreground freshness** - opt-in `watch` uses native filesystem events when the host supports them, exposes bounded pending-path evidence in its own stream, coalesces saves, retains bounded polling as a safety sweep, and invokes the same atomic `sync` only after drift.
 - **Generation-bound source evidence** - `search` and exact `explore` results use source captured with the active graph generation, even when the live project has since drifted.
 - **Declaration-focused node view** - exact `node` results return the full persisted declaration range plus a bounded declaration body, direct callers/callees, and explicit limits from one active generation without substituting live source text.
-- **Static route evidence** - narrow Express, Fastify, and NestJS HTTP packs plus React Router JSX client-navigation routes create first-class `route` nodes and exact `routes` edges only when the registration and target binding are statically proven.
+- **Static route evidence** - narrow Express, Fastify, and NestJS HTTP packs plus React Router JSX and data-router client-navigation routes create first-class `route` nodes and exact `routes` edges only when the registration and target binding are statically proven.
 - **Non-HTTP transport evidence** - AST-proven NestJS GraphQL, microservice, and WebSocket entrypoints use distinct `entrypoint` nodes and exact `handles` edges, so a message pattern or subscription is never mislabeled as an HTTP route.
 - **Direct type-hierarchy evidence** - AST-proven `extends` and `implements` edges preserve value/type namespace proof, type-only imports, re-export provenance, unresolved bases, and bounded direct parent/child views without pretending to have a full type checker.
 - **Bounded context packs** - ordered symbol references produce persisted source, capped relationship/impact summaries, and static directed evidence paths without guessing ambiguous symbols or dynamic behavior.
@@ -102,7 +102,7 @@ One-shot data commands emit stable, pretty JSON. `watch` is the deliberate strea
 
 ## Capabilities
 
-| Area | v0.23.0 behavior |
+| Area | v0.24.0 behavior |
 | --- | --- |
 | Source files | TypeScript, TSX, JavaScript, and JSX |
 | Scope | Project root by default or repeatable, persisted `--scope` directories |
@@ -114,7 +114,7 @@ One-shot data commands emit stable, pretty JSON. `watch` is the deliberate strea
 | Re-exports | Named aliases, `export *`, default-through-named aliases, and namespace-export provenance |
 | Retrieval | Local deterministic FTS5 search across persisted source text and identifier parts; bounded path/language filters, source/symbol evidence, and exact `explore` excerpts from the same active generation |
 | Node inspection | Exact ID, qualified-name, simple-name, or `path:line[:column]` matches can return the persisted declaration range, capped direct callers/callees, source provenance, truncation, and active freshness from one generation |
-| Routes | Static AST-proven Express literal registrations; Fastify shorthand/full-object registrations plus inline, same-file named, and imported/re-exported plugin `register(..., { prefix })` projection; direct NestJS controller decorators plus `RouterModule.register()` module-prefix projection; and direct React Router JSX `Route` navigation records. All use bounded `routes` listing and exact handler evidence; React routes use `NAVIGATE`, never fabricated HTTP `GET` |
+| Routes | Static AST-proven Express literal registrations; Fastify shorthand/full-object registrations plus inline, same-file named, and imported/re-exported plugin `register(..., { prefix })` projection; direct NestJS controller decorators plus `RouterModule.register()` module-prefix projection; and direct React Router JSX `Route` plus v6.4+ data-router object navigation records. All use bounded `routes` listing and exact handler evidence; React routes use `NAVIGATE`, never fabricated HTTP `GET` |
 | Non-HTTP entrypoints | AST-proven direct NestJS GraphQL `Query` / `Mutation` / `Subscription`, microservice `MessagePattern` / `EventPattern`, and WebSocket `SubscribeMessage` handlers. Bounded `entrypoints` listing keeps transport/operation/name semantics and exact `handles` evidence separate from HTTP routes |
 | Type hierarchy | Direct TS/JS class `extends`, TS class `implements`, and TS interface `extends`; exact lexical/import/re-export proof with value/type namespaces, plus bounded direct parents/children |
 | Context | Bounded packs for 1–8 ordered references: exact-match source excerpts, capped callers/callees and reverse impact, plus shortest static directed evidence paths between adjacent exact references |
@@ -148,7 +148,7 @@ For an exact call that travels through a barrel, evidence uses `module.reexporte
 
 ### Static route and client-navigation evidence
 
-v0.14 introduced the first framework pack as a graph contract, not a regex guess; v0.23 adds AST-proven React Router JSX navigation on the same evidence-first terms. A supported registration creates a first-class `route` symbol such as `GET /users`, `GET /api/users`, or `NAVIGATE /settings` and a distinct `routes` edge to its terminal handler. That edge remains visible in `callers`, `callees`, `impact`, `context`, `explore`, `node`, and `explain-edge`; its kind keeps HTTP dispatch and browser navigation separate from ordinary function calls.
+v0.14 introduced the first framework pack as a graph contract, not a regex guess; v0.24 extends the React Router surface from direct JSX `Route` elements to direct data-router route objects on the same evidence-first terms. A supported registration creates a first-class `route` symbol such as `GET /users`, `GET /api/users`, or `NAVIGATE /settings` and a distinct `routes` edge to its terminal handler. That edge remains visible in `callers`, `callees`, `impact`, `context`, `explore`, `node`, and `explain-edge`; its kind keeps HTTP dispatch and browser navigation separate from ordinary function calls.
 
 #### Express
 
@@ -259,9 +259,11 @@ If the terminal handler cannot be resolved through a lexical binding, explicit i
 > [!NOTE]
 > `routes` is a read-only active-generation query. Its `status` may be stale after a source edit, while every route/handler record remains evidence from the last successfully indexed generation. Run `sync` or `index` to publish newer route evidence.
 
-### React Router JSX client-navigation evidence
+### React Router client-navigation evidence
 
-v0.23 indexes a deliberately narrow React Router JSX surface. A supported client route becomes a `NAVIGATE /...` symbol, not an HTTP route: `NAVIGATE` is a query discriminator that preserves the browser-navigation meaning while reusing the existing read-only `routes`, callers, impact, context, and edge-explanation views.
+v0.24 indexes two deliberately narrow React Router source forms: direct JSX `Route` elements and direct v6.4+ data-router object arrays. A supported client route becomes a `NAVIGATE /...` symbol, not an HTTP route: `NAVIGATE` is a query discriminator that preserves browser-navigation meaning while reusing the existing read-only `routes`, callers, impact, context, and edge-explanation views.
+
+#### JSX `Route` elements
 
 ```tsx
 import { Route as AppRoute } from "react-router-dom";
@@ -278,20 +280,37 @@ export function AppRoutes() {
 }
 ```
 
-The resulting route records are `NAVIGATE / -> HomePage`, `NAVIGATE /settings -> SettingsPage`, and `NAVIGATE /legacy -> LegacyPage`. Query them separately from HTTP registrations when useful:
+The resulting route records are `NAVIGATE / -> HomePage`, `NAVIGATE /settings -> SettingsPage`, and `NAVIGATE /legacy -> LegacyPage`.
+
+#### Data-router object arrays
+
+```tsx
+import { createBrowserRouter as makeRouter } from "react-router-dom";
+import { HomePage, SettingsPage } from "./pages.js";
+
+export const router = makeRouter([
+  { path: "/", Component: HomePage },
+  { path: "/settings", element: <SettingsPage /> }
+]);
+```
+
+This produces `NAVIGATE / -> HomePage` and `NAVIGATE /settings -> SettingsPage` with `routeRegistration: "react-router-data-router"` provenance and `framework.react-router.data-router.*` edge evidence. Query either React Router form separately from HTTP registrations when useful:
 
 ```bash
 node dist/cli/main.js routes /path/to/project --method NAVIGATE --path /settings --limit 20
 ```
 
-The v0.23 pack accepts only:
+> [!NOTE]
+> Compared with the local CodeGraph baseline used to plan this pack, SymbolLattice proves the import binding, direct factory call, route-object structure, and page binding through the AST instead of matching a source-text window. Dynamic router configurations can therefore remain unresolved by design, while unrelated object `path` fields are not promoted into navigation evidence.
 
-- a direct, non-type-only named `Route` import from `react-router` or `react-router-dom`; import aliases are supported;
-- one direct JSX `<Route>` opening/self-closing element with one slash-prefixed literal `path` (a JSX string or no-substitution string/template expression);
-- exactly one direct page reference: v5 `component={Page}`, v6 `Component={Page}`, or v6 `element={<Page />}`; and
+The v0.24 pack accepts only:
+
+- a direct, non-type-only named `Route`, `createBrowserRouter`, `createHashRouter`, or `createMemoryRouter` import from `react-router` or `react-router-dom`; import aliases are supported;
+- for JSX, one direct `<Route>` opening/self-closing element with one slash-prefixed literal `path` (a JSX string or no-substitution string/template expression) and exactly one direct v5 `component={Page}`, v6 `Component={Page}`, or v6 `element={<Page />}` page reference;
+- for data routers, one direct non-optional factory call with exactly one direct array-literal argument; each direct object entry is independently reported only with one slash-prefixed literal `path` and exactly one direct `Component: Page` or `element: <Page />` reference; and
 - exact local, import, or re-export value-space proof for the page component. Unresolved component references remain visible as unresolved `routes` edges rather than becoming global name guesses.
 
-Spreads, duplicate path/component attributes, type-only or shadowed `Route` bindings, dynamic paths, member/wrapped/inline page expressions, direct data-router route-object arrays, nested route composition, runtime router configuration, and Next.js file-system routes remain outside this release. Their runtime semantics are not inferred.
+Data-router extraction intentionally does not make one unsupported sibling erase an independently proven direct object. It does not, however, derive a route from that unsupported sibling. Computed/spread/duplicate object fields, dynamic paths, member/wrapped/inline page expressions, type-only or shadowed imports, a second factory argument (including `basename` options), route-array variables/spreads, and `lazy` route fields produce no data-router evidence for that shape. Nested `children` route composition, index or relative path derivation, runtime router configuration, and Next.js file-system routes remain outside this release. Their runtime semantics are not inferred.
 
 ### NestJS decorator and RouterModule route evidence
 
@@ -783,6 +802,8 @@ v0.22 adds no SQLite schema migration or route-query command. It persists additi
 
 v0.23 adds no SQLite schema migration or route-query command. It introduces additive `RouteMethod` value `NAVIGATE` and optional `routeFramework: "react-router"` provenance in the existing route fact payload, then projects direct JSX `Route` declarations into ordinary route symbols and `routes` edges. The extractor advances to `typescript-ast-v12` and the resolver to `project-resolver-v10`, so a pre-v0.23 active index requires an explicit `sync` or `index` before React Router navigation evidence can appear. Existing HTTP route symbols and facts remain readable.
 
+v0.24 adds no SQLite schema migration or route-query command. It adds the optional `routeRegistration: "react-router-data-router"` value to the existing route fact payload, then projects direct `createBrowserRouter`, `createHashRouter`, and `createMemoryRouter` object entries into ordinary route symbols and `routes` edges. The extractor advances to `typescript-ast-v13` and the resolver to `project-resolver-v11`, so a pre-v0.24 active index requires an explicit `sync` or `index` before data-router navigation evidence can appear. Existing React Router JSX and HTTP route symbols and facts remain readable.
+
 ## Architecture
 
 ```mermaid
@@ -796,7 +817,7 @@ flowchart LR
   Catalog["Filesystem catalog\nscope + gitignore"] --> Inputs["Index inputs"]
   Catalog --> TS["TS alias resolver"]
   Catalog --> WS["Workspace resolver"]
-  Extractor["TypeScript AST extractor\ndirect heritage + Express/Fastify/Nest HTTP routes\nReact Router JSX navigation + Fastify plugin facts\nNest module-prefix facts + non-HTTP entrypoints"] --> Facts["Reusable artifact facts"]
+  Extractor["TypeScript AST extractor\ndirect heritage + Express/Fastify/Nest HTTP routes\nReact Router JSX + data-router navigation + Fastify plugin facts\nNest module-prefix facts + non-HTTP entrypoints"] --> Facts["Reusable artifact facts"]
   Catalog --> SourceDocs["Persisted source documents"]
   SourceDocs --> Retrieval["Generation-bound lexical projection"]
   Facts --> Resolver["Full project export surface"]
@@ -822,11 +843,11 @@ src/
 
 ## Deliberate boundaries
 
-v0.23.0 does not yet provide:
+v0.24.0 does not yet provide:
 
 - Daemon mode, background automatic sync after the foreground process exits, cross-process watch coordination, MCP per-query pending-file banners, worker pools, or historical source browsing.
 - pnpm workspace YAML, TypeScript project references, external/package `extends`, or nested `.gitignore` semantics.
-- CommonJS `require`, dynamic dispatch, reflection, arbitrary framework routes, or namespace property-call resolution. The Express and Fastify packs remain limited to syntax-proven direct static registrations; Fastify now projects direct imported/re-exported plugin callbacks and nested direct identifier registrations, but it does not model mutable/assignment aliases, namespace/member access, `fastify-plugin` wrappers, dynamic prefixes, prefixed-plugin root-route variants, hooks, inline route handlers, or runtime route composition. The React Router pack accepts only direct JSX `Route` elements with literal paths and direct page identifiers; data-router objects, Next.js conventions, nested route composition, wrappers, and runtime router configuration remain unmodeled.
+- CommonJS `require`, dynamic dispatch, reflection, arbitrary framework routes, or namespace property-call resolution. The Express and Fastify packs remain limited to syntax-proven direct static registrations; Fastify now projects direct imported/re-exported plugin callbacks and nested direct identifier registrations, but it does not model mutable/assignment aliases, namespace/member access, `fastify-plugin` wrappers, dynamic prefixes, prefixed-plugin root-route variants, hooks, inline route handlers, or runtime route composition. The React Router pack accepts only direct JSX `Route` elements or direct one-argument data-router array objects with literal paths and direct page identifiers; it does not model `basename`, `lazy`, array variables/spreads, nested/index/relative route composition, Next.js conventions, wrappers, or runtime router configuration.
 - Semantic type checking, transitive hierarchy traversal, declaration-merging semantics, override dispatch, mixin/qualified/conditional heritage expressions, or automatic framework decorator inference. v0.18 recognizes direct imported NestJS HTTP decorators, direct static `RouterModule.register()` prefixes, and the narrowly defined non-HTTP decorators documented above; it does not infer custom decorators, barrels, `forRoot` / `forChild`, global/version prefixes, guards, GraphQL field resolvers, dynamic patterns, dynamic gateway configuration, or runtime transport wiring.
 - Parsers beyond TS/TSX/JS/JSX, external dependency indexing, telemetry, or multi-project routing.
 - Embedding-based or cloud retrieval, semantic ranking, arbitrary natural-language context assembly, semantic Git diff beyond immutable zero-context hunk-to-revision-local-declaration evidence, or reliable rename/move/cross-side identity attribution.
@@ -857,7 +878,8 @@ v0.23.0 does not yet provide:
 | `v0.21.0` | AST-proven same-file named Fastify plugin-prefix composition, nested local/inline prefixes, distinct local-plugin handler evidence, and unchanged read-only route views |
 | `v0.22.0` | AST-proven imported/re-exported Fastify plugin-prefix composition, nested cross-file plugin facts, cycle-safe projection, distinct imported-plugin handler evidence, and unchanged read-only route views |
 | `v0.23.0` | AST-proven React Router JSX `Route` extraction, explicit `NAVIGATE` client-navigation records, exact page-component evidence, and existing read-only route views across CLI, MCP, callers, impact, and context |
-| `v0.24+` | React Router data-router and nested-route composition where exact proof is possible, Next.js conventions, additional language adapters/framework packs, `fastify-plugin` wrapper proof, GraphQL field-resolver/runtime-transport evidence, contract graphs, retained-generation source browsing, and further CodeGraph-parity work |
+| `v0.24.0` | AST-proven React Router `createBrowserRouter` / `createHashRouter` / `createMemoryRouter` direct object arrays, data-router-specific handler evidence, and existing read-only navigation route views |
+| `v0.25+` | React Router nested/index/relative route composition where exact proof is possible, Next.js conventions, additional language adapters/framework packs, `fastify-plugin` wrapper proof, GraphQL field-resolver/runtime-transport evidence, contract graphs, retained-generation source browsing, and further CodeGraph-parity work |
 
 See [CHANGELOG.md](CHANGELOG.md) for release notes and migration history.
 
@@ -871,7 +893,7 @@ npm.cmd pack --dry-run
 git diff --check
 ```
 
-The suite covers discovery, input fingerprints, alias and workspace resolution, exact direct TypeScript/JavaScript heritage extraction and namespace-aware local/import/re-export resolution, bounded hierarchy traversal, exact static Express and Fastify route extraction including inline, same-file named, and cross-file imported/re-exported plugin-prefix composition plus handler resolution, exact React Router JSX client-navigation extraction with literal path, import/type/shadow/spread boundary checks, CLI/MCP `NAVIGATE` filtering, and incremental raw-fact reuse, direct NestJS controller decorators plus static `RouterModule.register()` prefix composition and non-HTTP GraphQL/microservice/WebSocket entrypoint extraction with alias, shadow, dynamic, persistence, and incremental raw-fact reuse coverage, route- and entrypoint-aware graph traversal, re-export semantics, exact affected-test proofs and completeness limits, local Git change-set parsing and selection, immutable revision-local Git hunk declaration attribution, bounded generation-bound node declaration evidence, generation-bound search and exploration source evidence, retained graph history and structural diffs, legacy snapshot backfill, stale-source evidence, bounded foreground pending-file disclosure, event debounce/polling fallback/retry receipts, no-op sync, schema migration, atomic rollback, MCP read-only behavior, CLI parsing, and architecture boundaries.
+The suite covers discovery, input fingerprints, alias and workspace resolution, exact direct TypeScript/JavaScript heritage extraction and namespace-aware local/import/re-export resolution, bounded hierarchy traversal, exact static Express and Fastify route extraction including inline, same-file named, and cross-file imported/re-exported plugin-prefix composition plus handler resolution, exact React Router JSX and direct data-router client-navigation extraction with literal paths, import/type/shadow/spread/lazy/factory-option boundary checks, data-router-specific page evidence, CLI/MCP `NAVIGATE` filtering, and incremental raw-fact reuse, direct NestJS controller decorators plus static `RouterModule.register()` prefix composition and non-HTTP GraphQL/microservice/WebSocket entrypoint extraction with alias, shadow, dynamic, persistence, and incremental raw-fact reuse coverage, route- and entrypoint-aware graph traversal, re-export semantics, exact affected-test proofs and completeness limits, local Git change-set parsing and selection, immutable revision-local Git hunk declaration attribution, bounded generation-bound node declaration evidence, generation-bound search and exploration source evidence, retained graph history and structural diffs, legacy snapshot backfill, stale-source evidence, bounded foreground pending-file disclosure, event debounce/polling fallback/retry receipts, no-op sync, schema migration, atomic rollback, MCP read-only behavior, CLI parsing, and architecture boundaries.
 
 ## Contributing
 

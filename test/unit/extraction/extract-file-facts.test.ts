@@ -594,6 +594,125 @@ describe("TypeScript and JavaScript extraction", () => {
     ]);
   });
 
+  it("extracts AST-proven React Router data-router object routes with direct page handlers", () => {
+    const facts = extractFileFacts({
+      filePath: "src/data-routes.tsx",
+      language: "typescript",
+      sourceText: [
+        'import { createBrowserRouter as makeRouter } from "react-router-dom";',
+        "function HomePage() { return <main>Home</main>; }",
+        "function SettingsPage() { return <main>Settings</main>; }",
+        "export const router = makeRouter([",
+        '  { path: "/", Component: HomePage },',
+        '  { path: "/settings", element: <SettingsPage /> }',
+        "]);"
+      ].join("\n")
+    });
+
+    expect(
+      facts.symbols
+        .filter((symbol) => symbol.kind === "route")
+        .map((route) => [route.name, route.range.start.line])
+    ).toEqual([
+      ["NAVIGATE /", 5],
+      ["NAVIGATE /settings", 6]
+    ]);
+    expect(
+      facts.pendingReferences
+        .filter((reference) => reference.relationKind === "routes")
+        .map((reference) => [
+          reference.referenceName,
+          reference.routeFramework,
+          reference.routeRegistration
+        ])
+    ).toEqual([
+      ["HomePage", "react-router", "react-router-data-router"],
+      ["SettingsPage", "react-router", "react-router-data-router"]
+    ]);
+  });
+
+  it("extracts AST-proven React Router data-router object routes in JavaScript source", () => {
+    const facts = extractFileFacts({
+      filePath: "src/data-routes.jsx",
+      language: "javascript",
+      sourceText: [
+        'import { createHashRouter, createMemoryRouter } from "react-router";',
+        "function ProfilePage() { return <main>Profile</main>; }",
+        "function MemoryPage() { return <main>Memory</main>; }",
+        "export const router = createHashRouter([",
+        '  { path: "/profile", element: <ProfilePage /> }',
+        "]);",
+        'export const memoryRouter = createMemoryRouter([{ path: "/memory", Component: MemoryPage }]);'
+      ].join("\n")
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route").map((route) => route.name)).toEqual([
+      "NAVIGATE /profile",
+      "NAVIGATE /memory"
+    ]);
+    expect(
+      facts.pendingReferences
+        .filter((reference) => reference.relationKind === "routes")
+        .map((reference) => [reference.referenceName, reference.routeRegistration])
+    ).toEqual([
+      ["ProfilePage", "react-router-data-router"],
+      ["MemoryPage", "react-router-data-router"]
+    ]);
+  });
+
+  it("retains direct data-router root-route evidence without deriving unsupported siblings or children", () => {
+    const facts = extractFileFacts({
+      filePath: "src/data-routes.tsx",
+      language: "typescript",
+      sourceText: [
+        'import { createBrowserRouter } from "react-router-dom";',
+        'const dynamicPath = "/dynamic";',
+        "function ParentPage() { return <main>Parent</main>; }",
+        "function ChildPage() { return <main>Child</main>; }",
+        "export const router = createBrowserRouter([",
+        '  { path: "/parent", Component: ParentPage, children: [{ path: "child", Component: ChildPage }] },',
+        "  { path: dynamicPath, Component: ChildPage }",
+        "]);"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route").map((route) => route.name)).toEqual([
+      "NAVIGATE /parent"
+    ]);
+    expect(facts.pendingReferences.filter((reference) => reference.relationKind === "routes")).toEqual([
+      expect.objectContaining({ referenceName: "ParentPage", routeRegistration: "react-router-data-router" })
+    ]);
+  });
+
+  it("rejects unproven, dynamic, spread, and ambiguous React Router data-router objects", () => {
+    const facts = extractFileFacts({
+      filePath: "src/data-routes.tsx",
+      language: "typescript",
+      sourceText: [
+        'import { createBrowserRouter } from "react-router";',
+        'import type { createHashRouter as TypeRouter } from "react-router-dom";',
+        'const dynamicPath = "/dynamic";',
+        'const routeOptions = { id: "spread" };',
+        "function Page() { return <main>Page</main>; }",
+        "function shadow(createBrowserRouter: (routes: unknown[]) => unknown) {",
+        '  return createBrowserRouter([{ path: "/shadowed", Component: Page }]);',
+        "}",
+        "void shadow;",
+        "createBrowserRouter([{ path: dynamicPath, Component: Page }]);",
+        'createBrowserRouter([{ ...routeOptions, path: "/spread", Component: Page }]);',
+        'createBrowserRouter([{ ["path"]: "/computed", Component: Page }]);',
+        'createBrowserRouter([{ path: "/member", Component: pages.Page }]);',
+        'createBrowserRouter([{ path: "/ambiguous", Component: Page, element: <Page /> }]);',
+        'createBrowserRouter([{ path: "/lazy", Component: Page, lazy: () => Promise.resolve({ Component: Page }) }]);',
+        'createBrowserRouter([{ path: "/options", Component: Page }], { basename: "/app" });',
+        'TypeRouter([{ path: "/type-only", Component: Page }]);'
+      ].join("\n")
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(facts.pendingReferences.filter((reference) => reference.relationKind === "routes")).toEqual([]);
+  });
+
   it("rejects dynamic, type-only, shadowed, spread, and ambiguous React Router JSX routes", () => {
     const facts = extractFileFacts({
       filePath: "src/app-routes.tsx",

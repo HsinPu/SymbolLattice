@@ -6,6 +6,23 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.24.0] - 2026-07-30
+
+### Added
+
+- AST-proven React Router v6.4+ data-router object routes for TypeScript/TSX and JavaScript/JSX. Direct non-type-only named `createBrowserRouter`, `createHashRouter`, and `createMemoryRouter` imports from `react-router` or `react-router-dom` (including aliases) now recognize a direct one-argument route array with slash-prefixed literal object paths and exactly one direct `Component: Page` or `element: <Page />` page handler.
+- Additive `routeRegistration: "react-router-data-router"` fact provenance and `framework.react-router.data-router.*` terminal-handler evidence. Local, imported, re-exported, and unresolved page references retain the factory/object route shape through the existing route, caller, impact, context, CLI, and MCP views, while `NAVIGATE` remains an explicit client-navigation discriminator rather than an HTTP method.
+- Exact type-only, lexical-shadow, factory-options, path, handler, spread, duplicate, computed-field, member-expression, and lazy-route rejection boundaries, plus persisted-fact and incremental-reuse coverage for a real data-router project.
+
+### Compatibility
+
+- No SQLite schema migration or new route-query command is required. The existing raw artifact-fact payload gains the additive optional `routeRegistration: "react-router-data-router"` value; existing route facts and evidence remain readable.
+- The artifact extractor advances to `typescript-ast-v13` and the project resolver to `project-resolver-v11`. A pre-v0.24 active index reports `indexer-version-changed` until an explicit `sync` or `index` publishes data-router navigation evidence.
+
+### Deliberate limits
+
+- This pack scans only direct object entries in a literal first-argument route array. It does not compose `children`, derive index or relative paths, apply a `basename`/factory options object, infer lazy or runtime route modules, follow route-array variables/spreads, or interpret Next.js file-system routing. A direct `lazy` field is rejected because it can replace the rendered page at runtime.
+
 ## [0.23.0] - 2026-07-30
 
 ### Added
@@ -475,7 +492,8 @@ No unreleased changes.
 - Explicit full indexing, caller/callee/impact queries, and read-only MCP exploration.
 - `exact`, `heuristic`, and `unresolved` relationship states.
 
-[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.23.0...HEAD
+[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.24.0...HEAD
+[0.24.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.23.0...v0.24.0
 [0.23.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.20.0...v0.21.0

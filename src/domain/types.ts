@@ -38,11 +38,12 @@ export type ResolutionKind = "exact" | "heuristic" | "unresolved";
 /** Framework provenance retained for syntax-proven static HTTP or client-navigation routes. */
 export type RouteFramework = "express" | "fastify" | "react-router";
 
-/** Additional static registration context retained when it changes the route path. */
+/** Additional static registration context retained when it changes route provenance or path. */
 export type RouteRegistration =
   | "fastify-inline-plugin-prefix"
   | "fastify-local-plugin-prefix"
-  | "fastify-imported-plugin-prefix";
+  | "fastify-imported-plugin-prefix"
+  | "react-router-data-router";
 
 export const ARTIFACT_LANGUAGES = ["typescript", "javascript"] as const;
 
@@ -101,7 +102,7 @@ export interface PendingReference {
   >;
   /** Present only for syntax-proven framework route or client-navigation handlers. */
   readonly routeFramework?: RouteFramework;
-  /** Present when a statically proven registration projects a framework route path. */
+  /** Present when a statically proven registration projects route provenance or a framework route path. */
   readonly routeRegistration?: RouteRegistration;
   readonly range: SourceRange;
 }

@@ -305,6 +305,7 @@ type RouteBindingKind =
   | "fastify-default-factory"
   | "fastify-plugin-receiver"
   | "react-router-route"
+  | "react-router-data-router-factory"
   | "other";
 
 interface RouteBinding {
@@ -329,11 +330,16 @@ interface StaticFastifyRoute {
   readonly routeRegistration?: RouteRegistration;
 }
 
-/** A direct React Router JSX route with a statically identifiable page component. */
+/** A direct React Router route with a statically identifiable page component. */
 interface StaticReactRouterRoute {
   readonly method: "NAVIGATE";
   readonly path: string;
   readonly handler: ts.Identifier;
+}
+
+/** A direct data-router object route, retaining its exact registration range. */
+interface StaticReactRouterDataRoute extends StaticReactRouterRoute {
+  readonly declaration: ts.ObjectLiteralExpression;
 }
 
 /** A literal Fastify route before a proven receiver provides any prefix context. */
@@ -441,6 +447,12 @@ const FASTIFY_OBJECT_ROUTE_METHODS = [
   "PUT",
   "POST"
 ] as const satisfies readonly RouteMethod[];
+
+const REACT_ROUTER_DATA_ROUTER_FACTORIES = [
+  "createBrowserRouter",
+  "createHashRouter",
+  "createMemoryRouter"
+] as const;
 
 const NEST_OTHER_DECORATOR_BINDING = { kind: "other", method: null } as const;
 
@@ -619,7 +631,12 @@ function namedReactRouterImportBindingKind(
     return "other";
   }
   const importedName = element.propertyName?.text ?? element.name.text;
-  return importedName === "Route" ? "react-router-route" : "other";
+  if (importedName === "Route") {
+    return "react-router-route";
+  }
+  return (REACT_ROUTER_DATA_ROUTER_FACTORIES as readonly string[]).includes(importedName)
+    ? "react-router-data-router-factory"
+    : "other";
 }
 
 function namedRouteImportBindingKind(
@@ -1439,6 +1456,115 @@ function staticReactRouterHandler(
     return staticReactRouterElementHandler(initializer.expression);
   }
   return ts.isIdentifier(initializer.expression) ? initializer.expression : null;
+}
+
+function staticReactRouterDataRoutePath(expression: ts.Expression): string | null {
+  const path = staticLiteralText(expression);
+  return path !== null && path.startsWith("/") ? path : null;
+}
+
+function staticReactRouterDataRouteHandler(
+  propertyName: "Component" | "element",
+  expression: ts.Expression
+): ts.Identifier | null {
+  return propertyName === "Component"
+    ? (ts.isIdentifier(expression) ? expression : null)
+    : staticReactRouterElementHandler(expression);
+}
+
+/**
+ * Keep data-router extraction at one direct object depth. A root route may
+ * retain ordinary route metadata or child definitions, but the route itself
+ * is reported only when its public path and page handler are both direct.
+ * `lazy` may replace the rendered page at runtime, so it is intentionally
+ * outside this syntax-proof boundary.
+ */
+function staticReactRouterDataRouteObject(expression: ts.Expression): StaticReactRouterDataRoute | null {
+  if (!ts.isObjectLiteralExpression(expression)) {
+    return null;
+  }
+
+  const propertyNames = new Set<string>();
+  let path: string | undefined;
+  let handler: ts.Identifier | undefined;
+  for (const property of expression.properties) {
+    if (!ts.isPropertyAssignment(property) || ts.isComputedPropertyName(property.name)) {
+      return null;
+    }
+
+    const propertyName = staticPropertyName(property.name);
+    if (propertyName === null || propertyNames.has(propertyName)) {
+      return null;
+    }
+    propertyNames.add(propertyName);
+
+    if (propertyName === "path") {
+      const staticPath = staticReactRouterDataRoutePath(property.initializer);
+      if (staticPath === null) {
+        return null;
+      }
+      path = staticPath;
+      continue;
+    }
+
+    if (propertyName === "Component" || propertyName === "element") {
+      if (handler !== undefined) {
+        return null;
+      }
+      const staticHandler = staticReactRouterDataRouteHandler(propertyName, property.initializer);
+      if (staticHandler === null) {
+        return null;
+      }
+      handler = staticHandler;
+      continue;
+    }
+
+    if (propertyName === "lazy") {
+      return null;
+    }
+  }
+
+  return path === undefined || handler === undefined
+    ? null
+    : { method: "NAVIGATE", path, handler, declaration: expression };
+}
+
+/**
+ * Supports direct v6.4+ data-router factories imported from React Router.
+ * Factory options can change the public URL base, so only the one-argument
+ * form is accepted. Route entries remain independent proof units: unsupported
+ * siblings are skipped rather than making a proven direct object ambiguous.
+ */
+function staticReactRouterDataRoutes(
+  sourceFile: ts.SourceFile,
+  node: ts.CallExpression,
+  bindings: ScopedRouteReceiverBindings
+): readonly StaticReactRouterDataRoute[] {
+  if (
+    node.questionDotToken !== undefined ||
+    !ts.isIdentifier(node.expression) ||
+    visibleRouteBindingKind(sourceFile, node.expression, bindings) !== "react-router-data-router-factory" ||
+    node.arguments.length !== 1
+  ) {
+    return [];
+  }
+
+  const routes = node.arguments[0];
+  if (routes === undefined || !ts.isArrayLiteralExpression(routes)) {
+    return [];
+  }
+
+  const staticRoutes: StaticReactRouterDataRoute[] = [];
+  for (const route of routes.elements) {
+    if (!ts.isExpression(route)) {
+      continue;
+    }
+    const staticRoute = staticReactRouterDataRouteObject(route);
+    if (staticRoute !== null) {
+      staticRoutes.push(staticRoute);
+    }
+  }
+  return staticRoutes;
 }
 
 /**
@@ -2966,6 +3092,10 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
     addStaticRoute(node, route, "react-router");
   }
 
+  function addStaticReactRouterDataRoute(route: StaticReactRouterDataRoute): void {
+    addStaticRoute(route.declaration, route, "react-router", "react-router-data-router");
+  }
+
   function addFastifyPluginFacts(node: ts.CallExpression): void {
     for (const candidate of staticFastifyPluginRouteCandidates({
       sourceFile,
@@ -3368,6 +3498,9 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
         addStaticFastifyRoute(node, route);
       }
       addFastifyPluginFacts(node);
+      for (const route of staticReactRouterDataRoutes(sourceFile, node, routeReceiverBindings)) {
+        addStaticReactRouterDataRoute(route);
+      }
     }
     if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
       const route = staticReactRouterJsxRoute(sourceFile, node, routeReceiverBindings);
