@@ -1,5 +1,6 @@
 import ts from "typescript";
 
+import { extractCFileFacts } from "./c.js";
 import { extractCsharpFileFacts } from "./csharp.js";
 import { extractCppFileFacts } from "./cpp.js";
 import { extractDartFileFacts } from "./dart.js";
@@ -3425,6 +3426,9 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
   }
   if (input.language === "php") {
     return extractPhpFileFacts({ ...input, language: "php" });
+  }
+  if (input.language === "c") {
+    return extractCFileFacts({ ...input, language: "c" });
   }
   if (input.language === "cpp") {
     return extractCppFileFacts({ ...input, language: "cpp" });

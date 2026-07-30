@@ -49,6 +49,7 @@ export type RouteFramework =
   | "axum"
   | "spring-web"
   | "laravel"
+  | "civetweb"
   | "cpp-httplib"
   | "aspnet-core"
   | "rails"
@@ -75,6 +76,7 @@ export const ARTIFACT_LANGUAGES = [
   "rust",
   "java",
   "php",
+  "c",
   "cpp",
   "csharp",
   "ruby",

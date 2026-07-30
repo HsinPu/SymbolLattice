@@ -22,6 +22,7 @@ describe("first-party framework capabilities", () => {
       "axum",
       "spring-web",
       "laravel",
+      "civetweb",
       "cpp-httplib",
       "aspnet-core",
       "rails",
@@ -122,6 +123,15 @@ describe("first-party framework capabilities", () => {
       surfaces: [
         "direct imported or fully-qualified Route facade calls",
         "literal controller-action arrays with same-file exact method evidence"
+      ]
+    });
+    expect(frameworkCapability("civetweb")).toMatchObject({
+      languages: ["c"],
+      routeFramework: "civetweb",
+      routeRegistrations: [],
+      surfaces: [
+        "direct civetweb.h request-handler registration",
+        "literal URI routes with unique unshadowed local function handlers"
       ]
     });
     expect(frameworkCapability("cpp-httplib")).toMatchObject({

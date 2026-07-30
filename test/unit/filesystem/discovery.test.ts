@@ -42,6 +42,7 @@ describe("source discovery", () => {
     await writeFile(join(projectPath, "src", "d.rs"), "fn main() {}\n", "utf8");
     await writeFile(join(projectPath, "src", "e.java"), "class Example {}\n", "utf8");
     await writeFile(join(projectPath, "src", "f.php"), "<?php\nfunction example() {}\n", "utf8");
+    await writeFile(join(projectPath, "src", "g.c"), "int main(void) { return 0; }\n", "utf8");
     await writeFile(join(projectPath, "src", "g.cpp"), "int main() { return 0; }\n", "utf8");
     await writeFile(join(projectPath, "src", "h.hpp"), "class Header {};\n", "utf8");
     await writeFile(join(projectPath, "src", "i.cs"), "public class Api {}\n", "utf8");
@@ -66,6 +67,7 @@ describe("source discovery", () => {
       "src/d.rs",
       "src/e.java",
       "src/f.php",
+      "src/g.c",
       "src/g.cpp",
       "src/h.hpp",
       "src/i.cs",
@@ -85,6 +87,7 @@ describe("source discovery", () => {
       "rust",
       "java",
       "php",
+      "c",
       "cpp",
       "cpp",
       "csharp",

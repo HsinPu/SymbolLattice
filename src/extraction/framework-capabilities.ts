@@ -15,6 +15,7 @@ export const FRAMEWORK_CAPABILITY_IDS = [
   "axum",
   "spring-web",
   "laravel",
+  "civetweb",
   "cpp-httplib",
   "aspnet-core",
   "rails",
@@ -168,6 +169,16 @@ export const FRAMEWORK_CAPABILITIES = [
     surfaces: [
       "direct imported or fully-qualified Route facade calls",
       "literal controller-action arrays with same-file exact method evidence"
+    ]
+  },
+  {
+    id: "civetweb",
+    languages: ["c"],
+    routeFramework: "civetweb",
+    routeRegistrations: [],
+    surfaces: [
+      "direct civetweb.h request-handler registration",
+      "literal URI routes with unique unshadowed local function handlers"
     ]
   },
   {

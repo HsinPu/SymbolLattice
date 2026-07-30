@@ -6,6 +6,24 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.48.0] - 2026-07-30
+
+### Added
+
+- C `.c` source discovery, persisted source-search language filtering, CLI/MCP validation, and direct top-level function containment through a deliberately separate C extractor. C++ source files remain on their existing cpp-httplib path.
+- An executable first-party `civetweb` capability. A route now requires a direct `<civetweb.h>` or `"civetweb.h"` include, a direct `mg_set_request_handler(context, "/literal", handler, cbdata)` registration in a direct function body, one literal slash-prefixed URI, and one unique unshadowed same-file top-level handler function. CivetWeb handler registration does not bind an HTTP method, so matching routes are represented as `ALL` and retain `framework.civetweb.direct-request-handler.literal-uri.local-function` evidence.
+- Unit and integration coverage now verifies C discovery, direct function containment, exact C source-search and `ALL` route-query behavior, quoted/system header forms, dynamic URI rejection, missing-header rejection, duplicate handler rejection, local-shadow rejection, and syntax-error fail-closed behavior. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.48.0.md`.
+
+### Compatibility
+
+- No SQLite schema migration or new query command is required. C symbols and CivetWeb routes reuse the existing file, symbol, edge, source-search, and route-query contracts; existing generations remain readable.
+- The artifact extractor advances to `multi-language-ast-v37`; the project resolver remains `project-resolver-v16` because all accepted CivetWeb proof is file-local. A pre-v0.48 active index reports `indexer-version-changed` until an explicit `sync` or `index` publishes C-capable facts.
+
+### Deliberate limits
+
+- The C extractor intentionally accepts only common parser-proven top-level function forms. It does not claim full C preprocessing, macro expansion, header graph resolution, C type checking, function-pointer data-flow, cross-file handler resolution, nested control-flow registration, or runtime behavior.
+- CivetWeb support excludes indirect/wrapper registration, dynamic/raw/escaped URIs, non-identifier context or handler expressions, duplicate handlers, potentially shadowed handlers, aliases, non-direct body statements, WebSocket/auth callbacks, per-method request inspection, and runtime route behavior. The local CodeGraph baseline already indexes C with a dedicated parser but has no CivetWeb resolver; SymbolLattice adds a narrow audited framework surface rather than claiming broad C parity.
+
 ## [0.47.0] - 2026-07-30
 
 ### Added

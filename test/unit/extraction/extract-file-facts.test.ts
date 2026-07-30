@@ -2861,6 +2861,154 @@ describe("source extraction", () => {
     expect(broken.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
   });
 
+  it("extracts direct C CivetWeb literal request-handler routes with exact evidence", () => {
+    const facts = extractFileFacts({
+      filePath: "src/server.c",
+      language: "c",
+      sourceText: [
+        "#include <civetweb.h>",
+        "",
+        "static int health(struct mg_connection *conn, void *ignored) { return 200; }",
+        "static int user(struct mg_connection *conn, void *ignored) { return 200; }",
+        "",
+        "void configure_routes(struct mg_context *ctx) {",
+        '  mg_set_request_handler(ctx, "/health", health, NULL);',
+        '  mg_set_request_handler(ctx, "/users/:id", user, 0);',
+        "}"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(facts.symbols.filter((symbol) => symbol.kind === "function").map((symbol) => symbol.qualifiedName)).toEqual([
+      "src/server.c#health",
+      "src/server.c#user",
+      "src/server.c#configure_routes"
+    ]);
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId,
+          edge.resolution,
+          edge.confidence
+        ])
+    ).toEqual([
+      [
+        "ALL /health",
+        "src/server.c#health",
+        "framework.civetweb.direct-request-handler.literal-uri.local-function",
+        "exact",
+        1
+      ],
+      [
+        "ALL /users/:id",
+        "src/server.c#user",
+        "framework.civetweb.direct-request-handler.literal-uri.local-function",
+        "exact",
+        1
+      ]
+    ]);
+  });
+
+  it("accepts direct C quoted CivetWeb headers", () => {
+    const facts = extractFileFacts({
+      filePath: "src/quoted.c",
+      language: "c",
+      sourceText: [
+        '#include "civetweb.h"',
+        "int health(void) { return 200; }",
+        "void configure(struct mg_context *ctx) {",
+        '  mg_set_request_handler(ctx, "/health", health, NULL);',
+        "}"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId
+        ])
+    ).toEqual([
+      [
+        "ALL /health",
+        "src/quoted.c#health",
+        "framework.civetweb.direct-request-handler.literal-uri.local-function"
+      ]
+    ]);
+  });
+
+  it("requires direct C CivetWeb header, literal URI, unique unshadowed local handler, and valid syntax", () => {
+    const missingHeader = extractFileFacts({
+      filePath: "src/missing-header.c",
+      language: "c",
+      sourceText: [
+        "int health(void) { return 200; }",
+        "void configure(struct mg_context *ctx) {",
+        '  mg_set_request_handler(ctx, "/health", health, NULL);',
+        "}"
+      ].join("\n")
+    });
+    const dynamic = extractFileFacts({
+      filePath: "src/dynamic.c",
+      language: "c",
+      sourceText: [
+        "#include <civetweb.h>",
+        "int health(void) { return 200; }",
+        "void configure(struct mg_context *ctx) {",
+        '  const char *path = "/health";',
+        "  mg_set_request_handler(ctx, path, health, NULL);",
+        "}"
+      ].join("\n")
+    });
+    const shadowed = extractFileFacts({
+      filePath: "src/shadowed.c",
+      language: "c",
+      sourceText: [
+        "#include <civetweb.h>",
+        "int health(void) { return 200; }",
+        "void configure(struct mg_context *ctx) {",
+        "  int health = 0;",
+        '  mg_set_request_handler(ctx, "/health", health, NULL);',
+        "}"
+      ].join("\n")
+    });
+    const duplicate = extractFileFacts({
+      filePath: "src/duplicate.c",
+      language: "c",
+      sourceText: [
+        "#include <civetweb.h>",
+        "int health(void) { return 200; }",
+        "int health(void) { return 201; }",
+        "void configure(struct mg_context *ctx) {",
+        '  mg_set_request_handler(ctx, "/health", health, NULL);',
+        "}"
+      ].join("\n")
+    });
+    const broken = extractFileFacts({
+      filePath: "src/broken.c",
+      language: "c",
+      sourceText: [
+        "#include <civetweb.h>",
+        "int health(void) { return 200; }",
+        "void configure( {",
+        '  mg_set_request_handler(ctx, "/health", health, NULL);',
+        "}"
+      ].join("\n")
+    });
+
+    for (const facts of [missingHeader, dynamic, shadowed, duplicate, broken]) {
+      expect(facts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+      expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+    }
+    expect(broken.symbols.filter((symbol) => symbol.kind === "function")).toEqual([]);
+  });
+
   it("extracts direct C++ cpp-httplib named-handler routes with exact evidence", () => {
     const facts = extractFileFacts({
       filePath: "src/server.cpp",

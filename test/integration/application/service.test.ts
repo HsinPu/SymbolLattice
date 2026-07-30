@@ -4055,6 +4055,63 @@ describe("SymbolLatticeService", () => {
     expect(search.results).toMatchObject([{ filePath: "src/server.cpp", language: "cpp" }]);
   });
 
+  it("indexes C CivetWeb routes and retains C source-search filtering", async () => {
+    const projectPath = await createInlineProject({
+      "src/server.c": [
+        "#include <civetweb.h>",
+        "",
+        "int health(struct mg_connection *conn, void *ignored) { return 200; }",
+        "int create_user(struct mg_connection *conn, void *ignored) { return 201; }",
+        "",
+        "void configure(struct mg_context *ctx) {",
+        '  mg_set_request_handler(ctx, "/health", health, NULL);',
+        '  mg_set_request_handler(ctx, "/users", create_user, NULL);',
+        "}"
+      ].join("\n")
+    });
+    const service = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+    const allRoutes = await service.routes(projectPath, { method: "ALL" });
+    const search = await service.search(projectPath, "health", { language: "c" });
+
+    expect(routes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "ALL",
+          path: "/health",
+          handler: expect.objectContaining({ qualifiedName: "src/server.c#health" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.civetweb.direct-request-handler.literal-uri.local-function",
+              stage: "syntax"
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "ALL",
+          path: "/users",
+          handler: expect.objectContaining({ qualifiedName: "src/server.c#create_user" })
+        })
+      ])
+    );
+    expect(allRoutes.routes).toMatchObject([
+      {
+        method: "ALL",
+        path: "/health",
+        handler: { qualifiedName: "src/server.c#health" }
+      },
+      {
+        method: "ALL",
+        path: "/users",
+        handler: { qualifiedName: "src/server.c#create_user" }
+      }
+    ]);
+    expect(search.results).toMatchObject([{ filePath: "src/server.c", language: "c" }]);
+  });
+
   it("indexes C# ASP.NET Core routes and retains C# source-search filtering", async () => {
     const projectPath = await createInlineProject({
       "src/Program.cs": [
