@@ -3506,6 +3506,63 @@ describe("SymbolLatticeService", () => {
     ]);
   });
 
+  it("indexes Rust Axum routes and retains Rust source-search filtering", async () => {
+    const projectPath = await createInlineProject({
+      "src/http.rs": [
+        "use axum::{Router, routing::{get, post}};",
+        "",
+        "async fn health() {}",
+        "async fn create_user() {}",
+        "",
+        "fn app() {",
+        "  let app = Router::new()",
+        "    .route(\"/health\", get(health))",
+        "    .route(\"/users\", post(create_user));",
+        "}"
+      ].join("\n")
+    });
+    const service = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+    const getRoutes = await service.routes(projectPath, { method: "GET" });
+    const search = await service.search(projectPath, "health", { language: "rust" });
+
+    expect(routes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "GET",
+          path: "/health",
+          handler: expect.objectContaining({ qualifiedName: "src/http.rs#health" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.axum.direct-router.route.local-function",
+              stage: "syntax"
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "POST",
+          path: "/users",
+          handler: expect.objectContaining({ qualifiedName: "src/http.rs#create_user" })
+        })
+      ])
+    );
+    expect(getRoutes.routes).toMatchObject([
+      {
+        method: "GET",
+        path: "/health",
+        handler: { qualifiedName: "src/http.rs#health" },
+        edge: {
+          resolution: "exact",
+          evidence: { ruleId: "framework.axum.direct-router.route.local-function", stage: "syntax" }
+        }
+      }
+    ]);
+    expect(search.results).toMatchObject([{ filePath: "src/http.rs", language: "rust" }]);
+  });
+
   it("indexes NestJS decorator routes as persisted exact method evidence", async () => {
     const projectPath = await createInlineProject({
       "src/cats.controller.ts": [

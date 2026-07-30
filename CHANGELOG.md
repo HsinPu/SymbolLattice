@@ -6,6 +6,24 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.36.0] - 2026-07-30
+
+### Added
+
+- Rust `.rs` source discovery, persisted source-search language filtering, CLI/MCP validation, conservative top-level function containment, and a first-party `@lezer/rust` AST adapter.
+- An executable first-party Axum capability for direct, unambiguous `use` bindings of `axum::Router` and `axum::routing::{get, post, put, patch, delete, head, options, trace}` (including direct aliases). A contiguous direct `Router::new().route("/path", method(handler))` builder chain with a literal path and one named top-level local handler now emits exact `framework.axum.direct-router.route.local-function` route evidence.
+- Capability, discovery, CLI, unit, integration, source-search, dynamic/shadow/inline/composition/wrapper/rebinding/import-proof, and malformed-source coverage. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.36.0.md`.
+
+### Compatibility
+
+- No SQLite schema migration or new query command is required. Rust facts and Axum routes reuse the existing file, symbol, edge, source-search, and route-query contracts; existing generations remain readable.
+- The artifact extractor advances to `multi-language-ast-v25`; the project resolver remains `project-resolver-v14` because the supported Rust and Axum forms are file-local. A pre-v0.36 active index reports `indexer-version-changed` until an explicit `sync` or `index` publishes the new facts.
+
+### Deliberate limits
+
+- Axum support accepts only direct non-public/non-wildcard `use` bindings, a direct unshadowed `Router::new()` root, contiguous literal `.route(...)` calls, one direct imported method-router helper, and one named top-level local function handler. `route_service`, `nest`, `merge`, `with_state`, `layer`, type/generic constructors, trailing wrappers, `MethodRouter` composition, inline/wrapped/namespaced handlers, dynamic/escaped paths, mutable/factory/router flow, methods, cross-file Cargo/module resolution, semantic type checking, and runtime behavior remain excluded.
+- CodeGraph has materially broader Rust declaration, crate/module, and regex-based Axum/Actix/Rocket coverage. SymbolLattice v0.36 intentionally trades that breadth for auditable import, constructor, builder-chain, literal-path, local-handler, and shadowing proof in this first Rust slice.
+
 ## [0.35.0] - 2026-07-30
 
 ### Added

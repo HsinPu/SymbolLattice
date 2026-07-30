@@ -11,7 +11,8 @@ export const FRAMEWORK_CAPABILITY_IDS = [
   "flask",
   "gin",
   "net-http",
-  "chi"
+  "chi",
+  "axum"
 ] as const;
 
 export type FrameworkCapabilityId = (typeof FRAMEWORK_CAPABILITY_IDS)[number];
@@ -128,6 +129,16 @@ export const FRAMEWORK_CAPABILITIES = [
     surfaces: [
       "direct chi.NewRouter and chi.NewMux router methods",
       "literal direct named-handler HTTP registrations"
+    ]
+  },
+  {
+    id: "axum",
+    languages: ["rust"],
+    routeFramework: "axum",
+    routeRegistrations: [],
+    surfaces: [
+      "direct imported Router::new literal route builder chains",
+      "direct imported method-router named local handlers"
     ]
   }
 ] as const satisfies readonly FrameworkCapability[];

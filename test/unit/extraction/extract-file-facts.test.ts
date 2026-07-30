@@ -2494,6 +2494,180 @@ describe("source extraction", () => {
     expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
   });
 
+  it("extracts direct Rust Axum literal route-builder chains with exact evidence", () => {
+    const facts = extractFileFacts({
+      filePath: "src/http.rs",
+      language: "rust",
+      sourceText: [
+        "use axum::{Router as AppRouter, routing::{get as axum_get, post, trace}};",
+        "",
+        "async fn health() {}",
+        "async fn create_user() {}",
+        "async fn diagnostics() {}",
+        "",
+        "pub fn app() {",
+        "  let app = AppRouter::new()",
+        "    .route(\"/health\", axum_get(health))",
+        "    .route(\"/users\", post(create_user))",
+        "    .route(\"/diagnostics\", trace(diagnostics));",
+        "}"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId,
+          edge.evidence?.stage,
+          edge.resolution,
+          edge.confidence
+        ])
+    ).toEqual([
+      [
+        "GET /health",
+        "src/http.rs#health",
+        "framework.axum.direct-router.route.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "POST /users",
+        "src/http.rs#create_user",
+        "framework.axum.direct-router.route.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "TRACE /diagnostics",
+        "src/http.rs#diagnostics",
+        "framework.axum.direct-router.route.local-function",
+        "syntax",
+        "exact",
+        1
+      ]
+    ]);
+  });
+
+  it("extracts the conventional direct Rust Axum routing import list", () => {
+    const facts = extractFileFacts({
+      filePath: "src/conventional.rs",
+      language: "rust",
+      sourceText: [
+        "use axum::Router;",
+        "use axum::routing::{get, post};",
+        "",
+        "async fn health() {}",
+        "async fn create_user() {}",
+        "",
+        "fn app() {",
+        "  let app = Router::new()",
+        "    .route(\"/health\", get(health))",
+        "    .route(\"/users\", post(create_user));",
+        "}"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId
+        ])
+    ).toEqual([
+      [
+        "GET /health",
+        "src/conventional.rs#health",
+        "framework.axum.direct-router.route.local-function"
+      ],
+      [
+        "POST /users",
+        "src/conventional.rs#create_user",
+        "framework.axum.direct-router.route.local-function"
+      ]
+    ]);
+  });
+
+  it("rejects dynamic, shadowed, inline, composed, wrapper, and rebounded Rust Axum route shapes", () => {
+    const facts = extractFileFacts({
+      filePath: "src/unproven.rs",
+      language: "rust",
+      sourceText: [
+        "use axum::{Router, routing::{get, post}};",
+        "",
+        "async fn health() {}",
+        "async fn stable() {}",
+        "",
+        "fn shadowed(Router: u8) {",
+        "  let app = Router::new().route(\"/shadowed-router\", get(health));",
+        "}",
+        "",
+        "fn parameter_shadow((get, _): (u8, u8)) {",
+        "  let app = Router::new().route(\"/shadowed-parameter\", get(health));",
+        "}",
+        "",
+        "fn main() {",
+        "  let dynamic = \"/dynamic\";",
+        "  let app = Router::new().route(dynamic, get(health));",
+        "  let get = post;",
+        "  let shadowed = Router::new().route(\"/shadowed-method\", get(health));",
+        "  let (post, _) = (get, ());",
+        "  let tuple_shadow = Router::new().route(\"/tuple-shadow\", post(stable));",
+        "  let inline = Router::new().route(\"/inline\", get(|| async {}));",
+        "  let composed = Router::new().route(\"/composed\", get(health).post(stable));",
+        "  let wrapped = build_router().route(\"/wrapped\", post(stable));",
+        "  let rebound = Router::new().route(\"/escaped\\\\path\", post(stable));",
+        "}"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+  });
+
+  it("requires direct Rust Axum import evidence before accepting a route-builder chain", () => {
+    const facts = extractFileFacts({
+      filePath: "src/no-import.rs",
+      language: "rust",
+      sourceText: [
+        "async fn health() {}",
+        "",
+        "fn app() {",
+        "  let app = Router::new().route(\"/health\", get(health));",
+        "}"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+  });
+
+  it("fails closed for Rust syntax errors instead of emitting partial declarations or routes", () => {
+    const facts = extractFileFacts({
+      filePath: "src/broken.rs",
+      language: "rust",
+      sourceText: [
+        "use axum::{Router, routing::get};",
+        "async fn health() {}",
+        "fn app( {",
+        "  let app = Router::new().route(\"/health\", get(health));",
+        "}"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "function")).toEqual([]);
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+  });
+
   it("fails closed for Go syntax errors instead of emitting partial declarations or routes", () => {
     const facts = extractFileFacts({
       filePath: "cmd/server/broken.go",

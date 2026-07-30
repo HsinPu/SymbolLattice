@@ -18,7 +18,8 @@ describe("first-party framework capabilities", () => {
       "flask",
       "gin",
       "net-http",
-      "chi"
+      "chi",
+      "axum"
     ]);
     expect(FRAMEWORK_CAPABILITIES.map((capability) => capability.id)).toEqual(
       FRAMEWORK_CAPABILITY_IDS
@@ -85,6 +86,15 @@ describe("first-party framework capabilities", () => {
       surfaces: [
         "direct chi.NewRouter and chi.NewMux router methods",
         "literal direct named-handler HTTP registrations"
+      ]
+    });
+    expect(frameworkCapability("axum")).toMatchObject({
+      languages: ["rust"],
+      routeFramework: "axum",
+      routeRegistrations: [],
+      surfaces: [
+        "direct imported Router::new literal route builder chains",
+        "direct imported method-router named local handlers"
       ]
     });
   });

@@ -511,8 +511,8 @@ export function createProgram(
     )
     .option("--path <project-relative-prefix>", "Restrict results to a project-relative source-path prefix", parseSearchPath)
     .option(
-      "--language <typescript|javascript|python>",
-      "Restrict results to TypeScript, JavaScript, or Python",
+      "--language <typescript|javascript|python|go|rust>",
+      "Restrict results to one supported indexed source language",
       parseSearchLanguage
     )
     .action(async (query: string, options: SearchCommandOptions) => {

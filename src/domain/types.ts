@@ -45,7 +45,8 @@ export type RouteFramework =
   | "flask"
   | "gin"
   | "net-http"
-  | "chi";
+  | "chi"
+  | "axum";
 
 /** Additional static registration context retained when it changes route provenance or path. */
 export type RouteRegistration =
@@ -57,7 +58,7 @@ export type RouteRegistration =
   | "react-router-data-router"
   | "react-router-create-routes-from-elements";
 
-export const ARTIFACT_LANGUAGES = ["typescript", "javascript", "python", "go"] as const;
+export const ARTIFACT_LANGUAGES = ["typescript", "javascript", "python", "go", "rust"] as const;
 
 export type ArtifactLanguage = (typeof ARTIFACT_LANGUAGES)[number];
 

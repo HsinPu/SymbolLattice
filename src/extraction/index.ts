@@ -2,6 +2,7 @@ import ts from "typescript";
 
 import { extractGoFileFacts } from "./go.js";
 import { extractPythonFileFacts } from "./python.js";
+import { extractRustFileFacts } from "./rust.js";
 import {
   frameworkCapability,
   type FrameworkCapability,
@@ -3406,6 +3407,9 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
   }
   if (input.language === "go") {
     return extractGoFileFacts({ ...input, language: "go" });
+  }
+  if (input.language === "rust") {
+    return extractRustFileFacts({ ...input, language: "rust" });
   }
 
   const sourceFile = ts.createSourceFile(

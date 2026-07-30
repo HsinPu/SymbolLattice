@@ -38,6 +38,7 @@ describe("source discovery", () => {
     await writeFile(join(projectPath, "src", "a.js"), "export const a = 1;", "utf8");
     await writeFile(join(projectPath, "src", "b.py"), "def b():\n    return 1\n", "utf8");
     await writeFile(join(projectPath, "src", "c.go"), "package main\n", "utf8");
+    await writeFile(join(projectPath, "src", "d.rs"), "fn main() {}\n", "utf8");
     await writeFile(join(projectPath, "README.md"), "ignored", "utf8");
     await writeFile(join(projectPath, "node_modules", "ignored", "index.js"), "ignored", "utf8");
 
@@ -47,12 +48,14 @@ describe("source discovery", () => {
       "src/a.js",
       "src/b.py",
       "src/c.go",
+      "src/d.rs",
       "src/z.ts"
     ]);
     expect(files.map((file) => file.language)).toEqual([
       "javascript",
       "python",
       "go",
+      "rust",
       "typescript"
     ]);
   });
