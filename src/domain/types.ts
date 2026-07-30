@@ -106,6 +106,7 @@ export const ARTIFACT_LANGUAGES = [
   "c",
   "lua",
   "luau",
+  "pascal",
   "r",
   "elixir",
   "erlang",

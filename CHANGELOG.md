@@ -6,6 +6,23 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.75.0] - 2026-07-31
+
+### Added
+
+- Pascal `.pas`, `.dpr`, `.dpk`, and `.lpr` source discovery, persisted source-search filtering, CLI/MCP language validation, and an independently implemented lexical declaration pass. It retains only direct column-one complete `procedure` / `function` implementations, including direct dotted and `class` routine names, as exact file-local `contains` evidence.
+- The scanner blanks `//`, `{...}`, `(*...*)`, and quoted Pascal source before testing declarations, handles simple `var` sections and nested `begin`/`case`/`try`/`repeat`/type blocks while finding a routine body, and fails closed for incomplete routines or unterminated comments/strings. Unit and integration coverage verifies discovery, direct functions, procedures, dotted/class names, comments/strings, nested blocks, incomplete declarations, malformed source, persisted search, and route absence. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.75.0.md`.
+
+### Compatibility
+
+- No SQLite schema migration or query command is required. `pascal` is an additive artifact language using the existing file, symbol, containment, source-search, CLI, MCP, and incremental-index contracts; existing generations remain readable. The root package metadata in `package-lock.json` is also realigned with `package.json` at `0.75.0`.
+- The artifact extractor advances to `multi-language-ast-v64`; the project resolver remains `project-resolver-v23` because this language slice is file-local and produces no module or framework projection. A pre-v0.75 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes Pascal-capable facts.
+
+### Deliberate limits
+
+- This is not a Pascal grammar, compiler, unit/project resolver, or runtime analyzer. It excludes `.dfm` / `.fmx`, forward/interface declarations, indented or local routines, constructors/destructors/operators/generics, overload/directive forms, type/class/interface symbols, uses/import/module/call analysis, VCL/FMX/Lazarus forms, Horse/Brook/WebBroker or other framework inference, compilation, and runtime behavior.
+- The inspected local CodeGraph baseline uses a dedicated Tree-sitter Pascal grammar and also maps `.dfm` / `.fmx`; it therefore has broader syntax and extension coverage. SymbolLattice v0.75 deliberately keeps a smaller lexical proof boundary with explicit complete-body requirements; it is independently implemented and does not reuse CodeGraph source.
+
 ## [0.74.0] - 2026-07-31
 
 ### Added

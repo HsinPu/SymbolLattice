@@ -3324,6 +3324,71 @@ describe("source extraction", () => {
     expect(indirect.symbols.map((symbol) => symbol.kind)).toEqual(["file"]);
   });
 
+  it("extracts complete direct Pascal routines while rejecting declarations and malformed source", () => {
+    const facts = extractFileFacts({
+      filePath: "src/health.pas",
+      language: "pascal",
+      sourceText: [
+        "unit Health;",
+        "",
+        "interface",
+        "procedure DeclaredOnly;",
+        "",
+        "implementation",
+        "",
+        "procedure THealthService.Ping;",
+        "begin",
+        "  { function ignored; }",
+        "end;",
+        "",
+        "class procedure THealthService.Reset;",
+        "begin",
+        "  (* procedure ignored; *)",
+        "end;",
+        "",
+        "function Add(left, right: Integer): Integer;",
+        "var",
+        "  labelText: string;",
+        "begin",
+        "  labelText := 'procedure ignored;';",
+        "  case left of",
+        "    0: Result := right;",
+        "  else",
+        "    Result := left + right;",
+        "  end;",
+        "end;",
+        "",
+        "  procedure NestedButIndented;",
+        "  begin",
+        "  end;",
+        "",
+        "procedure InlineRoutine; begin end;",
+        "",
+        "procedure Broken;",
+        "begin",
+        "  Result := 1;",
+        "end."
+      ].join("\n")
+    });
+    const malformed = extractFileFacts({
+      filePath: "src/broken.pas",
+      language: "pascal",
+      sourceText: ["procedure ValidButIgnored;", "begin", "end;", "(*"].join("\n")
+    });
+
+    expect(
+      facts.symbols.filter((symbol) => symbol.kind === "function").map((symbol) => symbol.qualifiedName)
+    ).toEqual([
+      "src/health.pas#THealthService.Ping",
+      "src/health.pas#THealthService.Reset",
+      "src/health.pas#Add",
+      "src/health.pas#InlineRoutine"
+    ]);
+    expect(facts.edges.filter((edge) => edge.kind === "contains")).toHaveLength(4);
+    expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+    expect(malformed.symbols.map((symbol) => symbol.kind)).toEqual(["file"]);
+  });
+
   it("extracts direct R Plumber annotation routes with exact evidence", () => {
     const facts = extractFileFacts({
       filePath: "src/plumber.R",

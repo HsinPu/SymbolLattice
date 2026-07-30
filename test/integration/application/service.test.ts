@@ -4281,6 +4281,45 @@ describe("SymbolLatticeService", () => {
     expect(search.results).toMatchObject([{ filePath: "src/avatar.luau", language: "luau" }]);
   });
 
+  it("indexes Pascal source and retains Pascal source-search filtering", async () => {
+    const projectPath = await createInlineProject({
+      "src/health.pas": [
+        "program Health;",
+        "",
+        "procedure Check;",
+        "begin",
+        "end;",
+        "",
+        "begin",
+        "end."
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    const indexed = await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+    const search = await service.search(projectPath, "Check", { language: "pascal" });
+    const persistedFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "src/health.pas");
+    const check = await service.find(projectPath, "src/health.pas#Check");
+
+    expect(indexed).toMatchObject({
+      stale: false,
+      counts: { files: 1, symbols: expect.any(Number), edges: expect.any(Number) }
+    });
+    expect(persistedFacts).toMatchObject({
+      language: "pascal",
+      extractorVersion: ARTIFACT_FACTS_EXTRACTOR_VERSION
+    });
+    expect(check.symbols).toMatchObject([
+      { kind: "function", qualifiedName: "src/health.pas#Check", isExported: true }
+    ]);
+    expect(routes.routes).toEqual([]);
+    expect(search.results).toMatchObject([{ filePath: "src/health.pas", language: "pascal" }]);
+  });
+
   it("indexes R Plumber annotation routes and retains R source-search filtering", async () => {
     const projectPath = await createInlineProject({
       "src/plumber.R": [
