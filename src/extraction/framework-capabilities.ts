@@ -19,6 +19,7 @@ export const FRAMEWORK_CAPABILITY_IDS = [
   "lapis",
   "plumber",
   "phoenix",
+  "cowboy",
   "cpp-httplib",
   "aspnet-core",
   "rails",
@@ -212,6 +213,16 @@ export const FRAMEWORK_CAPABILITIES = [
     surfaces: [
       "direct use Phoenix.Router module bindings",
       "literal scope-composed HTTP verb routes with full-module controller atom actions"
+    ]
+  },
+  {
+    id: "cowboy",
+    languages: ["erlang"],
+    routeFramework: "cowboy",
+    routeRegistrations: [],
+    surfaces: [
+      "direct cowboy_router:compile literal wildcard-host dispatch lists",
+      "literal three-item routes with same-module exported init/2 callback proof"
     ]
   },
   {

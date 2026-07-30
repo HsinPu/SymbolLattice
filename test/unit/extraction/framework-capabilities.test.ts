@@ -26,6 +26,7 @@ describe("first-party framework capabilities", () => {
       "lapis",
       "plumber",
       "phoenix",
+      "cowboy",
       "cpp-httplib",
       "aspnet-core",
       "rails",
@@ -162,6 +163,15 @@ describe("first-party framework capabilities", () => {
       surfaces: [
         "direct use Phoenix.Router module bindings",
         "literal scope-composed HTTP verb routes with full-module controller atom actions"
+      ]
+    });
+    expect(frameworkCapability("cowboy")).toMatchObject({
+      languages: ["erlang"],
+      routeFramework: "cowboy",
+      routeRegistrations: [],
+      surfaces: [
+        "direct cowboy_router:compile literal wildcard-host dispatch lists",
+        "literal three-item routes with same-module exported init/2 callback proof"
       ]
     });
     expect(frameworkCapability("cpp-httplib")).toMatchObject({

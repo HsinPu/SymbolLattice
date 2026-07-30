@@ -4287,6 +4287,74 @@ describe("SymbolLatticeService", () => {
     expect(search.results).toMatchObject([{ filePath: "src/router.ex", language: "elixir" }]);
   });
 
+  it("indexes Erlang Cowboy routes and retains Erlang source-search filtering", async () => {
+    const projectPath = await createInlineProject({
+      "src/demo_handler.erl": [
+        "-module(demo_handler).",
+        "-export([start/2, init/2]).",
+        "",
+        "start(_Type, _Args) ->",
+        "    Dispatch = cowboy_router:compile([",
+        "        {'_', [",
+        "            {\"/health\", demo_handler, #{}},",
+        "            {\"/users\", users_handler, []}",
+        "        ]}",
+        "    ]),",
+        "    cowboy:start_clear(demo_listener, [{port, 8080}], #{env => #{dispatch => Dispatch}}).",
+        "",
+        "init(Req0, State) ->",
+        "    {ok, Req0, State}."
+      ].join("\n")
+    });
+    const service = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+    const allRoutes = await service.routes(projectPath, { method: "ALL" });
+    const search = await service.search(projectPath, "health", { language: "erlang" });
+
+    expect(routes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "ALL",
+          path: "/health",
+          handler: expect.objectContaining({
+            qualifiedName: "src/demo_handler.erl#demo_handler.init/2"
+          }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.cowboy.direct-router.literal-wildcard-host.local-exported-init",
+              stage: "syntax"
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "ALL",
+          path: "/users",
+          handler: null,
+          edge: expect.objectContaining({
+            resolution: "unresolved",
+            evidence: expect.objectContaining({
+              ruleId: "framework.cowboy.direct-router.literal-wildcard-host.unresolved-handler-init"
+            })
+          })
+        })
+      ])
+    );
+    expect(allRoutes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "ALL",
+          path: "/health",
+          handler: expect.objectContaining({
+            qualifiedName: "src/demo_handler.erl#demo_handler.init/2"
+          })
+        })
+      ])
+    );
+    expect(search.results).toMatchObject([{ filePath: "src/demo_handler.erl", language: "erlang" }]);
+  });
+
   it("indexes C# ASP.NET Core routes and retains C# source-search filtering", async () => {
     const projectPath = await createInlineProject({
       "src/Program.cs": [

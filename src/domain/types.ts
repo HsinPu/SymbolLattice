@@ -53,6 +53,7 @@ export type RouteFramework =
   | "lapis"
   | "plumber"
   | "phoenix"
+  | "cowboy"
   | "cpp-httplib"
   | "aspnet-core"
   | "rails"
@@ -83,6 +84,7 @@ export const ARTIFACT_LANGUAGES = [
   "lua",
   "r",
   "elixir",
+  "erlang",
   "cpp",
   "csharp",
   "ruby",

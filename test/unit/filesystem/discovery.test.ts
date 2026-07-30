@@ -44,6 +44,7 @@ describe("source discovery", () => {
     await writeFile(join(projectPath, "src", "f.php"), "<?php\nfunction example() {}\n", "utf8");
     await writeFile(join(projectPath, "src", "g.c"), "int main(void) { return 0; }\n", "utf8");
     await writeFile(join(projectPath, "src", "g.cpp"), "int main() { return 0; }\n", "utf8");
+    await writeFile(join(projectPath, "src", "g.erl"), "-module(example).\n", "utf8");
     await writeFile(join(projectPath, "src", "g.ex"), "defmodule Example do\nend\n", "utf8");
     await writeFile(join(projectPath, "src", "g.exs"), "IO.puts(\"example\")\n", "utf8");
     await writeFile(join(projectPath, "src", "g.lua"), "local answer = 42\n", "utf8");
@@ -74,6 +75,7 @@ describe("source discovery", () => {
       "src/g.R",
       "src/g.c",
       "src/g.cpp",
+      "src/g.erl",
       "src/g.ex",
       "src/g.exs",
       "src/g.lua",
@@ -98,6 +100,7 @@ describe("source discovery", () => {
       "r",
       "c",
       "cpp",
+      "erlang",
       "elixir",
       "elixir",
       "lua",

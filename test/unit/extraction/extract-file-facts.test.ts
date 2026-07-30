@@ -3497,6 +3497,155 @@ describe("source extraction", () => {
     expect(unterminatedString.symbols).toHaveLength(1);
   });
 
+  it("extracts direct Erlang Cowboy wildcard-host routes with exact and unresolved evidence", () => {
+    const facts = extractFileFacts({
+      filePath: "src/demo_handler.erl",
+      language: "erlang",
+      sourceText: [
+        "-module(demo_handler).",
+        "-export([start/2, init/2]).",
+        "",
+        "start(_Type, _Args) ->",
+        "    Dispatch = cowboy_router:compile([",
+        "        {'_', [",
+        "            {\"/health\", demo_handler, #{}},",
+        "            {\"/users\", users_handler, []}",
+        "        ]}",
+        "    ]),",
+        "    cowboy:start_clear(demo_listener, [{port, 8080}], #{env => #{dispatch => Dispatch}}).",
+        "",
+        "init(Req0, State) ->",
+        "    {ok, Req0, State}."
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(facts.symbols.filter((symbol) => symbol.kind === "class").map((symbol) => symbol.qualifiedName)).toEqual([
+      "src/demo_handler.erl#demo_handler"
+    ]);
+    expect(
+      facts.symbols
+        .filter((symbol) => symbol.kind === "method")
+        .map((symbol) => [symbol.qualifiedName, symbol.isExported])
+    ).toEqual([
+      ["src/demo_handler.erl#demo_handler.start/2", true],
+      ["src/demo_handler.erl#demo_handler.init/2", true]
+    ]);
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName ?? null,
+          edge.referenceName,
+          edge.evidence?.ruleId,
+          edge.resolution,
+          edge.confidence
+        ])
+    ).toEqual([
+      [
+        "ALL /health",
+        "src/demo_handler.erl#demo_handler.init/2",
+        "demo_handler#init/2",
+        "framework.cowboy.direct-router.literal-wildcard-host.local-exported-init",
+        "exact",
+        1
+      ],
+      [
+        "ALL /users",
+        null,
+        "users_handler#init/2",
+        "framework.cowboy.direct-router.literal-wildcard-host.unresolved-handler-init",
+        "unresolved",
+        0
+      ]
+    ]);
+  });
+
+  it("requires direct Cowboy literal wildcard-host dispatches and balanced Erlang source", () => {
+    const dynamicDispatch = extractFileFacts({
+      filePath: "src/dynamic.erl",
+      language: "erlang",
+      sourceText: [
+        "-module(dynamic).",
+        "-export([init/2]).",
+        "init(Req, State) -> {ok, Req, State}.",
+        "start() -> cowboy_router:compile(Routes)."
+      ].join("\n")
+    });
+    const constrainedHost = extractFileFacts({
+      filePath: "src/constrained.erl",
+      language: "erlang",
+      sourceText: [
+        "-module(constrained).",
+        "-export([init/2]).",
+        "init(Req, State) -> {ok, Req, State}.",
+        "start() -> cowboy_router:compile([{\"example.test\", [{\"/health\", constrained, #{}}]}])."
+      ].join("\n")
+    });
+    const binaryPath = extractFileFacts({
+      filePath: "src/binary.erl",
+      language: "erlang",
+      sourceText: [
+        "-module(binary).",
+        "-export([init/2]).",
+        "init(Req, State) -> {ok, Req, State}.",
+        "start() -> cowboy_router:compile([{'_', [{<<\"/health\">>, binary, #{}}]}])."
+      ].join("\n")
+    });
+    const indirectModule = extractFileFacts({
+      filePath: "src/indirect.erl",
+      language: "erlang",
+      sourceText: [
+        "-module(indirect).",
+        "-export([init/2]).",
+        "init(Req, State) -> {ok, Req, State}.",
+        "start() -> Router = cowboy_router, Router:compile([{'_', [{\"/health\", indirect, #{}}]}])."
+      ].join("\n")
+    });
+    const constrainedPathTuple = extractFileFacts({
+      filePath: "src/tuple.erl",
+      language: "erlang",
+      sourceText: [
+        "-module(tuple).",
+        "-export([init/2]).",
+        "init(Req, State) -> {ok, Req, State}.",
+        "start() -> cowboy_router:compile([{'_', [{\"/health\", #{}, tuple, #{}}]}])."
+      ].join("\n")
+    });
+    const broken = extractFileFacts({
+      filePath: "src/broken.erl",
+      language: "erlang",
+      sourceText: [
+        "-module(broken).",
+        "start() -> cowboy_router:compile([{'_', [{\"/health\", broken, #{}}]})."
+      ].join("\n")
+    });
+    const unterminatedString = extractFileFacts({
+      filePath: "src/string.erl",
+      language: "erlang",
+      sourceText: [
+        "-module(string).",
+        "start() -> cowboy_router:compile([{'_', [{\"/health, string, #{}}]}])."
+      ].join("\n")
+    });
+
+    for (const facts of [
+      dynamicDispatch,
+      constrainedHost,
+      binaryPath,
+      indirectModule,
+      constrainedPathTuple,
+      broken,
+      unterminatedString
+    ]) {
+      expect(facts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+      expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+    }
+    expect(broken.symbols).toHaveLength(1);
+    expect(unterminatedString.symbols).toHaveLength(1);
+  });
+
   it("extracts direct C++ cpp-httplib named-handler routes with exact evidence", () => {
     const facts = extractFileFacts({
       filePath: "src/server.cpp",

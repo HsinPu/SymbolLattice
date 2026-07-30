@@ -6,6 +6,24 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.52.0] - 2026-07-30
+
+### Added
+
+- Erlang `.erl` source discovery, persisted source-search language filtering, CLI/MCP validation, and a deliberately isolated Erlang lexical/delimiter-balancing extractor for direct `-module`, `-export`, and simple top-level function containment.
+- An executable first-party `cowboy` capability. Direct Cowboy route facts now require one direct `cowboy_router:compile([{'_', [...] }])` wildcard-host dispatch list, literal slash-prefixed unescaped string paths, unquoted handler atoms, and literal three-item `{Path, Handler, InitialState}` tuples. A unique same-module exported `init/2` produces `framework.cowboy.direct-router.literal-wildcard-host.local-exported-init`; any other accepted handler remains explicit `unresolved` evidence.
+- Unit and integration coverage now verifies Erlang discovery, direct module/export/function containment, exact and unresolved Cowboy route-query/source-search behavior, dynamic/non-wildcard/binary/constrained/indirect route rejection, malformed delimiter and unterminated quote fail-closed behavior, and CLI/MCP language validation. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.52.0.md`.
+
+### Compatibility
+
+- No SQLite schema migration or new query command is required. Erlang symbols and Cowboy routes reuse the existing file, symbol, edge, source-search, and route-query contracts; existing generations remain readable.
+- The artifact extractor advances to `multi-language-ast-v41`; the project resolver remains `project-resolver-v16` because all accepted Cowboy callback proof is file-local. A pre-v0.52 active index reports `indexer-version-changed` until an explicit `sync` or `index` publishes Erlang-capable facts.
+
+### Deliberate limits
+
+- The Erlang extractor is a deliberately small lexical/delimiter-balancing implementation, not a full Erlang parser. It retains only file symbols for unmatched delimiters or unterminated quoted input, and does not claim generic Erlang behaviour, call, type, record, OTP, include, parse-transform, module-resolution, or runtime analysis.
+- Cowboy support accepts only a direct literal wildcard-host dispatch list and resolves only a unique same-module exported `init/2`. It excludes multiple/specific hosts, host/path constraints, binary/dynamic/escaped paths, quoted or macro-generated handlers, dispatch variables, aliases, nested router calls, cross-file handlers, and runtime behavior. The local CodeGraph baseline lists generic Erlang language support but has no detected Cowboy-specific route extractor; SymbolLattice adds a narrow audited framework slice rather than claiming broader generic Erlang parity.
+
 ## [0.51.0] - 2026-07-30
 
 ### Added
