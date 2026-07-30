@@ -964,6 +964,108 @@ describe("literal route handler resolution", () => {
     expect(snapshot.pendingReferences.filter((reference) => reference.relationKind === "routes")).toEqual([]);
   });
 
+  it("resolves Next.js App Router default page exports with distinct navigation evidence", () => {
+    const sourceDocuments: readonly SourceDocument[] = [
+      {
+        absolutePath: "C:/project/src/components/pricing-page.tsx",
+        relativePath: "src/components/pricing-page.tsx",
+        language: "typescript",
+        sourceText: "export function PricingPage() { return <main>Pricing</main>; }",
+        contentHash: "page"
+      },
+      {
+        absolutePath: "C:/project/src/app/pricing/page.tsx",
+        relativePath: "src/app/pricing/page.tsx",
+        language: "typescript",
+        sourceText: [
+          'import { PricingPage } from "../../components/pricing-page.js";',
+          "export default PricingPage;"
+        ].join("\n"),
+        contentHash: "route"
+      }
+    ];
+
+    const snapshot = snapshotWithResolver(sourceDocuments, undefined);
+    const page = snapshot.symbols.find(
+      (symbol) => symbol.filePath === "src/components/pricing-page.tsx" && symbol.name === "PricingPage"
+    );
+    const route = snapshot.symbols.find(
+      (symbol) => symbol.kind === "route" && symbol.name === "NAVIGATE /pricing"
+    );
+    const edge = snapshot.edges.find(
+      (candidate) => candidate.kind === "routes" && candidate.sourceId === route?.id
+    );
+
+    expect(edge).toMatchObject({
+      targetId: page?.id,
+      resolution: "exact",
+      confidence: 1,
+      evidence: {
+        ruleId: "framework.nextjs.app-router.imported-handler",
+        stage: "module",
+        candidateSymbolIds: [page?.id]
+      }
+    });
+    expect(snapshot.pendingReferences.filter((reference) => reference.relationKind === "routes")).toEqual([]);
+  });
+
+  it("resolves Next.js Pages Router re-exported page handlers with distinct navigation evidence", () => {
+    const sourceDocuments: readonly SourceDocument[] = [
+      {
+        absolutePath: "C:/project/src/components/pages.tsx",
+        relativePath: "src/components/pages.tsx",
+        language: "typescript",
+        sourceText: "export function BillingPage() { return <main>Billing</main>; }",
+        contentHash: "page"
+      },
+      {
+        absolutePath: "C:/project/src/components/public-pages.ts",
+        relativePath: "src/components/public-pages.ts",
+        language: "typescript",
+        sourceText: 'export { BillingPage as PublicBillingPage } from "./pages.js";',
+        contentHash: "barrel"
+      },
+      {
+        absolutePath: "C:/project/src/pages/billing.tsx",
+        relativePath: "src/pages/billing.tsx",
+        language: "typescript",
+        sourceText: [
+          'import { PublicBillingPage } from "../components/public-pages.js";',
+          "export default PublicBillingPage;"
+        ].join("\n"),
+        contentHash: "route"
+      }
+    ];
+
+    const snapshot = snapshotWithResolver(sourceDocuments, undefined);
+    const page = snapshot.symbols.find(
+      (symbol) => symbol.filePath === "src/components/pages.tsx" && symbol.name === "BillingPage"
+    );
+    const route = snapshot.symbols.find(
+      (symbol) => symbol.kind === "route" && symbol.name === "NAVIGATE /billing"
+    );
+    const edge = snapshot.edges.find(
+      (candidate) => candidate.kind === "routes" && candidate.sourceId === route?.id
+    );
+
+    expect(edge).toMatchObject({
+      targetId: page?.id,
+      resolution: "exact",
+      confidence: 1,
+      evidence: {
+        ruleId: "framework.nextjs.pages-router.reexported-handler",
+        stage: "module",
+        candidateSymbolIds: [page?.id],
+        resolutionPath: [
+          "src/pages/billing.tsx",
+          "src/components/public-pages.ts",
+          "src/components/pages.tsx"
+        ]
+      }
+    });
+    expect(snapshot.pendingReferences.filter((reference) => reference.relationKind === "routes")).toEqual([]);
+  });
+
   it("resolves direct inline Fastify plugin-prefix handlers with distinct evidence", () => {
     const sourceDocuments: readonly SourceDocument[] = [
       {

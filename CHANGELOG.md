@@ -6,6 +6,25 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.25.0] - 2026-07-30
+
+### Added
+
+- An executable first-party framework capability registry for Express, Fastify, NestJS, React Router, and Next.js. The AST extraction pipeline now selects registered passes by the parsed language, so framework coverage has one inspectable extension boundary rather than a documentation-only inventory.
+- Syntax-proven Next.js Pages Router navigation from `pages/` and `src/pages/` files with a direct named default export. `index` files map to their containing path and dynamic path segments remain explicit route patterns such as `NAVIGATE /blog/[slug]`.
+- Syntax-proven Next.js App Router navigation from `app/` and `src/app/` `page` files with a direct named default export. Conventional route groups are omitted from the URL, while ordinary local/import/re-export handler resolution produces `framework.nextjs.pages-router.*` or `framework.nextjs.app-router.*` evidence.
+- Additive `routeFramework: "nextjs"` and `routeRegistration: "nextjs-pages-router" | "nextjs-app-router"` provenance, plus unit, resolution, persisted-fact, caller, and incremental-reuse coverage.
+
+### Compatibility
+
+- No SQLite schema migration or new route-query command is required. Existing raw artifact facts gain only additive route-framework and route-registration values; existing route symbols and evidence remain readable.
+- The artifact extractor advances to `typescript-ast-v14` and the project resolver to `project-resolver-v12`. A pre-v0.25 active index reports `indexer-version-changed` until an explicit `sync` or `index` publishes capability and Next.js navigation evidence.
+
+### Deliberate limits
+
+- Next.js coverage is a static convention proof, not a runtime model. Pages API files, special Pages files, App Router `route` handlers, middleware, layouts, templates, loading/error/not-found files, anonymous/wrapped/HOC defaults, parallel routes, intercepting routes, and runtime configuration are excluded.
+- App route groups are omitted only for conventional `(name)` segments. React Router nested/index/relative composition remains a later pack; this release does not widen the existing React Router data-router proof boundary.
+
 ## [0.24.0] - 2026-07-30
 
 ### Added
@@ -492,7 +511,8 @@ No unreleased changes.
 - Explicit full indexing, caller/callee/impact queries, and read-only MCP exploration.
 - `exact`, `heuristic`, and `unresolved` relationship states.
 
-[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.24.0...HEAD
+[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.25.0...HEAD
+[0.25.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.24.0...v0.25.0
 [0.24.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.23.0...v0.24.0
 [0.23.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.21.0...v0.22.0

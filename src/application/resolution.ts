@@ -139,6 +139,11 @@ function staticRouteHandlerRuleId(
       reference.routeRegistration === "react-router-data-router" ? "data-router" : "jsx-route";
     return `framework.react-router.${registration}.${suffix}`;
   }
+  if (reference.routeFramework === "nextjs") {
+    const registration =
+      reference.routeRegistration === "nextjs-app-router" ? "app-router" : "pages-router";
+    return `framework.nextjs.${registration}.${suffix}`;
+  }
   return `framework.express.literal-route.${suffix}`;
 }
 

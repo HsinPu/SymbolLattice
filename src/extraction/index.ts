@@ -1,6 +1,12 @@
 import ts from "typescript";
 
 import {
+  frameworkCapability,
+  type FrameworkCapability,
+  type FrameworkCapabilityId
+} from "./framework-capabilities.js";
+
+import {
   createEdgeId,
   createSymbolId,
   type ArtifactFacts,
@@ -36,6 +42,12 @@ export type {
   ReExportBinding,
   ReferenceScope
 } from "../domain/index.js";
+export {
+  FRAMEWORK_CAPABILITIES,
+  FRAMEWORK_CAPABILITY_IDS,
+  frameworkCapability
+} from "./framework-capabilities.js";
+export type { FrameworkCapability, FrameworkCapabilityId } from "./framework-capabilities.js";
 
 /** @deprecated Use ArtifactLanguage from the domain package. */
 export type ExtractionLanguage = ArtifactLanguage;
@@ -340,6 +352,28 @@ interface StaticReactRouterRoute {
 /** A direct data-router object route, retaining its exact registration range. */
 interface StaticReactRouterDataRoute extends StaticReactRouterRoute {
   readonly declaration: ts.ObjectLiteralExpression;
+}
+
+/** A convention-derived Next.js navigation route with a direct default export. */
+interface StaticNextRoute extends StaticReactRouterRoute {
+  readonly declaration: ts.Node;
+  readonly routeRegistration: Extract<
+    RouteRegistration,
+    "nextjs-pages-router" | "nextjs-app-router"
+  >;
+}
+
+interface FrameworkExtractionPass {
+  readonly capability: FrameworkCapability;
+  readonly visit?: (node: ts.Node) => void;
+  readonly finalize?: () => void;
+}
+
+function frameworkExtractionPass(
+  id: FrameworkCapabilityId,
+  callbacks: Omit<FrameworkExtractionPass, "capability">
+): FrameworkExtractionPass {
+  return { capability: frameworkCapability(id), ...callbacks };
 }
 
 /** A literal Fastify route before a proven receiver provides any prefix context. */
@@ -1565,6 +1599,144 @@ function staticReactRouterDataRoutes(
     }
   }
   return staticRoutes;
+}
+
+const NEXT_PAGES_NON_ROUTE_FILES = new Set(["_app", "_document", "_error", "404", "500"]);
+
+function sourcePathBelowNextRoot(
+  filePath: string,
+  root: "app" | "pages"
+): readonly string[] | null {
+  const parts = filePath.replaceAll("\\", "/").split("/");
+  const rootIndex =
+    parts[0] === root ? 0 : parts[0] === "src" && parts[1] === root ? 1 : -1;
+  if (rootIndex === -1 || rootIndex === parts.length - 1) {
+    return null;
+  }
+  return parts.slice(rootIndex + 1);
+}
+
+function nextSourceFileStem(fileName: string): string | null {
+  const extension = /\.[cm]?[jt]sx?$/i.exec(fileName);
+  if (extension === null) {
+    return null;
+  }
+  const stem = fileName.slice(0, -extension[0].length);
+  return stem.endsWith(".d") ? null : stem;
+}
+
+function nextNavigationPath(segments: readonly string[]): string {
+  return segments.length === 0 ? "/" : `/${segments.join("/")}`;
+}
+
+function staticNextPagesRouterPath(filePath: string): string | null {
+  const parts = sourcePathBelowNextRoot(filePath, "pages");
+  const fileName = parts?.at(-1);
+  if (parts === null || fileName === undefined || parts[0] === "api") {
+    return null;
+  }
+
+  const stem = nextSourceFileStem(fileName);
+  if (stem === null || NEXT_PAGES_NON_ROUTE_FILES.has(stem)) {
+    return null;
+  }
+  return nextNavigationPath([...parts.slice(0, -1), ...(stem === "index" ? [] : [stem])]);
+}
+
+function isNextRouteGroup(segment: string): boolean {
+  return /^\([A-Za-z0-9][A-Za-z0-9_-]*\)$/.test(segment);
+}
+
+/**
+ * Intercepting and parallel-route segments change which slot or history state
+ * renders a page. Without the complete layout tree, this extractor leaves
+ * them outside its proof boundary instead of manufacturing one URL.
+ */
+function isUnsupportedNextAppSegment(segment: string): boolean {
+  return segment.startsWith("@") || (segment.startsWith("(") && !isNextRouteGroup(segment));
+}
+
+function staticNextAppRouterPath(filePath: string): string | null {
+  const parts = sourcePathBelowNextRoot(filePath, "app");
+  const fileName = parts?.at(-1);
+  if (parts === null || fileName === undefined || nextSourceFileStem(fileName) !== "page") {
+    return null;
+  }
+
+  const pathSegments: string[] = [];
+  for (const segment of parts.slice(0, -1)) {
+    if (isNextRouteGroup(segment)) {
+      continue;
+    }
+    if (segment.length === 0 || isUnsupportedNextAppSegment(segment)) {
+      return null;
+    }
+    pathSegments.push(segment);
+  }
+  return nextNavigationPath(pathSegments);
+}
+
+interface StaticNextDefaultExport {
+  readonly declaration: ts.Node;
+  readonly handler: ts.Identifier;
+}
+
+/**
+ * A Next.js page must have exactly one direct, named default export. Named
+ * declarations and identifier assignments preserve enough syntax evidence for
+ * normal local/import/re-export resolution; wrapped expressions remain out of
+ * scope because their rendered handler is not statically explicit.
+ */
+function staticNextDefaultExport(sourceFile: ts.SourceFile): StaticNextDefaultExport | null {
+  const candidates: StaticNextDefaultExport[] = [];
+  for (const statement of sourceFile.statements) {
+    if (
+      (ts.isFunctionDeclaration(statement) || ts.isClassDeclaration(statement)) &&
+      statement.name !== undefined &&
+      hasExportModifier(statement) &&
+      hasDefaultModifier(statement)
+    ) {
+      candidates.push({ declaration: statement, handler: statement.name });
+      continue;
+    }
+    if (
+      ts.isExportAssignment(statement) &&
+      !statement.isExportEquals &&
+      ts.isIdentifier(statement.expression)
+    ) {
+      candidates.push({ declaration: statement, handler: statement.expression });
+    }
+  }
+  return candidates.length === 1 ? candidates[0] ?? null : null;
+}
+
+function staticNextRoute(sourceFile: ts.SourceFile): StaticNextRoute | null {
+  const defaultExport = staticNextDefaultExport(sourceFile);
+  if (defaultExport === null) {
+    return null;
+  }
+
+  const pagesPath = staticNextPagesRouterPath(sourceFile.fileName);
+  if (pagesPath !== null) {
+    return {
+      method: "NAVIGATE",
+      path: pagesPath,
+      handler: defaultExport.handler,
+      declaration: defaultExport.declaration,
+      routeRegistration: "nextjs-pages-router"
+    };
+  }
+
+  const appPath = staticNextAppRouterPath(sourceFile.fileName);
+  return appPath === null
+    ? null
+    : {
+        method: "NAVIGATE",
+        path: appPath,
+        handler: defaultExport.handler,
+        declaration: defaultExport.declaration,
+        routeRegistration: "nextjs-app-router"
+      };
 }
 
 /**
@@ -3062,7 +3234,7 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
 
   function addStaticRoute(
     node: ts.Node,
-    route: StaticExpressRoute | StaticFastifyRoute | StaticReactRouterRoute,
+    route: StaticExpressRoute | StaticFastifyRoute | StaticNextRoute | StaticReactRouterRoute,
     routeFramework: NonNullable<PendingReference["routeFramework"]>,
     routeRegistration?: PendingReference["routeRegistration"]
   ): void {
@@ -3094,6 +3266,10 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
 
   function addStaticReactRouterDataRoute(route: StaticReactRouterDataRoute): void {
     addStaticRoute(route.declaration, route, "react-router", "react-router-data-router");
+  }
+
+  function addStaticNextRoute(route: StaticNextRoute): void {
+    addStaticRoute(route.declaration, route, "nextjs", route.routeRegistration);
   }
 
   function addFastifyPluginFacts(node: ts.CallExpression): void {
@@ -3478,40 +3654,85 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
 
   ts.forEachChild(sourceFile, visit);
 
-  function extractStaticRoutes(node: ts.Node): void {
-    if (ts.isClassDeclaration(node)) {
-      for (const route of staticNestRoutes(sourceFile, node, nestDecoratorBindings)) {
-        addStaticNestRoute(route);
+  const frameworkExtractionPasses: readonly FrameworkExtractionPass[] = [
+    frameworkExtractionPass("nestjs", {
+      visit(node) {
+        if (!ts.isClassDeclaration(node)) {
+          return;
+        }
+        for (const route of staticNestRoutes(sourceFile, node, nestDecoratorBindings)) {
+          addStaticNestRoute(route);
+        }
+        for (const entrypoint of staticNestEntrypoints(sourceFile, node, nestDecoratorBindings)) {
+          addStaticNestEntrypoint(entrypoint);
+        }
+        addStaticNestModuleFacts(node);
       }
-      for (const entrypoint of staticNestEntrypoints(sourceFile, node, nestDecoratorBindings)) {
-        addStaticNestEntrypoint(entrypoint);
+    }),
+    frameworkExtractionPass("express", {
+      visit(node) {
+        if (!ts.isCallExpression(node)) {
+          return;
+        }
+        const route = staticExpressRoute(sourceFile, node, routeReceiverBindings);
+        if (route !== null) {
+          addStaticExpressRoute(node, route);
+        }
       }
-      addStaticNestModuleFacts(node);
-    }
+    }),
+    frameworkExtractionPass("fastify", {
+      visit(node) {
+        if (!ts.isCallExpression(node)) {
+          return;
+        }
+        for (const route of staticFastifyRoutes(sourceFile, node, routeReceiverBindings)) {
+          addStaticFastifyRoute(node, route);
+        }
+        addFastifyPluginFacts(node);
+      }
+    }),
+    frameworkExtractionPass("react-router", {
+      visit(node) {
+        if (ts.isCallExpression(node)) {
+          for (const route of staticReactRouterDataRoutes(sourceFile, node, routeReceiverBindings)) {
+            addStaticReactRouterDataRoute(route);
+          }
+        }
+        if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
+          const route = staticReactRouterJsxRoute(sourceFile, node, routeReceiverBindings);
+          if (route !== null) {
+            addStaticReactRouterRoute(node, route);
+          }
+        }
+      }
+    }),
+    frameworkExtractionPass("nextjs", {
+      finalize() {
+        const route = staticNextRoute(sourceFile);
+        if (route !== null) {
+          addStaticNextRoute(route);
+        }
+      }
+    })
+  ];
 
-    if (ts.isCallExpression(node)) {
-      const route = staticExpressRoute(sourceFile, node, routeReceiverBindings);
-      if (route !== null) {
-        addStaticExpressRoute(node, route);
-      }
-      for (const route of staticFastifyRoutes(sourceFile, node, routeReceiverBindings)) {
-        addStaticFastifyRoute(node, route);
-      }
-      addFastifyPluginFacts(node);
-      for (const route of staticReactRouterDataRoutes(sourceFile, node, routeReceiverBindings)) {
-        addStaticReactRouterDataRoute(route);
-      }
+  // The registry is part of execution, not merely documentation: a capability
+  // opts its pass into the language currently being parsed.
+  const applicableFrameworkExtractionPasses = frameworkExtractionPasses.filter((pass) =>
+    pass.capability.languages.includes(input.language)
+  );
+
+  function extractFrameworkFacts(node: ts.Node): void {
+    for (const pass of applicableFrameworkExtractionPasses) {
+      pass.visit?.(node);
     }
-    if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
-      const route = staticReactRouterJsxRoute(sourceFile, node, routeReceiverBindings);
-      if (route !== null) {
-        addStaticReactRouterRoute(node, route);
-      }
-    }
-    ts.forEachChild(node, extractStaticRoutes);
+    ts.forEachChild(node, extractFrameworkFacts);
   }
 
-  ts.forEachChild(sourceFile, extractStaticRoutes);
+  ts.forEachChild(sourceFile, extractFrameworkFacts);
+  for (const pass of applicableFrameworkExtractionPasses) {
+    pass.finalize?.();
+  }
 
   return {
     symbols,

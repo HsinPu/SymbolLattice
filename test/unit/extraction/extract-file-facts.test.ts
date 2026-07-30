@@ -744,6 +744,108 @@ describe("TypeScript and JavaScript extraction", () => {
     expect(facts.pendingReferences.filter((reference) => reference.relationKind === "routes")).toEqual([]);
   });
 
+  it("extracts convention-derived Next.js Pages Router navigation routes with named default handlers", () => {
+    const homeFacts = extractFileFacts({
+      filePath: "pages/index.tsx",
+      language: "typescript",
+      sourceText: "export default function HomePage() { return <main>Home</main>; }"
+    });
+    const articleFacts = extractFileFacts({
+      filePath: "src/pages/blog/[slug].jsx",
+      language: "javascript",
+      sourceText: [
+        "const ArticlePage = () => <article>Article</article>;",
+        "export default ArticlePage;"
+      ].join("\n")
+    });
+    const settingsFacts = extractFileFacts({
+      filePath: "pages/settings.tsx",
+      language: "typescript",
+      sourceText: "export default class SettingsPage {}"
+    });
+
+    expect(homeFacts.symbols.filter((symbol) => symbol.kind === "route").map((route) => route.name)).toEqual([
+      "NAVIGATE /"
+    ]);
+    expect(
+      homeFacts.pendingReferences
+        .filter((reference) => reference.relationKind === "routes")
+        .map((reference) => [
+          reference.referenceName,
+          reference.routeFramework,
+          reference.routeRegistration
+        ])
+    ).toEqual([["HomePage", "nextjs", "nextjs-pages-router"]]);
+    expect(articleFacts.symbols.filter((symbol) => symbol.kind === "route").map((route) => route.name)).toEqual([
+      "NAVIGATE /blog/[slug]"
+    ]);
+    expect(articleFacts.pendingReferences.filter((reference) => reference.relationKind === "routes")).toEqual([
+      expect.objectContaining({
+        referenceName: "ArticlePage",
+        routeFramework: "nextjs",
+        routeRegistration: "nextjs-pages-router"
+      })
+    ]);
+    expect(settingsFacts.symbols.filter((symbol) => symbol.kind === "route").map((route) => route.name)).toEqual([
+      "NAVIGATE /settings"
+    ]);
+    expect(settingsFacts.pendingReferences.filter((reference) => reference.relationKind === "routes")).toEqual([
+      expect.objectContaining({ referenceName: "SettingsPage", routeRegistration: "nextjs-pages-router" })
+    ]);
+  });
+
+  it("extracts convention-derived Next.js App Router navigation routes and omits route groups", () => {
+    const pricingFacts = extractFileFacts({
+      filePath: "src/app/(marketing)/pricing/page.tsx",
+      language: "typescript",
+      sourceText: "export default function PricingPage() { return <main>Pricing</main>; }"
+    });
+    const postFacts = extractFileFacts({
+      filePath: "app/blog/[slug]/page.jsx",
+      language: "javascript",
+      sourceText: [
+        "const PostPage = () => <article>Post</article>;",
+        "export default PostPage;"
+      ].join("\n")
+    });
+
+    expect(pricingFacts.symbols.filter((symbol) => symbol.kind === "route").map((route) => route.name)).toEqual([
+      "NAVIGATE /pricing"
+    ]);
+    expect(postFacts.symbols.filter((symbol) => symbol.kind === "route").map((route) => route.name)).toEqual([
+      "NAVIGATE /blog/[slug]"
+    ]);
+    expect(
+      [...pricingFacts.pendingReferences, ...postFacts.pendingReferences]
+        .filter((reference) => reference.relationKind === "routes")
+        .map((reference) => [reference.referenceName, reference.routeRegistration])
+    ).toEqual([
+      ["PricingPage", "nextjs-app-router"],
+      ["PostPage", "nextjs-app-router"]
+    ]);
+  });
+
+  it("rejects unsupported Next.js conventions and non-direct default exports", () => {
+    const rejected = [
+      ["pages/api/hello.ts", "export default function Hello() { return null; }"],
+      ["pages/_app.tsx", "export default function App() { return null; }"],
+      ["pages/404.tsx", "export default function NotFound() { return null; }"],
+      ["app/blog/route.ts", "export default function GET() { return null; }"],
+      ["app/@modal/page.tsx", "export default function Modal() { return null; }"],
+      ["app/(.)feed/page.tsx", "export default function Feed() { return null; }"],
+      ["app/anonymous/page.tsx", "export default () => <main>Anonymous</main>;"],
+      ["src/not-app/page.tsx", "export default function Page() { return null; }"]
+    ] as const;
+
+    for (const [filePath, sourceText] of rejected) {
+      const facts = extractFileFacts({ filePath, language: "typescript", sourceText });
+      expect(facts.symbols.filter((symbol) => symbol.kind === "route"), filePath).toEqual([]);
+      expect(facts.pendingReferences.filter((reference) => reference.relationKind === "routes"), filePath).toEqual(
+        []
+      );
+    }
+  });
+
   it("extracts syntax-proven Fastify shorthand and full-object routes with framework provenance", () => {
     const facts = extractFileFacts({
       filePath: "src/routes.ts",

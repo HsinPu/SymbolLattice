@@ -36,13 +36,15 @@ export type EdgeKind = (typeof EDGE_KINDS)[number];
 export type ResolutionKind = "exact" | "heuristic" | "unresolved";
 
 /** Framework provenance retained for syntax-proven static HTTP or client-navigation routes. */
-export type RouteFramework = "express" | "fastify" | "react-router";
+export type RouteFramework = "express" | "fastify" | "nextjs" | "react-router";
 
 /** Additional static registration context retained when it changes route provenance or path. */
 export type RouteRegistration =
   | "fastify-inline-plugin-prefix"
   | "fastify-local-plugin-prefix"
   | "fastify-imported-plugin-prefix"
+  | "nextjs-app-router"
+  | "nextjs-pages-router"
   | "react-router-data-router";
 
 export const ARTIFACT_LANGUAGES = ["typescript", "javascript"] as const;
