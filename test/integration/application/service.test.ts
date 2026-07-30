@@ -3350,6 +3350,100 @@ describe("SymbolLatticeService", () => {
     ]);
   });
 
+  it("indexes React Router createRoutesFromElements navigation routes with exact imported page evidence", async () => {
+    const projectPath = await createInlineProject({
+      "src/pages.tsx": "export function SettingsPage() { return <main>Settings</main>; }\n",
+      "src/route-config.tsx": [
+        'import { createRoutesFromElements as makeRoutes, Route as AppRoute } from "react-router-dom";',
+        'import { SettingsPage } from "./pages.js";',
+        "export const routes = makeRoutes(",
+        '  <AppRoute path="/workspace">',
+        '    <AppRoute path="settings" Component={SettingsPage} />',
+        "  </AppRoute>",
+        ");"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    const indexed = await service.init({ projectPath });
+    const navigationRoutes = await service.routes(projectPath, { method: "NAVIGATE" });
+    const persistedFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "src/route-config.tsx");
+    const page = (await service.find(projectPath, "src/pages.tsx#SettingsPage")).symbols[0];
+    if (page === undefined) {
+      throw new Error("Expected indexed React Router createRoutesFromElements page component.");
+    }
+    const callers = await service.callers(projectPath, page.qualifiedName);
+
+    expect(indexed).toMatchObject({
+      stale: false,
+      counts: { files: 2, symbols: expect.any(Number), edges: expect.any(Number) }
+    });
+    expect(
+      persistedFacts?.pendingReferences
+        .filter((reference) => reference.relationKind === "routes")
+        .map((reference) => [
+          reference.referenceName,
+          reference.routeFramework,
+          reference.routeRegistration
+        ])
+    ).toEqual([[
+      "SettingsPage",
+      "react-router",
+      "react-router-create-routes-from-elements"
+    ]]);
+    expect(navigationRoutes.routes).toMatchObject([
+      {
+        method: "NAVIGATE",
+        path: "/workspace/settings",
+        route: { kind: "route", name: "NAVIGATE /workspace/settings" },
+        edge: {
+          kind: "routes",
+          resolution: "exact",
+          evidence: {
+            ruleId: "framework.react-router.create-routes-from-elements.imported-handler",
+            stage: "module"
+          }
+        },
+        handler: { qualifiedName: "src/pages.tsx#SettingsPage" }
+      }
+    ]);
+    expect(callers.relations).toMatchObject([
+      {
+        symbol: { kind: "route", name: "NAVIGATE /workspace/settings" },
+        edge: {
+          kind: "routes",
+          resolution: "exact",
+          evidence: {
+            ruleId: "framework.react-router.create-routes-from-elements.imported-handler",
+            stage: "module"
+          }
+        }
+      }
+    ]);
+
+    await writeFile(join(projectPath, "src", "unrelated.ts"), "export const unrelated = true;\n", "utf8");
+    const synced = await service.sync({ projectPath });
+    const routesAfterReuse = await service.routes(projectPath, { method: "NAVIGATE" });
+
+    expect(synced.lastIndexWork).toMatchObject({
+      mode: "incremental",
+      reExtractedFiles: ["src/unrelated.ts"],
+      reusedArtifactFiles: ["src/pages.tsx", "src/route-config.tsx"]
+    });
+    expect(routesAfterReuse.routes).toMatchObject([
+      {
+        method: "NAVIGATE",
+        path: "/workspace/settings",
+        edge: {
+          evidence: { ruleId: "framework.react-router.create-routes-from-elements.imported-handler" }
+        }
+      }
+    ]);
+  });
+
   it("indexes React Router data-router navigation routes with exact imported page evidence", async () => {
     const projectPath = await createInlineProject({
       "src/pages.tsx": "export function SettingsPage() { return <main>Settings</main>; }\n",

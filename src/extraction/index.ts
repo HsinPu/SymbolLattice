@@ -318,6 +318,7 @@ type RouteBindingKind =
   | "fastify-plugin-receiver"
   | "react-router-route"
   | "react-router-data-router-factory"
+  | "react-router-elements-factory"
   | "other";
 
 interface RouteBinding {
@@ -514,6 +515,7 @@ const REACT_ROUTER_DATA_ROUTER_FACTORIES = [
   "createHashRouter",
   "createMemoryRouter"
 ] as const;
+const REACT_ROUTER_ELEMENTS_FACTORY = "createRoutesFromElements";
 
 const NEST_OTHER_DECORATOR_BINDING = { kind: "other", method: null } as const;
 
@@ -694,6 +696,9 @@ function namedReactRouterImportBindingKind(
   const importedName = element.propertyName?.text ?? element.name.text;
   if (importedName === "Route") {
     return "react-router-route";
+  }
+  if (importedName === REACT_ROUTER_ELEMENTS_FACTORY) {
+    return "react-router-elements-factory";
   }
   return (REACT_ROUTER_DATA_ROUTER_FACTORIES as readonly string[]).includes(importedName)
     ? "react-router-data-router-factory"
@@ -1931,6 +1936,52 @@ function staticReactRouterJsxRouteDefinitions(
     }
   }
   return definitions;
+}
+
+/**
+ * Reads the direct JSX child tree accepted by an imported
+ * `createRoutesFromElements(...)` call. The factory gives this JSX tree
+ * data-router semantics, so its route facts retain distinct provenance rather
+ * than being indistinguishable from an arbitrary declarative JSX route.
+ */
+function staticReactRouterElementsFactoryRouteDefinitions(
+  sourceFile: ts.SourceFile,
+  node: ts.CallExpression,
+  bindings: ScopedRouteReceiverBindings
+): readonly StaticReactRouterJsxRouteDefinition[] {
+  if (
+    node.questionDotToken !== undefined ||
+    !ts.isIdentifier(node.expression) ||
+    visibleRouteBindingKind(sourceFile, node.expression, bindings) !== "react-router-elements-factory" ||
+    node.arguments.length !== 1
+  ) {
+    return [];
+  }
+
+  const children = node.arguments[0];
+  if (children === undefined) {
+    return [];
+  }
+  if (ts.isJsxFragment(children)) {
+    return staticReactRouterJsxRouteDefinitions(sourceFile, children.children, bindings);
+  }
+
+  const routeElement = ts.isJsxElement(children) ? children.openingElement : children;
+  if (!isStaticReactRouterJsxRouteElement(sourceFile, routeElement, bindings)) {
+    return [];
+  }
+  const definition = staticReactRouterJsxRouteDefinition(sourceFile, routeElement, bindings);
+  return definition === null ? [] : [definition];
+}
+
+function markStaticReactRouterJsxRouteDefinitionDeclarations(
+  definition: StaticReactRouterJsxRouteDefinition,
+  declarations: Set<ReactRouterJsxRouteElement>
+): void {
+  declarations.add(definition.declaration);
+  for (const child of definition.children) {
+    markStaticReactRouterJsxRouteDefinitionDeclarations(child, declarations);
+  }
 }
 
 /**
@@ -3377,6 +3428,7 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
   const fastifyPluginCallbacks = collectScopedFastifyPluginCallbacks(sourceFile, routeReceiverBindings);
   const nestDecoratorBindings = collectScopedNestDecoratorBindings(sourceFile);
   const symbolsByDeclaration = new Map<ts.Node, SymbolNode>();
+  const reactRouterElementsFactoryRouteDeclarations = new Set<ReactRouterJsxRouteElement>();
   const fastifyPluginFacts: {
     routes: FastifyPluginFacts["routes"][number][];
     childRegistrations: FastifyPluginFacts["childRegistrations"][number][];
@@ -3557,6 +3609,15 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
 
   function addStaticReactRouterDataRoute(route: StaticReactRouterDataRoute): void {
     addStaticRoute(route.declaration, route, "react-router", "react-router-data-router");
+  }
+
+  function addStaticReactRouterElementsFactoryRoute(route: StaticReactRouterJsxRoute): void {
+    addStaticRoute(
+      route.declaration,
+      route,
+      "react-router",
+      "react-router-create-routes-from-elements"
+    );
   }
 
   function addStaticNextRoute(route: StaticNextRoute): void {
@@ -3988,8 +4049,24 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
           for (const route of staticReactRouterDataRoutes(sourceFile, node, routeReceiverBindings)) {
             addStaticReactRouterDataRoute(route);
           }
+          for (const definition of staticReactRouterElementsFactoryRouteDefinitions(
+            sourceFile,
+            node,
+            routeReceiverBindings
+          )) {
+            markStaticReactRouterJsxRouteDefinitionDeclarations(
+              definition,
+              reactRouterElementsFactoryRouteDeclarations
+            );
+            for (const route of staticReactRouterJsxRouteTree(definition, "/", true)) {
+              addStaticReactRouterElementsFactoryRoute(route);
+            }
+          }
         }
         if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
+          if (reactRouterElementsFactoryRouteDeclarations.has(node)) {
+            return;
+          }
           if (staticReactRouterJsxRouteHasRouteAncestor(sourceFile, node, routeReceiverBindings)) {
             return;
           }

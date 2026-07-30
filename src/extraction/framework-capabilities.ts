@@ -58,8 +58,15 @@ export const FRAMEWORK_CAPABILITIES = [
     id: "react-router",
     languages: ["typescript", "javascript"],
     routeFramework: "react-router",
-    routeRegistrations: ["react-router-data-router"],
-    surfaces: ["JSX Route elements", "v6.4+ data-router objects"]
+    routeRegistrations: [
+      "react-router-data-router",
+      "react-router-create-routes-from-elements"
+    ],
+    surfaces: [
+      "JSX Route elements",
+      "createRoutesFromElements JSX trees",
+      "v6.4+ data-router objects"
+    ]
   },
   {
     id: "nextjs",

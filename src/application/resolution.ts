@@ -136,7 +136,11 @@ function staticRouteHandlerRuleId(
   }
   if (reference.routeFramework === "react-router") {
     const registration =
-      reference.routeRegistration === "react-router-data-router" ? "data-router" : "jsx-route";
+      reference.routeRegistration === "react-router-data-router"
+        ? "data-router"
+        : reference.routeRegistration === "react-router-create-routes-from-elements"
+          ? "create-routes-from-elements"
+          : "jsx-route";
     return `framework.react-router.${registration}.${suffix}`;
   }
   if (reference.routeFramework === "nextjs") {

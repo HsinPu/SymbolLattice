@@ -674,6 +674,93 @@ describe("TypeScript and JavaScript extraction", () => {
     ).toEqual(["ParentPage", "KeptPage"]);
   });
 
+  it("extracts createRoutesFromElements JSX trees with exact factory provenance", () => {
+    const facts = extractFileFacts({
+      filePath: "src/route-config.tsx",
+      language: "typescript",
+      sourceText: [
+        'import { createRoutesFromElements as makeRoutes, Route as AppRoute } from "react-router-dom";',
+        "function Shell() { return <main />; }",
+        "function WorkspacePage() { return <main />; }",
+        "function OverviewPage() { return <main />; }",
+        "function SettingsPage() { return <main />; }",
+        "export const routes = makeRoutes(",
+        "  <>",
+        "    <AppRoute element={<Shell />}>",
+        '      <AppRoute path="workspace" Component={WorkspacePage}>',
+        "        <AppRoute index element={<OverviewPage />} />",
+        '        <AppRoute path="settings" Component={SettingsPage} />',
+        "      </AppRoute>",
+        "    </AppRoute>",
+        "  </>",
+        ");"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route").map((route) => route.name)).toEqual([
+      "NAVIGATE /workspace",
+      "NAVIGATE /workspace",
+      "NAVIGATE /workspace/settings"
+    ]);
+    expect(
+      facts.pendingReferences
+        .filter((reference) => reference.relationKind === "routes")
+        .map((reference) => [reference.referenceName, reference.routeRegistration])
+    ).toEqual([
+      ["WorkspacePage", "react-router-create-routes-from-elements"],
+      ["OverviewPage", "react-router-create-routes-from-elements"],
+      ["SettingsPage", "react-router-create-routes-from-elements"]
+    ]);
+  });
+
+  it("extracts createRoutesFromElements JSX trees in JavaScript source", () => {
+    const facts = extractFileFacts({
+      filePath: "src/route-config.jsx",
+      language: "javascript",
+      sourceText: [
+        'import { createRoutesFromElements, Route } from "react-router";',
+        "function Page() { return <main />; }",
+        'export const routes = createRoutesFromElements(<Route path="/javascript" element={<Page />} />);'
+      ].join("\n")
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route").map((route) => route.name)).toEqual([
+      "NAVIGATE /javascript"
+    ]);
+    expect(
+      facts.pendingReferences
+        .filter((reference) => reference.relationKind === "routes")
+        .map((reference) => [reference.referenceName, reference.routeRegistration])
+    ).toEqual([["Page", "react-router-create-routes-from-elements"]]);
+  });
+
+  it("does not assign createRoutesFromElements provenance to unproven factory calls", () => {
+    const facts = extractFileFacts({
+      filePath: "src/route-config.tsx",
+      language: "typescript",
+      sourceText: [
+        'import { createRoutesFromElements, Route } from "react-router";',
+        'import type { createRoutesFromElements as TypeFactory } from "react-router-dom";',
+        "function Page() { return <main />; }",
+        "const dynamicTree = <Route path=\"/dynamic\" Component={Page} />;",
+        "function shadow(createRoutesFromElements: (routes: unknown) => unknown) {",
+        '  return createRoutesFromElements(<Route path="/shadowed" Component={Page} />);',
+        "}",
+        "void shadow;",
+        'createRoutesFromElements(<Route path="/options" Component={Page} />, {});',
+        'createRoutesFromElements?.(<Route path="/optional" Component={Page} />);',
+        "createRoutesFromElements(dynamicTree);",
+        'TypeFactory(<Route path="/type-only" Component={Page} />);'
+      ].join("\n")
+    });
+
+    expect(
+      facts.pendingReferences
+        .filter((reference) => reference.relationKind === "routes")
+        .map((reference) => reference.routeRegistration)
+    ).toEqual([undefined, undefined, undefined, undefined, undefined]);
+  });
+
   it("extracts AST-proven React Router data-router object routes with direct page handlers", () => {
     const facts = extractFileFacts({
       filePath: "src/data-routes.tsx",

@@ -45,7 +45,8 @@ export type RouteRegistration =
   | "fastify-imported-plugin-prefix"
   | "nextjs-app-router"
   | "nextjs-pages-router"
-  | "react-router-data-router";
+  | "react-router-data-router"
+  | "react-router-create-routes-from-elements";
 
 export const ARTIFACT_LANGUAGES = ["typescript", "javascript"] as const;
 

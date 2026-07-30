@@ -6,6 +6,24 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.28.0] - 2026-07-30
+
+### Added
+
+- AST-proven React Router `createRoutesFromElements(...)` extraction for TypeScript/TSX and JavaScript/JSX. A direct non-type-only named import from `react-router` or `react-router-dom` (including an alias), one direct non-optional factory call, and exactly one direct JSX `Route` or JSX fragment argument now project first-class `NAVIGATE` routes.
+- Factory-backed literal JSX trees reuse the established direct-child/fragment, relative-child, index-route, and pathless-layout composition rules. Every emitted page handler carries additive `routeRegistration: "react-router-create-routes-from-elements"` provenance and distinct `framework.react-router.create-routes-from-elements.*` evidence through the existing route, caller, impact, context, CLI, MCP, and retained-fact surfaces.
+- Exact extraction, cross-file resolver, persisted-fact, caller, and incremental-reuse coverage for factory-specific route evidence, plus a standalone Traditional Chinese comparison report at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.28.0.md`.
+
+### Compatibility
+
+- No SQLite schema migration or new route-query command is required. Existing route symbols and facts remain readable; the new factory registration is an additive value in the existing optional `routeRegistration` contract.
+- The artifact extractor advances to `typescript-ast-v17` and the project resolver to `project-resolver-v13`. A pre-v0.28 active index reports `indexer-version-changed` until an explicit `sync` or `index` publishes factory-specific facts and handler evidence.
+
+### Deliberate limits
+
+- This pack proves only the direct imported factory/call/argument/tree form. Type-only or shadowed imports, optional calls, additional arguments, dynamic JSX values, JSX conditions or arbitrary wrapper descendants, spread or duplicate attributes, dynamic paths, absolute child paths, and `.` / `..` child segments do not receive factory provenance.
+- Unsupported factory calls are not silently reclassified as factory-backed navigation. Existing generic JSX `Route` extraction remains independently available when its own direct syntax proof applies.
+
 ## [0.27.0] - 2026-07-30
 
 ### Added
@@ -547,7 +565,8 @@ No unreleased changes.
 - Explicit full indexing, caller/callee/impact queries, and read-only MCP exploration.
 - `exact`, `heuristic`, and `unresolved` relationship states.
 
-[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.27.0...HEAD
+[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.28.0...HEAD
+[0.28.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.27.0...v0.28.0
 [0.27.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.26.0...v0.27.0
 [0.26.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.25.0...v0.26.0
 [0.25.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.24.0...v0.25.0

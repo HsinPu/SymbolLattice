@@ -886,6 +886,52 @@ describe("literal route handler resolution", () => {
     expect(snapshot.pendingReferences.filter((reference) => reference.relationKind === "routes")).toEqual([]);
   });
 
+  it("resolves React Router createRoutesFromElements page components with distinct navigation evidence", () => {
+    const sourceDocuments: readonly SourceDocument[] = [
+      {
+        absolutePath: "C:/project/src/pages.tsx",
+        relativePath: "src/pages.tsx",
+        language: "typescript",
+        sourceText: "export function SettingsPage() { return <main>Settings</main>; }",
+        contentHash: "pages"
+      },
+      {
+        absolutePath: "C:/project/src/route-config.tsx",
+        relativePath: "src/route-config.tsx",
+        language: "typescript",
+        sourceText: [
+          'import { createRoutesFromElements as makeRoutes, Route } from "react-router-dom";',
+          'import { SettingsPage } from "./pages.js";',
+          'export const routes = makeRoutes(<Route path="/settings" Component={SettingsPage} />);'
+        ].join("\n"),
+        contentHash: "routes"
+      }
+    ];
+
+    const snapshot = snapshotWithResolver(sourceDocuments, undefined);
+    const page = snapshot.symbols.find(
+      (symbol) => symbol.filePath === "src/pages.tsx" && symbol.name === "SettingsPage"
+    );
+    const route = snapshot.symbols.find(
+      (symbol) => symbol.kind === "route" && symbol.name === "NAVIGATE /settings"
+    );
+    const edge = snapshot.edges.find(
+      (candidate) => candidate.kind === "routes" && candidate.sourceId === route?.id
+    );
+
+    expect(edge).toMatchObject({
+      targetId: page?.id,
+      resolution: "exact",
+      confidence: 1,
+      evidence: {
+        ruleId: "framework.react-router.create-routes-from-elements.imported-handler",
+        stage: "module",
+        candidateSymbolIds: [page?.id]
+      }
+    });
+    expect(snapshot.pendingReferences.filter((reference) => reference.relationKind === "routes")).toEqual([]);
+  });
+
   it("resolves React Router data-router page components with distinct navigation evidence", () => {
     const sourceDocuments: readonly SourceDocument[] = [
       {
