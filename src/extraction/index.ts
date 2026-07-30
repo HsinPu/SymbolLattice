@@ -6,6 +6,7 @@ import { extractGoFileFacts } from "./go.js";
 import { extractJavaFileFacts } from "./java.js";
 import { extractPhpFileFacts } from "./php.js";
 import { extractPythonFileFacts } from "./python.js";
+import { extractRubyFileFacts } from "./ruby.js";
 import { extractRustFileFacts } from "./rust.js";
 import {
   frameworkCapability,
@@ -3426,6 +3427,9 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
   }
   if (input.language === "csharp") {
     return extractCsharpFileFacts({ ...input, language: "csharp" });
+  }
+  if (input.language === "ruby") {
+    return extractRubyFileFacts({ ...input, language: "ruby" });
   }
 
   const sourceFile = ts.createSourceFile(

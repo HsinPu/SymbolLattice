@@ -6,6 +6,25 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.41.0] - 2026-07-30
+
+### Added
+
+- Ruby `.rb` source discovery, persisted source-search language filtering, CLI/MCP validation, direct top-level class/method/function containment, and a first-party `@ast-grep/lang-ruby` AST adapter.
+- An executable first-party `rails` capability. Rails routes now require a direct `Rails.application.routes.draw do ... end` block, one literal slash-prefixed `get` / `post` / `put` / `patch` / `delete` / `head` / `options` call, and exactly `to: "controller#action"`. Same-file non-namespaced controllers emit exact `framework.rails.direct-routes-draw.literal-controller-action.local-method` evidence; namespaced or cross-file controllers retain an explicit `unresolved` controller-action edge instead of a guessed target.
+- A shared C#/Ruby ast-grep language registry. The runtime registers all first-party dynamic grammars in one replacement-safe call, so adding Ruby cannot hide the existing C# parser in a long-lived process.
+- Capability, discovery, exact/unresolved route, unsupported verb/dynamic/resource/namespace/malformed-source rejection, source-search, CLI, and persisted route-query integration coverage. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.41.0.md`.
+
+### Compatibility
+
+- No SQLite schema migration or new query command is required. Ruby symbols and Rails routes reuse the existing file, symbol, edge, source-search, and route-query contracts; existing generations remain readable.
+- The artifact extractor advances to `multi-language-ast-v30`; the project resolver remains `project-resolver-v14` because all supported Ruby proof is file-local. A pre-v0.41 active index reports `indexer-version-changed` until an explicit `sync` or `index` publishes the new facts.
+
+### Deliberate limits
+
+- Rails support accepts only the direct literal `routes.draw` form above. It excludes `resources` / `resource`, `namespace` / `scope`, route groups/prefixes, constraints, root/mount/redirect/match forms, lambdas and other non-controller handlers, controller aliases/namespaces, dynamic/interpolated/escaped values, generic Ruby import/package/call/type resolution, cross-file controller resolution, and runtime Rails behavior.
+- CodeGraph has a broader regex-based Rails resolver: it detects Rails projects, extracts explicit `get` / `post` / `put` / `patch` / `delete` / `match` routes plus `resources` / `resource` expansions, and heuristically resolves controller actions across files at confidence `0.85`. SymbolLattice v0.41 intentionally adds a narrower AST-proven `routes.draw` surface with explicit exact-versus-unresolved controller evidence; it remains far behind CodeGraph's overall multi-language breadth.
+
 ## [0.40.0] - 2026-07-30
 
 ### Added

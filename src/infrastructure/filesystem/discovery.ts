@@ -25,7 +25,8 @@ export const SUPPORTED_EXTENSIONS: ReadonlyMap<string, SupportedLanguage> = new 
   [".hpp", "cpp"],
   [".hh", "cpp"],
   [".hxx", "cpp"],
-  [".cs", "csharp"]
+  [".cs", "csharp"],
+  [".rb", "ruby"]
 ] as const);
 
 /**

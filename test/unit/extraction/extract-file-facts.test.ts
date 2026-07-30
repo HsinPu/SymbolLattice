@@ -3155,6 +3155,139 @@ describe("source extraction", () => {
     expect(broken.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
   });
 
+  it("extracts direct Ruby Rails routes.draw controller-action routes with exact local evidence", () => {
+    const facts = extractFileFacts({
+      filePath: "config/routes.rb",
+      language: "ruby",
+      sourceText: [
+        "Rails.application.routes.draw do",
+        "  get \"/health\", to: \"health#show\"",
+        "  post \"/orders\", to: \"orders#create\"",
+        "  head \"/status\", to: \"status#check\"",
+        "end",
+        "",
+        "class HealthController",
+        "  def show",
+        "  end",
+        "end",
+        "",
+        "class OrdersController",
+        "  def create",
+        "  end",
+        "end",
+        "",
+        "class StatusController",
+        "  def check",
+        "  end",
+        "end",
+        "",
+        "def helper",
+        "end"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(facts.symbols.filter((symbol) => symbol.kind === "class").map((symbol) => symbol.qualifiedName)).toEqual([
+      "config/routes.rb#HealthController",
+      "config/routes.rb#OrdersController",
+      "config/routes.rb#StatusController"
+    ]);
+    expect(facts.symbols.filter((symbol) => symbol.kind === "function").map((symbol) => symbol.qualifiedName)).toEqual([
+      "config/routes.rb#helper"
+    ]);
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId,
+          edge.resolution,
+          edge.confidence
+        ])
+    ).toEqual([
+      [
+        "GET /health",
+        "config/routes.rb#HealthController.show",
+        "framework.rails.direct-routes-draw.literal-controller-action.local-method",
+        "exact",
+        1
+      ],
+      [
+        "POST /orders",
+        "config/routes.rb#OrdersController.create",
+        "framework.rails.direct-routes-draw.literal-controller-action.local-method",
+        "exact",
+        1
+      ],
+      [
+        "HEAD /status",
+        "config/routes.rb#StatusController.check",
+        "framework.rails.direct-routes-draw.literal-controller-action.local-method",
+        "exact",
+        1
+      ]
+    ]);
+  });
+
+  it("requires a direct Ruby Rails routes.draw block, literal route/action shape, and valid syntax", () => {
+    const unproven = extractFileFacts({
+      filePath: "config/routes.rb",
+      language: "ruby",
+      sourceText: [
+        "get \"/outside\", to: \"health#show\"",
+        "Rails.application.routes.draw do",
+        "  get path, to: \"health#show\"",
+        "  get \"/without-action\"",
+        "  get \"/extra\", to: \"health#show\", as: :health",
+        "end"
+      ].join("\n")
+    });
+    const unresolved = extractFileFacts({
+      filePath: "config/routes.rb",
+      language: "ruby",
+      sourceText: [
+        "Rails.application.routes.draw do",
+        "  delete \"/admin/health\", to: \"admin/health#destroy\"",
+        "end"
+      ].join("\n")
+    });
+    const broken = extractFileFacts({
+      filePath: "config/routes.rb",
+      language: "ruby",
+      sourceText: [
+        "Rails.application.routes.draw do",
+        "  get \"/broken\", to: \"health#show\""
+      ].join("\n")
+    });
+
+    expect(unproven.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(unproven.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+    expect(unresolved.symbols.filter((symbol) => symbol.kind === "route").map((symbol) => symbol.name)).toEqual([
+      "DELETE /admin/health"
+    ]);
+    expect(
+      unresolved.edges.filter((edge) => edge.kind === "routes").map((edge) => [
+        edge.targetId,
+        edge.referenceName,
+        edge.resolution,
+        edge.confidence,
+        edge.evidence?.ruleId
+      ])
+    ).toEqual([
+      [
+        null,
+        "admin/health#destroy",
+        "unresolved",
+        0,
+        "framework.rails.direct-routes-draw.literal-controller-action.unresolved-controller-method"
+      ]
+    ]);
+    expect(broken.symbols.filter((symbol) => symbol.kind === "class")).toEqual([]);
+    expect(broken.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(broken.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+  });
+
   it("extracts direct Rust Axum literal route-builder chains with exact evidence", () => {
     const facts = extractFileFacts({
       filePath: "src/http.rs",

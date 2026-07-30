@@ -16,7 +16,8 @@ export const FRAMEWORK_CAPABILITY_IDS = [
   "spring-web",
   "laravel",
   "cpp-httplib",
-  "aspnet-core"
+  "aspnet-core",
+  "rails"
 ] as const;
 
 export type FrameworkCapabilityId = (typeof FRAMEWORK_CAPABILITY_IDS)[number];
@@ -183,6 +184,16 @@ export const FRAMEWORK_CAPABILITIES = [
     surfaces: [
       "direct WebApplication builder bindings with literal Map routes",
       "direct MVC ApiController Route and Http method attributes"
+    ]
+  },
+  {
+    id: "rails",
+    languages: ["ruby"],
+    routeFramework: "rails",
+    routeRegistrations: [],
+    surfaces: [
+      "direct Rails.application.routes.draw blocks",
+      "literal direct verb routes with controller-action strings"
     ]
   }
 ] as const satisfies readonly FrameworkCapability[];

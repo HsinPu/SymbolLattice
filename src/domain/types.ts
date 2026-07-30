@@ -50,7 +50,8 @@ export type RouteFramework =
   | "spring-web"
   | "laravel"
   | "cpp-httplib"
-  | "aspnet-core";
+  | "aspnet-core"
+  | "rails";
 
 /** Additional static registration context retained when it changes route provenance or path. */
 export type RouteRegistration =
@@ -71,7 +72,8 @@ export const ARTIFACT_LANGUAGES = [
   "java",
   "php",
   "cpp",
-  "csharp"
+  "csharp",
+  "ruby"
 ] as const;
 
 export type ArtifactLanguage = (typeof ARTIFACT_LANGUAGES)[number];

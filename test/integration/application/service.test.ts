@@ -3800,6 +3800,71 @@ describe("SymbolLatticeService", () => {
     expect(search.results).toMatchObject([{ filePath: "src/Program.cs", language: "csharp" }]);
   });
 
+  it("indexes Ruby Rails routes and retains explicit unresolved controller evidence", async () => {
+    const projectPath = await createInlineProject({
+      "config/routes.rb": [
+        "Rails.application.routes.draw do",
+        "  get \"/health\", to: \"health#show\"",
+        "  post \"/orders\", to: \"orders#create\"",
+        "end"
+      ].join("\n"),
+      "app/controllers/health_controller.rb": [
+        "class HealthController",
+        "  def show",
+        "  end",
+        "end"
+      ].join("\n")
+    });
+    const service = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+    const getRoutes = await service.routes(projectPath, { method: "GET" });
+    const search = await service.search(projectPath, "health", { language: "ruby" });
+
+    expect(routes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "GET",
+          path: "/health",
+          handler: null,
+          edge: expect.objectContaining({
+            referenceName: "health#show",
+            resolution: "unresolved",
+            evidence: expect.objectContaining({
+              ruleId:
+                "framework.rails.direct-routes-draw.literal-controller-action.unresolved-controller-method",
+              stage: "syntax"
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "POST",
+          path: "/orders",
+          handler: null,
+          edge: expect.objectContaining({ referenceName: "orders#create", resolution: "unresolved" })
+        })
+      ])
+    );
+    expect(getRoutes.routes).toMatchObject([
+      {
+        method: "GET",
+        path: "/health",
+        handler: null,
+        edge: {
+          resolution: "unresolved",
+          referenceName: "health#show"
+        }
+      }
+    ]);
+    expect(search.results).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ filePath: "config/routes.rb", language: "ruby" }),
+        expect.objectContaining({ filePath: "app/controllers/health_controller.rb", language: "ruby" })
+      ])
+    );
+  });
+
   it("indexes NestJS decorator routes as persisted exact method evidence", async () => {
     const projectPath = await createInlineProject({
       "src/cats.controller.ts": [

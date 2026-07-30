@@ -1,5 +1,4 @@
-import csharp from "@ast-grep/lang-csharp";
-import { parse, registerDynamicLanguage, type SgNode } from "@ast-grep/napi";
+import { parse, type SgNode } from "./ast-grep-languages.js";
 
 import {
   createEdgeId,
@@ -14,11 +13,9 @@ import {
 import { frameworkCapability } from "./framework-capabilities.js";
 
 /**
- * C# is parsed through ast-grep's prebuilt Tree-sitter language package. This
- * keeps the extractor synchronous like the existing Lezer adapters and avoids
- * a host C/C++ build requirement on Windows.
+ * C# is parsed through the shared prebuilt ast-grep Tree-sitter registry,
+ * keeping extraction synchronous without a host C/C++ build.
  */
-registerDynamicLanguage({ csharp });
 
 export interface CsharpExtractFileFactsInput {
   readonly filePath: string;

@@ -23,7 +23,8 @@ describe("first-party framework capabilities", () => {
       "spring-web",
       "laravel",
       "cpp-httplib",
-      "aspnet-core"
+      "aspnet-core",
+      "rails"
     ]);
     expect(FRAMEWORK_CAPABILITIES.map((capability) => capability.id)).toEqual(
       FRAMEWORK_CAPABILITY_IDS
@@ -135,6 +136,15 @@ describe("first-party framework capabilities", () => {
       surfaces: [
         "direct WebApplication builder bindings with literal Map routes",
         "direct MVC ApiController Route and Http method attributes"
+      ]
+    });
+    expect(frameworkCapability("rails")).toMatchObject({
+      languages: ["ruby"],
+      routeFramework: "rails",
+      routeRegistrations: [],
+      surfaces: [
+        "direct Rails.application.routes.draw blocks",
+        "literal direct verb routes with controller-action strings"
       ]
     });
   });
