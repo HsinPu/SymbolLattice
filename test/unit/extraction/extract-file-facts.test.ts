@@ -8736,6 +8736,183 @@ describe("source extraction", () => {
     expect(unsupported.edges).toEqual([]);
   });
 
+  it("extracts source-proven Java properties keys without retaining configuration values", () => {
+    const facts = extractFileFacts({
+      filePath: "config/application.properties",
+      language: "properties",
+      sourceText: [
+        "# comments never become declarations",
+        "spring.datasource.password=database-secret",
+        "server.port: 8080",
+        "feature.enabled true",
+        "empty.value",
+        "escaped\\=key=ignored-value",
+        "unicode.\\u006bey=ignored-value",
+        "banner.text=first\\",
+        "  second physical value line",
+        "server.port=9090"
+      ].join("\n")
+    });
+
+    expect(
+      facts.symbols.map((symbol) => [
+        symbol.kind,
+        symbol.qualifiedName,
+        symbol.declarationOrdinal,
+        symbol.range
+      ])
+    ).toEqual([
+      [
+        "file",
+        "config/application.properties",
+        0,
+        { start: { line: 1, column: 1 }, end: { line: 10, column: 17 } }
+      ],
+      [
+        "variable",
+        "config/application.properties#properties-key:spring.datasource.password",
+        0,
+        { start: { line: 2, column: 1 }, end: { line: 2, column: 27 } }
+      ],
+      [
+        "variable",
+        "config/application.properties#properties-key:server.port",
+        0,
+        { start: { line: 3, column: 1 }, end: { line: 3, column: 12 } }
+      ],
+      [
+        "variable",
+        "config/application.properties#properties-key:feature.enabled",
+        0,
+        { start: { line: 4, column: 1 }, end: { line: 4, column: 16 } }
+      ],
+      [
+        "variable",
+        "config/application.properties#properties-key:empty.value",
+        0,
+        { start: { line: 5, column: 1 }, end: { line: 5, column: 12 } }
+      ],
+      [
+        "variable",
+        "config/application.properties#properties-key:escaped=key",
+        0,
+        { start: { line: 6, column: 1 }, end: { line: 6, column: 13 } }
+      ],
+      [
+        "variable",
+        "config/application.properties#properties-key:unicode.key",
+        0,
+        { start: { line: 7, column: 1 }, end: { line: 7, column: 17 } }
+      ],
+      [
+        "variable",
+        "config/application.properties#properties-key:banner.text",
+        0,
+        { start: { line: 8, column: 1 }, end: { line: 8, column: 12 } }
+      ],
+      [
+        "variable",
+        "config/application.properties#properties-key:server.port",
+        1,
+        { start: { line: 10, column: 1 }, end: { line: 10, column: 12 } }
+      ]
+    ]);
+    expect(
+      facts.edges.map((edge) => [
+        edge.kind,
+        edge.referenceName,
+        edge.evidence?.ruleId,
+        edge.resolution,
+        edge.range
+      ])
+    ).toEqual([
+      [
+        "contains",
+        "spring.datasource.password",
+        "syntax.properties.literal-key",
+        "exact",
+        { start: { line: 2, column: 1 }, end: { line: 2, column: 27 } }
+      ],
+      [
+        "contains",
+        "server.port",
+        "syntax.properties.literal-key",
+        "exact",
+        { start: { line: 3, column: 1 }, end: { line: 3, column: 12 } }
+      ],
+      [
+        "contains",
+        "feature.enabled",
+        "syntax.properties.literal-key",
+        "exact",
+        { start: { line: 4, column: 1 }, end: { line: 4, column: 16 } }
+      ],
+      [
+        "contains",
+        "empty.value",
+        "syntax.properties.literal-key",
+        "exact",
+        { start: { line: 5, column: 1 }, end: { line: 5, column: 12 } }
+      ],
+      [
+        "contains",
+        "escaped=key",
+        "syntax.properties.literal-key",
+        "exact",
+        { start: { line: 6, column: 1 }, end: { line: 6, column: 13 } }
+      ],
+      [
+        "contains",
+        "unicode.key",
+        "syntax.properties.literal-key",
+        "exact",
+        { start: { line: 7, column: 1 }, end: { line: 7, column: 17 } }
+      ],
+      [
+        "contains",
+        "banner.text",
+        "syntax.properties.literal-key",
+        "exact",
+        { start: { line: 8, column: 1 }, end: { line: 8, column: 12 } }
+      ],
+      [
+        "contains",
+        "server.port",
+        "syntax.properties.literal-key",
+        "exact",
+        { start: { line: 10, column: 1 }, end: { line: 10, column: 12 } }
+      ]
+    ]);
+    expect(JSON.stringify(facts)).not.toContain("database-secret");
+    expect(facts.symbols.some((symbol) => symbol.name === "second")).toBe(false);
+  });
+
+  it("ignores malformed, continued, and dangling Java properties keys", () => {
+    const facts = extractFileFacts({
+      filePath: "config/invalid.properties",
+      language: "properties",
+      sourceText: [
+        "bad\\u12=value",
+        "continued\\",
+        "key=value",
+        "valid.key=value",
+        "dangling=value\\"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.map((symbol) => [symbol.kind, symbol.name])).toEqual([
+      ["file", "invalid.properties"],
+      ["variable", "valid.key"]
+    ]);
+    expect(facts.edges).toMatchObject([
+      {
+        kind: "contains",
+        referenceName: "valid.key",
+        evidence: { ruleId: "syntax.properties.literal-key", stage: "syntax" }
+      }
+    ]);
+  });
+
   it("extracts parser-proven XML root and direct-child resources with containment evidence", () => {
     const facts = extractFileFacts({
       filePath: "config/catalog.xml",

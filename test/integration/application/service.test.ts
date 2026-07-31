@@ -8002,6 +8002,50 @@ describe("SymbolLatticeService", () => {
     ]);
   });
 
+  it("indexes Java properties keys without persisting values and retains language filtering", async () => {
+    const projectPath = await createInlineProject({
+      "config/application.properties": [
+        "spring.datasource.password=database-secret",
+        "server.port: 8080",
+        "feature.enabled true"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    const indexed = await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+    const search = await service.search(projectPath, "server.port", { language: "properties" });
+    const persistedFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "config/application.properties");
+    const serverPort = await service.find(
+      projectPath,
+      "config/application.properties#properties-key:server.port"
+    );
+
+    expect(indexed).toMatchObject({
+      stale: false,
+      counts: { files: 1, symbols: 4, edges: 3 }
+    });
+    expect(persistedFacts).toMatchObject({
+      language: "properties",
+      extractorVersion: ARTIFACT_FACTS_EXTRACTOR_VERSION
+    });
+    expect(JSON.stringify(persistedFacts)).not.toContain("database-secret");
+    expect(serverPort.symbols).toMatchObject([
+      {
+        kind: "variable",
+        qualifiedName: "config/application.properties#properties-key:server.port",
+        isExported: false
+      }
+    ]);
+    expect(routes.routes).toEqual([]);
+    expect(search.results).toMatchObject([
+      { filePath: "config/application.properties", language: "properties" }
+    ]);
+  });
+
   it("indexes Drupal routing YAML routes with parser-backed unresolved controller evidence", async () => {
     const projectPath = await createInlineProject({
       "modules/custom/example/example.routing.yml": [

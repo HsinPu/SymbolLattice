@@ -139,7 +139,8 @@ export const ARTIFACT_LANGUAGES = [
   "cobol",
   "zig",
   "yaml",
-  "xml"
+  "xml",
+  "properties"
 ] as const;
 
 export type ArtifactLanguage = (typeof ARTIFACT_LANGUAGES)[number];

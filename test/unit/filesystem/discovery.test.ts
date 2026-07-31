@@ -223,6 +223,11 @@ describe("source discovery", () => {
     expect(getSourceLanguage("config/catalog.xml")).toBe("xml");
   });
 
+  it("recognizes the Java properties source extension", () => {
+    expect(getSourceLanguage("config/application.properties")).toBe("properties");
+    expect(getSourceLanguage("resources/logging.PROPERTIES")).toBe("properties");
+  });
+
   it("discovers only source-proven Objective-C .h headers", async () => {
     const projectPath = await createProject();
     await mkdir(join(projectPath, "Headers"), { recursive: true });

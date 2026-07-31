@@ -6,6 +6,23 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.91.0] - 2026-07-31
+
+### Added
+
+- Java `.properties` source discovery now recognizes every case-insensitive `.properties` extension and exposes the additive `properties` language through the existing persisted source-search, CLI, and MCP language-validation contracts. The new dependency-free parser retains a file symbol plus source-ranged `variable` symbols for literal non-empty keys across all properties filenames.
+- The parser accepts comments, `=`, `:`, whitespace-separated, and no-value entries; it decodes source-proven escaped separators, whitespace, and `\\uXXXX` key characters. Value-continuation lines are consumed so they cannot become false declarations. Key ranges, symbols, and edge evidence never include property values, and each exact file-to-key containment edge carries `syntax.properties.literal-key` evidence. Unit, discovery, and service integration coverage prove escaped-key identities, duplicate ordinals, continuation safety, value omission from artifact facts, malformed/dangling/continued-key exclusion, persisted provenance, and source-search filtering. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.91.0.md`.
+
+### Compatibility
+
+- The artifact extractor advances to `multi-language-ast-v80`; the project resolver remains `project-resolver-v23` because properties facts are direct file-local declarations with no cross-file configuration binding. A pre-v0.91 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes properties-capable facts.
+- No SQLite schema migration or query command is required. This is an additive artifact-language capability within existing file, variable-symbol, exact-containment-edge, source-search, CLI, MCP, and incremental-index contracts; existing generations remain readable.
+
+### Deliberate limits
+
+- This is not a complete Java `Properties` runtime model. It excludes continued keys, malformed escapes, control-character keys, profile/config precedence, placeholders, interpolation, default merging, encoding/runtime loading behavior, value semantics, Spring `@Value` / `@ConfigurationProperties`, framework detection, cross-file resolution, schema validation, and runtime behavior.
+- The inspected local CodeGraph baseline tracks generic `.properties` files at file level and has a Spring-specific `application` / `bootstrap` key and binding pass. SymbolLattice v0.91 independently adds generic, parser-backed key facts across all `.properties` names with source key ranges and explicit containment evidence; it does not copy CodeGraph source or claim Spring parity.
+
 ## [0.90.0] - 2026-07-31
 
 ### Added
