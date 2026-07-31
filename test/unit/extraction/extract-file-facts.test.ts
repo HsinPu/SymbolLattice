@@ -9123,6 +9123,149 @@ describe("source extraction", () => {
     ]);
   });
 
+  it("extracts complete direct SQL table and view declarations with source ranges", () => {
+    const facts = extractFileFacts({
+      filePath: "db/schema.sql",
+      language: "sql",
+      sourceText: [
+        "-- CREATE TABLE ignored (id integer);",
+        "CREATE TABLE IF NOT EXISTS public.users (",
+        "  id integer PRIMARY KEY,",
+        "  note text DEFAULT 'CREATE TABLE fake (id integer);'",
+        ");",
+        "",
+        "CREATE UNLOGGED TABLE audit.events (",
+        "  id integer,",
+        "  metadata jsonb",
+        ");",
+        "",
+        "CREATE OR REPLACE VIEW public.active_users AS",
+        "SELECT id, note FROM public.users;"
+      ].join("\n")
+    });
+
+    expect(
+      facts.symbols.map((symbol) => [
+        symbol.kind,
+        symbol.qualifiedName,
+        symbol.declarationOrdinal,
+        symbol.range
+      ])
+    ).toEqual([
+      [
+        "file",
+        "db/schema.sql",
+        0,
+        { start: { line: 1, column: 1 }, end: { line: 13, column: 35 } }
+      ],
+      [
+        "resource",
+        "db/schema.sql#sql-table:public.users",
+        0,
+        { start: { line: 2, column: 1 }, end: { line: 5, column: 3 } }
+      ],
+      [
+        "resource",
+        "db/schema.sql#sql-table:audit.events",
+        0,
+        { start: { line: 7, column: 1 }, end: { line: 10, column: 3 } }
+      ],
+      [
+        "resource",
+        "db/schema.sql#sql-view:public.active_users",
+        0,
+        { start: { line: 12, column: 1 }, end: { line: 13, column: 35 } }
+      ]
+    ]);
+    expect(
+      facts.edges.map((edge) => [
+        edge.kind,
+        edge.referenceName,
+        edge.evidence?.ruleId,
+        edge.resolution,
+        edge.range
+      ])
+    ).toEqual([
+      [
+        "contains",
+        "public.users",
+        "language.sql.create-table.direct-ddl",
+        "exact",
+        { start: { line: 2, column: 1 }, end: { line: 5, column: 3 } }
+      ],
+      [
+        "contains",
+        "audit.events",
+        "language.sql.create-table.direct-ddl",
+        "exact",
+        { start: { line: 7, column: 1 }, end: { line: 10, column: 3 } }
+      ],
+      [
+        "contains",
+        "public.active_users",
+        "language.sql.create-view.direct-ddl",
+        "exact",
+        { start: { line: 12, column: 1 }, end: { line: 13, column: 35 } }
+      ]
+    ]);
+  });
+
+  it("rejects unsupported, incomplete, quoted, and dollar-quoted SQL declaration shapes", () => {
+    const quotedName = extractFileFacts({
+      filePath: "db/quoted.sql",
+      language: "sql",
+      sourceText: 'CREATE TABLE "users" (id integer);\n'
+    });
+    const dynamicName = extractFileFacts({
+      filePath: "db/dynamic.sql",
+      language: "sql",
+      sourceText: "CREATE TABLE ${table_name} (id integer);\n"
+    });
+    const incomplete = extractFileFacts({
+      filePath: "db/incomplete.sql",
+      language: "sql",
+      sourceText: "CREATE TABLE pending (id integer\n"
+    });
+    const unsupportedView = extractFileFacts({
+      filePath: "db/unsupported-view.sql",
+      language: "sql",
+      sourceText: "CREATE MATERIALIZED VIEW public.cached AS SELECT 1;\n"
+    });
+    const columnListView = extractFileFacts({
+      filePath: "db/column-list.sql",
+      language: "sql",
+      sourceText: "CREATE VIEW public.catalog (id) AS SELECT id FROM public.items;\n"
+    });
+    const malformedView = extractFileFacts({
+      filePath: "db/malformed-view.sql",
+      language: "sql",
+      sourceText: "CREATE VIEW public.catalog AS SELECT (id FROM public.items;\n"
+    });
+    const dollarQuotedRoutine = extractFileFacts({
+      filePath: "db/routine.sql",
+      language: "sql",
+      sourceText: [
+        "CREATE FUNCTION public.seed() RETURNS void AS $$",
+        "  CREATE TABLE public.hidden (id integer);",
+        "$$ LANGUAGE sql;"
+      ].join("\n")
+    });
+
+    for (const facts of [
+      quotedName,
+      dynamicName,
+      incomplete,
+      unsupportedView,
+      columnListView,
+      malformedView,
+      dollarQuotedRoutine
+    ]) {
+      expect(facts.symbols).toHaveLength(1);
+      expect(facts.symbols[0]?.kind).toBe("file");
+      expect(facts.edges).toEqual([]);
+    }
+  });
+
   it("extracts source-proven Java properties keys without retaining configuration values", () => {
     const facts = extractFileFacts({
       filePath: "config/application.properties",

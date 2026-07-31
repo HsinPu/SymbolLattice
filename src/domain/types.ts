@@ -143,7 +143,8 @@ export const ARTIFACT_LANGUAGES = [
   "yaml",
   "xml",
   "properties",
-  "shell"
+  "shell",
+  "sql"
 ] as const;
 
 export type ArtifactLanguage = (typeof ARTIFACT_LANGUAGES)[number];

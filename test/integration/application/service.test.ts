@@ -8345,6 +8345,47 @@ describe("SymbolLatticeService", () => {
     ]);
   });
 
+  it("indexes direct SQL table and view declarations with persisted source search", async () => {
+    const projectPath = await createInlineProject({
+      "db/schema.sql": [
+        "CREATE TABLE public.users (",
+        "  id integer PRIMARY KEY",
+        ");",
+        "",
+        "CREATE OR REPLACE VIEW public.active_users AS",
+        "SELECT id FROM public.users;"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    const indexed = await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+    const search = await service.search(projectPath, "active_users", { language: "sql" });
+    const activeUsers = await service.find(projectPath, "db/schema.sql#sql-view:public.active_users");
+    const persistedFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "db/schema.sql");
+
+    expect(indexed).toMatchObject({
+      stale: false,
+      counts: { files: 1, symbols: 3, edges: 2 }
+    });
+    expect(persistedFacts).toMatchObject({
+      language: "sql",
+      extractorVersion: ARTIFACT_FACTS_EXTRACTOR_VERSION
+    });
+    expect(activeUsers.symbols).toMatchObject([
+      {
+        kind: "resource",
+        qualifiedName: "db/schema.sql#sql-view:public.active_users",
+        isExported: true
+      }
+    ]);
+    expect(routes.routes).toEqual([]);
+    expect(search.results).toMatchObject([{ filePath: "db/schema.sql", language: "sql" }]);
+  });
+
   it("indexes Drupal routing YAML routes with parser-backed unresolved controller evidence", async () => {
     const projectPath = await createInlineProject({
       "modules/custom/example/example.routing.yml": [

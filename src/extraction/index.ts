@@ -23,6 +23,7 @@ import { extractObjectiveCFileFacts } from "./objc.js";
 import { extractPascalFileFacts } from "./pascal.js";
 import { extractRFileFacts } from "./r.js";
 import { extractShellFileFacts } from "./shell.js";
+import { extractSqlFileFacts } from "./sql.js";
 import { extractPhpFileFacts } from "./php.js";
 import { extractPythonFileFacts } from "./python.js";
 import { extractRubyFileFacts } from "./ruby.js";
@@ -3705,6 +3706,9 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
   }
   if (input.language === "shell") {
     return extractShellFileFacts({ ...input, language: "shell" });
+  }
+  if (input.language === "sql") {
+    return extractSqlFileFacts({ ...input, language: "sql" });
   }
   if (input.language === "lua" || input.language === "luau") {
     return extractLuaFileFacts({ ...input, language: input.language });

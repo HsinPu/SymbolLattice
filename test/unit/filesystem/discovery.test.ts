@@ -239,6 +239,11 @@ describe("source discovery", () => {
     expect(getSourceLanguage("scripts/release.BASH")).toBe("shell");
   });
 
+  it("recognizes the SQL source extension", () => {
+    expect(getSourceLanguage("db/schema.sql")).toBe("sql");
+    expect(getSourceLanguage("migrations/001_init.SQL")).toBe("sql");
+  });
+
   it("discovers only source-proven Objective-C .h headers", async () => {
     const projectPath = await createProject();
     await mkdir(join(projectPath, "Headers"), { recursive: true });

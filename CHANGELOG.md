@@ -6,6 +6,23 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.95.0] - 2026-07-31
+
+### Added
+
+- SQL source discovery now recognizes case-insensitive `.sql` extensions and exposes the additive `sql` language through existing persisted source-search, CLI, and MCP language-validation contracts. The new dependency-free lexical extractor retains a file symbol plus complete direct `CREATE TABLE` and `CREATE VIEW` schema `resource` symbols with unquoted literal qualified names.
+- The SQL DDL slice accepts semicolon-terminated direct `CREATE TABLE` forms with `IF NOT EXISTS`, `TEMP` / `TEMPORARY`, `LOCAL` / `GLOBAL TEMP`, or `UNLOGGED`, plus direct `CREATE [OR REPLACE] [TEMP] VIEW ... AS SELECT` / `WITH` forms. Each resource has a complete source range and an exact `contains` edge with `language.sql.create-table.direct-ddl` or `language.sql.create-view.direct-ddl` evidence. Comments, quoted data, and quoted identifiers are offset-preservingly masked; unit, discovery, and service integration coverage prove statement boundaries, persistence, language-filtered search, and unsupported-shape rejection. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.95.0.md`.
+
+### Compatibility
+
+- The artifact extractor advances to `multi-language-ast-v84`; the project resolver remains `project-resolver-v24` because the initial SQL facts are file-local declarations with no schema dependency resolution. A pre-v0.95 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes SQL-capable facts.
+- No SQLite schema migration or query command is required. This is an additive artifact-language capability within existing file, resource-symbol, exact-containment-edge, source-search, CLI, MCP, retained-generation, and incremental-index contracts; existing generations remain readable.
+
+### Deliberate limits
+
+- This is not a SQL grammar, dialect detector, migration executor, database connection, or runtime model. It excludes quoted/dynamic names, `CREATE TABLE AS`, table clauses after the closed body, materialized/recursive/column-list views, columns, constraints, indexes, types, sequences, triggers, DML, dependencies, stored procedures/functions, dollar-quoted SQL, migration ordering, cross-file schema resolution, validation, query planning, and runtime behavior.
+- The inspected local CodeGraph baseline does not include `sql` in its runtime `LANGUAGES` or native-kernel language lists. SymbolLattice v0.95 independently adds a deliberately narrow, source-range-preserving SQL DDL declaration slice; it does not copy CodeGraph source or claim full SQL-dialect coverage.
+
 ## [0.94.0] - 2026-07-31
 
 ### Added
