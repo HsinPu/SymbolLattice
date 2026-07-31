@@ -6,6 +6,23 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.85.0] - 2026-07-31
+
+### Added
+
+- Zig source discovery now recognizes `.zig` files and exposes the new `zig` language through persisted source search plus the existing CLI and MCP language validation contracts. A syntactically balanced Zig file produces direct top-level named `struct`, `enum`, `union`, and `opaque` containers as class symbols plus direct named `fn` declarations as function symbols; `pub` and `export fn` visibility is retained.
+- The first Zig extractor preserves source offsets while masking line comments, quoted literals, and line-oriented multiline string literal lines. It emits exact `syntax.zig.top-level-container` or `syntax.zig.top-level-function` containment evidence and rejects unbalanced delimiters, unterminated quoted literals, anonymous/computed containers, nested container or test-scope declarations, imports, calls, and runtime behavior. Unit, discovery, and service integration coverage prove the retained scope, source-search persistence, and rejection boundaries. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.85.0.md`.
+
+### Compatibility
+
+- The artifact extractor advances to `multi-language-ast-v74`; the project resolver remains `project-resolver-v23` because the initial Zig facts are file-local. A pre-v0.85 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes Zig-capable facts.
+- No SQLite schema migration or query command is required. This is an additive artifact-language capability within the existing file, symbol, containment-edge, source-search, CLI, MCP, and incremental-index contracts; existing generations remain readable.
+
+### Deliberate limits
+
+- This is not a Zig parser, compiler, build-system, package/module resolver, or runtime model. It excludes imports, calls, variables, `test` blocks, nested methods, anonymous/comptime/generated containers, aliases, `usingnamespace`, cross-file resolution, type inference, build configuration, compilation, and runtime behavior.
+- The inspected local CodeGraph baseline has no `zig` member in its current `LANGUAGES` registry. SymbolLattice v0.85 therefore expands language breadth beyond that checked baseline, while retaining a deliberately narrower, independently implemented source-proven declaration contract.
+
 ## [0.84.0] - 2026-07-31
 
 ### Added

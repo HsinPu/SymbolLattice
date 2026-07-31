@@ -62,6 +62,7 @@ describe("source discovery", () => {
     await writeFile(join(projectPath, "src", "g.pas"), "procedure Answer; begin end;\n", "utf8");
     await writeFile(join(projectPath, "src", "g.pl"), "use Dancer2;\n", "utf8");
     await writeFile(join(projectPath, "src", "g.pm"), "package Sample;\n", "utf8");
+    await writeFile(join(projectPath, "src", "g.zig"), "pub fn main() void {}\n", "utf8");
     await writeFile(join(projectPath, "src", "g.R"), "answer <- 42\n", "utf8");
     await writeFile(join(projectPath, "src", "h.hpp"), "class Header {};\n", "utf8");
     await writeFile(join(projectPath, "src", "i.cs"), "public class Api {}\n", "utf8");
@@ -121,6 +122,7 @@ describe("source discovery", () => {
       "src/g.pas",
       "src/g.pl",
       "src/g.pm",
+      "src/g.zig",
       "src/h.hpp",
       "src/i.cs",
       "src/j.rb",
@@ -174,6 +176,7 @@ describe("source discovery", () => {
       "pascal",
       "perl",
       "perl",
+      "zig",
       "cpp",
       "csharp",
       "ruby",
@@ -205,6 +208,10 @@ describe("source discovery", () => {
     expect(getSourceLanguage("src/billing.cob")).toBe("cobol");
     expect(getSourceLanguage("src/billing.cobol")).toBe("cobol");
     expect(getSourceLanguage("copybooks/customer.cpy")).toBe("cobol");
+  });
+
+  it("recognizes the Zig source extension", () => {
+    expect(getSourceLanguage("src/main.zig")).toBe("zig");
   });
 
   it("discovers only source-proven Objective-C .h headers", async () => {

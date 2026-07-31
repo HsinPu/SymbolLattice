@@ -134,7 +134,8 @@ export const ARTIFACT_LANGUAGES = [
   "cfml",
   "nix",
   "vbnet",
-  "cobol"
+  "cobol",
+  "zig"
 ] as const;
 
 export type ArtifactLanguage = (typeof ARTIFACT_LANGUAGES)[number];

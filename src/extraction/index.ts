@@ -33,6 +33,7 @@ import { extractArkTsFileFacts } from "./arkts.js";
 import { extractCfmlFileFacts } from "./cfml.js";
 import { extractNixFileFacts } from "./nix.js";
 import { extractVbnetFileFacts } from "./vbnet.js";
+import { extractZigFileFacts } from "./zig.js";
 import { extractLiquidFileFacts } from "./liquid.js";
 import { extractTwigFileFacts } from "./twig.js";
 import { extractBladeFileFacts } from "./blade.js";
@@ -3685,6 +3686,9 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
   }
   if (input.language === "cobol") {
     return extractCobolFileFacts({ ...input, language: "cobol" });
+  }
+  if (input.language === "zig") {
+    return extractZigFileFacts({ ...input, language: "zig" });
   }
   if (input.language === "lua" || input.language === "luau") {
     return extractLuaFileFacts({ ...input, language: input.language });

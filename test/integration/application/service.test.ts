@@ -7855,4 +7855,46 @@ describe("SymbolLatticeService", () => {
       ])
     );
   });
+
+  it("indexes Zig declarations and retains Zig source-search filtering", async () => {
+    const projectPath = await createInlineProject({
+      "src/main.zig": [
+        "pub const Api = struct {",
+        "    pub fn nested() void {}",
+        "};",
+        "",
+        "const Mode = enum { ready, stopped };",
+        "pub fn main() void {}",
+        "fn helper() void {}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    const indexed = await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+    const search = await service.search(projectPath, "Api", { language: "zig" });
+    const persistedFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "src/main.zig");
+    const api = await service.find(projectPath, "src/main.zig.Api");
+    const main = await service.find(projectPath, "src/main.zig.main");
+
+    expect(indexed).toMatchObject({
+      stale: false,
+      counts: { files: 1, symbols: 5, edges: 4 }
+    });
+    expect(persistedFacts).toMatchObject({
+      language: "zig",
+      extractorVersion: ARTIFACT_FACTS_EXTRACTOR_VERSION
+    });
+    expect(api.symbols).toMatchObject([
+      { kind: "class", qualifiedName: "src/main.zig.Api", isExported: true }
+    ]);
+    expect(main.symbols).toMatchObject([
+      { kind: "function", qualifiedName: "src/main.zig.main", isExported: true }
+    ]);
+    expect(routes.routes).toEqual([]);
+    expect(search.results).toMatchObject([{ filePath: "src/main.zig", language: "zig" }]);
+  });
 });

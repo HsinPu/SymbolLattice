@@ -8286,4 +8286,111 @@ describe("source extraction", () => {
     ]);
     expect(malformed.edges).toEqual([]);
   });
+
+  it("extracts direct Zig top-level containers and functions with source evidence", () => {
+    const facts = extractFileFacts({
+      filePath: "src/main.zig",
+      language: "zig",
+      sourceText: [
+        "const std = @import(\"std\");",
+        "",
+        "pub const Point = struct {",
+        "    x: f32,",
+        "    y: f32,",
+        "",
+        "    pub fn init(x: f32, y: f32) Point {",
+        "        return .{ .x = x, .y = y };",
+        "    }",
+        "};",
+        "",
+        "const Choice = enum(u8) { first, second };",
+        "pub const Flags = packed struct { ready: bool };",
+        "const Result = union(enum) { ok: u8, failed: void };",
+        "",
+        "pub extern \"c\" fn puts(message: [*:0]const u8) c_int;",
+        "pub fn main() void {",
+        "    std.debug.print(\"ready\\n\", .{});",
+        "}",
+        "fn helper() void {}",
+        "export fn c_entry() callconv(.c) void {}"
+      ].join("\n")
+    });
+
+    expect(
+      facts.symbols.map((symbol) => [symbol.kind, symbol.qualifiedName, symbol.isExported])
+    ).toEqual([
+      ["file", "src/main.zig", true],
+      ["class", "src/main.zig.Point", true],
+      ["class", "src/main.zig.Choice", false],
+      ["class", "src/main.zig.Flags", true],
+      ["class", "src/main.zig.Result", false],
+      ["function", "src/main.zig.puts", true],
+      ["function", "src/main.zig.main", true],
+      ["function", "src/main.zig.helper", false],
+      ["function", "src/main.zig.c_entry", true]
+    ]);
+    expect(
+      facts.edges.map((edge) => [
+        edge.kind,
+        edge.referenceName,
+        edge.evidence?.ruleId,
+        edge.resolution
+      ])
+    ).toEqual([
+      ["contains", "Point", "syntax.zig.top-level-container", "exact"],
+      ["contains", "Choice", "syntax.zig.top-level-container", "exact"],
+      ["contains", "Flags", "syntax.zig.top-level-container", "exact"],
+      ["contains", "Result", "syntax.zig.top-level-container", "exact"],
+      ["contains", "puts", "syntax.zig.top-level-function", "exact"],
+      ["contains", "main", "syntax.zig.top-level-function", "exact"],
+      ["contains", "helper", "syntax.zig.top-level-function", "exact"],
+      ["contains", "c_entry", "syntax.zig.top-level-function", "exact"]
+    ]);
+  });
+
+  it("rejects malformed Zig and ignores nested, computed, commented, and quoted declarations", () => {
+    const safe = extractFileFacts({
+      filePath: "src/safe.zig",
+      language: "zig",
+      sourceText: [
+        "// pub fn commented() void {}",
+        "const quoted = \"pub fn quoted() void {}\";",
+        "const multiline =",
+        "    \\\\pub fn multiline() void {}",
+        ";",
+        "const Container = struct {",
+        "    pub fn nested() void {}",
+        "};",
+        "const Computed = comptime blk: { break :blk struct {}; };",
+        "pub fn real() void {}",
+        "test \"nested scope\" {",
+        "    fn test_local() void {}",
+        "}"
+      ].join("\n")
+    });
+    const malformed = extractFileFacts({
+      filePath: "src/broken.zig",
+      language: "zig",
+      sourceText: "pub fn broken() void {\n"
+    });
+    const unterminatedString = extractFileFacts({
+      filePath: "src/string.zig",
+      language: "zig",
+      sourceText: "const value = \"unterminated\n"
+    });
+
+    expect(safe.symbols.map((symbol) => [symbol.kind, symbol.name])).toEqual([
+      ["file", "safe.zig"],
+      ["class", "Container"],
+      ["function", "real"]
+    ]);
+    expect(malformed.symbols.map((symbol) => [symbol.kind, symbol.name])).toEqual([
+      ["file", "broken.zig"]
+    ]);
+    expect(unterminatedString.symbols.map((symbol) => [symbol.kind, symbol.name])).toEqual([
+      ["file", "string.zig"]
+    ]);
+    expect(malformed.edges).toEqual([]);
+    expect(unterminatedString.edges).toEqual([]);
+  });
 });
