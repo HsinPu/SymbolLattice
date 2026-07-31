@@ -8291,6 +8291,189 @@ describe("source extraction", () => {
     ]);
   });
 
+  it("projects direct mounted Actix attribute services through App and scope prefixes", () => {
+    const facts = extractFileFacts({
+      filePath: "src/actix-attribute-services.rs",
+      language: "rust",
+      sourceText: [
+        "use actix_web::{get as actix_get, post, App as HttpApp, web as http};",
+        "",
+        "#[actix_get(\"/health\")]",
+        "async fn health() {}",
+        "",
+        "#[post(\"/users\")]",
+        "async fn list_users() {}",
+        "",
+        "#[post(\"/users\")]",
+        "async fn create_user() {}",
+        "",
+        "#[actix_get(\"/orphan\")]",
+        "async fn orphan() {}",
+        "",
+        "fn configure() {",
+        "  let app = HttpApp::new()",
+        "    .service(health)",
+        "    .service(",
+        "      http::scope(\"/api\")",
+        "        .service(list_users)",
+        "        .service(http::scope(\"/v1\").service(create_user)),",
+        "    );",
+        "}"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId,
+          edge.evidence?.stage,
+          edge.resolution,
+          edge.confidence
+        ])
+    ).toEqual([
+      [
+        "GET /health",
+        "src/actix-attribute-services.rs#health",
+        "framework.actix-web.direct-app.attribute-service.literal-path.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "POST /api/users",
+        "src/actix-attribute-services.rs#list_users",
+        "framework.actix-web.direct-app.web-scope.attribute-service.literal-path.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "POST /api/v1/users",
+        "src/actix-attribute-services.rs#create_user",
+        "framework.actix-web.direct-app.web-scope.attribute-service.literal-path.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "GET /orphan",
+        "src/actix-attribute-services.rs#orphan",
+        "framework.actix-web.attribute-route.literal-path.local-function",
+        "syntax",
+        "exact",
+        1
+      ]
+    ]);
+  });
+
+  it("keeps the attribute declaration route when a direct Actix service handler is shadowed", () => {
+    const facts = extractFileFacts({
+      filePath: "src/shadowed-actix-attribute-service.rs",
+      language: "rust",
+      sourceText: [
+        "use actix_web::{get, App, web};",
+        "",
+        "#[get(\"/health\")]",
+        "async fn health() {}",
+        "",
+        "fn configure(health: u8) {",
+        "  let app = App::new().service(web::scope(\"/api\").service(health));",
+        "}"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId
+        ])
+    ).toEqual([
+      [
+        "GET /health",
+        "src/shadowed-actix-attribute-service.rs#health",
+        "framework.actix-web.attribute-route.literal-path.local-function"
+      ]
+    ]);
+  });
+
+  it("keeps the attribute declaration route when a local use shadows an Actix service handler", () => {
+    const facts = extractFileFacts({
+      filePath: "src/local-use-shadowed-actix-attribute-service.rs",
+      language: "rust",
+      sourceText: [
+        "use actix_web::{get, App};",
+        "",
+        "#[get(\"/health\")]",
+        "async fn health() {}",
+        "",
+        "fn configure() {",
+        "  use crate::external::health;",
+        "  let app = App::new().service(health);",
+        "}"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId
+        ])
+    ).toEqual([
+      [
+        "GET /health",
+        "src/local-use-shadowed-actix-attribute-service.rs#health",
+        "framework.actix-web.attribute-route.literal-path.local-function"
+      ]
+    ]);
+  });
+
+  it("keeps the attribute declaration route when a later local function shadows an Actix service handler", () => {
+    const facts = extractFileFacts({
+      filePath: "src/local-function-shadowed-actix-attribute-service.rs",
+      language: "rust",
+      sourceText: [
+        "use actix_web::{get, App};",
+        "",
+        "#[get(\"/health\")]",
+        "async fn health() {}",
+        "",
+        "fn configure() {",
+        "  let app = App::new().service(health);",
+        "  fn health() {}",
+        "}"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId
+        ])
+    ).toEqual([
+      [
+        "GET /health",
+        "src/local-function-shadowed-actix-attribute-service.rs#health",
+        "framework.actix-web.attribute-route.literal-path.local-function"
+      ]
+    ]);
+  });
+
   it("rejects unmounted, dynamic, shadowed, and wrapper Actix Web builder routes", () => {
     const facts = extractFileFacts({
       filePath: "src/unproven-actix-builder.rs",

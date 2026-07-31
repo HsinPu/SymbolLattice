@@ -6,6 +6,24 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.116.0] - 2026-07-31
+
+### Added
+
+- Rust route extraction now projects direct same-file Actix Web HTTP attribute handlers through a contiguous `App::new().service(handler)` chain, a direct `web::scope("/prefix").service(handler)` chain, and nested static scopes. Each projected route receives its effective mounted path.
+- Mounted root handlers retain `framework.actix-web.direct-app.attribute-service.literal-path.local-function` evidence. Scoped and nested-scoped handlers retain `framework.actix-web.direct-app.web-scope.attribute-service.literal-path.local-function` evidence. A direct, unshadowed named local handler and its direct imported attribute macro are required.
+- Attribute declarations are collected before builder traversal. An Actix declaration is suppressed only after a proven mount of that handler; unmounted or shadowed handlers retain their original `framework.actix-web.attribute-route.literal-path.local-function` fact.
+- Direct block-local `use` declarations and named local functions now participate in lexical-shadow checks, including a later local function item. They cannot fabricate an exact relation to a same-named top-level handler.
+
+### Compatibility
+
+- The artifact facts extractor advances to `multi-language-ast-v100`. Existing indexes remain readable; the next explicit `sync` or fresh `init` safely re-extracts Rust facts. No graph-schema migration or CLI/MCP contract change is required.
+
+### Comparison notes
+
+- Actix Web documents scopes as composable prefixes for attached services. The checked CodeGraph Rust resolver recognizes raw HTTP attributes plus resource and app builder text patterns, but does not compose `web::scope` prefixes or direct attribute-service mounts in that resolver. This independent SymbolLattice slice adds stricter effective-path and mount-evidence coverage for that static surface.
+- CodeGraph remains ahead in daemon lifecycle, socket/PID registry, cross-client coordination, worker-pool concurrency, and broader semantic resolution. v0.116 is a verified route-analysis improvement, not a general parity claim.
+
 ## [0.115.0] - 2026-07-31
 
 ### Added

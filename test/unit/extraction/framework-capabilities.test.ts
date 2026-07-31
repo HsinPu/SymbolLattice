@@ -260,10 +260,10 @@ describe("first-party framework capabilities", () => {
       routeFramework: "actix-web",
       routeRegistrations: [],
       surfaces: [
-        "direct imported HTTP attribute macros",
+        "direct imported HTTP attribute macros with direct same-file service mounts",
         "literal attribute paths on direct top-level function handlers",
         "direct imported App::new, web resource, and web scope builder chains",
-        "literal direct app, resource, and scope routes with named local handlers"
+        "literal direct app, resource, scope, and mounted attribute-service routes with named local handlers"
       ]
     });
     expect(frameworkCapability("rocket")).toMatchObject({

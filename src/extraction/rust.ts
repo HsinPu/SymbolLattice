@@ -54,6 +54,17 @@ interface StaticActixWebResourceChain {
 interface StaticActixWebScopeChain {
   readonly prefix: string;
   readonly routes: readonly StaticRustRoute[];
+  readonly mountedAttributeHandlers: readonly string[];
+}
+
+interface StaticActixWebAppChain {
+  readonly routes: readonly StaticRustRoute[];
+  readonly mountedAttributeHandlers: readonly string[];
+}
+
+interface StaticActixWebAttributeService {
+  readonly handlerName: string;
+  readonly routes: readonly StaticRustRoute[];
 }
 
 const AXUM_ROUTER_PATH = "axum::Router";
@@ -68,6 +79,10 @@ const ACTIX_WEB_RESOURCE_ROUTE_RULE_ID =
   "framework.actix-web.direct-app.web-resource.literal-path.local-function";
 const ACTIX_WEB_SCOPE_ROUTE_RULE_ID =
   "framework.actix-web.direct-app.web-scope.literal-path.local-function";
+const ACTIX_WEB_APP_ATTRIBUTE_SERVICE_ROUTE_RULE_ID =
+  "framework.actix-web.direct-app.attribute-service.literal-path.local-function";
+const ACTIX_WEB_SCOPE_ATTRIBUTE_SERVICE_ROUTE_RULE_ID =
+  "framework.actix-web.direct-app.web-scope.attribute-service.literal-path.local-function";
 const ROCKET_ATTRIBUTE_ROUTE_RULE_ID =
   "framework.rocket.attribute-route.literal-path.local-function";
 
@@ -486,7 +501,26 @@ function staticRustAttributeRoute(
   };
 }
 
+function directStaticItemBoundNames(
+  input: RustExtractFileFactsInput,
+  statement: RustSyntaxNode
+): readonly string[] {
+  if (statement.name === "UseDeclaration") {
+    const target = directUseImportTarget(statement);
+    return target === null ? [] : staticUseImports(input, target).map((imported) => imported.localName);
+  }
+  const localFunction = staticRustFunction(input, statement);
+  if (localFunction !== null) {
+    return [localFunction.name];
+  }
+  return [];
+}
+
 function directBoundNames(input: RustExtractFileFactsInput, statement: RustSyntaxNode): readonly string[] {
+  const staticItemNames = directStaticItemBoundNames(input, statement);
+  if (staticItemNames.length > 0) {
+    return staticItemNames;
+  }
   if (statement.name !== "LetDeclaration") {
     return [];
   }
@@ -771,6 +805,44 @@ function prefixActixWebScopeRoutes(
   }));
 }
 
+function prefixedActixWebScopeRoutes(
+  prefix: string,
+  routes: readonly StaticRustRoute[]
+): readonly StaticRustRoute[] {
+  return routes.map((route) => ({
+    ...route,
+    path: prefixedActixWebScopePath(prefix, route.path)
+  }));
+}
+
+function staticActixWebAttributeService(
+  input: RustExtractFileFactsInput,
+  handlerNode: RustSyntaxNode,
+  mountNode: RustSyntaxNode,
+  attributeRoutesByHandler: ReadonlyMap<string, readonly StaticRustRoute[]>,
+  shadowedNames: ReadonlySet<string>,
+  prefix: string,
+  ruleId: string
+): StaticActixWebAttributeService | null {
+  const handlerName = identifierText(input, handlerNode);
+  if (handlerName === null || shadowedNames.has(handlerName)) {
+    return null;
+  }
+  const attributeRoutes = attributeRoutesByHandler.get(handlerName);
+  if (attributeRoutes === undefined || attributeRoutes.length === 0) {
+    return null;
+  }
+  return {
+    handlerName,
+    routes: attributeRoutes.map((attributeRoute) => ({
+      ...attributeRoute,
+      path: prefixedActixWebScopePath(prefix, attributeRoute.path),
+      node: mountNode,
+      ruleId
+    }))
+  };
+}
+
 /**
  * Proves only a contiguous `web::resource("/path").route(web::get().to(handler))`
  * chain. The resource must later be attached directly to one proven `App::new()`
@@ -841,24 +913,32 @@ function staticActixWebResourceChain(
 
 /**
  * Proves only a direct `web::scope("/prefix")` chain of literal `.route(...)`
- * calls and direct resource or nested-scope `.service(...)` calls. Every scope
- * prefix is static, starts with `/`, and has no trailing slash except `/` itself.
+ * calls and direct resource, attribute-service, or nested-scope `.service(...)`
+ * calls. Every scope prefix is static, starts with `/`, and has no trailing slash
+ * except `/` itself.
  */
 function staticActixWebScopeChain(
   input: RustExtractFileFactsInput,
   node: RustSyntaxNode,
   webAliases: ReadonlySet<string>,
-  shadowedNames: ReadonlySet<string>
+  shadowedNames: ReadonlySet<string>,
+  attributeRoutesByHandler: ReadonlyMap<string, readonly StaticRustRoute[]>
 ): StaticActixWebScopeChain | null {
   const scopePrefix = staticActixWebScope(input, node, webAliases, shadowedNames);
   if (scopePrefix !== null) {
-    return { prefix: scopePrefix, routes: [] };
+    return { prefix: scopePrefix, routes: [], mountedAttributeHandlers: [] };
   }
   const call = staticFieldCall(input, node);
   if (call === null) {
     return null;
   }
-  const preceding = staticActixWebScopeChain(input, call.receiver, webAliases, shadowedNames);
+  const preceding = staticActixWebScopeChain(
+    input,
+    call.receiver,
+    webAliases,
+    shadowedNames,
+    attributeRoutesByHandler
+  );
   if (preceding === null) {
     return null;
   }
@@ -898,31 +978,60 @@ function staticActixWebScopeChain(
   const nestedScope =
     serviceNode === undefined
       ? null
-      : staticActixWebScopeChain(input, serviceNode, webAliases, shadowedNames);
-  const serviceRoutes = resource?.routes ?? nestedScope?.routes ?? null;
+      : staticActixWebScopeChain(
+          input,
+          serviceNode,
+          webAliases,
+          shadowedNames,
+          attributeRoutesByHandler
+        );
+  const attributeService =
+    serviceNode === undefined
+      ? null
+      : staticActixWebAttributeService(
+          input,
+          serviceNode,
+          node,
+          attributeRoutesByHandler,
+          shadowedNames,
+          preceding.prefix,
+          ACTIX_WEB_SCOPE_ATTRIBUTE_SERVICE_ROUTE_RULE_ID
+        );
+  const serviceRoutes =
+    resource !== null
+      ? prefixActixWebScopeRoutes(preceding.prefix, resource.routes)
+      : nestedScope !== null
+        ? prefixedActixWebScopeRoutes(preceding.prefix, nestedScope.routes)
+        : attributeService?.routes ?? null;
+  const mountedAttributeHandlers =
+    nestedScope?.mountedAttributeHandlers ??
+    (attributeService === null ? [] : [attributeService.handlerName]);
   return serviceRoutes === null
     ? null
     : {
         ...preceding,
-        routes: [...preceding.routes, ...prefixActixWebScopeRoutes(preceding.prefix, serviceRoutes)]
+        routes: [...preceding.routes, ...serviceRoutes],
+        mountedAttributeHandlers: [...preceding.mountedAttributeHandlers, ...mountedAttributeHandlers]
       };
 }
 
 /**
  * Proves only a contiguous direct `App::new()` chain. Supported calls are a
  * literal `.route("/path", web::METHOD().to(handler))` or `.service(...)` with
- * one direct resource or scope chain; wrappers, mounts, guards, and runtime
- * composition stay out until their evidence rules are deliberately added.
+ * one direct resource, attribute-service, or scope chain; wrappers, mounts,
+ * guards, and runtime composition stay out until their evidence rules are
+ * deliberately added.
  */
 function staticActixWebAppRouteChain(
   input: RustExtractFileFactsInput,
   node: RustSyntaxNode,
   appAliases: ReadonlySet<string>,
   webAliases: ReadonlySet<string>,
-  shadowedNames: ReadonlySet<string>
-): readonly StaticRustRoute[] | null {
+  shadowedNames: ReadonlySet<string>,
+  attributeRoutesByHandler: ReadonlyMap<string, readonly StaticRustRoute[]>
+): StaticActixWebAppChain | null {
   if (staticActixWebAppNew(input, node, appAliases, shadowedNames)) {
-    return [];
+    return { routes: [], mountedAttributeHandlers: [] };
   }
   const call = staticFieldCall(input, node);
   if (call === null) {
@@ -941,21 +1050,25 @@ function staticActixWebAppRouteChain(
       call.receiver,
       appAliases,
       webAliases,
-      shadowedNames
+      shadowedNames,
+      attributeRoutesByHandler
     );
     if (path === null || methodRoute === null || precedingRoutes === null) {
       return null;
     }
-    return [
+    return {
       ...precedingRoutes,
-      {
-        method: methodRoute.method,
-        path,
-        handlerName: methodRoute.handlerName,
-        node,
-        ruleId: ACTIX_WEB_APP_ROUTE_RULE_ID
-      }
-    ];
+      routes: [
+        ...precedingRoutes.routes,
+        {
+          method: methodRoute.method,
+          path,
+          handlerName: methodRoute.handlerName,
+          node,
+          ruleId: ACTIX_WEB_APP_ROUTE_RULE_ID
+        }
+      ]
+    };
   }
   if (call.methodName !== "service" || call.arguments_.length !== 1) {
     return null;
@@ -968,18 +1081,44 @@ function staticActixWebAppRouteChain(
   const scope =
     serviceNode === undefined
       ? null
-      : staticActixWebScopeChain(input, serviceNode, webAliases, shadowedNames);
-  const serviceRoutes = resource?.routes ?? scope?.routes ?? null;
+      : staticActixWebScopeChain(
+          input,
+          serviceNode,
+          webAliases,
+          shadowedNames,
+          attributeRoutesByHandler
+        );
+  const attributeService =
+    serviceNode === undefined
+      ? null
+      : staticActixWebAttributeService(
+          input,
+          serviceNode,
+          node,
+          attributeRoutesByHandler,
+          shadowedNames,
+          "/",
+          ACTIX_WEB_APP_ATTRIBUTE_SERVICE_ROUTE_RULE_ID
+        );
+  const serviceRoutes = resource?.routes ?? scope?.routes ?? attributeService?.routes ?? null;
+  const mountedAttributeHandlers =
+    scope?.mountedAttributeHandlers ??
+    (attributeService === null ? [] : [attributeService.handlerName]);
   const precedingRoutes = staticActixWebAppRouteChain(
     input,
     call.receiver,
     appAliases,
     webAliases,
-    shadowedNames
+    shadowedNames,
+    attributeRoutesByHandler
   );
   return serviceRoutes === null || precedingRoutes === null
     ? null
-    : [...precedingRoutes, ...serviceRoutes];
+    : {
+        ...precedingRoutes,
+        routes: [...precedingRoutes.routes, ...serviceRoutes],
+        mountedAttributeHandlers: [...precedingRoutes.mountedAttributeHandlers, ...mountedAttributeHandlers]
+      };
 }
 
 function staticStatementExpression(statement: RustSyntaxNode): RustSyntaxNode | null {
@@ -997,10 +1136,10 @@ function staticStatementExpression(statement: RustSyntaxNode): RustSyntaxNode | 
  * Extracts conservative Rust file facts. Axum routes require a direct import,
  * a contiguous literal route builder chain, and one unshadowed named top-level
  * function handler. Actix Web accepts direct imported HTTP attributes plus one
- * continuous direct `App::new()` builder chain with direct resource and scope
- * services. Rocket routes require their direct imported attribute macro, a
- * literal path, and the annotated top-level handler. No type checking or runtime
- * router composition is inferred from this syntax-only adapter.
+ * continuous direct `App::new()` builder chain with direct resource, attribute,
+ * and scope services. Rocket routes require their direct imported attribute
+ * macro, a literal path, and the annotated top-level handler. No type checking
+ * or runtime router composition is inferred from this syntax-only adapter.
  */
 export function extractRustFileFacts(input: RustExtractFileFactsInput): ArtifactFacts {
   const frameworkCapabilities = [
@@ -1149,6 +1288,8 @@ export function extractRustFileFacts(input: RustExtractFileFactsInput): Artifact
     }
 
     const attributeRouteAliases = staticRustAttributeRouteAliases(input, root);
+    const attributeRoutes: Array<{ readonly route: StaticRustRoute; readonly handler: SymbolNode }> = [];
+    const actixAttributeRoutesByHandler = new Map<string, StaticRustRoute[]>();
     for (const functionDeclaration of functions) {
       for (const attribute of functionDeclaration.attributes) {
         const route = staticRustAttributeRoute(
@@ -1164,7 +1305,12 @@ export function extractRustFileFacts(input: RustExtractFileFactsInput): Artifact
         if (candidates.length === 1) {
           const handler = candidates[0];
           if (handler !== undefined) {
-            addRustRoute(route, handler);
+            attributeRoutes.push({ route, handler });
+            if (route.ruleId === ACTIX_WEB_ATTRIBUTE_ROUTE_RULE_ID) {
+              const routes = actixAttributeRoutesByHandler.get(route.handlerName) ?? [];
+              routes.push(route);
+              actixAttributeRoutesByHandler.set(route.handlerName, routes);
+            }
           }
         }
       }
@@ -1172,6 +1318,7 @@ export function extractRustFileFacts(input: RustExtractFileFactsInput): Artifact
 
     const { routerAliases, methodAliases } = staticAxumImportAliases(input, root);
     const { appAliases, webAliases } = staticActixWebImportAliases(input, root);
+    const mountedActixAttributeHandlers = new Set<string>();
     for (const functionDeclaration of functions) {
       const visibleRouterAliases = new Set(
         [...routerAliases].filter((alias) => !functionDeclaration.parameterNames.includes(alias))
@@ -1185,8 +1332,12 @@ export function extractRustFileFacts(input: RustExtractFileFactsInput): Artifact
       const visibleWebAliases = new Set(
         [...webAliases].filter((alias) => !functionDeclaration.parameterNames.includes(alias))
       );
-      const shadowedNames = new Set(functionDeclaration.parameterNames);
-      for (const statement of directChildren(functionDeclaration.body)) {
+      const statements = directChildren(functionDeclaration.body);
+      const staticItemBoundNames = new Set(
+        statements.flatMap((statement) => directStaticItemBoundNames(input, statement))
+      );
+      const shadowedNames = new Set([...functionDeclaration.parameterNames, ...staticItemBoundNames]);
+      for (const statement of statements) {
         const expression = staticStatementExpression(statement);
         const axumRoutes =
           expression === null
@@ -1198,7 +1349,7 @@ export function extractRustFileFacts(input: RustExtractFileFactsInput): Artifact
                 visibleMethodAliases,
                 shadowedNames
               );
-        const actixWebRoutes =
+        const actixWebChain =
           expression === null
             ? null
             : staticActixWebAppRouteChain(
@@ -1206,8 +1357,10 @@ export function extractRustFileFacts(input: RustExtractFileFactsInput): Artifact
                 expression,
                 visibleAppAliases,
                 visibleWebAliases,
-                shadowedNames
+                shadowedNames,
+                actixAttributeRoutesByHandler
               );
+        const actixWebRoutes = actixWebChain === null ? null : actixWebChain.routes;
         for (const routes of [axumRoutes, actixWebRoutes]) {
           if (routes === null) {
             continue;
@@ -1225,9 +1378,23 @@ export function extractRustFileFacts(input: RustExtractFileFactsInput): Artifact
             }
           }
         }
+        if (actixWebChain !== null) {
+          for (const handlerName of actixWebChain.mountedAttributeHandlers) {
+            mountedActixAttributeHandlers.add(handlerName);
+          }
+        }
         for (const name of directBoundNames(input, statement)) {
           shadowedNames.add(name);
         }
+      }
+    }
+
+    for (const { route, handler } of attributeRoutes) {
+      if (
+        route.ruleId !== ACTIX_WEB_ATTRIBUTE_ROUTE_RULE_ID ||
+        !mountedActixAttributeHandlers.has(route.handlerName)
+      ) {
+        addRustRoute(route, handler);
       }
     }
   }
