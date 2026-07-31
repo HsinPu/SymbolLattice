@@ -3035,6 +3035,197 @@ describe("source extraction", () => {
     expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
   });
 
+  it("extracts direct Micronaut Controller routes with literal URI evidence", () => {
+    const facts = extractFileFacts({
+      filePath: "src/api/IssuesController.java",
+      language: "java",
+      sourceText: [
+        "import io.micronaut.http.annotation.Controller;",
+        "import io.micronaut.http.annotation.Get;",
+        "import io.micronaut.http.annotation.Post;",
+        "import io.micronaut.http.annotation.Put;",
+        "import io.micronaut.http.annotation.Patch;",
+        "import io.micronaut.http.annotation.Delete;",
+        "import io.micronaut.http.annotation.Head;",
+        "import io.micronaut.http.annotation.Options;",
+        "import io.micronaut.http.annotation.Trace;",
+        "",
+        "@Controller(\"/issues\")",
+        "class IssuesController {",
+        "  @Get",
+        "  String list() { return \"[]\"; }",
+        "  @Get(uri = \"/{number}\")",
+        "  String show() { return \"{}\"; }",
+        "  @Post(value = \"/\")",
+        "  String create() { return \"{}\"; }",
+        "  @Put(\"/{number}\")",
+        "  String replace() { return \"{}\"; }",
+        "  @Patch(\"/{number}\")",
+        "  String patch() { return \"{}\"; }",
+        "  @Delete(\"/{number}\")",
+        "  String delete() { return \"{}\"; }",
+        "  @Head(\"/{number}\")",
+        "  String head() { return \"\"; }",
+        "  @Options",
+        "  String options() { return \"\"; }",
+        "  @Trace(\"/debug\")",
+        "  String trace() { return \"\"; }",
+        "}",
+        "",
+        "@io.micronaut.http.annotation.Controller",
+        "class FullyQualifiedStatusController {",
+        "  @io.micronaut.http.annotation.Get(\"/health\")",
+        "  String health() { return \"ok\"; }",
+        "}"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId,
+          edge.range.start.line,
+          edge.resolution,
+          edge.confidence
+        ])
+    ).toEqual([
+      [
+        "GET /issues",
+        "src/api/IssuesController.java#IssuesController.list",
+        "framework.micronaut.direct-controller.literal-method-mapping.local-method",
+        13,
+        "exact",
+        1
+      ],
+      [
+        "GET /issues/{number}",
+        "src/api/IssuesController.java#IssuesController.show",
+        "framework.micronaut.direct-controller.literal-method-mapping.local-method",
+        15,
+        "exact",
+        1
+      ],
+      [
+        "POST /issues",
+        "src/api/IssuesController.java#IssuesController.create",
+        "framework.micronaut.direct-controller.literal-method-mapping.local-method",
+        17,
+        "exact",
+        1
+      ],
+      [
+        "PUT /issues/{number}",
+        "src/api/IssuesController.java#IssuesController.replace",
+        "framework.micronaut.direct-controller.literal-method-mapping.local-method",
+        19,
+        "exact",
+        1
+      ],
+      [
+        "PATCH /issues/{number}",
+        "src/api/IssuesController.java#IssuesController.patch",
+        "framework.micronaut.direct-controller.literal-method-mapping.local-method",
+        21,
+        "exact",
+        1
+      ],
+      [
+        "DELETE /issues/{number}",
+        "src/api/IssuesController.java#IssuesController.delete",
+        "framework.micronaut.direct-controller.literal-method-mapping.local-method",
+        23,
+        "exact",
+        1
+      ],
+      [
+        "HEAD /issues/{number}",
+        "src/api/IssuesController.java#IssuesController.head",
+        "framework.micronaut.direct-controller.literal-method-mapping.local-method",
+        25,
+        "exact",
+        1
+      ],
+      [
+        "OPTIONS /issues",
+        "src/api/IssuesController.java#IssuesController.options",
+        "framework.micronaut.direct-controller.literal-method-mapping.local-method",
+        27,
+        "exact",
+        1
+      ],
+      [
+        "TRACE /issues/debug",
+        "src/api/IssuesController.java#IssuesController.trace",
+        "framework.micronaut.direct-controller.literal-method-mapping.local-method",
+        29,
+        "exact",
+        1
+      ],
+      [
+        "GET /health",
+        "src/api/IssuesController.java#FullyQualifiedStatusController.health",
+        "framework.micronaut.direct-controller.literal-method-mapping.local-method",
+        35,
+        "exact",
+        1
+      ]
+    ]);
+  });
+
+  it("rejects unproven, dynamic, multi-route, and metadata-bearing Micronaut mappings", () => {
+    const wildcardFacts = extractFileFacts({
+      filePath: "src/api/WildcardMicronautController.java",
+      language: "java",
+      sourceText: [
+        "import io.micronaut.http.annotation.Controller;",
+        "import io.micronaut.http.annotation.*;",
+        "",
+        "@Controller(\"/wildcard\")",
+        "class WildcardMicronautController {",
+        "  @Get(\"/ignored\")",
+        "  String ignored() { return \"\"; }",
+        "}"
+      ].join("\n")
+    });
+    const unsupportedFacts = extractFileFacts({
+      filePath: "src/api/UnsupportedMicronautController.java",
+      language: "java",
+      sourceText: [
+        "import io.micronaut.http.annotation.Controller;",
+        "import io.micronaut.http.annotation.Get;",
+        "import io.micronaut.http.annotation.Post;",
+        "",
+        "@Controller(prefix)",
+        "class DynamicMicronautController {",
+        "  @Get(\"/users\")",
+        "  String users() { return \"[]\"; }",
+        "}",
+        "",
+        "@Controller(\"/multiple\")",
+        "class MultipleMicronautController {",
+        "  @Get(\"/one\")",
+        "  @Post(\"/two\")",
+        "  String multiple() { return \"\"; }",
+        "}",
+        "",
+        "@Controller(\"/metadata\")",
+        "class MetadataMicronautController {",
+        "  @Get(produces = MediaType.TEXT_PLAIN)",
+        "  String metadata() { return \"\"; }",
+        "}"
+      ].join("\n")
+    });
+
+    expect(wildcardFacts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(wildcardFacts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+    expect(unsupportedFacts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(unsupportedFacts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+  });
+
   it("retains direct Java Spring Boot @Value field facts with source ranges", () => {
     const facts = extractFileFacts({
       filePath: "src/config/AppConfig.java",

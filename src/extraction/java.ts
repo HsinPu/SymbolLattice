@@ -41,7 +41,7 @@ interface StaticJavaMethod {
   readonly isExported: boolean;
 }
 
-interface StaticSpringRoute {
+interface StaticHttpRoute {
   readonly method: RouteMethod;
   readonly path: string;
   readonly node: JavaSyntaxNode;
@@ -56,6 +56,7 @@ const SPRING_REST_CONTROLLER_PATH = "org.springframework.web.bind.annotation.Res
 const SPRING_CONTROLLER_PATH = "org.springframework.stereotype.Controller";
 const SPRING_REQUEST_MAPPING_PATH = "org.springframework.web.bind.annotation.RequestMapping";
 const SPRING_VALUE_PATH = "org.springframework.beans.factory.annotation.Value";
+const MICRONAUT_CONTROLLER_PATH = "io.micronaut.http.annotation.Controller";
 const SPRING_BOOT_PROPERTIES_KEY = /^[A-Za-z0-9][A-Za-z0-9._-]*$/u;
 
 const SPRING_METHOD_MAPPING_PATHS: Readonly<Record<string, RouteMethod>> = {
@@ -64,6 +65,17 @@ const SPRING_METHOD_MAPPING_PATHS: Readonly<Record<string, RouteMethod>> = {
   "org.springframework.web.bind.annotation.PutMapping": "PUT",
   "org.springframework.web.bind.annotation.PatchMapping": "PATCH",
   "org.springframework.web.bind.annotation.DeleteMapping": "DELETE"
+};
+
+const MICRONAUT_METHOD_MAPPING_PATHS: Readonly<Record<string, RouteMethod>> = {
+  "io.micronaut.http.annotation.Get": "GET",
+  "io.micronaut.http.annotation.Post": "POST",
+  "io.micronaut.http.annotation.Put": "PUT",
+  "io.micronaut.http.annotation.Patch": "PATCH",
+  "io.micronaut.http.annotation.Delete": "DELETE",
+  "io.micronaut.http.annotation.Head": "HEAD",
+  "io.micronaut.http.annotation.Options": "OPTIONS",
+  "io.micronaut.http.annotation.Trace": "TRACE"
 };
 
 function directChildren(node: JavaSyntaxNode): readonly JavaSyntaxNode[] {
@@ -214,6 +226,61 @@ function staticSpringPath(
     return "";
   }
   return path.startsWith("/") && !path.includes("//") ? path : null;
+}
+
+/**
+ * Micronaut maps a marker `@Controller` / HTTP method annotation to `/`.
+ * This first slice accepts only that default, a single positional literal, or
+ * one literal `value` (plus method-only `uri`) argument. `uris`, media-type
+ * arrays, aliases, and dynamic URI construction deliberately remain absent.
+ */
+function staticMicronautPath(
+  input: JavaExtractFileFactsInput,
+  annotation: StaticJavaAnnotation,
+  allowUriArgument: boolean
+): string | null {
+  if (annotation.node.name === "MarkerAnnotation") {
+    return "/";
+  }
+  if (annotation.node.name !== "Annotation") {
+    return null;
+  }
+  const arguments_ = directChildren(annotation.node).find(
+    (child) => child.name === "AnnotationArgumentList"
+  );
+  if (arguments_ === undefined) {
+    return null;
+  }
+  const values = directChildren(arguments_).filter(
+    (child) => !["(", ")", ","].includes(child.name)
+  );
+  if (values.length === 0) {
+    return "/";
+  }
+  if (values.length !== 1 || values[0] === undefined) {
+    return null;
+  }
+  const value = values[0];
+  let path: string | null;
+  if (value.name === "StringLiteral") {
+    path = staticPlainJavaString(input, value);
+  } else if (value.name === "ElementValuePair") {
+    const pair = directChildren(value);
+    const key = pair[0] === undefined ? null : identifierText(input, pair[0]);
+    const literal = pair[2];
+    if (
+      pair.length !== 3 ||
+      pair[1]?.name !== "AssignOp" ||
+      (key !== "value" && (!allowUriArgument || key !== "uri")) ||
+      literal === undefined
+    ) {
+      return null;
+    }
+    path = staticPlainJavaString(input, literal);
+  } else {
+    return null;
+  }
+  return path !== null && path.startsWith("/") && !path.includes("//") ? path : null;
 }
 
 /**
@@ -425,7 +492,7 @@ function staticMethodRoute(
   input: JavaExtractFileFactsInput,
   declaration: StaticJavaMethod,
   imports: ReadonlyMap<string, string>
-): StaticSpringRoute | null {
+): StaticHttpRoute | null {
   const annotationsNamedRequestMapping = declaration.annotations.filter(
     (annotation) => annotation.name === "RequestMapping" || annotation.name === SPRING_REQUEST_MAPPING_PATH
   );
@@ -454,6 +521,55 @@ function staticMethodRoute(
     return null;
   }
   const path = staticSpringPath(input, mapping.annotation);
+  return path === null ? null : { method: mapping.method, path, node: mapping.annotation.node };
+}
+
+function staticMicronautClassPrefix(
+  input: JavaExtractFileFactsInput,
+  declaration: StaticJavaClass,
+  imports: ReadonlyMap<string, string>
+): string | null {
+  const annotationsNamedController = declaration.annotations.filter(
+    (annotation) => annotation.name === "Controller" || annotation.name === MICRONAUT_CONTROLLER_PATH
+  );
+  const controllers = annotationsNamedController.filter((annotation) =>
+    annotationMatches(annotation, MICRONAUT_CONTROLLER_PATH, imports)
+  );
+  if (annotationsNamedController.length !== controllers.length || controllers.length !== 1) {
+    return null;
+  }
+  const controller = controllers[0];
+  return controller === undefined ? null : staticMicronautPath(input, controller, false);
+}
+
+function isMicronautMappingAnnotationName(name: string): boolean {
+  return Object.keys(MICRONAUT_METHOD_MAPPING_PATHS).some(
+    (path) => name === path || name === path.split(".").at(-1)
+  );
+}
+
+function staticMicronautMethodRoute(
+  input: JavaExtractFileFactsInput,
+  declaration: StaticJavaMethod,
+  imports: ReadonlyMap<string, string>
+): StaticHttpRoute | null {
+  const annotationsNamedMappings = declaration.annotations.filter((annotation) =>
+    isMicronautMappingAnnotationName(annotation.name)
+  );
+  const mappings = annotationsNamedMappings.flatMap((annotation) => {
+    const method = Object.entries(MICRONAUT_METHOD_MAPPING_PATHS).find(([path]) =>
+      annotationMatches(annotation, path, imports)
+    )?.[1];
+    return method === undefined ? [] : [{ annotation, method }];
+  });
+  if (annotationsNamedMappings.length !== mappings.length || mappings.length !== 1) {
+    return null;
+  }
+  const mapping = mappings[0];
+  if (mapping === undefined) {
+    return null;
+  }
+  const path = staticMicronautPath(input, mapping.annotation, true);
   return path === null ? null : { method: mapping.method, path, node: mapping.annotation.node };
 }
 
@@ -509,7 +625,7 @@ function staticSpringBootPropertiesReferences(
   return references;
 }
 
-function joinSpringPaths(prefix: string, path: string): string {
+function joinHttpPaths(prefix: string, path: string): string {
   const segments = [prefix, path]
     .flatMap((value) => value.split("/"))
     .filter((segment) => segment.length > 0);
@@ -518,15 +634,20 @@ function joinSpringPaths(prefix: string, path: string): string {
 
 /**
  * Extracts Java class and method symbols plus deliberately narrow Spring Web
- * routes and Spring Boot properties facts. Spring Web proves a direct controller
- * annotation, unambiguous framework import (or fully-qualified annotation), one
- * literal mapping path, and the exact local method declaration. Spring Boot
- * properties retains only direct field-level literal `@Value` placeholders.
+ * and Micronaut routes, as well as Spring Boot properties facts. Each HTTP
+ * surface proves a direct controller annotation, unambiguous framework import
+ * (or fully-qualified annotation), one literal mapping path, and the exact
+ * local method declaration. Spring Boot properties retains only direct
+ * field-level literal `@Value` placeholders.
  */
 export function extractJavaFileFacts(input: JavaExtractFileFactsInput): ArtifactFacts {
   const springWebCapability = frameworkCapability("spring-web");
   if (!springWebCapability.languages.includes(input.language)) {
     throw new Error("Java framework extraction was invoked for an unsupported source language.");
+  }
+  const micronautCapability = frameworkCapability("micronaut");
+  if (!micronautCapability.languages.includes(input.language)) {
+    throw new Error("Micronaut route extraction was invoked for an unsupported source language.");
   }
   const springBootPropertiesCapability = frameworkCapability("spring-boot-properties");
   if (!springBootPropertiesCapability.languages.includes(input.language)) {
@@ -641,10 +762,11 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
     return symbol;
   }
 
-  function addSpringRoute(
+  function addFrameworkRoute(
     parent: SymbolNode,
-    routeFact: StaticSpringRoute,
-    handler: SymbolNode
+    routeFact: StaticHttpRoute,
+    handler: SymbolNode,
+    ruleId: string
   ): void {
     const routeName = `${routeFact.method} ${routeFact.path}`;
     const qualifiedName = `${parent.qualifiedName}#route:${routeName}`;
@@ -685,7 +807,7 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
       confidence: 1,
       referenceName: handler.name,
       evidence: {
-        ruleId: "framework.spring-web.direct-controller.literal-method-mapping.local-method",
+        ruleId,
         stage: "syntax",
         candidateSymbolIds: [handler.id]
       }
@@ -721,21 +843,37 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
         symbolsByMethod.set(methodDeclaration, addMethod(classSymbol, methodDeclaration));
       }
 
-      if (!isSpringController(classDeclaration, imports)) {
-        continue;
+      if (isSpringController(classDeclaration, imports)) {
+        const prefix = staticClassPrefix(input, classDeclaration, imports);
+        if (prefix !== null) {
+          for (const methodDeclaration of methods) {
+            const route = staticMethodRoute(input, methodDeclaration, imports);
+            const handler = symbolsByMethod.get(methodDeclaration);
+            if (route !== null && handler !== undefined) {
+              addFrameworkRoute(
+                classSymbol,
+                { ...route, path: joinHttpPaths(prefix, route.path) },
+                handler,
+                "framework.spring-web.direct-controller.literal-method-mapping.local-method"
+              );
+            }
+          }
+        }
       }
-      const prefix = staticClassPrefix(input, classDeclaration, imports);
-      if (prefix === null) {
+
+      const micronautPrefix = staticMicronautClassPrefix(input, classDeclaration, imports);
+      if (micronautPrefix === null) {
         continue;
       }
       for (const methodDeclaration of methods) {
-        const route = staticMethodRoute(input, methodDeclaration, imports);
+        const route = staticMicronautMethodRoute(input, methodDeclaration, imports);
         const handler = symbolsByMethod.get(methodDeclaration);
         if (route !== null && handler !== undefined) {
-          addSpringRoute(
+          addFrameworkRoute(
             classSymbol,
-            { ...route, path: joinSpringPaths(prefix, route.path) },
-            handler
+            { ...route, path: joinHttpPaths(micronautPrefix, route.path) },
+            handler,
+            "framework.micronaut.direct-controller.literal-method-mapping.local-method"
           );
         }
       }

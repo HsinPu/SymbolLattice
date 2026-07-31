@@ -58,6 +58,7 @@ export type RouteFramework =
   | "chi"
   | "axum"
   | "spring-web"
+  | "micronaut"
   | "laravel"
   | "drupal"
   | "civetweb"

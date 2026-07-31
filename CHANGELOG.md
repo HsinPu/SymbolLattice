@@ -6,6 +6,23 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.94.0] - 2026-07-31
+
+### Added
+
+- Java Micronaut Controller support now recognizes direct imports or fully-qualified `io.micronaut.http.annotation.Controller` annotations and direct local `Get`, `Post`, `Put`, `Patch`, `Delete`, `Head`, `Options`, and `Trace` method annotations. A marker annotation, one positional literal, or one literal `value` (`uri` on methods) is enough to build a source-ranged exact route to the declared local method.
+- Micronaut route facts share the existing local Java class/method/route graph surface, source search, CLI, MCP, retained artifact-fact persistence, and `routes` query. Every emitted route carries `framework.micronaut.direct-controller.literal-method-mapping.local-method` syntax evidence. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.94.0.md`.
+
+### Compatibility
+
+- The artifact extractor advances to `multi-language-ast-v83`; the project resolver remains `project-resolver-v24` because direct Micronaut routes are file-local syntax facts. A pre-v0.94 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes Micronaut-capable facts.
+- No SQLite schema migration or query command is required. This is an additive Java framework capability within existing class, method, route-symbol, exact route-edge, source-search, CLI, MCP, retained-generation, and incremental-index contracts; existing generations remain readable.
+
+### Deliberate limits
+
+- This is not a full Micronaut router or runtime model. It excludes Kotlin/Groovy, wildcard/static imports, meta-annotations, `uris` arrays, URI aliases, media-type/port/condition arguments, multiple mapping annotations, custom HTTP methods, RouteBuilder/programmatic routes, controller inheritance, route filters, error handlers, dependency injection, validation, OpenAPI, compilation, and runtime behavior.
+- The inspected local CodeGraph baseline exposes Spring-oriented configuration analysis but did not contain a Micronaut implementation in its searched source surface. SymbolLattice v0.94 independently adds a deliberately narrow, import-proven Micronaut route slice; it does not copy CodeGraph source or claim full Micronaut coverage.
+
 ## [0.93.0] - 2026-07-31
 
 ### Added

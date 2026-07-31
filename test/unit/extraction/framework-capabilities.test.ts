@@ -32,6 +32,7 @@ describe("first-party framework capabilities", () => {
       "chi",
       "axum",
       "spring-web",
+      "micronaut",
       "spring-boot-properties",
       "laravel",
       "drupal",
@@ -225,6 +226,15 @@ describe("first-party framework capabilities", () => {
       routeRegistrations: [],
       surfaces: [
         "direct imported or fully-qualified Spring controller annotations",
+        "literal class and HTTP-method mapping annotations on direct local methods"
+      ]
+    });
+    expect(frameworkCapability("micronaut")).toMatchObject({
+      languages: ["java"],
+      routeFramework: "micronaut",
+      routeRegistrations: [],
+      surfaces: [
+        "direct imported or fully-qualified Micronaut Controller annotations",
         "literal class and HTTP-method mapping annotations on direct local methods"
       ]
     });

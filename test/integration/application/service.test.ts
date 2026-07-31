@@ -4147,6 +4147,84 @@ describe("SymbolLatticeService", () => {
     expect(search.results).toMatchObject([{ filePath: "src/api/StatusController.java", language: "java" }]);
   });
 
+  it("indexes Java Micronaut Controller routes with persisted source evidence", async () => {
+    const projectPath = await createInlineProject({
+      "src/api/CatalogController.java": [
+        "import io.micronaut.http.annotation.Controller;",
+        "import io.micronaut.http.annotation.Get;",
+        "import io.micronaut.http.annotation.Post;",
+        "",
+        "@Controller(\"/catalog\")",
+        "public class CatalogController {",
+        "  @Get",
+        "  public String index() { return \"[]\"; }",
+        "",
+        "  @Post(uri = \"/refresh\")",
+        "  public String refresh() { return \"ok\"; }",
+        "}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    const indexed = await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+    const getRoutes = await service.routes(projectPath, { method: "GET" });
+    const search = await service.search(projectPath, "catalog", { language: "java" });
+    const persistedFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "src/api/CatalogController.java");
+
+    expect(indexed).toMatchObject({
+      stale: false,
+      counts: { files: 1, symbols: 6, edges: 7 }
+    });
+    expect(persistedFacts).toMatchObject({
+      language: "java",
+      extractorVersion: ARTIFACT_FACTS_EXTRACTOR_VERSION
+    });
+    expect(routes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "GET",
+          path: "/catalog",
+          handler: expect.objectContaining({
+            qualifiedName: "src/api/CatalogController.java#CatalogController.index"
+          }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.micronaut.direct-controller.literal-method-mapping.local-method",
+              stage: "syntax"
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "POST",
+          path: "/catalog/refresh",
+          handler: expect.objectContaining({
+            qualifiedName: "src/api/CatalogController.java#CatalogController.refresh"
+          })
+        })
+      ])
+    );
+    expect(getRoutes.routes).toMatchObject([
+      {
+        method: "GET",
+        path: "/catalog",
+        handler: { qualifiedName: "src/api/CatalogController.java#CatalogController.index" },
+        edge: {
+          resolution: "exact",
+          evidence: {
+            ruleId: "framework.micronaut.direct-controller.literal-method-mapping.local-method",
+            stage: "syntax"
+          }
+        }
+      }
+    ]);
+    expect(search.results).toMatchObject([{ filePath: "src/api/CatalogController.java", language: "java" }]);
+  });
+
   it("indexes PHP Laravel facade routes with explicit unresolved cross-file controller evidence", async () => {
     const projectPath = await createInlineProject({
       "routes/web.php": [
