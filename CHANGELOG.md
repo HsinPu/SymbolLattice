@@ -6,6 +6,30 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.120.0] - 2026-07-31
+
+### Added
+
+- Rust module resolution now includes an evidence-gated Cargo workspace resolver. It accepts a literal `[workspace] members` list (including multiline arrays), an implicit root package, or an explicit member; it maps only a scanned target `src/lib.rs`.
+- A cross-crate result additionally requires an exact direct `[dependencies]` inline-table `path` dependency from the importing crate to the target member. The dependency key becomes the Rust crate name; an explicit Cargo `package` alias is accepted only when it matches the target manifest name. Registry, transitive, and same-name filesystem guesses remain unresolved.
+- Actix Web imported `ServiceConfig` facts now retain their `importRoot` and optional `workspaceCrateName`. A supported workspace mount projects through target `lib.rs` and one or two direct Rust module declarations, retaining the mounting file, complete module chain, and consulted Cargo manifests in edge evidence.
+- Project index inputs now persist Cargo root/member manifest hashes. A manifest-only change therefore makes a generation stale before any route is claimed from it.
+
+### Compatibility
+
+- The index-input identity advances to `project-inputs-v2`; the artifact facts extractor advances to `multi-language-ast-v104`; the project resolver advances to `project-resolver-v30`. Existing graphs remain readable, while the next explicit `sync` or fresh `init` safely refreshes their inputs, facts, and projections.
+- The persisted `importRoot` and `workspaceCrateName` mount fields are additive. Pre-v0.120 local-module facts continue to be interpreted as local only.
+
+### Deliberate limits
+
+- Cargo workspace resolution deliberately excludes glob members, `workspace = true`, registry/transitive/dev/build dependencies, non-inline dependency tables, target-specific sections, custom library paths, and crates without a scanned `src/lib.rs`.
+- Cross-crate Actix projection remains limited to one or two direct module hops and literal callbacks/routes. Re-exports, `#[path]`, inline modules, macros, wrappers, closures, and dynamic paths remain unresolved.
+
+### Comparison notes
+
+- The checked CodeGraph Rust resolver maps workspace crate names from Cargo workspace membership. SymbolLattice independently adds direct path-dependency and target-manifest proof before it links a cross-crate Actix callback, making this narrower but more auditable rather than a copy of CodeGraph.
+- CodeGraph remains ahead in daemon lifecycle, socket/PID registry, cross-client coordination, worker-pool concurrency, and broader semantic resolution. v0.120 is a verified Cargo-aware route-analysis increment, not a general parity claim.
+
 ## [0.119.0] - 2026-07-31
 
 ### Added

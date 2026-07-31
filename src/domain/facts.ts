@@ -11,13 +11,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v103";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v104";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v29";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v30";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -335,16 +335,24 @@ export interface RustActixServiceConfigDeclarationFact {
 /** The direct Actix builder surface that mounted one imported configuration callback. */
 export type RustActixImportedServiceConfigMountKind = "app" | "scope";
 
+/** The Rust import root whose target must be independently proven by the resolver. */
+export type RustActixImportedServiceConfigImportRoot = "crate" | "self" | "workspace";
+
 /**
  * A direct `crate::module::config` import mounted through App or Scope
  * configure. `moduleName` is the root direct module for v0.118 compatibility;
- * `modulePath` retains one or two direct module segments when available.
+ * `modulePath` retains one or two direct module segments when available. A
+ * workspace root is projected only after the Cargo resolver proves the crate.
  */
 export interface RustActixImportedServiceConfigMountFact {
   readonly configurationName: string;
   readonly moduleName: string;
   /** Omitted only by facts persisted before v0.119. */
   readonly modulePath?: readonly string[];
+  /** Omitted by persisted pre-v0.120 local-module facts. */
+  readonly importRoot?: RustActixImportedServiceConfigImportRoot;
+  /** Present only when `importRoot` is `workspace`. */
+  readonly workspaceCrateName?: string;
   readonly prefix: string;
   readonly kind: RustActixImportedServiceConfigMountKind;
   readonly range: SourceRange;

@@ -95,12 +95,16 @@ interface StaticActixWebImportedServiceConfig {
   /** The root direct external module, retained for persisted-fact compatibility. */
   readonly moduleName: string;
   readonly modulePath: readonly string[];
+  readonly importRoot: "crate" | "self" | "workspace";
+  readonly workspaceCrateName?: string;
 }
 
 interface StaticActixWebImportedConfigMount {
   readonly configurationName: string;
   readonly moduleName: string;
   readonly modulePath: readonly string[];
+  readonly importRoot: "crate" | "self" | "workspace";
+  readonly workspaceCrateName?: string;
   readonly prefix: string;
   readonly kind: "app" | "scope";
   readonly node: RustSyntaxNode;
@@ -392,18 +396,31 @@ function staticActixWebImportedServiceConfigs(
     const modulePath = segments.slice(1, -1);
     const moduleName = modulePath[0];
     const configurationName = segments.at(-1);
+    const importRoot =
+      rootName === "crate" || rootName === "self"
+        ? rootName
+        : rootName === undefined || rootName === "super" || !/^[A-Za-z_][A-Za-z0-9_]*$/u.test(rootName)
+          ? null
+          : "workspace";
     if (
       paths.length !== 1 ||
       paths[0] !== imported.path ||
-      (rootName !== "crate" && rootName !== "self") ||
+      importRoot === null ||
       (modulePath.length !== 1 && modulePath.length !== 2) ||
       moduleName === undefined ||
       configurationName === undefined ||
-      modulesByName.get(moduleName) !== 1
+      modulePath.some((segment) => !/^[A-Za-z_][A-Za-z0-9_]*$/u.test(segment)) ||
+      (importRoot !== "workspace" && modulesByName.get(moduleName) !== 1)
     ) {
       continue;
     }
-    importedConfigs.set(imported.localName, { configurationName, moduleName, modulePath });
+    importedConfigs.set(imported.localName, {
+      configurationName,
+      moduleName,
+      modulePath,
+      importRoot,
+      ...(importRoot === "workspace" ? { workspaceCrateName: rootName } : {})
+    });
   }
   return importedConfigs;
 }
@@ -1576,6 +1593,10 @@ function staticActixWebImportedConfigMounts(
           configurationName: imported.configurationName,
           moduleName: imported.moduleName,
           modulePath: imported.modulePath,
+          importRoot: imported.importRoot,
+          ...(imported.workspaceCrateName === undefined
+            ? {}
+            : { workspaceCrateName: imported.workspaceCrateName }),
           prefix,
           kind,
           node: mountNode
@@ -2138,6 +2159,10 @@ export function extractRustFileFacts(input: RustExtractFileFactsInput): Artifact
           configurationName: mount.configurationName,
           moduleName: mount.moduleName,
           modulePath: mount.modulePath,
+          importRoot: mount.importRoot,
+          ...(mount.workspaceCrateName === undefined
+            ? {}
+            : { workspaceCrateName: mount.workspaceCrateName }),
           prefix: mount.prefix,
           kind: mount.kind,
           range: rangeFor(lineStarts, mount.node.from, mount.node.to)

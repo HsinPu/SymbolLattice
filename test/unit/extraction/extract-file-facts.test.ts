@@ -8707,6 +8707,47 @@ describe("source extraction", () => {
     });
   });
 
+  it("retains Cargo workspace-crate Actix ServiceConfig mount facts without local module proof", () => {
+    const facts = extractFileFacts({
+      filePath: "apps/server/src/main.rs",
+      language: "rust",
+      sourceText: [
+        "use actix_web::{App, web};",
+        "use api_routes::routes::configure as api_routes_config;",
+        "",
+        "fn bootstrap() {",
+        "  let app = App::new()",
+        "    .configure(api_routes_config)",
+        "    .service(web::scope(\"/api\").configure(api_routes_config));",
+        "}"
+      ].join("\n")
+    });
+
+    expect(facts.rustActixServiceConfigFacts).toMatchObject({
+      externalModules: [],
+      importedMounts: [
+        {
+          configurationName: "configure",
+          moduleName: "routes",
+          modulePath: ["routes"],
+          importRoot: "workspace",
+          workspaceCrateName: "api_routes",
+          prefix: "/",
+          kind: "app"
+        },
+        {
+          configurationName: "configure",
+          moduleName: "routes",
+          modulePath: ["routes"],
+          importRoot: "workspace",
+          workspaceCrateName: "api_routes",
+          prefix: "/api",
+          kind: "scope"
+        }
+      ]
+    });
+  });
+
   it("resolves Actix ServiceConfig handlers in the config callback lexical scope", () => {
     const facts = extractFileFacts({
       filePath: "src/actix-service-config-lexical-scope.rs",

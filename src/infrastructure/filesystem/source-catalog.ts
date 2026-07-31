@@ -13,6 +13,7 @@ import {
   isUnsafeProjectPath,
   toProjectRelativePath
 } from "./discovery.js";
+import { createCargoWorkspaceProjectModuleResolver } from "./cargo-workspace.js";
 import { buildProjectIndexInputs } from "./project-inputs.js";
 import { createWorkspaceProjectModuleResolver } from "./workspace.js";
 
@@ -46,19 +47,25 @@ export class FileSystemSourceCatalog implements SourceCatalog {
       projectPath: normalizedProjectPath,
       sourceDocuments
     });
+    const cargoWorkspaceResolver = await createCargoWorkspaceProjectModuleResolver({
+      projectPath: normalizedProjectPath,
+      sourceDocuments
+    });
     const inputOptions =
       options?.scopeRoots === undefined
         ? {
             additionalConfigurationInputs: [
               ...typeScriptResolver.configurationInputs,
-              ...workspaceResolver.configurationInputs
+              ...workspaceResolver.configurationInputs,
+              ...cargoWorkspaceResolver.configurationInputs
             ]
           }
         : {
             scopeRoots: options.scopeRoots,
             additionalConfigurationInputs: [
               ...typeScriptResolver.configurationInputs,
-              ...workspaceResolver.configurationInputs
+              ...workspaceResolver.configurationInputs,
+              ...cargoWorkspaceResolver.configurationInputs
             ]
           };
     const indexInputs = await buildProjectIndexInputs(normalizedProjectPath, inputOptions);
@@ -83,6 +90,31 @@ export class FileSystemSourceCatalog implements SourceCatalog {
             return typeScriptResolution;
           }
 
+          const cargoWorkspaceResolution = cargoWorkspaceResolver.moduleResolver.resolve(
+            fromFilePath,
+            moduleSpecifier
+          );
+          if (cargoWorkspaceResolution.strategy !== "unresolved") {
+            return {
+              ...cargoWorkspaceResolution,
+              configurationPaths: mergeConfigurationPaths(
+                typeScriptResolution.configurationPaths,
+                cargoWorkspaceResolution.configurationPaths
+              )
+            };
+          }
+
+          if (fromFilePath.endsWith(".rs")) {
+            return {
+              targetFilePath: null,
+              strategy: "unresolved",
+              configurationPaths: mergeConfigurationPaths(
+                typeScriptResolution.configurationPaths,
+                cargoWorkspaceResolution.configurationPaths
+              )
+            };
+          }
+
           const workspaceResolution = workspaceResolver.moduleResolver.resolve(
             fromFilePath,
             moduleSpecifier
@@ -92,6 +124,7 @@ export class FileSystemSourceCatalog implements SourceCatalog {
               ...workspaceResolution,
               configurationPaths: mergeConfigurationPaths(
                 typeScriptResolution.configurationPaths,
+                cargoWorkspaceResolution.configurationPaths,
                 workspaceResolution.configurationPaths
               )
             };
@@ -102,6 +135,7 @@ export class FileSystemSourceCatalog implements SourceCatalog {
             strategy: "unresolved",
             configurationPaths: mergeConfigurationPaths(
               typeScriptResolution.configurationPaths,
+              cargoWorkspaceResolution.configurationPaths,
               workspaceResolution.configurationPaths
             )
           };

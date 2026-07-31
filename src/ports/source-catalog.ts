@@ -19,6 +19,7 @@ export type ModuleResolutionStrategy =
   | "tsconfig-paths"
   | "tsconfig-base-url"
   | "workspace-package"
+  | "cargo-workspace-crate"
   | "unresolved";
 
 export interface ResolvedModule {

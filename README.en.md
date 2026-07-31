@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.119.0 is an early developer release. The package is not published to npm; run it from source.
+> v0.120.0 is an early developer release. The package is not published to npm; run it from source.
 
 SymbolLattice builds a queryable local code-symbol graph for a project. Every relation keeps its source rule, resolution stage, and confidence. Source code remains in the indexed project's `.symbol-lattice/index.sqlite` and is never silently uploaded.
 
@@ -22,7 +22,7 @@ SymbolLattice builds a queryable local code-symbol graph for a project. Every re
 
 - Extracts AST-proven files, symbols, imports/exports, type hierarchy, routes, entrypoints, and cross-file relations.
 - Leaves ambiguous facts unresolved or heuristic instead of presenting guesses as exact graph relations.
-- Covers frontend, backend, JVM, systems, data, IaC, template, and schema languages. Rust includes conservative Axum, Actix Web, and Rocket route analysis.
+- Covers frontend, backend, JVM, systems, data, IaC, template, and schema languages. Rust includes conservative Axum, Actix Web, Rocket, and Cargo-workspace route analysis.
 - Provides CLI and read-only MCP queries for symbols, relations, routes, entrypoints, impact, history, diffs, and index status.
 
 ## Quick start
@@ -48,17 +48,17 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 On Windows PowerShell, use `npm.cmd` if `npm` is unavailable. Filesystem roots and home directories are rejected unless `--force` is explicit.
 
-## v0.119.0
+## v0.120.0
 
-- Actix Web projects cross-file `ServiceConfig` callbacks through a direct crate-root module path: `crate::api::routes::configure` or `self::api::routes::configure`.
-- Every segment needs one direct `mod` declaration and one physical module candidate. `api.rs` / `api/mod.rs` and `routes.rs` / `routes/mod.rs` combinations are covered.
-- Projected routes retain the complete module-stage resolution chain. A raw attribute route is replaced only after that complete proof succeeds; existing one-module evidence rule IDs remain unchanged.
+- Actix Web can now project a `ServiceConfig` from another Cargo workspace crate, for example `use api_routes::routes::configure`.
+- Projection requires literal workspace membership, the target crate's `Cargo.toml`, a direct inline-table `[dependencies]` `path` dependency from the mounting crate, and every direct `mod` hop from target `src/lib.rs`; package aliases are supported.
+- The projected edge retains all three manifest inputs plus a mount-file → `lib.rs` → callback-module resolution path. Missing evidence means no projection and no suppression of the raw attribute route.
 
 ## Deliberate limits
 
 - This is not a compiler, type checker, framework runtime, or execution tracer.
 - Dynamic dispatch, reflection, macro expansion, code generation, dependency injection, and ambiguous names never become exact graph relations.
-- Cross-file Actix Web `ServiceConfig` support accepts only one or two direct external modules from `main.rs` / `lib.rs` and a direct `crate` / `self` import. Re-exports, `#[path]`, inline modules, paths deeper than two modules, closures, wrappers, dynamic callbacks or paths remain unprojected.
+- Cross-file Actix Web `ServiceConfig` support accepts only one or two direct external modules from `main.rs` / `lib.rs`. Workspace crates require literal `members`, a root package or explicit member, and an inline-table `[dependencies]` `path` dependency. Glob members, `workspace = true`, registry/transitive/dev/build dependencies, re-exports, `#[path]`, inline modules, deeper paths, closures, wrappers, dynamic callbacks, and dynamic paths remain unprojected.
 
 ## Verification
 

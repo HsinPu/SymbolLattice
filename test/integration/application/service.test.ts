@@ -4670,6 +4670,210 @@ describe("SymbolLatticeService", () => {
     );
   });
 
+  it("projects Rust Actix ServiceConfig routes across a direct Cargo workspace path dependency", async () => {
+    const projectPath = await createInlineProject({
+      "Cargo.toml": [
+        "[workspace]",
+        'members = ["apps/server", "crates/api-routes"]'
+      ].join("\n"),
+      "apps/server/Cargo.toml": [
+        "[package]",
+        'name = "server"',
+        "",
+        "[dependencies]",
+        'api-routes = { path = "../../crates/api-routes" }'
+      ].join("\n"),
+      "apps/server/src/main.rs": [
+        "use actix_web::{App, web};",
+        "use api_routes::routes::configure as api_routes_config;",
+        "",
+        "fn bootstrap() {",
+        "  let app = App::new()",
+        "    .configure(api_routes_config)",
+        "    .service(web::scope(\"/api\").configure(api_routes_config));",
+        "}"
+      ].join("\n"),
+      "crates/api-routes/Cargo.toml": [
+        "[package]",
+        'name = "api-routes"'
+      ].join("\n"),
+      "crates/api-routes/src/lib.rs": "pub mod routes;",
+      "crates/api-routes/src/routes.rs": [
+        "use actix_web::{get, web};",
+        "",
+        "async fn health() {}",
+        "",
+        "#[get(\"/ready\")]",
+        "async fn ready() {}",
+        "",
+        "pub fn configure(cfg: &mut web::ServiceConfig) {",
+        "  cfg.route(\"/health\", web::get().to(health));",
+        "  cfg.service(ready);",
+        "}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath, { method: "GET" });
+    const mainFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "apps/server/src/main.rs");
+
+    expect(mainFacts?.rustActixServiceConfigFacts).toMatchObject({
+      importedMounts: [
+        {
+          configurationName: "configure",
+          moduleName: "routes",
+          modulePath: ["routes"],
+          importRoot: "workspace",
+          workspaceCrateName: "api_routes",
+          prefix: "/",
+          kind: "app"
+        },
+        {
+          configurationName: "configure",
+          moduleName: "routes",
+          modulePath: ["routes"],
+          importRoot: "workspace",
+          workspaceCrateName: "api_routes",
+          prefix: "/api",
+          kind: "scope"
+        }
+      ]
+    });
+    expect(routes.routes).toHaveLength(4);
+    expect(routes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: "/health",
+          handler: expect.objectContaining({ qualifiedName: "crates/api-routes/src/routes.rs#health" }),
+          edge: expect.objectContaining({
+            evidence: expect.objectContaining({
+              ruleId:
+                "framework.actix-web.imported-service-config.app.configure.cargo-workspace-module.local-function",
+              stage: "module",
+              configurationPaths: [
+                "Cargo.toml",
+                "apps/server/Cargo.toml",
+                "crates/api-routes/Cargo.toml"
+              ],
+              resolutionPath: [
+                "apps/server/src/main.rs",
+                "crates/api-routes/src/lib.rs",
+                "crates/api-routes/src/routes.rs"
+              ]
+            })
+          })
+        }),
+        expect.objectContaining({
+          path: "/ready",
+          handler: expect.objectContaining({ qualifiedName: "crates/api-routes/src/routes.rs#ready" })
+        }),
+        expect.objectContaining({
+          path: "/api/health",
+          handler: expect.objectContaining({ qualifiedName: "crates/api-routes/src/routes.rs#health" }),
+          edge: expect.objectContaining({
+            evidence: expect.objectContaining({
+              ruleId:
+                "framework.actix-web.imported-service-config.web-scope.configure.cargo-workspace-module.local-function",
+              stage: "module",
+              configurationPaths: [
+                "Cargo.toml",
+                "apps/server/Cargo.toml",
+                "crates/api-routes/Cargo.toml"
+              ],
+              resolutionPath: [
+                "apps/server/src/main.rs",
+                "crates/api-routes/src/lib.rs",
+                "crates/api-routes/src/routes.rs"
+              ]
+            })
+          })
+        }),
+        expect.objectContaining({
+          path: "/api/ready",
+          handler: expect.objectContaining({ qualifiedName: "crates/api-routes/src/routes.rs#ready" })
+        })
+      ])
+    );
+
+    await writeFile(
+      join(projectPath, "apps", "server", "Cargo.toml"),
+      [
+        "[package]",
+        'name = "server"',
+        "",
+        "[dependencies]",
+        'api-routes = { path = "../../crates/api-routes" }',
+        "# manifest-only change"
+      ].join("\n"),
+      "utf8"
+    );
+    expect(await service.getStatus(projectPath)).toMatchObject({
+      stale: true,
+      staleReasons: ["project-inputs-changed"]
+    });
+  });
+
+  it("rejects a Cargo workspace Actix projection without a direct path dependency", async () => {
+    const projectPath = await createInlineProject({
+      "Cargo.toml": [
+        "[workspace]",
+        'members = ["apps/server", "crates/api-routes"]'
+      ].join("\n"),
+      "apps/server/Cargo.toml": [
+        "[package]",
+        'name = "server"',
+        "",
+        "[dependencies]",
+        'api-routes = "1"'
+      ].join("\n"),
+      "apps/server/src/main.rs": [
+        "use actix_web::{App, web};",
+        "use api_routes::routes::configure;",
+        "",
+        "fn bootstrap() {",
+        "  let app = App::new().service(web::scope(\"/api\").configure(configure));",
+        "}"
+      ].join("\n"),
+      "crates/api-routes/Cargo.toml": [
+        "[package]",
+        'name = "api-routes"'
+      ].join("\n"),
+      "crates/api-routes/src/lib.rs": "pub mod routes;",
+      "crates/api-routes/src/routes.rs": [
+        "use actix_web::{get, web};",
+        "",
+        "#[get(\"/ready\")]",
+        "async fn ready() {}",
+        "",
+        "pub fn configure(cfg: &mut web::ServiceConfig) {",
+        "  cfg.service(ready);",
+        "}"
+      ].join("\n")
+    });
+    const service = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+
+    await expect(service.routes(projectPath, { method: "GET" })).resolves.toMatchObject({
+      routes: [
+        {
+          path: "/ready",
+          handler: { qualifiedName: "crates/api-routes/src/routes.rs#ready" },
+          edge: {
+            evidence: {
+              ruleId: "framework.actix-web.attribute-route.literal-path.local-function",
+              stage: "syntax"
+            }
+          }
+        }
+      ]
+    });
+  });
+
   it("projects Rust Actix ServiceConfig routes through a direct external module", async () => {
     const projectPath = await createInlineProject({
       "src/main.rs": [

@@ -896,6 +896,8 @@ function moduleRuleId(strategy: ResolvedModule["strategy"]): string {
       return "module.tsconfig-base-url";
     case "workspace-package":
       return "module.workspace-package";
+    case "cargo-workspace-crate":
+      return "module.cargo-workspace-crate";
     case "unresolved":
       return "module.unresolved-specifier";
   }
@@ -1969,6 +1971,8 @@ interface ProjectedRustActixImportedServiceConfigRoute {
   readonly configurationFilePath: string;
   readonly mount: RustActixImportedServiceConfigMountFact;
   readonly modulePath: readonly string[];
+  readonly importResolutionKind: "local-module" | "cargo-workspace-module";
+  readonly configurationPaths: readonly string[];
   readonly resolutionPath: readonly string[];
   readonly configuration: RustActixServiceConfigDeclarationFact;
   readonly route: RustActixServiceConfigRouteFact;
@@ -1996,11 +2000,67 @@ function compareProjectedRustActixImportedServiceConfigRoute(
   );
 }
 
+function rustActixImportedServiceConfigRoot(input: {
+  readonly mount: RustActixImportedServiceConfigMountFact;
+  readonly mountFilePath: string;
+  readonly knownFilePaths: ReadonlySet<string>;
+  readonly moduleResolver: ProjectModuleResolver | undefined;
+}): {
+  readonly rootFilePath: string;
+  readonly configurationPaths: readonly string[];
+  readonly importResolutionKind: "local-module" | "cargo-workspace-module";
+} | null {
+  if (
+    input.mount.importRoot === undefined ||
+    input.mount.importRoot === "crate" ||
+    input.mount.importRoot === "self"
+  ) {
+    return input.mount.workspaceCrateName === undefined
+      ? {
+          rootFilePath: input.mountFilePath,
+          configurationPaths: [],
+          importResolutionKind: "local-module"
+        }
+      : null;
+  }
+  if (
+    input.mount.importRoot !== "workspace" ||
+    input.mount.workspaceCrateName === undefined ||
+    !isRustDirectExternalModuleName(input.mount.workspaceCrateName) ||
+    input.moduleResolver === undefined
+  ) {
+    return null;
+  }
+  const resolution = input.moduleResolver.resolve(input.mountFilePath, input.mount.workspaceCrateName);
+  if (
+    resolution.strategy !== "cargo-workspace-crate" ||
+    resolution.targetFilePath === null ||
+    !input.knownFilePaths.has(resolution.targetFilePath) ||
+    !(
+      resolution.targetFilePath === "src/lib.rs" ||
+      resolution.targetFilePath.endsWith("/src/lib.rs")
+    )
+  ) {
+    return null;
+  }
+  return {
+    rootFilePath: resolution.targetFilePath,
+    configurationPaths: resolution.configurationPaths,
+    importResolutionKind: "cargo-workspace-module"
+  };
+}
+
 function rustActixImportedServiceConfigRouteRuleId(
   kind: RustActixImportedServiceConfigMountFact["kind"],
-  modulePath: readonly string[]
+  modulePath: readonly string[],
+  importResolutionKind: "local-module" | "cargo-workspace-module"
 ): string {
-  const moduleRule = modulePath.length === 1 ? "direct-module" : "direct-module-path";
+  const moduleRule =
+    importResolutionKind === "cargo-workspace-module"
+      ? "cargo-workspace-module"
+      : modulePath.length === 1
+        ? "direct-module"
+        : "direct-module-path";
   return kind === "app"
     ? `framework.actix-web.imported-service-config.app.configure.${moduleRule}.local-function`
     : `framework.actix-web.imported-service-config.web-scope.configure.${moduleRule}.local-function`;
@@ -2015,9 +2075,9 @@ interface RustActixImportedServiceConfigRouteProjection {
 
 /**
  * Projects literal routes through an imported Actix Web `ServiceConfig` only
- * when every module hop is directly declared from a Rust crate root and both
- * callback and handler resolve uniquely in the final module. The route edge
- * retains the full resolution chain so it never looks syntax-local.
+ * when every module hop is directly declared from a Rust crate root. Workspace
+ * imports additionally require one Cargo workspace direct-path-dependency
+ * proof. Callback and handler must resolve uniquely in the final module.
  */
 function projectRustActixImportedServiceConfigRoutes(input: {
   readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
@@ -2025,6 +2085,7 @@ function projectRustActixImportedServiceConfigRoutes(input: {
   readonly fileSymbols: ReadonlyMap<string, SymbolNode>;
   readonly symbolsById: ReadonlyMap<string, SymbolNode>;
   readonly structuralEdges: readonly GraphEdge[];
+  readonly moduleResolver: ProjectModuleResolver | undefined;
 }): RustActixImportedServiceConfigRouteProjection {
   const candidates: ProjectedRustActixImportedServiceConfigRoute[] = [];
 
@@ -2049,15 +2110,28 @@ function projectRustActixImportedServiceConfigRoutes(input: {
       if (modulePath === null) {
         continue;
       }
-      const resolutionPath = resolveRustDirectExternalModulePath({
-        factsByFile: input.factsByFile,
+      const importRoot = rustActixImportedServiceConfigRoot({
+        mount,
+        mountFilePath,
         knownFilePaths: input.knownFilePaths,
-        rootFilePath: mountFilePath,
-        modulePath
+        moduleResolver: input.moduleResolver
       });
-      if (resolutionPath === null) {
+      if (importRoot === null) {
         continue;
       }
+      const moduleResolutionPath = resolveRustDirectExternalModulePath({
+        factsByFile: input.factsByFile,
+        knownFilePaths: input.knownFilePaths,
+        rootFilePath: importRoot.rootFilePath,
+        modulePath
+      });
+      if (moduleResolutionPath === null) {
+        continue;
+      }
+      const resolutionPath =
+        importRoot.importResolutionKind === "cargo-workspace-module"
+          ? [mountFilePath, ...moduleResolutionPath]
+          : moduleResolutionPath;
       const configurationFilePath = resolutionPath.at(-1);
       if (configurationFilePath === undefined) {
         continue;
@@ -2113,6 +2187,8 @@ function projectRustActixImportedServiceConfigRoutes(input: {
           configurationFilePath,
           mount,
           modulePath,
+          importResolutionKind: importRoot.importResolutionKind,
+          configurationPaths: importRoot.configurationPaths,
           resolutionPath,
           configuration,
           route,
@@ -2212,10 +2288,14 @@ function projectRustActixImportedServiceConfigRoutes(input: {
       confidence: 1,
       referenceName: candidate.handler.name,
       evidence: referenceEvidence(
-        rustActixImportedServiceConfigRouteRuleId(candidate.mount.kind, candidate.modulePath),
+        rustActixImportedServiceConfigRouteRuleId(
+          candidate.mount.kind,
+          candidate.modulePath,
+          candidate.importResolutionKind
+        ),
         "module",
         [candidate.handler.id, candidate.callback.id],
-        [],
+        candidate.configurationPaths,
         candidate.resolutionPath
       )
     });
@@ -3299,7 +3379,8 @@ export function resolveProjectFacts(input: {
     knownFilePaths,
     fileSymbols,
     symbolsById,
-    structuralEdges
+    structuralEdges,
+    moduleResolver: input.moduleResolver
   });
   if (rustActixImportedServiceConfigRouteProjection.suppressedRawRouteIds.length > 0) {
     const suppressedRawRouteIds = new Set(
