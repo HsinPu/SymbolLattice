@@ -255,6 +255,11 @@ describe("source discovery", () => {
     expect(getSourceLanguage("api/CATALOG.PROTO")).toBe("proto");
   });
 
+  it("recognizes the Groovy source extension", () => {
+    expect(getSourceLanguage("src/catalog.groovy")).toBe("groovy");
+    expect(getSourceLanguage("src/CATALOG.GROOVY")).toBe("groovy");
+  });
+
   it("discovers only source-proven Objective-C .h headers", async () => {
     const projectPath = await createProject();
     await mkdir(join(projectPath, "Headers"), { recursive: true });

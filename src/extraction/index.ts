@@ -17,6 +17,7 @@ import { extractPerlFileFacts } from "./perl.js";
 import { extractScalaFileFacts } from "./scala.js";
 import { extractGoFileFacts } from "./go.js";
 import { extractJavaFileFacts } from "./java.js";
+import { extractGroovyFileFacts } from "./groovy.js";
 import { extractKotlinFileFacts } from "./kotlin.js";
 import { extractLuaFileFacts } from "./lua.js";
 import { extractObjectiveCFileFacts } from "./objc.js";
@@ -3721,6 +3722,9 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
   }
   if (input.language === "java") {
     return extractJavaFileFacts({ ...input, language: "java" });
+  }
+  if (input.language === "groovy") {
+    return extractGroovyFileFacts({ ...input, language: "groovy" });
   }
   if (input.language === "php") {
     return extractPhpFileFacts({ ...input, language: "php" });

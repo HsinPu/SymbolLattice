@@ -9653,6 +9653,88 @@ describe("source extraction", () => {
     expect(rpcBlock.symbols.some((symbol) => symbol.kind === "method")).toBe(false);
   });
 
+  it("extracts complete direct Groovy declarations with source ranges", () => {
+    const facts = extractFileFacts({
+      filePath: "src/catalog.groovy",
+      language: "groovy",
+      sourceText: [
+        "#!/usr/bin/env groovy",
+        "// class CommentOnly {}",
+        "class Catalog {",
+        "  class Nested { }",
+        "}",
+        "interface Searchable { }",
+        "trait Auditable {",
+        '  String audit() { "ok" }',
+        "}",
+        "enum State { READY, DONE }",
+        "def greet(String name) {",
+        '  return """class Quoted {}"""',
+        "}",
+        "def make = { class Hidden {} }"
+      ].join("\n")
+    });
+
+    expect(
+      facts.symbols.map((symbol) => [symbol.kind, symbol.qualifiedName, symbol.declarationOrdinal])
+    ).toEqual([
+      ["file", "src/catalog.groovy", 0],
+      ["class", "src/catalog.groovy#class:Catalog", 0],
+      ["interface", "src/catalog.groovy#interface:Searchable", 0],
+      ["interface", "src/catalog.groovy#trait:Auditable", 0],
+      ["type", "src/catalog.groovy#enum:State", 0],
+      ["function", "src/catalog.groovy#function:greet", 0]
+    ]);
+    expect(facts.symbols.find((symbol) => symbol.name === "Catalog")?.range).toEqual({
+      start: { line: 3, column: 1 },
+      end: { line: 5, column: 2 }
+    });
+    expect(facts.symbols.find((symbol) => symbol.name === "greet")?.range).toEqual({
+      start: { line: 11, column: 1 },
+      end: { line: 13, column: 2 }
+    });
+    expect(facts.symbols.some((symbol) => symbol.name === "Nested")).toBe(false);
+    expect(facts.symbols.some((symbol) => symbol.name === "Hidden")).toBe(false);
+    expect(
+      facts.edges.map((edge) => [edge.referenceName, edge.evidence?.ruleId, edge.resolution])
+    ).toEqual([
+      ["Catalog", "language.groovy.class.direct-top-level", "exact"],
+      ["Searchable", "language.groovy.interface.direct-top-level", "exact"],
+      ["Auditable", "language.groovy.trait.direct-top-level", "exact"],
+      ["State", "language.groovy.enum.direct-top-level", "exact"],
+      ["greet", "language.groovy.function.direct-top-level", "exact"]
+    ]);
+  });
+
+  it("rejects malformed and slashy Groovy script-scope input", () => {
+    const unbalanced = extractFileFacts({
+      filePath: "src/unbalanced.groovy",
+      language: "groovy",
+      sourceText: "class Broken {\n"
+    });
+    const unclosedComment = extractFileFacts({
+      filePath: "src/unclosed-comment.groovy",
+      language: "groovy",
+      sourceText: "/* class Broken {}"
+    });
+    const slashy = extractFileFacts({
+      filePath: "src/slashy.groovy",
+      language: "groovy",
+      sourceText: ["def pattern = /class Hidden {}/", "class Visible {}"].join("\n")
+    });
+    const scriptDivision = extractFileFacts({
+      filePath: "src/division.groovy",
+      language: "groovy",
+      sourceText: ["def ratio = 6 / 3", "class Visible {}"].join("\n")
+    });
+
+    for (const facts of [unbalanced, unclosedComment, slashy, scriptDivision]) {
+      expect(facts.symbols).toHaveLength(1);
+      expect(facts.symbols[0]?.kind).toBe("file");
+      expect(facts.edges).toEqual([]);
+    }
+  });
+
   it("extracts source-proven Java properties keys without retaining configuration values", () => {
     const facts = extractFileFacts({
       filePath: "config/application.properties",

@@ -6,6 +6,24 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.100.0] - 2026-07-31
+
+### Added
+
+- Source discovery now recognizes case-insensitive `.groovy` files and exposes the additive `groovy` language through the existing persisted source-search, CLI, and MCP language-validation contracts. The dependency-free extractor retains a file symbol plus complete direct top-level `class`, `interface`, `trait`, `enum`, and `def name(...) { ... }` declarations.
+- Each accepted Groovy declaration keeps its complete source range and an exact file-to-symbol `contains` edge with `language.groovy.<kind>.direct-top-level` syntax evidence. A `trait` intentionally maps to the existing `interface` kind; comments, shebangs, ordinary strings, and triple-quoted strings are offset-preservingly masked before selection. Focused unit, discovery, and service integration coverage prove ranges, nested-declaration exclusion, malformed-input safety, persisted facts, and language-filtered source search. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.100.0.md`.
+- `README.md` is now a concise Traditional Chinese default, with an equivalent `README.en.md` English version. Both cross-link at the top and are included in the package file list.
+
+### Compatibility
+
+- The artifact extractor advances to `multi-language-ast-v89`; the project resolver remains `project-resolver-v25` because the initial Groovy facts are direct file-local declarations. A pre-v0.100 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes Groovy-capable facts.
+- No SQLite schema migration or query command is required. This is an additive artifact-language capability within existing file, class/interface/type/function-symbol, exact-containment-edge, source-search, CLI, MCP, retained-generation, and incremental-index contracts; existing generations remain readable.
+
+### Deliberate limits
+
+- This is not a Groovy compiler, grammar validator, type checker, runtime model, Gradle parser, Grails model, or dynamic-dispatch tracer. It excludes declaration members, `extends` / `implements` relations, trait composition, annotations as semantic facts, imports, closures, properties, scripts, Gradle DSLs, Grails conventions, AST transforms, metaprogramming, compilation, cross-file resolution, and execution behavior.
+- Any unmasked script-scope `/` (including slashy/dollar-slashy strings and division) deliberately rejects the file because the lexical context can be ambiguous. The initial slice chooses no declaration facts over a possible false symbol. The inspected local CodeGraph baseline did not expose a dedicated Groovy artifact-language extractor in the searched source surface; SymbolLattice v0.100 independently adds this narrow, source-range-preserving slice without copying CodeGraph source or claiming complete Groovy support.
+
 ## [0.99.0] - 2026-07-31
 
 ### Added

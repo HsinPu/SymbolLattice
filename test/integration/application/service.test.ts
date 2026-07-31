@@ -8552,6 +8552,48 @@ describe("SymbolLatticeService", () => {
     ]);
   });
 
+  it("indexes direct Groovy declarations with persisted source search", async () => {
+    const projectPath = await createInlineProject({
+      "src/catalog.groovy": [
+        "class Catalog {}",
+        "trait Auditable {}",
+        "def greet(String name) { name }"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    const indexed = await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+    const search = await service.search(projectPath, "Catalog", { language: "groovy" });
+    const auditable = await service.find(projectPath, "src/catalog.groovy#trait:Auditable");
+    const persistedFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "src/catalog.groovy");
+
+    expect(indexed).toMatchObject({
+      stale: false,
+      counts: { files: 1, symbols: 4, edges: 3 }
+    });
+    expect(persistedFacts).toMatchObject({
+      language: "groovy",
+      extractorVersion: ARTIFACT_FACTS_EXTRACTOR_VERSION
+    });
+    expect(auditable.symbols).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "interface",
+          qualifiedName: "src/catalog.groovy#trait:Auditable",
+          isExported: true
+        })
+      ])
+    );
+    expect(routes.routes).toEqual([]);
+    expect(search.results).toMatchObject([
+      { filePath: "src/catalog.groovy", language: "groovy" }
+    ]);
+  });
+
   it("projects a direct NestJS GraphQL resolver to one unique schema object type as heuristic evidence", async () => {
     const projectPath = await createInlineProject({
       "api/schema.graphql": [

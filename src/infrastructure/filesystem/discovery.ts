@@ -23,6 +23,7 @@ export const SUPPORTED_EXTENSIONS: ReadonlyMap<string, SupportedLanguage> = new 
   [".go", "go"],
   [".rs", "rust"],
   [".java", "java"],
+  [".groovy", "groovy"],
   [".php", "php"],
   [".c", "c"],
   [".lua", "lua"],
