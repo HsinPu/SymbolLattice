@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  DEFAULT_WATCH_INTERVAL_MS,
   type AffectedTestsOptions,
   type AffectedTestsResult,
   type ContextOptions,
@@ -10,6 +11,7 @@ import {
   type EntrypointsOptions,
   type EntrypointsResult,
   type ForegroundWatchOptions,
+  type ForegroundWatchSession,
   type GenerationDiffOptions,
   type GenerationDiffResult,
   type GenerationHistoryOptions,
@@ -33,9 +35,12 @@ import {
 import {
   createProgram,
   parseAffectedStdin,
+  runMcpWithAutoSync,
   runForegroundWatch,
+  type McpAutoSyncOptions,
   type WatchSignalSource
 } from "../../../src/cli/main.js";
+import type { McpServerSession } from "../../../src/mcp/index.js";
 
 function resultStatus(): SearchResult["status"] {
   return {
@@ -1897,5 +1902,142 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
     expect(receipts.map((receipt) => receipt.event)).toEqual(["started", "stopped"]);
     expect(signals.listenerCount("SIGINT")).toBe(0);
     expect(signals.listenerCount("SIGTERM")).toBe(0);
+  });
+
+  it("starts an event-backed auto-sync watcher before MCP and stops it after the MCP session closes", async () => {
+    const calls: string[] = [];
+    const stopped = vi.fn(async (): Promise<void> => {
+      calls.push("watch-stop");
+    });
+    const watchSession: ForegroundWatchSession = {
+      done: Promise.resolve(),
+      stop: stopped
+    };
+    let capturedWatchOptions: ForegroundWatchOptions | null = null;
+    let resolveServerStarted: (() => void) | null = null;
+    const serverStarted = new Promise<void>((resolve) => {
+      resolveServerStarted = resolve;
+    });
+    let resolveClosed: (() => void) | null = null;
+    const closed = new Promise<void>((resolve) => {
+      resolveClosed = resolve;
+    });
+    const mcpSession: McpServerSession = {
+      closed,
+      async close(): Promise<void> {
+        resolveClosed?.();
+      }
+    };
+    const service = {} as SymbolLatticeService;
+    const running = runMcpWithAutoSync(
+      service,
+      {
+        projectPath: "C:/chosen-project",
+        force: true,
+        intervalMs: 750
+      },
+      async (_receivedService, projectPath): Promise<McpServerSession> => {
+        expect(projectPath).toBe("C:/chosen-project");
+        calls.push("mcp-start");
+        resolveServerStarted?.();
+        return mcpSession;
+      },
+      async (_receivedService, options): Promise<ForegroundWatchSession> => {
+        calls.push("watch-start");
+        capturedWatchOptions = options;
+        return watchSession;
+      }
+    );
+
+    await serverStarted;
+
+    expect(calls).toEqual(["watch-start", "mcp-start"]);
+    expect(capturedWatchOptions).toMatchObject({
+      projectPath: "C:/chosen-project",
+      force: true,
+      intervalMs: 750
+    });
+    expect(capturedWatchOptions?.eventSource).toBeDefined();
+
+    resolveClosed?.();
+    await running;
+
+    expect(calls).toEqual(["watch-start", "mcp-start", "watch-stop"]);
+    expect(stopped).toHaveBeenCalledTimes(1);
+  });
+
+  it("serves MCP without starting a watcher when auto-sync is explicitly disabled", async () => {
+    const watchStarter = vi.fn(async (): Promise<ForegroundWatchSession> => {
+      throw new Error("auto-sync watcher must not start");
+    });
+    const mcpSession: McpServerSession = {
+      closed: Promise.resolve(),
+      async close(): Promise<void> {}
+    };
+
+    await runMcpWithAutoSync(
+      {} as SymbolLatticeService,
+      { projectPath: "C:/manual-project", autoSync: false },
+      async (): Promise<McpServerSession> => mcpSession,
+      watchStarter
+    );
+
+    expect(watchStarter).not.toHaveBeenCalled();
+  });
+
+  it("passes MCP auto-sync controls through the serve command", async () => {
+    const calls: McpAutoSyncOptions[] = [];
+    const mcpRunner = async (
+      _receivedService: SymbolLatticeService,
+      options: McpAutoSyncOptions
+    ): Promise<void> => {
+      calls.push(options);
+    };
+
+    await createProgram({} as SymbolLatticeService, async () => undefined, mcpRunner).parseAsync(
+      [
+        "node",
+        "symbol-lattice",
+        "serve",
+        "--mcp",
+        "--project",
+        "C:/chosen-project",
+        "--force",
+        "--sync-interval",
+        "750",
+        "--poll"
+      ],
+      { from: "node" }
+    );
+
+    await createProgram({} as SymbolLatticeService, async () => undefined, mcpRunner).parseAsync(
+      [
+        "node",
+        "symbol-lattice",
+        "serve",
+        "--mcp",
+        "--project",
+        "C:/manual-project",
+        "--no-auto-sync"
+      ],
+      { from: "node" }
+    );
+
+    expect(calls).toEqual([
+      {
+        projectPath: resolve("C:/chosen-project"),
+        force: true,
+        autoSync: true,
+        intervalMs: 750,
+        poll: true
+      },
+      {
+        projectPath: resolve("C:/manual-project"),
+        force: false,
+        autoSync: false,
+        intervalMs: DEFAULT_WATCH_INTERVAL_MS,
+        poll: false
+      }
+    ]);
   });
 });

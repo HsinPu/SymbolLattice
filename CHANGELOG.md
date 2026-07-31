@@ -6,6 +6,24 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.106.0] - 2026-07-31
+
+### Added
+
+- `serve --mcp` now composes the existing foreground freshness watcher with the stdio MCP host. For an initialized project, it reads the active status, performs one incremental catch-up before MCP is available when stale, then uses the existing debounced native filesystem-event path with bounded polling fallback. The watcher remains separately owned by the CLI host: every MCP tool retains its read-only contract and receives no indexing callback.
+- MCP stdio startup now returns an internal close-aware session. Parent stdin `end` / `close` cleanly stop the server session, which lets the CLI stop its watcher instead of retaining a timer after the parent MCP client disconnects. The injectable transport and input seams add focused lifecycle coverage without changing tool schemas or public query responses.
+- `serve --mcp` adds `--sync-interval <ms>`, `--poll`, `--no-auto-sync`, and `--force` controls. The default is automatic incremental freshness; `--no-auto-sync` preserves an explicitly manual lifecycle for controlled or diagnostic use. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.106.0.md`.
+
+### Compatibility
+
+- No SQLite schema, artifact-extractor, resolver, route, or query-contract version changes are required. Existing initialized indexes remain readable; a stale active generation is refreshed by the default MCP host before it accepts requests.
+- Default `serve --mcp` deliberately requires an existing initialized index, just like `watch`. It never silently initializes a project or expands persisted scope. Run `init` first, or use `--no-auto-sync` to retain the former no-watcher MCP bootstrap behavior.
+
+### Comparison notes
+
+- This closes the most visible operational gap found in the local CodeGraph comparison: its MCP daemon documents connect-time catch-up, debounced filesystem watching, and stale-state handling, while SymbolLattice previously required a separate manual `sync` / `watch` process. The implementation is original composition of SymbolLattice's existing watcher and MCP host; no CodeGraph source was copied.
+- SymbolLattice is still a single local Node.js MCP process with one watcher and polling fallback. The inspected CodeGraph source remains ahead in daemon lifecycle management, worker-pool concurrency, parser breadth and semantic depth, and mature operational diagnostics. Automatic freshness improves parity but is not a claim of complete CodeGraph equivalence.
+
 ## [0.105.0] - 2026-07-31
 
 ### Added

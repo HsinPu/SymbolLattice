@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.105.0 is an early developer release. Run this repository from source; the npm package remains private and unpublished.
+> v0.106.0 is an early developer release. Run this repository from source; the npm package remains private and unpublished.
 
 ## Positioning
 
@@ -45,15 +45,20 @@ node dist/cli/main.js init /path/to/project
 # Query the indexed graph
 node dist/cli/main.js find add --project /path/to/project
 node dist/cli/main.js explain-edge "edge:<edge-id>" --project /path/to/project
+
+# Start MCP: catch up a stale existing index, then keep it fresh in the background
+node dist/cli/main.js serve --mcp --project /path/to/project
 ```
 
 On Windows PowerShell, use `npm.cmd` when `npm` is unavailable. Filesystem roots and home directories are rejected unless `--force` is explicitly supplied.
 
-## v0.105.0 highlights
+## v0.106.0 highlights
 
-- Adds direct Elysia route scanning for TypeScript and JavaScript.
-- An Elysia route requires a named `Elysia` import from `elysia`, immutable `new Elysia()` receiver, literal path, and named handler before it receives traceable evidence.
-- Keeps Traditional Chinese as the default README, with this concise English counterpart.
+- `serve --mcp` now checks the existing index first and completes an incremental catch-up before MCP becomes available when it is stale.
+- Native filesystem events with debouncing accelerate background sync; polling remains the fallback if events are unavailable.
+- MCP tools remain read-only: the background watcher owns synchronization, and no query tool creates, indexes, or syncs a graph.
+
+Use `--sync-interval <ms>` to tune fallback polling, `--poll` to disable native event acceleration, or `--no-auto-sync` to disable background sync. Run `init` once first; manual `sync` remains useful for repair and CI.
 
 ## Deliberate limits
 
@@ -61,7 +66,7 @@ On Windows PowerShell, use `npm.cmd` when `npm` is unavailable. Filesystem roots
 - Dynamic dispatch, reflection, macros, code generation, dependency injection, and ambiguous name matches are never promoted to exact graph relations.
 - Groovy, Fortran, and Ada remain conservative first slices: only complete direct units are retained; members, cross-file, and runtime relations are not inferred, and ambiguous source is skipped.
 - The Koa, Hono, and Elysia slices cover direct receiver routes only; prefixes, mounts, nested apps, `basePath` / `group` / `use` / `route` / `on`, CommonJS, dynamic paths, and inline/member handlers are not inferred.
-- Updating a graph requires an explicit `sync` or `index`; MCP queries remain read-only.
+- Default MCP background sync only operates on initialized projects and never changes the stored index scope. Filesystem roots and home directories still require explicit `--force`.
 
 ## Verification
 

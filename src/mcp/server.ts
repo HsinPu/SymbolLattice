@@ -1,5 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { z } from "zod";
 
 import { SymbolLatticeError } from "../application/errors.js";
@@ -1471,10 +1472,103 @@ export function createMcpServer(
   return server;
 }
 
+/**
+ * Minimal lifecycle surface needed to stop a long-lived stdio MCP connection.
+ * `closed` never performs graph work; it only reports transport termination.
+ */
+export interface McpServerSession {
+  readonly closed: Promise<void>;
+  close(): Promise<void>;
+}
+
+/** Process-stdin subset used to stop the MCP session when its parent disconnects. */
+export interface McpLifecycleInput {
+  once(event: "end" | "close", listener: () => void): unknown;
+  off(event: "end" | "close", listener: () => void): unknown;
+}
+
+/** Injectable seams keep the stdio lifecycle independently testable. */
+export interface McpServerOptions {
+  readonly transport?: Transport;
+  readonly lifecycleInput?: McpLifecycleInput;
+}
+
+/**
+ * Starts an MCP server and returns a close-aware session.
+ *
+ * The server remains query-only. Its lifecycle is intentionally exposed so a
+ * CLI host can own a separate background freshness watcher without teaching
+ * individual MCP handlers how to index or synchronize.
+ */
+export async function startMcpServer(
+  service: ExploreService,
+  defaultProjectPath: string,
+  options: McpServerOptions = {}
+): Promise<McpServerSession> {
+  const server = createMcpServer(service, defaultProjectPath);
+  const transport = options.transport ?? new StdioServerTransport();
+  const lifecycleInput = options.lifecycleInput ?? process.stdin;
+  let resolveClosed: (() => void) | null = null;
+  let settled = false;
+  let lifecycleAttached = false;
+  let closePromise: Promise<void> | null = null;
+  const closed = new Promise<void>((resolve) => {
+    resolveClosed = resolve;
+  });
+  const detachLifecycleInput = (): void => {
+    if (!lifecycleAttached) {
+      return;
+    }
+    lifecycleInput.off("end", requestClose);
+    lifecycleInput.off("close", requestClose);
+    lifecycleAttached = false;
+  };
+  const settleClosed = (): void => {
+    if (settled) {
+      return;
+    }
+    settled = true;
+    detachLifecycleInput();
+    resolveClosed?.();
+    resolveClosed = null;
+  };
+  const existingOnClose = transport.onclose;
+  transport.onclose = (): void => {
+    existingOnClose?.();
+    settleClosed();
+  };
+  const close = (): Promise<void> => {
+    if (closePromise !== null) {
+      return closePromise;
+    }
+    detachLifecycleInput();
+    closePromise = server.close().finally(settleClosed);
+    return closePromise;
+  };
+  function requestClose(): void {
+    void close().catch(() => undefined);
+  }
+
+  try {
+    await server.connect(transport);
+  } catch (error) {
+    settleClosed();
+    throw error;
+  }
+
+  if (!settled) {
+    lifecycleInput.once("end", requestClose);
+    lifecycleInput.once("close", requestClose);
+    lifecycleAttached = true;
+  }
+
+  return { closed, close };
+}
+
+/** Backward-compatible one-shot stdio server start for programmatic callers. */
 export async function serveMcp(
   service: ExploreService,
   defaultProjectPath: string
 ): Promise<void> {
-  const server = createMcpServer(service, defaultProjectPath);
-  await server.connect(new StdioServerTransport());
+  await startMcpServer(service, defaultProjectPath);
 }

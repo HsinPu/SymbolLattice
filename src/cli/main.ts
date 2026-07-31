@@ -35,6 +35,7 @@ import {
   type GenerationDiffOptions,
   type GenerationHistoryOptions,
   type ForegroundWatchOptions,
+  type ForegroundWatchSession,
   type GitAffectedTestsOptions,
   type GitHunksOptions,
   type FindOptions,
@@ -50,7 +51,7 @@ import {
 } from "../infrastructure/filesystem/index.js";
 import { FileSystemGitChangeSetProvider } from "../infrastructure/git/index.js";
 import { SqliteGraphStore } from "../infrastructure/sqlite/index.js";
-import { serveMcp } from "../mcp/index.js";
+import { startMcpServer, type McpServerSession } from "../mcp/index.js";
 import { SYMBOL_LATTICE_VERSION } from "../version.js";
 
 interface OutputOptions {
@@ -124,6 +125,12 @@ interface WatchCommandOptions extends ProjectOptions {
   readonly poll?: boolean;
 }
 
+interface ServeCommandOptions extends ProjectOptions {
+  readonly autoSync?: boolean;
+  readonly syncInterval?: number;
+  readonly poll?: boolean;
+}
+
 interface GenerationHistoryCommandOptions extends ProjectOptions {
   readonly limit?: number;
 }
@@ -137,6 +144,33 @@ interface GenerationDiffCommandOptions extends ProjectOptions {
 export type WatchCommandRunner = (
   service: SymbolLatticeService,
   options: ForegroundWatchOptions
+) => Promise<void>;
+
+/** Options for the MCP host's separate, background freshness watcher. */
+export interface McpAutoSyncOptions {
+  readonly projectPath: string;
+  readonly force?: boolean;
+  readonly autoSync?: boolean;
+  readonly intervalMs?: number;
+  readonly poll?: boolean;
+}
+
+/** Injectable MCP session seam for CLI lifecycle and option coverage. */
+export type McpServerRunner = (
+  service: SymbolLatticeService,
+  defaultProjectPath: string
+) => Promise<McpServerSession>;
+
+/** Injectable freshness-watcher seam; MCP handlers never receive this capability. */
+export type McpWatchStarter = (
+  service: SymbolLatticeService,
+  options: ForegroundWatchOptions
+) => Promise<ForegroundWatchSession>;
+
+/** Injectable composition seam for the `serve --mcp` command. */
+export type McpCommandRunner = (
+  service: SymbolLatticeService,
+  options: McpAutoSyncOptions
 ) => Promise<void>;
 
 /** Minimal process-signal contract for the foreground watch lifecycle. */
@@ -307,6 +341,38 @@ export async function runForegroundWatch(
   }
 }
 
+/**
+ * Runs a read-only MCP server beside a separate automatic freshness watcher.
+ *
+ * The watcher performs startup catch-up plus debounced incremental syncs. MCP
+ * request handlers stay read-only because they only receive the graph service,
+ * never the watcher session or a synchronization callback.
+ */
+export async function runMcpWithAutoSync(
+  service: SymbolLatticeService,
+  options: McpAutoSyncOptions,
+  serverRunner: McpServerRunner = startMcpServer,
+  watchStarter: McpWatchStarter = startForegroundWatch
+): Promise<void> {
+  let watchSession: ForegroundWatchSession | null = null;
+  try {
+    if (options.autoSync ?? true) {
+      watchSession = await watchStarter(service, {
+        projectPath: options.projectPath,
+        force: options.force ?? false,
+        intervalMs: options.intervalMs ?? DEFAULT_WATCH_INTERVAL_MS,
+        ...(options.poll === true ? {} : { eventSource: new NodeFileSystemWatchSource() })
+      });
+    }
+    const mcpSession = await serverRunner(service, options.projectPath);
+    await mcpSession.closed;
+  } finally {
+    if (watchSession !== null) {
+      await watchSession.stop();
+    }
+  }
+}
+
 function renderError(error: unknown, json: boolean): void {
   const code = error instanceof SymbolLatticeError ? error.code : "UNEXPECTED_ERROR";
   const message = error instanceof Error ? error.message : "Unknown SymbolLattice error.";
@@ -364,12 +430,13 @@ function toIndexOptions(projectPath: string, options: IndexCommandOptions) {
 
 export function createProgram(
   service = createService(),
-  watchRunner: WatchCommandRunner = runForegroundWatch
+  watchRunner: WatchCommandRunner = runForegroundWatch,
+  mcpRunner: McpCommandRunner = runMcpWithAutoSync
 ): Command {
   const program = new Command();
   program
     .name("symbol-lattice")
-    .description("Evidence-first local code graph exploration for TypeScript, JavaScript, and Python.")
+    .description("Evidence-first local code intelligence across a multi-language, framework-aware catalog.")
     .version(SYMBOL_LATTICE_VERSION);
 
   addJsonOption(addIndexOptions(addProjectOption(program.command("init [path]"))))
@@ -753,8 +820,22 @@ export function createProgram(
 
   addProjectOption(program.command("serve"))
     .requiredOption("--mcp", "Run the MCP stdio server")
-    .action(async (options: ProjectOptions) => {
-      await serveMcp(service, defaultProjectPath(options));
+    .option("--force", "Allow background sync of a filesystem root or the home directory")
+    .option("--no-auto-sync", "Disable background incremental sync while serving MCP")
+    .option(
+      "--sync-interval <milliseconds>",
+      `Polling fallback interval for MCP auto-sync (${MIN_WATCH_INTERVAL_MS}-${MAX_WATCH_INTERVAL_MS}; default ${DEFAULT_WATCH_INTERVAL_MS})`,
+      parseWatchInterval
+    )
+    .option("--poll", "Disable native filesystem-event acceleration for MCP auto-sync")
+    .action(async (options: ServeCommandOptions) => {
+      await mcpRunner(service, {
+        projectPath: defaultProjectPath(options),
+        force: options.force ?? false,
+        autoSync: options.autoSync ?? true,
+        intervalMs: options.syncInterval ?? DEFAULT_WATCH_INTERVAL_MS,
+        poll: options.poll ?? false
+      });
     });
 
   return program;

@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.105.0 為早期開發者版本。此儲存庫從原始碼執行；npm 套件維持私有，尚未發佈。
+> v0.106.0 為早期開發者版本。此儲存庫從原始碼執行；npm 套件維持私有，尚未發佈。
 
 ## 產品定位
 
@@ -45,15 +45,20 @@ node dist/cli/main.js init /path/to/project
 # 查詢已建立的圖譜
 node dist/cli/main.js find add --project /path/to/project
 node dist/cli/main.js explain-edge "edge:<edge-id>" --project /path/to/project
+
+# 啟動 MCP：先補齊已過期索引，之後在背景自動保持新鮮
+node dist/cli/main.js serve --mcp --project /path/to/project
 ```
 
 Windows PowerShell 若找不到 `npm`，請使用 `npm.cmd`。系統預設拒絕索引檔案系統根目錄或家目錄，除非明確指定 `--force`。
 
-## v0.105.0 重點
+## v0.106.0 重點
 
-- 新增 Elysia 的 TypeScript／JavaScript 直接路由掃描。
-- 只有 `elysia` 的具名 `Elysia` 匯入、不可變 `new Elysia()`、字面路徑與具名處理器才會建立 Elysia 路由與可追溯證據。
-- README 維持預設繁體中文，並提供精簡英文版。
+- `serve --mcp` 預設會先檢查既有索引；若已過期，會在 MCP 可用前完成一次增量同步。
+- 服務期間以原生檔案事件加去抖動加速同步；事件不可用時保留輪詢備援。
+- MCP 工具仍是唯讀：背景 watcher 擁有同步權限，任何查詢工具都不會自行建立、索引或同步圖譜。
+
+可用 `--sync-interval <ms>` 調整輪詢備援、`--poll` 關閉原生事件加速，或以 `--no-auto-sync` 關閉背景同步。首次使用仍需先執行 `init`；手動 `sync` 適合修復或 CI。
 
 ## 明確限制
 
@@ -61,7 +66,7 @@ Windows PowerShell 若找不到 `npm`，請使用 `npm.cmd`。系統預設拒絕
 - 不會把動態派發、反射、巨集、程式碼產生、依賴注入或模糊名稱連結當成精確關係。
 - Groovy、Fortran 與 Ada 仍是保守初版：僅擷取完整直接單元，不推斷成員、跨檔案或執行期關係；遇到曖昧結構會略過。
 - Koa、Hono 與 Elysia 初版只支援直接 receiver 路由；不推斷 prefix、掛載、巢狀 app、`basePath`／`group`／`use`／`route`／`on`、CommonJS、動態路徑或內嵌／成員處理器。
-- 更新圖譜需由使用者明確執行 `sync` 或 `index`；MCP 查詢保持唯讀。
+- 預設 MCP 背景同步只處理已初始化的專案，且不會改變已儲存的索引範圍；根目錄或家目錄仍需明確加上 `--force`。
 
 ## 驗證
 

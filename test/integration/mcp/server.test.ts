@@ -39,7 +39,8 @@ import {
   runHierarchyTool,
   runNodeTool,
   runRoutesTool,
-  runSearchTool
+  runSearchTool,
+  startMcpServer
 } from "../../../src/mcp/index.js";
 
 const closeCallbacks: Array<() => Promise<void>> = [];
@@ -47,6 +48,32 @@ const closeCallbacks: Array<() => Promise<void>> = [];
 afterEach(async () => {
   await Promise.all(closeCallbacks.splice(0).map((close) => close()));
 });
+
+class FakeLifecycleInput {
+  private readonly listeners = new Map<"end" | "close", Set<() => void>>();
+
+  public once(event: "end" | "close", listener: () => void): void {
+    const listeners = this.listeners.get(event) ?? new Set<() => void>();
+    listeners.add(listener);
+    this.listeners.set(event, listeners);
+  }
+
+  public off(event: "end" | "close", listener: () => void): void {
+    this.listeners.get(event)?.delete(listener);
+  }
+
+  public emit(event: "end" | "close"): void {
+    const listeners = [...(this.listeners.get(event) ?? [])];
+    this.listeners.delete(event);
+    for (const listener of listeners) {
+      listener();
+    }
+  }
+
+  public listenerCount(event: "end" | "close"): number {
+    return this.listeners.get(event)?.size ?? 0;
+  }
+}
 
 function exploreResult(): ExploreResult {
   return {
@@ -588,6 +615,30 @@ function explainEdgeResult(): ExplainEdgeResult {
 }
 
 describe("SymbolLattice MCP server", () => {
+  it("owns a close-aware stdio session and releases its parent-input listeners", async () => {
+    const [serverTransport] = InMemoryTransport.createLinkedPair();
+    const lifecycleInput = new FakeLifecycleInput();
+    const session = await startMcpServer(
+      {
+        async explore(): Promise<ExploreResult> {
+          return exploreResult();
+        }
+      },
+      "C:/default-project",
+      { transport: serverTransport, lifecycleInput }
+    );
+    closeCallbacks.push(() => session.close());
+
+    expect(lifecycleInput.listenerCount("end")).toBe(1);
+    expect(lifecycleInput.listenerCount("close")).toBe(1);
+
+    lifecycleInput.emit("end");
+    await session.closed;
+
+    expect(lifecycleInput.listenerCount("end")).toBe(0);
+    expect(lifecycleInput.listenerCount("close")).toBe(0);
+  });
+
   it("exposes read-only retrieval tools and forwards projects and filters", async () => {
     const exploreCalls: Array<{ projectPath: string; reference: string }> = [];
     const explainCalls: Array<{ projectPath: string; edgeId: string }> = [];
