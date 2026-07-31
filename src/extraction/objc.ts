@@ -571,12 +571,12 @@ function directMethodsInContainer(
 }
 
 /**
- * Extracts a conservative Objective-C source subset from .m and .mm files:
- * complete direct non-category implementations, ordinary class interfaces,
- * and protocols. Implementations contribute one-line brace-bodied methods;
- * interfaces and protocols contribute one-line semicolon-terminated method
- * declarations. Headers, categories, properties, calls, inheritance edges,
- * and Swift bridging remain deliberately out of scope.
+ * Extracts a conservative Objective-C source subset from .m, .mm, and
+ * source-proven .h files: complete direct non-category implementations,
+ * ordinary class interfaces, and protocols. Implementations contribute
+ * one-line brace-bodied methods; interfaces and protocols contribute one-line
+ * semicolon-terminated method declarations. Categories, properties, calls,
+ * inheritance edges, and Swift bridging remain deliberately out of scope.
  */
 export function extractObjectiveCFileFacts(input: ObjectiveCExtractFileFactsInput): ArtifactFacts {
   const lineStarts = lineStartsFor(input.sourceText);

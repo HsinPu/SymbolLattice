@@ -4385,6 +4385,66 @@ describe("SymbolLatticeService", () => {
     ]);
   });
 
+  it("indexes source-proven Objective-C headers without admitting ordinary C headers", async () => {
+    const projectPath = await createInlineProject({
+      "Headers/HealthController.h": [
+        "#import <Foundation/Foundation.h>",
+        "@interface HealthController : NSObject",
+        "- (void)check;",
+        "@end",
+        "",
+        "@protocol HealthChecking",
+        "- (BOOL)isHealthy;",
+        "@end"
+      ].join("\n"),
+      "Headers/PlainC.h": "typedef struct { int status; } HealthStatus;\n"
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    const indexed = await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+    const search = await service.search(projectPath, "HealthController", { language: "objc" });
+    const persistedFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "Headers/HealthController.h");
+    const health = await service.find(
+      projectPath,
+      "Headers/HealthController.h#HealthController.check"
+    );
+    const healthChecking = await service.find(
+      projectPath,
+      "Headers/HealthController.h#protocol:HealthChecking.isHealthy"
+    );
+
+    expect(indexed).toMatchObject({
+      stale: false,
+      counts: { files: 1, symbols: expect.any(Number), edges: expect.any(Number) }
+    });
+    expect(persistedFacts).toMatchObject({
+      language: "objc",
+      extractorVersion: ARTIFACT_FACTS_EXTRACTOR_VERSION
+    });
+    expect(health.symbols).toMatchObject([
+      {
+        kind: "method",
+        qualifiedName: "Headers/HealthController.h#HealthController.check",
+        isExported: true
+      }
+    ]);
+    expect(healthChecking.symbols).toMatchObject([
+      {
+        kind: "method",
+        qualifiedName: "Headers/HealthController.h#protocol:HealthChecking.isHealthy",
+        isExported: true
+      }
+    ]);
+    expect(routes.routes).toEqual([]);
+    expect(search.results).toMatchObject([
+      { filePath: "Headers/HealthController.h", language: "objc" }
+    ]);
+  });
+
   it("indexes proven Pascal Horse routes with their prior local handlers", async () => {
     const projectPath = await createInlineProject({
       "src/server.pas": [

@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   canonicalizeScopeRoots,
   discoverSourceFiles,
+  getSourceLanguage,
   hashSource,
   isUnsafeProjectPath,
   toProjectRelativePath
@@ -108,6 +109,7 @@ describe("source discovery", () => {
       "src/g.ex",
       "src/g.exs",
       "src/g.fs",
+      "src/g.h",
       "src/g.hs",
       "src/g.jl",
       "src/g.lua",
@@ -160,6 +162,7 @@ describe("source discovery", () => {
       "elixir",
       "elixir",
       "fsharp",
+      "objc",
       "haskell",
       "julia",
       "lua",
@@ -194,6 +197,58 @@ describe("source discovery", () => {
       "nix",
       "vbnet",
       "typescript"
+    ]);
+  });
+
+  it("discovers only source-proven Objective-C .h headers", async () => {
+    const projectPath = await createProject();
+    await mkdir(join(projectPath, "Headers"), { recursive: true });
+    const header = [
+      "#import <Foundation/Foundation.h>",
+      "@interface HealthController : NSObject",
+      "- (void)check;",
+      "@end"
+    ].join("\n");
+    await writeFile(join(projectPath, "Headers", "HealthController.h"), header, "utf8");
+    await writeFile(
+      join(projectPath, "Headers", "HealthChecking.h"),
+      ["@protocol HealthChecking", "- (BOOL)isHealthy;", "@end"].join("\n"),
+      "utf8"
+    );
+    await writeFile(
+      join(projectPath, "Headers", "PlainC.h"),
+      "typedef struct { int status; } HealthStatus;\n",
+      "utf8"
+    );
+    await writeFile(
+      join(projectPath, "Headers", "Commented.h"),
+      "// @interface Fake : NSObject\n// @end\n",
+      "utf8"
+    );
+    await writeFile(
+      join(projectPath, "Headers", "Quoted.h"),
+      "const char *marker = \"@interface Fake\\n@end\";\n",
+      "utf8"
+    );
+    await writeFile(
+      join(projectPath, "Headers", "Macro.h"),
+      "#define FAKE \\\r\n@interface Fake : NSObject\r\n@end\r\n",
+      "utf8"
+    );
+    await writeFile(
+      join(projectPath, "Headers", "Incomplete.h"),
+      "@interface Incomplete : NSObject\n",
+      "utf8"
+    );
+
+    expect(getSourceLanguage("Headers/HealthController.h")).toBeNull();
+    expect(getSourceLanguage("Headers/HealthController.h", header)).toBe("objc");
+
+    const files = await discoverSourceFiles(projectPath);
+
+    expect(files.map((file) => [file.relativePath, file.language])).toEqual([
+      ["Headers/HealthChecking.h", "objc"],
+      ["Headers/HealthController.h", "objc"]
     ]);
   });
 

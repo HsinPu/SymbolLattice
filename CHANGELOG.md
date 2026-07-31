@@ -6,6 +6,23 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.81.0] - 2026-07-31
+
+### Added
+
+- Source discovery now treats a `.h` file as an Objective-C candidate only after its source proves a direct `@interface` or `@protocol` container followed by a direct `@end`. The classifier blanks line/block comments, quoted literals, and preprocessor directives (including CRLF continuation macros) before checking that proof, so ordinary C/C++ headers and declaration-looking text do not enter the graph.
+- Proven headers reuse the existing conservative Objective-C extractor: direct ordinary interfaces and protocols contribute the same local class/interface and one-line declaration-method evidence as `.m` / `.mm`; the full service path persists them as `objc` and exposes them to the existing language-filtered source search. Unit and integration coverage verifies positive interface/protocol headers, plain C rejection, comment/string/macro/incomplete rejection, persisted provenance, exact symbols, and source search. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.81.0.md`.
+
+### Compatibility
+
+- The artifact extractor advances to `multi-language-ast-v70`; the project resolver remains `project-resolver-v23` because this source-proven header classification and all accepted Objective-C facts remain file-local. A pre-v0.81 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes the expanded Objective-C facts.
+- No SQLite schema migration or query command is required. This is an additive language-discovery capability within the existing Objective-C artifact, graph, source-search, CLI, MCP, incremental-index, and evidence contracts; existing generations remain readable.
+
+### Deliberate limits
+
+- `.h` is still not a general C/C++/Objective-C classifier: only direct source-proven Objective-C interface/protocol headers are indexed. Categories/extensions, properties, imports, inheritance/protocol-conformance relations, C/C++ declarations, message calls, Swift bridging, compiler configuration, conditional-compilation semantics, and runtime behavior remain outside scope. Git change-set/hunk attribution remains path-only and therefore does not yet select `.h` files without source content.
+- The inspected local CodeGraph baseline maps `.h` through content heuristics and has Tree-sitter extraction across C/C++/Objective-C plus broader cross-language resolution. SymbolLattice v0.81 is narrower for general header syntax but deliberately stronger about requiring a direct complete Objective-C container after comment/string/macro blanking; it is independently implemented and not a CodeGraph source copy.
+
 ## [0.80.0] - 2026-07-31
 
 ### Added

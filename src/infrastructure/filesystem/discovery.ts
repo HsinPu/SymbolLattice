@@ -70,6 +70,11 @@ export const SUPPORTED_EXTENSIONS: ReadonlyMap<string, SupportedLanguage> = new 
   [".vb", "vbnet"]
 ] as const);
 
+const OBJECTIVE_C_HEADER_EXTENSION = ".h";
+const OBJECTIVE_C_HEADER_CONTAINER =
+  /^[ \t]*@(interface|protocol)[ \t]+[A-Za-z_][A-Za-z0-9_]*/mu;
+const OBJECTIVE_C_HEADER_END = /^[ \t]*@end[ \t]*$/mu;
+
 /**
  * These directories contain neither user source nor SymbolLattice input. They
  * are deliberately outside `.gitignore` semantics, so a negated rule can
@@ -171,7 +176,10 @@ export async function canonicalizeScopeRoots(
   );
 }
 
-export function getSourceLanguage(filePath: string): SupportedLanguage | null {
+export function getSourceLanguage(
+  filePath: string,
+  sourceText?: string
+): SupportedLanguage | null {
   if (isPlayRoutesFile(filePath)) {
     return "scala";
   }
@@ -179,6 +187,9 @@ export function getSourceLanguage(filePath: string): SupportedLanguage | null {
     return "blade";
   }
   const extension = filePath.slice(filePath.lastIndexOf(".")).toLowerCase();
+  if (extension === OBJECTIVE_C_HEADER_EXTENSION) {
+    return sourceText !== undefined && isProvenObjectiveCHeader(sourceText) ? "objc" : null;
+  }
   return SUPPORTED_EXTENSIONS.get(extension) ?? null;
 }
 
@@ -213,24 +224,29 @@ export async function discoverSourceFiles(
       })
     )
   ).flat();
-  const sourceFiles = await Promise.all(
-    paths.map(async (absolutePath) => {
-      const sourceText = await readFile(absolutePath, "utf8");
-      const language = getSourceLanguage(absolutePath);
+  const sourceFiles = (
+    await Promise.all(
+      paths.map(async (absolutePath) => {
+        const sourceText = await readFile(absolutePath, "utf8");
+        const language = getSourceLanguage(absolutePath, sourceText);
 
-      if (language === null) {
-        throw new Error(`Unsupported source file was discovered: ${absolutePath}`);
-      }
+        if (language === null) {
+          if (isObjectiveCHeaderPath(absolutePath)) {
+            return null;
+          }
+          throw new Error(`Unsupported source file was discovered: ${absolutePath}`);
+        }
 
-      return {
-        absolutePath,
-        relativePath: toProjectRelativePath(normalizedProjectPath, absolutePath),
-        language,
-        sourceText,
-        contentHash: hashSource(sourceText)
-      };
-    })
-  );
+        return {
+          absolutePath,
+          relativePath: toProjectRelativePath(normalizedProjectPath, absolutePath),
+          language,
+          sourceText,
+          contentHash: hashSource(sourceText)
+        };
+      })
+    )
+  ).filter((file): file is SourceFile => file !== null);
 
   return sourceFiles.sort((left, right) => compareProjectPaths(left.relativePath, right.relativePath));
 }
@@ -261,7 +277,7 @@ async function collectSourcePaths(
 
     if (
       entry.isFile() &&
-      getSourceLanguage(entryRelativePath) !== null &&
+      isSourceCandidatePath(entryRelativePath) &&
       !ignoreMatcher.ignores(entryRelativePath)
     ) {
       sourcePaths.push(entryPath);
@@ -274,6 +290,130 @@ async function collectSourcePaths(
 function isPlayRoutesFile(filePath: string): boolean {
   const normalized = filePath.replaceAll("\\", "/");
   return /(?:^|\/)conf\/(?:routes|[^/]+\.routes)$/u.test(normalized);
+}
+
+function isSourceCandidatePath(filePath: string): boolean {
+  return getSourceLanguage(filePath) !== null || isObjectiveCHeaderPath(filePath);
+}
+
+function isObjectiveCHeaderPath(filePath: string): boolean {
+  return filePath.toLowerCase().endsWith(OBJECTIVE_C_HEADER_EXTENSION);
+}
+
+/**
+ * A bare .h extension is ambiguous among C, C++, and Objective-C. Accept it
+ * only when a direct Objective-C container and its closing @end remain after
+ * comments, literals, and preprocessor directives are blanked. The extractor
+ * independently validates the container before emitting symbols.
+ */
+function isProvenObjectiveCHeader(sourceText: string): boolean {
+  const sanitized = sanitizeObjectiveCHeaderSource(sourceText);
+  const container = OBJECTIVE_C_HEADER_CONTAINER.exec(sanitized);
+  if (container === null) {
+    return false;
+  }
+
+  return OBJECTIVE_C_HEADER_END.test(sanitized.slice(container.index + container[0].length));
+}
+
+function sanitizeObjectiveCHeaderSource(sourceText: string): string {
+  let result = "";
+  let mode: "code" | "line-comment" | "block-comment" | "string" | "character" | "preprocessor" =
+    "code";
+
+  for (let index = 0; index < sourceText.length; index += 1) {
+    const character = sourceText[index] ?? "";
+    const next = sourceText[index + 1] ?? "";
+
+    if (mode === "line-comment") {
+      result += character === "\n" ? "\n" : " ";
+      if (character === "\n") {
+        mode = "code";
+      }
+      continue;
+    }
+
+    if (mode === "block-comment") {
+      if (character === "*" && next === "/") {
+        result += "  ";
+        index += 1;
+        mode = "code";
+      } else {
+        result += character === "\n" ? "\n" : " ";
+      }
+      continue;
+    }
+
+    if (mode === "string" || mode === "character") {
+      if (character === "\\") {
+        result += " ";
+        if (next.length > 0) {
+          result += next === "\n" ? "\n" : " ";
+          index += 1;
+        }
+      } else {
+        result += character === "\n" ? "\n" : " ";
+        if (
+          (mode === "string" && character === "\"") ||
+          (mode === "character" && character === "'")
+        ) {
+          mode = "code";
+        }
+      }
+      continue;
+    }
+
+    if (mode === "preprocessor") {
+      result += character === "\n" ? "\n" : " ";
+      if (character === "\n" && !isPreprocessorContinuation(sourceText, index)) {
+        mode = "code";
+      }
+      continue;
+    }
+
+    if (character === "/" && next === "/") {
+      result += "  ";
+      index += 1;
+      mode = "line-comment";
+      continue;
+    }
+    if (character === "/" && next === "*") {
+      result += "  ";
+      index += 1;
+      mode = "block-comment";
+      continue;
+    }
+    if (character === "\"") {
+      result += " ";
+      mode = "string";
+      continue;
+    }
+    if (character === "'") {
+      result += " ";
+      mode = "character";
+      continue;
+    }
+    if (character === "#" && isLineStartOrWhitespaceOnly(sourceText, index)) {
+      result += " ";
+      mode = "preprocessor";
+      continue;
+    }
+
+    result += character;
+  }
+
+  return result;
+}
+
+function isLineStartOrWhitespaceOnly(sourceText: string, index: number): boolean {
+  const lineStart = sourceText.lastIndexOf("\n", index - 1) + 1;
+  return /^[ \t]*$/u.test(sourceText.slice(lineStart, index));
+}
+
+function isPreprocessorContinuation(sourceText: string, lineFeedIndex: number): boolean {
+  const previousIndex =
+    sourceText[lineFeedIndex - 1] === "\r" ? lineFeedIndex - 2 : lineFeedIndex - 1;
+  return sourceText[previousIndex] === "\\";
 }
 
 async function loadRootGitignore(projectPath: string): Promise<Ignore> {
