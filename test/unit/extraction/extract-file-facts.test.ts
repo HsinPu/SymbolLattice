@@ -9735,6 +9735,136 @@ describe("source extraction", () => {
     }
   });
 
+  it("extracts complete direct Fortran program units with source ranges", () => {
+    const facts = extractFileFacts({
+      filePath: "src/numeric.f90",
+      language: "fortran",
+      sourceText: [
+        "! module CommentOnly",
+        "module NumericOps",
+        "  implicit none",
+        "contains",
+        "  subroutine hidden()",
+        "  end subroutine hidden",
+        "end module NumericOps",
+        "program Solver",
+        '  print *, "end program fake"',
+        "end program Solver",
+        "subroutine solve(x)",
+        "end subroutine solve",
+        "real function energy(x)",
+        "  energy = x",
+        "end function energy",
+        "abstract interface",
+        "  subroutine callback()",
+        "  end subroutine callback",
+        "end interface",
+        "subroutine visible()",
+        "end subroutine visible"
+      ].join("\n")
+    });
+
+    expect(
+      facts.symbols.map((symbol) => [symbol.kind, symbol.qualifiedName, symbol.declarationOrdinal])
+    ).toEqual([
+      ["file", "src/numeric.f90", 0],
+      ["module", "src/numeric.f90#module:NumericOps", 0],
+      ["module", "src/numeric.f90#program:Solver", 0],
+      ["function", "src/numeric.f90#subroutine:solve", 0],
+      ["function", "src/numeric.f90#function:energy", 0],
+      ["function", "src/numeric.f90#subroutine:visible", 0]
+    ]);
+    expect(facts.symbols.find((symbol) => symbol.name === "NumericOps")?.range).toEqual({
+      start: { line: 2, column: 1 },
+      end: { line: 7, column: 22 }
+    });
+    expect(facts.symbols.find((symbol) => symbol.name === "Solver")?.range).toEqual({
+      start: { line: 8, column: 1 },
+      end: { line: 10, column: 19 }
+    });
+    expect(facts.symbols.some((symbol) => symbol.name === "hidden")).toBe(false);
+    expect(facts.symbols.some((symbol) => symbol.name === "callback")).toBe(false);
+    expect(
+      facts.edges.map((edge) => [edge.referenceName, edge.evidence?.ruleId, edge.resolution])
+    ).toEqual([
+      ["NumericOps", "language.fortran.module.direct-program-unit", "exact"],
+      ["Solver", "language.fortran.program.direct-program-unit", "exact"],
+      ["solve", "language.fortran.subroutine.direct-program-unit", "exact"],
+      ["energy", "language.fortran.function.direct-program-unit", "exact"],
+      ["visible", "language.fortran.subroutine.direct-program-unit", "exact"]
+    ]);
+
+    const fixedForm = extractFileFacts({
+      filePath: "src/fixed.for",
+      language: "fortran",
+      sourceText: [
+        "c     program CommentOnly",
+        "      program FixedMain",
+        "      end program FixedMain"
+      ].join("\n")
+    });
+    expect(fixedForm.symbols.find((symbol) => symbol.name === "FixedMain")?.range).toEqual({
+      start: { line: 2, column: 7 },
+      end: { line: 3, column: 28 }
+    });
+  });
+
+  it("rejects incomplete, generic-end, and continued Fortran input", () => {
+    const unbalanced = extractFileFacts({
+      filePath: "src/unbalanced.f90",
+      language: "fortran",
+      sourceText: "module Broken\n"
+    });
+    const genericEnd = extractFileFacts({
+      filePath: "src/generic-end.f90",
+      language: "fortran",
+      sourceText: ["program Broken", "end"].join("\n")
+    });
+    const freeContinuation = extractFileFacts({
+      filePath: "src/free-continuation.f90",
+      language: "fortran",
+      sourceText: ["subroutine split(&", "  value)", "end subroutine split"].join("\n")
+    });
+    const fixedContinuation = extractFileFacts({
+      filePath: "src/fixed-continuation.for",
+      language: "fortran",
+      sourceText: [
+        "      subroutine split(",
+        "     & value)",
+        "      end subroutine split"
+      ].join("\n")
+    });
+    const moduleProcedure = extractFileFacts({
+      filePath: "src/module-procedure.f90",
+      language: "fortran",
+      sourceText: [
+        "module subroutine unsupported()",
+        "end subroutine unsupported"
+      ].join("\n")
+    });
+    const fixedSequenceField = extractFileFacts({
+      filePath: "src/sequence-field.for",
+      language: "fortran",
+      sourceText: [
+        "      " + " ".repeat(66) + "program OutOfField",
+        "      " + " ".repeat(66) + "end program OutOfField"
+      ].join("\n")
+    });
+
+    for (const facts of [
+      unbalanced,
+      genericEnd,
+      freeContinuation,
+      fixedContinuation,
+      moduleProcedure,
+      fixedSequenceField
+    ]) {
+      expect(facts.symbols).toHaveLength(1);
+      expect(facts.symbols[0]?.kind).toBe("file");
+      expect(facts.edges).toEqual([]);
+    }
+  });
+
   it("extracts source-proven Java properties keys without retaining configuration values", () => {
     const facts = extractFileFacts({
       filePath: "config/application.properties",

@@ -109,6 +109,7 @@ export const ARTIFACT_LANGUAGES = [
   "rust",
   "java",
   "groovy",
+  "fortran",
   "php",
   "blade",
   "c",

@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.100.0 is an early developer release. Run this repository from source; the npm package remains private and unpublished.
+> v0.101.0 is an early developer release. Run this repository from source; the npm package remains private and unpublished.
 
 ## Positioning
 
@@ -26,7 +26,7 @@ License: MIT.
 
 - Builds syntax-proven file, symbol, containment, import/export, type-hierarchy, route, entrypoint, and cross-file graph facts.
 - Creates exact edges only when the proof is direct; ambiguous candidates remain unresolved or heuristic evidence instead of runtime guesses.
-- Covers frontend, backend, JVM, native, data, IaC, template, and schema sources, including TypeScript, Java, Groovy, Python, Go, Rust, C/C++, C#, PHP, Ruby, Kotlin, Swift, Dart, SQL, GraphQL, Protocol Buffers, Terraform, YAML, and XML.
+- Covers frontend, backend, JVM, scientific-computing, native, data, IaC, template, and schema sources, including TypeScript, Java, Groovy, Fortran, Python, Go, Rust, C/C++, C#, PHP, Ruby, Kotlin, Swift, Dart, SQL, GraphQL, Protocol Buffers, Terraform, YAML, and XML.
 - Includes a CLI and read-only MCP queries for symbols, relationships, routes, entrypoints, generation history, diffs, and affected tests.
 
 ## Quick start
@@ -49,17 +49,18 @@ node dist/cli/main.js explain-edge "edge:<edge-id>" --project /path/to/project
 
 On Windows PowerShell, use `npm.cmd` when `npm` is unavailable. Filesystem roots and home directories are rejected unless `--force` is explicitly supplied.
 
-## v0.100.0 highlights
+## v0.101.0 highlights
 
-- Adds `.groovy` scanning for complete top-level `class`, `interface`, `trait`, `enum`, and `def name(...) { ... }` declarations, with source ranges and exact `contains` evidence.
-- Represents a Groovy `trait` with the existing `interface` symbol kind; comments, ordinary strings, and triple-quoted strings cannot create false declarations.
-- Switches the README default to Traditional Chinese and adds this concise English counterpart.
+- Adds Fortran `.f`, `.for`, `.f77`, `.f90`, `.f95`, `.f03`, `.f08`, and `.f18` source discovery.
+- Complete direct `module`, `program`, `subroutine`, and `function` units receive source ranges and exact `contains` evidence; a `program` uses the existing `module` symbol kind.
+- Keeps Traditional Chinese as the default README, with this equally concise English counterpart.
 
 ## Deliberate limits
 
 - This is not a compiler, full language parser, type checker, framework runtime, or execution tracer.
 - Dynamic dispatch, reflection, macros, code generation, dependency injection, and ambiguous name matches are never promoted to exact graph relations.
 - The first Groovy slice excludes members, trait composition, Grails, Gradle DSLs, and dynamic metaprogramming. Any unmasked script-scope `/` (including slashy/dollar-slashy strings and division) conservatively rejects the file instead of risking false symbols.
+- The first Fortran slice excludes `contains` members, interface/submodule/derived-type contents, cross-file module relations, and runtime behavior. A generic `END` used to close a supported unit, continuation, or incomplete structure rejects the file.
 - Updating a graph requires an explicit `sync` or `index`; MCP queries remain read-only.
 
 ## Verification

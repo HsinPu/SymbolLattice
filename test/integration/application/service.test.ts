@@ -8594,6 +8594,52 @@ describe("SymbolLatticeService", () => {
     ]);
   });
 
+  it("indexes direct Fortran program units with persisted source search", async () => {
+    const projectPath = await createInlineProject({
+      "src/numeric.f90": [
+        "module NumericOps",
+        "contains",
+        "  subroutine hidden()",
+        "  end subroutine hidden",
+        "end module NumericOps",
+        "subroutine solve()",
+        "end subroutine solve"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    const indexed = await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+    const search = await service.search(projectPath, "NumericOps", { language: "fortran" });
+    const solve = await service.find(projectPath, "src/numeric.f90#subroutine:solve");
+    const persistedFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "src/numeric.f90");
+
+    expect(indexed).toMatchObject({
+      stale: false,
+      counts: { files: 1, symbols: 3, edges: 2 }
+    });
+    expect(persistedFacts).toMatchObject({
+      language: "fortran",
+      extractorVersion: ARTIFACT_FACTS_EXTRACTOR_VERSION
+    });
+    expect(solve.symbols).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "function",
+          qualifiedName: "src/numeric.f90#subroutine:solve",
+          isExported: true
+        })
+      ])
+    );
+    expect(routes.routes).toEqual([]);
+    expect(search.results).toMatchObject([
+      { filePath: "src/numeric.f90", language: "fortran" }
+    ]);
+  });
+
   it("projects a direct NestJS GraphQL resolver to one unique schema object type as heuristic evidence", async () => {
     const projectPath = await createInlineProject({
       "api/schema.graphql": [

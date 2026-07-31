@@ -6,6 +6,23 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.101.0] - 2026-07-31
+
+### Added
+
+- Source discovery now recognizes case-insensitive fixed-form `.f`, `.for`, and `.f77` plus free-form `.f90`, `.f95`, `.f03`, `.f08`, and `.f18` files. The additive `fortran` language is available through the existing persisted source-search, CLI, and MCP language-validation contracts.
+- The dependency-free extractor retains a file symbol plus complete direct `module`, `program`, `subroutine`, and `function` program units. Modules and programs use the existing `module` symbol kind, while subroutines and functions use `function`; each accepted unit has its source range and an exact file-to-symbol `contains` edge with `language.fortran.<kind>.direct-program-unit` syntax evidence. Unit, discovery, and service integration coverage prove fixed/free-form selection, nested-member exclusion, malformed-input safety, SQLite persistence, and language-filtered source search. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.101.0.md`.
+
+### Compatibility
+
+- The artifact extractor advances to `multi-language-ast-v90`; the project resolver remains `project-resolver-v25` because the initial Fortran facts are direct file-local declarations. A pre-v0.101 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes Fortran-capable facts.
+- No SQLite schema migration or query command is required. This is an additive artifact-language capability within existing file, module/function-symbol, exact-containment-edge, source-search, CLI, MCP, retained-generation, and incremental-index contracts; existing generations remain readable.
+
+### Deliberate limits
+
+- This is not a Fortran compiler, grammar validator, type checker, module resolver, generic-interface model, preprocessor, or runtime tracer. It excludes `contains` members, `interface`, `submodule`, and derived-type contents, `use` dependencies, module procedures, common blocks, include files, preprocessing, cross-file resolution, and execution behavior.
+- A generic `END` used to close a supported unit, continuation line, mismatched named end, or incomplete supported unit deliberately rejects the source file rather than guessing a declaration. The inspected local CodeGraph baseline did not expose a dedicated Fortran artifact-language extractor in the searched source surface; SymbolLattice v0.101 independently adds this narrow, source-range-preserving slice without copying CodeGraph source or claiming complete Fortran support.
+
 ## [0.100.0] - 2026-07-31
 
 ### Added

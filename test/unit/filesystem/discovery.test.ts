@@ -260,6 +260,13 @@ describe("source discovery", () => {
     expect(getSourceLanguage("src/CATALOG.GROOVY")).toBe("groovy");
   });
 
+  it("recognizes fixed- and free-form Fortran source extensions", () => {
+    expect(getSourceLanguage("src/solver.f")).toBe("fortran");
+    expect(getSourceLanguage("src/solver.for")).toBe("fortran");
+    expect(getSourceLanguage("src/solver.f90")).toBe("fortran");
+    expect(getSourceLanguage("src/SOLVER.F08")).toBe("fortran");
+  });
+
   it("discovers only source-proven Objective-C .h headers", async () => {
     const projectPath = await createProject();
     await mkdir(join(projectPath, "Headers"), { recursive: true });
