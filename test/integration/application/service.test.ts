@@ -4225,6 +4225,84 @@ describe("SymbolLatticeService", () => {
     expect(search.results).toMatchObject([{ filePath: "src/api/CatalogController.java", language: "java" }]);
   });
 
+  it("indexes Java Jakarta REST routes with persisted source evidence", async () => {
+    const projectPath = await createInlineProject({
+      "src/api/CatalogResource.java": [
+        "import jakarta.ws.rs.Path;",
+        "import jakarta.ws.rs.GET;",
+        "import jakarta.ws.rs.POST;",
+        "",
+        '@Path("/catalog")',
+        "public class CatalogResource {",
+        "  @GET",
+        "  public String index() { return \"[]\"; }",
+        "",
+        '  @POST @Path("refresh")',
+        "  public String refresh() { return \"ok\"; }",
+        "}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    const indexed = await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+    const getRoutes = await service.routes(projectPath, { method: "GET" });
+    const search = await service.search(projectPath, "catalog", { language: "java" });
+    const persistedFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "src/api/CatalogResource.java");
+
+    expect(indexed).toMatchObject({
+      stale: false,
+      counts: { files: 1, symbols: 6, edges: 7 }
+    });
+    expect(persistedFacts).toMatchObject({
+      language: "java",
+      extractorVersion: ARTIFACT_FACTS_EXTRACTOR_VERSION
+    });
+    expect(routes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "GET",
+          path: "/catalog",
+          handler: expect.objectContaining({
+            qualifiedName: "src/api/CatalogResource.java#CatalogResource.index"
+          }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.jakarta-rest.direct-path.literal-method-mapping.local-method",
+              stage: "syntax"
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "POST",
+          path: "/catalog/refresh",
+          handler: expect.objectContaining({
+            qualifiedName: "src/api/CatalogResource.java#CatalogResource.refresh"
+          })
+        })
+      ])
+    );
+    expect(getRoutes.routes).toMatchObject([
+      {
+        method: "GET",
+        path: "/catalog",
+        handler: { qualifiedName: "src/api/CatalogResource.java#CatalogResource.index" },
+        edge: {
+          resolution: "exact",
+          evidence: {
+            ruleId: "framework.jakarta-rest.direct-path.literal-method-mapping.local-method",
+            stage: "syntax"
+          }
+        }
+      }
+    ]);
+    expect(search.results).toMatchObject([{ filePath: "src/api/CatalogResource.java", language: "java" }]);
+  });
+
   it("indexes PHP Laravel facade routes with explicit unresolved cross-file controller evidence", async () => {
     const projectPath = await createInlineProject({
       "routes/web.php": [

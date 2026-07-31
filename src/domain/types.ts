@@ -59,6 +59,7 @@ export type RouteFramework =
   | "axum"
   | "spring-web"
   | "micronaut"
+  | "jakarta-rest"
   | "laravel"
   | "drupal"
   | "civetweb"

@@ -57,6 +57,7 @@ const SPRING_CONTROLLER_PATH = "org.springframework.stereotype.Controller";
 const SPRING_REQUEST_MAPPING_PATH = "org.springframework.web.bind.annotation.RequestMapping";
 const SPRING_VALUE_PATH = "org.springframework.beans.factory.annotation.Value";
 const MICRONAUT_CONTROLLER_PATH = "io.micronaut.http.annotation.Controller";
+const JAKARTA_REST_PATH_PATHS = ["jakarta.ws.rs.Path", "javax.ws.rs.Path"] as const;
 const SPRING_BOOT_PROPERTIES_KEY = /^[A-Za-z0-9][A-Za-z0-9._-]*$/u;
 
 const SPRING_METHOD_MAPPING_PATHS: Readonly<Record<string, RouteMethod>> = {
@@ -76,6 +77,23 @@ const MICRONAUT_METHOD_MAPPING_PATHS: Readonly<Record<string, RouteMethod>> = {
   "io.micronaut.http.annotation.Head": "HEAD",
   "io.micronaut.http.annotation.Options": "OPTIONS",
   "io.micronaut.http.annotation.Trace": "TRACE"
+};
+
+const JAKARTA_REST_METHOD_MAPPING_PATHS: Readonly<Record<string, RouteMethod>> = {
+  "jakarta.ws.rs.GET": "GET",
+  "jakarta.ws.rs.POST": "POST",
+  "jakarta.ws.rs.PUT": "PUT",
+  "jakarta.ws.rs.PATCH": "PATCH",
+  "jakarta.ws.rs.DELETE": "DELETE",
+  "jakarta.ws.rs.HEAD": "HEAD",
+  "jakarta.ws.rs.OPTIONS": "OPTIONS",
+  "javax.ws.rs.GET": "GET",
+  "javax.ws.rs.POST": "POST",
+  "javax.ws.rs.PUT": "PUT",
+  "javax.ws.rs.PATCH": "PATCH",
+  "javax.ws.rs.DELETE": "DELETE",
+  "javax.ws.rs.HEAD": "HEAD",
+  "javax.ws.rs.OPTIONS": "OPTIONS"
 };
 
 function directChildren(node: JavaSyntaxNode): readonly JavaSyntaxNode[] {
@@ -573,6 +591,123 @@ function staticMicronautMethodRoute(
   return path === null ? null : { method: mapping.method, path, node: mapping.annotation.node };
 }
 
+/**
+ * Jakarta REST `@Path` values are URI templates relative to the application's
+ * base URI. This pass keeps one direct literal only; it never interprets a
+ * template, parameter binding, encoding, or a deployment-level ApplicationPath.
+ */
+function staticJakartaRestPath(
+  input: JavaExtractFileFactsInput,
+  annotation: StaticJavaAnnotation
+): string | null {
+  if (annotation.node.name !== "Annotation") {
+    return null;
+  }
+  const arguments_ = directChildren(annotation.node).find(
+    (child) => child.name === "AnnotationArgumentList"
+  );
+  if (arguments_ === undefined) {
+    return null;
+  }
+  const values = directChildren(arguments_).filter(
+    (child) => !["(", ")", ","].includes(child.name)
+  );
+  if (values.length !== 1 || values[0] === undefined) {
+    return null;
+  }
+  const value = values[0];
+  let path: string | null;
+  if (value.name === "StringLiteral") {
+    path = staticPlainJavaString(input, value);
+  } else if (value.name === "ElementValuePair") {
+    const pair = directChildren(value);
+    const key = pair[0] === undefined ? null : identifierText(input, pair[0]);
+    const literal = pair[2];
+    if (
+      pair.length !== 3 ||
+      pair[1]?.name !== "AssignOp" ||
+      key !== "value" ||
+      literal === undefined
+    ) {
+      return null;
+    }
+    path = staticPlainJavaString(input, literal);
+  } else {
+    return null;
+  }
+  return path !== null && !path.includes("\\") && !path.includes("//") && !/\s/u.test(path)
+    ? path
+    : null;
+}
+
+function isJakartaRestPathAnnotationName(name: string): boolean {
+  return name === "Path" || JAKARTA_REST_PATH_PATHS.some((path) => path === name);
+}
+
+function isJakartaRestMethodAnnotationName(name: string): boolean {
+  return Object.keys(JAKARTA_REST_METHOD_MAPPING_PATHS).some(
+    (path) => name === path || name === path.split(".").at(-1)
+  );
+}
+
+function matchesJakartaRestPath(
+  annotation: StaticJavaAnnotation,
+  imports: ReadonlyMap<string, string>
+): boolean {
+  return JAKARTA_REST_PATH_PATHS.some((path) => annotationMatches(annotation, path, imports));
+}
+
+function staticJakartaRestClassPrefix(
+  input: JavaExtractFileFactsInput,
+  declaration: StaticJavaClass,
+  imports: ReadonlyMap<string, string>
+): string | null {
+  const annotationsNamedPath = declaration.annotations.filter((annotation) =>
+    isJakartaRestPathAnnotationName(annotation.name)
+  );
+  const paths = annotationsNamedPath.filter((annotation) => matchesJakartaRestPath(annotation, imports));
+  if (annotationsNamedPath.length !== paths.length || paths.length !== 1) {
+    return null;
+  }
+  const path = paths[0];
+  return path === undefined ? null : staticJakartaRestPath(input, path);
+}
+
+function staticJakartaRestMethodRoute(
+  input: JavaExtractFileFactsInput,
+  declaration: StaticJavaMethod,
+  imports: ReadonlyMap<string, string>
+): StaticHttpRoute | null {
+  const annotationsNamedPath = declaration.annotations.filter((annotation) =>
+    isJakartaRestPathAnnotationName(annotation.name)
+  );
+  const paths = annotationsNamedPath.filter((annotation) => matchesJakartaRestPath(annotation, imports));
+  if (annotationsNamedPath.length !== paths.length || paths.length > 1) {
+    return null;
+  }
+  const annotationsNamedMethods = declaration.annotations.filter((annotation) =>
+    isJakartaRestMethodAnnotationName(annotation.name)
+  );
+  const methods = annotationsNamedMethods.flatMap((annotation) => {
+    const method = Object.entries(JAKARTA_REST_METHOD_MAPPING_PATHS).find(([path]) =>
+      annotationMatches(annotation, path, imports)
+    )?.[1];
+    return method === undefined ? [] : [{ annotation, method }];
+  });
+  if (annotationsNamedMethods.length !== methods.length || methods.length !== 1) {
+    return null;
+  }
+  const requestMethod = methods[0];
+  if (requestMethod === undefined || requestMethod.annotation.node.name !== "MarkerAnnotation") {
+    return null;
+  }
+  const pathAnnotation = paths[0];
+  const path = pathAnnotation === undefined ? "" : staticJakartaRestPath(input, pathAnnotation);
+  return path === null
+    ? null
+    : { method: requestMethod.method, path, node: requestMethod.annotation.node };
+}
+
 function isSpringController(
   declaration: StaticJavaClass,
   imports: ReadonlyMap<string, string>
@@ -634,7 +769,7 @@ function joinHttpPaths(prefix: string, path: string): string {
 
 /**
  * Extracts Java class and method symbols plus deliberately narrow Spring Web
- * and Micronaut routes, as well as Spring Boot properties facts. Each HTTP
+ * and Micronaut/Jakarta REST routes, as well as Spring Boot properties facts. Each HTTP
  * surface proves a direct controller annotation, unambiguous framework import
  * (or fully-qualified annotation), one literal mapping path, and the exact
  * local method declaration. Spring Boot properties retains only direct
@@ -648,6 +783,10 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
   const micronautCapability = frameworkCapability("micronaut");
   if (!micronautCapability.languages.includes(input.language)) {
     throw new Error("Micronaut route extraction was invoked for an unsupported source language.");
+  }
+  const jakartaRestCapability = frameworkCapability("jakarta-rest");
+  if (!jakartaRestCapability.languages.includes(input.language)) {
+    throw new Error("Jakarta REST route extraction was invoked for an unsupported source language.");
   }
   const springBootPropertiesCapability = frameworkCapability("spring-boot-properties");
   if (!springBootPropertiesCapability.languages.includes(input.language)) {
@@ -861,20 +1000,35 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
         }
       }
 
-      const micronautPrefix = staticMicronautClassPrefix(input, classDeclaration, imports);
-      if (micronautPrefix === null) {
-        continue;
+      const jakartaRestPrefix = staticJakartaRestClassPrefix(input, classDeclaration, imports);
+      if (jakartaRestPrefix !== null) {
+        for (const methodDeclaration of methods) {
+          const route = staticJakartaRestMethodRoute(input, methodDeclaration, imports);
+          const handler = symbolsByMethod.get(methodDeclaration);
+          if (route !== null && handler !== undefined) {
+            addFrameworkRoute(
+              classSymbol,
+              { ...route, path: joinHttpPaths(jakartaRestPrefix, route.path) },
+              handler,
+              "framework.jakarta-rest.direct-path.literal-method-mapping.local-method"
+            );
+          }
+        }
       }
-      for (const methodDeclaration of methods) {
-        const route = staticMicronautMethodRoute(input, methodDeclaration, imports);
-        const handler = symbolsByMethod.get(methodDeclaration);
-        if (route !== null && handler !== undefined) {
-          addFrameworkRoute(
-            classSymbol,
-            { ...route, path: joinHttpPaths(micronautPrefix, route.path) },
-            handler,
-            "framework.micronaut.direct-controller.literal-method-mapping.local-method"
-          );
+
+      const micronautPrefix = staticMicronautClassPrefix(input, classDeclaration, imports);
+      if (micronautPrefix !== null) {
+        for (const methodDeclaration of methods) {
+          const route = staticMicronautMethodRoute(input, methodDeclaration, imports);
+          const handler = symbolsByMethod.get(methodDeclaration);
+          if (route !== null && handler !== undefined) {
+            addFrameworkRoute(
+              classSymbol,
+              { ...route, path: joinHttpPaths(micronautPrefix, route.path) },
+              handler,
+              "framework.micronaut.direct-controller.literal-method-mapping.local-method"
+            );
+          }
         }
       }
     }

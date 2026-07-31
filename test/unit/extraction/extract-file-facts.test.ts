@@ -3257,6 +3257,185 @@ describe("source extraction", () => {
     expect(unsupportedFacts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
   });
 
+  it("extracts direct Jakarta REST and legacy JAX-RS Path routes with literal evidence", () => {
+    const facts = extractFileFacts({
+      filePath: "src/api/CatalogResource.java",
+      language: "java",
+      sourceText: [
+        "import jakarta.ws.rs.Path;",
+        "import jakarta.ws.rs.GET;",
+        "import jakarta.ws.rs.POST;",
+        "import jakarta.ws.rs.PUT;",
+        "import jakarta.ws.rs.PATCH;",
+        "import jakarta.ws.rs.DELETE;",
+        "import jakarta.ws.rs.HEAD;",
+        "import jakarta.ws.rs.OPTIONS;",
+        "",
+        '@Path("catalog")',
+        "class CatalogResource {",
+        "  @GET",
+        "  String index() { return \"[]\"; }",
+        '  @GET @Path("{id}")',
+        "  String show() { return \"{}\"; }",
+        '  @POST @Path(value = "refresh")',
+        "  String refresh() { return \"{}\"; }",
+        '  @PUT @Path("{id}")',
+        "  String replace() { return \"{}\"; }",
+        '  @PATCH @Path("{id}")',
+        "  String patch() { return \"{}\"; }",
+        '  @DELETE @Path("{id}")',
+        "  String delete() { return \"{}\"; }",
+        '  @HEAD @Path("{id}")',
+        "  String head() { return \"\"; }",
+        "  @OPTIONS",
+        "  String options() { return \"\"; }",
+        "}",
+        "",
+        '@javax.ws.rs.Path("/legacy")',
+        "class LegacyResource {",
+        "  @javax.ws.rs.GET",
+        "  String health() { return \"ok\"; }",
+        "}"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId,
+          edge.range.start.line,
+          edge.resolution,
+          edge.confidence
+        ])
+    ).toEqual([
+      [
+        "GET /catalog",
+        "src/api/CatalogResource.java#CatalogResource.index",
+        "framework.jakarta-rest.direct-path.literal-method-mapping.local-method",
+        12,
+        "exact",
+        1
+      ],
+      [
+        "GET /catalog/{id}",
+        "src/api/CatalogResource.java#CatalogResource.show",
+        "framework.jakarta-rest.direct-path.literal-method-mapping.local-method",
+        14,
+        "exact",
+        1
+      ],
+      [
+        "POST /catalog/refresh",
+        "src/api/CatalogResource.java#CatalogResource.refresh",
+        "framework.jakarta-rest.direct-path.literal-method-mapping.local-method",
+        16,
+        "exact",
+        1
+      ],
+      [
+        "PUT /catalog/{id}",
+        "src/api/CatalogResource.java#CatalogResource.replace",
+        "framework.jakarta-rest.direct-path.literal-method-mapping.local-method",
+        18,
+        "exact",
+        1
+      ],
+      [
+        "PATCH /catalog/{id}",
+        "src/api/CatalogResource.java#CatalogResource.patch",
+        "framework.jakarta-rest.direct-path.literal-method-mapping.local-method",
+        20,
+        "exact",
+        1
+      ],
+      [
+        "DELETE /catalog/{id}",
+        "src/api/CatalogResource.java#CatalogResource.delete",
+        "framework.jakarta-rest.direct-path.literal-method-mapping.local-method",
+        22,
+        "exact",
+        1
+      ],
+      [
+        "HEAD /catalog/{id}",
+        "src/api/CatalogResource.java#CatalogResource.head",
+        "framework.jakarta-rest.direct-path.literal-method-mapping.local-method",
+        24,
+        "exact",
+        1
+      ],
+      [
+        "OPTIONS /catalog",
+        "src/api/CatalogResource.java#CatalogResource.options",
+        "framework.jakarta-rest.direct-path.literal-method-mapping.local-method",
+        26,
+        "exact",
+        1
+      ],
+      [
+        "GET /legacy",
+        "src/api/CatalogResource.java#LegacyResource.health",
+        "framework.jakarta-rest.direct-path.literal-method-mapping.local-method",
+        32,
+        "exact",
+        1
+      ]
+    ]);
+  });
+
+  it("rejects unproven, dynamic, multi-method, and unsupported Jakarta REST Path forms", () => {
+    const wildcardFacts = extractFileFacts({
+      filePath: "src/api/WildcardResource.java",
+      language: "java",
+      sourceText: [
+        "import jakarta.ws.rs.Path;",
+        "import jakarta.ws.rs.*;",
+        "",
+        '@Path("/wildcard")',
+        "class WildcardResource {",
+        "  @GET",
+        "  String ignored() { return \"\"; }",
+        "}"
+      ].join("\n")
+    });
+    const unsupportedFacts = extractFileFacts({
+      filePath: "src/api/UnsupportedResource.java",
+      language: "java",
+      sourceText: [
+        "import jakarta.ws.rs.Path;",
+        "import jakarta.ws.rs.GET;",
+        "import jakarta.ws.rs.POST;",
+        "",
+        "@Path(prefix)",
+        "class DynamicResource {",
+        "  @GET",
+        "  String index() { return \"\"; }",
+        "}",
+        "",
+        '@Path("/multiple")',
+        "class MultipleResource {",
+        "  @GET @POST",
+        "  String multiple() { return \"\"; }",
+        "}",
+        "",
+        '@Path("/unsupported")',
+        "class UnsupportedPathResource {",
+        '  @GET @Path(path = "wrong")',
+        "  String wrong() { return \"\"; }",
+        "}"
+      ].join("\n")
+    });
+
+    expect(wildcardFacts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(wildcardFacts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+    expect(unsupportedFacts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(unsupportedFacts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+  });
+
   it("retains direct Java Spring Boot @Value field facts with source ranges", () => {
     const facts = extractFileFacts({
       filePath: "src/config/AppConfig.java",

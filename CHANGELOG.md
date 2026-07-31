@@ -6,6 +6,23 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.99.0] - 2026-07-31
+
+### Added
+
+- The first-party `jakarta-rest` capability adds direct Java Jakarta REST / JAX-RS route evidence. A resource class needs exactly one direct imported or fully-qualified `jakarta.ws.rs.Path` or legacy `javax.ws.rs.Path` annotation with one literal URI template; methods need exactly one direct imported or fully-qualified marker `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD`, or `OPTIONS` annotation and an optional one-literal `@Path` suffix.
+- Each accepted local route creates the existing source-ranged `route` node and exact `routes` edge to its direct Java method, with `framework.jakarta-rest.direct-path.literal-method-mapping.local-method` syntax evidence. Relative and slash-prefixed literal paths are normalized through the existing join contract; focused unit, capability-registry, and service integration coverage prove current/legacy imports, fully-qualified annotations, literal `value`, persisted facts, source search, and dynamic/wildcard/multi-method/unsupported-path rejection. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.99.0.md`.
+
+### Compatibility
+
+- The artifact extractor advances to `multi-language-ast-v88`; the project resolver remains `project-resolver-v25` because Jakarta REST route facts are direct file-local syntax evidence. A pre-v0.99 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes Jakarta-REST-capable facts.
+- No SQLite schema migration or query command is required. This is an additive Java framework capability within existing class, method, route-symbol, exact-route-edge, source-search, CLI, MCP, retained-generation, and incremental-index contracts; existing generations remain readable.
+
+### Deliberate limits
+
+- This is not a Jakarta REST / JAX-RS compiler, deployment model, URI-template validator, dependency-injection model, or runtime router. It excludes `ApplicationPath`, inherited/sub-resource locators, custom `@HttpMethod` annotations, method `@Path` without a request-method annotation, `Consumes` / `Produces`, parameter binding, media negotiation, exception mappers, filters/interceptors, `javax`/`jakarta` ecosystem resolution, Quarkus/RESTEasy configuration, OpenAPI, code generation, cross-file handlers, compilation, and runtime behavior.
+- The inspected local CodeGraph baseline has a generic Java extractor but no dedicated JAX-RS / Jakarta REST `@Path` plus HTTP-request-annotation route capability in the searched source surface. SymbolLattice v0.99 independently adds a deliberately narrow, import-proven route slice; it does not copy CodeGraph source or claim full Java REST framework coverage.
+
 ## [0.98.0] - 2026-07-31
 
 ### Added

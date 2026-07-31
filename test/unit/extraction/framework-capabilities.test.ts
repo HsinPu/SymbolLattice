@@ -33,6 +33,7 @@ describe("first-party framework capabilities", () => {
       "axum",
       "spring-web",
       "micronaut",
+      "jakarta-rest",
       "spring-boot-properties",
       "laravel",
       "drupal",
@@ -236,6 +237,15 @@ describe("first-party framework capabilities", () => {
       surfaces: [
         "direct imported or fully-qualified Micronaut Controller annotations",
         "literal class and HTTP-method mapping annotations on direct local methods"
+      ]
+    });
+    expect(frameworkCapability("jakarta-rest")).toMatchObject({
+      languages: ["java"],
+      routeFramework: "jakarta-rest",
+      routeRegistrations: [],
+      surfaces: [
+        "direct imported or fully-qualified Jakarta REST and legacy JAX-RS Path annotations",
+        "literal Path declarations with direct local HTTP request-method annotations"
       ]
     });
     expect(frameworkCapability("spring-boot-properties")).toMatchObject({

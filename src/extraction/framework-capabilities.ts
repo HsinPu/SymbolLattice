@@ -26,6 +26,7 @@ export const FRAMEWORK_CAPABILITY_IDS = [
   "axum",
   "spring-web",
   "micronaut",
+  "jakarta-rest",
   "spring-boot-properties",
   "laravel",
   "drupal",
@@ -293,6 +294,16 @@ export const FRAMEWORK_CAPABILITIES = [
     surfaces: [
       "direct imported or fully-qualified Micronaut Controller annotations",
       "literal class and HTTP-method mapping annotations on direct local methods"
+    ]
+  },
+  {
+    id: "jakarta-rest",
+    languages: ["java"],
+    routeFramework: "jakarta-rest",
+    routeRegistrations: [],
+    surfaces: [
+      "direct imported or fully-qualified Jakarta REST and legacy JAX-RS Path annotations",
+      "literal Path declarations with direct local HTTP request-method annotations"
     ]
   },
   {
