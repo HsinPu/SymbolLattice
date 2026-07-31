@@ -8552,6 +8552,151 @@ describe("source extraction", () => {
     ]);
   });
 
+  it("extracts parser-proven Drupal routing YAML controller routes with explicit unresolved targets", () => {
+    const facts = extractFileFacts({
+      filePath: "modules/custom/example/example.routing.yml",
+      language: "yaml",
+      sourceText: [
+        "example.catalog:",
+        "  path: '/catalog'",
+        "  defaults:",
+        "    _controller: '\\Drupal\\example\\Controller\\CatalogController::index'",
+        "  requirements:",
+        "    _permission: 'access content'",
+        "    _method: 'GET|POST'",
+        "",
+        "example.status:",
+        "  path: /status",
+        "  defaults:",
+        "    _controller: '\\Drupal\\example\\Controller\\StatusController::show'"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.map((symbol) => [symbol.kind, symbol.qualifiedName])).toEqual([
+      ["file", "modules/custom/example/example.routing.yml"],
+      ["route", "modules/custom/example/example.routing.yml#route:GET /catalog"],
+      ["route", "modules/custom/example/example.routing.yml#route:POST /catalog"],
+      ["route", "modules/custom/example/example.routing.yml#route:ALL /status"]
+    ]);
+    expect(
+      facts.edges.map((edge) => [
+        edge.kind,
+        edge.referenceName,
+        edge.resolution,
+        edge.confidence,
+        edge.evidence?.ruleId
+      ])
+    ).toEqual([
+      [
+        "contains",
+        "GET /catalog",
+        "exact",
+        1,
+        "framework.drupal.routing-yaml.literal-controller.route-node"
+      ],
+      [
+        "routes",
+        "\\Drupal\\example\\Controller\\CatalogController::index",
+        "unresolved",
+        0,
+        "framework.drupal.routing-yaml.literal-controller.unresolved-controller-method"
+      ],
+      [
+        "contains",
+        "POST /catalog",
+        "exact",
+        1,
+        "framework.drupal.routing-yaml.literal-controller.route-node"
+      ],
+      [
+        "routes",
+        "\\Drupal\\example\\Controller\\CatalogController::index",
+        "unresolved",
+        0,
+        "framework.drupal.routing-yaml.literal-controller.unresolved-controller-method"
+      ],
+      [
+        "contains",
+        "ALL /status",
+        "exact",
+        1,
+        "framework.drupal.routing-yaml.literal-controller.route-node"
+      ],
+      [
+        "routes",
+        "\\Drupal\\example\\Controller\\StatusController::show",
+        "unresolved",
+        0,
+        "framework.drupal.routing-yaml.literal-controller.unresolved-controller-method"
+      ]
+    ]);
+  });
+
+  it("rejects unproven Drupal routing YAML controller, method, alias, and document forms", () => {
+    const facts = extractFileFacts({
+      filePath: "modules/custom/example/example.routing.yaml",
+      language: "yaml",
+      sourceText: [
+        "example.service:",
+        "  path: '/service'",
+        "  defaults:",
+        "    _controller: 'example.service:show'",
+        "",
+        "example.form:",
+        "  path: '/form'",
+        "  defaults:",
+        "    _form: '\\Drupal\\example\\Form\\ExampleForm'",
+        "",
+        "example.dynamic-method:",
+        "  path: '/method'",
+        "  defaults:",
+        "    _controller: '\\Drupal\\example\\Controller\\ExampleController::show'",
+        "  requirements:",
+        "    _method: 'GET|BREW'",
+        "",
+        "example.invalid-requirements:",
+        "  path: '/requirements'",
+        "  defaults:",
+        "    _controller: '\\Drupal\\example\\Controller\\ExampleController::show'",
+        "  requirements: public",
+        "",
+        "example.anchored-defaults:",
+        "  path: '/defaults'",
+        "  defaults: &defaults",
+        "    _controller: '\\Drupal\\example\\Controller\\ExampleController::show'",
+        "",
+        "example.anchored:",
+        "  path: &path '/anchored'",
+        "  defaults:",
+        "    _controller: '\\Drupal\\example\\Controller\\ExampleController::show'"
+      ].join("\n")
+    });
+    const multipleDocuments = extractFileFacts({
+      filePath: "modules/custom/example/example.routing.yml",
+      language: "yaml",
+      sourceText: [
+        "example.first:",
+        "  path: '/first'",
+        "  defaults:",
+        "    _controller: '\\Drupal\\example\\Controller\\ExampleController::first'",
+        "---",
+        "example.second:",
+        "  path: '/second'",
+        "  defaults:",
+        "    _controller: '\\Drupal\\example\\Controller\\ExampleController::second'"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.map((symbol) => [symbol.kind, symbol.name])).toEqual([
+      ["file", "example.routing.yaml"]
+    ]);
+    expect(facts.edges).toEqual([]);
+    expect(multipleDocuments.symbols.map((symbol) => [symbol.kind, symbol.name])).toEqual([
+      ["file", "example.routing.yml"]
+    ]);
+    expect(multipleDocuments.edges).toEqual([]);
+  });
+
   it("rejects malformed or multi-document YAML and ignores nested, anchored, alias, and tagged mappings", () => {
     const malformed = extractFileFacts({
       filePath: "config/broken.yml",

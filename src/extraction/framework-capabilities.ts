@@ -26,6 +26,7 @@ export const FRAMEWORK_CAPABILITY_IDS = [
   "axum",
   "spring-web",
   "laravel",
+  "drupal",
   "laravel-blade",
   "civetweb",
   "lapis",
@@ -290,6 +291,16 @@ export const FRAMEWORK_CAPABILITIES = [
     surfaces: [
       "direct imported or fully-qualified Route facade calls",
       "literal controller-action arrays with same-file exact method evidence"
+    ]
+  },
+  {
+    id: "drupal",
+    languages: ["yaml"],
+    routeFramework: "drupal",
+    routeRegistrations: [],
+    surfaces: [
+      "single-document module.routing.yml literal path mappings",
+      "direct Drupal FQCN controller methods with static _method requirements"
     ]
   },
   {

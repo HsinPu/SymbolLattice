@@ -33,6 +33,7 @@ describe("first-party framework capabilities", () => {
       "axum",
       "spring-web",
       "laravel",
+      "drupal",
       "laravel-blade",
       "civetweb",
       "lapis",
@@ -233,6 +234,15 @@ describe("first-party framework capabilities", () => {
       surfaces: [
         "direct imported or fully-qualified Route facade calls",
         "literal controller-action arrays with same-file exact method evidence"
+      ]
+    });
+    expect(frameworkCapability("drupal")).toMatchObject({
+      languages: ["yaml"],
+      routeFramework: "drupal",
+      routeRegistrations: [],
+      surfaces: [
+        "single-document module.routing.yml literal path mappings",
+        "direct Drupal FQCN controller methods with static _method requirements"
       ]
     });
     expect(frameworkCapability("laravel-blade")).toMatchObject({

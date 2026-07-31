@@ -6,6 +6,23 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.88.0] - 2026-07-31
+
+### Added
+
+- The executable first-party framework capability registry and route-framework provenance now include `drupal`. Parser-backed YAML extraction recognizes only valid single-document `*.routing.yml` / `*.routing.yaml` files whose direct route mapping proves a slash-prefixed literal `path`, a direct `defaults._controller` in `\Drupal\…\Class::method` form, and either a literal uppercase pipe-separated `requirements._method` set or no method requirement (`ALL`).
+- Each accepted Drupal route becomes a first-class `route` symbol with exact `framework.drupal.routing-yaml.literal-controller.route-node` containment evidence and an explicit unresolved `routes` edge retaining the controller spelling. Unit and service integration coverage prove `.yml` / `.yaml` discovery, method expansion/filtering, persisted source search and route queries, and rejection of service/Form controller syntax, unsupported methods, malformed requirements, anchors, and multi-document input. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.88.0.md`.
+
+### Compatibility
+
+- The artifact extractor advances to `multi-language-ast-v77`; the project resolver remains `project-resolver-v23` because the Drupal route node and its explicitly unresolved controller evidence are file-local. A pre-v0.88 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes Drupal-route-capable facts.
+- No SQLite schema migration or query command is required. This is an additive YAML-framework capability within the existing file, route-symbol, route-edge, source-search, CLI, MCP, and incremental-index contracts; existing generations remain readable.
+
+### Deliberate limits
+
+- This is not a general Drupal/Symfony route model. It excludes service controller syntax, `_form`, `_entity_form`, entity views/lists, hooks, aliases, dynamic route providers, route options/access semantics, aliases/anchors/tags/merge semantics, block/multiline scalars, duplicate or malformed requirements, PHP namespace/autoload/controller resolution, compilation, and runtime routing behavior.
+- The inspected local CodeGraph baseline has a broader Drupal resolver that detects Drupal projects and recognizes controller, form, and hook relationships. SymbolLattice v0.88 independently adds parser-backed source ranges and explicit unresolved controller evidence for a deliberately narrower static YAML controller subset; it does not copy CodeGraph source or claim full Drupal parity.
+
 ## [0.87.0] - 2026-07-31
 
 ### Added

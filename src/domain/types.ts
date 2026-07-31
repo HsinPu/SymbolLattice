@@ -58,6 +58,7 @@ export type RouteFramework =
   | "axum"
   | "spring-web"
   | "laravel"
+  | "drupal"
   | "civetweb"
   | "lapis"
   | "horse"

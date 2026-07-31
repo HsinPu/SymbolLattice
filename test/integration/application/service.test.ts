@@ -8001,4 +8001,76 @@ describe("SymbolLatticeService", () => {
       { filePath: "config/application.yml", language: "yaml" }
     ]);
   });
+
+  it("indexes Drupal routing YAML routes with parser-backed unresolved controller evidence", async () => {
+    const projectPath = await createInlineProject({
+      "modules/custom/example/example.routing.yml": [
+        "example.catalog:",
+        "  path: '/catalog'",
+        "  defaults:",
+        "    _controller: '\\Drupal\\example\\Controller\\CatalogController::index'",
+        "  requirements:",
+        "    _method: 'GET|POST'",
+        "",
+        "example.status:",
+        "  path: '/status'",
+        "  defaults:",
+        "    _controller: '\\Drupal\\example\\Controller\\StatusController::show'"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    const indexed = await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+    const search = await service.search(projectPath, "CatalogController", { language: "yaml" });
+    const persistedFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "modules/custom/example/example.routing.yml");
+
+    expect(indexed).toMatchObject({
+      stale: false,
+      counts: { files: 1, symbols: 4, edges: 6 }
+    });
+    expect(persistedFacts).toMatchObject({
+      language: "yaml",
+      extractorVersion: ARTIFACT_FACTS_EXTRACTOR_VERSION
+    });
+    expect(routes.routes).toMatchObject([
+      {
+        method: "GET",
+        path: "/catalog",
+        handler: null,
+        edge: {
+          resolution: "unresolved",
+          referenceName: "\\Drupal\\example\\Controller\\CatalogController::index",
+          evidence: {
+            ruleId: "framework.drupal.routing-yaml.literal-controller.unresolved-controller-method",
+            stage: "syntax"
+          }
+        }
+      },
+      {
+        method: "POST",
+        path: "/catalog",
+        handler: null,
+        edge: {
+          resolution: "unresolved",
+          referenceName: "\\Drupal\\example\\Controller\\CatalogController::index"
+        }
+      },
+      {
+        method: "ALL",
+        path: "/status",
+        handler: null,
+        edge: {
+          resolution: "unresolved",
+          referenceName: "\\Drupal\\example\\Controller\\StatusController::show"
+        }
+      }
+    ]);
+    expect(search.results).toMatchObject([
+      { filePath: "modules/custom/example/example.routing.yml", language: "yaml" }
+    ]);
+  });
 });
