@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import type { IndexWork } from "../domain/index-work.js";
 import type { IndexStatus } from "../domain/types.js";
 
+import type { AutoSyncOwnerLeaseStatus } from "./auto-sync-owner.js";
 import { SymbolLatticeError } from "./errors.js";
 import type { IndexOptions } from "./service.js";
 
@@ -33,6 +34,7 @@ export interface WatchReceipt {
     | "event-pending"
     | "event-fresh"
     | "fresh-observed"
+    | "owner-lease-unavailable"
     | "stopped";
   readonly observedAt: string;
   readonly projectPath: string;
@@ -64,6 +66,7 @@ export type AutoSyncState =
   | "pending"
   | "syncing"
   | "retrying"
+  | "blocked"
   | "failed"
   | "stopped";
 
@@ -73,7 +76,8 @@ export type AutoSyncWatcherMode =
   | "starting"
   | "native-events"
   | "polling-fallback"
-  | "polling-only";
+  | "polling-only"
+  | "blocked";
 
 /**
  * Read-only snapshot of watcher health. File paths have already passed the
@@ -83,6 +87,8 @@ export interface AutoSyncStatus {
   readonly enabled: boolean;
   readonly state: AutoSyncState;
   readonly watcherMode: AutoSyncWatcherMode;
+  /** Whether this MCP host owns the lifecycle gate required to run a watcher. */
+  readonly ownerLease: AutoSyncOwnerLeaseStatus;
   readonly observedAt: string | null;
   readonly lastEvent: WatchReceipt["event"] | null;
   readonly lastSuccessfulSyncAt: string | null;
@@ -169,6 +175,9 @@ export class AutoSyncStatusTracker {
   private readonly enabled: boolean;
   private state: AutoSyncState;
   private watcherMode: AutoSyncWatcherMode;
+  private ownerLeaseState: AutoSyncOwnerLeaseStatus["state"];
+  private ownerLeaseObservedAt: string | null = null;
+  private ownerLeaseError: AutoSyncOwnerLeaseStatus["error"] = null;
   private observedAt: string | null = null;
   private lastEvent: WatchReceipt["event"] | null = null;
   private lastSuccessfulSyncAt: string | null = null;
@@ -193,6 +202,18 @@ export class AutoSyncStatusTracker {
         ? "polling-only"
         : "starting"
       : "disabled";
+    this.ownerLeaseState = this.enabled ? "acquiring" : "not-required";
+  }
+
+  /** Marks this host as the only process permitted to start its automatic watcher. */
+  public markOwnerLeaseOwned(observedAt: string): void {
+    if (!this.enabled) {
+      return;
+    }
+
+    this.ownerLeaseState = "owned";
+    this.ownerLeaseObservedAt = observedAt;
+    this.ownerLeaseError = null;
   }
 
   /** Records one watcher receipt without invoking any index or filesystem operation. */
@@ -247,6 +268,13 @@ export class AutoSyncStatusTracker {
         this.watcherMode = "polling-fallback";
         this.eventWatchFailure = cloneWatchError(receipt.error);
         break;
+      case "owner-lease-unavailable":
+        this.state = "blocked";
+        this.watcherMode = "blocked";
+        this.ownerLeaseState = "unavailable";
+        this.ownerLeaseObservedAt = receipt.observedAt;
+        this.ownerLeaseError = cloneWatchError(receipt.error);
+        break;
       case "stopped":
         this.state = "stopped";
         break;
@@ -261,6 +289,11 @@ export class AutoSyncStatusTracker {
       enabled: this.enabled,
       state: this.state,
       watcherMode: this.watcherMode,
+      ownerLease: {
+        state: this.ownerLeaseState,
+        observedAt: this.ownerLeaseObservedAt,
+        error: cloneWatchError(this.ownerLeaseError)
+      },
       observedAt: this.observedAt,
       lastEvent: this.lastEvent,
       lastSuccessfulSyncAt: this.lastSuccessfulSyncAt,

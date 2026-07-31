@@ -2,6 +2,7 @@ export class SymbolLatticeError extends Error {
   public constructor(
     public readonly code:
       | "AMBIGUOUS_SYMBOL"
+      | "AUTO_SYNC_OWNER_UNAVAILABLE"
       | "EDGE_NOT_FOUND"
       | "GENERATION_HISTORY_UNAVAILABLE"
       | "GENERATION_NOT_RETAINED"

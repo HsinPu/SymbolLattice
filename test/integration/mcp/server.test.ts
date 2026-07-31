@@ -113,6 +113,11 @@ function autoSyncStatusResult(): AutoSyncStatusResult {
       enabled: true,
       state: "pending",
       watcherMode: "native-events",
+      ownerLease: {
+        state: "owned",
+        observedAt: "2026-07-31T00:00:00.000Z",
+        error: null
+      },
       observedAt: "2026-07-31T00:00:00.000Z",
       lastEvent: "event-pending",
       lastSuccessfulSyncAt: null,

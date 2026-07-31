@@ -211,6 +211,11 @@ describe("automatic sync status tracker", () => {
       enabled: false,
       state: "disabled",
       watcherMode: "disabled",
+      ownerLease: {
+        state: "not-required",
+        observedAt: null,
+        error: null
+      },
       observedAt: null,
       lastEvent: null,
       lastSuccessfulSyncAt: null,
@@ -225,6 +230,33 @@ describe("automatic sync status tracker", () => {
 
     tracker.record(receipt("synced"));
     expect(tracker.snapshot().state).toBe("disabled");
+  });
+
+  it("blocks a host that cannot acquire the project auto-sync owner lease", () => {
+    const tracker = new AutoSyncStatusTracker({ hostId: "host:owner-lease" });
+
+    tracker.record(
+      receipt("owner-lease-unavailable", {
+        observedAt: "2026-07-31T00:00:00.000Z",
+        error: {
+          code: "AUTO_SYNC_OWNER_UNAVAILABLE",
+          message: "Another host owns automatic synchronization."
+        }
+      })
+    );
+
+    expect(tracker.snapshot()).toMatchObject({
+      state: "blocked",
+      watcherMode: "blocked",
+      ownerLease: {
+        state: "unavailable",
+        observedAt: "2026-07-31T00:00:00.000Z",
+        error: { code: "AUTO_SYNC_OWNER_UNAVAILABLE" }
+      }
+    });
+    expect(tracker.diagnostics().events).toMatchObject([
+      { event: "owner-lease-unavailable", state: "blocked", watcherMode: "blocked" }
+    ]);
   });
 
   it("maps bounded receipts to fresh, pending, retry, and fallback watcher health", () => {

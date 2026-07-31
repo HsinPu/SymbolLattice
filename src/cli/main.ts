@@ -30,11 +30,13 @@ import {
   SymbolLatticeService,
   startForegroundWatch,
   validateWatchInterval,
+  type AcquiredAutoSyncOwnerLease,
   type ContextOptions,
   type AffectedTestsOptions,
   type AutoSyncDiagnosticJournal,
   type AutoSyncDiagnosticJournalOptions,
   type AutoSyncDiagnosticsOptions,
+  type AutoSyncOwnerLease,
   type AutoSyncDiagnosticsResult,
   type AutoSyncStatusResult,
   type EntrypointsOptions,
@@ -58,6 +60,7 @@ import {
 import { FileSystemGitChangeSetProvider } from "../infrastructure/git/index.js";
 import {
   SqliteAutoSyncDiagnosticJournal,
+  SqliteAutoSyncOwnerLease,
   SqliteGraphStore
 } from "../infrastructure/sqlite/index.js";
 import {
@@ -189,6 +192,12 @@ export type McpAutoSyncJournalFactory = (
   projectPath: string,
   writable: boolean
 ) => AutoSyncDiagnosticJournal;
+
+/** Injectable project-ownership seam; MCP request handlers never receive this capability. */
+export type AutoSyncOwnerLeaseFactory = (projectPath: string) => AutoSyncOwnerLease;
+
+/** Backward-compatible alias for the MCP composition seam. */
+export type McpAutoSyncOwnerLeaseFactory = AutoSyncOwnerLeaseFactory;
 
 /** Injectable composition seam for the `serve --mcp` command. */
 export type McpCommandRunner = (
@@ -403,11 +412,45 @@ function toAutoSyncDiagnosticError(
   };
 }
 
+/** Creates one bounded local lifecycle receipt when a second host loses the owner race. */
+function ownerLeaseUnavailableReceipt(
+  projectPath: string,
+  error: { readonly code: string; readonly message: string }
+): WatchReceipt {
+  return {
+    event: "owner-lease-unavailable",
+    observedAt: new Date().toISOString(),
+    projectPath,
+    status: null,
+    previousGenerationId: null,
+    generationId: null,
+    lastIndexWork: null,
+    error,
+    retryDelayMs: null,
+    pendingFileCount: 0,
+    pendingFiles: [],
+    pendingFilesTruncated: false,
+    pendingFilesUnknown: false
+  };
+}
+
 export async function runForegroundWatch(
   service: SymbolLatticeService,
   options: ForegroundWatchOptions,
-  signals: WatchSignalSource = process
+  signals: WatchSignalSource = process,
+  ownerLeaseFactory: AutoSyncOwnerLeaseFactory = (projectPath) =>
+    new SqliteAutoSyncOwnerLease(projectPath)
 ): Promise<void> {
+  // Guard the project boundary before creating the separate owner database.
+  service.assertSafeProjectPath({
+    projectPath: options.projectPath,
+    force: options.force ?? false
+  });
+  const acquired = ownerLeaseFactory(options.projectPath).acquire();
+  if (acquired.state === "unavailable") {
+    throw new SymbolLatticeError("AUTO_SYNC_OWNER_UNAVAILABLE", acquired.error.message);
+  }
+
   let session: Awaited<ReturnType<typeof startForegroundWatch>> | null = null;
   let stopping = false;
   let stopRequestedBeforeStart = false;
@@ -425,9 +468,9 @@ export async function runForegroundWatch(
     void session.stop();
   };
 
-  signals.once("SIGINT", stop);
-  signals.once("SIGTERM", stop);
   try {
+    signals.once("SIGINT", stop);
+    signals.once("SIGTERM", stop);
     session = await startForegroundWatch(service, options);
     if (stopRequestedBeforeStart) {
       await session.stop();
@@ -435,8 +478,15 @@ export async function runForegroundWatch(
     }
     await session.done;
   } finally {
-    signals.off("SIGINT", stop);
-    signals.off("SIGTERM", stop);
+    try {
+      signals.off("SIGINT", stop);
+    } finally {
+      try {
+        signals.off("SIGTERM", stop);
+      } finally {
+        acquired.release();
+      }
+    }
   }
 }
 
@@ -453,7 +503,9 @@ export async function runMcpWithAutoSync(
   serverRunner: McpServerRunner = startMcpServer,
   watchStarter: McpWatchStarter = startForegroundWatch,
   journalFactory: McpAutoSyncJournalFactory = (projectPath, writable) =>
-    new SqliteAutoSyncDiagnosticJournal(projectPath, { writable })
+    new SqliteAutoSyncDiagnosticJournal(projectPath, { writable }),
+  ownerLeaseFactory: McpAutoSyncOwnerLeaseFactory = (projectPath) =>
+    new SqliteAutoSyncOwnerLease(projectPath)
 ): Promise<void> {
   const autoSyncEnabled = options.autoSync ?? true;
   const journalWritable = autoSyncEnabled && (options.diagnosticJournal ?? true);
@@ -464,26 +516,46 @@ export async function runMcpWithAutoSync(
   });
   const mcpService = withAutoSyncObservability(service, options.projectPath, tracker, journal);
   let watchSession: ForegroundWatchSession | null = null;
+  let ownerLease: AcquiredAutoSyncOwnerLease | null = null;
+  const recordReceipt = (receipt: WatchReceipt): void => {
+    const event = tracker.record(receipt);
+    if (event !== null && journalWritable) {
+      journal.append(event);
+    }
+  };
   try {
     if (autoSyncEnabled) {
-      watchSession = await watchStarter(service, {
+      const watchOptions: ForegroundWatchOptions = {
         projectPath: options.projectPath,
         force: options.force ?? false,
         intervalMs: options.intervalMs ?? DEFAULT_WATCH_INTERVAL_MS,
         ...(options.poll === true ? {} : { eventSource: new NodeFileSystemWatchSource() }),
-        onReceipt: (receipt) => {
-          const event = tracker.record(receipt);
-          if (event !== null && journalWritable) {
-            journal.append(event);
-          }
-        }
+        onReceipt: recordReceipt
+      };
+      // Match the foreground watch safety gate before the owner database is
+      // opened, so a rejected broad path never gains a project-local lock file.
+      service.assertSafeProjectPath({
+        projectPath: watchOptions.projectPath,
+        force: watchOptions.force ?? false
       });
+      const acquired = ownerLeaseFactory(options.projectPath).acquire();
+      if (acquired.state === "owned") {
+        ownerLease = acquired;
+        tracker.markOwnerLeaseOwned(new Date().toISOString());
+        watchSession = await watchStarter(service, watchOptions);
+      } else {
+        recordReceipt(ownerLeaseUnavailableReceipt(options.projectPath, acquired.error));
+      }
     }
     const mcpSession = await serverRunner(mcpService, options.projectPath);
     await mcpSession.closed;
   } finally {
-    if (watchSession !== null) {
-      await watchSession.stop();
+    try {
+      if (watchSession !== null) {
+        await watchSession.stop();
+      }
+    } finally {
+      ownerLease?.release();
     }
   }
 }

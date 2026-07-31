@@ -45,6 +45,7 @@ import {
   runForegroundWatch,
   type McpAutoSyncOptions,
   type McpAutoSyncJournalFactory,
+  type McpAutoSyncOwnerLeaseFactory,
   type WatchSignalSource
 } from "../../../src/cli/main.js";
 import type { McpServerSession } from "../../../src/mcp/index.js";
@@ -111,6 +112,14 @@ function autoSyncJournalResult(): AutoSyncDiagnosticJournalResult {
       }
     ]
   };
+}
+
+function ownedOwnerLeaseFactory(
+  release: () => void = () => undefined
+): McpAutoSyncOwnerLeaseFactory {
+  return () => ({
+    acquire: () => ({ state: "owned", release })
+  });
 }
 
 function searchResult(): SearchResult {
@@ -1933,6 +1942,7 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
       }
     };
     const receipts: WatchReceipt[] = [];
+    const releaseOwnerLease = vi.fn();
     const service = {
       assertSafeProjectPath(): void {},
       async getStatus(): Promise<SearchResult["status"]> {
@@ -1950,7 +1960,8 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
         intervalMs: 250,
         onReceipt: (receipt) => receipts.push(receipt)
       },
-      signals
+      signals,
+      ownedOwnerLeaseFactory(releaseOwnerLease)
     );
 
     expect(signals.listenerCount("SIGINT")).toBe(1);
@@ -1961,6 +1972,63 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
     expect(receipts.map((receipt) => receipt.event)).toEqual(["started", "stopped"]);
     expect(signals.listenerCount("SIGINT")).toBe(0);
     expect(signals.listenerCount("SIGTERM")).toBe(0);
+    expect(releaseOwnerLease).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects a standalone watcher when another host owns the project lease", async () => {
+    const assertSafeProjectPath = vi.fn();
+    const signals: WatchSignalSource = {
+      once: vi.fn(),
+      off: vi.fn()
+    };
+    const ownerLeaseFactory = vi.fn<McpAutoSyncOwnerLeaseFactory>(() => ({
+      acquire: () => ({
+        state: "unavailable",
+        error: {
+          code: "AUTO_SYNC_OWNER_UNAVAILABLE",
+          message: "Another host owns automatic synchronization."
+        }
+      })
+    }));
+
+    await expect(
+      runForegroundWatch(
+        { assertSafeProjectPath } as unknown as SymbolLatticeService,
+        { projectPath: "C:/chosen-project" },
+        signals,
+        ownerLeaseFactory
+      )
+    ).rejects.toMatchObject({ code: "AUTO_SYNC_OWNER_UNAVAILABLE" });
+
+    expect(assertSafeProjectPath).toHaveBeenCalledWith({
+      projectPath: "C:/chosen-project",
+      force: false
+    });
+    expect(ownerLeaseFactory).toHaveBeenCalledWith("C:/chosen-project");
+    expect(signals.once).not.toHaveBeenCalled();
+  });
+
+  it("releases a standalone watcher lease when signal registration fails", async () => {
+    const releaseOwnerLease = vi.fn();
+    const signals: WatchSignalSource = {
+      once: vi.fn(() => {
+        throw new Error("signal source is unavailable");
+      }),
+      off: vi.fn()
+    };
+
+    await expect(
+      runForegroundWatch(
+        { assertSafeProjectPath(): void {} } as unknown as SymbolLatticeService,
+        { projectPath: "C:/chosen-project" },
+        signals,
+        ownedOwnerLeaseFactory(releaseOwnerLease)
+      )
+    ).rejects.toThrow("signal source is unavailable");
+
+    expect(releaseOwnerLease).toHaveBeenCalledTimes(1);
+    expect(signals.off).toHaveBeenCalledWith("SIGINT", expect.any(Function));
+    expect(signals.off).toHaveBeenCalledWith("SIGTERM", expect.any(Function));
   });
 
   it("starts an event-backed auto-sync watcher before MCP and stops it after the MCP session closes", async () => {
@@ -1968,6 +2036,7 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
     const stopped = vi.fn(async (): Promise<void> => {
       calls.push("watch-stop");
     });
+    const releaseOwnerLease = vi.fn();
     const watchSession: ForegroundWatchSession = {
       done: Promise.resolve(),
       stop: stopped
@@ -1987,7 +2056,7 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
         resolveClosed?.();
       }
     };
-    const service = {} as SymbolLatticeService;
+    const service = { assertSafeProjectPath(): void {} } as unknown as SymbolLatticeService;
     const running = runMcpWithAutoSync(
       service,
       {
@@ -2005,7 +2074,9 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
         calls.push("watch-start");
         capturedWatchOptions = options;
         return watchSession;
-      }
+      },
+      undefined,
+      ownedOwnerLeaseFactory(releaseOwnerLease)
     );
 
     await serverStarted;
@@ -2023,12 +2094,13 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
 
     expect(calls).toEqual(["watch-start", "mcp-start", "watch-stop"]);
     expect(stopped).toHaveBeenCalledTimes(1);
+    expect(releaseOwnerLease).toHaveBeenCalledTimes(1);
   });
 
   it("feeds watcher receipts into the MCP host's read-only auto-sync status", async () => {
     const sync = vi.fn(async (): Promise<SearchResult["status"]> => resultStatus());
     const getStatus = vi.fn(async (): Promise<SearchResult["status"]> => resultStatus());
-    const service = { getStatus, sync } as unknown as SymbolLatticeService;
+    const service = { assertSafeProjectPath(): void {}, getStatus, sync } as unknown as SymbolLatticeService;
     const mcpSession: McpServerSession = {
       closed: Promise.resolve(),
       async close(): Promise<void> {}
@@ -2092,7 +2164,9 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
           pendingFilesUnknown: false
         });
         return { done: Promise.resolve(), async stop(): Promise<void> {} };
-      }
+      },
+      undefined,
+      ownedOwnerLeaseFactory()
     );
 
     expect(observed).toMatchObject({
@@ -2101,6 +2175,7 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
         enabled: true,
         state: "pending",
         watcherMode: "native-events",
+        ownerLease: { state: "owned", error: null },
         pendingFiles: ["src/changed.ts"]
       }
     });
@@ -2116,7 +2191,7 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
       );
     });
     const sync = vi.fn(async (): Promise<SearchResult["status"]> => resultStatus());
-    const service = { getStatus, sync } as unknown as SymbolLatticeService;
+    const service = { assertSafeProjectPath(): void {}, getStatus, sync } as unknown as SymbolLatticeService;
     const mcpSession: McpServerSession = {
       closed: Promise.resolve(),
       async close(): Promise<void> {}
@@ -2146,7 +2221,9 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
           })
         );
         return { done: Promise.resolve(), async stop(): Promise<void> {} };
-      }
+      },
+      undefined,
+      ownedOwnerLeaseFactory()
     );
 
     expect(observed).toMatchObject({
@@ -2185,7 +2262,7 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
     let observed: AutoSyncDiagnosticJournalResult | null = null;
 
     await runMcpWithAutoSync(
-      { getStatus, sync } as unknown as SymbolLatticeService,
+      { assertSafeProjectPath(): void {}, getStatus, sync } as unknown as SymbolLatticeService,
       { projectPath: "C:/chosen-project" },
       async (receivedService): Promise<McpServerSession> => {
         const journalService = receivedService as SymbolLatticeService & {
@@ -2203,7 +2280,8 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
         );
         return { done: Promise.resolve(), async stop(): Promise<void> {} };
       },
-      journalFactory
+      journalFactory,
+      ownedOwnerLeaseFactory()
     );
 
     expect(journalFactory).toHaveBeenCalledWith("C:/chosen-project", true);
@@ -2234,18 +2312,121 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
     };
 
     await runMcpWithAutoSync(
-      { getStatus: async () => resultStatus() } as unknown as SymbolLatticeService,
+      {
+        assertSafeProjectPath(): void {},
+        getStatus: async () => resultStatus()
+      } as unknown as SymbolLatticeService,
       { projectPath: "C:/chosen-project", diagnosticJournal: false },
       async (): Promise<McpServerSession> => mcpSession,
       async (_receivedService, options): Promise<ForegroundWatchSession> => {
         options.onReceipt?.(watchReceipt("started"));
         return { done: Promise.resolve(), async stop(): Promise<void> {} };
       },
-      journalFactory
+      journalFactory,
+      ownedOwnerLeaseFactory()
     );
 
     expect(journalFactory).toHaveBeenCalledWith("C:/chosen-project", false);
     expect(append).not.toHaveBeenCalled();
+  });
+
+  it("keeps MCP read-only and reports a blocked owner lease when another host already watches", async () => {
+    const watchStarter = vi.fn(async (): Promise<ForegroundWatchSession> => {
+      throw new Error("a blocked host must not start a watcher");
+    });
+    const getStatus = vi.fn(async (): Promise<SearchResult["status"]> => resultStatus());
+    const sync = vi.fn(async (): Promise<SearchResult["status"]> => resultStatus());
+    const append = vi.fn<(event: AutoSyncDiagnosticEvent) => void>();
+    const journal: AutoSyncDiagnosticJournal = {
+      append,
+      diagnostics: () => autoSyncJournalResult()
+    };
+    const ownerLeaseFactory = vi.fn<McpAutoSyncOwnerLeaseFactory>(() => ({
+      acquire: () => ({
+        state: "unavailable",
+        error: {
+          code: "AUTO_SYNC_OWNER_UNAVAILABLE",
+          message: "Another host owns automatic synchronization."
+        }
+      })
+    }));
+    const mcpSession: McpServerSession = {
+      closed: Promise.resolve(),
+      async close(): Promise<void> {}
+    };
+    let observed: AutoSyncStatusResult | null = null;
+
+    await runMcpWithAutoSync(
+      { assertSafeProjectPath(): void {}, getStatus, sync } as unknown as SymbolLatticeService,
+      { projectPath: "C:/chosen-project" },
+      async (receivedService): Promise<McpServerSession> => {
+        const statusService = receivedService as SymbolLatticeService & {
+          autoSyncStatus(): Promise<AutoSyncStatusResult>;
+        };
+        observed = await statusService.autoSyncStatus();
+        return mcpSession;
+      },
+      watchStarter,
+      () => journal,
+      ownerLeaseFactory
+    );
+
+    expect(ownerLeaseFactory).toHaveBeenCalledWith("C:/chosen-project");
+    expect(watchStarter).not.toHaveBeenCalled();
+    expect(observed).toMatchObject({
+      index: { stale: false, generationId: "generation:test" },
+      autoSync: {
+        enabled: true,
+        state: "blocked",
+        watcherMode: "blocked",
+        ownerLease: {
+          state: "unavailable",
+          error: { code: "AUTO_SYNC_OWNER_UNAVAILABLE" }
+        },
+        lastEvent: "owner-lease-unavailable"
+      }
+    });
+    expect(append).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: "owner-lease-unavailable",
+        state: "blocked",
+        watcherMode: "blocked"
+      })
+    );
+    expect(getStatus).toHaveBeenCalledWith("C:/chosen-project");
+    expect(sync).not.toHaveBeenCalled();
+  });
+
+  it("checks auto-sync scope safety before acquiring a project owner lease", async () => {
+    const assertSafeProjectPath = vi.fn(() => {
+      throw new SymbolLatticeError("UNSAFE_PROJECT_PATH", "Explicit force is required.");
+    });
+    const ownerLeaseFactory = vi.fn<McpAutoSyncOwnerLeaseFactory>(ownedOwnerLeaseFactory());
+    const serverRunner = vi.fn(async (): Promise<McpServerSession> => {
+      throw new Error("MCP must not start when auto-sync scope is rejected.");
+    });
+    const watchStarter = vi.fn(async (): Promise<ForegroundWatchSession> => {
+      throw new Error("watcher must not start when auto-sync scope is rejected.");
+    });
+
+    await expect(
+      runMcpWithAutoSync(
+        { assertSafeProjectPath } as unknown as SymbolLatticeService,
+        { projectPath: "C:/broad-project", force: false },
+        serverRunner,
+        watchStarter,
+        undefined,
+        ownerLeaseFactory
+      )
+    ).rejects.toMatchObject({ code: "UNSAFE_PROJECT_PATH" });
+
+    expect(assertSafeProjectPath).toHaveBeenCalledWith({
+      projectPath: "C:/broad-project",
+      force: false
+    });
+    expect(ownerLeaseFactory).not.toHaveBeenCalled();
+    expect(watchStarter).not.toHaveBeenCalled();
+    expect(serverRunner).not.toHaveBeenCalled();
   });
 
   it("serves MCP without starting a watcher when auto-sync is explicitly disabled", async () => {
@@ -2258,6 +2439,9 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
       async close(): Promise<void> {}
     };
     let observed: AutoSyncDiagnosticsResult | null = null;
+    const ownerLeaseFactory = vi.fn<McpAutoSyncOwnerLeaseFactory>(() => {
+      throw new Error("a --no-auto-sync MCP host must not acquire an owner lease");
+    });
 
     await runMcpWithAutoSync(
       { getStatus } as unknown as SymbolLatticeService,
@@ -2269,14 +2453,22 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
         observed = await diagnosticsService.autoSyncDiagnostics();
         return mcpSession;
       },
-      watchStarter
+      watchStarter,
+      undefined,
+      ownerLeaseFactory
     );
 
     expect(watchStarter).not.toHaveBeenCalled();
+    expect(ownerLeaseFactory).not.toHaveBeenCalled();
     expect(getStatus).toHaveBeenCalledWith("C:/manual-project");
     expect(observed).toMatchObject({
       index: { status: { stale: false }, error: null },
-      autoSync: { enabled: false, state: "disabled", watcherMode: "disabled" },
+      autoSync: {
+        enabled: false,
+        state: "disabled",
+        watcherMode: "disabled",
+        ownerLease: { state: "not-required", error: null }
+      },
       timeline: { retained: 0, returned: 0, dropped: 0, truncated: false, events: [] }
     });
   });

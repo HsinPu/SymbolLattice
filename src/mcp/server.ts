@@ -368,6 +368,7 @@ const autoSyncStateOutputSchema = z.enum([
   "pending",
   "syncing",
   "retrying",
+  "blocked",
   "failed",
   "stopped"
 ]);
@@ -377,7 +378,15 @@ const autoSyncWatcherModeOutputSchema = z.enum([
   "starting",
   "native-events",
   "polling-fallback",
-  "polling-only"
+  "polling-only",
+  "blocked"
+]);
+
+const autoSyncOwnerLeaseStateOutputSchema = z.enum([
+  "not-required",
+  "acquiring",
+  "owned",
+  "unavailable"
 ]);
 
 const watchEventOutputSchema = z.enum([
@@ -391,6 +400,7 @@ const watchEventOutputSchema = z.enum([
   "event-pending",
   "event-fresh",
   "fresh-observed",
+  "owner-lease-unavailable",
   "stopped"
 ]);
 
@@ -398,6 +408,11 @@ const autoSyncSnapshotOutputSchema = z.object({
   enabled: z.boolean(),
   state: autoSyncStateOutputSchema,
   watcherMode: autoSyncWatcherModeOutputSchema,
+  ownerLease: z.object({
+    state: autoSyncOwnerLeaseStateOutputSchema,
+    observedAt: z.string().nullable(),
+    error: watchErrorOutputSchema.nullable()
+  }),
   observedAt: z.string().nullable(),
   lastEvent: watchEventOutputSchema.nullable(),
   lastSuccessfulSyncAt: z.string().nullable(),

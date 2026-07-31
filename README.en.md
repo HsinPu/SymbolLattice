@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.109.0 is an early developer release. Run this repository from source; the npm package remains private and unpublished.
+> v0.110.0 is an early developer release. Run this repository from source; the npm package remains private and unpublished.
 
 ## Positioning
 
@@ -27,7 +27,7 @@ License: MIT.
 - Builds syntax-proven file, symbol, containment, import/export, type-hierarchy, route, entrypoint, and cross-file graph facts.
 - Creates exact edges only when the proof is direct; ambiguous candidates remain unresolved or heuristic evidence instead of runtime guesses.
 - Covers frontend, backend, JVM, scientific-computing, systems, native, data, IaC, template, and schema sources, including TypeScript, Java, Groovy, Fortran, Ada, Python, Go, Rust, C/C++, C#, PHP, Ruby, Kotlin, Swift, Dart, SQL, GraphQL, Protocol Buffers, Terraform, YAML, and XML.
-- Includes a CLI and read-only MCP queries for symbols, relationships, routes, entrypoints, generation history, diffs, affected tests, automatic-sync health, session timelines, and durable diagnostics.
+- Includes a CLI and read-only MCP queries for symbols, relationships, routes, entrypoints, generation history, diffs, affected tests, automatic-sync health, project owner leases, session timelines, and durable diagnostics.
 
 ## Quick start
 
@@ -46,7 +46,7 @@ node dist/cli/main.js init /path/to/project
 node dist/cli/main.js find add --project /path/to/project
 node dist/cli/main.js explain-edge "edge:<edge-id>" --project /path/to/project
 
-# Start MCP: catch up a stale existing index, then keep it fresh in the background
+# Start MCP: catch up a stale existing index, then let one project-owner watcher keep it fresh
 node dist/cli/main.js serve --mcp --project /path/to/project
 
 # From an MCP client, retrieve the latest eight watcher diagnostic events
@@ -58,13 +58,13 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 On Windows PowerShell, use `npm.cmd` when `npm` is unavailable. Filesystem roots and home directories are rejected unless `--force` is explicitly supplied.
 
-## v0.109.0 highlights
+## v0.110.0 highlights
 
-- `symbol_lattice_auto_sync_journal` reads the default project's durable watcher history, including after an MCP host restart.
-- An initialized project's background watcher writes sanitized receipts (including a per-host UUID, so cross-host sequences stay distinguishable) to `.symbol-lattice/auto-sync-diagnostics.sqlite`; it retains at most 128 events and reports retention, eviction, truncation, latest persisted time, and I/O state.
-- MCP requests only read the journal. Writes occur only in the watcher receipt callback owned by `serve --mcp`; an unindexed project never gains `.symbol-lattice` merely for diagnostics.
+- Before automatic sync starts, `serve --mcp` and `watch` acquire an exclusive SQLite owner lock at `.symbol-lattice/auto-sync-owner.sqlite`; only that host starts the watcher and writes graph updates for the project.
+- A competing MCP host still serves read-only queries but does not start a watcher. `symbol_lattice_auto_sync_status` and diagnostics report `autoSync.state: "blocked"` with a PID- and path-free `ownerLease` reason.
+- `--no-auto-sync` neither acquires nor creates an owner lock, preserving an explicit read-only MCP mode. Normal shutdown releases the lock; the SQLite operating-system lock does not rely on an expiring PID file.
 
-Use `--sync-interval <ms>` to tune fallback polling, `--poll` to disable native event acceleration, `--no-auto-sync` to disable background sync, or `--no-diagnostic-journal` to disable journal writes. Run `init` once first; manual `sync` remains useful for repair and CI.
+Use `--sync-interval <ms>` to tune fallback polling, `--poll` to disable native event acceleration, or `--no-diagnostic-journal` to disable journal writes. Run `init` once first; manual `sync` remains useful for repair and CI.
 
 ## Deliberate limits
 
@@ -73,8 +73,8 @@ Use `--sync-interval <ms>` to tune fallback polling, `--poll` to disable native 
 - Groovy, Fortran, and Ada remain conservative first slices: only complete direct units are retained; members, cross-file, and runtime relations are not inferred, and ambiguous source is skipped.
 - The Koa, Hono, and Elysia slices cover direct receiver routes only; prefixes, mounts, nested apps, `basePath` / `group` / `use` / `route` / `on`, CommonJS, dynamic paths, and inline/member handlers are not inferred.
 - Default MCP background sync only operates on initialized projects and never changes the stored index scope. Filesystem roots and home directories still require explicit `--force`.
-- Automatic-sync status and the session timeline describe the current default MCP host's watcher only. They are not a cross-process daemon, centralized queue, or performance-monitoring system.
-- The durable journal is a bounded 128-event operational record, not a tamper-proof audit log, daemon lifecycle, leader election, or complete cross-client coordination mechanism.
+- The SQLite owner lock serializes one foreground watcher for one project only; it is not a daemon, socket registry, distributed leader-election protocol, worker pool, or cross-machine coordination mechanism.
+- Automatic-sync status and the session timeline describe the current default MCP host only. The durable journal is a bounded 128-event operational record, not a tamper-proof audit log or complete lifecycle record.
 
 ## Verification
 

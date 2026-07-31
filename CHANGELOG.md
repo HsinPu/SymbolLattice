@@ -6,6 +6,24 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.110.0] - 2026-07-31
+
+### Added
+
+- `serve --mcp` and the standalone `watch` command now acquire a project-local SQLite exclusive owner lock at `.symbol-lattice/auto-sync-owner.sqlite` before starting an automatic foreground watcher. A successful host holds the transaction for its lifecycle and releases it during shutdown; an operating-system SQLite lock avoids stale PID-file or heartbeat-expiry recovery rules.
+- A competing host still starts its read-only MCP server but skips the watcher and reports `autoSync.state: "blocked"`, `watcherMode: "blocked"`, and a safe `ownerLease` status through the existing auto-sync status and diagnostics tools. The durable journal records the bounded `owner-lease-unavailable` transition when journal writes are enabled, without disclosing another host's PID or path.
+- `--no-auto-sync` does not construct, acquire, or create an owner lock. The auto-sync safety gate runs before owner-lock acquisition, so a rejected broad project path cannot gain a lock database. Focused integration coverage proves mutual exclusion, post-release succession, read-only contention behavior, standalone-watch rejection, release cleanup (including signal-registration failure), no-auto-sync behavior, and safety-gate ordering. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.110.0.md`.
+
+### Compatibility
+
+- Existing graph indexes remain readable; the owner lock is a new file separate from `index.sqlite` and does not migrate graph or diagnostic-journal schemas.
+- Existing read-only MCP tools retain their contracts. The auto-sync status and diagnostics payloads add `ownerLease`; clients that validate exact schemas should accept this additive field and the new `blocked` state, watcher mode, and `owner-lease-unavailable` event.
+
+### Comparison notes
+
+- This independently closes one concrete CodeGraph operational gap: a local project now has a verified single-writer watcher gate rather than allowing concurrent `serve --mcp` hosts to attempt the same graph synchronization.
+- CodeGraph remains ahead in daemon lifecycle, PID/socket registry, daemon discovery, cross-client coordination, worker-pool concurrency, and error-log operations. SymbolLattice's owner lock is deliberately a small local foreground-watcher guard, not a claim of daemon or distributed-leader-election parity; no CodeGraph source was copied.
+
 ## [0.109.0] - 2026-07-31
 
 ### Added
