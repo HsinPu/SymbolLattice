@@ -11,13 +11,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v85";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v86";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v24";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v25";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -146,6 +146,18 @@ export interface NestRouteFacts {
   readonly routeControllers: readonly NestRouteControllerFact[];
   readonly moduleControllers: readonly NestModuleControllerFact[];
   readonly routerModulePrefixes: readonly NestRouterModulePrefixFact[];
+}
+
+/** A direct `@Resolver(() => Type)` identifier retained for unique schema matching. */
+export interface NestGraphqlResolverReferenceFact {
+  readonly resolverId: string;
+  readonly schemaTypeName: string;
+  readonly range: SourceRange;
+}
+
+/** Syntax-only facts for bounded NestJS resolver-to-GraphQL-schema projection. */
+export interface NestGraphqlFacts {
+  readonly resolverReferences: readonly NestGraphqlResolverReferenceFact[];
 }
 
 /** A direct identifier reference retained for exact Fastify plugin composition. */
@@ -370,6 +382,8 @@ export interface ArtifactFacts {
   readonly reExportBindings: readonly ReExportBinding[];
   /** Omitted only by artifact facts persisted before v0.17. */
   readonly nestRouteFacts?: NestRouteFacts;
+  /** Omitted only by artifact facts persisted before v0.97. */
+  readonly nestGraphqlFacts?: NestGraphqlFacts;
   /** Omitted only by artifact facts persisted before v0.22. */
   readonly fastifyPluginFacts?: FastifyPluginFacts;
   /** Omitted only by artifact facts persisted before v0.31. */

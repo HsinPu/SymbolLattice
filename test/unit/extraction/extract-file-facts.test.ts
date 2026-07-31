@@ -1750,6 +1750,36 @@ describe("source extraction", () => {
       ["microservice event user.created", "onUserCreated", "framework.nestjs.microservice.pattern.local-method", "exact", 1],
       ["websocket subscribe events:created", "handleCreated", "framework.nestjs.websocket.subscribe-message.local-method", "exact", 1]
     ]);
+    const resolver = facts.symbols.find((symbol) => symbol.name === "AuthorResolver");
+    if (resolver === undefined) {
+      throw new Error("Expected indexed NestJS GraphQL resolver class.");
+    }
+    expect(facts.nestGraphqlFacts?.resolverReferences).toEqual([
+      {
+        resolverId: resolver.id,
+        schemaTypeName: "Author",
+        range: {
+          start: { line: 5, column: 22 },
+          end: { line: 5, column: 28 }
+        }
+      }
+    ]);
+  });
+
+  it("rejects non-identifier, async, multi-argument, and block NestJS resolver type factories", () => {
+    const facts = extractFileFacts({
+      filePath: "src/unproven-resolvers.ts",
+      language: "typescript",
+      sourceText: [
+        'import { Resolver } from "@nestjs/graphql";',
+        "@Resolver(() => [User]) class ArrayResolver {}",
+        "@Resolver(() => User, {}) class OptionsResolver {}",
+        "@Resolver(async () => User) class AsyncResolver {}",
+        "@Resolver(() => { return User; }) class BlockResolver {}"
+      ].join("\n")
+    });
+
+    expect(facts.nestGraphqlFacts?.resolverReferences).toEqual([]);
   });
 
   it("rejects unproven NestJS non-HTTP entrypoint decorators and dynamic identities", () => {
@@ -1789,6 +1819,7 @@ describe("source extraction", () => {
 
     expect(facts.symbols.filter((symbol) => symbol.kind === "entrypoint")).toEqual([]);
     expect(facts.edges.filter((edge) => edge.kind === "handles")).toEqual([]);
+    expect(facts.nestGraphqlFacts?.resolverReferences).toEqual([]);
   });
 
   it("rejects type-only, non-Nest, shadowed, dynamic, namespace, and static NestJS route shapes", () => {

@@ -663,6 +663,7 @@ function artifactFactsPayload(facts: PersistedArtifactFacts): ArtifactFacts {
     exportBindings: facts.exportBindings,
     reExportBindings: facts.reExportBindings,
     ...(facts.nestRouteFacts === undefined ? {} : { nestRouteFacts: facts.nestRouteFacts }),
+    ...(facts.nestGraphqlFacts === undefined ? {} : { nestGraphqlFacts: facts.nestGraphqlFacts }),
     ...(facts.fastifyPluginFacts === undefined
       ? {}
       : { fastifyPluginFacts: facts.fastifyPluginFacts }),

@@ -8430,6 +8430,138 @@ describe("SymbolLatticeService", () => {
     ]);
   });
 
+  it("projects a direct NestJS GraphQL resolver to one unique schema object type as heuristic evidence", async () => {
+    const projectPath = await createInlineProject({
+      "api/schema.graphql": [
+        "type User {",
+        "  id: ID!",
+        "}"
+      ].join("\n"),
+      "src/users.resolver.ts": [
+        'import { Resolver as GraphResolver } from "@nestjs/graphql";',
+        "@GraphResolver(() => User)",
+        "export class UsersResolver {}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const snapshot = graphStore.getSnapshot(projectPath);
+    const resolver = snapshot.symbols.find(
+      (symbol) =>
+        symbol.filePath === "src/users.resolver.ts" &&
+        symbol.kind === "class" &&
+        symbol.name === "UsersResolver"
+    );
+    const schemaType = snapshot.symbols.find(
+      (symbol) => symbol.qualifiedName === "api/schema.graphql#type:User"
+    );
+    if (resolver === undefined || schemaType === undefined) {
+      throw new Error("Expected indexed resolver and GraphQL object type.");
+    }
+    const edge = snapshot.edges.find(
+      (candidate) => candidate.sourceId === resolver.id && candidate.kind === "references"
+    );
+    const persistedFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "src/users.resolver.ts");
+
+    expect(edge).toMatchObject({
+      targetId: schemaType.id,
+      kind: "references",
+      resolution: "heuristic",
+      confidence: 0.85,
+      referenceName: "User",
+      evidence: {
+        ruleId: "framework.nestjs.graphql.resolver-schema.unique-object-type",
+        stage: "heuristic",
+        candidateSymbolIds: [schemaType.id]
+      }
+    });
+    expect(persistedFacts).toMatchObject({
+      language: "typescript",
+      extractorVersion: ARTIFACT_FACTS_EXTRACTOR_VERSION,
+      nestGraphqlFacts: {
+        resolverReferences: [
+          {
+            resolverId: resolver.id,
+            schemaTypeName: "User"
+          }
+        ]
+      }
+    });
+  });
+
+  it("keeps an ambiguous NestJS GraphQL resolver schema match explicitly unresolved", async () => {
+    const projectPath = await createInlineProject({
+      "api/one.graphql": "type User { id: ID! }\n",
+      "api/two.graphql": "type User { email: String! }\n",
+      "src/users.resolver.ts": [
+        'import { Resolver } from "@nestjs/graphql";',
+        "@Resolver(() => User)",
+        "export class UsersResolver {}",
+        "@Resolver(() => Missing)",
+        "export class MissingResolver {}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const snapshot = graphStore.getSnapshot(projectPath);
+    const resolver = snapshot.symbols.find(
+      (symbol) =>
+        symbol.filePath === "src/users.resolver.ts" &&
+        symbol.kind === "class" &&
+        symbol.name === "UsersResolver"
+    );
+    const missingResolver = snapshot.symbols.find(
+      (symbol) =>
+        symbol.filePath === "src/users.resolver.ts" &&
+        symbol.kind === "class" &&
+        symbol.name === "MissingResolver"
+    );
+    const candidates = snapshot.symbols
+      .filter((symbol) => symbol.name === "User" && symbol.filePath.startsWith("api/"))
+      .map((symbol) => symbol.id)
+      .sort();
+    if (resolver === undefined || missingResolver === undefined) {
+      throw new Error("Expected indexed NestJS resolver classes.");
+    }
+    const edge = snapshot.edges.find(
+      (candidate) => candidate.sourceId === resolver.id && candidate.kind === "references"
+    );
+    const missingEdge = snapshot.edges.find(
+      (candidate) => candidate.sourceId === missingResolver.id && candidate.kind === "references"
+    );
+
+    expect(edge).toMatchObject({
+      targetId: null,
+      kind: "references",
+      resolution: "unresolved",
+      confidence: 0,
+      referenceName: "User",
+      evidence: {
+        ruleId: "framework.nestjs.graphql.resolver-schema.ambiguous-object-type",
+        stage: "unresolved",
+        candidateSymbolIds: candidates
+      }
+    });
+    expect(missingEdge).toMatchObject({
+      targetId: null,
+      kind: "references",
+      resolution: "unresolved",
+      confidence: 0,
+      referenceName: "Missing",
+      evidence: {
+        ruleId: "framework.nestjs.graphql.resolver-schema.unresolved-object-type",
+        stage: "unresolved",
+        candidateSymbolIds: []
+      }
+    });
+  });
+
   it("indexes Drupal routing YAML routes with parser-backed unresolved controller evidence", async () => {
     const projectPath = await createInlineProject({
       "modules/custom/example/example.routing.yml": [

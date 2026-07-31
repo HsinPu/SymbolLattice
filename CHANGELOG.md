@@ -6,6 +6,23 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.97.0] - 2026-07-31
+
+### Added
+
+- A bounded NestJS GraphQL framework projection now retains only one direct, non-type-only named-import `@Resolver(() => Identifier)` class decorator (including an import alias) when its factory is zero-argument, synchronous, expression-bodied, and a single identifier. The persisted `nestGraphqlFacts` payload keeps the resolver class ID, schema-type name, and exact identifier range without treating the TypeScript value as a schema declaration.
+- During project resolution, the resolver class gains a `references` edge only when exactly one indexed GraphQL object `type` symbol has the same name. The cross-language name bridge is explicitly `heuristic` at confidence `0.85` with `framework.nestjs.graphql.resolver-schema.unique-object-type` evidence; missing or duplicate candidates remain target-null `unresolved` edges with their candidate IDs and a specific rule ID. Focused extraction and service integration coverage prove aliases, source ranges, SQLite payload persistence, unique linking, and ambiguity rejection. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.97.0.md`.
+
+### Compatibility
+
+- The artifact extractor advances to `multi-language-ast-v86` and the project resolver to `project-resolver-v25`. A pre-v0.97 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes the new raw resolver facts and their cross-file projection.
+- No SQLite schema migration or new query command is required: the additive `nestGraphqlFacts` field is persisted inside the existing versioned artifact-facts JSON payload, while pre-v0.97 generations remain readable without claiming this capability.
+
+### Deliberate limits
+
+- This is not a semantic GraphQL or NestJS runtime linker. It rejects no-argument, array, async, block-bodied, multi-argument, namespace, type-only, foreign, shadowed, wrapped, and custom resolver decorator forms; it does not infer resolver fields, `@Query` / `@Mutation` / `@Subscription` schema fields, resolver arguments, imports, code-first schemas, schema composition, federation, transport, or execution behavior.
+- The inspected local CodeGraph baseline detects NestJS GraphQL decorators and operation names but does not index standalone GraphQL schema files. SymbolLattice v0.97 builds its own narrow schema-plus-framework relation from its prior source-ranged schema facts; it does not copy CodeGraph source or present a same-name cross-language match as exact proof.
+
 ## [0.96.0] - 2026-07-31
 
 ### Added

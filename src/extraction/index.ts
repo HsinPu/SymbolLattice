@@ -68,6 +68,7 @@ import {
   type GraphEdge,
   type ImportBinding,
   type LocalBinding,
+  type NestGraphqlFacts,
   type NestRouteFacts,
   type PendingReference,
   type ReExportBinding,
@@ -86,6 +87,7 @@ export type {
   FastifyPluginFacts,
   ImportBinding,
   LocalBinding,
+  NestGraphqlFacts,
   NestRouteFacts,
   ReExportBinding,
   ReferenceScope
@@ -505,6 +507,11 @@ interface StaticNestEntrypoint {
   readonly name: string;
   readonly decorator: ts.Decorator;
   readonly handler: ts.MethodDeclaration;
+}
+
+interface StaticNestGraphqlResolverReference {
+  readonly resolver: ts.ClassDeclaration;
+  readonly schemaType: ts.Identifier;
 }
 
 interface StaticNestRouterModulePrefix {
@@ -2939,6 +2946,39 @@ function directNestClassDecorators(
   });
 }
 
+function staticNestGraphqlResolverReference(
+  sourceFile: ts.SourceFile,
+  declaration: ts.ClassDeclaration,
+  bindings: ScopedNestDecoratorBindings
+): StaticNestGraphqlResolverReference | null {
+  const resolvers = directNestClassDecorators(
+    sourceFile,
+    declaration,
+    bindings,
+    "nest-graphql-resolver"
+  );
+  if (resolvers.length !== 1) {
+    return null;
+  }
+  const resolver = resolvers[0];
+  if (resolver === undefined || resolver.expression.arguments.length !== 1) {
+    return null;
+  }
+  const typeFactory = resolver.expression.arguments[0];
+  if (
+    typeFactory === undefined ||
+    !ts.isArrowFunction(typeFactory) ||
+    typeFactory.parameters.length !== 0 ||
+    !ts.isIdentifier(typeFactory.body) ||
+    ((typeFactory as ModifierCarrier).modifiers?.some(
+      (modifier) => modifier.kind === ts.SyntaxKind.AsyncKeyword
+    ) ?? false)
+  ) {
+    return null;
+  }
+  return { resolver: declaration, schemaType: typeFactory.body };
+}
+
 function staticLiteralText(expression: ts.Expression | undefined): string | null {
   return expression !== undefined &&
     (ts.isStringLiteral(expression) || ts.isNoSubstitutionTemplateLiteral(expression))
@@ -3836,6 +3876,11 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
     moduleControllers: [],
     routerModulePrefixes: []
   };
+  const nestGraphqlFacts: {
+    resolverReferences: NestGraphqlFacts["resolverReferences"][number][];
+  } = {
+    resolverReferences: []
+  };
   const declarationOrdinals = new Map<string, number>();
   const routeReceiverBindings = collectScopedRouteReceiverBindings(sourceFile);
   const fastifyPluginCallbacks = collectScopedFastifyPluginCallbacks(sourceFile, routeReceiverBindings);
@@ -4171,6 +4216,20 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
     });
   }
 
+  function addStaticNestGraphqlResolverReference(
+    reference: StaticNestGraphqlResolverReference
+  ): void {
+    const resolver = symbolsByDeclaration.get(reference.resolver);
+    if (resolver?.kind !== "class") {
+      return;
+    }
+    nestGraphqlFacts.resolverReferences.push({
+      resolverId: resolver.id,
+      schemaTypeName: reference.schemaType.text,
+      range: sourceRange(sourceFile, reference.schemaType)
+    });
+  }
+
   function addStaticNestModuleFacts(declaration: ts.ClassDeclaration): void {
     const module = symbolsByDeclaration.get(declaration);
     const definition = staticNestModuleDefinition(sourceFile, declaration, nestDecoratorBindings);
@@ -4440,6 +4499,14 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
         for (const entrypoint of staticNestEntrypoints(sourceFile, node, nestDecoratorBindings)) {
           addStaticNestEntrypoint(entrypoint);
         }
+        const resolverReference = staticNestGraphqlResolverReference(
+          sourceFile,
+          node,
+          nestDecoratorBindings
+        );
+        if (resolverReference !== null) {
+          addStaticNestGraphqlResolverReference(resolverReference);
+        }
         addStaticNestModuleFacts(node);
       }
     }),
@@ -4546,6 +4613,7 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
     exportBindings,
     reExportBindings,
     nestRouteFacts,
+    nestGraphqlFacts,
     fastifyPluginFacts
   };
 }
