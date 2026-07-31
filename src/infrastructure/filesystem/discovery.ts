@@ -72,7 +72,9 @@ export const SUPPORTED_EXTENSIONS: ReadonlyMap<string, SupportedLanguage> = new 
   [".cob", "cobol"],
   [".cobol", "cobol"],
   [".cpy", "cobol"],
-  [".zig", "zig"]
+  [".zig", "zig"],
+  [".yaml", "yaml"],
+  [".yml", "yaml"]
 ] as const);
 
 const OBJECTIVE_C_HEADER_EXTENSION = ".h";

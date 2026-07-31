@@ -7960,4 +7960,45 @@ describe("SymbolLatticeService", () => {
     expect(routes.routes).toEqual([]);
     expect(search.results).toMatchObject([{ filePath: "src/main.zig", language: "zig" }]);
   });
+
+  it("indexes YAML top-level scalar keys and retains YAML source-search filtering", async () => {
+    const projectPath = await createInlineProject({
+      "config/application.yml": [
+        "service: symbol-lattice",
+        "port: 3000",
+        "metadata:",
+        "  team: graph"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    const indexed = await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+    const search = await service.search(projectPath, "service", { language: "yaml" });
+    const persistedFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "config/application.yml");
+    const serviceKey = await service.find(projectPath, "config/application.yml#yaml-key:service");
+
+    expect(indexed).toMatchObject({
+      stale: false,
+      counts: { files: 1, symbols: 3, edges: 2 }
+    });
+    expect(persistedFacts).toMatchObject({
+      language: "yaml",
+      extractorVersion: ARTIFACT_FACTS_EXTRACTOR_VERSION
+    });
+    expect(serviceKey.symbols).toMatchObject([
+      {
+        kind: "variable",
+        qualifiedName: "config/application.yml#yaml-key:service",
+        isExported: false
+      }
+    ]);
+    expect(routes.routes).toEqual([]);
+    expect(search.results).toMatchObject([
+      { filePath: "config/application.yml", language: "yaml" }
+    ]);
+  });
 });

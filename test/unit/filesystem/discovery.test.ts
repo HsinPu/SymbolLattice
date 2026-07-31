@@ -214,6 +214,11 @@ describe("source discovery", () => {
     expect(getSourceLanguage("src/main.zig")).toBe("zig");
   });
 
+  it("recognizes YAML source extensions", () => {
+    expect(getSourceLanguage("config/application.yaml")).toBe("yaml");
+    expect(getSourceLanguage("config/application.yml")).toBe("yaml");
+  });
+
   it("discovers only source-proven Objective-C .h headers", async () => {
     const projectPath = await createProject();
     await mkdir(join(projectPath, "Headers"), { recursive: true });

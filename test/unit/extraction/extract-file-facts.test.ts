@@ -8511,4 +8511,83 @@ describe("source extraction", () => {
     expect(malformed.edges).toEqual([]);
     expect(unterminatedString.edges).toEqual([]);
   });
+
+  it("extracts parser-proven YAML top-level scalar mapping keys with source evidence", () => {
+    const facts = extractFileFacts({
+      filePath: "config/application.yaml",
+      language: "yaml",
+      sourceText: [
+        "# direct scalar settings",
+        "---",
+        "service: symbol-lattice",
+        "port: 3000",
+        'owner: "HsinPu"',
+        "metadata:",
+        "  team: graph",
+        "tags:",
+        "  - code-intelligence",
+        "..."
+      ].join("\n")
+    });
+
+    expect(
+      facts.symbols.map((symbol) => [symbol.kind, symbol.qualifiedName, symbol.isExported])
+    ).toEqual([
+      ["file", "config/application.yaml", true],
+      ["variable", "config/application.yaml#yaml-key:service", false],
+      ["variable", "config/application.yaml#yaml-key:port", false],
+      ["variable", "config/application.yaml#yaml-key:owner", false]
+    ]);
+    expect(
+      facts.edges.map((edge) => [
+        edge.kind,
+        edge.referenceName,
+        edge.evidence?.ruleId,
+        edge.resolution
+      ])
+    ).toEqual([
+      ["contains", "service", "syntax.yaml.top-level-scalar-mapping", "exact"],
+      ["contains", "port", "syntax.yaml.top-level-scalar-mapping", "exact"],
+      ["contains", "owner", "syntax.yaml.top-level-scalar-mapping", "exact"]
+    ]);
+  });
+
+  it("rejects malformed or multi-document YAML and ignores nested, anchored, alias, and tagged mappings", () => {
+    const malformed = extractFileFacts({
+      filePath: "config/broken.yml",
+      language: "yaml",
+      sourceText: "service: [unterminated\n"
+    });
+    const multipleDocuments = extractFileFacts({
+      filePath: "config/multiple.yaml",
+      language: "yaml",
+      sourceText: "first: one\n---\nsecond: two\n"
+    });
+    const unsupported = extractFileFacts({
+      filePath: "config/unsupported.yaml",
+      language: "yaml",
+      sourceText: [
+        "base: &base ready",
+        "alias: *base",
+        "tagged: !environment production",
+        "metadata:",
+        "  team: graph",
+        "tags:",
+        "  - code-intelligence"
+      ].join("\n")
+    });
+
+    expect(malformed.symbols.map((symbol) => [symbol.kind, symbol.name])).toEqual([
+      ["file", "broken.yml"]
+    ]);
+    expect(multipleDocuments.symbols.map((symbol) => [symbol.kind, symbol.name])).toEqual([
+      ["file", "multiple.yaml"]
+    ]);
+    expect(unsupported.symbols.map((symbol) => [symbol.kind, symbol.name])).toEqual([
+      ["file", "unsupported.yaml"]
+    ]);
+    expect(malformed.edges).toEqual([]);
+    expect(multipleDocuments.edges).toEqual([]);
+    expect(unsupported.edges).toEqual([]);
+  });
 });

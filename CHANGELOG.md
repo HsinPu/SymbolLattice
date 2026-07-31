@@ -6,6 +6,23 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.87.0] - 2026-07-31
+
+### Added
+
+- YAML source discovery now recognizes `.yaml` and `.yml` files and exposes the new `yaml` language through persisted source search plus the existing CLI and MCP language validation contracts. The new `yaml@2.9.0` parser-backed extractor accepts one parser-valid document with a top-level mapping and produces variables only for source-ranged, untagged, unanchored top-level scalar key/value pairs that remain on one line.
+- Each retained YAML key has an exact `contains` edge with `syntax.yaml.top-level-scalar-mapping` evidence. Unit, discovery, and service integration coverage prove `.yaml` / `.yml` recognition, quoted/scalar values, nested-map/sequence exclusion, anchored/alias/tagged exclusion, malformed and multi-document fail-closed behavior, persisted provenance, and YAML source-search filtering. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.87.0.md`.
+
+### Compatibility
+
+- The artifact extractor advances to `multi-language-ast-v76`; the project resolver remains `project-resolver-v23` because YAML facts are direct, file-local declarations with no configuration-reference resolution. A pre-v0.87 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes YAML-capable facts.
+- No SQLite schema migration or query command is required. This is an additive artifact-language capability within the existing file, variable-symbol, containment-edge, source-search, CLI, MCP, and incremental-index contracts; existing generations remain readable.
+
+### Deliberate limits
+
+- This is not a general YAML configuration model. It excludes nested mappings/sequences, empty or null values, aliases, anchors, explicit tags, block scalars, complex keys, multi-document streams, merge/configuration semantics, schemas, imports, calls, routes, framework recognition, cross-file resolution, deployment behavior, and runtime values.
+- The inspected local CodeGraph baseline tracks YAML files generally at file level and has a Spring-specific handwritten leaf-key pass for `application` / `bootstrap` YAML configuration. SymbolLattice v0.87 independently adds parser-backed, source-ranged declaration facts for a deliberately narrow top-level subset across all YAML filenames, rather than claiming broad configuration semantics or copying CodeGraph source.
+
 ## [0.86.0] - 2026-07-31
 
 ### Added
