@@ -6,6 +6,23 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.90.0] - 2026-07-31
+
+### Added
+
+- The XML extractor now has a bounded MyBatis 3 mapper pass. A parser-valid `<mapper namespace="Java.FQN">` accepts direct `select`, `insert`, `update`, `delete`, and `sql` child elements with simple identifier `id` values as source-ranged `method` symbols qualified as `Java.FQN::id`. The standard MyBatis Mapper 3.0 DTD declaration is the only DTD exception; it is checked as literal syntax and is never fetched, expanded, or evaluated.
+- A self-closing literal same-mapper `<include refid="id"/>` inside one accepted statement becomes an exact `calls` edge only when one same-file `sql` fragment proves the target. Missing or ambiguous fragments retain an explicit unresolved `calls` edge with `framework.mybatis.mapper.literal-include.*` evidence. Unit and service integration coverage prove standard-DTD acceptance, statement containment, nested literal includes, exact source ranges, source search, invalid namespace/id rejection, unsupported DTD rejection, and persisted graph queries. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.90.0.md`.
+
+### Compatibility
+
+- The artifact extractor advances to `multi-language-ast-v79`; the project resolver remains `project-resolver-v23` because MyBatis statement and include facts resolve only inside one XML source file. A pre-v0.90 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes MyBatis-capable facts.
+- No SQLite schema migration or query command is required. This is an additive XML-framework capability within existing file, method-symbol, exact/unresolved call-edge, source-search, CLI, MCP, and incremental-index contracts; existing generations remain readable.
+
+### Deliberate limits
+
+- This is not a general MyBatis, iBatis, SQL, XML DOM, DTD/entity, schema, or Java project model. It excludes iBatis `<sqlMap>`, result maps, cache/configuration, dynamic SQL tags, statement attribute and SQL-text semantics, dotted/cross-mapper includes, generated interfaces, cross-file Java mapper resolution, DTD/entity processing, validation, and runtime behavior.
+- The inspected local CodeGraph baseline is broader: it supports MyBatis 3 plus iBatis 2 statement forms, richer statement metadata, and mapper include references. SymbolLattice v0.90 independently adds a deliberately narrower parser-backed MyBatis 3 subset with complete source ranges and explicit exact/unresolved same-file evidence; it does not copy CodeGraph source or claim parity.
+
 ## [0.89.0] - 2026-07-31
 
 ### Added

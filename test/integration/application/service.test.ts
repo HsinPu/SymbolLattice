@@ -8122,4 +8122,70 @@ describe("SymbolLatticeService", () => {
     expect(routes.routes).toEqual([]);
     expect(search.results).toMatchObject([{ filePath: "config/catalog.xml", language: "xml" }]);
   });
+
+  it("indexes bounded MyBatis mapper methods and same-file SQL include evidence", async () => {
+    const projectPath = await createInlineProject({
+      "src/main/resources/UserMapper.xml": [
+        '<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"',
+        '  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">',
+        '<mapper namespace="com.example.UserMapper">',
+        '  <sql id="baseColumns">id, email</sql>',
+        '  <select id="findById">SELECT <include refid="baseColumns"/> FROM users</select>',
+        "</mapper>"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    const indexed = await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+    const search = await service.search(projectPath, "findById", { language: "xml" });
+    const persistedFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "src/main/resources/UserMapper.xml");
+    const select = await service.node(projectPath, "com.example.UserMapper::findById");
+
+    expect(indexed).toMatchObject({
+      stale: false,
+      counts: { files: 1, symbols: 3, edges: 3 }
+    });
+    expect(persistedFacts).toMatchObject({
+      language: "xml",
+      extractorVersion: ARTIFACT_FACTS_EXTRACTOR_VERSION
+    });
+    expect(select).toMatchObject({
+      match: {
+        status: "exact",
+        symbol: {
+          kind: "method",
+          qualifiedName: "com.example.UserMapper::findById",
+          isExported: false
+        }
+      },
+      callees: {
+        items: [
+          {
+            edge: {
+              kind: "calls",
+              resolution: "exact",
+              referenceName: "com.example.UserMapper::baseColumns",
+              evidence: {
+                ruleId: "framework.mybatis.mapper.literal-include.same-file-sql",
+                stage: "syntax"
+              }
+            },
+            symbol: {
+              kind: "method",
+              qualifiedName: "com.example.UserMapper::baseColumns"
+            }
+          }
+        ],
+        truncated: false
+      }
+    });
+    expect(routes.routes).toEqual([]);
+    expect(search.results).toMatchObject([
+      { filePath: "src/main/resources/UserMapper.xml", language: "xml" }
+    ]);
+  });
 });

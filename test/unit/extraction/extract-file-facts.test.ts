@@ -8804,6 +8804,132 @@ describe("source extraction", () => {
     ]);
   });
 
+  it("extracts bounded MyBatis mapper statements and same-file SQL includes", () => {
+    const facts = extractFileFacts({
+      filePath: "src/main/resources/UserMapper.xml",
+      language: "xml",
+      sourceText: [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"',
+        '  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">',
+        '<mapper namespace="com.example.UserMapper">',
+        '  <sql id="baseColumns">id, email</sql>',
+        '  <select id="findById">',
+        '    SELECT <include refid="baseColumns"/> FROM users',
+        "  </select>",
+        '  <insert id="insertUser">INSERT INTO users</insert>',
+        "</mapper>"
+      ].join("\n")
+    });
+
+    expect(
+      facts.symbols.map((symbol) => [symbol.kind, symbol.qualifiedName, symbol.isExported])
+    ).toEqual([
+      ["file", "src/main/resources/UserMapper.xml", true],
+      ["method", "com.example.UserMapper::baseColumns", false],
+      ["method", "com.example.UserMapper::findById", false],
+      ["method", "com.example.UserMapper::insertUser", false]
+    ]);
+    expect(facts.symbols.some((symbol) => symbol.kind === "resource")).toBe(false);
+    expect(
+      facts.edges.map((edge) => [
+        edge.kind,
+        edge.referenceName,
+        edge.resolution,
+        edge.confidence,
+        edge.evidence?.ruleId
+      ])
+    ).toEqual([
+      [
+        "contains",
+        "baseColumns",
+        "exact",
+        1,
+        "framework.mybatis.mapper.literal-direct-statement"
+      ],
+      [
+        "contains",
+        "findById",
+        "exact",
+        1,
+        "framework.mybatis.mapper.literal-direct-statement"
+      ],
+      [
+        "contains",
+        "insertUser",
+        "exact",
+        1,
+        "framework.mybatis.mapper.literal-direct-statement"
+      ],
+      [
+        "calls",
+        "com.example.UserMapper::baseColumns",
+        "exact",
+        1,
+        "framework.mybatis.mapper.literal-include.same-file-sql"
+      ]
+    ]);
+    expect(facts.edges.at(-1)?.range).toEqual({
+      start: { line: 7, column: 12 },
+      end: { line: 7, column: 42 }
+    });
+  });
+
+  it("keeps unproven MyBatis forms explicit or absent", () => {
+    const missingFragment = extractFileFacts({
+      filePath: "src/main/resources/MissingMapper.xml",
+      language: "xml",
+      sourceText: [
+        '<mapper namespace="com.example.MissingMapper">',
+        '  <select id="find"><if test="enabled"><include refid="missing"/></if></select>',
+        "</mapper>"
+      ].join("\n")
+    });
+    const invalidNamespaceAndId = extractFileFacts({
+      filePath: "src/main/resources/UnsupportedMapper.xml",
+      language: "xml",
+      sourceText: '<mapper namespace="UserMapper"><select id="find-user"/></mapper>'
+    });
+    const otherDtd = extractFileFacts({
+      filePath: "src/main/resources/OtherDtdMapper.xml",
+      language: "xml",
+      sourceText: [
+        '<!DOCTYPE mapper SYSTEM "https://example.test/mapper.dtd">',
+        '<mapper namespace="com.example.OtherMapper"><select id="find"/></mapper>'
+      ].join("\n")
+    });
+
+    expect(
+      missingFragment.edges.map((edge) => [
+        edge.kind,
+        edge.referenceName,
+        edge.resolution,
+        edge.confidence,
+        edge.evidence?.ruleId
+      ])
+    ).toContainEqual([
+      "calls",
+      "com.example.MissingMapper::missing",
+      "unresolved",
+      0,
+      "framework.mybatis.mapper.literal-include.unresolved-same-file-sql"
+    ]);
+    expect(
+      invalidNamespaceAndId.symbols.map((symbol) => [symbol.kind, symbol.qualifiedName])
+    ).toEqual([
+      ["file", "src/main/resources/UnsupportedMapper.xml"],
+      ["resource", "src/main/resources/UnsupportedMapper.xml#xml-element:mapper[0]"],
+      [
+        "resource",
+        "src/main/resources/UnsupportedMapper.xml#xml-element:mapper[0]/select[0]"
+      ]
+    ]);
+    expect(otherDtd.symbols.map((symbol) => [symbol.kind, symbol.name])).toEqual([
+      ["file", "OtherDtdMapper.xml"]
+    ]);
+    expect(otherDtd.edges).toEqual([]);
+  });
+
   it("rejects malformed, multi-root, and DTD XML without derived facts", () => {
     const malformed = extractFileFacts({
       filePath: "config/broken.xml",
