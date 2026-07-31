@@ -6,6 +6,24 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.77.0] - 2026-07-31
+
+### Added
+
+- Objective-C .m and Objective-C++ .mm source discovery, persisted source-search filtering, CLI/MCP language validation, and an independently implemented lexical implementation extractor.
+- A complete direct non-category @implementation ClassName ... @end block now emits one class symbol. Direct one-line brace-bodied instance and class methods emit contained method symbols, including multi-part selector names such as create:with:.
+- The scanner blanks line comments, block comments, quoted literals, and preprocessor directives while preserving offsets. This prevents macro, comment, and string text from fabricating declarations. Unit and integration coverage verifies .m/.mm discovery, selector extraction, source-search filtering, exact containment evidence, category/header rejection, malformed-source fail-closed behavior, and Objective-C++ indexing. The standalone Traditional Chinese comparison report is at C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.77.0.md.
+
+### Compatibility
+
+- The artifact extractor advances to multi-language-ast-v66; the project resolver remains project-resolver-v23 because every accepted Objective-C fact is file-local. A pre-v0.77 active index reports indexer-version-changed until an explicit sync or index republishes Objective-C-capable facts.
+- No SQLite schema migration or query command is required. Objective-C is additive to the existing artifact, graph, source-search, CLI, MCP, incremental-index, and evidence contracts; existing generations remain readable.
+
+### Deliberate limits
+
+- This is not a general Objective-C parser, compiler, header analyzer, or runtime analyzer. It excludes .h headers, @interface and @protocol declarations, categories/extensions, properties, imports, inheritance, C/C++ declarations, Objective-C message calls, Swift bridging, compiler configuration, and runtime behavior. Only direct complete implementation bodies are eligible.
+- The inspected local CodeGraph baseline has a dedicated Objective-C Tree-sitter extractor and Swift-Objective-C bridge resolution, so it remains broader for language syntax and cross-language relationships. SymbolLattice v0.77 independently adds a smaller evidence-bearing declaration subset and does not copy CodeGraph source or claim full parity.
+
 ## [0.76.0] - 2026-07-31
 
 ### Added

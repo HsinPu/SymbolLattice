@@ -4320,6 +4320,52 @@ describe("SymbolLatticeService", () => {
     expect(search.results).toMatchObject([{ filePath: "src/health.pas", language: "pascal" }]);
   });
 
+  it("indexes Objective-C++ implementation source and retains Objective-C source-search filtering", async () => {
+    const projectPath = await createInlineProject({
+      "src/HealthController.mm": [
+        "@implementation HealthController",
+        "- (void)health {",
+        "}",
+        "- (void)create:(NSString *)name with:(id)context {",
+        "}",
+        "@end"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    const indexed = await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+    const search = await service.search(projectPath, "HealthController", { language: "objc" });
+    const persistedFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "src/HealthController.mm");
+    const health = await service.find(
+      projectPath,
+      "src/HealthController.mm#HealthController.health"
+    );
+
+    expect(indexed).toMatchObject({
+      stale: false,
+      counts: { files: 1, symbols: expect.any(Number), edges: expect.any(Number) }
+    });
+    expect(persistedFacts).toMatchObject({
+      language: "objc",
+      extractorVersion: ARTIFACT_FACTS_EXTRACTOR_VERSION
+    });
+    expect(health.symbols).toMatchObject([
+      {
+        kind: "method",
+        qualifiedName: "src/HealthController.mm#HealthController.health",
+        isExported: true
+      }
+    ]);
+    expect(routes.routes).toEqual([]);
+    expect(search.results).toMatchObject([
+      { filePath: "src/HealthController.mm", language: "objc" }
+    ]);
+  });
+
   it("indexes proven Pascal Horse routes with their prior local handlers", async () => {
     const projectPath = await createInlineProject({
       "src/server.pas": [

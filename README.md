@@ -2,7 +2,7 @@
 
 # SymbolLattice
 
-**Evidence-first local code intelligence for TypeScript, JavaScript, ArkTS/ArkUI, Vue, Svelte, Astro, Razor/Blazor, Terraform/OpenTofu, Shopify Liquid, Twig, Laravel Blade, Solidity, CFML/CFScript, Nix, VB.NET, Python/Django, Go, Rust, Java, PHP, C, Lua/Luau, Pascal, R, Elixir, Erlang, Clojure, Perl, Julia, Haskell, OCaml, F#, Nim, C++, C#, Ruby, Kotlin, Swift, Dart, and Scala projects.**
+**Evidence-first local code intelligence for TypeScript, JavaScript, ArkTS/ArkUI, Vue, Svelte, Astro, Razor/Blazor, Terraform/OpenTofu, Shopify Liquid, Twig, Laravel Blade, Solidity, CFML/CFScript, Nix, VB.NET, Python/Django, Go, Rust, Java, PHP, C, Lua/Luau, Pascal, Objective-C/Objective-C++, R, Elixir, Erlang, Clojure, Perl, Julia, Haskell, OCaml, F#, Nim, C++, C#, Ruby, Kotlin, Swift, Dart, and Scala projects.**
 
 [![Version](https://img.shields.io/github/v/tag/HsinPu/symbol-lattice?label=version)](https://github.com/HsinPu/symbol-lattice/tags)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D22.13-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
@@ -14,7 +14,10 @@
 </div>
 
 > [!IMPORTANT]
-> **v0.76.0** is an early developer release. This public repository runs from source; its npm package is intentionally private and is not published to npm.
+> **v0.77.0** is an early developer release. This public repository runs from source; its npm package is intentionally private and is not published to npm.
+
+> [!NOTE]
+> **v0.77.0 — Objective-C first slice.** SymbolLattice now discovers Objective-C and Objective-C++ implementation files, keeps only complete direct implementation classes and brace-bodied methods, and retains exact local containment evidence without pretending to parse headers, categories, calls, or runtime behavior.
 
 SymbolLattice builds a local symbol graph without hiding uncertainty. It keeps syntax-proven artifact facts, resolves cross-file relationships conservatively, and records why every resolved edge exists. The graph stays local to the inspected project under `.symbol-lattice/index.sqlite`.
 
@@ -95,6 +98,7 @@ node dist/cli/main.js search "health" --project /path/to/project --language c
 node dist/cli/main.js search "health" --project /path/to/project --language lua
 node dist/cli/main.js search "health" --project /path/to/project --language luau
 node dist/cli/main.js search "health" --project /path/to/project --language pascal
+node dist/cli/main.js search "health" --project /path/to/project --language objc
 node dist/cli/main.js search "health" --project /path/to/project --language r
 node dist/cli/main.js search "health" --project /path/to/project --language elixir
 node dist/cli/main.js search "health" --project /path/to/project --language erlang
@@ -153,8 +157,9 @@ One-shot data commands emit stable, pretty JSON. `watch` is the deliberate strea
 
 ## Capabilities
 
-| Area | v0.76.0 behavior |
+| Area | v0.77.0 behavior |
 | --- | --- |
+| Objective-C / Objective-C++ | Objective-C .m and Objective-C++ .mm implementation files are indexed as objc. Only complete direct non-category implementation blocks and complete one-line brace-bodied instance or class methods emit exact local contains evidence. Headers, categories, protocols, imports, properties, calls, and Swift bridging remain outside this first slice. |
 | Source files | TypeScript, TSX, JavaScript, JSX, ArkTS/ArkUI, Vue SFC, Svelte SFC, Astro SFC, Razor/Blazor components, Terraform/OpenTofu HCL, Shopify Liquid, Twig, Laravel Blade, Solidity, CFML/CFScript, Nix, VB.NET, Python, Go, Rust, Java, PHP, C, Lua, Luau, Pascal, R, Elixir, Erlang, Clojure, Perl, Julia, Haskell, OCaml, F#, Nim, C++, C#, Ruby, Kotlin, Swift, Dart, and Scala (`.ets`, `.vue`, `.svelte`, `.astro`, `.razor`, `.tf`, `.tfvars`, `.tofu`, `.liquid`, `.twig`, `.blade.php`, `.sol`, `.cfc`, `.cfm`, `.cfs`, `.nix`, `.vb`, `.c`, `.lua`, `.luau`, `.pas`, `.dpr`, `.dpk`, `.lpr`, `.r`, `.ex`, `.exs`, `.erl`, `.clj`, `.pl`, `.pm`, `.jl`, `.hs`, `.ml`, `.fs`, `.nim`, `.cpp`, `.cc`, `.cxx`, `.hpp`, `.hh`, `.hxx`, `.cs`, `.rb`, `.kt`, `.swift`, `.dart`, `.scala`; plus Play `conf/routes` and `conf/*.routes` route tables) |
 | F# + Giraffe | Direct top-level typed `HttpFunc` / `HttpContext` handlers plus exactly one `open Giraffe` proof and a direct literal `choose [` route table. Fixed HTTP verbs and plain `route "/..."` entries become exact same-file or explicit unresolved route evidence. |
 | Nim + Jester | Direct top-level zero-argument `proc` handlers plus exactly one direct `import` list containing `jester`, then a flat `routes:` or `router name:` literal route block. Fixed lowercase HTTP verbs become exact same-file or explicit unresolved route evidence. |
@@ -413,6 +418,14 @@ end.
 The program creates `GET /health` and `POST /users` route symbols and exact `routes` edges to their unique, prior same-file routines, each carrying `framework.horse.direct-uses.literal-route.local-routine` syntax evidence. The source must contain exactly one standalone direct `uses Horse;`, exactly one direct `program` declaration, and one complete top-level `begin ... end.` block. Only one-line slash-prefixed literal `THorse.Get` / `THorse.Post` calls at that main-block level are accepted.
 
 Horse support deliberately excludes combined or aliased `uses`, units, inline or multiline callbacks, `Put` / `Delete` and other HTTP methods, `THorse` aliases/subclasses/wrappers, groups/prefixes/middleware, nested or routine-local registrations, dynamic/query/fragment/double-slash paths, late/ambiguous/cross-file handlers, compilation, and runtime behavior. This is a narrow static evidence surface, not a claim of general Horse compatibility.
+
+#### Objective-C / Objective-C++
+
+v0.77 adds Objective-C .m and Objective-C++ .mm discovery through an independently implemented lexical boundary. It emits one class symbol for each complete direct non-category @implementation ClassName ... @end block, plus contained method symbols for direct one-line - or + declarations with a complete brace body. Multi-part selectors such as create:with: remain a single method name.
+
+Before declaration matching, the scanner blanks line and block comments, single- and double-quoted literals, and preprocessor directives while preserving source offsets. This means comment, string, and macro text cannot fabricate class or method facts. Unbalanced comments, literals, braces, duplicate ordinary implementations, or an unfinished implementation retain only the file symbol.
+
+This first Objective-C slice deliberately excludes .h headers, @interface and @protocol declarations, categories and class extensions, properties, imports, inheritance, C or C++ declarations, Objective-C message calls, Swift interoperability, compiler configuration, and runtime behavior. Objective-C++ files are accepted only through the shared Objective-C declaration boundary; this is not a C++ parser claim.
 
 #### Plumber (R)
 
@@ -2241,7 +2254,7 @@ src/
 
 ## Deliberate boundaries
 
-v0.76.0 does not yet provide:
+v0.77.0 does not yet provide:
 
 - Daemon mode, background automatic sync after the foreground process exits, cross-process watch coordination, MCP per-query pending-file banners, worker pools, or historical source browsing.
 - pnpm workspace YAML, TypeScript project references, external/package `extends`, or nested `.gitignore` semantics.
@@ -2285,6 +2298,7 @@ v0.76.0 does not yet provide:
 - Semantic type checking, transitive hierarchy traversal, declaration-merging semantics, override dispatch, mixin/qualified/conditional heritage expressions, or automatic framework decorator inference. v0.18 recognizes direct imported NestJS HTTP decorators, direct static `RouterModule.register()` prefixes, and the narrowly defined non-HTTP decorators documented above; it does not infer custom decorators, barrels, `forRoot` / `forChild`, global/version prefixes, guards, GraphQL field resolvers, dynamic patterns, dynamic gateway configuration, or runtime transport wiring.
 - Language adapters beyond TS/TSX/JS/JSX/ArkTS/Vue/Svelte/Astro/Razor/Terraform/OpenTofu/Shopify-Liquid/Twig/Laravel-Blade/Solidity/CFML-CFScript/Nix/VB.NET/Python/Go/Rust/Java/PHP/C/Lua/Luau/Pascal/R/Elixir/Erlang/Clojure/Perl/Julia/Haskell/OCaml/F#/C++/C#/Ruby/Kotlin/Swift/Dart/Scala, external dependency indexing, telemetry, or multi-project routing.
 - Embedding-based or cloud retrieval, semantic ranking, arbitrary natural-language context assembly, semantic Git diff beyond immutable zero-context hunk-to-revision-local-declaration evidence, or reliable rename/move/cross-side identity attribution.
+- The Objective-C surface is intentionally a declaration-only lexical subset. It accepts only .m and .mm complete direct ordinary implementation blocks plus one-line brace-bodied instance or class methods. It does not index .h headers, interfaces, protocols, categories, extensions, properties, imports, inheritance, C/C++ symbols, message calls, Swift bridges, compiler configuration, or runtime behavior; malformed lexical boundaries retain only the file symbol.
 
 ## Roadmap
 

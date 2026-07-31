@@ -18,6 +18,7 @@ import { extractGoFileFacts } from "./go.js";
 import { extractJavaFileFacts } from "./java.js";
 import { extractKotlinFileFacts } from "./kotlin.js";
 import { extractLuaFileFacts } from "./lua.js";
+import { extractObjectiveCFileFacts } from "./objc.js";
 import { extractPascalFileFacts } from "./pascal.js";
 import { extractRFileFacts } from "./r.js";
 import { extractPhpFileFacts } from "./php.js";
@@ -3686,6 +3687,9 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
   }
   if (input.language === "pascal") {
     return extractPascalFileFacts({ ...input, language: "pascal" });
+  }
+  if (input.language === "objc") {
+    return extractObjectiveCFileFacts({ ...input, language: "objc" });
   }
   if (input.language === "r") {
     return extractRFileFacts({ ...input, language: "r" });

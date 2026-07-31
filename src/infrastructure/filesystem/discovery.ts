@@ -31,6 +31,8 @@ export const SUPPORTED_EXTENSIONS: ReadonlyMap<string, SupportedLanguage> = new 
   [".dpr", "pascal"],
   [".dpk", "pascal"],
   [".lpr", "pascal"],
+  [".m", "objc"],
+  [".mm", "objc"],
   [".r", "r"],
   [".ex", "elixir"],
   [".exs", "elixir"],

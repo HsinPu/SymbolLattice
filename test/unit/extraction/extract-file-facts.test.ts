@@ -3389,6 +3389,76 @@ describe("source extraction", () => {
     expect(malformed.symbols.map((symbol) => symbol.kind)).toEqual(["file"]);
   });
 
+  it("extracts direct Objective-C implementation methods while rejecting unsupported forms", () => {
+    const facts = extractFileFacts({
+      filePath: "src/health.m",
+      language: "objc",
+      sourceText: [
+        "#import <Foundation/Foundation.h>",
+        "",
+        "@interface HealthController : NSObject",
+        "- (void)declarationOnly;",
+        "@end",
+        "",
+        "/*",
+        "@implementation CommentGhost",
+        "@end",
+        "*/",
+        "#define DEFINE_GHOST \\",
+        "@implementation MacroGhost \\",
+        "@end",
+        "",
+        "@implementation HealthController",
+        "- (void)health {",
+        '  NSString *message = @"@implementation StringGhost";',
+        "}",
+        "+ (instancetype)shared {",
+        "  return nil;",
+        "}",
+        "- (void)create:(NSString *)name with:(id)context {",
+        "  (void)name;",
+        "  (void)context;",
+        "}",
+        "- (void)declaredOnly;",
+        "- (void)multiLine:",
+        "  (NSString *)name {",
+        "}",
+        "@end",
+        "",
+        "@implementation HealthController (Diagnostics)",
+        "- (void)ignored {",
+        "}",
+        "@end"
+      ].join("\n")
+    });
+    const malformed = extractFileFacts({
+      filePath: "src/broken.m",
+      language: "objc",
+      sourceText: ["@implementation Broken", "- (void)incomplete {"].join("\n")
+    });
+
+    expect(
+      facts.symbols.filter((symbol) => symbol.kind === "class").map((symbol) => symbol.qualifiedName)
+    ).toEqual(["src/health.m#HealthController"]);
+    expect(
+      facts.symbols.filter((symbol) => symbol.kind === "method").map((symbol) => symbol.qualifiedName)
+    ).toEqual([
+      "src/health.m#HealthController.health",
+      "src/health.m#HealthController.shared",
+      "src/health.m#HealthController.create:with:"
+    ]);
+    expect(facts.edges.filter((edge) => edge.kind === "contains")).toHaveLength(4);
+    expect(
+      facts.edges.filter((edge) => edge.kind === "contains").map((edge) => edge.evidence?.ruleId)
+    ).toEqual([
+      "language.objc.implementation.direct",
+      "language.objc.method.direct-implementation",
+      "language.objc.method.direct-implementation",
+      "language.objc.method.direct-implementation"
+    ]);
+    expect(malformed.symbols.map((symbol) => symbol.kind)).toEqual(["file"]);
+  });
+
   it("extracts direct Horse Get/Post routes only from a proven Pascal program main block", () => {
     const facts = extractFileFacts({
       filePath: "src/server.dpr",

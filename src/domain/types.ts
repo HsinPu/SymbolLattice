@@ -108,6 +108,7 @@ export const ARTIFACT_LANGUAGES = [
   "lua",
   "luau",
   "pascal",
+  "objc",
   "r",
   "elixir",
   "erlang",

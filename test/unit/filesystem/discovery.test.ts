@@ -52,6 +52,9 @@ describe("source discovery", () => {
     await writeFile(join(projectPath, "src", "g.jl"), "health() = \"ok\"\n", "utf8");
     await writeFile(join(projectPath, "src", "g.lua"), "local answer = 42\n", "utf8");
     await writeFile(join(projectPath, "src", "g.luau"), "--!strict\nlocal answer: number = 42\n", "utf8");
+    await writeFile(join(projectPath, "src", "g.m"), "@implementation Answer\n@end\n", "utf8");
+    await writeFile(join(projectPath, "src", "g.mm"), "@implementation Answer\n@end\n", "utf8");
+    await writeFile(join(projectPath, "src", "g.h"), "@interface Answer : NSObject\n@end\n", "utf8");
     await writeFile(join(projectPath, "src", "g.ml"), "let answer = 42\n", "utf8");
     await writeFile(join(projectPath, "src", "g.fs"), "let answer = 42\n", "utf8");
     await writeFile(join(projectPath, "src", "g.nim"), "proc answer() = discard\n", "utf8");
@@ -109,7 +112,9 @@ describe("source discovery", () => {
       "src/g.jl",
       "src/g.lua",
       "src/g.luau",
+      "src/g.m",
       "src/g.ml",
+      "src/g.mm",
       "src/g.nim",
       "src/g.pas",
       "src/g.pl",
@@ -159,7 +164,9 @@ describe("source discovery", () => {
       "julia",
       "lua",
       "luau",
+      "objc",
       "ocaml",
+      "objc",
       "nim",
       "pascal",
       "perl",
