@@ -3534,7 +3534,7 @@ describe("source extraction", () => {
     expect(malformedProtocol.symbols.map((symbol) => symbol.kind)).toEqual(["file"]);
   });
 
-  it("extracts direct Horse Get/Post/Put/Patch/Delete routes only from a proven Pascal program main block", () => {
+  it("extracts direct Horse Get/Post/Put/Patch/Delete/Head routes only from a proven Pascal program main block", () => {
     const facts = extractFileFacts({
       filePath: "src/server.dpr",
       language: "pascal",
@@ -3563,12 +3563,17 @@ describe("source extraction", () => {
         "begin",
         "end;",
         "",
+        "procedure HeadHealth(Req: THorseRequest; Res: THorseResponse);",
+        "begin",
+        "end;",
+        "",
         "begin",
         "  THorse.Get('/health', health);",
         "  THorse.Post('/users', CreateUser);",
         "  THorse.Put('/users', UpdateUser);",
         "  THorse.Patch('/users', PatchUser);",
         "  THorse.Delete('/users', DeleteUser);",
+        "  THorse.Head('/health', HeadHealth);",
         "  THorse.Options('/unsupported', Health);",
         "  if True then",
         "  begin",
@@ -3652,7 +3657,8 @@ describe("source extraction", () => {
       "POST /users",
       "PUT /users",
       "PATCH /users",
-      "DELETE /users"
+      "DELETE /users",
+      "HEAD /health"
     ]);
     expect(facts.edges.filter((edge) => edge.kind === "routes")).toMatchObject([
       {
@@ -3689,6 +3695,14 @@ describe("source extraction", () => {
       },
       {
         referenceName: "DeleteUser",
+        resolution: "exact",
+        evidence: {
+          ruleId: "framework.horse.direct-uses.literal-route.local-routine",
+          candidateSymbolIds: expect.any(Array)
+        }
+      },
+      {
+        referenceName: "HeadHealth",
         resolution: "exact",
         evidence: {
           ruleId: "framework.horse.direct-uses.literal-route.local-routine",

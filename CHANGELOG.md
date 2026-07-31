@@ -6,6 +6,22 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.82.0] - 2026-07-31
+
+### Added
+
+- Pascal Horse route extraction now accepts a direct main-program `THorse.Head('/literal', PriorLocalRoutine)` registration in addition to Get, Post, Put, Patch, and Delete. The accepted form still requires exactly one standalone `uses Horse;` proof, exactly one direct program main block, a one-line slash-prefixed literal path, and a unique prior same-file complete routine handler. Unit and service integration coverage verifies exact `HEAD` route/handler evidence and method filtering while preserving `Options` rejection. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.82.0.md`.
+
+### Compatibility
+
+- The artifact extractor advances to `multi-language-ast-v71`; the project resolver remains `project-resolver-v23` because every accepted Horse route and handler proof remains file-local. A pre-v0.82 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes the expanded Horse facts.
+- No SQLite schema migration or query command is required. This is an additive framework capability expansion within the existing Pascal artifact, graph, route query, source-search, CLI, MCP, incremental-index, and evidence contracts; existing generations remain readable.
+
+### Deliberate limits
+
+- `Options` and all other Horse methods remain excluded, as do combined/aliased `uses`, units, callbacks, groups, prefixes, middleware, aliases/wrappers, nested or routine-local registrations, nonliteral paths, late/ambiguous/cross-file handlers, compilation, and runtime behavior.
+- The inspected local CodeGraph baseline has broad Pascal syntax and relationship analysis but no dedicated Horse route rule. SymbolLattice v0.82 remains narrower in general Pascal coverage and deliberately deeper for this source-proven Horse `HEAD` registration; the implementation is independent and does not copy CodeGraph source.
+
 ## [0.81.0] - 2026-07-31
 
 ### Added

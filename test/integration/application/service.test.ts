@@ -4472,12 +4472,17 @@ describe("SymbolLatticeService", () => {
         "begin",
         "end;",
         "",
+        "procedure HeadHealth(Req: THorseRequest; Res: THorseResponse);",
+        "begin",
+        "end;",
+        "",
         "begin",
         "  THorse.Get('/health', health);",
         "  THorse.Post('/users', CreateUser);",
         "  THorse.Put('/users', UpdateUser);",
         "  THorse.Patch('/users', PatchUser);",
         "  THorse.Delete('/users', DeleteUser);",
+        "  THorse.Head('/health', HeadHealth);",
         "end."
       ].join("\n")
     });
@@ -4490,6 +4495,7 @@ describe("SymbolLatticeService", () => {
     const putRoutes = await service.routes(projectPath, { method: "PUT" });
     const patchRoutes = await service.routes(projectPath, { method: "PATCH" });
     const deleteRoutes = await service.routes(projectPath, { method: "DELETE" });
+    const headRoutes = await service.routes(projectPath, { method: "HEAD" });
     const search = await service.search(projectPath, "CreateUser", { language: "pascal" });
     const persistedFacts = graphStore
       .getArtifactFacts(projectPath)
@@ -4565,6 +4571,19 @@ describe("SymbolLatticeService", () => {
               stage: "syntax"
             })
           })
+        }),
+        expect.objectContaining({
+          method: "HEAD",
+          path: "/health",
+          handler: expect.objectContaining({ qualifiedName: "src/server.pas#HeadHealth" }),
+          edge: expect.objectContaining({
+            kind: "routes",
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.horse.direct-uses.literal-route.local-routine",
+              stage: "syntax"
+            })
+          })
         })
       ])
     );
@@ -4572,6 +4591,7 @@ describe("SymbolLatticeService", () => {
     expect(putRoutes.routes).toMatchObject([{ method: "PUT", path: "/users" }]);
     expect(patchRoutes.routes).toMatchObject([{ method: "PATCH", path: "/users" }]);
     expect(deleteRoutes.routes).toMatchObject([{ method: "DELETE", path: "/users" }]);
+    expect(headRoutes.routes).toMatchObject([{ method: "HEAD", path: "/health" }]);
     expect(search.results).toMatchObject([{ filePath: "src/server.pas", language: "pascal" }]);
   });
 
