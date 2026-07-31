@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.116.0 is an early developer release. Run it from source; the npm package is not published.
+> v0.117.0 is an early developer release. Run it from source; the npm package is not published.
 
 SymbolLattice builds a queryable local code-symbol graph and preserves the source rule, resolution stage, and confidence behind every relationship. Index data stays in the inspected project's `.symbol-lattice/index.sqlite`; source code is never silently uploaded.
 
@@ -48,17 +48,17 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 On Windows PowerShell, use `npm.cmd` if `npm` is unavailable. Filesystem roots and home directories are rejected unless `--force` is explicit.
 
-## v0.116.0
+## v0.117.0
 
-- Rust Actix Web now projects direct same-file attribute handlers mounted through `App::new().service(handler)`, scoped `.service(handler)`, and nested static scopes to their effective paths.
-- Only a syntax-proven mount replaces an attribute declaration route. An unmounted or shadowed handler keeps its original declaration route, avoiding both lost facts and guessed paths.
+- Rust Actix Web now projects effective paths from same-file `App::configure(config)` and `web::scope(...).configure(config)` mounts. It accepts direct or aliased `&mut ServiceConfig` parameter types.
+- A callback supports literal `cfg.route(...)`, mounted resources, scopes, attribute services, and named nested `cfg.configure(...)` calls. Handlers resolve only in the callback's own lexical scope.
 - The artifact-facts version advances; the next explicit `sync` or fresh `init` safely re-extracts affected Rust facts.
 
 ## Deliberate limits
 
 - This is not a compiler, type checker, framework runtime, or execution tracer.
 - Dynamic dispatch, reflection, macro expansion, code generation, dependency injection, and ambiguous name matches never become exact graph relations.
-- Actix Web accepts directly imported HTTP attribute macros and contiguous static `App::new()` `.route(...)` / `.service(...)` chains. An attribute service must be a direct same-file, unshadowed named handler. `configure`, `ServiceConfig`, cross-file or namespace handlers, guards, wrappers, dynamic paths, and runtime composition remain intentionally unprojected.
+- Actix Web accepts directly imported HTTP attribute macros and contiguous static `App::new()` `.route(...)` / `.service(...)` / `.configure(...)` chains. A `ServiceConfig` callback must be same-file, unique, named, and type-proven. Closures, cross-file or namespace handlers, guards, wrappers, dynamic callbacks or paths, and runtime composition remain intentionally unprojected.
 
 ## Verification
 

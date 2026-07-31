@@ -24,6 +24,7 @@ interface StaticRustFunction {
   readonly name: string;
   readonly node: RustSyntaxNode;
   readonly body: RustSyntaxNode;
+  readonly parameters: readonly RustSyntaxNode[];
   readonly parameterNames: readonly string[];
   readonly attributes: readonly RustSyntaxNode[];
 }
@@ -37,6 +38,8 @@ interface StaticRustRoute {
   readonly method: RouteMethod;
   readonly path: string;
   readonly handlerName: string;
+  /** Whether handler lexical proof belongs to the outer builder or a ServiceConfig callback. */
+  readonly handlerScope?: "builder" | "service-config";
   readonly node: RustSyntaxNode;
   readonly ruleId: string;
 }
@@ -51,15 +54,28 @@ interface StaticActixWebResourceChain {
   readonly routes: readonly StaticRustRoute[];
 }
 
-interface StaticActixWebScopeChain {
-  readonly prefix: string;
+interface StaticActixWebRouteProjection {
   readonly routes: readonly StaticRustRoute[];
   readonly mountedAttributeHandlers: readonly string[];
 }
 
-interface StaticActixWebAppChain {
-  readonly routes: readonly StaticRustRoute[];
-  readonly mountedAttributeHandlers: readonly string[];
+interface StaticActixWebScopeChain extends StaticActixWebRouteProjection {
+  readonly prefix: string;
+}
+
+interface StaticActixWebAppChain extends StaticActixWebRouteProjection {}
+
+interface StaticActixWebServiceConfig {
+  readonly name: string;
+  readonly parameterName: string;
+  readonly parameterNames: readonly string[];
+  readonly body: RustSyntaxNode;
+}
+
+interface StaticActixWebRouteContext {
+  readonly webAliases: ReadonlySet<string>;
+  readonly attributeRoutesByHandler: ReadonlyMap<string, readonly StaticRustRoute[]>;
+  readonly serviceConfigsByName: ReadonlyMap<string, StaticActixWebServiceConfig>;
 }
 
 interface StaticActixWebAttributeService {
@@ -83,6 +99,10 @@ const ACTIX_WEB_APP_ATTRIBUTE_SERVICE_ROUTE_RULE_ID =
   "framework.actix-web.direct-app.attribute-service.literal-path.local-function";
 const ACTIX_WEB_SCOPE_ATTRIBUTE_SERVICE_ROUTE_RULE_ID =
   "framework.actix-web.direct-app.web-scope.attribute-service.literal-path.local-function";
+const ACTIX_WEB_APP_CONFIGURE_ROUTE_RULE_ID =
+  "framework.actix-web.direct-app.configure.service-config.literal-path.local-function";
+const ACTIX_WEB_SCOPE_CONFIGURE_ROUTE_RULE_ID =
+  "framework.actix-web.direct-app.web-scope.configure.service-config.literal-path.local-function";
 const ROCKET_ATTRIBUTE_ROUTE_RULE_ID =
   "framework.rocket.attribute-route.literal-path.local-function";
 
@@ -366,6 +386,7 @@ function staticRustAttributeRouteAliases(
 function staticActixWebImportAliases(input: RustExtractFileFactsInput, root: RustSyntaxNode): {
   readonly appAliases: ReadonlySet<string>;
   readonly webAliases: ReadonlySet<string>;
+  readonly serviceConfigAliases: ReadonlySet<string>;
 } {
   const imports = staticTopLevelUseImports(input, root);
   const pathsByLocalName = new Map<string, string[]>();
@@ -387,6 +408,14 @@ function staticActixWebImportAliases(input: RustExtractFileFactsInput, root: Rus
     webAliases: new Set(
       imports
         .filter((imported) => imported.path === ACTIX_WEB_WEB_PATH && isUnambiguous(imported))
+        .map((imported) => imported.localName)
+    ),
+    serviceConfigAliases: new Set(
+      imports
+        .filter(
+          (imported) =>
+            imported.path === "actix_web::web::ServiceConfig" && isUnambiguous(imported)
+        )
         .map((imported) => imported.localName)
     )
   };
@@ -429,26 +458,67 @@ function staticRustFunction(
   const children = directChildren(functionNode);
   const fnIndex = children.findIndex((child) => child.name === "fn");
   const name = children.slice(fnIndex + 1).find((child) => child.name === "BoundIdentifier");
-  const parameters = children.find((child) => child.name === "ParamList");
+  const parameterList = children.find((child) => child.name === "ParamList");
   const body = children.find((child) => child.name === "Block");
   const nameText = name === undefined ? null : identifierText(input, name);
   if (fnIndex < 0 || nameText === null || body === undefined) {
     return null;
   }
+  const parameters =
+    parameterList === undefined
+      ? []
+      : directChildren(parameterList).filter((parameter) => parameter.name === "Parameter");
   return {
     name: nameText,
     node: functionNode,
     body,
+    parameters,
     attributes: node.name === "AttributeItem"
       ? directChildren(node).filter((child) => child.name === "Attribute")
       : [],
-    parameterNames:
-      parameters === undefined
-        ? []
-        : directChildren(parameters).flatMap((parameter) => {
-            return parameter.name === "Parameter" ? boundIdentifierNames(input, parameter) : [];
-          })
+    parameterNames: parameters.flatMap((parameter) => boundIdentifierNames(input, parameter))
   };
+}
+
+function staticActixWebServiceConfig(
+  input: RustExtractFileFactsInput,
+  functionDeclaration: StaticRustFunction,
+  webAliases: ReadonlySet<string>,
+  serviceConfigAliases: ReadonlySet<string>
+): StaticActixWebServiceConfig | null {
+  if (functionDeclaration.parameters.length !== 1) {
+    return null;
+  }
+  const parameter = functionDeclaration.parameters[0];
+  if (parameter === undefined) {
+    return null;
+  }
+  const parameterNameNodes = directChildren(parameter).filter(
+    (child) => child.name === "BoundIdentifier"
+  );
+  const parameterNameNode = parameterNameNodes[0];
+  const parameterName =
+    parameterNameNodes.length === 1 && parameterNameNode !== undefined
+      ? identifierText(input, parameterNameNode)
+      : null;
+  if (parameterName === null) {
+    return null;
+  }
+  const compactParameter = nodeText(input, parameter).replace(/\s+/gu, "");
+  const qualifiedConfig = [...webAliases].some(
+    (webAlias) => compactParameter === `${parameterName}:&mut${webAlias}::ServiceConfig`
+  );
+  const directlyImportedConfig = [...serviceConfigAliases].some(
+    (configAlias) => compactParameter === `${parameterName}:&mut${configAlias}`
+  );
+  return !qualifiedConfig && !directlyImportedConfig
+    ? null
+    : {
+        name: functionDeclaration.name,
+        parameterName,
+        parameterNames: functionDeclaration.parameterNames,
+        body: functionDeclaration.body
+      };
 }
 
 function staticRustAttributeRoute(
@@ -843,6 +913,209 @@ function staticActixWebAttributeService(
   };
 }
 
+function staticDirectExpressionStatementCall(statement: RustSyntaxNode): RustSyntaxNode | null {
+  if (statement.name !== "ExpressionStatement") {
+    return null;
+  }
+  const calls = directChildren(statement).filter((child) => child.name === "CallExpression");
+  return calls.length === 1 ? calls[0] ?? null : null;
+}
+
+function configuredActixWebRoutes(
+  prefix: string,
+  routes: readonly StaticRustRoute[],
+  mountNode: RustSyntaxNode,
+  ruleId: string
+): readonly StaticRustRoute[] {
+  return routes.map((route) => ({
+    ...route,
+    path: prefixedActixWebScopePath(prefix, route.path),
+    handlerScope: "service-config",
+    node: mountNode,
+    ruleId
+  }));
+}
+
+/**
+ * A nested ServiceConfig callback has its own lexical scope. Routes already
+ * marked as `service-config` were proven there, so an enclosing callback's
+ * local names must not suppress their top-level handler resolution.
+ */
+function staticActixWebServiceConfigVisibleRoutes(
+  routes: readonly StaticRustRoute[],
+  shadowedNames: ReadonlySet<string>
+): readonly StaticRustRoute[] {
+  return routes.filter(
+    (route) => route.handlerScope === "service-config" || !shadowedNames.has(route.handlerName)
+  );
+}
+
+function staticActixWebConfiguredRoutes(
+  input: RustExtractFileFactsInput,
+  configurationNode: RustSyntaxNode,
+  mountNode: RustSyntaxNode,
+  context: StaticActixWebRouteContext,
+  callerShadowedNames: ReadonlySet<string>,
+  prefix: string,
+  ruleId: string,
+  configurationStack: ReadonlySet<string>
+): StaticActixWebRouteProjection | null {
+  const configurationName = identifierText(input, configurationNode);
+  if (configurationName === null || callerShadowedNames.has(configurationName)) {
+    return null;
+  }
+  const configuration = context.serviceConfigsByName.get(configurationName);
+  if (configuration === undefined || configurationStack.has(configurationName)) {
+    return null;
+  }
+  const nextStack = new Set(configurationStack);
+  nextStack.add(configurationName);
+  return staticActixWebServiceConfigRoutes(
+    input,
+    configuration,
+    context,
+    prefix,
+    ruleId,
+    mountNode,
+    nextStack
+  );
+}
+
+function staticActixWebServiceConfigRoutes(
+  input: RustExtractFileFactsInput,
+  configuration: StaticActixWebServiceConfig,
+  context: StaticActixWebRouteContext,
+  prefix: string,
+  ruleId: string,
+  mountNode: RustSyntaxNode,
+  configurationStack: ReadonlySet<string>
+): StaticActixWebRouteProjection | null {
+  const statements = directChildren(configuration.body);
+  const staticItemBoundNames = new Set(
+    statements.flatMap((statement) => directStaticItemBoundNames(input, statement))
+  );
+  const lexicalShadowedNames = new Set([
+    ...configuration.parameterNames,
+    ...staticItemBoundNames
+  ]);
+  let configurationReceiverAvailable = !staticItemBoundNames.has(configuration.parameterName);
+  const routes: StaticRustRoute[] = [];
+  const mountedAttributeHandlers: string[] = [];
+
+  for (const statement of statements) {
+    const expression = staticDirectExpressionStatementCall(statement);
+    const call = expression === null ? null : staticFieldCall(input, expression);
+    const receiverName = call === null ? null : identifierText(input, call.receiver);
+    if (call !== null && receiverName === configuration.parameterName && configurationReceiverAvailable) {
+      if (call.methodName === "route") {
+        const pathNode = call.arguments_[0];
+        const routeHandler = call.arguments_[1];
+        const path = pathNode === undefined ? null : staticLiteralSlashPath(input, pathNode);
+        const methodRoute =
+          routeHandler === undefined
+            ? null
+            : staticActixWebMethodTo(input, routeHandler, context.webAliases, lexicalShadowedNames);
+        if (call.arguments_.length !== 2 || path === null || methodRoute === null) {
+          return null;
+        }
+        if (!lexicalShadowedNames.has(methodRoute.handlerName)) {
+          routes.push({
+            method: methodRoute.method,
+            path: prefixedActixWebScopePath(prefix, path),
+            handlerName: methodRoute.handlerName,
+            handlerScope: "service-config",
+            node: mountNode,
+            ruleId
+          });
+        }
+      } else if (call.methodName === "service") {
+        const serviceNode = call.arguments_[0];
+        if (call.arguments_.length !== 1 || serviceNode === undefined) {
+          return null;
+        }
+        const resource = staticActixWebResourceChain(
+          input,
+          serviceNode,
+          context.webAliases,
+          lexicalShadowedNames
+        );
+        const scope = staticActixWebScopeChain(
+          input,
+          serviceNode,
+          context.webAliases,
+          lexicalShadowedNames,
+          context,
+          configurationStack
+        );
+        const attributeService = staticActixWebAttributeService(
+          input,
+          serviceNode,
+          mountNode,
+          context.attributeRoutesByHandler,
+          lexicalShadowedNames,
+          prefix,
+          ruleId
+        );
+        if (resource !== null) {
+          routes.push(
+            ...configuredActixWebRoutes(
+              prefix,
+              staticActixWebServiceConfigVisibleRoutes(resource.routes, lexicalShadowedNames),
+              mountNode,
+              ruleId
+            )
+          );
+        } else if (scope !== null) {
+          routes.push(
+            ...configuredActixWebRoutes(
+              prefix,
+              staticActixWebServiceConfigVisibleRoutes(scope.routes, lexicalShadowedNames),
+              mountNode,
+              ruleId
+            )
+          );
+          mountedAttributeHandlers.push(...scope.mountedAttributeHandlers);
+        } else if (attributeService !== null) {
+          routes.push(
+            ...attributeService.routes.map((route) => ({ ...route, handlerScope: "service-config" as const }))
+          );
+          mountedAttributeHandlers.push(attributeService.handlerName);
+        } else {
+          return null;
+        }
+      } else if (call.methodName === "configure") {
+        const configurationNode = call.arguments_[0];
+        if (call.arguments_.length !== 1 || configurationNode === undefined) {
+          return null;
+        }
+        const nestedConfiguration = staticActixWebConfiguredRoutes(
+          input,
+          configurationNode,
+          mountNode,
+          context,
+          lexicalShadowedNames,
+          prefix,
+          ruleId,
+          configurationStack
+        );
+        if (nestedConfiguration === null) {
+          return null;
+        }
+        routes.push(...nestedConfiguration.routes);
+        mountedAttributeHandlers.push(...nestedConfiguration.mountedAttributeHandlers);
+      }
+    }
+    for (const name of directBoundNames(input, statement)) {
+      lexicalShadowedNames.add(name);
+      if (name === configuration.parameterName) {
+        configurationReceiverAvailable = false;
+      }
+    }
+  }
+
+  return { routes, mountedAttributeHandlers };
+}
+
 /**
  * Proves only a contiguous `web::resource("/path").route(web::get().to(handler))`
  * chain. The resource must later be attached directly to one proven `App::new()`
@@ -922,7 +1195,8 @@ function staticActixWebScopeChain(
   node: RustSyntaxNode,
   webAliases: ReadonlySet<string>,
   shadowedNames: ReadonlySet<string>,
-  attributeRoutesByHandler: ReadonlyMap<string, readonly StaticRustRoute[]>
+  context: StaticActixWebRouteContext,
+  configurationStack: ReadonlySet<string>
 ): StaticActixWebScopeChain | null {
   const scopePrefix = staticActixWebScope(input, node, webAliases, shadowedNames);
   if (scopePrefix !== null) {
@@ -937,7 +1211,8 @@ function staticActixWebScopeChain(
     call.receiver,
     webAliases,
     shadowedNames,
-    attributeRoutesByHandler
+    context,
+    configurationStack
   );
   if (preceding === null) {
     return null;
@@ -967,6 +1242,32 @@ function staticActixWebScopeChain(
       ]
     };
   }
+  if (call.methodName === "configure") {
+    const configurationNode = call.arguments_[0];
+    if (call.arguments_.length !== 1 || configurationNode === undefined) {
+      return null;
+    }
+    const configuredRoutes = staticActixWebConfiguredRoutes(
+      input,
+      configurationNode,
+      node,
+      context,
+      shadowedNames,
+      preceding.prefix,
+      ACTIX_WEB_SCOPE_CONFIGURE_ROUTE_RULE_ID,
+      configurationStack
+    );
+    return configuredRoutes === null
+      ? null
+      : {
+          ...preceding,
+          routes: [...preceding.routes, ...configuredRoutes.routes],
+          mountedAttributeHandlers: [
+            ...preceding.mountedAttributeHandlers,
+            ...configuredRoutes.mountedAttributeHandlers
+          ]
+        };
+  }
   if (call.methodName !== "service" || call.arguments_.length !== 1) {
     return null;
   }
@@ -983,7 +1284,8 @@ function staticActixWebScopeChain(
           serviceNode,
           webAliases,
           shadowedNames,
-          attributeRoutesByHandler
+          context,
+          configurationStack
         );
   const attributeService =
     serviceNode === undefined
@@ -992,7 +1294,7 @@ function staticActixWebScopeChain(
           input,
           serviceNode,
           node,
-          attributeRoutesByHandler,
+          context.attributeRoutesByHandler,
           shadowedNames,
           preceding.prefix,
           ACTIX_WEB_SCOPE_ATTRIBUTE_SERVICE_ROUTE_RULE_ID
@@ -1028,7 +1330,8 @@ function staticActixWebAppRouteChain(
   appAliases: ReadonlySet<string>,
   webAliases: ReadonlySet<string>,
   shadowedNames: ReadonlySet<string>,
-  attributeRoutesByHandler: ReadonlyMap<string, readonly StaticRustRoute[]>
+  context: StaticActixWebRouteContext,
+  configurationStack: ReadonlySet<string>
 ): StaticActixWebAppChain | null {
   if (staticActixWebAppNew(input, node, appAliases, shadowedNames)) {
     return { routes: [], mountedAttributeHandlers: [] };
@@ -1051,7 +1354,8 @@ function staticActixWebAppRouteChain(
       appAliases,
       webAliases,
       shadowedNames,
-      attributeRoutesByHandler
+      context,
+      configurationStack
     );
     if (path === null || methodRoute === null || precedingRoutes === null) {
       return null;
@@ -1070,6 +1374,41 @@ function staticActixWebAppRouteChain(
       ]
     };
   }
+  if (call.methodName === "configure") {
+    const configurationNode = call.arguments_[0];
+    if (call.arguments_.length !== 1 || configurationNode === undefined) {
+      return null;
+    }
+    const configuredRoutes = staticActixWebConfiguredRoutes(
+      input,
+      configurationNode,
+      node,
+      context,
+      shadowedNames,
+      "/",
+      ACTIX_WEB_APP_CONFIGURE_ROUTE_RULE_ID,
+      configurationStack
+    );
+    const precedingRoutes = staticActixWebAppRouteChain(
+      input,
+      call.receiver,
+      appAliases,
+      webAliases,
+      shadowedNames,
+      context,
+      configurationStack
+    );
+    return configuredRoutes === null || precedingRoutes === null
+      ? null
+      : {
+          ...precedingRoutes,
+          routes: [...precedingRoutes.routes, ...configuredRoutes.routes],
+          mountedAttributeHandlers: [
+            ...precedingRoutes.mountedAttributeHandlers,
+            ...configuredRoutes.mountedAttributeHandlers
+          ]
+        };
+  }
   if (call.methodName !== "service" || call.arguments_.length !== 1) {
     return null;
   }
@@ -1086,7 +1425,8 @@ function staticActixWebAppRouteChain(
           serviceNode,
           webAliases,
           shadowedNames,
-          attributeRoutesByHandler
+          context,
+          configurationStack
         );
   const attributeService =
     serviceNode === undefined
@@ -1095,7 +1435,7 @@ function staticActixWebAppRouteChain(
           input,
           serviceNode,
           node,
-          attributeRoutesByHandler,
+          context.attributeRoutesByHandler,
           shadowedNames,
           "/",
           ACTIX_WEB_APP_ATTRIBUTE_SERVICE_ROUTE_RULE_ID
@@ -1110,7 +1450,8 @@ function staticActixWebAppRouteChain(
     appAliases,
     webAliases,
     shadowedNames,
-    attributeRoutesByHandler
+    context,
+    configurationStack
   );
   return serviceRoutes === null || precedingRoutes === null
     ? null
@@ -1317,7 +1658,27 @@ export function extractRustFileFacts(input: RustExtractFileFactsInput): Artifact
     }
 
     const { routerAliases, methodAliases } = staticAxumImportAliases(input, root);
-    const { appAliases, webAliases } = staticActixWebImportAliases(input, root);
+    const { appAliases, webAliases, serviceConfigAliases } = staticActixWebImportAliases(input, root);
+    const serviceConfigsByName = new Map<string, StaticActixWebServiceConfig>();
+    for (const functionDeclaration of functions) {
+      if ((functionsByName.get(functionDeclaration.name) ?? []).length !== 1) {
+        continue;
+      }
+      const serviceConfig = staticActixWebServiceConfig(
+        input,
+        functionDeclaration,
+        webAliases,
+        serviceConfigAliases
+      );
+      if (serviceConfig !== null) {
+        serviceConfigsByName.set(serviceConfig.name, serviceConfig);
+      }
+    }
+    const actixWebContext: StaticActixWebRouteContext = {
+      webAliases,
+      attributeRoutesByHandler: actixAttributeRoutesByHandler,
+      serviceConfigsByName
+    };
     const mountedActixAttributeHandlers = new Set<string>();
     for (const functionDeclaration of functions) {
       const visibleRouterAliases = new Set(
@@ -1358,7 +1719,8 @@ export function extractRustFileFacts(input: RustExtractFileFactsInput): Artifact
                 visibleAppAliases,
                 visibleWebAliases,
                 shadowedNames,
-                actixAttributeRoutesByHandler
+                actixWebContext,
+                new Set()
               );
         const actixWebRoutes = actixWebChain === null ? null : actixWebChain.routes;
         for (const routes of [axumRoutes, actixWebRoutes]) {
@@ -1366,7 +1728,7 @@ export function extractRustFileFacts(input: RustExtractFileFactsInput): Artifact
             continue;
           }
           for (const route of routes) {
-            if (shadowedNames.has(route.handlerName)) {
+            if (route.handlerScope !== "service-config" && shadowedNames.has(route.handlerName)) {
               continue;
             }
             const candidates = functionsByName.get(route.handlerName) ?? [];

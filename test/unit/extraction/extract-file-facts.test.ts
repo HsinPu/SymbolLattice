@@ -8474,6 +8474,273 @@ describe("source extraction", () => {
     ]);
   });
 
+  it("projects same-file Actix ServiceConfig routes through App and scope configure mounts", () => {
+    const facts = extractFileFacts({
+      filePath: "src/actix-service-config.rs",
+      language: "rust",
+      sourceText: [
+        "use actix_web::{get as actix_get, App as HttpApp, web as http};",
+        "use actix_web::web::ServiceConfig as Config;",
+        "",
+        "async fn health() {}",
+        "async fn create_user() {}",
+        "async fn profile() {}",
+        "async fn diagnostics() {}",
+        "",
+        "#[actix_get(\"/ready\")]",
+        "async fn ready() {}",
+        "",
+        "fn common(cfg: &mut http::ServiceConfig) {",
+        "  cfg.route(\"/health\", http::get().to(health));",
+        "  cfg.service(ready);",
+        "  cfg.service(http::resource(\"/users\").route(http::post().to(create_user)));",
+        "  cfg.service(http::scope(\"/v1\").route(\"/profile\", http::get().to(profile)));",
+        "}",
+        "",
+        "fn routes(cfg: &mut http::ServiceConfig) {",
+        "  cfg.configure(common);",
+        "}",
+        "",
+        "fn diagnostics_config(cfg: &mut Config) {",
+        "  cfg.route(\"/diagnostics\", http::head().to(diagnostics));",
+        "}",
+        "",
+        "fn configure() {",
+        "  let app = HttpApp::new()",
+        "    .configure(routes)",
+        "    .configure(diagnostics_config)",
+        "    .service(http::scope(\"/api\").configure(routes));",
+        "}"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId,
+          edge.evidence?.stage,
+          edge.resolution,
+          edge.confidence
+        ])
+    ).toEqual([
+      [
+        "GET /health",
+        "src/actix-service-config.rs#health",
+        "framework.actix-web.direct-app.configure.service-config.literal-path.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "GET /ready",
+        "src/actix-service-config.rs#ready",
+        "framework.actix-web.direct-app.configure.service-config.literal-path.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "POST /users",
+        "src/actix-service-config.rs#create_user",
+        "framework.actix-web.direct-app.configure.service-config.literal-path.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "GET /v1/profile",
+        "src/actix-service-config.rs#profile",
+        "framework.actix-web.direct-app.configure.service-config.literal-path.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "HEAD /diagnostics",
+        "src/actix-service-config.rs#diagnostics",
+        "framework.actix-web.direct-app.configure.service-config.literal-path.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "GET /api/health",
+        "src/actix-service-config.rs#health",
+        "framework.actix-web.direct-app.web-scope.configure.service-config.literal-path.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "GET /api/ready",
+        "src/actix-service-config.rs#ready",
+        "framework.actix-web.direct-app.web-scope.configure.service-config.literal-path.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "POST /api/users",
+        "src/actix-service-config.rs#create_user",
+        "framework.actix-web.direct-app.web-scope.configure.service-config.literal-path.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "GET /api/v1/profile",
+        "src/actix-service-config.rs#profile",
+        "framework.actix-web.direct-app.web-scope.configure.service-config.literal-path.local-function",
+        "syntax",
+        "exact",
+        1
+      ]
+    ]);
+  });
+
+  it("resolves Actix ServiceConfig handlers in the config callback lexical scope", () => {
+    const facts = extractFileFacts({
+      filePath: "src/actix-service-config-lexical-scope.rs",
+      language: "rust",
+      sourceText: [
+        "use actix_web::{App, web};",
+        "",
+        "async fn health() {}",
+        "",
+        "fn routes(cfg: &mut web::ServiceConfig) {",
+        "  cfg.route(\"/health\", web::get().to(health));",
+        "}",
+        "",
+        "fn configure(health: u8) {",
+        "  let app = App::new().configure(routes);",
+        "}"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId
+        ])
+    ).toEqual([
+      [
+        "GET /health",
+        "src/actix-service-config-lexical-scope.rs#health",
+        "framework.actix-web.direct-app.configure.service-config.literal-path.local-function"
+      ]
+    ]);
+  });
+
+  it("keeps nested Actix ServiceConfig handlers outside an outer config shadow", () => {
+    const facts = extractFileFacts({
+      filePath: "src/nested-actix-service-config-lexical-scope.rs",
+      language: "rust",
+      sourceText: [
+        "use actix_web::{App, web};",
+        "",
+        "async fn health() {}",
+        "",
+        "fn inner(cfg: &mut web::ServiceConfig) {",
+        "  cfg.route(\"/health\", web::get().to(health));",
+        "}",
+        "",
+        "fn outer(cfg: &mut web::ServiceConfig) {",
+        "  let health = fallback;",
+        "  cfg.service(web::scope(\"/api\").configure(inner));",
+        "}",
+        "",
+        "fn configure() {",
+        "  let app = App::new().configure(outer);",
+        "}"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId
+        ])
+    ).toEqual([
+      [
+        "GET /api/health",
+        "src/nested-actix-service-config-lexical-scope.rs#health",
+        "framework.actix-web.direct-app.configure.service-config.literal-path.local-function"
+      ]
+    ]);
+  });
+
+  it("rejects unproven Actix ServiceConfig configure shapes", () => {
+    const facts = extractFileFacts({
+      filePath: "src/unproven-actix-service-config.rs",
+      language: "rust",
+      sourceText: [
+        "use actix_web::{App, web};",
+        "",
+        "async fn health() {}",
+        "",
+        "fn wrong_signature(cfg: web::ServiceConfig) {",
+        "  cfg.route(\"/wrong-signature\", web::get().to(health));",
+        "}",
+        "",
+        "fn dynamic_path(cfg: &mut web::ServiceConfig) {",
+        "  cfg.route(PATH, web::get().to(health));",
+        "}",
+        "",
+        "fn valid(cfg: &mut web::ServiceConfig) {",
+        "  cfg.route(\"/valid\", web::get().to(health));",
+        "}",
+        "",
+        "fn shadowed(valid: u8) {",
+        "  let app = App::new().configure(valid);",
+        "}",
+        "",
+        "fn dynamic(callback: fn(&mut web::ServiceConfig)) {",
+        "  let app = App::new().configure(callback);",
+        "}",
+        "",
+        "fn wrapped() {",
+        "  let app = build_app().configure(valid);",
+        "}",
+        "",
+        "fn locally_shadowed(cfg: &mut web::ServiceConfig) {",
+        "  let health = fallback;",
+        "  cfg.route(\"/local-shadow\", web::get().to(health));",
+        "}",
+        "",
+        "fn recursive_a(cfg: &mut web::ServiceConfig) {",
+        "  cfg.route(\"/recursive\", web::get().to(health));",
+        "  cfg.configure(recursive_b);",
+        "}",
+        "",
+        "fn recursive_b(cfg: &mut web::ServiceConfig) {",
+        "  cfg.configure(recursive_a);",
+        "}",
+        "",
+        "fn invalid() {",
+        "  let app = App::new().configure(wrong_signature);",
+        "  let dynamic = App::new().configure(dynamic_path);",
+        "  let local = App::new().configure(locally_shadowed);",
+        "  let recursive = App::new().configure(recursive_a);",
+        "}"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+  });
+
   it("rejects unmounted, dynamic, shadowed, and wrapper Actix Web builder routes", () => {
     const facts = extractFileFacts({
       filePath: "src/unproven-actix-builder.rs",

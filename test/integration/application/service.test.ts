@@ -4602,6 +4602,74 @@ describe("SymbolLatticeService", () => {
     );
   });
 
+  it("indexes Rust Actix ServiceConfig routes through App and scope configure mounts", async () => {
+    const projectPath = await createInlineProject({
+      "src/http.rs": [
+        "use actix_web::{get, App, web};",
+        "",
+        "async fn health() {}",
+        "",
+        "#[get(\"/ready\")]",
+        "async fn ready() {}",
+        "",
+        "fn routes(cfg: &mut web::ServiceConfig) {",
+        "  cfg.route(\"/health\", web::get().to(health));",
+        "  cfg.service(ready);",
+        "}",
+        "",
+        "fn configure() {",
+        "  let app = App::new()",
+        "    .configure(routes)",
+        "    .service(web::scope(\"/api\").configure(routes));",
+        "}"
+      ].join("\n")
+    });
+    const service = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath, { method: "GET" });
+
+    expect(routes.routes).toHaveLength(4);
+    expect(routes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: "/health",
+          handler: expect.objectContaining({ qualifiedName: "src/http.rs#health" }),
+          edge: expect.objectContaining({
+            evidence: expect.objectContaining({
+              ruleId: "framework.actix-web.direct-app.configure.service-config.literal-path.local-function",
+              stage: "syntax"
+            })
+          })
+        }),
+        expect.objectContaining({
+          path: "/ready",
+          handler: expect.objectContaining({ qualifiedName: "src/http.rs#ready" }),
+          edge: expect.objectContaining({
+            evidence: expect.objectContaining({
+              ruleId: "framework.actix-web.direct-app.configure.service-config.literal-path.local-function"
+            })
+          })
+        }),
+        expect.objectContaining({
+          path: "/api/health",
+          handler: expect.objectContaining({ qualifiedName: "src/http.rs#health" }),
+          edge: expect.objectContaining({
+            evidence: expect.objectContaining({
+              ruleId:
+                "framework.actix-web.direct-app.web-scope.configure.service-config.literal-path.local-function",
+              stage: "syntax"
+            })
+          })
+        }),
+        expect.objectContaining({
+          path: "/api/ready",
+          handler: expect.objectContaining({ qualifiedName: "src/http.rs#ready" })
+        })
+      ])
+    );
+  });
+
   it("indexes Java Spring Web routes and retains Java source-search filtering", async () => {
     const projectPath = await createInlineProject({
       "src/api/StatusController.java": [

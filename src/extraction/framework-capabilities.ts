@@ -319,10 +319,10 @@ export const FRAMEWORK_CAPABILITIES = [
     routeFramework: "actix-web",
     routeRegistrations: [],
     surfaces: [
-      "direct imported HTTP attribute macros with direct same-file service mounts",
+      "direct imported HTTP attribute macros with direct same-file service or ServiceConfig mounts",
       "literal attribute paths on direct top-level function handlers",
-      "direct imported App::new, web resource, and web scope builder chains",
-      "literal direct app, resource, scope, and mounted attribute-service routes with named local handlers"
+      "direct imported App::new, web resource, web scope, and ServiceConfig builder chains",
+      "literal direct app, resource, scope, mounted attribute-service, and configured ServiceConfig routes with named local handlers"
     ]
   },
   {

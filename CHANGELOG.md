@@ -6,6 +6,23 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.117.0] - 2026-07-31
+
+### Added
+
+- Rust route extraction now projects literal same-file Actix Web `ServiceConfig` routes through contiguous `App::new().configure(config)` and `web::scope("/prefix").configure(config)` mounts, preserving their effective paths.
+- A supported callback has one direct, unambiguous `&mut web::ServiceConfig` parameter or a direct imported `ServiceConfig` alias. Its direct `cfg.route(...)`, mounted resource, scope, attribute-service, and named nested `cfg.configure(...)` calls are projected only when every path and handler remains static.
+- Handler proof is evaluated in the callback's own lexical scope. Callback parameters, local `use` declarations, local named functions, and sequential local bindings cannot resolve to a same-named top-level handler. A recursive configuration cycle or an unsupported direct route-bearing call fails closed.
+
+### Compatibility
+
+- The artifact facts extractor advances to `multi-language-ast-v101`. Existing indexes remain readable; the next explicit `sync` or fresh `init` safely re-extracts Rust facts. No graph-schema migration or CLI/MCP contract change is required.
+
+### Comparison notes
+
+- [Actix Web documents](https://actix.rs/docs/application/) `configure` on both `App` and `web::Scope`, using a `&mut web::ServiceConfig` callback. The checked CodeGraph Rust resolver recognizes raw HTTP attributes plus resource and app-route text patterns, but has no `ServiceConfig`, `.configure(...)`, or `web::scope` projection in that resolver. This independent SymbolLattice slice adds stricter exact coverage for that static surface.
+- CodeGraph remains ahead in daemon lifecycle, socket/PID registry, cross-client coordination, worker-pool concurrency, and broader semantic resolution. v0.117 is a verified route-analysis improvement, not a general parity claim.
+
 ## [0.116.0] - 2026-07-31
 
 ### Added
