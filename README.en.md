@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.110.0 is an early developer release. Run this repository from source; the npm package remains private and unpublished.
+> v0.111.0 is an early developer release. Run this repository from source; the npm package remains private and unpublished.
 
 ## Positioning
 
@@ -58,11 +58,11 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 On Windows PowerShell, use `npm.cmd` when `npm` is unavailable. Filesystem roots and home directories are rejected unless `--force` is explicitly supplied.
 
-## v0.110.0 highlights
+## v0.111.0 highlights
 
-- Before automatic sync starts, `serve --mcp` and `watch` acquire an exclusive SQLite owner lock at `.symbol-lattice/auto-sync-owner.sqlite`; only that host starts the watcher and writes graph updates for the project.
-- A competing MCP host still serves read-only queries but does not start a watcher. `symbol_lattice_auto_sync_status` and diagnostics report `autoSync.state: "blocked"` with a PID- and path-free `ownerLease` reason.
-- `--no-auto-sync` neither acquires nor creates an owner lock, preserving an explicit read-only MCP mode. Normal shutdown releases the lock; the SQLite operating-system lock does not rely on an expiring PID file.
+- Python Flask now projects a cross-file Blueprint imported as `from .module import blueprint` inside one proven regular package. Registration prefixes, Blueprint prefixes, and decorator paths become queryable routes.
+- Each projected route retains module-stage evidence and the registration/Blueprint resolution path. Parent-relative imports, namespace packages, import chains, dynamic values, and rebound bindings never become exact edges.
+- Blueprint facts persist with SQLite artifact facts. After only the mount module changes, `sync` can reuse the unchanged Blueprint facts and project the new final path.
 
 Use `--sync-interval <ms>` to tune fallback polling, `--poll` to disable native event acceleration, or `--no-diagnostic-journal` to disable journal writes. Run `init` once first; manual `sync` remains useful for repair and CI.
 
@@ -72,6 +72,7 @@ Use `--sync-interval <ms>` to tune fallback polling, `--poll` to disable native 
 - Dynamic dispatch, reflection, macros, code generation, dependency injection, and ambiguous name matches are never promoted to exact graph relations.
 - Groovy, Fortran, and Ada remain conservative first slices: only complete direct units are retained; members, cross-file, and runtime relations are not inferred, and ambiguous source is skipped.
 - The Koa, Hono, and Elysia slices cover direct receiver routes only; prefixes, mounts, nested apps, `basePath` / `group` / `use` / `route` / `on`, CommonJS, dynamic paths, and inline/member handlers are not inferred.
+- Cross-file Flask Blueprint support accepts only a single-name, one-dot relative import within a regular package proven by `__init__.py` markers. Parent-relative imports, namespace packages, import chains, dynamic prefixes, and runtime registration are out of scope.
 - Default MCP background sync only operates on initialized projects and never changes the stored index scope. Filesystem roots and home directories still require explicit `--force`.
 - The SQLite owner lock serializes one foreground watcher for one project only; it is not a daemon, socket registry, distributed leader-election protocol, worker pool, or cross-machine coordination mechanism.
 - Automatic-sync status and the session timeline describe the current default MCP host only. The durable journal is a bounded 128-event operational record, not a tamper-proof audit log or complete lifecycle record.

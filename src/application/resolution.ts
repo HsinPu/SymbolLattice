@@ -7,6 +7,8 @@ import {
   type FastApiImportedRouterInclusionFact,
   type FastApiRouterDeclarationFact,
   type FastApiRouterRouteFact,
+  type FlaskBlueprintRouteFact,
+  type FlaskImportedBlueprintRegistrationFact,
   type FastifyPluginRouteFact,
   type FastifyPluginSymbolReference,
   type GraphEdge,
@@ -1752,33 +1754,33 @@ function projectFastifyImportedPluginRoutes(input: {
   return { symbols, structuralEdges, references, referenceScopes };
 }
 
-function isStaticFastApiPrefix(value: string): boolean {
+function isStaticPythonRoutePrefix(value: string): boolean {
   return value === "" || (value.startsWith("/") && !value.endsWith("/"));
 }
 
-function fastApiImportedRouterPath(
-  inclusionPrefix: string,
-  routerPrefix: string,
+function mountedPythonRoutePath(
+  registrationPrefix: string,
+  receiverPrefix: string,
   routePath: string
 ): string | null {
   if (
-    !isStaticFastApiPrefix(inclusionPrefix) ||
-    !isStaticFastApiPrefix(routerPrefix) ||
+    !isStaticPythonRoutePrefix(registrationPrefix) ||
+    !isStaticPythonRoutePrefix(receiverPrefix) ||
     !routePath.startsWith("/")
   ) {
     return null;
   }
-  return `${inclusionPrefix}${routerPrefix}${routePath}`;
+  return `${registrationPrefix}${receiverPrefix}${routePath}`;
 }
 
 /**
- * Resolves the intentionally narrow v0.31 FastAPI import surface. A direct
- * `from .module import router` is accepted only when both files live in one
+ * Resolves the intentionally narrow Python framework import surface. A direct
+ * `from .module import binding` is accepted only when both files live in one
  * regular package whose traversed directories contain `__init__.py` markers.
  * This excludes namespace packages, parent-relative imports, import chains,
  * and circular self-imports until they have dedicated fact models.
  */
-function resolveFastApiRelativeRouterModule(
+function resolvePythonRelativeModule(
   knownFilePaths: ReadonlySet<string>,
   fromFilePath: string,
   moduleSpecifier: string
@@ -1878,7 +1880,7 @@ function projectFastApiImportedRouterRoutes(input: {
     }
 
     for (const inclusion of inclusionFacts.importedRouterInclusions) {
-      const routerFilePath = resolveFastApiRelativeRouterModule(
+      const routerFilePath = resolvePythonRelativeModule(
         input.knownFilePaths,
         inclusionFilePath,
         inclusion.moduleSpecifier
@@ -1906,7 +1908,7 @@ function projectFastApiImportedRouterRoutes(input: {
         if (handler?.kind !== "function" || handler.filePath !== routerFilePath) {
           continue;
         }
-        const path = fastApiImportedRouterPath(inclusion.prefix, router.prefix, route.path);
+        const path = mountedPythonRoutePath(inclusion.prefix, router.prefix, route.path);
         if (path === null) {
           continue;
         }
@@ -2013,6 +2015,201 @@ function projectFastApiImportedRouterRoutes(input: {
         [candidate.handler.id],
         [],
         [candidate.inclusionFilePath, candidate.routerFilePath]
+      )
+    });
+  }
+
+  return { symbols, structuralEdges };
+}
+
+interface ProjectedFlaskImportedBlueprintRoute {
+  readonly registrationFilePath: string;
+  readonly blueprintFilePath: string;
+  readonly registration: FlaskImportedBlueprintRegistrationFact;
+  readonly route: FlaskBlueprintRouteFact;
+  readonly handler: SymbolNode;
+  readonly path: string;
+}
+
+function compareProjectedFlaskImportedBlueprintRoute(
+  left: ProjectedFlaskImportedBlueprintRoute,
+  right: ProjectedFlaskImportedBlueprintRoute
+): number {
+  return (
+    compareStableText(left.registrationFilePath, right.registrationFilePath) ||
+    left.registration.range.start.line - right.registration.range.start.line ||
+    left.registration.range.start.column - right.registration.range.start.column ||
+    compareStableText(left.blueprintFilePath, right.blueprintFilePath) ||
+    left.route.range.start.line - right.route.range.start.line ||
+    left.route.range.start.column - right.route.range.start.column ||
+    compareStableText(left.route.method, right.route.method) ||
+    compareStableText(left.path, right.path) ||
+    compareStableText(left.handler.id, right.handler.id)
+  );
+}
+
+interface FlaskImportedBlueprintRouteProjection {
+  readonly symbols: readonly SymbolNode[];
+  readonly structuralEdges: readonly GraphEdge[];
+}
+
+/**
+ * Projects literal handler routes declared on an imported, direct Flask
+ * Blueprint. Evidence identifies both the module that registers the Blueprint
+ * and the module that declares the handler route.
+ */
+function projectFlaskImportedBlueprintRoutes(input: {
+  readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
+  readonly knownFilePaths: ReadonlySet<string>;
+  readonly fileSymbols: ReadonlyMap<string, SymbolNode>;
+  readonly symbolsById: ReadonlyMap<string, SymbolNode>;
+}): FlaskImportedBlueprintRouteProjection {
+  const candidates: ProjectedFlaskImportedBlueprintRoute[] = [];
+
+  for (const [registrationFilePath, facts] of [...input.factsByFile.entries()].sort(([left], [right]) =>
+    compareStableText(left, right)
+  )) {
+    const registrationFacts = facts.flaskBlueprintFacts;
+    if (registrationFacts === undefined) {
+      continue;
+    }
+
+    for (const registration of registrationFacts.importedBlueprintRegistrations) {
+      const blueprintFilePath = resolvePythonRelativeModule(
+        input.knownFilePaths,
+        registrationFilePath,
+        registration.moduleSpecifier
+      );
+      if (blueprintFilePath === null) {
+        continue;
+      }
+      const blueprintFacts = input.factsByFile.get(blueprintFilePath)?.flaskBlueprintFacts;
+      if (blueprintFacts === undefined) {
+        continue;
+      }
+      const blueprints = blueprintFacts.blueprints.filter(
+        (blueprint) => blueprint.name === registration.importedBlueprintName
+      );
+      if (blueprints.length !== 1 || blueprints[0] === undefined) {
+        continue;
+      }
+      const blueprint = blueprints[0];
+
+      for (const route of blueprintFacts.routes) {
+        if (route.blueprintName !== blueprint.name) {
+          continue;
+        }
+        const handler = input.symbolsById.get(route.handlerId);
+        if (handler?.kind !== "function" || handler.filePath !== blueprintFilePath) {
+          continue;
+        }
+        const path = mountedPythonRoutePath(registration.prefix, blueprint.prefix, route.path);
+        if (path === null) {
+          continue;
+        }
+        candidates.push({
+          registrationFilePath,
+          blueprintFilePath,
+          registration,
+          route,
+          handler,
+          path
+        });
+      }
+    }
+  }
+
+  const symbols: SymbolNode[] = [];
+  const structuralEdges: GraphEdge[] = [];
+  const declarationOrdinals = new Map<string, number>();
+  const seen = new Set<string>();
+  for (const candidate of [...candidates].sort(compareProjectedFlaskImportedBlueprintRoute)) {
+    const dedupeKey = [
+      candidate.registrationFilePath,
+      candidate.registration.range.start.line,
+      candidate.registration.range.start.column,
+      candidate.blueprintFilePath,
+      candidate.route.range.start.line,
+      candidate.route.range.start.column,
+      candidate.route.method,
+      candidate.path,
+      candidate.handler.id
+    ].join("\u0000");
+    if (seen.has(dedupeKey)) {
+      continue;
+    }
+    seen.add(dedupeKey);
+
+    const file = input.fileSymbols.get(candidate.blueprintFilePath);
+    if (file === undefined) {
+      continue;
+    }
+    const name = `${candidate.route.method} ${candidate.path}`;
+    const qualifiedName = `${candidate.blueprintFilePath}#route:${name}`;
+    const declarationOrdinal = declarationOrdinals.get(qualifiedName) ?? 0;
+    declarationOrdinals.set(qualifiedName, declarationOrdinal + 1);
+    const route: SymbolNode = {
+      id: createSymbolId({
+        filePath: candidate.blueprintFilePath,
+        qualifiedName,
+        kind: "route",
+        declarationOrdinal
+      }),
+      name,
+      qualifiedName,
+      kind: "route",
+      filePath: candidate.blueprintFilePath,
+      range: candidate.route.range,
+      isExported: false,
+      declarationOrdinal
+    };
+    symbols.push(route);
+    structuralEdges.push({
+      id: createEdgeId({
+        sourceId: file.id,
+        targetId: route.id,
+        kind: "contains",
+        line: candidate.route.range.start.line,
+        column: candidate.route.range.start.column,
+        referenceName: route.name
+      }),
+      sourceId: file.id,
+      targetId: route.id,
+      kind: "contains",
+      filePath: candidate.blueprintFilePath,
+      range: candidate.route.range,
+      resolution: "exact",
+      confidence: 1,
+      referenceName: route.name,
+      evidence: {
+        ruleId: "syntax.containment",
+        stage: "syntax",
+        candidateSymbolIds: [route.id]
+      }
+    });
+    structuralEdges.push({
+      id: createEdgeId({
+        sourceId: route.id,
+        targetId: candidate.handler.id,
+        kind: "routes",
+        line: candidate.route.range.start.line,
+        column: candidate.route.range.start.column,
+        referenceName: candidate.handler.name
+      }),
+      sourceId: route.id,
+      targetId: candidate.handler.id,
+      kind: "routes",
+      filePath: candidate.blueprintFilePath,
+      range: candidate.route.range,
+      resolution: "exact",
+      confidence: 1,
+      referenceName: candidate.handler.name,
+      evidence: referenceEvidence(
+        "framework.flask.imported-blueprint.register-blueprint.decorator.local-function",
+        "module",
+        [candidate.handler.id],
+        [],
+        [candidate.registrationFilePath, candidate.blueprintFilePath]
       )
     });
   }
@@ -2506,6 +2703,18 @@ export function resolveProjectFacts(input: {
   symbols.push(...fastApiImportedRouterRouteProjection.symbols);
   structuralEdges.push(...fastApiImportedRouterRouteProjection.structuralEdges);
   for (const symbol of fastApiImportedRouterRouteProjection.symbols) {
+    symbolsById.set(symbol.id, symbol);
+  }
+
+  const flaskImportedBlueprintRouteProjection = projectFlaskImportedBlueprintRoutes({
+    factsByFile,
+    knownFilePaths,
+    fileSymbols,
+    symbolsById
+  });
+  symbols.push(...flaskImportedBlueprintRouteProjection.symbols);
+  structuralEdges.push(...flaskImportedBlueprintRouteProjection.structuralEdges);
+  for (const symbol of flaskImportedBlueprintRouteProjection.symbols) {
     symbolsById.set(symbol.id, symbol);
   }
 

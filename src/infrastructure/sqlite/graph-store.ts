@@ -670,6 +670,9 @@ function artifactFactsPayload(facts: PersistedArtifactFacts): ArtifactFacts {
     ...(facts.fastApiRouterFacts === undefined
       ? {}
       : { fastApiRouterFacts: facts.fastApiRouterFacts }),
+    ...(facts.flaskBlueprintFacts === undefined
+      ? {}
+      : { flaskBlueprintFacts: facts.flaskBlueprintFacts }),
     ...(facts.scalaFacts === undefined ? {} : { scalaFacts: facts.scalaFacts }),
     ...(facts.javaFacts === undefined ? {} : { javaFacts: facts.javaFacts }),
     ...(facts.springBootPropertiesFacts === undefined

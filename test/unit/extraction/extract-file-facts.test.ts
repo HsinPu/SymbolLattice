@@ -2376,6 +2376,98 @@ describe("source extraction", () => {
     });
   });
 
+  it("retains proven cross-file Flask Blueprint and package-relative registration facts", () => {
+    const blueprintFacts = extractFileFacts({
+      filePath: "app/routes/catalog.py",
+      language: "python",
+      sourceText: [
+        "from flask import Blueprint as BP",
+        "catalog = BP(\"catalog\", __name__, url_prefix=\"/catalog\")",
+        "",
+        "@catalog.get(\"/items\")",
+        "def items():",
+        "    return []"
+      ].join("\n")
+    });
+    const mainFacts = extractFileFacts({
+      filePath: "app/main.py",
+      language: "python",
+      sourceText: [
+        "from flask import Flask as App",
+        "from .routes.catalog import catalog as catalog_blueprint",
+        "app = App(__name__)",
+        "app.register_blueprint(catalog_blueprint, url_prefix=\"/api\")"
+      ].join("\n")
+    });
+
+    expect(blueprintFacts.flaskBlueprintFacts).toMatchObject({
+      blueprints: [{ name: "catalog", prefix: "/catalog" }],
+      routes: [
+        {
+          blueprintName: "catalog",
+          method: "GET",
+          path: "/items",
+          handlerId: expect.any(String)
+        }
+      ],
+      importedBlueprintRegistrations: []
+    });
+    expect(mainFacts.flaskBlueprintFacts).toMatchObject({
+      blueprints: [],
+      routes: [],
+      importedBlueprintRegistrations: [
+        {
+          applicationName: "app",
+          blueprintName: "catalog_blueprint",
+          importedBlueprintName: "catalog",
+          moduleSpecifier: ".routes.catalog",
+          prefix: "/api"
+        }
+      ]
+    });
+  });
+
+  it("rejects parent-relative and rebound Flask Blueprint registrations", () => {
+    const facts = extractFileFacts({
+      filePath: "app/main.py",
+      language: "python",
+      sourceText: [
+        "from flask import Flask",
+        "from ..routes.catalog import catalog",
+        "app = Flask(__name__)",
+        "app.register_blueprint(catalog)",
+        "",
+        "from .routes.catalog import catalog as catalog_blueprint",
+        "catalog_blueprint = build_blueprint()",
+        "app.register_blueprint(catalog_blueprint)"
+      ].join("\n")
+    });
+
+    expect(facts.flaskBlueprintFacts?.importedBlueprintRegistrations).toEqual([]);
+  });
+
+  it("does not retain cross-file Blueprint facts when the source Blueprint is later rebound", () => {
+    const facts = extractFileFacts({
+      filePath: "app/routes/catalog.py",
+      language: "python",
+      sourceText: [
+        "from flask import Blueprint",
+        "catalog = Blueprint(\"catalog\", __name__)",
+        "",
+        "@catalog.get(\"/items\")",
+        "def items():",
+        "    return []",
+        "",
+        "catalog = build_blueprint()"
+      ].join("\n")
+    });
+
+    expect(facts.flaskBlueprintFacts).toMatchObject({
+      blueprints: [],
+      routes: []
+    });
+  });
+
   it("extracts direct Flask shortcut and literal route-method decorators", () => {
     const facts = extractFileFacts({
       filePath: "app/flask_app.py",

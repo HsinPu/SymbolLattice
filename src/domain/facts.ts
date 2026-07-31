@@ -11,13 +11,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v94";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v95";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v25";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v26";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -240,6 +240,46 @@ export interface FastApiRouterFacts {
   readonly importedRouterInclusions: readonly FastApiImportedRouterInclusionFact[];
 }
 
+/** A direct, top-level Flask `Blueprint` binding with a literal URL prefix. */
+export interface FlaskBlueprintDeclarationFact {
+  readonly name: string;
+  readonly prefix: string;
+  readonly range: SourceRange;
+}
+
+/** A literal route decorated directly on a syntax-proven Flask Blueprint. */
+export interface FlaskBlueprintRouteFact {
+  readonly blueprintName: string;
+  readonly method: RouteMethod;
+  readonly path: string;
+  /** Stable symbol identity of the directly decorated local handler. */
+  readonly handlerId: string;
+  readonly range: SourceRange;
+}
+
+/**
+ * A direct, single-name, package-relative Blueprint import mounted through a
+ * direct Flask application's literal `register_blueprint` call.
+ */
+export interface FlaskImportedBlueprintRegistrationFact {
+  readonly applicationName: string;
+  readonly blueprintName: string;
+  readonly importedBlueprintName: string;
+  readonly moduleSpecifier: string;
+  readonly prefix: string;
+  readonly range: SourceRange;
+}
+
+/**
+ * Syntax-only facts used to project literal routes through a directly imported
+ * Flask Blueprint in another module of the same proven Python package.
+ */
+export interface FlaskBlueprintFacts {
+  readonly blueprints: readonly FlaskBlueprintDeclarationFact[];
+  readonly routes: readonly FlaskBlueprintRouteFact[];
+  readonly importedBlueprintRegistrations: readonly FlaskImportedBlueprintRegistrationFact[];
+}
+
 /** A Scala class or object declaration with its direct package-clause proof. */
 export interface ScalaClassFact {
   readonly symbolId: string;
@@ -388,6 +428,8 @@ export interface ArtifactFacts {
   readonly fastifyPluginFacts?: FastifyPluginFacts;
   /** Omitted only by artifact facts persisted before v0.31. */
   readonly fastApiRouterFacts?: FastApiRouterFacts;
+  /** Omitted only by artifact facts persisted before v0.111. */
+  readonly flaskBlueprintFacts?: FlaskBlueprintFacts;
   /** Omitted only by artifact facts persisted before v0.46. */
   readonly scalaFacts?: ScalaFacts;
   /** Omitted only by artifact facts persisted before v0.47. */

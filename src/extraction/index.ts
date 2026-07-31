@@ -89,6 +89,7 @@ export type {
   ExportBinding,
   FastApiRouterFacts,
   FastifyPluginFacts,
+  FlaskBlueprintFacts,
   ImportBinding,
   LocalBinding,
   NestGraphqlFacts,

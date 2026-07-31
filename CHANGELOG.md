@@ -6,6 +6,24 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.111.0] - 2026-07-31
+
+### Added
+
+- Python route extraction now retains `FlaskBlueprintFacts` for direct Blueprint declarations, literal decorated handlers, and direct single-name one-dot relative Blueprint imports used by a literal Flask `register_blueprint` call. The project resolver projects the resulting exact routes only when both modules belong to one regular package proven by every required `__init__.py` marker.
+- A projected route is owned by the Blueprint module and retains module-stage evidence with both the registration and Blueprint module paths. Its final path combines the literal registration prefix, Blueprint prefix, and decorator path. Parent-relative imports, namespace packages, import chains, rebinding, dynamic registrations, ambiguous Blueprint declarations, and missing handlers remain unprojected rather than guessed.
+- Flask Blueprint facts persist through the SQLite artifact-facts payload. The extractor version advances to `multi-language-ast-v95` and the project resolver version to `project-resolver-v26`, so an explicit `sync` safely re-extracts unchanged source facts and rebuilds cross-file projections. Focused tests cover facts, persistence, exact route output, rejected boundaries and rebindings, and an incremental mount-prefix update that reuses the unchanged Blueprint artifact. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.111.0.md`.
+
+### Compatibility
+
+- Existing indexes remain readable. The next explicit `sync` (or a fresh `init`) refreshes cached artifact facts because extraction and resolver versions changed; no graph schema migration is required.
+- The new `flaskBlueprintFacts` field is additive in persisted artifact JSON and the public extraction type surface. Existing route, CLI, MCP, and read-only query contracts remain unchanged.
+
+### Comparison notes
+
+- This extends SymbolLattice's framework-route breadth with a verifiable cross-file Flask composition path, while preserving evidence and reject-by-default behavior rather than copying CodeGraph implementation.
+- CodeGraph remains ahead in daemon lifecycle, PID/socket registry, cross-client coordination, worker-pool concurrency, error-log operations, and broader parser/semantic depth. SymbolLattice's new route projection is an independent framework-analysis capability, not a daemon-parity claim.
+
 ## [0.110.0] - 2026-07-31
 
 ### Added

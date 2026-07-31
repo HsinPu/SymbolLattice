@@ -7,6 +7,9 @@ import {
   type FastApiImportedRouterInclusionFact,
   type FastApiRouterDeclarationFact,
   type FastApiRouterRouteFact,
+  type FlaskBlueprintDeclarationFact,
+  type FlaskBlueprintRouteFact,
+  type FlaskImportedBlueprintRegistrationFact,
   type GraphEdge,
   type RouteMethod,
   type SourcePosition,
@@ -96,6 +99,14 @@ interface StaticFastApiRelativeRouterImport {
   readonly moduleSpecifier: string;
   readonly importedRouterName: string;
   readonly routerName: string;
+  readonly node: PythonSyntaxNode;
+}
+
+/** A one-dot, single-name Python relative import that can carry a Flask Blueprint. */
+interface StaticFlaskRelativeBlueprintImport {
+  readonly moduleSpecifier: string;
+  readonly importedBlueprintName: string;
+  readonly blueprintName: string;
   readonly node: PythonSyntaxNode;
 }
 
@@ -310,6 +321,35 @@ function staticFastApiRelativeRouterImport(
     moduleSpecifier: match[1],
     importedRouterName: match[2],
     routerName: match[3] ?? match[2],
+    node
+  };
+}
+
+/**
+ * Retains only the deliberately narrow import form supported by the project
+ * resolver: `from .package.module import blueprint [as local_blueprint]`.
+ *
+ * The resolver independently verifies the regular-package boundary and the
+ * Blueprint declaration in the imported module before it can project a route.
+ */
+function staticFlaskRelativeBlueprintImport(
+  input: PythonExtractFileFactsInput,
+  node: PythonSyntaxNode
+): StaticFlaskRelativeBlueprintImport | null {
+  if (node.name !== "ImportStatement") {
+    return null;
+  }
+  const match = /^from[ \t]+(\.[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)[ \t]+import[ \t]+([A-Za-z_][A-Za-z0-9_]*)(?:[ \t]+as[ \t]+([A-Za-z_][A-Za-z0-9_]*))?[ \t]*$/u.exec(
+    nodeText(input, node)
+  );
+  if (match?.[1] === undefined || match[2] === undefined) {
+    return null;
+  }
+
+  return {
+    moduleSpecifier: match[1],
+    importedBlueprintName: match[2],
+    blueprintName: match[3] ?? match[2],
     node
   };
 }
@@ -1118,6 +1158,34 @@ function latestProvenFastApiRelativeRouterImport(
   return candidates.length === 1 ? candidates[0] ?? null : null;
 }
 
+/**
+ * Finds the one direct relative import still bound to the Blueprint argument
+ * at a literal `register_blueprint` call. A later assignment or import shadows
+ * an earlier import and therefore removes it from consideration.
+ */
+function latestProvenFlaskRelativeBlueprintImport(
+  input: PythonExtractFileFactsInput,
+  topLevelNodes: readonly PythonSyntaxNode[],
+  imports: readonly StaticFlaskRelativeBlueprintImport[],
+  registration: StaticFlaskBlueprintRegistration
+): StaticFlaskRelativeBlueprintImport | null {
+  const candidates = imports
+    .filter(
+      (candidate) =>
+        candidate.blueprintName === registration.blueprintName &&
+        candidate.node.to <= registration.node.from &&
+        !hasTopLevelRebinding(
+          input,
+          topLevelNodes,
+          candidate.blueprintName,
+          candidate.node.to,
+          registration.node.from
+        )
+    )
+    .sort((left, right) => right.node.from - left.node.from);
+  return candidates.length === 1 ? candidates[0] ?? null : null;
+}
+
 function combinedRoutePath(...parts: readonly string[]): string {
   return parts.join("");
 }
@@ -1125,8 +1193,8 @@ function combinedRoutePath(...parts: readonly string[]): string {
 /**
  * Extracts conservative Python file facts. The Python surface records
  * declarations, containment, direct FastAPI/Flask decorators, direct Django
- * URL patterns, and direct same-file router or Blueprint composition only when
- * every binding and path is syntax-proven.
+ * URL patterns, and direct same-file or package-relative router/Blueprint
+ * composition only when every binding and path is syntax-proven.
  */
 export function extractPythonFileFacts(input: PythonExtractFileFactsInput): ArtifactFacts {
   const fastApiCapability = frameworkCapability("fastapi");
@@ -1154,6 +1222,15 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
     routers: [],
     routes: [],
     importedRouterInclusions: []
+  };
+  const flaskBlueprintFacts: {
+    readonly blueprints: FlaskBlueprintDeclarationFact[];
+    readonly routes: FlaskBlueprintRouteFact[];
+    readonly importedBlueprintRegistrations: FlaskImportedBlueprintRegistrationFact[];
+  } = {
+    blueprints: [],
+    routes: [],
+    importedBlueprintRegistrations: []
   };
   const fileName = input.filePath.split(/[\\/]/u).at(-1) ?? input.filePath;
   const fileNode: SymbolNode = {
@@ -1321,6 +1398,9 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
     const relativeRouterImports = topLevelNodes
       .map((node) => staticFastApiRelativeRouterImport(input, node))
       .filter((candidate): candidate is StaticFastApiRelativeRouterImport => candidate !== null);
+    const relativeBlueprintImports = topLevelNodes
+      .map((node) => staticFlaskRelativeBlueprintImport(input, node))
+      .filter((candidate): candidate is StaticFlaskRelativeBlueprintImport => candidate !== null);
     const applicationConstructorNames = new Set(
       imports
         .filter((candidate) => candidate.importedName === "FastAPI")
@@ -1396,11 +1476,30 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
       );
       return finalRouter !== null && nodeKey(finalRouter.node) === nodeKey(router.node);
     });
+    const finalFlaskBlueprints = flaskBlueprints.filter((blueprint) => {
+      const finalBlueprint = latestProvenFrameworkInstance(
+        input,
+        topLevelNodes,
+        flaskImports,
+        flaskBlueprints,
+        blueprint.name,
+        input.sourceText.length,
+        "Blueprint"
+      );
+      return finalBlueprint !== null && nodeKey(finalBlueprint.node) === nodeKey(blueprint.node);
+    });
     for (const router of finalRouters) {
       fastApiRouterFacts.routers.push({
         name: router.name,
         prefix: router.prefix,
         range: rangeFor(lineStarts, router.node.from, router.node.to)
+      });
+    }
+    for (const blueprint of finalFlaskBlueprints) {
+      flaskBlueprintFacts.blueprints.push({
+        name: blueprint.name,
+        prefix: blueprint.prefix,
+        range: rangeFor(lineStarts, blueprint.node.from, blueprint.node.to)
       });
     }
 
@@ -1487,6 +1586,38 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
         moduleSpecifier: importedRouter.moduleSpecifier,
         prefix: inclusion.prefix,
         range: rangeFor(lineStarts, inclusion.node.from, inclusion.node.to)
+      });
+    }
+
+    for (const registration of flaskBlueprintRegistrations) {
+      if (
+        latestProvenFlaskApplication(
+          input,
+          topLevelNodes,
+          flaskImports,
+          flaskApplications,
+          registration.applicationName,
+          registration.node.from
+        ) === null
+      ) {
+        continue;
+      }
+      const importedBlueprint = latestProvenFlaskRelativeBlueprintImport(
+        input,
+        topLevelNodes,
+        relativeBlueprintImports,
+        registration
+      );
+      if (importedBlueprint === null) {
+        continue;
+      }
+      flaskBlueprintFacts.importedBlueprintRegistrations.push({
+        applicationName: registration.applicationName,
+        blueprintName: importedBlueprint.blueprintName,
+        importedBlueprintName: importedBlueprint.importedBlueprintName,
+        moduleSpecifier: importedBlueprint.moduleSpecifier,
+        prefix: registration.prefix,
+        range: rangeFor(lineStarts, registration.node.from, registration.node.to)
       });
     }
 
@@ -1613,6 +1744,32 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
           }
         }
 
+        const blueprintAtFlaskDecorator = latestProvenFrameworkInstance(
+          input,
+          topLevelNodes,
+          flaskImports,
+          flaskBlueprints,
+          flaskDecorator.receiver,
+          flaskDecorator.node.from,
+          "Blueprint"
+        );
+        const finalBlueprint = finalFlaskBlueprints.find(
+          (blueprint) =>
+            blueprintAtFlaskDecorator !== null &&
+            nodeKey(blueprint.node) === nodeKey(blueprintAtFlaskDecorator.node)
+        );
+        if (finalBlueprint !== undefined) {
+          for (const method of flaskDecorator.methods) {
+            flaskBlueprintFacts.routes.push({
+              blueprintName: finalBlueprint.name,
+              method,
+              path: flaskDecorator.path,
+              handlerId: handler.id,
+              range: rangeFor(lineStarts, flaskDecorator.node.from, flaskDecorator.node.to)
+            });
+          }
+        }
+
         for (const registration of flaskBlueprintRegistrations) {
           if (
             flaskDecorator.receiver !== registration.blueprintName ||
@@ -1691,6 +1848,7 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
       childRegistrations: [],
       rootRegistrations: []
     },
-    fastApiRouterFacts
+    fastApiRouterFacts,
+    flaskBlueprintFacts
   };
 }

@@ -3727,6 +3727,128 @@ describe("SymbolLatticeService", () => {
     );
   });
 
+  it("projects package-relative Flask Blueprint modules through literal prefixes", async () => {
+    const projectPath = await createInlineProject({
+      "app/__init__.py": "",
+      "app/routes/__init__.py": "",
+      "app/routes/catalog.py": [
+        "from flask import Blueprint as BP",
+        "catalog = BP(\"catalog\", __name__, url_prefix=\"/catalog\")",
+        "",
+        "@catalog.get(\"/items\")",
+        "def items():",
+        "    return []"
+      ].join("\n"),
+      "app/main.py": [
+        "from flask import Flask as App",
+        "from .routes.catalog import catalog as catalog_blueprint",
+        "app = App(__name__)",
+        "app.register_blueprint(catalog_blueprint, url_prefix=\"/api\")"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath, { method: "GET" });
+    const mainFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "app/main.py");
+    const blueprintFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "app/routes/catalog.py");
+
+    expect(mainFacts?.flaskBlueprintFacts).toMatchObject({
+      importedBlueprintRegistrations: [
+        {
+          moduleSpecifier: ".routes.catalog",
+          importedBlueprintName: "catalog",
+          blueprintName: "catalog_blueprint",
+          prefix: "/api"
+        }
+      ]
+    });
+    expect(blueprintFacts?.flaskBlueprintFacts).toMatchObject({
+      blueprints: [{ name: "catalog", prefix: "/catalog" }],
+      routes: [{ blueprintName: "catalog", method: "GET", path: "/items" }]
+    });
+    expect(routes.routes).toMatchObject([
+      {
+        method: "GET",
+        path: "/api/catalog/items",
+        route: {
+          kind: "route",
+          name: "GET /api/catalog/items",
+          filePath: "app/routes/catalog.py"
+        },
+        edge: {
+          kind: "routes",
+          resolution: "exact",
+          evidence: {
+            ruleId: "framework.flask.imported-blueprint.register-blueprint.decorator.local-function",
+            stage: "module",
+            resolutionPath: ["app/main.py", "app/routes/catalog.py"]
+          }
+        },
+        handler: { qualifiedName: "app/routes/catalog.py#items" }
+      }
+    ]);
+
+    await writeFile(
+      join(projectPath, "app", "main.py"),
+      [
+        "from flask import Flask as App",
+        "from .routes.catalog import catalog as catalog_blueprint",
+        "app = App(__name__)",
+        "app.register_blueprint(catalog_blueprint, url_prefix=\"/v2\")"
+      ].join("\n"),
+      "utf8"
+    );
+    const synced = await service.sync({ projectPath });
+    const routesAfterSync = await service.routes(projectPath, { method: "GET" });
+
+    expect(synced.lastIndexWork).toMatchObject({
+      mode: "incremental",
+      modifiedFiles: ["app/main.py"],
+      reExtractedFiles: ["app/main.py"],
+      reusedArtifactFiles: expect.arrayContaining(["app/routes/catalog.py"])
+    });
+    expect(routesAfterSync.routes).toMatchObject([
+      {
+        method: "GET",
+        path: "/v2/catalog/items",
+        route: { name: "GET /v2/catalog/items", filePath: "app/routes/catalog.py" },
+        handler: { qualifiedName: "app/routes/catalog.py#items" }
+      }
+    ]);
+  });
+
+  it("does not project Flask Blueprint modules without a proven package boundary", async () => {
+    const projectPath = await createInlineProject({
+      "app/routes/catalog.py": [
+        "from flask import Blueprint",
+        "catalog = Blueprint(\"catalog\", __name__)",
+        "",
+        "@catalog.get(\"/items\")",
+        "def items():",
+        "    return []"
+      ].join("\n"),
+      "app/main.py": [
+        "from flask import Flask",
+        "from .routes.catalog import catalog",
+        "app = Flask(__name__)",
+        "app.register_blueprint(catalog, url_prefix=\"/api\")"
+      ].join("\n")
+    });
+    const service = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+
+    await expect(service.routes(projectPath, { method: "GET" })).resolves.toMatchObject({
+      routes: []
+    });
+  });
+
   it("indexes Go Gin engine and literal group routes with exact syntax evidence", async () => {
     const projectPath = await createInlineProject({
       "cmd/server/main.go": [

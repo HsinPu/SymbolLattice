@@ -185,7 +185,8 @@ describe("first-party framework capabilities", () => {
       routeRegistrations: [],
       surfaces: [
         "direct Flask application decorators",
-        "same-file Blueprint decorators through direct register_blueprint"
+        "same-file Blueprint decorators through direct register_blueprint",
+        "package-relative imported Blueprint decorators through direct register_blueprint"
       ]
     });
     expect(frameworkCapability("django")).toMatchObject({
