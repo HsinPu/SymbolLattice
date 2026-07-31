@@ -6,6 +6,23 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.102.0] - 2026-07-31
+
+### Added
+
+- Source discovery now recognizes case-insensitive `.ads`, `.adb`, and `.ada` files. The additive `ada` language is available through the existing persisted source-search, CLI, and MCP language-validation contracts.
+- The dependency-free extractor retains a file symbol plus complete direct Ada `package`, `package body`, `procedure`, and `function` library units. Packages and package bodies use the existing `module` symbol kind; procedures and functions use `function`. A direct one-line procedure/function declaration ending in `;` is also retained. Every accepted unit has its source range and an exact file-to-symbol `contains` edge with `language.ada.<kind>.direct-library-unit` syntax evidence. Unit, discovery, and service integration coverage prove comments/strings, child package names, nested-member exclusion, malformed-input safety, persisted facts, and language-filtered source search. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.102.0.md`.
+
+### Compatibility
+
+- The artifact extractor advances to `multi-language-ast-v91`; the project resolver remains `project-resolver-v25` because the initial Ada facts are direct file-local declarations. A pre-v0.102 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes Ada-capable facts.
+- No SQLite schema migration or query command is required. This is an additive artifact-language capability within existing file, module/function-symbol, exact-containment-edge, source-search, CLI, MCP, retained-generation, and incremental-index contracts; existing generations remain readable.
+
+### Deliberate limits
+
+- This is not an Ada compiler, grammar validator, type checker, elaboration model, generic-instantiation resolver, spec/body linker, or runtime tracer. It excludes package members, `with` / `use`, aspect clauses, multi-line profiles, generic/task/protected/separate units, renamings, operators, cross-file resolution, and execution behavior.
+- Only explicitly named `end Name;` terminators complete the supported multiline units; an unmatched named end or unterminated string rejects the source file. Other unsupported forms emit no Ada symbol. The inspected local CodeGraph baseline did not expose a dedicated Ada artifact-language extractor in the searched source surface; SymbolLattice v0.102 independently adds this narrow, source-range-preserving slice without copying CodeGraph source or claiming complete Ada support.
+
 ## [0.101.0] - 2026-07-31
 
 ### Added

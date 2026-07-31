@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.101.0 is an early developer release. Run this repository from source; the npm package remains private and unpublished.
+> v0.102.0 is an early developer release. Run this repository from source; the npm package remains private and unpublished.
 
 ## Positioning
 
@@ -26,7 +26,7 @@ License: MIT.
 
 - Builds syntax-proven file, symbol, containment, import/export, type-hierarchy, route, entrypoint, and cross-file graph facts.
 - Creates exact edges only when the proof is direct; ambiguous candidates remain unresolved or heuristic evidence instead of runtime guesses.
-- Covers frontend, backend, JVM, scientific-computing, native, data, IaC, template, and schema sources, including TypeScript, Java, Groovy, Fortran, Python, Go, Rust, C/C++, C#, PHP, Ruby, Kotlin, Swift, Dart, SQL, GraphQL, Protocol Buffers, Terraform, YAML, and XML.
+- Covers frontend, backend, JVM, scientific-computing, systems, native, data, IaC, template, and schema sources, including TypeScript, Java, Groovy, Fortran, Ada, Python, Go, Rust, C/C++, C#, PHP, Ruby, Kotlin, Swift, Dart, SQL, GraphQL, Protocol Buffers, Terraform, YAML, and XML.
 - Includes a CLI and read-only MCP queries for symbols, relationships, routes, entrypoints, generation history, diffs, and affected tests.
 
 ## Quick start
@@ -49,10 +49,10 @@ node dist/cli/main.js explain-edge "edge:<edge-id>" --project /path/to/project
 
 On Windows PowerShell, use `npm.cmd` when `npm` is unavailable. Filesystem roots and home directories are rejected unless `--force` is explicitly supplied.
 
-## v0.101.0 highlights
+## v0.102.0 highlights
 
-- Adds Fortran `.f`, `.for`, `.f77`, `.f90`, `.f95`, `.f03`, `.f08`, and `.f18` source discovery.
-- Complete direct `module`, `program`, `subroutine`, and `function` units receive source ranges and exact `contains` evidence; a `program` uses the existing `module` symbol kind.
+- Adds Ada `.ads`, `.adb`, and `.ada` source discovery.
+- Complete direct `package`, `package body`, `procedure`, and `function` library units receive source ranges and exact `contains` evidence; the first two use the existing `module` kind and the latter two use `function`.
 - Keeps Traditional Chinese as the default README, with this equally concise English counterpart.
 
 ## Deliberate limits
@@ -61,6 +61,7 @@ On Windows PowerShell, use `npm.cmd` when `npm` is unavailable. Filesystem roots
 - Dynamic dispatch, reflection, macros, code generation, dependency injection, and ambiguous name matches are never promoted to exact graph relations.
 - The first Groovy slice excludes members, trait composition, Grails, Gradle DSLs, and dynamic metaprogramming. Any unmasked script-scope `/` (including slashy/dollar-slashy strings and division) conservatively rejects the file instead of risking false symbols.
 - The first Fortran slice excludes `contains` members, interface/submodule/derived-type contents, cross-file module relations, and runtime behavior. A generic `END` used to close a supported unit, continuation, or incomplete structure rejects the file.
+- The first Ada slice excludes package members, spec/body pairing, multi-line profiles, aspects, generics, task/protected/separate units, `with`/`use`, and cross-file relations. An unmatched named ending or unterminated string rejects the file; other unsupported forms create no Ada symbols.
 - Updating a graph requires an explicit `sync` or `index`; MCP queries remain read-only.
 
 ## Verification
@@ -71,5 +72,3 @@ npm test
 npm run build
 git diff --check
 ```
-
-Each version includes a Traditional Chinese comparison report outside the project at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v<version>.md`.

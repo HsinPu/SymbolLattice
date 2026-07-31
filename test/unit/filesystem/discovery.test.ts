@@ -267,6 +267,12 @@ describe("source discovery", () => {
     expect(getSourceLanguage("src/SOLVER.F08")).toBe("fortran");
   });
 
+  it("recognizes Ada source extensions", () => {
+    expect(getSourceLanguage("src/directory.ads")).toBe("ada");
+    expect(getSourceLanguage("src/main.adb")).toBe("ada");
+    expect(getSourceLanguage("src/legacy.ADA")).toBe("ada");
+  });
+
   it("discovers only source-proven Objective-C .h headers", async () => {
     const projectPath = await createProject();
     await mkdir(join(projectPath, "Headers"), { recursive: true });

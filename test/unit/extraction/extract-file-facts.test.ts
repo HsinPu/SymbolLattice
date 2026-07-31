@@ -9865,6 +9865,138 @@ describe("source extraction", () => {
     }
   });
 
+  it("extracts complete direct Ada library units with source ranges", () => {
+    const facts = extractFileFacts({
+      filePath: "src/directory.adb",
+      language: "ada",
+      sourceText: [
+        "-- package Commented is",
+        "package Directory is",
+        "  procedure Hidden;",
+        "end Directory;",
+        "package body Directory is",
+        "  procedure Hidden is",
+        "  begin",
+        '    Ada.Text_IO.Put_Line("end Directory;");',
+        "  end Hidden;",
+        "end Directory;",
+        "procedure Main is",
+        "begin",
+        "  null;",
+        "end Main;",
+        "function Sum (Left, Right : Integer) return Integer is",
+        "begin",
+        "  return Left + Right;",
+        "end Sum;",
+        "procedure Declared (Value : Integer);",
+        "function Named return Boolean;",
+        "package Parent.Child is",
+        "end Parent.Child;"
+      ].join("\n")
+    });
+
+    expect(
+      facts.symbols.map((symbol) => [symbol.kind, symbol.qualifiedName, symbol.declarationOrdinal])
+    ).toEqual([
+      ["file", "src/directory.adb", 0],
+      ["module", "src/directory.adb#package:Directory", 0],
+      ["module", "src/directory.adb#package-body:Directory", 0],
+      ["function", "src/directory.adb#procedure:Main", 0],
+      ["function", "src/directory.adb#function:Sum", 0],
+      ["function", "src/directory.adb#procedure:Declared", 0],
+      ["function", "src/directory.adb#function:Named", 0],
+      ["module", "src/directory.adb#package:Parent.Child", 0]
+    ]);
+    expect(facts.symbols.find((symbol) => symbol.qualifiedName.endsWith("package:Directory"))?.range).toEqual({
+      start: { line: 2, column: 1 },
+      end: { line: 4, column: 15 }
+    });
+    expect(
+      facts.symbols.find((symbol) => symbol.qualifiedName.endsWith("package-body:Directory"))?.range
+    ).toEqual({
+      start: { line: 5, column: 1 },
+      end: { line: 10, column: 15 }
+    });
+    expect(facts.symbols.find((symbol) => symbol.name === "Main")?.range).toEqual({
+      start: { line: 11, column: 1 },
+      end: { line: 14, column: 10 }
+    });
+    expect(facts.symbols.some((symbol) => symbol.name === "Hidden")).toBe(false);
+    expect(
+      facts.edges.map((edge) => [edge.referenceName, edge.evidence?.ruleId, edge.resolution])
+    ).toEqual([
+      ["Directory", "language.ada.package.direct-library-unit", "exact"],
+      ["Directory", "language.ada.package-body.direct-library-unit", "exact"],
+      ["Main", "language.ada.procedure.direct-library-unit", "exact"],
+      ["Sum", "language.ada.function.direct-library-unit", "exact"],
+      ["Declared", "language.ada.procedure.direct-library-unit", "exact"],
+      ["Named", "language.ada.function.direct-library-unit", "exact"],
+      ["Parent.Child", "language.ada.package.direct-library-unit", "exact"]
+    ]);
+  });
+
+  it("rejects incomplete or unsupported Ada library-unit forms", () => {
+    const unbalanced = extractFileFacts({
+      filePath: "src/unbalanced.ads",
+      language: "ada",
+      sourceText: "package Broken is\n"
+    });
+    const genericEnd = extractFileFacts({
+      filePath: "src/generic-end.adb",
+      language: "ada",
+      sourceText: ["procedure Broken is", "end;"].join("\n")
+    });
+    const wrongEnd = extractFileFacts({
+      filePath: "src/wrong-end.adb",
+      language: "ada",
+      sourceText: ["function Broken return Boolean is", "end Other;"].join("\n")
+    });
+    const multilineProfile = extractFileFacts({
+      filePath: "src/multiline.adb",
+      language: "ada",
+      sourceText: [
+        "procedure Split (",
+        "  Value : Integer",
+        ") is",
+        "begin",
+        "  null;",
+        "end Split;"
+      ].join("\n")
+    });
+    const aspectClause = extractFileFacts({
+      filePath: "src/aspect.adb",
+      language: "ada",
+      sourceText: [
+        "procedure Checked with Pre => Ready is",
+        "begin",
+        "  null;",
+        "end Checked;"
+      ].join("\n")
+    });
+    const unclosedString = extractFileFacts({
+      filePath: "src/unclosed-string.adb",
+      language: "ada",
+      sourceText: [
+        "procedure Safe is",
+        '  Text : String := "unterminated',
+        "end Safe;"
+      ].join("\n")
+    });
+
+    for (const facts of [
+      unbalanced,
+      genericEnd,
+      wrongEnd,
+      multilineProfile,
+      aspectClause,
+      unclosedString
+    ]) {
+      expect(facts.symbols).toHaveLength(1);
+      expect(facts.symbols[0]?.kind).toBe("file");
+      expect(facts.edges).toEqual([]);
+    }
+  });
+
   it("extracts source-proven Java properties keys without retaining configuration values", () => {
     const facts = extractFileFacts({
       filePath: "config/application.properties",

@@ -8640,6 +8640,64 @@ describe("SymbolLatticeService", () => {
     ]);
   });
 
+  it("indexes direct Ada library units with persisted source search", async () => {
+    const projectPath = await createInlineProject({
+      "src/directory.ads": [
+        "package Directory is",
+        "  procedure Hidden;",
+        "end Directory;"
+      ].join("\n"),
+      "src/main.adb": [
+        "procedure Main is",
+        "begin",
+        "  null;",
+        "end Main;"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    const indexed = await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+    const search = await service.search(projectPath, "Directory", { language: "ada" });
+    const main = await service.find(projectPath, "src/main.adb#procedure:Main");
+    const persistedFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .filter((facts) => facts.language === "ada");
+
+    expect(indexed).toMatchObject({
+      stale: false,
+      counts: { files: 2, symbols: 4, edges: 2 }
+    });
+    expect(persistedFacts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          filePath: "src/directory.ads",
+          language: "ada",
+          extractorVersion: ARTIFACT_FACTS_EXTRACTOR_VERSION
+        }),
+        expect.objectContaining({
+          filePath: "src/main.adb",
+          language: "ada",
+          extractorVersion: ARTIFACT_FACTS_EXTRACTOR_VERSION
+        })
+      ])
+    );
+    expect(main.symbols).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "function",
+          qualifiedName: "src/main.adb#procedure:Main",
+          isExported: true
+        })
+      ])
+    );
+    expect(routes.routes).toEqual([]);
+    expect(search.results).toMatchObject([
+      { filePath: "src/directory.ads", language: "ada" }
+    ]);
+  });
+
   it("projects a direct NestJS GraphQL resolver to one unique schema object type as heuristic evidence", async () => {
     const projectPath = await createInlineProject({
       "api/schema.graphql": [

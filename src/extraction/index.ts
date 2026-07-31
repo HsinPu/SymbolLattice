@@ -19,6 +19,7 @@ import { extractGoFileFacts } from "./go.js";
 import { extractJavaFileFacts } from "./java.js";
 import { extractGroovyFileFacts } from "./groovy.js";
 import { extractFortranFileFacts } from "./fortran.js";
+import { extractAdaFileFacts } from "./ada.js";
 import { extractKotlinFileFacts } from "./kotlin.js";
 import { extractLuaFileFacts } from "./lua.js";
 import { extractObjectiveCFileFacts } from "./objc.js";
@@ -3729,6 +3730,9 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
   }
   if (input.language === "fortran") {
     return extractFortranFileFacts({ ...input, language: "fortran" });
+  }
+  if (input.language === "ada") {
+    return extractAdaFileFacts({ ...input, language: "ada" });
   }
   if (input.language === "php") {
     return extractPhpFileFacts({ ...input, language: "php" });
