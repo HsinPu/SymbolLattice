@@ -671,6 +671,9 @@ function artifactFactsPayload(facts: PersistedArtifactFacts): ArtifactFacts {
       : { fastApiRouterFacts: facts.fastApiRouterFacts }),
     ...(facts.scalaFacts === undefined ? {} : { scalaFacts: facts.scalaFacts }),
     ...(facts.javaFacts === undefined ? {} : { javaFacts: facts.javaFacts }),
+    ...(facts.springBootPropertiesFacts === undefined
+      ? {}
+      : { springBootPropertiesFacts: facts.springBootPropertiesFacts }),
     ...(facts.liquidFacts === undefined ? {} : { liquidFacts: facts.liquidFacts }),
     ...(facts.solidityFacts === undefined ? {} : { solidityFacts: facts.solidityFacts }),
     ...(facts.twigFacts === undefined ? {} : { twigFacts: facts.twigFacts }),

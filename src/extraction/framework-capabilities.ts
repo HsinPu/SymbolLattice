@@ -25,6 +25,7 @@ export const FRAMEWORK_CAPABILITY_IDS = [
   "chi",
   "axum",
   "spring-web",
+  "spring-boot-properties",
   "laravel",
   "drupal",
   "laravel-blade",
@@ -281,6 +282,15 @@ export const FRAMEWORK_CAPABILITIES = [
     surfaces: [
       "direct imported or fully-qualified Spring controller annotations",
       "literal class and HTTP-method mapping annotations on direct local methods"
+    ]
+  },
+  {
+    id: "spring-boot-properties",
+    languages: ["java", "properties"],
+    routeRegistrations: [],
+    surfaces: [
+      "direct imported or fully-qualified @Value literal-key annotations on direct Java fields",
+      "unique literal keys in conventional application or bootstrap properties files"
     ]
   },
   {

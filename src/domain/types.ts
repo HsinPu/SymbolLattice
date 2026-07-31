@@ -27,6 +27,7 @@ export const EDGE_KINDS = [
   "contains",
   "imports",
   "exports",
+  "references",
   "calls",
   "routes",
   "handles",

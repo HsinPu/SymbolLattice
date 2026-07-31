@@ -6,6 +6,24 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.92.0] - 2026-07-31
+
+### Added
+
+- The first-party framework registry now includes `spring-boot-properties`. A direct Java field inside a direct class can retain a raw property-reference fact only when an exact `org.springframework.beans.factory.annotation.Value` import or fully-qualified annotation proves one static `${key}` or `${key:default}` literal. The source range is the annotation itself; property values are never retained.
+- Project resolution now considers only parser-proven keys in conventional `application.properties`, `application-*.properties`, `bootstrap.properties`, and `bootstrap-*.properties` files. A unique literal key becomes an exact class-to-key `references` edge with `framework.spring-boot.properties.direct-value.literal-key.exact-key` evidence. Missing and duplicate keys remain explicit unresolved `references` edges with rule-specific evidence, candidate IDs, and applicable configuration paths; no profile or precedence guess is made.
+- `references` is now a first-class static traversal relation for direct callers, callees, bounded evidence paths, and reverse impact paths. SQLite raw-artifact serialization persists the additive Spring Boot property facts so an explicit sync can safely reproject them. Unit, graph, and service integration coverage prove field/import boundaries, source ranges, persistence, exact queryability, ambiguous/missing evidence, value non-retention, and traversal. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.92.0.md`.
+
+### Compatibility
+
+- The artifact extractor advances to `multi-language-ast-v81` and the project resolver to `project-resolver-v24` because the release adds persisted cross-file Spring Boot property-reference projection. A pre-v0.92 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes complete facts and graph evidence.
+- No SQLite schema migration or query command is required. The additive raw-fact payload and `references` edge use existing artifact-fact, graph, source-search, CLI, MCP, retained-generation, and incremental-index contracts; existing generations remain readable.
+
+### Deliberate limits
+
+- This is not a general Spring configuration model. It excludes YAML, Kotlin, `@ConfigurationProperties`, method or parameter annotations, aliases/wildcard imports, named or dynamic arguments, string concatenation/escaping, nested placeholders, SpEL, relaxed binding, active-profile selection, precedence/default merging, imports, environment overrides, validation, values, and runtime behavior.
+- The inspected local CodeGraph baseline has broader Spring configuration detection, including YAML/property configuration candidates, `@Value`, `@ConfigurationProperties`, relaxed binding, and profile heuristics. SymbolLattice v0.92 independently adds a narrower persistence-safe proof that resolves only one unique conventional properties key and makes uncertainty explicit; it does not copy CodeGraph source or claim parity.
+
 ## [0.91.0] - 2026-07-31
 
 ### Added

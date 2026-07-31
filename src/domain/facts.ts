@@ -11,13 +11,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v80";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v81";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v23";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v24";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -259,6 +259,23 @@ export interface JavaFacts {
   readonly classes: readonly JavaClassFact[];
 }
 
+/** One direct Spring `@Value("${literal.key}")` annotation on a class field. */
+export interface SpringBootPropertiesValueReferenceFact {
+  /** Stable symbol identity of the directly enclosing Java class. */
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly key: string;
+  readonly range: SourceRange;
+}
+
+/**
+ * Syntax-only Spring Boot properties facts. The project resolver links them
+ * only to one unique key in a conventional application/bootstrap properties file.
+ */
+export interface SpringBootPropertiesFacts {
+  readonly valueReferences: readonly SpringBootPropertiesValueReferenceFact[];
+}
+
 /** Direct literal Shopify Liquid template tag kinds retained for project-local resolution. */
 export type LiquidTemplateReferenceKind = "render" | "include" | "section";
 
@@ -361,6 +378,8 @@ export interface ArtifactFacts {
   readonly scalaFacts?: ScalaFacts;
   /** Omitted only by artifact facts persisted before v0.47. */
   readonly javaFacts?: JavaFacts;
+  /** Omitted only by artifact facts persisted before v0.92. */
+  readonly springBootPropertiesFacts?: SpringBootPropertiesFacts;
   /** Omitted only by artifact facts persisted before v0.66. */
   readonly liquidFacts?: LiquidFacts;
   /** Omitted only by artifact facts persisted before v0.67. */

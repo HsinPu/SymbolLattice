@@ -312,6 +312,96 @@ function projectBladeTemplateReferences(input: {
   return edges;
 }
 
+function isSpringBootPropertiesFile(filePath: string): boolean {
+  const fileName = filePath.split(/[\\/]/u).at(-1) ?? filePath;
+  return /^(application|bootstrap)(?:-[A-Za-z0-9_.-]+)?\.properties$/iu.test(fileName);
+}
+
+function springBootPropertiesRuleId(
+  suffix: "exact-key" | "unresolved-key" | "ambiguous-key"
+): string {
+  return `framework.spring-boot.properties.direct-value.literal-key.${suffix}`;
+}
+
+/**
+ * Projects a direct Java field `@Value("${literal.key}")` only through one
+ * unique, parser-proven key in a conventional application/bootstrap properties
+ * file. Profile precedence and duplicate-key selection are runtime semantics,
+ * so zero or multiple candidates remain explicit unresolved references.
+ */
+function projectSpringBootPropertiesReferences(input: {
+  readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
+  readonly symbolsById: ReadonlyMap<string, SymbolNode>;
+}): readonly GraphEdge[] {
+  const propertyKeySymbols: SymbolNode[] = [];
+  for (const [filePath, facts] of [...input.factsByFile.entries()].sort(([left], [right]) =>
+    compareStableText(left, right)
+  )) {
+    if (!isSpringBootPropertiesFile(filePath)) {
+      continue;
+    }
+    const qualifiedNamePrefix = `${filePath}#properties-key:`;
+    for (const symbol of facts.symbols) {
+      if (symbol.kind === "variable" && symbol.qualifiedName.startsWith(qualifiedNamePrefix)) {
+        propertyKeySymbols.push(symbol);
+      }
+    }
+  }
+
+  const edges: GraphEdge[] = [];
+  for (const [, facts] of [...input.factsByFile.entries()].sort(([left], [right]) =>
+    compareStableText(left, right)
+  )) {
+    const references = [...(facts.springBootPropertiesFacts?.valueReferences ?? [])].sort(
+      (left, right) => {
+        const bySource = compareStableText(left.sourceId, right.sourceId);
+        if (bySource !== 0) {
+          return bySource;
+        }
+        const byLine = left.range.start.line - right.range.start.line;
+        return byLine !== 0 ? byLine : left.range.start.column - right.range.start.column;
+      }
+    );
+    for (const reference of references) {
+      const source = input.symbolsById.get(reference.sourceId);
+      if (source === undefined) {
+        continue;
+      }
+      const candidates = propertyKeySymbols
+        .filter((symbol) => symbol.name === reference.key)
+        .sort((left, right) => compareStableText(left.id, right.id));
+      const target = candidates.length === 1 ? candidates[0] : undefined;
+      const suffix =
+        target !== undefined ? "exact-key" : candidates.length === 0 ? "unresolved-key" : "ambiguous-key";
+      edges.push({
+        id: createEdgeId({
+          sourceId: source.id,
+          targetId: target?.id ?? null,
+          kind: "references",
+          line: reference.range.start.line,
+          column: reference.range.start.column,
+          referenceName: reference.key
+        }),
+        sourceId: source.id,
+        targetId: target?.id ?? null,
+        kind: "references",
+        filePath: reference.filePath,
+        range: reference.range,
+        resolution: target === undefined ? "unresolved" : "exact",
+        confidence: target === undefined ? 0 : 1,
+        referenceName: reference.key,
+        evidence: referenceEvidence(
+          springBootPropertiesRuleId(suffix),
+          target === undefined ? "unresolved" : "module",
+          candidateSymbolIds(candidates),
+          candidates.map((candidate) => candidate.filePath)
+        )
+      });
+    }
+  }
+  return edges;
+}
+
 function solidityInheritanceRuleId(
   source: SymbolNode,
   relationKind: "extends" | "implements"
@@ -2200,6 +2290,12 @@ export function resolveProjectFacts(input: {
   resolvedEdges.push(
     ...projectSolidityInheritance({
       factsByFile
+    })
+  );
+  resolvedEdges.push(
+    ...projectSpringBootPropertiesReferences({
+      factsByFile,
+      symbolsById
     })
   );
 

@@ -32,6 +32,7 @@ describe("first-party framework capabilities", () => {
       "chi",
       "axum",
       "spring-web",
+      "spring-boot-properties",
       "laravel",
       "drupal",
       "laravel-blade",
@@ -225,6 +226,14 @@ describe("first-party framework capabilities", () => {
       surfaces: [
         "direct imported or fully-qualified Spring controller annotations",
         "literal class and HTTP-method mapping annotations on direct local methods"
+      ]
+    });
+    expect(frameworkCapability("spring-boot-properties")).toMatchObject({
+      languages: ["java", "properties"],
+      routeRegistrations: [],
+      surfaces: [
+        "direct imported or fully-qualified @Value literal-key annotations on direct Java fields",
+        "unique literal keys in conventional application or bootstrap properties files"
       ]
     });
     expect(frameworkCapability("laravel")).toMatchObject({

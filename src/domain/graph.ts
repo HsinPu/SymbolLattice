@@ -7,6 +7,7 @@ import {
 
 const DEFAULT_IMPACT_EDGE_KINDS: readonly EdgeKind[] = [
   "calls",
+  "references",
   "routes",
   "handles",
   "imports"
@@ -680,7 +681,7 @@ export function getEntrypoints(graph: SymbolGraph): readonly EntryPointRecord[] 
   return entrypoints.sort(compareEntrypointRecords);
 }
 
-/** Returns all resolved static call, route, or entrypoint-handler bindings targeting a symbol. */
+/** Returns all resolved static call, reference, route, or entrypoint-handler bindings targeting a symbol. */
 export function getCallers(graph: SymbolGraph, symbolId: string): readonly GraphRelation[] {
   const symbolsById = createSymbolIndex(graph.symbols);
   if (!symbolsById.has(symbolId)) {
@@ -690,7 +691,10 @@ export function getCallers(graph: SymbolGraph, symbolId: string): readonly Graph
   const callers: GraphRelation[] = [];
   for (const edge of graph.edges) {
     if (
-      (edge.kind !== "calls" && edge.kind !== "routes" && edge.kind !== "handles") ||
+      (edge.kind !== "calls" &&
+        edge.kind !== "references" &&
+        edge.kind !== "routes" &&
+        edge.kind !== "handles") ||
       !isResolvedGraphEdge(edge) ||
       edge.targetId !== symbolId
     ) {
@@ -706,7 +710,7 @@ export function getCallers(graph: SymbolGraph, symbolId: string): readonly Graph
   return callers.sort(compareRelations);
 }
 
-/** Returns all resolved static call, route, or entrypoint-handler targets referenced by a symbol. */
+/** Returns all resolved static call, reference, route, or entrypoint-handler targets referenced by a symbol. */
 export function getCallees(graph: SymbolGraph, symbolId: string): readonly GraphRelation[] {
   const symbolsById = createSymbolIndex(graph.symbols);
   if (!symbolsById.has(symbolId)) {
@@ -716,7 +720,10 @@ export function getCallees(graph: SymbolGraph, symbolId: string): readonly Graph
   const callees: GraphRelation[] = [];
   for (const edge of graph.edges) {
     if (
-      (edge.kind !== "calls" && edge.kind !== "routes" && edge.kind !== "handles") ||
+      (edge.kind !== "calls" &&
+        edge.kind !== "references" &&
+        edge.kind !== "routes" &&
+        edge.kind !== "handles") ||
       !isResolvedGraphEdge(edge) ||
       edge.sourceId !== symbolId
     ) {
@@ -795,7 +802,7 @@ function assertPositiveVisitCap(maxVisitedSymbols: number): void {
 /**
  * Finds one deterministic shortest directed evidence path through exact,
  * resolved graph edges. The bounded breadth-first traversal follows calls,
- * routes, entrypoint handlers, and imports by default, never revisits a symbol, and only reports truncation
+ * references, routes, entrypoint handlers, and imports by default, never revisits a symbol, and only reports truncation
  * when its visit cap prevented another unvisited candidate from entering the
  * search.
  */
@@ -1067,8 +1074,8 @@ export function findAffectedTestPaths(
  * Traverses resolved incoming edges to find symbols affected by a change.
  *
  * The result excludes the root, keeps one deterministic shortest evidence path
- * per impacted symbol, never repeats a symbol, and follows static calls, routes,
- * entrypoint handlers, and imports by default. Pass a subset of `EDGE_KINDS` to scope the dependency relation.
+ * per impacted symbol, never repeats a symbol, and follows static calls, references,
+ * routes, entrypoint handlers, and imports by default. Pass a subset of `EDGE_KINDS` to scope the dependency relation.
  */
 export function getImpactPaths(
   graph: SymbolGraph,

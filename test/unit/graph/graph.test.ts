@@ -128,6 +128,47 @@ describe("pure graph traversal", () => {
     ]);
   });
 
+  it("traverses resolved cross-file references as callers, callees, and impact paths", () => {
+    const configuration = symbol({
+      id: "configuration",
+      name: "AppConfig",
+      filePath: "src/config/AppConfig.java",
+      kind: "class"
+    });
+    const property = symbol({
+      id: "property",
+      name: "server.port",
+      filePath: "config/application.properties",
+      kind: "variable"
+    });
+    const referenceGraph = {
+      symbols: [configuration, property],
+      edges: [
+        edge({
+          id: "configuration-references-server-port",
+          sourceId: configuration.id,
+          targetId: property.id,
+          kind: "references",
+          filePath: configuration.filePath,
+          referenceName: property.name
+        })
+      ]
+    };
+
+    expect(getCallers(referenceGraph, property.id).map((relation) => relation.symbol.id)).toEqual([
+      configuration.id
+    ]);
+    expect(getCallees(referenceGraph, configuration.id).map((relation) => relation.symbol.id)).toEqual([
+      property.id
+    ]);
+    expect(
+      findEvidencePath(referenceGraph, configuration.id, property.id).path?.edges.map((item) => item.id)
+    ).toEqual(["configuration-references-server-port"]);
+    expect(getImpactPaths(referenceGraph, property.id, 1).map((path) => path.symbols.at(-1)?.id)).toEqual([
+      configuration.id
+    ]);
+  });
+
   it("returns direct exact and unresolved TypeScript parents, plus exact children", () => {
     const base = symbol({ id: "base", name: "Base", filePath: "src/base.ts", kind: "class" });
     const contract = symbol({

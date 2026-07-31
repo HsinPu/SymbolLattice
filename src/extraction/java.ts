@@ -8,6 +8,7 @@ import {
   type RouteMethod,
   type SourcePosition,
   type SourceRange,
+  type SpringBootPropertiesValueReferenceFact,
   type SymbolNode
 } from "../domain/index.js";
 import { frameworkCapability } from "./framework-capabilities.js";
@@ -46,9 +47,16 @@ interface StaticSpringRoute {
   readonly node: JavaSyntaxNode;
 }
 
+interface StaticSpringBootPropertiesReference {
+  readonly key: string;
+  readonly node: JavaSyntaxNode;
+}
+
 const SPRING_REST_CONTROLLER_PATH = "org.springframework.web.bind.annotation.RestController";
 const SPRING_CONTROLLER_PATH = "org.springframework.stereotype.Controller";
 const SPRING_REQUEST_MAPPING_PATH = "org.springframework.web.bind.annotation.RequestMapping";
+const SPRING_VALUE_PATH = "org.springframework.beans.factory.annotation.Value";
+const SPRING_BOOT_PROPERTIES_KEY = /^[A-Za-z0-9][A-Za-z0-9._-]*$/u;
 
 const SPRING_METHOD_MAPPING_PATHS: Readonly<Record<string, RouteMethod>> = {
   "org.springframework.web.bind.annotation.GetMapping": "GET",
@@ -206,6 +214,40 @@ function staticSpringPath(
     return "";
   }
   return path.startsWith("/") && !path.includes("//") ? path : null;
+}
+
+/**
+ * Retains only a literal Spring placeholder value such as
+ * `@Value("${server.port}")` or `@Value("${server.port:8080}")`. Named
+ * arguments, escaped strings, nested placeholders, SpEL, and key expressions
+ * are deferred rather than treated as configuration references.
+ */
+function staticSpringBootPropertiesKey(
+  input: JavaExtractFileFactsInput,
+  annotation: StaticJavaAnnotation
+): string | null {
+  if (annotation.node.name !== "Annotation") {
+    return null;
+  }
+  const arguments_ = directChildren(annotation.node).find(
+    (child) => child.name === "AnnotationArgumentList"
+  );
+  if (arguments_ === undefined) {
+    return null;
+  }
+  const values = directChildren(arguments_).filter(
+    (child) => !["(", ")", ","].includes(child.name)
+  );
+  if (values.length !== 1 || values[0] === undefined) {
+    return null;
+  }
+  const literal = staticPlainJavaString(input, values[0]);
+  if (literal === null) {
+    return null;
+  }
+  const match = /^\$\{([A-Za-z0-9][A-Za-z0-9._-]*)(?::[^{}]*)?\}$/u.exec(literal);
+  const key = match?.[1] ?? null;
+  return key !== null && SPRING_BOOT_PROPERTIES_KEY.test(key) ? key : null;
 }
 
 function staticAnnotation(input: JavaExtractFileFactsInput, node: JavaSyntaxNode): StaticJavaAnnotation | null {
@@ -426,6 +468,47 @@ function isSpringController(
   );
 }
 
+/**
+ * Retains direct class-field `@Value` annotations only after one exact import
+ * or fully-qualified annotation proves Spring's `Value` type. The owner is
+ * the enclosing class because this Java slice does not add generic field
+ * symbols; the annotation retains its own source range for later projection.
+ */
+function staticSpringBootPropertiesReferences(
+  input: JavaExtractFileFactsInput,
+  declaration: StaticJavaClass,
+  imports: ReadonlyMap<string, string>
+): readonly StaticSpringBootPropertiesReference[] {
+  const references: StaticSpringBootPropertiesReference[] = [];
+  for (const field of directChildren(declaration.body)) {
+    if (field.name !== "FieldDeclaration") {
+      continue;
+    }
+    const annotations = staticAnnotations(input, field);
+    const annotationsNamedValue = annotations.filter(
+      (annotation) => annotation.name === "Value" || annotation.name === SPRING_VALUE_PATH
+    );
+    const valueAnnotations = annotationsNamedValue.filter((annotation) =>
+      annotationMatches(annotation, SPRING_VALUE_PATH, imports)
+    );
+    if (
+      annotationsNamedValue.length !== valueAnnotations.length ||
+      valueAnnotations.length !== 1
+    ) {
+      continue;
+    }
+    const annotation = valueAnnotations[0];
+    if (annotation === undefined) {
+      continue;
+    }
+    const key = staticSpringBootPropertiesKey(input, annotation);
+    if (key !== null) {
+      references.push({ key, node: annotation.node });
+    }
+  }
+  return references;
+}
+
 function joinSpringPaths(prefix: string, path: string): string {
   const segments = [prefix, path]
     .flatMap((value) => value.split("/"))
@@ -434,15 +517,20 @@ function joinSpringPaths(prefix: string, path: string): string {
 }
 
 /**
- * Extracts Java class and method symbols plus a deliberately narrow Spring Web
- * mapping surface. It proves a direct controller annotation, unambiguous
- * framework import (or fully-qualified annotation), one literal mapping path,
- * and the exact local method declaration before it creates a route edge.
+ * Extracts Java class and method symbols plus deliberately narrow Spring Web
+ * routes and Spring Boot properties facts. Spring Web proves a direct controller
+ * annotation, unambiguous framework import (or fully-qualified annotation), one
+ * literal mapping path, and the exact local method declaration. Spring Boot
+ * properties retains only direct field-level literal `@Value` placeholders.
  */
 export function extractJavaFileFacts(input: JavaExtractFileFactsInput): ArtifactFacts {
   const springWebCapability = frameworkCapability("spring-web");
   if (!springWebCapability.languages.includes(input.language)) {
     throw new Error("Java framework extraction was invoked for an unsupported source language.");
+  }
+  const springBootPropertiesCapability = frameworkCapability("spring-boot-properties");
+  if (!springBootPropertiesCapability.languages.includes(input.language)) {
+    throw new Error("Spring Boot properties extraction was invoked for an unsupported source language.");
   }
 
   const root = parser.parse(input.sourceText).topNode;
@@ -450,6 +538,7 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
   const symbols: SymbolNode[] = [];
   const edges: GraphEdge[] = [];
   const javaClassFacts: Array<{ symbolId: string; packageName: string }> = [];
+  const springBootPropertiesValueReferences: SpringBootPropertiesValueReferenceFact[] = [];
   const declarationOrdinals = new Map<string, number>();
   const fileName = input.filePath.split(/[\\/]/u).at(-1) ?? input.filePath;
   const fileNode: SymbolNode = {
@@ -612,6 +701,18 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
 
     for (const classDeclaration of classes) {
       const classSymbol = addClass(classDeclaration, packageName);
+      for (const reference of staticSpringBootPropertiesReferences(
+        input,
+        classDeclaration,
+        imports
+      )) {
+        springBootPropertiesValueReferences.push({
+          sourceId: classSymbol.id,
+          filePath: input.filePath,
+          key: reference.key,
+          range: rangeFor(lineStarts, reference.node.from, reference.node.to)
+        });
+      }
       const methods = directChildren(classDeclaration.body)
         .map((node) => staticJavaMethod(input, node))
         .filter((candidate): candidate is StaticJavaMethod => candidate !== null);
@@ -667,6 +768,9 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
     },
     javaFacts: {
       classes: javaClassFacts
+    },
+    springBootPropertiesFacts: {
+      valueReferences: springBootPropertiesValueReferences
     }
   };
 }

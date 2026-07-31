@@ -3035,6 +3035,83 @@ describe("source extraction", () => {
     expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
   });
 
+  it("retains direct Java Spring Boot @Value field facts with source ranges", () => {
+    const facts = extractFileFacts({
+      filePath: "src/config/AppConfig.java",
+      language: "java",
+      sourceText: [
+        "import org.springframework.beans.factory.annotation.Value;",
+        "",
+        "class AppConfig {",
+        '  @Value("${server.port}")',
+        "  private String port;",
+        '  @Value("${feature.enabled:false}")',
+        "  private boolean enabled;",
+        "}",
+        "",
+        "class FullyQualifiedConfig {",
+        '  @org.springframework.beans.factory.annotation.Value("${app.name}")',
+        "  private String name;",
+        "}"
+      ].join("\n")
+    });
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+
+    expect(
+      facts.springBootPropertiesFacts?.valueReferences.map((reference) => [
+        symbolsById.get(reference.sourceId)?.name,
+        reference.key,
+        reference.range
+      ])
+    ).toEqual([
+      [
+        "AppConfig",
+        "server.port",
+        { start: { line: 4, column: 3 }, end: { line: 4, column: 27 } }
+      ],
+      [
+        "AppConfig",
+        "feature.enabled",
+        { start: { line: 6, column: 3 }, end: { line: 6, column: 37 } }
+      ],
+      [
+        "FullyQualifiedConfig",
+        "app.name",
+        { start: { line: 11, column: 3 }, end: { line: 11, column: 69 } }
+      ]
+    ]);
+    expect(facts.edges.filter((edge) => edge.kind === "references")).toEqual([]);
+  });
+
+  it("rejects non-field, unproven, dynamic, named-argument, and nested Spring @Value forms", () => {
+    const directImportFacts = extractFileFacts({
+      filePath: "src/config/UnsupportedValues.java",
+      language: "java",
+      sourceText: [
+        "import org.springframework.beans.factory.annotation.Value;",
+        "class UnsupportedValues {",
+        '  @Value(value = "${named.argument}") private String named;',
+        '  @Value("${nested.${key}}") private String nested;',
+        '  @Value("${dynamic}" + suffix) private String dynamic;',
+        '  @Value("${method.only}") void configure() {}',
+        "}"
+      ].join("\n")
+    });
+    const wildcardImportFacts = extractFileFacts({
+      filePath: "src/config/WildcardValues.java",
+      language: "java",
+      sourceText: [
+        "import org.springframework.beans.factory.annotation.*;",
+        "class WildcardValues {",
+        '  @Value("${unproven.key}") private String value;',
+        "}"
+      ].join("\n")
+    });
+
+    expect(directImportFacts.springBootPropertiesFacts?.valueReferences).toEqual([]);
+    expect(wildcardImportFacts.springBootPropertiesFacts?.valueReferences).toEqual([]);
+  });
+
   it("extracts direct PHP Laravel facade controller routes with same-file exact method evidence", () => {
     const facts = extractFileFacts({
       filePath: "routes/api.php",

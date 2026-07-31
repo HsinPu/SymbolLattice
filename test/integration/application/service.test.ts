@@ -8046,6 +8046,182 @@ describe("SymbolLatticeService", () => {
     ]);
   });
 
+  it("projects conservative Spring Boot @Value property references across conventional properties files", async () => {
+    const projectPath = await createInlineProject({
+      "config/application.properties": [
+        "server.port=8080",
+        "feature.enabled=true",
+        "spring.datasource.password=database-secret"
+      ].join("\n"),
+      "config/application-dev.properties": "feature.enabled=false\n",
+      "config/bootstrap-prod.properties": "app.name=symbol-lattice\n",
+      "src/config/AppConfig.java": [
+        "import org.springframework.beans.factory.annotation.Value;",
+        "",
+        "class AppConfig {",
+        '  @Value("${server.port}")',
+        "  private String port;",
+        '  @Value("${feature.enabled:false}")',
+        "  private boolean enabled;",
+        '  @Value("${app.name}")',
+        "  private String appName;",
+        '  @Value("${missing.key}")',
+        "  private String missing;",
+        "}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    const indexed = await service.init({ projectPath });
+    const configurationClass = (
+      await service.find(projectPath, "src/config/AppConfig.java#AppConfig")
+    ).symbols[0];
+    const serverPort = (
+      await service.find(projectPath, "config/application.properties#properties-key:server.port")
+    ).symbols[0];
+    const appName = (
+      await service.find(projectPath, "config/bootstrap-prod.properties#properties-key:app.name")
+    ).symbols[0];
+    const applicationFeature = (
+      await service.find(projectPath, "config/application.properties#properties-key:feature.enabled")
+    ).symbols[0];
+    const developmentFeature = (
+      await service.find(projectPath, "config/application-dev.properties#properties-key:feature.enabled")
+    ).symbols[0];
+    if (
+      configurationClass === undefined ||
+      serverPort === undefined ||
+      appName === undefined ||
+      applicationFeature === undefined ||
+      developmentFeature === undefined
+    ) {
+      throw new Error("Expected indexed Spring Boot configuration symbols.");
+    }
+    const propertyCallers = await service.callers(projectPath, serverPort.qualifiedName);
+    const configurationCallees = await service.callees(projectPath, configurationClass.qualifiedName);
+    const javaFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "src/config/AppConfig.java");
+    const snapshot = graphStore.getSnapshot(projectPath);
+    const serverPortReference = snapshot.edges.find(
+      (edge) => edge.sourceId === configurationClass.id && edge.targetId === serverPort.id
+    );
+    const appNameReference = snapshot.edges.find(
+      (edge) => edge.sourceId === configurationClass.id && edge.targetId === appName.id
+    );
+    const ambiguousFeatureReference = snapshot.edges.find(
+      (edge) =>
+        edge.sourceId === configurationClass.id &&
+        edge.kind === "references" &&
+        edge.referenceName === "feature.enabled"
+    );
+    const missingReference = snapshot.edges.find(
+      (edge) =>
+        edge.sourceId === configurationClass.id &&
+        edge.kind === "references" &&
+        edge.referenceName === "missing.key"
+    );
+
+    expect(indexed).toMatchObject({
+      stale: false,
+      counts: { files: 4, symbols: 10, edges: 10 }
+    });
+    expect(javaFacts?.springBootPropertiesFacts).toMatchObject({
+      valueReferences: [
+        { sourceId: configurationClass.id, key: "server.port" },
+        { sourceId: configurationClass.id, key: "feature.enabled" },
+        { sourceId: configurationClass.id, key: "app.name" },
+        { sourceId: configurationClass.id, key: "missing.key" }
+      ]
+    });
+    expect(JSON.stringify(javaFacts)).not.toContain("database-secret");
+    expect(propertyCallers.relations).toEqual([
+      expect.objectContaining({
+        symbol: expect.objectContaining({ id: configurationClass.id }),
+        edge: expect.objectContaining({
+          kind: "references",
+          resolution: "exact",
+          referenceName: "server.port",
+          evidence: expect.objectContaining({
+            ruleId: "framework.spring-boot.properties.direct-value.literal-key.exact-key",
+            stage: "module",
+            candidateSymbolIds: [serverPort.id],
+            configurationPaths: ["config/application.properties"]
+          })
+        })
+      })
+    ]);
+    expect(configurationCallees.relations.map((relation) => relation.symbol.id)).toEqual(
+      expect.arrayContaining([serverPort.id, appName.id])
+    );
+    expect(serverPortReference).toMatchObject({
+      kind: "references",
+      resolution: "exact",
+      confidence: 1,
+      referenceName: "server.port"
+    });
+    expect(appNameReference).toMatchObject({
+      kind: "references",
+      resolution: "exact",
+      confidence: 1,
+      referenceName: "app.name"
+    });
+    expect(ambiguousFeatureReference).toMatchObject({
+      targetId: null,
+      resolution: "unresolved",
+      confidence: 0,
+      referenceName: "feature.enabled",
+      evidence: {
+        ruleId: "framework.spring-boot.properties.direct-value.literal-key.ambiguous-key",
+        stage: "unresolved",
+        candidateSymbolIds: expect.arrayContaining([applicationFeature.id, developmentFeature.id]),
+        configurationPaths: expect.arrayContaining([
+          "config/application.properties",
+          "config/application-dev.properties"
+        ])
+      }
+    });
+    expect(missingReference).toMatchObject({
+      targetId: null,
+      resolution: "unresolved",
+      confidence: 0,
+      referenceName: "missing.key",
+      evidence: {
+        ruleId: "framework.spring-boot.properties.direct-value.literal-key.unresolved-key",
+        stage: "unresolved",
+        candidateSymbolIds: []
+      }
+    });
+
+    await writeFile(
+      join(projectPath, "config", "application.properties"),
+      ["feature.enabled=true", "spring.datasource.password=database-secret"].join("\n"),
+      "utf8"
+    );
+    const synced = await service.sync({ projectPath });
+    const serverPortAfterSync = graphStore
+      .getSnapshot(projectPath)
+      .edges.find(
+        (edge) =>
+          edge.sourceId === configurationClass.id &&
+          edge.kind === "references" &&
+          edge.referenceName === "server.port"
+      );
+
+    expect(synced.lastIndexWork?.reusedArtifactFiles).toContain("src/config/AppConfig.java");
+    expect(serverPortAfterSync).toMatchObject({
+      targetId: null,
+      resolution: "unresolved",
+      confidence: 0,
+      evidence: {
+        ruleId: "framework.spring-boot.properties.direct-value.literal-key.unresolved-key",
+        stage: "unresolved",
+        candidateSymbolIds: []
+      }
+    });
+  });
+
   it("indexes Drupal routing YAML routes with parser-backed unresolved controller evidence", async () => {
     const projectPath = await createInlineProject({
       "modules/custom/example/example.routing.yml": [
