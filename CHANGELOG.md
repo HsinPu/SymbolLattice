@@ -6,6 +6,23 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.86.0] - 2026-07-31
+
+### Added
+
+- Go Echo route extraction now recognizes direct non-dot/non-blank imports of `github.com/labstack/echo/v4` and `github.com/labstack/echo/v5`, using the default `echo` name or a direct alias. A route requires a same-function short-variable `app := echo.New()` binding, a literal slash-prefixed path, one unshadowed named package-level handler, and either a direct App method or a proven nested same-function literal `Group` prefix. Direct `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD`, `OPTIONS`, and `Any` registrations become exact route evidence; `Any` is represented as `ALL`.
+- The executable first-party framework capability registry, `RouteFramework` provenance union, persisted route query, and Go route evidence now include `echo`. Unit and service integration coverage prove v5 aliases, v4 default imports, nested group composition, exact rule IDs, `ALL` method filtering, and rejection of dynamic paths, alias shadows, inline/middleware handlers, `Match`, `var` constructors, mutable receivers, and unsupported group forms. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.86.0.md`.
+
+### Compatibility
+
+- The artifact extractor advances to `multi-language-ast-v75`; the project resolver remains `project-resolver-v23` because the Echo App, Group, path, and handler proof remains file-local. A pre-v0.86 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes Echo-capable facts.
+- No SQLite schema migration or query command is required. This is an additive Go framework capability within the existing file, symbol, route-edge, source-search, CLI, MCP, and incremental-index contracts; existing generations remain readable.
+
+### Deliberate limits
+
+- The Echo slice is not a general Echo program model. It excludes middleware, `Match`, `File` / static helpers, path parameters/wildcard semantics, handlers other than one named package-level function, `var`/factory/wrapper/chained/mutable receiver flow, cross-file packages, generic Go analysis, compilation, and runtime routing behavior.
+- The inspected local CodeGraph baseline labels its broad generic Go receiver-method resolver as covering Echo, but does not require Echo v4/v5 imports, `echo.New()` construction, literal Group-prefix composition, or unique same-file handler identity. SymbolLattice v0.86 is deliberately narrower in source coverage and stronger in auditability; it is independently implemented and does not copy CodeGraph source.
+
 ## [0.85.0] - 2026-07-31
 
 ### Added

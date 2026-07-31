@@ -52,6 +52,7 @@ export type RouteFramework =
   | "django"
   | "gin"
   | "fiber"
+  | "echo"
   | "net-http"
   | "chi"
   | "axum"

@@ -20,6 +20,7 @@ export const FRAMEWORK_CAPABILITY_IDS = [
   "django",
   "gin",
   "fiber",
+  "echo",
   "net-http",
   "chi",
   "axum",
@@ -229,6 +230,16 @@ export const FRAMEWORK_CAPABILITIES = [
     surfaces: [
       "direct Fiber v2/v3 App methods",
       "same-function literal Router Group prefixes"
+    ]
+  },
+  {
+    id: "echo",
+    languages: ["go"],
+    routeFramework: "echo",
+    routeRegistrations: [],
+    surfaces: [
+      "direct Echo v4/v5 App methods",
+      "same-function literal Group prefixes"
     ]
   },
   {

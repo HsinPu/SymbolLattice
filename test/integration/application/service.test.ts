@@ -3845,6 +3845,69 @@ describe("SymbolLatticeService", () => {
     ]);
   });
 
+  it("indexes Go Echo v4 App and literal Group routes with exact syntax evidence", async () => {
+    const projectPath = await createInlineProject({
+      "cmd/server/main.go": [
+        "package main",
+        "",
+        'import "github.com/labstack/echo/v4"',
+        "",
+        "func health(c echo.Context) error { return nil }",
+        "func fallback(c echo.Context) error { return nil }",
+        "",
+        "func main() {",
+        "  app := echo.New()",
+        '  app.GET("/health", health)',
+        '  api := app.Group("/api")',
+        '  api.Any("/fallback", fallback)',
+        "}"
+      ].join("\n")
+    });
+    const service = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+    const allRoutes = await service.routes(projectPath, { method: "ALL" });
+    const search = await service.search(projectPath, "fallback", { language: "go" });
+
+    expect(routes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "GET",
+          path: "/health",
+          handler: expect.objectContaining({ qualifiedName: "cmd/server/main.go#health" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.echo.direct-app.method.local-function",
+              stage: "syntax"
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "ALL",
+          path: "/api/fallback",
+          handler: expect.objectContaining({ qualifiedName: "cmd/server/main.go#fallback" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.echo.direct-group.method.local-function",
+              stage: "syntax"
+            })
+          })
+        })
+      ])
+    );
+    expect(allRoutes.routes).toMatchObject([
+      {
+        method: "ALL",
+        path: "/api/fallback",
+        handler: { qualifiedName: "cmd/server/main.go#fallback" }
+      }
+    ]);
+    expect(search.results).toMatchObject([{ filePath: "cmd/server/main.go", language: "go" }]);
+  });
+
   it("indexes Go net/http default and literal ServeMux routes with exact syntax evidence", async () => {
     const projectPath = await createInlineProject({
       "cmd/server/main.go": [

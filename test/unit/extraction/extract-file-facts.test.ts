@@ -2377,6 +2377,124 @@ describe("source extraction", () => {
     ]);
   });
 
+  it("extracts direct Go Echo v5 App and nested literal Group routes with exact evidence", () => {
+    const facts = extractFileFacts({
+      filePath: "cmd/server/echo.go",
+      language: "go",
+      sourceText: [
+        "package main",
+        "",
+        'import e "github.com/labstack/echo/v5"',
+        "",
+        "func health(c *e.Context) error { return nil }",
+        "func headHealth(c *e.Context) error { return nil }",
+        "func createUser(c *e.Context) error { return nil }",
+        "func search(c *e.Context) error { return nil }",
+        "",
+        "func main() {",
+        "  app := e.New()",
+        '  app.GET("/health", health)',
+        '  app.HEAD("/health", headHealth)',
+        '  api := app.Group("/api")',
+        '  v1 := api.Group("/v1")',
+        '  v1.POST("/users", createUser)',
+        '  v1.Any("/search", search)',
+        "}"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId,
+          edge.evidence?.stage,
+          edge.resolution,
+          edge.confidence
+        ])
+    ).toEqual([
+      [
+        "GET /health",
+        "cmd/server/echo.go#health",
+        "framework.echo.direct-app.method.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "HEAD /health",
+        "cmd/server/echo.go#headHealth",
+        "framework.echo.direct-app.method.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "POST /api/v1/users",
+        "cmd/server/echo.go#createUser",
+        "framework.echo.direct-group.method.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "ALL /api/v1/search",
+        "cmd/server/echo.go#search",
+        "framework.echo.direct-group.method.local-function",
+        "syntax",
+        "exact",
+        1
+      ]
+    ]);
+  });
+
+  it("rejects shadowed, dynamic, inline, middleware, Match, and rebound Go Echo route shapes", () => {
+    const facts = extractFileFacts({
+      filePath: "cmd/server/unproven-echo.go",
+      language: "go",
+      sourceText: [
+        "package main",
+        "",
+        'import echo "github.com/labstack/echo/v5"',
+        "",
+        "func health(c *echo.Context) error { return nil }",
+        "func stable(c *echo.Context) error { return nil }",
+        "",
+        "func shadowed(echo int) {",
+        "  app := echo.New()",
+        '  app.GET("/shadowed", health)',
+        "}",
+        "",
+        "func main() {",
+        "  path := \"/dynamic\"",
+        "  app := echo.New()",
+        "  app.GET(path, health)",
+        '  app.GET("/inline", func(c *echo.Context) error { return nil })',
+        '  app.GET("/middleware", auth, health)',
+        '  app.Match([]string{"GET"}, "/match", stable)',
+        "  health := fallback",
+        '  app.GET("/rebound-handler", health)',
+        "  app = buildApp()",
+        '  app.GET("/rebound-app", stable)',
+        "  var legacy = echo.New()",
+        '  legacy.GET("/var-binding", stable)',
+        "  second := echo.New()",
+        "  prefix := \"/api\"",
+        "  api := second.Group(prefix)",
+        '  api.GET("/dynamic-group", stable)',
+        '  bad := second.Group("/api/", auth)',
+        '  bad.GET("/unsupported-group", stable)',
+        "}"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+  });
+
   it("extracts direct Go net/http default and literal ServeMux HandleFunc routes with exact evidence", () => {
     const facts = extractFileFacts({
       filePath: "cmd/server/http.go",

@@ -63,6 +63,24 @@ interface StaticFiberRoute {
   readonly node: GoSyntaxNode;
 }
 
+interface EchoReceiver {
+  readonly kind: "app" | "group";
+  readonly prefix: string;
+}
+
+interface StaticEchoBinding {
+  readonly name: string;
+  readonly receiver: EchoReceiver;
+}
+
+interface StaticEchoRoute {
+  readonly receiver: EchoReceiver;
+  readonly method: RouteMethod;
+  readonly path: string;
+  readonly handlerName: string;
+  readonly node: GoSyntaxNode;
+}
+
 interface StaticNetHttpMuxBinding {
   readonly name: string;
 }
@@ -94,6 +112,10 @@ const FIBER_PACKAGE_PATHS = [
   "github.com/gofiber/fiber/v2",
   "github.com/gofiber/fiber/v3"
 ] as const;
+const ECHO_PACKAGE_PATHS = [
+  "github.com/labstack/echo/v4",
+  "github.com/labstack/echo/v5"
+] as const;
 const NET_HTTP_PACKAGE_PATH = "net/http";
 const CHI_PACKAGE_PATHS = ["github.com/go-chi/chi/v5"] as const;
 
@@ -119,6 +141,17 @@ const FIBER_ROUTE_METHODS: Readonly<Record<string, RouteMethod>> = {
   Trace: "TRACE",
   Connect: "CONNECT",
   All: "ALL"
+};
+
+const ECHO_ROUTE_METHODS: Readonly<Record<string, RouteMethod>> = {
+  GET: "GET",
+  POST: "POST",
+  PUT: "PUT",
+  PATCH: "PATCH",
+  DELETE: "DELETE",
+  HEAD: "HEAD",
+  OPTIONS: "OPTIONS",
+  Any: "ALL"
 };
 
 const NET_HTTP_PATTERN_METHODS = new Set<RouteMethod>([
@@ -327,6 +360,13 @@ function staticFiberImportAliases(
   root: GoSyntaxNode
 ): readonly string[] {
   return staticPackageImportAliases(input, root, FIBER_PACKAGE_PATHS, "fiber");
+}
+
+function staticEchoImportAliases(
+  input: GoExtractFileFactsInput,
+  root: GoSyntaxNode
+): readonly string[] {
+  return staticPackageImportAliases(input, root, ECHO_PACKAGE_PATHS, "echo");
 }
 
 function staticNetHttpImportAliases(
@@ -595,6 +635,84 @@ function staticFiberRoute(
   return { receiver, method, path, handlerName, node };
 }
 
+function staticEchoAppBinding(
+  input: GoExtractFileFactsInput,
+  node: GoSyntaxNode,
+  echoAliases: ReadonlySet<string>,
+  shadowedNames: ReadonlySet<string>
+): StaticEchoBinding | null {
+  const declaration = staticShortVariableCall(input, node);
+  if (
+    declaration === null ||
+    !echoAliases.has(declaration.receiverName) ||
+    shadowedNames.has(declaration.receiverName) ||
+    declaration.methodName !== "New" ||
+    declaration.arguments_.length !== 0
+  ) {
+    return null;
+  }
+  return { name: declaration.name, receiver: { kind: "app", prefix: "" } };
+}
+
+function staticEchoGroupBinding(
+  input: GoExtractFileFactsInput,
+  node: GoSyntaxNode,
+  receivers: ReadonlyMap<string, EchoReceiver>
+): StaticEchoBinding | null {
+  const declaration = staticShortVariableCall(input, node);
+  if (
+    declaration === null ||
+    declaration.methodName !== "Group" ||
+    declaration.arguments_.length !== 1
+  ) {
+    return null;
+  }
+  const parent = receivers.get(declaration.receiverName);
+  const pathNode = declaration.arguments_[0];
+  const prefix = pathNode === undefined ? null : staticLiteralGroupPrefix(input, pathNode);
+  if (parent === undefined || prefix === null) {
+    return null;
+  }
+  return {
+    name: declaration.name,
+    receiver: { kind: "group", prefix: combinedRoutePath(parent.prefix, prefix) }
+  };
+}
+
+function staticEchoRoute(
+  input: GoExtractFileFactsInput,
+  node: GoSyntaxNode,
+  receivers: ReadonlyMap<string, EchoReceiver>
+): StaticEchoRoute | null {
+  if (node.name !== "ExprStatement") {
+    return null;
+  }
+  const expression = directChildren(node)[0];
+  if (expression === undefined) {
+    return null;
+  }
+  const call = staticSelectorCall(input, expression);
+  if (call === null || call.arguments_.length !== 2) {
+    return null;
+  }
+  const receiver = receivers.get(call.receiverName);
+  const method = ECHO_ROUTE_METHODS[call.methodName];
+  const pathNode = call.arguments_[0];
+  const handlerNode = call.arguments_[1];
+  const path = pathNode === undefined ? null : staticLiteralSlashPath(input, pathNode);
+  const handlerName =
+    handlerNode?.name === "VariableName" ? identifierText(input, handlerNode) : null;
+  if (
+    receiver === undefined ||
+    method === undefined ||
+    path === null ||
+    handlerName === null
+  ) {
+    return null;
+  }
+  return { receiver, method, path, handlerName, node };
+}
+
 function staticNetHttpMuxBinding(
   input: GoExtractFileFactsInput,
   node: GoSyntaxNode,
@@ -734,11 +852,13 @@ function combinedRoutePath(...parts: readonly string[]): string {
 export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFacts {
   const ginCapability = frameworkCapability("gin");
   const fiberCapability = frameworkCapability("fiber");
+  const echoCapability = frameworkCapability("echo");
   const netHttpCapability = frameworkCapability("net-http");
   const chiCapability = frameworkCapability("chi");
   if (
     !ginCapability.languages.includes(input.language) ||
     !fiberCapability.languages.includes(input.language) ||
+    !echoCapability.languages.includes(input.language) ||
     !netHttpCapability.languages.includes(input.language) ||
     !chiCapability.languages.includes(input.language)
   ) {
@@ -899,6 +1019,18 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
     );
   }
 
+  function addEchoRoute(routeFact: StaticEchoRoute, handler: SymbolNode): void {
+    addResolvedRoute(
+      routeFact.method,
+      combinedRoutePath(routeFact.receiver.prefix, routeFact.path),
+      routeFact.node,
+      handler,
+      routeFact.receiver.kind === "app"
+        ? "framework.echo.direct-app.method.local-function"
+        : "framework.echo.direct-group.method.local-function"
+    );
+  }
+
   function addNetHttpRoute(routeFact: StaticNetHttpRoute, handler: SymbolNode): void {
     addResolvedRoute(
       routeFact.method,
@@ -935,6 +1067,7 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
 
     const ginAliases = staticGinImportAliases(input, root);
     const fiberAliases = staticFiberImportAliases(input, root);
+    const echoAliases = staticEchoImportAliases(input, root);
     const netHttpAliases = staticNetHttpImportAliases(input, root);
     const chiAliases = staticChiImportAliases(input, root);
     for (const functionDeclaration of functions) {
@@ -944,6 +1077,9 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
       const visibleFiberAliases = new Set(
         fiberAliases.filter((alias) => !functionDeclaration.parameterNames.includes(alias))
       );
+      const visibleEchoAliases = new Set(
+        echoAliases.filter((alias) => !functionDeclaration.parameterNames.includes(alias))
+      );
       const visibleNetHttpAliases = new Set(
         netHttpAliases.filter((alias) => !functionDeclaration.parameterNames.includes(alias))
       );
@@ -952,6 +1088,7 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
       );
       const ginReceivers = new Map<string, GinReceiver>();
       const fiberReceivers = new Map<string, FiberReceiver>();
+      const echoReceivers = new Map<string, EchoReceiver>();
       const netHttpMuxes = new Set<string>();
       const chiReceivers = new Set<string>();
       const shadowedNames = new Set(functionDeclaration.parameterNames);
@@ -1000,6 +1137,30 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
             const handler = candidates[0];
             if (handler !== undefined) {
               addFiberRoute(fiberRoute, handler);
+            }
+          }
+        }
+
+        const echoAppBinding = staticEchoAppBinding(
+          input,
+          statement,
+          visibleEchoAliases,
+          shadowedNames
+        );
+        if (echoAppBinding !== null) {
+          echoReceivers.set(echoAppBinding.name, echoAppBinding.receiver);
+        }
+        const echoGroupBinding = staticEchoGroupBinding(input, statement, echoReceivers);
+        if (echoGroupBinding !== null) {
+          echoReceivers.set(echoGroupBinding.name, echoGroupBinding.receiver);
+        }
+        const echoRoute = staticEchoRoute(input, statement, echoReceivers);
+        if (echoRoute !== null && !shadowedNames.has(echoRoute.handlerName)) {
+          const candidates = functionsByName.get(echoRoute.handlerName) ?? [];
+          if (candidates.length === 1) {
+            const handler = candidates[0];
+            if (handler !== undefined) {
+              addEchoRoute(echoRoute, handler);
             }
           }
         }
@@ -1060,6 +1221,11 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
             (name): name is string => name !== undefined
           )
         );
+        const retainedEchoBindings = new Set(
+          [echoAppBinding?.name, echoGroupBinding?.name].filter(
+            (name): name is string => name !== undefined
+          )
+        );
         const retainedNetHttpBindings = new Set(
           [muxBinding?.name].filter((name): name is string => name !== undefined)
         );
@@ -1072,6 +1238,9 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
           }
           if (!retainedFiberBindings.has(name)) {
             fiberReceivers.delete(name);
+          }
+          if (!retainedEchoBindings.has(name)) {
+            echoReceivers.delete(name);
           }
           if (!retainedNetHttpBindings.has(name)) {
             netHttpMuxes.delete(name);
