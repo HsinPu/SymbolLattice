@@ -5,6 +5,11 @@ import { z } from "zod";
 
 import { SymbolLatticeError } from "../application/errors.js";
 import {
+  MAX_AUTO_SYNC_DIAGNOSTIC_JOURNAL_EVENTS,
+  type AutoSyncDiagnosticJournalOptions,
+  type AutoSyncDiagnosticJournalResult
+} from "../application/auto-sync-journal.js";
+import {
   MAX_AUTO_SYNC_DIAGNOSTIC_EVENTS,
   type AutoSyncDiagnosticsOptions,
   type AutoSyncDiagnosticsResult,
@@ -161,6 +166,13 @@ export interface AutoSyncDiagnosticsService {
   autoSyncDiagnostics(options?: AutoSyncDiagnosticsOptions): Promise<AutoSyncDiagnosticsResult>;
 }
 
+/** Optional project-owned durable watcher-history seam for operational MCP diagnostics. */
+export interface AutoSyncDiagnosticJournalService {
+  autoSyncJournal(
+    options?: AutoSyncDiagnosticJournalOptions
+  ): Promise<AutoSyncDiagnosticJournalResult>;
+}
+
 export type ReadOnlyMcpService = ExploreService & ExplainEdgeService;
 export type NodeMcpService = ExploreService & NodeService;
 export type SearchMcpService = ExploreService & SearchService;
@@ -175,6 +187,7 @@ export type GenerationHistoryMcpService = ExploreService & GenerationHistoryServ
 export type GenerationDiffMcpService = ExploreService & GenerationDiffService;
 export type AutoSyncStatusMcpService = ExploreService & AutoSyncStatusService;
 export type AutoSyncDiagnosticsMcpService = ExploreService & AutoSyncDiagnosticsService;
+export type AutoSyncDiagnosticJournalMcpService = ExploreService & AutoSyncDiagnosticJournalService;
 
 export interface ExploreToolArguments {
   readonly query: string;
@@ -272,6 +285,10 @@ export interface AutoSyncDiagnosticsToolArguments {
   readonly limit?: number | undefined;
 }
 
+export interface AutoSyncDiagnosticJournalToolArguments {
+  readonly limit?: number | undefined;
+}
+
 export interface ReadOnlyToolResponse {
   readonly [key: string]: unknown;
   readonly content: {
@@ -297,6 +314,7 @@ export type GenerationHistoryToolResponse = ReadOnlyToolResponse;
 export type GenerationDiffToolResponse = ReadOnlyToolResponse;
 export type AutoSyncStatusToolResponse = ReadOnlyToolResponse;
 export type AutoSyncDiagnosticsToolResponse = ReadOnlyToolResponse;
+export type AutoSyncDiagnosticJournalToolResponse = ReadOnlyToolResponse;
 
 const sourcePositionOutputSchema = z.object({
   line: z.number().int(),
@@ -400,6 +418,7 @@ const autoSyncStatusOutputSchema = z
   .passthrough();
 
 const autoSyncDiagnosticEventOutputSchema = z.object({
+  hostId: z.string().min(1),
   sequence: z.number().int().positive(),
   event: watchEventOutputSchema,
   observedAt: z.string(),
@@ -429,6 +448,22 @@ const autoSyncDiagnosticsOutputSchema = z
       truncated: z.boolean(),
       events: z.array(autoSyncDiagnosticEventOutputSchema).max(MAX_AUTO_SYNC_DIAGNOSTIC_EVENTS)
     })
+  })
+  .passthrough();
+
+const autoSyncDiagnosticJournalOutputSchema = z
+  .object({
+    state: z.enum(["active", "read-only", "unavailable", "failed"]),
+    capacity: z.literal(MAX_AUTO_SYNC_DIAGNOSTIC_JOURNAL_EVENTS),
+    retained: z.number().int().nonnegative().max(MAX_AUTO_SYNC_DIAGNOSTIC_JOURNAL_EVENTS),
+    returned: z.number().int().nonnegative().max(MAX_AUTO_SYNC_DIAGNOSTIC_JOURNAL_EVENTS),
+    dropped: z.number().int().nonnegative(),
+    truncated: z.boolean(),
+    lastPersistedAt: z.string().nullable(),
+    error: watchErrorOutputSchema.nullable(),
+    events: z
+      .array(autoSyncDiagnosticEventOutputSchema)
+      .max(MAX_AUTO_SYNC_DIAGNOSTIC_JOURNAL_EVENTS)
   })
   .passthrough();
 
@@ -823,6 +858,12 @@ function supportsAutoSyncDiagnostics(service: ExploreService): service is AutoSy
   return "autoSyncDiagnostics" in service && typeof service.autoSyncDiagnostics === "function";
 }
 
+function supportsAutoSyncDiagnosticJournal(
+  service: ExploreService
+): service is AutoSyncDiagnosticJournalMcpService {
+  return "autoSyncJournal" in service && typeof service.autoSyncJournal === "function";
+}
+
 function supportsGitAffectedTests(service: ExploreService): service is GitAffectedTestsMcpService {
   return (
     "gitAffectedTestsAvailable" in service &&
@@ -879,6 +920,24 @@ export async function runAutoSyncDiagnosticsTool(
 ): Promise<AutoSyncDiagnosticsToolResponse> {
   try {
     const result = await service.autoSyncDiagnostics(
+      arguments_.limit === undefined ? {} : { limit: arguments_.limit }
+    );
+    return {
+      content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      structuredContent: result as unknown as Record<string, unknown>
+    };
+  } catch (error) {
+    return renderToolError(error);
+  }
+}
+
+/** Reads bounded durable watcher history without creating, indexing, or synchronizing a project. */
+export async function runAutoSyncDiagnosticJournalTool(
+  service: AutoSyncDiagnosticJournalService,
+  arguments_: AutoSyncDiagnosticJournalToolArguments = {}
+): Promise<AutoSyncDiagnosticJournalToolResponse> {
+  try {
+    const result = await service.autoSyncJournal(
       arguments_.limit === undefined ? {} : { limit: arguments_.limit }
     );
     return {
@@ -1255,6 +1314,34 @@ export function createMcpServer(
         }
       },
       async (arguments_) => runAutoSyncDiagnosticsTool(autoSyncDiagnosticsService, arguments_)
+    );
+  }
+
+  const autoSyncDiagnosticJournalService = supportsAutoSyncDiagnosticJournal(service) ? service : null;
+  if (autoSyncDiagnosticJournalService !== null) {
+    server.registerTool(
+      "symbol_lattice_auto_sync_journal",
+      {
+        title: "Inspect durable SymbolLattice auto-sync history",
+        description:
+          "Returns bounded persisted watcher transitions for the default MCP project. This tool only reads a host-owned diagnostic journal; it never creates, indexes, or synchronizes a project.",
+        inputSchema: {
+          limit: z
+            .number()
+            .int()
+            .min(1)
+            .max(MAX_AUTO_SYNC_DIAGNOSTIC_JOURNAL_EVENTS)
+            .optional()
+            .describe("Maximum latest persisted watcher transitions to return.")
+        },
+        outputSchema: autoSyncDiagnosticJournalOutputSchema,
+        annotations: {
+          readOnlyHint: true,
+          idempotentHint: true
+        }
+      },
+      async (arguments_) =>
+        runAutoSyncDiagnosticJournalTool(autoSyncDiagnosticJournalService, arguments_)
     );
   }
 

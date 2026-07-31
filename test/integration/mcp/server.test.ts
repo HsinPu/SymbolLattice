@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import {
   type AffectedTestsResult,
+  type AutoSyncDiagnosticJournalResult,
   type AutoSyncDiagnosticsResult,
   type AutoSyncStatusResult,
   SymbolLatticeError,
@@ -30,6 +31,7 @@ import {
 import {
   createMcpServer,
   runAffectedTestsTool,
+  runAutoSyncDiagnosticJournalTool,
   runAutoSyncDiagnosticsTool,
   runAutoSyncStatusTool,
   runContextTool,
@@ -137,6 +139,7 @@ function autoSyncDiagnosticsResult(): AutoSyncDiagnosticsResult {
       truncated: false,
       events: [
         {
+          hostId: "host:session-test",
           sequence: 1,
           event: "started",
           observedAt: "2026-07-31T00:00:00.000Z",
@@ -151,6 +154,7 @@ function autoSyncDiagnosticsResult(): AutoSyncDiagnosticsResult {
           pendingFilesUnknown: false
         },
         {
+          hostId: "host:session-test",
           sequence: 2,
           event: "event-pending",
           observedAt: "2026-07-31T00:00:01.000Z",
@@ -166,6 +170,66 @@ function autoSyncDiagnosticsResult(): AutoSyncDiagnosticsResult {
         }
       ]
     }
+  };
+}
+
+function autoSyncDiagnosticJournalResult(): AutoSyncDiagnosticJournalResult {
+  return {
+    state: "active",
+    capacity: 128,
+    retained: 3,
+    returned: 3,
+    dropped: 4,
+    truncated: true,
+    lastPersistedAt: "2026-07-31T00:00:03.000Z",
+    error: null,
+    events: [
+      {
+        hostId: "host:journal-a",
+        sequence: 7,
+        event: "started",
+        observedAt: "2026-07-31T00:00:01.000Z",
+        state: "fresh",
+        watcherMode: "starting",
+        generationId: "generation:test",
+        error: null,
+        retryDelayMs: null,
+        pendingFileCount: 0,
+        pendingFiles: [],
+        pendingFilesTruncated: false,
+        pendingFilesUnknown: false
+      },
+      {
+        hostId: "host:journal-a",
+        sequence: 8,
+        event: "event-pending",
+        observedAt: "2026-07-31T00:00:02.000Z",
+        state: "pending",
+        watcherMode: "native-events",
+        generationId: "generation:test",
+        error: null,
+        retryDelayMs: null,
+        pendingFileCount: 1,
+        pendingFiles: ["src/changed.ts"],
+        pendingFilesTruncated: false,
+        pendingFilesUnknown: false
+      },
+      {
+        hostId: "host:journal-b",
+        sequence: 9,
+        event: "synced",
+        observedAt: "2026-07-31T00:00:03.000Z",
+        state: "fresh",
+        watcherMode: "native-events",
+        generationId: "generation:next",
+        error: null,
+        retryDelayMs: null,
+        pendingFileCount: 0,
+        pendingFiles: [],
+        pendingFilesTruncated: false,
+        pendingFilesUnknown: false
+      }
+    ]
   };
 }
 
@@ -802,6 +866,7 @@ describe("SymbolLattice MCP server", () => {
   it("exposes host-owned auto-sync health without accepting a project or mutation input", async () => {
     let statusCalls = 0;
     const diagnosticCalls: Array<{ limit?: number }> = [];
+    const journalCalls: Array<{ limit?: number }> = [];
     const server = createMcpServer(
       {
         async explore(): Promise<ExploreResult> {
@@ -814,6 +879,10 @@ describe("SymbolLattice MCP server", () => {
         async autoSyncDiagnostics(options = {}): Promise<AutoSyncDiagnosticsResult> {
           diagnosticCalls.push(options);
           return autoSyncDiagnosticsResult();
+        },
+        async autoSyncJournal(options = {}): Promise<AutoSyncDiagnosticJournalResult> {
+          journalCalls.push(options);
+          return autoSyncDiagnosticJournalResult();
         }
       },
       "C:/default-project"
@@ -828,7 +897,8 @@ describe("SymbolLattice MCP server", () => {
     expect(tools.tools.map((tool) => tool.name)).toEqual([
       "symbol_lattice_explore",
       "symbol_lattice_auto_sync_status",
-      "symbol_lattice_auto_sync_diagnostics"
+      "symbol_lattice_auto_sync_diagnostics",
+      "symbol_lattice_auto_sync_journal"
     ]);
 
     const result = await client.callTool({
@@ -867,6 +937,27 @@ describe("SymbolLattice MCP server", () => {
     });
     expect(invalidDiagnostics.isError).toBe(true);
     expect(diagnosticCalls).toEqual([{ limit: 2 }]);
+
+    const journal = await client.callTool({
+      name: "symbol_lattice_auto_sync_journal",
+      arguments: { limit: 1 }
+    });
+    expect(journal.isError).not.toBe(true);
+    expect(journal.structuredContent).toMatchObject({
+      state: "active",
+      retained: 3,
+      returned: 3,
+      dropped: 4,
+      events: [{ event: "started" }, { event: "event-pending" }, { event: "synced" }]
+    });
+    expect(journalCalls).toEqual([{ limit: 1 }]);
+
+    const invalidJournal = await client.callTool({
+      name: "symbol_lattice_auto_sync_journal",
+      arguments: { limit: 129 }
+    });
+    expect(invalidJournal.isError).toBe(true);
+    expect(journalCalls).toEqual([{ limit: 1 }]);
   });
 
   it("does not register automatic sync diagnostics for a status-only embedding", async () => {
@@ -890,6 +981,30 @@ describe("SymbolLattice MCP server", () => {
     expect((await client.listTools()).tools.map((tool) => tool.name)).toEqual([
       "symbol_lattice_explore",
       "symbol_lattice_auto_sync_status"
+    ]);
+  });
+
+  it("does not register durable journal history for a timeline-only embedding", async () => {
+    const server = createMcpServer(
+      {
+        async explore(): Promise<ExploreResult> {
+          return exploreResult();
+        },
+        async autoSyncDiagnostics(): Promise<AutoSyncDiagnosticsResult> {
+          return autoSyncDiagnosticsResult();
+        }
+      },
+      "C:/default-project"
+    );
+    const client = new Client({ name: "symbol-lattice-timeline-only-test", version: "1.0.0" });
+    const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+    closeCallbacks.push(() => client.close(), () => server.close());
+
+    expect((await client.listTools()).tools.map((tool) => tool.name)).toEqual([
+      "symbol_lattice_explore",
+      "symbol_lattice_auto_sync_diagnostics"
     ]);
   });
 
@@ -1771,6 +1886,17 @@ describe("SymbolLattice MCP server", () => {
     expect(response.content[0]?.text).toContain("MISSING_INDEX");
   });
 
+  it("returns durable automatic sync journal errors without indexing", async () => {
+    const response = await runAutoSyncDiagnosticJournalTool({
+      async autoSyncJournal(): Promise<AutoSyncDiagnosticJournalResult> {
+        throw new SymbolLatticeError("MISSING_INDEX", "Run symbol-lattice init first.");
+      }
+    });
+
+    expect(response).toMatchObject({ isError: true });
+    expect(response.content[0]?.text).toContain("MISSING_INDEX");
+  });
+
   it("returns exact-node errors without indexing", async () => {
     const response = await runNodeTool(
       {
@@ -2014,6 +2140,9 @@ describe("SymbolLattice MCP server", () => {
       async autoSyncDiagnostics(): Promise<AutoSyncDiagnosticsResult> {
         return autoSyncDiagnosticsResult();
       },
+      async autoSyncJournal(): Promise<AutoSyncDiagnosticJournalResult> {
+        return autoSyncDiagnosticJournalResult();
+      },
       async init(): Promise<void> {
         mutationCalls.push("init");
       },
@@ -2028,6 +2157,7 @@ describe("SymbolLattice MCP server", () => {
     await runExploreTool(service, "C:/project", { query: "missing" });
     await runAutoSyncStatusTool(service);
     await runAutoSyncDiagnosticsTool(service, { limit: 2 });
+    await runAutoSyncDiagnosticJournalTool(service, { limit: 2 });
     await runNodeTool(service, "C:/project", { query: "src/missing.ts#missing" });
     await runContextTool(service, "C:/project", { references: ["src/missing.ts#missing"] });
     await runAffectedTestsTool(service, "C:/project", { filePaths: ["src/missing.ts"] });

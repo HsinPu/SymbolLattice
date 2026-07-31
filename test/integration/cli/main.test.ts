@@ -6,6 +6,9 @@ import {
   DEFAULT_WATCH_INTERVAL_MS,
   type AffectedTestsOptions,
   type AffectedTestsResult,
+  type AutoSyncDiagnosticEvent,
+  type AutoSyncDiagnosticJournal,
+  type AutoSyncDiagnosticJournalResult,
   type AutoSyncDiagnosticsResult,
   type AutoSyncStatusResult,
   type ContextOptions,
@@ -41,6 +44,7 @@ import {
   runMcpWithAutoSync,
   runForegroundWatch,
   type McpAutoSyncOptions,
+  type McpAutoSyncJournalFactory,
   type WatchSignalSource
 } from "../../../src/cli/main.js";
 import type { McpServerSession } from "../../../src/mcp/index.js";
@@ -76,6 +80,36 @@ function watchReceipt(
     pendingFilesTruncated: false,
     pendingFilesUnknown: false,
     ...overrides
+  };
+}
+
+function autoSyncJournalResult(): AutoSyncDiagnosticJournalResult {
+  return {
+    state: "active",
+    capacity: 128,
+    retained: 1,
+    returned: 1,
+    dropped: 0,
+    truncated: false,
+    lastPersistedAt: "2026-07-31T00:00:00.000Z",
+    error: null,
+    events: [
+      {
+        hostId: "host:cli-test",
+        sequence: 1,
+        event: "event-pending",
+        observedAt: "2026-07-31T00:00:00.000Z",
+        state: "pending",
+        watcherMode: "native-events",
+        generationId: "generation:test",
+        error: null,
+        retryDelayMs: null,
+        pendingFileCount: 1,
+        pendingFiles: ["src/changed.ts"],
+        pendingFilesTruncated: false,
+        pendingFilesUnknown: false
+      }
+    ]
   };
 }
 
@@ -2137,6 +2171,83 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
     expect(sync).not.toHaveBeenCalled();
   });
 
+  it("persists watcher receipts through the host owner while MCP only reads the durable journal", async () => {
+    const append = vi.fn<(event: AutoSyncDiagnosticEvent) => void>();
+    const diagnostics = vi.fn(() => autoSyncJournalResult());
+    const journal: AutoSyncDiagnosticJournal = { append, diagnostics };
+    const journalFactory = vi.fn<McpAutoSyncJournalFactory>(() => journal);
+    const getStatus = vi.fn(async (): Promise<SearchResult["status"]> => resultStatus());
+    const sync = vi.fn(async (): Promise<SearchResult["status"]> => resultStatus());
+    const mcpSession: McpServerSession = {
+      closed: Promise.resolve(),
+      async close(): Promise<void> {}
+    };
+    let observed: AutoSyncDiagnosticJournalResult | null = null;
+
+    await runMcpWithAutoSync(
+      { getStatus, sync } as unknown as SymbolLatticeService,
+      { projectPath: "C:/chosen-project" },
+      async (receivedService): Promise<McpServerSession> => {
+        const journalService = receivedService as SymbolLatticeService & {
+          autoSyncJournal(options?: { limit?: number }): Promise<AutoSyncDiagnosticJournalResult>;
+        };
+        observed = await journalService.autoSyncJournal({ limit: 1 });
+        return mcpSession;
+      },
+      async (_receivedService, options): Promise<ForegroundWatchSession> => {
+        options.onReceipt?.(
+          watchReceipt("event-pending", {
+            pendingFileCount: 1,
+            pendingFiles: ["src/changed.ts"]
+          })
+        );
+        return { done: Promise.resolve(), async stop(): Promise<void> {} };
+      },
+      journalFactory
+    );
+
+    expect(journalFactory).toHaveBeenCalledWith("C:/chosen-project", true);
+    expect(append).toHaveBeenCalledTimes(1);
+    expect(append).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sequence: 1,
+        event: "event-pending",
+        state: "pending",
+        pendingFiles: ["src/changed.ts"]
+      })
+    );
+    expect(diagnostics).toHaveBeenCalledWith({ limit: 1 });
+    expect(observed).toMatchObject({ state: "active", events: [{ event: "event-pending" }] });
+    expect(sync).not.toHaveBeenCalled();
+  });
+
+  it("does not append durable history when the host disables diagnostic journal writes", async () => {
+    const append = vi.fn<(event: AutoSyncDiagnosticEvent) => void>();
+    const journal: AutoSyncDiagnosticJournal = {
+      append,
+      diagnostics: () => autoSyncJournalResult()
+    };
+    const journalFactory = vi.fn<McpAutoSyncJournalFactory>(() => journal);
+    const mcpSession: McpServerSession = {
+      closed: Promise.resolve(),
+      async close(): Promise<void> {}
+    };
+
+    await runMcpWithAutoSync(
+      { getStatus: async () => resultStatus() } as unknown as SymbolLatticeService,
+      { projectPath: "C:/chosen-project", diagnosticJournal: false },
+      async (): Promise<McpServerSession> => mcpSession,
+      async (_receivedService, options): Promise<ForegroundWatchSession> => {
+        options.onReceipt?.(watchReceipt("started"));
+        return { done: Promise.resolve(), async stop(): Promise<void> {} };
+      },
+      journalFactory
+    );
+
+    expect(journalFactory).toHaveBeenCalledWith("C:/chosen-project", false);
+    expect(append).not.toHaveBeenCalled();
+  });
+
   it("serves MCP without starting a watcher when auto-sync is explicitly disabled", async () => {
     const watchStarter = vi.fn(async (): Promise<ForegroundWatchSession> => {
       throw new Error("auto-sync watcher must not start");
@@ -2203,7 +2314,8 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
         "--mcp",
         "--project",
         "C:/manual-project",
-        "--no-auto-sync"
+        "--no-auto-sync",
+        "--no-diagnostic-journal"
       ],
       { from: "node" }
     );
@@ -2213,6 +2325,7 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
         projectPath: resolve("C:/chosen-project"),
         force: true,
         autoSync: true,
+        diagnosticJournal: true,
         intervalMs: 750,
         poll: true
       },
@@ -2220,6 +2333,7 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
         projectPath: resolve("C:/manual-project"),
         force: false,
         autoSync: false,
+        diagnosticJournal: false,
         intervalMs: DEFAULT_WATCH_INTERVAL_MS,
         poll: false
       }

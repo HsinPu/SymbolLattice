@@ -6,6 +6,24 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.109.0] - 2026-07-31
+
+### Added
+
+- The capability-gated, read-only `symbol_lattice_auto_sync_journal` MCP tool returns bounded durable watcher transitions for the default project. It has no project override or mutation input. Its result explicitly reports journal availability (`active`, `read-only`, `unavailable`, or `failed`), 128-event capacity, retained/evicted/truncated counts, latest persisted time, and a structured I/O error when appropriate.
+- The CLI-owned foreground watcher now persists sanitized `AutoSyncDiagnosticEvent` records, including a per-host UUID that disambiguates per-host sequences, into `.symbol-lattice/auto-sync-diagnostics.sqlite` for already initialized projects. SQLite transactions retain the newest 128 events and maintain a durable evicted-event counter, so multiple local hosts do not depend on an unbounded NDJSON file or a last-writer-wins rewrite.
+- `serve --mcp` accepts `--no-diagnostic-journal` to disable journal writes. MCP request handlers only receive the journal's read seam; the only append call is the watcher receipt callback. Uninitialized projects do not gain a `.symbol-lattice` directory solely because diagnostics were requested. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.109.0.md`.
+
+### Compatibility
+
+- The v0.108 in-memory `symbol_lattice_auto_sync_diagnostics` timeline remains unchanged at 32 events. Durable history is an additive capability and its tool is absent from embeddings that do not expose `autoSyncJournal`.
+- Existing graph indexes remain readable; the journal is a separate project-local SQLite file and does not migrate or change `index.sqlite` schema. The standard CLI MCP host exposes the new tool, while `--no-auto-sync` and `--no-diagnostic-journal` prevent journal appends.
+
+### Comparison notes
+
+- CodeGraph's daemon and error-log surface remains more complete for process lifecycle, registry discovery, ownership, and long-running operations. This release independently adds a bounded, transactional, project-local diagnostic history that is directly consumable by MCP clients after host restart.
+- SymbolLattice still has no daemon, socket registry, leader-election protocol, worker pool, or tamper-proof audit log. The persistent journal is intentionally presented as an operational evidence layer, not full CodeGraph daemon parity; no CodeGraph source was copied.
+
 ## [0.108.0] - 2026-07-31
 
 ### Added

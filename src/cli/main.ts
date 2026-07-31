@@ -32,6 +32,8 @@ import {
   validateWatchInterval,
   type ContextOptions,
   type AffectedTestsOptions,
+  type AutoSyncDiagnosticJournal,
+  type AutoSyncDiagnosticJournalOptions,
   type AutoSyncDiagnosticsOptions,
   type AutoSyncDiagnosticsResult,
   type AutoSyncStatusResult,
@@ -54,9 +56,13 @@ import {
   NodeFileSystemWatchSource
 } from "../infrastructure/filesystem/index.js";
 import { FileSystemGitChangeSetProvider } from "../infrastructure/git/index.js";
-import { SqliteGraphStore } from "../infrastructure/sqlite/index.js";
+import {
+  SqliteAutoSyncDiagnosticJournal,
+  SqliteGraphStore
+} from "../infrastructure/sqlite/index.js";
 import {
   startMcpServer,
+  type AutoSyncDiagnosticJournalService,
   type AutoSyncDiagnosticsService,
   type AutoSyncStatusService,
   type McpServerSession
@@ -136,6 +142,7 @@ interface WatchCommandOptions extends ProjectOptions {
 
 interface ServeCommandOptions extends ProjectOptions {
   readonly autoSync?: boolean;
+  readonly diagnosticJournal?: boolean;
   readonly syncInterval?: number;
   readonly poll?: boolean;
 }
@@ -160,6 +167,7 @@ export interface McpAutoSyncOptions {
   readonly projectPath: string;
   readonly force?: boolean;
   readonly autoSync?: boolean;
+  readonly diagnosticJournal?: boolean;
   readonly intervalMs?: number;
   readonly poll?: boolean;
 }
@@ -175,6 +183,12 @@ export type McpWatchStarter = (
   service: SymbolLatticeService,
   options: ForegroundWatchOptions
 ) => Promise<ForegroundWatchSession>;
+
+/** Injectable durable receipt store; request handlers only receive its read method. */
+export type McpAutoSyncJournalFactory = (
+  projectPath: string,
+  writable: boolean
+) => AutoSyncDiagnosticJournal;
 
 /** Injectable composition seam for the `serve --mcp` command. */
 export type McpCommandRunner = (
@@ -321,8 +335,12 @@ function renderWatchReceipt(receipt: WatchReceipt): void {
 function withAutoSyncObservability(
   service: SymbolLatticeService,
   defaultProjectPath: string,
-  tracker: AutoSyncStatusTracker
-): SymbolLatticeService & AutoSyncStatusService & AutoSyncDiagnosticsService {
+  tracker: AutoSyncStatusTracker,
+  journal: AutoSyncDiagnosticJournal
+): SymbolLatticeService &
+  AutoSyncStatusService &
+  AutoSyncDiagnosticsService &
+  AutoSyncDiagnosticJournalService {
   const autoSyncStatus = async (): Promise<AutoSyncStatusResult> => ({
     index: await service.getStatus(defaultProjectPath),
     autoSync: tracker.snapshot()
@@ -345,6 +363,9 @@ function withAutoSyncObservability(
       };
     }
   };
+  const autoSyncJournal = async (
+    options: AutoSyncDiagnosticJournalOptions = {}
+  ) => journal.diagnostics(options);
   return new Proxy(service, {
     get(target, property, receiver): unknown {
       if (property === "autoSyncStatus") {
@@ -353,6 +374,9 @@ function withAutoSyncObservability(
       if (property === "autoSyncDiagnostics") {
         return autoSyncDiagnostics;
       }
+      if (property === "autoSyncJournal") {
+        return autoSyncJournal;
+      }
       const value = Reflect.get(target, property, receiver);
       return typeof value === "function" ? value.bind(target) : value;
     },
@@ -360,10 +384,14 @@ function withAutoSyncObservability(
       return (
         property === "autoSyncStatus" ||
         property === "autoSyncDiagnostics" ||
+        property === "autoSyncJournal" ||
         Reflect.has(target, property)
       );
     }
-  }) as SymbolLatticeService & AutoSyncStatusService & AutoSyncDiagnosticsService;
+  }) as SymbolLatticeService &
+    AutoSyncStatusService &
+    AutoSyncDiagnosticsService &
+    AutoSyncDiagnosticJournalService;
 }
 
 function toAutoSyncDiagnosticError(
@@ -423,14 +451,18 @@ export async function runMcpWithAutoSync(
   service: SymbolLatticeService,
   options: McpAutoSyncOptions,
   serverRunner: McpServerRunner = startMcpServer,
-  watchStarter: McpWatchStarter = startForegroundWatch
+  watchStarter: McpWatchStarter = startForegroundWatch,
+  journalFactory: McpAutoSyncJournalFactory = (projectPath, writable) =>
+    new SqliteAutoSyncDiagnosticJournal(projectPath, { writable })
 ): Promise<void> {
   const autoSyncEnabled = options.autoSync ?? true;
+  const journalWritable = autoSyncEnabled && (options.diagnosticJournal ?? true);
+  const journal = journalFactory(options.projectPath, journalWritable);
   const tracker = new AutoSyncStatusTracker({
     enabled: autoSyncEnabled,
     nativeEventsRequested: options.poll !== true
   });
-  const mcpService = withAutoSyncObservability(service, options.projectPath, tracker);
+  const mcpService = withAutoSyncObservability(service, options.projectPath, tracker, journal);
   let watchSession: ForegroundWatchSession | null = null;
   try {
     if (autoSyncEnabled) {
@@ -439,7 +471,12 @@ export async function runMcpWithAutoSync(
         force: options.force ?? false,
         intervalMs: options.intervalMs ?? DEFAULT_WATCH_INTERVAL_MS,
         ...(options.poll === true ? {} : { eventSource: new NodeFileSystemWatchSource() }),
-        onReceipt: (receipt) => tracker.record(receipt)
+        onReceipt: (receipt) => {
+          const event = tracker.record(receipt);
+          if (event !== null && journalWritable) {
+            journal.append(event);
+          }
+        }
       });
     }
     const mcpSession = await serverRunner(mcpService, options.projectPath);
@@ -901,6 +938,10 @@ export function createProgram(
     .option("--force", "Allow background sync of a filesystem root or the home directory")
     .option("--no-auto-sync", "Disable background incremental sync while serving MCP")
     .option(
+      "--no-diagnostic-journal",
+      "Disable persistent auto-sync diagnostic journal writes while serving MCP"
+    )
+    .option(
       "--sync-interval <milliseconds>",
       `Polling fallback interval for MCP auto-sync (${MIN_WATCH_INTERVAL_MS}-${MAX_WATCH_INTERVAL_MS}; default ${DEFAULT_WATCH_INTERVAL_MS})`,
       parseWatchInterval
@@ -911,6 +952,7 @@ export function createProgram(
         projectPath: defaultProjectPath(options),
         force: options.force ?? false,
         autoSync: options.autoSync ?? true,
+        diagnosticJournal: options.diagnosticJournal ?? true,
         intervalMs: options.syncInterval ?? DEFAULT_WATCH_INTERVAL_MS,
         poll: options.poll ?? false
       });

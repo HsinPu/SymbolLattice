@@ -290,7 +290,7 @@ describe("automatic sync status tracker", () => {
   });
 
   it("retains a bounded, defensive chronological diagnostic timeline", () => {
-    const tracker = new AutoSyncStatusTracker();
+    const tracker = new AutoSyncStatusTracker({ hostId: "host:unit-test" });
 
     tracker.record(receipt("started", { observedAt: "2026-07-31T00:00:00.000Z" }));
     tracker.record(receipt("event-watch-active", { observedAt: "2026-07-31T00:00:01.000Z" }));
@@ -314,6 +314,11 @@ describe("automatic sync status tracker", () => {
       [1, "started", "fresh"],
       [2, "event-watch-active", "fresh"],
       [3, "event-pending", "pending"]
+    ]);
+    expect(initial.events.map((event) => event.hostId)).toEqual([
+      "host:unit-test",
+      "host:unit-test",
+      "host:unit-test"
     ]);
 
     (initial.events[2]?.pendingFiles as string[]).push("src/consumer.ts");

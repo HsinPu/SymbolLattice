@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import type { IndexWork } from "../domain/index-work.js";
 import type { IndexStatus } from "../domain/types.js";
 
@@ -101,6 +103,8 @@ export interface AutoSyncStatusResult {
 
 /** One safe, compact watcher transition retained only for the current MCP host session. */
 export interface AutoSyncDiagnosticEvent {
+  /** Stable only for one MCP host process; distinguishes sequences from other hosts. */
+  readonly hostId: string;
   /** Monotonic per-host sequence; it resets when the MCP host restarts. */
   readonly sequence: number;
   readonly event: WatchReceipt["event"];
@@ -151,6 +155,8 @@ export interface AutoSyncStatusTrackerOptions {
   readonly enabled?: boolean;
   /** False when the MCP host was explicitly started with `--poll`. */
   readonly nativeEventsRequested?: boolean;
+  /** Injectable only for deterministic tests; normal hosts receive a UUID. */
+  readonly hostId?: string;
 }
 
 /**
@@ -175,10 +181,12 @@ export class AutoSyncStatusTracker {
   private pendingFilesUnknown = false;
   private readonly diagnosticEvents: AutoSyncDiagnosticEvent[] = [];
   private droppedDiagnosticEvents = 0;
+  private readonly diagnosticHostId: string;
   private nextDiagnosticSequence = 1;
 
   public constructor(options: AutoSyncStatusTrackerOptions = {}) {
     this.enabled = options.enabled ?? true;
+    this.diagnosticHostId = options.hostId ?? randomUUID();
     this.state = this.enabled ? "starting" : "disabled";
     this.watcherMode = this.enabled
       ? options.nativeEventsRequested === false
@@ -188,9 +196,9 @@ export class AutoSyncStatusTracker {
   }
 
   /** Records one watcher receipt without invoking any index or filesystem operation. */
-  public record(receipt: WatchReceipt): void {
+  public record(receipt: WatchReceipt): AutoSyncDiagnosticEvent | null {
     if (!this.enabled) {
-      return;
+      return null;
     }
 
     this.observedAt = receipt.observedAt;
@@ -244,7 +252,7 @@ export class AutoSyncStatusTracker {
         break;
     }
 
-    this.appendDiagnosticEvent(receipt);
+    return this.appendDiagnosticEvent(receipt);
   }
 
   /** Returns a defensive copy suitable for an MCP or HTTP status response. */
@@ -280,12 +288,13 @@ export class AutoSyncStatusTracker {
     };
   }
 
-  private appendDiagnosticEvent(receipt: WatchReceipt): void {
+  private appendDiagnosticEvent(receipt: WatchReceipt): AutoSyncDiagnosticEvent {
     if (this.diagnosticEvents.length === MAX_AUTO_SYNC_DIAGNOSTIC_EVENTS) {
       this.diagnosticEvents.shift();
       this.droppedDiagnosticEvents += 1;
     }
-    this.diagnosticEvents.push({
+    const event: AutoSyncDiagnosticEvent = {
+      hostId: this.diagnosticHostId,
       sequence: this.nextDiagnosticSequence,
       event: receipt.event,
       observedAt: receipt.observedAt,
@@ -298,8 +307,10 @@ export class AutoSyncStatusTracker {
       pendingFiles: [...receipt.pendingFiles],
       pendingFilesTruncated: receipt.pendingFilesTruncated,
       pendingFilesUnknown: receipt.pendingFilesUnknown
-    });
+    };
+    this.diagnosticEvents.push(event);
     this.nextDiagnosticSequence += 1;
+    return cloneDiagnosticEvent(event);
   }
 
   private diagnosticLimit(limit: number | undefined): number {

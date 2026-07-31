@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.108.0 is an early developer release. Run this repository from source; the npm package remains private and unpublished.
+> v0.109.0 is an early developer release. Run this repository from source; the npm package remains private and unpublished.
 
 ## Positioning
 
@@ -27,7 +27,7 @@ License: MIT.
 - Builds syntax-proven file, symbol, containment, import/export, type-hierarchy, route, entrypoint, and cross-file graph facts.
 - Creates exact edges only when the proof is direct; ambiguous candidates remain unresolved or heuristic evidence instead of runtime guesses.
 - Covers frontend, backend, JVM, scientific-computing, systems, native, data, IaC, template, and schema sources, including TypeScript, Java, Groovy, Fortran, Ada, Python, Go, Rust, C/C++, C#, PHP, Ruby, Kotlin, Swift, Dart, SQL, GraphQL, Protocol Buffers, Terraform, YAML, and XML.
-- Includes a CLI and read-only MCP queries for symbols, relationships, routes, entrypoints, generation history, diffs, affected tests, automatic-sync health, and bounded diagnostics.
+- Includes a CLI and read-only MCP queries for symbols, relationships, routes, entrypoints, generation history, diffs, affected tests, automatic-sync health, session timelines, and durable diagnostics.
 
 ## Quick start
 
@@ -51,17 +51,20 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 # From an MCP client, retrieve the latest eight watcher diagnostic events
 # symbol_lattice_auto_sync_diagnostics { "limit": 8 }
+
+# Retrieve the latest eight persisted watcher transitions for this project
+# symbol_lattice_auto_sync_journal { "limit": 8 }
 ```
 
 On Windows PowerShell, use `npm.cmd` when `npm` is unavailable. Filesystem roots and home directories are rejected unless `--force` is explicitly supplied.
 
-## v0.108.0 highlights
+## v0.109.0 highlights
 
-- `symbol_lattice_auto_sync_diagnostics` returns the default MCP host's live index observation, watcher state, and latest chronological watcher timeline.
-- The timeline retains at most 32 sanitized receipts; use `limit` for recent events and inspect retained, dropped, and truncation metadata.
-- If the live `getStatus` read fails, diagnostics still returns a structured error and the existing watcher timeline. It never creates, indexes, or synchronizes a graph.
+- `symbol_lattice_auto_sync_journal` reads the default project's durable watcher history, including after an MCP host restart.
+- An initialized project's background watcher writes sanitized receipts (including a per-host UUID, so cross-host sequences stay distinguishable) to `.symbol-lattice/auto-sync-diagnostics.sqlite`; it retains at most 128 events and reports retention, eviction, truncation, latest persisted time, and I/O state.
+- MCP requests only read the journal. Writes occur only in the watcher receipt callback owned by `serve --mcp`; an unindexed project never gains `.symbol-lattice` merely for diagnostics.
 
-Use `--sync-interval <ms>` to tune fallback polling, `--poll` to disable native event acceleration, or `--no-auto-sync` to disable background sync; the status tool reports `disabled` in that mode. Run `init` once first; manual `sync` remains useful for repair and CI.
+Use `--sync-interval <ms>` to tune fallback polling, `--poll` to disable native event acceleration, `--no-auto-sync` to disable background sync, or `--no-diagnostic-journal` to disable journal writes. Run `init` once first; manual `sync` remains useful for repair and CI.
 
 ## Deliberate limits
 
@@ -70,8 +73,8 @@ Use `--sync-interval <ms>` to tune fallback polling, `--poll` to disable native 
 - Groovy, Fortran, and Ada remain conservative first slices: only complete direct units are retained; members, cross-file, and runtime relations are not inferred, and ambiguous source is skipped.
 - The Koa, Hono, and Elysia slices cover direct receiver routes only; prefixes, mounts, nested apps, `basePath` / `group` / `use` / `route` / `on`, CommonJS, dynamic paths, and inline/member handlers are not inferred.
 - Default MCP background sync only operates on initialized projects and never changes the stored index scope. Filesystem roots and home directories still require explicit `--force`.
-- Automatic-sync status describes the current default MCP host's watcher only. It is not a cross-process daemon, centralized queue, or performance-monitoring system.
-- Diagnostics exist only in the current MCP host's memory and reset on restart; they are not a persistent audit log or a cross-client shared timeline.
+- Automatic-sync status and the session timeline describe the current default MCP host's watcher only. They are not a cross-process daemon, centralized queue, or performance-monitoring system.
+- The durable journal is a bounded 128-event operational record, not a tamper-proof audit log, daemon lifecycle, leader election, or complete cross-client coordination mechanism.
 
 ## Verification
 
