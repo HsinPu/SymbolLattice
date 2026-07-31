@@ -247,7 +247,8 @@ export const FRAMEWORK_CAPABILITIES = [
     routeRegistrations: [],
     surfaces: [
       "direct django.urls path imports",
-      "final literal urlpatterns lists with same-file top-level function handlers"
+      "final literal urlpatterns lists with same-file top-level function handlers",
+      "package-relative imported URLConfs through direct path and include composition"
     ]
   },
   {

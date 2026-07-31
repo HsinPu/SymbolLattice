@@ -86,6 +86,7 @@ import {
 
 export type {
   ArtifactFacts,
+  DjangoUrlFacts,
   ExportBinding,
   FastApiRouterFacts,
   FastifyPluginFacts,

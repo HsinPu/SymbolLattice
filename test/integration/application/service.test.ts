@@ -3849,6 +3849,127 @@ describe("SymbolLatticeService", () => {
     });
   });
 
+  it("projects package-relative Django URLConf modules through literal include prefixes", async () => {
+    const projectPath = await createInlineProject({
+      "project/__init__.py": "",
+      "project/catalog/__init__.py": "",
+      "project/catalog/urls.py": [
+        "from django.urls import path as url",
+        "",
+        "def items(request):",
+        "    return None",
+        "",
+        "urlpatterns = [url('items/', items)]"
+      ].join("\n"),
+      "project/urls.py": [
+        "from django.urls import include as mount, path as url",
+        "from .catalog import urls as catalog_urls",
+        "",
+        "urlpatterns = [url('api/', mount(catalog_urls))]"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath, { method: "ALL", pathPrefix: "/api/" });
+    const mainFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "project/urls.py");
+    const childFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "project/catalog/urls.py");
+
+    expect(mainFacts?.djangoUrlFacts).toMatchObject({
+      importedUrlconfInclusions: [
+        {
+          urlconfName: "catalog_urls",
+          importedUrlconfName: "urls",
+          moduleSpecifier: ".catalog.urls",
+          prefix: "/api/"
+        }
+      ]
+    });
+    expect(childFacts?.djangoUrlFacts).toMatchObject({
+      routes: [{ path: "/items/" }]
+    });
+    expect(routes.routes).toMatchObject([
+      {
+        method: "ALL",
+        path: "/api/items/",
+        route: {
+          kind: "route",
+          name: "ALL /api/items/",
+          filePath: "project/catalog/urls.py"
+        },
+        edge: {
+          kind: "routes",
+          resolution: "exact",
+          evidence: {
+            ruleId: "framework.django.imported-urlconf.path.include.local-function",
+            stage: "module",
+            resolutionPath: ["project/urls.py", "project/catalog/urls.py"]
+          }
+        },
+        handler: { qualifiedName: "project/catalog/urls.py#items" }
+      }
+    ]);
+
+    await writeFile(
+      join(projectPath, "project", "urls.py"),
+      [
+        "from django.urls import include as mount, path as url",
+        "from .catalog import urls as catalog_urls",
+        "",
+        "urlpatterns = [url('v2/', mount(catalog_urls))]"
+      ].join("\n"),
+      "utf8"
+    );
+    const synced = await service.sync({ projectPath });
+    const routesAfterSync = await service.routes(projectPath, { method: "ALL", pathPrefix: "/v2/" });
+
+    expect(synced.lastIndexWork).toMatchObject({
+      mode: "incremental",
+      modifiedFiles: ["project/urls.py"],
+      reExtractedFiles: ["project/urls.py"],
+      reusedArtifactFiles: expect.arrayContaining(["project/catalog/urls.py"])
+    });
+    expect(routesAfterSync.routes).toMatchObject([
+      {
+        method: "ALL",
+        path: "/v2/items/",
+        route: { name: "ALL /v2/items/", filePath: "project/catalog/urls.py" },
+        handler: { qualifiedName: "project/catalog/urls.py#items" }
+      }
+    ]);
+  });
+
+  it("does not project Django URLConf modules without a proven package boundary", async () => {
+    const projectPath = await createInlineProject({
+      "project/catalog/urls.py": [
+        "from django.urls import path",
+        "",
+        "def items(request):",
+        "    return None",
+        "",
+        "urlpatterns = [path('items/', items)]"
+      ].join("\n"),
+      "project/urls.py": [
+        "from django.urls import include, path",
+        "from .catalog import urls as catalog_urls",
+        "",
+        "urlpatterns = [path('api/', include(catalog_urls))]"
+      ].join("\n")
+    });
+    const service = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+
+    await expect(
+      service.routes(projectPath, { method: "ALL", pathPrefix: "/api/" })
+    ).resolves.toMatchObject({ routes: [] });
+  });
+
   it("indexes Go Gin engine and literal group routes with exact syntax evidence", async () => {
     const projectPath = await createInlineProject({
       "cmd/server/main.go": [

@@ -11,13 +11,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v95";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v96";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v26";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v27";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -280,6 +280,35 @@ export interface FlaskBlueprintFacts {
   readonly importedBlueprintRegistrations: readonly FlaskImportedBlueprintRegistrationFact[];
 }
 
+/** A literal route in a final Django `urlpatterns` list with a local function handler. */
+export interface DjangoUrlPatternRouteFact {
+  readonly path: string;
+  /** Stable symbol identity of the directly referenced local handler. */
+  readonly handlerId: string;
+  readonly range: SourceRange;
+}
+
+/**
+ * A direct Django `path(prefix, include(imported_urlconf))` composition where
+ * the included URLConf arrived through a single-name package-relative import.
+ */
+export interface DjangoImportedUrlconfInclusionFact {
+  readonly urlconfName: string;
+  readonly importedUrlconfName: "urls" | "urlpatterns";
+  readonly moduleSpecifier: string;
+  readonly prefix: string;
+  readonly range: SourceRange;
+}
+
+/**
+ * Syntax-only facts used to project literal child URL patterns through a
+ * directly included URLConf in the same proven Python package.
+ */
+export interface DjangoUrlFacts {
+  readonly routes: readonly DjangoUrlPatternRouteFact[];
+  readonly importedUrlconfInclusions: readonly DjangoImportedUrlconfInclusionFact[];
+}
+
 /** A Scala class or object declaration with its direct package-clause proof. */
 export interface ScalaClassFact {
   readonly symbolId: string;
@@ -430,6 +459,8 @@ export interface ArtifactFacts {
   readonly fastApiRouterFacts?: FastApiRouterFacts;
   /** Omitted only by artifact facts persisted before v0.111. */
   readonly flaskBlueprintFacts?: FlaskBlueprintFacts;
+  /** Omitted only by artifact facts persisted before v0.112. */
+  readonly djangoUrlFacts?: DjangoUrlFacts;
   /** Omitted only by artifact facts persisted before v0.46. */
   readonly scalaFacts?: ScalaFacts;
   /** Omitted only by artifact facts persisted before v0.47. */

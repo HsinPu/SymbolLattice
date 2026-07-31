@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.111.0 為早期開發者版本。此儲存庫從原始碼執行；npm 套件維持私有，尚未發佈。
+> v0.112.0 為早期開發者版本。此儲存庫從原始碼執行；npm 套件維持私有，尚未發佈。
 
 ## 產品定位
 
@@ -58,11 +58,11 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 Windows PowerShell 若找不到 `npm`，請使用 `npm.cmd`。系統預設拒絕索引檔案系統根目錄或家目錄，除非明確指定 `--force`。
 
-## v0.111.0 重點
+## v0.112.0 重點
 
-- Python Flask 現在可投影同一個具 `__init__.py` 證據的標準 Python package 中 `from .module import blueprint` 跨檔 Blueprint；會將 registration prefix、Blueprint prefix 與 decorator path 組合成可查詢路由。
-- 每條投影路由保留 module-stage evidence 與 registration／Blueprint 模組解析路徑；parent-relative import、namespace package、import chain、動態或 rebind 情況都不會產生精確邊。
-- Blueprint facts 會隨 SQLite artifact facts 持久化。只修改 mount 模組後的 `sync` 能重用未改 Blueprint facts，並重新投影最終路徑。
+- Python Django 現在可投影同一個具 `__init__.py` 證據的標準 package 中，以相對匯入帶入的 URLConf；會將 `path(prefix, include(...))` 的 parent prefix 與子 `urlpatterns` 路徑組合成可查詢路由。
+- 每條投影路由保留 module-stage evidence 與 parent／child URLConf 解析路徑；parent-relative import、namespace package、import chain、動態 include 或 rebind 都不會產生精確邊。
+- Django URL facts 會隨 SQLite artifact facts 持久化。只修改 parent URLConf 後的 `sync` 能重用未改 child URLConf facts，並重新投影最終路徑。
 
 可用 `--sync-interval <ms>` 調整輪詢備援、`--poll` 關閉原生事件加速，或以 `--no-diagnostic-journal` 關閉 journal 寫入。首次使用仍需先執行 `init`；手動 `sync` 適合修復或 CI。
 
@@ -73,6 +73,7 @@ Windows PowerShell 若找不到 `npm`，請使用 `npm.cmd`。系統預設拒絕
 - Groovy、Fortran 與 Ada 仍是保守初版：僅擷取完整直接單元，不推斷成員、跨檔案或執行期關係；遇到曖昧結構會略過。
 - Koa、Hono 與 Elysia 初版只支援直接 receiver 路由；不推斷 prefix、掛載、巢狀 app、`basePath`／`group`／`use`／`route`／`on`、CommonJS、動態路徑或內嵌／成員處理器。
 - Flask 跨檔 Blueprint 僅接受單一名稱、單點相對 import 與具 `__init__.py` 證據的 regular package；不處理 parent-relative import、namespace package、import chain、動態 prefix 或執行期註冊。
+- Django 跨檔 URLConf 僅接受 `from .package import urls` 或 `from .package.urls import urlpatterns` 的單一名稱相對 import、直接 `path(prefix, include(local_urlconf))` 與子模組本地頂層函式 handler；不處理字串 URLConf、parent-relative import、namespace package、import chain、巢狀 include、動態 include／prefix 或外部 view handler。
 - 預設 MCP 背景同步只處理已初始化的專案，且不會改變已儲存的索引範圍；根目錄或家目錄仍需明確加上 `--force`。
 - SQLite owner lock 只串行同一專案的一個 foreground watcher；它不是 daemon、socket registry、分散式領導者選舉、worker pool 或跨機器協調協定。
 - 自動同步狀態與 session 時間線只描述目前預設 MCP host。持久化 journal 是有 128 筆上限的 operational record，不是不可竄改 audit log 或完整 lifecycle 記錄。

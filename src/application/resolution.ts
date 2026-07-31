@@ -3,6 +3,8 @@ import {
   createEdgeId,
   createSymbolId,
   type BindingSpace,
+  type DjangoImportedUrlconfInclusionFact,
+  type DjangoUrlPatternRouteFact,
   type EdgeEvidence,
   type FastApiImportedRouterInclusionFact,
   type FastApiRouterDeclarationFact,
@@ -2217,6 +2219,201 @@ function projectFlaskImportedBlueprintRoutes(input: {
   return { symbols, structuralEdges };
 }
 
+function isStaticDjangoUrlPatternPath(value: string): boolean {
+  return value.startsWith("/") && !value.includes("\\") && !value.includes("//");
+}
+
+function mountedDjangoUrlconfRoutePath(prefix: string, routePath: string): string | null {
+  if (!isStaticDjangoUrlPatternPath(prefix) || !isStaticDjangoUrlPatternPath(routePath)) {
+    return null;
+  }
+  const normalizedPrefix = prefix === "/" ? "" : prefix.endsWith("/") ? prefix.slice(0, -1) : prefix;
+  return `${normalizedPrefix}${routePath}`;
+}
+
+interface ProjectedDjangoImportedUrlconfRoute {
+  readonly inclusionFilePath: string;
+  readonly urlconfFilePath: string;
+  readonly inclusion: DjangoImportedUrlconfInclusionFact;
+  readonly route: DjangoUrlPatternRouteFact;
+  readonly handler: SymbolNode;
+  readonly path: string;
+}
+
+function compareProjectedDjangoImportedUrlconfRoute(
+  left: ProjectedDjangoImportedUrlconfRoute,
+  right: ProjectedDjangoImportedUrlconfRoute
+): number {
+  return (
+    compareStableText(left.inclusionFilePath, right.inclusionFilePath) ||
+    left.inclusion.range.start.line - right.inclusion.range.start.line ||
+    left.inclusion.range.start.column - right.inclusion.range.start.column ||
+    compareStableText(left.urlconfFilePath, right.urlconfFilePath) ||
+    left.route.range.start.line - right.route.range.start.line ||
+    left.route.range.start.column - right.route.range.start.column ||
+    compareStableText(left.path, right.path) ||
+    compareStableText(left.handler.id, right.handler.id)
+  );
+}
+
+interface DjangoImportedUrlconfRouteProjection {
+  readonly symbols: readonly SymbolNode[];
+  readonly structuralEdges: readonly GraphEdge[];
+}
+
+/**
+ * Projects literal child URL patterns through a directly imported Django
+ * URLConf. Evidence records both URLConf modules so callers can distinguish a
+ * project-level path from a child URLConf-local route.
+ */
+function projectDjangoImportedUrlconfRoutes(input: {
+  readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
+  readonly knownFilePaths: ReadonlySet<string>;
+  readonly fileSymbols: ReadonlyMap<string, SymbolNode>;
+  readonly symbolsById: ReadonlyMap<string, SymbolNode>;
+}): DjangoImportedUrlconfRouteProjection {
+  const candidates: ProjectedDjangoImportedUrlconfRoute[] = [];
+
+  for (const [inclusionFilePath, facts] of [...input.factsByFile.entries()].sort(([left], [right]) =>
+    compareStableText(left, right)
+  )) {
+    const inclusionFacts = facts.djangoUrlFacts;
+    if (inclusionFacts === undefined) {
+      continue;
+    }
+
+    for (const inclusion of inclusionFacts.importedUrlconfInclusions) {
+      const urlconfFilePath = resolvePythonRelativeModule(
+        input.knownFilePaths,
+        inclusionFilePath,
+        inclusion.moduleSpecifier
+      );
+      if (urlconfFilePath === null) {
+        continue;
+      }
+      const urlconfFacts = input.factsByFile.get(urlconfFilePath)?.djangoUrlFacts;
+      if (urlconfFacts === undefined) {
+        continue;
+      }
+
+      for (const route of urlconfFacts.routes) {
+        const handler = input.symbolsById.get(route.handlerId);
+        if (handler?.kind !== "function" || handler.filePath !== urlconfFilePath) {
+          continue;
+        }
+        const path = mountedDjangoUrlconfRoutePath(inclusion.prefix, route.path);
+        if (path === null) {
+          continue;
+        }
+        candidates.push({
+          inclusionFilePath,
+          urlconfFilePath,
+          inclusion,
+          route,
+          handler,
+          path
+        });
+      }
+    }
+  }
+
+  const symbols: SymbolNode[] = [];
+  const structuralEdges: GraphEdge[] = [];
+  const declarationOrdinals = new Map<string, number>();
+  const seen = new Set<string>();
+  for (const candidate of [...candidates].sort(compareProjectedDjangoImportedUrlconfRoute)) {
+    const dedupeKey = [
+      candidate.inclusionFilePath,
+      candidate.inclusion.range.start.line,
+      candidate.inclusion.range.start.column,
+      candidate.urlconfFilePath,
+      candidate.route.range.start.line,
+      candidate.route.range.start.column,
+      candidate.path,
+      candidate.handler.id
+    ].join("\u0000");
+    if (seen.has(dedupeKey)) {
+      continue;
+    }
+    seen.add(dedupeKey);
+
+    const file = input.fileSymbols.get(candidate.urlconfFilePath);
+    if (file === undefined) {
+      continue;
+    }
+    const name = `ALL ${candidate.path}`;
+    const qualifiedName = `${candidate.urlconfFilePath}#route:${name}`;
+    const declarationOrdinal = declarationOrdinals.get(qualifiedName) ?? 0;
+    declarationOrdinals.set(qualifiedName, declarationOrdinal + 1);
+    const route: SymbolNode = {
+      id: createSymbolId({
+        filePath: candidate.urlconfFilePath,
+        qualifiedName,
+        kind: "route",
+        declarationOrdinal
+      }),
+      name,
+      qualifiedName,
+      kind: "route",
+      filePath: candidate.urlconfFilePath,
+      range: candidate.route.range,
+      isExported: false,
+      declarationOrdinal
+    };
+    symbols.push(route);
+    structuralEdges.push({
+      id: createEdgeId({
+        sourceId: file.id,
+        targetId: route.id,
+        kind: "contains",
+        line: candidate.route.range.start.line,
+        column: candidate.route.range.start.column,
+        referenceName: route.name
+      }),
+      sourceId: file.id,
+      targetId: route.id,
+      kind: "contains",
+      filePath: candidate.urlconfFilePath,
+      range: candidate.route.range,
+      resolution: "exact",
+      confidence: 1,
+      referenceName: route.name,
+      evidence: {
+        ruleId: "syntax.containment",
+        stage: "syntax",
+        candidateSymbolIds: [route.id]
+      }
+    });
+    structuralEdges.push({
+      id: createEdgeId({
+        sourceId: route.id,
+        targetId: candidate.handler.id,
+        kind: "routes",
+        line: candidate.route.range.start.line,
+        column: candidate.route.range.start.column,
+        referenceName: candidate.handler.name
+      }),
+      sourceId: route.id,
+      targetId: candidate.handler.id,
+      kind: "routes",
+      filePath: candidate.urlconfFilePath,
+      range: candidate.route.range,
+      resolution: "exact",
+      confidence: 1,
+      referenceName: candidate.handler.name,
+      evidence: referenceEvidence(
+        "framework.django.imported-urlconf.path.include.local-function",
+        "module",
+        [candidate.handler.id],
+        [],
+        [candidate.inclusionFilePath, candidate.urlconfFilePath]
+      )
+    });
+  }
+
+  return { symbols, structuralEdges };
+}
+
 function routePathFromSymbol(route: SymbolNode): string | null {
   const separator = route.name.indexOf(" ");
   if (separator <= 0) {
@@ -2715,6 +2912,18 @@ export function resolveProjectFacts(input: {
   symbols.push(...flaskImportedBlueprintRouteProjection.symbols);
   structuralEdges.push(...flaskImportedBlueprintRouteProjection.structuralEdges);
   for (const symbol of flaskImportedBlueprintRouteProjection.symbols) {
+    symbolsById.set(symbol.id, symbol);
+  }
+
+  const djangoImportedUrlconfRouteProjection = projectDjangoImportedUrlconfRoutes({
+    factsByFile,
+    knownFilePaths,
+    fileSymbols,
+    symbolsById
+  });
+  symbols.push(...djangoImportedUrlconfRouteProjection.symbols);
+  structuralEdges.push(...djangoImportedUrlconfRouteProjection.structuralEdges);
+  for (const symbol of djangoImportedUrlconfRouteProjection.symbols) {
     symbolsById.set(symbol.id, symbol);
   }
 

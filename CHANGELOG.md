@@ -6,6 +6,24 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.112.0] - 2026-07-31
+
+### Added
+
+- Python route extraction now retains `DjangoUrlFacts` for final literal `urlpatterns` entries with local top-level function handlers and for direct `path(prefix, include(imported_urlconf))` composition. Supported URLConf imports are deliberately limited to single-name one-dot-relative `from .package import urls` and `from .package.urls import urlpatterns` forms; the project resolver projects an exact route only when both modules belong to one regular package proven by every required `__init__.py` marker.
+- A projected Django route is owned by the child URLConf module and retains module-stage evidence with both parent and child URLConf paths. Its final path joins the literal parent `include` prefix with the child literal path. Parent-relative imports, namespace packages, import chains, nested includes, dynamic includes or prefixes, rebindings, ambiguous imports, and missing local handlers remain unprojected rather than guessed.
+- Django URL facts persist through the SQLite artifact-facts payload. The extractor version advances to `multi-language-ast-v96` and the project resolver version to `project-resolver-v27`, so an explicit `sync` safely re-extracts unchanged source facts and rebuilds cross-file projections. Focused tests cover both supported import forms, rejected boundaries and rebindings, persistence, exact route output, and an incremental parent-prefix update that reuses the unchanged child URLConf artifact. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.112.0.md`.
+
+### Compatibility
+
+- Existing indexes remain readable. The next explicit `sync` (or a fresh `init`) refreshes cached artifact facts because extraction and resolver versions changed; no graph schema migration is required.
+- The new `djangoUrlFacts` field is additive in persisted artifact JSON and the public extraction type surface. Existing route, CLI, MCP, and read-only query contracts remain unchanged.
+
+### Comparison notes
+
+- CodeGraph's checked Django resolver recognizes `include('app.urls')` as a URLConf dependency and retains direct routes. This release independently adds a stricter relative-import path that projects a parent include prefix through child URL patterns, with module-stage evidence and incremental artifact reuse.
+- CodeGraph remains ahead in daemon lifecycle, PID/socket registry, cross-client coordination, worker-pool concurrency, error-log operations, and broader parser/semantic depth. SymbolLattice's new route projection is an independent framework-analysis capability, not a daemon-parity claim.
+
 ## [0.111.0] - 2026-07-31
 
 ### Added

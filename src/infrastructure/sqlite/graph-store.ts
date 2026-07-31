@@ -673,6 +673,7 @@ function artifactFactsPayload(facts: PersistedArtifactFacts): ArtifactFacts {
     ...(facts.flaskBlueprintFacts === undefined
       ? {}
       : { flaskBlueprintFacts: facts.flaskBlueprintFacts }),
+    ...(facts.djangoUrlFacts === undefined ? {} : { djangoUrlFacts: facts.djangoUrlFacts }),
     ...(facts.scalaFacts === undefined ? {} : { scalaFacts: facts.scalaFacts }),
     ...(facts.javaFacts === undefined ? {} : { javaFacts: facts.javaFacts }),
     ...(facts.springBootPropertiesFacts === undefined

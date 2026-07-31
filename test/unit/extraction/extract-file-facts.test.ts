@@ -2652,6 +2652,91 @@ describe("source extraction", () => {
     ]);
   });
 
+  it("records package-relative Django URLConf inclusion and child route facts", () => {
+    const childFacts = extractFileFacts({
+      filePath: "project/catalog/urls.py",
+      language: "python",
+      sourceText: [
+        "from django.urls import path",
+        "",
+        "def items(request):",
+        "    return None",
+        "",
+        "urlpatterns = [path('items/', items)]"
+      ].join("\n")
+    });
+    const mainFacts = extractFileFacts({
+      filePath: "project/urls.py",
+      language: "python",
+      sourceText: [
+        "from django.urls import include as mount, path as url",
+        "from .catalog import urls as catalog_urls",
+        "",
+        "urlpatterns = [url('api/', mount(catalog_urls))]"
+      ].join("\n")
+    });
+    const patternsImportFacts = extractFileFacts({
+      filePath: "project/urls.py",
+      language: "python",
+      sourceText: [
+        "from django.urls import include, path",
+        "from .catalog.urls import urlpatterns as catalog_patterns",
+        "",
+        "urlpatterns = [path('patterns/', include(catalog_patterns))]"
+      ].join("\n")
+    });
+
+    const childHandler = childFacts.symbols.find(
+      (symbol) => symbol.qualifiedName === "project/catalog/urls.py#items"
+    );
+    expect(childFacts.djangoUrlFacts).toMatchObject({
+      routes: [{ path: "/items/", handlerId: childHandler?.id }],
+      importedUrlconfInclusions: []
+    });
+    expect(mainFacts.djangoUrlFacts).toMatchObject({
+      routes: [],
+      importedUrlconfInclusions: [
+        {
+          urlconfName: "catalog_urls",
+          importedUrlconfName: "urls",
+          moduleSpecifier: ".catalog.urls",
+          prefix: "/api/"
+        }
+      ]
+    });
+    expect(patternsImportFacts.djangoUrlFacts).toMatchObject({
+      importedUrlconfInclusions: [
+        {
+          urlconfName: "catalog_patterns",
+          importedUrlconfName: "urlpatterns",
+          moduleSpecifier: ".catalog.urls",
+          prefix: "/patterns/"
+        }
+      ]
+    });
+  });
+
+  it("rejects dynamic, parent-relative, and rebound Django URLConf inclusion forms", () => {
+    const facts = extractFileFacts({
+      filePath: "project/urls.py",
+      language: "python",
+      sourceText: [
+        "from django.urls import include, path",
+        "from ..catalog import urls as parent_urls",
+        "from .catalog import urls as catalog_urls",
+        "catalog_urls = replacement",
+        "",
+        "urlpatterns = [",
+        "    path('parent/', include(parent_urls)),",
+        "    path('rebound/', include(catalog_urls)),",
+        "    path('dynamic/', include(build_urlconf())),",
+        "]"
+      ].join("\n")
+    });
+
+    expect(facts.djangoUrlFacts?.importedUrlconfInclusions).toEqual([]);
+  });
+
   it("rejects non-final, dynamic, non-local, unsupported, and rebound Django path forms", () => {
     const facts = extractFileFacts({
       filePath: "project/urls.py",
