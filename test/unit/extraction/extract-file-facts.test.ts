@@ -8735,4 +8735,96 @@ describe("source extraction", () => {
     expect(multipleDocuments.edges).toEqual([]);
     expect(unsupported.edges).toEqual([]);
   });
+
+  it("extracts parser-proven XML root and direct-child resources with containment evidence", () => {
+    const facts = extractFileFacts({
+      filePath: "config/catalog.xml",
+      language: "xml",
+      sourceText: [
+        '<?xml version="1.0"?>',
+        "<catalog>",
+        '  <item id="first"/>',
+        "  <section>",
+        "    <entry>hidden</entry>",
+        "  </section>",
+        "</catalog>"
+      ].join("\n")
+    });
+
+    expect(
+      facts.symbols.map((symbol) => [symbol.kind, symbol.qualifiedName, symbol.isExported])
+    ).toEqual([
+      ["file", "config/catalog.xml", true],
+      ["resource", "config/catalog.xml#xml-element:catalog[0]", true],
+      ["resource", "config/catalog.xml#xml-element:catalog[0]/item[0]", false],
+      ["resource", "config/catalog.xml#xml-element:catalog[0]/section[0]", false]
+    ]);
+    expect(
+      facts.edges.map((edge) => [
+        edge.kind,
+        edge.referenceName,
+        edge.evidence?.ruleId,
+        edge.range
+      ])
+    ).toEqual([
+      [
+        "contains",
+        "catalog",
+        "syntax.xml.root-element",
+        { start: { line: 2, column: 1 }, end: { line: 7, column: 11 } }
+      ],
+      [
+        "contains",
+        "item",
+        "syntax.xml.direct-child-element",
+        { start: { line: 3, column: 3 }, end: { line: 3, column: 21 } }
+      ],
+      [
+        "contains",
+        "section",
+        "syntax.xml.direct-child-element",
+        { start: { line: 4, column: 3 }, end: { line: 6, column: 13 } }
+      ]
+    ]);
+    expect(facts.symbols.some((symbol) => symbol.name === "entry")).toBe(false);
+  });
+
+  it("assigns stable ordinals to repeated direct XML child element names", () => {
+    const facts = extractFileFacts({
+      filePath: "config/repeated.xml",
+      language: "xml",
+      sourceText: "<catalog><item/><item/></catalog>"
+    });
+
+    expect(facts.symbols.map((symbol) => symbol.qualifiedName)).toEqual([
+      "config/repeated.xml",
+      "config/repeated.xml#xml-element:catalog[0]",
+      "config/repeated.xml#xml-element:catalog[0]/item[0]",
+      "config/repeated.xml#xml-element:catalog[0]/item[1]"
+    ]);
+  });
+
+  it("rejects malformed, multi-root, and DTD XML without derived facts", () => {
+    const malformed = extractFileFacts({
+      filePath: "config/broken.xml",
+      language: "xml",
+      sourceText: "<catalog><item></catalog>"
+    });
+    const multipleRoots = extractFileFacts({
+      filePath: "config/multiple.xml",
+      language: "xml",
+      sourceText: "<first/><second/>"
+    });
+    const doctype = extractFileFacts({
+      filePath: "config/external.xml",
+      language: "xml",
+      sourceText: "<!DOCTYPE catalog><catalog><item/></catalog>"
+    });
+
+    for (const facts of [malformed, multipleRoots, doctype]) {
+      expect(facts.symbols).toHaveLength(1);
+      expect(facts.symbols[0]).toMatchObject({ kind: "file" });
+      expect(facts.edges).toEqual([]);
+    }
+  });
 });

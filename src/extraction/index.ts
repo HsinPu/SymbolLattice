@@ -35,6 +35,7 @@ import { extractNixFileFacts } from "./nix.js";
 import { extractVbnetFileFacts } from "./vbnet.js";
 import { extractZigFileFacts } from "./zig.js";
 import { extractYamlFileFacts } from "./yaml.js";
+import { extractXmlFileFacts } from "./xml.js";
 import { extractLiquidFileFacts } from "./liquid.js";
 import { extractTwigFileFacts } from "./twig.js";
 import { extractBladeFileFacts } from "./blade.js";
@@ -3693,6 +3694,9 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
   }
   if (input.language === "yaml") {
     return extractYamlFileFacts({ ...input, language: "yaml" });
+  }
+  if (input.language === "xml") {
+    return extractXmlFileFacts({ ...input, language: "xml" });
   }
   if (input.language === "lua" || input.language === "luau") {
     return extractLuaFileFacts({ ...input, language: input.language });

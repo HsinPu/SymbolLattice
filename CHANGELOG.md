@@ -6,6 +6,23 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.89.0] - 2026-07-31
+
+### Added
+
+- XML source discovery now recognizes `.xml` files and exposes the new `xml` language through persisted source search plus the existing CLI and MCP language validation contracts. The new `saxes@6.0.0` event-parser-backed extractor accepts one well-formed, DTD-free document and retains only the root element plus its direct child elements as source-ranged `resource` symbols.
+- Each retained XML resource has exact `contains` evidence: `syntax.xml.root-element` from file to root and `syntax.xml.direct-child-element` from root to direct child. Unit, discovery, and service integration coverage prove complete element ranges, duplicate-safe child paths, nested-descendant exclusion, persisted source search, and malformed/multi-root/DTD fail-closed behavior. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.89.0.md`.
+
+### Compatibility
+
+- The artifact extractor advances to `multi-language-ast-v78`; the project resolver remains `project-resolver-v23` because XML resource facts are file-local. A pre-v0.89 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes XML-capable facts.
+- No SQLite schema migration or query command is required. This is an additive artifact-language capability within the existing file, resource-symbol, containment-edge, source-search, CLI, MCP, and incremental-index contracts; existing generations remain readable.
+
+### Deliberate limits
+
+- This is not a general XML DOM, namespace, XPath/XQuery, DTD/entity/schema, XInclude, import, code-generation, configuration, or runtime model. It excludes attributes and values, text/CDATA/comments/processing instructions, namespace resolution, XML below the direct-child level, MyBatis/Spring-specific semantics, cross-file resolution, validation, and runtime behavior.
+- The inspected local CodeGraph baseline tracks generic XML at file level and has a narrower MyBatis-specific XML path. SymbolLattice v0.89 independently adds parser-backed generic root/direct-child source ranges and containment evidence, but does not claim MyBatis parity or copy CodeGraph source.
+
 ## [0.88.0] - 2026-07-31
 
 ### Added

@@ -219,6 +219,10 @@ describe("source discovery", () => {
     expect(getSourceLanguage("config/application.yml")).toBe("yaml");
   });
 
+  it("recognizes the XML source extension", () => {
+    expect(getSourceLanguage("config/catalog.xml")).toBe("xml");
+  });
+
   it("discovers only source-proven Objective-C .h headers", async () => {
     const projectPath = await createProject();
     await mkdir(join(projectPath, "Headers"), { recursive: true });

@@ -14,10 +14,10 @@
 </div>
 
 > [!IMPORTANT]
-> **v0.88.0** is an early developer release. This public repository runs from source; its npm package is intentionally private and is not published to npm.
+> **v0.89.0** is an early developer release. This public repository runs from source; its npm package is intentionally private and is not published to npm.
 
 > [!NOTE]
-> **v0.88.0 — parser-proven Drupal routing YAML.** Valid `*.routing.yml` and `*.routing.yaml` files now create literal route nodes only for direct `path`, Drupal FQCN `_controller`, and static `_method` evidence; cross-file PHP controllers remain explicit unresolved targets.
+> **v0.89.0 — parser-proven XML element containment.** A well-formed `.xml` document now contributes a root `resource` plus direct-child resources with exact source ranges and containment evidence; malformed, multi-root, and DTD input remains file-only.
 
 SymbolLattice builds a local symbol graph without hiding uncertainty. It keeps syntax-proven artifact facts, resolves cross-file relationships conservatively, and records why every resolved edge exists. The graph stays local to the inspected project under `.symbol-lattice/index.sqlite`.
 
@@ -45,6 +45,7 @@ SymbolLattice builds a local symbol graph without hiding uncertainty. It keeps s
 - **Nix declaration and import-syntax evidence** - direct bindings of returned literal attribute sets, direct `let ... in` bindings, simple `inherit` names, and literal project-relative `import` expressions become auditable symbols or explicit pending import references without claiming evaluation or module-target resolution.
 - **VB.NET declaration and Imports-syntax evidence** - complete `Namespace`, primary type containers, direct `Sub` / `Function` declarations, and simple unaliased file-level `Imports` statements become auditable symbols or explicit pending import references without claiming CLR/project resolution.
 - **YAML scalar-key and Drupal route evidence** - a valid single YAML document can contribute source-ranged top-level scalar mapping keys as auditable variables; direct Drupal routing YAML may additionally contribute literal route nodes with explicit unresolved controller evidence. Other nested structures and YAML features remain outside the graph.
+- **XML element containment evidence** - a well-formed, DTD-free `.xml` document contributes its root and direct child elements as source-ranged `resource` symbols. Attributes, text, namespaces, XPath, schemas, and deeper elements remain intentionally unmodeled.
 - **Non-HTTP and UI transport evidence** - AST-proven NestJS GraphQL, microservice, and WebSocket entrypoints, plus direct ArkUI UI roots, use distinct `entrypoint` nodes and exact `handles` edges, so a message pattern, subscription, or UI root is never mislabeled as an HTTP route.
 - **Direct type-hierarchy evidence** - AST-proven `extends` and `implements` edges preserve value/type namespace proof, type-only imports, re-export provenance, unresolved bases, and bounded direct parent/child views without pretending to have a full type checker.
 - **Bounded context packs** - ordered symbol references produce persisted source, capped relationship/impact summaries, and static directed evidence paths without guessing ambiguous symbols or dynamic behavior.
@@ -159,7 +160,7 @@ One-shot data commands emit stable, pretty JSON. `watch` is the deliberate strea
 
 ## Capabilities
 
-| Area | v0.88.0 behavior |
+| Area | v0.89.0 behavior |
 | --- | --- |
 | Objective-C / Objective-C++ | Objective-C `.m`, Objective-C++ `.mm`, and source-proven Objective-C `.h` files are indexed as `objc`. A header requires a direct `@interface` or `@protocol` and later `@end` after comments, literals, and preprocessor directives are blanked; normal C/C++ headers are skipped. Complete direct ordinary interface, protocol, and implementation blocks emit exact local contains evidence. Interfaces and protocols contribute one-line semicolon-terminated method declarations; implementations contribute one-line brace-bodied methods. A same-file interface plus implementation becomes one class symbol, with implementation evidence preferred for a matching selector. Categories/extensions, properties, inheritance edges, imports, calls, and Swift bridging remain outside this slice. |
 | Horse v0.82 | Pascal Horse accepts direct main-program Get, Post, Put, Patch, Delete, and Head literal registrations only after the same strict proof conditions. Options and all other verbs remain excluded. |
@@ -169,6 +170,7 @@ One-shot data commands emit stable, pretty JSON. `watch` is the deliberate strea
 | Zig v0.85 | `.zig` files retain direct top-level named `struct`, `enum`, `union`, and `opaque` containers as class symbols plus direct named `fn` declarations as function symbols. `pub` and `export fn` visibility is preserved, and every containment edge has an explicit Zig syntax rule ID. |
 | YAML v0.87 | `.yaml` and `.yml` files use a full YAML document parser. A valid single document contributes only source-ranged, untagged, unanchored top-level scalar mapping keys as `variable` symbols, each with exact `syntax.yaml.top-level-scalar-mapping` evidence. |
 | Drupal v0.88 | A parser-valid single-document `*.routing.yml` or `*.routing.yaml` file can contribute `route` symbols only for direct slash-prefixed literal `path`, direct `defaults._controller` in `\Drupal\…\Class::method` form, and either a literal uppercase pipe-separated `requirements._method` set or no method requirement (`ALL`). The controller target remains a visible unresolved `routes` edge; service controllers, forms, hooks, aliases, tags, anchors, malformed requirements, multi-document input, and PHP cross-file resolution are excluded. |
+| XML v0.89 | A well-formed, DTD-free `.xml` document adds a root `resource` plus direct-child `resource` symbols with complete element ranges and exact `syntax.xml.root-element` / `syntax.xml.direct-child-element` containment evidence. Attributes, values, text, namespace resolution, XPath, schemas, and elements below the direct-child level are deliberately excluded. |
 | Source files | TypeScript, TSX, JavaScript, JSX, ArkTS/ArkUI, Vue SFC, Svelte SFC, Astro SFC, Razor/Blazor components, Terraform/OpenTofu HCL, Shopify Liquid, Twig, Laravel Blade, Solidity, CFML/CFScript, Nix, VB.NET, Python, Go, Rust, Java, PHP, C, COBOL, Zig, YAML, Lua, Luau, Pascal, Objective-C / Objective-C++, R, Elixir, Erlang, Clojure, Perl, Julia, Haskell, OCaml, F#, Nim, C++, C#, Ruby, Kotlin, Swift, Dart, and Scala (`.ets`, `.vue`, `.svelte`, `.astro`, `.razor`, `.tf`, `.tfvars`, `.tofu`, `.liquid`, `.twig`, `.blade.php`, `.sol`, `.cfc`, `.cfm`, `.cfs`, `.nix`, `.vb`, `.c`, `.cbl`, `.cob`, `.cobol`, `.cpy`, `.zig`, `.yaml`, `.yml`, `.lua`, `.luau`, `.pas`, `.dpr`, `.dpk`, `.lpr`, `.m`, `.mm`, source-proven `.h`, `.r`, `.ex`, `.exs`, `.erl`, `.clj`, `.pl`, `.pm`, `.jl`, `.hs`, `.ml`, `.fs`, `.nim`, `.cpp`, `.cc`, `.cxx`, `.hpp`, `.hh`, `.hxx`, `.cs`, `.rb`, `.kt`, `.swift`, `.dart`, `.scala`; plus Play `conf/routes` and `conf/*.routes` route tables) |
 | F# + Giraffe | Direct top-level typed `HttpFunc` / `HttpContext` handlers plus exactly one `open Giraffe` proof and a direct literal `choose [` route table. Fixed HTTP verbs and plain `route "/..."` entries become exact same-file or explicit unresolved route evidence. |
 | Nim + Jester | Direct top-level zero-argument `proc` handlers plus exactly one direct `import` list containing `jester`, then a flat `routes:` or `router name:` literal route block. Fixed lowercase HTTP verbs become exact same-file or explicit unresolved route evidence. |
@@ -440,6 +442,23 @@ example.catalog:
 This yields `GET /catalog` and `POST /catalog` route nodes. The source controller spelling is retained on each `routes` edge as `framework.drupal.routing-yaml.literal-controller.unresolved-controller-method`; it is deliberately unresolved until a later version has a namespace-aware PHP controller proof. With no direct `requirements._method`, the route is represented as `ALL`.
 
 The accepted shape excludes service controller syntax (`service_id:method`), `_form`, `_entity_form`, hooks, dynamic route providers, duplicate or malformed requirements, aliases, anchors, tags, block/multiline scalars, multi-document streams, path normalization, PHP autoload resolution, compilation, and runtime routing behavior. This keeps a declarative YAML route visible without fabricating a controller edge.
+
+#### XML element containment
+
+v0.89 adds `.xml` discovery and an event-parser-validated, source-ranged XML slice using [saxes](https://www.npmjs.com/package/saxes). A well-formed document contributes the root element and only its direct child elements as `resource` symbols:
+
+```xml
+<catalog>
+  <item id="first"/>
+  <section>
+    <entry>not indexed independently</entry>
+  </section>
+</catalog>
+```
+
+The example produces `catalog[0]`, `catalog[0]/item[0]`, and `catalog[0]/section[0]` under `config/catalog.xml#xml-element:`. The root uses `syntax.xml.root-element`; each direct child uses `syntax.xml.direct-child-element`. Their ranges cover each complete element, while attribute values and text never become symbols or edges.
+
+This is deliberately not a DOM, schema, XPath, namespace, configuration, import, code-generation, or runtime model. DTD-bearing input is rejected so no entity or schema semantics enter the graph. Malformed or multi-root XML also retains only its file symbol; nested grandchildren, processing instructions, comments, CDATA, and namespace declarations never create extra facts.
 
 #### Pascal
 
@@ -2421,6 +2440,8 @@ v0.87 adds `.yaml` and `.yml` discovery plus parser-proven single-document top-l
 
 v0.88 adds the `drupal` framework capability plus parser-proven direct Drupal routing YAML facts. The artifact extractor advances to `multi-language-ast-v77`; the resolver remains `project-resolver-v23` because accepted route nodes and explicit unresolved controller edges are file-local. A pre-v0.88 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes Drupal-route-capable facts. Existing generations remain readable.
 
+v0.89 adds `.xml` discovery plus parser-proven root and direct-child `resource` containment. The artifact extractor advances to `multi-language-ast-v78`; the resolver remains `project-resolver-v23` because the XML facts are file-local. A pre-v0.89 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes XML-capable facts. Existing generations remain readable.
+
 ## Architecture
 
 ```mermaid
@@ -2462,13 +2483,15 @@ src/
 
 ## Deliberate boundaries
 
-v0.88.0 does not yet provide:
+v0.89.0 does not yet provide:
 
 - The COBOL surface proves exactly one direct `IDENTIFICATION DIVISION.`, `PROGRAM-ID. name.`, and `PROCEDURE DIVISION.` sequence, then only direct free-format or fixed-format Area-A Procedure Division paragraph labels. It excludes data items/sections/declaratives, `PERFORM` / `CALL`/control-flow relationships, copy expansion, nested programs, `PROCEDURE DIVISION USING`, compiler/source-format directives, dialect-specific grammar, project or copybook resolution, compilation, and runtime behavior. Fixed-format comment lines, `*>` comments, and complete quoted literals are masked; incomplete literals, duplicate declarations, and missing required divisions retain only a file symbol.
 
 - The Zig surface proves only direct top-level named `struct`, `enum`, `union`, and `opaque` containers plus named `fn` declarations from a balanced source file. It masks line comments, quoted literals, and line-oriented multiline string literal lines; it excludes imports, calls, variables, tests, nested methods, anonymous/computed containers, aliases, `usingnamespace`, cross-file/package/build resolution, compiler validation, and runtime behavior. Any unbalanced delimiter or unterminated quoted literal retains only a file symbol.
 
 - The YAML surface requires one parser-valid document with a top-level mapping. Generic YAML emits only source-ranged untagged/unanchored scalar-key/scalar-value pairs that stay on one line. The Drupal exception accepts only `*.routing.yml` / `*.routing.yaml` direct literal slash-prefixed `path`, a Drupal FQCN `Class::method` `_controller`, and a direct uppercase pipe-separated `_method` requirement (or no method requirement as `ALL`); its target is explicitly unresolved. It excludes service/form/entity handlers, hooks, route providers, aliases, anchors, tags, block scalars, complex keys, multi-document streams, configuration merging, schema validation, imports, calls, PHP namespace/autoload resolution, deployment behavior, and runtime values. Parser errors retain only a file symbol.
+
+- The XML surface requires one well-formed, DTD-free document. It emits only a root `resource` and its direct child element resources, with source ranges spanning complete elements and exact syntax containment evidence. It excludes attributes and attribute values, text/CDATA/comment/processing-instruction facts, namespace resolution, XPath/XQuery, DTD/entity/schema processing, XInclude, imports, generic XML configuration semantics, generated-source semantics, nested descendants, cross-file resolution, validation, and runtime behavior. Parser errors, multiple roots, or DTD input retain only a file symbol.
 
 - Daemon mode, background automatic sync after the foreground process exits, cross-process watch coordination, MCP per-query pending-file banners, worker pools, or historical source browsing.
 - pnpm workspace YAML, TypeScript project references, external/package `extends`, or nested `.gitignore` semantics.
@@ -2605,10 +2628,12 @@ v0.88.0 does not yet provide:
 | `v0.86.0` | Go Echo v4/v5 direct import and `app := echo.New()` proof, literal App/Group methods with nested same-function prefix composition, unique same-file package-level handlers, persisted route querying, and dynamic/shadow/middleware/`Match`/rebind rejection |
 | `v0.87.0` | YAML `.yaml` / `.yml` discovery, parser-proven single-document source-ranged top-level untagged/unanchored scalar mapping-key variables, persisted source search, and malformed/multi-document/nested/alias/tag rejection |
 | `v0.88.0` | Drupal `*.routing.yml` / `*.routing.yaml` parser-proven direct literal path/FQCN controller route nodes, static `_method` filtering or `ALL`, explicit unresolved controller edges, persisted route querying, and service/form/hook/alias/anchor/tag/multi-document rejection |
+| `v0.89.0` | XML `.xml` discovery, parser-proven root and direct-child `resource` containment with complete element ranges, persisted source search, and malformed/multiple-root/DTD/nested-descendant rejection |
 | `v0.85+` | Zig grammar/compiler validation, imports/calls/variables/test declarations, nested container methods, anonymous/comptime/alias/`usingnamespace` forms, module/package/build resolution, type inference, and runtime analysis |
 | `v0.84+` | Fiber constructor configuration, `Use` / `Route` / `RouteChain`, mounted sub-apps, group middleware, automatic `HEAD`, handler adapters, group and cross-file composition, Go modules/packages, compiler validation, and runtime route analysis |
 | `v0.86+` | Echo route/group middleware, `Match`, `File` / static helpers, parameter/wildcard semantics, handler adapters, group and cross-file composition, Go modules/packages, compiler validation, and runtime route analysis |
 | `v0.88+` | Namespace-aware PHP controller matching for Drupal routes, service/form/entity/hook/dynamic route-provider support, YAML source kinds beyond the bounded scalar/route shapes, aliases/anchors/tags/merge semantics, complex keys and block scalars, schema validation, configuration references, Kubernetes/Compose/CI framework packs, cross-file configuration resolution, deployment semantics, and runtime analysis |
+| `v0.89+` | XML attributes/text/CDATA/comment/processing-instruction facts, namespace resolution, XPath/XQuery, DTD/entity/schema/XInclude processing, deeper descendants, MyBatis/Spring or other framework-specific XML semantics, imports, code generation, cross-file configuration resolution, validation, and runtime analysis |
 | `v0.83+` | COBOL grammar/compiler validation, data and section declarations, `PERFORM` / `CALL` relationships, copybook and nested-program resolution, source-format directives, dialect configurations, CICS/SQL/JCL surfaces, project resolution, and runtime analysis |
 | `v0.81+` | Objective-C categories/extensions, properties, inheritance and protocol-conformance relationships, imports/message calls, Swift bridge resolution, compiler proof, Git change-set header attribution, and runtime analysis |
 | `v0.76+` | Pascal grammar validation, `.dfm` / `.fmx` form surfaces, interface/type/class/unit/uses/call relations, local/constructor/destructor/operator/generic/overload forms, project/package resolution, broad Horse/Brook/WebBroker and VCL/FMX/Lazarus framework facts, compiler proof, and runtime analysis |
@@ -2655,6 +2680,8 @@ Go coverage includes `.go` discovery, persisted source search and CLI/MCP langua
 Zig coverage includes `.zig` discovery, persisted source search and CLI/MCP language filters, direct balanced top-level named `struct` / `enum` / `union` / `opaque` container containment, direct named `fn` containment, `pub` / `export fn` visibility, comment/quoted/multiline-string masking, and malformed/nested/computed declaration rejection. It emits no import, call, route, type, module, compiler, or runtime claim.
 
 YAML coverage includes `.yaml` / `.yml` discovery, parser-validated single-document input, persisted source search and CLI/MCP language filters, source-ranged top-level untagged/unanchored scalar mapping-key containment, parser-proven direct Drupal `*.routing.yml` / `*.routing.yaml` route nodes with explicit unresolved FQCN controller evidence, static `_method` filtering, nested collection exclusion outside that narrow framework shape, malformed/multi-document fail-closed behavior, and no generic import, call, schema, merge, PHP cross-file controller, deployment, or runtime claim.
+
+XML coverage includes `.xml` discovery, event-parser-validated root and direct-child resource containment, complete source ranges, persisted source search and CLI/MCP language filters, DTD/malformed/multiple-root fail-closed behavior, and no attribute/text/namespace/XPath/schema/import/cross-file/runtime claim.
 
 Rust coverage includes `.rs` discovery, persisted source search and CLI/MCP language filters, conservative top-level function containment, direct/default-or-aliased Axum `Router::new()` literal route-builder chains, imported `get` / `post` / `put` / `patch` / `delete` / `head` / `options` / `trace` method routers, dynamic/shadow/inline/composition/wrapper rejection, malformed-source fail-closed behavior, and exact route-query integration.
 

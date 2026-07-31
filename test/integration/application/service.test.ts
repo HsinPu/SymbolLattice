@@ -8073,4 +8073,53 @@ describe("SymbolLatticeService", () => {
       { filePath: "modules/custom/example/example.routing.yml", language: "yaml" }
     ]);
   });
+
+  it("indexes parser-proven XML element resources and retains XML source-search filtering", async () => {
+    const projectPath = await createInlineProject({
+      "config/catalog.xml": [
+        "<catalog>",
+        '  <item id="first"/>',
+        "  <section>",
+        "    <entry>hidden</entry>",
+        "  </section>",
+        "</catalog>"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    const indexed = await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+    const search = await service.search(projectPath, "section", { language: "xml" });
+    const persistedFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "config/catalog.xml");
+    const catalog = await service.find(projectPath, "config/catalog.xml#xml-element:catalog[0]");
+    const section = await service.find(projectPath, "config/catalog.xml#xml-element:catalog[0]/section[0]");
+
+    expect(indexed).toMatchObject({
+      stale: false,
+      counts: { files: 1, symbols: 4, edges: 3 }
+    });
+    expect(persistedFacts).toMatchObject({
+      language: "xml",
+      extractorVersion: ARTIFACT_FACTS_EXTRACTOR_VERSION
+    });
+    expect(catalog.symbols).toContainEqual(
+      expect.objectContaining({
+        kind: "resource",
+        qualifiedName: "config/catalog.xml#xml-element:catalog[0]",
+        isExported: true
+      })
+    );
+    expect(section.symbols).toContainEqual(
+      expect.objectContaining({
+        kind: "resource",
+        qualifiedName: "config/catalog.xml#xml-element:catalog[0]/section[0]",
+        isExported: false
+      })
+    );
+    expect(routes.routes).toEqual([]);
+    expect(search.results).toMatchObject([{ filePath: "config/catalog.xml", language: "xml" }]);
+  });
 });
