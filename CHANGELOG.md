@@ -6,6 +6,22 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.114.0] - 2026-07-31
+
+### Added
+
+- Rust route extraction now recognizes one strict Actix Web `App::new()` builder surface: contiguous literal `.route("/path", web::METHOD().to(handler))` calls and directly mounted `web::resource("/path")` chains with literal `web::METHOD().to(handler)` or `.to(handler)` handlers. `App` and `web` must be direct, unambiguous `actix_web` imports; aliases are supported.
+- Builder routes retain exact syntax evidence: `framework.actix-web.direct-app.route.literal-path.local-function` for app-level routes and `framework.actix-web.direct-app.web-resource.literal-path.local-function` for mounted resources. The direct resource `.to(handler)` form is retained as `ALL`.
+
+### Compatibility
+
+- The artifact facts extractor advances to `multi-language-ast-v98`. Existing indexes remain readable; the next explicit `sync` or fresh `init` safely re-extracts Rust facts. No graph-schema migration or CLI/MCP contract change is required.
+
+### Comparison notes
+
+- CodeGraph's checked Rust resolver recognizes Actix resource and app builder forms through permissive text patterns. This independent SymbolLattice slice adds a narrower AST-backed version that proves direct imports, an unshadowed contiguous `App::new()` receiver, static paths, a directly mounted resource, and one same-file named handler.
+- CodeGraph remains ahead in daemon lifecycle, socket/PID registry, cross-client coordination, worker-pool concurrency, and broader semantic resolution. v0.114 improves route-analysis parity and traceability, not daemon parity.
+
 ## [0.113.0] - 2026-07-31
 
 ### Added

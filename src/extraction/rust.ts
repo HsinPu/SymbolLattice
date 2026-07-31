@@ -46,10 +46,21 @@ interface StaticRustAttributeRouteImport {
   readonly ruleId: string;
 }
 
+interface StaticActixWebResourceChain {
+  readonly path: string;
+  readonly routes: readonly StaticRustRoute[];
+}
+
 const AXUM_ROUTER_PATH = "axum::Router";
+const ACTIX_WEB_APP_PATH = "actix_web::App";
+const ACTIX_WEB_WEB_PATH = "actix_web::web";
 const AXUM_ROUTE_RULE_ID = "framework.axum.direct-router.route.local-function";
 const ACTIX_WEB_ATTRIBUTE_ROUTE_RULE_ID =
   "framework.actix-web.attribute-route.literal-path.local-function";
+const ACTIX_WEB_APP_ROUTE_RULE_ID =
+  "framework.actix-web.direct-app.route.literal-path.local-function";
+const ACTIX_WEB_RESOURCE_ROUTE_RULE_ID =
+  "framework.actix-web.direct-app.web-resource.literal-path.local-function";
 const ROCKET_ATTRIBUTE_ROUTE_RULE_ID =
   "framework.rocket.attribute-route.literal-path.local-function";
 
@@ -72,6 +83,15 @@ const RUST_ATTRIBUTE_ROUTE_METHODS: Readonly<Record<string, RouteMethod>> = {
   delete: "DELETE",
   head: "HEAD",
   options: "OPTIONS"
+};
+
+const ACTIX_WEB_BUILDER_METHODS: Readonly<Record<string, RouteMethod>> = {
+  get: "GET",
+  post: "POST",
+  put: "PUT",
+  patch: "PATCH",
+  delete: "DELETE",
+  head: "HEAD"
 };
 
 const RUST_ATTRIBUTE_ROUTE_IMPORTS = [
@@ -319,6 +339,35 @@ function staticRustAttributeRouteAliases(
     }
   }
   return aliases;
+}
+
+function staticActixWebImportAliases(input: RustExtractFileFactsInput, root: RustSyntaxNode): {
+  readonly appAliases: ReadonlySet<string>;
+  readonly webAliases: ReadonlySet<string>;
+} {
+  const imports = staticTopLevelUseImports(input, root);
+  const pathsByLocalName = new Map<string, string[]>();
+  for (const imported of imports) {
+    const paths = pathsByLocalName.get(imported.localName) ?? [];
+    paths.push(imported.path);
+    pathsByLocalName.set(imported.localName, paths);
+  }
+  const isUnambiguous = (imported: StaticRustUseImport): boolean => {
+    const paths = pathsByLocalName.get(imported.localName) ?? [];
+    return paths.length === 1 && paths[0] === imported.path;
+  };
+  return {
+    appAliases: new Set(
+      imports
+        .filter((imported) => imported.path === ACTIX_WEB_APP_PATH && isUnambiguous(imported))
+        .map((imported) => imported.localName)
+    ),
+    webAliases: new Set(
+      imports
+        .filter((imported) => imported.path === ACTIX_WEB_WEB_PATH && isUnambiguous(imported))
+        .map((imported) => imported.localName)
+    )
+  };
 }
 
 function boundIdentifierNames(
@@ -598,6 +647,218 @@ function staticAxumRouteChain(
   ];
 }
 
+function staticActixWebAppNew(
+  input: RustExtractFileFactsInput,
+  node: RustSyntaxNode,
+  appAliases: ReadonlySet<string>,
+  shadowedNames: ReadonlySet<string>
+): boolean {
+  const call = staticCall(node);
+  const arguments_ = call === null ? null : staticArguments(call.arguments_);
+  const segments = call === null ? null : staticPathSegments(input, call.callee);
+  if (arguments_ === null || segments === null || arguments_.length !== 0 || segments.length !== 2) {
+    return false;
+  }
+  const appName = segments[0];
+  return appName !== undefined && appAliases.has(appName) && !shadowedNames.has(appName) && segments[1] === "new";
+}
+
+function staticActixWebMethodTo(
+  input: RustExtractFileFactsInput,
+  node: RustSyntaxNode,
+  webAliases: ReadonlySet<string>,
+  shadowedNames: ReadonlySet<string>
+): { readonly method: RouteMethod; readonly handlerName: string } | null {
+  const toCall = staticFieldCall(input, node);
+  if (toCall === null || toCall.methodName !== "to" || toCall.arguments_.length !== 1) {
+    return null;
+  }
+  const handler = toCall.arguments_[0];
+  const handlerName = handler === undefined ? null : identifierText(input, handler);
+  const methodCall = staticCall(toCall.receiver);
+  const methodArguments = methodCall === null ? null : staticArguments(methodCall.arguments_);
+  const segments = methodCall === null ? null : staticPathSegments(input, methodCall.callee);
+  if (
+    handlerName === null ||
+    methodArguments === null ||
+    segments === null ||
+    methodArguments.length !== 0 ||
+    segments.length !== 2
+  ) {
+    return null;
+  }
+  const webName = segments[0];
+  const methodName = segments[1];
+  if (webName === undefined || methodName === undefined || shadowedNames.has(webName)) {
+    return null;
+  }
+  const method = ACTIX_WEB_BUILDER_METHODS[methodName];
+  return method === undefined || !webAliases.has(webName) ? null : { method, handlerName };
+}
+
+function staticActixWebResource(
+  input: RustExtractFileFactsInput,
+  node: RustSyntaxNode,
+  webAliases: ReadonlySet<string>,
+  shadowedNames: ReadonlySet<string>
+): string | null {
+  const call = staticCall(node);
+  const arguments_ = call === null ? null : staticArguments(call.arguments_);
+  const segments = call === null ? null : staticPathSegments(input, call.callee);
+  const pathNode = arguments_?.[0];
+  const path = pathNode === undefined ? null : staticLiteralSlashPath(input, pathNode);
+  if (
+    arguments_ === null ||
+    segments === null ||
+    arguments_.length !== 1 ||
+    segments.length !== 2 ||
+    path === null
+  ) {
+    return null;
+  }
+  const webName = segments[0];
+  return webName === undefined || !webAliases.has(webName) || shadowedNames.has(webName) || segments[1] !== "resource"
+    ? null
+    : path;
+}
+
+/**
+ * Proves only a contiguous `web::resource("/path").route(web::get().to(handler))`
+ * chain. The resource must later be attached directly to one proven `App::new()`
+ * chain before these facts can enter the graph.
+ */
+function staticActixWebResourceChain(
+  input: RustExtractFileFactsInput,
+  node: RustSyntaxNode,
+  webAliases: ReadonlySet<string>,
+  shadowedNames: ReadonlySet<string>
+): StaticActixWebResourceChain | null {
+  const resourcePath = staticActixWebResource(input, node, webAliases, shadowedNames);
+  if (resourcePath !== null) {
+    return { path: resourcePath, routes: [] };
+  }
+  const call = staticFieldCall(input, node);
+  if (call === null || call.arguments_.length !== 1) {
+    return null;
+  }
+  const preceding = staticActixWebResourceChain(input, call.receiver, webAliases, shadowedNames);
+  if (preceding === null) {
+    return null;
+  }
+  if (call.methodName === "route") {
+    const routeHandler = call.arguments_[0];
+    const methodRoute =
+      routeHandler === undefined
+        ? null
+        : staticActixWebMethodTo(input, routeHandler, webAliases, shadowedNames);
+    if (methodRoute === null) {
+      return null;
+    }
+    return {
+      ...preceding,
+      routes: [
+        ...preceding.routes,
+        {
+          method: methodRoute.method,
+          path: preceding.path,
+          handlerName: methodRoute.handlerName,
+          node,
+          ruleId: ACTIX_WEB_RESOURCE_ROUTE_RULE_ID
+        }
+      ]
+    };
+  }
+  if (call.methodName !== "to" || preceding.routes.length !== 0) {
+    return null;
+  }
+  const handler = call.arguments_[0];
+  const handlerName = handler === undefined ? null : identifierText(input, handler);
+  if (handlerName === null) {
+    return null;
+  }
+  return {
+    ...preceding,
+    routes: [
+      {
+        method: "ALL",
+        path: preceding.path,
+        handlerName,
+        node,
+        ruleId: ACTIX_WEB_RESOURCE_ROUTE_RULE_ID
+      }
+    ]
+  };
+}
+
+/**
+ * Proves only a contiguous direct `App::new()` chain. Supported calls are a
+ * literal `.route("/path", web::METHOD().to(handler))` or `.service(...)` with
+ * one direct resource chain; scopes, wrappers, mounts, guards, and runtime
+ * composition stay out until their evidence rules are deliberately added.
+ */
+function staticActixWebAppRouteChain(
+  input: RustExtractFileFactsInput,
+  node: RustSyntaxNode,
+  appAliases: ReadonlySet<string>,
+  webAliases: ReadonlySet<string>,
+  shadowedNames: ReadonlySet<string>
+): readonly StaticRustRoute[] | null {
+  if (staticActixWebAppNew(input, node, appAliases, shadowedNames)) {
+    return [];
+  }
+  const call = staticFieldCall(input, node);
+  if (call === null) {
+    return null;
+  }
+  if (call.methodName === "route" && call.arguments_.length === 2) {
+    const pathNode = call.arguments_[0];
+    const routeHandler = call.arguments_[1];
+    const path = pathNode === undefined ? null : staticLiteralSlashPath(input, pathNode);
+    const methodRoute =
+      routeHandler === undefined
+        ? null
+        : staticActixWebMethodTo(input, routeHandler, webAliases, shadowedNames);
+    const precedingRoutes = staticActixWebAppRouteChain(
+      input,
+      call.receiver,
+      appAliases,
+      webAliases,
+      shadowedNames
+    );
+    if (path === null || methodRoute === null || precedingRoutes === null) {
+      return null;
+    }
+    return [
+      ...precedingRoutes,
+      {
+        method: methodRoute.method,
+        path,
+        handlerName: methodRoute.handlerName,
+        node,
+        ruleId: ACTIX_WEB_APP_ROUTE_RULE_ID
+      }
+    ];
+  }
+  if (call.methodName !== "service" || call.arguments_.length !== 1) {
+    return null;
+  }
+  const resourceNode = call.arguments_[0];
+  const resource =
+    resourceNode === undefined
+      ? null
+      : staticActixWebResourceChain(input, resourceNode, webAliases, shadowedNames);
+  const precedingRoutes = staticActixWebAppRouteChain(
+    input,
+    call.receiver,
+    appAliases,
+    webAliases,
+    shadowedNames
+  );
+  return resource === null || precedingRoutes === null
+    ? null
+    : [...precedingRoutes, ...resource.routes];
+}
+
 function staticStatementExpression(statement: RustSyntaxNode): RustSyntaxNode | null {
   if (statement.name === "CallExpression") {
     return statement;
@@ -612,9 +873,11 @@ function staticStatementExpression(statement: RustSyntaxNode): RustSyntaxNode | 
 /**
  * Extracts conservative Rust file facts. Axum routes require a direct import,
  * a contiguous literal route builder chain, and one unshadowed named top-level
- * function handler. Actix Web and Rocket routes require their direct imported
- * attribute macro, a literal path, and the annotated top-level handler. No type
- * checking or runtime router composition is inferred from this syntax-only adapter.
+ * function handler. Actix Web accepts direct imported HTTP attributes plus one
+ * continuous direct `App::new()` builder chain. Rocket routes require their
+ * direct imported attribute macro, a literal path, and the annotated top-level
+ * handler. No type checking or runtime router composition is inferred from this
+ * syntax-only adapter.
  */
 export function extractRustFileFacts(input: RustExtractFileFactsInput): ArtifactFacts {
   const frameworkCapabilities = [
@@ -785,6 +1048,7 @@ export function extractRustFileFacts(input: RustExtractFileFactsInput): Artifact
     }
 
     const { routerAliases, methodAliases } = staticAxumImportAliases(input, root);
+    const { appAliases, webAliases } = staticActixWebImportAliases(input, root);
     for (const functionDeclaration of functions) {
       const visibleRouterAliases = new Set(
         [...routerAliases].filter((alias) => !functionDeclaration.parameterNames.includes(alias))
@@ -792,10 +1056,16 @@ export function extractRustFileFacts(input: RustExtractFileFactsInput): Artifact
       const visibleMethodAliases = new Map(
         [...methodAliases].filter(([alias]) => !functionDeclaration.parameterNames.includes(alias))
       );
+      const visibleAppAliases = new Set(
+        [...appAliases].filter((alias) => !functionDeclaration.parameterNames.includes(alias))
+      );
+      const visibleWebAliases = new Set(
+        [...webAliases].filter((alias) => !functionDeclaration.parameterNames.includes(alias))
+      );
       const shadowedNames = new Set(functionDeclaration.parameterNames);
       for (const statement of directChildren(functionDeclaration.body)) {
         const expression = staticStatementExpression(statement);
-        const routes =
+        const axumRoutes =
           expression === null
             ? null
             : staticAxumRouteChain(
@@ -805,7 +1075,20 @@ export function extractRustFileFacts(input: RustExtractFileFactsInput): Artifact
                 visibleMethodAliases,
                 shadowedNames
               );
-        if (routes !== null) {
+        const actixWebRoutes =
+          expression === null
+            ? null
+            : staticActixWebAppRouteChain(
+                input,
+                expression,
+                visibleAppAliases,
+                visibleWebAliases,
+                shadowedNames
+              );
+        for (const routes of [axumRoutes, actixWebRoutes]) {
+          if (routes === null) {
+            continue;
+          }
           for (const route of routes) {
             if (shadowedNames.has(route.handlerName)) {
               continue;

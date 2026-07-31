@@ -8130,6 +8130,115 @@ describe("source extraction", () => {
     ]);
   });
 
+  it("extracts direct imported Actix Web App and resource builder routes with exact evidence", () => {
+    const facts = extractFileFacts({
+      filePath: "src/actix-builder.rs",
+      language: "rust",
+      sourceText: [
+        "use actix_web::{App as HttpApp, web as http};",
+        "",
+        "async fn health() {}",
+        "async fn list_users() {}",
+        "async fn create_user() {}",
+        "async fn all_methods() {}",
+        "",
+        "fn configure() {",
+        "  let app = HttpApp::new()",
+        "    .route(\"/health\", http::get().to(health))",
+        "    .service(",
+        "      http::resource(\"/users\")",
+        "        .route(http::get().to(list_users))",
+        "        .route(http::post().to(create_user))",
+        "    )",
+        "    .service(http::resource(\"/all\").to(all_methods));",
+        "}"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId,
+          edge.evidence?.stage,
+          edge.resolution,
+          edge.confidence
+        ])
+    ).toEqual([
+      [
+        "GET /health",
+        "src/actix-builder.rs#health",
+        "framework.actix-web.direct-app.route.literal-path.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "GET /users",
+        "src/actix-builder.rs#list_users",
+        "framework.actix-web.direct-app.web-resource.literal-path.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "POST /users",
+        "src/actix-builder.rs#create_user",
+        "framework.actix-web.direct-app.web-resource.literal-path.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "ALL /all",
+        "src/actix-builder.rs#all_methods",
+        "framework.actix-web.direct-app.web-resource.literal-path.local-function",
+        "syntax",
+        "exact",
+        1
+      ]
+    ]);
+  });
+
+  it("rejects unmounted, dynamic, shadowed, and wrapper Actix Web builder routes", () => {
+    const facts = extractFileFacts({
+      filePath: "src/unproven-actix-builder.rs",
+      language: "rust",
+      sourceText: [
+        "use actix_web::{App, web};",
+        "",
+        "async fn health() {}",
+        "",
+        "fn shadowed_app(App: u8) {",
+        "  let app = App::new().route(\"/shadowed-app\", web::get().to(health));",
+        "}",
+        "",
+        "fn shadowed_web(web: u8) {",
+        "  let app = App::new().route(\"/shadowed-web\", web::get().to(health));",
+        "}",
+        "",
+        "fn dynamic_path() {",
+        "  let path = \"/dynamic\";",
+        "  let app = App::new().route(path, web::get().to(health));",
+        "}",
+        "",
+        "fn unmounted_resource() {",
+        "  let resource = web::resource(\"/unmounted\").route(web::get().to(health));",
+        "}",
+        "",
+        "fn wrapped_app() {",
+        "  let app = build_app().route(\"/wrapped\", web::get().to(health));",
+        "}"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+  });
+
   it("rejects unimported, ambiguous, nonliteral, and nonfunction Rust attribute routes", () => {
     const facts = extractFileFacts({
       filePath: "src/unproven-attribute-routes.rs",

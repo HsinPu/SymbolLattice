@@ -320,7 +320,9 @@ export const FRAMEWORK_CAPABILITIES = [
     routeRegistrations: [],
     surfaces: [
       "direct imported HTTP attribute macros",
-      "literal attribute paths on direct top-level function handlers"
+      "literal attribute paths on direct top-level function handlers",
+      "direct imported App::new and web resource builder chains",
+      "literal direct app and resource routes with named local handlers"
     ]
   },
   {
