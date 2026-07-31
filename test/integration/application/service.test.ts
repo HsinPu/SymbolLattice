@@ -4454,6 +4454,71 @@ describe("SymbolLatticeService", () => {
     ]);
   });
 
+  it("indexes Rust Actix Web scoped builder routes", async () => {
+    const projectPath = await createInlineProject({
+      "src/http.rs": [
+        "use actix_web::{App as HttpApp, web as http};",
+        "",
+        "async fn health() {}",
+        "async fn list_users() {}",
+        "async fn create_user() {}",
+        "",
+        "fn configure() {",
+        "  let app = HttpApp::new().service(",
+        "    http::scope(\"/api\")",
+        "      .route(\"/health\", http::get().to(health))",
+        "      .service(http::resource(\"/users\").route(http::get().to(list_users)))",
+        "      .service(",
+        "        http::scope(\"/v1\")",
+        "          .service(http::resource(\"/users\").route(http::post().to(create_user))),",
+        "      ),",
+        "  );",
+        "}"
+      ].join("\n")
+    });
+    const service = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const getRoutes = await service.routes(projectPath, { method: "GET" });
+    const postRoutes = await service.routes(projectPath, { method: "POST" });
+
+    expect(getRoutes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "GET",
+          path: "/api/health",
+          handler: expect.objectContaining({ qualifiedName: "src/http.rs#health" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.actix-web.direct-app.web-scope.literal-path.local-function",
+              stage: "syntax"
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "GET",
+          path: "/api/users",
+          handler: expect.objectContaining({ qualifiedName: "src/http.rs#list_users" })
+        })
+      ])
+    );
+    expect(postRoutes.routes).toMatchObject([
+      {
+        method: "POST",
+        path: "/api/v1/users",
+        handler: { qualifiedName: "src/http.rs#create_user" },
+        edge: {
+          resolution: "exact",
+          evidence: {
+            ruleId: "framework.actix-web.direct-app.web-scope.literal-path.local-function",
+            stage: "syntax"
+          }
+        }
+      }
+    ]);
+  });
+
   it("indexes Java Spring Web routes and retains Java source-search filtering", async () => {
     const projectPath = await createInlineProject({
       "src/api/StatusController.java": [

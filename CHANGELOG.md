@@ -6,6 +6,22 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.115.0] - 2026-07-31
+
+### Added
+
+- Rust route extraction now recognizes one strict Actix Web `web::scope("/prefix")` builder surface inside a direct `App::new()` chain. Literal scoped `.route("/path", web::METHOD().to(handler))`, mounted `web::resource("/path")` chains, and nested static scopes compose into their effective route paths.
+- Scoped routes retain `framework.actix-web.direct-app.web-scope.literal-path.local-function` syntax evidence. Scope prefixes must be direct, unambiguous `actix_web::web` calls, slash-prefixed literals without a trailing slash except root, and all paths must lead to one same-file named handler.
+
+### Compatibility
+
+- The artifact facts extractor advances to `multi-language-ast-v99`. Existing indexes remain readable; the next explicit `sync` or fresh `init` safely re-extracts Rust facts. No graph-schema migration or CLI/MCP contract change is required.
+
+### Comparison notes
+
+- Actix Web documents scopes as prefixes that are prepended to attached resources and can nest. CodeGraph's checked Rust resolver recognizes resource and app builder text patterns but has no corresponding scope-prefix extraction in that resolver. This independent SymbolLattice slice therefore expands verified coverage beyond that checked surface while remaining deliberately narrower than runtime composition.
+- CodeGraph remains ahead in daemon lifecycle, socket/PID registry, cross-client coordination, worker-pool concurrency, and broader semantic resolution. v0.115 improves route-analysis coverage and traceability, not daemon parity.
+
 ## [0.114.0] - 2026-07-31
 
 ### Added

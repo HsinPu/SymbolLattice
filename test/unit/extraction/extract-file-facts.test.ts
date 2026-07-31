@@ -8203,6 +8203,94 @@ describe("source extraction", () => {
     ]);
   });
 
+  it("extracts direct imported Actix Web scope builder routes with exact prefixed evidence", () => {
+    const facts = extractFileFacts({
+      filePath: "src/actix-scope-builder.rs",
+      language: "rust",
+      sourceText: [
+        "use actix_web::{App as HttpApp, web as http};",
+        "",
+        "async fn health() {}",
+        "async fn list_users() {}",
+        "async fn create_user() {}",
+        "async fn all_api_methods() {}",
+        "async fn root_health() {}",
+        "",
+        "fn configure() {",
+        "  let app = HttpApp::new().service(",
+        "    http::scope(\"/api\")",
+        "      .route(\"/health\", http::get().to(health))",
+        "      .service(http::resource(\"/users\").route(http::get().to(list_users)))",
+        "      .service(",
+        "        http::scope(\"/v1\")",
+        "          .service(http::resource(\"/users\").route(http::post().to(create_user)))",
+        "          .service(http::resource(\"/all\").to(all_api_methods))",
+        "      ),",
+        "  );",
+        "}",
+        "",
+        "fn root_scope() {",
+        "  let app = HttpApp::new().service(http::scope(\"/\").route(\"/health\", http::get().to(root_health)));",
+        "}"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId,
+          edge.evidence?.stage,
+          edge.resolution,
+          edge.confidence
+        ])
+    ).toEqual([
+      [
+        "GET /api/health",
+        "src/actix-scope-builder.rs#health",
+        "framework.actix-web.direct-app.web-scope.literal-path.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "GET /api/users",
+        "src/actix-scope-builder.rs#list_users",
+        "framework.actix-web.direct-app.web-scope.literal-path.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "POST /api/v1/users",
+        "src/actix-scope-builder.rs#create_user",
+        "framework.actix-web.direct-app.web-scope.literal-path.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "ALL /api/v1/all",
+        "src/actix-scope-builder.rs#all_api_methods",
+        "framework.actix-web.direct-app.web-scope.literal-path.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "GET /health",
+        "src/actix-scope-builder.rs#root_health",
+        "framework.actix-web.direct-app.web-scope.literal-path.local-function",
+        "syntax",
+        "exact",
+        1
+      ]
+    ]);
+  });
+
   it("rejects unmounted, dynamic, shadowed, and wrapper Actix Web builder routes", () => {
     const facts = extractFileFacts({
       filePath: "src/unproven-actix-builder.rs",
@@ -8220,6 +8308,10 @@ describe("source extraction", () => {
         "  let app = App::new().route(\"/shadowed-web\", web::get().to(health));",
         "}",
         "",
+        "fn shadowed_scope_web(web: u8) {",
+        "  let app = App::new().service(web::scope(\"/shadowed-scope\").route(\"/health\", web::get().to(health)));",
+        "}",
+        "",
         "fn dynamic_path() {",
         "  let path = \"/dynamic\";",
         "  let app = App::new().route(path, web::get().to(health));",
@@ -8227,6 +8319,19 @@ describe("source extraction", () => {
         "",
         "fn unmounted_resource() {",
         "  let resource = web::resource(\"/unmounted\").route(web::get().to(health));",
+        "}",
+        "",
+        "fn unmounted_scope() {",
+        "  let scope = web::scope(\"/unmounted\").route(\"/health\", web::get().to(health));",
+        "}",
+        "",
+        "fn dynamic_scope() {",
+        "  let prefix = \"/api\";",
+        "  let app = App::new().service(web::scope(prefix).route(\"/health\", web::get().to(health)));",
+        "}",
+        "",
+        "fn trailing_scope() {",
+        "  let app = App::new().service(web::scope(\"/api/\").route(\"/health\", web::get().to(health)));",
         "}",
         "",
         "fn wrapped_app() {",

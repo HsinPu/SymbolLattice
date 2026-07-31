@@ -262,8 +262,8 @@ describe("first-party framework capabilities", () => {
       surfaces: [
         "direct imported HTTP attribute macros",
         "literal attribute paths on direct top-level function handlers",
-        "direct imported App::new and web resource builder chains",
-        "literal direct app and resource routes with named local handlers"
+        "direct imported App::new, web resource, and web scope builder chains",
+        "literal direct app, resource, and scope routes with named local handlers"
       ]
     });
     expect(frameworkCapability("rocket")).toMatchObject({
