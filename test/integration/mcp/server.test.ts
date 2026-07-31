@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import {
   type AffectedTestsResult,
+  type AutoSyncStatusResult,
   SymbolLatticeError,
   type ContextResult,
   type EntrypointsOptions,
@@ -28,6 +29,7 @@ import {
 import {
   createMcpServer,
   runAffectedTestsTool,
+  runAutoSyncStatusTool,
   runContextTool,
   runEntrypointsTool,
   runExplainEdgeTool,
@@ -98,6 +100,27 @@ function exploreResult(): ExploreResult {
 function legacyExploreResult(): ExploreResult {
   const { sourceAvailability: _sourceAvailability, ...result } = exploreResult();
   return result;
+}
+
+function autoSyncStatusResult(): AutoSyncStatusResult {
+  return {
+    index: exploreResult().status,
+    autoSync: {
+      enabled: true,
+      state: "pending",
+      watcherMode: "native-events",
+      observedAt: "2026-07-31T00:00:00.000Z",
+      lastEvent: "event-pending",
+      lastSuccessfulSyncAt: null,
+      lastSyncFailure: null,
+      eventWatchFailure: null,
+      retryDelayMs: null,
+      pendingFileCount: 1,
+      pendingFiles: ["src/changed.ts"],
+      pendingFilesTruncated: false,
+      pendingFilesUnknown: false
+    }
+  };
 }
 
 function nodeResult(): NodeResult {
@@ -728,6 +751,48 @@ describe("SymbolLattice MCP server", () => {
     expect(explainCalls).toEqual([
       { projectPath: "C:/chosen-project", edgeId: "edge:caller-callee" }
     ]);
+  });
+
+  it("exposes host-owned auto-sync health without accepting a project or mutation input", async () => {
+    let statusCalls = 0;
+    const server = createMcpServer(
+      {
+        async explore(): Promise<ExploreResult> {
+          return exploreResult();
+        },
+        async autoSyncStatus(): Promise<AutoSyncStatusResult> {
+          statusCalls += 1;
+          return autoSyncStatusResult();
+        }
+      },
+      "C:/default-project"
+    );
+    const client = new Client({ name: "symbol-lattice-auto-sync-status-test", version: "1.0.0" });
+    const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+    closeCallbacks.push(() => client.close(), () => server.close());
+
+    const tools = await client.listTools();
+    expect(tools.tools.map((tool) => tool.name)).toEqual([
+      "symbol_lattice_explore",
+      "symbol_lattice_auto_sync_status"
+    ]);
+
+    const result = await client.callTool({
+      name: "symbol_lattice_auto_sync_status",
+      arguments: {}
+    });
+    expect(result.isError).not.toBe(true);
+    expect(result.structuredContent).toMatchObject({
+      index: { stale: false, generationId: "generation:test" },
+      autoSync: {
+        state: "pending",
+        watcherMode: "native-events",
+        pendingFiles: ["src/changed.ts"]
+      }
+    });
+    expect(statusCalls).toBe(1);
   });
 
   it("registers bounded route inventory only when the service supports it", async () => {
@@ -1586,6 +1651,17 @@ describe("SymbolLattice MCP server", () => {
     expect(response.content[0]?.text).toContain("MISSING_INDEX");
   });
 
+  it("returns automatic sync status errors without indexing", async () => {
+    const response = await runAutoSyncStatusTool({
+      async autoSyncStatus(): Promise<AutoSyncStatusResult> {
+        throw new SymbolLatticeError("MISSING_INDEX", "Run symbol-lattice init first.");
+      }
+    });
+
+    expect(response).toMatchObject({ isError: true });
+    expect(response.content[0]?.text).toContain("MISSING_INDEX");
+  });
+
   it("returns exact-node errors without indexing", async () => {
     const response = await runNodeTool(
       {
@@ -1823,6 +1899,9 @@ describe("SymbolLattice MCP server", () => {
       async explainEdge(): Promise<ExplainEdgeResult> {
         return explainEdgeResult();
       },
+      async autoSyncStatus(): Promise<AutoSyncStatusResult> {
+        return autoSyncStatusResult();
+      },
       async init(): Promise<void> {
         mutationCalls.push("init");
       },
@@ -1835,6 +1914,7 @@ describe("SymbolLattice MCP server", () => {
     };
 
     await runExploreTool(service, "C:/project", { query: "missing" });
+    await runAutoSyncStatusTool(service);
     await runNodeTool(service, "C:/project", { query: "src/missing.ts#missing" });
     await runContextTool(service, "C:/project", { references: ["src/missing.ts#missing"] });
     await runAffectedTestsTool(service, "C:/project", { filePaths: ["src/missing.ts"] });

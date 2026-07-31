@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  AutoSyncStatusTracker,
   DEFAULT_WATCH_EVENT_DEBOUNCE_MS,
   DEFAULT_WATCH_INTERVAL_MS,
   MAX_WATCH_INTERVAL_MS,
@@ -179,6 +180,115 @@ function watchOptions(receipts: WatchReceipt[]): ForegroundWatchOptions {
   };
 }
 
+function receipt(
+  event: WatchReceipt["event"],
+  overrides: Partial<WatchReceipt> = {}
+): WatchReceipt {
+  return {
+    event,
+    observedAt: "2026-07-31T00:00:00.000Z",
+    projectPath: "C:/project",
+    status: status("generation:one"),
+    previousGenerationId: "generation:one",
+    generationId: "generation:one",
+    lastIndexWork: null,
+    error: null,
+    retryDelayMs: null,
+    pendingFileCount: 0,
+    pendingFiles: [],
+    pendingFilesTruncated: false,
+    pendingFilesUnknown: false,
+    ...overrides
+  };
+}
+
+describe("automatic sync status tracker", () => {
+  it("reports a disabled host without inventing a watcher lifecycle", () => {
+    const tracker = new AutoSyncStatusTracker({ enabled: false });
+
+    expect(tracker.snapshot()).toEqual({
+      enabled: false,
+      state: "disabled",
+      watcherMode: "disabled",
+      observedAt: null,
+      lastEvent: null,
+      lastSuccessfulSyncAt: null,
+      lastSyncFailure: null,
+      eventWatchFailure: null,
+      retryDelayMs: null,
+      pendingFileCount: 0,
+      pendingFiles: [],
+      pendingFilesTruncated: false,
+      pendingFilesUnknown: false
+    });
+
+    tracker.record(receipt("synced"));
+    expect(tracker.snapshot().state).toBe("disabled");
+  });
+
+  it("maps bounded receipts to fresh, pending, retry, and fallback watcher health", () => {
+    const tracker = new AutoSyncStatusTracker();
+
+    tracker.record(receipt("started"));
+    tracker.record(receipt("event-watch-active"));
+    tracker.record(
+      receipt("event-pending", {
+        pendingFileCount: 1,
+        pendingFiles: ["src/changed.ts"]
+      })
+    );
+    expect(tracker.snapshot()).toMatchObject({
+      state: "pending",
+      watcherMode: "native-events",
+      pendingFileCount: 1,
+      pendingFiles: ["src/changed.ts"]
+    });
+
+    tracker.record(receipt("stale-detected", { status: status("generation:one", true) }));
+    tracker.record(
+      receipt("sync-failed", {
+        error: { code: "INVALID_PROJECT_CONFIGURATION", message: "Temporary invalid tsconfig." },
+        retryDelayMs: 500,
+        pendingFileCount: 1,
+        pendingFiles: ["src/changed.ts"]
+      })
+    );
+    expect(tracker.snapshot()).toMatchObject({
+      state: "retrying",
+      lastSyncFailure: {
+        code: "INVALID_PROJECT_CONFIGURATION",
+        message: "Temporary invalid tsconfig."
+      },
+      retryDelayMs: 500
+    });
+
+    tracker.record(
+      receipt("synced", {
+        observedAt: "2026-07-31T00:00:02.000Z",
+        generationId: "generation:two",
+        pendingFileCount: 0,
+        pendingFiles: []
+      })
+    );
+    tracker.record(
+      receipt("event-watch-failed", {
+        error: { code: "WATCH_EVENTS_FAILED", message: "Native watcher ended." }
+      })
+    );
+    const snapshot = tracker.snapshot();
+    expect(snapshot).toMatchObject({
+      state: "fresh",
+      watcherMode: "polling-fallback",
+      lastSuccessfulSyncAt: "2026-07-31T00:00:02.000Z",
+      lastSyncFailure: null,
+      eventWatchFailure: { code: "WATCH_EVENTS_FAILED", message: "Native watcher ended." }
+    });
+
+    (snapshot.pendingFiles as string[]).push("src/consumer.ts");
+    expect(tracker.snapshot().pendingFiles).toEqual([]);
+  });
+});
+
 describe("foreground index watch", () => {
   it("checks immediately, syncs only after detected drift, and emits stable receipts", async () => {
     const scheduler = new ManualScheduler();
@@ -258,6 +368,31 @@ describe("foreground index watch", () => {
       "synced"
     ]);
     expect(scheduler.scheduledDelays).toEqual([MIN_WATCH_INTERVAL_MS]);
+
+    await session.stop();
+  });
+
+  it("emits fresh-observed when a retrying status check later recovers without pending events", async () => {
+    const scheduler = new ManualScheduler();
+    const receipts: WatchReceipt[] = [];
+    const service = new FakeWatchService([
+      new Error("Temporary status failure."),
+      status("generation:one")
+    ]);
+
+    const session = await startForegroundWatch(service, watchOptions(receipts), scheduler);
+    expect(receipts.map((item) => item.event)).toEqual(["status-failed"]);
+    expect(scheduler.scheduledDelays).toEqual([MIN_WATCH_INTERVAL_MS * 2]);
+
+    scheduler.fireNext();
+    await settle();
+
+    expect(receipts.map((item) => item.event)).toEqual(["status-failed", "fresh-observed"]);
+    expect(receipts.at(-1)).toMatchObject({
+      error: null,
+      retryDelayMs: null,
+      pendingFiles: []
+    });
 
     await session.stop();
   });
@@ -891,7 +1026,8 @@ describe("foreground index watch", () => {
     expect(source.subscribeCalls).toEqual(["C:/project"]);
     expect(receipts.map((receipt) => receipt.event)).toEqual([
       "status-failed",
-      "event-watch-active"
+      "event-watch-active",
+      "fresh-observed"
     ]);
     expect(scheduler.scheduledDelays).toEqual([1_000]);
 

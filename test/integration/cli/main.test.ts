@@ -6,6 +6,7 @@ import {
   DEFAULT_WATCH_INTERVAL_MS,
   type AffectedTestsOptions,
   type AffectedTestsResult,
+  type AutoSyncStatusResult,
   type ContextOptions,
   type ContextResult,
   type EntrypointsOptions,
@@ -1964,6 +1965,89 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
 
     expect(calls).toEqual(["watch-start", "mcp-start", "watch-stop"]);
     expect(stopped).toHaveBeenCalledTimes(1);
+  });
+
+  it("feeds watcher receipts into the MCP host's read-only auto-sync status", async () => {
+    const sync = vi.fn(async (): Promise<SearchResult["status"]> => resultStatus());
+    const getStatus = vi.fn(async (): Promise<SearchResult["status"]> => resultStatus());
+    const service = { getStatus, sync } as unknown as SymbolLatticeService;
+    const mcpSession: McpServerSession = {
+      closed: Promise.resolve(),
+      async close(): Promise<void> {}
+    };
+    let observed: AutoSyncStatusResult | null = null;
+
+    await runMcpWithAutoSync(
+      service,
+      { projectPath: "C:/chosen-project" },
+      async (receivedService): Promise<McpServerSession> => {
+        const statusService = receivedService as SymbolLatticeService & {
+          autoSyncStatus(): Promise<AutoSyncStatusResult>;
+        };
+        observed = await statusService.autoSyncStatus();
+        return mcpSession;
+      },
+      async (_receivedService, options): Promise<ForegroundWatchSession> => {
+        options.onReceipt?.({
+          event: "started",
+          observedAt: "2026-07-31T00:00:00.000Z",
+          projectPath: "C:/chosen-project",
+          status: resultStatus(),
+          previousGenerationId: "generation:test",
+          generationId: "generation:test",
+          lastIndexWork: null,
+          error: null,
+          retryDelayMs: null,
+          pendingFileCount: 0,
+          pendingFiles: [],
+          pendingFilesTruncated: false,
+          pendingFilesUnknown: false
+        });
+        options.onReceipt?.({
+          event: "event-watch-active",
+          observedAt: "2026-07-31T00:00:01.000Z",
+          projectPath: "C:/chosen-project",
+          status: resultStatus(),
+          previousGenerationId: "generation:test",
+          generationId: "generation:test",
+          lastIndexWork: null,
+          error: null,
+          retryDelayMs: null,
+          pendingFileCount: 0,
+          pendingFiles: [],
+          pendingFilesTruncated: false,
+          pendingFilesUnknown: false
+        });
+        options.onReceipt?.({
+          event: "event-pending",
+          observedAt: "2026-07-31T00:00:02.000Z",
+          projectPath: "C:/chosen-project",
+          status: resultStatus(),
+          previousGenerationId: "generation:test",
+          generationId: "generation:test",
+          lastIndexWork: null,
+          error: null,
+          retryDelayMs: null,
+          pendingFileCount: 1,
+          pendingFiles: ["src/changed.ts"],
+          pendingFilesTruncated: false,
+          pendingFilesUnknown: false
+        });
+        return { done: Promise.resolve(), async stop(): Promise<void> {} };
+      }
+    );
+
+    expect(observed).toMatchObject({
+      index: { stale: false, generationId: "generation:test" },
+      autoSync: {
+        enabled: true,
+        state: "pending",
+        watcherMode: "native-events",
+        pendingFiles: ["src/changed.ts"]
+      }
+    });
+    expect(getStatus).toHaveBeenCalledWith("C:/chosen-project");
+    expect(sync).not.toHaveBeenCalled();
   });
 
   it("serves MCP without starting a watcher when auto-sync is explicitly disabled", async () => {

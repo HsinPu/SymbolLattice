@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.106.0 is an early developer release. Run this repository from source; the npm package remains private and unpublished.
+> v0.107.0 is an early developer release. Run this repository from source; the npm package remains private and unpublished.
 
 ## Positioning
 
@@ -27,7 +27,7 @@ License: MIT.
 - Builds syntax-proven file, symbol, containment, import/export, type-hierarchy, route, entrypoint, and cross-file graph facts.
 - Creates exact edges only when the proof is direct; ambiguous candidates remain unresolved or heuristic evidence instead of runtime guesses.
 - Covers frontend, backend, JVM, scientific-computing, systems, native, data, IaC, template, and schema sources, including TypeScript, Java, Groovy, Fortran, Ada, Python, Go, Rust, C/C++, C#, PHP, Ruby, Kotlin, Swift, Dart, SQL, GraphQL, Protocol Buffers, Terraform, YAML, and XML.
-- Includes a CLI and read-only MCP queries for symbols, relationships, routes, entrypoints, generation history, diffs, and affected tests.
+- Includes a CLI and read-only MCP queries for symbols, relationships, routes, entrypoints, generation history, diffs, affected tests, and automatic-sync health.
 
 ## Quick start
 
@@ -52,13 +52,13 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 On Windows PowerShell, use `npm.cmd` when `npm` is unavailable. Filesystem roots and home directories are rejected unless `--force` is explicitly supplied.
 
-## v0.106.0 highlights
+## v0.107.0 highlights
 
-- `serve --mcp` now checks the existing index first and completes an incremental catch-up before MCP becomes available when it is stale.
-- Native filesystem events with debouncing accelerate background sync; polling remains the fallback if events are unavailable.
-- MCP tools remain read-only: the background watcher owns synchronization, and no query tool creates, indexes, or syncs a graph.
+- The new `symbol_lattice_auto_sync_status` MCP tool reports the default MCP host's live index freshness, watcher mode, sync/retry state, last errors, and bounded pending-file summary.
+- Status is derived from existing watcher receipts. The tool reads `getStatus` and a snapshot only; it never creates, indexes, or synchronizes a graph.
+- A temporary status-check failure now emits an explicit healthy recovery state, so stale retry errors do not linger after recovery.
 
-Use `--sync-interval <ms>` to tune fallback polling, `--poll` to disable native event acceleration, or `--no-auto-sync` to disable background sync. Run `init` once first; manual `sync` remains useful for repair and CI.
+Use `--sync-interval <ms>` to tune fallback polling, `--poll` to disable native event acceleration, or `--no-auto-sync` to disable background sync; the status tool reports `disabled` in that mode. Run `init` once first; manual `sync` remains useful for repair and CI.
 
 ## Deliberate limits
 
@@ -67,6 +67,7 @@ Use `--sync-interval <ms>` to tune fallback polling, `--poll` to disable native 
 - Groovy, Fortran, and Ada remain conservative first slices: only complete direct units are retained; members, cross-file, and runtime relations are not inferred, and ambiguous source is skipped.
 - The Koa, Hono, and Elysia slices cover direct receiver routes only; prefixes, mounts, nested apps, `basePath` / `group` / `use` / `route` / `on`, CommonJS, dynamic paths, and inline/member handlers are not inferred.
 - Default MCP background sync only operates on initialized projects and never changes the stored index scope. Filesystem roots and home directories still require explicit `--force`.
+- Automatic-sync status describes the current default MCP host's watcher only. It is not a cross-process daemon, centralized queue, or performance-monitoring system.
 
 ## Verification
 

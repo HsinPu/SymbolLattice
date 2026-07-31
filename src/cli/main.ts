@@ -25,12 +25,14 @@ import {
   MAX_WATCH_INTERVAL_MS,
   MIN_WATCH_INTERVAL_MS,
   MAX_IMPACT_LIMIT,
+  AutoSyncStatusTracker,
   SymbolLatticeError,
   SymbolLatticeService,
   startForegroundWatch,
   validateWatchInterval,
   type ContextOptions,
   type AffectedTestsOptions,
+  type AutoSyncStatusResult,
   type EntrypointsOptions,
   type GenerationDiffOptions,
   type GenerationHistoryOptions,
@@ -51,7 +53,11 @@ import {
 } from "../infrastructure/filesystem/index.js";
 import { FileSystemGitChangeSetProvider } from "../infrastructure/git/index.js";
 import { SqliteGraphStore } from "../infrastructure/sqlite/index.js";
-import { startMcpServer, type McpServerSession } from "../mcp/index.js";
+import {
+  startMcpServer,
+  type AutoSyncStatusService,
+  type McpServerSession
+} from "../mcp/index.js";
 import { SYMBOL_LATTICE_VERSION } from "../version.js";
 
 interface OutputOptions {
@@ -304,6 +310,33 @@ function renderWatchReceipt(receipt: WatchReceipt): void {
   process.stdout.write(`${JSON.stringify(receipt)}\n`);
 }
 
+/**
+ * Adds only a read-only watcher-health seam for one MCP host. Method calls are
+ * bound to the original service so this wrapper cannot redirect index writes.
+ */
+function withAutoSyncStatus(
+  service: SymbolLatticeService,
+  defaultProjectPath: string,
+  tracker: AutoSyncStatusTracker
+): SymbolLatticeService & AutoSyncStatusService {
+  const autoSyncStatus = async (): Promise<AutoSyncStatusResult> => ({
+    index: await service.getStatus(defaultProjectPath),
+    autoSync: tracker.snapshot()
+  });
+  return new Proxy(service, {
+    get(target, property, receiver): unknown {
+      if (property === "autoSyncStatus") {
+        return autoSyncStatus;
+      }
+      const value = Reflect.get(target, property, receiver);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+    has(target, property): boolean {
+      return property === "autoSyncStatus" || Reflect.has(target, property);
+    }
+  }) as SymbolLatticeService & AutoSyncStatusService;
+}
+
 export async function runForegroundWatch(
   service: SymbolLatticeService,
   options: ForegroundWatchOptions,
@@ -354,17 +387,24 @@ export async function runMcpWithAutoSync(
   serverRunner: McpServerRunner = startMcpServer,
   watchStarter: McpWatchStarter = startForegroundWatch
 ): Promise<void> {
+  const autoSyncEnabled = options.autoSync ?? true;
+  const tracker = new AutoSyncStatusTracker({
+    enabled: autoSyncEnabled,
+    nativeEventsRequested: options.poll !== true
+  });
+  const mcpService = withAutoSyncStatus(service, options.projectPath, tracker);
   let watchSession: ForegroundWatchSession | null = null;
   try {
-    if (options.autoSync ?? true) {
+    if (autoSyncEnabled) {
       watchSession = await watchStarter(service, {
         projectPath: options.projectPath,
         force: options.force ?? false,
         intervalMs: options.intervalMs ?? DEFAULT_WATCH_INTERVAL_MS,
-        ...(options.poll === true ? {} : { eventSource: new NodeFileSystemWatchSource() })
+        ...(options.poll === true ? {} : { eventSource: new NodeFileSystemWatchSource() }),
+        onReceipt: (receipt) => tracker.record(receipt)
       });
     }
-    const mcpSession = await serverRunner(service, options.projectPath);
+    const mcpSession = await serverRunner(mcpService, options.projectPath);
     await mcpSession.closed;
   } finally {
     if (watchSession !== null) {

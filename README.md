@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.106.0 為早期開發者版本。此儲存庫從原始碼執行；npm 套件維持私有，尚未發佈。
+> v0.107.0 為早期開發者版本。此儲存庫從原始碼執行；npm 套件維持私有，尚未發佈。
 
 ## 產品定位
 
@@ -27,7 +27,7 @@ SymbolLattice 在本機建立可查詢的程式碼符號圖譜，並保留每條
 - 以語法可證明的檔案、符號、包含關係、匯入／匯出、型別階層、路由、進入點與跨檔案關係建立圖譜。
 - 只在條件明確時建立精確邊；模糊候選保留為未解析或啟發式證據，不猜測執行期行為。
 - 支援前端、後端、JVM、科學計算、系統語言、原生語言、資料格式、IaC、模板與 schema 檔案；包含 TypeScript、Java、Groovy、Fortran、Ada、Python、Go、Rust、C/C++、C#、PHP、Ruby、Kotlin、Swift、Dart、SQL、GraphQL、Protocol Buffers、Terraform、YAML、XML 等。
-- 提供 CLI 與唯讀 MCP 查詢，可查看符號、關係、路由、進入點、版本歷史、差異與受影響測試。
+- 提供 CLI 與唯讀 MCP 查詢，可查看符號、關係、路由、進入點、版本歷史、差異、受影響測試與自動同步健康狀態。
 
 ## 快速開始
 
@@ -52,13 +52,13 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 Windows PowerShell 若找不到 `npm`，請使用 `npm.cmd`。系統預設拒絕索引檔案系統根目錄或家目錄，除非明確指定 `--force`。
 
-## v0.106.0 重點
+## v0.107.0 重點
 
-- `serve --mcp` 預設會先檢查既有索引；若已過期，會在 MCP 可用前完成一次增量同步。
-- 服務期間以原生檔案事件加去抖動加速同步；事件不可用時保留輪詢備援。
-- MCP 工具仍是唯讀：背景 watcher 擁有同步權限，任何查詢工具都不會自行建立、索引或同步圖譜。
+- 新增 MCP 工具 `symbol_lattice_auto_sync_status`：顯示預設 MCP host 的即時索引新鮮度、watcher 模式、同步／重試狀態、最後錯誤與有界待處理檔案摘要。
+- 狀態來自既有 watcher receipt；工具只讀取 `getStatus` 與快照，不會建立、索引或同步圖譜。
+- 暫時的狀態檢查失敗恢復後會明確回報健康狀態，避免持續顯示過期的重試錯誤。
 
-可用 `--sync-interval <ms>` 調整輪詢備援、`--poll` 關閉原生事件加速，或以 `--no-auto-sync` 關閉背景同步。首次使用仍需先執行 `init`；手動 `sync` 適合修復或 CI。
+可用 `--sync-interval <ms>` 調整輪詢備援、`--poll` 關閉原生事件加速，或以 `--no-auto-sync` 關閉背景同步；此時 status 工具會回報 `disabled`。首次使用仍需先執行 `init`；手動 `sync` 適合修復或 CI。
 
 ## 明確限制
 
@@ -67,6 +67,7 @@ Windows PowerShell 若找不到 `npm`，請使用 `npm.cmd`。系統預設拒絕
 - Groovy、Fortran 與 Ada 仍是保守初版：僅擷取完整直接單元，不推斷成員、跨檔案或執行期關係；遇到曖昧結構會略過。
 - Koa、Hono 與 Elysia 初版只支援直接 receiver 路由；不推斷 prefix、掛載、巢狀 app、`basePath`／`group`／`use`／`route`／`on`、CommonJS、動態路徑或內嵌／成員處理器。
 - 預設 MCP 背景同步只處理已初始化的專案，且不會改變已儲存的索引範圍；根目錄或家目錄仍需明確加上 `--force`。
+- 自動同步狀態只描述目前預設 MCP host 的 watcher，不是跨程序 daemon、集中式工作佇列或效能監控系統。
 
 ## 驗證
 

@@ -6,6 +6,24 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.107.0] - 2026-07-31
+
+### Added
+
+- `serve --mcp` now exposes the capability-gated, read-only `symbol_lattice_auto_sync_status` MCP tool. It combines the default host's live `getStatus` result with a watcher receipt snapshot: enabled state, lifecycle state, watcher mode, retry delay, last synchronization or event-watch error, and the existing bounded pending-file summary.
+- `AutoSyncStatusTracker` is a non-mutating application seam fed only by `ForegroundWatch` receipts. A CLI-owned proxy adds this one status method to the MCP host while binding every original service method to the real service, so query handlers still receive no synchronization capability. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.107.0.md`.
+- Recovery from an initial or later status-check failure now emits `fresh-observed` when the next check is healthy without a pending event. This prevents an observable MCP status from remaining in a retry state after its watcher has recovered.
+
+### Compatibility
+
+- No SQLite schema, artifact-extractor, resolver, route, or persisted graph-query contract version changes are required. Existing initialized indexes remain readable; the added MCP tool is optional for embedding services and is always present for the CLI MCP host.
+- The status tool is explicitly host-scoped and has no `projectPath` or mutation input. It only reports the MCP host's configured default project; it never initializes a project, expands index scope, indexes, or synchronizes.
+
+### Comparison notes
+
+- The local CodeGraph implementation exposes watcher state through `isWatching()` and operates a daemon with lifecycle and registry controls. SymbolLattice now gives MCP clients a concrete view of its own single-process watch health instead of requiring users to infer it from timing or stderr.
+- CodeGraph remains ahead in daemon lifecycle, cross-client coordination, worker-pool throughput, and richer operations surfaces. v0.107.0 closes the observability gap for one local MCP host; it does not claim daemon parity or copy CodeGraph source.
+
 ## [0.106.0] - 2026-07-31
 
 ### Added

@@ -4,6 +4,7 @@ import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { z } from "zod";
 
 import { SymbolLatticeError } from "../application/errors.js";
+import type { AutoSyncStatusResult } from "../application/watch.js";
 import {
   MAX_AFFECTED_CHANGED_FILES,
   MAX_AFFECTED_LIMIT,
@@ -145,6 +146,11 @@ export interface GenerationDiffService {
   ): Promise<GenerationDiffResult>;
 }
 
+/** Optional host-owned watcher-health seam for MCP processes with auto-sync enabled or disabled. */
+export interface AutoSyncStatusService {
+  autoSyncStatus(): Promise<AutoSyncStatusResult>;
+}
+
 export type ReadOnlyMcpService = ExploreService & ExplainEdgeService;
 export type NodeMcpService = ExploreService & NodeService;
 export type SearchMcpService = ExploreService & SearchService;
@@ -157,6 +163,7 @@ export type GitAffectedTestsMcpService = ExploreService & GitAffectedTestsServic
 export type GitHunksMcpService = ExploreService & GitHunksService;
 export type GenerationHistoryMcpService = ExploreService & GenerationHistoryService;
 export type GenerationDiffMcpService = ExploreService & GenerationDiffService;
+export type AutoSyncStatusMcpService = ExploreService & AutoSyncStatusService;
 
 export interface ExploreToolArguments {
   readonly query: string;
@@ -248,6 +255,8 @@ export interface GenerationDiffToolArguments {
   readonly limit?: number | undefined;
 }
 
+export interface AutoSyncStatusToolArguments {}
+
 export interface ReadOnlyToolResponse {
   readonly [key: string]: unknown;
   readonly content: {
@@ -271,6 +280,7 @@ export type EntrypointsToolResponse = ReadOnlyToolResponse;
 export type HierarchyToolResponse = ReadOnlyToolResponse;
 export type GenerationHistoryToolResponse = ReadOnlyToolResponse;
 export type GenerationDiffToolResponse = ReadOnlyToolResponse;
+export type AutoSyncStatusToolResponse = ReadOnlyToolResponse;
 
 const sourcePositionOutputSchema = z.object({
   line: z.number().int(),
@@ -309,6 +319,61 @@ const indexStatusOutputSchema = z
       pendingReferences: z.number().int().nonnegative()
     }),
     lastIndexWork: z.object({}).passthrough().optional()
+  })
+  .passthrough();
+
+const watchErrorOutputSchema = z.object({
+  code: z.string(),
+  message: z.string()
+});
+
+const autoSyncStatusOutputSchema = z
+  .object({
+    index: indexStatusOutputSchema,
+    autoSync: z.object({
+      enabled: z.boolean(),
+      state: z.enum([
+        "disabled",
+        "starting",
+        "fresh",
+        "pending",
+        "syncing",
+        "retrying",
+        "failed",
+        "stopped"
+      ]),
+      watcherMode: z.enum([
+        "disabled",
+        "starting",
+        "native-events",
+        "polling-fallback",
+        "polling-only"
+      ]),
+      observedAt: z.string().nullable(),
+      lastEvent: z
+        .enum([
+          "started",
+          "stale-detected",
+          "synced",
+          "sync-failed",
+          "status-failed",
+          "event-watch-active",
+          "event-watch-failed",
+          "event-pending",
+          "event-fresh",
+          "fresh-observed",
+          "stopped"
+        ])
+        .nullable(),
+      lastSuccessfulSyncAt: z.string().nullable(),
+      lastSyncFailure: watchErrorOutputSchema.nullable(),
+      eventWatchFailure: watchErrorOutputSchema.nullable(),
+      retryDelayMs: z.number().int().positive().nullable(),
+      pendingFileCount: z.number().int().nonnegative().nullable(),
+      pendingFiles: z.array(z.string()),
+      pendingFilesTruncated: z.boolean(),
+      pendingFilesUnknown: z.boolean()
+    })
   })
   .passthrough();
 
@@ -695,6 +760,10 @@ function supportsGenerationDiff(service: ExploreService): service is GenerationD
   return "diff" in service && typeof service.diff === "function";
 }
 
+function supportsAutoSyncStatus(service: ExploreService): service is AutoSyncStatusMcpService {
+  return "autoSyncStatus" in service && typeof service.autoSyncStatus === "function";
+}
+
 function supportsGitAffectedTests(service: ExploreService): service is GitAffectedTestsMcpService {
   return (
     "gitAffectedTestsAvailable" in service &&
@@ -726,6 +795,22 @@ function renderToolError(error: unknown): ReadOnlyToolResponse {
     content: [{ type: "text", text: message }],
     isError: true
   };
+}
+
+/** Reports host-owned watcher health and live index freshness without triggering a sync. */
+export async function runAutoSyncStatusTool(
+  service: AutoSyncStatusService,
+  _arguments: AutoSyncStatusToolArguments = {}
+): Promise<AutoSyncStatusToolResponse> {
+  try {
+    const result = await service.autoSyncStatus();
+    return {
+      content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      structuredContent: result as unknown as Record<string, unknown>
+    };
+  } catch (error) {
+    return renderToolError(error);
+  }
 }
 
 /** Builds a read-only tool result without ever triggering an index operation. */
@@ -1049,6 +1134,25 @@ export function createMcpServer(
     },
     async (arguments_) => runExploreTool(service, defaultProjectPath, arguments_)
   );
+
+  const autoSyncStatusService = supportsAutoSyncStatus(service) ? service : null;
+  if (autoSyncStatusService !== null) {
+    server.registerTool(
+      "symbol_lattice_auto_sync_status",
+      {
+        title: "Inspect SymbolLattice MCP auto-sync health",
+        description:
+          "Reports the default MCP host's live index freshness plus its background watcher state, retry information, and bounded pending-file summary. This tool only reads status; it never creates, indexes, or synchronizes a project.",
+        inputSchema: {},
+        outputSchema: autoSyncStatusOutputSchema,
+        annotations: {
+          readOnlyHint: true,
+          idempotentHint: true
+        }
+      },
+      async (arguments_) => runAutoSyncStatusTool(autoSyncStatusService, arguments_)
+    );
+  }
 
   const nodeService = supportsNode(service) ? service : null;
   if (nodeService !== null) {

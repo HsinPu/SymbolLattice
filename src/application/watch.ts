@@ -28,6 +28,7 @@ export interface WatchReceipt {
     | "event-watch-failed"
     | "event-pending"
     | "event-fresh"
+    | "fresh-observed"
     | "stopped";
   readonly observedAt: string;
   readonly projectPath: string;
@@ -49,6 +50,167 @@ export interface WatchReceipt {
   readonly pendingFilesTruncated: boolean;
   /** True when at least one pending source-change event did not identify a path. */
   readonly pendingFilesUnknown: boolean;
+}
+
+/** Coarse, user-facing state of the watcher that owns automatic synchronization. */
+export type AutoSyncState =
+  | "disabled"
+  | "starting"
+  | "fresh"
+  | "pending"
+  | "syncing"
+  | "retrying"
+  | "failed"
+  | "stopped";
+
+/** How the active watcher receives source-change notifications. */
+export type AutoSyncWatcherMode =
+  | "disabled"
+  | "starting"
+  | "native-events"
+  | "polling-fallback"
+  | "polling-only";
+
+/**
+ * Read-only snapshot of watcher health. File paths have already passed the
+ * watcher's bounded, project-relative disclosure contract.
+ */
+export interface AutoSyncStatus {
+  readonly enabled: boolean;
+  readonly state: AutoSyncState;
+  readonly watcherMode: AutoSyncWatcherMode;
+  readonly observedAt: string | null;
+  readonly lastEvent: WatchReceipt["event"] | null;
+  readonly lastSuccessfulSyncAt: string | null;
+  readonly lastSyncFailure: WatchReceipt["error"];
+  readonly eventWatchFailure: WatchReceipt["error"];
+  readonly retryDelayMs: number | null;
+  readonly pendingFileCount: number | null;
+  readonly pendingFiles: readonly string[];
+  readonly pendingFilesTruncated: boolean;
+  readonly pendingFilesUnknown: boolean;
+}
+
+/** Composes live index freshness with the watcher's non-mutating lifecycle snapshot. */
+export interface AutoSyncStatusResult {
+  readonly index: IndexStatus;
+  readonly autoSync: AutoSyncStatus;
+}
+
+export interface AutoSyncStatusTrackerOptions {
+  /** False when the MCP host was explicitly started with `--no-auto-sync`. */
+  readonly enabled?: boolean;
+  /** False when the MCP host was explicitly started with `--poll`. */
+  readonly nativeEventsRequested?: boolean;
+}
+
+/**
+ * Converts watch receipts into a stable, query-safe status snapshot.
+ *
+ * This class does not observe files, call `sync`, or mutate an index. Its only
+ * input is the receipt stream that the foreground watcher already produces.
+ */
+export class AutoSyncStatusTracker {
+  private readonly enabled: boolean;
+  private state: AutoSyncState;
+  private watcherMode: AutoSyncWatcherMode;
+  private observedAt: string | null = null;
+  private lastEvent: WatchReceipt["event"] | null = null;
+  private lastSuccessfulSyncAt: string | null = null;
+  private lastSyncFailure: WatchReceipt["error"] = null;
+  private eventWatchFailure: WatchReceipt["error"] = null;
+  private retryDelayMs: number | null = null;
+  private pendingFileCount: number | null = 0;
+  private pendingFiles: readonly string[] = [];
+  private pendingFilesTruncated = false;
+  private pendingFilesUnknown = false;
+
+  public constructor(options: AutoSyncStatusTrackerOptions = {}) {
+    this.enabled = options.enabled ?? true;
+    this.state = this.enabled ? "starting" : "disabled";
+    this.watcherMode = this.enabled
+      ? options.nativeEventsRequested === false
+        ? "polling-only"
+        : "starting"
+      : "disabled";
+  }
+
+  /** Records one watcher receipt without invoking any index or filesystem operation. */
+  public record(receipt: WatchReceipt): void {
+    if (!this.enabled) {
+      return;
+    }
+
+    this.observedAt = receipt.observedAt;
+    this.lastEvent = receipt.event;
+    this.retryDelayMs = receipt.retryDelayMs;
+    this.pendingFileCount = receipt.pendingFileCount;
+    this.pendingFiles = [...receipt.pendingFiles];
+    this.pendingFilesTruncated = receipt.pendingFilesTruncated;
+    this.pendingFilesUnknown = receipt.pendingFilesUnknown;
+
+    switch (receipt.event) {
+      case "started":
+        this.state = receipt.status?.stale === true ? "syncing" : "fresh";
+        break;
+      case "stale-detected":
+        this.state = "syncing";
+        break;
+      case "synced":
+        this.state = "fresh";
+        this.lastSuccessfulSyncAt = receipt.observedAt;
+        this.lastSyncFailure = null;
+        this.retryDelayMs = null;
+        break;
+      case "sync-failed":
+      case "status-failed":
+        this.state = receipt.retryDelayMs === null ? "failed" : "retrying";
+        this.lastSyncFailure = receipt.error;
+        break;
+      case "event-pending":
+        this.state = "pending";
+        break;
+      case "event-fresh":
+      case "fresh-observed":
+        this.state = "fresh";
+        this.lastSyncFailure = null;
+        this.retryDelayMs = null;
+        break;
+      case "event-watch-active":
+        this.watcherMode = "native-events";
+        if (this.state === "starting" || this.state === "retrying") {
+          this.state = receipt.status?.stale === true ? "syncing" : "fresh";
+        }
+        this.eventWatchFailure = null;
+        break;
+      case "event-watch-failed":
+        this.watcherMode = "polling-fallback";
+        this.eventWatchFailure = receipt.error;
+        break;
+      case "stopped":
+        this.state = "stopped";
+        break;
+    }
+  }
+
+  /** Returns a defensive copy suitable for an MCP or HTTP status response. */
+  public snapshot(): AutoSyncStatus {
+    return {
+      enabled: this.enabled,
+      state: this.state,
+      watcherMode: this.watcherMode,
+      observedAt: this.observedAt,
+      lastEvent: this.lastEvent,
+      lastSuccessfulSyncAt: this.lastSuccessfulSyncAt,
+      lastSyncFailure: this.lastSyncFailure,
+      eventWatchFailure: this.eventWatchFailure,
+      retryDelayMs: this.retryDelayMs,
+      pendingFileCount: this.pendingFileCount,
+      pendingFiles: [...this.pendingFiles],
+      pendingFilesTruncated: this.pendingFilesTruncated,
+      pendingFilesUnknown: this.pendingFilesUnknown
+    };
+  }
 }
 
 /** The narrow application surface needed by an automatic foreground sync. */
@@ -491,14 +653,26 @@ class ForegroundWatch implements ForegroundWatchSession {
     pendingReconciliation: { readonly hadPendingEvents: boolean; readonly revision: number } | null = null
   ): Promise<number | null> {
     if (!status.stale || this.stopped) {
+      const recoveredFromFailure = this.consecutiveFailures > 0;
       this.consecutiveFailures = 0;
-      if (!this.stopped && this.clearPendingAfterSuccessfulReconciliation(pendingReconciliation)) {
-        this.emit(
-          "event-fresh",
-          status,
-          statusGenerationId(status),
-          statusGenerationId(status)
-        );
+      if (!this.stopped) {
+        if (this.clearPendingAfterSuccessfulReconciliation(pendingReconciliation)) {
+          this.emit(
+            "event-fresh",
+            status,
+            statusGenerationId(status),
+            statusGenerationId(status)
+          );
+        } else if (recoveredFromFailure) {
+          // A successful polling check after a status failure is meaningful to
+          // long-lived hosts even when no source-change event was pending.
+          this.emit(
+            "fresh-observed",
+            status,
+            statusGenerationId(status),
+            statusGenerationId(status)
+          );
+        }
       }
       return this.intervalMs;
     }
