@@ -181,4 +181,141 @@ describe("Cargo workspace crate module resolution", () => {
       configurationPaths: ["Cargo.toml", "apps/server/Cargo.toml"]
     });
   });
+
+  it("resolves a shared workspace dependency only when a member explicitly inherits its local path proof", async () => {
+    const projectPath = await createProject({
+      "Cargo.toml": [
+        "[workspace]",
+        'members = ["apps/server", "crates/api-routes"]',
+        "",
+        "[workspace.dependencies]",
+        'api = { package = "api-routes", path = "crates/api-routes" }'
+      ].join("\n"),
+      "apps/server/Cargo.toml": [
+        "[package]",
+        'name = "server"',
+        "",
+        "[dependencies]",
+        'api = { workspace = true, features = ["http"], optional = false }'
+      ].join("\n"),
+      "apps/server/src/main.rs": "use api::routes::configure;",
+      "crates/api-routes/Cargo.toml": [
+        "[package]",
+        'name = "api-routes"'
+      ].join("\n"),
+      "crates/api-routes/src/lib.rs": "pub mod routes;"
+    });
+    const scan = await new FileSystemSourceCatalog().scan(projectPath);
+
+    expect(scan.moduleResolver.resolve("apps/server/src/main.rs", "api")).toEqual({
+      targetFilePath: "crates/api-routes/src/lib.rs",
+      strategy: "cargo-workspace-crate",
+      configurationPaths: [
+        "Cargo.toml",
+        "apps/server/Cargo.toml",
+        "crates/api-routes/Cargo.toml"
+      ]
+    });
+    expect(scan.moduleResolver.resolve("apps/server/src/main.rs", "api_routes")).toEqual({
+      targetFilePath: null,
+      strategy: "unresolved",
+      configurationPaths: ["Cargo.toml", "apps/server/Cargo.toml"]
+    });
+  });
+
+  it("does not resolve a shared workspace dependency without root local path proof", async () => {
+    const projectPath = await createProject({
+      "Cargo.toml": [
+        "[workspace]",
+        'members = ["apps/server", "crates/api-routes"]',
+        "",
+        "[workspace.dependencies]",
+        'api = { package = "api-routes", version = "1" }'
+      ].join("\n"),
+      "apps/server/Cargo.toml": [
+        "[package]",
+        'name = "server"',
+        "",
+        "[dependencies]",
+        'api = { workspace = true }'
+      ].join("\n"),
+      "apps/server/src/main.rs": "use api::routes::configure;",
+      "crates/api-routes/Cargo.toml": [
+        "[package]",
+        'name = "api-routes"'
+      ].join("\n"),
+      "crates/api-routes/src/lib.rs": "pub mod routes;"
+    });
+    const scan = await new FileSystemSourceCatalog().scan(projectPath);
+
+    expect(scan.moduleResolver.resolve("apps/server/src/main.rs", "api")).toEqual({
+      targetFilePath: null,
+      strategy: "unresolved",
+      configurationPaths: ["Cargo.toml", "apps/server/Cargo.toml"]
+    });
+  });
+
+  it("does not resolve a shared workspace dependency when the inherited declaration has an unsupported Cargo key", async () => {
+    const projectPath = await createProject({
+      "Cargo.toml": [
+        "[workspace]",
+        'members = ["apps/server", "crates/api-routes"]',
+        "",
+        "[workspace.dependencies]",
+        'api = { package = "api-routes", path = "crates/api-routes" }'
+      ].join("\n"),
+      "apps/server/Cargo.toml": [
+        "[package]",
+        'name = "server"',
+        "",
+        "[dependencies]",
+        'api = { workspace = true, default-features = false }'
+      ].join("\n"),
+      "apps/server/src/main.rs": "use api::routes::configure;",
+      "crates/api-routes/Cargo.toml": [
+        "[package]",
+        'name = "api-routes"'
+      ].join("\n"),
+      "crates/api-routes/src/lib.rs": "pub mod routes;"
+    });
+    const scan = await new FileSystemSourceCatalog().scan(projectPath);
+
+    expect(scan.moduleResolver.resolve("apps/server/src/main.rs", "api")).toEqual({
+      targetFilePath: null,
+      strategy: "unresolved",
+      configurationPaths: ["Cargo.toml", "apps/server/Cargo.toml"]
+    });
+  });
+
+  it("does not resolve a shared workspace dependency when its root declaration is optional", async () => {
+    const projectPath = await createProject({
+      "Cargo.toml": [
+        "[workspace]",
+        'members = ["apps/server", "crates/api-routes"]',
+        "",
+        "[workspace.dependencies]",
+        'api = { package = "api-routes", path = "crates/api-routes", optional = true }'
+      ].join("\n"),
+      "apps/server/Cargo.toml": [
+        "[package]",
+        'name = "server"',
+        "",
+        "[dependencies]",
+        'api = { workspace = true }'
+      ].join("\n"),
+      "apps/server/src/main.rs": "use api::routes::configure;",
+      "crates/api-routes/Cargo.toml": [
+        "[package]",
+        'name = "api-routes"'
+      ].join("\n"),
+      "crates/api-routes/src/lib.rs": "pub mod routes;"
+    });
+    const scan = await new FileSystemSourceCatalog().scan(projectPath);
+
+    expect(scan.moduleResolver.resolve("apps/server/src/main.rs", "api")).toEqual({
+      targetFilePath: null,
+      strategy: "unresolved",
+      configurationPaths: ["Cargo.toml", "apps/server/Cargo.toml"]
+    });
+  });
 });

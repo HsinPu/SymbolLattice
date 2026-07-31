@@ -21,6 +21,8 @@ interface LoadedCargoManifest {
 }
 
 interface CargoPathDependency {
+  /** Exact Cargo dependency key used to prove workspace-dependency inheritance. */
+  readonly dependencyName: string;
   /** Rust import spelling from the dependency key, with Cargo hyphens normalized. */
   readonly crateName: string;
   /** Package name Cargo must find at the explicit local path. */
@@ -45,6 +47,7 @@ export interface CargoWorkspaceProjectModuleResolver {
 }
 
 const RUST_CRATE_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/u;
+const CARGO_WORKSPACE_INHERITANCE_FIELDS = new Set(["workspace", "optional", "features"]);
 
 function configurationError(path: string, message: string): ProjectConfigurationError {
   return new ProjectConfigurationError(`Invalid Cargo workspace configuration at ${path}: ${message}`);
@@ -341,6 +344,11 @@ function parseTomlStringArray(value: string): readonly string[] | null {
     : strings.filter((field): field is string => field !== null);
 }
 
+function parseTomlBoolean(value: string): boolean | null {
+  const trimmed = value.trim();
+  return trimmed === "true" ? true : trimmed === "false" ? false : null;
+}
+
 function parseTomlInlineTable(value: string): ReadonlyMap<string, string> | null {
   const trimmed = value.trim();
   if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) {
@@ -386,8 +394,12 @@ async function loadPresentCargoManifest(
   };
 }
 
-function parsePathDependencies(manifest: LoadedCargoManifest): readonly CargoPathDependency[] {
-  const dependencies = manifest.sections.get("dependencies");
+function parsePathDependencies(
+  manifest: LoadedCargoManifest,
+  sectionName = "dependencies",
+  options?: { readonly rejectOptional: boolean }
+): readonly CargoPathDependency[] {
+  const dependencies = manifest.sections.get(sectionName);
   if (dependencies === undefined) {
     return [];
   }
@@ -395,6 +407,9 @@ function parsePathDependencies(manifest: LoadedCargoManifest): readonly CargoPat
   for (const [dependencyName, rawValue] of dependencies) {
     const inlineTable = parseTomlInlineTable(rawValue);
     if (inlineTable === null) {
+      continue;
+    }
+    if (options?.rejectOptional === true && inlineTable.has("optional")) {
       continue;
     }
     const rawPath = inlineTable.get("path");
@@ -412,7 +427,57 @@ function parsePathDependencies(manifest: LoadedCargoManifest): readonly CargoPat
       continue;
     }
     const absoluteTargetPath = resolve(manifest.absolutePath, "..", path);
-    result.push({ crateName, packageName, absoluteTargetPath });
+    result.push({ dependencyName, crateName, packageName, absoluteTargetPath });
+  }
+  return result.sort(
+    (left, right) =>
+      compareStableText(left.crateName, right.crateName) ||
+      compareStableText(left.absoluteTargetPath, right.absoluteTargetPath)
+  );
+}
+
+/**
+ * Cargo members can inherit a dependency only by repeating its exact
+ * workspace-dependency key with `{ workspace = true }`. Cargo permits only
+ * `optional` and additive `features` alongside that key, so every other
+ * member-side field deliberately remains unresolved.
+ */
+function parseWorkspaceInheritedPathDependencies(
+  manifest: LoadedCargoManifest,
+  workspacePathDependencies: readonly CargoPathDependency[]
+): readonly CargoPathDependency[] {
+  const dependencies = manifest.sections.get("dependencies");
+  if (dependencies === undefined || workspacePathDependencies.length === 0) {
+    return [];
+  }
+  const workspaceDependencyByName = new Map(
+    workspacePathDependencies.map((dependency) => [dependency.dependencyName, dependency])
+  );
+  const result: CargoPathDependency[] = [];
+  for (const [dependencyName, rawValue] of dependencies) {
+    const inlineTable = parseTomlInlineTable(rawValue);
+    const optional = inlineTable?.get("optional");
+    const features = inlineTable?.get("features");
+    if (
+      inlineTable === null ||
+      inlineTable.get("workspace")?.trim() !== "true" ||
+      [...inlineTable.keys()].some((field) => !CARGO_WORKSPACE_INHERITANCE_FIELDS.has(field)) ||
+      (optional !== undefined && parseTomlBoolean(optional) === null) ||
+      (features !== undefined && parseTomlStringArray(features) === null)
+    ) {
+      continue;
+    }
+    const workspaceDependency = workspaceDependencyByName.get(dependencyName);
+    const crateName = normalizeCrateName(dependencyName);
+    if (workspaceDependency === undefined || crateName === null) {
+      continue;
+    }
+    result.push({
+      dependencyName,
+      crateName,
+      packageName: workspaceDependency.packageName,
+      absoluteTargetPath: workspaceDependency.absoluteTargetPath
+    });
   }
   return result.sort(
     (left, right) =>
@@ -444,9 +509,10 @@ function packageForFile(
 
 /**
  * Resolves a Rust crate only when the importing source belongs to an explicit
- * Cargo workspace member and that member declares one direct inline-table path
- * dependency to another member. It deliberately does not infer registry,
- * workspace-inherited, glob, or transitive dependencies.
+ * Cargo workspace member and that member declares either one direct inline-table
+ * path dependency or an explicit `{ workspace = true }` inheritance from a
+ * root `[workspace.dependencies]` local path. It deliberately does not infer
+ * registry, glob, or transitive dependencies.
  */
 export async function createCargoWorkspaceProjectModuleResolver(input: {
   readonly projectPath: string;
@@ -471,6 +537,9 @@ export async function createCargoWorkspaceProjectModuleResolver(input: {
     rootInput.path,
     "cargo-workspace-root-manifest"
   );
+  const workspacePathDependencies = parsePathDependencies(rootManifest, "workspace.dependencies", {
+    rejectOptional: true
+  });
   const rawMemberValues = rootManifest.sections.get("workspace")?.get("members");
   const memberValues = rawMemberValues === undefined ? [] : parseTomlStringArray(rawMemberValues);
   if (memberValues === null) {
@@ -530,7 +599,10 @@ export async function createCargoWorkspaceProjectModuleResolver(input: {
         manifestInput: manifest.input,
         absoluteRootPath,
         relativeRootPath,
-        pathDependencies: parsePathDependencies(manifest)
+        pathDependencies: [
+          ...parsePathDependencies(manifest),
+          ...parseWorkspaceInheritedPathDependencies(manifest, workspacePathDependencies)
+        ] as readonly CargoPathDependency[]
       } satisfies CargoWorkspacePackage;
     })
     .filter((workspacePackage): workspacePackage is CargoWorkspacePackage => workspacePackage !== null)

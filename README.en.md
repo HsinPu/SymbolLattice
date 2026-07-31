@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.120.0 is an early developer release. The package is not published to npm; run it from source.
+> v0.121.0 is an early developer release. The package is not published to npm; run it from source.
 
 SymbolLattice builds a queryable local code-symbol graph for a project. Every relation keeps its source rule, resolution stage, and confidence. Source code remains in the indexed project's `.symbol-lattice/index.sqlite` and is never silently uploaded.
 
@@ -48,17 +48,17 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 On Windows PowerShell, use `npm.cmd` if `npm` is unavailable. Filesystem roots and home directories are rejected unless `--force` is explicit.
 
-## v0.120.0
+## v0.121.0
 
-- Actix Web can now project a `ServiceConfig` from another Cargo workspace crate, for example `use api_routes::routes::configure`.
-- Projection requires literal workspace membership, the target crate's `Cargo.toml`, a direct inline-table `[dependencies]` `path` dependency from the mounting crate, and every direct `mod` hop from target `src/lib.rs`; package aliases are supported.
-- The projected edge retains all three manifest inputs plus a mount-file → `lib.rs` → callback-module resolution path. Missing evidence means no projection and no suppression of the raw attribute route.
+- A root `[workspace.dependencies]` local `path` dependency can now be inherited by a member with the matching `{ workspace = true }` key; package aliases plus Cargo-permitted member `features` / `optional` modifiers are supported.
+- Cross-crate Actix Web `ServiceConfig` projection still requires literal workspace membership, root local-path proof, member opt-in, a matching target `Cargo.toml` package name, and every direct `mod` hop from target `src/lib.rs`.
+- The projected edge retains root, mounting, and target manifest evidence plus a mount-file → `lib.rs` → callback-module resolution path. A root declaration change marks the graph stale.
 
 ## Deliberate limits
 
 - This is not a compiler, type checker, framework runtime, or execution tracer.
 - Dynamic dispatch, reflection, macro expansion, code generation, dependency injection, and ambiguous names never become exact graph relations.
-- Cross-file Actix Web `ServiceConfig` support accepts only one or two direct external modules from `main.rs` / `lib.rs`. Workspace crates require literal `members`, a root package or explicit member, and an inline-table `[dependencies]` `path` dependency. Glob members, `workspace = true`, registry/transitive/dev/build dependencies, re-exports, `#[path]`, inline modules, deeper paths, closures, wrappers, dynamic callbacks, and dynamic paths remain unprojected.
+- Cross-file Actix Web `ServiceConfig` support accepts only one or two direct external modules from `main.rs` / `lib.rs`. Workspace crates require literal `members`, a root package or explicit member, plus either a direct inline-table `[dependencies]` `path` or a matching `{ workspace = true }` inheritance of a root local `[workspace.dependencies]` path. Glob members, inherited registry/transitive/dev/build dependencies, non-inline tables, target-specific sections, re-exports, `#[path]`, inline modules, deeper paths, closures, wrappers, dynamic callbacks, and dynamic paths remain unprojected.
 
 ## Verification
 

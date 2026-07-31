@@ -6,6 +6,28 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.121.0] - 2026-08-01
+
+### Added
+
+- Cargo workspace resolution now proves a second direct local dependency form: a root `[workspace.dependencies]` inline-table `path` entry inherited by an importing member through the same dependency key and `{ workspace = true }`. Root package aliases remain verified against the target member's `package.name`.
+- The resolver accepts only Cargo-permitted member-side `features` and `optional` modifiers alongside `workspace = true`; every other member-side dependency field remains unresolved. A root workspace dependency that declares `optional`, a registry-only workspace dependency, or a missing root local-path proof also remains unresolved.
+- Cross-crate Actix Web `ServiceConfig` projection now follows this inherited dependency form while retaining the root, importing, and target manifests plus the complete Rust module path in edge evidence. A root `Cargo.toml` workspace-dependency change is covered by the existing project-input fingerprint and makes the graph stale.
+
+### Compatibility
+
+- The project resolver advances to `project-resolver-v31`. Existing graphs remain readable; the next explicit `sync` or fresh `init` rebuilds projections with the new dependency proof. Artifact-fact and project-input formats are unchanged.
+
+### Deliberate limits
+
+- Cargo workspace resolution still excludes glob members, registry/transitive/dev/build inherited dependencies, non-inline dependency tables, target-specific dependency sections, custom library paths, and crates without a scanned `src/lib.rs`.
+- Cross-crate Actix projection remains limited to one or two direct module hops and literal callbacks/routes. Re-exports, `#[path]`, inline modules, macros, wrappers, closures, and dynamic paths remain unresolved.
+
+### Comparison notes
+
+- CodeGraph's checked Cargo workspace helper maps workspace member names broadly, including glob member patterns. SymbolLattice now supports a common workspace-dependency form but independently requires local-path, member opt-in, target-manifest, and Rust-module proof before creating a cross-crate route relationship.
+- CodeGraph remains ahead in daemon lifecycle, socket/PID registry, cross-client coordination, worker-pool concurrency, and broader semantic resolution. v0.121 is a verified Cargo-aware route-analysis increment, not a general parity claim.
+
 ## [0.120.0] - 2026-07-31
 
 ### Added
@@ -2206,7 +2228,8 @@ No unreleased changes.
 - Explicit full indexing, caller/callee/impact queries, and read-only MCP exploration.
 - `exact`, `heuristic`, and `unresolved` relationship states.
 
-[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.35.0...HEAD
+[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.121.0...HEAD
+[0.121.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.120.0...v0.121.0
 [0.35.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.34.0...v0.35.0
 [0.34.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.33.0...v0.34.0
 [0.33.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.32.0...v0.33.0
