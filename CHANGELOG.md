@@ -6,6 +6,28 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.119.0] - 2026-07-31
+
+### Added
+
+- Rust Actix Web `ServiceConfig` projection now accepts one nested direct module path from a crate root: `crate::api::routes::configure` or `self::api::routes::configure`. The root module and its child must each retain exactly one direct external `mod name;` fact.
+- The resolver proves each physical hop independently: `api.rs` or `api/mod.rs`, then `api/routes.rs` or `api/routes/mod.rs`. Projected edges preserve the complete root-to-callback module resolution path and use a distinct `direct-module-path` evidence rule; the existing one-module rule IDs remain stable.
+- The additive `modulePath` mount fact persists in SQLite artifact JSON. Focused coverage verifies facts, root and scope projection, both intermediate/final Rust file conventions, raw attribute-route preservation when intermediate proof is absent, and incremental mount-prefix updates that reuse unchanged nested facts.
+
+### Compatibility
+
+- The artifact facts extractor advances to `multi-language-ast-v103` and the project resolver to `project-resolver-v29`. Existing indexes remain readable; the next explicit `sync` or fresh `init` safely re-extracts Rust facts and rebuilds the projection.
+- `modulePath` is additive and optional for pre-v0.119 persisted mount facts. No graph-schema migration or CLI/MCP contract change is required.
+
+### Deliberate limits
+
+- Only one or two direct external module segments are accepted from `main.rs` or `lib.rs`. Re-exports, `#[path]`, inline modules, deeper module paths, ambiguity, dynamic composition, wrappers, and nonliteral route surfaces remain unprojected.
+
+### Comparison notes
+
+- The checked CodeGraph Rust resolver recognizes raw Actix HTTP attributes plus text patterns for `web::resource(...)` and app-level `.route(...)`. It contains no `ServiceConfig`, `.configure(...)`, or `web::scope(...)` pattern in that resolver. This independent SymbolLattice slice adds a stricter, evidence-gated cross-file static surface rather than copying CodeGraph behavior.
+- CodeGraph remains ahead in daemon lifecycle, socket/PID registry, cross-client coordination, worker-pool concurrency, and broader semantic resolution. v0.119 is a verified route-analysis increment, not a general parity claim.
+
 ## [0.118.0] - 2026-07-31
 
 ### Added

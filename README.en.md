@@ -14,16 +14,16 @@
 </div>
 
 > [!IMPORTANT]
-> v0.118.0 is an early developer release. Run it from source; the npm package is not published.
+> v0.119.0 is an early developer release. The package is not published to npm; run it from source.
 
-SymbolLattice builds a queryable local code-symbol graph and preserves the source rule, resolution stage, and confidence behind every relationship. Index data stays in the inspected project's `.symbol-lattice/index.sqlite`; source code is never silently uploaded.
+SymbolLattice builds a queryable local code-symbol graph for a project. Every relation keeps its source rule, resolution stage, and confidence. Source code remains in the indexed project's `.symbol-lattice/index.sqlite` and is never silently uploaded.
 
 ## Highlights
 
-- Extracts syntax-proven files, symbols, imports/exports, type hierarchy, routes, entrypoints, and cross-file relations.
-- Leaves ambiguous facts unresolved or heuristic rather than presenting guesses as exact graph relations.
-- Covers frontend, backend, JVM, systems, data, IaC, template, and schema languages. Rust route support includes conservative Axum, Actix Web, and Rocket extraction.
-- Provides CLI and read-only MCP queries for symbols, relations, routes, entrypoints, diffs, impact, and index status.
+- Extracts AST-proven files, symbols, imports/exports, type hierarchy, routes, entrypoints, and cross-file relations.
+- Leaves ambiguous facts unresolved or heuristic instead of presenting guesses as exact graph relations.
+- Covers frontend, backend, JVM, systems, data, IaC, template, and schema languages. Rust includes conservative Axum, Actix Web, and Rocket route analysis.
+- Provides CLI and read-only MCP queries for symbols, relations, routes, entrypoints, impact, history, diffs, and index status.
 
 ## Quick start
 
@@ -35,10 +35,10 @@ cd symbol-lattice
 npm install
 npm run build
 
-# Initialize a local graph for a project
+# Create a local graph
 node dist/cli/main.js init /path/to/project
 
-# Query it and explicitly synchronize source changes
+# Query it; explicitly synchronize when source changes
 node dist/cli/main.js routes --project /path/to/project --method GET
 node dist/cli/main.js sync /path/to/project
 
@@ -48,17 +48,17 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 On Windows PowerShell, use `npm.cmd` if `npm` is unavailable. Filesystem roots and home directories are rejected unless `--force` is explicit.
 
-## v0.118.0
+## v0.119.0
 
-- Rust Actix Web now projects cross-file `ServiceConfig` callbacks from a crate root's direct `mod routes;` plus direct `crate::routes::configure` or `self::routes::configure` import. Aliases, `routes.rs`, and `routes/mod.rs` are supported.
-- Every cross-file route carries module-stage evidence and the mount-file-to-callback-file resolution path. Exact projection requires one exported, type-proven callback and one same-module handler.
-- Root and scope prefixes, persisted facts, and attribute-route replacement are verified. A raw attribute route is replaced only after the cross-file mount proof succeeds.
+- Actix Web projects cross-file `ServiceConfig` callbacks through a direct crate-root module path: `crate::api::routes::configure` or `self::api::routes::configure`.
+- Every segment needs one direct `mod` declaration and one physical module candidate. `api.rs` / `api/mod.rs` and `routes.rs` / `routes/mod.rs` combinations are covered.
+- Projected routes retain the complete module-stage resolution chain. A raw attribute route is replaced only after that complete proof succeeds; existing one-module evidence rule IDs remain unchanged.
 
 ## Deliberate limits
 
 - This is not a compiler, type checker, framework runtime, or execution tracer.
-- Dynamic dispatch, reflection, macro expansion, code generation, dependency injection, and ambiguous name matches never become exact graph relations.
-- Actix Web accepts directly imported HTTP attribute macros and contiguous static `App::new()` `.route(...)` / `.service(...)` / `.configure(...)` chains. Cross-file `ServiceConfig` support is limited to a direct external module of `main.rs` or `lib.rs` and a direct `crate` or `self` import. Nested modules, re-exports, `#[path]`, namespace handlers, closures, guards, wrappers, dynamic callbacks or paths, and runtime composition remain intentionally unprojected.
+- Dynamic dispatch, reflection, macro expansion, code generation, dependency injection, and ambiguous names never become exact graph relations.
+- Cross-file Actix Web `ServiceConfig` support accepts only one or two direct external modules from `main.rs` / `lib.rs` and a direct `crate` / `self` import. Re-exports, `#[path]`, inline modules, paths deeper than two modules, closures, wrappers, dynamic callbacks or paths remain unprojected.
 
 ## Verification
 

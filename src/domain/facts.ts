@@ -11,13 +11,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v102";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v103";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v28";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v29";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -335,10 +335,16 @@ export interface RustActixServiceConfigDeclarationFact {
 /** The direct Actix builder surface that mounted one imported configuration callback. */
 export type RustActixImportedServiceConfigMountKind = "app" | "scope";
 
-/** A direct `crate::module::config` import mounted through App or Scope configure. */
+/**
+ * A direct `crate::module::config` import mounted through App or Scope
+ * configure. `moduleName` is the root direct module for v0.118 compatibility;
+ * `modulePath` retains one or two direct module segments when available.
+ */
 export interface RustActixImportedServiceConfigMountFact {
   readonly configurationName: string;
   readonly moduleName: string;
+  /** Omitted only by facts persisted before v0.119. */
+  readonly modulePath?: readonly string[];
   readonly prefix: string;
   readonly kind: RustActixImportedServiceConfigMountKind;
   readonly range: SourceRange;
@@ -346,7 +352,7 @@ export interface RustActixImportedServiceConfigMountFact {
 
 /**
  * Syntax-only facts used to project literal Actix Web ServiceConfig routes
- * through one directly declared Rust module in the project resolver.
+ * through one or two directly declared Rust modules in the project resolver.
  */
 export interface RustActixServiceConfigFacts {
   readonly externalModules: readonly RustActixExternalModuleFact[];

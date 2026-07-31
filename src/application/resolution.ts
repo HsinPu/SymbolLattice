@@ -1853,39 +1853,123 @@ function isRustCrateRootFile(filePath: string): boolean {
   return fileName === "main.rs" || fileName === "lib.rs";
 }
 
-/**
- * Resolves only Rust's direct external-module convention from one crate root:
- * `mod routes;` in `main.rs` or `lib.rs` maps uniquely to `routes.rs` or
- * `routes/mod.rs`. Nested modules, re-exports, path attributes, and dynamic
- * module loading deliberately remain outside this evidence model.
- */
-function resolveRustDirectExternalModule(
-  knownFilePaths: ReadonlySet<string>,
-  rootFilePath: string,
-  moduleName: string
-): string | null {
-  const normalizedRootPath = rootFilePath.replace(/\\/gu, "/");
-  if (
-    !isRustCrateRootFile(normalizedRootPath) ||
-    !/^[A-Za-z_][A-Za-z0-9_]*$/u.test(moduleName)
-  ) {
+function isRustDirectExternalModuleName(value: string): boolean {
+  return /^[A-Za-z_][A-Za-z0-9_]*$/u.test(value);
+}
+
+/** Returns the directory where one external child module of `filePath` lives. */
+function rustExternalModuleChildDirectory(filePath: string): string | null {
+  const normalizedFilePath = filePath.replace(/\\/gu, "/");
+  const parts = normalizedFilePath.split("/");
+  const fileName = parts.at(-1);
+  if (fileName === undefined) {
     return null;
   }
-  const directory = normalizedRootPath.split("/").slice(0, -1).join("/");
+  const directory = parts.slice(0, -1).join("/");
+  if (isRustCrateRootFile(normalizedFilePath) || fileName === "mod.rs") {
+    return directory;
+  }
+  if (!fileName.endsWith(".rs")) {
+    return null;
+  }
+  const moduleName = fileName.slice(0, -".rs".length);
+  if (!isRustDirectExternalModuleName(moduleName)) {
+    return null;
+  }
+  return directory === "" ? moduleName : `${directory}/${moduleName}`;
+}
+
+/** Resolves one syntax-proven Rust external module from its declaring file. */
+function resolveRustDirectExternalModule(
+  knownFilePaths: ReadonlySet<string>,
+  declaringFilePath: string,
+  moduleName: string
+): string | null {
+  if (!isRustDirectExternalModuleName(moduleName)) {
+    return null;
+  }
+  const normalizedDeclaringPath = declaringFilePath.replace(/\\/gu, "/");
+  const directory = rustExternalModuleChildDirectory(normalizedDeclaringPath);
+  if (directory === null) {
+    return null;
+  }
   const moduleBase = directory === "" ? moduleName : `${directory}/${moduleName}`;
   const candidates = [`${moduleBase}.rs`, `${moduleBase}/mod.rs`].filter((candidate) =>
     knownFilePaths.has(candidate)
   );
-  if (candidates.length !== 1 || candidates[0] === undefined || candidates[0] === normalizedRootPath) {
+  if (
+    candidates.length !== 1 ||
+    candidates[0] === undefined ||
+    candidates[0] === normalizedDeclaringPath
+  ) {
     return null;
   }
   return candidates[0];
+}
+
+/**
+ * Normalizes persisted v0.118 direct-module facts and accepts v0.119's one
+ * nested direct module path. Any malformed persisted shape remains unresolved.
+ */
+function rustActixImportedServiceConfigModulePath(
+  mount: RustActixImportedServiceConfigMountFact
+): readonly string[] | null {
+  const modulePath = mount.modulePath ?? [mount.moduleName];
+  if (
+    !Array.isArray(modulePath) ||
+    (modulePath.length !== 1 && modulePath.length !== 2) ||
+    modulePath[0] !== mount.moduleName ||
+    modulePath.some((moduleName) => !isRustDirectExternalModuleName(moduleName))
+  ) {
+    return null;
+  }
+  return [...modulePath];
+}
+
+/**
+ * Resolves every segment of a one- or two-module Actix configuration import.
+ * Each hop needs both a direct `mod name;` fact and one physical Rust module
+ * candidate, so re-exports and implicit filesystem matches cannot project a
+ * route.
+ */
+function resolveRustDirectExternalModulePath(input: {
+  readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
+  readonly knownFilePaths: ReadonlySet<string>;
+  readonly rootFilePath: string;
+  readonly modulePath: readonly string[];
+}): readonly string[] | null {
+  const rootFilePath = input.rootFilePath.replace(/\\/gu, "/");
+  if (!isRustCrateRootFile(rootFilePath)) {
+    return null;
+  }
+  const resolutionPath = [rootFilePath];
+  let declaringFilePath = rootFilePath;
+  for (const moduleName of input.modulePath) {
+    const declaringFacts = input.factsByFile.get(declaringFilePath)?.rustActixServiceConfigFacts;
+    const directModuleFacts = declaringFacts?.externalModules.filter((module) => module.name === moduleName) ?? [];
+    if (directModuleFacts.length !== 1) {
+      return null;
+    }
+    const resolvedFilePath = resolveRustDirectExternalModule(
+      input.knownFilePaths,
+      declaringFilePath,
+      moduleName
+    );
+    if (resolvedFilePath === null || resolutionPath.includes(resolvedFilePath)) {
+      return null;
+    }
+    resolutionPath.push(resolvedFilePath);
+    declaringFilePath = resolvedFilePath;
+  }
+  return resolutionPath;
 }
 
 interface ProjectedRustActixImportedServiceConfigRoute {
   readonly mountFilePath: string;
   readonly configurationFilePath: string;
   readonly mount: RustActixImportedServiceConfigMountFact;
+  readonly modulePath: readonly string[];
+  readonly resolutionPath: readonly string[];
   readonly configuration: RustActixServiceConfigDeclarationFact;
   readonly route: RustActixServiceConfigRouteFact;
   readonly callback: SymbolNode;
@@ -1913,11 +1997,13 @@ function compareProjectedRustActixImportedServiceConfigRoute(
 }
 
 function rustActixImportedServiceConfigRouteRuleId(
-  kind: RustActixImportedServiceConfigMountFact["kind"]
+  kind: RustActixImportedServiceConfigMountFact["kind"],
+  modulePath: readonly string[]
 ): string {
+  const moduleRule = modulePath.length === 1 ? "direct-module" : "direct-module-path";
   return kind === "app"
-    ? "framework.actix-web.imported-service-config.app.configure.direct-module.local-function"
-    : "framework.actix-web.imported-service-config.web-scope.configure.direct-module.local-function";
+    ? `framework.actix-web.imported-service-config.app.configure.${moduleRule}.local-function`
+    : `framework.actix-web.imported-service-config.web-scope.configure.${moduleRule}.local-function`;
 }
 
 interface RustActixImportedServiceConfigRouteProjection {
@@ -1929,9 +2015,9 @@ interface RustActixImportedServiceConfigRouteProjection {
 
 /**
  * Projects literal routes through an imported Actix Web `ServiceConfig` only
- * when the mount is a directly declared module of a Rust crate root and both
- * callback and handler resolve uniquely in that module. The route edge keeps
- * the two-file path so this stronger relationship never looks syntax-local.
+ * when every module hop is directly declared from a Rust crate root and both
+ * callback and handler resolve uniquely in the final module. The route edge
+ * retains the full resolution chain so it never looks syntax-local.
  */
 function projectRustActixImportedServiceConfigRoutes(input: {
   readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
@@ -1959,18 +2045,21 @@ function projectRustActixImportedServiceConfigRoutes(input: {
         compareStableText(left.kind, right.kind)
       );
     })) {
-      const directModuleFacts = mountFacts.externalModules.filter(
-        (module) => module.name === mount.moduleName
-      );
-      if (directModuleFacts.length !== 1) {
+      const modulePath = rustActixImportedServiceConfigModulePath(mount);
+      if (modulePath === null) {
         continue;
       }
-      const configurationFilePath = resolveRustDirectExternalModule(
-        input.knownFilePaths,
-        mountFilePath,
-        mount.moduleName
-      );
-      if (configurationFilePath === null) {
+      const resolutionPath = resolveRustDirectExternalModulePath({
+        factsByFile: input.factsByFile,
+        knownFilePaths: input.knownFilePaths,
+        rootFilePath: mountFilePath,
+        modulePath
+      });
+      if (resolutionPath === null) {
+        continue;
+      }
+      const configurationFilePath = resolutionPath.at(-1);
+      if (configurationFilePath === undefined) {
         continue;
       }
       const configurationFileFacts = input.factsByFile.get(configurationFilePath);
@@ -2023,6 +2112,8 @@ function projectRustActixImportedServiceConfigRoutes(input: {
           mountFilePath,
           configurationFilePath,
           mount,
+          modulePath,
+          resolutionPath,
           configuration,
           route,
           callback,
@@ -2121,11 +2212,11 @@ function projectRustActixImportedServiceConfigRoutes(input: {
       confidence: 1,
       referenceName: candidate.handler.name,
       evidence: referenceEvidence(
-        rustActixImportedServiceConfigRouteRuleId(candidate.mount.kind),
+        rustActixImportedServiceConfigRouteRuleId(candidate.mount.kind, candidate.modulePath),
         "module",
         [candidate.handler.id, candidate.callback.id],
         [],
-        [candidate.mountFilePath, candidate.configurationFilePath]
+        candidate.resolutionPath
       )
     });
 

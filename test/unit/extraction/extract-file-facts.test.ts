@@ -8651,8 +8651,58 @@ describe("source extraction", () => {
     expect(mountFacts.rustActixServiceConfigFacts).toMatchObject({
       externalModules: [{ name: "routes" }],
       importedMounts: [
-        { configurationName: "configure", moduleName: "routes", prefix: "/", kind: "app" },
-        { configurationName: "configure", moduleName: "routes", prefix: "/api", kind: "scope" }
+        {
+          configurationName: "configure",
+          moduleName: "routes",
+          modulePath: ["routes"],
+          prefix: "/",
+          kind: "app"
+        },
+        {
+          configurationName: "configure",
+          moduleName: "routes",
+          modulePath: ["routes"],
+          prefix: "/api",
+          kind: "scope"
+        }
+      ]
+    });
+  });
+
+  it("retains nested direct-module Actix ServiceConfig mount facts", () => {
+    const facts = extractFileFacts({
+      filePath: "src/main.rs",
+      language: "rust",
+      sourceText: [
+        "pub mod api;",
+        "use actix_web::{App, web};",
+        "use crate::api::routes::configure as api_routes;",
+        "",
+        "fn bootstrap() {",
+        "  let app = App::new()",
+        "    .configure(api_routes)",
+        "    .service(web::scope(\"/api\").configure(api_routes));",
+        "}"
+      ].join("\n")
+    });
+
+    expect(facts.rustActixServiceConfigFacts).toMatchObject({
+      externalModules: [{ name: "api" }],
+      importedMounts: [
+        {
+          configurationName: "configure",
+          moduleName: "api",
+          modulePath: ["api", "routes"],
+          prefix: "/",
+          kind: "app"
+        },
+        {
+          configurationName: "configure",
+          moduleName: "api",
+          modulePath: ["api", "routes"],
+          prefix: "/api",
+          kind: "scope"
+        }
       ]
     });
   });

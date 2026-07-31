@@ -92,12 +92,15 @@ interface StaticRustExternalModule {
 
 interface StaticActixWebImportedServiceConfig {
   readonly configurationName: string;
+  /** The root direct external module, retained for persisted-fact compatibility. */
   readonly moduleName: string;
+  readonly modulePath: readonly string[];
 }
 
 interface StaticActixWebImportedConfigMount {
   readonly configurationName: string;
   readonly moduleName: string;
+  readonly modulePath: readonly string[];
   readonly prefix: string;
   readonly kind: "app" | "scope";
   readonly node: RustSyntaxNode;
@@ -386,20 +389,21 @@ function staticActixWebImportedServiceConfigs(
     const paths = pathsByLocalName.get(imported.localName) ?? [];
     const segments = imported.path.split("::");
     const rootName = segments[0];
-    const moduleName = segments[1];
-    const configurationName = segments[2];
+    const modulePath = segments.slice(1, -1);
+    const moduleName = modulePath[0];
+    const configurationName = segments.at(-1);
     if (
       paths.length !== 1 ||
       paths[0] !== imported.path ||
-      segments.length !== 3 ||
       (rootName !== "crate" && rootName !== "self") ||
+      (modulePath.length !== 1 && modulePath.length !== 2) ||
       moduleName === undefined ||
       configurationName === undefined ||
       modulesByName.get(moduleName) !== 1
     ) {
       continue;
     }
-    importedConfigs.set(imported.localName, { configurationName, moduleName });
+    importedConfigs.set(imported.localName, { configurationName, moduleName, modulePath });
   }
   return importedConfigs;
 }
@@ -1571,6 +1575,7 @@ function staticActixWebImportedConfigMounts(
         {
           configurationName: imported.configurationName,
           moduleName: imported.moduleName,
+          modulePath: imported.modulePath,
           prefix,
           kind,
           node: mountNode
@@ -2132,6 +2137,7 @@ export function extractRustFileFacts(input: RustExtractFileFactsInput): Artifact
         importedMounts: importedServiceConfigMounts.map((mount) => ({
           configurationName: mount.configurationName,
           moduleName: mount.moduleName,
+          modulePath: mount.modulePath,
           prefix: mount.prefix,
           kind: mount.kind,
           range: rangeFor(lineStarts, mount.node.from, mount.node.to)
