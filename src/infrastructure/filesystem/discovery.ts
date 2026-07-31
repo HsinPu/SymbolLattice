@@ -76,7 +76,9 @@ export const SUPPORTED_EXTENSIONS: ReadonlyMap<string, SupportedLanguage> = new 
   [".yaml", "yaml"],
   [".yml", "yaml"],
   [".xml", "xml"],
-  [".properties", "properties"]
+  [".properties", "properties"],
+  [".sh", "shell"],
+  [".bash", "shell"]
 ] as const);
 
 const OBJECTIVE_C_HEADER_EXTENSION = ".h";

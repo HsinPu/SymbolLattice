@@ -8222,6 +8222,51 @@ describe("SymbolLatticeService", () => {
     });
   });
 
+  it("indexes direct Shell and Bash functions with persisted source search", async () => {
+    const projectPath = await createInlineProject({
+      "scripts/deploy.sh": [
+        "#!/usr/bin/env bash",
+        "deploy() {",
+        "  printf '%s\\n' \"${APP_NAME}\"",
+        "}",
+        "",
+        "function cleanup {",
+        "  rm -f \"$1\"",
+        "}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    const indexed = await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+    const search = await service.search(projectPath, "cleanup", { language: "shell" });
+    const cleanup = await service.find(projectPath, "scripts/deploy.sh#cleanup");
+    const persistedFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "scripts/deploy.sh");
+
+    expect(indexed).toMatchObject({
+      stale: false,
+      counts: { files: 1, symbols: 3, edges: 2 }
+    });
+    expect(persistedFacts).toMatchObject({
+      language: "shell",
+      extractorVersion: ARTIFACT_FACTS_EXTRACTOR_VERSION
+    });
+    expect(cleanup.symbols).toMatchObject([
+      {
+        kind: "function",
+        qualifiedName: "scripts/deploy.sh#cleanup",
+        isExported: true
+      }
+    ]);
+    expect(routes.routes).toEqual([]);
+    expect(search.results).toMatchObject([
+      { filePath: "scripts/deploy.sh", language: "shell" }
+    ]);
+  });
+
   it("indexes Drupal routing YAML routes with parser-backed unresolved controller evidence", async () => {
     const projectPath = await createInlineProject({
       "modules/custom/example/example.routing.yml": [

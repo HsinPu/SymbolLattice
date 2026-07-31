@@ -64,6 +64,7 @@ describe("source discovery", () => {
     await writeFile(join(projectPath, "src", "g.pm"), "package Sample;\n", "utf8");
     await writeFile(join(projectPath, "src", "g.zig"), "pub fn main() void {}\n", "utf8");
     await writeFile(join(projectPath, "src", "g.R"), "answer <- 42\n", "utf8");
+    await writeFile(join(projectPath, "src", "g.bash"), "deploy() { :; }\n", "utf8");
     await writeFile(join(projectPath, "src", "h.hpp"), "class Header {};\n", "utf8");
     await writeFile(join(projectPath, "src", "i.cs"), "public class Api {}\n", "utf8");
     await writeFile(join(projectPath, "src", "j.rb"), "class Api\nend\n", "utf8");
@@ -76,6 +77,7 @@ describe("source discovery", () => {
     await writeFile(join(projectPath, "src", "q.astro"), "<main />\n", "utf8");
     await writeFile(join(projectPath, "src", "r.razor"), "<main />\n", "utf8");
     await writeFile(join(projectPath, "src", "s.ets"), "@Component struct App {}\n", "utf8");
+    await writeFile(join(projectPath, "src", "s.sh"), "deploy() { :; }\n", "utf8");
     await writeFile(join(projectPath, "src", "t.tf"), "resource \"aws_s3_bucket\" \"assets\" {}\n", "utf8");
     await writeFile(join(projectPath, "src", "u.blade.php"), "@extends('layouts.app')\n", "utf8");
     await writeFile(join(projectPath, "src", "u.liquid"), "{% render 'card' %}\n", "utf8");
@@ -103,6 +105,7 @@ describe("source discovery", () => {
       "src/e.java",
       "src/f.php",
       "src/g.R",
+      "src/g.bash",
       "src/g.c",
       "src/g.clj",
       "src/g.cpp",
@@ -135,6 +138,7 @@ describe("source discovery", () => {
       "src/q.astro",
       "src/r.razor",
       "src/s.ets",
+      "src/s.sh",
       "src/t.tf",
       "src/u.blade.php",
       "src/u.liquid",
@@ -157,6 +161,7 @@ describe("source discovery", () => {
       "java",
       "php",
       "r",
+      "shell",
       "c",
       "clojure",
       "cpp",
@@ -189,6 +194,7 @@ describe("source discovery", () => {
       "astro",
       "razor",
       "arkts",
+      "shell",
       "terraform",
       "blade",
       "liquid",
@@ -226,6 +232,11 @@ describe("source discovery", () => {
   it("recognizes the Java properties source extension", () => {
     expect(getSourceLanguage("config/application.properties")).toBe("properties");
     expect(getSourceLanguage("resources/logging.PROPERTIES")).toBe("properties");
+  });
+
+  it("recognizes Shell and Bash source extensions", () => {
+    expect(getSourceLanguage("scripts/deploy.sh")).toBe("shell");
+    expect(getSourceLanguage("scripts/release.BASH")).toBe("shell");
   });
 
   it("discovers only source-proven Objective-C .h headers", async () => {

@@ -141,7 +141,8 @@ export const ARTIFACT_LANGUAGES = [
   "zig",
   "yaml",
   "xml",
-  "properties"
+  "properties",
+  "shell"
 ] as const;
 
 export type ArtifactLanguage = (typeof ARTIFACT_LANGUAGES)[number];

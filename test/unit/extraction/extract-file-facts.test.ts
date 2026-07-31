@@ -8813,6 +8813,125 @@ describe("source extraction", () => {
     expect(unsupported.edges).toEqual([]);
   });
 
+  it("extracts complete direct Shell and Bash function declarations with source ranges", () => {
+    const facts = extractFileFacts({
+      filePath: "scripts/deploy.sh",
+      language: "shell",
+      sourceText: [
+        "#!/usr/bin/env bash",
+        "# comments and strings never create declarations",
+        "deploy() {",
+        "  printf '%s\\n' \"${APP_NAME}\" # function() { is ignored here",
+        "}",
+        "",
+        "function cleanup {",
+        "  rm -f \"$1\"",
+        "}"
+      ].join("\n")
+    });
+
+    expect(
+      facts.symbols.map((symbol) => [
+        symbol.kind,
+        symbol.qualifiedName,
+        symbol.declarationOrdinal,
+        symbol.range
+      ])
+    ).toEqual([
+      [
+        "file",
+        "scripts/deploy.sh",
+        0,
+        { start: { line: 1, column: 1 }, end: { line: 9, column: 2 } }
+      ],
+      [
+        "function",
+        "scripts/deploy.sh#deploy",
+        0,
+        { start: { line: 3, column: 1 }, end: { line: 5, column: 2 } }
+      ],
+      [
+        "function",
+        "scripts/deploy.sh#cleanup",
+        0,
+        { start: { line: 7, column: 1 }, end: { line: 9, column: 2 } }
+      ]
+    ]);
+    expect(
+      facts.edges.map((edge) => [
+        edge.kind,
+        edge.referenceName,
+        edge.evidence?.ruleId,
+        edge.resolution,
+        edge.range
+      ])
+    ).toEqual([
+      [
+        "contains",
+        "deploy",
+        "language.shell.function.direct-top-level",
+        "exact",
+        { start: { line: 3, column: 1 }, end: { line: 5, column: 2 } }
+      ],
+      [
+        "contains",
+        "cleanup",
+        "language.shell.function.direct-top-level",
+        "exact",
+        { start: { line: 7, column: 1 }, end: { line: 9, column: 2 } }
+      ]
+    ]);
+  });
+
+  it("rejects nested, incomplete, quoted, and here-document Shell function shapes", () => {
+    const nested = extractFileFacts({
+      filePath: "scripts/nested.bash",
+      language: "shell",
+      sourceText: [
+        "if enabled; then",
+        "hidden() {",
+        "}",
+        "fi",
+        "outer() {",
+        "inner() {",
+        "}",
+        "}",
+        "visible() {",
+        "}"
+      ].join("\n")
+    });
+    const incomplete = extractFileFacts({
+      filePath: "scripts/incomplete.sh",
+      language: "shell",
+      sourceText: "deploy() {\n  printf 'open'\n"
+    });
+    const quoted = extractFileFacts({
+      filePath: "scripts/quoted.sh",
+      language: "shell",
+      sourceText: 'printf "%s" "fake() { }"\n'
+    });
+    const hereDocument = extractFileFacts({
+      filePath: "scripts/here-doc.sh",
+      language: "shell",
+      sourceText: "deploy() {\n  cat <<EOF\nvalue\nEOF\n}\n"
+    });
+
+    expect(nested.symbols.map((symbol) => [symbol.kind, symbol.name])).toEqual([
+      ["file", "nested.bash"],
+      ["function", "outer"],
+      ["function", "visible"]
+    ]);
+    expect(incomplete.symbols.map((symbol) => [symbol.kind, symbol.name])).toEqual([
+      ["file", "incomplete.sh"]
+    ]);
+    expect(quoted.symbols.map((symbol) => [symbol.kind, symbol.name])).toEqual([
+      ["file", "quoted.sh"]
+    ]);
+    expect(hereDocument.symbols.map((symbol) => [symbol.kind, symbol.name])).toEqual([
+      ["file", "here-doc.sh"]
+    ]);
+  });
+
   it("extracts source-proven Java properties keys without retaining configuration values", () => {
     const facts = extractFileFacts({
       filePath: "config/application.properties",

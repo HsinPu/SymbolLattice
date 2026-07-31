@@ -2,7 +2,7 @@
 
 # SymbolLattice
 
-**Evidence-first local code intelligence for TypeScript, JavaScript, ArkTS/ArkUI, Vue, Svelte, Astro, Razor/Blazor, Terraform/OpenTofu, Shopify Liquid, Twig, Laravel Blade, Solidity, CFML/CFScript, Nix, VB.NET, Python/Django, Go, Rust, Java, PHP, C, COBOL, Zig, YAML, XML/MyBatis, Java properties, Lua/Luau, Pascal, Objective-C/Objective-C++, R, Elixir, Erlang, Clojure, Perl, Julia, Haskell, OCaml, F#, Nim, C++, C#, Ruby, Kotlin, Swift, Dart, and Scala projects.**
+**Evidence-first local code intelligence for TypeScript, JavaScript, ArkTS/ArkUI, Vue, Svelte, Astro, Razor/Blazor, Terraform/OpenTofu, Shopify Liquid, Twig, Laravel Blade, Solidity, CFML/CFScript, Nix, VB.NET, Python/Django, Go, Rust, Java, PHP, C, COBOL, Zig, YAML, XML/MyBatis, Java properties, Shell/Bash, Lua/Luau, Pascal, Objective-C/Objective-C++, R, Elixir, Erlang, Clojure, Perl, Julia, Haskell, OCaml, F#, Nim, C++, C#, Ruby, Kotlin, Swift, Dart, and Scala projects.**
 
 [![Version](https://img.shields.io/github/v/tag/HsinPu/symbol-lattice?label=version)](https://github.com/HsinPu/symbol-lattice/tags)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D22.13-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
@@ -14,10 +14,10 @@
 </div>
 
 > [!IMPORTANT]
-> **v0.92.0** is an early developer release. This public repository runs from source; its npm package is intentionally private and is not published to npm.
+> **v0.93.0** is an early developer release. This public repository runs from source; its npm package is intentionally private and is not published to npm.
 
 > [!NOTE]
-> **v0.92.0 — conservative Spring Boot property references.** A directly proven Java field `@Value("${literal.key}")` now links to one unique conventional `application` / `bootstrap` `.properties` key; missing or duplicate keys remain explicit unresolved evidence rather than a guessed profile choice.
+> **v0.93.0 — source-proven Shell/Bash declarations.** `.sh` and `.bash` files now expose complete direct top-level function symbols with source ranges and exact containment evidence; shell execution semantics remain explicitly out of scope.
 
 SymbolLattice builds a local symbol graph without hiding uncertainty. It keeps syntax-proven artifact facts, resolves cross-file relationships conservatively, and records why every resolved edge exists. The graph stays local to the inspected project under `.symbol-lattice/index.sqlite`.
 
@@ -48,6 +48,7 @@ SymbolLattice builds a local symbol graph without hiding uncertainty. It keeps s
 - **XML element containment evidence** - a well-formed, DTD-free `.xml` document contributes its root and direct child elements as source-ranged `resource` symbols. Attributes, text, namespaces, XPath, schemas, and deeper elements remain intentionally unmodeled.
 - **Java properties key evidence** - every `.properties` file contributes literal source-ranged key variables across `=`, `:`, whitespace, and no-value forms. Escaped key characters are decoded, values never enter graph facts, and value-continuation lines cannot become false keys.
 - **Spring Boot property-reference evidence** - a narrowly proven direct Java field `@Value` annotation can point to one unique conventional `application` / `bootstrap` properties key with exact `references` evidence; missing and duplicate candidates stay explicit unresolved facts without guessing active profiles or configuration precedence.
+- **Shell/Bash declaration evidence** - direct, complete top-level POSIX `name() { ... }` and Bash `function name { ... }` declarations in `.sh` / `.bash` files become auditable function symbols. Quoted/commented text, nested control-flow forms, incomplete input, and here-documents do not create symbols.
 - **Non-HTTP and UI transport evidence** - AST-proven NestJS GraphQL, microservice, and WebSocket entrypoints, plus direct ArkUI UI roots, use distinct `entrypoint` nodes and exact `handles` edges, so a message pattern, subscription, or UI root is never mislabeled as an HTTP route.
 - **Direct type-hierarchy evidence** - AST-proven `extends` and `implements` edges preserve value/type namespace proof, type-only imports, re-export provenance, unresolved bases, and bounded direct parent/child views without pretending to have a full type checker.
 - **Bounded context packs** - ordered symbol references produce persisted source, capped relationship/impact summaries, and static directed evidence paths without guessing ambiguous symbols or dynamic behavior.
@@ -164,7 +165,7 @@ One-shot data commands emit stable, pretty JSON. `watch` is the deliberate strea
 
 ## Capabilities
 
-| Area | v0.92.0 behavior |
+| Area | v0.93.0 behavior |
 | --- | --- |
 | Objective-C / Objective-C++ | Objective-C `.m`, Objective-C++ `.mm`, and source-proven Objective-C `.h` files are indexed as `objc`. A header requires a direct `@interface` or `@protocol` and later `@end` after comments, literals, and preprocessor directives are blanked; normal C/C++ headers are skipped. Complete direct ordinary interface, protocol, and implementation blocks emit exact local contains evidence. Interfaces and protocols contribute one-line semicolon-terminated method declarations; implementations contribute one-line brace-bodied methods. A same-file interface plus implementation becomes one class symbol, with implementation evidence preferred for a matching selector. Categories/extensions, properties, inheritance edges, imports, calls, and Swift bridging remain outside this slice. |
 | Horse v0.82 | Pascal Horse accepts direct main-program Get, Post, Put, Patch, Delete, and Head literal registrations only after the same strict proof conditions. Options and all other verbs remain excluded. |
@@ -178,7 +179,9 @@ One-shot data commands emit stable, pretty JSON. `watch` is the deliberate strea
 | MyBatis v0.90 | A parser-valid MyBatis 3 `<mapper namespace="Java.FQN">` file accepts direct `select`, `insert`, `update`, `delete`, and `sql` elements with simple identifier `id` values as `method` symbols. A self-closing literal same-mapper `<include refid="id"/>` becomes an exact call to one unique local `sql` fragment or an explicit unresolved call. Only the standard MyBatis mapper DTD declaration is allowed; no DTD is fetched or evaluated. |
 | Java properties v0.91 | Every `.properties` file adds source-ranged literal non-empty key `variable` symbols with exact `syntax.properties.literal-key` containment evidence. It accepts comments, `=`, `:`, whitespace-separated, and no-value entries; escaped separators, whitespace, and `\\uXXXX` key characters decode into the symbol identity. Keys that are continued, malformed, or dangling are excluded, and values never enter node fields or edge evidence. |
 | Spring Boot properties v0.92 | A direct Java class field with an exact `org.springframework.beans.factory.annotation.Value` import (or a fully-qualified annotation) and one static literal `${key}` / `${key:default}` form becomes a `references` edge from the class to one unique key in conventional `application(-profile)?.properties` or `bootstrap(-profile)?.properties` files. Zero or multiple candidates remain explicit unresolved evidence; values, profiles, YAML, Kotlin, aliases, wildcard imports, `@ConfigurationProperties`, SpEL, interpolation, and runtime precedence are excluded. |
+| Shell/Bash v0.93 | `.sh` and `.bash` files become `shell` artifacts. Complete direct top-level POSIX `name() { ... }` or Bash `function name { ... }` declarations emit source-ranged `function` symbols with exact `language.shell.function.direct-top-level` containment evidence. Commands, calls, `source`, shebang-only files, zsh/fish syntax, here-documents, dynamic evaluation, and runtime semantics are excluded. |
 | Source files | TypeScript, TSX, JavaScript, JSX, ArkTS/ArkUI, Vue SFC, Svelte SFC, Astro SFC, Razor/Blazor components, Terraform/OpenTofu HCL, Shopify Liquid, Twig, Laravel Blade, Solidity, CFML/CFScript, Nix, VB.NET, Python, Go, Rust, Java, PHP, C, COBOL, Zig, YAML, XML, Java properties, Lua, Luau, Pascal, Objective-C / Objective-C++, R, Elixir, Erlang, Clojure, Perl, Julia, Haskell, OCaml, F#, Nim, C++, C#, Ruby, Kotlin, Swift, Dart, and Scala (`.ets`, `.vue`, `.svelte`, `.astro`, `.razor`, `.tf`, `.tfvars`, `.tofu`, `.liquid`, `.twig`, `.blade.php`, `.sol`, `.cfc`, `.cfm`, `.cfs`, `.nix`, `.vb`, `.c`, `.cbl`, `.cob`, `.cobol`, `.cpy`, `.zig`, `.yaml`, `.yml`, `.xml`, `.properties`, `.lua`, `.luau`, `.pas`, `.dpr`, `.dpk`, `.lpr`, `.m`, `.mm`, source-proven `.h`, `.r`, `.ex`, `.exs`, `.erl`, `.clj`, `.pl`, `.pm`, `.jl`, `.hs`, `.ml`, `.fs`, `.nim`, `.cpp`, `.cc`, `.cxx`, `.hpp`, `.hh`, `.hxx`, `.cs`, `.rb`, `.kt`, `.swift`, `.dart`, `.scala`; plus Play `conf/routes` and `conf/*.routes` route tables) |
+| Shell/Bash source files | `.sh` and `.bash` are discovered as `shell` source artifacts, participate in persisted source search and the existing CLI/MCP language validation, and never rely on a shebang guess. |
 | F# + Giraffe | Direct top-level typed `HttpFunc` / `HttpContext` handlers plus exactly one `open Giraffe` proof and a direct literal `choose [` route table. Fixed HTTP verbs and plain `route "/..."` entries become exact same-file or explicit unresolved route evidence. |
 | Nim + Jester | Direct top-level zero-argument `proc` handlers plus exactly one direct `import` list containing `jester`, then a flat `routes:` or `router name:` literal route block. Fixed lowercase HTTP verbs become exact same-file or explicit unresolved route evidence. |
 | Vue + Vue Router | Vue `.vue` files contribute a file symbol plus direct inline JavaScript/TypeScript script declarations and an auditable default component export. In TypeScript/JavaScript router modules, exactly one direct `createRouter` import plus one top-level literal `routes` option emits `NAVIGATE` route evidence; direct default imports can resolve exactly through `.vue` modules. |
@@ -207,6 +210,8 @@ One-shot data commands emit stable, pretty JSON. `watch` is the deliberate strea
 | F# module resolution | No generic F# module, project, package, or cross-file handler resolver in this release. |
 | Nim symbols and routes | Files, direct top-level zero-argument `proc` declarations, and direct Jester routes with exact same-file or explicit unresolved evidence. |
 | Nim module resolution | No generic Nim module, package, macro, project, or cross-file handler resolver in this release. |
+| Shell/Bash symbols and relationships | Complete direct outer-script POSIX `name() { ... }` and Bash `function name { ... }` / `function name() { ... }` declarations produce source-ranged function symbols and exact `contains` edges only. |
+| Shell/Bash module resolution | No generic Shell source, module, package, command-call, environment, or runtime resolver in this release. |
 | Vue symbols and relationships | One audited inline JavaScript/TypeScript `<script>` block yields direct top-level declarations; a supported direct default export is retained as an export binding. A Vue Router static route emits an evidence-bearing `NAVIGATE` `routes` reference to its same-file or uniquely resolved imported component. |
 | Vue module resolution | Relative TypeScript/JavaScript module resolution includes a unique `.vue` candidate. Only audited direct Vue SFC default-export forms participate; implicit `script setup` compiler exports remain deliberately unresolved. |
 | Svelte symbols and relationships | A validated Svelte SFC emits a conventional `default` component plus direct top-level instance-script functions, classes, interfaces, type aliases, and identifier variables. A static SvelteKit page emits a `NAVIGATE` `routes` reference to that local default component. |
@@ -533,6 +538,26 @@ class AppConfig {
 Only source-ranged v0.91 keys in `application.properties`, `application-*.properties`, `bootstrap.properties`, or `bootstrap-*.properties` participate. One unique key creates an exact class-to-key `references` edge with `framework.spring-boot.properties.direct-value.literal-key.exact-key` evidence. A missing key or duplicate key across conventional files remains an explicit unresolved `references` edge with its candidate IDs and applicable configuration paths; it never chooses a profile, default, or precedence order. The raw annotation reference facts persist with the graph, so an explicit future `sync` can safely reproject them; property values never enter those facts or edge evidence.
 
 This is not a general Spring configuration model. It excludes YAML, Kotlin, `@ConfigurationProperties`, method or parameter annotations, aliases/wildcard imports, named arguments, concatenated or escaped strings, nested placeholders, SpEL, relaxed binding, profile activation/precedence, imports, environment overrides, validation, values, and runtime behavior.
+
+#### Shell/Bash direct functions
+
+v0.93 adds a dependency-free `shell` artifact language for `.sh` and `.bash` files. It retains only complete declarations that begin at the direct outer script level:
+
+```bash
+#!/usr/bin/env bash
+
+deploy() {
+  printf '%s\n' "${APP_NAME}"
+}
+
+function cleanup {
+  rm -f "$1"
+}
+```
+
+The graph receives a file symbol plus source-ranged `deploy` and `cleanup` `function` symbols, each with an exact `contains` edge carrying `language.shell.function.direct-top-level` evidence. String literals, comments, escapes, and `${parameter}` expansions are masked before brace matching, so text that merely resembles a function does not become a declaration. Complete direct functions are queryable through the existing source search, CLI, MCP, node, and graph persistence surfaces.
+
+This deliberately excludes all execution semantics: command calls, `source` / dot imports, aliases, functions nested in control flow or groups, `eval`, here-documents, command substitutions, pipelines, redirections, arrays, trap handlers, `zsh` / fish dialects, extensionless shebang scripts, shellcheck parsing, module/package resolution, environment variables, and runtime behavior. Unterminated strings, escapes, parameter expansions, or direct outer-script control/brace forms—and any here-document—leave only the file symbol.
 
 #### Pascal
 
@@ -2522,6 +2547,8 @@ v0.91 adds `.properties` discovery plus generic source-ranged Java-properties ke
 
 v0.92 adds a persisted Spring Boot direct-field `@Value` raw-fact capability and projects exact or explicit unresolved class-to-conventional-properties `references` edges only after the complete artifact catalog is known. The artifact extractor advances to `multi-language-ast-v81` and the resolver to `project-resolver-v24`, so a pre-v0.92 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes the complete property-reference projection. No SQLite schema migration or new query command is required; existing generations remain readable.
 
+v0.93 adds `.sh` / `.bash` discovery and complete direct top-level Shell/Bash function containment. The artifact extractor advances to `multi-language-ast-v82`; the resolver remains `project-resolver-v24` because this initial language slice is file-local. A pre-v0.93 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes Shell-capable facts. No SQLite schema migration or query command is required; existing generations remain readable.
+
 ## Architecture
 
 ```mermaid
@@ -2535,7 +2562,7 @@ flowchart LR
   Catalog["Filesystem catalog\nscope + gitignore"] --> Inputs["Index inputs"]
   Catalog --> TS["TS alias resolver"]
   Catalog --> WS["Workspace resolver"]
-  Extractor["TypeScript AST extractor + ArkTS/ArkUI lexical scanner + Vue/Svelte/Astro SFC scanners + Razor/Blazor directive scanner + Terraform/OpenTofu HCL lexical scanner + Shopify Liquid and Twig tag scanners + YAML document parser + XML event parser + Java properties key scanner + Solidity, CFML/CFScript, Nix, Zig, and VB.NET declaration scanners + Python/Go/Rust/Java/PHP/C/C++ Lezer parsers + Lua/Luau/Pascal/R/Elixir/Erlang/Clojure/Perl/Julia/Haskell lexical extractors + C#/Ruby/Kotlin/Swift/Dart/Scala ast-grep parsers\nfirst-party framework capability passes\nExpress/Fastify/Nest HTTP routes + FastAPI/Flask/Django/Gin/Fiber/Echo/net-http/Chi/Axum/Spring Web/Spring Boot properties/Laravel/Drupal routing YAML/CivetWeb/Lapis/Horse/Plumber/Phoenix/Cowboy/Compojure/Dancer2/Genie/Scotty/cpp-httplib/ASP.NET Core/Rails/Ktor/Vapor/Flutter/Play facts\nFlutter/Vue Router/SvelteKit/Astro/Blazor/React Router/Next client navigation\nNest module-prefix facts + non-HTTP and ArkUI UI-root entrypoints + Terraform/OpenTofu IaC declaration facts + Shopify Liquid and Twig local template calls + Solidity hierarchy + CFML/CFScript, Nix, Zig, VB.NET, YAML, XML/MyBatis, Java properties, and Spring Boot direct-field reference facts"] --> Facts["Reusable artifact facts"]
+  Extractor["TypeScript AST extractor + ArkTS/ArkUI lexical scanner + Vue/Svelte/Astro SFC scanners + Razor/Blazor directive scanner + Terraform/OpenTofu HCL lexical scanner + Shopify Liquid and Twig tag scanners + YAML document parser + XML event parser + Java properties key and Shell/Bash function scanners + Solidity, CFML/CFScript, Nix, Zig, and VB.NET declaration scanners + Python/Go/Rust/Java/PHP/C/C++ Lezer parsers + Lua/Luau/Pascal/R/Elixir/Erlang/Clojure/Perl/Julia/Haskell lexical extractors + C#/Ruby/Kotlin/Swift/Dart/Scala ast-grep parsers\nfirst-party framework capability passes\nExpress/Fastify/Nest HTTP routes + FastAPI/Flask/Django/Gin/Fiber/Echo/net-http/Chi/Axum/Spring Web/Spring Boot properties/Laravel/Drupal routing YAML/CivetWeb/Lapis/Horse/Plumber/Phoenix/Cowboy/Compojure/Dancer2/Genie/Scotty/cpp-httplib/ASP.NET Core/Rails/Ktor/Vapor/Flutter/Play facts\nFlutter/Vue Router/SvelteKit/Astro/Blazor/React Router/Next client navigation\nNest module-prefix facts + non-HTTP and ArkUI UI-root entrypoints + Terraform/OpenTofu IaC declaration facts + Shopify Liquid and Twig local template calls + Solidity hierarchy + CFML/CFScript, Nix, Zig, VB.NET, YAML, XML/MyBatis, Java properties, Shell/Bash, and Spring Boot direct-field reference facts"] --> Facts["Reusable artifact facts"]
   Catalog --> SourceDocs["Persisted source documents"]
   SourceDocs --> Retrieval["Generation-bound lexical projection"]
   Facts --> Resolver["Full project export surface"]
@@ -2555,7 +2582,7 @@ src/
   application/     Use cases, incremental planning, and graph projection
   cli/             Commander-based CLI
   domain/          Graph, evidence, identity, and index-work contracts
-  extraction/      TypeScript AST, ArkTS/ArkUI lexical, Vue/Svelte/Astro SFC, Razor/Blazor directive, Terraform/OpenTofu HCL lexical, Shopify Liquid/Twig tag lexical, YAML document plus Drupal routing YAML, XML/MyBatis event parsing, Java properties key plus direct-field Spring Boot @Value parsing, Solidity declaration lexical, CFML/CFScript declaration lexical, Nix declaration lexical, VB.NET/COBOL/Zig declaration lexical, Python/Go/Rust/Java/PHP/C/C++ Lezer, Lua/Luau/Pascal/Horse/Objective-C/R/Elixir/Erlang/Clojure/Perl/Julia/Haskell lexical, and C#/Ruby/Kotlin/Swift/Dart/Scala ast-grep fact extraction
+  extraction/      TypeScript AST, ArkTS/ArkUI lexical, Vue/Svelte/Astro SFC, Razor/Blazor directive, Terraform/OpenTofu HCL lexical, Shopify Liquid/Twig tag lexical, YAML document plus Drupal routing YAML, XML/MyBatis event parsing, Java properties key, Shell/Bash direct function, plus direct-field Spring Boot @Value parsing, Solidity declaration lexical, CFML/CFScript declaration lexical, Nix declaration lexical, VB.NET/COBOL/Zig declaration lexical, Python/Go/Rust/Java/PHP/C/C++ Lezer, Lua/Luau/Pascal/Horse/Objective-C/R/Elixir/Erlang/Clojure/Perl/Julia/Haskell lexical, and C#/Ruby/Kotlin/Swift/Dart/Scala ast-grep fact extraction
   infrastructure/  Filesystem, workspace, TypeScript, and SQLite adapters
   mcp/             Read-only MCP server
   ports/           Dependency boundaries
@@ -2563,7 +2590,7 @@ src/
 
 ## Deliberate boundaries
 
-v0.92.0 does not yet provide:
+v0.93.0 does not yet provide:
 
 - The COBOL surface proves exactly one direct `IDENTIFICATION DIVISION.`, `PROGRAM-ID. name.`, and `PROCEDURE DIVISION.` sequence, then only direct free-format or fixed-format Area-A Procedure Division paragraph labels. It excludes data items/sections/declaratives, `PERFORM` / `CALL`/control-flow relationships, copy expansion, nested programs, `PROCEDURE DIVISION USING`, compiler/source-format directives, dialect-specific grammar, project or copybook resolution, compilation, and runtime behavior. Fixed-format comment lines, `*>` comments, and complete quoted literals are masked; incomplete literals, duplicate declarations, and missing required divisions retain only a file symbol.
 
@@ -2575,6 +2602,7 @@ v0.92.0 does not yet provide:
 
 - The Java properties surface proves only physically contiguous, non-empty literal keys. It accepts `=`, `:`, whitespace-separated, and no-value forms and decodes escaped separators, whitespace, and `\\uXXXX` sequences only in the key identity. The separate Spring Boot proof accepts only direct Java class fields with a precise or fully-qualified `@Value` annotation containing one plain `${key}` or `${key:default}` literal, and only tries literal keys in conventional `application` / `bootstrap` `.properties` files. It excludes key continuations, malformed escapes, control-character keys, values and value semantics, Spring profile precedence/placeholders/defaults at runtime, aliases/wildcard imports, named/dynamic/nested/SpEL `@Value` arguments, `@ConfigurationProperties`, YAML/Kotlin configuration, framework auto-detection, broad cross-file configuration resolution, schema validation, encoding/runtime loading behavior, and runtime analysis. A dangling continuation or unsupported key form produces no property symbol; its source file remains indexed.
 
+- The Shell/Bash surface proves only complete column-one direct POSIX `name() { ... }` and Bash `function name { ... }` declarations in `.sh` / `.bash` files. It masks strings, comments, escapes, and parameter expansions for source-range-safe brace matching, and it rejects here-documents plus malformed top-level quote/escape/parameter/control/brace forms. It excludes extensionless shebang files, zsh/fish dialects, command/call facts, `source`/dot imports, aliases, functions nested in control flow or groups, `eval`, here-documents, command substitution/pipeline/redirection/array/trap semantics, module resolution, environment variables, lint/compiler integration, and runtime behavior.
 - Daemon mode, background automatic sync after the foreground process exits, cross-process watch coordination, MCP per-query pending-file banners, worker pools, or historical source browsing.
 - pnpm workspace YAML, TypeScript project references, external/package `extends`, or nested `.gitignore` semantics.
 - CommonJS `require`, dynamic dispatch, reflection, arbitrary framework routes, or namespace property-call resolution. The Express and Fastify packs remain limited to syntax-proven direct static registrations; Fastify now projects direct imported/re-exported plugin callbacks and nested direct identifier registrations, but it does not model mutable/assignment aliases, namespace/member access, `fastify-plugin` wrappers, dynamic prefixes, prefixed-plugin root-route variants, hooks, inline route handlers, or runtime route composition. The React Router pack accepts only direct literal JSX `Route` trees with direct child routes/fragments, direct one-argument `createRoutesFromElements(...)` literal JSX trees, or direct one-argument data-router literal trees with direct page identifiers; it does not model `basename`, `lazy`, array variables/spreads, v5 nested `component` trees, dynamic children, JSX conditionals/arbitrary wrapper descendants, absolute child paths, dynamic/optional/multiple-argument factory calls, or runtime router configuration. The Next.js pack accepts only convention-derived Pages/App page files with one direct named default export; it excludes API and App Route handlers, wrappers, parallel/intercepting routes, layouts, middleware, and runtime configuration.
@@ -2714,6 +2742,7 @@ v0.92.0 does not yet provide:
 | `v0.90.0` | MyBatis 3 parser-proven direct `select` / `insert` / `update` / `delete` / `sql` method facts, standard mapper-DTD-only acceptance without evaluation, and literal same-file SQL-fragment include calls with exact or explicit unresolved evidence |
 | `v0.91.0` | Java `.properties` discovery across all filenames, source-ranged literal key variables with escaped-key decoding and duplicate ordinals, key-only fact/evidence retention, value-continuation safety, persisted source search, and malformed/continued/dangling-key rejection |
 | `v0.92.0` | Conservative Spring Boot direct Java field `@Value` facts, persisted exact/unresolved class-to-conventional-properties `references` evidence, duplicate/missing candidate disclosure without profile-precedence guessing, and static reference traversal support |
+| `v0.93.0` | Shell/Bash `.sh` / `.bash` discovery, complete direct top-level POSIX/Bash function containment with source ranges, persisted source search, and nested/incomplete/quoted/here-document rejection |
 | `v0.85+` | Zig grammar/compiler validation, imports/calls/variables/test declarations, nested container methods, anonymous/comptime/alias/`usingnamespace` forms, module/package/build resolution, type inference, and runtime analysis |
 | `v0.84+` | Fiber constructor configuration, `Use` / `Route` / `RouteChain`, mounted sub-apps, group middleware, automatic `HEAD`, handler adapters, group and cross-file composition, Go modules/packages, compiler validation, and runtime route analysis |
 | `v0.86+` | Echo route/group middleware, `Match`, `File` / static helpers, parameter/wildcard semantics, handler adapters, group and cross-file composition, Go modules/packages, compiler validation, and runtime route analysis |
@@ -2721,6 +2750,7 @@ v0.92.0 does not yet provide:
 | `v0.89+` | XML attributes/text/CDATA/comment/processing-instruction facts, namespace resolution, XPath/XQuery, DTD/entity/schema/XInclude processing, deeper descendants, MyBatis/Spring or other framework-specific XML semantics, imports, code generation, cross-file configuration resolution, validation, and runtime analysis |
 | `v0.90+` | iBatis support, MyBatis resultMap/cache/configuration/dynamic-SQL semantics, statement attribute and SQL-text analysis, dotted/cross-mapper include resolution, generated interface or cross-file Java mapper resolution, DTD/entity evaluation, validation, and runtime analysis |
 | `v0.92+` | Java properties key continuations, profile/precedence/default/placeholder/interpolation semantics, value analysis, broader `@Value` / `@ConfigurationProperties` binding, framework detection, YAML/Kotlin and broad cross-file configuration resolution, schema validation, encoding/runtime loading behavior, and runtime analysis |
+| `v0.93+` | Extensionless shebang scripts, zsh/fish dialects, a real Shell grammar/shellcheck validation, command/source/call/import relationships, aliases/eval/functions in groups or control flow, here-documents, command substitution/pipelines/redirections/arrays/traps, module/package/environment analysis, and runtime behavior |
 | `v0.83+` | COBOL grammar/compiler validation, data and section declarations, `PERFORM` / `CALL` relationships, copybook and nested-program resolution, source-format directives, dialect configurations, CICS/SQL/JCL surfaces, project resolution, and runtime analysis |
 | `v0.81+` | Objective-C categories/extensions, properties, inheritance and protocol-conformance relationships, imports/message calls, Swift bridge resolution, compiler proof, Git change-set header attribution, and runtime analysis |
 | `v0.76+` | Pascal grammar validation, `.dfm` / `.fmx` form surfaces, interface/type/class/unit/uses/call relations, local/constructor/destructor/operator/generic/overload forms, project/package resolution, broad Horse/Brook/WebBroker and VCL/FMX/Lazarus framework facts, compiler proof, and runtime analysis |
@@ -2771,6 +2801,8 @@ YAML coverage includes `.yaml` / `.yml` discovery, parser-validated single-docum
 XML coverage includes `.xml` discovery, event-parser-validated root and direct-child resource containment, complete source ranges, persisted source search and CLI/MCP language filters, generic DTD/malformed/multiple-root fail-closed behavior, plus a MyBatis 3 exception for direct statement methods and literal same-file SQL-fragment include calls under one exact non-evaluated mapper DTD declaration. It makes no generic attribute/text/namespace/XPath/schema/import/cross-file/runtime claim.
 
 Java properties coverage includes case-insensitive `.properties` discovery, persisted source search and CLI/MCP language filters, literal non-empty key variables across `=`, `:`, whitespace-separated, and no-value forms, escaped separator/whitespace/`\\uXXXX` key decoding, exact key-only containment evidence, duplicate ordinals, value-continuation safety, and malformed/continued/dangling-key exclusion. The separate v0.92 Spring Boot slice can use only conventional application/bootstrap properties keys for exact or explicit unresolved direct Java-field `@Value` references; it makes no value, profile-precedence, placeholder-runtime, broad Spring-binding, YAML, Kotlin, or runtime claim.
+
+Shell/Bash coverage includes `.sh` / `.bash` discovery, persisted source search and CLI/MCP language filters, complete direct top-level POSIX and Bash function containment, source ranges, quoted/commented/parameter-expansion masking, nested-control/group rejection, malformed-input fail-closed behavior, and here-document rejection. It emits no command, call, source/import, environment, module, lint, or runtime claim.
 
 Rust coverage includes `.rs` discovery, persisted source search and CLI/MCP language filters, conservative top-level function containment, direct/default-or-aliased Axum `Router::new()` literal route-builder chains, imported `get` / `post` / `put` / `patch` / `delete` / `head` / `options` / `trace` method routers, dynamic/shadow/inline/composition/wrapper rejection, malformed-source fail-closed behavior, and exact route-query integration.
 

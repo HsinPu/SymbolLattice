@@ -6,6 +6,23 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.93.0] - 2026-07-31
+
+### Added
+
+- Shell/Bash source discovery now recognizes case-insensitive `.sh` and `.bash` extensions and exposes the additive `shell` language through existing persisted source-search, CLI, and MCP language-validation contracts. The new dependency-free lexical extractor retains a file symbol plus complete direct top-level POSIX `name() { ... }` and Bash `function name { ... }` function symbols.
+- Each accepted Shell function has its complete source range and an exact file-to-function `contains` edge carrying `language.shell.function.direct-top-level` evidence. Strings, comments, escapes, and `${...}` parameter expansions are masked before brace matching; functions nested in direct control-flow/group shapes, incomplete source, quoted/commented lookalikes, and here-documents do not become declarations. Unit, discovery, and service integration coverage prove both declaration forms, source ranges, persistence, source search, nested/incomplete rejection, and here-document safety. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.93.0.md`.
+
+### Compatibility
+
+- The artifact extractor advances to `multi-language-ast-v82`; the project resolver remains `project-resolver-v24` because the initial Shell slice emits only file-local declaration and containment facts. A pre-v0.93 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes Shell-capable facts.
+- No SQLite schema migration or query command is required. This is an additive artifact-language capability within existing file, function-symbol, exact-containment-edge, source-search, CLI, MCP, retained-generation, and incremental-index contracts; existing generations remain readable.
+
+### Deliberate limits
+
+- This is not a Shell parser, shellcheck integration, or execution model. It excludes extensionless shebang scripts, zsh/fish dialects, command calls, `source`/dot imports, aliases, nested/group/control-flow function declarations, `eval`, here-documents, command substitution analysis, pipelines, redirections, arrays, traps, module/package resolution, environment variables, linting, and runtime behavior.
+- The inspected local CodeGraph baseline does not list Shell/Bash among its runtime `LANGUAGES` entries. SymbolLattice v0.93 independently adds a deliberately narrow, source-range-preserving Shell declaration slice; it does not copy CodeGraph source or claim full shell-language coverage.
+
 ## [0.92.0] - 2026-07-31
 
 ### Added
