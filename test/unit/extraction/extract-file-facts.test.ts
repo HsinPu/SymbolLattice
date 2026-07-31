@@ -3459,7 +3459,7 @@ describe("source extraction", () => {
     expect(malformed.symbols.map((symbol) => symbol.kind)).toEqual(["file"]);
   });
 
-  it("extracts direct Horse Get/Post routes only from a proven Pascal program main block", () => {
+  it("extracts direct Horse Get/Post/Put/Delete routes only from a proven Pascal program main block", () => {
     const facts = extractFileFacts({
       filePath: "src/server.dpr",
       language: "pascal",
@@ -3476,10 +3476,20 @@ describe("source extraction", () => {
         "begin",
         "end;",
         "",
+        "procedure UpdateUser(Req: THorseRequest; Res: THorseResponse);",
+        "begin",
+        "end;",
+        "",
+        "procedure DeleteUser(Req: THorseRequest; Res: THorseResponse);",
+        "begin",
+        "end;",
+        "",
         "begin",
         "  THorse.Get('/health', health);",
         "  THorse.Post('/users', CreateUser);",
-        "  THorse.Put('/unsupported', Health);",
+        "  THorse.Put('/users', UpdateUser);",
+        "  THorse.Delete('/users', DeleteUser);",
+        "  THorse.Patch('/unsupported', Health);",
         "  if True then",
         "  begin",
         "    THorse.Get('/nested', Health);",
@@ -3559,7 +3569,9 @@ describe("source extraction", () => {
 
     expect(facts.symbols.filter((symbol) => symbol.kind === "route").map((symbol) => symbol.name)).toEqual([
       "GET /health",
-      "POST /users"
+      "POST /users",
+      "PUT /users",
+      "DELETE /users"
     ]);
     expect(facts.edges.filter((edge) => edge.kind === "routes")).toMatchObject([
       {
@@ -3572,6 +3584,22 @@ describe("source extraction", () => {
       },
       {
         referenceName: "CreateUser",
+        resolution: "exact",
+        evidence: {
+          ruleId: "framework.horse.direct-uses.literal-route.local-routine",
+          candidateSymbolIds: expect.any(Array)
+        }
+      },
+      {
+        referenceName: "UpdateUser",
+        resolution: "exact",
+        evidence: {
+          ruleId: "framework.horse.direct-uses.literal-route.local-routine",
+          candidateSymbolIds: expect.any(Array)
+        }
+      },
+      {
+        referenceName: "DeleteUser",
         resolution: "exact",
         evidence: {
           ruleId: "framework.horse.direct-uses.literal-route.local-routine",

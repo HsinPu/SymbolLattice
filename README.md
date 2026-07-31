@@ -14,10 +14,10 @@
 </div>
 
 > [!IMPORTANT]
-> **v0.77.0** is an early developer release. This public repository runs from source; its npm package is intentionally private and is not published to npm.
+> **v0.78.0** is an early developer release. This public repository runs from source; its npm package is intentionally private and is not published to npm.
 
 > [!NOTE]
-> **v0.77.0 — Objective-C first slice.** SymbolLattice now discovers Objective-C and Objective-C++ implementation files, keeps only complete direct implementation classes and brace-bodied methods, and retains exact local containment evidence without pretending to parse headers, categories, calls, or runtime behavior.
+> **v0.78.0 — Horse framework expansion.** SymbolLattice now keeps direct Pascal Horse PUT and DELETE routes under exactly the same local proof boundary as GET and POST: one direct uses Horse proof, one program main block, one-line literal registration, and one unique prior same-file complete routine handler.
 
 SymbolLattice builds a local symbol graph without hiding uncertainty. It keeps syntax-proven artifact facts, resolves cross-file relationships conservatively, and records why every resolved edge exists. The graph stays local to the inspected project under `.symbol-lattice/index.sqlite`.
 
@@ -157,9 +157,10 @@ One-shot data commands emit stable, pretty JSON. `watch` is the deliberate strea
 
 ## Capabilities
 
-| Area | v0.77.0 behavior |
+| Area | v0.78.0 behavior |
 | --- | --- |
 | Objective-C / Objective-C++ | Objective-C .m and Objective-C++ .mm implementation files are indexed as objc. Only complete direct non-category implementation blocks and complete one-line brace-bodied instance or class methods emit exact local contains evidence. Headers, categories, protocols, imports, properties, calls, and Swift bridging remain outside this first slice. |
+| Horse v0.78 | Pascal Horse accepts direct main-program Get, Post, Put, and Delete literal registrations only after the same strict proof conditions. Patch and all other verbs remain excluded. |
 | Source files | TypeScript, TSX, JavaScript, JSX, ArkTS/ArkUI, Vue SFC, Svelte SFC, Astro SFC, Razor/Blazor components, Terraform/OpenTofu HCL, Shopify Liquid, Twig, Laravel Blade, Solidity, CFML/CFScript, Nix, VB.NET, Python, Go, Rust, Java, PHP, C, Lua, Luau, Pascal, R, Elixir, Erlang, Clojure, Perl, Julia, Haskell, OCaml, F#, Nim, C++, C#, Ruby, Kotlin, Swift, Dart, and Scala (`.ets`, `.vue`, `.svelte`, `.astro`, `.razor`, `.tf`, `.tfvars`, `.tofu`, `.liquid`, `.twig`, `.blade.php`, `.sol`, `.cfc`, `.cfm`, `.cfs`, `.nix`, `.vb`, `.c`, `.lua`, `.luau`, `.pas`, `.dpr`, `.dpk`, `.lpr`, `.r`, `.ex`, `.exs`, `.erl`, `.clj`, `.pl`, `.pm`, `.jl`, `.hs`, `.ml`, `.fs`, `.nim`, `.cpp`, `.cc`, `.cxx`, `.hpp`, `.hh`, `.hxx`, `.cs`, `.rb`, `.kt`, `.swift`, `.dart`, `.scala`; plus Play `conf/routes` and `conf/*.routes` route tables) |
 | F# + Giraffe | Direct top-level typed `HttpFunc` / `HttpContext` handlers plus exactly one `open Giraffe` proof and a direct literal `choose [` route table. Fixed HTTP verbs and plain `route "/..."` entries become exact same-file or explicit unresolved route evidence. |
 | Nim + Jester | Direct top-level zero-argument `proc` handlers plus exactly one direct `import` list containing `jester`, then a flat `routes:` or `router name:` literal route block. Fixed lowercase HTTP verbs become exact same-file or explicit unresolved route evidence. |
@@ -180,7 +181,7 @@ One-shot data commands emit stable, pretty JSON. `watch` is the deliberate strea
 | CFML / CFScript | Complete braced `component` / `interface` declarations, complete tag-based `<cfcomponent>` / `<cfinterface>` containers with named `<cffunction>` members, and conventional implicit CFC components emit exact local `contains` evidence. |
 | Nix | Complete direct returned-attribute-set and `let ... in` bindings emit function or variable symbols; simple `inherit` names emit variable symbols; literal project-relative `import` paths are retained as explicit pending `imports` references without a target-resolution claim. |
 | VB.NET | Complete `Namespace`, `Class`, `Module`, `Interface`, `Structure`, and `Enum` blocks plus direct complete `Sub` / `Function` members emit exact local `contains` evidence; simple file-level `Imports` syntax is retained as a pending reference. |
-| Pascal | Direct column-one complete `procedure` / `function` implementations, including direct dotted and `class` routine names, emit exact file-local `contains` evidence. A separate Horse pass emits only proven direct main-program `GET` / `POST` routes. Comments, strings, interface-only declarations, indented routines, and incomplete source cannot create a routine symbol. |
+| Pascal | Direct column-one complete `procedure` / `function` implementations, including direct dotted and `class` routine names, emit exact file-local `contains` evidence. A separate Horse pass emits only proven direct main-program `GET` / `POST` / `PUT` / `DELETE` routes. Comments, strings, interface-only declarations, indented routines, and incomplete source cannot create a routine symbol. |
 | Scope | Project root by default or repeatable, persisted `--scope` directories |
 | Discovery | Root `.gitignore` with negation; `.git`, `.symbol-lattice`, `coverage`, `dist`, and `node_modules` are always excluded |
 | Symbols | TypeScript/JavaScript: files, classes, functions, methods, interfaces, types, variables, routes, and entrypoints. Python: files, classes, functions, methods, and direct FastAPI / same-file or proven cross-file `APIRouter` / same-file Flask / same-file Django `urlpatterns` routes. Go: files, top-level functions, and direct Gin / `net/http` / Chi routes. Rust: files, top-level functions, and direct Axum routes. Java: files, direct top-level classes and methods, direct Spring Web routes, and direct package facts usable by Play controller resolution. PHP: files, direct top-level classes, methods, functions, and direct Laravel facade routes. C: files, direct top-level functions, and direct CivetWeb routes. Lua: files, direct top-level `function` / `local function` declarations, and direct Lapis routes. Luau: files and direct top-level Lua-compatible `function` / `local function` / `export function` declarations only. Pascal: files, direct column-one complete `procedure` / `function` implementations, including direct dotted and `class` routine names, and proven direct Horse route nodes. R: files, direct top-level braced `name <- function(...)` / `name = function(...)` declarations, and direct Plumber annotation routes. Elixir: files, direct top-level `defmodule` declarations represented by the existing `class` kind, direct module `def` / `defp` methods, and direct Phoenix Router routes. Erlang: files, direct `-module(...)` declarations represented by the existing `class` kind, direct simple top-level functions, and direct Cowboy dispatch routes. Clojure: files, direct `ns` declarations represented by the existing `class` kind, direct simple top-level `defn` functions, and direct Compojure routes. Perl: files, direct `package` declarations represented by the existing `class` kind, direct simple top-level `sub` functions, and direct Dancer2 routes. Julia: files, direct top-level one-line `name(...) = ...` functions, and direct Genie routes. C++: files, direct top-level classes, methods, functions, and direct cpp-httplib routes. C#: files, direct top-level classes, interfaces, methods, local functions, and direct ASP.NET Core routes. Ruby: files, direct top-level classes, methods, functions, and direct Rails routes. Kotlin: files, direct top-level classes, interfaces, methods, functions, and direct Ktor routes. Swift: files, direct top-level classes, structs, protocols, methods, functions, and direct Vapor routes. Dart: files, direct top-level classes, methods, functions, and direct Flutter named-navigation routes. Scala: files, direct top-level classes, objects, traits, methods, functions, direct Play route-table entries, and literal Play Router-mount nodes. CFML/CFScript: files, complete braced or tag-based component/interface containers, conventional implicit CFC component classes, direct named methods, and standalone complete top-level CFScript functions. |
@@ -236,7 +237,7 @@ One-shot data commands emit stable, pretty JSON. `watch` is the deliberate strea
 
 Framework coverage is declared once and actively selects the extraction passes applicable to the parsed language. This is a stable integration boundary, not a runtime framework detector: every pass below still requires its own syntax proof before it emits facts.
 
-| Capability | Proven surfaces in v0.76 |
+| Capability | Proven surfaces in v0.78 |
 | --- | --- |
 | Express | Literal receiver methods and identifier handlers |
 | Fastify | Literal routes and static prefix composition |
@@ -253,7 +254,7 @@ Framework coverage is declared once and actively selects the extraction passes a
 | Laravel Blade | Direct literal `@extends`, `@include`, `@component`, and `@each` directives resolved only against indexed conventional `resources/views/` Blade templates |
 | CivetWeb | C direct [`mg_set_request_handler(context, uri, handler, cbdata)`](https://civetweb.github.io/civetweb/api/mg_set_request_handler.html) registration after `civetweb.h` inclusion, with unique unshadowed same-file handlers; represented as `ALL` because registration has no method argument |
 | Lapis | Lua direct [`require("lapis")` / `Application()`](https://leafo.net/lapis/reference/lua_getting_started.html) bindings with literal `get` / `post` / `put` / `delete` / `match` registrations and unique, prior, un-rebound same-file local function handlers |
-| Horse | Pascal exactly one direct [`uses Horse;`](https://github.com/HashLoad/horse) proof, exactly one direct `program` main block, and direct main-block one-line literal `THorse.Get` / `THorse.Post` registrations with unique, prior same-file complete routine handlers |
+| Horse | Pascal exactly one direct [`uses Horse;`](https://github.com/HashLoad/horse) proof, exactly one direct `program` main block, and direct main-block one-line literal `THorse.Get` / `THorse.Post` / `THorse.Put` / `THorse.Delete` registrations with unique, prior same-file complete routine handlers |
 | Plumber | R direct [`#*` / `#'` annotations](https://www.rplumber.io/) with literal `@get` / `@post` / `@put` / `@delete` slash paths and immediately following top-level braced anonymous function handlers |
 | Phoenix | Elixir direct [`use Phoenix.Router`](https://phoenix.hexdocs.pm/Phoenix.Router.html) modules, literal nested `scope` prefixes, and direct verb routes with full-module controller atom actions |
 | Cowboy | Erlang direct [`cowboy_router:compile/1`](https://ninenines.eu/docs/en/cowboy/2.14/manual/cowboy_router.compile/) literal wildcard-host dispatch lists with same-module exported `init/2` proof |
@@ -409,15 +410,25 @@ procedure CreateUser(Req: THorseRequest; Res: THorseResponse);
 begin
 end;
 
+procedure UpdateUser(Req: THorseRequest; Res: THorseResponse);
+begin
+end;
+
+procedure DeleteUser(Req: THorseRequest; Res: THorseResponse);
+begin
+end;
+
 begin
   THorse.Get('/health', Health);
   THorse.Post('/users', CreateUser);
+  THorse.Put('/users', UpdateUser);
+  THorse.Delete('/users', DeleteUser);
 end.
 ```
 
-The program creates `GET /health` and `POST /users` route symbols and exact `routes` edges to their unique, prior same-file routines, each carrying `framework.horse.direct-uses.literal-route.local-routine` syntax evidence. The source must contain exactly one standalone direct `uses Horse;`, exactly one direct `program` declaration, and one complete top-level `begin ... end.` block. Only one-line slash-prefixed literal `THorse.Get` / `THorse.Post` calls at that main-block level are accepted.
+The program creates `GET /health`, `POST /users`, `PUT /users`, and `DELETE /users` route symbols and exact `routes` edges to their unique, prior same-file routines, each carrying `framework.horse.direct-uses.literal-route.local-routine` syntax evidence. The source must contain exactly one standalone direct `uses Horse;`, exactly one direct `program` declaration, and one complete top-level `begin ... end.` block. Only one-line slash-prefixed literal `THorse.Get` / `THorse.Post` / `THorse.Put` / `THorse.Delete` calls at that main-block level are accepted.
 
-Horse support deliberately excludes combined or aliased `uses`, units, inline or multiline callbacks, `Put` / `Delete` and other HTTP methods, `THorse` aliases/subclasses/wrappers, groups/prefixes/middleware, nested or routine-local registrations, dynamic/query/fragment/double-slash paths, late/ambiguous/cross-file handlers, compilation, and runtime behavior. This is a narrow static evidence surface, not a claim of general Horse compatibility.
+Horse support deliberately excludes combined or aliased `uses`, units, inline or multiline callbacks, `Patch` / `Head` / `Options` and other HTTP methods, `THorse` aliases/subclasses/wrappers, groups/prefixes/middleware, nested or routine-local registrations, dynamic/query/fragment/double-slash paths, late/ambiguous/cross-file handlers, compilation, and runtime behavior. This is a narrow static evidence surface, not a claim of general Horse compatibility.
 
 #### Objective-C / Objective-C++
 
@@ -2212,6 +2223,10 @@ v0.74 adds no SQLite schema migration or query command. It adds `.luau` discover
 v0.75 adds no SQLite schema migration or query command. It adds `.pas`, `.dpr`, `.dpk`, and `.lpr` discovery plus direct column-one complete Pascal `procedure` / `function` implementation containment. The artifact extractor advances to `multi-language-ast-v64`; the resolver remains `project-resolver-v23`, because Pascal exposes no unit, module, type, call, form, or framework projection in this first slice. A pre-v0.75 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes Pascal-capable facts. Existing generations remain readable.
 
 v0.76 adds no SQLite schema migration or query command. It introduces the additive `horse` framework capability and exact local Pascal Horse `GET` / `POST` route facts, but only after one direct `uses Horse;`, one direct `program` main block, one-line literal `THorse.Get` / `THorse.Post` registrations, and one unique prior same-file complete routine handler. The artifact extractor advances to `multi-language-ast-v65`; the resolver remains `project-resolver-v23`, because every accepted Horse proof is file-local. A pre-v0.76 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes Horse-capable facts. Existing generations remain readable.
+
+v0.77 adds Objective-C .m and Objective-C++ .mm discovery, direct complete ordinary implementation classes, and direct one-line brace-bodied methods. The artifact extractor advances to multi-language-ast-v66; the resolver remains project-resolver-v23 because this declaration slice is file-local. A pre-v0.77 active index reports indexer-version-changed until an explicit sync or index republishes Objective-C-capable facts. Existing generations remain readable.
+
+v0.78 adds direct Pascal Horse Put and Delete route facts under the existing exact direct uses Horse, program-main-block, literal registration, and unique prior local-routine proof. The artifact extractor advances to multi-language-ast-v67; the resolver remains project-resolver-v23 because these route facts are file-local. A pre-v0.78 active index reports indexer-version-changed until an explicit sync or index republishes the expanded Horse facts. Existing generations remain readable.
 
 ## Architecture
 

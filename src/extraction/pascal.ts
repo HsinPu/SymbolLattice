@@ -54,14 +54,16 @@ interface SanitizedPascalSource {
 }
 
 type PascalBlockCloser = "end" | "until";
-type HorseRouteMethod = "GET" | "POST";
+type HorseRouteMethod = "GET" | "POST" | "PUT" | "DELETE";
 
 const PASCAL_ROUTINE_HEADER =
   /^(?:(?:class|static)\s+)?(?:procedure|function)\s+([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)\s*(?:\([^)]*\))?\s*(?::\s*[A-Za-z_][A-Za-z0-9_.]*)?\s*;\s*(begin\b.*)?$/iu;
 
 const HORSE_ROUTE_METHODS: ReadonlyMap<string, HorseRouteMethod> = new Map([
   ["get", "GET"],
-  ["post", "POST"]
+  ["post", "POST"],
+  ["put", "PUT"],
+  ["delete", "DELETE"]
 ]);
 
 function lineStartsFor(sourceText: string): readonly number[] {
@@ -483,7 +485,7 @@ function staticHorsePath(value: string): string | null {
 
 function directHorseRoute(rawLine: PascalLine): StaticHorseRoute | null {
   const match =
-    /^THorse\.(Get|Post)\(\s*'((?:''|[^'\r\n])*)'\s*,\s*([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)\s*\)\s*;\s*$/iu.exec(
+    /^THorse\.(Get|Post|Put|Delete)\(\s*'((?:''|[^'\r\n])*)'\s*,\s*([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)\s*\)\s*;\s*$/iu.exec(
       rawLine.content
     );
   const method = match?.[1] === undefined ? undefined : HORSE_ROUTE_METHODS.get(match[1].toLowerCase());
@@ -532,8 +534,8 @@ function collectDirectHorseRoutes(
 /**
  * Extracts direct Pascal routines plus a narrow Horse route subset. Horse
  * requires exactly one direct `uses Horse;` proof, one complete program main
- * block, direct literal `THorse.Get/Post` registrations, and prior same-file
- * direct routine handlers.
+ * block, direct literal `THorse.Get/Post/Put/Delete` registrations, and
+ * prior same-file direct routine handlers.
  */
 export function extractPascalFileFacts(input: PascalExtractFileFactsInput): ArtifactFacts {
   const horseCapability = frameworkCapability("horse");
