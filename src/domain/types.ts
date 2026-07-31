@@ -43,6 +43,7 @@ export type RouteFramework =
   | "express"
   | "koa"
   | "hono"
+  | "elysia"
   | "fastify"
   | "nextjs"
   | "sveltekit"

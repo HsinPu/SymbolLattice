@@ -6152,6 +6152,91 @@ describe("SymbolLatticeService", () => {
     ]);
   });
 
+  it("indexes direct Elysia routes in JavaScript with exact imported handler evidence", async () => {
+    const projectPath = await createInlineProject({
+      "src/handlers.js": [
+        "export function listUsers() { return []; }",
+        "export function removeUser() { return undefined; }"
+      ].join("\n"),
+      "src/routes.js": [
+        'import { Elysia } from "elysia";',
+        'import { listUsers, removeUser } from "./handlers.js";',
+        "const app = new Elysia();",
+        'app.get("/users", listUsers);',
+        'app.delete("/users/:id", removeUser);'
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    const indexed = await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+    const persistedFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "src/routes.js");
+    const found = await service.find(projectPath, "src/handlers.js#listUsers");
+    const listUsers = found.symbols[0];
+    if (listUsers === undefined) {
+      throw new Error("Expected indexed Elysia handler.");
+    }
+    const callers = await service.callers(projectPath, listUsers.qualifiedName);
+
+    expect(indexed).toMatchObject({
+      stale: false,
+      counts: { files: 2, symbols: expect.any(Number), edges: expect.any(Number) }
+    });
+    expect(
+      persistedFacts?.pendingReferences
+        .filter((reference) => reference.relationKind === "routes")
+        .map((reference) => [reference.referenceName, reference.routeFramework])
+    ).toEqual([
+      ["listUsers", "elysia"],
+      ["removeUser", "elysia"]
+    ]);
+    expect(routes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "GET",
+          path: "/users",
+          route: expect.objectContaining({ kind: "route", name: "GET /users" }),
+          edge: expect.objectContaining({
+            kind: "routes",
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.elysia.app.literal-route.imported-handler",
+              stage: "module"
+            })
+          }),
+          handler: expect.objectContaining({ qualifiedName: "src/handlers.js#listUsers" })
+        }),
+        expect.objectContaining({
+          method: "DELETE",
+          path: "/users/:id",
+          route: expect.objectContaining({ kind: "route", name: "DELETE /users/:id" }),
+          edge: expect.objectContaining({
+            kind: "routes",
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.elysia.app.literal-route.imported-handler",
+              stage: "module"
+            })
+          }),
+          handler: expect.objectContaining({ qualifiedName: "src/handlers.js#removeUser" })
+        })
+      ])
+    );
+    expect(callers.relations).toMatchObject([
+      {
+        symbol: { kind: "route", name: "GET /users" },
+        edge: {
+          kind: "routes",
+          resolution: "exact",
+          evidence: { ruleId: "framework.elysia.app.literal-route.imported-handler", stage: "module" }
+        }
+      }
+    ]);
+  });
+
   it("indexes React Router JSX navigation routes with exact imported page evidence", async () => {
     const projectPath = await createInlineProject({
       "src/pages.tsx": "export function SettingsPage() { return <main>Settings</main>; }\n",

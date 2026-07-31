@@ -371,6 +371,8 @@ type RouteBindingKind =
   | "koa-router-receiver"
   | "hono-constructor"
   | "hono-receiver"
+  | "elysia-constructor"
+  | "elysia-receiver"
   | "fastify-receiver"
   | "fastify-default-factory"
   | "fastify-plugin-receiver"
@@ -403,6 +405,13 @@ interface StaticKoaRoute {
 
 /** A direct Hono route with literal path and named terminal handler. */
 interface StaticHonoRoute {
+  readonly method: RouteMethod;
+  readonly path: string;
+  readonly handler: ts.Identifier;
+}
+
+/** A direct Elysia route with literal path and named terminal handler. */
+interface StaticElysiaRoute {
   readonly method: RouteMethod;
   readonly path: string;
   readonly handler: ts.Identifier;
@@ -584,6 +593,17 @@ const KOA_ROUTE_METHODS: Readonly<Record<string, RouteMethod>> = {
 };
 
 const HONO_ROUTE_METHODS = [
+  "GET",
+  "POST",
+  "PUT",
+  "PATCH",
+  "DELETE",
+  "HEAD",
+  "OPTIONS",
+  "ALL"
+] as const satisfies readonly RouteMethod[];
+
+const ELYSIA_ROUTE_METHODS = [
   "GET",
   "POST",
   "PUT",
@@ -783,6 +803,14 @@ function isHonoImport(statement: ts.ImportDeclaration): boolean {
   );
 }
 
+function isElysiaImport(statement: ts.ImportDeclaration): boolean {
+  return (
+    ts.isStringLiteral(statement.moduleSpecifier) &&
+    statement.moduleSpecifier.text === "elysia" &&
+    statement.importClause?.isTypeOnly !== true
+  );
+}
+
 function isReactRouterImport(statement: ts.ImportDeclaration): boolean {
   return (
     ts.isStringLiteral(statement.moduleSpecifier) &&
@@ -840,6 +868,18 @@ function namedHonoImportBindingKind(
     : "other";
 }
 
+function namedElysiaImportBindingKind(
+  statement: ts.ImportDeclaration,
+  element: ts.ImportSpecifier
+): RouteBindingKind {
+  if (!isElysiaImport(statement) || element.isTypeOnly) {
+    return "other";
+  }
+  return (element.propertyName?.text ?? element.name.text) === "Elysia"
+    ? "elysia-constructor"
+    : "other";
+}
+
 function namedRouteImportBindingKind(
   statement: ts.ImportDeclaration,
   element: ts.ImportSpecifier
@@ -849,9 +889,13 @@ function namedRouteImportBindingKind(
     return expressBinding;
   }
   const honoBinding = namedHonoImportBindingKind(statement, element);
-  return honoBinding === "other"
+  if (honoBinding !== "other") {
+    return honoBinding;
+  }
+  const elysiaBinding = namedElysiaImportBindingKind(statement, element);
+  return elysiaBinding === "other"
     ? namedReactRouterImportBindingKind(statement, element)
-    : honoBinding;
+    : elysiaBinding;
 }
 
 function visibleRouteBinding(
@@ -945,6 +989,20 @@ function isHonoRouteReceiverInitializer(
   );
 }
 
+function isElysiaRouteReceiverInitializer(
+  sourceFile: ts.SourceFile,
+  initializer: ts.Expression,
+  bindings: ScopedRouteReceiverBindings
+): boolean {
+  return (
+    ts.isNewExpression(initializer) &&
+    initializer.arguments !== undefined &&
+    initializer.arguments.length === 0 &&
+    ts.isIdentifier(initializer.expression) &&
+    visibleRouteBindingKind(sourceFile, initializer.expression, bindings) === "elysia-constructor"
+  );
+}
+
 function addScopedValueBinding(
   byScopeId: Map<string, Map<string, RouteBinding[]>>,
   scopeId: string | undefined,
@@ -969,7 +1027,12 @@ function markRouteReceiver(
   byScopeId: Map<string, Map<string, RouteBinding[]>>,
   scopeId: string | undefined,
   declaration: ts.VariableDeclaration,
-  bindingKind: "express-receiver" | "koa-router-receiver" | "hono-receiver" | "fastify-receiver"
+  bindingKind:
+    | "express-receiver"
+    | "koa-router-receiver"
+    | "hono-receiver"
+    | "elysia-receiver"
+    | "fastify-receiver"
 ): void {
   if (scopeId === undefined || !ts.isIdentifier(declaration.name)) {
     return;
@@ -1571,6 +1634,19 @@ function collectScopedRouteReceiverBindings(sourceFile: ts.SourceFile): ScopedRo
       ts.isIdentifier(node.name) &&
       node.initializer !== undefined &&
       isConstVariableDeclaration(node) &&
+      isElysiaRouteReceiverInitializer(sourceFile, node.initializer, { byScopeId })
+    ) {
+      markRouteReceiver(
+        byScopeId,
+        variableBindingScopeId(sourceFile, node),
+        node,
+        "elysia-receiver"
+      );
+    } else if (
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.initializer !== undefined &&
+      isConstVariableDeclaration(node) &&
       isFastifyReceiverInitializer(sourceFile, node.initializer, { byScopeId })
     ) {
       markRouteReceiver(
@@ -1631,6 +1707,14 @@ function isHonoRouteReceiver(
   bindings: ScopedRouteReceiverBindings
 ): boolean {
   return visibleRouteBindingKind(sourceFile, receiver, bindings) === "hono-receiver";
+}
+
+function isElysiaRouteReceiver(
+  sourceFile: ts.SourceFile,
+  receiver: ts.Identifier,
+  bindings: ScopedRouteReceiverBindings
+): boolean {
+  return visibleRouteBindingKind(sourceFile, receiver, bindings) === "elysia-receiver";
 }
 
 function fastifyRouteReceiverContext(
@@ -1743,6 +1827,43 @@ function staticHonoRoute(
   }
 
   const method = staticRouteMethodForName(node.expression.name.text, HONO_ROUTE_METHODS);
+  if (method === undefined) {
+    return null;
+  }
+
+  const pathArgument = node.arguments[0];
+  const handler = node.arguments.at(-1);
+  if (
+    node.arguments.length < 2 ||
+    pathArgument === undefined ||
+    !ts.isStringLiteral(pathArgument) ||
+    !pathArgument.text.startsWith("/") ||
+    handler === undefined ||
+    !ts.isIdentifier(handler) ||
+    node.arguments.slice(1).some((argument) => !ts.isIdentifier(argument))
+  ) {
+    return null;
+  }
+
+  return { method, path: pathArgument.text, handler };
+}
+
+function staticElysiaRoute(
+  sourceFile: ts.SourceFile,
+  node: ts.CallExpression,
+  bindings: ScopedRouteReceiverBindings
+): StaticElysiaRoute | null {
+  if (
+    node.questionDotToken !== undefined ||
+    !ts.isPropertyAccessExpression(node.expression) ||
+    node.expression.questionDotToken !== undefined ||
+    !ts.isIdentifier(node.expression.expression) ||
+    !isElysiaRouteReceiver(sourceFile, node.expression.expression, bindings)
+  ) {
+    return null;
+  }
+
+  const method = staticRouteMethodForName(node.expression.name.text, ELYSIA_ROUTE_METHODS);
   if (method === undefined) {
     return null;
   }
@@ -4276,6 +4397,7 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
       | StaticExpressRoute
       | StaticKoaRoute
       | StaticHonoRoute
+      | StaticElysiaRoute
       | StaticFastifyRoute
       | StaticNextRoute
       | StaticReactRouterRoute
@@ -4304,6 +4426,10 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
 
   function addStaticHonoRoute(node: ts.CallExpression, route: StaticHonoRoute): void {
     addStaticRoute(node, route, "hono");
+  }
+
+  function addStaticElysiaRoute(node: ts.CallExpression, route: StaticElysiaRoute): void {
+    addStaticRoute(node, route, "elysia");
   }
 
   function addStaticFastifyRoute(node: ts.CallExpression, route: StaticFastifyRoute): void {
@@ -4787,6 +4913,17 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
         const route = staticHonoRoute(sourceFile, node, routeReceiverBindings);
         if (route !== null) {
           addStaticHonoRoute(node, route);
+        }
+      }
+    }),
+    frameworkExtractionPass("elysia", {
+      visit(node) {
+        if (!ts.isCallExpression(node)) {
+          return;
+        }
+        const route = staticElysiaRoute(sourceFile, node, routeReceiverBindings);
+        if (route !== null) {
+          addStaticElysiaRoute(node, route);
         }
       }
     }),

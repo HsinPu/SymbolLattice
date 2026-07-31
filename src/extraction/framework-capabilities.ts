@@ -5,6 +5,7 @@ export const FRAMEWORK_CAPABILITY_IDS = [
   "express",
   "koa",
   "hono",
+  "elysia",
   "fastify",
   "nestjs",
   "react-router",
@@ -101,6 +102,16 @@ export const FRAMEWORK_CAPABILITIES = [
     surfaces: [
       "direct named Hono imports",
       "immutable direct new Hono() receivers with literal named-handler HTTP methods"
+    ]
+  },
+  {
+    id: "elysia",
+    languages: ["typescript", "javascript"],
+    routeFramework: "elysia",
+    routeRegistrations: [],
+    surfaces: [
+      "direct named Elysia imports",
+      "immutable direct new Elysia() receivers with literal named-handler HTTP methods"
     ]
   },
   {

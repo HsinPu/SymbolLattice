@@ -6,6 +6,23 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.105.0] - 2026-07-31
+
+### Added
+
+- The first-party `elysia` capability adds syntax-proven TypeScript and JavaScript `elysia` application route evidence. It accepts a direct runtime named `Elysia` import (including an alias), an immutable direct `const app = new Elysia()` receiver with no constructor options, a slash-prefixed string-literal path, and named identifier middleware/terminal handlers. The terminal identifier creates the existing source-ranged route node and a pending `routes` reference; `get`, `post`, `put`, `patch`, `delete`, `head`, `options`, and `all` are mapped to the existing HTTP method contract.
+- Same-file, imported, and re-exported Elysia handlers reuse the deterministic resolver with Elysia-specific `framework.elysia.app.literal-route.*` evidence. Focused extraction, capability-registry, resolver, and JavaScript service integration coverage prove aliases, accepted methods, lexical shadowing, type-only/default/namespace/foreign/CommonJS rejection, persisted facts, and exact route queries. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.105.0.md`.
+
+### Compatibility
+
+- The artifact extractor advances to `multi-language-ast-v94`; the project resolver remains `project-resolver-v25` because the added resolver branch only labels Elysia facts freshly produced by this extractor version. A pre-v0.105 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes Elysia-capable facts.
+- No SQLite schema migration or new query command is required. This is an additive framework capability with the same persisted route contract.
+
+### Comparison notes
+
+- The inspected local CodeGraph query did not expose an Elysia-specific route extractor in the returned source surface. SymbolLattice v0.105 independently adds a deliberately narrow, provenance-preserving slice without copying CodeGraph source or claiming complete Elysia support.
+- Elysia documents direct verb routes, grouping, constructor prefixes, plugins, and custom methods. This release intentionally excludes `group`, constructor prefixes, `use`, `route`, chained expressions, and inline handlers because they need additional static proof before they can safely compose route paths or resolve a handler.
+
 ## [0.104.0] - 2026-07-31
 
 ### Added

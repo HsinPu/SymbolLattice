@@ -1313,6 +1313,114 @@ describe("source extraction", () => {
     ).toEqual([["handler", "hono"]]);
   });
 
+  it("extracts syntax-proven direct Elysia routes with literal paths and named handlers", () => {
+    const facts = extractFileFacts({
+      filePath: "src/routes.ts",
+      language: "typescript",
+      sourceText: [
+        'import { Elysia as WebApp } from "elysia";',
+        "const app = new WebApp();",
+        "const requireAuth = () => undefined;",
+        "function handler() { return undefined; }",
+        'app.get("/users", requireAuth, handler);',
+        'app.post("/users", handler);',
+        'app.put("/users/:id", handler);',
+        'app.patch("/users/:id", handler);',
+        'app.delete("/users/:id", handler);',
+        'app.head("/health", handler);',
+        'app.options("/users", handler);',
+        'app.all("/fallback", handler);'
+      ].join("\n")
+    });
+
+    const routes = facts.symbols.filter((symbol) => symbol.kind === "route");
+    const routeReferences = facts.pendingReferences.filter(
+      (reference) => reference.relationKind === "routes"
+    );
+
+    expect(routes.map((route) => route.name)).toEqual([
+      "GET /users",
+      "POST /users",
+      "PUT /users/:id",
+      "PATCH /users/:id",
+      "DELETE /users/:id",
+      "HEAD /health",
+      "OPTIONS /users",
+      "ALL /fallback"
+    ]);
+    expect(
+      routeReferences.map((reference) => [reference.referenceName, reference.routeFramework])
+    ).toEqual([
+      ["handler", "elysia"],
+      ["handler", "elysia"],
+      ["handler", "elysia"],
+      ["handler", "elysia"],
+      ["handler", "elysia"],
+      ["handler", "elysia"],
+      ["handler", "elysia"],
+      ["handler", "elysia"]
+    ]);
+  });
+
+  it("rejects unproven, dynamic, and non-direct Elysia route shapes", () => {
+    const facts = extractFileFacts({
+      filePath: "src/routes.ts",
+      language: "typescript",
+      sourceText: [
+        'import DefaultElysia from "elysia";',
+        'import * as elysiaNamespace from "elysia";',
+        'import type { Elysia as TypeOnlyElysia } from "elysia";',
+        'import { Elysia as WebApp } from "elysia";',
+        'import foreignElysia from "not-elysia";',
+        "const app = new WebApp();",
+        "let mutable = new WebApp();",
+        'const configured = new WebApp({ prefix: "/api" });',
+        "const defaultApp = new DefaultElysia();",
+        "const namespaceApp = new elysiaNamespace.Elysia();",
+        "const typeOnly = new TypeOnlyElysia();",
+        "const foreign = new foreignElysia();",
+        'const legacy = require("elysia");',
+        "const legacyApp = new legacy.Elysia();",
+        "const controller = { handler: () => undefined };",
+        'const path = "/dynamic";',
+        "function handler() { return undefined; }",
+        'app.get("/real", handler);',
+        "app.get(path, handler);",
+        'app.get("not-slash-prefixed", handler);',
+        'app.get("/inline", () => undefined);',
+        'app.get("/member", controller.handler);',
+        'app.get("/non-identifier-middleware", {}, handler);',
+        'app["get"]("/computed", handler);',
+        'app?.get("/optional-property", handler);',
+        'app.get?.("/optional-call", handler);',
+        'app.route("GET", "/custom-method", handler);',
+        'app.group("/group", handler);',
+        "app.use(app);",
+        'new WebApp().get("/chained", handler);',
+        'mutable.get("/mutable", handler);',
+        'configured.get("/configured", handler);',
+        'defaultApp.get("/default", handler);',
+        'namespaceApp.get("/namespace", handler);',
+        'typeOnly.get("/type-only", handler);',
+        'foreign.get("/foreign", handler);',
+        'legacyApp.get("/require", handler);',
+        "function shadow(WebApp: new () => unknown) {",
+        "  const shadowed = new WebApp();",
+        '  shadowed.get("/shadowed", handler);',
+        "}"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route").map((route) => route.name)).toEqual([
+      "GET /real"
+    ]);
+    expect(
+      facts.pendingReferences
+        .filter((reference) => reference.relationKind === "routes")
+        .map((reference) => [reference.referenceName, reference.routeFramework])
+    ).toEqual([["handler", "elysia"]]);
+  });
+
   it("extracts syntax-proven Fastify shorthand and full-object routes with framework provenance", () => {
     const facts = extractFileFacts({
       filePath: "src/routes.ts",

@@ -611,6 +611,9 @@ function staticRouteHandlerRuleId(
   if (reference.routeFramework === "hono") {
     return `framework.hono.app.literal-route.${suffix}`;
   }
+  if (reference.routeFramework === "elysia") {
+    return `framework.elysia.app.literal-route.${suffix}`;
+  }
   if (reference.routeFramework === "react-router") {
     const registration =
       reference.routeRegistration === "react-router-data-router"

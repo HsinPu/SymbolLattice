@@ -12,6 +12,7 @@ describe("first-party framework capabilities", () => {
       "express",
       "koa",
       "hono",
+      "elysia",
       "fastify",
       "nestjs",
       "react-router",
@@ -80,6 +81,15 @@ describe("first-party framework capabilities", () => {
       surfaces: [
         "direct named Hono imports",
         "immutable direct new Hono() receivers with literal named-handler HTTP methods"
+      ]
+    });
+    expect(frameworkCapability("elysia")).toMatchObject({
+      languages: ["typescript", "javascript"],
+      routeFramework: "elysia",
+      routeRegistrations: [],
+      surfaces: [
+        "direct named Elysia imports",
+        "immutable direct new Elysia() receivers with literal named-handler HTTP methods"
       ]
     });
     expect(frameworkCapability("react-router")).toMatchObject({
