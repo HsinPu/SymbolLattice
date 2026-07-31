@@ -1095,6 +1095,117 @@ describe("source extraction", () => {
     }
   });
 
+  it("extracts syntax-proven direct Koa router routes with literal paths and named handlers", () => {
+    const facts = extractFileFacts({
+      filePath: "src/routes.ts",
+      language: "typescript",
+      sourceText: [
+        'import Router from "@koa/router";',
+        "const router = new Router();",
+        "const requireAuth = () => undefined;",
+        "function handler() { return undefined; }",
+        'router.get("/users", requireAuth, handler);',
+        'router.post("/users", handler);',
+        'router.put("/users/:id", handler);',
+        'router.patch("/users/:id", handler);',
+        'router.delete("/users/:id", handler);',
+        'router.del("/legacy/:id", handler);',
+        'router.head("/health", handler);',
+        'router.options("/users", handler);',
+        'router.connect("/tunnel", handler);',
+        'router.trace("/diagnostics", handler);',
+        'router.all("/fallback", handler);'
+      ].join("\n")
+    });
+
+    const routes = facts.symbols.filter((symbol) => symbol.kind === "route");
+    const routeReferences = facts.pendingReferences.filter(
+      (reference) => reference.relationKind === "routes"
+    );
+
+    expect(routes.map((route) => route.name)).toEqual([
+      "GET /users",
+      "POST /users",
+      "PUT /users/:id",
+      "PATCH /users/:id",
+      "DELETE /users/:id",
+      "DELETE /legacy/:id",
+      "HEAD /health",
+      "OPTIONS /users",
+      "CONNECT /tunnel",
+      "TRACE /diagnostics",
+      "ALL /fallback"
+    ]);
+    expect(
+      routeReferences.map((reference) => [reference.referenceName, reference.routeFramework])
+    ).toEqual([
+      ["handler", "koa"],
+      ["handler", "koa"],
+      ["handler", "koa"],
+      ["handler", "koa"],
+      ["handler", "koa"],
+      ["handler", "koa"],
+      ["handler", "koa"],
+      ["handler", "koa"],
+      ["handler", "koa"],
+      ["handler", "koa"],
+      ["handler", "koa"]
+    ]);
+  });
+
+  it("rejects unproven, dynamic, and non-direct Koa router route shapes", () => {
+    const facts = extractFileFacts({
+      filePath: "src/routes.ts",
+      language: "typescript",
+      sourceText: [
+        'import Router from "@koa/router";',
+        'import type TypeOnlyRouter from "@koa/router";',
+        'import { default as NamedDefaultRouter } from "@koa/router";',
+        'import foreignRouter from "not-koa-router";',
+        "const router = new Router();",
+        "let mutable = new Router();",
+        'const prefixed = new Router({ prefix: "/api" });',
+        "const typeOnly = new TypeOnlyRouter();",
+        "const namedDefault = new NamedDefaultRouter();",
+        "const foreign = new foreignRouter();",
+        'const legacy = require("@koa/router");',
+        "const legacyRouter = new legacy();",
+        "const controller = { handler: () => undefined };",
+        'const path = "/dynamic";',
+        "function handler() { return undefined; }",
+        'router.get("/real", handler);',
+        "router.get(path, handler);",
+        'router.get("named-route", "/named", handler);',
+        'router.get("/inline", () => undefined);',
+        'router.get("/member", controller.handler);',
+        'router.get("/non-identifier-middleware", {}, handler);',
+        'router["get"]("/computed", handler);',
+        'router.use("/mount", handler);',
+        'router?.get("/optional-property", handler);',
+        'router.get?.("/optional-call", handler);',
+        'mutable.get("/mutable", handler);',
+        'prefixed.get("/prefixed", handler);',
+        'typeOnly.get("/type-only", handler);',
+        'namedDefault.get("/named-default", handler);',
+        'foreign.get("/foreign", handler);',
+        'legacyRouter.get("/require", handler);',
+        "function shadow(Router: new () => unknown) {",
+        "  const shadowed = new Router();",
+        '  shadowed.get("/shadowed", handler);',
+        "}"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route").map((route) => route.name)).toEqual([
+      "GET /real"
+    ]);
+    expect(
+      facts.pendingReferences
+        .filter((reference) => reference.relationKind === "routes")
+        .map((reference) => [reference.referenceName, reference.routeFramework])
+    ).toEqual([["handler", "koa"]]);
+  });
+
   it("extracts syntax-proven Fastify shorthand and full-object routes with framework provenance", () => {
     const facts = extractFileFacts({
       filePath: "src/routes.ts",

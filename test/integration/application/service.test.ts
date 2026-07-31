@@ -5982,6 +5982,91 @@ describe("SymbolLatticeService", () => {
     ]);
   });
 
+  it("indexes direct Koa router routes with exact imported handler evidence", async () => {
+    const projectPath = await createInlineProject({
+      "src/handlers.ts": [
+        "export function listUsers() { return []; }",
+        "export function removeUser() { return undefined; }"
+      ].join("\n"),
+      "src/routes.ts": [
+        'import Router from "@koa/router";',
+        'import { listUsers, removeUser } from "./handlers.js";',
+        "const router = new Router();",
+        'router.get("/users", listUsers);',
+        'router.del("/users/:id", removeUser);'
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    const indexed = await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+    const persistedFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "src/routes.ts");
+    const found = await service.find(projectPath, "src/handlers.ts#listUsers");
+    const listUsers = found.symbols[0];
+    if (listUsers === undefined) {
+      throw new Error("Expected indexed Koa handler.");
+    }
+    const callers = await service.callers(projectPath, listUsers.qualifiedName);
+
+    expect(indexed).toMatchObject({
+      stale: false,
+      counts: { files: 2, symbols: expect.any(Number), edges: expect.any(Number) }
+    });
+    expect(
+      persistedFacts?.pendingReferences
+        .filter((reference) => reference.relationKind === "routes")
+        .map((reference) => [reference.referenceName, reference.routeFramework])
+    ).toEqual([
+      ["listUsers", "koa"],
+      ["removeUser", "koa"]
+    ]);
+    expect(routes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "GET",
+          path: "/users",
+          route: expect.objectContaining({ kind: "route", name: "GET /users" }),
+          edge: expect.objectContaining({
+            kind: "routes",
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.koa.router.literal-route.imported-handler",
+              stage: "module"
+            })
+          }),
+          handler: expect.objectContaining({ qualifiedName: "src/handlers.ts#listUsers" })
+        }),
+        expect.objectContaining({
+          method: "DELETE",
+          path: "/users/:id",
+          route: expect.objectContaining({ kind: "route", name: "DELETE /users/:id" }),
+          edge: expect.objectContaining({
+            kind: "routes",
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.koa.router.literal-route.imported-handler",
+              stage: "module"
+            })
+          }),
+          handler: expect.objectContaining({ qualifiedName: "src/handlers.ts#removeUser" })
+        })
+      ])
+    );
+    expect(callers.relations).toMatchObject([
+      {
+        symbol: { kind: "route", name: "GET /users" },
+        edge: {
+          kind: "routes",
+          resolution: "exact",
+          evidence: { ruleId: "framework.koa.router.literal-route.imported-handler", stage: "module" }
+        }
+      }
+    ]);
+  });
+
   it("indexes React Router JSX navigation routes with exact imported page evidence", async () => {
     const projectPath = await createInlineProject({
       "src/pages.tsx": "export function SettingsPage() { return <main>Settings</main>; }\n",

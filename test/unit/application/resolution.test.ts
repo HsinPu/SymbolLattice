@@ -826,6 +826,104 @@ describe("literal route handler resolution", () => {
     ).toEqual([]);
   });
 
+  it("resolves Koa router handlers with distinct framework evidence", () => {
+    const sourceDocuments: readonly SourceDocument[] = [
+      {
+        absolutePath: "C:/project/src/handlers.ts",
+        relativePath: "src/handlers.ts",
+        language: "typescript",
+        sourceText:
+          "export function importedHandler() { return 1; } export function reexportedHandler() { return 2; }",
+        contentHash: "handlers"
+      },
+      {
+        absolutePath: "C:/project/src/barrel.ts",
+        relativePath: "src/barrel.ts",
+        language: "typescript",
+        sourceText: 'export { reexportedHandler } from "./handlers";',
+        contentHash: "barrel"
+      },
+      {
+        absolutePath: "C:/project/src/local-routes.ts",
+        relativePath: "src/local-routes.ts",
+        language: "typescript",
+        sourceText:
+          'import Router from "@koa/router"; const router = new Router(); function localHandler() { return 3; } router.get("/local", localHandler);',
+        contentHash: "local-routes"
+      },
+      {
+        absolutePath: "C:/project/src/imported-routes.ts",
+        relativePath: "src/imported-routes.ts",
+        language: "typescript",
+        sourceText:
+          'import Router from "@koa/router"; import { importedHandler } from "./handlers"; const router = new Router(); router.post("/imported", importedHandler);',
+        contentHash: "imported-routes"
+      },
+      {
+        absolutePath: "C:/project/src/reexported-routes.ts",
+        relativePath: "src/reexported-routes.ts",
+        language: "typescript",
+        sourceText:
+          'import Router from "@koa/router"; import { reexportedHandler } from "./barrel"; const router = new Router(); router.del("/reexported", reexportedHandler);',
+        contentHash: "reexported-routes"
+      }
+    ];
+    const snapshot = snapshotWithResolver(sourceDocuments, undefined);
+    const localHandler = snapshot.symbols.find(
+      (symbol) => symbol.filePath === "src/local-routes.ts" && symbol.name === "localHandler"
+    );
+    const importedHandler = snapshot.symbols.find(
+      (symbol) => symbol.filePath === "src/handlers.ts" && symbol.name === "importedHandler"
+    );
+    const reexportedHandler = snapshot.symbols.find(
+      (symbol) => symbol.filePath === "src/handlers.ts" && symbol.name === "reexportedHandler"
+    );
+    const localRoute = snapshot.edges.find(
+      (edge) => edge.kind === "routes" && edge.referenceName === "localHandler"
+    );
+    const importedRoute = snapshot.edges.find(
+      (edge) => edge.kind === "routes" && edge.referenceName === "importedHandler"
+    );
+    const reexportedRoute = snapshot.edges.find(
+      (edge) => edge.kind === "routes" && edge.referenceName === "reexportedHandler"
+    );
+
+    expect(localRoute).toMatchObject({
+      targetId: localHandler?.id,
+      resolution: "exact",
+      confidence: 1,
+      evidence: {
+        ruleId: "framework.koa.router.literal-route.local-handler",
+        stage: "lexical",
+        candidateSymbolIds: [localHandler?.id]
+      }
+    });
+    expect(importedRoute).toMatchObject({
+      targetId: importedHandler?.id,
+      resolution: "exact",
+      confidence: 1,
+      evidence: {
+        ruleId: "framework.koa.router.literal-route.imported-handler",
+        stage: "module",
+        candidateSymbolIds: [importedHandler?.id]
+      }
+    });
+    expect(reexportedRoute).toMatchObject({
+      targetId: reexportedHandler?.id,
+      resolution: "exact",
+      confidence: 1,
+      evidence: {
+        ruleId: "framework.koa.router.literal-route.reexported-handler",
+        stage: "module",
+        candidateSymbolIds: [reexportedHandler?.id],
+        resolutionPath: ["src/reexported-routes.ts", "src/barrel.ts", "src/handlers.ts"]
+      }
+    });
+    expect(
+      snapshot.pendingReferences.filter((reference) => reference.relationKind === "routes")
+    ).toEqual([]);
+  });
+
   it("does not resolve a Fastify runtime handler through a type-only import", () => {
     const sourceDocuments: readonly SourceDocument[] = [
       {

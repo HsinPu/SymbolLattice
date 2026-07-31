@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.102.0 is an early developer release. Run this repository from source; the npm package remains private and unpublished.
+> v0.103.0 is an early developer release. Run this repository from source; the npm package remains private and unpublished.
 
 ## Positioning
 
@@ -49,19 +49,18 @@ node dist/cli/main.js explain-edge "edge:<edge-id>" --project /path/to/project
 
 On Windows PowerShell, use `npm.cmd` when `npm` is unavailable. Filesystem roots and home directories are rejected unless `--force` is explicitly supplied.
 
-## v0.102.0 highlights
+## v0.103.0 highlights
 
-- Adds Ada `.ads`, `.adb`, and `.ada` source discovery.
-- Complete direct `package`, `package body`, `procedure`, and `function` library units receive source ranges and exact `contains` evidence; the first two use the existing `module` kind and the latter two use `function`.
-- Keeps Traditional Chinese as the default README, with this equally concise English counterpart.
+- Adds direct `@koa/router` route scanning for TypeScript and JavaScript.
+- A Koa route requires a direct default import, immutable `new Router()` receiver, literal path, and named handler before it receives traceable evidence.
+- Keeps Traditional Chinese as the default README, with this concise English counterpart.
 
 ## Deliberate limits
 
 - This is not a compiler, full language parser, type checker, framework runtime, or execution tracer.
 - Dynamic dispatch, reflection, macros, code generation, dependency injection, and ambiguous name matches are never promoted to exact graph relations.
-- The first Groovy slice excludes members, trait composition, Grails, Gradle DSLs, and dynamic metaprogramming. Any unmasked script-scope `/` (including slashy/dollar-slashy strings and division) conservatively rejects the file instead of risking false symbols.
-- The first Fortran slice excludes `contains` members, interface/submodule/derived-type contents, cross-file module relations, and runtime behavior. A generic `END` used to close a supported unit, continuation, or incomplete structure rejects the file.
-- The first Ada slice excludes package members, spec/body pairing, multi-line profiles, aspects, generics, task/protected/separate units, `with`/`use`, and cross-file relations. An unmatched named ending or unterminated string rejects the file; other unsupported forms create no Ada symbols.
+- Groovy, Fortran, and Ada remain conservative first slices: only complete direct units are retained; members, cross-file, and runtime relations are not inferred, and ambiguous source is skipped.
+- The first Koa slice does not infer prefixes, mounts, nested routers, `use` middleware, CommonJS, dynamic paths, or inline/member handlers.
 - Updating a graph requires an explicit `sync` or `index`; MCP queries remain read-only.
 
 ## Verification

@@ -10,6 +10,7 @@ describe("first-party framework capabilities", () => {
   it("declares one executable capability for every registered extractor", () => {
     expect(FRAMEWORK_CAPABILITY_IDS).toEqual([
       "express",
+      "koa",
       "fastify",
       "nestjs",
       "react-router",
@@ -62,6 +63,15 @@ describe("first-party framework capabilities", () => {
     expect(FRAMEWORK_CAPABILITIES.map((capability) => capability.id)).toEqual(
       FRAMEWORK_CAPABILITY_IDS
     );
+    expect(frameworkCapability("koa")).toMatchObject({
+      languages: ["typescript", "javascript"],
+      routeFramework: "koa",
+      routeRegistrations: [],
+      surfaces: [
+        "direct default @koa/router imports",
+        "immutable direct new Router() receivers with literal named-handler HTTP methods"
+      ]
+    });
     expect(frameworkCapability("react-router")).toMatchObject({
       languages: ["typescript", "javascript"],
       routeFramework: "react-router",

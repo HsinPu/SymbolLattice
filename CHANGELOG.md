@@ -6,6 +6,23 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.103.0] - 2026-07-31
+
+### Added
+
+- The first-party `koa` capability adds syntax-proven TypeScript and JavaScript `@koa/router` route evidence. It accepts a direct runtime default import, an immutable direct `const router = new Router()` receiver with no constructor options, a slash-prefixed string-literal path, and named identifier middleware/terminal handlers. The terminal identifier creates the existing source-ranged route node and a pending `routes` reference; `get`, `post`, `put`, `patch`, `delete` / `del`, `head`, `options`, `connect`, `trace`, and `all` are mapped to the existing HTTP method contract.
+- Same-file, imported, and re-exported Koa handlers reuse the existing deterministic resolver but now retain Koa-specific `framework.koa.router.literal-route.*` evidence rather than falling back to Express evidence. Focused extraction, capability-registry, resolver, and service integration coverage prove accepted methods, lexical shadowing, type-only/foreign/CommonJS rejection, persisted facts, and exact route queries. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.103.0.md`.
+
+### Compatibility
+
+- The artifact extractor advances to `multi-language-ast-v92`; the project resolver remains `project-resolver-v25` because the added resolver branch only labels Koa facts freshly produced by this extractor version. A pre-v0.103 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes Koa-capable facts.
+- No SQLite schema migration or new query command is required. This is an additive framework capability within existing TypeScript/JavaScript source discovery, route symbol, route-edge, source-search, CLI, MCP, retained-generation, and incremental-index contracts; existing generations remain readable.
+
+### Deliberate limits
+
+- This is not a Koa compiler, runtime router, middleware scheduler, path matcher, dependency injector, or execution tracer. It deliberately excludes legacy `koa-router` / CommonJS, namespace and named imports, constructor options and prefixes, mutable or reassigned receivers, `router.use`, mount and nested-router composition, `router.routes()` wiring, regex/array/dynamic paths, named-route overloads, inline/member handlers, and runtime behavior.
+- The inspected local CodeGraph query did not expose a Koa-specific route extractor in the returned source surface. SymbolLattice v0.103 independently adds a deliberately narrow, provenance-preserving slice without copying CodeGraph source or claiming complete Koa support.
+
 ## [0.102.0] - 2026-07-31
 
 ### Added

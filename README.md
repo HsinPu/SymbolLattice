@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.102.0 為早期開發者版本。此儲存庫從原始碼執行；npm 套件維持私有，尚未發佈。
+> v0.103.0 為早期開發者版本。此儲存庫從原始碼執行；npm 套件維持私有，尚未發佈。
 
 ## 產品定位
 
@@ -49,19 +49,18 @@ node dist/cli/main.js explain-edge "edge:<edge-id>" --project /path/to/project
 
 Windows PowerShell 若找不到 `npm`，請使用 `npm.cmd`。系統預設拒絕索引檔案系統根目錄或家目錄，除非明確指定 `--force`。
 
-## v0.102.0 重點
+## v0.103.0 重點
 
-- 新增 Ada 的 `.ads`、`.adb` 與 `.ada` 掃描。
-- 完整直接 `package`、`package body`、`procedure`、`function` library unit 會產生來源範圍與精確 `contains` 證據；前兩者使用既有 `module` 類型，後兩者使用 `function` 類型。
-- README 維持預設繁體中文，並提供同樣精簡的英文版。
+- 新增 `@koa/router` 的 TypeScript／JavaScript 直接路由掃描。
+- 只有直接預設匯入、不可變 `new Router()`、字面路徑與具名處理器才會建立 Koa 路由與可追溯證據。
+- README 維持預設繁體中文，並提供精簡英文版。
 
 ## 明確限制
 
 - 不是編譯器、完整語言 parser、型別檢查器、framework runtime 或執行期追蹤器。
 - 不會把動態派發、反射、巨集、程式碼產生、依賴注入或模糊名稱連結當成精確關係。
-- Groovy 初版不解析成員、trait 組合、Grails、Gradle DSL、動態 metaprogramming；任何腳本頂層未遮罩的 `/`（含 slashy／dollar-slashy 字串與除法）都會保守地略過整個檔案，而非冒險建立假符號。
-- Fortran 初版不解析 `contains` 內成員、介面／子模組／衍生型別內容、跨檔案模組關係或執行期行為；以一般 `END` 結束受支援單元、續行或不完整結構會略過整個檔案。
-- Ada 初版不解析 package 成員、spec/body 配對、多行 profile、aspect、generic、task／protected／separate unit、`with`／`use` 或跨檔案關係；未配對命名結尾與未關閉字串會略過整個檔案，其他不支援形式不建立 Ada 符號。
+- Groovy、Fortran 與 Ada 仍是保守初版：僅擷取完整直接單元，不推斷成員、跨檔案或執行期關係；遇到曖昧結構會略過。
+- Koa 初版不推斷 prefix、掛載、巢狀 router、`use` middleware、CommonJS、動態路徑或內嵌／成員處理器。
 - 更新圖譜需由使用者明確執行 `sync` 或 `index`；MCP 查詢保持唯讀。
 
 ## 驗證

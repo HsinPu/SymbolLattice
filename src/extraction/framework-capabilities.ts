@@ -3,6 +3,7 @@ import type { ArtifactLanguage, RouteFramework, RouteRegistration } from "../dom
 /** Stable identifiers for first-party syntax extractors. */
 export const FRAMEWORK_CAPABILITY_IDS = [
   "express",
+  "koa",
   "fastify",
   "nestjs",
   "react-router",
@@ -80,6 +81,16 @@ export const FRAMEWORK_CAPABILITIES = [
     routeFramework: "express",
     routeRegistrations: [],
     surfaces: ["literal HTTP receiver methods"]
+  },
+  {
+    id: "koa",
+    languages: ["typescript", "javascript"],
+    routeFramework: "koa",
+    routeRegistrations: [],
+    surfaces: [
+      "direct default @koa/router imports",
+      "immutable direct new Router() receivers with literal named-handler HTTP methods"
+    ]
   },
   {
     id: "fastify",

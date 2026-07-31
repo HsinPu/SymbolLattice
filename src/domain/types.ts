@@ -41,6 +41,7 @@ export type ResolutionKind = "exact" | "heuristic" | "unresolved";
 /** Framework provenance retained for syntax-proven static HTTP or client-navigation routes. */
 export type RouteFramework =
   | "express"
+  | "koa"
   | "fastify"
   | "nextjs"
   | "sveltekit"

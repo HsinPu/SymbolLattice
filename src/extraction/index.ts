@@ -367,6 +367,8 @@ type RouteBindingKind =
   | "express-default-factory"
   | "express-namespace"
   | "express-router-factory"
+  | "koa-router-constructor"
+  | "koa-router-receiver"
   | "fastify-receiver"
   | "fastify-default-factory"
   | "fastify-plugin-receiver"
@@ -385,6 +387,13 @@ interface RouteBinding {
 }
 
 interface StaticExpressRoute {
+  readonly method: RouteMethod;
+  readonly path: string;
+  readonly handler: ts.Identifier;
+}
+
+/** A direct @koa/router route with literal path and named terminal handler. */
+interface StaticKoaRoute {
   readonly method: RouteMethod;
   readonly path: string;
   readonly handler: ts.Identifier;
@@ -550,6 +559,20 @@ const EXPRESS_ROUTE_METHODS = [
   "OPTIONS",
   "ALL"
 ] as const satisfies readonly RouteMethod[];
+
+const KOA_ROUTE_METHODS: Readonly<Record<string, RouteMethod>> = {
+  get: "GET",
+  post: "POST",
+  put: "PUT",
+  patch: "PATCH",
+  delete: "DELETE",
+  del: "DELETE",
+  head: "HEAD",
+  options: "OPTIONS",
+  connect: "CONNECT",
+  trace: "TRACE",
+  all: "ALL"
+};
 
 const FASTIFY_SHORTHAND_ROUTE_METHODS = [
   "GET",
@@ -724,6 +747,14 @@ function isFastifyImport(statement: ts.ImportDeclaration): boolean {
   );
 }
 
+function isKoaRouterImport(statement: ts.ImportDeclaration): boolean {
+  return (
+    ts.isStringLiteral(statement.moduleSpecifier) &&
+    statement.moduleSpecifier.text === "@koa/router" &&
+    statement.importClause?.isTypeOnly !== true
+  );
+}
+
 function isReactRouterImport(statement: ts.ImportDeclaration): boolean {
   return (
     ts.isStringLiteral(statement.moduleSpecifier) &&
@@ -842,6 +873,20 @@ function isFastifyReceiverInitializer(
   );
 }
 
+function isKoaRouteReceiverInitializer(
+  sourceFile: ts.SourceFile,
+  initializer: ts.Expression,
+  bindings: ScopedRouteReceiverBindings
+): boolean {
+  return (
+    ts.isNewExpression(initializer) &&
+    initializer.arguments !== undefined &&
+    initializer.arguments.length === 0 &&
+    ts.isIdentifier(initializer.expression) &&
+    visibleRouteBindingKind(sourceFile, initializer.expression, bindings) === "koa-router-constructor"
+  );
+}
+
 function addScopedValueBinding(
   byScopeId: Map<string, Map<string, RouteBinding[]>>,
   scopeId: string | undefined,
@@ -866,7 +911,7 @@ function markRouteReceiver(
   byScopeId: Map<string, Map<string, RouteBinding[]>>,
   scopeId: string | undefined,
   declaration: ts.VariableDeclaration,
-  bindingKind: "express-receiver" | "fastify-receiver"
+  bindingKind: "express-receiver" | "koa-router-receiver" | "fastify-receiver"
 ): void {
   if (scopeId === undefined || !ts.isIdentifier(declaration.name)) {
     return;
@@ -1342,9 +1387,11 @@ function collectScopedRouteReceiverBindings(sourceFile: ts.SourceFile): ScopedRo
           importClause.name,
           isExpressImport(node)
             ? "express-default-factory"
-            : isFastifyImport(node)
-              ? "fastify-default-factory"
-              : "other"
+            : isKoaRouterImport(node)
+              ? "koa-router-constructor"
+              : isFastifyImport(node)
+                ? "fastify-default-factory"
+                : "other"
         );
       }
       if (importClause?.namedBindings !== undefined) {
@@ -1440,6 +1487,19 @@ function collectScopedRouteReceiverBindings(sourceFile: ts.SourceFile): ScopedRo
       ts.isIdentifier(node.name) &&
       node.initializer !== undefined &&
       isConstVariableDeclaration(node) &&
+      isKoaRouteReceiverInitializer(sourceFile, node.initializer, { byScopeId })
+    ) {
+      markRouteReceiver(
+        byScopeId,
+        variableBindingScopeId(sourceFile, node),
+        node,
+        "koa-router-receiver"
+      );
+    } else if (
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.initializer !== undefined &&
+      isConstVariableDeclaration(node) &&
       isFastifyReceiverInitializer(sourceFile, node.initializer, { byScopeId })
     ) {
       markRouteReceiver(
@@ -1486,6 +1546,14 @@ function isExpressRouteReceiver(
   return visibleRouteBindingKind(sourceFile, receiver, bindings) === "express-receiver";
 }
 
+function isKoaRouteReceiver(
+  sourceFile: ts.SourceFile,
+  receiver: ts.Identifier,
+  bindings: ScopedRouteReceiverBindings
+): boolean {
+  return visibleRouteBindingKind(sourceFile, receiver, bindings) === "koa-router-receiver";
+}
+
 function fastifyRouteReceiverContext(
   sourceFile: ts.SourceFile,
   receiver: ts.Identifier,
@@ -1522,6 +1590,43 @@ function staticExpressRoute(
 
   const methodName = node.expression.name.text;
   const method = staticRouteMethodForName(methodName, EXPRESS_ROUTE_METHODS);
+  if (method === undefined) {
+    return null;
+  }
+
+  const pathArgument = node.arguments[0];
+  const handler = node.arguments.at(-1);
+  if (
+    node.arguments.length < 2 ||
+    pathArgument === undefined ||
+    !ts.isStringLiteral(pathArgument) ||
+    !pathArgument.text.startsWith("/") ||
+    handler === undefined ||
+    !ts.isIdentifier(handler) ||
+    node.arguments.slice(1).some((argument) => !ts.isIdentifier(argument))
+  ) {
+    return null;
+  }
+
+  return { method, path: pathArgument.text, handler };
+}
+
+function staticKoaRoute(
+  sourceFile: ts.SourceFile,
+  node: ts.CallExpression,
+  bindings: ScopedRouteReceiverBindings
+): StaticKoaRoute | null {
+  if (
+    node.questionDotToken !== undefined ||
+    !ts.isPropertyAccessExpression(node.expression) ||
+    node.expression.questionDotToken !== undefined ||
+    !ts.isIdentifier(node.expression.expression) ||
+    !isKoaRouteReceiver(sourceFile, node.expression.expression, bindings)
+  ) {
+    return null;
+  }
+
+  const method = KOA_ROUTE_METHODS[node.expression.name.text];
   if (method === undefined) {
     return null;
   }
@@ -4053,6 +4158,7 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
     node: ts.Node,
     route:
       | StaticExpressRoute
+      | StaticKoaRoute
       | StaticFastifyRoute
       | StaticNextRoute
       | StaticReactRouterRoute
@@ -4073,6 +4179,10 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
 
   function addStaticExpressRoute(node: ts.CallExpression, route: StaticExpressRoute): void {
     addStaticRoute(node, route, "express");
+  }
+
+  function addStaticKoaRoute(node: ts.CallExpression, route: StaticKoaRoute): void {
+    addStaticRoute(node, route, "koa");
   }
 
   function addStaticFastifyRoute(node: ts.CallExpression, route: StaticFastifyRoute): void {
@@ -4534,6 +4644,17 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
         const route = staticExpressRoute(sourceFile, node, routeReceiverBindings);
         if (route !== null) {
           addStaticExpressRoute(node, route);
+        }
+      }
+    }),
+    frameworkExtractionPass("koa", {
+      visit(node) {
+        if (!ts.isCallExpression(node)) {
+          return;
+        }
+        const route = staticKoaRoute(sourceFile, node, routeReceiverBindings);
+        if (route !== null) {
+          addStaticKoaRoute(node, route);
         }
       }
     }),
