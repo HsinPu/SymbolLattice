@@ -11,6 +11,7 @@ describe("first-party framework capabilities", () => {
     expect(FRAMEWORK_CAPABILITY_IDS).toEqual([
       "express",
       "koa",
+      "hono",
       "fastify",
       "nestjs",
       "react-router",
@@ -70,6 +71,15 @@ describe("first-party framework capabilities", () => {
       surfaces: [
         "direct default @koa/router imports",
         "immutable direct new Router() receivers with literal named-handler HTTP methods"
+      ]
+    });
+    expect(frameworkCapability("hono")).toMatchObject({
+      languages: ["typescript", "javascript"],
+      routeFramework: "hono",
+      routeRegistrations: [],
+      surfaces: [
+        "direct named Hono imports",
+        "immutable direct new Hono() receivers with literal named-handler HTTP methods"
       ]
     });
     expect(frameworkCapability("react-router")).toMatchObject({

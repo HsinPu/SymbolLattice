@@ -608,6 +608,9 @@ function staticRouteHandlerRuleId(
   if (reference.routeFramework === "koa") {
     return `framework.koa.router.literal-route.${suffix}`;
   }
+  if (reference.routeFramework === "hono") {
+    return `framework.hono.app.literal-route.${suffix}`;
+  }
   if (reference.routeFramework === "react-router") {
     const registration =
       reference.routeRegistration === "react-router-data-router"

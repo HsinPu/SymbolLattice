@@ -4,6 +4,7 @@ import type { ArtifactLanguage, RouteFramework, RouteRegistration } from "../dom
 export const FRAMEWORK_CAPABILITY_IDS = [
   "express",
   "koa",
+  "hono",
   "fastify",
   "nestjs",
   "react-router",
@@ -90,6 +91,16 @@ export const FRAMEWORK_CAPABILITIES = [
     surfaces: [
       "direct default @koa/router imports",
       "immutable direct new Router() receivers with literal named-handler HTTP methods"
+    ]
+  },
+  {
+    id: "hono",
+    languages: ["typescript", "javascript"],
+    routeFramework: "hono",
+    routeRegistrations: [],
+    surfaces: [
+      "direct named Hono imports",
+      "immutable direct new Hono() receivers with literal named-handler HTTP methods"
     ]
   },
   {

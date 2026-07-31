@@ -6,6 +6,23 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.104.0] - 2026-07-31
+
+### Added
+
+- The first-party `hono` capability adds syntax-proven TypeScript and JavaScript `hono` application route evidence. It accepts a direct runtime named `Hono` import (including an alias), an immutable direct `const app = new Hono()` receiver with no constructor options, a slash-prefixed string-literal path, and named identifier middleware/terminal handlers. The terminal identifier creates the existing source-ranged route node and a pending `routes` reference; `get`, `post`, `put`, `patch`, `delete`, `head`, `options`, and `all` are mapped to the existing HTTP method contract.
+- Same-file, imported, and re-exported Hono handlers reuse the deterministic resolver with Hono-specific `framework.hono.app.literal-route.*` evidence. Focused extraction, capability-registry, resolver, and JavaScript service integration coverage prove aliases, accepted methods, lexical shadowing, type-only/default/namespace/foreign/CommonJS rejection, persisted facts, and exact route queries. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.104.0.md`.
+
+### Compatibility
+
+- The artifact extractor advances to `multi-language-ast-v93`; the project resolver remains `project-resolver-v25` because the added resolver branch only labels Hono facts freshly produced by this extractor version. A pre-v0.104 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes Hono-capable facts.
+- No SQLite schema migration or new query command is required. This is an additive framework capability within existing TypeScript/JavaScript source discovery, route symbol, route-edge, source-search, CLI, MCP, retained-generation, and incremental-index contracts; existing generations remain readable.
+
+### Deliberate limits
+
+- This is not a Hono compiler, runtime router, middleware scheduler, path matcher, deployment adapter, or execution tracer. It deliberately excludes default/namespace/CommonJS imports, constructor options, `app.on`, `app.use`, `app.route`, `app.basePath`, `app.mount`, chained routes, dynamic/array paths or methods, inline/member handlers, and runtime behavior.
+- The inspected local CodeGraph query did not expose a Hono-specific route extractor in the returned source surface. SymbolLattice v0.104 independently adds a deliberately narrow, provenance-preserving slice without copying CodeGraph source or claiming complete Hono support.
+
 ## [0.103.0] - 2026-07-31
 
 ### Added

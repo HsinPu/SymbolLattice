@@ -42,6 +42,7 @@ export type ResolutionKind = "exact" | "heuristic" | "unresolved";
 export type RouteFramework =
   | "express"
   | "koa"
+  | "hono"
   | "fastify"
   | "nextjs"
   | "sveltekit"

@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.103.0 is an early developer release. Run this repository from source; the npm package remains private and unpublished.
+> v0.104.0 is an early developer release. Run this repository from source; the npm package remains private and unpublished.
 
 ## Positioning
 
@@ -49,10 +49,10 @@ node dist/cli/main.js explain-edge "edge:<edge-id>" --project /path/to/project
 
 On Windows PowerShell, use `npm.cmd` when `npm` is unavailable. Filesystem roots and home directories are rejected unless `--force` is explicitly supplied.
 
-## v0.103.0 highlights
+## v0.104.0 highlights
 
-- Adds direct `@koa/router` route scanning for TypeScript and JavaScript.
-- A Koa route requires a direct default import, immutable `new Router()` receiver, literal path, and named handler before it receives traceable evidence.
+- Adds direct Hono route scanning for TypeScript and JavaScript.
+- A Hono route requires a named `Hono` import from `hono`, immutable `new Hono()` receiver, literal path, and named handler before it receives traceable evidence.
 - Keeps Traditional Chinese as the default README, with this concise English counterpart.
 
 ## Deliberate limits
@@ -60,7 +60,7 @@ On Windows PowerShell, use `npm.cmd` when `npm` is unavailable. Filesystem roots
 - This is not a compiler, full language parser, type checker, framework runtime, or execution tracer.
 - Dynamic dispatch, reflection, macros, code generation, dependency injection, and ambiguous name matches are never promoted to exact graph relations.
 - Groovy, Fortran, and Ada remain conservative first slices: only complete direct units are retained; members, cross-file, and runtime relations are not inferred, and ambiguous source is skipped.
-- The first Koa slice does not infer prefixes, mounts, nested routers, `use` middleware, CommonJS, dynamic paths, or inline/member handlers.
+- The Koa and Hono slices cover direct receiver routes only; prefixes / `basePath`, mounts, nested apps, `use`, `route`, `on`, CommonJS, dynamic paths, and inline/member handlers are not inferred.
 - Updating a graph requires an explicit `sync` or `index`; MCP queries remain read-only.
 
 ## Verification
