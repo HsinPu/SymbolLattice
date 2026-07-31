@@ -6,6 +6,23 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.83.0] - 2026-07-31
+
+### Added
+
+- COBOL source discovery now recognizes `.cbl`, `.cob`, `.cobol`, and `.cpy` paths and exposes the new `cobol` language through persisted source search plus the existing CLI and MCP language validation contracts. A source file produces a program module only after exactly one direct `IDENTIFICATION DIVISION.`, `PROGRAM-ID. name.`, and `PROCEDURE DIVISION.` sequence; direct free-format or fixed-format Area-A Procedure Division paragraph labels become contained function symbols.
+- The first COBOL extractor masks fixed-format comment lines, `*>` comments, and complete quoted literals before scanning, preserves offsets for evidence, and fails closed for unterminated literals, duplicate programs, missing divisions, and `.cpy` copybook input. Unit and service integration coverage verifies all supported extensions, fixed/free paragraph containment, exact evidence, persisted provenance, source search, and rejection boundaries. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.83.0.md`.
+
+### Compatibility
+
+- The artifact extractor advances to `multi-language-ast-v72`; the project resolver remains `project-resolver-v23` because the initial COBOL facts are file-local. A pre-v0.83 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes COBOL-capable facts.
+- No SQLite schema migration or query command is required. This is an additive artifact-language capability within the existing file, symbol, containment-edge, source-search, CLI, MCP, and incremental-index contracts; existing generations remain readable.
+
+### Deliberate limits
+
+- This is not a COBOL grammar, compiler, copybook resolver, or runtime model. Data/section/declarative declarations, `PERFORM` / `CALL` relations, nested programs, `PROCEDURE DIVISION USING`, compiler directives/source formats, dialect semantics, project resolution, CICS/SQL/JCL, compilation, and runtime behavior remain outside scope.
+- The inspected local CodeGraph baseline has a COBOL Tree-sitter grammar and broader general syntax extraction. SymbolLattice v0.83 is intentionally narrower, but adds persistent language-filtered source search and explicit rule IDs for the source-proven program/paragraph subset; it is independently implemented and does not copy CodeGraph source.
+
 ## [0.82.0] - 2026-07-31
 
 ### Added

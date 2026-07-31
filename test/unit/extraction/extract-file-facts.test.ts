@@ -3716,6 +3716,116 @@ describe("source extraction", () => {
     expect(lateHandler.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
   });
 
+  it("extracts a source-proven COBOL program and direct Procedure Division paragraphs", () => {
+    const facts = extractFileFacts({
+      filePath: "src/billing.cob",
+      language: "cobol",
+      sourceText: [
+        "       IDENTIFICATION DIVISION.",
+        "       PROGRAM-ID. BILLING-REPORT.",
+        "       PROCEDURE DIVISION.",
+        "       MAIN-LOGIC.",
+        "           DISPLAY \"FAKE-PARAGRAPH.\".",
+        "           GOBACK.",
+        "       FINISH-REPORT.",
+        "           GOBACK.",
+        "       END PROGRAM BILLING-REPORT."
+      ].join("\n")
+    });
+    const copybook = extractFileFacts({
+      filePath: "copybooks/customer.cpy",
+      language: "cobol",
+      sourceText: ["       01 CUSTOMER-NAME PIC X(30)."].join("\n")
+    });
+    const programShapedCopybook = extractFileFacts({
+      filePath: "copybooks/embedded.cpy",
+      language: "cobol",
+      sourceText: [
+        "       IDENTIFICATION DIVISION.",
+        "       PROGRAM-ID. EMBEDDED.",
+        "       PROCEDURE DIVISION.",
+        "       MAIN-LOGIC.",
+        "           GOBACK."
+      ].join("\n")
+    });
+    const multiplePrograms = extractFileFacts({
+      filePath: "src/multiple.cbl",
+      language: "cobol",
+      sourceText: [
+        "       IDENTIFICATION DIVISION.",
+        "       PROGRAM-ID. FIRST.",
+        "       PROCEDURE DIVISION.",
+        "       FIRST-LOGIC.",
+        "           GOBACK.",
+        "       END PROGRAM FIRST.",
+        "       IDENTIFICATION DIVISION.",
+        "       PROGRAM-ID. SECOND.",
+        "       PROCEDURE DIVISION."
+      ].join("\n")
+    });
+    const unterminatedLiteral = extractFileFacts({
+      filePath: "src/broken.cobol",
+      language: "cobol",
+      sourceText: [
+        "identification division.",
+        "program-id. broken.",
+        "procedure division.",
+        "main-logic.",
+        "display \"unterminated."
+      ].join("\n")
+    });
+
+    expect(
+      facts.symbols.map((symbol) => [symbol.kind, symbol.name, symbol.qualifiedName, symbol.isExported])
+    ).toEqual([
+      ["file", "billing.cob", "src/billing.cob", true],
+      ["module", "BILLING-REPORT", "src/billing.cob#program:BILLING-REPORT", true],
+      [
+        "function",
+        "MAIN-LOGIC",
+        "src/billing.cob#program:BILLING-REPORT#paragraph:MAIN-LOGIC",
+        false
+      ],
+      [
+        "function",
+        "FINISH-REPORT",
+        "src/billing.cob#program:BILLING-REPORT#paragraph:FINISH-REPORT",
+        false
+      ]
+    ]);
+    expect(
+      facts.edges.filter((edge) => edge.kind === "contains").map((edge) => [
+        edge.referenceName,
+        edge.evidence?.ruleId,
+        edge.resolution,
+        edge.confidence
+      ])
+    ).toEqual([
+      [
+        "BILLING-REPORT",
+        "language.cobol.program.identification-program-id-procedure",
+        "exact",
+        1
+      ],
+      [
+        "MAIN-LOGIC",
+        "language.cobol.paragraph.direct-procedure-division",
+        "exact",
+        1
+      ],
+      [
+        "FINISH-REPORT",
+        "language.cobol.paragraph.direct-procedure-division",
+        "exact",
+        1
+      ]
+    ]);
+    expect(copybook.symbols.map((symbol) => symbol.kind)).toEqual(["file"]);
+    expect(programShapedCopybook.symbols.map((symbol) => symbol.kind)).toEqual(["file"]);
+    expect(multiplePrograms.symbols.map((symbol) => symbol.kind)).toEqual(["file"]);
+    expect(unterminatedLiteral.symbols.map((symbol) => symbol.kind)).toEqual(["file"]);
+  });
+
   it("extracts direct R Plumber annotation routes with exact evidence", () => {
     const facts = extractFileFacts({
       filePath: "src/plumber.R",

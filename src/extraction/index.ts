@@ -1,6 +1,7 @@
 import ts from "typescript";
 
 import { extractCFileFacts } from "./c.js";
+import { extractCobolFileFacts } from "./cobol.js";
 import { extractCsharpFileFacts } from "./csharp.js";
 import { extractCppFileFacts } from "./cpp.js";
 import { extractDartFileFacts } from "./dart.js";
@@ -3681,6 +3682,9 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
   }
   if (input.language === "c") {
     return extractCFileFacts({ ...input, language: "c" });
+  }
+  if (input.language === "cobol") {
+    return extractCobolFileFacts({ ...input, language: "cobol" });
   }
   if (input.language === "lua" || input.language === "luau") {
     return extractLuaFileFacts({ ...input, language: input.language });

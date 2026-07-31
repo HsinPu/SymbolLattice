@@ -4320,6 +4320,52 @@ describe("SymbolLatticeService", () => {
     expect(search.results).toMatchObject([{ filePath: "src/health.pas", language: "pascal" }]);
   });
 
+  it("indexes a source-proven COBOL program and retains COBOL source-search filtering", async () => {
+    const projectPath = await createInlineProject({
+      "cobol/Billing.cbl": [
+        "       IDENTIFICATION DIVISION.",
+        "       PROGRAM-ID. BILLING-REPORT.",
+        "       PROCEDURE DIVISION.",
+        "       MAIN-LOGIC.",
+        "           DISPLAY \"ready\".",
+        "       FINISH-REPORT.",
+        "           GOBACK.",
+        "       END PROGRAM BILLING-REPORT."
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    const indexed = await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+    const search = await service.search(projectPath, "BILLING", { language: "cobol" });
+    const persistedFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "cobol/Billing.cbl");
+    const mainLogic = await service.find(
+      projectPath,
+      "cobol/Billing.cbl#program:BILLING-REPORT#paragraph:MAIN-LOGIC"
+    );
+
+    expect(indexed).toMatchObject({
+      stale: false,
+      counts: { files: 1, symbols: expect.any(Number), edges: expect.any(Number) }
+    });
+    expect(persistedFacts).toMatchObject({
+      language: "cobol",
+      extractorVersion: ARTIFACT_FACTS_EXTRACTOR_VERSION
+    });
+    expect(mainLogic.symbols).toMatchObject([
+      {
+        kind: "function",
+        qualifiedName: "cobol/Billing.cbl#program:BILLING-REPORT#paragraph:MAIN-LOGIC",
+        isExported: false
+      }
+    ]);
+    expect(routes.routes).toEqual([]);
+    expect(search.results).toMatchObject([{ filePath: "cobol/Billing.cbl", language: "cobol" }]);
+  });
+
   it("indexes Objective-C++ interfaces, protocols, and implementations with Objective-C source-search filtering", async () => {
     const projectPath = await createInlineProject({
       "src/HealthController.mm": [

@@ -200,6 +200,13 @@ describe("source discovery", () => {
     ]);
   });
 
+  it("recognizes COBOL implementation and copybook extensions", () => {
+    expect(getSourceLanguage("src/billing.cbl")).toBe("cobol");
+    expect(getSourceLanguage("src/billing.cob")).toBe("cobol");
+    expect(getSourceLanguage("src/billing.cobol")).toBe("cobol");
+    expect(getSourceLanguage("copybooks/customer.cpy")).toBe("cobol");
+  });
+
   it("discovers only source-proven Objective-C .h headers", async () => {
     const projectPath = await createProject();
     await mkdir(join(projectPath, "Headers"), { recursive: true });

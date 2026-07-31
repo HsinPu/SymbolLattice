@@ -2,7 +2,7 @@
 
 # SymbolLattice
 
-**Evidence-first local code intelligence for TypeScript, JavaScript, ArkTS/ArkUI, Vue, Svelte, Astro, Razor/Blazor, Terraform/OpenTofu, Shopify Liquid, Twig, Laravel Blade, Solidity, CFML/CFScript, Nix, VB.NET, Python/Django, Go, Rust, Java, PHP, C, Lua/Luau, Pascal, Objective-C/Objective-C++, R, Elixir, Erlang, Clojure, Perl, Julia, Haskell, OCaml, F#, Nim, C++, C#, Ruby, Kotlin, Swift, Dart, and Scala projects.**
+**Evidence-first local code intelligence for TypeScript, JavaScript, ArkTS/ArkUI, Vue, Svelte, Astro, Razor/Blazor, Terraform/OpenTofu, Shopify Liquid, Twig, Laravel Blade, Solidity, CFML/CFScript, Nix, VB.NET, Python/Django, Go, Rust, Java, PHP, C, COBOL, Lua/Luau, Pascal, Objective-C/Objective-C++, R, Elixir, Erlang, Clojure, Perl, Julia, Haskell, OCaml, F#, Nim, C++, C#, Ruby, Kotlin, Swift, Dart, and Scala projects.**
 
 [![Version](https://img.shields.io/github/v/tag/HsinPu/symbol-lattice?label=version)](https://github.com/HsinPu/symbol-lattice/tags)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D22.13-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
@@ -14,10 +14,10 @@
 </div>
 
 > [!IMPORTANT]
-> **v0.82.0** is an early developer release. This public repository runs from source; its npm package is intentionally private and is not published to npm.
+> **v0.83.0** is an early developer release. This public repository runs from source; its npm package is intentionally private and is not published to npm.
 
 > [!NOTE]
-> **v0.82.0 — Pascal Horse HEAD routes.** SymbolLattice now extracts a direct `THorse.Head('/literal', Handler)` route only under the existing source-proven Horse program boundary; `Options` and all broader forms remain excluded.
+> **v0.83.0 — source-proven COBOL programs.** SymbolLattice now indexes direct `IDENTIFICATION DIVISION` / `PROGRAM-ID` / `PROCEDURE DIVISION` programs and direct paragraph declarations, while copybooks and broad COBOL syntax remain deliberately conservative.
 
 SymbolLattice builds a local symbol graph without hiding uncertainty. It keeps syntax-proven artifact facts, resolves cross-file relationships conservatively, and records why every resolved edge exists. The graph stays local to the inspected project under `.symbol-lattice/index.sqlite`.
 
@@ -157,11 +157,12 @@ One-shot data commands emit stable, pretty JSON. `watch` is the deliberate strea
 
 ## Capabilities
 
-| Area | v0.82.0 behavior |
+| Area | v0.83.0 behavior |
 | --- | --- |
 | Objective-C / Objective-C++ | Objective-C `.m`, Objective-C++ `.mm`, and source-proven Objective-C `.h` files are indexed as `objc`. A header requires a direct `@interface` or `@protocol` and later `@end` after comments, literals, and preprocessor directives are blanked; normal C/C++ headers are skipped. Complete direct ordinary interface, protocol, and implementation blocks emit exact local contains evidence. Interfaces and protocols contribute one-line semicolon-terminated method declarations; implementations contribute one-line brace-bodied methods. A same-file interface plus implementation becomes one class symbol, with implementation evidence preferred for a matching selector. Categories/extensions, properties, inheritance edges, imports, calls, and Swift bridging remain outside this slice. |
 | Horse v0.82 | Pascal Horse accepts direct main-program Get, Post, Put, Patch, Delete, and Head literal registrations only after the same strict proof conditions. Options and all other verbs remain excluded. |
-| Source files | TypeScript, TSX, JavaScript, JSX, ArkTS/ArkUI, Vue SFC, Svelte SFC, Astro SFC, Razor/Blazor components, Terraform/OpenTofu HCL, Shopify Liquid, Twig, Laravel Blade, Solidity, CFML/CFScript, Nix, VB.NET, Python, Go, Rust, Java, PHP, C, Lua, Luau, Pascal, Objective-C / Objective-C++, R, Elixir, Erlang, Clojure, Perl, Julia, Haskell, OCaml, F#, Nim, C++, C#, Ruby, Kotlin, Swift, Dart, and Scala (`.ets`, `.vue`, `.svelte`, `.astro`, `.razor`, `.tf`, `.tfvars`, `.tofu`, `.liquid`, `.twig`, `.blade.php`, `.sol`, `.cfc`, `.cfm`, `.cfs`, `.nix`, `.vb`, `.c`, `.lua`, `.luau`, `.pas`, `.dpr`, `.dpk`, `.lpr`, `.m`, `.mm`, source-proven `.h`, `.r`, `.ex`, `.exs`, `.erl`, `.clj`, `.pl`, `.pm`, `.jl`, `.hs`, `.ml`, `.fs`, `.nim`, `.cpp`, `.cc`, `.cxx`, `.hpp`, `.hh`, `.hxx`, `.cs`, `.rb`, `.kt`, `.swift`, `.dart`, `.scala`; plus Play `conf/routes` and `conf/*.routes` route tables) |
+| COBOL v0.83 | `.cbl`, `.cob`, `.cobol`, and `.cpy` files are indexed as COBOL. A non-copybook program emits a module only when it proves one direct `IDENTIFICATION DIVISION.`, `PROGRAM-ID. name.`, and `PROCEDURE DIVISION.` in order; direct Procedure Division Area-A/free-format paragraph labels become contained function symbols. |
+| Source files | TypeScript, TSX, JavaScript, JSX, ArkTS/ArkUI, Vue SFC, Svelte SFC, Astro SFC, Razor/Blazor components, Terraform/OpenTofu HCL, Shopify Liquid, Twig, Laravel Blade, Solidity, CFML/CFScript, Nix, VB.NET, Python, Go, Rust, Java, PHP, C, COBOL, Lua, Luau, Pascal, Objective-C / Objective-C++, R, Elixir, Erlang, Clojure, Perl, Julia, Haskell, OCaml, F#, Nim, C++, C#, Ruby, Kotlin, Swift, Dart, and Scala (`.ets`, `.vue`, `.svelte`, `.astro`, `.razor`, `.tf`, `.tfvars`, `.tofu`, `.liquid`, `.twig`, `.blade.php`, `.sol`, `.cfc`, `.cfm`, `.cfs`, `.nix`, `.vb`, `.c`, `.cbl`, `.cob`, `.cobol`, `.cpy`, `.lua`, `.luau`, `.pas`, `.dpr`, `.dpk`, `.lpr`, `.m`, `.mm`, source-proven `.h`, `.r`, `.ex`, `.exs`, `.erl`, `.clj`, `.pl`, `.pm`, `.jl`, `.hs`, `.ml`, `.fs`, `.nim`, `.cpp`, `.cc`, `.cxx`, `.hpp`, `.hh`, `.hxx`, `.cs`, `.rb`, `.kt`, `.swift`, `.dart`, `.scala`; plus Play `conf/routes` and `conf/*.routes` route tables) |
 | F# + Giraffe | Direct top-level typed `HttpFunc` / `HttpContext` handlers plus exactly one `open Giraffe` proof and a direct literal `choose [` route table. Fixed HTTP verbs and plain `route "/..."` entries become exact same-file or explicit unresolved route evidence. |
 | Nim + Jester | Direct top-level zero-argument `proc` handlers plus exactly one direct `import` list containing `jester`, then a flat `routes:` or `router name:` literal route block. Fixed lowercase HTTP verbs become exact same-file or explicit unresolved route evidence. |
 | Vue + Vue Router | Vue `.vue` files contribute a file symbol plus direct inline JavaScript/TypeScript script declarations and an auditable default component export. In TypeScript/JavaScript router modules, exactly one direct `createRouter` import plus one top-level literal `routes` option emits `NAVIGATE` route evidence; direct default imports can resolve exactly through `.vue` modules. |
@@ -352,6 +353,27 @@ end
 This emits direct `contains` facts for `greet` and `publish`; `publish` is exported. `--!strict`, type aliases, and annotations are accepted as syntax context but do not create type symbols or type edges. A `.luau` file never activates the Lua-only Lapis route pass, even if it contains a matching `require("lapis")` form.
 
 v0.74 deliberately excludes `type` / `export type` symbols, generic functions, module/`require`/call resolution, Roblox services, `Instance` / event / `RemoteEvent` analysis, Roact/Fusion, metatables/tables, generic Luau framework inference, and runtime behavior. Unbalanced structures retain only a file symbol.
+
+#### COBOL
+
+v0.83 adds `.cbl`, `.cob`, `.cobol`, and `.cpy` discovery plus a deliberately narrow COBOL declaration pass. It follows the conventional program shape described by the [GnuCOBOL manual](https://gnucobol.sourceforge.io/doc/gnucobol.html), but requires a stricter local proof before emitting symbols:
+
+```cobol
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. BILLING-REPORT.
+       PROCEDURE DIVISION.
+       MAIN-LOGIC.
+           DISPLAY "ready".
+       FINISH-REPORT.
+           GOBACK.
+       END PROGRAM BILLING-REPORT.
+```
+
+A file produces a `module` symbol only when it contains exactly one direct `IDENTIFICATION DIVISION.`, `PROGRAM-ID. name.`, and `PROCEDURE DIVISION.` in that order. Direct free-format or fixed-format Area-A paragraph labels in the proven Procedure Division become contained `function` symbols. Every `contains` edge retains either `language.cobol.program.identification-program-id-procedure` or `language.cobol.paragraph.direct-procedure-division` syntax evidence.
+
+The initial scanner blanks fixed-format comment lines, `*>` comments, and complete single/double quoted literals while preserving offsets. It rejects incomplete literals, duplicate program declarations, missing required divisions, `.cpy` copybook paths, statement-looking labels such as `GOBACK.`, and paragraph-like text in comments or strings.
+
+This is not a COBOL parser or compiler. It deliberately excludes data items, sections, declaratives, `PERFORM` / `CALL` relationships, copy expansion, nested programs, `PROCEDURE DIVISION USING`, compiler directives/source formats, dialect-specific syntax, project/copybook resolution, compilation, and runtime behavior.
 
 #### Pascal
 
@@ -2255,6 +2277,8 @@ v0.81 adds source-proven Objective-C `.h` discovery: a direct `@interface` or `@
 
 v0.82 adds direct Pascal Horse Head route facts under the same exact direct `uses Horse;`, program-main-block, one-line literal-registration, and unique-prior-local-routine proof. The artifact extractor advances to multi-language-ast-v71; the resolver remains project-resolver-v23 because these route facts are file-local. A pre-v0.82 active index reports indexer-version-changed until an explicit sync or index republishes the expanded Horse facts. Existing generations remain readable.
 
+v0.83 adds COBOL `.cbl`, `.cob`, `.cobol`, and `.cpy` discovery plus a source-proven single-program module and direct Procedure Division paragraph containment. The artifact extractor advances to multi-language-ast-v72; the resolver remains project-resolver-v23 because this first COBOL slice is file-local. A pre-v0.83 active index reports indexer-version-changed until an explicit sync or index republishes COBOL-capable facts. Existing generations remain readable.
+
 ## Architecture
 
 ```mermaid
@@ -2288,7 +2312,7 @@ src/
   application/     Use cases, incremental planning, and graph projection
   cli/             Commander-based CLI
   domain/          Graph, evidence, identity, and index-work contracts
-  extraction/      TypeScript AST, ArkTS/ArkUI lexical, Vue/Svelte/Astro SFC, Razor/Blazor directive, Terraform/OpenTofu HCL lexical, Shopify Liquid/Twig tag lexical, Solidity declaration lexical, CFML/CFScript declaration lexical, Nix declaration lexical, VB.NET declaration lexical, Python/Go/Rust/Java/PHP/C/C++ Lezer, Lua/Luau/Pascal/Horse/Objective-C/R/Elixir/Erlang/Clojure/Perl/Julia/Haskell lexical, and C#/Ruby/Kotlin/Swift/Dart/Scala ast-grep fact extraction
+  extraction/      TypeScript AST, ArkTS/ArkUI lexical, Vue/Svelte/Astro SFC, Razor/Blazor directive, Terraform/OpenTofu HCL lexical, Shopify Liquid/Twig tag lexical, Solidity declaration lexical, CFML/CFScript declaration lexical, Nix declaration lexical, VB.NET/COBOL declaration lexical, Python/Go/Rust/Java/PHP/C/C++ Lezer, Lua/Luau/Pascal/Horse/Objective-C/R/Elixir/Erlang/Clojure/Perl/Julia/Haskell lexical, and C#/Ruby/Kotlin/Swift/Dart/Scala ast-grep fact extraction
   infrastructure/  Filesystem, workspace, TypeScript, and SQLite adapters
   mcp/             Read-only MCP server
   ports/           Dependency boundaries
@@ -2296,7 +2320,9 @@ src/
 
 ## Deliberate boundaries
 
-v0.82.0 does not yet provide:
+v0.83.0 does not yet provide:
+
+- The COBOL surface proves exactly one direct `IDENTIFICATION DIVISION.`, `PROGRAM-ID. name.`, and `PROCEDURE DIVISION.` sequence, then only direct free-format or fixed-format Area-A Procedure Division paragraph labels. It excludes data items/sections/declaratives, `PERFORM` / `CALL`/control-flow relationships, copy expansion, nested programs, `PROCEDURE DIVISION USING`, compiler/source-format directives, dialect-specific grammar, project or copybook resolution, compilation, and runtime behavior. Fixed-format comment lines, `*>` comments, and complete quoted literals are masked; incomplete literals, duplicate declarations, and missing required divisions retain only a file symbol.
 
 - Daemon mode, background automatic sync after the foreground process exits, cross-process watch coordination, MCP per-query pending-file banners, worker pools, or historical source browsing.
 - pnpm workspace YAML, TypeScript project references, external/package `extends`, or nested `.gitignore` semantics.
@@ -2427,6 +2453,8 @@ v0.82.0 does not yet provide:
 | `v0.80.0` | Pascal Horse exact local `PATCH` route facts under the existing direct uses/program/literal-registration/unique-prior-handler proof boundary |
 | `v0.81.0` | Source-proven Objective-C `.h` discovery after comment/literal/preprocessor blanking, direct interface/protocol declaration containment, ordinary C/C++/comment/string/macro/incomplete-header rejection, and source-search persistence |
 | `v0.82.0` | Pascal Horse exact local `HEAD` route facts under the existing direct `uses` / program-main-block / one-line-literal-registration / unique-prior-handler proof boundary |
+| `v0.83.0` | COBOL `.cbl` / `.cob` / `.cobol` / `.cpy` discovery, direct source-proven single-program module and Procedure Division paragraph containment, persisted source search, and malformed/`.cpy` copybook rejection |
+| `v0.83+` | COBOL grammar/compiler validation, data and section declarations, `PERFORM` / `CALL` relationships, copybook and nested-program resolution, source-format directives, dialect configurations, CICS/SQL/JCL surfaces, project resolution, and runtime analysis |
 | `v0.81+` | Objective-C categories/extensions, properties, inheritance and protocol-conformance relationships, imports/message calls, Swift bridge resolution, compiler proof, Git change-set header attribution, and runtime analysis |
 | `v0.76+` | Pascal grammar validation, `.dfm` / `.fmx` form surfaces, interface/type/class/unit/uses/call relations, local/constructor/destructor/operator/generic/overload forms, project/package resolution, broad Horse/Brook/WebBroker and VCL/FMX/Lazarus framework facts, compiler proof, and runtime analysis |
 | `v0.74+` | Tree-sitter Luau grammar, type / `export type` facts, generic types/functions, modules/packages/`require`, Roblox services/instances/events/RemoteEvents, Roact/Fusion/framework evidence, compiler proof, and runtime analysis |
