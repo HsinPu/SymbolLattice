@@ -4670,6 +4670,364 @@ describe("SymbolLatticeService", () => {
     );
   });
 
+  it("projects Rust Actix ServiceConfig routes through a direct external module", async () => {
+    const projectPath = await createInlineProject({
+      "src/main.rs": [
+        "mod routes;",
+        "use actix_web::{App, web};",
+        "use crate::routes::configure as routes_config;",
+        "",
+        "fn bootstrap() {",
+        "  let app = App::new()",
+        "    .configure(routes_config)",
+        "    .service(web::scope(\"/api\").configure(routes_config));",
+        "}"
+      ].join("\n"),
+      "src/routes.rs": [
+        "use actix_web::{get, web};",
+        "",
+        "async fn health() {}",
+        "",
+        "#[get(\"/ready\")]",
+        "async fn ready() {}",
+        "",
+        "pub fn configure(cfg: &mut web::ServiceConfig) {",
+        "  cfg.route(\"/health\", web::get().to(health));",
+        "  cfg.service(ready);",
+        "}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath, { method: "GET" });
+    const mainFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "src/main.rs");
+    const configFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "src/routes.rs");
+
+    expect(mainFacts?.rustActixServiceConfigFacts).toMatchObject({
+      externalModules: [{ name: "routes" }],
+      importedMounts: [
+        { configurationName: "configure", moduleName: "routes", prefix: "/", kind: "app" },
+        { configurationName: "configure", moduleName: "routes", prefix: "/api", kind: "scope" }
+      ]
+    });
+    expect(configFacts?.rustActixServiceConfigFacts).toMatchObject({
+      configurations: [
+        {
+          name: "configure",
+          routes: [
+            { method: "GET", path: "/health", handlerName: "health" },
+            { method: "GET", path: "/ready", handlerName: "ready" }
+          ],
+          mountedAttributeHandlers: ["ready"]
+        }
+      ]
+    });
+    expect(routes.routes).toHaveLength(4);
+    expect(routes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: "/health",
+          handler: expect.objectContaining({ qualifiedName: "src/routes.rs#health" }),
+          edge: expect.objectContaining({
+            evidence: expect.objectContaining({
+              ruleId: "framework.actix-web.imported-service-config.app.configure.direct-module.local-function",
+              stage: "module",
+              resolutionPath: ["src/main.rs", "src/routes.rs"]
+            })
+          })
+        }),
+        expect.objectContaining({
+          path: "/ready",
+          handler: expect.objectContaining({ qualifiedName: "src/routes.rs#ready" }),
+          edge: expect.objectContaining({
+            evidence: expect.objectContaining({
+              ruleId: "framework.actix-web.imported-service-config.app.configure.direct-module.local-function"
+            })
+          })
+        }),
+        expect.objectContaining({
+          path: "/api/health",
+          handler: expect.objectContaining({ qualifiedName: "src/routes.rs#health" }),
+          edge: expect.objectContaining({
+            evidence: expect.objectContaining({
+              ruleId:
+                "framework.actix-web.imported-service-config.web-scope.configure.direct-module.local-function",
+              stage: "module",
+              resolutionPath: ["src/main.rs", "src/routes.rs"]
+            })
+          })
+        }),
+        expect.objectContaining({
+          path: "/api/ready",
+          handler: expect.objectContaining({ qualifiedName: "src/routes.rs#ready" })
+        })
+      ])
+    );
+  });
+
+  it("reuses persisted Rust ServiceConfig facts when an external mount prefix changes", async () => {
+    const projectPath = await createInlineProject({
+      "src/main.rs": [
+        "mod routes;",
+        "use actix_web::{App, web};",
+        "use crate::routes::configure as routes_config;",
+        "",
+        "fn bootstrap() {",
+        "  let app = App::new().service(web::scope(\"/api\").configure(routes_config));",
+        "}"
+      ].join("\n"),
+      "src/routes.rs": [
+        "use actix_web::web;",
+        "",
+        "async fn health() {}",
+        "",
+        "pub fn configure(cfg: &mut web::ServiceConfig) {",
+        "  cfg.route(\"/health\", web::get().to(health));",
+        "}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    await expect(service.routes(projectPath, { method: "GET" })).resolves.toMatchObject({
+      routes: [{ path: "/api/health", handler: { qualifiedName: "src/routes.rs#health" } }]
+    });
+
+    await writeFile(
+      join(projectPath, "src", "main.rs"),
+      [
+        "mod routes;",
+        "use actix_web::{App, web};",
+        "use crate::routes::configure as routes_config;",
+        "",
+        "fn bootstrap() {",
+        "  let app = App::new().service(web::scope(\"/v2\").configure(routes_config));",
+        "}"
+      ].join("\n"),
+      "utf8"
+    );
+    const synced = await service.sync({ projectPath });
+
+    expect(synced.lastIndexWork).toMatchObject({
+      mode: "incremental",
+      modifiedFiles: ["src/main.rs"],
+      reExtractedFiles: ["src/main.rs"],
+      reusedArtifactFiles: expect.arrayContaining(["src/routes.rs"])
+    });
+    await expect(service.routes(projectPath, { method: "GET" })).resolves.toMatchObject({
+      routes: [
+        {
+          path: "/v2/health",
+          handler: { qualifiedName: "src/routes.rs#health" },
+          edge: {
+            evidence: {
+              ruleId:
+                "framework.actix-web.imported-service-config.web-scope.configure.direct-module.local-function",
+              resolutionPath: ["src/main.rs", "src/routes.rs"]
+            }
+          }
+        }
+      ]
+    });
+  });
+
+  it("rejects Rust Actix external ServiceConfig mounts without root module proof", async () => {
+    const projectPath = await createInlineProject({
+      "src/main.rs": [
+        "use actix_web::App;",
+        "use crate::routes::configure;",
+        "",
+        "fn bootstrap() {",
+        "  let app = App::new().configure(configure);",
+        "}"
+      ].join("\n"),
+      "src/routes.rs": [
+        "use actix_web::web;",
+        "",
+        "async fn health() {}",
+        "",
+        "pub fn configure(cfg: &mut web::ServiceConfig) {",
+        "  cfg.route(\"/health\", web::get().to(health));",
+        "}"
+      ].join("\n")
+    });
+    const service = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+
+    await expect(service.routes(projectPath, { method: "GET" })).resolves.toMatchObject({
+      routes: []
+    });
+  });
+
+  it("rejects Rust Actix external ServiceConfig mounts without an exported callback", async () => {
+    const projectPath = await createInlineProject({
+      "src/main.rs": [
+        "mod routes;",
+        "use actix_web::App;",
+        "use crate::routes::configure;",
+        "",
+        "fn bootstrap() {",
+        "  let app = App::new().configure(configure);",
+        "}"
+      ].join("\n"),
+      "src/routes.rs": [
+        "use actix_web::web;",
+        "",
+        "async fn health() {}",
+        "",
+        "fn configure(cfg: &mut web::ServiceConfig) {",
+        "  cfg.route(\"/health\", web::get().to(health));",
+        "}"
+      ].join("\n")
+    });
+    const service = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+
+    await expect(service.routes(projectPath, { method: "GET" })).resolves.toMatchObject({
+      routes: []
+    });
+  });
+
+  it("retains a raw Actix attribute route without direct external-module proof", async () => {
+    const projectPath = await createInlineProject({
+      "src/main.rs": [
+        "use actix_web::App;",
+        "use crate::routes::configure;",
+        "",
+        "fn bootstrap() {",
+        "  let app = App::new().configure(configure);",
+        "}"
+      ].join("\n"),
+      "src/routes.rs": [
+        "use actix_web::{get, web};",
+        "",
+        "#[get(\"/ready\")]",
+        "async fn ready() {}",
+        "",
+        "pub fn configure(cfg: &mut web::ServiceConfig) {",
+        "  cfg.service(ready);",
+        "}"
+      ].join("\n")
+    });
+    const service = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath, { method: "GET" });
+
+    expect(routes.routes).toEqual([
+      expect.objectContaining({
+        path: "/ready",
+        handler: expect.objectContaining({ qualifiedName: "src/routes.rs#ready" }),
+        edge: expect.objectContaining({
+          evidence: expect.objectContaining({
+            ruleId: "framework.actix-web.attribute-route.literal-path.local-function",
+            stage: "syntax"
+          })
+        })
+      })
+    ]);
+  });
+
+  it("projects a direct self import through a Rust routes module root", async () => {
+    const projectPath = await createInlineProject({
+      "src/main.rs": [
+        "mod routes;",
+        "use actix_web::{App, web};",
+        "use self::routes::configure;",
+        "",
+        "fn bootstrap() {",
+        "  let app = App::new().service(web::scope(\"/api\").configure(configure));",
+        "}"
+      ].join("\n"),
+      "src/routes/mod.rs": [
+        "use actix_web::web;",
+        "",
+        "async fn health() {}",
+        "",
+        "pub fn configure(cfg: &mut web::ServiceConfig) {",
+        "  cfg.route(\"/health\", web::get().to(health));",
+        "}"
+      ].join("\n")
+    });
+    const service = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+
+    await expect(service.routes(projectPath, { method: "GET" })).resolves.toMatchObject({
+      routes: [
+        {
+          path: "/api/health",
+          handler: { qualifiedName: "src/routes/mod.rs#health" },
+          edge: {
+            evidence: {
+              ruleId:
+                "framework.actix-web.imported-service-config.web-scope.configure.direct-module.local-function",
+              resolutionPath: ["src/main.rs", "src/routes/mod.rs"]
+            }
+          }
+        }
+      ]
+    });
+  });
+
+  it("keeps distinct route identities when an unrelated attribute route shares an effective path", async () => {
+    const projectPath = await createInlineProject({
+      "src/main.rs": [
+        "mod routes;",
+        "use actix_web::{App, web};",
+        "use crate::routes::configure;",
+        "",
+        "fn bootstrap() {",
+        "  let app = App::new().service(web::scope(\"/api\").configure(configure));",
+        "}"
+      ].join("\n"),
+      "src/routes.rs": [
+        "use actix_web::{get, web};",
+        "",
+        "#[get(\"/api/health\")]",
+        "async fn direct_health() {}",
+        "",
+        "async fn configured_health() {}",
+        "",
+        "pub fn configure(cfg: &mut web::ServiceConfig) {",
+        "  cfg.route(\"/health\", web::get().to(configured_health));",
+        "}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+
+    const routes = await service.routes(projectPath, { method: "GET", pathPrefix: "/api/health" });
+    const routeIds = graphStore
+      .getSnapshot(projectPath)
+      .symbols.filter((symbol) => symbol.kind === "route")
+      .map((symbol) => symbol.id);
+    expect(new Set(routeIds).size).toBe(routeIds.length);
+    expect(routes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: "/api/health",
+          handler: expect.objectContaining({ qualifiedName: "src/routes.rs#direct_health" })
+        }),
+        expect.objectContaining({
+          path: "/api/health",
+          handler: expect.objectContaining({ qualifiedName: "src/routes.rs#configured_health" })
+        })
+      ])
+    );
+  });
+
   it("indexes Java Spring Web routes and retains Java source-search filtering", async () => {
     const projectPath = await createInlineProject({
       "src/api/StatusController.java": [

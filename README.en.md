@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.117.0 is an early developer release. Run it from source; the npm package is not published.
+> v0.118.0 is an early developer release. Run it from source; the npm package is not published.
 
 SymbolLattice builds a queryable local code-symbol graph and preserves the source rule, resolution stage, and confidence behind every relationship. Index data stays in the inspected project's `.symbol-lattice/index.sqlite`; source code is never silently uploaded.
 
@@ -48,17 +48,17 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 On Windows PowerShell, use `npm.cmd` if `npm` is unavailable. Filesystem roots and home directories are rejected unless `--force` is explicit.
 
-## v0.117.0
+## v0.118.0
 
-- Rust Actix Web now projects effective paths from same-file `App::configure(config)` and `web::scope(...).configure(config)` mounts. It accepts direct or aliased `&mut ServiceConfig` parameter types.
-- A callback supports literal `cfg.route(...)`, mounted resources, scopes, attribute services, and named nested `cfg.configure(...)` calls. Handlers resolve only in the callback's own lexical scope.
-- The artifact-facts version advances; the next explicit `sync` or fresh `init` safely re-extracts affected Rust facts.
+- Rust Actix Web now projects cross-file `ServiceConfig` callbacks from a crate root's direct `mod routes;` plus direct `crate::routes::configure` or `self::routes::configure` import. Aliases, `routes.rs`, and `routes/mod.rs` are supported.
+- Every cross-file route carries module-stage evidence and the mount-file-to-callback-file resolution path. Exact projection requires one exported, type-proven callback and one same-module handler.
+- Root and scope prefixes, persisted facts, and attribute-route replacement are verified. A raw attribute route is replaced only after the cross-file mount proof succeeds.
 
 ## Deliberate limits
 
 - This is not a compiler, type checker, framework runtime, or execution tracer.
 - Dynamic dispatch, reflection, macro expansion, code generation, dependency injection, and ambiguous name matches never become exact graph relations.
-- Actix Web accepts directly imported HTTP attribute macros and contiguous static `App::new()` `.route(...)` / `.service(...)` / `.configure(...)` chains. A `ServiceConfig` callback must be same-file, unique, named, and type-proven. Closures, cross-file or namespace handlers, guards, wrappers, dynamic callbacks or paths, and runtime composition remain intentionally unprojected.
+- Actix Web accepts directly imported HTTP attribute macros and contiguous static `App::new()` `.route(...)` / `.service(...)` / `.configure(...)` chains. Cross-file `ServiceConfig` support is limited to a direct external module of `main.rs` or `lib.rs` and a direct `crate` or `self` import. Nested modules, re-exports, `#[path]`, namespace handlers, closures, guards, wrappers, dynamic callbacks or paths, and runtime composition remain intentionally unprojected.
 
 ## Verification
 

@@ -6,6 +6,7 @@ import {
   type ArtifactFacts,
   type GraphEdge,
   type RouteMethod,
+  type RustActixServiceConfigFacts,
   type SourcePosition,
   type SourceRange,
   type SymbolNode
@@ -67,6 +68,7 @@ interface StaticActixWebAppChain extends StaticActixWebRouteProjection {}
 
 interface StaticActixWebServiceConfig {
   readonly name: string;
+  readonly node: RustSyntaxNode;
   readonly parameterName: string;
   readonly parameterNames: readonly string[];
   readonly body: RustSyntaxNode;
@@ -81,6 +83,29 @@ interface StaticActixWebRouteContext {
 interface StaticActixWebAttributeService {
   readonly handlerName: string;
   readonly routes: readonly StaticRustRoute[];
+}
+
+interface StaticRustExternalModule {
+  readonly name: string;
+  readonly node: RustSyntaxNode;
+}
+
+interface StaticActixWebImportedServiceConfig {
+  readonly configurationName: string;
+  readonly moduleName: string;
+}
+
+interface StaticActixWebImportedConfigMount {
+  readonly configurationName: string;
+  readonly moduleName: string;
+  readonly prefix: string;
+  readonly kind: "app" | "scope";
+  readonly node: RustSyntaxNode;
+}
+
+interface StaticActixWebImportedConfigScopeChain {
+  readonly prefix: string;
+  readonly importedMounts: readonly StaticActixWebImportedConfigMount[];
 }
 
 const AXUM_ROUTER_PATH = "axum::Router";
@@ -103,6 +128,8 @@ const ACTIX_WEB_APP_CONFIGURE_ROUTE_RULE_ID =
   "framework.actix-web.direct-app.configure.service-config.literal-path.local-function";
 const ACTIX_WEB_SCOPE_CONFIGURE_ROUTE_RULE_ID =
   "framework.actix-web.direct-app.web-scope.configure.service-config.literal-path.local-function";
+const ACTIX_WEB_SERVICE_CONFIG_DECLARATION_RULE_ID =
+  "framework.actix-web.service-config.declaration.literal-path.local-function";
 const ROCKET_ATTRIBUTE_ROUTE_RULE_ID =
   "framework.rocket.attribute-route.literal-path.local-function";
 
@@ -320,6 +347,63 @@ function staticTopLevelUseImports(
     });
 }
 
+function staticRustExternalModules(
+  input: RustExtractFileFactsInput,
+  root: RustSyntaxNode
+): readonly StaticRustExternalModule[] {
+  return directChildren(root).flatMap((node) => {
+    if (node.name !== "ModItem") {
+      return [];
+    }
+    const children = directChildren(node);
+    const modIndex = children.findIndex((child) => child.name === "mod");
+    const nameNode = modIndex < 0 ? undefined : children[modIndex + 1];
+    const name = nameNode === undefined ? null : identifierText(input, nameNode);
+    const isExternal = children.some((child) => child.name === ";") &&
+      !children.some((child) => child.name === "Block");
+    return name === null || !isExternal ? [] : [{ name, node }];
+  });
+}
+
+function staticActixWebImportedServiceConfigs(
+  input: RustExtractFileFactsInput,
+  root: RustSyntaxNode,
+  externalModules: readonly StaticRustExternalModule[]
+): ReadonlyMap<string, StaticActixWebImportedServiceConfig> {
+  const modulesByName = new Map<string, number>();
+  for (const module of externalModules) {
+    modulesByName.set(module.name, (modulesByName.get(module.name) ?? 0) + 1);
+  }
+  const imports = staticTopLevelUseImports(input, root);
+  const pathsByLocalName = new Map<string, string[]>();
+  for (const imported of imports) {
+    const paths = pathsByLocalName.get(imported.localName) ?? [];
+    paths.push(imported.path);
+    pathsByLocalName.set(imported.localName, paths);
+  }
+  const importedConfigs = new Map<string, StaticActixWebImportedServiceConfig>();
+  for (const imported of imports) {
+    const paths = pathsByLocalName.get(imported.localName) ?? [];
+    const segments = imported.path.split("::");
+    const rootName = segments[0];
+    const moduleName = segments[1];
+    const configurationName = segments[2];
+    if (
+      paths.length !== 1 ||
+      paths[0] !== imported.path ||
+      segments.length !== 3 ||
+      (rootName !== "crate" && rootName !== "self") ||
+      moduleName === undefined ||
+      configurationName === undefined ||
+      modulesByName.get(moduleName) !== 1
+    ) {
+      continue;
+    }
+    importedConfigs.set(imported.localName, { configurationName, moduleName });
+  }
+  return importedConfigs;
+}
+
 function staticAxumImportAliases(input: RustExtractFileFactsInput, root: RustSyntaxNode): {
   readonly routerAliases: ReadonlySet<string>;
   readonly methodAliases: ReadonlyMap<string, RouteMethod>;
@@ -515,6 +599,7 @@ function staticActixWebServiceConfig(
     ? null
     : {
         name: functionDeclaration.name,
+        node: functionDeclaration.node,
         parameterName,
         parameterNames: functionDeclaration.parameterNames,
         body: functionDeclaration.body
@@ -1462,6 +1547,236 @@ function staticActixWebAppRouteChain(
       };
 }
 
+function staticActixWebImportedConfigMounts(
+  input: RustExtractFileFactsInput,
+  configurationNode: RustSyntaxNode,
+  mountNode: RustSyntaxNode,
+  context: StaticActixWebRouteContext,
+  importedServiceConfigs: ReadonlyMap<string, StaticActixWebImportedServiceConfig>,
+  shadowedNames: ReadonlySet<string>,
+  prefix: string,
+  kind: "app" | "scope"
+): readonly StaticActixWebImportedConfigMount[] | null {
+  const localName = identifierText(input, configurationNode);
+  if (localName === null || shadowedNames.has(localName)) {
+    return null;
+  }
+  if (context.serviceConfigsByName.has(localName)) {
+    return [];
+  }
+  const imported = importedServiceConfigs.get(localName);
+  return imported === undefined
+    ? null
+    : [
+        {
+          configurationName: imported.configurationName,
+          moduleName: imported.moduleName,
+          prefix,
+          kind,
+          node: mountNode
+        }
+      ];
+}
+
+function staticActixWebImportedConfigScopeChain(
+  input: RustExtractFileFactsInput,
+  node: RustSyntaxNode,
+  webAliases: ReadonlySet<string>,
+  shadowedNames: ReadonlySet<string>,
+  context: StaticActixWebRouteContext,
+  importedServiceConfigs: ReadonlyMap<string, StaticActixWebImportedServiceConfig>
+): StaticActixWebImportedConfigScopeChain | null {
+  const scopePrefix = staticActixWebScope(input, node, webAliases, shadowedNames);
+  if (scopePrefix !== null) {
+    return { prefix: scopePrefix, importedMounts: [] };
+  }
+  const call = staticFieldCall(input, node);
+  if (call === null) {
+    return null;
+  }
+  const preceding = staticActixWebImportedConfigScopeChain(
+    input,
+    call.receiver,
+    webAliases,
+    shadowedNames,
+    context,
+    importedServiceConfigs
+  );
+  if (preceding === null) {
+    return null;
+  }
+  if (call.methodName === "route") {
+    const pathNode = call.arguments_[0];
+    const routeHandler = call.arguments_[1];
+    const path = pathNode === undefined ? null : staticLiteralSlashPath(input, pathNode);
+    const methodRoute =
+      routeHandler === undefined
+        ? null
+        : staticActixWebMethodTo(input, routeHandler, webAliases, shadowedNames);
+    return call.arguments_.length !== 2 || path === null || methodRoute === null ? null : preceding;
+  }
+  if (call.methodName === "configure") {
+    const configurationNode = call.arguments_[0];
+    if (call.arguments_.length !== 1 || configurationNode === undefined) {
+      return null;
+    }
+    const importedMounts = staticActixWebImportedConfigMounts(
+      input,
+      configurationNode,
+      node,
+      context,
+      importedServiceConfigs,
+      shadowedNames,
+      preceding.prefix,
+      "scope"
+    );
+    return importedMounts === null
+      ? null
+      : {
+          ...preceding,
+          importedMounts: [...preceding.importedMounts, ...importedMounts]
+        };
+  }
+  if (call.methodName !== "service" || call.arguments_.length !== 1) {
+    return null;
+  }
+  const serviceNode = call.arguments_[0];
+  const resource =
+    serviceNode === undefined
+      ? null
+      : staticActixWebResourceChain(input, serviceNode, webAliases, shadowedNames);
+  const nestedScope =
+    serviceNode === undefined
+      ? null
+      : staticActixWebImportedConfigScopeChain(
+          input,
+          serviceNode,
+          webAliases,
+          shadowedNames,
+          context,
+          importedServiceConfigs
+        );
+  const attributeService =
+    serviceNode === undefined
+      ? null
+      : staticActixWebAttributeService(
+          input,
+          serviceNode,
+          node,
+          context.attributeRoutesByHandler,
+          shadowedNames,
+          preceding.prefix,
+          ACTIX_WEB_SCOPE_ATTRIBUTE_SERVICE_ROUTE_RULE_ID
+        );
+  if (resource !== null || attributeService !== null) {
+    return preceding;
+  }
+  return nestedScope === null
+    ? null
+    : {
+        ...preceding,
+        importedMounts: [
+          ...preceding.importedMounts,
+          ...nestedScope.importedMounts.map((mount) => ({
+            ...mount,
+            prefix: prefixedActixWebScopePath(preceding.prefix, mount.prefix)
+          }))
+        ]
+      };
+}
+
+function staticActixWebImportedConfigAppMounts(
+  input: RustExtractFileFactsInput,
+  node: RustSyntaxNode,
+  appAliases: ReadonlySet<string>,
+  webAliases: ReadonlySet<string>,
+  shadowedNames: ReadonlySet<string>,
+  context: StaticActixWebRouteContext,
+  importedServiceConfigs: ReadonlyMap<string, StaticActixWebImportedServiceConfig>
+): readonly StaticActixWebImportedConfigMount[] | null {
+  if (staticActixWebAppNew(input, node, appAliases, shadowedNames)) {
+    return [];
+  }
+  const call = staticFieldCall(input, node);
+  if (call === null) {
+    return null;
+  }
+  const preceding = staticActixWebImportedConfigAppMounts(
+    input,
+    call.receiver,
+    appAliases,
+    webAliases,
+    shadowedNames,
+    context,
+    importedServiceConfigs
+  );
+  if (preceding === null) {
+    return null;
+  }
+  if (call.methodName === "route") {
+    const pathNode = call.arguments_[0];
+    const routeHandler = call.arguments_[1];
+    const path = pathNode === undefined ? null : staticLiteralSlashPath(input, pathNode);
+    const methodRoute =
+      routeHandler === undefined
+        ? null
+        : staticActixWebMethodTo(input, routeHandler, webAliases, shadowedNames);
+    return call.arguments_.length !== 2 || path === null || methodRoute === null ? null : preceding;
+  }
+  if (call.methodName === "configure") {
+    const configurationNode = call.arguments_[0];
+    if (call.arguments_.length !== 1 || configurationNode === undefined) {
+      return null;
+    }
+    const importedMounts = staticActixWebImportedConfigMounts(
+      input,
+      configurationNode,
+      node,
+      context,
+      importedServiceConfigs,
+      shadowedNames,
+      "/",
+      "app"
+    );
+    return importedMounts === null ? null : [...preceding, ...importedMounts];
+  }
+  if (call.methodName !== "service" || call.arguments_.length !== 1) {
+    return null;
+  }
+  const serviceNode = call.arguments_[0];
+  const resource =
+    serviceNode === undefined
+      ? null
+      : staticActixWebResourceChain(input, serviceNode, webAliases, shadowedNames);
+  const scope =
+    serviceNode === undefined
+      ? null
+      : staticActixWebImportedConfigScopeChain(
+          input,
+          serviceNode,
+          webAliases,
+          shadowedNames,
+          context,
+          importedServiceConfigs
+        );
+  const attributeService =
+    serviceNode === undefined
+      ? null
+      : staticActixWebAttributeService(
+          input,
+          serviceNode,
+          node,
+          context.attributeRoutesByHandler,
+          shadowedNames,
+          "/",
+          ACTIX_WEB_APP_ATTRIBUTE_SERVICE_ROUTE_RULE_ID
+        );
+  if (resource !== null || attributeService !== null) {
+    return preceding;
+  }
+  return scope === null ? null : [...preceding, ...scope.importedMounts];
+}
+
 function staticStatementExpression(statement: RustSyntaxNode): RustSyntaxNode | null {
   if (statement.name === "CallExpression") {
     return statement;
@@ -1497,6 +1812,7 @@ export function extractRustFileFacts(input: RustExtractFileFactsInput): Artifact
   const symbols: SymbolNode[] = [];
   const edges: GraphEdge[] = [];
   const declarationOrdinals = new Map<string, number>();
+  let rustActixServiceConfigFacts: RustActixServiceConfigFacts | undefined;
   const fileName = input.filePath.split(/[\\/]/u).at(-1) ?? input.filePath;
   const fileNode: SymbolNode = {
     id: createSymbolId({
@@ -1659,6 +1975,12 @@ export function extractRustFileFacts(input: RustExtractFileFactsInput): Artifact
 
     const { routerAliases, methodAliases } = staticAxumImportAliases(input, root);
     const { appAliases, webAliases, serviceConfigAliases } = staticActixWebImportAliases(input, root);
+    const externalModules = staticRustExternalModules(input, root);
+    const importedServiceConfigs = staticActixWebImportedServiceConfigs(
+      input,
+      root,
+      externalModules
+    );
     const serviceConfigsByName = new Map<string, StaticActixWebServiceConfig>();
     for (const functionDeclaration of functions) {
       if ((functionsByName.get(functionDeclaration.name) ?? []).length !== 1) {
@@ -1679,6 +2001,36 @@ export function extractRustFileFacts(input: RustExtractFileFactsInput): Artifact
       attributeRoutesByHandler: actixAttributeRoutesByHandler,
       serviceConfigsByName
     };
+    const serviceConfigFacts = [...serviceConfigsByName.values()]
+      .sort((left, right) => left.name.localeCompare(right.name))
+      .flatMap((configuration) => {
+        const projected = staticActixWebServiceConfigRoutes(
+          input,
+          configuration,
+          actixWebContext,
+          "/",
+          ACTIX_WEB_SERVICE_CONFIG_DECLARATION_RULE_ID,
+          configuration.node,
+          new Set([configuration.name])
+        );
+        if (projected === null) {
+          return [];
+        }
+        return [
+          {
+            name: configuration.name,
+            range: rangeFor(lineStarts, configuration.node.from, configuration.node.to),
+            routes: projected.routes.map((route) => ({
+              method: route.method,
+              path: route.path,
+              handlerName: route.handlerName,
+              range: rangeFor(lineStarts, route.node.from, route.node.to)
+            })),
+            mountedAttributeHandlers: [...new Set(projected.mountedAttributeHandlers)]
+          }
+        ];
+      });
+    const importedServiceConfigMounts: StaticActixWebImportedConfigMount[] = [];
     const mountedActixAttributeHandlers = new Set<string>();
     for (const functionDeclaration of functions) {
       const visibleRouterAliases = new Set(
@@ -1722,6 +2074,18 @@ export function extractRustFileFacts(input: RustExtractFileFactsInput): Artifact
                 actixWebContext,
                 new Set()
               );
+        const importedActixWebMounts =
+          expression === null
+            ? null
+            : staticActixWebImportedConfigAppMounts(
+                input,
+                expression,
+                visibleAppAliases,
+                visibleWebAliases,
+                shadowedNames,
+                actixWebContext,
+                importedServiceConfigs
+              );
         const actixWebRoutes = actixWebChain === null ? null : actixWebChain.routes;
         for (const routes of [axumRoutes, actixWebRoutes]) {
           if (routes === null) {
@@ -1745,10 +2109,34 @@ export function extractRustFileFacts(input: RustExtractFileFactsInput): Artifact
             mountedActixAttributeHandlers.add(handlerName);
           }
         }
+        if (importedActixWebMounts !== null) {
+          importedServiceConfigMounts.push(...importedActixWebMounts);
+        }
         for (const name of directBoundNames(input, statement)) {
           shadowedNames.add(name);
         }
       }
+    }
+
+    if (
+      externalModules.length > 0 ||
+      serviceConfigFacts.length > 0 ||
+      importedServiceConfigMounts.length > 0
+    ) {
+      rustActixServiceConfigFacts = {
+        externalModules: externalModules.map((module) => ({
+          name: module.name,
+          range: rangeFor(lineStarts, module.node.from, module.node.to)
+        })),
+        configurations: serviceConfigFacts,
+        importedMounts: importedServiceConfigMounts.map((mount) => ({
+          configurationName: mount.configurationName,
+          moduleName: mount.moduleName,
+          prefix: mount.prefix,
+          kind: mount.kind,
+          range: rangeFor(lineStarts, mount.node.from, mount.node.to)
+        }))
+      };
     }
 
     for (const { route, handler } of attributeRoutes) {
@@ -1784,6 +2172,7 @@ export function extractRustFileFacts(input: RustExtractFileFactsInput): Artifact
       routers: [],
       routes: [],
       importedRouterInclusions: []
-    }
+    },
+    ...(rustActixServiceConfigFacts === undefined ? {} : { rustActixServiceConfigFacts })
   };
 }

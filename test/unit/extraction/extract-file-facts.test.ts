@@ -8602,6 +8602,61 @@ describe("source extraction", () => {
     ]);
   });
 
+  it("retains direct external-module Actix ServiceConfig facts", () => {
+    const configurationFacts = extractFileFacts({
+      filePath: "src/routes.rs",
+      language: "rust",
+      sourceText: [
+        "use actix_web::{get, web};",
+        "",
+        "async fn health() {}",
+        "",
+        "#[get(\"/ready\")]",
+        "async fn ready() {}",
+        "",
+        "pub fn configure(cfg: &mut web::ServiceConfig) {",
+        "  cfg.route(\"/health\", web::get().to(health));",
+        "  cfg.service(ready);",
+        "}"
+      ].join("\n")
+    });
+    const mountFacts = extractFileFacts({
+      filePath: "src/main.rs",
+      language: "rust",
+      sourceText: [
+        "mod routes;",
+        "use actix_web::{App, web};",
+        "use crate::routes::configure as routes_config;",
+        "",
+        "fn bootstrap() {",
+        "  let app = App::new()",
+        "    .configure(routes_config)",
+        "    .service(web::scope(\"/api\").configure(routes_config));",
+        "}"
+      ].join("\n")
+    });
+
+    expect(configurationFacts.rustActixServiceConfigFacts).toMatchObject({
+      configurations: [
+        {
+          name: "configure",
+          routes: [
+            { method: "GET", path: "/health", handlerName: "health" },
+            { method: "GET", path: "/ready", handlerName: "ready" }
+          ],
+          mountedAttributeHandlers: ["ready"]
+        }
+      ]
+    });
+    expect(mountFacts.rustActixServiceConfigFacts).toMatchObject({
+      externalModules: [{ name: "routes" }],
+      importedMounts: [
+        { configurationName: "configure", moduleName: "routes", prefix: "/", kind: "app" },
+        { configurationName: "configure", moduleName: "routes", prefix: "/api", kind: "scope" }
+      ]
+    });
+  });
+
   it("resolves Actix ServiceConfig handlers in the config callback lexical scope", () => {
     const facts = extractFileFacts({
       filePath: "src/actix-service-config-lexical-scope.rs",

@@ -18,6 +18,9 @@ import {
   type NestSymbolReference,
   type PendingReference,
   type ResolutionKind,
+  type RustActixImportedServiceConfigMountFact,
+  type RustActixServiceConfigDeclarationFact,
+  type RustActixServiceConfigRouteFact,
   type SourceRange,
   type SymbolNode
 } from "../domain/index.js";
@@ -1829,6 +1832,334 @@ function resolvePythonRelativeModule(
   return targetFilePath;
 }
 
+function isStaticActixServiceConfigPath(value: string): boolean {
+  return (
+    value.startsWith("/") &&
+    !value.includes("//") &&
+    !value.includes("\\") &&
+    (value === "/" || !value.endsWith("/"))
+  );
+}
+
+function mountedActixServiceConfigRoutePath(prefix: string, routePath: string): string | null {
+  if (!isStaticActixServiceConfigPath(prefix) || !isStaticActixServiceConfigPath(routePath)) {
+    return null;
+  }
+  return prefix === "/" ? routePath : `${prefix}${routePath}`;
+}
+
+function isRustCrateRootFile(filePath: string): boolean {
+  const fileName = filePath.split("/").at(-1);
+  return fileName === "main.rs" || fileName === "lib.rs";
+}
+
+/**
+ * Resolves only Rust's direct external-module convention from one crate root:
+ * `mod routes;` in `main.rs` or `lib.rs` maps uniquely to `routes.rs` or
+ * `routes/mod.rs`. Nested modules, re-exports, path attributes, and dynamic
+ * module loading deliberately remain outside this evidence model.
+ */
+function resolveRustDirectExternalModule(
+  knownFilePaths: ReadonlySet<string>,
+  rootFilePath: string,
+  moduleName: string
+): string | null {
+  const normalizedRootPath = rootFilePath.replace(/\\/gu, "/");
+  if (
+    !isRustCrateRootFile(normalizedRootPath) ||
+    !/^[A-Za-z_][A-Za-z0-9_]*$/u.test(moduleName)
+  ) {
+    return null;
+  }
+  const directory = normalizedRootPath.split("/").slice(0, -1).join("/");
+  const moduleBase = directory === "" ? moduleName : `${directory}/${moduleName}`;
+  const candidates = [`${moduleBase}.rs`, `${moduleBase}/mod.rs`].filter((candidate) =>
+    knownFilePaths.has(candidate)
+  );
+  if (candidates.length !== 1 || candidates[0] === undefined || candidates[0] === normalizedRootPath) {
+    return null;
+  }
+  return candidates[0];
+}
+
+interface ProjectedRustActixImportedServiceConfigRoute {
+  readonly mountFilePath: string;
+  readonly configurationFilePath: string;
+  readonly mount: RustActixImportedServiceConfigMountFact;
+  readonly configuration: RustActixServiceConfigDeclarationFact;
+  readonly route: RustActixServiceConfigRouteFact;
+  readonly callback: SymbolNode;
+  readonly handler: SymbolNode;
+  readonly path: string;
+}
+
+function compareProjectedRustActixImportedServiceConfigRoute(
+  left: ProjectedRustActixImportedServiceConfigRoute,
+  right: ProjectedRustActixImportedServiceConfigRoute
+): number {
+  return (
+    compareStableText(left.mountFilePath, right.mountFilePath) ||
+    left.mount.range.start.line - right.mount.range.start.line ||
+    left.mount.range.start.column - right.mount.range.start.column ||
+    compareStableText(left.configurationFilePath, right.configurationFilePath) ||
+    left.configuration.range.start.line - right.configuration.range.start.line ||
+    left.configuration.range.start.column - right.configuration.range.start.column ||
+    left.route.range.start.line - right.route.range.start.line ||
+    left.route.range.start.column - right.route.range.start.column ||
+    compareStableText(left.route.method, right.route.method) ||
+    compareStableText(left.path, right.path) ||
+    compareStableText(left.handler.id, right.handler.id)
+  );
+}
+
+function rustActixImportedServiceConfigRouteRuleId(
+  kind: RustActixImportedServiceConfigMountFact["kind"]
+): string {
+  return kind === "app"
+    ? "framework.actix-web.imported-service-config.app.configure.direct-module.local-function"
+    : "framework.actix-web.imported-service-config.web-scope.configure.direct-module.local-function";
+}
+
+interface RustActixImportedServiceConfigRouteProjection {
+  readonly symbols: readonly SymbolNode[];
+  readonly structuralEdges: readonly GraphEdge[];
+  /** Raw attribute route symbols replaced by one proven ServiceConfig projection. */
+  readonly suppressedRawRouteIds: readonly string[];
+}
+
+/**
+ * Projects literal routes through an imported Actix Web `ServiceConfig` only
+ * when the mount is a directly declared module of a Rust crate root and both
+ * callback and handler resolve uniquely in that module. The route edge keeps
+ * the two-file path so this stronger relationship never looks syntax-local.
+ */
+function projectRustActixImportedServiceConfigRoutes(input: {
+  readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
+  readonly knownFilePaths: ReadonlySet<string>;
+  readonly fileSymbols: ReadonlyMap<string, SymbolNode>;
+  readonly symbolsById: ReadonlyMap<string, SymbolNode>;
+  readonly structuralEdges: readonly GraphEdge[];
+}): RustActixImportedServiceConfigRouteProjection {
+  const candidates: ProjectedRustActixImportedServiceConfigRoute[] = [];
+
+  for (const [mountFilePath, facts] of [...input.factsByFile.entries()].sort(([left], [right]) =>
+    compareStableText(left, right)
+  )) {
+    const mountFacts = facts.rustActixServiceConfigFacts;
+    if (mountFacts === undefined || !isRustCrateRootFile(mountFilePath)) {
+      continue;
+    }
+    for (const mount of [...mountFacts.importedMounts].sort((left, right) => {
+      return (
+        left.range.start.line - right.range.start.line ||
+        left.range.start.column - right.range.start.column ||
+        compareStableText(left.moduleName, right.moduleName) ||
+        compareStableText(left.configurationName, right.configurationName) ||
+        compareStableText(left.prefix, right.prefix) ||
+        compareStableText(left.kind, right.kind)
+      );
+    })) {
+      const directModuleFacts = mountFacts.externalModules.filter(
+        (module) => module.name === mount.moduleName
+      );
+      if (directModuleFacts.length !== 1) {
+        continue;
+      }
+      const configurationFilePath = resolveRustDirectExternalModule(
+        input.knownFilePaths,
+        mountFilePath,
+        mount.moduleName
+      );
+      if (configurationFilePath === null) {
+        continue;
+      }
+      const configurationFileFacts = input.factsByFile.get(configurationFilePath);
+      const configurationFacts = configurationFileFacts?.rustActixServiceConfigFacts;
+      if (configurationFileFacts === undefined || configurationFacts === undefined) {
+        continue;
+      }
+      const matchingConfigurations = configurationFacts.configurations.filter(
+        (configuration) => configuration.name === mount.configurationName
+      );
+      if (matchingConfigurations.length !== 1 || matchingConfigurations[0] === undefined) {
+        continue;
+      }
+      const configuration = matchingConfigurations[0];
+      const callbacks = configurationFileFacts.symbols.filter(
+        (symbol) =>
+          symbol.kind === "function" &&
+          symbol.filePath === configurationFilePath &&
+          symbol.name === configuration.name &&
+          symbol.isExported
+      );
+      if (callbacks.length !== 1 || callbacks[0] === undefined) {
+        continue;
+      }
+      const callback = callbacks[0];
+      if (
+        callback.range.start.line !== configuration.range.start.line ||
+        callback.range.start.column !== configuration.range.start.column ||
+        callback.range.end.line !== configuration.range.end.line ||
+        callback.range.end.column !== configuration.range.end.column
+      ) {
+        continue;
+      }
+
+      for (const route of configuration.routes) {
+        const handlers = configurationFileFacts.symbols.filter(
+          (symbol) =>
+            symbol.kind === "function" &&
+            symbol.filePath === configurationFilePath &&
+            symbol.name === route.handlerName
+        );
+        if (handlers.length !== 1 || handlers[0] === undefined) {
+          continue;
+        }
+        const path = mountedActixServiceConfigRoutePath(mount.prefix, route.path);
+        if (path === null) {
+          continue;
+        }
+        candidates.push({
+          mountFilePath,
+          configurationFilePath,
+          mount,
+          configuration,
+          route,
+          callback,
+          handler: handlers[0],
+          path
+        });
+      }
+    }
+  }
+
+  const symbols: SymbolNode[] = [];
+  const structuralEdges: GraphEdge[] = [];
+  const suppressedRawRouteIds = new Set<string>();
+  const declarationOrdinals = new Map<string, number>();
+  const seen = new Set<string>();
+  for (const candidate of [...candidates].sort(compareProjectedRustActixImportedServiceConfigRoute)) {
+    const dedupeKey = [
+      candidate.mountFilePath,
+      candidate.mount.range.start.line,
+      candidate.mount.range.start.column,
+      candidate.configurationFilePath,
+      candidate.configuration.range.start.line,
+      candidate.configuration.range.start.column,
+      candidate.route.method,
+      candidate.route.path,
+      candidate.path,
+      candidate.handler.id
+    ].join("\u0000");
+    if (seen.has(dedupeKey)) {
+      continue;
+    }
+    seen.add(dedupeKey);
+
+    const file = input.fileSymbols.get(candidate.configurationFilePath);
+    if (file === undefined) {
+      continue;
+    }
+    const name = `${candidate.route.method} ${candidate.path}`;
+    const qualifiedName = `${candidate.configurationFilePath}#route:${name}`;
+    const declarationOrdinal = declarationOrdinals.get(qualifiedName) ?? 0;
+    declarationOrdinals.set(qualifiedName, declarationOrdinal + 1);
+    const route: SymbolNode = {
+      id: createSymbolId({
+        filePath: candidate.configurationFilePath,
+        qualifiedName,
+        kind: "route",
+        declarationOrdinal
+      }),
+      name,
+      qualifiedName,
+      kind: "route",
+      filePath: candidate.configurationFilePath,
+      range: candidate.route.range,
+      isExported: false,
+      declarationOrdinal
+    };
+    symbols.push(route);
+    structuralEdges.push({
+      id: createEdgeId({
+        sourceId: file.id,
+        targetId: route.id,
+        kind: "contains",
+        line: candidate.route.range.start.line,
+        column: candidate.route.range.start.column,
+        referenceName: route.name
+      }),
+      sourceId: file.id,
+      targetId: route.id,
+      kind: "contains",
+      filePath: candidate.configurationFilePath,
+      range: candidate.route.range,
+      resolution: "exact",
+      confidence: 1,
+      referenceName: route.name,
+      evidence: {
+        ruleId: "syntax.containment",
+        stage: "syntax",
+        candidateSymbolIds: [route.id]
+      }
+    });
+    structuralEdges.push({
+      id: createEdgeId({
+        sourceId: route.id,
+        targetId: candidate.handler.id,
+        kind: "routes",
+        line: candidate.route.range.start.line,
+        column: candidate.route.range.start.column,
+        referenceName: candidate.handler.name
+      }),
+      sourceId: route.id,
+      targetId: candidate.handler.id,
+      kind: "routes",
+      filePath: candidate.configurationFilePath,
+      range: candidate.route.range,
+      resolution: "exact",
+      confidence: 1,
+      referenceName: candidate.handler.name,
+      evidence: referenceEvidence(
+        rustActixImportedServiceConfigRouteRuleId(candidate.mount.kind),
+        "module",
+        [candidate.handler.id, candidate.callback.id],
+        [],
+        [candidate.mountFilePath, candidate.configurationFilePath]
+      )
+    });
+
+    if (!candidate.configuration.mountedAttributeHandlers.includes(candidate.route.handlerName)) {
+      continue;
+    }
+    const rawRouteName = `${candidate.route.method} ${candidate.route.path}`;
+    for (const edge of input.structuralEdges) {
+      if (
+        edge.kind !== "routes" ||
+        edge.targetId !== candidate.handler.id ||
+        edge.filePath !== candidate.configurationFilePath ||
+        edge.evidence?.ruleId !== "framework.actix-web.attribute-route.literal-path.local-function"
+      ) {
+        continue;
+      }
+      const rawRoute = input.symbolsById.get(edge.sourceId);
+      if (
+        rawRoute?.kind === "route" &&
+        rawRoute.filePath === candidate.configurationFilePath &&
+        rawRoute.name === rawRouteName
+      ) {
+        suppressedRawRouteIds.add(rawRoute.id);
+      }
+    }
+  }
+
+  return {
+    symbols,
+    structuralEdges,
+    suppressedRawRouteIds: [...suppressedRawRouteIds].sort(compareStableText)
+  };
+}
+
 interface ProjectedFastApiImportedRouterRoute {
   readonly inclusionFilePath: string;
   readonly routerFilePath: string;
@@ -2871,6 +3202,39 @@ export function resolveProjectFacts(input: {
     moduleResolutionByKey,
     moduleTargetPathByKey
   });
+
+  const rustActixImportedServiceConfigRouteProjection = projectRustActixImportedServiceConfigRoutes({
+    factsByFile,
+    knownFilePaths,
+    fileSymbols,
+    symbolsById,
+    structuralEdges
+  });
+  if (rustActixImportedServiceConfigRouteProjection.suppressedRawRouteIds.length > 0) {
+    const suppressedRawRouteIds = new Set(
+      rustActixImportedServiceConfigRouteProjection.suppressedRawRouteIds
+    );
+    symbols.splice(
+      0,
+      symbols.length,
+      ...symbols.filter((symbol) => !suppressedRawRouteIds.has(symbol.id))
+    );
+    structuralEdges.splice(
+      0,
+      structuralEdges.length,
+      ...structuralEdges.filter(
+        (edge) => !suppressedRawRouteIds.has(edge.sourceId) && !suppressedRawRouteIds.has(edge.targetId ?? "")
+      )
+    );
+    for (const routeId of suppressedRawRouteIds) {
+      symbolsById.delete(routeId);
+    }
+  }
+  symbols.push(...rustActixImportedServiceConfigRouteProjection.symbols);
+  structuralEdges.push(...rustActixImportedServiceConfigRouteProjection.structuralEdges);
+  for (const symbol of rustActixImportedServiceConfigRouteProjection.symbols) {
+    symbolsById.set(symbol.id, symbol);
+  }
 
   const fastifyPluginRouteProjection = projectFastifyImportedPluginRoutes({
     factsByFile,

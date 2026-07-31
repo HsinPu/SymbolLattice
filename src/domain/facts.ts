@@ -11,13 +11,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v101";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v102";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v27";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v28";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -309,6 +309,51 @@ export interface DjangoUrlFacts {
   readonly importedUrlconfInclusions: readonly DjangoImportedUrlconfInclusionFact[];
 }
 
+/** A direct external `mod name;` declaration retained for Rust module proof. */
+export interface RustActixExternalModuleFact {
+  readonly name: string;
+  readonly range: SourceRange;
+}
+
+/** A literal route declared in one syntax-proven Actix Web `ServiceConfig` callback. */
+export interface RustActixServiceConfigRouteFact {
+  readonly method: RouteMethod;
+  readonly path: string;
+  readonly handlerName: string;
+  readonly range: SourceRange;
+}
+
+/** One unique, direct `&mut ServiceConfig` callback declaration in a Rust file. */
+export interface RustActixServiceConfigDeclarationFact {
+  readonly name: string;
+  readonly range: SourceRange;
+  readonly routes: readonly RustActixServiceConfigRouteFact[];
+  /** Attribute handlers that are proven to be mounted by this callback. */
+  readonly mountedAttributeHandlers: readonly string[];
+}
+
+/** The direct Actix builder surface that mounted one imported configuration callback. */
+export type RustActixImportedServiceConfigMountKind = "app" | "scope";
+
+/** A direct `crate::module::config` import mounted through App or Scope configure. */
+export interface RustActixImportedServiceConfigMountFact {
+  readonly configurationName: string;
+  readonly moduleName: string;
+  readonly prefix: string;
+  readonly kind: RustActixImportedServiceConfigMountKind;
+  readonly range: SourceRange;
+}
+
+/**
+ * Syntax-only facts used to project literal Actix Web ServiceConfig routes
+ * through one directly declared Rust module in the project resolver.
+ */
+export interface RustActixServiceConfigFacts {
+  readonly externalModules: readonly RustActixExternalModuleFact[];
+  readonly configurations: readonly RustActixServiceConfigDeclarationFact[];
+  readonly importedMounts: readonly RustActixImportedServiceConfigMountFact[];
+}
+
 /** A Scala class or object declaration with its direct package-clause proof. */
 export interface ScalaClassFact {
   readonly symbolId: string;
@@ -461,6 +506,8 @@ export interface ArtifactFacts {
   readonly flaskBlueprintFacts?: FlaskBlueprintFacts;
   /** Omitted only by artifact facts persisted before v0.112. */
   readonly djangoUrlFacts?: DjangoUrlFacts;
+  /** Omitted only by artifact facts persisted before v0.118. */
+  readonly rustActixServiceConfigFacts?: RustActixServiceConfigFacts;
   /** Omitted only by artifact facts persisted before v0.46. */
   readonly scalaFacts?: ScalaFacts;
   /** Omitted only by artifact facts persisted before v0.47. */

@@ -6,6 +6,25 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.118.0] - 2026-07-31
+
+### Added
+
+- Rust route extraction now retains `RustActixServiceConfigFacts`: direct external `mod name;` declarations, unique type-proven `ServiceConfig` callbacks, and direct imported callback mounts through `App::configure(...)` or `web::scope(...).configure(...)`.
+- The project resolver projects a literal callback route only from `main.rs` or `lib.rs` through one direct `crate::module::callback` or `self::module::callback` import. It resolves exactly one sibling `module.rs` or `module/mod.rs`, one exported callback, and one same-module handler; projected edges retain module-stage evidence and a mount-file-to-callback-file resolution path.
+- Attribute routes are replaced only after that complete cross-file proof succeeds. Unsupported module forms, missing `mod` proof, non-exported callbacks, ambiguity, dynamic composition, nested modules, re-exports, and `#[path]` modules remain unprojected.
+- SQLite artifact-facts payloads now persist the additive Rust ServiceConfig facts. Focused coverage verifies root and scoped mounts, aliases, `self` imports, `routes/mod.rs`, an incremental prefix update that reuses the unchanged callback fact, rejected boundaries, and preservation of raw attribute routes when proof is absent.
+
+### Compatibility
+
+- The artifact facts extractor advances to `multi-language-ast-v102` and the project resolver to `project-resolver-v28`. Existing indexes remain readable; the next explicit `sync` or fresh `init` safely re-extracts Rust facts and rebuilds the projection.
+- `rustActixServiceConfigFacts` is additive JSON in persisted artifact facts. No graph-schema migration or CLI/MCP contract change is required.
+
+### Comparison notes
+
+- [Actix Web documents](https://actix.rs/docs/application/) `configure` on both `App` and `web::Scope`, using a `&mut web::ServiceConfig` callback. The checked CodeGraph Rust resolver recognizes raw HTTP attributes plus resource and app-route text patterns, but has no `ServiceConfig`, `.configure(...)`, or `web::scope` projection in that resolver. This independent SymbolLattice slice adds narrower, evidence-gated cross-file coverage for that static surface.
+- CodeGraph remains ahead in daemon lifecycle, socket/PID registry, cross-client coordination, worker-pool concurrency, and broader semantic resolution. v0.118 is a verified route-analysis improvement, not a general parity claim.
+
 ## [0.117.0] - 2026-07-31
 
 ### Added
