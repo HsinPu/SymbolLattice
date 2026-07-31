@@ -3780,6 +3780,71 @@ describe("SymbolLatticeService", () => {
     );
   });
 
+  it("indexes Go Fiber v2 App and literal Group routes with exact syntax evidence", async () => {
+    const projectPath = await createInlineProject({
+      "cmd/server/main.go": [
+        "package main",
+        "",
+        'import "github.com/gofiber/fiber/v2"',
+        "",
+        "func health(c fiber.Ctx) error { return nil }",
+        "func deleteUser(c fiber.Ctx) error { return nil }",
+        "",
+        "func main() {",
+        "  app := fiber.New()",
+        '  app.Get("/health", health)',
+        '  api := app.Group("/api")',
+        '  api.Delete("/users", deleteUser)',
+        "}"
+      ].join("\n")
+    });
+    const service = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+    const deleteRoutes = await service.routes(projectPath, { method: "DELETE" });
+
+    expect(routes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "GET",
+          path: "/health",
+          handler: expect.objectContaining({ qualifiedName: "cmd/server/main.go#health" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.fiber.direct-app.method.local-function",
+              stage: "syntax"
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "DELETE",
+          path: "/api/users",
+          handler: expect.objectContaining({ qualifiedName: "cmd/server/main.go#deleteUser" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.fiber.direct-group.method.local-function",
+              stage: "syntax"
+            })
+          })
+        })
+      ])
+    );
+    expect(deleteRoutes.routes).toMatchObject([
+      {
+        method: "DELETE",
+        path: "/api/users",
+        handler: { qualifiedName: "cmd/server/main.go#deleteUser" },
+        edge: {
+          resolution: "exact",
+          evidence: { ruleId: "framework.fiber.direct-group.method.local-function", stage: "syntax" }
+        }
+      }
+    ]);
+  });
+
   it("indexes Go net/http default and literal ServeMux routes with exact syntax evidence", async () => {
     const projectPath = await createInlineProject({
       "cmd/server/main.go": [

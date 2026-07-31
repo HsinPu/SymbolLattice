@@ -2303,6 +2303,80 @@ describe("source extraction", () => {
     ]);
   });
 
+  it("extracts direct Go Fiber v3 App and nested literal Group routes with exact evidence", () => {
+    const facts = extractFileFacts({
+      filePath: "cmd/server/fiber.go",
+      language: "go",
+      sourceText: [
+        "package main",
+        "",
+        'import f "github.com/gofiber/fiber/v3"',
+        "",
+        "func health(c f.Ctx) error { return nil }",
+        "func headHealth(c f.Ctx) error { return nil }",
+        "func createUser(c f.Ctx) error { return nil }",
+        "func search(c f.Ctx) error { return nil }",
+        "",
+        "func main() {",
+        "  app := f.New()",
+        '  app.Get("/health", health)',
+        '  app.Head("/health", headHealth)',
+        '  api := app.Group("/api")',
+        '  v1 := api.Group("/v1")',
+        '  v1.Post("/users", createUser)',
+        '  v1.All("/search", search)',
+        "}"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId,
+          edge.evidence?.stage,
+          edge.resolution,
+          edge.confidence
+        ])
+    ).toEqual([
+      [
+        "GET /health",
+        "cmd/server/fiber.go#health",
+        "framework.fiber.direct-app.method.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "HEAD /health",
+        "cmd/server/fiber.go#headHealth",
+        "framework.fiber.direct-app.method.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "POST /api/v1/users",
+        "cmd/server/fiber.go#createUser",
+        "framework.fiber.direct-group.method.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "ALL /api/v1/search",
+        "cmd/server/fiber.go#search",
+        "framework.fiber.direct-group.method.local-function",
+        "syntax",
+        "exact",
+        1
+      ]
+    ]);
+  });
+
   it("extracts direct Go net/http default and literal ServeMux HandleFunc routes with exact evidence", () => {
     const facts = extractFileFacts({
       filePath: "cmd/server/http.go",
@@ -2405,6 +2479,51 @@ describe("source extraction", () => {
         "  api.GET(\"/dynamic-group\", health)",
         "  bad := second.Group(\"/api/\")",
         "  bad.GET(\"/trailing-prefix\", stable)",
+        "}"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+  });
+
+  it("rejects shadowed, dynamic, inline, middleware, configured, and rebound Go Fiber route shapes", () => {
+    const facts = extractFileFacts({
+      filePath: "cmd/server/unproven-fiber.go",
+      language: "go",
+      sourceText: [
+        "package main",
+        "",
+        'import f "github.com/gofiber/fiber/v3"',
+        "",
+        "func health(c f.Ctx) error { return nil }",
+        "func stable(c f.Ctx) error { return nil }",
+        "",
+        "func shadowed(f int) {",
+        "  app := f.New()",
+        '  app.Get("/shadowed", health)',
+        "}",
+        "",
+        "func main() {",
+        "  path := \"/dynamic\"",
+        "  app := f.New()",
+        "  app.Get(path, health)",
+        '  app.Get("/inline", func(c f.Ctx) error { return nil })',
+        '  app.Get("/middleware", auth, health)',
+        "  health := fallback",
+        '  app.Get("/rebound-handler", health)',
+        "  app = buildApp()",
+        '  app.Get("/rebound-app", stable)',
+        "  var legacy = f.New()",
+        '  legacy.Get("/var-binding", stable)',
+        "  configured := f.New(f.Config{})",
+        '  configured.Get("/configured", stable)',
+        "  second := f.New()",
+        "  prefix := \"/api\"",
+        "  api := second.Group(prefix)",
+        '  api.Get("/dynamic-group", stable)',
+        '  bad := second.Group("/api/", auth)',
+        '  bad.Get("/unsupported-group", stable)',
         "}"
       ].join("\n")
     });

@@ -45,6 +45,24 @@ interface StaticGinRoute {
   readonly node: GoSyntaxNode;
 }
 
+interface FiberReceiver {
+  readonly kind: "app" | "group";
+  readonly prefix: string;
+}
+
+interface StaticFiberBinding {
+  readonly name: string;
+  readonly receiver: FiberReceiver;
+}
+
+interface StaticFiberRoute {
+  readonly receiver: FiberReceiver;
+  readonly method: RouteMethod;
+  readonly path: string;
+  readonly handlerName: string;
+  readonly node: GoSyntaxNode;
+}
+
 interface StaticNetHttpMuxBinding {
   readonly name: string;
 }
@@ -72,6 +90,10 @@ interface StaticChiRoute {
 }
 
 const GIN_PACKAGE_PATH = "github.com/gin-gonic/gin";
+const FIBER_PACKAGE_PATHS = [
+  "github.com/gofiber/fiber/v2",
+  "github.com/gofiber/fiber/v3"
+] as const;
 const NET_HTTP_PACKAGE_PATH = "net/http";
 const CHI_PACKAGE_PATHS = ["github.com/go-chi/chi/v5"] as const;
 
@@ -84,6 +106,19 @@ const GIN_ROUTE_METHODS: Readonly<Record<string, RouteMethod>> = {
   HEAD: "HEAD",
   OPTIONS: "OPTIONS",
   Any: "ALL"
+};
+
+const FIBER_ROUTE_METHODS: Readonly<Record<string, RouteMethod>> = {
+  Get: "GET",
+  Post: "POST",
+  Put: "PUT",
+  Patch: "PATCH",
+  Delete: "DELETE",
+  Head: "HEAD",
+  Options: "OPTIONS",
+  Trace: "TRACE",
+  Connect: "CONNECT",
+  All: "ALL"
 };
 
 const NET_HTTP_PATTERN_METHODS = new Set<RouteMethod>([
@@ -197,7 +232,7 @@ function staticGinPath(input: GoExtractFileFactsInput, node: GoSyntaxNode): stri
   return staticLiteralSlashPath(input, node);
 }
 
-function staticGinGroupPrefix(input: GoExtractFileFactsInput, node: GoSyntaxNode): string | null {
+function staticLiteralGroupPrefix(input: GoExtractFileFactsInput, node: GoSyntaxNode): string | null {
   const prefix = staticGinPath(input, node);
   return prefix === null || prefix === "/" || prefix.endsWith("/") ? null : prefix;
 }
@@ -285,6 +320,13 @@ function staticGinImportAliases(
   root: GoSyntaxNode
 ): readonly string[] {
   return staticPackageImportAliases(input, root, [GIN_PACKAGE_PATH], "gin");
+}
+
+function staticFiberImportAliases(
+  input: GoExtractFileFactsInput,
+  root: GoSyntaxNode
+): readonly string[] {
+  return staticPackageImportAliases(input, root, FIBER_PACKAGE_PATHS, "fiber");
 }
 
 function staticNetHttpImportAliases(
@@ -431,7 +473,7 @@ function staticGinGroupBinding(
   }
   const parent = receivers.get(declaration.receiverName);
   const pathNode = declaration.arguments_[0];
-  const prefix = pathNode === undefined ? null : staticGinGroupPrefix(input, pathNode);
+  const prefix = pathNode === undefined ? null : staticLiteralGroupPrefix(input, pathNode);
   if (parent === undefined || prefix === null) {
     return null;
   }
@@ -462,6 +504,84 @@ function staticGinRoute(
   const pathNode = call.arguments_[0];
   const handlerNode = call.arguments_[1];
   const path = pathNode === undefined ? null : staticGinPath(input, pathNode);
+  const handlerName =
+    handlerNode?.name === "VariableName" ? identifierText(input, handlerNode) : null;
+  if (
+    receiver === undefined ||
+    method === undefined ||
+    path === null ||
+    handlerName === null
+  ) {
+    return null;
+  }
+  return { receiver, method, path, handlerName, node };
+}
+
+function staticFiberAppBinding(
+  input: GoExtractFileFactsInput,
+  node: GoSyntaxNode,
+  fiberAliases: ReadonlySet<string>,
+  shadowedNames: ReadonlySet<string>
+): StaticFiberBinding | null {
+  const declaration = staticShortVariableCall(input, node);
+  if (
+    declaration === null ||
+    !fiberAliases.has(declaration.receiverName) ||
+    shadowedNames.has(declaration.receiverName) ||
+    declaration.methodName !== "New" ||
+    declaration.arguments_.length !== 0
+  ) {
+    return null;
+  }
+  return { name: declaration.name, receiver: { kind: "app", prefix: "" } };
+}
+
+function staticFiberGroupBinding(
+  input: GoExtractFileFactsInput,
+  node: GoSyntaxNode,
+  receivers: ReadonlyMap<string, FiberReceiver>
+): StaticFiberBinding | null {
+  const declaration = staticShortVariableCall(input, node);
+  if (
+    declaration === null ||
+    declaration.methodName !== "Group" ||
+    declaration.arguments_.length !== 1
+  ) {
+    return null;
+  }
+  const parent = receivers.get(declaration.receiverName);
+  const pathNode = declaration.arguments_[0];
+  const prefix = pathNode === undefined ? null : staticLiteralGroupPrefix(input, pathNode);
+  if (parent === undefined || prefix === null) {
+    return null;
+  }
+  return {
+    name: declaration.name,
+    receiver: { kind: "group", prefix: combinedRoutePath(parent.prefix, prefix) }
+  };
+}
+
+function staticFiberRoute(
+  input: GoExtractFileFactsInput,
+  node: GoSyntaxNode,
+  receivers: ReadonlyMap<string, FiberReceiver>
+): StaticFiberRoute | null {
+  if (node.name !== "ExprStatement") {
+    return null;
+  }
+  const expression = directChildren(node)[0];
+  if (expression === undefined) {
+    return null;
+  }
+  const call = staticSelectorCall(input, expression);
+  if (call === null || call.arguments_.length !== 2) {
+    return null;
+  }
+  const receiver = receivers.get(call.receiverName);
+  const method = FIBER_ROUTE_METHODS[call.methodName];
+  const pathNode = call.arguments_[0];
+  const handlerNode = call.arguments_[1];
+  const path = pathNode === undefined ? null : staticLiteralSlashPath(input, pathNode);
   const handlerName =
     handlerNode?.name === "VariableName" ? identifierText(input, handlerNode) : null;
   if (
@@ -613,10 +733,12 @@ function combinedRoutePath(...parts: readonly string[]): string {
  */
 export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFacts {
   const ginCapability = frameworkCapability("gin");
+  const fiberCapability = frameworkCapability("fiber");
   const netHttpCapability = frameworkCapability("net-http");
   const chiCapability = frameworkCapability("chi");
   if (
     !ginCapability.languages.includes(input.language) ||
+    !fiberCapability.languages.includes(input.language) ||
     !netHttpCapability.languages.includes(input.language) ||
     !chiCapability.languages.includes(input.language)
   ) {
@@ -765,6 +887,18 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
     );
   }
 
+  function addFiberRoute(routeFact: StaticFiberRoute, handler: SymbolNode): void {
+    addResolvedRoute(
+      routeFact.method,
+      combinedRoutePath(routeFact.receiver.prefix, routeFact.path),
+      routeFact.node,
+      handler,
+      routeFact.receiver.kind === "app"
+        ? "framework.fiber.direct-app.method.local-function"
+        : "framework.fiber.direct-group.method.local-function"
+    );
+  }
+
   function addNetHttpRoute(routeFact: StaticNetHttpRoute, handler: SymbolNode): void {
     addResolvedRoute(
       routeFact.method,
@@ -800,11 +934,15 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
     }
 
     const ginAliases = staticGinImportAliases(input, root);
+    const fiberAliases = staticFiberImportAliases(input, root);
     const netHttpAliases = staticNetHttpImportAliases(input, root);
     const chiAliases = staticChiImportAliases(input, root);
     for (const functionDeclaration of functions) {
       const visibleGinAliases = new Set(
         ginAliases.filter((alias) => !functionDeclaration.parameterNames.includes(alias))
+      );
+      const visibleFiberAliases = new Set(
+        fiberAliases.filter((alias) => !functionDeclaration.parameterNames.includes(alias))
       );
       const visibleNetHttpAliases = new Set(
         netHttpAliases.filter((alias) => !functionDeclaration.parameterNames.includes(alias))
@@ -813,6 +951,7 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
         chiAliases.filter((alias) => !functionDeclaration.parameterNames.includes(alias))
       );
       const ginReceivers = new Map<string, GinReceiver>();
+      const fiberReceivers = new Map<string, FiberReceiver>();
       const netHttpMuxes = new Set<string>();
       const chiReceivers = new Set<string>();
       const shadowedNames = new Set(functionDeclaration.parameterNames);
@@ -837,6 +976,30 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
             const handler = candidates[0];
             if (handler !== undefined) {
               addGinRoute(ginRoute, handler);
+            }
+          }
+        }
+
+        const appBinding = staticFiberAppBinding(
+          input,
+          statement,
+          visibleFiberAliases,
+          shadowedNames
+        );
+        if (appBinding !== null) {
+          fiberReceivers.set(appBinding.name, appBinding.receiver);
+        }
+        const fiberGroupBinding = staticFiberGroupBinding(input, statement, fiberReceivers);
+        if (fiberGroupBinding !== null) {
+          fiberReceivers.set(fiberGroupBinding.name, fiberGroupBinding.receiver);
+        }
+        const fiberRoute = staticFiberRoute(input, statement, fiberReceivers);
+        if (fiberRoute !== null && !shadowedNames.has(fiberRoute.handlerName)) {
+          const candidates = functionsByName.get(fiberRoute.handlerName) ?? [];
+          if (candidates.length === 1) {
+            const handler = candidates[0];
+            if (handler !== undefined) {
+              addFiberRoute(fiberRoute, handler);
             }
           }
         }
@@ -892,6 +1055,11 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
             (name): name is string => name !== undefined
           )
         );
+        const retainedFiberBindings = new Set(
+          [appBinding?.name, fiberGroupBinding?.name].filter(
+            (name): name is string => name !== undefined
+          )
+        );
         const retainedNetHttpBindings = new Set(
           [muxBinding?.name].filter((name): name is string => name !== undefined)
         );
@@ -901,6 +1069,9 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
         for (const name of directBoundNames(input, statement)) {
           if (!retainedGinBindings.has(name)) {
             ginReceivers.delete(name);
+          }
+          if (!retainedFiberBindings.has(name)) {
+            fiberReceivers.delete(name);
           }
           if (!retainedNetHttpBindings.has(name)) {
             netHttpMuxes.delete(name);

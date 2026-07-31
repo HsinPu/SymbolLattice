@@ -6,6 +6,23 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.84.0] - 2026-07-31
+
+### Added
+
+- Go Fiber route extraction now recognizes direct non-dot/non-blank imports of `github.com/gofiber/fiber/v2` and `github.com/gofiber/fiber/v3`, using the default `fiber` name or a direct alias. A route requires a same-function short-variable `app := fiber.New()` binding, a literal slash-prefixed path, one unshadowed named package-level handler, and either a direct App method or a proven nested same-function literal `Group` prefix. Direct `Get`, `Post`, `Put`, `Patch`, `Delete`, `Head`, `Options`, `Trace`, `Connect`, and `All` registrations become exact route evidence; `All` is represented as `ALL`.
+- The executable first-party framework capability registry, `RouteFramework` provenance union, persisted route query, and Go route evidence now include `fiber`. Unit and service integration coverage prove v3 aliases, v2 default imports, nested group composition, exact rule IDs, method filtering, and rejection of dynamic paths, alias shadows, inline/middleware handlers, configured/factory/`var` constructors, mutable receivers, and unsupported group forms. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.84.0.md`.
+
+### Compatibility
+
+- The artifact extractor advances to `multi-language-ast-v73`; the project resolver remains `project-resolver-v23` because the Fiber App, Group, path, and handler proof remains file-local. A pre-v0.84 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes Fiber-capable facts.
+- No SQLite schema migration or query command is required. This is an additive Go framework capability within the existing file, symbol, route-edge, source-search, CLI, MCP, and incremental-index contracts; existing generations remain readable.
+
+### Deliberate limits
+
+- The Fiber slice is not a general Fiber program model. It excludes constructor configuration, `Use`, `Route`, `RouteChain`, mounted sub-apps, group middleware, path parameters/constraints semantics, automatic `HEAD`, handlers other than one named package-level function, `var`/factory/wrapper/chained/mutable receiver flow, cross-file packages, generic Go analysis, compilation, and runtime routing behavior.
+- The inspected local CodeGraph baseline recognizes Go framework-looking method calls including Fiber through a broad receiver pattern. SymbolLattice v0.84 is narrower in source coverage but adds explicit v2/v3 import and App-construction proof, group-prefix provenance, exact unique same-file handler identity, and fail-closed rebinding behavior; it is independently implemented and does not copy CodeGraph source.
+
 ## [0.83.0] - 2026-07-31
 
 ### Added

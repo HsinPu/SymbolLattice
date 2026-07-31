@@ -51,6 +51,7 @@ export type RouteFramework =
   | "flask"
   | "django"
   | "gin"
+  | "fiber"
   | "net-http"
   | "chi"
   | "axum"

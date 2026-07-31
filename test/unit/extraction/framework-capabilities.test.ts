@@ -26,6 +26,7 @@ describe("first-party framework capabilities", () => {
       "flask",
       "django",
       "gin",
+      "fiber",
       "net-http",
       "chi",
       "axum",
@@ -168,6 +169,15 @@ describe("first-party framework capabilities", () => {
       surfaces: [
         "direct Gin engine methods",
         "same-function literal RouterGroup prefixes"
+      ]
+    });
+    expect(frameworkCapability("fiber")).toMatchObject({
+      languages: ["go"],
+      routeFramework: "fiber",
+      routeRegistrations: [],
+      surfaces: [
+        "direct Fiber v2/v3 App methods",
+        "same-function literal Router Group prefixes"
       ]
     });
     expect(frameworkCapability("net-http")).toMatchObject({

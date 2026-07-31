@@ -19,6 +19,7 @@ export const FRAMEWORK_CAPABILITY_IDS = [
   "flask",
   "django",
   "gin",
+  "fiber",
   "net-http",
   "chi",
   "axum",
@@ -218,6 +219,16 @@ export const FRAMEWORK_CAPABILITIES = [
     surfaces: [
       "direct Gin engine methods",
       "same-function literal RouterGroup prefixes"
+    ]
+  },
+  {
+    id: "fiber",
+    languages: ["go"],
+    routeFramework: "fiber",
+    routeRegistrations: [],
+    surfaces: [
+      "direct Fiber v2/v3 App methods",
+      "same-function literal Router Group prefixes"
     ]
   },
   {
