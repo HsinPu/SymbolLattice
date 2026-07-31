@@ -4404,6 +4404,10 @@ describe("SymbolLatticeService", () => {
         "begin",
         "end;",
         "",
+        "procedure PatchUser(Req: THorseRequest; Res: THorseResponse);",
+        "begin",
+        "end;",
+        "",
         "procedure DeleteUser(Req: THorseRequest; Res: THorseResponse);",
         "begin",
         "end;",
@@ -4412,6 +4416,7 @@ describe("SymbolLatticeService", () => {
         "  THorse.Get('/health', health);",
         "  THorse.Post('/users', CreateUser);",
         "  THorse.Put('/users', UpdateUser);",
+        "  THorse.Patch('/users', PatchUser);",
         "  THorse.Delete('/users', DeleteUser);",
         "end."
       ].join("\n")
@@ -4423,6 +4428,7 @@ describe("SymbolLatticeService", () => {
     const routes = await service.routes(projectPath);
     const getRoutes = await service.routes(projectPath, { method: "GET" });
     const putRoutes = await service.routes(projectPath, { method: "PUT" });
+    const patchRoutes = await service.routes(projectPath, { method: "PATCH" });
     const deleteRoutes = await service.routes(projectPath, { method: "DELETE" });
     const search = await service.search(projectPath, "CreateUser", { language: "pascal" });
     const persistedFacts = graphStore
@@ -4475,6 +4481,19 @@ describe("SymbolLatticeService", () => {
           })
         }),
         expect.objectContaining({
+          method: "PATCH",
+          path: "/users",
+          handler: expect.objectContaining({ qualifiedName: "src/server.pas#PatchUser" }),
+          edge: expect.objectContaining({
+            kind: "routes",
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.horse.direct-uses.literal-route.local-routine",
+              stage: "syntax"
+            })
+          })
+        }),
+        expect.objectContaining({
           method: "DELETE",
           path: "/users",
           handler: expect.objectContaining({ qualifiedName: "src/server.pas#DeleteUser" }),
@@ -4491,6 +4510,7 @@ describe("SymbolLatticeService", () => {
     );
     expect(getRoutes.routes).toMatchObject([{ method: "GET", path: "/health" }]);
     expect(putRoutes.routes).toMatchObject([{ method: "PUT", path: "/users" }]);
+    expect(patchRoutes.routes).toMatchObject([{ method: "PATCH", path: "/users" }]);
     expect(deleteRoutes.routes).toMatchObject([{ method: "DELETE", path: "/users" }]);
     expect(search.results).toMatchObject([{ filePath: "src/server.pas", language: "pascal" }]);
   });

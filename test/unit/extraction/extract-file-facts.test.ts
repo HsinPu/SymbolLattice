@@ -3534,7 +3534,7 @@ describe("source extraction", () => {
     expect(malformedProtocol.symbols.map((symbol) => symbol.kind)).toEqual(["file"]);
   });
 
-  it("extracts direct Horse Get/Post/Put/Delete routes only from a proven Pascal program main block", () => {
+  it("extracts direct Horse Get/Post/Put/Patch/Delete routes only from a proven Pascal program main block", () => {
     const facts = extractFileFacts({
       filePath: "src/server.dpr",
       language: "pascal",
@@ -3555,6 +3555,10 @@ describe("source extraction", () => {
         "begin",
         "end;",
         "",
+        "procedure PatchUser(Req: THorseRequest; Res: THorseResponse);",
+        "begin",
+        "end;",
+        "",
         "procedure DeleteUser(Req: THorseRequest; Res: THorseResponse);",
         "begin",
         "end;",
@@ -3563,8 +3567,9 @@ describe("source extraction", () => {
         "  THorse.Get('/health', health);",
         "  THorse.Post('/users', CreateUser);",
         "  THorse.Put('/users', UpdateUser);",
+        "  THorse.Patch('/users', PatchUser);",
         "  THorse.Delete('/users', DeleteUser);",
-        "  THorse.Patch('/unsupported', Health);",
+        "  THorse.Options('/unsupported', Health);",
         "  if True then",
         "  begin",
         "    THorse.Get('/nested', Health);",
@@ -3646,6 +3651,7 @@ describe("source extraction", () => {
       "GET /health",
       "POST /users",
       "PUT /users",
+      "PATCH /users",
       "DELETE /users"
     ]);
     expect(facts.edges.filter((edge) => edge.kind === "routes")).toMatchObject([
@@ -3667,6 +3673,14 @@ describe("source extraction", () => {
       },
       {
         referenceName: "UpdateUser",
+        resolution: "exact",
+        evidence: {
+          ruleId: "framework.horse.direct-uses.literal-route.local-routine",
+          candidateSymbolIds: expect.any(Array)
+        }
+      },
+      {
+        referenceName: "PatchUser",
         resolution: "exact",
         evidence: {
           ruleId: "framework.horse.direct-uses.literal-route.local-routine",

@@ -6,6 +6,23 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.80.0] - 2026-07-31
+
+### Added
+
+- Pascal Horse route extraction now accepts direct main-program Patch registrations in addition to Get, Post, Put, and Delete. Every accepted registration still requires exactly one direct uses Horse proof, exactly one direct program main block, a one-line slash-prefixed literal path, and one unique prior same-file complete routine handler.
+- Patch reuses the existing route node, routes edge, Pascal case-insensitive handler lookup, and framework.horse.direct-uses.literal-route.local-routine syntax evidence. Unit and integration coverage verifies exact Patch routes, handler proof, bounded route-method filtering, and continued Options rejection. The standalone Traditional Chinese comparison report is at C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.80.0.md.
+
+### Compatibility
+
+- The artifact extractor advances to multi-language-ast-v69; the project resolver remains project-resolver-v23 because every accepted Horse route and handler proof remains file-local. A pre-v0.80 active index reports indexer-version-changed until an explicit sync or index republishes the expanded Horse facts.
+- No SQLite schema migration or query command is required. This is an additive framework capability expansion within the existing Pascal artifact, graph, route query, source-search, CLI, MCP, incremental-index, and evidence contracts; existing generations remain readable.
+
+### Deliberate limits
+
+- Head, Options, and every other Horse verb remain excluded. Combined or aliased uses, units, inline or multiline callbacks, aliases/wrappers/subclasses, groups, prefixes, middleware, nested registrations, dynamic paths, late or ambiguous handlers, cross-file handlers, compilation, and runtime behavior remain outside scope.
+- The inspected local CodeGraph baseline has broad Tree-sitter Pascal extraction and form/callback support but no dedicated Horse or THorse framework rule in its local source search. SymbolLattice v0.80 is therefore narrower for general Pascal syntax but ahead for this explicit, evidence-bearing PATCH route subset; it is independently implemented and not a CodeGraph source copy.
+
 ## [0.79.0] - 2026-07-31
 
 ### Added
