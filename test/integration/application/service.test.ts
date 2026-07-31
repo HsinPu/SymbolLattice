@@ -4320,9 +4320,17 @@ describe("SymbolLatticeService", () => {
     expect(search.results).toMatchObject([{ filePath: "src/health.pas", language: "pascal" }]);
   });
 
-  it("indexes Objective-C++ implementation source and retains Objective-C source-search filtering", async () => {
+  it("indexes Objective-C++ interfaces, protocols, and implementations with Objective-C source-search filtering", async () => {
     const projectPath = await createInlineProject({
       "src/HealthController.mm": [
+        "@interface HealthController : NSObject",
+        "- (void)declaredOnly;",
+        "@end",
+        "",
+        "@protocol HealthChecking",
+        "- (BOOL)isHealthy;",
+        "@end",
+        "",
         "@implementation HealthController",
         "- (void)health {",
         "}",
@@ -4344,6 +4352,10 @@ describe("SymbolLatticeService", () => {
       projectPath,
       "src/HealthController.mm#HealthController.health"
     );
+    const healthChecking = await service.find(
+      projectPath,
+      "src/HealthController.mm#protocol:HealthChecking.isHealthy"
+    );
 
     expect(indexed).toMatchObject({
       stale: false,
@@ -4357,6 +4369,13 @@ describe("SymbolLatticeService", () => {
       {
         kind: "method",
         qualifiedName: "src/HealthController.mm#HealthController.health",
+        isExported: true
+      }
+    ]);
+    expect(healthChecking.symbols).toMatchObject([
+      {
+        kind: "method",
+        qualifiedName: "src/HealthController.mm#protocol:HealthChecking.isHealthy",
         isExported: true
       }
     ]);

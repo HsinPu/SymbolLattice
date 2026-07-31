@@ -14,10 +14,10 @@
 </div>
 
 > [!IMPORTANT]
-> **v0.78.0** is an early developer release. This public repository runs from source; its npm package is intentionally private and is not published to npm.
+> **v0.79.0** is an early developer release. This public repository runs from source; its npm package is intentionally private and is not published to npm.
 
 > [!NOTE]
-> **v0.78.0 — Horse framework expansion.** SymbolLattice now keeps direct Pascal Horse PUT and DELETE routes under exactly the same local proof boundary as GET and POST: one direct uses Horse proof, one program main block, one-line literal registration, and one unique prior same-file complete routine handler.
+> **v0.79.0 — Objective-C declaration expansion.** SymbolLattice now records direct ordinary class interfaces and protocols in .m and .mm files, including one-line method declarations, while retaining the existing fail-closed lexical and evidence boundary.
 
 SymbolLattice builds a local symbol graph without hiding uncertainty. It keeps syntax-proven artifact facts, resolves cross-file relationships conservatively, and records why every resolved edge exists. The graph stays local to the inspected project under `.symbol-lattice/index.sqlite`.
 
@@ -157,11 +157,11 @@ One-shot data commands emit stable, pretty JSON. `watch` is the deliberate strea
 
 ## Capabilities
 
-| Area | v0.78.0 behavior |
+| Area | v0.79.0 behavior |
 | --- | --- |
-| Objective-C / Objective-C++ | Objective-C .m and Objective-C++ .mm implementation files are indexed as objc. Only complete direct non-category implementation blocks and complete one-line brace-bodied instance or class methods emit exact local contains evidence. Headers, categories, protocols, imports, properties, calls, and Swift bridging remain outside this first slice. |
+| Objective-C / Objective-C++ | Objective-C .m and Objective-C++ .mm files are indexed as objc. Complete direct ordinary interface, protocol, and implementation blocks emit exact local contains evidence. Interfaces and protocols contribute one-line semicolon-terminated method declarations; implementations contribute one-line brace-bodied methods. A same-file interface plus implementation becomes one class symbol, with implementation evidence preferred for a matching selector. Headers, categories/extensions, properties, inheritance edges, imports, calls, and Swift bridging remain outside this slice. |
 | Horse v0.78 | Pascal Horse accepts direct main-program Get, Post, Put, and Delete literal registrations only after the same strict proof conditions. Patch and all other verbs remain excluded. |
-| Source files | TypeScript, TSX, JavaScript, JSX, ArkTS/ArkUI, Vue SFC, Svelte SFC, Astro SFC, Razor/Blazor components, Terraform/OpenTofu HCL, Shopify Liquid, Twig, Laravel Blade, Solidity, CFML/CFScript, Nix, VB.NET, Python, Go, Rust, Java, PHP, C, Lua, Luau, Pascal, R, Elixir, Erlang, Clojure, Perl, Julia, Haskell, OCaml, F#, Nim, C++, C#, Ruby, Kotlin, Swift, Dart, and Scala (`.ets`, `.vue`, `.svelte`, `.astro`, `.razor`, `.tf`, `.tfvars`, `.tofu`, `.liquid`, `.twig`, `.blade.php`, `.sol`, `.cfc`, `.cfm`, `.cfs`, `.nix`, `.vb`, `.c`, `.lua`, `.luau`, `.pas`, `.dpr`, `.dpk`, `.lpr`, `.r`, `.ex`, `.exs`, `.erl`, `.clj`, `.pl`, `.pm`, `.jl`, `.hs`, `.ml`, `.fs`, `.nim`, `.cpp`, `.cc`, `.cxx`, `.hpp`, `.hh`, `.hxx`, `.cs`, `.rb`, `.kt`, `.swift`, `.dart`, `.scala`; plus Play `conf/routes` and `conf/*.routes` route tables) |
+| Source files | TypeScript, TSX, JavaScript, JSX, ArkTS/ArkUI, Vue SFC, Svelte SFC, Astro SFC, Razor/Blazor components, Terraform/OpenTofu HCL, Shopify Liquid, Twig, Laravel Blade, Solidity, CFML/CFScript, Nix, VB.NET, Python, Go, Rust, Java, PHP, C, Lua, Luau, Pascal, Objective-C / Objective-C++, R, Elixir, Erlang, Clojure, Perl, Julia, Haskell, OCaml, F#, Nim, C++, C#, Ruby, Kotlin, Swift, Dart, and Scala (`.ets`, `.vue`, `.svelte`, `.astro`, `.razor`, `.tf`, `.tfvars`, `.tofu`, `.liquid`, `.twig`, `.blade.php`, `.sol`, `.cfc`, `.cfm`, `.cfs`, `.nix`, `.vb`, `.c`, `.lua`, `.luau`, `.pas`, `.dpr`, `.dpk`, `.lpr`, `.m`, `.mm`, `.r`, `.ex`, `.exs`, `.erl`, `.clj`, `.pl`, `.pm`, `.jl`, `.hs`, `.ml`, `.fs`, `.nim`, `.cpp`, `.cc`, `.cxx`, `.hpp`, `.hh`, `.hxx`, `.cs`, `.rb`, `.kt`, `.swift`, `.dart`, `.scala`; plus Play `conf/routes` and `conf/*.routes` route tables) |
 | F# + Giraffe | Direct top-level typed `HttpFunc` / `HttpContext` handlers plus exactly one `open Giraffe` proof and a direct literal `choose [` route table. Fixed HTTP verbs and plain `route "/..."` entries become exact same-file or explicit unresolved route evidence. |
 | Nim + Jester | Direct top-level zero-argument `proc` handlers plus exactly one direct `import` list containing `jester`, then a flat `routes:` or `router name:` literal route block. Fixed lowercase HTTP verbs become exact same-file or explicit unresolved route evidence. |
 | Vue + Vue Router | Vue `.vue` files contribute a file symbol plus direct inline JavaScript/TypeScript script declarations and an auditable default component export. In TypeScript/JavaScript router modules, exactly one direct `createRouter` import plus one top-level literal `routes` option emits `NAVIGATE` route evidence; direct default imports can resolve exactly through `.vue` modules. |
@@ -432,11 +432,13 @@ Horse support deliberately excludes combined or aliased `uses`, units, inline or
 
 #### Objective-C / Objective-C++
 
-v0.77 adds Objective-C .m and Objective-C++ .mm discovery through an independently implemented lexical boundary. It emits one class symbol for each complete direct non-category @implementation ClassName ... @end block, plus contained method symbols for direct one-line - or + declarations with a complete brace body. Multi-part selectors such as create:with: remain a single method name.
+v0.79 extends the independently implemented Objective-C lexical boundary for .m and .mm files. It emits one class symbol for a complete direct ordinary @interface ClassName ... @end block or @implementation ClassName ... @end block, and one interface symbol for each complete direct @protocol Name ... @end block. A same-file ordinary interface plus implementation is intentionally merged into one class symbol rather than becoming duplicate declarations.
 
-Before declaration matching, the scanner blanks line and block comments, single- and double-quoted literals, and preprocessor directives while preserving source offsets. This means comment, string, and macro text cannot fabricate class or method facts. Unbalanced comments, literals, braces, duplicate ordinary implementations, or an unfinished implementation retain only the file symbol.
+Interfaces and protocols contribute only direct one-line - or + method declarations ending in a semicolon; implementations contribute only direct one-line brace-bodied methods. Multi-part selectors such as create:with: remain one method name. When an interface declaration and implementation define the same selector, the implementation range and implementation evidence take precedence; interface-only selectors remain visible.
 
-This first Objective-C slice deliberately excludes .h headers, @interface and @protocol declarations, categories and class extensions, properties, imports, inheritance, C or C++ declarations, Objective-C message calls, Swift interoperability, compiler configuration, and runtime behavior. Objective-C++ files are accepted only through the shared Objective-C declaration boundary; this is not a C++ parser claim.
+Before declaration matching, the scanner blanks line and block comments, single- and double-quoted literals, and preprocessor directives while preserving source offsets. This prevents comment, string, and macro text from fabricating facts. Unbalanced comments, literals, braces, duplicate ordinary containers, nested container directives, or an unfinished recognized container retain only the file symbol.
+
+The slice still excludes .h headers, categories and class extensions, properties, imports, inheritance or protocol-conformance edges, C or C++ declarations, Objective-C message calls, Swift interoperability, compiler configuration, and runtime behavior. Objective-C++ files are accepted only through this shared Objective-C declaration boundary; this is not a C++ parser claim.
 
 #### Plumber (R)
 
@@ -2261,7 +2263,7 @@ src/
   application/     Use cases, incremental planning, and graph projection
   cli/             Commander-based CLI
   domain/          Graph, evidence, identity, and index-work contracts
-  extraction/      TypeScript AST, ArkTS/ArkUI lexical, Vue/Svelte/Astro SFC, Razor/Blazor directive, Terraform/OpenTofu HCL lexical, Shopify Liquid/Twig tag lexical, Solidity declaration lexical, CFML/CFScript declaration lexical, Nix declaration lexical, VB.NET declaration lexical, Python/Go/Rust/Java/PHP/C/C++ Lezer, Lua/Luau/Pascal/Horse/R/Elixir/Erlang/Clojure/Perl/Julia/Haskell lexical, and C#/Ruby/Kotlin/Swift/Dart/Scala ast-grep fact extraction
+  extraction/      TypeScript AST, ArkTS/ArkUI lexical, Vue/Svelte/Astro SFC, Razor/Blazor directive, Terraform/OpenTofu HCL lexical, Shopify Liquid/Twig tag lexical, Solidity declaration lexical, CFML/CFScript declaration lexical, Nix declaration lexical, VB.NET declaration lexical, Python/Go/Rust/Java/PHP/C/C++ Lezer, Lua/Luau/Pascal/Horse/Objective-C/R/Elixir/Erlang/Clojure/Perl/Julia/Haskell lexical, and C#/Ruby/Kotlin/Swift/Dart/Scala ast-grep fact extraction
   infrastructure/  Filesystem, workspace, TypeScript, and SQLite adapters
   mcp/             Read-only MCP server
   ports/           Dependency boundaries
@@ -2269,7 +2271,7 @@ src/
 
 ## Deliberate boundaries
 
-v0.77.0 does not yet provide:
+v0.79.0 does not yet provide:
 
 - Daemon mode, background automatic sync after the foreground process exits, cross-process watch coordination, MCP per-query pending-file banners, worker pools, or historical source browsing.
 - pnpm workspace YAML, TypeScript project references, external/package `extends`, or nested `.gitignore` semantics.
@@ -2311,9 +2313,9 @@ v0.77.0 does not yet provide:
 - The Nix surface is a deliberately small lexical declaration scanner, not a Nix parser, evaluator, flake reader, package builder, or deployment planner. It accepts only complete direct returned-attribute-set and `let ... in` bindings, simple `inherit` names, and literal project-relative import syntax. It excludes quoted/dynamic attributes, nested members, `with`, assertions, overlays/derivations, flakes/lock files, target resolution, `callPackage`, arbitrary calls, dependency/evaluation semantics, NixOS/Home Manager module composition, builds, and runtime deployment behavior.
 - The VB.NET surface is a deliberately small line-oriented declaration scanner, not a VB.NET parser, Roslyn compiler, CLR analyzer, UI framework analyzer, or runtime debugger. It accepts only complete namespace/type/`Sub`/`Function` blocks, bodyless interface/`MustOverride` signatures, and simple file-level `Imports`. It excludes attributes/aliases, fields/properties/events/delegates/P-Invoke, generic/overload/type/inheritance/`Handles` semantics, calls/lambdas/local functions, partial types, project/assembly/package/MSBuild resolution, compilation, designer resources, and runtime behavior.
 - Semantic type checking, transitive hierarchy traversal, declaration-merging semantics, override dispatch, mixin/qualified/conditional heritage expressions, or automatic framework decorator inference. v0.18 recognizes direct imported NestJS HTTP decorators, direct static `RouterModule.register()` prefixes, and the narrowly defined non-HTTP decorators documented above; it does not infer custom decorators, barrels, `forRoot` / `forChild`, global/version prefixes, guards, GraphQL field resolvers, dynamic patterns, dynamic gateway configuration, or runtime transport wiring.
-- Language adapters beyond TS/TSX/JS/JSX/ArkTS/Vue/Svelte/Astro/Razor/Terraform/OpenTofu/Shopify-Liquid/Twig/Laravel-Blade/Solidity/CFML-CFScript/Nix/VB.NET/Python/Go/Rust/Java/PHP/C/Lua/Luau/Pascal/R/Elixir/Erlang/Clojure/Perl/Julia/Haskell/OCaml/F#/C++/C#/Ruby/Kotlin/Swift/Dart/Scala, external dependency indexing, telemetry, or multi-project routing.
+- Language adapters beyond TS/TSX/JS/JSX/ArkTS/Vue/Svelte/Astro/Razor/Terraform/OpenTofu/Shopify-Liquid/Twig/Laravel-Blade/Solidity/CFML-CFScript/Nix/VB.NET/Python/Go/Rust/Java/PHP/C/Lua/Luau/Pascal/Objective-C/Objective-C++/R/Elixir/Erlang/Clojure/Perl/Julia/Haskell/OCaml/F#/C++/C#/Ruby/Kotlin/Swift/Dart/Scala, external dependency indexing, telemetry, or multi-project routing.
 - Embedding-based or cloud retrieval, semantic ranking, arbitrary natural-language context assembly, semantic Git diff beyond immutable zero-context hunk-to-revision-local-declaration evidence, or reliable rename/move/cross-side identity attribution.
-- The Objective-C surface is intentionally a declaration-only lexical subset. It accepts only .m and .mm complete direct ordinary implementation blocks plus one-line brace-bodied instance or class methods. It does not index .h headers, interfaces, protocols, categories, extensions, properties, imports, inheritance, C/C++ symbols, message calls, Swift bridges, compiler configuration, or runtime behavior; malformed lexical boundaries retain only the file symbol.
+- The Objective-C surface is intentionally a declaration-only lexical subset. It accepts only .m and .mm complete direct ordinary interface, protocol, and implementation blocks; interfaces and protocols allow one-line semicolon-terminated instance/class methods, while implementations allow one-line brace-bodied instance/class methods. A same-file implementation wins for a matching selector. It does not index .h headers, categories/extensions, properties, imports, inheritance or protocol-conformance relationships, C/C++ symbols, message calls, Swift bridges, compiler configuration, or runtime behavior; malformed lexical boundaries retain only the file symbol.
 
 ## Roadmap
 
@@ -2394,6 +2396,10 @@ v0.77.0 does not yet provide:
 | `v0.74.0` | Luau `.luau` discovery, direct Lua-compatible top-level function containment, strict/type-annotation tolerance, source-search/CLI/MCP filtering, explicit Lua-Lapis isolation, and malformed-source fail-closed behavior |
 | `v0.75.0` | Pascal `.pas` / `.dpr` / `.dpk` / `.lpr` discovery, direct complete `procedure` / `function` containment, dotted/class routine support, comments/strings/nested-block isolation, source-search/CLI/MCP filtering, and malformed-source fail-closed behavior |
 | `v0.76.0` | Pascal Horse exact local `GET` / `POST` route facts only after one direct `uses Horse;`, one direct program main block, one-line literal registration, and a unique prior same-file complete routine handler |
+| `v0.77.0` | Objective-C `.m` / Objective-C++ `.mm` discovery, direct complete non-category implementation containment, one-line brace-bodied selector methods, source-search/CLI/MCP filtering, and malformed-source fail-closed behavior |
+| `v0.78.0` | Pascal Horse exact local `PUT` / `DELETE` route facts under the existing direct uses/program/literal-registration/unique-prior-handler proof boundary |
+| `v0.79.0` | Objective-C direct ordinary interface and protocol containment, one-line method declarations, same-file interface/implementation class merging, implementation-preferred matching selectors, and malformed/nested/category rejection |
+| `v0.79+` | Objective-C header classification, categories/extensions, properties, inheritance and protocol-conformance relationships, imports/message calls, Swift bridge resolution, compiler proof, and runtime analysis |
 | `v0.76+` | Pascal grammar validation, `.dfm` / `.fmx` form surfaces, interface/type/class/unit/uses/call relations, local/constructor/destructor/operator/generic/overload forms, project/package resolution, broad Horse/Brook/WebBroker and VCL/FMX/Lazarus framework facts, compiler proof, and runtime analysis |
 | `v0.74+` | Tree-sitter Luau grammar, type / `export type` facts, generic types/functions, modules/packages/`require`, Roblox services/instances/events/RemoteEvents, Roact/Fusion/framework evidence, compiler proof, and runtime analysis |
 | `v0.73+` | Broader Django URLConf and DRF forms: `re_path`/legacy `url`, `include` and nested path expansion, app namespaces, routers/viewsets, class-based views, imported/cross-file handlers, settings-aware resolution, template integration, compiler checks, and runtime URL evidence |

@@ -3389,7 +3389,7 @@ describe("source extraction", () => {
     expect(malformed.symbols.map((symbol) => symbol.kind)).toEqual(["file"]);
   });
 
-  it("extracts direct Objective-C implementation methods while rejecting unsupported forms", () => {
+  it("extracts direct Objective-C interface declarations and implementation methods while rejecting unsupported forms", () => {
     const facts = extractFileFacts({
       filePath: "src/health.m",
       language: "objc",
@@ -3443,20 +3443,95 @@ describe("source extraction", () => {
     expect(
       facts.symbols.filter((symbol) => symbol.kind === "method").map((symbol) => symbol.qualifiedName)
     ).toEqual([
+      "src/health.m#HealthController.declarationOnly",
       "src/health.m#HealthController.health",
       "src/health.m#HealthController.shared",
       "src/health.m#HealthController.create:with:"
     ]);
-    expect(facts.edges.filter((edge) => edge.kind === "contains")).toHaveLength(4);
+    expect(facts.edges.filter((edge) => edge.kind === "contains")).toHaveLength(5);
     expect(
       facts.edges.filter((edge) => edge.kind === "contains").map((edge) => edge.evidence?.ruleId)
     ).toEqual([
-      "language.objc.implementation.direct",
+      "language.objc.interface.direct",
+      "language.objc.method.direct-declaration",
       "language.objc.method.direct-implementation",
       "language.objc.method.direct-implementation",
       "language.objc.method.direct-implementation"
     ]);
     expect(malformed.symbols.map((symbol) => symbol.kind)).toEqual(["file"]);
+  });
+
+  it("extracts direct Objective-C protocol declarations, prefers implementations, and ignores categories", () => {
+    const facts = extractFileFacts({
+      filePath: "src/contracts.mm",
+      language: "objc",
+      sourceText: [
+        "@interface HealthController : NSObject <HealthChecking>",
+        "{",
+        "  int status;",
+        "}",
+        "- (void)declaredOnly;",
+        "- (void)create:(NSString *)name with:(id)context;",
+        "@end",
+        "",
+        "@protocol HealthChecking <NSObject>",
+        "@required",
+        "- (BOOL)isHealthy;",
+        "@optional",
+        "+ (void)reset;",
+        "@end",
+        "",
+        "@interface HealthController (Diagnostics)",
+        "- (void)diagnose;",
+        "@end",
+        "",
+        "@interface HealthController ()",
+        "- (void)privateProbe;",
+        "@end",
+        "",
+        "@implementation HealthController",
+        "- (void)create:(NSString *)name with:(id)context {",
+        "  (void)name;",
+        "  (void)context;",
+        "}",
+        "@end"
+      ].join("\n")
+    });
+    const malformedProtocol = extractFileFacts({
+      filePath: "src/broken-protocol.m",
+      language: "objc",
+      sourceText: ["@protocol Broken", "- (void)unfinished;"].join("\n")
+    });
+
+    expect(
+      facts.symbols.filter((symbol) => symbol.kind === "class").map((symbol) => symbol.qualifiedName)
+    ).toEqual(["src/contracts.mm#HealthController"]);
+    expect(
+      facts.symbols.filter((symbol) => symbol.kind === "interface").map((symbol) => symbol.qualifiedName)
+    ).toEqual(["src/contracts.mm#protocol:HealthChecking"]);
+    expect(
+      facts.symbols.filter((symbol) => symbol.kind === "method").map((symbol) => symbol.qualifiedName)
+    ).toEqual([
+      "src/contracts.mm#HealthController.declaredOnly",
+      "src/contracts.mm#HealthController.create:with:",
+      "src/contracts.mm#protocol:HealthChecking.isHealthy",
+      "src/contracts.mm#protocol:HealthChecking.reset"
+    ]);
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "contains")
+        .map((edge) => [edge.referenceName, edge.evidence?.ruleId])
+    ).toEqual([
+      ["HealthController", "language.objc.interface.direct"],
+      ["declaredOnly", "language.objc.method.direct-declaration"],
+      ["create:with:", "language.objc.method.direct-implementation"],
+      ["HealthChecking", "language.objc.protocol.direct"],
+      ["isHealthy", "language.objc.method.direct-declaration"],
+      ["reset", "language.objc.method.direct-declaration"]
+    ]);
+    expect(facts.symbols.some((symbol) => symbol.name === "diagnose")).toBe(false);
+    expect(facts.symbols.some((symbol) => symbol.name === "privateProbe")).toBe(false);
+    expect(malformedProtocol.symbols.map((symbol) => symbol.kind)).toEqual(["file"]);
   });
 
   it("extracts direct Horse Get/Post/Put/Delete routes only from a proven Pascal program main block", () => {

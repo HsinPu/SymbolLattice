@@ -20,7 +20,10 @@ interface ObjectiveCLine {
   readonly text: string;
 }
 
-interface StaticObjectiveCImplementation {
+type DirectObjectiveCContainerKind = "implementation" | "interface" | "protocol";
+
+interface StaticObjectiveCContainer {
+  readonly kind: DirectObjectiveCContainerKind;
   readonly name: string;
   readonly start: number;
   readonly end: number;
@@ -48,7 +51,16 @@ type ObjectiveCLexicalMode =
 
 const DIRECT_IMPLEMENTATION_HEADER =
   /^[ \t]*@implementation[ \t]+([A-Za-z_][A-Za-z0-9_]*)[ \t]*$/u;
+const DIRECT_INTERFACE_HEADER =
+  /^[ \t]*@interface[ \t]+([A-Za-z_][A-Za-z0-9_]*)(.*)$/u;
+const DIRECT_PROTOCOL_HEADER =
+  /^[ \t]*@protocol[ \t]+([A-Za-z_][A-Za-z0-9_]*)(.*)$/u;
 const DIRECT_END_DIRECTIVE = /^[ \t]*@end[ \t]*$/u;
+const OBJECTIVE_C_CONTAINER_DIRECTIVE = /^[ \t]*@(interface|implementation|protocol)\b/u;
+const DIRECT_PROTOCOL_LIST =
+  /^<[ \t]*[A-Za-z_][A-Za-z0-9_]*(?:[ \t]*,[ \t]*[A-Za-z_][A-Za-z0-9_]*)*[ \t]*>$/u;
+const DIRECT_INTERFACE_SUFFIX =
+  /^(?::[ \t]*[A-Za-z_][A-Za-z0-9_]*(?:[ \t]*<[ \t]*[A-Za-z_][A-Za-z0-9_]*(?:[ \t]*,[ \t]*[A-Za-z_][A-Za-z0-9_]*)*[ \t]*>)?|<[ \t]*[A-Za-z_][A-Za-z0-9_]*(?:[ \t]*,[ \t]*[A-Za-z_][A-Za-z0-9_]*)*[ \t]*>)$/u;
 
 function lineStartsFor(sourceText: string): readonly number[] {
   const starts = [0];
@@ -264,23 +276,54 @@ function firstCodeOffset(line: ObjectiveCLine): number {
   return line.start + (line.text.length - line.text.trimStart().length);
 }
 
-function collectDirectImplementations(
+function directContainerHeader(
+  line: ObjectiveCLine
+): { readonly kind: DirectObjectiveCContainerKind; readonly name: string } | null {
+  const implementation = DIRECT_IMPLEMENTATION_HEADER.exec(line.text);
+  if (implementation !== null) {
+    const name = implementation[1];
+    return name === undefined ? null : { kind: "implementation", name };
+  }
+
+  const interfaceHeader = DIRECT_INTERFACE_HEADER.exec(line.text);
+  if (interfaceHeader !== null) {
+    const name = interfaceHeader[1];
+    const suffix = interfaceHeader[2]?.trim() ?? "";
+    if (name !== undefined && (suffix === "" || DIRECT_INTERFACE_SUFFIX.test(suffix))) {
+      return { kind: "interface", name };
+    }
+    return null;
+  }
+
+  const protocol = DIRECT_PROTOCOL_HEADER.exec(line.text);
+  if (protocol !== null) {
+    const name = protocol[1];
+    const suffix = protocol[2]?.trim() ?? "";
+    if (name !== undefined && (suffix === "" || DIRECT_PROTOCOL_LIST.test(suffix))) {
+      return { kind: "protocol", name };
+    }
+  }
+
+  return null;
+}
+
+function collectDirectContainers(
   lines: readonly ObjectiveCLine[]
-): readonly StaticObjectiveCImplementation[] | null {
-  const implementations: StaticObjectiveCImplementation[] = [];
-  const names = new Set<string>();
+): readonly StaticObjectiveCContainer[] | null {
+  const containers: StaticObjectiveCContainer[] = [];
+  const identities = new Set<string>();
 
   for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
     const line = lines[lineIndex];
     if (line === undefined) {
       return null;
     }
-    const header = DIRECT_IMPLEMENTATION_HEADER.exec(line.text);
+    const header = directContainerHeader(line);
     if (header === null) {
       continue;
     }
-    const name = header[1];
-    if (name === undefined || names.has(name)) {
+    const identity = header.kind + "\u0000" + header.name;
+    if (identities.has(identity)) {
       return null;
     }
 
@@ -290,11 +333,11 @@ function collectDirectImplementations(
       if (candidate === undefined) {
         return null;
       }
-      if (DIRECT_IMPLEMENTATION_HEADER.test(candidate.text)) {
-        return null;
-      }
       if (DIRECT_END_DIRECTIVE.test(candidate.text)) {
         break;
+      }
+      if (OBJECTIVE_C_CONTAINER_DIRECTIVE.test(candidate.text)) {
+        return null;
       }
     }
     const end = lines[endLine];
@@ -302,9 +345,10 @@ function collectDirectImplementations(
       return null;
     }
 
-    names.add(name);
-    implementations.push({
-      name,
+    identities.add(identity);
+    containers.push({
+      kind: header.kind,
+      name: header.name,
       start: firstCodeOffset(line),
       end: end.end,
       bodyStartLine: lineIndex + 1,
@@ -313,7 +357,7 @@ function collectDirectImplementations(
     lineIndex = endLine;
   }
 
-  return implementations;
+  return containers;
 }
 
 function isIdentifierStart(character: string | undefined): boolean {
@@ -401,7 +445,8 @@ function matchingBrace(
 function directMethodOnLine(
   sourceText: string,
   line: ObjectiveCLine,
-  implementationEnd: number
+  containerEnd: number,
+  form: "declaration" | "implementation"
 ): StaticObjectiveCMethod | null {
   let cursor = skipHorizontalWhitespace(sourceText, line.start, line.end);
   const start = cursor;
@@ -425,6 +470,7 @@ function directMethodOnLine(
 
   const selectorParts = [firstSelectorPart.name];
   cursor = firstSelectorPart.end;
+  const terminator = form === "implementation" ? "{" : ";";
   if (sourceText.charAt(cursor) === ":") {
     selectorParts[0] = firstSelectorPart.name + ":";
     cursor += 1;
@@ -443,7 +489,7 @@ function directMethodOnLine(
         return null;
       }
       cursor = skipHorizontalWhitespace(sourceText, parameter.end, line.end);
-      if (sourceText.charAt(cursor) === "{") {
+      if (sourceText.charAt(cursor) === terminator) {
         break;
       }
       const nextSelectorPart = identifierAt(sourceText, cursor, line.end);
@@ -459,30 +505,37 @@ function directMethodOnLine(
     }
   } else {
     cursor = skipHorizontalWhitespace(sourceText, cursor, line.end);
-    if (sourceText.charAt(cursor) !== "{") {
+    if (sourceText.charAt(cursor) !== terminator) {
       return null;
     }
   }
 
-  const end = matchingBrace(sourceText, cursor, implementationEnd);
+  if (form === "declaration") {
+    const end = cursor + 1;
+    return skipHorizontalWhitespace(sourceText, end, line.end) === line.end
+      ? { name: selectorParts.join(""), start, end }
+      : null;
+  }
+
+  const end = matchingBrace(sourceText, cursor, containerEnd);
   return end === null ? null : { name: selectorParts.join(""), start, end: end + 1 };
 }
 
-function directMethodsInImplementation(
+function directMethodsInContainer(
   sourceText: string,
   lines: readonly ObjectiveCLine[],
-  implementation: StaticObjectiveCImplementation
+  container: StaticObjectiveCContainer
 ): readonly StaticObjectiveCMethod[] | null {
   const methods: StaticObjectiveCMethod[] = [];
   let braceDepth = 0;
-  const endLine = lines[implementation.endLine];
+  const endLine = lines[container.endLine];
   if (endLine === undefined) {
     return null;
   }
 
   for (
-    let lineIndex = implementation.bodyStartLine;
-    lineIndex < implementation.endLine;
+    let lineIndex = container.bodyStartLine;
+    lineIndex < container.endLine;
     lineIndex += 1
   ) {
     const line = lines[lineIndex];
@@ -490,7 +543,12 @@ function directMethodsInImplementation(
       return null;
     }
     if (braceDepth === 0) {
-      const method = directMethodOnLine(sourceText, line, endLine.start);
+      const method = directMethodOnLine(
+        sourceText,
+        line,
+        endLine.start,
+        container.kind === "implementation" ? "implementation" : "declaration"
+      );
       if (method !== null) {
         methods.push(method);
       }
@@ -513,11 +571,12 @@ function directMethodsInImplementation(
 }
 
 /**
- * Extracts a conservative Objective-C implementation subset: complete direct
- * non-category @implementation ClassName ... @end blocks and their one-line,
- * brace-bodied instance or class methods. Headers, categories, protocols,
- * imports, properties, calls, and Swift bridging are deliberately left to
- * later language slices.
+ * Extracts a conservative Objective-C source subset from .m and .mm files:
+ * complete direct non-category implementations, ordinary class interfaces,
+ * and protocols. Implementations contribute one-line brace-bodied methods;
+ * interfaces and protocols contribute one-line semicolon-terminated method
+ * declarations. Headers, categories, properties, calls, inheritance edges,
+ * and Swift bridging remain deliberately out of scope.
  */
 export function extractObjectiveCFileFacts(input: ObjectiveCExtractFileFactsInput): ArtifactFacts {
   const lineStarts = lineStartsFor(input.sourceText);
@@ -579,10 +638,13 @@ export function extractObjectiveCFileFacts(input: ObjectiveCExtractFileFactsInpu
     });
   }
 
-  function addClass(implementation: StaticObjectiveCImplementation): SymbolNode {
-    const qualifiedName = input.filePath + "#" + implementation.name;
+  function addClass(
+    container: StaticObjectiveCContainer,
+    ruleId: "language.objc.implementation.direct" | "language.objc.interface.direct"
+  ): SymbolNode {
+    const qualifiedName = input.filePath + "#" + container.name;
     const declarationOrdinal = nextOrdinal(qualifiedName, "class");
-    const range = rangeFor(lineStarts, implementation.start, implementation.end);
+    const range = rangeFor(lineStarts, container.start, container.end);
     const symbol: SymbolNode = {
       id: createSymbolId({
         filePath: input.filePath,
@@ -590,7 +652,7 @@ export function extractObjectiveCFileFacts(input: ObjectiveCExtractFileFactsInpu
         kind: "class",
         declarationOrdinal
       }),
-      name: implementation.name,
+      name: container.name,
       qualifiedName,
       kind: "class",
       filePath: input.filePath,
@@ -599,11 +661,39 @@ export function extractObjectiveCFileFacts(input: ObjectiveCExtractFileFactsInpu
       declarationOrdinal
     };
     symbols.push(symbol);
-    addContainment(fileNode, symbol, range, "language.objc.implementation.direct");
+    addContainment(fileNode, symbol, range, ruleId);
     return symbol;
   }
 
-  function addMethod(parent: SymbolNode, method: StaticObjectiveCMethod): void {
+  function addProtocol(container: StaticObjectiveCContainer): SymbolNode {
+    const qualifiedName = input.filePath + "#protocol:" + container.name;
+    const declarationOrdinal = nextOrdinal(qualifiedName, "interface");
+    const range = rangeFor(lineStarts, container.start, container.end);
+    const symbol: SymbolNode = {
+      id: createSymbolId({
+        filePath: input.filePath,
+        qualifiedName,
+        kind: "interface",
+        declarationOrdinal
+      }),
+      name: container.name,
+      qualifiedName,
+      kind: "interface",
+      filePath: input.filePath,
+      range,
+      isExported: true,
+      declarationOrdinal
+    };
+    symbols.push(symbol);
+    addContainment(fileNode, symbol, range, "language.objc.protocol.direct");
+    return symbol;
+  }
+
+  function addMethod(
+    parent: SymbolNode,
+    method: StaticObjectiveCMethod,
+    ruleId: "language.objc.method.direct-declaration" | "language.objc.method.direct-implementation"
+  ): void {
     const qualifiedName = parent.qualifiedName + "." + method.name;
     const declarationOrdinal = nextOrdinal(qualifiedName, "method");
     const range = rangeFor(lineStarts, method.start, method.end);
@@ -623,7 +713,7 @@ export function extractObjectiveCFileFacts(input: ObjectiveCExtractFileFactsInpu
       declarationOrdinal
     };
     symbols.push(symbol);
-    addContainment(parent, symbol, range, "language.objc.method.direct-implementation");
+    addContainment(parent, symbol, range, ruleId);
   }
 
   const sanitized = sanitizeObjectiveC(input.sourceText);
@@ -631,23 +721,131 @@ export function extractObjectiveCFileFacts(input: ObjectiveCExtractFileFactsInpu
     return emptyFacts(symbols, edges);
   }
   const lines = linesFor(sanitized.text);
-  const implementations = collectDirectImplementations(lines);
-  if (implementations === null) {
+  const containers = collectDirectContainers(lines);
+  if (containers === null) {
     return emptyFacts(symbols, edges);
   }
 
-  const methodsByImplementation = implementations.map((implementation) => ({
-    implementation,
-    methods: directMethodsInImplementation(sanitized.text, lines, implementation)
-  }));
-  if (methodsByImplementation.some((entry) => entry.methods === null)) {
-    return emptyFacts([fileNode], []);
+  const methodsByContainer = new Map<StaticObjectiveCContainer, readonly StaticObjectiveCMethod[]>();
+  for (const container of containers) {
+    const methods = directMethodsInContainer(sanitized.text, lines, container);
+    if (methods === null) {
+      return emptyFacts([fileNode], []);
+    }
+    methodsByContainer.set(container, methods);
   }
 
-  for (const entry of methodsByImplementation) {
-    const parent = addClass(entry.implementation);
-    for (const method of entry.methods ?? []) {
-      addMethod(parent, method);
+  const classes = new Map<
+    string,
+    {
+      declaration: StaticObjectiveCContainer | null;
+      implementation: StaticObjectiveCContainer | null;
+    }
+  >();
+  const protocols: StaticObjectiveCContainer[] = [];
+  for (const container of containers) {
+    if (container.kind === "protocol") {
+      protocols.push(container);
+      continue;
+    }
+    const existing = classes.get(container.name) ?? {
+      declaration: null,
+      implementation: null
+    };
+    if (container.kind === "interface") {
+      if (existing.declaration !== null) {
+        return emptyFacts([fileNode], []);
+      }
+      existing.declaration = container;
+    } else {
+      if (existing.implementation !== null) {
+        return emptyFacts([fileNode], []);
+      }
+      existing.implementation = container;
+    }
+    classes.set(container.name, existing);
+  }
+
+  const owners: Array<
+    | {
+        readonly kind: "class";
+        readonly container: StaticObjectiveCContainer;
+        readonly declaration: StaticObjectiveCContainer | null;
+        readonly implementation: StaticObjectiveCContainer | null;
+      }
+    | {
+        readonly kind: "protocol";
+        readonly container: StaticObjectiveCContainer;
+      }
+  > = [];
+  for (const entry of classes.values()) {
+    const container = entry.declaration ?? entry.implementation;
+    if (container === null) {
+      return emptyFacts([fileNode], []);
+    }
+    owners.push({
+      kind: "class",
+      container,
+      declaration: entry.declaration,
+      implementation: entry.implementation
+    });
+  }
+  for (const protocol of protocols) {
+    owners.push({ kind: "protocol", container: protocol });
+  }
+  owners.sort((left, right) => left.container.start - right.container.start);
+
+  for (const owner of owners) {
+    if (owner.kind === "protocol") {
+      const parent = addProtocol(owner.container);
+      for (const method of methodsByContainer.get(owner.container) ?? []) {
+        addMethod(parent, method, "language.objc.method.direct-declaration");
+      }
+      continue;
+    }
+
+    const parent = addClass(
+      owner.container,
+      owner.declaration === null
+        ? "language.objc.implementation.direct"
+        : "language.objc.interface.direct"
+    );
+    const selectedMethods = new Map<
+      string,
+      {
+        readonly method: StaticObjectiveCMethod;
+        readonly ruleId:
+          | "language.objc.method.direct-declaration"
+          | "language.objc.method.direct-implementation";
+      }
+    >();
+    for (const source of [
+      owner.declaration === null
+        ? null
+        : {
+            container: owner.declaration,
+            ruleId: "language.objc.method.direct-declaration" as const
+          },
+      owner.implementation === null
+        ? null
+        : {
+            container: owner.implementation,
+            ruleId: "language.objc.method.direct-implementation" as const
+          }
+    ]) {
+      if (source === null) {
+        continue;
+      }
+      for (const method of methodsByContainer.get(source.container) ?? []) {
+        if (source.ruleId === "language.objc.method.direct-implementation" || !selectedMethods.has(method.name)) {
+          selectedMethods.set(method.name, { method, ruleId: source.ruleId });
+        }
+      }
+    }
+    for (const { method, ruleId } of [...selectedMethods.values()].sort(
+      (left, right) => left.method.start - right.method.start
+    )) {
+      addMethod(parent, method, ruleId);
     }
   }
 

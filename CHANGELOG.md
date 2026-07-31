@@ -6,6 +6,23 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.79.0] - 2026-07-31
+
+### Added
+
+- Objective-C .m and Objective-C++ .mm extraction now accepts complete direct ordinary @interface and @protocol containers alongside the existing direct non-category @implementation subset. Ordinary interfaces emit one class symbol, protocols emit one interface symbol, and one-line semicolon-terminated instance/class method declarations emit exact contained method symbols.
+- A same-file ordinary interface and implementation with the same class name intentionally merge into one class symbol. When both state the same selector, the complete implementation method wins over the declaration; interface-only selectors stay visible. Unit and integration coverage verifies protocol containment, selector preservation, implementation precedence, Objective-C++ persistence, category/extension exclusion, and malformed-protocol fail-closed behavior. The standalone Traditional Chinese comparison report is at C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.79.0.md.
+
+### Compatibility
+
+- The artifact extractor advances to multi-language-ast-v68; the project resolver remains project-resolver-v23 because every accepted Objective-C fact remains file-local. A pre-v0.79 active index reports indexer-version-changed until an explicit sync or index republishes the expanded Objective-C facts.
+- No SQLite schema migration or query command is required. This is an additive language capability expansion within the existing Objective-C artifact, graph, source-search, CLI, MCP, incremental-index, and evidence contracts; existing generations remain readable.
+
+### Deliberate limits
+
+- This remains a narrow lexical declaration scanner, not a general Objective-C parser, compiler, header analyzer, or runtime analyzer. It excludes .h headers, categories/extensions, properties, imports, inheritance/protocol-conformance relations, C/C++ declarations, message calls, Swift bridging, compiler configuration, and runtime behavior. Interfaces and protocols accept only direct one-line semicolon-terminated methods; implementations accept only direct one-line brace-bodied methods.
+- The inspected local CodeGraph baseline has a Tree-sitter Objective-C extractor and Swift-Objective-C bridge resolution, so it remains materially broader for language syntax and cross-language relationships. SymbolLattice v0.79 independently adds a smaller, evidence-bearing interface/protocol subset and does not copy CodeGraph source or claim full parity.
+
 ## [0.78.0] - 2026-07-31
 
 ### Added
