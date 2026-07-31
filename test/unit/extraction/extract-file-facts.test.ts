@@ -9266,6 +9266,93 @@ describe("source extraction", () => {
     }
   });
 
+  it("extracts complete direct GraphQL schema definitions with source ranges", () => {
+    const facts = extractFileFacts({
+      filePath: "api/schema.graphql",
+      language: "graphql",
+      sourceText: [
+        "# comments and strings never create schema declarations",
+        '\"\"\"A described object.\"\"\"',
+        'type User implements Node @key(fields: "id") {',
+        "  id: ID!",
+        "  profile: Profile",
+        "}",
+        "interface Node { id: ID! }",
+        "input CreateUserInput { name: String! }",
+        "enum Role { ADMIN MEMBER }",
+        'scalar DateTime @specifiedBy(url: "https://example.test/date-time")',
+        "union SearchResult = User | Profile",
+        "query RuntimeOperation { user { id } }"
+      ].join("\n")
+    });
+
+    expect(
+      facts.symbols.map((symbol) => [symbol.kind, symbol.qualifiedName, symbol.declarationOrdinal])
+    ).toEqual([
+      ["file", "api/schema.graphql", 0],
+      ["class", "api/schema.graphql#type:User", 0],
+      ["interface", "api/schema.graphql#interface:Node", 0],
+      ["type", "api/schema.graphql#input:CreateUserInput", 0],
+      ["type", "api/schema.graphql#enum:Role", 0],
+      ["type", "api/schema.graphql#scalar:DateTime", 0],
+      ["type", "api/schema.graphql#union:SearchResult", 0]
+    ]);
+    expect(facts.symbols.find((symbol) => symbol.name === "User")?.range).toEqual({
+      start: { line: 3, column: 1 },
+      end: { line: 6, column: 2 }
+    });
+    expect(facts.symbols.find((symbol) => symbol.name === "DateTime")?.range).toEqual({
+      start: { line: 10, column: 1 },
+      end: { line: 10, column: 16 }
+    });
+    expect(facts.symbols.find((symbol) => symbol.name === "SearchResult")?.range).toEqual({
+      start: { line: 11, column: 1 },
+      end: { line: 11, column: 36 }
+    });
+    expect(
+      facts.edges.map((edge) => [edge.referenceName, edge.evidence?.ruleId, edge.resolution])
+    ).toEqual([
+      ["User", "language.graphql.type.direct-definition", "exact"],
+      ["Node", "language.graphql.interface.direct-definition", "exact"],
+      ["CreateUserInput", "language.graphql.input.direct-definition", "exact"],
+      ["Role", "language.graphql.enum.direct-definition", "exact"],
+      ["DateTime", "language.graphql.scalar.direct-definition", "exact"],
+      ["SearchResult", "language.graphql.union.direct-definition", "exact"]
+    ]);
+  });
+
+  it("rejects incomplete, extended, and operation-only GraphQL source", () => {
+    const incomplete = extractFileFacts({
+      filePath: "api/incomplete.graphql",
+      language: "graphql",
+      sourceText: "type User { id: ID!\n"
+    });
+    const unclosedDescription = extractFileFacts({
+      filePath: "api/unclosed.graphql",
+      language: "graphql",
+      sourceText: '\"\"\"description\ntype User { id: ID! }\n'
+    });
+    const extension = extractFileFacts({
+      filePath: "api/extension.graphql",
+      language: "graphql",
+      sourceText: [
+        "extend type User { id: ID! }",
+        "type Profile { id: ID! }"
+      ].join("\n")
+    });
+    const operationOnly = extractFileFacts({
+      filePath: "api/query.gql",
+      language: "graphql",
+      sourceText: "query Search { user { id } }\n"
+    });
+
+    for (const facts of [incomplete, unclosedDescription, extension, operationOnly]) {
+      expect(facts.symbols).toHaveLength(1);
+      expect(facts.symbols[0]?.kind).toBe("file");
+      expect(facts.edges).toEqual([]);
+    }
+  });
+
   it("extracts source-proven Java properties keys without retaining configuration values", () => {
     const facts = extractFileFacts({
       filePath: "config/application.properties",

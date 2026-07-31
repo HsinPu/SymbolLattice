@@ -6,6 +6,23 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.96.0] - 2026-07-31
+
+### Added
+
+- GraphQL source discovery now recognizes case-insensitive `.graphql`, `.gql`, and `.graphqls` extensions and exposes the additive `graphql` language through existing persisted source-search, CLI, and MCP language-validation contracts. The new dependency-free lexical extractor retains a file symbol plus source-ranged direct schema definitions.
+- Complete direct object `type`, `interface`, `input`, and `enum` bodies, plus simple `scalar` and `union Name = Member | Member` forms, become existing `class`, `interface`, or `type` symbols with exact `language.graphql.<kind>.direct-definition` containment evidence. Comments, ordinary strings, block-string descriptions, directive values, and nested delimiters are masked or bounded before definition selection; unit, discovery, and service integration coverage prove declaration ranges, artifact persistence, language-filtered search, and extension/operation/malformed rejection. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.96.0.md`.
+
+### Compatibility
+
+- The artifact extractor advances to `multi-language-ast-v85`; the project resolver remains `project-resolver-v24` because the initial GraphQL facts are file-local declarations with no schema-to-resolver or cross-file schema projection. A pre-v0.96 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes GraphQL-capable facts.
+- No SQLite schema migration or query command is required. This is an additive artifact-language capability within existing file, class/interface/type-symbol, exact-containment-edge, source-search, CLI, MCP, retained-generation, and incremental-index contracts; existing generations remain readable.
+
+### Deliberate limits
+
+- This is not a GraphQL parser, schema validator, federation engine, resolver linker, code generator, client/server, or runtime model. It excludes extensions, fields, arguments, defaults, descriptions/directives as semantic facts, interfaces/union relationships, root schema mapping, operation documents/fragments, introspection, imports, cross-file composition, NestJS resolver linkage, validation, transport, and execution behavior.
+- The inspected local CodeGraph baseline has NestJS GraphQL decorator analysis but does not include standalone `.graphql` / `.gql` / `.graphqls` schema files in its runtime `LANGUAGES` or native-kernel language lists. SymbolLattice v0.96 independently adds a deliberately narrow, source-range-preserving schema declaration slice; it does not copy CodeGraph source or claim full GraphQL coverage.
+
 ## [0.95.0] - 2026-07-31
 
 ### Added

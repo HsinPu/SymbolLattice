@@ -8386,6 +8386,50 @@ describe("SymbolLatticeService", () => {
     expect(search.results).toMatchObject([{ filePath: "db/schema.sql", language: "sql" }]);
   });
 
+  it("indexes direct GraphQL schema declarations with persisted source search", async () => {
+    const projectPath = await createInlineProject({
+      "api/schema.graphql": [
+        "type Query {",
+        "  user: User",
+        "}",
+        "",
+        "type User {",
+        "  id: ID!",
+        "}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    const indexed = await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+    const search = await service.search(projectPath, "User", { language: "graphql" });
+    const user = await service.find(projectPath, "api/schema.graphql#type:User");
+    const persistedFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "api/schema.graphql");
+
+    expect(indexed).toMatchObject({
+      stale: false,
+      counts: { files: 1, symbols: 3, edges: 2 }
+    });
+    expect(persistedFacts).toMatchObject({
+      language: "graphql",
+      extractorVersion: ARTIFACT_FACTS_EXTRACTOR_VERSION
+    });
+    expect(user.symbols).toMatchObject([
+      {
+        kind: "class",
+        qualifiedName: "api/schema.graphql#type:User",
+        isExported: true
+      }
+    ]);
+    expect(routes.routes).toEqual([]);
+    expect(search.results).toMatchObject([
+      { filePath: "api/schema.graphql", language: "graphql" }
+    ]);
+  });
+
   it("indexes Drupal routing YAML routes with parser-backed unresolved controller evidence", async () => {
     const projectPath = await createInlineProject({
       "modules/custom/example/example.routing.yml": [

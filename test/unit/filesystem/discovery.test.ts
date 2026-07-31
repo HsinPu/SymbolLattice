@@ -244,6 +244,12 @@ describe("source discovery", () => {
     expect(getSourceLanguage("migrations/001_init.SQL")).toBe("sql");
   });
 
+  it("recognizes GraphQL source extensions", () => {
+    expect(getSourceLanguage("api/schema.graphql")).toBe("graphql");
+    expect(getSourceLanguage("api/query.GQL")).toBe("graphql");
+    expect(getSourceLanguage("api/schema.graphqls")).toBe("graphql");
+  });
+
   it("discovers only source-proven Objective-C .h headers", async () => {
     const projectPath = await createProject();
     await mkdir(join(projectPath, "Headers"), { recursive: true });
