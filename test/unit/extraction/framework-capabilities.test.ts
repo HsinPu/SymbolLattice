@@ -34,6 +34,8 @@ describe("first-party framework capabilities", () => {
       "net-http",
       "chi",
       "axum",
+      "actix-web",
+      "rocket",
       "spring-web",
       "micronaut",
       "jakarta-rest",
@@ -251,6 +253,24 @@ describe("first-party framework capabilities", () => {
       surfaces: [
         "direct imported Router::new literal route builder chains",
         "direct imported method-router named local handlers"
+      ]
+    });
+    expect(frameworkCapability("actix-web")).toMatchObject({
+      languages: ["rust"],
+      routeFramework: "actix-web",
+      routeRegistrations: [],
+      surfaces: [
+        "direct imported HTTP attribute macros",
+        "literal attribute paths on direct top-level function handlers"
+      ]
+    });
+    expect(frameworkCapability("rocket")).toMatchObject({
+      languages: ["rust"],
+      routeFramework: "rocket",
+      routeRegistrations: [],
+      surfaces: [
+        "direct imported HTTP attribute macros",
+        "literal attribute paths on direct top-level function handlers"
       ]
     });
     expect(frameworkCapability("spring-web")).toMatchObject({

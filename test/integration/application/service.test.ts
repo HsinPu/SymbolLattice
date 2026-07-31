@@ -4322,6 +4322,73 @@ describe("SymbolLatticeService", () => {
     expect(search.results).toMatchObject([{ filePath: "src/http.rs", language: "rust" }]);
   });
 
+  it("indexes Rust Actix Web and Rocket attribute routes", async () => {
+    const projectPath = await createInlineProject({
+      "src/http.rs": [
+        "use actix_web::{get, post};",
+        "use rocket::{delete as rocket_delete, get as rocket_get};",
+        "",
+        "#[get(\"/health\")]",
+        "async fn health() {}",
+        "",
+        "#[post(\"/users\")]",
+        "async fn create_user() {}",
+        "",
+        "#[rocket_delete(\"/users/:id\")]",
+        "fn delete_user() {}",
+        "",
+        "#[rocket_get(\"/ready\")]",
+        "fn ready() {}"
+      ].join("\n")
+    });
+    const service = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const getRoutes = await service.routes(projectPath, { method: "GET" });
+    const deleteRoutes = await service.routes(projectPath, { method: "DELETE" });
+
+    expect(getRoutes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "GET",
+          path: "/health",
+          handler: expect.objectContaining({ qualifiedName: "src/http.rs#health" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.actix-web.attribute-route.literal-path.local-function",
+              stage: "syntax"
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "GET",
+          path: "/ready",
+          handler: expect.objectContaining({ qualifiedName: "src/http.rs#ready" }),
+          edge: expect.objectContaining({
+            evidence: expect.objectContaining({
+              ruleId: "framework.rocket.attribute-route.literal-path.local-function"
+            })
+          })
+        })
+      ])
+    );
+    expect(deleteRoutes.routes).toMatchObject([
+      {
+        method: "DELETE",
+        path: "/users/:id",
+        handler: { qualifiedName: "src/http.rs#delete_user" },
+        edge: {
+          resolution: "exact",
+          evidence: {
+            ruleId: "framework.rocket.attribute-route.literal-path.local-function",
+            stage: "syntax"
+          }
+        }
+      }
+    ]);
+  });
+
   it("indexes Java Spring Web routes and retains Java source-search filtering", async () => {
     const projectPath = await createInlineProject({
       "src/api/StatusController.java": [

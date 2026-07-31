@@ -25,6 +25,7 @@ interface StaticRustFunction {
   readonly node: RustSyntaxNode;
   readonly body: RustSyntaxNode;
   readonly parameterNames: readonly string[];
+  readonly attributes: readonly RustSyntaxNode[];
 }
 
 interface StaticRustUseImport {
@@ -32,14 +33,25 @@ interface StaticRustUseImport {
   readonly localName: string;
 }
 
-interface StaticAxumRoute {
+interface StaticRustRoute {
   readonly method: RouteMethod;
   readonly path: string;
   readonly handlerName: string;
   readonly node: RustSyntaxNode;
+  readonly ruleId: string;
+}
+
+interface StaticRustAttributeRouteImport {
+  readonly method: RouteMethod;
+  readonly ruleId: string;
 }
 
 const AXUM_ROUTER_PATH = "axum::Router";
+const AXUM_ROUTE_RULE_ID = "framework.axum.direct-router.route.local-function";
+const ACTIX_WEB_ATTRIBUTE_ROUTE_RULE_ID =
+  "framework.actix-web.attribute-route.literal-path.local-function";
+const ROCKET_ATTRIBUTE_ROUTE_RULE_ID =
+  "framework.rocket.attribute-route.literal-path.local-function";
 
 const AXUM_ROUTING_METHODS: Readonly<Record<string, RouteMethod>> = {
   get: "GET",
@@ -51,6 +63,27 @@ const AXUM_ROUTING_METHODS: Readonly<Record<string, RouteMethod>> = {
   options: "OPTIONS",
   trace: "TRACE"
 };
+
+const RUST_ATTRIBUTE_ROUTE_METHODS: Readonly<Record<string, RouteMethod>> = {
+  get: "GET",
+  post: "POST",
+  put: "PUT",
+  patch: "PATCH",
+  delete: "DELETE",
+  head: "HEAD",
+  options: "OPTIONS"
+};
+
+const RUST_ATTRIBUTE_ROUTE_IMPORTS = [
+  {
+    prefix: "actix_web::",
+    ruleId: ACTIX_WEB_ATTRIBUTE_ROUTE_RULE_ID
+  },
+  {
+    prefix: "rocket::",
+    ruleId: ROCKET_ATTRIBUTE_ROUTE_RULE_ID
+  }
+] as const;
 
 function directChildren(node: RustSyntaxNode): readonly RustSyntaxNode[] {
   const children: RustSyntaxNode[] = [];
@@ -213,16 +246,23 @@ function staticUseImports(
   return [];
 }
 
-function staticAxumImportAliases(input: RustExtractFileFactsInput, root: RustSyntaxNode): {
-  readonly routerAliases: ReadonlySet<string>;
-  readonly methodAliases: ReadonlyMap<string, RouteMethod>;
-} {
-  const imports = directChildren(root)
+function staticTopLevelUseImports(
+  input: RustExtractFileFactsInput,
+  root: RustSyntaxNode
+): readonly StaticRustUseImport[] {
+  return directChildren(root)
     .filter((node) => node.name === "UseDeclaration")
     .flatMap((node) => {
       const target = directUseImportTarget(node);
       return target === null ? [] : staticUseImports(input, target);
     });
+}
+
+function staticAxumImportAliases(input: RustExtractFileFactsInput, root: RustSyntaxNode): {
+  readonly routerAliases: ReadonlySet<string>;
+  readonly methodAliases: ReadonlyMap<string, RouteMethod>;
+} {
+  const imports = staticTopLevelUseImports(input, root);
   const pathsByLocalName = new Map<string, string[]>();
   for (const imported of imports) {
     const paths = pathsByLocalName.get(imported.localName) ?? [];
@@ -252,6 +292,35 @@ function staticAxumImportAliases(input: RustExtractFileFactsInput, root: RustSyn
   return { routerAliases, methodAliases };
 }
 
+function staticRustAttributeRouteAliases(
+  input: RustExtractFileFactsInput,
+  root: RustSyntaxNode
+): ReadonlyMap<string, StaticRustAttributeRouteImport> {
+  const imports = staticTopLevelUseImports(input, root);
+  const pathsByLocalName = new Map<string, string[]>();
+  for (const imported of imports) {
+    const paths = pathsByLocalName.get(imported.localName) ?? [];
+    paths.push(imported.path);
+    pathsByLocalName.set(imported.localName, paths);
+  }
+  const isUnambiguous = (imported: StaticRustUseImport): boolean => {
+    const paths = pathsByLocalName.get(imported.localName) ?? [];
+    return paths.length === 1 && paths[0] === imported.path;
+  };
+  const aliases = new Map<string, StaticRustAttributeRouteImport>();
+  for (const imported of imports) {
+    const methodName = imported.path.split("::").at(-1);
+    const method = methodName === undefined ? undefined : RUST_ATTRIBUTE_ROUTE_METHODS[methodName];
+    const framework = RUST_ATTRIBUTE_ROUTE_IMPORTS.find(
+      (candidate) => methodName !== undefined && imported.path === `${candidate.prefix}${methodName}`
+    );
+    if (method !== undefined && framework !== undefined && isUnambiguous(imported)) {
+      aliases.set(imported.localName, { method, ruleId: framework.ruleId });
+    }
+  }
+  return aliases;
+}
+
 function boundIdentifierNames(
   input: RustExtractFileFactsInput,
   node: RustSyntaxNode
@@ -277,10 +346,16 @@ function staticRustFunction(
   input: RustExtractFileFactsInput,
   node: RustSyntaxNode
 ): StaticRustFunction | null {
-  if (node.name !== "FunctionItem") {
+  const functionNode =
+    node.name === "FunctionItem"
+      ? node
+      : node.name === "AttributeItem"
+        ? directChildren(node).find((child) => child.name === "FunctionItem")
+        : undefined;
+  if (functionNode === undefined) {
     return null;
   }
-  const children = directChildren(node);
+  const children = directChildren(functionNode);
   const fnIndex = children.findIndex((child) => child.name === "fn");
   const name = children.slice(fnIndex + 1).find((child) => child.name === "BoundIdentifier");
   const parameters = children.find((child) => child.name === "ParamList");
@@ -291,14 +366,67 @@ function staticRustFunction(
   }
   return {
     name: nameText,
-    node,
+    node: functionNode,
     body,
+    attributes: node.name === "AttributeItem"
+      ? directChildren(node).filter((child) => child.name === "Attribute")
+      : [],
     parameterNames:
       parameters === undefined
         ? []
         : directChildren(parameters).flatMap((parameter) => {
             return parameter.name === "Parameter" ? boundIdentifierNames(input, parameter) : [];
           })
+  };
+}
+
+function staticRustAttributeRoute(
+  input: RustExtractFileFactsInput,
+  attribute: RustSyntaxNode,
+  aliases: ReadonlyMap<string, StaticRustAttributeRouteImport>,
+  handlerName: string
+): StaticRustRoute | null {
+  if (attribute.name !== "Attribute") {
+    return null;
+  }
+  const children = directChildren(attribute);
+  const metaItem = children[1];
+  if (
+    children.length !== 3 ||
+    children[0]?.name !== "[" ||
+    metaItem === undefined ||
+    metaItem.name !== "MetaItem" ||
+    children[2]?.name !== "]"
+  ) {
+    return null;
+  }
+  const metaChildren = directChildren(metaItem);
+  const macro = metaChildren[0];
+  const arguments_ = metaChildren[1];
+  if (
+    metaChildren.length !== 2 ||
+    macro === undefined ||
+    arguments_ === undefined ||
+    arguments_.name !== "ParenthesizedTokens"
+  ) {
+    return null;
+  }
+  const macroName = identifierText(input, macro);
+  const routeImport = macroName === null ? undefined : aliases.get(macroName);
+  const argumentNodes = directChildren(arguments_).filter(
+    (child) => !["(", ")", ","].includes(child.name)
+  );
+  const pathNode = argumentNodes[0];
+  const path = pathNode === undefined ? null : staticLiteralSlashPath(input, pathNode);
+  if (routeImport === undefined || argumentNodes.length !== 1 || path === null) {
+    return null;
+  }
+  return {
+    method: routeImport.method,
+    path,
+    handlerName,
+    node: attribute,
+    ruleId: routeImport.ruleId
   };
 }
 
@@ -433,7 +561,7 @@ function staticAxumRouteChain(
   routerAliases: ReadonlySet<string>,
   methodAliases: ReadonlyMap<string, RouteMethod>,
   shadowedNames: ReadonlySet<string>
-): readonly StaticAxumRoute[] | null {
+): readonly StaticRustRoute[] | null {
   if (staticRouterNew(input, node, routerAliases, shadowedNames)) {
     return [];
   }
@@ -460,7 +588,13 @@ function staticAxumRouteChain(
   }
   return [
     ...precedingRoutes,
-    { method: methodRoute.method, path, handlerName: methodRoute.handlerName, node }
+    {
+      method: methodRoute.method,
+      path,
+      handlerName: methodRoute.handlerName,
+      node,
+      ruleId: AXUM_ROUTE_RULE_ID
+    }
   ];
 }
 
@@ -476,14 +610,19 @@ function staticStatementExpression(statement: RustSyntaxNode): RustSyntaxNode | 
 }
 
 /**
- * Extracts conservative Rust file facts. The first Axum surface intentionally
- * requires a direct import, a contiguous literal route builder chain, and one
- * unshadowed named top-level function handler. No type checking or runtime
- * router composition is inferred from this syntax-only adapter.
+ * Extracts conservative Rust file facts. Axum routes require a direct import,
+ * a contiguous literal route builder chain, and one unshadowed named top-level
+ * function handler. Actix Web and Rocket routes require their direct imported
+ * attribute macro, a literal path, and the annotated top-level handler. No type
+ * checking or runtime router composition is inferred from this syntax-only adapter.
  */
 export function extractRustFileFacts(input: RustExtractFileFactsInput): ArtifactFacts {
-  const axumCapability = frameworkCapability("axum");
-  if (!axumCapability.languages.includes(input.language)) {
+  const frameworkCapabilities = [
+    frameworkCapability("axum"),
+    frameworkCapability("actix-web"),
+    frameworkCapability("rocket")
+  ] as const;
+  if (frameworkCapabilities.some((capability) => !capability.languages.includes(input.language))) {
     throw new Error("Rust framework extraction was invoked for an unsupported source language.");
   }
 
@@ -562,7 +701,7 @@ export function extractRustFileFacts(input: RustExtractFileFactsInput): Artifact
     return symbol;
   }
 
-  function addAxumRoute(routeFact: StaticAxumRoute, handler: SymbolNode): void {
+  function addRustRoute(routeFact: StaticRustRoute, handler: SymbolNode): void {
     const routeName = `${routeFact.method} ${routeFact.path}`;
     const qualifiedName = `${input.filePath}#route:${routeName}`;
     const identity = `${qualifiedName}\u0000route`;
@@ -604,7 +743,7 @@ export function extractRustFileFacts(input: RustExtractFileFactsInput): Artifact
       confidence: 1,
       referenceName: handler.name,
       evidence: {
-        ruleId: "framework.axum.direct-router.route.local-function",
+        ruleId: routeFact.ruleId,
         stage: "syntax",
         candidateSymbolIds: [handler.id]
       }
@@ -621,6 +760,28 @@ export function extractRustFileFacts(input: RustExtractFileFactsInput): Artifact
       const sameName = functionsByName.get(functionDeclaration.name) ?? [];
       sameName.push(symbol);
       functionsByName.set(functionDeclaration.name, sameName);
+    }
+
+    const attributeRouteAliases = staticRustAttributeRouteAliases(input, root);
+    for (const functionDeclaration of functions) {
+      for (const attribute of functionDeclaration.attributes) {
+        const route = staticRustAttributeRoute(
+          input,
+          attribute,
+          attributeRouteAliases,
+          functionDeclaration.name
+        );
+        if (route === null) {
+          continue;
+        }
+        const candidates = functionsByName.get(route.handlerName) ?? [];
+        if (candidates.length === 1) {
+          const handler = candidates[0];
+          if (handler !== undefined) {
+            addRustRoute(route, handler);
+          }
+        }
+      }
     }
 
     const { routerAliases, methodAliases } = staticAxumImportAliases(input, root);
@@ -653,7 +814,7 @@ export function extractRustFileFacts(input: RustExtractFileFactsInput): Artifact
             if (candidates.length === 1) {
               const handler = candidates[0];
               if (handler !== undefined) {
-                addAxumRoute(route, handler);
+                addRustRoute(route, handler);
               }
             }
           }

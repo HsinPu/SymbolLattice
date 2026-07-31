@@ -60,6 +60,8 @@ export type RouteFramework =
   | "net-http"
   | "chi"
   | "axum"
+  | "actix-web"
+  | "rocket"
   | "spring-web"
   | "micronaut"
   | "jakarta-rest"

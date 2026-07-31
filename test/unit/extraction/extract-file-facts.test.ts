@@ -8060,6 +8060,106 @@ describe("source extraction", () => {
     ]);
   });
 
+  it("extracts direct imported Actix Web and Rocket attribute routes with exact evidence", () => {
+    const facts = extractFileFacts({
+      filePath: "src/attribute-routes.rs",
+      language: "rust",
+      sourceText: [
+        "use actix_web::{get as actix_get, post};",
+        "use rocket::{delete as rocket_delete, get as rocket_get};",
+        "",
+        "#[actix_get(\"/health\")]",
+        "async fn health() {}",
+        "",
+        "#[post(\"/users\")]",
+        "async fn create_user() {}",
+        "",
+        "#[rocket_delete(\"/users/:id\")]",
+        "fn delete_user() {}",
+        "",
+        "#[rocket_get(\"/ready\")]",
+        "fn ready() {}"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId,
+          edge.evidence?.stage,
+          edge.resolution,
+          edge.confidence
+        ])
+    ).toEqual([
+      [
+        "GET /health",
+        "src/attribute-routes.rs#health",
+        "framework.actix-web.attribute-route.literal-path.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "POST /users",
+        "src/attribute-routes.rs#create_user",
+        "framework.actix-web.attribute-route.literal-path.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "DELETE /users/:id",
+        "src/attribute-routes.rs#delete_user",
+        "framework.rocket.attribute-route.literal-path.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "GET /ready",
+        "src/attribute-routes.rs#ready",
+        "framework.rocket.attribute-route.literal-path.local-function",
+        "syntax",
+        "exact",
+        1
+      ]
+    ]);
+  });
+
+  it("rejects unimported, ambiguous, nonliteral, and nonfunction Rust attribute routes", () => {
+    const facts = extractFileFacts({
+      filePath: "src/unproven-attribute-routes.rs",
+      language: "rust",
+      sourceText: [
+        "use actix_web::{get, post};",
+        "use rocket::get;",
+        "use actix_web::web::get as nested_get;",
+        "",
+        "#[get(\"/ambiguous\")]",
+        "fn ambiguous() {}",
+        "",
+        "#[post(PATH)]",
+        "fn dynamic_path() {}",
+        "",
+        "#[delete(\"/unimported\")]",
+        "fn unimported() {}",
+        "",
+        "#[nested_get(\"/nested-import\")]",
+        "fn nested_import() {}",
+        "",
+        "#[get(\"/not-a-function\")]",
+        "struct NotAFunction;"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+  });
+
   it("rejects dynamic, shadowed, inline, composed, wrapper, and rebounded Rust Axum route shapes", () => {
     const facts = extractFileFacts({
       filePath: "src/unproven.rs",

@@ -14,20 +14,16 @@
 </div>
 
 > [!IMPORTANT]
-> v0.112.0 為早期開發者版本。此儲存庫從原始碼執行；npm 套件維持私有，尚未發佈。
+> v0.113.0 為早期開發者版本，請從原始碼執行；npm 套件尚未發佈。
 
-## 產品定位
+SymbolLattice 在本機建立可查詢的程式碼符號圖譜，並為每條關係保留來源規則、解析階段與信心資訊。索引只存放在受檢專案的 `.symbol-lattice/index.sqlite`，不會暗中上傳原始碼。
 
-SymbolLattice 在本機建立可查詢的程式碼符號圖譜，並保留每條關係的來源規則、解析階段與信心資訊。索引資料只寫入受檢專案的 `.symbol-lattice/index.sqlite`，不會暗中上傳原始碼。
+## 重點
 
-授權：MIT。
-
-## 核心功能
-
-- 以語法可證明的檔案、符號、包含關係、匯入／匯出、型別階層、路由、進入點與跨檔案關係建立圖譜。
-- 只在條件明確時建立精確邊；模糊候選保留為未解析或啟發式證據，不猜測執行期行為。
-- 支援前端、後端、JVM、科學計算、系統語言、原生語言、資料格式、IaC、模板與 schema 檔案；包含 TypeScript、Java、Groovy、Fortran、Ada、Python、Go、Rust、C/C++、C#、PHP、Ruby、Kotlin、Swift、Dart、SQL、GraphQL、Protocol Buffers、Terraform、YAML、XML 等。
-- 提供 CLI 與唯讀 MCP 查詢，可查看符號、關係、路由、進入點、版本歷史、差異、受影響測試、自動同步健康、專案 owner lease、session 時間線與持久化診斷歷程。
+- 從可證明的語法擷取檔案、符號、匯入／匯出、型別階層、路由、進入點與跨檔案關係。
+- 只在證據充分時建立精確邊；模糊候選會保留為未解析或啟發式結果，不猜測執行期行為。
+- 支援多種前端、後端、JVM、系統、資料、IaC、模板與 schema 語言；Rust 路由包含 Axum、Actix Web 與 Rocket 的受限靜態掃描。
+- 提供 CLI 與唯讀 MCP 查詢，支援符號、關係、路由、進入點、差異、影響範圍與索引狀態。
 
 ## 快速開始
 
@@ -39,44 +35,30 @@ cd symbol-lattice
 npm install
 npm run build
 
-# 為一個專案建立本機圖譜
+# 初始化目標專案的本機圖譜
 node dist/cli/main.js init /path/to/project
 
-# 查詢已建立的圖譜
-node dist/cli/main.js find add --project /path/to/project
-node dist/cli/main.js explain-edge "edge:<edge-id>" --project /path/to/project
+# 查詢與明確同步
+node dist/cli/main.js routes --project /path/to/project --method GET
+node dist/cli/main.js sync /path/to/project
 
-# 啟動 MCP：先補齊已過期索引，之後由一個專案 owner watcher 在背景保持新鮮
+# 啟動前景、唯讀 MCP host
 node dist/cli/main.js serve --mcp --project /path/to/project
-
-# 從 MCP client 取得最近 8 筆 watcher 診斷事件
-# symbol_lattice_auto_sync_diagnostics { "limit": 8 }
-
-# 讀取此專案最近 8 筆持久化診斷事件
-# symbol_lattice_auto_sync_journal { "limit": 8 }
 ```
 
-Windows PowerShell 若找不到 `npm`，請使用 `npm.cmd`。系統預設拒絕索引檔案系統根目錄或家目錄，除非明確指定 `--force`。
+Windows PowerShell 若找不到 `npm`，請改用 `npm.cmd`。檔案系統根目錄與家目錄預設會被拒絕，除非明確加入 `--force`。
 
-## v0.112.0 重點
+## v0.113.0
 
-- Python Django 現在可投影同一個具 `__init__.py` 證據的標準 package 中，以相對匯入帶入的 URLConf；會將 `path(prefix, include(...))` 的 parent prefix 與子 `urlpatterns` 路徑組合成可查詢路由。
-- 每條投影路由保留 module-stage evidence 與 parent／child URLConf 解析路徑；parent-relative import、namespace package、import chain、動態 include 或 rebind 都不會產生精確邊。
-- Django URL facts 會隨 SQLite artifact facts 持久化。只修改 parent URLConf 後的 `sync` 能重用未改 child URLConf facts，並重新投影最終路徑。
+- 新增 Rust Actix Web 與 Rocket 的 HTTP 屬性路由：支援直接匯入的巨集別名、靜態字面路徑與同檔頂層 handler。
+- 每條路由都保留專屬的 framework evidence rule；未匯入、同名歧義、動態路徑與非函式屬性不會產生路由。
+- 更新 artifact facts 版本；下一次明確 `sync` 或新的 `init` 會安全重建受影響的 Rust facts。
 
-可用 `--sync-interval <ms>` 調整輪詢備援、`--poll` 關閉原生事件加速，或以 `--no-diagnostic-journal` 關閉 journal 寫入。首次使用仍需先執行 `init`；手動 `sync` 適合修復或 CI。
+## 已知邊界
 
-## 明確限制
-
-- 不是編譯器、完整語言 parser、型別檢查器、framework runtime 或執行期追蹤器。
-- 不會把動態派發、反射、巨集、程式碼產生、依賴注入或模糊名稱連結當成精確關係。
-- Groovy、Fortran 與 Ada 仍是保守初版：僅擷取完整直接單元，不推斷成員、跨檔案或執行期關係；遇到曖昧結構會略過。
-- Koa、Hono 與 Elysia 初版只支援直接 receiver 路由；不推斷 prefix、掛載、巢狀 app、`basePath`／`group`／`use`／`route`／`on`、CommonJS、動態路徑或內嵌／成員處理器。
-- Flask 跨檔 Blueprint 僅接受單一名稱、單點相對 import 與具 `__init__.py` 證據的 regular package；不處理 parent-relative import、namespace package、import chain、動態 prefix 或執行期註冊。
-- Django 跨檔 URLConf 僅接受 `from .package import urls` 或 `from .package.urls import urlpatterns` 的單一名稱相對 import、直接 `path(prefix, include(local_urlconf))` 與子模組本地頂層函式 handler；不處理字串 URLConf、parent-relative import、namespace package、import chain、巢狀 include、動態 include／prefix 或外部 view handler。
-- 預設 MCP 背景同步只處理已初始化的專案，且不會改變已儲存的索引範圍；根目錄或家目錄仍需明確加上 `--force`。
-- SQLite owner lock 只串行同一專案的一個 foreground watcher；它不是 daemon、socket registry、分散式領導者選舉、worker pool 或跨機器協調協定。
-- 自動同步狀態與 session 時間線只描述目前預設 MCP host。持久化 journal 是有 128 筆上限的 operational record，不是不可竄改 audit log 或完整 lifecycle 記錄。
+- 這不是編譯器、型別檢查器、framework runtime 或執行期追蹤器。
+- 不會將動態派發、反射、巨集展開、程式碼產生、依賴注入或模糊名稱連結提升為精確關係。
+- Actix Web 與 Rocket 目前只接受直接匯入的 `get`、`post`、`put`、`patch`、`delete`、`head`、`options` 屬性巨集與單一路徑字面值；掛載、scope、guard、動態路徑及執行期組合留待後續版本。
 
 ## 驗證
 

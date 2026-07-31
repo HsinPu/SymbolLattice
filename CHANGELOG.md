@@ -6,6 +6,22 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.113.0] - 2026-07-31
+
+### Added
+
+- Rust route extraction now recognizes direct Actix Web and Rocket HTTP attribute macros. An exact route requires one unambiguous direct import (including an alias), one supported literal slash path, and the directly annotated same-file top-level function handler.
+- Each emitted route retains framework-specific syntax evidence: `framework.actix-web.attribute-route.literal-path.local-function` or `framework.rocket.attribute-route.literal-path.local-function`. Unimported macros, same-name imports from multiple frameworks, dynamic paths, extra attribute arguments, and attributes on non-functions fail closed.
+
+### Compatibility
+
+- The artifact facts extractor advances to `multi-language-ast-v97`. Existing indexes remain readable; the next explicit `sync` or fresh `init` safely re-extracts Rust source facts. No graph-schema migration or CLI/MCP contract change is required.
+
+### Comparison notes
+
+- CodeGraph's checked Rust framework resolver also covers Actix and Rocket patterns. This independent SymbolLattice slice adds a narrower AST-backed route projection with explicit import provenance and exact local-handler evidence.
+- CodeGraph remains ahead in daemon lifecycle, socket/PID registry, cross-client coordination, worker-pool concurrency, and deeper language/semantic resolution. SymbolLattice's v0.113 improvement is framework-breadth progress, not daemon-parity.
+
 ## [0.112.0] - 2026-07-31
 
 ### Added

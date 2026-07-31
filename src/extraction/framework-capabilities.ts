@@ -27,6 +27,8 @@ export const FRAMEWORK_CAPABILITY_IDS = [
   "net-http",
   "chi",
   "axum",
+  "actix-web",
+  "rocket",
   "spring-web",
   "micronaut",
   "jakarta-rest",
@@ -309,6 +311,26 @@ export const FRAMEWORK_CAPABILITIES = [
     surfaces: [
       "direct imported Router::new literal route builder chains",
       "direct imported method-router named local handlers"
+    ]
+  },
+  {
+    id: "actix-web",
+    languages: ["rust"],
+    routeFramework: "actix-web",
+    routeRegistrations: [],
+    surfaces: [
+      "direct imported HTTP attribute macros",
+      "literal attribute paths on direct top-level function handlers"
+    ]
+  },
+  {
+    id: "rocket",
+    languages: ["rust"],
+    routeFramework: "rocket",
+    routeRegistrations: [],
+    surfaces: [
+      "direct imported HTTP attribute macros",
+      "literal attribute paths on direct top-level function handlers"
     ]
   },
   {

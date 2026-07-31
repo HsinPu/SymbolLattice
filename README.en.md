@@ -14,20 +14,16 @@
 </div>
 
 > [!IMPORTANT]
-> v0.112.0 is an early developer release. Run this repository from source; the npm package remains private and unpublished.
+> v0.113.0 is an early developer release. Run it from source; the npm package is not published.
 
-## Positioning
+SymbolLattice builds a queryable local code-symbol graph and preserves the source rule, resolution stage, and confidence behind every relationship. Index data stays in the inspected project's `.symbol-lattice/index.sqlite`; source code is never silently uploaded.
 
-SymbolLattice creates a queryable local code-symbol graph and preserves the rule, resolution stage, and confidence behind every relationship. Index data stays in the inspected project's `.symbol-lattice/index.sqlite`; source code is not silently uploaded.
+## Highlights
 
-License: MIT.
-
-## Core capabilities
-
-- Builds syntax-proven file, symbol, containment, import/export, type-hierarchy, route, entrypoint, and cross-file graph facts.
-- Creates exact edges only when the proof is direct; ambiguous candidates remain unresolved or heuristic evidence instead of runtime guesses.
-- Covers frontend, backend, JVM, scientific-computing, systems, native, data, IaC, template, and schema sources, including TypeScript, Java, Groovy, Fortran, Ada, Python, Go, Rust, C/C++, C#, PHP, Ruby, Kotlin, Swift, Dart, SQL, GraphQL, Protocol Buffers, Terraform, YAML, and XML.
-- Includes a CLI and read-only MCP queries for symbols, relationships, routes, entrypoints, generation history, diffs, affected tests, automatic-sync health, project owner leases, session timelines, and durable diagnostics.
+- Extracts syntax-proven files, symbols, imports/exports, type hierarchy, routes, entrypoints, and cross-file relations.
+- Creates exact edges only when evidence is sufficient; ambiguous candidates remain unresolved or heuristic instead of becoming runtime guesses.
+- Covers frontend, backend, JVM, systems, data, IaC, template, and schema languages. Rust route support includes conservative Axum, Actix Web, and Rocket scanners.
+- Provides CLI and read-only MCP queries for symbols, relations, routes, entrypoints, diffs, impact, and index status.
 
 ## Quick start
 
@@ -39,44 +35,30 @@ cd symbol-lattice
 npm install
 npm run build
 
-# Create a local graph for one project
+# Initialize a local graph for a project
 node dist/cli/main.js init /path/to/project
 
-# Query the indexed graph
-node dist/cli/main.js find add --project /path/to/project
-node dist/cli/main.js explain-edge "edge:<edge-id>" --project /path/to/project
+# Query it and explicitly synchronize source changes
+node dist/cli/main.js routes --project /path/to/project --method GET
+node dist/cli/main.js sync /path/to/project
 
-# Start MCP: catch up a stale existing index, then let one project-owner watcher keep it fresh
+# Start a foreground, read-only MCP host
 node dist/cli/main.js serve --mcp --project /path/to/project
-
-# From an MCP client, retrieve the latest eight watcher diagnostic events
-# symbol_lattice_auto_sync_diagnostics { "limit": 8 }
-
-# Retrieve the latest eight persisted watcher transitions for this project
-# symbol_lattice_auto_sync_journal { "limit": 8 }
 ```
 
-On Windows PowerShell, use `npm.cmd` when `npm` is unavailable. Filesystem roots and home directories are rejected unless `--force` is explicitly supplied.
+On Windows PowerShell, use `npm.cmd` if `npm` is unavailable. Filesystem roots and home directories are rejected unless `--force` is explicit.
 
-## v0.112.0 highlights
+## v0.113.0
 
-- Python Django now projects a cross-file URLConf imported relatively within one proven regular package. A direct `path(prefix, include(...))` parent prefix and child `urlpatterns` path become a queryable route.
-- Each projected route retains module-stage evidence and the parent/child URLConf resolution path. Parent-relative imports, namespace packages, import chains, dynamic includes, and rebound bindings never become exact edges.
-- Django URL facts persist with SQLite artifact facts. After only the parent URLConf changes, `sync` can reuse the unchanged child URLConf facts and project the new final path.
-
-Use `--sync-interval <ms>` to tune fallback polling, `--poll` to disable native event acceleration, or `--no-diagnostic-journal` to disable journal writes. Run `init` once first; manual `sync` remains useful for repair and CI.
+- Adds Rust Actix Web and Rocket HTTP attribute routes with direct-import aliases, literal paths, and same-file top-level handlers.
+- Retains a framework-specific evidence rule for every route. Unimported macros, ambiguous aliases, dynamic paths, and non-function attributes emit no route.
+- Advances the artifact-facts version; the next explicit `sync` or fresh `init` safely rebuilds affected Rust facts.
 
 ## Deliberate limits
 
-- This is not a compiler, full language parser, type checker, framework runtime, or execution tracer.
-- Dynamic dispatch, reflection, macros, code generation, dependency injection, and ambiguous name matches are never promoted to exact graph relations.
-- Groovy, Fortran, and Ada remain conservative first slices: only complete direct units are retained; members, cross-file, and runtime relations are not inferred, and ambiguous source is skipped.
-- The Koa, Hono, and Elysia slices cover direct receiver routes only; prefixes, mounts, nested apps, `basePath` / `group` / `use` / `route` / `on`, CommonJS, dynamic paths, and inline/member handlers are not inferred.
-- Cross-file Flask Blueprint support accepts only a single-name, one-dot relative import within a regular package proven by `__init__.py` markers. Parent-relative imports, namespace packages, import chains, dynamic prefixes, and runtime registration are out of scope.
-- Cross-file Django URLConf support accepts only a single-name relative `from .package import urls` or `from .package.urls import urlpatterns`, a direct `path(prefix, include(local_urlconf))`, and child-local top-level function handlers. String URLConfs, parent-relative imports, namespace packages, import chains, nested includes, dynamic includes/prefixes, and external view handlers are out of scope.
-- Default MCP background sync only operates on initialized projects and never changes the stored index scope. Filesystem roots and home directories still require explicit `--force`.
-- The SQLite owner lock serializes one foreground watcher for one project only; it is not a daemon, socket registry, distributed leader-election protocol, worker pool, or cross-machine coordination mechanism.
-- Automatic-sync status and the session timeline describe the current default MCP host only. The durable journal is a bounded 128-event operational record, not a tamper-proof audit log or complete lifecycle record.
+- This is not a compiler, type checker, framework runtime, or execution tracer.
+- Dynamic dispatch, reflection, macro expansion, code generation, dependency injection, and ambiguous name matches never become exact graph relations.
+- Actix Web and Rocket currently accept only directly imported `get`, `post`, `put`, `patch`, `delete`, `head`, and `options` attribute macros with one literal path. Mounts, scopes, guards, dynamic paths, and runtime composition are deferred.
 
 ## Verification
 
