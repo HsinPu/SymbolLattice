@@ -10,6 +10,8 @@ export const DEFAULT_WATCH_INTERVAL_MS = 2_000;
 export const DEFAULT_WATCH_EVENT_DEBOUNCE_MS = 250;
 export const MIN_WATCH_INTERVAL_MS = 250;
 export const MAX_WATCH_INTERVAL_MS = 60_000;
+/** Maximum per-MCP-host watcher transitions retained for read-only diagnostics. */
+export const MAX_AUTO_SYNC_DIAGNOSTIC_EVENTS = 32;
 const MAX_WATCH_PENDING_FILES = 25;
 
 /**
@@ -97,6 +99,53 @@ export interface AutoSyncStatusResult {
   readonly autoSync: AutoSyncStatus;
 }
 
+/** One safe, compact watcher transition retained only for the current MCP host session. */
+export interface AutoSyncDiagnosticEvent {
+  /** Monotonic per-host sequence; it resets when the MCP host restarts. */
+  readonly sequence: number;
+  readonly event: WatchReceipt["event"];
+  readonly observedAt: string;
+  readonly state: AutoSyncState;
+  readonly watcherMode: AutoSyncWatcherMode;
+  readonly generationId: string | null;
+  readonly error: WatchReceipt["error"];
+  readonly retryDelayMs: number | null;
+  readonly pendingFileCount: number | null;
+  readonly pendingFiles: readonly string[];
+  readonly pendingFilesTruncated: boolean;
+  readonly pendingFilesUnknown: boolean;
+}
+
+/** Controls the bounded number of latest transitions returned by diagnostics. */
+export interface AutoSyncDiagnosticsOptions {
+  readonly limit?: number;
+}
+
+/** Retention metadata and chronological watcher transitions for one MCP host session. */
+export interface AutoSyncDiagnosticTimeline {
+  readonly capacity: number;
+  readonly retained: number;
+  readonly returned: number;
+  /** Number of oldest events evicted after the fixed in-memory capacity was reached. */
+  readonly dropped: number;
+  /** True when history has evicted old events or the requested result limit omitted retained events. */
+  readonly truncated: boolean;
+  readonly events: readonly AutoSyncDiagnosticEvent[];
+}
+
+/** A read-only index observation that remains useful if a live status read fails. */
+export interface AutoSyncDiagnosticIndex {
+  readonly status: IndexStatus | null;
+  readonly error: WatchReceipt["error"];
+}
+
+/** Full non-mutating operational view for one MCP host. */
+export interface AutoSyncDiagnosticsResult {
+  readonly index: AutoSyncDiagnosticIndex;
+  readonly autoSync: AutoSyncStatus;
+  readonly timeline: AutoSyncDiagnosticTimeline;
+}
+
 export interface AutoSyncStatusTrackerOptions {
   /** False when the MCP host was explicitly started with `--no-auto-sync`. */
   readonly enabled?: boolean;
@@ -124,6 +173,9 @@ export class AutoSyncStatusTracker {
   private pendingFiles: readonly string[] = [];
   private pendingFilesTruncated = false;
   private pendingFilesUnknown = false;
+  private readonly diagnosticEvents: AutoSyncDiagnosticEvent[] = [];
+  private droppedDiagnosticEvents = 0;
+  private nextDiagnosticSequence = 1;
 
   public constructor(options: AutoSyncStatusTrackerOptions = {}) {
     this.enabled = options.enabled ?? true;
@@ -165,7 +217,7 @@ export class AutoSyncStatusTracker {
       case "sync-failed":
       case "status-failed":
         this.state = receipt.retryDelayMs === null ? "failed" : "retrying";
-        this.lastSyncFailure = receipt.error;
+        this.lastSyncFailure = cloneWatchError(receipt.error);
         break;
       case "event-pending":
         this.state = "pending";
@@ -185,12 +237,14 @@ export class AutoSyncStatusTracker {
         break;
       case "event-watch-failed":
         this.watcherMode = "polling-fallback";
-        this.eventWatchFailure = receipt.error;
+        this.eventWatchFailure = cloneWatchError(receipt.error);
         break;
       case "stopped":
         this.state = "stopped";
         break;
     }
+
+    this.appendDiagnosticEvent(receipt);
   }
 
   /** Returns a defensive copy suitable for an MCP or HTTP status response. */
@@ -202,14 +256,62 @@ export class AutoSyncStatusTracker {
       observedAt: this.observedAt,
       lastEvent: this.lastEvent,
       lastSuccessfulSyncAt: this.lastSuccessfulSyncAt,
-      lastSyncFailure: this.lastSyncFailure,
-      eventWatchFailure: this.eventWatchFailure,
+      lastSyncFailure: cloneWatchError(this.lastSyncFailure),
+      eventWatchFailure: cloneWatchError(this.eventWatchFailure),
       retryDelayMs: this.retryDelayMs,
       pendingFileCount: this.pendingFileCount,
       pendingFiles: [...this.pendingFiles],
       pendingFilesTruncated: this.pendingFilesTruncated,
       pendingFilesUnknown: this.pendingFilesUnknown
     };
+  }
+
+  /** Returns latest watcher transitions in chronological order without touching files or an index. */
+  public diagnostics(options: AutoSyncDiagnosticsOptions = {}): AutoSyncDiagnosticTimeline {
+    const limit = this.diagnosticLimit(options.limit);
+    const events = this.diagnosticEvents.slice(-limit).map(cloneDiagnosticEvent);
+    return {
+      capacity: MAX_AUTO_SYNC_DIAGNOSTIC_EVENTS,
+      retained: this.diagnosticEvents.length,
+      returned: events.length,
+      dropped: this.droppedDiagnosticEvents,
+      truncated: this.droppedDiagnosticEvents > 0 || events.length < this.diagnosticEvents.length,
+      events
+    };
+  }
+
+  private appendDiagnosticEvent(receipt: WatchReceipt): void {
+    if (this.diagnosticEvents.length === MAX_AUTO_SYNC_DIAGNOSTIC_EVENTS) {
+      this.diagnosticEvents.shift();
+      this.droppedDiagnosticEvents += 1;
+    }
+    this.diagnosticEvents.push({
+      sequence: this.nextDiagnosticSequence,
+      event: receipt.event,
+      observedAt: receipt.observedAt,
+      state: this.state,
+      watcherMode: this.watcherMode,
+      generationId: receipt.generationId,
+      error: cloneWatchError(receipt.error),
+      retryDelayMs: receipt.retryDelayMs,
+      pendingFileCount: receipt.pendingFileCount,
+      pendingFiles: [...receipt.pendingFiles],
+      pendingFilesTruncated: receipt.pendingFilesTruncated,
+      pendingFilesUnknown: receipt.pendingFilesUnknown
+    });
+    this.nextDiagnosticSequence += 1;
+  }
+
+  private diagnosticLimit(limit: number | undefined): number {
+    if (limit === undefined) {
+      return MAX_AUTO_SYNC_DIAGNOSTIC_EVENTS;
+    }
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > MAX_AUTO_SYNC_DIAGNOSTIC_EVENTS) {
+      throw new RangeError(
+        `Diagnostic limit must be an integer between 1 and ${MAX_AUTO_SYNC_DIAGNOSTIC_EVENTS}.`
+      );
+    }
+    return limit;
   }
 }
 
@@ -269,6 +371,18 @@ function toWatchError(error: unknown): WatchReceipt["error"] {
   return {
     code: error instanceof SymbolLatticeError ? error.code : "UNEXPECTED_ERROR",
     message: error instanceof Error ? error.message : "Unknown SymbolLattice error."
+  };
+}
+
+function cloneWatchError(error: WatchReceipt["error"]): WatchReceipt["error"] {
+  return error === null ? null : { ...error };
+}
+
+function cloneDiagnosticEvent(event: AutoSyncDiagnosticEvent): AutoSyncDiagnosticEvent {
+  return {
+    ...event,
+    error: cloneWatchError(event.error),
+    pendingFiles: [...event.pendingFiles]
   };
 }
 

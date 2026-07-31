@@ -4,6 +4,7 @@ import {
   AutoSyncStatusTracker,
   DEFAULT_WATCH_EVENT_DEBOUNCE_MS,
   DEFAULT_WATCH_INTERVAL_MS,
+  MAX_AUTO_SYNC_DIAGNOSTIC_EVENTS,
   MAX_WATCH_INTERVAL_MS,
   MIN_WATCH_INTERVAL_MS,
   SymbolLatticeError,
@@ -286,6 +287,61 @@ describe("automatic sync status tracker", () => {
 
     (snapshot.pendingFiles as string[]).push("src/consumer.ts");
     expect(tracker.snapshot().pendingFiles).toEqual([]);
+  });
+
+  it("retains a bounded, defensive chronological diagnostic timeline", () => {
+    const tracker = new AutoSyncStatusTracker();
+
+    tracker.record(receipt("started", { observedAt: "2026-07-31T00:00:00.000Z" }));
+    tracker.record(receipt("event-watch-active", { observedAt: "2026-07-31T00:00:01.000Z" }));
+    tracker.record(
+      receipt("event-pending", {
+        observedAt: "2026-07-31T00:00:02.000Z",
+        pendingFileCount: 1,
+        pendingFiles: ["src/changed.ts"]
+      })
+    );
+
+    const initial = tracker.diagnostics();
+    expect(initial).toMatchObject({
+      capacity: MAX_AUTO_SYNC_DIAGNOSTIC_EVENTS,
+      retained: 3,
+      returned: 3,
+      dropped: 0,
+      truncated: false
+    });
+    expect(initial.events.map((event) => [event.sequence, event.event, event.state])).toEqual([
+      [1, "started", "fresh"],
+      [2, "event-watch-active", "fresh"],
+      [3, "event-pending", "pending"]
+    ]);
+
+    (initial.events[2]?.pendingFiles as string[]).push("src/consumer.ts");
+    expect(tracker.diagnostics().events[2]?.pendingFiles).toEqual(["src/changed.ts"]);
+
+    for (let sequence = 0; sequence < MAX_AUTO_SYNC_DIAGNOSTIC_EVENTS; sequence += 1) {
+      tracker.record(
+        receipt("event-fresh", {
+          observedAt: `2026-07-31T00:01:${String(sequence).padStart(2, "0")}.000Z`
+        })
+      );
+    }
+
+    const limited = tracker.diagnostics({ limit: 2 });
+    expect(limited).toMatchObject({
+      capacity: MAX_AUTO_SYNC_DIAGNOSTIC_EVENTS,
+      retained: MAX_AUTO_SYNC_DIAGNOSTIC_EVENTS,
+      returned: 2,
+      dropped: 3,
+      truncated: true
+    });
+    expect(limited.events.map((event) => event.sequence)).toEqual([
+      MAX_AUTO_SYNC_DIAGNOSTIC_EVENTS + 2,
+      MAX_AUTO_SYNC_DIAGNOSTIC_EVENTS + 3
+    ]);
+    expect(() => tracker.diagnostics({ limit: 0 })).toThrow(
+      `Diagnostic limit must be an integer between 1 and ${MAX_AUTO_SYNC_DIAGNOSTIC_EVENTS}.`
+    );
   });
 });
 

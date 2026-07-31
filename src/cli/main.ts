@@ -32,6 +32,8 @@ import {
   validateWatchInterval,
   type ContextOptions,
   type AffectedTestsOptions,
+  type AutoSyncDiagnosticsOptions,
+  type AutoSyncDiagnosticsResult,
   type AutoSyncStatusResult,
   type EntrypointsOptions,
   type GenerationDiffOptions,
@@ -55,6 +57,7 @@ import { FileSystemGitChangeSetProvider } from "../infrastructure/git/index.js";
 import { SqliteGraphStore } from "../infrastructure/sqlite/index.js";
 import {
   startMcpServer,
+  type AutoSyncDiagnosticsService,
   type AutoSyncStatusService,
   type McpServerSession
 } from "../mcp/index.js";
@@ -311,30 +314,65 @@ function renderWatchReceipt(receipt: WatchReceipt): void {
 }
 
 /**
- * Adds only a read-only watcher-health seam for one MCP host. Method calls are
- * bound to the original service so this wrapper cannot redirect index writes.
+ * Adds only read-only watcher-health and diagnostics seams for one MCP host.
+ * Method calls remain bound to the original service so this wrapper cannot
+ * redirect index writes.
  */
-function withAutoSyncStatus(
+function withAutoSyncObservability(
   service: SymbolLatticeService,
   defaultProjectPath: string,
   tracker: AutoSyncStatusTracker
-): SymbolLatticeService & AutoSyncStatusService {
+): SymbolLatticeService & AutoSyncStatusService & AutoSyncDiagnosticsService {
   const autoSyncStatus = async (): Promise<AutoSyncStatusResult> => ({
     index: await service.getStatus(defaultProjectPath),
     autoSync: tracker.snapshot()
   });
+  const autoSyncDiagnostics = async (
+    options: AutoSyncDiagnosticsOptions = {}
+  ): Promise<AutoSyncDiagnosticsResult> => {
+    try {
+      const status = await service.getStatus(defaultProjectPath);
+      return {
+        index: { status, error: null },
+        autoSync: tracker.snapshot(),
+        timeline: tracker.diagnostics(options)
+      };
+    } catch (error) {
+      return {
+        index: { status: null, error: toAutoSyncDiagnosticError(error) },
+        autoSync: tracker.snapshot(),
+        timeline: tracker.diagnostics(options)
+      };
+    }
+  };
   return new Proxy(service, {
     get(target, property, receiver): unknown {
       if (property === "autoSyncStatus") {
         return autoSyncStatus;
       }
+      if (property === "autoSyncDiagnostics") {
+        return autoSyncDiagnostics;
+      }
       const value = Reflect.get(target, property, receiver);
       return typeof value === "function" ? value.bind(target) : value;
     },
     has(target, property): boolean {
-      return property === "autoSyncStatus" || Reflect.has(target, property);
+      return (
+        property === "autoSyncStatus" ||
+        property === "autoSyncDiagnostics" ||
+        Reflect.has(target, property)
+      );
     }
-  }) as SymbolLatticeService & AutoSyncStatusService;
+  }) as SymbolLatticeService & AutoSyncStatusService & AutoSyncDiagnosticsService;
+}
+
+function toAutoSyncDiagnosticError(
+  error: unknown
+): AutoSyncDiagnosticsResult["index"]["error"] {
+  return {
+    code: error instanceof SymbolLatticeError ? error.code : "UNEXPECTED_ERROR",
+    message: error instanceof Error ? error.message : "Unknown SymbolLattice error."
+  };
 }
 
 export async function runForegroundWatch(
@@ -392,7 +430,7 @@ export async function runMcpWithAutoSync(
     enabled: autoSyncEnabled,
     nativeEventsRequested: options.poll !== true
   });
-  const mcpService = withAutoSyncStatus(service, options.projectPath, tracker);
+  const mcpService = withAutoSyncObservability(service, options.projectPath, tracker);
   let watchSession: ForegroundWatchSession | null = null;
   try {
     if (autoSyncEnabled) {

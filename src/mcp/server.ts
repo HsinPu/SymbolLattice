@@ -4,7 +4,12 @@ import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { z } from "zod";
 
 import { SymbolLatticeError } from "../application/errors.js";
-import type { AutoSyncStatusResult } from "../application/watch.js";
+import {
+  MAX_AUTO_SYNC_DIAGNOSTIC_EVENTS,
+  type AutoSyncDiagnosticsOptions,
+  type AutoSyncDiagnosticsResult,
+  type AutoSyncStatusResult
+} from "../application/watch.js";
 import {
   MAX_AFFECTED_CHANGED_FILES,
   MAX_AFFECTED_LIMIT,
@@ -151,6 +156,11 @@ export interface AutoSyncStatusService {
   autoSyncStatus(): Promise<AutoSyncStatusResult>;
 }
 
+/** Optional host-owned, bounded watcher timeline seam for operational MCP diagnostics. */
+export interface AutoSyncDiagnosticsService {
+  autoSyncDiagnostics(options?: AutoSyncDiagnosticsOptions): Promise<AutoSyncDiagnosticsResult>;
+}
+
 export type ReadOnlyMcpService = ExploreService & ExplainEdgeService;
 export type NodeMcpService = ExploreService & NodeService;
 export type SearchMcpService = ExploreService & SearchService;
@@ -164,6 +174,7 @@ export type GitHunksMcpService = ExploreService & GitHunksService;
 export type GenerationHistoryMcpService = ExploreService & GenerationHistoryService;
 export type GenerationDiffMcpService = ExploreService & GenerationDiffService;
 export type AutoSyncStatusMcpService = ExploreService & AutoSyncStatusService;
+export type AutoSyncDiagnosticsMcpService = ExploreService & AutoSyncDiagnosticsService;
 
 export interface ExploreToolArguments {
   readonly query: string;
@@ -257,6 +268,10 @@ export interface GenerationDiffToolArguments {
 
 export interface AutoSyncStatusToolArguments {}
 
+export interface AutoSyncDiagnosticsToolArguments {
+  readonly limit?: number | undefined;
+}
+
 export interface ReadOnlyToolResponse {
   readonly [key: string]: unknown;
   readonly content: {
@@ -281,6 +296,7 @@ export type HierarchyToolResponse = ReadOnlyToolResponse;
 export type GenerationHistoryToolResponse = ReadOnlyToolResponse;
 export type GenerationDiffToolResponse = ReadOnlyToolResponse;
 export type AutoSyncStatusToolResponse = ReadOnlyToolResponse;
+export type AutoSyncDiagnosticsToolResponse = ReadOnlyToolResponse;
 
 const sourcePositionOutputSchema = z.object({
   line: z.number().int(),
@@ -327,52 +343,91 @@ const watchErrorOutputSchema = z.object({
   message: z.string()
 });
 
+const autoSyncStateOutputSchema = z.enum([
+  "disabled",
+  "starting",
+  "fresh",
+  "pending",
+  "syncing",
+  "retrying",
+  "failed",
+  "stopped"
+]);
+
+const autoSyncWatcherModeOutputSchema = z.enum([
+  "disabled",
+  "starting",
+  "native-events",
+  "polling-fallback",
+  "polling-only"
+]);
+
+const watchEventOutputSchema = z.enum([
+  "started",
+  "stale-detected",
+  "synced",
+  "sync-failed",
+  "status-failed",
+  "event-watch-active",
+  "event-watch-failed",
+  "event-pending",
+  "event-fresh",
+  "fresh-observed",
+  "stopped"
+]);
+
+const autoSyncSnapshotOutputSchema = z.object({
+  enabled: z.boolean(),
+  state: autoSyncStateOutputSchema,
+  watcherMode: autoSyncWatcherModeOutputSchema,
+  observedAt: z.string().nullable(),
+  lastEvent: watchEventOutputSchema.nullable(),
+  lastSuccessfulSyncAt: z.string().nullable(),
+  lastSyncFailure: watchErrorOutputSchema.nullable(),
+  eventWatchFailure: watchErrorOutputSchema.nullable(),
+  retryDelayMs: z.number().int().positive().nullable(),
+  pendingFileCount: z.number().int().nonnegative().nullable(),
+  pendingFiles: z.array(z.string()),
+  pendingFilesTruncated: z.boolean(),
+  pendingFilesUnknown: z.boolean()
+});
+
 const autoSyncStatusOutputSchema = z
   .object({
     index: indexStatusOutputSchema,
-    autoSync: z.object({
-      enabled: z.boolean(),
-      state: z.enum([
-        "disabled",
-        "starting",
-        "fresh",
-        "pending",
-        "syncing",
-        "retrying",
-        "failed",
-        "stopped"
-      ]),
-      watcherMode: z.enum([
-        "disabled",
-        "starting",
-        "native-events",
-        "polling-fallback",
-        "polling-only"
-      ]),
-      observedAt: z.string().nullable(),
-      lastEvent: z
-        .enum([
-          "started",
-          "stale-detected",
-          "synced",
-          "sync-failed",
-          "status-failed",
-          "event-watch-active",
-          "event-watch-failed",
-          "event-pending",
-          "event-fresh",
-          "fresh-observed",
-          "stopped"
-        ])
-        .nullable(),
-      lastSuccessfulSyncAt: z.string().nullable(),
-      lastSyncFailure: watchErrorOutputSchema.nullable(),
-      eventWatchFailure: watchErrorOutputSchema.nullable(),
-      retryDelayMs: z.number().int().positive().nullable(),
-      pendingFileCount: z.number().int().nonnegative().nullable(),
-      pendingFiles: z.array(z.string()),
-      pendingFilesTruncated: z.boolean(),
-      pendingFilesUnknown: z.boolean()
+    autoSync: autoSyncSnapshotOutputSchema
+  })
+  .passthrough();
+
+const autoSyncDiagnosticEventOutputSchema = z.object({
+  sequence: z.number().int().positive(),
+  event: watchEventOutputSchema,
+  observedAt: z.string(),
+  state: autoSyncStateOutputSchema,
+  watcherMode: autoSyncWatcherModeOutputSchema,
+  generationId: z.string().nullable(),
+  error: watchErrorOutputSchema.nullable(),
+  retryDelayMs: z.number().int().positive().nullable(),
+  pendingFileCount: z.number().int().nonnegative().nullable(),
+  pendingFiles: z.array(z.string()),
+  pendingFilesTruncated: z.boolean(),
+  pendingFilesUnknown: z.boolean()
+});
+
+const autoSyncDiagnosticsOutputSchema = z
+  .object({
+    index: z.object({
+      status: indexStatusOutputSchema.nullable(),
+      error: watchErrorOutputSchema.nullable()
+    }),
+    autoSync: autoSyncSnapshotOutputSchema,
+    timeline: z.object({
+      capacity: z.literal(MAX_AUTO_SYNC_DIAGNOSTIC_EVENTS),
+      retained: z.number().int().nonnegative().max(MAX_AUTO_SYNC_DIAGNOSTIC_EVENTS),
+      returned: z.number().int().nonnegative().max(MAX_AUTO_SYNC_DIAGNOSTIC_EVENTS),
+      dropped: z.number().int().nonnegative(),
+      truncated: z.boolean(),
+      events: z.array(autoSyncDiagnosticEventOutputSchema).max(MAX_AUTO_SYNC_DIAGNOSTIC_EVENTS)
     })
   })
   .passthrough();
@@ -764,6 +819,10 @@ function supportsAutoSyncStatus(service: ExploreService): service is AutoSyncSta
   return "autoSyncStatus" in service && typeof service.autoSyncStatus === "function";
 }
 
+function supportsAutoSyncDiagnostics(service: ExploreService): service is AutoSyncDiagnosticsMcpService {
+  return "autoSyncDiagnostics" in service && typeof service.autoSyncDiagnostics === "function";
+}
+
 function supportsGitAffectedTests(service: ExploreService): service is GitAffectedTestsMcpService {
   return (
     "gitAffectedTestsAvailable" in service &&
@@ -804,6 +863,24 @@ export async function runAutoSyncStatusTool(
 ): Promise<AutoSyncStatusToolResponse> {
   try {
     const result = await service.autoSyncStatus();
+    return {
+      content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      structuredContent: result as unknown as Record<string, unknown>
+    };
+  } catch (error) {
+    return renderToolError(error);
+  }
+}
+
+/** Returns bounded host-owned watcher history without triggering index work. */
+export async function runAutoSyncDiagnosticsTool(
+  service: AutoSyncDiagnosticsService,
+  arguments_: AutoSyncDiagnosticsToolArguments = {}
+): Promise<AutoSyncDiagnosticsToolResponse> {
+  try {
+    const result = await service.autoSyncDiagnostics(
+      arguments_.limit === undefined ? {} : { limit: arguments_.limit }
+    );
     return {
       content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       structuredContent: result as unknown as Record<string, unknown>
@@ -1151,6 +1228,33 @@ export function createMcpServer(
         }
       },
       async (arguments_) => runAutoSyncStatusTool(autoSyncStatusService, arguments_)
+    );
+  }
+
+  const autoSyncDiagnosticsService = supportsAutoSyncDiagnostics(service) ? service : null;
+  if (autoSyncDiagnosticsService !== null) {
+    server.registerTool(
+      "symbol_lattice_auto_sync_diagnostics",
+      {
+        title: "Inspect SymbolLattice MCP auto-sync diagnostics",
+        description:
+          "Returns the default MCP host's live index observation when available plus a bounded chronological watcher timeline. It only reads host-owned state and never creates, indexes, or synchronizes a project.",
+        inputSchema: {
+          limit: z
+            .number()
+            .int()
+            .min(1)
+            .max(MAX_AUTO_SYNC_DIAGNOSTIC_EVENTS)
+            .optional()
+            .describe("Maximum latest watcher transitions to return.")
+        },
+        outputSchema: autoSyncDiagnosticsOutputSchema,
+        annotations: {
+          readOnlyHint: true,
+          idempotentHint: true
+        }
+      },
+      async (arguments_) => runAutoSyncDiagnosticsTool(autoSyncDiagnosticsService, arguments_)
     );
   }
 

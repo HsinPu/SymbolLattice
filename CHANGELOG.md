@@ -6,6 +6,24 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.108.0] - 2026-07-31
+
+### Added
+
+- The capability-gated, read-only `symbol_lattice_auto_sync_diagnostics` MCP tool returns a bounded chronological watcher timeline for the default MCP host. Each retained event carries only safe receipt-derived operational facts: sequence, transition, resulting watcher state/mode, generation ID, retry or error information, and the existing bounded pending-file summary. `limit` accepts 1 through 32 latest events, while retention metadata reports capacity, returned count, dropped events, and truncation.
+- `AutoSyncStatusTracker` now owns the fixed 32-event in-memory journal and returns defensive copies. It records every accepted foreground-watch receipt after reducing it into the public state, so a diagnostic event describes the resulting state rather than a pre-transition guess.
+- CLI MCP composition now adds a diagnostic seam alongside the existing status seam. A diagnostics request safely catches a live `getStatus` read error and returns `{ status: null, error }` plus the watcher snapshot/timeline, enabling fault diagnosis without turning a query into an index operation. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.108.0.md`.
+
+### Compatibility
+
+- No SQLite schema, artifact-extractor, resolver, route, or persisted graph-query contract version changes are required. Existing initialized indexes remain readable. Diagnostics are host-memory only and reset with the MCP process.
+- Existing MCP embeddings retain their current tool list unless they explicitly expose `autoSyncDiagnostics`. The standard CLI MCP host exposes both automatic-sync status and diagnostics. Neither tool accepts a project override or any mutation control.
+
+### Comparison notes
+
+- The local CodeGraph watcher has pending-file and lock-unavailable rescheduling paths, while its daemon infrastructure adds process/socket lifecycle controls and registry discovery. SymbolLattice now gives its own MCP clients a bounded, queryable timeline of watcher transitions, including the otherwise opaque case where a live index read fails.
+- CodeGraph remains ahead in persistent daemon operations, cross-client coordination, worker-pool throughput, error logs, and broader diagnostics. SymbolLattice's history is deliberately session-local and bounded; it is not presented as a daemon or audit-log substitute, and no CodeGraph source was copied.
+
 ## [0.107.0] - 2026-07-31
 
 ### Added

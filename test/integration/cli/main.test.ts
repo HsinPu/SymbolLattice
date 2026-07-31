@@ -6,6 +6,7 @@ import {
   DEFAULT_WATCH_INTERVAL_MS,
   type AffectedTestsOptions,
   type AffectedTestsResult,
+  type AutoSyncDiagnosticsResult,
   type AutoSyncStatusResult,
   type ContextOptions,
   type ContextResult,
@@ -31,6 +32,7 @@ import {
   type SearchOptions,
   type SearchResult,
   type WatchReceipt,
+  SymbolLatticeError,
   type SymbolLatticeService
 } from "../../../src/application/index.js";
 import {
@@ -52,6 +54,28 @@ function resultStatus(): SearchResult["status"] {
     indexedAt: "2026-07-29T00:00:00.000Z",
     generationId: "generation:test",
     counts: { files: 1, symbols: 1, edges: 0, pendingReferences: 0 }
+  };
+}
+
+function watchReceipt(
+  event: WatchReceipt["event"],
+  overrides: Partial<WatchReceipt> = {}
+): WatchReceipt {
+  return {
+    event,
+    observedAt: "2026-07-31T00:00:00.000Z",
+    projectPath: "C:/chosen-project",
+    status: resultStatus(),
+    previousGenerationId: "generation:test",
+    generationId: "generation:test",
+    lastIndexWork: null,
+    error: null,
+    retryDelayMs: null,
+    pendingFileCount: 0,
+    pendingFiles: [],
+    pendingFilesTruncated: false,
+    pendingFilesUnknown: false,
+    ...overrides
   };
 }
 
@@ -2050,23 +2074,100 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
     expect(sync).not.toHaveBeenCalled();
   });
 
-  it("serves MCP without starting a watcher when auto-sync is explicitly disabled", async () => {
-    const watchStarter = vi.fn(async (): Promise<ForegroundWatchSession> => {
-      throw new Error("auto-sync watcher must not start");
+  it("keeps MCP auto-sync diagnostics structured when the live index read fails", async () => {
+    const getStatus = vi.fn(async (): Promise<SearchResult["status"]> => {
+      throw new SymbolLatticeError(
+        "INVALID_PROJECT_CONFIGURATION",
+        "Temporary invalid tsconfig."
+      );
     });
+    const sync = vi.fn(async (): Promise<SearchResult["status"]> => resultStatus());
+    const service = { getStatus, sync } as unknown as SymbolLatticeService;
     const mcpSession: McpServerSession = {
       closed: Promise.resolve(),
       async close(): Promise<void> {}
     };
+    let observed: AutoSyncDiagnosticsResult | null = null;
 
     await runMcpWithAutoSync(
-      {} as SymbolLatticeService,
+      service,
+      { projectPath: "C:/chosen-project" },
+      async (receivedService): Promise<McpServerSession> => {
+        const diagnosticsService = receivedService as SymbolLatticeService & {
+          autoSyncDiagnostics(options?: { limit?: number }): Promise<AutoSyncDiagnosticsResult>;
+        };
+        observed = await diagnosticsService.autoSyncDiagnostics({ limit: 1 });
+        return mcpSession;
+      },
+      async (_receivedService, options): Promise<ForegroundWatchSession> => {
+        options.onReceipt?.(
+          watchReceipt("status-failed", {
+            status: null,
+            error: {
+              code: "INVALID_PROJECT_CONFIGURATION",
+              message: "Temporary invalid tsconfig."
+            },
+            retryDelayMs: 500,
+            pendingFileCount: null
+          })
+        );
+        return { done: Promise.resolve(), async stop(): Promise<void> {} };
+      }
+    );
+
+    expect(observed).toMatchObject({
+      index: {
+        status: null,
+        error: {
+          code: "INVALID_PROJECT_CONFIGURATION",
+          message: "Temporary invalid tsconfig."
+        }
+      },
+      autoSync: {
+        state: "retrying",
+        lastSyncFailure: { code: "INVALID_PROJECT_CONFIGURATION" }
+      },
+      timeline: {
+        retained: 1,
+        returned: 1,
+        events: [{ event: "status-failed", state: "retrying", retryDelayMs: 500 }]
+      }
+    });
+    expect(getStatus).toHaveBeenCalledWith("C:/chosen-project");
+    expect(sync).not.toHaveBeenCalled();
+  });
+
+  it("serves MCP without starting a watcher when auto-sync is explicitly disabled", async () => {
+    const watchStarter = vi.fn(async (): Promise<ForegroundWatchSession> => {
+      throw new Error("auto-sync watcher must not start");
+    });
+    const getStatus = vi.fn(async (): Promise<SearchResult["status"]> => resultStatus());
+    const mcpSession: McpServerSession = {
+      closed: Promise.resolve(),
+      async close(): Promise<void> {}
+    };
+    let observed: AutoSyncDiagnosticsResult | null = null;
+
+    await runMcpWithAutoSync(
+      { getStatus } as unknown as SymbolLatticeService,
       { projectPath: "C:/manual-project", autoSync: false },
-      async (): Promise<McpServerSession> => mcpSession,
+      async (receivedService): Promise<McpServerSession> => {
+        const diagnosticsService = receivedService as SymbolLatticeService & {
+          autoSyncDiagnostics(): Promise<AutoSyncDiagnosticsResult>;
+        };
+        observed = await diagnosticsService.autoSyncDiagnostics();
+        return mcpSession;
+      },
       watchStarter
     );
 
     expect(watchStarter).not.toHaveBeenCalled();
+    expect(getStatus).toHaveBeenCalledWith("C:/manual-project");
+    expect(observed).toMatchObject({
+      index: { status: { stale: false }, error: null },
+      autoSync: { enabled: false, state: "disabled", watcherMode: "disabled" },
+      timeline: { retained: 0, returned: 0, dropped: 0, truncated: false, events: [] }
+    });
   });
 
   it("passes MCP auto-sync controls through the serve command", async () => {
