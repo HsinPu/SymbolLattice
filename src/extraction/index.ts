@@ -25,6 +25,7 @@ import { extractRFileFacts } from "./r.js";
 import { extractShellFileFacts } from "./shell.js";
 import { extractSqlFileFacts } from "./sql.js";
 import { extractGraphqlFileFacts } from "./graphql.js";
+import { extractProtoFileFacts } from "./proto.js";
 import { extractPhpFileFacts } from "./php.js";
 import { extractPythonFileFacts } from "./python.js";
 import { extractRubyFileFacts } from "./ruby.js";
@@ -3753,6 +3754,9 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
   }
   if (input.language === "graphql") {
     return extractGraphqlFileFacts({ ...input, language: "graphql" });
+  }
+  if (input.language === "proto") {
+    return extractProtoFileFacts({ ...input, language: "proto" });
   }
   if (input.language === "lua" || input.language === "luau") {
     return extractLuaFileFacts({ ...input, language: input.language });

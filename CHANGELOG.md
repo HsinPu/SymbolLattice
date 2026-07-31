@@ -6,6 +6,23 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.98.0] - 2026-07-31
+
+### Added
+
+- Protocol Buffers source discovery now recognizes case-insensitive `.proto` extensions and exposes the additive `proto` language through the existing persisted source-search, CLI, and MCP language-validation contracts. The dependency-free lexical extractor retains a file symbol plus complete direct top-level `message`, `enum`, and `service` declarations.
+- A complete direct `message` becomes an existing `class`, `enum` becomes a `type`, and `service` becomes an `interface`, each with an exact `language.proto.<kind>.direct-definition` containment edge and source range. Direct semicolon-terminated service members in the narrow `rpc Name(Request) returns (Response);` form (including `stream` and dotted message names) become contained `method` symbols with exact `language.proto.rpc.direct-service-member` evidence. Unit, discovery, and service integration coverage prove ranges, nested-declaration exclusion, malformed-input safety, SQLite persistence, and language-filtered source search. The standalone Traditional Chinese comparison report is at `C:\Users\win10\Desktop\Graph\FEATURE_COMPARISON_v0.98.0.md`.
+
+### Compatibility
+
+- The artifact extractor advances to `multi-language-ast-v87`; the project resolver remains `project-resolver-v25` because the Protocol Buffers facts are direct file-local declarations. A pre-v0.98 active index reports `indexer-version-changed` until an explicit `sync` or `index` republishes Proto-capable facts.
+- No SQLite schema migration or new query command is required. This is an additive artifact-language capability within existing file, class/interface/type/method-symbol, exact-containment-edge, source-search, CLI, MCP, retained-generation, and incremental-index contracts; existing generations remain readable.
+
+### Deliberate limits
+
+- This is not a Protocol Buffers compiler, grammar validator, descriptor builder, import resolver, gRPC transport model, or runtime model. It excludes `syntax` / `edition` validation, packages, imports, fields, maps, oneofs, options, enum values, reserved/extension declarations, nested declarations, message-type references, service options, RPC option blocks, streaming semantics beyond recognizing `stream`, HTTP annotations, generated code, cross-file contracts, code generation, validation, and execution behavior.
+- The inspected local CodeGraph baseline does not include `proto` in its runtime `LANGUAGES` or native-kernel language lists. SymbolLattice v0.98 independently adds a deliberately narrow, source-range-preserving Proto declaration slice; it does not copy CodeGraph source or claim full protobuf/gRPC coverage.
+
 ## [0.97.0] - 2026-07-31
 
 ### Added

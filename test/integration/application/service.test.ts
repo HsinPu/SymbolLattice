@@ -8430,6 +8430,50 @@ describe("SymbolLatticeService", () => {
     ]);
   });
 
+  it("indexes direct Protocol Buffers declarations with persisted source search", async () => {
+    const projectPath = await createInlineProject({
+      "api/directory.proto": [
+        'syntax = "proto3";',
+        "message User { string id = 1; }",
+        "service Directory {",
+        "  rpc GetUser(GetUserRequest) returns (GetUserResponse);",
+        "}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    const indexed = await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+    const search = await service.search(projectPath, "Directory", { language: "proto" });
+    const directory = await service.find(projectPath, "api/directory.proto#service:Directory");
+    const persistedFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "api/directory.proto");
+
+    expect(indexed).toMatchObject({
+      stale: false,
+      counts: { files: 1, symbols: 4, edges: 3 }
+    });
+    expect(persistedFacts).toMatchObject({
+      language: "proto",
+      extractorVersion: ARTIFACT_FACTS_EXTRACTOR_VERSION
+    });
+    expect(directory.symbols).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "interface",
+          qualifiedName: "api/directory.proto#service:Directory",
+          isExported: true
+        })
+      ])
+    );
+    expect(routes.routes).toEqual([]);
+    expect(search.results).toMatchObject([
+      { filePath: "api/directory.proto", language: "proto" }
+    ]);
+  });
+
   it("projects a direct NestJS GraphQL resolver to one unique schema object type as heuristic evidence", async () => {
     const projectPath = await createInlineProject({
       "api/schema.graphql": [

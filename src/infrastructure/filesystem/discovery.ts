@@ -82,7 +82,8 @@ export const SUPPORTED_EXTENSIONS: ReadonlyMap<string, SupportedLanguage> = new 
   [".sql", "sql"],
   [".graphql", "graphql"],
   [".gql", "graphql"],
-  [".graphqls", "graphql"]
+  [".graphqls", "graphql"],
+  [".proto", "proto"]
 ] as const);
 
 const OBJECTIVE_C_HEADER_EXTENSION = ".h";

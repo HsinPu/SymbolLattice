@@ -250,6 +250,11 @@ describe("source discovery", () => {
     expect(getSourceLanguage("api/schema.graphqls")).toBe("graphql");
   });
 
+  it("recognizes the Protocol Buffers source extension", () => {
+    expect(getSourceLanguage("api/catalog.proto")).toBe("proto");
+    expect(getSourceLanguage("api/CATALOG.PROTO")).toBe("proto");
+  });
+
   it("discovers only source-proven Objective-C .h headers", async () => {
     const projectPath = await createProject();
     await mkdir(join(projectPath, "Headers"), { recursive: true });

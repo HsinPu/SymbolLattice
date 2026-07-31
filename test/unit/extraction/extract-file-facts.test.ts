@@ -9384,6 +9384,96 @@ describe("source extraction", () => {
     }
   });
 
+  it("extracts direct Protocol Buffers declarations and semicolon RPC members", () => {
+    const facts = extractFileFacts({
+      filePath: "api/directory.proto",
+      language: "proto",
+      sourceText: [
+        'syntax = "proto3";',
+        "package example.directory;",
+        "// comments and literals never create declarations",
+        "message User {",
+        "  string id = 1;",
+        "  message Nested { string hidden = 1; }",
+        "}",
+        "enum UserStatus {",
+        "  USER_STATUS_UNSPECIFIED = 0;",
+        "  USER_STATUS_ACTIVE = 1;",
+        "}",
+        "service Directory {",
+        "  rpc GetUser(GetUserRequest) returns (GetUserResponse);",
+        "  rpc WatchUsers(stream .example.WatchUsersRequest) returns (stream User);",
+        "}"
+      ].join("\n")
+    });
+
+    expect(
+      facts.symbols.map((symbol) => [symbol.kind, symbol.qualifiedName, symbol.declarationOrdinal])
+    ).toEqual([
+      ["file", "api/directory.proto", 0],
+      ["class", "api/directory.proto#message:User", 0],
+      ["type", "api/directory.proto#enum:UserStatus", 0],
+      ["interface", "api/directory.proto#service:Directory", 0],
+      ["method", "api/directory.proto#service:Directory::GetUser", 0],
+      ["method", "api/directory.proto#service:Directory::WatchUsers", 0]
+    ]);
+    expect(facts.symbols.find((symbol) => symbol.name === "User")?.range).toEqual({
+      start: { line: 4, column: 1 },
+      end: { line: 7, column: 2 }
+    });
+    expect(facts.symbols.find((symbol) => symbol.name === "Directory")?.range).toEqual({
+      start: { line: 12, column: 1 },
+      end: { line: 15, column: 2 }
+    });
+    expect(facts.symbols.some((symbol) => symbol.name === "Nested")).toBe(false);
+    expect(
+      facts.edges.map((edge) => [edge.referenceName, edge.evidence?.ruleId, edge.resolution])
+    ).toEqual([
+      ["User", "language.proto.message.direct-definition", "exact"],
+      ["UserStatus", "language.proto.enum.direct-definition", "exact"],
+      ["Directory", "language.proto.service.direct-definition", "exact"],
+      ["GetUser", "language.proto.rpc.direct-service-member", "exact"],
+      ["WatchUsers", "language.proto.rpc.direct-service-member", "exact"]
+    ]);
+  });
+
+  it("keeps only the file and complete direct service boundary for unsupported Protocol Buffers source", () => {
+    const unbalanced = extractFileFacts({
+      filePath: "api/unbalanced.proto",
+      language: "proto",
+      sourceText: "message User { string id = 1;"
+    });
+    const unclosedComment = extractFileFacts({
+      filePath: "api/unclosed-comment.proto",
+      language: "proto",
+      sourceText: "/* message User {}"
+    });
+    const rpcBlock = extractFileFacts({
+      filePath: "api/rpc-block.proto",
+      language: "proto",
+      sourceText: [
+        "service Directory {",
+        "  rpc Find(FindRequest) returns (FindResponse) {",
+        "    option deprecated = true;",
+        "  }",
+        "}"
+      ].join("\n")
+    });
+
+    for (const facts of [unbalanced, unclosedComment]) {
+      expect(facts.symbols).toHaveLength(1);
+      expect(facts.symbols[0]?.kind).toBe("file");
+      expect(facts.edges).toEqual([]);
+    }
+    expect(
+      rpcBlock.symbols.map((symbol) => [symbol.kind, symbol.qualifiedName])
+    ).toEqual([
+      ["file", "api/rpc-block.proto"],
+      ["interface", "api/rpc-block.proto#service:Directory"]
+    ]);
+    expect(rpcBlock.symbols.some((symbol) => symbol.kind === "method")).toBe(false);
+  });
+
   it("extracts source-proven Java properties keys without retaining configuration values", () => {
     const facts = extractFileFacts({
       filePath: "config/application.properties",
