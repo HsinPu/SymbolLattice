@@ -6,6 +6,26 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.136.0] - 2026-08-01
+
+### Added
+
+- GoFrame v1/v2 standard-router projection now evaluates every independently static argument in one variadic `RouterGroup.Bind(handlerOrObject ...any)` call. Direct `&Controller{}` values, proven `Factory()` calls, and the existing one-hop local factory aliases can coexist in the same batch and each produces its own exact route evidence.
+- An unknown or dynamic argument is ignored for exact extraction without suppressing a neighboring proven controller. Each retained fact keeps the same literal Group prefix, Domain host condition, source range, and local-module proof path as its single-argument form.
+- New unit and service coverage verifies a mixed direct-controller and cross-package factory batch, preserved Domain/Group evidence, and rejection of an unknown batch argument.
+
+### Compatibility
+
+- The artifact-facts extractor advances to `multi-language-ast-v117`. Existing graphs and SQLite schema remain readable; the next explicit `sync` re-extracts Go facts and reprojects routes. The project resolver remains `project-resolver-v37`.
+
+### Deliberate limits
+
+- Batch support is per static argument, not general value-flow analysis. Slice expansion, interface/container values, dynamic calls, forwarding helpers, dependency injection, factory rebindings, and any direct controller/factory shape that fails the existing proof remain non-exact.
+
+### Comparison notes
+
+- The inspected CodeGraph GoFrame path remains a heuristic request-type-to-method join and deliberately does not reconstruct Group prefixes. SymbolLattice now covers GoFrame's variadic batch registration for the proven subset with exact controller/factory, Group/Domain, and local-module evidence; CodeGraph remains broader for dynamic and reflective candidate coverage.
+
 ## [0.135.0] - 2026-08-01
 
 ### Added
@@ -2520,7 +2540,8 @@ No unreleased changes.
 - Explicit full indexing, caller/callee/impact queries, and read-only MCP exploration.
 - `exact`, `heuristic`, and `unresolved` relationship states.
 
-[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.135.0...HEAD
+[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.136.0...HEAD
+[0.136.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.135.0...v0.136.0
 [0.135.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.134.0...v0.135.0
 [0.134.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.133.0...v0.134.0
 [0.133.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.132.0...v0.133.0

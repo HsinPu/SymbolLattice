@@ -255,7 +255,7 @@ describe("first-party framework capabilities", () => {
         "direct g.Server BindHandler, BindObjectMethod, selected BindObject, or BindObjectRest literal rules and static or callback Group HTTP-method literal rules with named local functions or direct local object methods",
         "direct or variable g.Server.Domain literal BindHandler, BindObjectMethod, selected BindObject, or BindObjectRest rules with exact non-wildcard domain evidence",
         "literal g.Map batch rules and ALLMap paths on static or callback Groups with named local functions or direct local object methods",
-        "same-file and root-go.mod cross-package standard-router g.Meta request metadata with directly bound controller methods or statically proven no-argument controller factories, including one non-rebound local factory alias, plus unbound unique request-signature candidates marked heuristic"
+        "same-file and root-go.mod cross-package standard-router g.Meta request metadata with one or more independently statically proven direct controller or no-argument factory Bind arguments, including one non-rebound local factory alias, plus unbound unique request-signature candidates marked heuristic"
       ]
     });
     expect(frameworkCapability("axum")).toMatchObject({

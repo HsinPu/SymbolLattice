@@ -5373,6 +5373,141 @@ describe("SymbolLatticeService", () => {
     );
   });
 
+  it("projects every proven controller in one variadic GoFrame Bind through module evidence", async () => {
+    const projectPath = await createInlineProject({
+      "go.mod": "module example.test/warehouse\n\ngo 1.22\n",
+      "api/requests/first.go": [
+        "package contracts",
+        "",
+        'import "github.com/gogf/gf/v2/frame/g"',
+        "",
+        "type FirstReq struct {",
+        '  g.Meta `path:"/first" method:"GET"`',
+        "}"
+      ].join("\n"),
+      "api/requests/second.go": [
+        "package contracts",
+        "",
+        'import "github.com/gogf/gf/v2/frame/g"',
+        "",
+        "type SecondReq struct {",
+        '  g.Meta `path:"/second" method:"POST"`',
+        "}"
+      ].join("\n"),
+      "api/controllers/first.go": [
+        "package handlers",
+        "",
+        "import (",
+        '  "context"',
+        '  "example.test/warehouse/api/requests"',
+        ")",
+        "",
+        "type FirstController struct{}",
+        "",
+        "func (c *FirstController) First(ctx context.Context, req *contracts.FirstReq) {}"
+      ].join("\n"),
+      "api/controllers/second.go": [
+        "package handlers",
+        "",
+        "import (",
+        '  "context"',
+        '  "example.test/warehouse/api/requests"',
+        ")",
+        "",
+        "type SecondController struct{}",
+        "",
+        "func NewSecondController() *SecondController { return &SecondController{} }",
+        "func (c *SecondController) Second(ctx context.Context, req *contracts.SecondReq) {}"
+      ].join("\n"),
+      "cmd/server/routes.go": [
+        "package main",
+        "",
+        "import (",
+        '  "example.test/warehouse/api/controllers"',
+        '  "github.com/gogf/gf/v2/frame/g"',
+        ")",
+        "",
+        "func Register(unknown interface{}) {",
+        '  g.Server().Domain("api.example.test").Group("/v1").Bind(&handlers.FirstController{}, handlers.NewSecondController(), unknown)',
+        "}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath, { domain: "api.example.test" });
+    const bindingFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "cmd/server/routes.go");
+
+    expect(bindingFacts?.goFrameStandardRouterFacts?.controllerBindings).toEqual([
+      expect.objectContaining({
+        controllerName: "FirstController",
+        controllerPackageAlias: "handlers",
+        prefix: "/v1",
+        domains: ["api.example.test"]
+      })
+    ]);
+    expect(bindingFacts?.goFrameStandardRouterFacts?.controllerFactoryBindings).toEqual([
+      expect.objectContaining({
+        factoryName: "NewSecondController",
+        factoryPackageAlias: "handlers",
+        prefix: "/v1",
+        domains: ["api.example.test"]
+      })
+    ]);
+    expect(routes.routes).toHaveLength(2);
+    expect(routes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "GET",
+          path: "/v1/first",
+          domain: "api.example.test",
+          handler: expect.objectContaining({
+            qualifiedName: "api/controllers/first.go#FirstController.First"
+          }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            confidence: 1,
+            evidence: expect.objectContaining({
+              ruleId: "framework.goframe.standard-router.g-meta.go-module.cross-package",
+              stage: "module",
+              configurationPaths: ["go.mod"],
+              resolutionPath: [
+                "api/requests/first.go",
+                "api/controllers/first.go",
+                "cmd/server/routes.go"
+              ]
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "POST",
+          path: "/v1/second",
+          domain: "api.example.test",
+          handler: expect.objectContaining({
+            qualifiedName: "api/controllers/second.go#SecondController.Second"
+          }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            confidence: 1,
+            evidence: expect.objectContaining({
+              ruleId: "framework.goframe.standard-router.g-meta.go-module.factory-bind",
+              stage: "module",
+              configurationPaths: ["go.mod"],
+              resolutionPath: [
+                "api/requests/second.go",
+                "api/controllers/second.go",
+                "cmd/server/routes.go"
+              ]
+            })
+          })
+        })
+      ])
+    );
+  });
+
   it("keeps an unproven GoFrame factory Bind separate from exact route evidence", async () => {
     const projectPath = await createInlineProject({
       "api/request.go": [

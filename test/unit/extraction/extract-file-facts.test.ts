@@ -3597,6 +3597,55 @@ describe("source extraction", () => {
     );
   });
 
+  it("retains every statically proven GoFrame Bind argument in one batch", () => {
+    const facts = extractFileFacts({
+      filePath: "api/goframe-batch-bind.go",
+      language: "go",
+      sourceText: [
+        "package api",
+        "",
+        "import (",
+        '  "context"',
+        '  g "github.com/gogf/gf/v2/frame/g"',
+        ")",
+        "",
+        "type FirstReq struct {",
+        '  g.Meta `path:"/first" method:"GET"`',
+        "}",
+        "",
+        "type SecondReq struct {",
+        '  g.Meta `path:"/second" method:"POST"`',
+        "}",
+        "",
+        "type FirstController struct{}",
+        "type SecondController struct{}",
+        "",
+        "func NewSecondController() *SecondController { return &SecondController{} }",
+        "func (c *FirstController) First(ctx context.Context, req *FirstReq) {}",
+        "func (c *SecondController) Second(ctx context.Context, req *SecondReq) {}",
+        "",
+        "func Register(unknown interface{}) {",
+        '  g.Server().Domain("api.example.test").Group("/v1").Bind(&FirstController{}, NewSecondController(), unknown)',
+        "}"
+      ].join("\n")
+    });
+
+    expect(facts.goFrameStandardRouterFacts?.controllerBindings).toEqual([
+      expect.objectContaining({
+        controllerName: "FirstController",
+        prefix: "/v1",
+        domains: ["api.example.test"]
+      })
+    ]);
+    expect(facts.goFrameStandardRouterFacts?.controllerFactoryBindings).toEqual([
+      expect.objectContaining({
+        factoryName: "NewSecondController",
+        prefix: "/v1",
+        domains: ["api.example.test"]
+      })
+    ]);
+  });
+
   it("extracts literal GoFrame v1 BindHandler routes", () => {
     const facts = extractFileFacts({
       filePath: "cmd/server/goframe-v1.go",

@@ -1843,39 +1843,39 @@ function staticGoFrameObjectBinding(
   return name === null || controllerName === null ? null : { name, controllerName };
 }
 
-function staticGoFrameControllerBinding(
+function staticGoFrameControllerBindings(
   input: GoExtractFileFactsInput,
   node: GoSyntaxNode,
   receivers: ReadonlyMap<string, GoFrameReceiver>,
   goFrameAliases: ReadonlySet<string>
-): StaticGoFrameControllerBinding | null {
+): readonly StaticGoFrameControllerBinding[] {
   if (node.name !== "ExprStatement") {
-    return null;
+    return [];
   }
   const expression = directChildren(node)[0];
   if (expression === undefined) {
-    return null;
+    return [];
   }
   const call = staticGoFrameRouteRegistrationCall(input, expression, receivers, goFrameAliases);
-  if (call === null || call.methodName !== "Bind" || call.arguments_.length !== 1) {
-    return null;
+  if (call === null || call.methodName !== "Bind" || call.arguments_.length === 0) {
+    return [];
   }
-  const receiver = call.receiver;
-  const controllerNode = call.arguments_[0];
-  const controller =
-    controllerNode === undefined
-      ? null
-      : staticGoFrameStandardRouterControllerReference(input, controllerNode);
-  return controller === null
-    ? null
-    : {
-        receiver,
-        controllerName: controller.name,
-        ...(controller.packageAlias === undefined
-          ? {}
-          : { controllerPackageAlias: controller.packageAlias }),
-        node
-      };
+  const bindings: StaticGoFrameControllerBinding[] = [];
+  for (const controllerNode of call.arguments_) {
+    const controller = staticGoFrameStandardRouterControllerReference(input, controllerNode);
+    if (controller === null) {
+      continue;
+    }
+    bindings.push({
+      receiver: call.receiver,
+      controllerName: controller.name,
+      ...(controller.packageAlias === undefined
+        ? {}
+        : { controllerPackageAlias: controller.packageAlias }),
+      node
+    });
+  }
+  return bindings;
 }
 
 /**
@@ -1915,50 +1915,53 @@ function staticGoFrameControllerFactoryAliasBinding(
     : { name, factory };
 }
 
-function staticGoFrameControllerFactoryBinding(
+function staticGoFrameControllerFactoryBindings(
   input: GoExtractFileFactsInput,
   node: GoSyntaxNode,
   receivers: ReadonlyMap<string, GoFrameReceiver>,
   goFrameAliases: ReadonlySet<string>,
   shadowedNames: ReadonlySet<string>,
   factoryAliases: ReadonlyMap<string, StaticGoFrameNamedTypeReference>
-): StaticGoFrameControllerFactoryBinding | null {
+): readonly StaticGoFrameControllerFactoryBinding[] {
   if (node.name !== "ExprStatement") {
-    return null;
+    return [];
   }
   const expression = directChildren(node)[0];
   if (expression === undefined) {
-    return null;
+    return [];
   }
   const call = staticGoFrameRouteRegistrationCall(input, expression, receivers, goFrameAliases);
-  if (call === null || call.methodName !== "Bind" || call.arguments_.length !== 1) {
-    return null;
+  if (call === null || call.methodName !== "Bind" || call.arguments_.length === 0) {
+    return [];
   }
-  const factoryNode = call.arguments_[0];
-  const directFactory =
-    factoryNode === undefined
-      ? null
-      : staticGoFrameStandardRouterFactoryReference(input, factoryNode);
-  const factoryAliasName =
-    factoryNode?.name === "VariableName" ? identifierText(input, factoryNode) : null;
-  const factory =
-    directFactory ??
-    (factoryAliasName === null ? null : (factoryAliases.get(factoryAliasName) ?? null));
-  const factoryComesFromAlias = directFactory === null && factoryAliasName !== null && factory !== null;
-  const factoryScopeName = factory?.packageAlias ?? factory?.name;
-  return factory === null ||
-    (!factoryComesFromAlias &&
-      factoryScopeName !== undefined &&
-      shadowedNames.has(factoryScopeName))
-    ? null
-    : {
-        receiver: call.receiver,
-        factoryName: factory.name,
-        ...(factory.packageAlias === undefined
-          ? {}
-          : { factoryPackageAlias: factory.packageAlias }),
-        node
-      };
+  const bindings: StaticGoFrameControllerFactoryBinding[] = [];
+  for (const factoryNode of call.arguments_) {
+    const directFactory = staticGoFrameStandardRouterFactoryReference(input, factoryNode);
+    const factoryAliasName =
+      factoryNode.name === "VariableName" ? identifierText(input, factoryNode) : null;
+    const factory =
+      directFactory ??
+      (factoryAliasName === null ? null : (factoryAliases.get(factoryAliasName) ?? null));
+    const factoryComesFromAlias = directFactory === null && factoryAliasName !== null && factory !== null;
+    const factoryScopeName = factory?.packageAlias ?? factory?.name;
+    if (
+      factory === null ||
+      (!factoryComesFromAlias &&
+        factoryScopeName !== undefined &&
+        shadowedNames.has(factoryScopeName))
+    ) {
+      continue;
+    }
+    bindings.push({
+      receiver: call.receiver,
+      factoryName: factory.name,
+      ...(factory.packageAlias === undefined
+        ? {}
+        : { factoryPackageAlias: factory.packageAlias }),
+      node
+    });
+  }
+  return bindings;
 }
 
 function staticGoFrameBindObjectMethodRoute(
@@ -3059,16 +3062,14 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
             }
           }
         }
-        const controllerBinding = staticGoFrameControllerBinding(
+        const controllerBindings = staticGoFrameControllerBindings(
           input,
           statement,
           receivers,
           activeGoFrameAliases
         );
-        if (controllerBinding !== null) {
-          goFrameControllerBindings.push(controllerBinding);
-        }
-        const controllerFactoryBinding = staticGoFrameControllerFactoryBinding(
+        goFrameControllerBindings.push(...controllerBindings);
+        const controllerFactoryBindings = staticGoFrameControllerFactoryBindings(
           input,
           statement,
           receivers,
@@ -3076,9 +3077,7 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
           shadowedNames,
           factoryAliases
         );
-        if (controllerFactoryBinding !== null) {
-          goFrameControllerFactoryBindings.push(controllerFactoryBinding);
-        }
+        goFrameControllerFactoryBindings.push(...controllerFactoryBindings);
         const callback = staticGoFrameGroupCallback(
           input,
           statement,
