@@ -29,6 +29,7 @@ describe("first-party framework capabilities", () => {
       "flask",
       "django",
       "starlette",
+      "aiohttp",
       "gin",
       "fiber",
       "echo",
@@ -214,6 +215,15 @@ describe("first-party framework capabilities", () => {
       surfaces: [
         "direct Starlette applications with literal Route lists",
         "same-file top-level function endpoints"
+      ]
+    });
+    expect(frameworkCapability("aiohttp")).toMatchObject({
+      languages: ["python"],
+      routeFramework: "aiohttp",
+      routeRegistrations: [],
+      surfaces: [
+        "direct aiohttp.web Application router registrations",
+        "same-file top-level function handlers"
       ]
     });
     expect(frameworkCapability("gin")).toMatchObject({

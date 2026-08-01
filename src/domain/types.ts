@@ -55,6 +55,7 @@ export type RouteFramework =
   | "flask"
   | "django"
   | "starlette"
+  | "aiohttp"
   | "gin"
   | "fiber"
   | "echo"

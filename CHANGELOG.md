@@ -6,6 +6,26 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.147.0] - 2026-08-01
+
+### Added
+
+- Python extraction now recognizes direct aiohttp router registrations from `from aiohttp import web` (including aliases), `web.Application()`, and top-level `app.router.add_get`, `add_post`, `add_put`, `add_patch`, `add_delete`, `add_head`, or `add_route` calls with literal slash paths and named local handlers.
+- The documented `add_get` default now emits both `GET` and `HEAD` routes; a literal `allow_head=False` emits only `GET`. Direct `add_route` accepts literal uppercase standard HTTP methods through `OPTIONS`.
+- New unit and service coverage verifies import aliases, default and suppressed implicit HEAD routes, shortcut and generic registrations, exact handler proof, and rejection of dynamic, unsupported, rebound, or ambiguously ordered declarations.
+
+### Compatibility
+
+- The artifact-facts extractor advances to `multi-language-ast-v128`. Existing graphs and SQLite schema remain readable; the next explicit `sync` re-extracts Python facts and reprojects aiohttp routes. The project resolver remains `project-resolver-v38`.
+
+### Deliberate limits
+
+- aiohttp support is intentionally limited to direct `from aiohttp import web`, `web.Application()`, literal top-level direct router registrations, and same-file top-level named function handlers. `add_routes`, `RouteTableDef`, decorators, class views, subapps, dynamic values, wildcard or non-uppercase `add_route` methods, non-literal `allow_head`, handlers declared after registration, rebinding, and ambiguity remain non-exact.
+
+### Comparison notes
+
+- The inspected CodeGraph baseline source tree contains no `aiohttp` reference. SymbolLattice independently uses its Python AST to prove the import alias, direct application, router receiver, literal route form, handler order, and rebinding boundary for this narrow aiohttp slice; route tables, decorators, classes, subapps, and runtime composition remain deliberately outside scope.
+
 ## [0.146.0] - 2026-08-01
 
 ### Added
@@ -2740,7 +2760,8 @@ No unreleased changes.
 - Explicit full indexing, caller/callee/impact queries, and read-only MCP exploration.
 - `exact`, `heuristic`, and `unresolved` relationship states.
 
-[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.146.0...HEAD
+[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.147.0...HEAD
+[0.147.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.146.0...v0.147.0
 [0.146.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.145.0...v0.146.0
 [0.145.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.144.0...v0.145.0
 [0.144.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.143.0...v0.144.0

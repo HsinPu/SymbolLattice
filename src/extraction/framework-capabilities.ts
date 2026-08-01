@@ -22,6 +22,7 @@ export const FRAMEWORK_CAPABILITY_IDS = [
   "flask",
   "django",
   "starlette",
+  "aiohttp",
   "gin",
   "fiber",
   "echo",
@@ -267,6 +268,16 @@ export const FRAMEWORK_CAPABILITIES = [
     surfaces: [
       "direct Starlette applications with literal Route lists",
       "same-file top-level function endpoints"
+    ]
+  },
+  {
+    id: "aiohttp",
+    languages: ["python"],
+    routeFramework: "aiohttp",
+    routeRegistrations: [],
+    surfaces: [
+      "direct aiohttp.web Application router registrations",
+      "same-file top-level function handlers"
     ]
   },
   {

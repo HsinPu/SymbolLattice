@@ -2361,6 +2361,127 @@ describe("source extraction", () => {
     ]);
   });
 
+  it("extracts direct aiohttp router registrations with exact local handlers", () => {
+    const facts = extractFileFacts({
+      filePath: "app/aiohttp_app.py",
+      language: "python",
+      sourceText: [
+        "from aiohttp import web as aio",
+        "",
+        "async def health(request):",
+        "    return None",
+        "",
+        "def create_job(request):",
+        "    return None",
+        "",
+        "async def update_job(request):",
+        "    return None",
+        "",
+        "app = aio.Application()",
+        "app.router.add_get(\"/health\", health)",
+        "app.router.add_get(\"/ready\", health, allow_head=False)",
+        "app.router.add_post(\"/jobs\", create_job, name=\"jobs\")",
+        "app.router.add_route(\"PATCH\", \"/jobs/{job_id}\", update_job)"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId,
+          edge.evidence?.stage,
+          edge.resolution,
+          edge.confidence
+        ])
+    ).toEqual([
+      [
+        "GET /health",
+        "app/aiohttp_app.py#health",
+        "framework.aiohttp.direct-router.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "HEAD /health",
+        "app/aiohttp_app.py#health",
+        "framework.aiohttp.direct-router.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "GET /ready",
+        "app/aiohttp_app.py#health",
+        "framework.aiohttp.direct-router.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "POST /jobs",
+        "app/aiohttp_app.py#create_job",
+        "framework.aiohttp.direct-router.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "PATCH /jobs/{job_id}",
+        "app/aiohttp_app.py#update_job",
+        "framework.aiohttp.direct-router.local-function",
+        "syntax",
+        "exact",
+        1
+      ]
+    ]);
+  });
+
+  it("rejects dynamic, unsupported, rebound, and ambiguously ordered aiohttp registrations", () => {
+    const facts = extractFileFacts({
+      filePath: "app/unproven_aiohttp.py",
+      language: "python",
+      sourceText: [
+        "from aiohttp import web",
+        "",
+        "async def handler(request):",
+        "    return None",
+        "",
+        "async def shadowed_handler(request):",
+        "    return None",
+        "",
+        "app = web.Application()",
+        "app.router.add_get(dynamic_path, handler)",
+        "app.router.add_get(\"/unknown\", handler, allow_head=enabled)",
+        "app.router.add_get(\"/extra\", handler, expect_handler=on_expect)",
+        "app.router.add_route(\"*\", \"/any\", handler)",
+        "app.add_get(\"/wrong-receiver\", handler)",
+        "",
+        "rebound = web.Application()",
+        "rebound = build_application()",
+        "rebound.router.add_post(\"/rebound\", handler)",
+        "",
+        "app.router.add_post(\"/late\", late_handler)",
+        "async def late_handler(request):",
+        "    return None",
+        "",
+        "handler = replacement",
+        "app.router.add_patch(\"/handler-rebound\", handler)",
+        "",
+        "web = replacement",
+        "shadowed = web.Application()",
+        "shadowed.router.add_delete(\"/shadowed\", shadowed_handler)"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+  });
+
   it("rejects unmounted, dynamic, rebound, and unsupported Starlette Route list shapes", () => {
     const facts = extractFileFacts({
       filePath: "app/unproven_starlette.py",
