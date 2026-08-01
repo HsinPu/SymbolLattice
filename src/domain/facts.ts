@@ -11,13 +11,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v139";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v140";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v43";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v44";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -269,6 +269,14 @@ export interface FlaskBlueprintRouteFact {
   readonly range: SourceRange;
 }
 
+/** A final, single-name relative Blueprint export from a package initializer. */
+export interface FlaskBlueprintReExportFact {
+  readonly exportedName: string;
+  readonly importedBlueprintName: string;
+  readonly moduleSpecifier: string;
+  readonly range: SourceRange;
+}
+
 /**
  * A direct, single-name, package-relative Blueprint import mounted through a
  * direct Flask application's literal `register_blueprint` call.
@@ -289,6 +297,8 @@ export interface FlaskImportedBlueprintRegistrationFact {
 export interface FlaskBlueprintFacts {
   readonly blueprints: readonly FlaskBlueprintDeclarationFact[];
   readonly routes: readonly FlaskBlueprintRouteFact[];
+  /** Omitted only by artifact facts persisted before v0.159. */
+  readonly reExports?: readonly FlaskBlueprintReExportFact[];
   readonly importedBlueprintRegistrations: readonly FlaskImportedBlueprintRegistrationFact[];
 }
 

@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.158.0 是開發者預覽版，尚未發布到 npm；請從原始碼執行。
+> v0.159.0 是開發者預覽版，尚未發布到 npm；請從原始碼執行。
 
 SymbolLattice 將專案建立為可查詢的本機程式碼符號圖譜。每條關係都保留規則、解析階段與信心值，絕不混淆 `exact`、`heuristic` 與 `unresolved` 證據。
 
@@ -41,9 +41,9 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 在 Windows PowerShell，如無法使用 `npm`，請改用 `npm.cmd`。索引資料保存在目標專案的 `.symbol-lattice/index.sqlite`。
 
-## v0.158.0
+## v0.159.0
 
-- FastAPI `APIRouter` 現可透過正規 Python 套件的巢狀 `__init__.py` 最終單一名稱 re-export 鏈，跨檔解析 `include_router(...)` 路由。
+- Flask `Blueprint` 現可透過正規 Python 套件的巢狀 `__init__.py` 最終單一名稱 re-export 鏈，跨檔解析 `register_blueprint(...)` 路由。
 - 每一條 exact 路由都會在 `resolutionPath` 留下掛載模組、初始化檔與實際宣告模組，方便追溯。
 - 只接受未重綁定、可解析且沒有歧義的最終匯出；來源不存在、循環、衝突與動態覆寫不會產生 exact 路由。
 

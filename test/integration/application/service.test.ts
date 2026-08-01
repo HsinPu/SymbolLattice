@@ -4823,6 +4823,104 @@ describe("SymbolLatticeService", () => {
     ]);
   });
 
+  it("projects Flask Blueprint exports through nested package initializers", async () => {
+    const projectPath = await createInlineProject({
+      "app/__init__.py": "",
+      "app/routes/__init__.py": "from .internal import public_blueprint",
+      "app/routes/internal/__init__.py": "from .catalog import catalog as public_blueprint",
+      "app/routes/internal/catalog.py": [
+        "from flask import Blueprint",
+        "catalog = Blueprint(\"catalog\", __name__, url_prefix=\"/catalog\")",
+        "",
+        "@catalog.get(\"/health\")",
+        "def health():",
+        "    return {\"ok\": True}"
+      ].join("\n"),
+      "app/main.py": [
+        "from flask import Flask",
+        "from .routes import public_blueprint as mounted_blueprint",
+        "app = Flask(__name__)",
+        "app.register_blueprint(mounted_blueprint, url_prefix=\"/v1\")"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath, { method: "GET" });
+    const routesFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "app/routes/__init__.py");
+    const internalFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "app/routes/internal/__init__.py");
+
+    expect(routesFacts?.flaskBlueprintFacts).toMatchObject({
+      reExports: [
+        {
+          exportedName: "public_blueprint",
+          importedBlueprintName: "public_blueprint",
+          moduleSpecifier: ".internal"
+        }
+      ]
+    });
+    expect(internalFacts?.flaskBlueprintFacts).toMatchObject({
+      reExports: [
+        {
+          exportedName: "public_blueprint",
+          importedBlueprintName: "catalog",
+          moduleSpecifier: ".catalog"
+        }
+      ]
+    });
+    expect(routes.routes).toMatchObject([
+      {
+        method: "GET",
+        path: "/v1/catalog/health",
+        route: {
+          kind: "route",
+          name: "GET /v1/catalog/health",
+          filePath: "app/routes/internal/catalog.py"
+        },
+        edge: {
+          kind: "routes",
+          resolution: "exact",
+          evidence: {
+            ruleId: "framework.flask.reexported-blueprint.register-blueprint.decorator.local-function",
+            stage: "module",
+            resolutionPath: [
+              "app/main.py",
+              "app/routes/__init__.py",
+              "app/routes/internal/__init__.py",
+              "app/routes/internal/catalog.py"
+            ]
+          }
+        },
+        handler: { qualifiedName: "app/routes/internal/catalog.py#health" }
+      }
+    ]);
+  });
+
+  it("rejects unresolved Flask Blueprint package initializer exports", async () => {
+    const projectPath = await createInlineProject({
+      "app/__init__.py": "",
+      "app/routes/__init__.py": "from .missing import catalog as public_blueprint",
+      "app/main.py": [
+        "from flask import Flask",
+        "from .routes import public_blueprint",
+        "app = Flask(__name__)",
+        "app.register_blueprint(public_blueprint, url_prefix=\"/v1\")"
+      ].join("\n")
+    });
+    const service = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+
+    await expect(service.routes(projectPath, { method: "GET" })).resolves.toMatchObject({
+      routes: []
+    });
+  });
+
   it("does not project Flask Blueprint modules without a proven package boundary", async () => {
     const projectPath = await createInlineProject({
       "app/routes/catalog.py": [

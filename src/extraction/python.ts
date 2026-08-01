@@ -11,6 +11,7 @@ import {
   type FastApiRouterReExportFact,
   type FastApiRouterRouteFact,
   type FlaskBlueprintDeclarationFact,
+  type FlaskBlueprintReExportFact,
   type FlaskBlueprintRouteFact,
   type FlaskImportedBlueprintRegistrationFact,
   type GraphEdge,
@@ -2767,9 +2768,37 @@ function latestProvenFastApiRelativeRouterImport(
 }
 
 /**
+ * Finds the one direct relative import still bound to a Flask Blueprint name.
+ * A later assignment or import shadows an earlier import and therefore removes
+ * it from consideration.
+ */
+function latestProvenFlaskRelativeBlueprintImportBinding(
+  input: PythonExtractFileFactsInput,
+  topLevelNodes: readonly PythonSyntaxNode[],
+  imports: readonly StaticFlaskRelativeBlueprintImport[],
+  blueprintName: string,
+  before: number
+): StaticFlaskRelativeBlueprintImport | null {
+  const candidates = imports
+    .filter(
+      (candidate) =>
+        candidate.blueprintName === blueprintName &&
+        candidate.node.to <= before &&
+        !hasTopLevelRebinding(
+          input,
+          topLevelNodes,
+          candidate.blueprintName,
+          candidate.node.to,
+          before
+        )
+    )
+    .sort((left, right) => right.node.from - left.node.from);
+  return candidates.length === 1 ? candidates[0] ?? null : null;
+}
+
+/**
  * Finds the one direct relative import still bound to the Blueprint argument
- * at a literal `register_blueprint` call. A later assignment or import shadows
- * an earlier import and therefore removes it from consideration.
+ * at a literal `register_blueprint` call.
  */
 function latestProvenFlaskRelativeBlueprintImport(
   input: PythonExtractFileFactsInput,
@@ -2777,21 +2806,13 @@ function latestProvenFlaskRelativeBlueprintImport(
   imports: readonly StaticFlaskRelativeBlueprintImport[],
   registration: StaticFlaskBlueprintRegistration
 ): StaticFlaskRelativeBlueprintImport | null {
-  const candidates = imports
-    .filter(
-      (candidate) =>
-        candidate.blueprintName === registration.blueprintName &&
-        candidate.node.to <= registration.node.from &&
-        !hasTopLevelRebinding(
-          input,
-          topLevelNodes,
-          candidate.blueprintName,
-          candidate.node.to,
-          registration.node.from
-        )
-    )
-    .sort((left, right) => right.node.from - left.node.from);
-  return candidates.length === 1 ? candidates[0] ?? null : null;
+  return latestProvenFlaskRelativeBlueprintImportBinding(
+    input,
+    topLevelNodes,
+    imports,
+    registration.blueprintName,
+    registration.node.from
+  );
 }
 
 /**
@@ -2956,10 +2977,12 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
   const flaskBlueprintFacts: {
     readonly blueprints: FlaskBlueprintDeclarationFact[];
     readonly routes: FlaskBlueprintRouteFact[];
+    readonly reExports: FlaskBlueprintReExportFact[];
     readonly importedBlueprintRegistrations: FlaskImportedBlueprintRegistrationFact[];
   } = {
     blueprints: [],
     routes: [],
+    reExports: [],
     importedBlueprintRegistrations: []
   };
   const sanicBlueprintFacts: {
@@ -3458,6 +3481,25 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
         fastApiRouterFacts.reExports.push({
           exportedName: imported.routerName,
           importedRouterName: imported.importedRouterName,
+          moduleSpecifier: imported.moduleSpecifier,
+          range: rangeFor(lineStarts, imported.node.from, imported.node.to)
+        });
+      }
+
+      for (const imported of relativeBlueprintImports) {
+        const finalImport = latestProvenFlaskRelativeBlueprintImportBinding(
+          input,
+          topLevelNodes,
+          relativeBlueprintImports,
+          imported.blueprintName,
+          input.sourceText.length
+        );
+        if (finalImport === null || nodeKey(finalImport.node) !== nodeKey(imported.node)) {
+          continue;
+        }
+        flaskBlueprintFacts.reExports.push({
+          exportedName: imported.blueprintName,
+          importedBlueprintName: imported.importedBlueprintName,
           moduleSpecifier: imported.moduleSpecifier,
           range: rangeFor(lineStarts, imported.node.from, imported.node.to)
         });

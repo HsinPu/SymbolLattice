@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.158.0 is a developer preview and is not published to npm. Run it from source.
+> v0.159.0 is a developer preview and is not published to npm. Run it from source.
 
 SymbolLattice builds a queryable local code-symbol graph for a project. Every relation keeps its rule, resolution stage, and confidence; `exact`, `heuristic`, and `unresolved` evidence are never conflated.
 
@@ -41,9 +41,9 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 On Windows PowerShell, use `npm.cmd` if `npm` is unavailable. Index data stays in the target project's `.symbol-lattice/index.sqlite`.
 
-## v0.158.0
+## v0.159.0
 
-- Resolves FastAPI `APIRouter` `include_router(...)` routes through nested, final single-name re-export chains in regular-package `__init__.py` files.
+- Resolves Flask `Blueprint` `register_blueprint(...)` routes through nested, final single-name re-export chains in regular-package `__init__.py` files.
 - Each exact route keeps the mounting module, initializer, and source-module hops in `resolutionPath` evidence.
 - Only unrebound, resolvable, unambiguous final exports are exact; missing sources, cycles, collisions, and dynamic overrides produce no exact route.
 

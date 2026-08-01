@@ -3565,6 +3565,46 @@ describe("source extraction", () => {
     });
   });
 
+  it("retains final Flask Blueprint exports from a package initializer", () => {
+    const facts = extractFileFacts({
+      filePath: "app/routes/__init__.py",
+      language: "python",
+      sourceText: "from .catalog import blueprint as public_blueprint"
+    });
+
+    expect(facts.flaskBlueprintFacts).toMatchObject({
+      blueprints: [],
+      routes: [],
+      reExports: [
+        {
+          exportedName: "public_blueprint",
+          importedBlueprintName: "blueprint",
+          moduleSpecifier: ".catalog"
+        }
+      ],
+      importedBlueprintRegistrations: []
+    });
+  });
+
+  it("rejects rebounded and non-initializer Flask Blueprint exports", () => {
+    const reboundFacts = extractFileFacts({
+      filePath: "app/routes/__init__.py",
+      language: "python",
+      sourceText: [
+        "from .catalog import blueprint as public_blueprint",
+        "public_blueprint = build_blueprint()"
+      ].join("\n")
+    });
+    const regularModuleFacts = extractFileFacts({
+      filePath: "app/routes/exports.py",
+      language: "python",
+      sourceText: "from .catalog import blueprint as public_blueprint"
+    });
+
+    expect(reboundFacts.flaskBlueprintFacts).toMatchObject({ reExports: [] });
+    expect(regularModuleFacts.flaskBlueprintFacts).toMatchObject({ reExports: [] });
+  });
+
   it("rejects parent-relative and rebound Flask Blueprint registrations", () => {
     const facts = extractFileFacts({
       filePath: "app/main.py",
