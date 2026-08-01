@@ -3830,6 +3830,118 @@ describe("source extraction", () => {
     ]);
   });
 
+  it("extracts fully anchored literal Django re_path urlpatterns with exact same-file handlers", () => {
+    const facts = extractFileFacts({
+      filePath: "project/urls.py",
+      language: "python",
+      sourceText: [
+        "from django.urls import re_path as route",
+        "",
+        "def home(request):",
+        "    return None",
+        "",
+        "def health(request):",
+        "    return None",
+        "",
+        "urlpatterns = [",
+        "    route(r'^$', home),",
+        "    route(r'^health/$', health, name='health'),",
+        "]"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId,
+          edge.evidence?.stage,
+          edge.resolution,
+          edge.confidence
+        ])
+    ).toEqual([
+      [
+        "ALL /",
+        "project/urls.py#home",
+        "framework.django.direct-urlpatterns.re-path.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "ALL /health/",
+        "project/urls.py#health",
+        "framework.django.direct-urlpatterns.re-path.local-function",
+        "syntax",
+        "exact",
+        1
+      ]
+    ]);
+  });
+
+  it("keeps a Django path route when its alias is rebound after urlpatterns", () => {
+    const facts = extractFileFacts({
+      filePath: "project/urls.py",
+      language: "python",
+      sourceText: [
+        "from django.urls import path as route",
+        "",
+        "def health(request):",
+        "    return None",
+        "",
+        "urlpatterns = [route('health/', health)]",
+        "",
+        "from django.urls import re_path as route"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          edge.evidence?.ruleId,
+          edge.resolution
+        ])
+    ).toEqual([
+      [
+        "ALL /health/",
+        "framework.django.direct-urlpatterns.path.local-function",
+        "exact"
+      ]
+    ]);
+  });
+
+  it("rejects dynamic and non-literal-regex Django re_path urlpatterns", () => {
+    const facts = extractFileFacts({
+      filePath: "project/urls.py",
+      language: "python",
+      sourceText: [
+        "from django.urls import re_path as route",
+        "",
+        "pattern = r'^dynamic/$'",
+        "",
+        "def handler(request):",
+        "    return None",
+        "",
+        "urlpatterns = [",
+        "    route(r'^users/(?P<id>\\d+)/$', handler),",
+        "    route(r'^prefix/', handler),",
+        "    route('unanchored/', handler),",
+        "    route(pattern, handler),",
+        "    route(r'^dot.$', handler),",
+        "]"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+  });
+
   it("records package-relative Django URLConf inclusion and child route facts", () => {
     const childFacts = extractFileFacts({
       filePath: "project/catalog/urls.py",

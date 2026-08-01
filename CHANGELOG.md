@@ -6,6 +6,26 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.162.0] - 2026-08-02
+
+### Added
+
+- Django now extracts direct <code>re_path(...)</code> URL patterns with one same-file function handler when the import binding, handler, and pattern are all syntax-proven.
+- Accepted patterns are one raw or ordinary single-line string with a leading <code>^</code>, a trailing <code>$</code>, and a body that is a literal Django route path. The resulting edge uses <code>framework.django.direct-urlpatterns.re-path.local-function</code> evidence.
+- New unit and service coverage proves aliases, raw and ordinary strings, the root route, persisted route queries, and rejection of captures, wildcards, escapes, missing anchors, dynamic values, and rebinding.
+
+### Compatibility
+
+- The artifact-facts extractor advances to <code>multi-language-ast-v143</code>. Existing graphs and SQLite schema remain readable; the next explicit <code>sync</code> re-extracts Python facts before those new direct routes can appear.
+
+### Deliberate limits
+
+- This slice accepts only a direct, fully anchored static <code>re_path</code> pattern. Prefix matches, regex semantics, class-based views, imported handlers, dynamic strings, and <code>re_path(..., include(...))</code> mounts remain non-exact.
+
+### Comparison notes
+
+- The inspected CodeGraph Django resolver recognizes direct <code>path</code>, <code>re_path</code>, and legacy <code>url</code> call shapes through a broad regular expression. SymbolLattice now covers the safely canonical subset of direct <code>re_path</code> patterns and records an explicit evidence rule; richer regex and framework-runtime semantics remain intentionally outside <code>exact</code> analysis.
+
 ## [0.161.0] - 2026-08-02
 
 ### Added

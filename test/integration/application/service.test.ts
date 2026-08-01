@@ -3270,6 +3270,61 @@ describe("SymbolLatticeService", () => {
     ]);
   });
 
+  it("indexes fully anchored literal Django re_path routes with exact local handler proof", async () => {
+    const projectPath = await createInlineProject({
+      "config/urls.py": [
+        "from django.urls import re_path as route",
+        "",
+        "def home(request):",
+        "    return 'home'",
+        "",
+        "def health(request):",
+        "    return 'health'",
+        "",
+        "urlpatterns = [",
+        "    route(r'^$', home),",
+        "    route('^health/$', health),",
+        "]"
+      ].join("\n")
+    });
+    const service = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+
+    await expect(service.routes(projectPath, { method: "ALL" })).resolves.toMatchObject({
+      routes: [
+        {
+          method: "ALL",
+          path: "/",
+          route: { kind: "route", name: "ALL /" },
+          edge: {
+            kind: "routes",
+            resolution: "exact",
+            evidence: {
+              ruleId: "framework.django.direct-urlpatterns.re-path.local-function",
+              stage: "syntax"
+            }
+          },
+          handler: { qualifiedName: "config/urls.py#home" }
+        },
+        {
+          method: "ALL",
+          path: "/health/",
+          route: { kind: "route", name: "ALL /health/" },
+          edge: {
+            kind: "routes",
+            resolution: "exact",
+            evidence: {
+              ruleId: "framework.django.direct-urlpatterns.re-path.local-function",
+              stage: "syntax"
+            }
+          },
+          handler: { qualifiedName: "config/urls.py#health" }
+        }
+      ]
+    });
+  });
+
   it("indexes direct aiohttp router routes with exact local handler proof", async () => {
     const projectPath = await createInlineProject({
       "api/main.py": [
