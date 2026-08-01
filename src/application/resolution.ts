@@ -6,6 +6,7 @@ import {
   type DjangoImportedUrlconfInclusionFact,
   type DjangoLiteralUrlconfInclusionFact,
   type DjangoUrlconfInclusionFactory,
+  type DjangoUrlPatternHandlerKind,
   type DjangoUrlPatternRouteFact,
   type EdgeEvidence,
   type FastApiImportedRouterInclusionFact,
@@ -4539,46 +4540,33 @@ function djangoUrlconfInclusionFactory(
   return inclusion.factory ?? "path";
 }
 
+function djangoUrlPatternHandlerKind(
+  route: DjangoUrlPatternRouteFact
+): DjangoUrlPatternHandlerKind {
+  return route.handlerKind ?? "function";
+}
+
 function djangoUrlconfInclusionRuleId(
   inclusion: DjangoUrlconfInclusionFact,
-  reExported: boolean
+  reExported: boolean,
+  handlerKind: DjangoUrlPatternHandlerKind
 ): EdgeEvidence["ruleId"] {
   const factory = djangoUrlconfInclusionFactory(inclusion);
+  const factorySegment = factory === "re_path" ? "re-path" : factory;
+  const handlerSegment = handlerKind === "class-as-view" ? "local-class-as-view" : "local-function";
   if ("urlconfName" in inclusion) {
-    if (factory === "path") {
-      return reExported
-        ? "framework.django.reexported-urlconf.path.include.local-function"
-        : "framework.django.imported-urlconf.path.include.local-function";
-    }
-    if (factory === "re_path") {
-      return reExported
-        ? "framework.django.reexported-urlconf.re-path.include.local-function"
-        : "framework.django.imported-urlconf.re-path.include.local-function";
-    }
-    return reExported
-      ? "framework.django.reexported-urlconf.url.include.local-function"
-      : "framework.django.imported-urlconf.url.include.local-function";
+    const source = reExported ? "reexported-urlconf" : "imported-urlconf";
+    return `framework.django.${source}.${factorySegment}.include.${handlerSegment}`;
   }
-  if (factory === "path") {
-    return reExported
-      ? "framework.django.literal-urlconf.reexported-path.include.local-function"
-      : "framework.django.literal-urlconf.path.include.local-function";
-  }
-  if (factory === "re_path") {
-    return reExported
-      ? "framework.django.literal-urlconf.reexported-re-path.include.local-function"
-      : "framework.django.literal-urlconf.re-path.include.local-function";
-  }
-  return reExported
-    ? "framework.django.literal-urlconf.reexported-url.include.local-function"
-    : "framework.django.literal-urlconf.url.include.local-function";
+  const source = reExported ? `reexported-${factorySegment}` : factorySegment;
+  return `framework.django.literal-urlconf.${source}.include.${handlerSegment}`;
 }
 
 interface ResolvedDjangoUrlconfInclusion {
   readonly inclusion: DjangoUrlconfInclusionFact;
   readonly urlconfFilePath: string;
   readonly resolutionPath: readonly string[];
-  readonly ruleId: EdgeEvidence["ruleId"];
+  readonly reExported: boolean;
 }
 
 interface ProjectedDjangoUrlconfRoute {
@@ -4657,7 +4645,7 @@ function projectDjangoUrlconfRoutes(input: {
         inclusion,
         urlconfFilePath: target.filePath,
         resolutionPath: target.resolutionPath,
-        ruleId: djangoUrlconfInclusionRuleId(inclusion, target.reExported)
+        reExported: target.reExported
       });
     }
 
@@ -4683,7 +4671,7 @@ function projectDjangoUrlconfRoutes(input: {
         inclusion,
         urlconfFilePath: target.filePath,
         resolutionPath: target.resolutionPath,
-        ruleId: djangoUrlconfInclusionRuleId(inclusion, target.reExported)
+        reExported: target.reExported
       });
     }
 
@@ -4694,8 +4682,13 @@ function projectDjangoUrlconfRoutes(input: {
       }
 
       for (const route of urlconfFacts.routes) {
+        const handlerKind = djangoUrlPatternHandlerKind(route);
         const handler = input.symbolsById.get(route.handlerId);
-        if (handler?.kind !== "function" || handler.filePath !== resolvedInclusion.urlconfFilePath) {
+        if (
+          handler === undefined ||
+          handler.filePath !== resolvedInclusion.urlconfFilePath ||
+          (handlerKind === "function" ? handler.kind !== "function" : handler.kind !== "class")
+        ) {
           continue;
         }
         const path = mountedDjangoUrlconfRoutePath(resolvedInclusion.inclusion.prefix, route.path);
@@ -4710,7 +4703,11 @@ function projectDjangoUrlconfRoutes(input: {
           handler,
           path,
           resolutionPath: resolvedInclusion.resolutionPath,
-          ruleId: resolvedInclusion.ruleId
+          ruleId: djangoUrlconfInclusionRuleId(
+            resolvedInclusion.inclusion,
+            resolvedInclusion.reExported,
+            handlerKind
+          )
         });
       }
     }

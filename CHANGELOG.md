@@ -6,6 +6,27 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.165.0] - 2026-08-02
+
+### Added
+
+- Django URL patterns now accept an exact same-file <code>LocalClass.as_view()</code> target for <code>path</code>, bounded static <code>re_path</code>, and legacy <code>django.conf.urls.url</code>. Direct route facts retain an explicit <code>class-as-view</code> handler kind and a distinct evidence rule.
+- Existing static Django URLConf projection now carries those class targets through imported and literal <code>include(...)</code> mounts, including final package-initializer re-export chains. Projected evidence preserves both the mount factory and the class-handler shape.
+- New extractor and service coverage proves direct modern/regex/legacy routes, named routes, imported and literal mounts, re-exports, and rejection of configured, decorated, imported, dynamic, and rebound handlers.
+
+### Compatibility
+
+- The artifact-facts extractor advances to <code>multi-language-ast-v146</code> and the project resolver to <code>project-resolver-v49</code>. Existing graphs and SQLite schema remain readable; the next explicit <code>sync</code> re-extracts Django facts and rebuilds projected route evidence. Persisted routes without a handler kind continue to mean a local function.
+
+### Deliberate limits
+
+- Exact class-view analysis requires an undecorated, unique, top-level local class declared before the final <code>urlpatterns</code> list, a direct no-argument <code>Class.as_view()</code> call, a supported unambiguous route import, and no intervening rebinding. It does not prove framework inheritance or inspect the runtime <code>as_view</code> implementation.
+- Configured or dynamically built views, class decorators, imported classes, factories, member chains, aliases, namespaces, copied values, positional <code>kwargs</code>, and ambiguous or non-local URLConfs remain non-exact.
+
+### Comparison notes
+
+- The inspected CodeGraph Django resolver strips broad <code>.as_view(...)</code> spellings while resolving handlers. SymbolLattice independently covers a deliberately smaller syntax proof, but additionally records the class-handler kind and projects it through verified local URLConf composition with auditable evidence. Broader dynamic class-view forms remain CodeGraph coverage rather than SymbolLattice <code>exact</code> evidence.
+
 ## [0.164.0] - 2026-08-02
 
 ### Added

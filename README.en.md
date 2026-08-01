@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.164.0 is a developer preview and is not published to npm. Run it from source.
+> v0.165.0 is a developer preview and is not published to npm. Run it from source.
 
 SymbolLattice builds a queryable local code-symbol graph for a project. Every relation keeps its rule, resolution stage, and confidence; `exact`, `heuristic`, and `unresolved` evidence are never conflated.
 
@@ -41,17 +41,11 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 On Windows PowerShell, use `npm.cmd` if `npm` is unavailable. Index data stays in the target project's `.symbol-lattice/index.sqlite`.
 
-## v0.164.0
+## v0.165.0 highlights
 
-- Adds bounded support for legacy `django.conf.urls.url(...)`: direct local-function routes, imported and literal `include(...)` mounts, and final package-initializer re-exports.
-- It uses the same exact static-regex rules as `re_path`: direct routes need a literal `^...$` pattern; mounts need a literal `^.../` prefix. Captures, wildcards, escapes, dynamic values, and rebinding remain excluded.
-- Every legacy route or mount keeps a distinct `url` evidence rule, so callers can distinguish it from modern `path` and `re_path` analysis.
-
-## v0.163.0
-
-- Adds cross-file Django `re_path(prefix, include(...))` URLConf projection for relative imports, literal URLConfs, and package-initializer re-exports.
-- Only a pure static prefix with a leading `^`, no trailing `$`, and a trailing `/` is accepted, such as `r"^api/"`; projected edges retain a `re_path`-specific evidence rule.
-- Captures, wildcards, escapes, missing anchors, non-slash endings, dynamic values, and rebinding are never guessed as exact mounts.
+- Django `path`, bounded static `re_path`, and legacy `django.conf.urls.url` now recognize exact same-file `LocalClass.as_view()` routes.
+- Existing static URLConf `include(...)` projection carries those class targets through relative imports, literal URLConfs, and final package-initializer re-exports.
+- Every relation preserves its route factory, `class-as-view` handler shape, and auditable evidence rule for querying, impact analysis, and debugging.
 
 ## Principles
 
@@ -61,9 +55,9 @@ On Windows PowerShell, use `npm.cmd` if `npm` is unavailable. Index data stays i
 
 ## Static-analysis boundaries
 
-- Cross-file Python routing covers FastAPI `include_router`, Flask `register_blueprint`, Sanic `app.blueprint`, Django `path(..., include(...))`, bounded `re_path(..., include(...))`, and legacy `url(..., include(...))`.
-- Direct Django `re_path` and legacy `url` accept only one literal, full-match path pattern. Cross-file regex routes accept only a static prefix that composes with child paths; general regex semantics never become `exact` results.
-- Dynamic composition, external or namespace packages, parent-relative imports, copied values, list or tuple values, class views, WebSockets, `add_route`, versioning, and ambiguous targets never become exact.
+- Cross-file Python routing covers FastAPI `include_router`, Flask `register_blueprint`, Sanic `app.blueprint`, and Django `path`, bounded `re_path`, and legacy `url` `include(...)` mounts.
+- Django `Class.as_view()` accepts only an undecorated, unique, top-level local class declared before final `urlpatterns` without rebinding; the call must be direct and argument-free. It does not infer framework inheritance or runtime `as_view` behavior.
+- Dynamic composition, external or namespace packages, parent-relative imports, copied or container values, decorated or imported classes, WebSockets, `add_route`, versioning, and ambiguous targets never become `exact` results.
 
 ## Verification
 

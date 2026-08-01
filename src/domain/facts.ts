@@ -11,13 +11,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v145";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v146";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v48";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v49";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -381,11 +381,16 @@ export interface SanicBlueprintFacts {
   readonly importedBlueprintRegistrations: readonly SanicImportedBlueprintRegistrationFact[];
 }
 
-/** A literal route in a final Django `urlpatterns` list with a local function handler. */
+/** The local handler shape retained for a final Django URL pattern. */
+export type DjangoUrlPatternHandlerKind = "function" | "class-as-view";
+
+/** A literal route in a final Django `urlpatterns` list with a local handler. */
 export interface DjangoUrlPatternRouteFact {
   readonly path: string;
   /** Stable symbol identity of the directly referenced local handler. */
   readonly handlerId: string;
+  /** Omitted only by facts persisted before v0.165; defaults to `function`. */
+  readonly handlerKind?: DjangoUrlPatternHandlerKind;
   readonly range: SourceRange;
 }
 

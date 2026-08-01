@@ -7,6 +7,7 @@ import {
   type DjangoImportedUrlconfInclusionFact,
   type DjangoLiteralUrlconfInclusionFact,
   type DjangoUrlconfReExportFact,
+  type DjangoUrlPatternHandlerKind,
   type DjangoUrlPatternRouteFact,
   type FastApiImportedRouterInclusionFact,
   type FastApiRouterDeclarationFact,
@@ -228,7 +229,14 @@ interface StaticDjangoUrlPatternRoute {
   readonly factory: DjangoUrlPatternFactory;
   readonly path: string;
   readonly handlerName: string;
+  readonly handlerKind: DjangoUrlPatternHandlerKind;
   readonly node: PythonSyntaxNode;
+}
+
+/** A same-file Django handler accepted by the direct URL pattern subset. */
+interface StaticDjangoUrlPatternHandler {
+  readonly name: string;
+  readonly kind: DjangoUrlPatternHandlerKind;
 }
 
 /** Shared syntax for one static Django URLConf inclusion entry in urlpatterns. */
@@ -470,6 +478,10 @@ function isDirectClassMethod(node: PythonSyntaxNode): boolean {
 function isTopLevelFunction(node: PythonSyntaxNode): boolean {
   const statement = node.parent?.name === "DecoratedStatement" ? node.parent : node;
   return statement.parent?.name === "Script";
+}
+
+function isTopLevelClass(node: PythonSyntaxNode): boolean {
+  return isTopLevelFunction(node);
 }
 
 function staticNamedFrameworkImports(
@@ -1360,6 +1372,15 @@ function staticDjangoUrlconfInclusionPath(
     : staticDjangoRePathInclusionPrefix(rawPath);
 }
 
+function djangoDirectUrlPatternRuleId(
+  factory: DjangoUrlPatternFactory,
+  handlerKind: DjangoUrlPatternHandlerKind
+): string {
+  const factorySegment = factory === "re_path" ? "re-path" : factory;
+  const handlerSegment = handlerKind === "class-as-view" ? "local-class-as-view" : "local-function";
+  return `framework.django.direct-urlpatterns.${factorySegment}.${handlerSegment}`;
+}
+
 function staticStarletteRoutePath(value: string): string | null {
   if (
     value === "" ||
@@ -1917,6 +1938,51 @@ function staticAioHttpRouteTableRegistration(
     : { applicationName, routeListName: null, inlineRoutes, node };
 }
 
+/** Accepts only the direct, argument-free `LocalClass.as_view()` handler shape. */
+function staticDjangoClassAsViewHandler(
+  input: PythonExtractFileFactsInput,
+  node: PythonSyntaxNode
+): string | null {
+  if (node.name !== "CallExpression") {
+    return null;
+  }
+  const callChildren = directChildren(node);
+  const member = callChildren[0];
+  const arguments_ = callChildren[1];
+  if (
+    callChildren.length !== 2 ||
+    member?.name !== "MemberExpression" ||
+    arguments_?.name !== "ArgList" ||
+    staticArgumentEntries(arguments_).length !== 0
+  ) {
+    return null;
+  }
+  const memberChildren = directChildren(member);
+  const classNode = memberChildren[0];
+  const methodNode = memberChildren[2];
+  if (
+    memberChildren.length !== 3 ||
+    classNode?.name !== "VariableName" ||
+    methodNode?.name !== "PropertyName" ||
+    nodeText(input, methodNode) !== "as_view"
+  ) {
+    return null;
+  }
+  return declarationName(input, classNode);
+}
+
+function staticDjangoUrlPatternHandler(
+  input: PythonExtractFileFactsInput,
+  node: PythonSyntaxNode
+): StaticDjangoUrlPatternHandler | null {
+  if (node.name === "VariableName") {
+    const name = declarationName(input, node);
+    return name === null ? null : { name, kind: "function" };
+  }
+  const name = staticDjangoClassAsViewHandler(input, node);
+  return name === null ? null : { name, kind: "class-as-view" };
+}
+
 function staticDjangoUrlPatternRoutes(
   input: PythonExtractFileFactsInput,
   node: PythonSyntaxNode,
@@ -1946,7 +2012,7 @@ function staticDjangoUrlPatternRoutes(
   const keywordArguments = staticKeywordArgumentsAfterPositions(input, entries, 2);
   if (
     pathNode?.name !== "String" ||
-    handlerNode?.name !== "VariableName" ||
+    handlerNode === undefined ||
     keywordArguments === null ||
     [...keywordArguments.keys()].some((name) => name !== "name")
   ) {
@@ -1956,15 +2022,22 @@ function staticDjangoUrlPatternRoutes(
   if (routeNameNode !== undefined && (routeNameNode.name !== "String" || staticPlainPythonString(input, routeNameNode) === null)) {
     return [];
   }
-  const handlerName = declarationName(input, handlerNode);
-  if (handlerName === null) {
+  const handler = staticDjangoUrlPatternHandler(input, handlerNode);
+  if (handler === null) {
     return [];
   }
   const routes: StaticDjangoUrlPatternRoute[] = [];
   for (const factory of factories) {
     const path = staticDjangoUrlPatternPath(input, pathNode, factory);
     if (path !== null) {
-      routes.push({ factoryName, factory, path, handlerName, node });
+      routes.push({
+        factoryName,
+        factory,
+        path,
+        handlerName: handler.name,
+        handlerKind: handler.kind,
+        node
+      });
     }
   }
   return routes;
@@ -3534,6 +3607,21 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
       const symbol = symbolsByNodeKey.get(nodeKey(functionNode));
       return name === null || symbol?.kind !== "function" ? [] : [{ name, node: functionNode, symbol }];
     });
+    const topLevelClasses = topLevelNodes.flatMap((statement) => {
+      // A class decorator rebinds the class name to the decorator result. Keep
+      // `Class.as_view()` exact only when that name remains a direct class binding.
+      const classNode = statement.name === "ClassDefinition" ? statement : null;
+      if (
+        classNode === null ||
+        classNode.name !== "ClassDefinition" ||
+        !isTopLevelClass(classNode)
+      ) {
+        return [];
+      }
+      const name = declarationName(input, classNode);
+      const symbol = symbolsByNodeKey.get(nodeKey(classNode));
+      return name === null || symbol?.kind !== "class" ? [] : [{ name, node: classNode, symbol }];
+    });
     const finalRouters = routers.filter((router) => {
       const finalRouter = latestProvenFrameworkInstance(
         input,
@@ -3992,7 +4080,9 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
         ) {
           continue;
         }
-        const handlers = topLevelFunctions.filter(
+        const handlerCandidates =
+          route.handlerKind === "function" ? topLevelFunctions : topLevelClasses;
+        const handlers = handlerCandidates.filter(
           (candidate) =>
             candidate.name === route.handlerName &&
             candidate.node.to <= patterns.node.from &&
@@ -4016,15 +4106,12 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
           route.node,
           handler.symbol,
           route.path,
-          route.factory === "path"
-            ? "framework.django.direct-urlpatterns.path.local-function"
-            : route.factory === "re_path"
-              ? "framework.django.direct-urlpatterns.re-path.local-function"
-              : "framework.django.direct-urlpatterns.url.local-function"
+          djangoDirectUrlPatternRuleId(route.factory, route.handlerKind)
         );
         djangoUrlFacts.routes.push({
           path: route.path,
           handlerId: handler.symbol.id,
+          handlerKind: route.handlerKind,
           range: rangeFor(lineStarts, route.node.from, route.node.to)
         });
       }

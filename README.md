@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.164.0 是開發者預覽版，尚未發佈到 npm；請由原始碼執行。
+> v0.165.0 是開發者預覽版，尚未發佈到 npm；請由原始碼執行。
 
 SymbolLattice 為專案建立可查詢的本機程式碼符號圖譜。每一條關係都保留規則、解析階段與信心值，並嚴格區分 `exact`、`heuristic` 與 `unresolved` 證據。
 
@@ -31,7 +31,7 @@ npm run build
 # 明確建立本機索引
 node dist/cli/main.js init /path/to/project
 
-# 唯讀查詢；原始碼變更後由使用者明確同步
+# 唯讀查詢；原始碼變動後，由你明確同步
 node dist/cli/main.js routes --project /path/to/project --method GET
 node dist/cli/main.js sync /path/to/project
 
@@ -41,29 +41,23 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 Windows PowerShell 若無法使用 `npm`，請改用 `npm.cmd`。索引資料保存在目標專案的 `.symbol-lattice/index.sqlite`。
 
-## v0.164.0
+## v0.165.0 重點
 
-- 新增舊版 `django.conf.urls.url(...)` 的受限支援：同檔本機函式路由、相對匯入與字串 `include(...)` 掛載，以及最終 package initializer re-export。
-- 沿用 `re_path` 的精確靜態正規式條件：直接路由必須是字面 `^...$`；掛載必須是字面 `^.../`。捕捉群組、萬用字元、逸出字元、動態值與重綁定一律排除。
-- 每條舊版路由與掛載會保留獨立的 `url` 證據規則，可和現代 `path`、`re_path` 分析清楚區分。
-
-## v0.163.0
-
-- 新增 Django `re_path(prefix, include(...))` 的跨檔 URLConf 投影，支援相對匯入、字串 URLConf 與 package initializer re-export。
-- 僅接受開頭 `^`、沒有結尾 `$`、且以 `/` 結束的純靜態前綴，例如 `r"^api/"`；投影邊會保留 `re_path` 專屬證據規則。
-- 捕捉群組、萬用字元、逸出字元、缺少錨點、非斜線結尾、動態值與重綁定都不會被猜測為精確掛載。
+- Django 的 `path`、受限靜態 `re_path` 與舊式 `django.conf.urls.url`，現在可精確辨識同檔 `LocalClass.as_view()` 路由。
+- 既有的靜態 URLConf `include(...)` 投影也支援此類別目標，涵蓋相對匯入、字串 URLConf 與最終 package initializer re-export。
+- 每條關係會保留路由工廠、`class-as-view` 處理器形態與可稽核證據規則，方便查詢、影響分析與除錯。
 
 ## 核心原則
 
-- 索引與查詢都在本機執行，原始碼不會被悄悄上傳。
-- `init` 與 `sync` 是明確寫入動作；CLI 與 MCP 查詢保持唯讀，不會自行更新圖譜。
-- 關係需要可重現的靜態證據；否則保留為未解析，而非推測。
+- 索引與查詢都在本機進行；原始碼不會被自動上傳。
+- `init` 與 `sync` 是明確寫入動作；CLI 和 MCP 查詢保持唯讀，不會自行更新圖譜。
+- 關係必須有可重現的靜態證據；無法證明時保留為未解析，不會猜測。
 
 ## 靜態分析邊界
 
-- 跨檔 Python 路由目前涵蓋 FastAPI `include_router`、Flask `register_blueprint`、Sanic `app.blueprint` 與 Django `path(..., include(...))`、受限 `re_path(..., include(...))`、舊版 `url(..., include(...))`。
-- Django 直接 `re_path` 與舊版 `url` 僅接受單一路徑可完整比對的字面 pattern；跨檔正規式路由則僅接受可組合子路由的純靜態前綴。一般正規表示式語意不會產生 `exact` 結果。
-- 動態組合、外部或 namespace 套件、父層相對匯入、複製值、列表或 tuple、class view、WebSocket、`add_route`、版本化與模糊目標都不會被標示為精確。
+- 跨檔 Python 路由涵蓋 FastAPI `include_router`、Flask `register_blueprint`、Sanic `app.blueprint`，以及 Django `path`、受限 `re_path`、舊式 `url` 的 `include(...)`。
+- Django `Class.as_view()` 僅接受未裝飾、唯一、頂層、宣告於最終 `urlpatterns` 前且未重綁定的本機類別；呼叫必須是無參數的直接形式。這不會推論繼承關係或執行時 `as_view` 實作。
+- 動態組合、外部或 namespace 套件、父層相對匯入、複製值、容器值、已裝飾或匯入的類別、WebSocket、`add_route`、版本設定與模糊目標，都不會成為 `exact` 結果。
 
 ## 驗證
 

@@ -3934,6 +3934,112 @@ describe("source extraction", () => {
     ]);
   });
 
+  it("extracts static Django Class.as_view urlpatterns with exact same-file classes", () => {
+    const facts = extractFileFacts({
+      filePath: "project/urls.py",
+      language: "python",
+      sourceText: [
+        "from django.conf.urls import url as legacy_route",
+        "from django.urls import path as route",
+        "from django.urls import re_path as regex_route",
+        "from django.views import View",
+        "",
+        "class HomeView(View):",
+        "    pass",
+        "",
+        "class HealthView(View):",
+        "    pass",
+        "",
+        "class LegacyView(View):",
+        "    pass",
+        "",
+        "urlpatterns = [",
+        "    route('', HomeView.as_view()),",
+        "    regex_route(r'^health/$', HealthView.as_view(), name='health'),",
+        "    legacy_route(r'^legacy/$', LegacyView.as_view()),",
+        "]"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    const home = facts.symbols.find((symbol) => symbol.qualifiedName === "project/urls.py#HomeView");
+    const health = facts.symbols.find((symbol) => symbol.qualifiedName === "project/urls.py#HealthView");
+    const legacy = facts.symbols.find((symbol) => symbol.qualifiedName === "project/urls.py#LegacyView");
+    expect(facts.djangoUrlFacts).toMatchObject({
+      routes: [
+        { path: "/", handlerId: home?.id, handlerKind: "class-as-view" },
+        { path: "/health/", handlerId: health?.id, handlerKind: "class-as-view" },
+        { path: "/legacy/", handlerId: legacy?.id, handlerKind: "class-as-view" }
+      ]
+    });
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId,
+          edge.resolution
+        ])
+    ).toEqual([
+      [
+        "ALL /",
+        "project/urls.py#HomeView",
+        "framework.django.direct-urlpatterns.path.local-class-as-view",
+        "exact"
+      ],
+      [
+        "ALL /health/",
+        "project/urls.py#HealthView",
+        "framework.django.direct-urlpatterns.re-path.local-class-as-view",
+        "exact"
+      ],
+      [
+        "ALL /legacy/",
+        "project/urls.py#LegacyView",
+        "framework.django.direct-urlpatterns.url.local-class-as-view",
+        "exact"
+      ]
+    ]);
+  });
+
+  it("rejects dynamic, imported, configured, decorated, and rebound Django Class.as_view forms", () => {
+    const facts = extractFileFacts({
+      filePath: "project/urls.py",
+      language: "python",
+      sourceText: [
+        "from django.urls import path",
+        "from .views import ImportedView",
+        "",
+        "def decorate(view):",
+        "    return view",
+        "",
+        "class ConfiguredView:",
+        "    pass",
+        "",
+        "@decorate",
+        "class DecoratedView:",
+        "    pass",
+        "",
+        "class ReboundView:",
+        "    pass",
+        "",
+        "ReboundView = make_view()",
+        "",
+        "urlpatterns = [",
+        "    path('configured/', ConfiguredView.as_view(template_name='index.html')),",
+        "    path('decorated/', DecoratedView.as_view()),",
+        "    path('imported/', ImportedView.as_view()),",
+        "    path('rebound/', ReboundView.as_view()),",
+        "    path('dynamic/', build_view().as_view()),",
+        "]"
+      ].join("\n")
+    });
+
+    expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+    expect(facts.djangoUrlFacts).toMatchObject({ routes: [] });
+  });
+
   it("rejects a legacy Django url name imported from the modern django.urls module", () => {
     const facts = extractFileFacts({
       filePath: "project/urls.py",

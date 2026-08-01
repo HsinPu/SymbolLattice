@@ -5275,6 +5275,57 @@ describe("SymbolLatticeService", () => {
     ]);
   });
 
+  it("projects Django Class.as_view routes through static URLConf prefixes", async () => {
+    const projectPath = await createInlineProject({
+      "project/__init__.py": "",
+      "project/catalog/__init__.py": "",
+      "project/catalog/urls.py": [
+        "from django.urls import path",
+        "from django.views import View",
+        "",
+        "class CatalogView(View):",
+        "    pass",
+        "",
+        "urlpatterns = [path('items/', CatalogView.as_view())]"
+      ].join("\n"),
+      "project/urls.py": [
+        "from django.urls import include, re_path",
+        "from .catalog import urls as catalog_urls",
+        "",
+        "urlpatterns = [re_path(r'^api/', include(catalog_urls))]"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+
+    const routes = await service.routes(projectPath, { method: "ALL", pathPrefix: "/api/" });
+    const childFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "project/catalog/urls.py");
+
+    expect(childFacts?.djangoUrlFacts).toMatchObject({
+      routes: [{ path: "/items/", handlerKind: "class-as-view" }]
+    });
+    expect(routes.routes).toMatchObject([
+      {
+        method: "ALL",
+        path: "/api/items/",
+        edge: {
+          kind: "routes",
+          resolution: "exact",
+          evidence: {
+            ruleId: "framework.django.imported-urlconf.re-path.include.local-class-as-view",
+            stage: "module",
+            resolutionPath: ["project/urls.py", "project/catalog/urls.py"]
+          }
+        },
+        handler: { qualifiedName: "project/catalog/urls.py#CatalogView", kind: "class" }
+      }
+    ]);
+  });
+
   it("projects re-exported Django URLConfs through static re_path inclusion prefixes", async () => {
     const projectPath = await createInlineProject({
       "project/__init__.py": "",
@@ -5428,6 +5479,87 @@ describe("SymbolLatticeService", () => {
             }
           },
           handler: { qualifiedName: "project/literal_routes/catalog/urls.py#status" }
+        }
+      ]
+    });
+  });
+
+  it("projects re-exported Django Class.as_view URLConfs through static legacy url prefixes", async () => {
+    const projectPath = await createInlineProject({
+      "project/__init__.py": "",
+      "project/routes/__init__.py": "from .catalog.urls import urlpatterns as public_patterns",
+      "project/routes/catalog/__init__.py": "",
+      "project/routes/catalog/urls.py": [
+        "from django.urls import path",
+        "from django.views import View",
+        "",
+        "class HealthView(View):",
+        "    pass",
+        "",
+        "urlpatterns = [path('health/', HealthView.as_view())]"
+      ].join("\n"),
+      "project/literal_routes/__init__.py": "from .catalog.urls import urlpatterns",
+      "project/literal_routes/catalog/__init__.py": "",
+      "project/literal_routes/catalog/urls.py": [
+        "from django.urls import path",
+        "from django.views import View",
+        "",
+        "class StatusView(View):",
+        "    pass",
+        "",
+        "urlpatterns = [path('status/', StatusView.as_view())]"
+      ].join("\n"),
+      "project/urls.py": [
+        "from django.conf.urls import include, url",
+        "from .routes import public_patterns",
+        "",
+        "urlpatterns = [url(r'^v1/', include(public_patterns))]"
+      ].join("\n"),
+      "project/literal_urls.py": [
+        "from django.conf.urls import include, url",
+        "",
+        "urlpatterns = [url(r'^internal/', include('project.literal_routes'))]"
+      ].join("\n")
+    });
+    const service = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+
+    await expect(service.routes(projectPath, { method: "ALL", pathPrefix: "/v1/" })).resolves.toMatchObject({
+      routes: [
+        {
+          path: "/v1/health/",
+          edge: {
+            evidence: {
+              ruleId: "framework.django.reexported-urlconf.url.include.local-class-as-view",
+              resolutionPath: [
+                "project/urls.py",
+                "project/routes/__init__.py",
+                "project/routes/catalog/urls.py"
+              ]
+            }
+          },
+          handler: { qualifiedName: "project/routes/catalog/urls.py#HealthView", kind: "class" }
+        }
+      ]
+    });
+    await expect(
+      service.routes(projectPath, { method: "ALL", pathPrefix: "/internal/" })
+    ).resolves.toMatchObject({
+      routes: [
+        {
+          path: "/internal/status/",
+          edge: {
+            evidence: {
+              ruleId: "framework.django.literal-urlconf.reexported-url.include.local-class-as-view",
+              resolutionPath: [
+                "project/literal_urls.py",
+                "project/literal_routes/__init__.py",
+                "project/literal_routes/catalog/urls.py"
+              ]
+            }
+          },
+          handler: { qualifiedName: "project/literal_routes/catalog/urls.py#StatusView", kind: "class" }
         }
       ]
     });
