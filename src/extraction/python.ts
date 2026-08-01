@@ -227,9 +227,10 @@ interface StaticDjangoUrlPatternRoute {
   readonly node: PythonSyntaxNode;
 }
 
-/** Shared syntax for a literal `path(prefix, include(urlconf))` entry in urlpatterns. */
+/** Shared syntax for one static Django URLConf inclusion entry in urlpatterns. */
 interface StaticDjangoUrlconfInclusionBase {
   readonly factoryName: string;
+  readonly factory: DjangoUrlPatternFactory;
   readonly includeFactoryName: string;
   readonly path: string;
   readonly node: PythonSyntaxNode;
@@ -1295,6 +1296,23 @@ function staticDjangoRePathRoutePath(value: string): string | null {
   return staticDjangoRoutePath(pattern);
 }
 
+/**
+ * Projects only a start-anchored, slash-terminated literal `re_path` prefix
+ * used to mount a child URLConf. The terminal `$` form is deliberately not a
+ * prefix mount, and a non-slash ending would not preserve child concatenation.
+ */
+function staticDjangoRePathInclusionPrefix(value: string): string | null {
+  if (!value.startsWith("^") || value.endsWith("$")) {
+    return null;
+  }
+  const pattern = value.slice(1);
+  if ((pattern.length > 0 && !pattern.endsWith("/")) || [...pattern].some((character) => DJANGO_RE_PATH_META_CHARACTERS.has(character))) {
+    return null;
+  }
+  const path = staticDjangoRoutePath(pattern);
+  return path === null || path.includes("//") ? null : path;
+}
+
 function staticDjangoUrlPatternPath(
   input: PythonExtractFileFactsInput,
   node: PythonSyntaxNode,
@@ -1310,6 +1328,23 @@ function staticDjangoUrlPatternPath(
   return factory === "path"
     ? staticDjangoRoutePath(rawPath)
     : staticDjangoRePathRoutePath(rawPath);
+}
+
+function staticDjangoUrlconfInclusionPath(
+  input: PythonExtractFileFactsInput,
+  node: PythonSyntaxNode,
+  factory: DjangoUrlPatternFactory
+): string | null {
+  const rawPath =
+    factory === "path"
+      ? staticPlainPythonString(input, node)
+      : staticDjangoRePathPattern(input, node);
+  if (rawPath === null) {
+    return null;
+  }
+  return factory === "path"
+    ? staticDjangoRoutePath(rawPath)
+    : staticDjangoRePathInclusionPrefix(rawPath);
 }
 
 function staticStarletteRoutePath(value: string): string | null {
@@ -1922,13 +1957,13 @@ function staticDjangoUrlPatternRoutes(
   return routes;
 }
 
-function staticDjangoUrlconfInclusion(
+function staticDjangoUrlconfInclusions(
   input: PythonExtractFileFactsInput,
   node: PythonSyntaxNode,
-  pathFactoryNames: ReadonlySet<string>
-): StaticDjangoImportedUrlconfInclusion | StaticDjangoLiteralUrlconfInclusion | null {
+  routeFactories: ReadonlyMap<string, readonly DjangoUrlPatternFactory[]>
+): readonly (StaticDjangoImportedUrlconfInclusion | StaticDjangoLiteralUrlconfInclusion)[] {
   if (node.name !== "CallExpression") {
-    return null;
+    return [];
   }
   const callChildren = directChildren(node);
   const factoryNode = callChildren[0];
@@ -1938,11 +1973,12 @@ function staticDjangoUrlconfInclusion(
     factoryNode?.name !== "VariableName" ||
     arguments_?.name !== "ArgList"
   ) {
-    return null;
+    return [];
   }
   const factoryName = declarationName(input, factoryNode);
-  if (factoryName === null || !pathFactoryNames.has(factoryName)) {
-    return null;
+  const factories = factoryName === null ? undefined : routeFactories.get(factoryName);
+  if (factoryName === null || factories === undefined) {
+    return [];
   }
   const entries = staticArgumentEntries(arguments_);
   const pathNode = entries[0];
@@ -1952,12 +1988,7 @@ function staticDjangoUrlconfInclusion(
     includeNode?.name !== "CallExpression" ||
     staticKeywordArgumentsAfterPositions(input, entries, 2)?.size !== 0
   ) {
-    return null;
-  }
-  const rawPath = staticPlainPythonString(input, pathNode);
-  const path = rawPath === null ? null : staticDjangoRoutePath(rawPath);
-  if (path === null) {
-    return null;
+    return [];
   }
 
   const includeChildren = directChildren(includeNode);
@@ -1968,7 +1999,7 @@ function staticDjangoUrlconfInclusion(
     includeFactoryNode?.name !== "VariableName" ||
     includeArguments?.name !== "ArgList"
   ) {
-    return null;
+    return [];
   }
   const includeFactoryName = declarationName(input, includeFactoryNode);
   const includeEntries = staticArgumentEntries(includeArguments);
@@ -1977,28 +2008,47 @@ function staticDjangoUrlconfInclusion(
     includeFactoryName === null ||
     staticKeywordArgumentsAfterPositions(input, includeEntries, 1)?.size !== 0
   ) {
-    return null;
+    return [];
   }
+  const pathsByFactory = factories.flatMap((factory) => {
+    const path = staticDjangoUrlconfInclusionPath(input, pathNode, factory);
+    return path === null ? [] : [{ factory, path }];
+  });
   if (urlconfNode?.name === "VariableName") {
     const urlconfName = declarationName(input, urlconfNode);
     return urlconfName === null
-      ? null
-      : { kind: "imported", factoryName, includeFactoryName, path, urlconfName, node };
+      ? []
+      : pathsByFactory.map(({ factory, path }) => ({
+          kind: "imported" as const,
+          factoryName,
+          factory,
+          includeFactoryName,
+          path,
+          urlconfName,
+          node
+        }));
   }
   if (urlconfNode?.name !== "String") {
-    return null;
+    return [];
   }
   const moduleSpecifier = staticPlainPythonString(input, urlconfNode);
   return moduleSpecifier === null || !isStaticPythonModuleSpecifier(moduleSpecifier)
-    ? null
-    : { kind: "literal", factoryName, includeFactoryName, path, moduleSpecifier, node };
+    ? []
+    : pathsByFactory.map(({ factory, path }) => ({
+        kind: "literal" as const,
+        factoryName,
+        factory,
+        includeFactoryName,
+        path,
+        moduleSpecifier,
+        node
+      }));
 }
 
 function staticDjangoUrlPatternList(
   input: PythonExtractFileFactsInput,
   node: PythonSyntaxNode,
-  routeFactories: ReadonlyMap<string, readonly DjangoUrlPatternFactory[]>,
-  pathFactoryNames: ReadonlySet<string>
+  routeFactories: ReadonlyMap<string, readonly DjangoUrlPatternFactory[]>
 ): StaticDjangoUrlPatternList | null {
   if (node.name !== "AssignStatement") {
     return null;
@@ -2019,14 +2069,9 @@ function staticDjangoUrlPatternList(
   const routes = directChildren(value).flatMap((candidate) =>
     staticDjangoUrlPatternRoutes(input, candidate, routeFactories)
   );
-  const urlconfInclusions = directChildren(value)
-    .map((candidate) => staticDjangoUrlconfInclusion(input, candidate, pathFactoryNames))
-    .filter(
-      (
-        candidate
-      ): candidate is StaticDjangoImportedUrlconfInclusion | StaticDjangoLiteralUrlconfInclusion =>
-        candidate !== null
-    );
+  const urlconfInclusions = directChildren(value).flatMap((candidate) =>
+    staticDjangoUrlconfInclusions(input, candidate, routeFactories)
+  );
   const importedUrlconfInclusions = urlconfInclusions.filter(
     (candidate): candidate is StaticDjangoImportedUrlconfInclusion => candidate.kind === "imported"
   );
@@ -3370,11 +3415,6 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
     const relativeDjangoUrlconfImports = topLevelNodes
       .map((node) => staticDjangoRelativeUrlconfImport(input, node))
       .filter((candidate): candidate is StaticDjangoRelativeUrlconfImport => candidate !== null);
-    const djangoPathFactoryNames = new Set(
-      djangoUrlImports
-        .filter((candidate) => candidate.importedName === "path")
-        .map((candidate) => candidate.alias)
-    );
     const djangoRouteFactories = new Map<string, DjangoUrlPatternFactory[]>();
     for (const candidate of djangoUrlImports) {
       if (candidate.importedName === "path" || candidate.importedName === "re_path") {
@@ -3386,9 +3426,7 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
       }
     }
     const djangoUrlPatternLists = topLevelNodes
-      .map((node) =>
-        staticDjangoUrlPatternList(input, node, djangoRouteFactories, djangoPathFactoryNames)
-      )
+      .map((node) => staticDjangoUrlPatternList(input, node, djangoRouteFactories))
       .filter((candidate): candidate is StaticDjangoUrlPatternList => candidate !== null);
     const starletteApplicationImports = topLevelNodes.flatMap((node) =>
       staticStarletteApplicationImports(input, node)
@@ -3975,7 +4013,7 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
             topLevelNodes,
             djangoUrlImports,
             inclusion.factoryName,
-            "path",
+            inclusion.factory,
             patterns.node.from
           ) === null ||
           latestProvenDjangoIncludeImport(
@@ -3998,6 +4036,7 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
           continue;
         }
         djangoUrlFacts.importedUrlconfInclusions.push({
+          factory: inclusion.factory,
           urlconfName: importedUrlconf.urlconfName,
           importedUrlconfName: importedUrlconf.importedUrlconfName,
           moduleSpecifier: importedUrlconf.moduleSpecifier,
@@ -4013,7 +4052,7 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
             topLevelNodes,
             djangoUrlImports,
             inclusion.factoryName,
-            "path",
+            inclusion.factory,
             patterns.node.from
           ) === null ||
           latestProvenDjangoIncludeImport(
@@ -4027,6 +4066,7 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
           continue;
         }
         djangoUrlFacts.literalUrlconfInclusions.push({
+          factory: inclusion.factory,
           moduleSpecifier: inclusion.moduleSpecifier,
           prefix: inclusion.path,
           range: rangeFor(lineStarts, inclusion.node.from, inclusion.node.to)

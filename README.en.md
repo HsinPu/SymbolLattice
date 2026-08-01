@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.162.0 is a developer preview and is not published to npm. Run it from source.
+> v0.163.0 is a developer preview and is not published to npm. Run it from source.
 
 SymbolLattice builds a queryable local code-symbol graph for a project. Every relation keeps its rule, resolution stage, and confidence; `exact`, `heuristic`, and `unresolved` evidence are never conflated.
 
@@ -41,11 +41,11 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 On Windows PowerShell, use `npm.cmd` if `npm` is unavailable. Index data stays in the target project's `.symbol-lattice/index.sqlite`.
 
-## v0.162.0
+## v0.163.0
 
-- Adds direct Django `re_path` extraction for import aliases, raw strings, and ordinary single-line strings.
-- An `exact` `ALL` route is emitted only for a fully anchored `^static-path$` pattern with a same-file function handler.
-- Captures, wildcards, escapes, missing anchors, dynamic values, and rebinding are never guessed as exact routes.
+- Adds cross-file Django `re_path(prefix, include(...))` URLConf projection for relative imports, literal URLConfs, and package-initializer re-exports.
+- Only a pure static prefix with a leading `^`, no trailing `$`, and a trailing `/` is accepted, such as `r"^api/"`; projected edges retain a `re_path`-specific evidence rule.
+- Captures, wildcards, escapes, missing anchors, non-slash endings, dynamic values, and rebinding are never guessed as exact mounts.
 
 ## Principles
 
@@ -55,8 +55,8 @@ On Windows PowerShell, use `npm.cmd` if `npm` is unavailable. Index data stays i
 
 ## Static-analysis boundaries
 
-- Cross-file Python routing covers FastAPI `include_router`, Flask `register_blueprint`, Sanic `app.blueprint`, and Django `path(..., include(...))`.
-- Direct Django `re_path` accepts only one literal, full-match path pattern. Regex semantics and cross-file `re_path` mounts do not become `exact` results.
+- Cross-file Python routing covers FastAPI `include_router`, Flask `register_blueprint`, Sanic `app.blueprint`, Django `path(..., include(...))`, and bounded `re_path(..., include(...))`.
+- Direct Django `re_path` accepts only one literal, full-match path pattern. Cross-file `re_path` accepts only a static prefix that composes with child paths; general regex semantics never become `exact` results.
 - Dynamic composition, external or namespace packages, parent-relative imports, copied values, list or tuple values, class views, WebSockets, `add_route`, versioning, and ambiguous targets never become exact.
 
 ## Verification

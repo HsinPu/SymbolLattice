@@ -3916,6 +3916,33 @@ describe("source extraction", () => {
     ]);
   });
 
+  it("keeps a Django path URLConf inclusion when its alias is rebound after urlpatterns", () => {
+    const facts = extractFileFacts({
+      filePath: "project/urls.py",
+      language: "python",
+      sourceText: [
+        "from django.urls import include, path as route",
+        "from .catalog import urls as catalog_urls",
+        "",
+        "urlpatterns = [route('api/', include(catalog_urls))]",
+        "",
+        "from django.urls import re_path as route"
+      ].join("\n")
+    });
+
+    expect(facts.djangoUrlFacts).toMatchObject({
+      importedUrlconfInclusions: [
+        {
+          factory: "path",
+          urlconfName: "catalog_urls",
+          importedUrlconfName: "urls",
+          moduleSpecifier: ".catalog.urls",
+          prefix: "/api/"
+        }
+      ]
+    });
+  });
+
   it("rejects dynamic and non-literal-regex Django re_path urlpatterns", () => {
     const facts = extractFileFacts({
       filePath: "project/urls.py",
@@ -4026,6 +4053,72 @@ describe("source extraction", () => {
           prefix: "/api/"
         }
       ]
+    });
+  });
+
+  it("records static Django re_path URLConf inclusion facts", () => {
+    const importedFacts = extractFileFacts({
+      filePath: "project/urls.py",
+      language: "python",
+      sourceText: [
+        "from django.urls import include as mount, re_path as route",
+        "from .catalog import urls as catalog_urls",
+        "",
+        "urlpatterns = [route(r'^api/', mount(catalog_urls))]"
+      ].join("\n")
+    });
+    const literalFacts = extractFileFacts({
+      filePath: "project/urls.py",
+      language: "python",
+      sourceText: [
+        "from django.urls import include as mount, re_path as route",
+        "",
+        "urlpatterns = [route('^internal/', mount('project.catalog.urls'))]"
+      ].join("\n")
+    });
+
+    expect(importedFacts.djangoUrlFacts).toMatchObject({
+      importedUrlconfInclusions: [
+        {
+          factory: "re_path",
+          urlconfName: "catalog_urls",
+          importedUrlconfName: "urls",
+          moduleSpecifier: ".catalog.urls",
+          prefix: "/api/"
+        }
+      ]
+    });
+    expect(literalFacts.djangoUrlFacts).toMatchObject({
+      literalUrlconfInclusions: [
+        {
+          factory: "re_path",
+          moduleSpecifier: "project.catalog.urls",
+          prefix: "/internal/"
+        }
+      ]
+    });
+  });
+
+  it("rejects non-static Django re_path URLConf inclusion forms", () => {
+    const facts = extractFileFacts({
+      filePath: "project/urls.py",
+      language: "python",
+      sourceText: [
+        "from django.urls import include, re_path",
+        "from .catalog import urls as catalog_urls",
+        "",
+        "urlpatterns = [",
+        "    re_path(r'^api/(?P<version>v[0-9]+)/', include(catalog_urls)),",
+        "    re_path(r'^anchored/$', include(catalog_urls)),",
+        "    re_path('api/', include(catalog_urls)),",
+        "    re_path(r'^api', include('project.catalog.urls')),",
+        "]"
+      ].join("\n")
+    });
+
+    expect(facts.djangoUrlFacts).toMatchObject({
+      importedUrlconfInclusions: [],
+      literalUrlconfInclusions: []
     });
   });
 

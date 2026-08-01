@@ -6,6 +6,26 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.163.0] - 2026-08-02
+
+### Added
+
+- Django now projects a bounded static <code>re_path(prefix, include(...))</code> URLConf mount through direct relative imports, literal dotted module names, and final package-initializer re-export chains.
+- Persisted Django URLConf inclusion facts now retain their <code>path</code> or <code>re_path</code> factory. Projected routes use distinct module-stage evidence rules for direct and re-exported imported or literal <code>re_path</code> targets.
+- Accepted <code>re_path</code> mounts require a raw or ordinary single-line literal with a leading <code>^</code>, no trailing <code>$</code>, a static body, and a trailing slash unless mounted at root. New coverage proves both inclusion forms, package re-exports, static rejection, and alias rebinding after <code>urlpatterns</code>.
+
+### Compatibility
+
+- The artifact-facts extractor advances to <code>multi-language-ast-v144</code> and the project resolver to <code>project-resolver-v47</code>. Existing graphs and SQLite schema remain readable; the next explicit <code>sync</code> re-extracts facts and rebuilds projected route evidence. Facts persisted before this version continue to default their omitted factory to <code>path</code> during compatibility reads.
+
+### Deliberate limits
+
+- Exact <code>re_path</code> mounts exclude terminal anchors, captures, wildcards, escapes, regex operators, dynamic values, non-slash prefix endings, class-based views, namespaces, tuples, and ambiguous or non-local URLConfs. Those forms remain non-exact rather than being normalized into potentially incorrect child paths.
+
+### Comparison notes
+
+- In the inspected CodeGraph Django resolver, direct <code>path</code>/<code>re_path</code>/<code>url</code> calls are broadly discovered and <code>include('module.path')</code> becomes an import reference. SymbolLattice now independently composes the narrow, fully static <code>re_path</code> include subset into concrete child routes with an auditable evidence path; broad runtime regex composition remains outside <code>exact</code> analysis.
+
 ## [0.162.0] - 2026-08-02
 
 ### Added
