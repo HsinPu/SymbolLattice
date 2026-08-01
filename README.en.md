@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.153.0 is a developer preview. The package is not published to npm; run it from source.
+> v0.154.0 is a developer preview. The package is not published to npm; run it from source.
 
 SymbolLattice builds a queryable local code-symbol graph for a project. Every relation retains its rule, resolution stage, and confidence; exact, heuristic, and unresolved evidence are never conflated.
 
@@ -41,17 +41,17 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 On Windows PowerShell, use npm.cmd if npm is unavailable. Index data stays in the target project's .symbol-lattice/index.sqlite.
 
-## v0.153.0
+## v0.154.0
 
-- Adds same-file, single-layer Sanic `Blueprint.group(...)` support: the group prefix, Blueprint prefix, `app.blueprint(..., url_prefix=...)`, and decorator path compose into an exact route.
-- Every group member must be a syntax-proven, unrebound direct Blueprint; otherwise no exact route is emitted.
+- Adds same-file, recursively nested Sanic `Blueprint.group(...)` support: every group prefix, Blueprint prefix, `app.blueprint(..., url_prefix=...)`, and decorator path compose into an exact route.
+- Every group and member Blueprint must be syntax-proven and unrebound; a cyclic group tree or a Blueprint mounted twice emits no exact route.
 - The next explicit `sync` re-extracts existing Python facts and rebuilds affected routes.
 
 ## Boundaries
 
 - All indexing and queries stay local; source is never silently uploaded.
 - Dynamic dispatch, reflection, macros, generated code, DI, ambiguous names, and runtime configuration never become exact relations.
-- Cross-file Sanic support remains limited to one direct Blueprint imported by a single-name, one-dot relative import. Groups are same-file only, single-layer, direct Blueprint variables, and at most one literal `url_prefix`; nested groups, copies, array members, other registration options, class views, WebSockets, `add_route`, and dynamic composition remain unsupported.
+- Cross-file Sanic support remains limited to one direct Blueprint imported by a single-name, one-dot relative import. Groups are same-file only, direct Blueprint or group variables, and at most one literal `url_prefix`; cross-file groups, copies, array members, `name_prefix`, versioning or other registration options, class views, WebSockets, `add_route`, and dynamic composition remain unsupported.
 
 ## Verification
 

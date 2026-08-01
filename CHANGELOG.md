@@ -6,6 +6,27 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.154.0] - 2026-08-01
+
+### Added
+
+- Same-file Sanic <code>Blueprint.group(...)</code> projection now recursively resolves nested direct groups and composes every ancestor group prefix, member Blueprint prefix, and literal app-registration prefix.
+- Routes that traverse more than one group retain the distinct <code>framework.sanic.direct-nested-blueprint-group.app-blueprint.decorator.local-function</code> evidence rule; direct terminal branches retain the existing one-group rule.
+- Recursive resolution rejects cyclic group paths, unresolved or rebound members, and a direct Blueprint mounted more than once through a group tree.
+- Unit and service coverage verifies aliased nested groups, sibling direct-member composition, and duplicate-Blueprint rejection.
+
+### Compatibility
+
+- The artifact-facts extractor advances to <code>multi-language-ast-v135</code>. The project resolver remains at <code>project-resolver-v40</code> because this is same-file extraction only. Existing graphs and SQLite schema remain readable; the next explicit <code>sync</code> re-extracts Python facts and reprojects affected Sanic routes.
+
+### Deliberate limits
+
+- This slice supports same-file direct Blueprint/group variables and at most one literal <code>url_prefix</code> at each group or app registration. Cross-file groups, copied Blueprints, array/tuple members, <code>name_prefix</code>, versioning, strict-slashes controls, other options, class views, WebSockets, <code>add_route</code>, and dynamic composition remain non-exact.
+
+### Comparison notes
+
+- The inspected CodeGraph baseline source tree contains no <code>sanic</code> reference. SymbolLattice independently adds an evidence-backed nested-group route path; it is broader for this explicit static route slice while remaining deliberately narrower than runtime framework composition.
+
 ## [0.153.0] - 2026-08-01
 
 ### Added
@@ -2881,7 +2902,8 @@ No unreleased changes.
 - Explicit full indexing, caller/callee/impact queries, and read-only MCP exploration.
 - `exact`, `heuristic`, and `unresolved` relationship states.
 
-[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.153.0...HEAD
+[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.154.0...HEAD
+[0.154.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.153.0...v0.154.0
 [0.153.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.152.0...v0.153.0
 [0.152.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.151.0...v0.152.0
 [0.151.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.150.0...v0.151.0

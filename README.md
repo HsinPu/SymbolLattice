@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.153.0 是開發者預覽版；套件尚未發佈至 npm，請由原始碼執行。
+> v0.154.0 是開發者預覽版；套件尚未發佈至 npm，請由原始碼執行。
 
 SymbolLattice 為專案建立可查詢的本機程式碼符號圖譜。每條關係都保留規則、解析階段與信心值；它明確區分 exact、heuristic 與 unresolved，不會把猜測升格為事實。
 
@@ -41,17 +41,17 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 Windows PowerShell 若無法使用 npm，請改用 npm.cmd。索引資料保留在目標專案的 .symbol-lattice/index.sqlite。
 
-## v0.153.0
+## v0.154.0
 
-- 新增同檔、單層的 Sanic `Blueprint.group(...)`：群組 prefix、Blueprint prefix、`app.blueprint(..., url_prefix=...)` 與 decorator path 會組合為 exact 路徑。
-- 每個群組成員都必須是已語法證明、未重綁定的直接 Blueprint；否則不會產生精確路由。
+- 支援同檔、遞迴巢狀的 Sanic `Blueprint.group(...)`：每層群組 prefix、Blueprint prefix、`app.blueprint(..., url_prefix=...)` 與 decorator path 會組合為 exact 路徑。
+- 每個群組、每個成員 Blueprint 都必須可語法證明且未重綁定；群組樹若循環或同一 Blueprint 被掛載兩次，便不會產生精確路由。
 - 下一次明確 `sync` 會重新擷取既有 Python 事實並重建受影響的路由。
 
 ## 設計界線
 
 - 所有索引與查詢皆在本機進行；不會悄悄上傳原始碼。
 - 動態派發、反射、巨集、程式碼生成、DI、模糊名稱與執行期設定不會成為 exact 關係。
-- 跨檔 Sanic 支援仍限單一名稱、一層相對路徑的直接 Blueprint import。群組僅限同檔、單層、直接 Blueprint 變數與最多一個字面 `url_prefix`；巢狀群組、copies、陣列成員、其他註冊選項、class views、WebSocket、`add_route` 與動態組合暫不推斷。
+- 跨檔 Sanic 支援仍限單一名稱、一層相對路徑的直接 Blueprint import。群組僅限同檔、直接 Blueprint 或群組變數與最多一個字面 `url_prefix`；跨檔群組、copies、陣列成員、`name_prefix`、版本或其他註冊選項、class views、WebSocket、`add_route` 與動態組合暫不推斷。
 
 ## 驗證
 

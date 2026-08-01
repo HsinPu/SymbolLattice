@@ -84,13 +84,19 @@ interface SanicBlueprint extends FrameworkDirectInstance {
   readonly prefix: string;
 }
 
-/** A direct same-file Blueprint.group call with literal members and prefix. */
+/** A direct same-file Blueprint.group call with literal variable members and prefix. */
 interface SanicBlueprintGroup {
   readonly name: string;
   readonly constructorName: string;
-  readonly blueprintNames: readonly string[];
+  readonly memberNames: readonly string[];
   readonly prefix: string;
   readonly node: PythonSyntaxNode;
+}
+
+interface ResolvedSanicBlueprintGroupMember {
+  readonly blueprint: SanicBlueprint;
+  readonly prefixes: readonly string[];
+  readonly groupDepth: number;
 }
 
 interface StaticFastApiDecorator {
@@ -793,7 +799,7 @@ function staticSanicBlueprintGroup(
   }
 
   const entries = staticArgumentEntries(argumentList);
-  const blueprintNames: string[] = [];
+  const memberNames: string[] = [];
   let index = 0;
   while (index < entries.length) {
     const candidate = entries[index];
@@ -801,23 +807,23 @@ function staticSanicBlueprintGroup(
     if (candidate?.name !== "VariableName" || next?.name === "AssignOp") {
       break;
     }
-    const blueprintName = declarationName(input, candidate);
-    if (blueprintName === null || blueprintNames.includes(blueprintName)) {
+    const memberName = declarationName(input, candidate);
+    if (memberName === null || memberNames.includes(memberName)) {
       return null;
     }
-    blueprintNames.push(blueprintName);
+    memberNames.push(memberName);
     index += 1;
   }
   const keywordArguments = staticKeywordArguments(input, entries.slice(index));
   if (
-    blueprintNames.length === 0 ||
+    memberNames.length === 0 ||
     keywordArguments === null ||
     [...keywordArguments.keys()].some((argumentName) => argumentName !== "url_prefix")
   ) {
     return null;
   }
   const prefix = staticSanicPrefix(input, keywordArguments);
-  return prefix === null ? null : { name, constructorName, blueprintNames, prefix, node };
+  return prefix === null ? null : { name, constructorName, memberNames, prefix, node };
 }
 
 function staticArgumentEntries(argumentList: PythonSyntaxNode): readonly PythonSyntaxNode[] {
@@ -2311,6 +2317,85 @@ function latestProvenSanicBlueprintGroup(
   return null;
 }
 
+function resolveSanicBlueprintGroupMembers(
+  input: PythonExtractFileFactsInput,
+  topLevelNodes: readonly PythonSyntaxNode[],
+  imports: readonly FrameworkNamedImport[],
+  blueprints: readonly SanicBlueprint[],
+  groups: readonly SanicBlueprintGroup[],
+  group: SanicBlueprintGroup,
+  visited: ReadonlySet<string> = new Set<string>()
+): readonly ResolvedSanicBlueprintGroupMember[] | null {
+  const groupKey = nodeKey(group.node);
+  if (visited.has(groupKey)) {
+    return null;
+  }
+  const nestedVisited = new Set(visited);
+  nestedVisited.add(groupKey);
+  const members: ResolvedSanicBlueprintGroupMember[] = [];
+
+  for (const memberName of group.memberNames) {
+    const blueprint = latestProvenFrameworkInstance(
+      input,
+      topLevelNodes,
+      imports,
+      blueprints,
+      memberName,
+      group.node.from,
+      "Blueprint"
+    );
+    if (blueprint !== null) {
+      members.push({
+        blueprint,
+        prefixes: [group.prefix, blueprint.prefix],
+        groupDepth: 1
+      });
+      continue;
+    }
+
+    const childGroup = latestProvenSanicBlueprintGroup(
+      input,
+      topLevelNodes,
+      imports,
+      groups,
+      memberName,
+      group.node.from
+    );
+    if (childGroup === null) {
+      return null;
+    }
+    const childMembers = resolveSanicBlueprintGroupMembers(
+      input,
+      topLevelNodes,
+      imports,
+      blueprints,
+      groups,
+      childGroup,
+      nestedVisited
+    );
+    if (childMembers === null) {
+      return null;
+    }
+    for (const childMember of childMembers) {
+      members.push({
+        blueprint: childMember.blueprint,
+        prefixes: [group.prefix, ...childMember.prefixes],
+        groupDepth: childMember.groupDepth + 1
+      });
+    }
+  }
+
+  const blueprintKeys = new Set<string>();
+  for (const member of members) {
+    const blueprintKey = nodeKey(member.blueprint.node);
+    if (blueprintKeys.has(blueprintKey)) {
+      return null;
+    }
+    blueprintKeys.add(blueprintKey);
+  }
+  return members;
+}
+
 function latestProvenFastApiApplication(
   input: PythonExtractFileFactsInput,
   topLevelNodes: readonly PythonSyntaxNode[],
@@ -3682,10 +3767,7 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
                 registration.blueprintName,
                 registration.node.from
               );
-              if (
-                groupAtRegistration === null ||
-                !groupAtRegistration.blueprintNames.includes(sanicDecorator.receiver)
-              ) {
+              if (groupAtRegistration === null) {
                 continue;
               }
               const applicationAtRegistration = latestProvenFrameworkInstance(
@@ -3697,31 +3779,27 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
                 registration.node.from,
                 "Sanic"
               );
-              const groupBlueprints = groupAtRegistration.blueprintNames.map(
-                (blueprintName) =>
-                  latestProvenFrameworkInstance(
-                    input,
-                    topLevelNodes,
-                    sanicImports,
-                    sanicBlueprints,
-                    blueprintName,
-                    groupAtRegistration.node.from,
-                    "Blueprint"
-                  )
+              const groupMembers = resolveSanicBlueprintGroupMembers(
+                input,
+                topLevelNodes,
+                sanicImports,
+                sanicBlueprints,
+                sanicBlueprintGroups,
+                groupAtRegistration
               );
-              const blueprintAtGroup =
-                groupBlueprints[
-                  groupAtRegistration.blueprintNames.indexOf(sanicDecorator.receiver)
-                ];
+              const groupMember = groupMembers?.find(
+                (member) => nodeKey(member.blueprint.node) === nodeKey(blueprintAtDecorator.node)
+              );
               if (
                 applicationAtRegistration === null ||
-                groupBlueprints.some((blueprint) => blueprint === null) ||
-                blueprintAtGroup === undefined ||
-                blueprintAtGroup === null ||
-                nodeKey(blueprintAtDecorator.node) !== nodeKey(blueprintAtGroup.node)
+                groupMember === undefined
               ) {
                 continue;
               }
+              const ruleId =
+                groupMember.groupDepth === 1
+                  ? "framework.sanic.direct-blueprint-group.app-blueprint.decorator.local-function"
+                  : "framework.sanic.direct-nested-blueprint-group.app-blueprint.decorator.local-function";
               for (const method of sanicDecorator.methods) {
                 addPythonRoute(
                   method,
@@ -3729,11 +3807,10 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
                   handler,
                   combinedRoutePath(
                     registration.prefix,
-                    groupAtRegistration.prefix,
-                    blueprintAtGroup.prefix,
+                    ...groupMember.prefixes,
                     sanicDecorator.path
                   ),
-                  "framework.sanic.direct-blueprint-group.app-blueprint.decorator.local-function"
+                  ruleId
                 );
               }
             }
