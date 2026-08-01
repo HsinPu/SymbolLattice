@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.147.0 是開發者預覽版，尚未發布到 npm；請從原始碼執行。
+> v0.148.0 是開發者預覽版，尚未發布到 npm；請從原始碼執行。
 
 SymbolLattice 為專案建立可查詢的本機程式碼符號圖譜。每條關係都保留來源規則、解析階段與信心值；原始碼僅保存於受索引專案的 `.symbol-lattice/index.sqlite`，不會被靜默上傳。
 
@@ -49,11 +49,11 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 Windows PowerShell 若沒有 `npm` 指令，請改用 `npm.cmd`。檔案系統根目錄與使用者家目錄需要明確加上 `--force` 才會接受。
 
-## v0.147.0
+## v0.148.0
 
-- aiohttp 新增 direct router 路由擷取：支援 `from aiohttp import web`（含別名）、`web.Application()`、頂層 `app.router.add_*` 與 `add_route` 的字面量斜線路徑與大寫 method。
-- `add_get` 會依 aiohttp 的預設建立 `GET` 與 `HEAD`；字面量 `allow_head=False` 則只建立 `GET`。只有 app、handler、定義順序與未重綁定都能被證明時才產生 `exact`。
-- artifact facts 升級為 `multi-language-ast-v128`；project resolver 維持 `project-resolver-v38`，下次明確 `sync` 會重新萃取 Python facts 並重投影路由。
+- aiohttp 新增 declarative route table 擷取：支援由 `app.router.add_routes(...)` 掛載的具名或 inline 字面量 `[web.get(...), web.post(...), web.route(...)]`，並保留 import alias 與 direct `web.Application()` 證據。
+- 每個 table entry 都各自驗證字面量路徑／method、同檔頂層 function handler、定義順序與未重綁定；`web.get` 同樣正確保留預設 `GET` 與 `HEAD`，字面量 `allow_head=False` 則只建立 `GET`。
+- artifact facts 升級為 `multi-language-ast-v129`；project resolver 維持 `project-resolver-v38`，下次明確 `sync` 會重新萃取 Python facts 並重投影路由。
 
 ## 已知限制
 
@@ -69,7 +69,7 @@ Windows PowerShell 若沒有 `npm` 指令，請改用 `npm.cmd`。檔案系統�
 - HttpRouter 目前僅支援 `httprouter.New()` 的 direct HTTP method；`Handle`、`Handler`／`HandlerFunc`、自動 OPTIONS、wrapper、動態值與重綁都不會成為 `exact`。
 - Rails 目前僅支援 direct `Rails.application.routes.draw` 內的字面量 verb、`resources`／`resource`、標準 action 與陣列形狀的 `only`／`except`。namespace、scope、巢狀 resource、自訂 path/controller、單一 symbol filter、動態值與慣例檔案/class/action 不唯一時不會成為 `exact`。
 - Starlette 目前只支援 direct import、頂層字面量 `Route` list，以及由 `Starlette(routes=...)` 掛載的同檔頂層具名 function endpoint。`Mount`／`Router`、class endpoint、混合或動態 list、tuple、不支援的 `Route` 選項、跨檔 route、handler 定義在 route 之後、重綁與歧義均不會成為 `exact`。
-- aiohttp 目前只支援 direct `from aiohttp import web`、`web.Application()`、頂層 `app.router.add_get`／`add_post`／`add_put`／`add_patch`／`add_delete`／`add_head` 與 `add_route`，以及同檔頂層具名 function handler。`add_routes`、`RouteTableDef`、decorator、class view、subapp、動態值、非大寫或 wildcard `add_route` method、非字面量 `allow_head`、handler 定義在 registration 之後、重綁與歧義均不會成為 `exact`。
+- aiohttp 目前支援 direct `from aiohttp import web`、`web.Application()`、頂層 `app.router.add_get`／`add_post`／`add_put`／`add_patch`／`add_delete`／`add_head`／`add_route`，以及具名或 inline 字面量 `app.router.add_routes([web.get(...)])` table 與同檔頂層具名 function handler。`RouteTableDef`、decorator、class view、subapp、動態值、非大寫或 wildcard `route`／`add_route` method、非字面量 `allow_head`、handler 定義在 entry 之後、重綁與歧義均不會成為 `exact`。
 - 其他框架只涵蓋已實作且可驗證的切片；完整變更請見 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 驗證

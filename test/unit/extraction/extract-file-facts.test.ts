@@ -2482,6 +2482,146 @@ describe("source extraction", () => {
     expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
   });
 
+  it("extracts literal aiohttp route tables mounted by direct add_routes", () => {
+    const facts = extractFileFacts({
+      filePath: "app/aiohttp_routes.py",
+      language: "python",
+      sourceText: [
+        "from aiohttp import web as aio",
+        "",
+        "async def health(request):",
+        "    return None",
+        "",
+        "def create_job(request):",
+        "    return None",
+        "",
+        "async def update_job(request):",
+        "    return None",
+        "",
+        "async def delete_job(request):",
+        "    return None",
+        "",
+        "routes = [",
+        "    aio.get(\"/health\", health),",
+        "    aio.get(\"/ready\", health, allow_head=False),",
+        "    aio.post(\"/jobs\", create_job, name=\"jobs\"),",
+        "    aio.route(\"PATCH\", \"/jobs/{job_id}\", update_job),",
+        "]",
+        "app = aio.Application()",
+        "app.router.add_routes(routes)",
+        "inline_app = aio.Application()",
+        "inline_app.router.add_routes([aio.delete(\"/jobs/{job_id}\", delete_job)])"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId,
+          edge.evidence?.stage,
+          edge.resolution,
+          edge.confidence
+        ])
+    ).toEqual([
+      [
+        "GET /health",
+        "app/aiohttp_routes.py#health",
+        "framework.aiohttp.direct-router.add-routes.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "HEAD /health",
+        "app/aiohttp_routes.py#health",
+        "framework.aiohttp.direct-router.add-routes.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "GET /ready",
+        "app/aiohttp_routes.py#health",
+        "framework.aiohttp.direct-router.add-routes.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "POST /jobs",
+        "app/aiohttp_routes.py#create_job",
+        "framework.aiohttp.direct-router.add-routes.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "PATCH /jobs/{job_id}",
+        "app/aiohttp_routes.py#update_job",
+        "framework.aiohttp.direct-router.add-routes.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "DELETE /jobs/{job_id}",
+        "app/aiohttp_routes.py#delete_job",
+        "framework.aiohttp.direct-router.add-routes.local-function",
+        "syntax",
+        "exact",
+        1
+      ]
+    ]);
+  });
+
+  it("rejects unmounted, dynamic, unsupported, rebound, and late aiohttp route tables", () => {
+    const facts = extractFileFacts({
+      filePath: "app/unproven_aiohttp_routes.py",
+      language: "python",
+      sourceText: [
+        "from aiohttp import web",
+        "",
+        "async def handler(request):",
+        "    return None",
+        "",
+        "async def shadowed_handler(request):",
+        "    return None",
+        "",
+        "dynamic_routes = [web.get(dynamic_path, handler)]",
+        "unmounted = [web.get(\"/unmounted\", handler)]",
+        "rebound_routes = [web.get(\"/rebound\", handler)]",
+        "rebound_routes = build_routes()",
+        "late_routes = [web.get(\"/late\", late_handler)]",
+        "",
+        "app = web.Application()",
+        "app.router.add_routes(dynamic_routes)",
+        "app.router.add_routes(rebound_routes)",
+        "app.router.add_routes([web.view(\"/view\", handler)])",
+        "app.router.add_routes([web.route(\"*\", \"/any\", handler)])",
+        "app.router.add_routes([web.get(\"/unknown\", handler, allow_head=enabled)])",
+        "app.router.add_routes(late_routes)",
+        "",
+        "async def late_handler(request):",
+        "    return None",
+        "",
+        "rebound_app = web.Application()",
+        "rebound_app = build_application()",
+        "rebound_app.router.add_routes([web.post(\"/rebound-app\", handler)])",
+        "",
+        "web = replacement",
+        "shadowed = web.Application()",
+        "shadowed.router.add_routes([web.delete(\"/shadowed\", shadowed_handler)])"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+  });
+
   it("rejects unmounted, dynamic, rebound, and unsupported Starlette Route list shapes", () => {
     const facts = extractFileFacts({
       filePath: "app/unproven_starlette.py",

@@ -120,6 +120,30 @@ interface StaticAioHttpRouteRegistration {
   readonly node: PythonSyntaxNode;
 }
 
+/** One direct literal `aiohttp.web.get(...)` or `route(...)` table entry. */
+interface StaticAioHttpRouteDefinition {
+  readonly webModuleName: string;
+  readonly methods: readonly RouteMethod[];
+  readonly path: string;
+  readonly handlerName: string;
+  readonly node: PythonSyntaxNode;
+}
+
+/** A top-level literal aiohttp route table passed to `app.router.add_routes`. */
+interface StaticAioHttpRouteList {
+  readonly name: string;
+  readonly routes: readonly StaticAioHttpRouteDefinition[];
+  readonly node: PythonSyntaxNode;
+}
+
+/** One direct app-router registration of a named or inline literal aiohttp route table. */
+interface StaticAioHttpRouteTableRegistration {
+  readonly applicationName: string;
+  readonly routeListName: string | null;
+  readonly inlineRoutes: readonly StaticAioHttpRouteDefinition[] | null;
+  readonly node: PythonSyntaxNode;
+}
+
 /** One direct literal `django.urls.path(...)` entry in a final `urlpatterns` list. */
 interface StaticDjangoPathRoute {
   readonly factoryName: string;
@@ -215,6 +239,15 @@ const AIOHTTP_ROUTER_SHORTCUT_METHODS: Readonly<Record<string, readonly RouteMet
   add_patch: ["PATCH"],
   add_delete: ["DELETE"],
   add_head: ["HEAD"]
+};
+
+const AIOHTTP_ROUTE_TABLE_SHORTCUT_METHODS: Readonly<Record<string, readonly RouteMethod[]>> = {
+  get: ["GET", "HEAD"],
+  post: ["POST"],
+  put: ["PUT"],
+  patch: ["PATCH"],
+  delete: ["DELETE"],
+  head: ["HEAD"]
 };
 
 const AIOHTTP_ROUTE_METHODS = new Set<RouteMethod>([
@@ -1248,6 +1281,207 @@ function staticAioHttpRouteRegistration(
     : { applicationName, methods, path, handlerName, node };
 }
 
+function staticAioHttpRouteDefinition(
+  input: PythonExtractFileFactsInput,
+  node: PythonSyntaxNode
+): StaticAioHttpRouteDefinition | null {
+  if (node.name !== "CallExpression") {
+    return null;
+  }
+  const callChildren = directChildren(node);
+  const member = callChildren[0];
+  const arguments_ = callChildren[1];
+  if (callChildren.length !== 2 || member?.name !== "MemberExpression" || arguments_?.name !== "ArgList") {
+    return null;
+  }
+  const memberChildren = directChildren(member);
+  const webModule = memberChildren[0];
+  const methodNode = memberChildren[2];
+  if (
+    memberChildren.length !== 3 ||
+    webModule?.name !== "VariableName" ||
+    methodNode?.name !== "PropertyName"
+  ) {
+    return null;
+  }
+  const webModuleName = declarationName(input, webModule);
+  const methodName = nodeText(input, methodNode);
+  const entries = staticArgumentEntries(arguments_);
+  if (webModuleName === null) {
+    return null;
+  }
+
+  if (methodName === "route") {
+    const methodValueNode = entries[0];
+    const pathNode = entries[1];
+    const handlerNode = entries[2];
+    const keywordArguments = staticKeywordArgumentsAfterPositions(input, entries, 3);
+    if (
+      methodValueNode?.name !== "String" ||
+      pathNode?.name !== "String" ||
+      handlerNode?.name !== "VariableName" ||
+      keywordArguments === null ||
+      [...keywordArguments.keys()].some((name) => name !== "name")
+    ) {
+      return null;
+    }
+    const routeNameNode = keywordArguments.get("name");
+    if (
+      routeNameNode !== undefined &&
+      (routeNameNode.name !== "String" || staticPlainPythonString(input, routeNameNode) === null)
+    ) {
+      return null;
+    }
+    const rawMethod = staticPlainPythonString(input, methodValueNode);
+    const rawPath = staticPlainPythonString(input, pathNode);
+    const method =
+      rawMethod !== null && rawMethod === rawMethod.toUpperCase() && AIOHTTP_ROUTE_METHODS.has(rawMethod as RouteMethod)
+        ? (rawMethod as RouteMethod)
+        : null;
+    const path = rawPath === null ? null : staticStarletteRoutePath(rawPath);
+    const handlerName = declarationName(input, handlerNode);
+    return method === null || path === null || handlerName === null
+      ? null
+      : { webModuleName, methods: [method], path, handlerName, node };
+  }
+
+  const shortcutMethods = AIOHTTP_ROUTE_TABLE_SHORTCUT_METHODS[methodName];
+  const pathNode = entries[0];
+  const handlerNode = entries[1];
+  const keywordArguments = staticKeywordArgumentsAfterPositions(input, entries, 2);
+  if (
+    shortcutMethods === undefined ||
+    pathNode?.name !== "String" ||
+    handlerNode?.name !== "VariableName" ||
+    keywordArguments === null ||
+    [...keywordArguments.keys()].some(
+      (name) => name !== "name" && !(methodName === "get" && name === "allow_head")
+    )
+  ) {
+    return null;
+  }
+  const routeNameNode = keywordArguments.get("name");
+  if (
+    routeNameNode !== undefined &&
+    (routeNameNode.name !== "String" || staticPlainPythonString(input, routeNameNode) === null)
+  ) {
+    return null;
+  }
+  const allowHeadNode = keywordArguments.get("allow_head");
+  const allowHead =
+    allowHeadNode === undefined ? true : staticPythonBoolean(input, allowHeadNode);
+  if (allowHead === null) {
+    return null;
+  }
+  const rawPath = staticPlainPythonString(input, pathNode);
+  const path = rawPath === null ? null : staticStarletteRoutePath(rawPath);
+  const handlerName = declarationName(input, handlerNode);
+  const methods = methodName === "get" && allowHead === false ? ["GET" as const] : shortcutMethods;
+  return path === null || handlerName === null
+    ? null
+    : { webModuleName, methods, path, handlerName, node };
+}
+
+function staticAioHttpRouteEntries(
+  input: PythonExtractFileFactsInput,
+  node: PythonSyntaxNode
+): readonly StaticAioHttpRouteDefinition[] | null {
+  if (node.name !== "ArrayExpression") {
+    return null;
+  }
+  const entries = directChildren(node).filter((child) => !["[", "]", ","].includes(child.name));
+  const routes: StaticAioHttpRouteDefinition[] = [];
+  for (const entry of entries) {
+    const route = staticAioHttpRouteDefinition(input, entry);
+    if (route === null) {
+      return null;
+    }
+    routes.push(route);
+  }
+  return routes;
+}
+
+function staticAioHttpRouteList(
+  input: PythonExtractFileFactsInput,
+  node: PythonSyntaxNode
+): StaticAioHttpRouteList | null {
+  if (node.name !== "AssignStatement") {
+    return null;
+  }
+  const children = directChildren(node);
+  const target = children[0];
+  const operator = children[1];
+  const value = children[2];
+  if (
+    children.length !== 3 ||
+    target?.name !== "VariableName" ||
+    operator?.name !== "AssignOp" ||
+    value?.name !== "ArrayExpression"
+  ) {
+    return null;
+  }
+  const name = declarationName(input, target);
+  const routes = staticAioHttpRouteEntries(input, value);
+  return name === null || routes === null ? null : { name, routes, node };
+}
+
+function staticAioHttpRouteTableRegistration(
+  input: PythonExtractFileFactsInput,
+  node: PythonSyntaxNode
+): StaticAioHttpRouteTableRegistration | null {
+  if (node.name !== "ExpressionStatement") {
+    return null;
+  }
+  const expression = directChildren(node)[0];
+  if (expression?.name !== "CallExpression") {
+    return null;
+  }
+  const callChildren = directChildren(expression);
+  const member = callChildren[0];
+  const arguments_ = callChildren[1];
+  if (callChildren.length !== 2 || member?.name !== "MemberExpression" || arguments_?.name !== "ArgList") {
+    return null;
+  }
+  const memberChildren = directChildren(member);
+  const routerMember = memberChildren[0];
+  const methodNode = memberChildren[2];
+  if (
+    memberChildren.length !== 3 ||
+    routerMember?.name !== "MemberExpression" ||
+    methodNode?.name !== "PropertyName" ||
+    nodeText(input, methodNode) !== "add_routes"
+  ) {
+    return null;
+  }
+  const routerChildren = directChildren(routerMember);
+  const applicationNode = routerChildren[0];
+  const routerNameNode = routerChildren[2];
+  if (
+    routerChildren.length !== 3 ||
+    applicationNode?.name !== "VariableName" ||
+    routerNameNode?.name !== "PropertyName" ||
+    nodeText(input, routerNameNode) !== "router"
+  ) {
+    return null;
+  }
+  const applicationName = declarationName(input, applicationNode);
+  const entries = staticArgumentEntries(arguments_);
+  const routeListNode = entries[0];
+  if (applicationName === null || entries.length !== 1 || routeListNode === undefined) {
+    return null;
+  }
+  if (routeListNode.name === "VariableName") {
+    const routeListName = declarationName(input, routeListNode);
+    return routeListName === null
+      ? null
+      : { applicationName, routeListName, inlineRoutes: null, node };
+  }
+  const inlineRoutes = staticAioHttpRouteEntries(input, routeListNode);
+  return inlineRoutes === null
+    ? null
+    : { applicationName, routeListName: null, inlineRoutes, node };
+}
+
 function staticDjangoPathRoute(
   input: PythonExtractFileFactsInput,
   node: PythonSyntaxNode,
@@ -1733,6 +1967,44 @@ function latestProvenAioHttpApplication(
   return null;
 }
 
+function latestProvenAioHttpWebImport(
+  input: PythonExtractFileFactsInput,
+  topLevelNodes: readonly PythonSyntaxNode[],
+  imports: readonly FrameworkNamedImport[],
+  webModuleName: string,
+  before: number
+): FrameworkNamedImport | null {
+  const candidates = imports
+    .filter(
+      (candidate) =>
+        candidate.importedName === "web" &&
+        candidate.alias === webModuleName &&
+        hasUnambiguousFrameworkImportAlias(imports, candidate) &&
+        candidate.node.to <= before &&
+        !hasTopLevelRebinding(input, topLevelNodes, candidate.alias, candidate.node.to, before)
+    )
+    .sort((left, right) => right.node.from - left.node.from);
+  return candidates.length === 1 ? candidates[0] ?? null : null;
+}
+
+function latestProvenAioHttpRouteList(
+  input: PythonExtractFileFactsInput,
+  topLevelNodes: readonly PythonSyntaxNode[],
+  routeLists: readonly StaticAioHttpRouteList[],
+  routeListName: string,
+  before: number
+): StaticAioHttpRouteList | null {
+  const candidates = routeLists
+    .filter(
+      (candidate) =>
+        candidate.name === routeListName &&
+        candidate.node.to <= before &&
+        !hasTopLevelRebinding(input, topLevelNodes, candidate.name, candidate.node.to, before)
+    )
+    .sort((left, right) => right.node.from - left.node.from);
+  return candidates.length === 1 ? candidates[0] ?? null : null;
+}
+
 function latestProvenDjangoPathImport(
   input: PythonExtractFileFactsInput,
   topLevelNodes: readonly PythonSyntaxNode[],
@@ -2212,6 +2484,12 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
     const aioHttpRouteRegistrations = topLevelNodes
       .map((node) => staticAioHttpRouteRegistration(input, node))
       .filter((candidate): candidate is StaticAioHttpRouteRegistration => candidate !== null);
+    const aioHttpRouteLists = topLevelNodes
+      .map((node) => staticAioHttpRouteList(input, node))
+      .filter((candidate): candidate is StaticAioHttpRouteList => candidate !== null);
+    const aioHttpRouteTableRegistrations = topLevelNodes
+      .map((node) => staticAioHttpRouteTableRegistration(input, node))
+      .filter((candidate): candidate is StaticAioHttpRouteTableRegistration => candidate !== null);
     const topLevelFunctions = topLevelNodes.flatMap((statement) => {
       const functionNode =
         decoratedDefinition(statement) ??
@@ -2392,6 +2670,78 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
           registration.path,
           "framework.aiohttp.direct-router.local-function"
         );
+      }
+    }
+
+    for (const registration of aioHttpRouteTableRegistrations) {
+      if (
+        latestProvenAioHttpApplication(
+          input,
+          topLevelNodes,
+          aioHttpImports,
+          aioHttpApplications,
+          registration.applicationName,
+          registration.node.from
+        ) === null
+      ) {
+        continue;
+      }
+      const routeList =
+        registration.inlineRoutes === null
+          ? registration.routeListName === null
+            ? null
+            : latestProvenAioHttpRouteList(
+                input,
+                topLevelNodes,
+                aioHttpRouteLists,
+                registration.routeListName,
+                registration.node.from
+              )
+          : null;
+      const routes = registration.inlineRoutes ?? routeList?.routes;
+      if (routes === undefined) {
+        continue;
+      }
+      for (const route of routes) {
+        if (
+          latestProvenAioHttpWebImport(
+            input,
+            topLevelNodes,
+            aioHttpImports,
+            route.webModuleName,
+            route.node.from
+          ) === null
+        ) {
+          continue;
+        }
+        const handlers = topLevelFunctions.filter(
+          (candidate) =>
+            candidate.name === route.handlerName &&
+            candidate.node.to <= route.node.from &&
+            !hasTopLevelRebinding(
+              input,
+              topLevelNodes,
+              candidate.name,
+              candidate.node.to,
+              route.node.from
+            )
+        );
+        if (handlers.length !== 1) {
+          continue;
+        }
+        const handler = handlers[0];
+        if (handler === undefined) {
+          continue;
+        }
+        for (const method of route.methods) {
+          addPythonRoute(
+            method,
+            route.node,
+            handler.symbol,
+            route.path,
+            "framework.aiohttp.direct-router.add-routes.local-function"
+          );
+        }
       }
     }
 

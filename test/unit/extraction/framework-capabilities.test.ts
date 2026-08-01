@@ -223,6 +223,7 @@ describe("first-party framework capabilities", () => {
       routeRegistrations: [],
       surfaces: [
         "direct aiohttp.web Application router registrations",
+        "literal aiohttp.web route tables through direct router add_routes",
         "same-file top-level function handlers"
       ]
     });

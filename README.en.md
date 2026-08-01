@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.147.0 is an early developer release. The package is not published to npm; run it from source.
+> v0.148.0 is an early developer release. The package is not published to npm; run it from source.
 
 SymbolLattice builds a queryable local code-symbol graph for a project. Each relation retains its source rule, resolution stage, and confidence. Source remains in the indexed project's `.symbol-lattice/index.sqlite` and is never silently uploaded.
 
@@ -49,11 +49,11 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 On Windows PowerShell, use `npm.cmd` if `npm` is unavailable. Filesystem roots and home directories are rejected unless `--force` is explicit.
 
-## v0.147.0
+## v0.148.0
 
-- aiohttp now extracts direct router registrations: `from aiohttp import web` (including aliases), `web.Application()`, and top-level `app.router.add_*` or `add_route` calls with literal slash paths and uppercase methods are supported.
-- `add_get` records both `GET` and aiohttp's default `HEAD`; literal `allow_head=False` records only `GET`. A relation becomes `exact` only after the app, handler, declaration order, and absence of rebinding are proven.
-- Artifact facts advance to `multi-language-ast-v128`; the project resolver remains `project-resolver-v38`, and the next explicit `sync` re-extracts Python facts and reprojects routes.
+- aiohttp now extracts declarative route tables: named or inline literal `[web.get(...), web.post(...), web.route(...)]` tables mounted through `app.router.add_routes(...)`, with import-alias and direct `web.Application()` proof.
+- Every table entry proves its literal path/method, same-file top-level function handler, declaration order, and absence of rebinding. `web.get` still records the default `GET` and `HEAD`; literal `allow_head=False` records only `GET`.
+- Artifact facts advance to `multi-language-ast-v129`; the project resolver remains `project-resolver-v38`, and the next explicit `sync` re-extracts Python facts and reprojects routes.
 
 ## Deliberate limits
 
@@ -69,7 +69,7 @@ On Windows PowerShell, use `npm.cmd` if `npm` is unavailable. Filesystem roots a
 - HttpRouter currently supports only direct `httprouter.New()` HTTP methods. `Handle`, `Handler`, `HandlerFunc`, automatic OPTIONS behavior, wrappers, dynamic values, and rebinding never become `exact`.
 - Rails currently supports only literal verb, `resources`, and `resource` declarations inside direct `Rails.application.routes.draw` blocks, with standard actions and array-shaped `only`/`except` filters. Namespaces, scopes, nested resources, custom paths/controllers, single-symbol filters, dynamic values, and non-unique conventional file/class/action evidence never become `exact`.
 - Starlette currently supports only direct imports, top-level literal `Route` lists, and same-file top-level named function endpoints mounted through `Starlette(routes=...)`. `Mount`/`Router`, class endpoints, mixed or dynamic lists, tuples, unsupported `Route` options, cross-file routes, handlers declared after routes, rebinding, and ambiguity never become `exact`.
-- aiohttp currently supports only direct `from aiohttp import web`, `web.Application()`, top-level `app.router.add_get`/`add_post`/`add_put`/`add_patch`/`add_delete`/`add_head` or `add_route`, and same-file top-level named function handlers. `add_routes`, `RouteTableDef`, decorators, class views, subapps, dynamic values, non-uppercase or wildcard `add_route` methods, non-literal `allow_head`, handlers declared after registration, rebinding, and ambiguity never become `exact`.
+- aiohttp currently supports direct `from aiohttp import web`, `web.Application()`, top-level `app.router.add_get`/`add_post`/`add_put`/`add_patch`/`add_delete`/`add_head`/`add_route`, plus named or inline literal `app.router.add_routes([web.get(...)])` tables and same-file top-level named function handlers. `RouteTableDef`, decorators, class views, subapps, dynamic values, non-uppercase or wildcard `route`/`add_route` methods, non-literal `allow_head`, handlers declared after their entry, rebinding, and ambiguity never become `exact`.
 - Other frameworks expose only implemented, evidence-backed slices; see [CHANGELOG.md](CHANGELOG.md) for the full history.
 
 ## Verification

@@ -6,6 +6,26 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.148.0] - 2026-08-01
+
+### Added
+
+- Python extraction now recognizes aiohttp declarative route tables: top-level named lists and inline literal lists of direct `web.get`, `web.post`, `web.put`, `web.patch`, `web.delete`, `web.head`, or `web.route` entries mounted through direct `app.router.add_routes(...)` calls.
+- Every table entry independently proves the `aiohttp.web` import alias, literal slash path and standard uppercase generic method, same-file top-level named handler declared before the entry, and absence of rebinding. `web.get` records its documented default `GET` plus `HEAD`, while literal `allow_head=False` records only `GET`.
+- New unit and service coverage verifies named and inline tables, aliases, default and suppressed HEAD behavior, generic route entries, exact handler evidence, and rejected dynamic, unmounted, unsupported, rebound, or late declarations.
+
+### Compatibility
+
+- The artifact-facts extractor advances to `multi-language-ast-v129`. Existing graphs and SQLite schema remain readable; the next explicit `sync` re-extracts Python facts and reprojects aiohttp route tables. The project resolver remains `project-resolver-v38`.
+
+### Deliberate limits
+
+- aiohttp table support is intentionally limited to direct imports, direct `web.Application()` apps, literal direct `web.*` entries, direct `app.router.add_routes(...)` mounts, and same-file top-level named function handlers. `RouteTableDef`, decorators, class views, subapps, nested or dynamic composition, wildcard or non-uppercase generic methods, non-literal `allow_head`, handlers declared after an entry, rebinding, and ambiguity remain non-exact.
+
+### Comparison notes
+
+- The inspected CodeGraph baseline source tree contains no `aiohttp` reference. SymbolLattice independently uses its Python AST to prove a literal route-table definition, the add-routes mount, per-entry import and handler proof, and aiohttp's documented `GET`/`HEAD` default; it remains deliberately narrower for decorators, views, subapps, and runtime composition.
+
 ## [0.147.0] - 2026-08-01
 
 ### Added
@@ -2760,7 +2780,8 @@ No unreleased changes.
 - Explicit full indexing, caller/callee/impact queries, and read-only MCP exploration.
 - `exact`, `heuristic`, and `unresolved` relationship states.
 
-[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.147.0...HEAD
+[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.148.0...HEAD
+[0.148.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.147.0...v0.148.0
 [0.147.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.146.0...v0.147.0
 [0.146.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.145.0...v0.146.0
 [0.145.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.144.0...v0.145.0

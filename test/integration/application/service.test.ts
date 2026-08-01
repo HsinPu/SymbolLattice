@@ -3332,6 +3332,64 @@ describe("SymbolLatticeService", () => {
     );
   });
 
+  it("indexes literal aiohttp route tables mounted through direct add_routes", async () => {
+    const projectPath = await createInlineProject({
+      "api/main.py": [
+        "from aiohttp import web",
+        "",
+        "async def health(request):",
+        "    return None",
+        "",
+        "def create_job(request):",
+        "    return None",
+        "",
+        "routes = [",
+        "    web.get(\"/health\", health, allow_head=False),",
+        "    web.post(\"/jobs\", create_job),",
+        "]",
+        "app = web.Application()",
+        "app.router.add_routes(routes)"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+
+    expect(routes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "GET",
+          path: "/health",
+          handler: expect.objectContaining({ qualifiedName: "api/main.py#health" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.aiohttp.direct-router.add-routes.local-function",
+              stage: "syntax"
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "POST",
+          path: "/jobs",
+          handler: expect.objectContaining({ qualifiedName: "api/main.py#create_job" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.aiohttp.direct-router.add-routes.local-function",
+              stage: "syntax"
+            })
+          })
+        })
+      ])
+    );
+    expect(routes.routes).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ method: "HEAD", path: "/health" })])
+    );
+  });
+
   it("indexes Scala source plus Play conf/routes with exact package-class-method handler proof", async () => {
     const projectPath = await createInlineProject({
       "app/controllers/HealthController.scala": [
