@@ -2664,6 +2664,147 @@ describe("source extraction", () => {
     expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
   });
 
+  it("extracts direct Sanic application decorators with exact local handlers", () => {
+    const facts = extractFileFacts({
+      filePath: "app/sanic_app.py",
+      language: "python",
+      sourceText: [
+        "from sanic import Sanic as App",
+        "",
+        "app = App(\"symbol-lattice\")",
+        "",
+        "@app.get(\"/health\", name=\"health\")",
+        "async def health(request):",
+        "    return None",
+        "",
+        "@app.post(\"/jobs\")",
+        "def create_job(request):",
+        "    return None",
+        "",
+        "@app.route(\"/jobs/<job_id>\", methods=[\"PATCH\", \"DELETE\"], name=\"job\")",
+        "async def update_or_delete_job(request, job_id):",
+        "    return None",
+        "",
+        "@app.route(\"/ready\")",
+        "async def ready(request):",
+        "    return None",
+        "",
+        "@app.options(\"/metadata\")",
+        "async def metadata(request):",
+        "    return None"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId,
+          edge.evidence?.stage,
+          edge.resolution,
+          edge.confidence
+        ])
+    ).toEqual([
+      [
+        "GET /health",
+        "app/sanic_app.py#health",
+        "framework.sanic.direct-app.decorator.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "POST /jobs",
+        "app/sanic_app.py#create_job",
+        "framework.sanic.direct-app.decorator.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "PATCH /jobs/<job_id>",
+        "app/sanic_app.py#update_or_delete_job",
+        "framework.sanic.direct-app.decorator.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "DELETE /jobs/<job_id>",
+        "app/sanic_app.py#update_or_delete_job",
+        "framework.sanic.direct-app.decorator.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "GET /ready",
+        "app/sanic_app.py#ready",
+        "framework.sanic.direct-app.decorator.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "OPTIONS /metadata",
+        "app/sanic_app.py#metadata",
+        "framework.sanic.direct-app.decorator.local-function",
+        "syntax",
+        "exact",
+        1
+      ]
+    ]);
+  });
+
+  it("rejects dynamic, unsupported, rebound, and late Sanic decorator routes", () => {
+    const facts = extractFileFacts({
+      filePath: "app/unproven_sanic.py",
+      language: "python",
+      sourceText: [
+        "from sanic import Sanic",
+        "",
+        "app = Sanic(\"symbol-lattice\")",
+        "",
+        "@app.get(dynamic_path)",
+        "async def dynamic_path_handler(request):",
+        "    return None",
+        "",
+        "@app.route(\"/dynamic-methods\", methods=allowed_methods)",
+        "async def dynamic_methods_handler(request):",
+        "    return None",
+        "",
+        "@app.route(\"/wildcard\", methods=[\"*\"])",
+        "async def wildcard_handler(request):",
+        "    return None",
+        "",
+        "@app.get(\"/extra\", strict_slashes=True)",
+        "async def extra_handler(request):",
+        "    return None",
+        "",
+        "app = build_application()",
+        "@app.delete(\"/rebound\")",
+        "async def rebound_handler(request):",
+        "    return None",
+        "",
+        "@app.get(\"/late\")",
+        "async def late_handler(request):",
+        "    return None",
+        "",
+        "Sanic = replacement",
+        "shadowed = Sanic(\"shadowed\")",
+        "@shadowed.post(\"/shadowed\")",
+        "async def shadowed_handler(request):",
+        "    return None"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+  });
+
   it("retains proven cross-file FastAPI router and package-relative inclusion facts", () => {
     const routerFacts = extractFileFacts({
       filePath: "api/routers/catalog.py",

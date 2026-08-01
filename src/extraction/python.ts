@@ -29,7 +29,13 @@ export interface PythonExtractFileFactsInput {
 
 type PythonSyntaxNode = ReturnType<typeof parser.parse>["topNode"];
 
-type FrameworkImportedConstructor = "FastAPI" | "APIRouter" | "Flask" | "Blueprint" | "Starlette";
+type FrameworkImportedConstructor =
+  | "FastAPI"
+  | "APIRouter"
+  | "Flask"
+  | "Blueprint"
+  | "Starlette"
+  | "Sanic";
 
 interface FrameworkNamedImport {
   readonly importedName: string;
@@ -67,6 +73,9 @@ interface AioHttpApplication {
   readonly node: PythonSyntaxNode;
 }
 
+/** A direct `from sanic import Sanic` application instance. */
+interface SanicApplication extends FrameworkDirectInstance {}
+
 interface StaticFastApiDecorator {
   readonly receiver: string;
   readonly method: RouteMethod;
@@ -82,6 +91,14 @@ interface StaticFastApiRouterInclusion {
 }
 
 interface StaticFlaskDecorator {
+  readonly receiver: string;
+  readonly methods: readonly RouteMethod[];
+  readonly path: string;
+  readonly node: PythonSyntaxNode;
+}
+
+/** One direct top-level Sanic application decorator attached to a function. */
+interface StaticSanicDecorator {
   readonly receiver: string;
   readonly methods: readonly RouteMethod[];
   readonly path: string;
@@ -250,7 +267,27 @@ const AIOHTTP_ROUTE_TABLE_SHORTCUT_METHODS: Readonly<Record<string, readonly Rou
   head: ["HEAD"]
 };
 
+const SANIC_SHORTCUT_DECORATOR_METHODS: Readonly<Record<string, RouteMethod>> = {
+  get: "GET",
+  post: "POST",
+  put: "PUT",
+  patch: "PATCH",
+  delete: "DELETE",
+  head: "HEAD",
+  options: "OPTIONS"
+};
+
 const AIOHTTP_ROUTE_METHODS = new Set<RouteMethod>([
+  "GET",
+  "POST",
+  "PUT",
+  "PATCH",
+  "DELETE",
+  "HEAD",
+  "OPTIONS"
+]);
+
+const SANIC_ROUTE_METHODS = new Set<RouteMethod>([
   "GET",
   "POST",
   "PUT",
@@ -436,6 +473,13 @@ function staticAioHttpImports(
   return staticNamedFrameworkImports(input, node, "aiohttp");
 }
 
+function staticSanicImports(
+  input: PythonExtractFileFactsInput,
+  node: PythonSyntaxNode
+): readonly FrameworkNamedImport[] {
+  return staticNamedFrameworkImports(input, node, "sanic");
+}
+
 /**
  * Retains only the deliberately narrow import form supported by the project
  * resolver: `from .package.module import router [as local_router]`.
@@ -592,6 +636,17 @@ function staticFastApiApplication(
   node: PythonSyntaxNode,
   constructorNames: ReadonlySet<string>
 ): FastApiApplication | null {
+  const assignment = staticFrameworkConstructorAssignment(input, node, constructorNames);
+  return assignment === null
+    ? null
+    : { name: assignment.name, constructorName: assignment.constructorName, node: assignment.node };
+}
+
+function staticSanicApplication(
+  input: PythonExtractFileFactsInput,
+  node: PythonSyntaxNode,
+  constructorNames: ReadonlySet<string>
+): SanicApplication | null {
   const assignment = staticFrameworkConstructorAssignment(input, node, constructorNames);
   return assignment === null
     ? null
@@ -1774,6 +1829,103 @@ function staticFlaskDecorator(
   return { receiver, methods: [method], path, node };
 }
 
+function staticSanicRouteMethods(
+  input: PythonExtractFileFactsInput,
+  node: PythonSyntaxNode
+): readonly RouteMethod[] | null {
+  if (node.name !== "ArrayExpression") {
+    return null;
+  }
+  const entries = directChildren(node).filter(
+    (child) => !["[", "]", ","].includes(child.name)
+  );
+  if (entries.length === 0) {
+    return null;
+  }
+  const methods: RouteMethod[] = [];
+  for (const entry of entries) {
+    if (entry.name !== "String") {
+      return null;
+    }
+    const method = staticPlainPythonString(input, entry);
+    if (
+      method === null ||
+      method !== method.toUpperCase() ||
+      !SANIC_ROUTE_METHODS.has(method as RouteMethod)
+    ) {
+      return null;
+    }
+    const normalized = method as RouteMethod;
+    if (methods.includes(normalized)) {
+      return null;
+    }
+    methods.push(normalized);
+  }
+  return methods;
+}
+
+function staticSanicDecorator(
+  input: PythonExtractFileFactsInput,
+  node: PythonSyntaxNode
+): StaticSanicDecorator | null {
+  if (node.name !== "Decorator") {
+    return null;
+  }
+  const children = directChildren(node);
+  const members = children.filter(
+    (child) => child.name === "VariableName" || child.name === "PropertyName"
+  );
+  const arguments_ = children.filter((child) => child.name === "ArgList");
+  if (members.length !== 2 || arguments_.length !== 1) {
+    return null;
+  }
+  const receiver = declarationName(input, members[0] ?? node);
+  const methodName = nodeText(input, members[1] ?? node);
+  const argumentList = arguments_[0];
+  if (receiver === null || argumentList === undefined) {
+    return null;
+  }
+  const entries = staticArgumentEntries(argumentList);
+  const pathNode = entries[0];
+  const keywordArguments = staticKeywordArgumentsAfterFirst(input, entries);
+  if (pathNode?.name !== "String" || keywordArguments === null) {
+    return null;
+  }
+  const rawPath = staticPlainPythonString(input, pathNode);
+  const path = rawPath === null ? null : staticStarletteRoutePath(rawPath);
+  const nameNode = keywordArguments.get("name");
+  if (
+    path === null ||
+    (nameNode !== undefined &&
+      (nameNode.name !== "String" || staticPlainPythonString(input, nameNode) === null))
+  ) {
+    return null;
+  }
+
+  if (methodName === "route") {
+    if (
+      [...keywordArguments.keys()].some(
+        (name) => name !== "methods" && name !== "name"
+      )
+    ) {
+      return null;
+    }
+    const methodsNode = keywordArguments.get("methods");
+    const methods =
+      methodsNode === undefined ? ["GET" as const] : staticSanicRouteMethods(input, methodsNode);
+    return methods === null ? null : { receiver, methods, path, node };
+  }
+
+  const method = SANIC_SHORTCUT_DECORATOR_METHODS[methodName];
+  if (
+    method === undefined ||
+    [...keywordArguments.keys()].some((name) => name !== "name")
+  ) {
+    return null;
+  }
+  return { receiver, methods: [method], path, node };
+}
+
 function staticFlaskBlueprintRegistration(
   input: PythonExtractFileFactsInput,
   node: PythonSyntaxNode
@@ -1896,6 +2048,24 @@ function latestProvenFastApiApplication(
     decorator.receiver,
     decorator.node.from,
     "FastAPI"
+  );
+}
+
+function latestProvenSanicApplication(
+  input: PythonExtractFileFactsInput,
+  topLevelNodes: readonly PythonSyntaxNode[],
+  imports: readonly FrameworkNamedImport[],
+  applications: readonly SanicApplication[],
+  decorator: StaticSanicDecorator
+): SanicApplication | null {
+  return latestProvenFrameworkInstance(
+    input,
+    topLevelNodes,
+    imports,
+    applications,
+    decorator.receiver,
+    decorator.node.from,
+    "Sanic"
   );
 }
 
@@ -2182,12 +2352,14 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
   const djangoCapability = frameworkCapability("django");
   const starletteCapability = frameworkCapability("starlette");
   const aioHttpCapability = frameworkCapability("aiohttp");
+  const sanicCapability = frameworkCapability("sanic");
   if (
     !fastApiCapability.languages.includes(input.language) ||
     !flaskCapability.languages.includes(input.language) ||
     !djangoCapability.languages.includes(input.language) ||
     !starletteCapability.languages.includes(input.language) ||
-    !aioHttpCapability.languages.includes(input.language)
+    !aioHttpCapability.languages.includes(input.language) ||
+    !sanicCapability.languages.includes(input.language)
   ) {
     throw new Error("Python framework extraction was invoked for an unsupported source language.");
   }
@@ -2490,6 +2662,15 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
     const aioHttpRouteTableRegistrations = topLevelNodes
       .map((node) => staticAioHttpRouteTableRegistration(input, node))
       .filter((candidate): candidate is StaticAioHttpRouteTableRegistration => candidate !== null);
+    const sanicImports = topLevelNodes.flatMap((node) => staticSanicImports(input, node));
+    const sanicApplicationConstructorNames = new Set(
+      sanicImports
+        .filter((candidate) => candidate.importedName === "Sanic")
+        .map((candidate) => candidate.alias)
+    );
+    const sanicApplications = topLevelNodes
+      .map((node) => staticSanicApplication(input, node, sanicApplicationConstructorNames))
+      .filter((candidate): candidate is SanicApplication => candidate !== null);
     const topLevelFunctions = topLevelNodes.flatMap((statement) => {
       const functionNode =
         decoratedDefinition(statement) ??
@@ -2999,6 +3180,28 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
               handler,
               combinedRoutePath(inclusion.prefix, routerAtInclusion.prefix, decorator.path),
               "framework.fastapi.direct-router.include-router.decorator.local-function"
+            );
+          }
+        }
+
+        const sanicDecorator = staticSanicDecorator(input, decoratorNode);
+        if (
+          sanicDecorator !== null &&
+          latestProvenSanicApplication(
+            input,
+            topLevelNodes,
+            sanicImports,
+            sanicApplications,
+            sanicDecorator
+          ) !== null
+        ) {
+          for (const method of sanicDecorator.methods) {
+            addPythonRoute(
+              method,
+              sanicDecorator.node,
+              handler,
+              sanicDecorator.path,
+              "framework.sanic.direct-app.decorator.local-function"
             );
           }
         }

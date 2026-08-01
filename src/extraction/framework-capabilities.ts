@@ -23,6 +23,7 @@ export const FRAMEWORK_CAPABILITY_IDS = [
   "django",
   "starlette",
   "aiohttp",
+  "sanic",
   "gin",
   "fiber",
   "echo",
@@ -278,6 +279,16 @@ export const FRAMEWORK_CAPABILITIES = [
     surfaces: [
       "direct aiohttp.web Application router registrations",
       "literal aiohttp.web route tables through direct router add_routes",
+      "same-file top-level function handlers"
+    ]
+  },
+  {
+    id: "sanic",
+    languages: ["python"],
+    routeFramework: "sanic",
+    routeRegistrations: [],
+    surfaces: [
+      "direct Sanic application decorators",
       "same-file top-level function handlers"
     ]
   },

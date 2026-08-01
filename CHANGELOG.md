@@ -6,6 +6,26 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.149.0] - 2026-08-01
+
+### Added
+
+- Python extraction now recognizes direct Sanic application decorators from `from sanic import Sanic` (including aliases), a direct top-level `Sanic(...)` application assignment, and same-file top-level function handlers decorated with `@app.get`, `post`, `put`, `patch`, `delete`, `head`, `options`, or generic `route`.
+- Generic `@app.route("/path")` records its documented default `GET`; literal `methods=["POST", "PATCH"]` records each uppercase standard HTTP method. Literal `name` is accepted only where Sanic permits the direct decorator form.
+- New unit and service coverage verifies aliases, shortcuts, generic default and multi-method decorators, exact handler evidence, and rejection of dynamic, unsupported, rebound, or shadowed declarations.
+
+### Compatibility
+
+- The artifact-facts extractor advances to `multi-language-ast-v130`. Existing graphs and SQLite schema remain readable; the next explicit `sync` re-extracts Python facts and reprojects Sanic routes. The project resolver remains `project-resolver-v38`.
+
+### Deliberate limits
+
+- Sanic support is intentionally limited to direct imports, direct top-level `Sanic(...)` applications, literal direct app decorators, and same-file top-level named function handlers. Blueprints, `Sanic.get_app`, `add_route`, class views, WebSockets, versioning and other decorator configuration, dynamic paths or methods, non-uppercase or wildcard methods, external handlers, rebinding, and ambiguity remain non-exact.
+
+### Comparison notes
+
+- The inspected CodeGraph baseline source tree contains no `sanic` reference. SymbolLattice independently uses its Python AST to prove the direct import, application instance, decorator receiver, literal route shape, handler declaration, and rebinding boundary; it is broader for this Sanic slice while deliberately narrower for blueprints, class views, WebSockets, and runtime composition.
+
 ## [0.148.0] - 2026-08-01
 
 ### Added
@@ -2780,7 +2800,8 @@ No unreleased changes.
 - Explicit full indexing, caller/callee/impact queries, and read-only MCP exploration.
 - `exact`, `heuristic`, and `unresolved` relationship states.
 
-[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.148.0...HEAD
+[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.149.0...HEAD
+[0.149.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.148.0...v0.149.0
 [0.148.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.147.0...v0.148.0
 [0.147.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.146.0...v0.147.0
 [0.146.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.145.0...v0.146.0

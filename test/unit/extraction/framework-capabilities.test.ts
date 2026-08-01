@@ -30,6 +30,7 @@ describe("first-party framework capabilities", () => {
       "django",
       "starlette",
       "aiohttp",
+      "sanic",
       "gin",
       "fiber",
       "echo",
@@ -224,6 +225,15 @@ describe("first-party framework capabilities", () => {
       surfaces: [
         "direct aiohttp.web Application router registrations",
         "literal aiohttp.web route tables through direct router add_routes",
+        "same-file top-level function handlers"
+      ]
+    });
+    expect(frameworkCapability("sanic")).toMatchObject({
+      languages: ["python"],
+      routeFramework: "sanic",
+      routeRegistrations: [],
+      surfaces: [
+        "direct Sanic application decorators",
         "same-file top-level function handlers"
       ]
     });
