@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.131.0 is an early developer release. The package is not published to npm; run it from source.
+> v0.132.0 is an early developer release. The package is not published to npm; run it from source.
 
 SymbolLattice builds a queryable local code-symbol graph for a project. Each relation retains its source rule, resolution stage, and confidence. Source remains in the indexed project's `.symbol-lattice/index.sqlite` and is never silently uploaded.
 
@@ -49,11 +49,11 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 On Windows PowerShell, use `npm.cmd` if `npm` is unavailable. Filesystem roots and home directories are rejected unless `--force` is explicit.
 
-## v0.131.0
+## v0.132.0
 
-- GoFrame v1/v2 now exactly tracks literal chained receivers such as `g.Server().Domain(...).Group(...).Group(...)`.
-- Direct HTTP routes, `Map`, callback `Group`, and standard-router `Bind(&Controller{})` retain the full path prefix and Domain-host evidence.
-- Only a visible `g.Server()` root plus literal `Domain` and one-argument `Group` calls are accepted. The extractor advances to `multi-language-ast-v113`, so the next explicit `sync` refreshes Go raw facts.
+- GoFrame v1/v2 cross-package standard routing now accepts Go default imports only when a root `go.mod` resolves the target and its declared `package` exactly matches the source qualifier.
+- Both controller and request imports can use the default name while preserving chained `Group` prefixes, `Domain` hosts, rules, and configuration evidence.
+- The extractor advances to `multi-language-ast-v114` and the project resolver to `project-resolver-v35`; the next explicit `sync` re-extracts and reprojects GoFrame facts.
 
 ## Deliberate limits
 
@@ -61,7 +61,7 @@ On Windows PowerShell, use `npm.cmd` if `npm` is unavailable. Filesystem roots a
 - Dynamic dispatch, reflection, macro expansion, code generation, dependency injection, and ambiguous names never become exact graph relations.
 - GoFrame Domain extraction accepts only proven literal, non-wildcard hosts. Dynamic values, empty entries, wildcards, and rebound receivers remain unresolved.
 - Chained GoFrame receivers are limited to a `g.Server()` root and a finite literal `Domain`/one-argument `Group` chain. Arbitrary method calls, dynamic prefixes, variable propagation, and unsupported callback forms never become exact relations.
-- Cross-file GoFrame standard routing supports a same-package unique match or an explicit-alias local package import below the root `go.mod`. Implicit aliases, external/transitive modules, `replace`, nested-module selection, build tags, and ambiguous controller methods never become exact relations.
+- Cross-file GoFrame standard routing supports a same-package unique match or a local package below the root `go.mod`. Explicit aliases are accepted directly; default imports require a matching target `package` clause and are never inferred from the import path. `.`/`_` imports, external/transitive modules, `replace`, nested-module selection, build tags, and ambiguous controller methods never become exact relations.
 - Other frameworks expose only implemented, evidence-backed slices; see [CHANGELOG.md](CHANGELOG.md) for the full history.
 
 ## Verification

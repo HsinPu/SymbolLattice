@@ -537,32 +537,44 @@ function staticPackageImportAliases(
 }
 
 /**
- * Retains only literal, explicitly aliased imports. A cross-package GoFrame
- * standard-router projection must not infer Go's implicit package name from a
- * path segment, because that name is controlled by the imported package.
+ * Retains literal imports for GoFrame standard-router projection. Explicit
+ * aliases are kept verbatim; a default import deliberately has no local name,
+ * so project resolution must prove its qualifier from the target package clause
+ * rather than infer it from the import path.
  */
-function staticGoFrameExplicitImports(
+function staticGoFrameImports(
   input: GoExtractFileFactsInput,
   root: GoSyntaxNode
-): readonly { readonly localName: string; readonly moduleSpecifier: string }[] {
-  const imports: Array<{ readonly localName: string; readonly moduleSpecifier: string }> = [];
+): readonly { readonly localName?: string; readonly moduleSpecifier: string }[] {
+  const imports: Array<{ readonly localName?: string; readonly moduleSpecifier: string }> = [];
   for (const declaration of directChildren(root).filter((node) => node.name === "ImportDecl")) {
     for (const specifier of descendantsNamed(declaration, "ImportSpec")) {
       const children = directChildren(specifier);
       const aliasNode = children.find((child) => child.name === "DefName");
       const stringNode = children.find((child) => child.name === "String");
-      const localName = aliasNode === undefined ? null : identifierText(input, aliasNode);
+      const localName = aliasNode === undefined ? undefined : identifierText(input, aliasNode);
       const moduleSpecifier =
         stringNode === undefined ? null : staticPlainGoString(input, stringNode);
-      if (localName === null || localName === "_" || moduleSpecifier === null) {
+      if (
+        localName === null ||
+        localName === "_" ||
+        children.some((child) => child.name === ".") ||
+        moduleSpecifier === null
+      ) {
         continue;
       }
-      imports.push({ localName, moduleSpecifier });
+      imports.push(
+        localName === undefined ? { moduleSpecifier } : { localName, moduleSpecifier }
+      );
     }
   }
   return imports.sort(
     (left, right) =>
-      (left.localName < right.localName ? -1 : left.localName > right.localName ? 1 : 0) ||
+      ((left.localName ?? "") < (right.localName ?? "")
+        ? -1
+        : (left.localName ?? "") > (right.localName ?? "")
+          ? 1
+          : 0) ||
       (left.moduleSpecifier < right.moduleSpecifier
         ? -1
         : left.moduleSpecifier > right.moduleSpecifier
@@ -2662,7 +2674,7 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
     const goFrameAliases = staticGoFrameImportAliases(input, root);
     const goFrameHttpAliases = staticGoFrameHttpImportAliases(input, root);
     const contextAliases = staticContextImportAliases(input, root);
-    const goFrameExplicitImports = staticGoFrameExplicitImports(input, root);
+    const goFrameImports = staticGoFrameImports(input, root);
     const goFrameRequests = staticGoFrameRequests(input, root, new Set(goFrameAliases));
     const goFrameDeclaredMethods = staticGoFrameDeclaredMethods(input, root);
     const goFrameControllerMethods = staticGoFrameControllerMethods(
@@ -3194,7 +3206,7 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
           domains: binding.receiver.kind === "server" ? [] : binding.receiver.domains,
           range: rangeFor(lineStarts, binding.node.from, binding.node.to)
         })),
-        explicitImports: goFrameExplicitImports
+        imports: goFrameImports
       };
     }
   }

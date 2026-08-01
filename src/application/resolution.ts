@@ -2401,9 +2401,11 @@ interface ResolvedGoFrameStandardRouterPackage {
 
 /**
  * Projects GoFrame standard-router routes through either one literal Go
- * package directory or explicit aliases that a root local `go.mod` resolves
- * to one indexed package directory. It never uses project-wide same-name
- * matching, inferred implicit aliases, external modules, or transitive imports.
+ * package directory or a root local `go.mod` import that resolves to one
+ * indexed package directory. Explicit aliases are accepted directly; default
+ * import qualifiers need a matching target package clause. It never uses
+ * project-wide same-name matching, import-path-name inference, external
+ * modules, or transitive imports.
  */
 function projectGoFrameStandardRouterRoutes(input: {
   readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
@@ -2432,7 +2434,7 @@ function projectGoFrameStandardRouterRoutes(input: {
   for (const packageFiles of packageFilesByKey.values()) {
     packageFiles.sort((left, right) => compareStableText(left.filePath, right.filePath));
   }
-  const resolveExplicitImport = (
+  const resolveGoFrameImport = (
     sourceFilePath: string,
     sourceFacts: NonNullable<ExtractedFileFacts["goFrameStandardRouterFacts"]>,
     alias: string
@@ -2440,32 +2442,50 @@ function projectGoFrameStandardRouterRoutes(input: {
     if (input.moduleResolver === undefined) {
       return null;
     }
-    const imports = (sourceFacts.explicitImports ?? []).filter(
-      (candidate) => candidate.localName === alias
-    );
-    if (imports.length !== 1 || imports[0] === undefined) {
-      return null;
-    }
-    const resolution = input.moduleResolver.resolve(sourceFilePath, imports[0].moduleSpecifier);
-    if (
-      resolution.strategy !== "go-module-package" ||
-      resolution.targetFilePath === null ||
-      !input.knownFilePaths.has(resolution.targetFilePath)
-    ) {
-      return null;
-    }
-    const targetPackages = [...packageFilesByKey.entries()].filter(([, packageFiles]) =>
-      packageFiles.some((packageFile) => packageFile.filePath === resolution.targetFilePath)
-    );
-    if (targetPackages.length !== 1 || targetPackages[0] === undefined) {
-      return null;
-    }
-    const [resolvedPackageKey, packageFiles] = targetPackages[0];
-    return {
-      packageKey: resolvedPackageKey,
-      packageFiles,
-      configurationPaths: resolution.configurationPaths
+    const resolveOneImport = (
+      moduleSpecifier: string
+    ): ResolvedGoFrameStandardRouterPackage | null => {
+      const resolution = input.moduleResolver?.resolve(sourceFilePath, moduleSpecifier);
+      if (
+        resolution === undefined ||
+        resolution.strategy !== "go-module-package" ||
+        resolution.targetFilePath === null ||
+        !input.knownFilePaths.has(resolution.targetFilePath)
+      ) {
+        return null;
+      }
+      const targetPackages = [...packageFilesByKey.entries()].filter(([, packageFiles]) =>
+        packageFiles.some((packageFile) => packageFile.filePath === resolution.targetFilePath)
+      );
+      if (targetPackages.length !== 1 || targetPackages[0] === undefined) {
+        return null;
+      }
+      const [resolvedPackageKey, packageFiles] = targetPackages[0];
+      return {
+        packageKey: resolvedPackageKey,
+        packageFiles,
+        configurationPaths: resolution.configurationPaths
+      };
     };
+
+    const imports = sourceFacts.imports ?? sourceFacts.explicitImports ?? [];
+    const explicitAliases = imports.filter((candidate) => candidate.localName === alias);
+    if (explicitAliases.length > 0) {
+      return explicitAliases.length === 1 && explicitAliases[0] !== undefined
+        ? resolveOneImport(explicitAliases[0].moduleSpecifier)
+        : null;
+    }
+
+    const defaultImportPackages = imports
+      .filter((candidate) => candidate.localName === undefined)
+      .flatMap((candidate) => {
+        const resolved = resolveOneImport(candidate.moduleSpecifier);
+        const packageName = resolved?.packageFiles[0]?.facts.packageName;
+        return packageName === alias && resolved !== null ? [resolved] : [];
+      });
+    return defaultImportPackages.length === 1 && defaultImportPackages[0] !== undefined
+      ? defaultImportPackages[0]
+      : null;
   };
 
   for (const [bindingFilePath, extracted] of [...input.factsByFile.entries()].sort(([left], [right]) =>
@@ -2562,7 +2582,7 @@ function projectGoFrameStandardRouterRoutes(input: {
       const controllerPackage =
         binding.controllerPackageAlias === undefined
           ? localPackage
-          : resolveExplicitImport(
+          : resolveGoFrameImport(
               bindingFilePath,
               bindingFacts,
               binding.controllerPackageAlias
@@ -2579,7 +2599,7 @@ function projectGoFrameStandardRouterRoutes(input: {
         const requestPackage =
           controllerMethod.method.requestPackageAlias === undefined
             ? controllerPackage
-            : resolveExplicitImport(
+            : resolveGoFrameImport(
                 controllerMethod.filePath,
                 controllerMethod.facts,
                 controllerMethod.method.requestPackageAlias

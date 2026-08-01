@@ -3444,6 +3444,45 @@ describe("source extraction", () => {
     ]);
   });
 
+  it("retains unaliased Go imports for package-proven GoFrame standard routing", () => {
+    const facts = extractFileFacts({
+      filePath: "api/controllers/users.go",
+      language: "go",
+      sourceText: [
+        "package handlers",
+        "",
+        "import (",
+        '  "context"',
+        '  "example.test/warehouse/api/requests"',
+        ")",
+        "",
+        "type UsersController struct{}",
+        "",
+        "func (c *UsersController) List(ctx context.Context, req *contracts.ListReq) {}"
+      ].join("\n")
+    });
+
+    const imports = facts.goFrameStandardRouterFacts?.imports;
+    expect(facts.goFrameStandardRouterFacts).toMatchObject({
+      packageName: "handlers",
+      controllerMethods: [
+        expect.objectContaining({
+          controllerName: "UsersController",
+          requestType: "ListReq",
+          requestPackageAlias: "contracts"
+        })
+      ]
+    });
+    expect(imports).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ moduleSpecifier: "example.test/warehouse/api/requests" })
+      ])
+    );
+    expect(
+      imports?.find((candidate) => candidate.moduleSpecifier === "example.test/warehouse/api/requests")
+    ).not.toHaveProperty("localName");
+  });
+
   it("extracts literal GoFrame v1 BindHandler routes", () => {
     const facts = extractFileFacts({
       filePath: "cmd/server/goframe-v1.go",

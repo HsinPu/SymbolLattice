@@ -6,6 +6,26 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.132.0] - 2026-08-01
+
+### Added
+
+- GoFrame v1/v2 standard-router projection now accepts ordinary Go default imports at both cross-package boundaries. A request reference such as `contracts.ListReq` and a binding such as `&handlers.UsersController{}` become exact only when the root `go.mod` resolves each import to one indexed local package whose declared `package` is respectively `contracts` or `handlers`.
+- Default package names are proven from the target package clause, never inferred from an import-path directory. Existing explicit import aliases remain supported without a package-name equality requirement.
+- New extraction and service-level coverage verifies renamed package directories, default imports for both request and controller packages, preservation of chained Group/Domain evidence, incremental raw-fact reuse, and rejection when an imported target declares a mismatched package name.
+
+### Compatibility
+
+- The artifact-facts extractor advances to `multi-language-ast-v114` and the project resolver to `project-resolver-v35`. Existing graphs remain readable; the next explicit `sync` re-extracts Go facts and reprojects routes. SQLite schema is unchanged.
+
+### Deliberate limits
+
+- Default imports require one root local `go.mod`, one deterministic non-test representative, one target package clause matching the source qualifier, one unique request type, one unique controller method, and an already supported static GoFrame Bind receiver. `.`/`_` imports, import-path-name guesses, external/transitive modules, `replace`, nested-module selection, build tags, dynamic/reflection registration, rebindings, and ambiguity remain unresolved.
+
+### Comparison notes
+
+- At inspected CodeGraph commit `572d22bfbe82602080e457bec655f72e3314f9ef`, GoFrame synthesis heuristically matches `g.Meta` routes to method signatures. SymbolLattice v0.132 remains narrower in accepted runtime behavior, but its supported default-import slice proves the root module, target package clause, static Bind receiver, complete Group/Domain context, and persisted configuration evidence before emitting `exact`.
+
 ## [0.131.0] - 2026-08-01
 
 ### Added
@@ -2440,7 +2460,8 @@ No unreleased changes.
 - Explicit full indexing, caller/callee/impact queries, and read-only MCP exploration.
 - `exact`, `heuristic`, and `unresolved` relationship states.
 
-[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.131.0...HEAD
+[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.132.0...HEAD
+[0.132.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.131.0...v0.132.0
 [0.131.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.130.0...v0.131.0
 [0.130.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.129.0...v0.130.0
 [0.129.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.128.0...v0.129.0
