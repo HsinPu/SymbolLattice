@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.139.0 is an early developer release. The package is not published to npm; run it from source.
+> v0.140.0 is an early developer release. The package is not published to npm; run it from source.
 
 SymbolLattice builds a queryable local code-symbol graph for a project. Each relation retains its source rule, resolution stage, and confidence. Source remains in the indexed project's `.symbol-lattice/index.sqlite` and is never silently uploaded.
 
@@ -49,11 +49,11 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 On Windows PowerShell, use `npm.cmd` if `npm` is unavailable. Filesystem roots and home directories are rejected unless `--force` is explicit.
 
-## v0.139.0
+## v0.140.0
 
-- GoFrame v1/v2 now supports an untyped factory `var` alias in the same function: after `var controller = NewController()` or `var controller = handlers.NewV1()`, `Bind(controller)` can project an `exact` route.
-- A factory alias retains the proven factory, `Group` prefix, `Domain` host, and root-`go.mod` cross-package evidence. Typed factory vars, grouped/multi-value declarations, reassignment, and a callback parameter of the same name remain non-exact.
-- Artifact facts advance to `multi-language-ast-v120`; the next explicit `sync` re-extracts Go facts and reprojects routes.
+- Go Iris v12 routes are now extracted as `exact` from `iris.New()`, literal `Party` prefixes, and named handlers.
+- Nested `Party` prefixes retain their full path and route rule. Extraction requires an explicit `github.com/kataras/iris/v12` import and an unrebound receiver.
+- Artifact facts advance to `multi-language-ast-v121`; the next explicit `sync` re-extracts Go facts and reprojects routes.
 
 ## Deliberate limits
 
@@ -63,6 +63,7 @@ On Windows PowerShell, use `npm.cmd` if `npm` is unavailable. Filesystem roots a
 - Chained GoFrame receivers are limited to a `g.Server()` root and a finite literal `Domain`/one-argument `Group` chain. Arbitrary method calls, dynamic prefixes, variable propagation, and unsupported callback forms never become exact relations.
 - Cross-file GoFrame standard routing supports only statically proven direct pointers (`&Controller{}` / `new(Controller)`), no-argument `Factory()` calls, and one unrebound same-function pointer/factory alias. A pointer alias may use `:=`, or one directly initialized `var`; a declared type must be the matching pointer type. A factory alias may use `:=` or one untyped directly initialized `var`. Each `Bind(...)` argument must prove itself independently; slice expansion, dynamic values, globals, grouped/multi-value var declarations, typed factory vars, forwarding, branches, map/interface/DI containers, callback shadowing, rebinding, and ambiguity never become `exact`. Explicit import aliases are accepted directly; default imports require a matching target `package` clause and are never inferred from the import path. `.`/`_` imports, external/transitive modules, `replace`, nested-module selection, and build tags remain unresolved.
 - Unbound GoFrame request-signature candidates are always `heuristic`, never proof of runtime route registration; reflection, dynamic Bind calls, and unknown prefixes or hosts remain unresolved.
+- Iris currently supports only `iris.New()`, one named handler, and literal `Party` prefixes. `Default`, `Handle`, MVC, middleware, dynamic paths, and rebound receivers never become `exact`.
 - Other frameworks expose only implemented, evidence-backed slices; see [CHANGELOG.md](CHANGELOG.md) for the full history.
 
 ## Verification

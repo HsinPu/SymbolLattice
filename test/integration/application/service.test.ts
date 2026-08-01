@@ -4154,6 +4154,71 @@ describe("SymbolLatticeService", () => {
     expect(search.results).toMatchObject([{ filePath: "cmd/server/main.go", language: "go" }]);
   });
 
+  it("indexes Go Iris v12 Application and literal Party routes with exact syntax evidence", async () => {
+    const projectPath = await createInlineProject({
+      "cmd/server/main.go": [
+        "package main",
+        "",
+        'import "github.com/kataras/iris/v12"',
+        "",
+        "func health(ctx iris.Context) {}",
+        "func deleteUser(ctx iris.Context) {}",
+        "",
+        "func main() {",
+        "  app := iris.New()",
+        '  app.Get("/health", health)',
+        '  api := app.Party("/api")',
+        '  api.Delete("/users", deleteUser)',
+        "}"
+      ].join("\n")
+    });
+    const service = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+    const deleteRoutes = await service.routes(projectPath, { method: "DELETE" });
+
+    expect(routes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "GET",
+          path: "/health",
+          handler: expect.objectContaining({ qualifiedName: "cmd/server/main.go#health" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.iris.direct-app.method.local-function",
+              stage: "syntax"
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "DELETE",
+          path: "/api/users",
+          handler: expect.objectContaining({ qualifiedName: "cmd/server/main.go#deleteUser" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.iris.direct-party.method.local-function",
+              stage: "syntax"
+            })
+          })
+        })
+      ])
+    );
+    expect(deleteRoutes.routes).toMatchObject([
+      {
+        method: "DELETE",
+        path: "/api/users",
+        handler: { qualifiedName: "cmd/server/main.go#deleteUser" },
+        edge: {
+          resolution: "exact",
+          evidence: { ruleId: "framework.iris.direct-party.method.local-function", stage: "syntax" }
+        }
+      }
+    ]);
+  });
+
   it("indexes Go net/http default and literal ServeMux routes with exact syntax evidence", async () => {
     const projectPath = await createInlineProject({
       "cmd/server/main.go": [

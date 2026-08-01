@@ -31,6 +31,7 @@ describe("first-party framework capabilities", () => {
       "gin",
       "fiber",
       "echo",
+      "iris",
       "net-http",
       "chi",
       "goframe",
@@ -227,6 +228,15 @@ describe("first-party framework capabilities", () => {
       surfaces: [
         "direct Echo v4/v5 App methods",
         "same-function literal Group prefixes"
+      ]
+    });
+    expect(frameworkCapability("iris")).toMatchObject({
+      languages: ["go"],
+      routeFramework: "iris",
+      routeRegistrations: [],
+      surfaces: [
+        "direct Iris v12 Application methods",
+        "same-function literal Party prefixes"
       ]
     });
     expect(frameworkCapability("net-http")).toMatchObject({

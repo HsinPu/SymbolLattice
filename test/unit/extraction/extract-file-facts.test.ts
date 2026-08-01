@@ -3032,6 +3032,124 @@ describe("source extraction", () => {
     expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
   });
 
+  it("extracts direct Go Iris v12 Application and nested literal Party routes with exact evidence", () => {
+    const facts = extractFileFacts({
+      filePath: "cmd/server/iris.go",
+      language: "go",
+      sourceText: [
+        "package main",
+        "",
+        'import i "github.com/kataras/iris/v12"',
+        "",
+        "func health(ctx i.Context) {}",
+        "func headHealth(ctx i.Context) {}",
+        "func createUser(ctx i.Context) {}",
+        "func search(ctx i.Context) {}",
+        "",
+        "func main() {",
+        "  app := i.New()",
+        '  app.Get("/health", health)',
+        '  app.Head("/health", headHealth)',
+        '  api := app.Party("/api")',
+        '  v1 := api.Party("/v1")',
+        '  v1.Post("/users", createUser)',
+        '  v1.Any("/search", search)',
+        "}"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId,
+          edge.evidence?.stage,
+          edge.resolution,
+          edge.confidence
+        ])
+    ).toEqual([
+      [
+        "GET /health",
+        "cmd/server/iris.go#health",
+        "framework.iris.direct-app.method.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "HEAD /health",
+        "cmd/server/iris.go#headHealth",
+        "framework.iris.direct-app.method.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "POST /api/v1/users",
+        "cmd/server/iris.go#createUser",
+        "framework.iris.direct-party.method.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "ALL /api/v1/search",
+        "cmd/server/iris.go#search",
+        "framework.iris.direct-party.method.local-function",
+        "syntax",
+        "exact",
+        1
+      ]
+    ]);
+  });
+
+  it("rejects shadowed, dynamic, inline, middleware, unsupported, and rebound Go Iris route shapes", () => {
+    const facts = extractFileFacts({
+      filePath: "cmd/server/unproven-iris.go",
+      language: "go",
+      sourceText: [
+        "package main",
+        "",
+        'import iris "github.com/kataras/iris/v12"',
+        "",
+        "func health(ctx iris.Context) {}",
+        "func stable(ctx iris.Context) {}",
+        "",
+        "func shadowed(iris int) {",
+        "  app := iris.New()",
+        '  app.Get("/shadowed", health)',
+        "}",
+        "",
+        "func main() {",
+        '  path := "/dynamic"',
+        "  app := iris.New()",
+        "  app.Get(path, health)",
+        '  app.Get("/inline", func(ctx iris.Context) {})',
+        '  app.Get("/middleware", auth, health)',
+        '  app.Handle("GET", "/handle", stable)',
+        "  health := fallback",
+        '  app.Get("/rebound-handler", health)',
+        "  app = buildApp()",
+        '  app.Get("/rebound-app", stable)',
+        "  var legacy = iris.New()",
+        '  legacy.Get("/var-binding", stable)',
+        "  second := iris.New()",
+        '  prefix := "/api"',
+        "  api := second.Party(prefix)",
+        '  api.Get("/dynamic-party", stable)',
+        '  bad := second.Party("/api/", auth)',
+        '  bad.Get("/unsupported-party", stable)',
+        "}"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+  });
+
   it("extracts direct Go net/http default and literal ServeMux HandleFunc routes with exact evidence", () => {
     const facts = extractFileFacts({
       filePath: "cmd/server/http.go",

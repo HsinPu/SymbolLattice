@@ -24,6 +24,7 @@ export const FRAMEWORK_CAPABILITY_IDS = [
   "gin",
   "fiber",
   "echo",
+  "iris",
   "net-http",
   "chi",
   "goframe",
@@ -282,6 +283,16 @@ export const FRAMEWORK_CAPABILITIES = [
     surfaces: [
       "direct Echo v4/v5 App methods",
       "same-function literal Group prefixes"
+    ]
+  },
+  {
+    id: "iris",
+    languages: ["go"],
+    routeFramework: "iris",
+    routeRegistrations: [],
+    surfaces: [
+      "direct Iris v12 Application methods",
+      "same-function literal Party prefixes"
     ]
   },
   {

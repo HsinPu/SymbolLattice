@@ -57,6 +57,7 @@ export type RouteFramework =
   | "gin"
   | "fiber"
   | "echo"
+  | "iris"
   | "net-http"
   | "chi"
   | "goframe"

@@ -81,6 +81,24 @@ interface StaticEchoRoute {
   readonly node: GoSyntaxNode;
 }
 
+interface IrisReceiver {
+  readonly kind: "app" | "party";
+  readonly prefix: string;
+}
+
+interface StaticIrisBinding {
+  readonly name: string;
+  readonly receiver: IrisReceiver;
+}
+
+interface StaticIrisRoute {
+  readonly receiver: IrisReceiver;
+  readonly method: RouteMethod;
+  readonly path: string;
+  readonly handlerName: string;
+  readonly node: GoSyntaxNode;
+}
+
 interface StaticNetHttpMuxBinding {
   readonly name: string;
 }
@@ -279,6 +297,7 @@ const ECHO_PACKAGE_PATHS = [
   "github.com/labstack/echo/v4",
   "github.com/labstack/echo/v5"
 ] as const;
+const IRIS_PACKAGE_PATH = "github.com/kataras/iris/v12";
 const NET_HTTP_PACKAGE_PATH = "net/http";
 const CHI_PACKAGE_PATHS = ["github.com/go-chi/chi/v5"] as const;
 const GOFRAME_G_PACKAGE_PATHS = [
@@ -323,6 +342,19 @@ const ECHO_ROUTE_METHODS: Readonly<Record<string, RouteMethod>> = {
   DELETE: "DELETE",
   HEAD: "HEAD",
   OPTIONS: "OPTIONS",
+  Any: "ALL"
+};
+
+const IRIS_ROUTE_METHODS: Readonly<Record<string, RouteMethod>> = {
+  Get: "GET",
+  Post: "POST",
+  Put: "PUT",
+  Patch: "PATCH",
+  Delete: "DELETE",
+  Head: "HEAD",
+  Options: "OPTIONS",
+  Trace: "TRACE",
+  Connect: "CONNECT",
   Any: "ALL"
 };
 
@@ -631,6 +663,13 @@ function staticEchoImportAliases(
   root: GoSyntaxNode
 ): readonly string[] {
   return staticPackageImportAliases(input, root, ECHO_PACKAGE_PATHS, "echo");
+}
+
+function staticIrisImportAliases(
+  input: GoExtractFileFactsInput,
+  root: GoSyntaxNode
+): readonly string[] {
+  return staticPackageImportAliases(input, root, [IRIS_PACKAGE_PATH], "iris");
 }
 
 function staticNetHttpImportAliases(
@@ -2414,6 +2453,84 @@ function staticEchoRoute(
   return { receiver, method, path, handlerName, node };
 }
 
+function staticIrisAppBinding(
+  input: GoExtractFileFactsInput,
+  node: GoSyntaxNode,
+  irisAliases: ReadonlySet<string>,
+  shadowedNames: ReadonlySet<string>
+): StaticIrisBinding | null {
+  const declaration = staticShortVariableCall(input, node);
+  if (
+    declaration === null ||
+    !irisAliases.has(declaration.receiverName) ||
+    shadowedNames.has(declaration.receiverName) ||
+    declaration.methodName !== "New" ||
+    declaration.arguments_.length !== 0
+  ) {
+    return null;
+  }
+  return { name: declaration.name, receiver: { kind: "app", prefix: "" } };
+}
+
+function staticIrisPartyBinding(
+  input: GoExtractFileFactsInput,
+  node: GoSyntaxNode,
+  receivers: ReadonlyMap<string, IrisReceiver>
+): StaticIrisBinding | null {
+  const declaration = staticShortVariableCall(input, node);
+  if (
+    declaration === null ||
+    declaration.methodName !== "Party" ||
+    declaration.arguments_.length !== 1
+  ) {
+    return null;
+  }
+  const parent = receivers.get(declaration.receiverName);
+  const pathNode = declaration.arguments_[0];
+  const prefix = pathNode === undefined ? null : staticLiteralGroupPrefix(input, pathNode);
+  if (parent === undefined || prefix === null) {
+    return null;
+  }
+  return {
+    name: declaration.name,
+    receiver: { kind: "party", prefix: combinedRoutePath(parent.prefix, prefix) }
+  };
+}
+
+function staticIrisRoute(
+  input: GoExtractFileFactsInput,
+  node: GoSyntaxNode,
+  receivers: ReadonlyMap<string, IrisReceiver>
+): StaticIrisRoute | null {
+  if (node.name !== "ExprStatement") {
+    return null;
+  }
+  const expression = directChildren(node)[0];
+  if (expression === undefined) {
+    return null;
+  }
+  const call = staticSelectorCall(input, expression);
+  if (call === null || call.arguments_.length !== 2) {
+    return null;
+  }
+  const receiver = receivers.get(call.receiverName);
+  const method = IRIS_ROUTE_METHODS[call.methodName];
+  const pathNode = call.arguments_[0];
+  const handlerNode = call.arguments_[1];
+  const path = pathNode === undefined ? null : staticLiteralSlashPath(input, pathNode);
+  const handlerName =
+    handlerNode?.name === "VariableName" ? identifierText(input, handlerNode) : null;
+  if (
+    receiver === undefined ||
+    method === undefined ||
+    path === null ||
+    handlerName === null
+  ) {
+    return null;
+  }
+  return { receiver, method, path, handlerName, node };
+}
+
 function staticNetHttpMuxBinding(
   input: GoExtractFileFactsInput,
   node: GoSyntaxNode,
@@ -2555,6 +2672,7 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
   const ginCapability = frameworkCapability("gin");
   const fiberCapability = frameworkCapability("fiber");
   const echoCapability = frameworkCapability("echo");
+  const irisCapability = frameworkCapability("iris");
   const netHttpCapability = frameworkCapability("net-http");
   const chiCapability = frameworkCapability("chi");
   const goFrameCapability = frameworkCapability("goframe");
@@ -2562,6 +2680,7 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
     !ginCapability.languages.includes(input.language) ||
     !fiberCapability.languages.includes(input.language) ||
     !echoCapability.languages.includes(input.language) ||
+    !irisCapability.languages.includes(input.language) ||
     !netHttpCapability.languages.includes(input.language) ||
     !chiCapability.languages.includes(input.language) ||
     !goFrameCapability.languages.includes(input.language)
@@ -2736,6 +2855,18 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
       routeFact.receiver.kind === "app"
         ? "framework.echo.direct-app.method.local-function"
         : "framework.echo.direct-group.method.local-function"
+    );
+  }
+
+  function addIrisRoute(routeFact: StaticIrisRoute, handler: SymbolNode): void {
+    addResolvedRoute(
+      routeFact.method,
+      combinedRoutePath(routeFact.receiver.prefix, routeFact.path),
+      routeFact.node,
+      handler,
+      routeFact.receiver.kind === "app"
+        ? "framework.iris.direct-app.method.local-function"
+        : "framework.iris.direct-party.method.local-function"
     );
   }
 
@@ -2936,6 +3067,7 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
     const ginAliases = staticGinImportAliases(input, root);
     const fiberAliases = staticFiberImportAliases(input, root);
     const echoAliases = staticEchoImportAliases(input, root);
+    const irisAliases = staticIrisImportAliases(input, root);
     const netHttpAliases = staticNetHttpImportAliases(input, root);
     const chiAliases = staticChiImportAliases(input, root);
     const goFrameAliases = staticGoFrameImportAliases(input, root);
@@ -3276,6 +3408,9 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
       const visibleEchoAliases = new Set(
         echoAliases.filter((alias) => !functionDeclaration.parameterNames.includes(alias))
       );
+      const visibleIrisAliases = new Set(
+        irisAliases.filter((alias) => !functionDeclaration.parameterNames.includes(alias))
+      );
       const visibleNetHttpAliases = new Set(
         netHttpAliases.filter((alias) => !functionDeclaration.parameterNames.includes(alias))
       );
@@ -3285,6 +3420,7 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
       const ginReceivers = new Map<string, GinReceiver>();
       const fiberReceivers = new Map<string, FiberReceiver>();
       const echoReceivers = new Map<string, EchoReceiver>();
+      const irisReceivers = new Map<string, IrisReceiver>();
       const netHttpMuxes = new Set<string>();
       const chiReceivers = new Set<string>();
       const shadowedNames = new Set(functionDeclaration.parameterNames);
@@ -3361,6 +3497,30 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
           }
         }
 
+        const irisAppBinding = staticIrisAppBinding(
+          input,
+          statement,
+          visibleIrisAliases,
+          shadowedNames
+        );
+        if (irisAppBinding !== null) {
+          irisReceivers.set(irisAppBinding.name, irisAppBinding.receiver);
+        }
+        const irisPartyBinding = staticIrisPartyBinding(input, statement, irisReceivers);
+        if (irisPartyBinding !== null) {
+          irisReceivers.set(irisPartyBinding.name, irisPartyBinding.receiver);
+        }
+        const irisRoute = staticIrisRoute(input, statement, irisReceivers);
+        if (irisRoute !== null && !shadowedNames.has(irisRoute.handlerName)) {
+          const candidates = functionsByName.get(irisRoute.handlerName) ?? [];
+          if (candidates.length === 1) {
+            const handler = candidates[0];
+            if (handler !== undefined) {
+              addIrisRoute(irisRoute, handler);
+            }
+          }
+        }
+
         const muxBinding = staticNetHttpMuxBinding(
           input,
           statement,
@@ -3422,6 +3582,11 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
             (name): name is string => name !== undefined
           )
         );
+        const retainedIrisBindings = new Set(
+          [irisAppBinding?.name, irisPartyBinding?.name].filter(
+            (name): name is string => name !== undefined
+          )
+        );
         const retainedNetHttpBindings = new Set(
           [muxBinding?.name].filter((name): name is string => name !== undefined)
         );
@@ -3437,6 +3602,9 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
           }
           if (!retainedEchoBindings.has(name)) {
             echoReceivers.delete(name);
+          }
+          if (!retainedIrisBindings.has(name)) {
+            irisReceivers.delete(name);
           }
           if (!retainedNetHttpBindings.has(name)) {
             netHttpMuxes.delete(name);

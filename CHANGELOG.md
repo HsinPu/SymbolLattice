@@ -6,6 +6,26 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.140.0] - 2026-08-01
+
+### Added
+
+- Go Iris v12 extraction now proves direct `iris.New()` Application registrations and same-function literal `Party` prefixes, including nested parties and `Get`, `Post`, `Put`, `Patch`, `Delete`, `Head`, `Options`, `Trace`, `Connect`, and `Any` routes with one named local function handler.
+- Exact Iris route evidence records the direct Application or Party rule and only accepts a visible `github.com/kataras/iris/v12` import plus an unrebound local receiver.
+- New unit and service coverage verifies import aliases, nested `Party` composition, exact route lookup, and rejection of shadowed imports, dynamic paths/prefixes, inline or middleware handlers, unsupported `Handle`, var bindings, and rebinding.
+
+### Compatibility
+
+- The artifact-facts extractor advances to `multi-language-ast-v121`. Existing graphs and SQLite schema remain readable; the next explicit `sync` re-extracts Go facts and reprojects routes. The project resolver remains `project-resolver-v37`.
+
+### Deliberate limits
+
+- Iris extraction is limited to `iris.New()` short declarations, literal one-argument `Party` bindings, and one named handler for a direct supported HTTP method. `Default`, `Handle`, MVC, route groups with middleware, dynamic values, var bindings, forwarding, branches, callbacks, reassignment, and ambiguity remain non-exact.
+
+### Comparison notes
+
+- The inspected CodeGraph Go resolver uses generic receiver-method matching and can cover a broader mix of Go route-like calls, but it does not prove an Iris import, Application receiver, or composed Party prefix. SymbolLattice is narrower for dynamic and alternative Iris forms, but emits exact route evidence for the proven v12 slice.
+
 ## [0.139.0] - 2026-08-01
 
 ### Added
@@ -2600,7 +2620,8 @@ No unreleased changes.
 - Explicit full indexing, caller/callee/impact queries, and read-only MCP exploration.
 - `exact`, `heuristic`, and `unresolved` relationship states.
 
-[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.139.0...HEAD
+[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.140.0...HEAD
+[0.140.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.139.0...v0.140.0
 [0.139.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.138.0...v0.139.0
 [0.138.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.137.0...v0.138.0
 [0.137.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.136.0...v0.137.0
