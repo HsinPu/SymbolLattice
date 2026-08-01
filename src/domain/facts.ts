@@ -11,13 +11,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v111";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v112";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v33";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v34";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -324,6 +324,8 @@ export interface GoFrameStandardRouterControllerMethodFact {
   readonly controllerName: string;
   readonly methodName: string;
   readonly requestType: string;
+  /** Explicit Go import alias for a cross-package request type, when present. */
+  readonly requestPackageAlias?: string;
   /** Stable identity of the syntax-proven controller method symbol. */
   readonly handlerId: string;
 }
@@ -331,6 +333,8 @@ export interface GoFrameStandardRouterControllerMethodFact {
 /** One exact `Server` or `RouterGroup` `Bind(&Controller{})` registration. */
 export interface GoFrameStandardRouterBindingFact {
   readonly controllerName: string;
+  /** Explicit Go import alias for a cross-package controller type, when present. */
+  readonly controllerPackageAlias?: string;
   /** The fully composed literal Server/Group prefix at the registration point. */
   readonly prefix: string;
   /** Literal `Server.Domain` host conditions inherited by this binding, if any. */
@@ -338,15 +342,24 @@ export interface GoFrameStandardRouterBindingFact {
   readonly range: SourceRange;
 }
 
+/** One explicit Go package alias that can prove a local module-package hop. */
+export interface GoFrameStandardRouterExplicitImportFact {
+  readonly localName: string;
+  readonly moduleSpecifier: string;
+}
+
 /**
  * Syntax-only GoFrame facts used to project standard-router `g.Meta` routes
- * across exactly one indexed Go package directory in the project resolver.
+ * across one indexed Go package directory, or through an exact local Go module
+ * import with an explicit source alias, in the project resolver.
  */
 export interface GoFrameStandardRouterFacts {
   readonly packageName: string;
   readonly requests: readonly GoFrameStandardRouterRequestFact[];
   readonly controllerMethods: readonly GoFrameStandardRouterControllerMethodFact[];
   readonly controllerBindings: readonly GoFrameStandardRouterBindingFact[];
+  /** Omitted only by artifact facts persisted before v0.130. */
+  readonly explicitImports?: readonly GoFrameStandardRouterExplicitImportFact[];
 }
 
 /** A direct external `mod name;` declaration retained for Rust module proof. */

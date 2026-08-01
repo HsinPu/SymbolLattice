@@ -2366,6 +2366,8 @@ interface ProjectedGoFrameStandardRouterRoute {
   readonly handler: SymbolNode;
   readonly path: string;
   readonly domain: string | null;
+  readonly ruleId: string;
+  readonly configurationPaths: readonly string[];
 }
 
 function compareProjectedGoFrameStandardRouterRoute(
@@ -2391,19 +2393,80 @@ interface GoFrameStandardRouterRouteProjection {
   readonly structuralEdges: readonly GraphEdge[];
 }
 
+interface ResolvedGoFrameStandardRouterPackage {
+  readonly packageKey: string;
+  readonly packageFiles: readonly GoFrameStandardRouterPackageFile[];
+  readonly configurationPaths: readonly string[];
+}
+
 /**
- * Projects GoFrame standard-router routes only when the request declaration,
- * controller method, and Bind registration live in one literal Go package
- * directory. The graph deliberately does not infer Go module imports or use
- * project-wide same-name matching: every request type and controller method
- * must be unique within that package proof.
+ * Projects GoFrame standard-router routes through either one literal Go
+ * package directory or explicit aliases that a root local `go.mod` resolves
+ * to one indexed package directory. It never uses project-wide same-name
+ * matching, inferred implicit aliases, external modules, or transitive imports.
  */
 function projectGoFrameStandardRouterRoutes(input: {
   readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
   readonly fileSymbols: ReadonlyMap<string, SymbolNode>;
   readonly symbolsById: ReadonlyMap<string, SymbolNode>;
+  readonly knownFilePaths: ReadonlySet<string>;
+  readonly moduleResolver: ProjectModuleResolver | undefined;
 }): GoFrameStandardRouterRouteProjection {
   const candidates: ProjectedGoFrameStandardRouterRoute[] = [];
+  const packageFilesByKey = new Map<string, GoFrameStandardRouterPackageFile[]>();
+  const packageKey = (filePath: string, packageName: string): string =>
+    `${goPackageDirectory(filePath)}\u0000${packageName}`;
+
+  for (const [filePath, facts] of [...input.factsByFile.entries()].sort(([left], [right]) =>
+    compareStableText(left, right)
+  )) {
+    const goFrameFacts = facts.goFrameStandardRouterFacts;
+    if (goFrameFacts === undefined) {
+      continue;
+    }
+    const key = packageKey(filePath, goFrameFacts.packageName);
+    const packageFiles = packageFilesByKey.get(key) ?? [];
+    packageFiles.push({ filePath, facts: goFrameFacts });
+    packageFilesByKey.set(key, packageFiles);
+  }
+  for (const packageFiles of packageFilesByKey.values()) {
+    packageFiles.sort((left, right) => compareStableText(left.filePath, right.filePath));
+  }
+  const resolveExplicitImport = (
+    sourceFilePath: string,
+    sourceFacts: NonNullable<ExtractedFileFacts["goFrameStandardRouterFacts"]>,
+    alias: string
+  ): ResolvedGoFrameStandardRouterPackage | null => {
+    if (input.moduleResolver === undefined) {
+      return null;
+    }
+    const imports = (sourceFacts.explicitImports ?? []).filter(
+      (candidate) => candidate.localName === alias
+    );
+    if (imports.length !== 1 || imports[0] === undefined) {
+      return null;
+    }
+    const resolution = input.moduleResolver.resolve(sourceFilePath, imports[0].moduleSpecifier);
+    if (
+      resolution.strategy !== "go-module-package" ||
+      resolution.targetFilePath === null ||
+      !input.knownFilePaths.has(resolution.targetFilePath)
+    ) {
+      return null;
+    }
+    const targetPackages = [...packageFilesByKey.entries()].filter(([, packageFiles]) =>
+      packageFiles.some((packageFile) => packageFile.filePath === resolution.targetFilePath)
+    );
+    if (targetPackages.length !== 1 || targetPackages[0] === undefined) {
+      return null;
+    }
+    const [resolvedPackageKey, packageFiles] = targetPackages[0];
+    return {
+      packageKey: resolvedPackageKey,
+      packageFiles,
+      configurationPaths: resolution.configurationPaths
+    };
+  };
 
   for (const [bindingFilePath, extracted] of [...input.factsByFile.entries()].sort(([left], [right]) =>
     compareStableText(left, right)
@@ -2412,22 +2475,19 @@ function projectGoFrameStandardRouterRoutes(input: {
     if (bindingFacts === undefined) {
       continue;
     }
-    const packageDirectory = goPackageDirectory(bindingFilePath);
-    const packageFiles: GoFrameStandardRouterPackageFile[] = [...input.factsByFile.entries()]
-      .flatMap(([filePath, facts]) => {
-        const goFrameFacts = facts.goFrameStandardRouterFacts;
-        return goFrameFacts === undefined ||
-          goPackageDirectory(filePath) !== packageDirectory ||
-          goFrameFacts.packageName !== bindingFacts.packageName
-          ? []
-          : [{ filePath, facts: goFrameFacts }];
-      })
-      .sort((left, right) => compareStableText(left.filePath, right.filePath));
+    const packageFiles = packageFilesByKey.get(packageKey(bindingFilePath, bindingFacts.packageName)) ?? [];
 
     for (const binding of bindingFacts.controllerBindings) {
+      if (binding.controllerPackageAlias !== undefined) {
+        continue;
+      }
       const controllerMethods = packageFiles.flatMap(({ filePath, facts }) =>
         facts.controllerMethods
-          .filter((method) => method.controllerName === binding.controllerName)
+          .filter(
+            (method) =>
+              method.controllerName === binding.controllerName &&
+              method.requestPackageAlias === undefined
+          )
           .map((method) => ({ filePath, method }))
       );
       for (const controllerMethod of controllerMethods) {
@@ -2474,7 +2534,115 @@ function projectGoFrameStandardRouterRoutes(input: {
             binding,
             handler,
             path,
-            domain
+            domain,
+            ruleId: "framework.goframe.standard-router.g-meta.same-package.cross-file",
+            configurationPaths: []
+          });
+        }
+      }
+    }
+  }
+
+  for (const [bindingFilePath, extracted] of [...input.factsByFile.entries()].sort(([left], [right]) =>
+    compareStableText(left, right)
+  )) {
+    const bindingFacts = extracted.goFrameStandardRouterFacts;
+    if (bindingFacts === undefined) {
+      continue;
+    }
+    const localPackageKey = packageKey(bindingFilePath, bindingFacts.packageName);
+    const localPackageFiles = packageFilesByKey.get(localPackageKey) ?? [];
+    const localPackage: ResolvedGoFrameStandardRouterPackage = {
+      packageKey: localPackageKey,
+      packageFiles: localPackageFiles,
+      configurationPaths: []
+    };
+
+    for (const binding of bindingFacts.controllerBindings) {
+      const controllerPackage =
+        binding.controllerPackageAlias === undefined
+          ? localPackage
+          : resolveExplicitImport(
+              bindingFilePath,
+              bindingFacts,
+              binding.controllerPackageAlias
+            );
+      if (controllerPackage === null) {
+        continue;
+      }
+      const controllerMethods = controllerPackage.packageFiles.flatMap(({ filePath, facts }) =>
+        facts.controllerMethods
+          .filter((method) => method.controllerName === binding.controllerName)
+          .map((method) => ({ filePath, facts, method }))
+      );
+      const resolvedControllerMethods = controllerMethods.flatMap((controllerMethod) => {
+        const requestPackage =
+          controllerMethod.method.requestPackageAlias === undefined
+            ? controllerPackage
+            : resolveExplicitImport(
+                controllerMethod.filePath,
+                controllerMethod.facts,
+                controllerMethod.method.requestPackageAlias
+              );
+        return requestPackage === null ? [] : [{ ...controllerMethod, requestPackage }];
+      });
+
+      for (const controllerMethod of resolvedControllerMethods) {
+        if (
+          binding.controllerPackageAlias === undefined &&
+          controllerMethod.method.requestPackageAlias === undefined
+        ) {
+          // The same-package collector above owns fully local standard routes.
+          continue;
+        }
+        const equallyTypedMethods = resolvedControllerMethods.filter(
+          (candidate) =>
+            candidate.method.requestType === controllerMethod.method.requestType &&
+            candidate.requestPackage.packageKey === controllerMethod.requestPackage.packageKey
+        );
+        if (equallyTypedMethods.length !== 1) {
+          continue;
+        }
+        const matchingRequests = controllerMethod.requestPackage.packageFiles.flatMap(
+          ({ filePath, facts }) =>
+            facts.requests
+              .filter((request) => request.name === controllerMethod.method.requestType)
+              .map((request) => ({ filePath, request }))
+        );
+        if (matchingRequests.length !== 1 || matchingRequests[0] === undefined) {
+          continue;
+        }
+        const handler = input.symbolsById.get(controllerMethod.method.handlerId);
+        if (handler?.kind !== "method" || handler.filePath !== controllerMethod.filePath) {
+          continue;
+        }
+        const path = goFrameStandardRouterPath(binding.prefix, matchingRequests[0].request.path);
+        if (path === null) {
+          continue;
+        }
+        const domains =
+          binding.domains.length === 0
+            ? [null]
+            : [...new Set(binding.domains)].sort(compareStableText);
+        const configurationPaths = [
+          ...new Set([
+            ...controllerPackage.configurationPaths,
+            ...controllerMethod.requestPackage.configurationPaths
+          ])
+        ].sort(compareStableText);
+        for (const domain of domains) {
+          candidates.push({
+            requestFilePath: matchingRequests[0].filePath,
+            controllerFilePath: controllerMethod.filePath,
+            bindingFilePath,
+            request: matchingRequests[0].request,
+            controllerMethod: controllerMethod.method,
+            binding,
+            handler,
+            path,
+            domain,
+            ruleId: "framework.goframe.standard-router.g-meta.go-module.cross-package",
+            configurationPaths
           });
         }
       }
@@ -2534,10 +2702,10 @@ function projectGoFrameStandardRouterRoutes(input: {
     };
     symbols.push(route);
     const routeEvidence = referenceEvidence(
-      "framework.goframe.standard-router.g-meta.same-package.cross-file",
+      candidate.ruleId,
       "module",
       [candidate.handler.id],
-      [],
+      candidate.configurationPaths,
       [
         candidate.requestFilePath,
         candidate.controllerFilePath,
@@ -3681,7 +3849,9 @@ export function resolveProjectFacts(input: {
   const goFrameStandardRouterRouteProjection = projectGoFrameStandardRouterRoutes({
     factsByFile,
     fileSymbols,
-    symbolsById
+    symbolsById,
+    knownFilePaths,
+    moduleResolver: input.moduleResolver
   });
   symbols.push(...goFrameStandardRouterRouteProjection.symbols);
   structuralEdges.push(...goFrameStandardRouterRouteProjection.structuralEdges);

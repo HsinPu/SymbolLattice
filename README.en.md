@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.129.0 is an early developer release. The package is not published to npm; run it from source.
+> v0.130.0 is an early developer release. The package is not published to npm; run it from source.
 
 SymbolLattice builds a queryable local code-symbol graph for a project. Each relation retains its source rule, resolution stage, and confidence. Source remains in the indexed project's `.symbol-lattice/index.sqlite` and is never silently uploaded.
 
@@ -49,18 +49,18 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 On Windows PowerShell, use `npm.cmd` if `npm` is unavailable. Filesystem roots and home directories are rejected unless `--force` is explicit.
 
-## v0.129.0
+## v0.130.0
 
-- GoFrame v1/v2 now exactly joins `g.Meta`, controller methods, and `Bind(&Controller{})` when they are distributed across one proven Go package directory, preserving Group prefixes and `Server.Domain(...)` host evidence.
-- The new raw facts are persisted in SQLite, so an incremental `sync` after an unrelated change can reuse unchanged Go files and reproduce the same route.
-- The extractor advances to `multi-language-ast-v111` and the project resolver to `project-resolver-v33`; the next explicit `sync` re-extracts unchanged source facts.
+- GoFrame v1/v2 standard routing now follows a root `go.mod` local-module path to exactly join cross-package `g.Meta`, `*request.ListReq`, and `Bind(&controller.UsersController{})` evidence.
+- It accepts only explicit Go import aliases, one local package, and one controller method; Group prefixes, `Server.Domain(...)` hosts, and `go.mod` configuration evidence remain on the route edge.
+- `go.mod` is now part of the index configuration. An explicit `sync` reprojects routes after it changes while safely reusing unchanged Go raw facts.
 
 ## Deliberate limits
 
 - This is not a compiler, type checker, framework runtime, or execution tracer.
 - Dynamic dispatch, reflection, macro expansion, code generation, dependency injection, and ambiguous names never become exact graph relations.
 - GoFrame Domain extraction accepts only proven literal, non-wildcard hosts. Dynamic values, empty entries, wildcards, and rebound receivers remain unresolved.
-- Cross-file GoFrame standard routing is limited to one same-directory package with unique matches. Cross-package imports, build tags, qualified request types, and ambiguous controller methods remain unresolved.
+- Cross-file GoFrame standard routing supports a same-package unique match or an explicit-alias local package import below the root `go.mod`. Implicit aliases, external/transitive modules, `replace`, nested-module selection, build tags, and ambiguous controller methods never become exact relations.
 - Other frameworks expose only implemented, evidence-backed slices; see [CHANGELOG.md](CHANGELOG.md) for the full history.
 
 ## Verification

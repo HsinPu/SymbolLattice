@@ -14,6 +14,7 @@ import {
   toProjectRelativePath
 } from "./discovery.js";
 import { createCargoWorkspaceProjectModuleResolver } from "./cargo-workspace.js";
+import { createGoModuleProjectModuleResolver } from "./go-module.js";
 import { buildProjectIndexInputs } from "./project-inputs.js";
 import { createWorkspaceProjectModuleResolver } from "./workspace.js";
 
@@ -51,13 +52,18 @@ export class FileSystemSourceCatalog implements SourceCatalog {
       projectPath: normalizedProjectPath,
       sourceDocuments
     });
+    const goModuleResolver = await createGoModuleProjectModuleResolver({
+      projectPath: normalizedProjectPath,
+      sourceDocuments
+    });
     const inputOptions =
       options?.scopeRoots === undefined
         ? {
             additionalConfigurationInputs: [
               ...typeScriptResolver.configurationInputs,
               ...workspaceResolver.configurationInputs,
-              ...cargoWorkspaceResolver.configurationInputs
+              ...cargoWorkspaceResolver.configurationInputs,
+              ...goModuleResolver.configurationInputs
             ]
           }
         : {
@@ -65,7 +71,8 @@ export class FileSystemSourceCatalog implements SourceCatalog {
             additionalConfigurationInputs: [
               ...typeScriptResolver.configurationInputs,
               ...workspaceResolver.configurationInputs,
-              ...cargoWorkspaceResolver.configurationInputs
+              ...cargoWorkspaceResolver.configurationInputs,
+              ...goModuleResolver.configurationInputs
             ]
           };
     const indexInputs = await buildProjectIndexInputs(normalizedProjectPath, inputOptions);
@@ -75,6 +82,10 @@ export class FileSystemSourceCatalog implements SourceCatalog {
       indexInputs,
       moduleResolver: {
         resolve(fromFilePath, moduleSpecifier) {
+          if (fromFilePath.endsWith(".go")) {
+            return goModuleResolver.moduleResolver.resolve(fromFilePath, moduleSpecifier);
+          }
+
           const typeScriptResolution = typeScriptResolver.moduleResolver.resolve(
             fromFilePath,
             moduleSpecifier

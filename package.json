@@ -1,6 +1,6 @@
 {
   "name": "@hsinpu/symbol-lattice",
-  "version": "0.129.0",
+  "version": "0.130.0",
   "description": "Evidence-first local code intelligence for TypeScript, JavaScript, ArkTS/ArkUI, Vue, Svelte, Astro, Razor/Blazor, Terraform/OpenTofu, Shopify Liquid, Twig, Laravel Blade, Solidity, CFML/CFScript, Nix, VB.NET, Python/FastAPI/Flask/Django, Go, Rust, Java/Spring/Micronaut/Jakarta REST, Groovy, Fortran, Ada, PHP, C, COBOL, Zig, YAML, XML/MyBatis, Java properties, Shell/Bash, SQL DDL, GraphQL schema with bounded NestJS resolver links, Protocol Buffers declarations with bounded gRPC service contracts, Lua/Luau, Pascal, Objective-C/Objective-C++, R, Elixir, Erlang, Clojure, Perl, Julia, Haskell, OCaml, F#, Nim, C++, C#, Ruby, Kotlin, Swift, Dart, and Scala projects.",
   "license": "MIT",
   "repository": {

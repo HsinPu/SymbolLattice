@@ -3,7 +3,7 @@
  * resolved. Persisting this compact identity lets a read-only status request
  * detect configuration-only drift without reconstructing a graph first.
  */
-export const PROJECT_INDEX_INPUTS_FORMAT_VERSION = "project-inputs-v3";
+export const PROJECT_INDEX_INPUTS_FORMAT_VERSION = "project-inputs-v4";
 
 export const PROJECT_CONFIGURATION_INPUT_KINDS = [
   "root-gitignore",
@@ -14,7 +14,8 @@ export const PROJECT_CONFIGURATION_INPUT_KINDS = [
   "workspace-package-manifest",
   "cargo-workspace-root-manifest",
   "cargo-workspace-package-manifest",
-  "cargo-workspace-member-glob"
+  "cargo-workspace-member-glob",
+  "go-module"
 ] as const;
 
 export type ProjectConfigurationInputKind = (typeof PROJECT_CONFIGURATION_INPUT_KINDS)[number];

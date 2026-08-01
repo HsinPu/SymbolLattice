@@ -6,6 +6,28 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.130.0] - 2026-08-01
+
+### Added
+
+- GoFrame v1/v2 standard-router projection now follows one root `go.mod` local-module path through explicit Go import aliases. It exactly joins a literal `g.Meta` request, a controller method accepting `*alias.Request`, and `Bind(&alias.Controller{})` across indexed package directories while preserving literal Group/Domain route context.
+- The persisted GoFrame facts retain explicit package aliases for qualified request and controller references. Each projected route records the participating source paths and `go.mod` configuration evidence.
+- Root `go.mod` is tracked in project index inputs and resolves one deterministic non-test source representative per local package directory. A configuration-only `sync` reprojects routes while reusing compatible persisted source facts.
+
+### Compatibility
+
+- The artifact-facts extractor advances to `multi-language-ast-v112`, the project resolver to `project-resolver-v34`, and project index inputs to `project-inputs-v4`. Existing graphs remain readable; the next explicit `sync` refreshes raw facts and configuration identity. SQLite schema is unchanged.
+
+### Deliberate limits
+
+- A cross-package result requires a literal root module declaration, explicit aliases at every package boundary, one indexed non-test representative, one unique target package, one unique request type, one unique controller method, and an already supported static GoFrame Bind receiver. Implicit import names, external/transitive packages, `replace`, nested-module selection, build tags, dynamic/reflection registration, rebindings, and ambiguity remain unresolved.
+- Fully same-file standard-router routes remain owned by the syntax extractor; same-package cross-file routes retain their existing rule and are not duplicated by the module projection.
+
+### Comparison notes
+
+- At inspected CodeGraph commit `572d22bfbe82602080e457bec655f72e3314f9ef`, GoFrame synthesis performs a heuristic graph join for `g.Meta` request metadata and deliberately does not reconstruct Group prefixes or retain root-module configuration evidence.
+- SymbolLattice v0.130 is narrower in its supported Go import grammar, but stronger for that slice: every cross-package route needs a root `go.mod`, explicit aliases, unique local package proof, persisted configuration evidence, and preserved literal Group/Domain context.
+
 ## [0.129.0] - 2026-08-01
 
 ### Added
@@ -2398,7 +2420,9 @@ No unreleased changes.
 - Explicit full indexing, caller/callee/impact queries, and read-only MCP exploration.
 - `exact`, `heuristic`, and `unresolved` relationship states.
 
-[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.128.0...HEAD
+[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.130.0...HEAD
+[0.130.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.129.0...v0.130.0
+[0.129.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.128.0...v0.129.0
 [0.128.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.127.0...v0.128.0
 [0.127.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.126.0...v0.127.0
 [0.126.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.125.0...v0.126.0

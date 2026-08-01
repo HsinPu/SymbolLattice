@@ -4582,6 +4582,7 @@ describe("SymbolLatticeService", () => {
         })
       ])
     );
+
   });
 
   it("rejects ambiguous cross-file GoFrame standard-router controller methods", async () => {
@@ -4623,6 +4624,182 @@ describe("SymbolLatticeService", () => {
 
     expect(routes.routes).not.toEqual(
       expect.arrayContaining([expect.objectContaining({ method: "GET", path: "/users" })])
+    );
+  });
+
+  it("projects a GoFrame standard-router route through exact local Go module imports", async () => {
+    const projectPath = await createInlineProject({
+      "go.mod": "module example.test/warehouse\n\ngo 1.22\n",
+      "api/request/list.go": [
+        "package request",
+        "",
+        'import "github.com/gogf/gf/v2/frame/g"',
+        "",
+        "type ListReq struct {",
+        '  g.Meta `path:"/users" method:"GET"`',
+        "}"
+      ].join("\n"),
+      "api/request/list_external_test.go": "package request_test\n",
+      "api/controller/users.go": [
+        "package controller",
+        "",
+        "import (",
+        '  "context"',
+        '  request "example.test/warehouse/api/request"',
+        ")",
+        "",
+        "type UsersController struct{}",
+        "",
+        "func (c *UsersController) List(ctx context.Context, req *request.ListReq) {}"
+      ].join("\n"),
+      "cmd/server/routes.go": [
+        "package main",
+        "",
+        "import (",
+        '  controller "example.test/warehouse/api/controller"',
+        '  "github.com/gogf/gf/v2/frame/g"',
+        ")",
+        "",
+        "func Register() {",
+        "  server := g.Server()",
+        '  domain := server.Domain("api.example.test")',
+        '  api := domain.Group("/v1")',
+        "  api.Bind(&controller.UsersController{})",
+        "}"
+      ].join("\n"),
+      "other/request.go": [
+        "package other",
+        "",
+        'import "github.com/gogf/gf/v2/frame/g"',
+        "",
+        "type ListReq struct {",
+        '  g.Meta `path:"/wrong" method:"GET"`',
+        "}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath, { domain: "api.example.test" });
+    const controllerFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "api/controller/users.go");
+    const bindingFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "cmd/server/routes.go");
+
+    expect(controllerFacts?.goFrameStandardRouterFacts).toMatchObject({
+      controllerMethods: [
+        expect.objectContaining({
+          controllerName: "UsersController",
+          requestType: "ListReq",
+          requestPackageAlias: "request"
+        })
+      ],
+      explicitImports: [
+        expect.objectContaining({
+          localName: "request",
+          moduleSpecifier: "example.test/warehouse/api/request"
+        })
+      ]
+    });
+    expect(bindingFacts?.goFrameStandardRouterFacts).toMatchObject({
+      controllerBindings: [
+        expect.objectContaining({
+          controllerName: "UsersController",
+          controllerPackageAlias: "controller"
+        })
+      ],
+      explicitImports: [
+        expect.objectContaining({
+          localName: "controller",
+          moduleSpecifier: "example.test/warehouse/api/controller"
+        })
+      ]
+    });
+
+    expect(routes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "GET",
+          path: "/v1/users",
+          domain: "api.example.test",
+          handler: expect.objectContaining({
+            qualifiedName: "api/controller/users.go#UsersController.List"
+          }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            confidence: 1,
+            evidence: expect.objectContaining({
+              ruleId: "framework.goframe.standard-router.g-meta.go-module.cross-package",
+              stage: "module",
+              resolutionPath: [
+                "api/request/list.go",
+                "api/controller/users.go",
+                "cmd/server/routes.go"
+              ],
+              configurationPaths: ["go.mod"]
+            })
+          })
+        })
+      ])
+    );
+    expect(routes.routes).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ path: "/v1/wrong" })])
+    );
+
+    await writeFile(join(projectPath, "unrelated.go"), "package main\n\nconst Ready = true\n", "utf8");
+    const synced = await service.sync({ projectPath });
+    const routesAfterReuse = await service.routes(projectPath, { domain: "api.example.test" });
+
+    expect(synced.lastIndexWork).toMatchObject({
+      mode: "incremental",
+      reExtractedFiles: ["unrelated.go"],
+      reusedArtifactFiles: [
+        "api/controller/users.go",
+        "api/request/list.go",
+        "api/request/list_external_test.go",
+        "cmd/server/routes.go",
+        "other/request.go"
+      ]
+    });
+    expect(routesAfterReuse.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "GET",
+          path: "/v1/users",
+          edge: expect.objectContaining({
+            evidence: expect.objectContaining({
+              ruleId: "framework.goframe.standard-router.g-meta.go-module.cross-package",
+              configurationPaths: ["go.mod"]
+            })
+          })
+        })
+      ])
+    );
+
+    await writeFile(
+      join(projectPath, "api", "request", "go.mod"),
+      "module example.test/warehouse/api/request\n\ngo 1.22\n",
+      "utf8"
+    );
+    const syncedAfterNestedModule = await service.sync({ projectPath });
+    const routesAfterNestedModule = await service.routes(projectPath, {
+      domain: "api.example.test"
+    });
+
+    expect(syncedAfterNestedModule.lastIndexWork).toMatchObject({
+      mode: "incremental",
+      reExtractedFiles: [],
+      reusedArtifactFiles: expect.arrayContaining([
+        "api/controller/users.go",
+        "api/request/list.go",
+        "cmd/server/routes.go"
+      ])
+    });
+    expect(routesAfterNestedModule.routes).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ path: "/v1/users" })])
     );
   });
 

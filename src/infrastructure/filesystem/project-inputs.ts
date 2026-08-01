@@ -241,6 +241,8 @@ function configurationInputKindOrder(kind: ProjectConfigurationInputKind): numbe
       return 7;
     case "cargo-workspace-member-glob":
       return 8;
+    case "go-module":
+      return 9;
   }
 }
 

@@ -209,6 +209,7 @@ interface StaticGoFrameGroupCallback {
 interface StaticGoFrameControllerBinding {
   readonly receiver: GoFrameReceiver;
   readonly controllerName: string;
+  readonly controllerPackageAlias?: string;
   readonly node: GoSyntaxNode;
 }
 
@@ -232,6 +233,12 @@ interface StaticGoFrameDeclaredMethod extends StaticGoFrameMethod {
 
 interface StaticGoFrameControllerMethod extends StaticGoFrameMethod {
   readonly requestType: string;
+  readonly requestPackageAlias?: string;
+}
+
+interface StaticGoFrameNamedTypeReference {
+  readonly name: string;
+  readonly packageAlias?: string;
 }
 
 const GIN_PACKAGE_PATH = "github.com/gin-gonic/gin";
@@ -529,6 +536,41 @@ function staticPackageImportAliases(
     .sort();
 }
 
+/**
+ * Retains only literal, explicitly aliased imports. A cross-package GoFrame
+ * standard-router projection must not infer Go's implicit package name from a
+ * path segment, because that name is controlled by the imported package.
+ */
+function staticGoFrameExplicitImports(
+  input: GoExtractFileFactsInput,
+  root: GoSyntaxNode
+): readonly { readonly localName: string; readonly moduleSpecifier: string }[] {
+  const imports: Array<{ readonly localName: string; readonly moduleSpecifier: string }> = [];
+  for (const declaration of directChildren(root).filter((node) => node.name === "ImportDecl")) {
+    for (const specifier of descendantsNamed(declaration, "ImportSpec")) {
+      const children = directChildren(specifier);
+      const aliasNode = children.find((child) => child.name === "DefName");
+      const stringNode = children.find((child) => child.name === "String");
+      const localName = aliasNode === undefined ? null : identifierText(input, aliasNode);
+      const moduleSpecifier =
+        stringNode === undefined ? null : staticPlainGoString(input, stringNode);
+      if (localName === null || localName === "_" || moduleSpecifier === null) {
+        continue;
+      }
+      imports.push({ localName, moduleSpecifier });
+    }
+  }
+  return imports.sort(
+    (left, right) =>
+      (left.localName < right.localName ? -1 : left.localName > right.localName ? 1 : 0) ||
+      (left.moduleSpecifier < right.moduleSpecifier
+        ? -1
+        : left.moduleSpecifier > right.moduleSpecifier
+          ? 1
+          : 0)
+  );
+}
+
 function staticGinImportAliases(
   input: GoExtractFileFactsInput,
   root: GoSyntaxNode
@@ -759,7 +801,7 @@ function staticGoFrameControllerMethods(
     "u"
   );
   const requestParameterPattern =
-    /^(?:[A-Za-z_][A-Za-z0-9_]*\s+)?\*([A-Z][A-Za-z0-9_]*)$/u;
+    /^(?:[A-Za-z_][A-Za-z0-9_]*\s+)?\*(?:([A-Za-z_][A-Za-z0-9_]*)\.)?([A-Z][A-Za-z0-9_]*)$/u;
 
   for (const method of methods) {
     if (!/^[A-Z]/u.test(method.name)) {
@@ -779,14 +821,15 @@ function staticGoFrameControllerMethods(
     const requestMatch = requestParameterPattern.exec(nodeText(input, requestParameter).trim());
     if (
       !contextParameterPattern.test(nodeText(input, contextParameter).trim()) ||
-      requestMatch?.[1] === undefined
+      requestMatch?.[2] === undefined
     ) {
       continue;
     }
     controllerMethods.push({
       controllerName: method.controllerName,
       name: method.name,
-      requestType: requestMatch[1],
+      requestType: requestMatch[2],
+      ...(requestMatch[1] === undefined ? {} : { requestPackageAlias: requestMatch[1] }),
       node: method.node
     });
   }
@@ -1439,6 +1482,36 @@ function staticGoFrameControllerName(
   return constructorMatch?.[1] ?? null;
 }
 
+/**
+ * A `Bind` registration can name a local controller or one controller through
+ * an explicit Go package alias. Other object-route APIs keep their narrower
+ * local-controller grammar and are intentionally not broadened here.
+ */
+function staticGoFrameStandardRouterControllerReference(
+  input: GoExtractFileFactsInput,
+  node: GoSyntaxNode
+): StaticGoFrameNamedTypeReference | null {
+  const source = nodeText(input, node);
+  const addressMatch =
+    /^&\s*(?:([A-Za-z_][A-Za-z0-9_]*)\s*\.\s*)?([A-Z][A-Za-z0-9_]*)\s*\{\s*\}$/u.exec(
+      source
+    );
+  const constructorMatch =
+    addressMatch === null
+      ? /^new\s*\(\s*(?:([A-Za-z_][A-Za-z0-9_]*)\s*\.\s*)?([A-Z][A-Za-z0-9_]*)\s*\)$/u.exec(
+          source
+        )
+      : null;
+  const match = addressMatch ?? constructorMatch;
+  if (match?.[2] === undefined) {
+    return null;
+  }
+  return {
+    name: match[2],
+    ...(match[1] === undefined ? {} : { packageAlias: match[1] })
+  };
+}
+
 function staticGoFrameBoundObjectControllerName(
   input: GoExtractFileFactsInput,
   node: GoSyntaxNode,
@@ -1574,11 +1647,20 @@ function staticGoFrameControllerBinding(
   }
   const receiver = receivers.get(call.receiverName);
   const controllerNode = call.arguments_[0];
-  const controllerName =
-    controllerNode === undefined ? null : staticGoFrameControllerName(input, controllerNode);
-  return receiver === undefined || controllerName === null
+  const controller =
+    controllerNode === undefined
+      ? null
+      : staticGoFrameStandardRouterControllerReference(input, controllerNode);
+  return receiver === undefined || controller === null
     ? null
-    : { receiver, controllerName, node };
+    : {
+        receiver,
+        controllerName: controller.name,
+        ...(controller.packageAlias === undefined
+          ? {}
+          : { controllerPackageAlias: controller.packageAlias }),
+        node
+      };
 }
 
 function staticGoFrameBindObjectMethodRoute(
@@ -2448,6 +2530,7 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
     const goFrameAliases = staticGoFrameImportAliases(input, root);
     const goFrameHttpAliases = staticGoFrameHttpImportAliases(input, root);
     const contextAliases = staticContextImportAliases(input, root);
+    const goFrameExplicitImports = staticGoFrameExplicitImports(input, root);
     const goFrameRequests = staticGoFrameRequests(input, root, new Set(goFrameAliases));
     const goFrameDeclaredMethods = staticGoFrameDeclaredMethods(input, root);
     const goFrameControllerMethods = staticGoFrameControllerMethods(
@@ -2901,8 +2984,14 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
     }
 
     for (const binding of goFrameControllerBindings) {
+      if (binding.controllerPackageAlias !== undefined) {
+        continue;
+      }
       for (const method of goFrameControllerMethods) {
-        if (method.controllerName !== binding.controllerName) {
+        if (
+          method.controllerName !== binding.controllerName ||
+          method.requestPackageAlias !== undefined
+        ) {
           continue;
         }
         const requestMatches = goFrameRequests.filter(
@@ -2932,14 +3021,21 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
           controllerName: method.controllerName,
           methodName: method.name,
           requestType: method.requestType,
+          ...(method.requestPackageAlias === undefined
+            ? {}
+            : { requestPackageAlias: method.requestPackageAlias }),
           handlerId: goFrameMethodSymbol(method).id
         })),
         controllerBindings: goFrameControllerBindings.map((binding) => ({
           controllerName: binding.controllerName,
+          ...(binding.controllerPackageAlias === undefined
+            ? {}
+            : { controllerPackageAlias: binding.controllerPackageAlias }),
           prefix: binding.receiver.prefix,
           domains: binding.receiver.kind === "server" ? [] : binding.receiver.domains,
           range: rangeFor(lineStarts, binding.node.from, binding.node.to)
-        }))
+        })),
+        explicitImports: goFrameExplicitImports
       };
     }
   }
