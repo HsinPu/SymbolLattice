@@ -2,7 +2,7 @@
 
 # SymbolLattice
 
-**可驗證、可查詢的本機程式碼情報圖譜**
+**可查詢、可解釋、完全在本機執行的程式碼智慧圖譜**
 
 [![Version](https://img.shields.io/github/v/tag/HsinPu/symbol-lattice?label=version)](https://github.com/HsinPu/symbol-lattice/tags)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D22.13-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
@@ -14,13 +14,13 @@
 </div>
 
 > [!IMPORTANT]
-> v0.155.0 是開發者預覽版；套件尚未發佈至 npm，請由原始碼執行。
+> v0.156.0 是開發者預覽版，尚未發布到 npm；請從原始碼執行。
 
-SymbolLattice 為專案建立可查詢的本機程式碼符號圖譜。每條關係都保留規則、解析階段與信心值；它明確區分 exact、heuristic 與 unresolved，不會把猜測升格為事實。
+SymbolLattice 將專案建立為可查詢的本機程式碼符號圖譜。每條關係都保留規則、解析階段與信心值，絕不混淆 `exact`、`heuristic` 與 `unresolved` 證據。
 
 ## 快速開始
 
-需要 Node.js 22.13 以上且低於 25，以及 npm。
+需要 Node.js 22.13 以上、25 以下，以及 npm。
 
 ~~~bash
 git clone https://github.com/HsinPu/symbol-lattice.git
@@ -31,7 +31,7 @@ npm run build
 # 明確建立本機索引
 node dist/cli/main.js init /path/to/project
 
-# 唯讀查詢；來源變更後才明確同步
+# 唯讀查詢；原始碼變更後明確同步
 node dist/cli/main.js routes --project /path/to/project --method GET
 node dist/cli/main.js sync /path/to/project
 
@@ -39,20 +39,26 @@ node dist/cli/main.js sync /path/to/project
 node dist/cli/main.js serve --mcp --project /path/to/project
 ~~~
 
-Windows PowerShell 若無法使用 npm，請改用 npm.cmd。索引資料保留在目標專案的 .symbol-lattice/index.sqlite。
+在 Windows PowerShell，如無法使用 `npm`，請改用 `npm.cmd`。索引資料保存在目標專案的 `.symbol-lattice/index.sqlite`。
 
-## v0.155.0
+## v0.156.0
 
-- 支援同一 Sanic app 內，將同一 Blueprint 掛載到多個直接群組：每個群組必須有不同、受限字面 `name_prefix`，路由才會成為 exact。
-- 仍支援同檔遞迴巢狀群組；每層群組 prefix、Blueprint prefix、`app.blueprint(..., url_prefix=...)` 與 decorator path 都會組合為 exact 路徑。
-- 缺少、衝突或動態的名稱，以及循環、重綁定與無法證明的成員，都不會產生精確路由。
-- 下一次明確 `sync` 會重新擷取既有 Python 事實並重建受影響的路由。
+- Sanic `Blueprint.group(...)` 現可跨同一個已證明 Python 套件的相對匯入路徑遞迴投影路由。
+- 支援直接與匯入的 Blueprint 成員、巢狀群組、別名，以及群組 prefix、Blueprint prefix、掛載 prefix 與 decorator path 的精確組合。
+- 每條跨檔群組路由保留完整模組跳點的 `resolutionPath` 證據。
+- 同一 app 的重複群組掛載僅在每個直接群組均有不同且字面量 `name_prefix` 時成為 exact；循環、重複葉節點、衝突與未證明成員不會產生 exact 路由。
 
-## 設計界線
+## 核心原則
 
-- 所有索引與查詢皆在本機進行；不會悄悄上傳原始碼。
-- 動態派發、反射、巨集、程式碼生成、DI、模糊名稱與執行期設定不會成為 exact 關係。
-- 跨檔 Sanic 支援仍限單一名稱、一層相對路徑的直接 Blueprint import。群組僅限同檔、直接 Blueprint 或群組變數、最多一個字面 `url_prefix`，以及多重直接群組掛載時的非空英數/`_`/`-` `name_prefix`；跨檔群組、copies、陣列成員、巢狀重複掛載、app 註冊名稱、版本或其他註冊選項、class views、WebSocket、`add_route` 與動態組合暫不推斷。
+- 所有索引與查詢都在本機執行，不會靜默上傳原始碼。
+- `init` 與 `sync` 是明確的寫入操作；CLI 與 MCP 查詢維持唯讀。
+- 關係必須有可重現的靜態證據，否則保留為未解析，而非猜測。
+
+## 邊界
+
+- 跨檔 Sanic 路徑限於正規 Python 套件內、一個前導點、單一名稱的相對匯入，以及頂層、字面量設定的 `Blueprint.group(...)` 與 `app.blueprint(...)`。
+- 動態組合、複製值、list/tuple 成員、re-export、namespace package、父層相對匯入、class view、WebSocket、`add_route`、版本與其他註冊選項目前不會升格為 exact。
+- 反射、執行期設定、DI、巨集、產生程式碼與模糊名稱同樣不會被當作靜態證明。
 
 ## 驗證
 
@@ -62,3 +68,7 @@ npm test
 npm run build
 git diff --check
 ~~~
+
+## 授權
+
+[MIT](LICENSE)

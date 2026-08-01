@@ -11,13 +11,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v136";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v137";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v40";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v41";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -299,8 +299,9 @@ export interface SanicBlueprintRouteFact {
 }
 
 /**
- * A direct, option-free `app.blueprint(imported_blueprint)` registration from
- * one package-relative Python module into another.
+ * A direct `app.blueprint(imported_target)` registration from one
+ * package-relative Python module into another. The imported target may prove
+ * to be either a Blueprint or a Blueprint group during project resolution.
  */
 export interface SanicImportedBlueprintRegistrationFact {
   readonly applicationName: string;
@@ -311,12 +312,38 @@ export interface SanicImportedBlueprintRegistrationFact {
   readonly range: SourceRange;
 }
 
+/** One statically proven member of a top-level Sanic Blueprint group. */
+export type SanicBlueprintGroupMemberFact =
+  | {
+      readonly kind: "blueprint";
+      readonly name: string;
+    }
+  | {
+      readonly kind: "group";
+      readonly name: string;
+    }
+  | {
+      readonly kind: "imported";
+      readonly importedName: string;
+      readonly moduleSpecifier: string;
+    };
+
+/** A final, top-level Sanic `Blueprint.group` declaration with literal configuration. */
+export interface SanicBlueprintGroupDeclarationFact {
+  readonly name: string;
+  readonly prefix: string;
+  readonly namePrefix: string | null;
+  readonly members: readonly SanicBlueprintGroupMemberFact[];
+  readonly range: SourceRange;
+}
+
 /**
- * Syntax-only facts used to project literal routes through a directly imported
- * Sanic Blueprint in another module of the same proven Python package.
+ * Syntax-only facts used to project literal routes through directly imported
+ * Sanic Blueprints and Blueprint groups in one proven Python package.
  */
 export interface SanicBlueprintFacts {
   readonly blueprints: readonly SanicBlueprintDeclarationFact[];
+  readonly groups: readonly SanicBlueprintGroupDeclarationFact[];
   readonly routes: readonly SanicBlueprintRouteFact[];
   readonly importedBlueprintRegistrations: readonly SanicImportedBlueprintRegistrationFact[];
 }

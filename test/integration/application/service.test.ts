@@ -3762,6 +3762,247 @@ describe("SymbolLatticeService", () => {
     ]);
   });
 
+  it("projects nested package-relative Sanic Blueprint group modules through literal prefixes", async () => {
+    const projectPath = await createInlineProject({
+      "app/__init__.py": "",
+      "app/routes/__init__.py": "",
+      "app/routes/catalog.py": [
+        "from sanic import Blueprint as Router",
+        "catalog = Router(\"catalog\", url_prefix=\"/catalog\")",
+        "",
+        "@catalog.get(\"/items\")",
+        "async def items(request):",
+        "    return None"
+      ].join("\n"),
+      "app/routes/users.py": [
+        "from sanic import Blueprint as Router",
+        "users = Router(\"users\", url_prefix=\"/users\")",
+        "",
+        "@users.get(\"/health\")",
+        "async def health(request):",
+        "    return None"
+      ].join("\n"),
+      "app/routes/content.py": [
+        "from sanic import Blueprint as Router",
+        "from .users import users as users_blueprint",
+        "content = Router.group(users_blueprint, url_prefix=\"/content\")"
+      ].join("\n"),
+      "app/routes/api.py": [
+        "from sanic import Blueprint as Router",
+        "from .catalog import catalog as catalog_blueprint",
+        "from .content import content as content_group",
+        "reports = Router(\"reports\", url_prefix=\"/reports\")",
+        "api = Router.group(catalog_blueprint, content_group, reports, url_prefix=\"/api\")",
+        "",
+        "@reports.get(\"/summary\")",
+        "async def summary(request):",
+        "    return None"
+      ].join("\n"),
+      "app/main.py": [
+        "from sanic import Sanic as App",
+        "from .routes.api import api as api_group",
+        "app = App(\"symbol-lattice\")",
+        "app.blueprint(api_group, url_prefix=\"/v1\")"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath, { method: "GET" });
+
+    expect(routes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "GET",
+          path: "/v1/api/catalog/items",
+          route: expect.objectContaining({ filePath: "app/routes/catalog.py" }),
+          handler: expect.objectContaining({ qualifiedName: "app/routes/catalog.py#items" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.sanic.imported-blueprint-group.app-blueprint.decorator.local-function",
+              stage: "module",
+              resolutionPath: ["app/main.py", "app/routes/api.py", "app/routes/catalog.py"]
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "GET",
+          path: "/v1/api/content/users/health",
+          route: expect.objectContaining({ filePath: "app/routes/users.py" }),
+          handler: expect.objectContaining({ qualifiedName: "app/routes/users.py#health" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId:
+                "framework.sanic.imported-nested-blueprint-group.app-blueprint.decorator.local-function",
+              stage: "module",
+              resolutionPath: [
+                "app/main.py",
+                "app/routes/api.py",
+                "app/routes/content.py",
+                "app/routes/users.py"
+              ]
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "GET",
+          path: "/v1/api/reports/summary",
+          route: expect.objectContaining({ filePath: "app/routes/api.py" }),
+          handler: expect.objectContaining({ qualifiedName: "app/routes/api.py#summary" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.sanic.imported-blueprint-group.app-blueprint.decorator.local-function",
+              stage: "module",
+              resolutionPath: ["app/main.py", "app/routes/api.py"]
+            })
+          })
+        })
+      ])
+    );
+  });
+
+  it("projects named package-relative Sanic Blueprint group mounts without collapsing routes", async () => {
+    const projectPath = await createInlineProject({
+      "app/__init__.py": "",
+      "app/routes/__init__.py": "",
+      "app/routes/users.py": [
+        "from sanic import Blueprint as Router",
+        "users = Router(\"users\", url_prefix=\"/users\")",
+        "",
+        "@users.get(\"/health\")",
+        "async def health(request):",
+        "    return None"
+      ].join("\n"),
+      "app/routes/public.py": [
+        "from sanic import Blueprint as Router",
+        "from .users import users as users_blueprint",
+        "public = Router.group(users_blueprint, url_prefix=\"/public\", name_prefix=\"public\")"
+      ].join("\n"),
+      "app/routes/admin.py": [
+        "from sanic import Blueprint as Router",
+        "from .users import users as users_blueprint",
+        "admin = Router.group(users_blueprint, url_prefix=\"/admin\", name_prefix=\"admin\")"
+      ].join("\n"),
+      "app/main.py": [
+        "from sanic import Sanic as App",
+        "from .routes.public import public as public_group",
+        "from .routes.admin import admin as admin_group",
+        "app = App(\"symbol-lattice\")",
+        "app.blueprint(public_group, url_prefix=\"/v1\")",
+        "app.blueprint(admin_group, url_prefix=\"/v2\")"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath, { method: "GET" });
+
+    expect(routes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: "/v1/public/users/health",
+          edge: expect.objectContaining({
+            evidence: expect.objectContaining({
+              ruleId: "framework.sanic.imported-named-blueprint-group.app-blueprint.decorator.local-function"
+            })
+          })
+        }),
+        expect.objectContaining({
+          path: "/v2/admin/users/health",
+          edge: expect.objectContaining({
+            evidence: expect.objectContaining({
+              ruleId: "framework.sanic.imported-named-blueprint-group.app-blueprint.decorator.local-function"
+            })
+          })
+        })
+      ])
+    );
+  });
+
+  it("rejects repeated package-relative Sanic Blueprint group mounts without literal name prefixes", async () => {
+    const projectPath = await createInlineProject({
+      "app/__init__.py": "",
+      "app/routes/__init__.py": "",
+      "app/routes/users.py": [
+        "from sanic import Blueprint as Router",
+        "users = Router(\"users\", url_prefix=\"/users\")",
+        "",
+        "@users.get(\"/health\")",
+        "async def health(request):",
+        "    return None"
+      ].join("\n"),
+      "app/routes/public.py": [
+        "from sanic import Blueprint as Router",
+        "from .users import users as users_blueprint",
+        "public = Router.group(users_blueprint, url_prefix=\"/public\")"
+      ].join("\n"),
+      "app/routes/admin.py": [
+        "from sanic import Blueprint as Router",
+        "from .users import users as users_blueprint",
+        "admin = Router.group(users_blueprint, url_prefix=\"/admin\")"
+      ].join("\n"),
+      "app/main.py": [
+        "from sanic import Sanic as App",
+        "from .routes.public import public as public_group",
+        "from .routes.admin import admin as admin_group",
+        "app = App(\"symbol-lattice\")",
+        "app.blueprint(public_group, url_prefix=\"/v1\")",
+        "app.blueprint(admin_group, url_prefix=\"/v2\")"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath, { method: "GET" });
+
+    expect(routes.routes).toEqual([]);
+  });
+
+  it("rejects cyclic package-relative Sanic Blueprint group members", async () => {
+    const projectPath = await createInlineProject({
+      "app/__init__.py": "",
+      "app/routes/__init__.py": "",
+      "app/routes/users.py": [
+        "from sanic import Blueprint as Router",
+        "users = Router(\"users\", url_prefix=\"/users\")",
+        "",
+        "@users.get(\"/health\")",
+        "async def health(request):",
+        "    return None"
+      ].join("\n"),
+      "app/routes/alpha.py": [
+        "from sanic import Blueprint as Router",
+        "from .users import users as users_blueprint",
+        "from .beta import beta as beta_group",
+        "alpha = Router.group(users_blueprint, beta_group, url_prefix=\"/alpha\")"
+      ].join("\n"),
+      "app/routes/beta.py": [
+        "from sanic import Blueprint as Router",
+        "from .alpha import alpha as alpha_group",
+        "beta = Router.group(alpha_group, url_prefix=\"/beta\")"
+      ].join("\n"),
+      "app/main.py": [
+        "from sanic import Sanic as App",
+        "from .routes.alpha import alpha as alpha_group",
+        "app = App(\"symbol-lattice\")",
+        "app.blueprint(alpha_group, url_prefix=\"/v1\")"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath, { method: "GET" });
+
+    expect(routes.routes).toEqual([]);
+  });
+
   it("indexes Scala source plus Play conf/routes with exact package-class-method handler proof", async () => {
     const projectPath = await createInlineProject({
       "app/controllers/HealthController.scala": [

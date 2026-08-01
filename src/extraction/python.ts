@@ -15,6 +15,8 @@ import {
   type GraphEdge,
   type RouteMethod,
   type SanicBlueprintDeclarationFact,
+  type SanicBlueprintGroupDeclarationFact,
+  type SanicBlueprintGroupMemberFact,
   type SanicBlueprintRouteFact,
   type SanicImportedBlueprintRegistrationFact,
   type SourcePosition,
@@ -248,7 +250,7 @@ interface StaticFlaskRelativeBlueprintImport {
   readonly node: PythonSyntaxNode;
 }
 
-/** A one-dot, single-name Python relative import that can carry a Sanic Blueprint. */
+/** A one-dot, single-name Python relative import that can carry a Sanic Blueprint or group. */
 interface StaticSanicRelativeBlueprintImport {
   readonly moduleSpecifier: string;
   readonly importedBlueprintName: string;
@@ -2775,27 +2777,109 @@ function latestProvenFlaskRelativeBlueprintImport(
  * argument at a literal `app.blueprint` call. A later assignment or import
  * shadows an earlier import and therefore removes it from consideration.
  */
+function latestProvenSanicRelativeBlueprintImportBinding(
+  input: PythonExtractFileFactsInput,
+  topLevelNodes: readonly PythonSyntaxNode[],
+  imports: readonly StaticSanicRelativeBlueprintImport[],
+  blueprintName: string,
+  before: number
+): StaticSanicRelativeBlueprintImport | null {
+  const candidates = imports
+    .filter(
+      (candidate) =>
+        candidate.blueprintName === blueprintName &&
+        candidate.node.to <= before &&
+        !hasTopLevelRebinding(
+          input,
+          topLevelNodes,
+          candidate.blueprintName,
+          candidate.node.to,
+          before
+        )
+    )
+    .sort((left, right) => right.node.from - left.node.from);
+  return candidates.length === 1 ? candidates[0] ?? null : null;
+}
+
+/**
+ * Finds the one direct relative import still bound to a Sanic Blueprint or
+ * group argument at a literal `app.blueprint` call.
+ */
 function latestProvenSanicRelativeBlueprintImport(
   input: PythonExtractFileFactsInput,
   topLevelNodes: readonly PythonSyntaxNode[],
   imports: readonly StaticSanicRelativeBlueprintImport[],
   registration: StaticSanicBlueprintRegistration
 ): StaticSanicRelativeBlueprintImport | null {
-  const candidates = imports
-    .filter(
-      (candidate) =>
-        candidate.blueprintName === registration.blueprintName &&
-        candidate.node.to <= registration.node.from &&
-        !hasTopLevelRebinding(
-          input,
-          topLevelNodes,
-          candidate.blueprintName,
-          candidate.node.to,
-          registration.node.from
-        )
-    )
-    .sort((left, right) => right.node.from - left.node.from);
-  return candidates.length === 1 ? candidates[0] ?? null : null;
+  return latestProvenSanicRelativeBlueprintImportBinding(
+    input,
+    topLevelNodes,
+    imports,
+    registration.blueprintName,
+    registration.node.from
+  );
+}
+
+/**
+ * Persists a group only when every member has an exact binding at group
+ * creation time. Imported members preserve their source module so project
+ * resolution never infers a target from a local variable name.
+ */
+function resolvedSanicBlueprintGroupMemberFacts(input: {
+  readonly extraction: PythonExtractFileFactsInput;
+  readonly topLevelNodes: readonly PythonSyntaxNode[];
+  readonly imports: readonly FrameworkNamedImport[];
+  readonly relativeImports: readonly StaticSanicRelativeBlueprintImport[];
+  readonly blueprints: readonly SanicBlueprint[];
+  readonly groups: readonly SanicBlueprintGroup[];
+  readonly group: SanicBlueprintGroup;
+}): readonly SanicBlueprintGroupMemberFact[] | null {
+  const members: SanicBlueprintGroupMemberFact[] = [];
+  for (const memberName of input.group.memberNames) {
+    const blueprint = latestProvenFrameworkInstance(
+      input.extraction,
+      input.topLevelNodes,
+      input.imports,
+      input.blueprints,
+      memberName,
+      input.group.node.from,
+      "Blueprint"
+    );
+    if (blueprint !== null) {
+      members.push({ kind: "blueprint", name: blueprint.name });
+      continue;
+    }
+
+    const childGroup = latestProvenSanicBlueprintGroup(
+      input.extraction,
+      input.topLevelNodes,
+      input.imports,
+      input.groups,
+      memberName,
+      input.group.node.from
+    );
+    if (childGroup !== null) {
+      members.push({ kind: "group", name: childGroup.name });
+      continue;
+    }
+
+    const imported = latestProvenSanicRelativeBlueprintImportBinding(
+      input.extraction,
+      input.topLevelNodes,
+      input.relativeImports,
+      memberName,
+      input.group.node.from
+    );
+    if (imported === null) {
+      return null;
+    }
+    members.push({
+      kind: "imported",
+      importedName: imported.importedBlueprintName,
+      moduleSpecifier: imported.moduleSpecifier
+    });
+  }
+  return members;
 }
 
 function combinedRoutePath(...parts: readonly string[]): string {
@@ -2852,10 +2936,12 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
   };
   const sanicBlueprintFacts: {
     readonly blueprints: SanicBlueprintDeclarationFact[];
+    readonly groups: SanicBlueprintGroupDeclarationFact[];
     readonly routes: SanicBlueprintRouteFact[];
     readonly importedBlueprintRegistrations: SanicImportedBlueprintRegistrationFact[];
   } = {
     blueprints: [],
+    groups: [],
     routes: [],
     importedBlueprintRegistrations: []
   };
@@ -3210,6 +3296,17 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
       );
       return finalBlueprint !== null && nodeKey(finalBlueprint.node) === nodeKey(blueprint.node);
     });
+    const finalSanicBlueprintGroups = sanicBlueprintGroups.filter((group) => {
+      const finalGroup = latestProvenSanicBlueprintGroup(
+        input,
+        topLevelNodes,
+        sanicImports,
+        sanicBlueprintGroups,
+        group.name,
+        input.sourceText.length
+      );
+      return finalGroup !== null && nodeKey(finalGroup.node) === nodeKey(group.node);
+    });
     const uniqueSanicBlueprintRegistrations = sanicBlueprintRegistrations.filter(
       (registration) =>
         sanicBlueprintRegistrations.filter(
@@ -3293,6 +3390,27 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
         name: blueprint.name,
         prefix: blueprint.prefix,
         range: rangeFor(lineStarts, blueprint.node.from, blueprint.node.to)
+      });
+    }
+    for (const group of finalSanicBlueprintGroups) {
+      const members = resolvedSanicBlueprintGroupMemberFacts({
+        extraction: input,
+        topLevelNodes,
+        imports: sanicImports,
+        relativeImports: relativeSanicBlueprintImports,
+        blueprints: sanicBlueprints,
+        groups: sanicBlueprintGroups,
+        group
+      });
+      if (members === null) {
+        continue;
+      }
+      sanicBlueprintFacts.groups.push({
+        name: group.name,
+        prefix: group.prefix,
+        namePrefix: group.namePrefix,
+        members,
+        range: rangeFor(lineStarts, group.node.from, group.node.to)
       });
     }
 

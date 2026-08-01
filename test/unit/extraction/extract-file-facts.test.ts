@@ -3262,6 +3262,44 @@ describe("source extraction", () => {
     });
   });
 
+  it("retains package-relative Sanic Blueprint group members with their source modules", () => {
+    const facts = extractFileFacts({
+      filePath: "app/routes/api.py",
+      language: "python",
+      sourceText: [
+        "from sanic import Blueprint as Router",
+        "from .catalog import catalog as catalog_blueprint",
+        "from .content import content as content_group",
+        "api = Router.group(catalog_blueprint, content_group, url_prefix=\"/api\")"
+      ].join("\n")
+    });
+
+    expect(facts.sanicBlueprintFacts).toMatchObject({
+      blueprints: [],
+      groups: [
+        {
+          name: "api",
+          prefix: "/api",
+          namePrefix: null,
+          members: [
+            {
+              kind: "imported",
+              importedName: "catalog",
+              moduleSpecifier: ".catalog"
+            },
+            {
+              kind: "imported",
+              importedName: "content",
+              moduleSpecifier: ".content"
+            }
+          ]
+        }
+      ],
+      routes: [],
+      importedBlueprintRegistrations: []
+    });
+  });
+
   it("rejects parent-relative and rebound imported Sanic Blueprint registrations", () => {
     const facts = extractFileFacts({
       filePath: "app/main.py",

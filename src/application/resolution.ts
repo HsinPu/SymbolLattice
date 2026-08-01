@@ -11,6 +11,9 @@ import {
   type FastApiRouterRouteFact,
   type FlaskBlueprintRouteFact,
   type FlaskImportedBlueprintRegistrationFact,
+  type SanicBlueprintDeclarationFact,
+  type SanicBlueprintGroupDeclarationFact,
+  type SanicBlueprintGroupMemberFact,
   type SanicBlueprintRouteFact,
   type SanicImportedBlueprintRegistrationFact,
   type FastifyPluginRouteFact,
@@ -1870,6 +1873,22 @@ function mountedPythonRoutePath(
   return `${registrationPrefix}${receiverPrefix}${routePath}`;
 }
 
+function mountedPythonRoutePathParts(parts: readonly string[]): string | null {
+  if (parts.length < 2) {
+    return null;
+  }
+  const routePath = parts.at(-1);
+  const prefixes = parts.slice(0, -1);
+  if (
+    routePath === undefined ||
+    !routePath.startsWith("/") ||
+    !prefixes.every((prefix) => isStaticPythonRoutePrefix(prefix))
+  ) {
+    return null;
+  }
+  return [...prefixes, routePath].join("");
+}
+
 /**
  * Resolves the intentionally narrow Python framework import surface. A direct
  * `from .module import binding` is accepted only when both files live in one
@@ -3592,9 +3611,15 @@ interface ProjectedSanicImportedBlueprintRoute {
   readonly registrationFilePath: string;
   readonly blueprintFilePath: string;
   readonly registration: SanicImportedBlueprintRegistrationFact;
+  readonly blueprintName: string;
   readonly route: SanicBlueprintRouteFact;
   readonly handler: SymbolNode;
   readonly path: string;
+  /** Zero means a directly imported Blueprint rather than a Blueprint group. */
+  readonly groupDepth: number;
+  /** Applies only to the outer imported group and enables distinct repeated mounts. */
+  readonly groupNamePrefix: string | null;
+  readonly resolutionPath: readonly string[];
 }
 
 function compareProjectedSanicImportedBlueprintRoute(
@@ -3614,15 +3639,205 @@ function compareProjectedSanicImportedBlueprintRoute(
   );
 }
 
+type ResolvedSanicBlueprintTarget =
+  | {
+      readonly kind: "blueprint";
+      readonly filePath: string;
+      readonly blueprint: SanicBlueprintDeclarationFact;
+    }
+  | {
+      readonly kind: "group";
+      readonly filePath: string;
+      readonly group: SanicBlueprintGroupDeclarationFact;
+    };
+
+interface ResolvedSanicBlueprintGroupMember {
+  readonly blueprintFilePath: string;
+  readonly blueprint: SanicBlueprintDeclarationFact;
+  readonly prefixes: readonly string[];
+  readonly groupDepth: number;
+  readonly resolutionPath: readonly string[];
+}
+
+function compactSanicResolutionPath(parts: readonly string[]): readonly string[] {
+  const compacted: string[] = [];
+  for (const part of parts) {
+    if (compacted.at(-1) !== part) {
+      compacted.push(part);
+    }
+  }
+  return compacted;
+}
+
+function resolveExactSanicBlueprintTarget(input: {
+  readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
+  readonly filePath: string;
+  readonly name: string;
+}): ResolvedSanicBlueprintTarget | null {
+  const facts = input.factsByFile.get(input.filePath)?.sanicBlueprintFacts;
+  if (facts === undefined) {
+    return null;
+  }
+  const blueprints = facts.blueprints.filter((blueprint) => blueprint.name === input.name);
+  const groups = (facts.groups ?? []).filter((group) => group.name === input.name);
+  if (blueprints.length + groups.length !== 1) {
+    return null;
+  }
+  if (blueprints[0] !== undefined) {
+    return { kind: "blueprint", filePath: input.filePath, blueprint: blueprints[0] };
+  }
+  return groups[0] === undefined ? null : { kind: "group", filePath: input.filePath, group: groups[0] };
+}
+
+function resolveSanicBlueprintGroupMemberTarget(input: {
+  readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
+  readonly knownFilePaths: ReadonlySet<string>;
+  readonly groupFilePath: string;
+  readonly member: SanicBlueprintGroupMemberFact;
+}): ResolvedSanicBlueprintTarget | null {
+  if (input.member.kind === "blueprint" || input.member.kind === "group") {
+    const target = resolveExactSanicBlueprintTarget({
+      factsByFile: input.factsByFile,
+      filePath: input.groupFilePath,
+      name: input.member.name
+    });
+    return target === null || target.kind !== input.member.kind ? null : target;
+  }
+
+  const importedFilePath = resolvePythonRelativeModule(
+    input.knownFilePaths,
+    input.groupFilePath,
+    input.member.moduleSpecifier
+  );
+  if (importedFilePath === null) {
+    return null;
+  }
+  return resolveExactSanicBlueprintTarget({
+    factsByFile: input.factsByFile,
+    filePath: importedFilePath,
+    name: input.member.importedName
+  });
+}
+
+/**
+ * Resolves all direct and imported members of one Blueprint group. Cyclic
+ * groups and repeated Blueprint leaves are rejected rather than projected as
+ * speculative runtime routes.
+ */
+function resolveSanicBlueprintGroupMembers(input: {
+  readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
+  readonly knownFilePaths: ReadonlySet<string>;
+  readonly groupFilePath: string;
+  readonly group: SanicBlueprintGroupDeclarationFact;
+  readonly visited?: ReadonlySet<string>;
+}): readonly ResolvedSanicBlueprintGroupMember[] | null {
+  const groupKey = `${input.groupFilePath}\u0000${input.group.name}`;
+  const visited = input.visited ?? new Set<string>();
+  if (visited.has(groupKey)) {
+    return null;
+  }
+  const nestedVisited = new Set(visited);
+  nestedVisited.add(groupKey);
+  const members: ResolvedSanicBlueprintGroupMember[] = [];
+
+  for (const member of input.group.members) {
+    const target = resolveSanicBlueprintGroupMemberTarget({
+      factsByFile: input.factsByFile,
+      knownFilePaths: input.knownFilePaths,
+      groupFilePath: input.groupFilePath,
+      member
+    });
+    if (target === null) {
+      return null;
+    }
+    if (target.kind === "blueprint") {
+      members.push({
+        blueprintFilePath: target.filePath,
+        blueprint: target.blueprint,
+        prefixes: [input.group.prefix, target.blueprint.prefix],
+        groupDepth: 1,
+        resolutionPath: compactSanicResolutionPath([input.groupFilePath, target.filePath])
+      });
+      continue;
+    }
+
+    const childMembers = resolveSanicBlueprintGroupMembers({
+      factsByFile: input.factsByFile,
+      knownFilePaths: input.knownFilePaths,
+      groupFilePath: target.filePath,
+      group: target.group,
+      visited: nestedVisited
+    });
+    if (childMembers === null) {
+      return null;
+    }
+    for (const child of childMembers) {
+      members.push({
+        blueprintFilePath: child.blueprintFilePath,
+        blueprint: child.blueprint,
+        prefixes: [input.group.prefix, ...child.prefixes],
+        groupDepth: child.groupDepth + 1,
+        resolutionPath: compactSanicResolutionPath([input.groupFilePath, ...child.resolutionPath])
+      });
+    }
+  }
+
+  const blueprintKeys = new Set<string>();
+  for (const member of members) {
+    const blueprintKey = `${member.blueprintFilePath}\u0000${member.blueprint.name}`;
+    if (blueprintKeys.has(blueprintKey)) {
+      return null;
+    }
+    blueprintKeys.add(blueprintKey);
+  }
+  return members;
+}
+
+function sanicImportedBlueprintRouteRuleId(input: {
+  readonly groupDepth: number;
+  readonly namedGroupMount: boolean;
+}): string {
+  if (input.groupDepth === 0) {
+    return "framework.sanic.imported-blueprint.app-blueprint.decorator.local-function";
+  }
+  if (input.namedGroupMount) {
+    return "framework.sanic.imported-named-blueprint-group.app-blueprint.decorator.local-function";
+  }
+  return input.groupDepth === 1
+    ? "framework.sanic.imported-blueprint-group.app-blueprint.decorator.local-function"
+    : "framework.sanic.imported-nested-blueprint-group.app-blueprint.decorator.local-function";
+}
+
+function sanicImportedBlueprintMountKey(candidate: ProjectedSanicImportedBlueprintRoute): string {
+  return [
+    candidate.registrationFilePath,
+    candidate.registration.range.start.line,
+    candidate.registration.range.start.column,
+    candidate.blueprintFilePath,
+    candidate.blueprintName,
+    candidate.groupDepth,
+    candidate.groupNamePrefix ?? ""
+  ].join("\u0000");
+}
+
+function sanicImportedBlueprintTargetKey(candidate: ProjectedSanicImportedBlueprintRoute): string {
+  return [
+    candidate.registrationFilePath,
+    candidate.registration.applicationName,
+    candidate.blueprintFilePath,
+    candidate.blueprintName
+  ].join("\u0000");
+}
+
 interface SanicImportedBlueprintRouteProjection {
   readonly symbols: readonly SymbolNode[];
   readonly structuralEdges: readonly GraphEdge[];
 }
 
 /**
- * Projects literal handler routes declared on a directly imported Sanic
- * Blueprint. Evidence identifies both the module that registers the Blueprint
- * and the module that declares the handler route.
+ * Projects literal handler routes declared on directly imported Sanic
+ * Blueprints and recursively composed Blueprint groups. Every import, group
+ * member, prefix, and handler must have a persisted syntax proof.
  */
 function projectSanicImportedBlueprintRoutes(input: {
   readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
@@ -3641,47 +3856,118 @@ function projectSanicImportedBlueprintRoutes(input: {
     }
 
     for (const registration of registrationFacts.importedBlueprintRegistrations) {
-      const blueprintFilePath = resolvePythonRelativeModule(
+      const importedFilePath = resolvePythonRelativeModule(
         input.knownFilePaths,
         registrationFilePath,
         registration.moduleSpecifier
       );
-      if (blueprintFilePath === null) {
+      if (importedFilePath === null) {
         continue;
       }
-      const blueprintFacts = input.factsByFile.get(blueprintFilePath)?.sanicBlueprintFacts;
-      if (blueprintFacts === undefined) {
+      const target = resolveExactSanicBlueprintTarget({
+        factsByFile: input.factsByFile,
+        filePath: importedFilePath,
+        name: registration.importedBlueprintName
+      });
+      if (target === null) {
         continue;
       }
-      const blueprints = blueprintFacts.blueprints.filter(
-        (blueprint) => blueprint.name === registration.importedBlueprintName
-      );
-      if (blueprints.length !== 1 || blueprints[0] === undefined) {
-        continue;
-      }
-      const blueprint = blueprints[0];
 
-      for (const route of blueprintFacts.routes) {
-        if (route.blueprintName !== blueprint.name) {
-          continue;
-        }
-        const handler = input.symbolsById.get(route.handlerId);
-        if (handler?.kind !== "function" || handler.filePath !== blueprintFilePath) {
-          continue;
-        }
-        const path = mountedPythonRoutePath(registration.prefix, blueprint.prefix, route.path);
-        if (path === null) {
-          continue;
-        }
-        candidates.push({
-          registrationFilePath,
-          blueprintFilePath,
-          registration,
-          route,
-          handler,
-          path
-        });
+      const members: readonly ResolvedSanicBlueprintGroupMember[] =
+        target.kind === "blueprint"
+          ? [
+              {
+                blueprintFilePath: target.filePath,
+                blueprint: target.blueprint,
+                prefixes: [target.blueprint.prefix],
+                groupDepth: 0,
+                resolutionPath: [target.filePath]
+              }
+            ]
+          : (resolveSanicBlueprintGroupMembers({
+              factsByFile: input.factsByFile,
+              knownFilePaths: input.knownFilePaths,
+              groupFilePath: target.filePath,
+              group: target.group
+            }) ?? []);
+      if (members.length === 0) {
+        continue;
       }
+
+      for (const member of members) {
+        const blueprintFacts = input.factsByFile.get(member.blueprintFilePath)?.sanicBlueprintFacts;
+        if (blueprintFacts === undefined) {
+          continue;
+        }
+        for (const route of blueprintFacts.routes) {
+          if (route.blueprintName !== member.blueprint.name) {
+            continue;
+          }
+          const handler = input.symbolsById.get(route.handlerId);
+          if (handler?.kind !== "function" || handler.filePath !== member.blueprintFilePath) {
+            continue;
+          }
+          const path = mountedPythonRoutePathParts([
+            registration.prefix,
+            ...member.prefixes,
+            route.path
+          ]);
+          if (path === null) {
+            continue;
+          }
+          candidates.push({
+            registrationFilePath,
+            blueprintFilePath: member.blueprintFilePath,
+            registration,
+            blueprintName: member.blueprint.name,
+            route,
+            handler,
+            path,
+            groupDepth: member.groupDepth,
+            groupNamePrefix: target.kind === "group" ? target.group.namePrefix : null,
+            resolutionPath: compactSanicResolutionPath([
+              registrationFilePath,
+              ...member.resolutionPath
+            ])
+          });
+        }
+      }
+    }
+  }
+
+  const representativeByMountKey = new Map<string, ProjectedSanicImportedBlueprintRoute>();
+  const mountKeysByTargetKey = new Map<string, string[]>();
+  for (const candidate of candidates) {
+    const mountKey = sanicImportedBlueprintMountKey(candidate);
+    if (!representativeByMountKey.has(mountKey)) {
+      representativeByMountKey.set(mountKey, candidate);
+      const targetKey = sanicImportedBlueprintTargetKey(candidate);
+      const mountKeys = mountKeysByTargetKey.get(targetKey) ?? [];
+      mountKeys.push(mountKey);
+      mountKeysByTargetKey.set(targetKey, mountKeys);
+    }
+  }
+  const allowedMountKeys = new Set<string>();
+  const namedGroupMountKeys = new Set<string>();
+  for (const mountKeys of mountKeysByTargetKey.values()) {
+    const mounts = mountKeys
+      .map((mountKey) => representativeByMountKey.get(mountKey))
+      .filter((mount): mount is ProjectedSanicImportedBlueprintRoute => mount !== undefined);
+    if (mounts.every((mount) => mount.groupDepth === 0) || mounts.length === 1) {
+      for (const mountKey of mountKeys) {
+        allowedMountKeys.add(mountKey);
+      }
+      continue;
+    }
+    if (
+      !mounts.every((mount) => mount.groupDepth === 1 && mount.groupNamePrefix !== null) ||
+      new Set(mounts.map((mount) => mount.groupNamePrefix)).size !== mounts.length
+    ) {
+      continue;
+    }
+    for (const mountKey of mountKeys) {
+      allowedMountKeys.add(mountKey);
+      namedGroupMountKeys.add(mountKey);
     }
   }
 
@@ -3690,6 +3976,10 @@ function projectSanicImportedBlueprintRoutes(input: {
   const declarationOrdinals = new Map<string, number>();
   const seen = new Set<string>();
   for (const candidate of [...candidates].sort(compareProjectedSanicImportedBlueprintRoute)) {
+    const mountKey = sanicImportedBlueprintMountKey(candidate);
+    if (!allowedMountKeys.has(mountKey)) {
+      continue;
+    }
     const dedupeKey = [
       candidate.registrationFilePath,
       candidate.registration.range.start.line,
@@ -3771,11 +4061,14 @@ function projectSanicImportedBlueprintRoutes(input: {
       confidence: 1,
       referenceName: candidate.handler.name,
       evidence: referenceEvidence(
-        "framework.sanic.imported-blueprint.app-blueprint.decorator.local-function",
+        sanicImportedBlueprintRouteRuleId({
+          groupDepth: candidate.groupDepth,
+          namedGroupMount: namedGroupMountKeys.has(mountKey)
+        }),
         "module",
         [candidate.handler.id],
         [],
-        [candidate.registrationFilePath, candidate.blueprintFilePath]
+        candidate.resolutionPath
       )
     });
   }

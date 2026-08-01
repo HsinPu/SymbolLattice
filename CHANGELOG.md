@@ -6,6 +6,27 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.156.0] - 2026-08-01
+
+### Added
+
+- Sanic <code>Blueprint.group(...)</code> route projection now traverses recursively through direct or package-relative imported Blueprint and group members.
+- Group facts retain each imported member's source module. Project resolution composes literal app-registration, group, Blueprint, and decorator prefixes and keeps every module hop in exact evidence.
+- Repeated direct-group mounts across modules remain exact only with distinct literal <code>name_prefix</code> values. Cycles, duplicate leaf Blueprints, direct-plus-group ambiguity, collisions, and unresolved members emit no exact route.
+- Unit and service coverage verifies imported/direct members, nested group paths, aliases, named repeated mounts, and cross-file cycle or ambiguity rejection.
+
+### Compatibility
+
+- The artifact-facts extractor advances to <code>multi-language-ast-v137</code> and the project resolver to <code>project-resolver-v41</code>. Existing graphs and SQLite schema remain readable; the next explicit <code>sync</code> re-extracts Python facts and reprojects affected routes.
+
+### Deliberate limits
+
+- This slice accepts only regular Python packages, direct one-leading-dot single-name imports, and top-level literal group and app registrations. Copied values, list/tuple members, re-exports, namespace packages, parent-relative imports, dynamic composition, class views, WebSockets, <code>add_route</code>, versioning, and other configuration remain non-exact.
+
+### Comparison notes
+
+- The inspected CodeGraph baseline source tree contains no <code>sanic</code> reference. SymbolLattice independently adds a conservative, evidence-backed cross-module group route path, while runtime framework composition remains intentionally outside exact static analysis.
+
 ## [0.155.0] - 2026-08-01
 
 ### Added
@@ -2923,7 +2944,8 @@ No unreleased changes.
 - Explicit full indexing, caller/callee/impact queries, and read-only MCP exploration.
 - `exact`, `heuristic`, and `unresolved` relationship states.
 
-[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.155.0...HEAD
+[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.156.0...HEAD
+[0.156.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.155.0...v0.156.0
 [0.155.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.154.0...v0.155.0
 [0.154.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.153.0...v0.154.0
 [0.153.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.152.0...v0.153.0
