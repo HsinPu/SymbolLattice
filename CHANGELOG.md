@@ -6,6 +6,26 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.134.0] - 2026-08-01
+
+### Added
+
+- GoFrame v1/v2 standard-router projection now resolves exact factory bindings such as `Bind(NewController())` and `Bind(handlers.NewV1())` when a no-argument factory declares `*Controller` and directly returns the same `&Controller{}` or `new(Controller)` value.
+- Factory declaration and binding facts retain the factory source location, literal `Group` prefix, and inherited literal `Domain` hosts. The existing same-package and root-`go.mod` local-module proof is reused for explicit and target-`package`-proven default imports.
+- New extraction and service coverage verifies local and cross-package factory routes, default imports, preserved route evidence, incremental raw-fact reuse, and separation of malformed factories from `exact` output.
+
+### Compatibility
+
+- The artifact-facts extractor advances to `multi-language-ast-v115` and the project resolver to `project-resolver-v37`. Existing graphs and SQLite schema remain readable; the next explicit `sync` re-extracts Go facts and reprojects routes.
+
+### Deliberate limits
+
+- Exact factory support intentionally excludes parameters, named or multiple results, forwarding calls, dependency injection, branches, local function values, dynamic package values, rebindings, and any return expression other than the matching direct pointer construction. Those shapes may remain unresolved or, where independently eligible, appear only as the existing `heuristic` request-signature candidate.
+
+### Comparison notes
+
+- The inspected CodeGraph GoFrame surface includes reflective factory bindings such as `group.Bind(user.NewV1())` and joins `g.Meta` requests to method signatures heuristically. SymbolLattice remains narrower in accepted factory syntax, but for this proven subset emits `exact` routes with Group/Domain, source-path, and root-`go.mod` evidence; dynamic factory coverage remains weaker than CodeGraph's broader runtime-oriented model.
+
 ## [0.133.0] - 2026-08-01
 
 ### Added
@@ -2480,7 +2500,8 @@ No unreleased changes.
 - Explicit full indexing, caller/callee/impact queries, and read-only MCP exploration.
 - `exact`, `heuristic`, and `unresolved` relationship states.
 
-[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.133.0...HEAD
+[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.134.0...HEAD
+[0.134.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.133.0...v0.134.0
 [0.133.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.132.0...v0.133.0
 [0.132.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.131.0...v0.132.0
 [0.131.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.130.0...v0.131.0

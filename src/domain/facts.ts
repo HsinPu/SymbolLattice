@@ -11,13 +11,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v114";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v115";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v36";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v37";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -342,6 +342,25 @@ export interface GoFrameStandardRouterBindingFact {
   readonly range: SourceRange;
 }
 
+/** One statically proven no-argument Go controller factory with a direct pointer return. */
+export interface GoFrameStandardRouterControllerFactoryFact {
+  readonly factoryName: string;
+  readonly controllerName: string;
+  readonly range: SourceRange;
+}
+
+/** One literal `Server` or `RouterGroup` `Bind(Factory())` call retained for later exact proof. */
+export interface GoFrameStandardRouterFactoryBindingFact {
+  readonly factoryName: string;
+  /** Go package qualifier used for a cross-package factory call, when present. */
+  readonly factoryPackageAlias?: string;
+  /** The fully composed literal Server/Group prefix at the registration point. */
+  readonly prefix: string;
+  /** Literal `Server.Domain` host conditions inherited by this binding, if any. */
+  readonly domains: readonly string[];
+  readonly range: SourceRange;
+}
+
 /**
  * One literal Go import that can prove a local module-package hop. `localName`
  * is present for an explicit alias; when absent, the target package clause must
@@ -368,6 +387,10 @@ export interface GoFrameStandardRouterFacts {
   readonly requests: readonly GoFrameStandardRouterRequestFact[];
   readonly controllerMethods: readonly GoFrameStandardRouterControllerMethodFact[];
   readonly controllerBindings: readonly GoFrameStandardRouterBindingFact[];
+  /** Omitted only by artifact facts persisted before v0.134. */
+  readonly controllerFactories?: readonly GoFrameStandardRouterControllerFactoryFact[];
+  /** Omitted only by artifact facts persisted before v0.134. */
+  readonly controllerFactoryBindings?: readonly GoFrameStandardRouterFactoryBindingFact[];
   /** Omitted only by artifact facts persisted before v0.132. */
   readonly imports?: readonly GoFrameStandardRouterImportFact[];
   /** @deprecated Legacy v0.130 explicit-alias facts remain readable during upgrade. */

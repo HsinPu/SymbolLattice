@@ -3483,6 +3483,75 @@ describe("source extraction", () => {
     ).not.toHaveProperty("localName");
   });
 
+  it("retains statically proven GoFrame standard-router factory declarations and Bind calls", () => {
+    const facts = extractFileFacts({
+      filePath: "api/goframe-factory.go",
+      language: "go",
+      sourceText: [
+        "package api",
+        "",
+        "import (",
+        '  "context"',
+        '  g "github.com/gogf/gf/v2/frame/g"',
+        ")",
+        "",
+        "type ListReq struct {",
+        '  g.Meta `path:"/users" method:"GET"`',
+        "}",
+        "",
+        "type Controller struct{}",
+        "type OtherController struct{}",
+        "",
+        "func NewController() *Controller { return &Controller{} }",
+        "func NewBrokenController() *Controller { return &OtherController{} }",
+        "func (c *Controller) List(ctx context.Context, req *ListReq) {}",
+        "",
+        "func Shadowed(NewController func() *Controller) {",
+        '  g.Server().Group("/shadowed").Bind(NewController())',
+        "}",
+        "",
+        "func Register() {",
+        '  g.Server().Domain("api.example.test").Group("/v1").Bind(NewController())',
+        '  g.Server().Group("/invalid").Bind(NewBrokenController())',
+        '  g.Server().Group("/dynamic").Bind(NewController(makeConfig()))',
+        "}"
+      ].join("\n")
+    });
+
+    expect(facts.goFrameStandardRouterFacts).toMatchObject({
+      packageName: "api",
+      controllerFactories: [
+        expect.objectContaining({
+          factoryName: "NewController",
+          controllerName: "Controller"
+        })
+      ],
+      controllerFactoryBindings: expect.arrayContaining([
+        expect.objectContaining({
+          factoryName: "NewController",
+          prefix: "/v1",
+          domains: ["api.example.test"]
+        }),
+        expect.objectContaining({
+          factoryName: "NewBrokenController",
+          prefix: "/invalid",
+          domains: []
+        })
+      ])
+    });
+    expect(
+      facts.goFrameStandardRouterFacts?.controllerFactories?.find(
+        (factory) => factory.factoryName === "NewBrokenController"
+      )
+    ).toBeUndefined();
+    expect(facts.goFrameStandardRouterFacts?.controllerFactoryBindings).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ prefix: "/shadowed" })])
+    );
+    expect(facts.goFrameStandardRouterFacts?.controllerFactoryBindings).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ prefix: "/dynamic" })])
+    );
+  });
+
   it("extracts literal GoFrame v1 BindHandler routes", () => {
     const facts = extractFileFacts({
       filePath: "cmd/server/goframe-v1.go",

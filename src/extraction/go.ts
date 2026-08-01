@@ -213,6 +213,19 @@ interface StaticGoFrameControllerBinding {
   readonly node: GoSyntaxNode;
 }
 
+interface StaticGoFrameControllerFactory {
+  readonly factoryName: string;
+  readonly controllerName: string;
+  readonly node: GoSyntaxNode;
+}
+
+interface StaticGoFrameControllerFactoryBinding {
+  readonly receiver: GoFrameReceiver;
+  readonly factoryName: string;
+  readonly factoryPackageAlias?: string;
+  readonly node: GoSyntaxNode;
+}
+
 interface StaticGoFrameRequest {
   readonly name: string;
   readonly method: RouteMethod;
@@ -746,6 +759,42 @@ function staticGoFunction(
     .map((parameter) => identifierText(input, parameter))
     .filter((parameter): parameter is string => parameter !== null);
   return { name, node, body, parameterNames };
+}
+
+/**
+ * Retain only a no-argument factory whose declared pointer result and sole
+ * direct return expression name the same local controller type. This leaves
+ * dependency injection, parameters, named results, forwarding calls, and
+ * dynamic construction to later evidence tiers.
+ */
+function staticGoFrameControllerFactories(
+  input: GoExtractFileFactsInput,
+  functions: readonly StaticGoFunction[]
+): readonly StaticGoFrameControllerFactory[] {
+  const factories: StaticGoFrameControllerFactory[] = [];
+  const factoryPattern =
+    /^func\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(\s*\)\s*\*\s*([A-Z][A-Za-z0-9_]*)\s*\{\s*return\s+(?:&\s*([A-Z][A-Za-z0-9_]*)\s*\{\s*\}|new\s*\(\s*([A-Z][A-Za-z0-9_]*)\s*\))\s*\}$/u;
+
+  for (const functionDeclaration of functions) {
+    const match = factoryPattern.exec(nodeText(input, functionDeclaration.node));
+    const controllerName = match?.[3] ?? match?.[4];
+    if (
+      match?.[1] === undefined ||
+      match[2] === undefined ||
+      controllerName === undefined ||
+      functionDeclaration.name !== match[1] ||
+      match[2] !== controllerName
+    ) {
+      continue;
+    }
+    factories.push({
+      factoryName: functionDeclaration.name,
+      controllerName,
+      node: functionDeclaration.node
+    });
+  }
+
+  return factories;
 }
 
 function staticGoFrameDeclaredMethods(
@@ -1655,6 +1704,23 @@ function staticGoFrameStandardRouterControllerReference(
   };
 }
 
+function staticGoFrameStandardRouterFactoryReference(
+  input: GoExtractFileFactsInput,
+  node: GoSyntaxNode
+): StaticGoFrameNamedTypeReference | null {
+  const match =
+    /^(?:([A-Za-z_][A-Za-z0-9_]*)\s*\.\s*)?([A-Za-z_][A-Za-z0-9_]*)\s*\(\s*\)$/u.exec(
+      nodeText(input, node)
+    );
+  if (match?.[2] === undefined) {
+    return null;
+  }
+  return {
+    name: match[2],
+    ...(match[1] === undefined ? {} : { packageAlias: match[1] })
+  };
+}
+
 function staticGoFrameBoundObjectControllerName(
   input: GoExtractFileFactsInput,
   node: GoSyntaxNode,
@@ -1803,6 +1869,42 @@ function staticGoFrameControllerBinding(
         ...(controller.packageAlias === undefined
           ? {}
           : { controllerPackageAlias: controller.packageAlias }),
+        node
+      };
+}
+
+function staticGoFrameControllerFactoryBinding(
+  input: GoExtractFileFactsInput,
+  node: GoSyntaxNode,
+  receivers: ReadonlyMap<string, GoFrameReceiver>,
+  goFrameAliases: ReadonlySet<string>,
+  shadowedNames: ReadonlySet<string>
+): StaticGoFrameControllerFactoryBinding | null {
+  if (node.name !== "ExprStatement") {
+    return null;
+  }
+  const expression = directChildren(node)[0];
+  if (expression === undefined) {
+    return null;
+  }
+  const call = staticGoFrameRouteRegistrationCall(input, expression, receivers, goFrameAliases);
+  if (call === null || call.methodName !== "Bind" || call.arguments_.length !== 1) {
+    return null;
+  }
+  const factoryNode = call.arguments_[0];
+  const factory =
+    factoryNode === undefined
+      ? null
+      : staticGoFrameStandardRouterFactoryReference(input, factoryNode);
+  const factoryScopeName = factory?.packageAlias ?? factory?.name;
+  return factory === null || (factoryScopeName !== undefined && shadowedNames.has(factoryScopeName))
+    ? null
+    : {
+        receiver: call.receiver,
+        factoryName: factory.name,
+        ...(factory.packageAlias === undefined
+          ? {}
+          : { factoryPackageAlias: factory.packageAlias }),
         node
       };
 }
@@ -2682,12 +2784,14 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
       goFrameDeclaredMethods,
       new Set(contextAliases)
     );
+    const goFrameControllerFactories = staticGoFrameControllerFactories(input, functions);
     const goFrameObjectHandlerMethods = staticGoFrameObjectHandlerMethods(
       input,
       goFrameDeclaredMethods,
       new Set(goFrameHttpAliases)
     );
     const goFrameControllerBindings: StaticGoFrameControllerBinding[] = [];
+    const goFrameControllerFactoryBindings: StaticGoFrameControllerFactoryBinding[] = [];
     const goFrameMethodsByIdentity = new Map<string, StaticGoFrameMethod[]>();
     for (const method of goFrameDeclaredMethods) {
       const identity = method.controllerName + "\u0000" + method.name;
@@ -2902,6 +3006,16 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
         );
         if (controllerBinding !== null) {
           goFrameControllerBindings.push(controllerBinding);
+        }
+        const controllerFactoryBinding = staticGoFrameControllerFactoryBinding(
+          input,
+          statement,
+          receivers,
+          activeGoFrameAliases,
+          shadowedNames
+        );
+        if (controllerFactoryBinding !== null) {
+          goFrameControllerFactoryBindings.push(controllerFactoryBinding);
         }
         const callback = staticGoFrameGroupCallback(
           input,
@@ -3202,6 +3316,20 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
           ...(binding.controllerPackageAlias === undefined
             ? {}
             : { controllerPackageAlias: binding.controllerPackageAlias }),
+          prefix: binding.receiver.prefix,
+          domains: binding.receiver.kind === "server" ? [] : binding.receiver.domains,
+          range: rangeFor(lineStarts, binding.node.from, binding.node.to)
+        })),
+        controllerFactories: goFrameControllerFactories.map((factory) => ({
+          factoryName: factory.factoryName,
+          controllerName: factory.controllerName,
+          range: rangeFor(lineStarts, factory.node.from, factory.node.to)
+        })),
+        controllerFactoryBindings: goFrameControllerFactoryBindings.map((binding) => ({
+          factoryName: binding.factoryName,
+          ...(binding.factoryPackageAlias === undefined
+            ? {}
+            : { factoryPackageAlias: binding.factoryPackageAlias }),
           prefix: binding.receiver.prefix,
           domains: binding.receiver.kind === "server" ? [] : binding.receiver.domains,
           range: rangeFor(lineStarts, binding.node.from, binding.node.to)

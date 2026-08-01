@@ -2359,6 +2359,8 @@ interface GoFrameStandardRouterPackageFile {
 interface ProjectedGoFrameStandardRouterRoute {
   readonly requestFilePath: string;
   readonly controllerFilePath: string;
+  /** Factory declaration evidence when Bind receives a statically proven factory call. */
+  readonly factoryFilePath?: string;
   readonly bindingFilePath: string;
   readonly request: GoFrameStandardRouterRequestFact;
   readonly controllerMethod: GoFrameStandardRouterControllerMethodFact;
@@ -2433,16 +2435,24 @@ interface ResolvedGoFrameStandardRouterPackage {
   readonly configurationPaths: readonly string[];
 }
 
+/** A direct Bind or a factory Bind reduced to one exact controller identity. */
+interface EffectiveGoFrameStandardRouterBinding {
+  readonly binding: GoFrameStandardRouterBindingFact;
+  readonly factoryFilePath?: string;
+  readonly isFactoryBinding: boolean;
+}
+
 /**
  * Projects GoFrame standard-router routes through either one literal Go
  * package directory or a root local `go.mod` import that resolves to one
  * indexed package directory. Explicit aliases are accepted directly; default
  * import qualifiers need a matching target package clause. It never uses
  * project-wide same-name matching, import-path-name inference, external
- * modules, or transitive imports. When no identifiable static Bind names one
- * controller, a unique request-signature match can additionally become a
- * prefix-free heuristic candidate; it never replaces or duplicates exact
- * Bound-controller routes.
+ * modules, or transitive imports. A factory Bind is exact only when a
+ * no-argument factory directly returns its declared local controller pointer.
+ * When no identifiable static Bind names one controller, a unique
+ * request-signature match can additionally become a prefix-free heuristic
+ * candidate; it never replaces or duplicates exact Bound-controller routes.
  */
 function projectGoFrameStandardRouterRoutes(input: {
   readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
@@ -2529,6 +2539,70 @@ function projectGoFrameStandardRouterRoutes(input: {
   };
 
   /**
+   * A factory call becomes an ordinary controller binding only after resolving
+   * its package and finding exactly one syntax-proven factory declaration. The
+   * factory's direct local pointer return keeps the controller package equal to
+   * the factory package, so the existing request/controller proof stays valid.
+   */
+  const effectiveBindingsByFile = new Map<
+    string,
+    readonly EffectiveGoFrameStandardRouterBinding[]
+  >();
+  for (const [bindingFilePath, extracted] of [...input.factsByFile.entries()].sort(
+    ([left], [right]) => compareStableText(left, right)
+  )) {
+    const bindingFacts = extracted.goFrameStandardRouterFacts;
+    if (bindingFacts === undefined) {
+      continue;
+    }
+    const localPackageKey = packageKey(bindingFilePath, bindingFacts.packageName);
+    const localPackage: ResolvedGoFrameStandardRouterPackage = {
+      packageKey: localPackageKey,
+      packageFiles: packageFilesByKey.get(localPackageKey) ?? [],
+      configurationPaths: []
+    };
+    const effectiveBindings: EffectiveGoFrameStandardRouterBinding[] = bindingFacts.controllerBindings.map(
+      (binding) => ({ binding, isFactoryBinding: false })
+    );
+    for (const factoryBinding of bindingFacts.controllerFactoryBindings ?? []) {
+      const factoryPackage =
+        factoryBinding.factoryPackageAlias === undefined
+          ? localPackage
+          : resolveGoFrameImport(
+              bindingFilePath,
+              bindingFacts,
+              factoryBinding.factoryPackageAlias
+            );
+      if (factoryPackage === null) {
+        continue;
+      }
+      const matchingFactories = factoryPackage.packageFiles.flatMap(({ filePath, facts }) =>
+        (facts.controllerFactories ?? [])
+          .filter((factory) => factory.factoryName === factoryBinding.factoryName)
+          .map((factory) => ({ filePath, factory }))
+      );
+      if (matchingFactories.length !== 1 || matchingFactories[0] === undefined) {
+        continue;
+      }
+      const matchedFactory = matchingFactories[0];
+      effectiveBindings.push({
+        binding: {
+          controllerName: matchedFactory.factory.controllerName,
+          ...(factoryBinding.factoryPackageAlias === undefined
+            ? {}
+            : { controllerPackageAlias: factoryBinding.factoryPackageAlias }),
+          prefix: factoryBinding.prefix,
+          domains: factoryBinding.domains,
+          range: factoryBinding.range
+        },
+        factoryFilePath: matchedFactory.filePath,
+        isFactoryBinding: true
+      });
+    }
+    effectiveBindingsByFile.set(bindingFilePath, effectiveBindings);
+  }
+
+  /**
    * Do not synthesize a prefix-free candidate when an observed static Bind can
    * already name the controller. If an aliased Bind cannot be resolved, reject
    * every same-named candidate rather than risk hiding its unknown prefix.
@@ -2548,7 +2622,7 @@ function projectGoFrameStandardRouterRoutes(input: {
       packageFiles: packageFilesByKey.get(localPackageKey) ?? [],
       configurationPaths: []
     };
-    for (const binding of bindingFacts.controllerBindings) {
+    for (const { binding } of effectiveBindingsByFile.get(bindingFilePath) ?? []) {
       const controllerPackage =
         binding.controllerPackageAlias === undefined
           ? localPackage
@@ -2574,7 +2648,8 @@ function projectGoFrameStandardRouterRoutes(input: {
     }
     const packageFiles = packageFilesByKey.get(packageKey(bindingFilePath, bindingFacts.packageName)) ?? [];
 
-    for (const binding of bindingFacts.controllerBindings) {
+    for (const effectiveBinding of effectiveBindingsByFile.get(bindingFilePath) ?? []) {
+      const { binding } = effectiveBinding;
       if (binding.controllerPackageAlias !== undefined) {
         continue;
       }
@@ -2613,6 +2688,7 @@ function projectGoFrameStandardRouterRoutes(input: {
         if (
           matchingRequests[0].filePath === controllerMethod.filePath &&
           matchingRequests[0].filePath === bindingFilePath
+          && !effectiveBinding.isFactoryBinding
         ) {
           // The syntax extractor already owns fully same-file standard routes.
           continue;
@@ -2625,6 +2701,9 @@ function projectGoFrameStandardRouterRoutes(input: {
           candidates.push({
             requestFilePath: matchingRequests[0].filePath,
             controllerFilePath: controllerMethod.filePath,
+            ...(effectiveBinding.factoryFilePath === undefined
+              ? {}
+              : { factoryFilePath: effectiveBinding.factoryFilePath }),
             bindingFilePath,
             request: matchingRequests[0].request,
             controllerMethod: controllerMethod.method,
@@ -2632,7 +2711,9 @@ function projectGoFrameStandardRouterRoutes(input: {
             handler,
             path,
             domain,
-            ruleId: "framework.goframe.standard-router.g-meta.same-package.cross-file",
+            ruleId: effectiveBinding.isFactoryBinding
+              ? "framework.goframe.standard-router.g-meta.same-package.factory-bind"
+              : "framework.goframe.standard-router.g-meta.same-package.cross-file",
             configurationPaths: []
           });
         }
@@ -2655,7 +2736,8 @@ function projectGoFrameStandardRouterRoutes(input: {
       configurationPaths: []
     };
 
-    for (const binding of bindingFacts.controllerBindings) {
+    for (const effectiveBinding of effectiveBindingsByFile.get(bindingFilePath) ?? []) {
+      const { binding } = effectiveBinding;
       const controllerPackage =
         binding.controllerPackageAlias === undefined
           ? localPackage
@@ -2731,6 +2813,9 @@ function projectGoFrameStandardRouterRoutes(input: {
           candidates.push({
             requestFilePath: matchingRequests[0].filePath,
             controllerFilePath: controllerMethod.filePath,
+            ...(effectiveBinding.factoryFilePath === undefined
+              ? {}
+              : { factoryFilePath: effectiveBinding.factoryFilePath }),
             bindingFilePath,
             request: matchingRequests[0].request,
             controllerMethod: controllerMethod.method,
@@ -2738,7 +2823,9 @@ function projectGoFrameStandardRouterRoutes(input: {
             handler,
             path,
             domain,
-            ruleId: "framework.goframe.standard-router.g-meta.go-module.cross-package",
+            ruleId: effectiveBinding.isFactoryBinding
+              ? "framework.goframe.standard-router.g-meta.go-module.factory-bind"
+              : "framework.goframe.standard-router.g-meta.go-module.cross-package",
             configurationPaths
           });
         }
@@ -2883,6 +2970,7 @@ function projectGoFrameStandardRouterRoutes(input: {
       [
         candidate.requestFilePath,
         candidate.controllerFilePath,
+        ...(candidate.factoryFilePath === undefined ? [] : [candidate.factoryFilePath]),
         candidate.bindingFilePath
       ]
     );
