@@ -11,13 +11,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v110";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v111";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v32";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v33";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -311,6 +311,44 @@ export interface DjangoUrlFacts {
   readonly importedUrlconfInclusions: readonly DjangoImportedUrlconfInclusionFact[];
 }
 
+/** One literal `g.Meta` request declaration retained for GoFrame standard routing. */
+export interface GoFrameStandardRouterRequestFact {
+  readonly name: string;
+  readonly method: RouteMethod;
+  readonly path: string;
+  readonly range: SourceRange;
+}
+
+/** One exact controller method shape eligible for GoFrame standard routing. */
+export interface GoFrameStandardRouterControllerMethodFact {
+  readonly controllerName: string;
+  readonly methodName: string;
+  readonly requestType: string;
+  /** Stable identity of the syntax-proven controller method symbol. */
+  readonly handlerId: string;
+}
+
+/** One exact `Server` or `RouterGroup` `Bind(&Controller{})` registration. */
+export interface GoFrameStandardRouterBindingFact {
+  readonly controllerName: string;
+  /** The fully composed literal Server/Group prefix at the registration point. */
+  readonly prefix: string;
+  /** Literal `Server.Domain` host conditions inherited by this binding, if any. */
+  readonly domains: readonly string[];
+  readonly range: SourceRange;
+}
+
+/**
+ * Syntax-only GoFrame facts used to project standard-router `g.Meta` routes
+ * across exactly one indexed Go package directory in the project resolver.
+ */
+export interface GoFrameStandardRouterFacts {
+  readonly packageName: string;
+  readonly requests: readonly GoFrameStandardRouterRequestFact[];
+  readonly controllerMethods: readonly GoFrameStandardRouterControllerMethodFact[];
+  readonly controllerBindings: readonly GoFrameStandardRouterBindingFact[];
+}
+
 /** A direct external `mod name;` declaration retained for Rust module proof. */
 export interface RustActixExternalModuleFact {
   readonly name: string;
@@ -522,6 +560,8 @@ export interface ArtifactFacts {
   readonly flaskBlueprintFacts?: FlaskBlueprintFacts;
   /** Omitted only by artifact facts persisted before v0.112. */
   readonly djangoUrlFacts?: DjangoUrlFacts;
+  /** Omitted only by artifact facts persisted before v0.129. */
+  readonly goFrameStandardRouterFacts?: GoFrameStandardRouterFacts;
   /** Omitted only by artifact facts persisted before v0.118. */
   readonly rustActixServiceConfigFacts?: RustActixServiceConfigFacts;
   /** Omitted only by artifact facts persisted before v0.46. */

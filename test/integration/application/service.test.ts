@@ -4429,6 +4429,201 @@ describe("SymbolLatticeService", () => {
         expect.objectContaining({ method: "POST", path: "/callback/method" })
       ])
     );
+    expect(
+      routes.routes.filter(
+        (route) =>
+          route.path === "/api/users" &&
+          route.handler?.qualifiedName === "cmd/server/main.go#Controller.List"
+      )
+    ).toHaveLength(1);
+  });
+
+  it("projects GoFrame standard-router routes across one proven package directory", async () => {
+    const projectPath = await createInlineProject({
+      "api/request.go": [
+        "package api",
+        "",
+        "import \"github.com/gogf/gf/v2/frame/g\"",
+        "",
+        "type ListReq struct {",
+        '  g.Meta `path:"/users" method:"GET"`',
+        "}"
+      ].join("\n"),
+      "api/controller.go": [
+        "package api",
+        "",
+        "import \"context\"",
+        "",
+        "type Controller struct{}",
+        "",
+        "func (c *Controller) List(ctx context.Context, req *ListReq) (res *ListRes, err error) {",
+        "  return",
+        "}"
+      ].join("\n"),
+      "api/routes.go": [
+        "package api",
+        "",
+        "import \"github.com/gogf/gf/v2/frame/g\"",
+        "",
+        "func Register() {",
+        "  server := g.Server()",
+        '  domain := server.Domain("api.example.test, api-alt.example.test")',
+        '  api := domain.Group("/v1")',
+        "  api.Bind(&Controller{})",
+        "}"
+      ].join("\n"),
+      "other/request.go": [
+        "package other",
+        "",
+        "import \"github.com/gogf/gf/v2/frame/g\"",
+        "",
+        "type ListReq struct {",
+        '  g.Meta `path:"/wrong" method:"GET"`',
+        "}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+    const requestFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "api/request.go");
+    const controllerFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "api/controller.go");
+    const bindingFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "api/routes.go");
+
+    expect(requestFacts?.goFrameStandardRouterFacts).toMatchObject({
+      packageName: "api",
+      requests: [{ name: "ListReq", method: "GET", path: "/users" }]
+    });
+    expect(controllerFacts?.goFrameStandardRouterFacts).toMatchObject({
+      packageName: "api",
+      controllerMethods: [
+        expect.objectContaining({
+          controllerName: "Controller",
+          methodName: "List",
+          requestType: "ListReq",
+          handlerId: expect.any(String)
+        })
+      ]
+    });
+    expect(bindingFacts?.goFrameStandardRouterFacts).toMatchObject({
+      packageName: "api",
+      controllerBindings: [
+        {
+          controllerName: "Controller",
+          prefix: "/v1",
+          domains: ["api.example.test", "api-alt.example.test"]
+        }
+      ]
+    });
+
+    expect(routes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "GET",
+          path: "/v1/users",
+          domain: "api.example.test",
+          handler: expect.objectContaining({ qualifiedName: "api/controller.go#Controller.List" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            confidence: 1,
+            evidence: expect.objectContaining({
+              ruleId: "framework.goframe.standard-router.g-meta.same-package.cross-file",
+              stage: "module",
+              routeDomain: "api.example.test",
+              resolutionPath: ["api/request.go", "api/controller.go", "api/routes.go"]
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "GET",
+          path: "/v1/users",
+          domain: "api-alt.example.test",
+          handler: expect.objectContaining({ qualifiedName: "api/controller.go#Controller.List" }),
+          edge: expect.objectContaining({
+            evidence: expect.objectContaining({
+              ruleId: "framework.goframe.standard-router.g-meta.same-package.cross-file",
+              routeDomain: "api-alt.example.test"
+            })
+          })
+        })
+      ])
+    );
+    expect(routes.routes).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ path: "/v1/wrong" })])
+    );
+
+    await writeFile(join(projectPath, "unrelated.go"), "package unrelated\n\nconst Ready = true\n", "utf8");
+    const synced = await service.sync({ projectPath });
+    const routesAfterReuse = await service.routes(projectPath, { domain: "api.example.test" });
+
+    expect(synced.lastIndexWork).toMatchObject({
+      mode: "incremental",
+      reExtractedFiles: ["unrelated.go"],
+      reusedArtifactFiles: ["api/controller.go", "api/request.go", "api/routes.go", "other/request.go"]
+    });
+    expect(routesAfterReuse.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "GET",
+          path: "/v1/users",
+          domain: "api.example.test",
+          edge: expect.objectContaining({
+            evidence: expect.objectContaining({
+              ruleId: "framework.goframe.standard-router.g-meta.same-package.cross-file"
+            })
+          })
+        })
+      ])
+    );
+  });
+
+  it("rejects ambiguous cross-file GoFrame standard-router controller methods", async () => {
+    const projectPath = await createInlineProject({
+      "api/request.go": [
+        "package api",
+        "",
+        "import \"github.com/gogf/gf/v2/frame/g\"",
+        "",
+        "type ListReq struct {",
+        '  g.Meta `path:"/users" method:"GET"`',
+        "}"
+      ].join("\n"),
+      "api/controller.go": [
+        "package api",
+        "",
+        "import \"context\"",
+        "",
+        "type Controller struct{}",
+        "",
+        "func (c *Controller) List(ctx context.Context, req *ListReq) {}",
+        "func (c *Controller) Duplicate(ctx context.Context, req *ListReq) {}"
+      ].join("\n"),
+      "api/routes.go": [
+        "package api",
+        "",
+        "import \"github.com/gogf/gf/v2/frame/g\"",
+        "",
+        "func Register() {",
+        "  server := g.Server()",
+        "  server.Bind(&Controller{})",
+        "}"
+      ].join("\n")
+    });
+    const service = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+
+    expect(routes.routes).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ method: "GET", path: "/users" })])
+    );
   });
 
   it("indexes GoFrame BindObjectMethod routes with exact evidence", async () => {

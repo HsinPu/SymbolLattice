@@ -674,6 +674,9 @@ function artifactFactsPayload(facts: PersistedArtifactFacts): ArtifactFacts {
       ? {}
       : { flaskBlueprintFacts: facts.flaskBlueprintFacts }),
     ...(facts.djangoUrlFacts === undefined ? {} : { djangoUrlFacts: facts.djangoUrlFacts }),
+    ...(facts.goFrameStandardRouterFacts === undefined
+      ? {}
+      : { goFrameStandardRouterFacts: facts.goFrameStandardRouterFacts }),
     ...(facts.rustActixServiceConfigFacts === undefined
       ? {}
       : { rustActixServiceConfigFacts: facts.rustActixServiceConfigFacts }),

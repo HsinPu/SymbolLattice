@@ -209,6 +209,7 @@ interface StaticGoFrameGroupCallback {
 interface StaticGoFrameControllerBinding {
   readonly receiver: GoFrameReceiver;
   readonly controllerName: string;
+  readonly node: GoSyntaxNode;
 }
 
 interface StaticGoFrameRequest {
@@ -582,6 +583,18 @@ function staticContextImportAliases(
   root: GoSyntaxNode
 ): readonly string[] {
   return staticPackageImportAliases(input, root, [CONTEXT_PACKAGE_PATH], "context");
+}
+
+/** One direct package clause is the minimum proof for same-package projection. */
+function staticGoPackageName(input: GoExtractFileFactsInput, root: GoSyntaxNode): string | null {
+  const packageClauses = directChildren(root).filter((node) => node.name === "PackageClause");
+  if (packageClauses.length !== 1 || packageClauses[0] === undefined) {
+    return null;
+  }
+  const match = /^package\s+([A-Za-z_][A-Za-z0-9_]*)\s*$/u.exec(
+    nodeText(input, packageClauses[0])
+  );
+  return match?.[1] ?? null;
 }
 
 function escapeRegularExpression(value: string): string {
@@ -1565,7 +1578,7 @@ function staticGoFrameControllerBinding(
     controllerNode === undefined ? null : staticGoFrameControllerName(input, controllerNode);
   return receiver === undefined || controllerName === null
     ? null
-    : { receiver, controllerName };
+    : { receiver, controllerName, node };
 }
 
 function staticGoFrameBindObjectMethodRoute(
@@ -2067,6 +2080,7 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
   const lineStarts = lineStartsFor(input.sourceText);
   const symbols: SymbolNode[] = [];
   const edges: GraphEdge[] = [];
+  let goFrameStandardRouterFacts: ArtifactFacts["goFrameStandardRouterFacts"];
   const declarationOrdinals = new Map<string, number>();
   const fileName = input.filePath.split(/[\\/]/u).at(-1) ?? input.filePath;
   const fileNode: SymbolNode = {
@@ -2903,6 +2917,31 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
         }
       }
     }
+
+    const goFramePackageName = staticGoPackageName(input, root);
+    if (goFramePackageName !== null) {
+      goFrameStandardRouterFacts = {
+        packageName: goFramePackageName,
+        requests: goFrameRequests.map((request) => ({
+          name: request.name,
+          method: request.method,
+          path: request.path,
+          range: rangeFor(lineStarts, request.node.from, request.node.to)
+        })),
+        controllerMethods: goFrameControllerMethods.map((method) => ({
+          controllerName: method.controllerName,
+          methodName: method.name,
+          requestType: method.requestType,
+          handlerId: goFrameMethodSymbol(method).id
+        })),
+        controllerBindings: goFrameControllerBindings.map((binding) => ({
+          controllerName: binding.controllerName,
+          prefix: binding.receiver.prefix,
+          domains: binding.receiver.kind === "server" ? [] : binding.receiver.domains,
+          range: rangeFor(lineStarts, binding.node.from, binding.node.to)
+        }))
+      };
+    }
   }
 
   return {
@@ -2928,6 +2967,7 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
       routers: [],
       routes: [],
       importedRouterInclusions: []
-    }
+    },
+    ...(goFrameStandardRouterFacts === undefined ? {} : { goFrameStandardRouterFacts })
   };
 }

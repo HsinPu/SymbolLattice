@@ -6,6 +6,27 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.129.0] - 2026-08-01
+
+### Added
+
+- GoFrame v1/v2 standard-router extraction now projects one literal `g.Meta` request declaration through a unique controller method and `Bind(&Controller{})` registration when they are distributed across files in the same directly proven Go package directory. The projected route retains the composed literal Group prefix and every inherited literal `Server.Domain(...)` host condition.
+- The persisted artifact-facts contract now retains package name, `g.Meta` request, controller-method, and Bind-registration facts for this projection. An unrelated incremental `sync` can therefore reuse unchanged Go files without losing the projected route.
+
+### Compatibility
+
+- The artifact-facts extractor advances to `multi-language-ast-v111` and the project resolver to `project-resolver-v33`. Existing graphs remain readable; the next explicit `sync` re-extracts unchanged source documents before the new cross-file projection is used. SQLite schema is unchanged.
+
+### Deliberate limits
+
+- A result requires one literal package clause, one indexed package directory, one unique request type, one unique controller method for that request type, and an already supported static GoFrame Bind receiver. Cross-package imports, build-tag selection, dynamic/reflection registration, qualified request types, rebindings, and ambiguous request or controller matches remain unresolved.
+- Fully same-file standard-router routes remain owned by the syntax extractor and are not duplicated by the project resolver.
+
+### Comparison notes
+
+- At inspected CodeGraph commit `572d22bfbe82602080e457bec655f72e3314f9ef`, GoFrame synthesis joins `g.Meta` route metadata to controller methods through heuristic graph matching and deliberately does not reconstruct Group prefixes.
+- SymbolLattice v0.129 is narrower for cross-package Go layouts, but stronger for the supported same-package cross-file slice: it requires unique package-local proof, preserves literal Group/Domain evidence, and persists the raw facts needed to reproduce the route on incremental sync.
+
 ## [0.128.0] - 2026-08-01
 
 ### Added

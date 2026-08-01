@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.128.0 是開發者預覽版，尚未發布到 npm；請從原始碼執行。
+> v0.129.0 是開發者預覽版，尚未發布到 npm；請從原始碼執行。
 
 SymbolLattice 為專案建立可查詢的本機程式碼符號圖譜。每條關係都保留來源規則、解析階段與信心值；原始碼僅保存於受索引專案的 `.symbol-lattice/index.sqlite`，不會被靜默上傳。
 
@@ -49,17 +49,18 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 Windows PowerShell 若沒有 `npm` 指令，請改用 `npm.cmd`。檔案系統根目錄與使用者家目錄需要明確加上 `--force` 才會接受。
 
-## v0.128.0
+## v0.129.0
 
-- GoFrame v1/v2 現可精確擷取字面量 `Server.Domain(...)` 的 `BindHandler`、`BindObjectMethod`、選取式 `BindObject` 與 `BindObjectRest`，每一條路由皆保留精確 host/domain 證據。
-- 路由查詢回傳 `domain`（無 host 條件時為 `null`）；CLI 可用 `routes --domain <host>`，MCP `symbol_lattice_routes` 也支援相同精確篩選。
-- 修正路由投影時遺失 domain 身分造成的 symbol ID 衝突；萃取器升級為 `multi-language-ast-v110`，下次明確 `sync` 會重建未變動原始碼的 facts。
+- GoFrame v1/v2 現可跨同一個已證明的 Go package 目錄，精確連結分散檔案中的 `g.Meta`、Controller 方法與 `Bind(&Controller{})`；保留 Group 前綴與 `Server.Domain(...)` host 證據。
+- 新增的原始 facts 會保存到 SQLite，無關檔案變更後的增量 `sync` 仍可重用原本的 Go 檔案並重建同一條路由。
+- 萃取器升級為 `multi-language-ast-v111`，專案解析器升級為 `project-resolver-v33`；下次明確 `sync` 會重建未變動原始碼的 facts。
 
 ## 已知限制
 
 - 這不是編譯器、型別檢查器、框架 runtime 或執行期追蹤器。
 - 動態派發、反射、巨集展開、程式碼產生、依賴注入與歧義名稱不會成為 `exact` 關係。
 - GoFrame Domain 僅接受可證明的字面量、非萬用字元 host；動態值、空白項目、萬用字元與重綁定 receiver 保持未解析。
+- GoFrame 跨檔 standard router 僅支援同一資料夾且 package 名稱相同的唯一對應；跨 package import、build tag、限定型別與歧義 Controller 方法保持未解析。
 - 其他框架只涵蓋已實作且可驗證的切片；完整變更請見 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 驗證
