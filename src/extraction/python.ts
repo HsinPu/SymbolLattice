@@ -76,6 +76,11 @@ interface AioHttpApplication {
 /** A direct `from sanic import Sanic` application instance. */
 interface SanicApplication extends FrameworkDirectInstance {}
 
+/** A direct `from sanic import Blueprint` instance with a literal URL prefix. */
+interface SanicBlueprint extends FrameworkDirectInstance {
+  readonly prefix: string;
+}
+
 interface StaticFastApiDecorator {
   readonly receiver: string;
   readonly method: RouteMethod;
@@ -102,6 +107,13 @@ interface StaticSanicDecorator {
   readonly receiver: string;
   readonly methods: readonly RouteMethod[];
   readonly path: string;
+  readonly node: PythonSyntaxNode;
+}
+
+/** One direct literal `app.blueprint(blueprint)` registration. */
+interface StaticSanicBlueprintRegistration {
+  readonly applicationName: string;
+  readonly blueprintName: string;
   readonly node: PythonSyntaxNode;
 }
 
@@ -653,6 +665,37 @@ function staticSanicApplication(
     : { name: assignment.name, constructorName: assignment.constructorName, node: assignment.node };
 }
 
+function staticSanicBlueprint(
+  input: PythonExtractFileFactsInput,
+  node: PythonSyntaxNode,
+  constructorNames: ReadonlySet<string>
+): SanicBlueprint | null {
+  const assignment = staticFrameworkConstructorAssignment(input, node, constructorNames);
+  if (assignment === null) {
+    return null;
+  }
+  const entries = staticArgumentEntries(assignment.arguments_);
+  const blueprintLabel = entries[0];
+  const keywordArguments = staticKeywordArgumentsAfterFirst(input, entries);
+  if (
+    blueprintLabel?.name !== "String" ||
+    staticPlainPythonString(input, blueprintLabel) === null ||
+    keywordArguments === null ||
+    [...keywordArguments.keys()].some((name) => name !== "url_prefix")
+  ) {
+    return null;
+  }
+  const prefix = staticSanicPrefix(input, keywordArguments);
+  return prefix === null
+    ? null
+    : {
+        name: assignment.name,
+        constructorName: assignment.constructorName,
+        prefix,
+        node: assignment.node
+      };
+}
+
 function staticArgumentEntries(argumentList: PythonSyntaxNode): readonly PythonSyntaxNode[] {
   return directChildren(argumentList).filter(
     (child) => child.name !== "(" && child.name !== ")" && child.name !== ","
@@ -759,6 +802,23 @@ function staticFastApiPrefix(
 }
 
 function staticFlaskPrefix(
+  input: PythonExtractFileFactsInput,
+  keywordArguments: ReadonlyMap<string, PythonSyntaxNode>
+): string | null {
+  const prefixNode = keywordArguments.get("url_prefix");
+  if (prefixNode === undefined) {
+    return "";
+  }
+  if (prefixNode.name !== "String") {
+    return null;
+  }
+  const prefix = staticPlainPythonString(input, prefixNode);
+  return prefix === null || (prefix !== "" && (!prefix.startsWith("/") || prefix.endsWith("/")))
+    ? null
+    : prefix;
+}
+
+function staticSanicPrefix(
   input: PythonExtractFileFactsInput,
   keywordArguments: ReadonlyMap<string, PythonSyntaxNode>
 ): string | null {
@@ -1926,6 +1986,54 @@ function staticSanicDecorator(
   return { receiver, methods: [method], path, node };
 }
 
+function staticSanicBlueprintRegistration(
+  input: PythonExtractFileFactsInput,
+  node: PythonSyntaxNode
+): StaticSanicBlueprintRegistration | null {
+  if (node.name !== "ExpressionStatement") {
+    return null;
+  }
+  const expression = directChildren(node)[0];
+  if (expression?.name !== "CallExpression") {
+    return null;
+  }
+  const callChildren = directChildren(expression);
+  const member = callChildren[0];
+  const argumentList = callChildren[1];
+  if (
+    callChildren.length !== 2 ||
+    member?.name !== "MemberExpression" ||
+    argumentList?.name !== "ArgList"
+  ) {
+    return null;
+  }
+  const memberChildren = directChildren(member);
+  const applicationNode = memberChildren[0];
+  const methodNode = memberChildren[2];
+  if (
+    memberChildren.length !== 3 ||
+    applicationNode?.name !== "VariableName" ||
+    methodNode?.name !== "PropertyName" ||
+    nodeText(input, methodNode) !== "blueprint"
+  ) {
+    return null;
+  }
+  const applicationName = declarationName(input, applicationNode);
+  const entries = staticArgumentEntries(argumentList);
+  const blueprintNode = entries[0];
+  const keywordArguments = staticKeywordArgumentsAfterFirst(input, entries);
+  if (
+    applicationName === null ||
+    blueprintNode?.name !== "VariableName" ||
+    keywordArguments === null ||
+    keywordArguments.size !== 0
+  ) {
+    return null;
+  }
+  const blueprintName = declarationName(input, blueprintNode);
+  return blueprintName === null ? null : { applicationName, blueprintName, node };
+}
+
 function staticFlaskBlueprintRegistration(
   input: PythonExtractFileFactsInput,
   node: PythonSyntaxNode
@@ -2342,8 +2450,8 @@ function combinedRoutePath(...parts: readonly string[]): string {
 
 /**
  * Extracts conservative Python file facts. The Python surface records
- * declarations, containment, direct FastAPI/Flask decorators, direct Django
- * URL patterns, and direct same-file or package-relative router, Blueprint,
+ * declarations, containment, direct FastAPI/Flask/Sanic decorators, direct
+ * Django URL patterns, and direct same-file or package-relative router, Blueprint,
  * and URLConf composition only when every binding and path is syntax-proven.
  */
 export function extractPythonFileFacts(input: PythonExtractFileFactsInput): ArtifactFacts {
@@ -2668,9 +2776,20 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
         .filter((candidate) => candidate.importedName === "Sanic")
         .map((candidate) => candidate.alias)
     );
+    const sanicBlueprintConstructorNames = new Set(
+      sanicImports
+        .filter((candidate) => candidate.importedName === "Blueprint")
+        .map((candidate) => candidate.alias)
+    );
     const sanicApplications = topLevelNodes
       .map((node) => staticSanicApplication(input, node, sanicApplicationConstructorNames))
       .filter((candidate): candidate is SanicApplication => candidate !== null);
+    const sanicBlueprints = topLevelNodes
+      .map((node) => staticSanicBlueprint(input, node, sanicBlueprintConstructorNames))
+      .filter((candidate): candidate is SanicBlueprint => candidate !== null);
+    const sanicBlueprintRegistrations = topLevelNodes
+      .map((node) => staticSanicBlueprintRegistration(input, node))
+      .filter((candidate): candidate is StaticSanicBlueprintRegistration => candidate !== null);
     const topLevelFunctions = topLevelNodes.flatMap((statement) => {
       const functionNode =
         decoratedDefinition(statement) ??
@@ -3203,6 +3322,65 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
               sanicDecorator.path,
               "framework.sanic.direct-app.decorator.local-function"
             );
+          }
+        }
+        if (sanicDecorator !== null) {
+          const blueprintAtDecorator = latestProvenFrameworkInstance(
+            input,
+            topLevelNodes,
+            sanicImports,
+            sanicBlueprints,
+            sanicDecorator.receiver,
+            sanicDecorator.node.from,
+            "Blueprint"
+          );
+          if (blueprintAtDecorator !== null) {
+            for (const registration of sanicBlueprintRegistrations) {
+              if (
+                sanicDecorator.receiver !== registration.blueprintName ||
+                sanicBlueprintRegistrations.filter(
+                  (candidate) =>
+                    candidate.applicationName === registration.applicationName &&
+                    candidate.blueprintName === registration.blueprintName
+                ).length !== 1
+              ) {
+                continue;
+              }
+              const blueprintAtRegistration = latestProvenFrameworkInstance(
+                input,
+                topLevelNodes,
+                sanicImports,
+                sanicBlueprints,
+                registration.blueprintName,
+                registration.node.from,
+                "Blueprint"
+              );
+              const applicationAtRegistration = latestProvenFrameworkInstance(
+                input,
+                topLevelNodes,
+                sanicImports,
+                sanicApplications,
+                registration.applicationName,
+                registration.node.from,
+                "Sanic"
+              );
+              if (
+                blueprintAtRegistration === null ||
+                applicationAtRegistration === null ||
+                nodeKey(blueprintAtDecorator.node) !== nodeKey(blueprintAtRegistration.node)
+              ) {
+                continue;
+              }
+              for (const method of sanicDecorator.methods) {
+                addPythonRoute(
+                  method,
+                  sanicDecorator.node,
+                  handler,
+                  combinedRoutePath(blueprintAtRegistration.prefix, sanicDecorator.path),
+                  "framework.sanic.direct-blueprint.app-blueprint.decorator.local-function"
+                );
+              }
+            }
           }
         }
 

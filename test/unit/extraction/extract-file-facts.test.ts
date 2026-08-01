@@ -2805,6 +2805,149 @@ describe("source extraction", () => {
     expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
   });
 
+  it("extracts direct Sanic Blueprint decorators mounted by a direct application", () => {
+    const facts = extractFileFacts({
+      filePath: "app/sanic_blueprints.py",
+      language: "python",
+      sourceText: [
+        "from sanic import Blueprint as Router, Sanic as App",
+        "",
+        "app = App(\"symbol-lattice\")",
+        "api = Router(\"api\", url_prefix=\"/api\")",
+        "",
+        "app.blueprint(api)",
+        "",
+        "@api.get(\"/health\")",
+        "async def health(request):",
+        "    return None",
+        "",
+        "@api.route(\"/jobs/<job_id>\", methods=[\"PATCH\", \"DELETE\"])",
+        "async def update_or_delete_job(request, job_id):",
+        "    return None",
+        "",
+        "later = Router(\"later\", url_prefix=\"/later\")",
+        "",
+        "@later.post(\"/publish\")",
+        "async def publish(request):",
+        "    return None",
+        "",
+        "app.blueprint(later)"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId,
+          edge.evidence?.stage,
+          edge.resolution,
+          edge.confidence
+        ])
+    ).toEqual([
+      [
+        "GET /api/health",
+        "app/sanic_blueprints.py#health",
+        "framework.sanic.direct-blueprint.app-blueprint.decorator.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "PATCH /api/jobs/<job_id>",
+        "app/sanic_blueprints.py#update_or_delete_job",
+        "framework.sanic.direct-blueprint.app-blueprint.decorator.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "DELETE /api/jobs/<job_id>",
+        "app/sanic_blueprints.py#update_or_delete_job",
+        "framework.sanic.direct-blueprint.app-blueprint.decorator.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "POST /later/publish",
+        "app/sanic_blueprints.py#publish",
+        "framework.sanic.direct-blueprint.app-blueprint.decorator.local-function",
+        "syntax",
+        "exact",
+        1
+      ]
+    ]);
+  });
+
+  it("rejects unmounted, dynamic, configured, rebound, and shadowed Sanic Blueprints", () => {
+    const facts = extractFileFacts({
+      filePath: "app/unproven_sanic_blueprints.py",
+      language: "python",
+      sourceText: [
+        "from sanic import Blueprint, Sanic",
+        "",
+        "app = Sanic(\"symbol-lattice\")",
+        "dynamic_prefix = \"/dynamic\"",
+        "dynamic = Blueprint(\"dynamic\", url_prefix=dynamic_prefix)",
+        "app.blueprint(dynamic)",
+        "",
+        "@dynamic.get(\"/health\")",
+        "async def dynamic_handler(request):",
+        "    return None",
+        "",
+        "configured = Blueprint(\"configured\", url_prefix=\"/configured\", version=1)",
+        "app.blueprint(configured)",
+        "",
+        "@configured.post(\"/jobs\")",
+        "async def configured_handler(request):",
+        "    return None",
+        "",
+        "unmounted = Blueprint(\"unmounted\")",
+        "",
+        "@unmounted.delete(\"/jobs/<job_id>\")",
+        "async def unmounted_handler(request, job_id):",
+        "    return None",
+        "",
+        "registered = Blueprint(\"registered\")",
+        "app.blueprint(registered, url_prefix=\"/override\")",
+        "",
+        "@registered.patch(\"/jobs/<job_id>\")",
+        "async def overridden_handler(request, job_id):",
+        "    return None",
+        "",
+        "duplicate = Blueprint(\"duplicate\")",
+        "app.blueprint(duplicate)",
+        "app.blueprint(duplicate)",
+        "",
+        "@duplicate.get(\"/duplicate\")",
+        "async def duplicate_handler(request):",
+        "    return None",
+        "",
+        "app = build_application()",
+        "rebound = Blueprint(\"rebound\")",
+        "app.blueprint(rebound)",
+        "",
+        "@rebound.options(\"/metadata\")",
+        "async def rebound_handler(request):",
+        "    return None",
+        "",
+        "Blueprint = replacement",
+        "shadowed = Blueprint(\"shadowed\")",
+        "",
+        "@shadowed.get(\"/shadowed\")",
+        "async def shadowed_handler(request):",
+        "    return None"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+  });
+
   it("retains proven cross-file FastAPI router and package-relative inclusion facts", () => {
     const routerFacts = extractFileFacts({
       filePath: "api/routers/catalog.py",

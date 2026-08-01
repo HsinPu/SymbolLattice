@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.149.0 is an early developer release. The package is not published to npm; run it from source.
+> v0.150.0 is an early developer release. The package is not published to npm; run it from source.
 
 SymbolLattice builds a queryable local code-symbol graph for a project. Each relation retains its source rule, resolution stage, and confidence. Source remains in the indexed project's `.symbol-lattice/index.sqlite` and is never silently uploaded.
 
@@ -49,11 +49,11 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 On Windows PowerShell, use `npm.cmd` if `npm` is unavailable. Filesystem roots and home directories are rejected unless `--force` is explicit.
 
-## v0.149.0
+## v0.150.0
 
-- Adds direct Sanic application decorators: `from sanic import Sanic` (including aliases), top-level `Sanic(...)`, and same-file top-level function `@app.get`/`post`/`put`/`patch`/`delete`/`head`/`options` and `@app.route` handlers.
-- `@app.route` without `methods` records `GET`; specified methods must be literal, uppercase, standard HTTP-method arrays. Each route proves its import, app, path, handler, and no-rebinding boundary.
-- Artifact facts advance to `multi-language-ast-v130`; the project resolver remains `project-resolver-v38`.
+- Adds same-file direct Sanic Blueprint routes: `Blueprint(..., url_prefix="/...")`, `app.blueprint(bp)`, and the Blueprint's direct decorator routes.
+- A Blueprint may be mounted before or after its route decorator; only proven import, app, Blueprint, literal prefix/path/method, and no-rebinding combinations become `exact`. Repeated mounts of the same app–Blueprint pair conservatively emit no exact route.
+- Artifact facts advance to `multi-language-ast-v131`; the project resolver remains `project-resolver-v38`.
 
 ## Deliberate limits
 
@@ -70,7 +70,7 @@ On Windows PowerShell, use `npm.cmd` if `npm` is unavailable. Filesystem roots a
 - Rails currently supports only literal verb, `resources`, and `resource` declarations inside direct `Rails.application.routes.draw` blocks, with standard actions and array-shaped `only`/`except` filters. Namespaces, scopes, nested resources, custom paths/controllers, single-symbol filters, dynamic values, and non-unique conventional file/class/action evidence never become `exact`.
 - Starlette currently supports only direct imports, top-level literal `Route` lists, and same-file top-level named function endpoints mounted through `Starlette(routes=...)`. `Mount`/`Router`, class endpoints, mixed or dynamic lists, tuples, unsupported `Route` options, cross-file routes, handlers declared after routes, rebinding, and ambiguity never become `exact`.
 - aiohttp currently supports direct `from aiohttp import web`, `web.Application()`, top-level `app.router.add_get`/`add_post`/`add_put`/`add_patch`/`add_delete`/`add_head`/`add_route`, plus named or inline literal `app.router.add_routes([web.get(...)])` tables and same-file top-level named function handlers. `RouteTableDef`, decorators, class views, subapps, dynamic values, non-uppercase or wildcard `route`/`add_route` methods, non-literal `allow_head`, handlers declared after their entry, rebinding, and ambiguity never become `exact`.
-- Sanic currently supports only direct `from sanic import Sanic`, top-level `Sanic(...)`, and direct application decorators on same-file top-level functions. Blueprints, `Sanic.get_app`, `add_route`, class views, WebSockets, versioning or other configuration, dynamic paths or methods, non-uppercase or wildcard methods, external handlers, rebinding, and ambiguity never become `exact`.
+- Sanic currently supports direct application decorators and same-file direct `Blueprint(..., url_prefix=...)` plus `app.blueprint(bp)`. Cross-file Blueprint imports, Blueprint groups/copies, registration options, `Sanic.get_app`, `add_route`, class views, WebSockets, versioning or other configuration, dynamic paths or methods, non-uppercase or wildcard methods, external handlers, rebinding, and ambiguity never become `exact`.
 - Other frameworks expose only implemented, evidence-backed slices; see [CHANGELOG.md](CHANGELOG.md) for the full history.
 
 ## Verification

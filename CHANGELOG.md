@@ -6,6 +6,27 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.150.0] - 2026-08-01
+
+### Added
+
+- Python extraction now projects same-file Sanic Blueprint routes from direct `from sanic import Blueprint` imports (including aliases), literal `Blueprint("name", url_prefix="/prefix")` declarations, direct `app.blueprint(bp)` registrations, and the existing direct Blueprint decorators.
+- A Blueprint may be registered before or after its decorator route, matching the current Sanic Blueprint model. Projection proves the app and Blueprint bindings independently at their registration and decorator sites, then composes the literal Blueprint prefix with the literal route path.
+- Same app–Blueprint duplicate registrations, unsupported constructor or registration options, dynamic prefixes, unmounted Blueprints, rebinding, and shadowing are deliberately rejected instead of guessed.
+- New unit and service coverage verifies aliases, prefix composition, mount order, generic multi-method routes, exact handler evidence, and all stated rejection boundaries.
+
+### Compatibility
+
+- The artifact-facts extractor advances to `multi-language-ast-v131`. Existing graphs and SQLite schema remain readable; the next explicit `sync` re-extracts Python facts and reprojects same-file Sanic Blueprint routes. The project resolver remains `project-resolver-v38`.
+
+### Deliberate limits
+
+- This first Blueprint slice is limited to a direct same-file literal Blueprint with at most a literal constructor `url_prefix`, an option-free direct one-Blueprint `app.blueprint(bp)` call, and same-file top-level named function decorators. Cross-file imports, Blueprint groups/copies, registration options, indirect construction, `Sanic.get_app`, `add_route`, class views, WebSockets, dynamic composition, and ambiguous registrations remain non-exact.
+
+### Comparison notes
+
+- The inspected CodeGraph baseline source tree contains no `sanic` reference. SymbolLattice independently proves Sanic Blueprint construction, per-site identity, mount timing, prefix composition, local handler binding, and rebinding boundaries. It is broader for this direct same-file Blueprint slice while intentionally narrower for cross-file composition, groups, views, WebSockets, and runtime configuration.
+
 ## [0.149.0] - 2026-08-01
 
 ### Added
@@ -2800,7 +2821,8 @@ No unreleased changes.
 - Explicit full indexing, caller/callee/impact queries, and read-only MCP exploration.
 - `exact`, `heuristic`, and `unresolved` relationship states.
 
-[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.149.0...HEAD
+[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.150.0...HEAD
+[0.150.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.149.0...v0.150.0
 [0.149.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.148.0...v0.149.0
 [0.148.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.147.0...v0.148.0
 [0.147.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.146.0...v0.147.0

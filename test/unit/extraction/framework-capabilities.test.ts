@@ -234,6 +234,7 @@ describe("first-party framework capabilities", () => {
       routeRegistrations: [],
       surfaces: [
         "direct Sanic application decorators",
+        "direct Sanic Blueprint decorators mounted through direct application registration",
         "same-file top-level function handlers"
       ]
     });

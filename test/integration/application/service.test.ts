@@ -3454,6 +3454,73 @@ describe("SymbolLatticeService", () => {
     );
   });
 
+  it("indexes direct Sanic Blueprint routes with exact local handler proof", async () => {
+    const projectPath = await createInlineProject({
+      "api/main.py": [
+        "from sanic import Blueprint, Sanic",
+        "",
+        "app = Sanic(\"symbol-lattice\")",
+        "api = Blueprint(\"api\", url_prefix=\"/api\")",
+        "",
+        "app.blueprint(api)",
+        "",
+        "@api.get(\"/health\")",
+        "async def health(request):",
+        "    return None",
+        "",
+        "@api.route(\"/jobs\", methods=[\"POST\", \"PATCH\"])",
+        "def create_or_update_job(request):",
+        "    return None"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+
+    expect(routes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "GET",
+          path: "/api/health",
+          handler: expect.objectContaining({ qualifiedName: "api/main.py#health" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.sanic.direct-blueprint.app-blueprint.decorator.local-function",
+              stage: "syntax"
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "POST",
+          path: "/api/jobs",
+          handler: expect.objectContaining({ qualifiedName: "api/main.py#create_or_update_job" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.sanic.direct-blueprint.app-blueprint.decorator.local-function",
+              stage: "syntax"
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "PATCH",
+          path: "/api/jobs",
+          handler: expect.objectContaining({ qualifiedName: "api/main.py#create_or_update_job" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.sanic.direct-blueprint.app-blueprint.decorator.local-function",
+              stage: "syntax"
+            })
+          })
+        })
+      ])
+    );
+  });
+
   it("indexes Scala source plus Play conf/routes with exact package-class-method handler proof", async () => {
     const projectPath = await createInlineProject({
       "app/controllers/HealthController.scala": [

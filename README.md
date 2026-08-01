@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.149.0 是開發者預覽版，尚未發布到 npm；請從原始碼執行。
+> v0.150.0 是開發者預覽版，尚未發布到 npm；請從原始碼執行。
 
 SymbolLattice 為專案建立可查詢的本機程式碼符號圖譜。每條關係都保留來源規則、解析階段與信心值；原始碼僅保存於受索引專案的 `.symbol-lattice/index.sqlite`，不會被靜默上傳。
 
@@ -49,11 +49,11 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 Windows PowerShell 若沒有 `npm` 指令，請改用 `npm.cmd`。檔案系統根目錄與使用者家目錄需要明確加上 `--force` 才會接受。
 
-## v0.149.0
+## v0.150.0
 
-- 新增 Sanic direct app decorator 路由：支援 `from sanic import Sanic`（含 alias）、頂層 `Sanic(...)`，以及同檔頂層 function 的 `@app.get`／`post`／`put`／`patch`／`delete`／`head`／`options` 與 `@app.route`。
-- `@app.route` 未指定 `methods` 時建立 `GET`；指定時只接受字面量、大寫、標準 HTTP method 陣列。每條 route 都需證明 import、app、path、handler 與未重綁定。
-- artifact facts 升級為 `multi-language-ast-v130`；project resolver 維持 `project-resolver-v38`。
+- Sanic 新增同檔 direct Blueprint 路由：支援 `Blueprint(..., url_prefix="/...")`、`app.blueprint(bp)` 與 Blueprint 上既有的 decorator route。
+- Blueprint 可在 route decorator 前或後掛載；仍只接受可證明的 import、app、Blueprint、字面量 prefix／path／method 與未重綁定組合。重複的同 app–Blueprint 掛載保守地不建立 `exact` route。
+- artifact facts 升級為 `multi-language-ast-v131`；project resolver 維持 `project-resolver-v38`。
 
 ## 已知限制
 
@@ -70,7 +70,7 @@ Windows PowerShell 若沒有 `npm` 指令，請改用 `npm.cmd`。檔案系統�
 - Rails 目前僅支援 direct `Rails.application.routes.draw` 內的字面量 verb、`resources`／`resource`、標準 action 與陣列形狀的 `only`／`except`。namespace、scope、巢狀 resource、自訂 path/controller、單一 symbol filter、動態值與慣例檔案/class/action 不唯一時不會成為 `exact`。
 - Starlette 目前只支援 direct import、頂層字面量 `Route` list，以及由 `Starlette(routes=...)` 掛載的同檔頂層具名 function endpoint。`Mount`／`Router`、class endpoint、混合或動態 list、tuple、不支援的 `Route` 選項、跨檔 route、handler 定義在 route 之後、重綁與歧義均不會成為 `exact`。
 - aiohttp 目前支援 direct `from aiohttp import web`、`web.Application()`、頂層 `app.router.add_get`／`add_post`／`add_put`／`add_patch`／`add_delete`／`add_head`／`add_route`，以及具名或 inline 字面量 `app.router.add_routes([web.get(...)])` table 與同檔頂層具名 function handler。`RouteTableDef`、decorator、class view、subapp、動態值、非大寫或 wildcard `route`／`add_route` method、非字面量 `allow_head`、handler 定義在 entry 之後、重綁與歧義均不會成為 `exact`。
-- Sanic 目前只支援 direct `from sanic import Sanic`、頂層 `Sanic(...)`、同檔頂層 function 的 direct app decorator。Blueprint、`Sanic.get_app`、`add_route`、class view、WebSocket、version／其他設定、動態 path 或 methods、非大寫或 wildcard method、外部 handler、重綁與歧義均不會成為 `exact`。
+- Sanic 目前支援 direct app decorator，以及同檔 direct `Blueprint(..., url_prefix=...)` + `app.blueprint(bp)`。跨檔 Blueprint import、Blueprint group／copy、registration options、`Sanic.get_app`、`add_route`、class view、WebSocket、version／其他設定、動態 path 或 methods、非大寫或 wildcard method、外部 handler、重綁與歧義均不會成為 `exact`。
 - 其他框架只涵蓋已實作且可驗證的切片；完整變更請見 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 驗證
