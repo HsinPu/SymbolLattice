@@ -4273,6 +4273,7 @@ describe("SymbolLatticeService", () => {
         "import (",
         '  "context"',
         '  "github.com/gogf/gf/v2/frame/g"',
+        '  "github.com/gogf/gf/v2/net/ghttp"',
         ")",
         "",
         "type ListReq struct {",
@@ -4285,6 +4286,8 @@ describe("SymbolLatticeService", () => {
         "  return",
         "}",
         "",
+        "func (c *Controller) Total(r *ghttp.Request) {}",
+        "",
         "func health(ctx context.Context, req *HealthReq) (res *HealthRes, err error) {",
         "  return",
         "}",
@@ -4296,9 +4299,15 @@ describe("SymbolLatticeService", () => {
         "func main() {",
         "  server := g.Server()",
         '  server.BindHandler("GET:/health", health)',
+        "  controller := &Controller{}",
+        '  server.BindHandler("GET:/total", controller.Total)',
         '  api := server.Group("/api")',
         '  api.GET("/group-health", groupHealth)',
         "  api.Bind(&Controller{})",
+        '  server.Group("/callback", func(group *ghttp.RouterGroup) {',
+        '    group.POST("/method", controller.Total)',
+        "    group.Bind(&Controller{})",
+        "  })",
         "}"
       ].join("\n")
     });
@@ -4336,7 +4345,43 @@ describe("SymbolLatticeService", () => {
         }),
         expect.objectContaining({
           method: "GET",
+          path: "/total",
+          handler: expect.objectContaining({ qualifiedName: "cmd/server/main.go#Controller.Total" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.goframe.direct-server.bind-handler.local-object-method",
+              stage: "syntax"
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "POST",
+          path: "/callback/method",
+          handler: expect.objectContaining({ qualifiedName: "cmd/server/main.go#Controller.Total" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.goframe.direct-group.http-method.local-object-method",
+              stage: "syntax"
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "GET",
           path: "/api/users",
+          handler: expect.objectContaining({ qualifiedName: "cmd/server/main.go#Controller.List" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.goframe.standard-router.g-meta.direct-bound-controller.local-method",
+              stage: "syntax"
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "GET",
+          path: "/callback/users",
           handler: expect.objectContaining({ qualifiedName: "cmd/server/main.go#Controller.List" }),
           edge: expect.objectContaining({
             resolution: "exact",
@@ -4348,44 +4393,39 @@ describe("SymbolLatticeService", () => {
         })
       ])
     );
-    expect(getRoutes.routes).toMatchObject([
-      {
-        method: "GET",
-        path: "/api/users",
-        handler: { qualifiedName: "cmd/server/main.go#Controller.List" },
-        edge: {
-          resolution: "exact",
-          evidence: {
-            ruleId: "framework.goframe.standard-router.g-meta.direct-bound-controller.local-method",
-            stage: "syntax"
-          }
-        }
-      },
-      {
-        method: "GET",
-        path: "/health",
-        handler: { qualifiedName: "cmd/server/main.go#health" },
-        edge: {
-          resolution: "exact",
-          evidence: {
-            ruleId: "framework.goframe.direct-server.bind-handler.local-function",
-            stage: "syntax"
-          }
-        }
-      },
-      {
-        method: "GET",
-        path: "/api/group-health",
-        handler: { qualifiedName: "cmd/server/main.go#groupHealth" },
-        edge: {
-          resolution: "exact",
-          evidence: {
-            ruleId: "framework.goframe.direct-group.http-method.local-function",
-            stage: "syntax"
-          }
-        }
-      }
-    ]);
+    expect(getRoutes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "GET",
+          path: "/total",
+          handler: expect.objectContaining({ qualifiedName: "cmd/server/main.go#Controller.Total" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.goframe.direct-server.bind-handler.local-object-method",
+              stage: "syntax"
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "GET",
+          path: "/callback/users",
+          handler: expect.objectContaining({ qualifiedName: "cmd/server/main.go#Controller.List" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.goframe.standard-router.g-meta.direct-bound-controller.local-method",
+              stage: "syntax"
+            })
+          })
+        })
+      ])
+    );
+    expect(getRoutes.routes).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ method: "POST", path: "/callback/method" })
+      ])
+    );
   });
 
   it("indexes Rust Axum routes and retains Rust source-search filtering", async () => {

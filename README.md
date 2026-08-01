@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.123.0 為開發中版本；套件尚未發布至 npm，請從原始碼執行。
+> v0.124.0 為開發中版本；套件尚未發布至 npm，請從原始碼執行。
 
 SymbolLattice 為本機專案建立可查詢的程式碼符號圖譜。每條關係都保留來源規則、解析階段與信心度；來源碼只存於被索引專案的 `.symbol-lattice/index.sqlite`，不會被靜默上傳。
 
@@ -48,23 +48,18 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 Windows PowerShell 若找不到 `npm`，請改用 `npm.cmd`。檔案系統根目錄與家目錄預設會被拒絕，只有明確使用 `--force` 才可覆寫。
 
-## v0.123.0
+## v0.124.0
 
-- 新增 GoFrame v1/v2 路由擷取：可證明 `g.Server().BindHandler` 或靜態 `Group` 的 HTTP-method literal rule，以及同檔案 `g.Meta`、直接 `Bind` 與 controller method。
-- 每條新路由保留 exact evidence；既有圖譜在下一次明確 `sync` 時會因抽取器版本更新而重新擷取原始 facts。
-
-## v0.122.0
-
-- Cargo workspace 的 `members` 現可使用常見 `*`、`?`、`**` glob；glob 展開會套用 `[workspace].exclude`，而明確 literal member 保留 Cargo 的優先權。
-- 使用 glob 的工作區圖譜會保留成員快照；即使日後只新增符合規則的 `Cargo.toml`、尚未有 Rust 原始碼，`status` 仍會標示 stale，等待明確 `sync`。
-- 跨 crate Actix Web `ServiceConfig` 仍必須同時證明成員資格、根層本地 path、成員 opt-in、目標 `Cargo.toml` package 名稱，以及從 `src/lib.rs` 起的每個直接 `mod` hop。
+- GoFrame v1/v2 現可投影 literal `Group` callback（含可證明巢狀 prefix）內的 HTTP-method 路由與 `Bind`；callback 必須直接使用匯入的 `*ghttp.RouterGroup`。
+- `BindHandler` 與 Group HTTP method 現可解析同檔 `&Controller{}`／`new(Controller)` 的直接 method selector；每條路由仍保留 exact syntax evidence。
+- 抽取器升級為 `multi-language-ast-v106`；既有圖譜會在下一次明確 `sync` 時重新擷取原始 facts。
 
 ## 有意限制
 
 - 這不是編譯器、型別檢查器、框架 runtime 或執行追蹤器。
 - 動態派發、反射、巨集展開、程式碼產生、依賴注入與模糊名稱不會成為 exact 關係。
-- GoFrame 目前不投影 inline 或 object-method handler、callback `Group`、跨檔 controller/request 對應、多 method tag、domain rule、動態 receiver 或 rule。
-- Actix Web 跨檔 `ServiceConfig` 目前只接受 `main.rs`／`lib.rs` 的一或兩層直接外部模組；workspace crate 支援 literal 或常見 glob `members`、`exclude`、root package 或明確 member，以及直接 `[dependencies]` inline `path` 或根層本地 `workspace.dependencies` 的匹配 `{ workspace = true }` 繼承。字元類別、brace 與 `!` glob、Cargo 隱式 path 成員、繼承 registry／transitive／dev／build 依賴、非 inline table、target-specific section、re-export、`#[path]`、inline module、超過兩層的路徑、closure、wrapper、動態 callback 或路徑皆不投影。
+- GoFrame 仍不投影 inline handler、動態或多 callback `Group`、factory/wrapper/rebound object、跨檔 controller/request 對應、多 method tag、domain rule、動態 receiver 或 rule。
+- 其他框架只涵蓋已明確實作的可驗證子集；完整歷史與相容性請見 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 驗證
 

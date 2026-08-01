@@ -6,6 +6,26 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.124.0] - 2026-08-01
+
+### Added
+
+- GoFrame v1/v2 extraction now follows one literal `Server.Group(prefix, func(group *ghttp.RouterGroup) { ... })` callback, including directly nested callback groups. Literal HTTP-method registrations inside the callback retain the full proven prefix.
+- Direct `BindHandler` and Group HTTP-method registrations now resolve a direct method selector on one same-file local `&Controller{}` or `new(Controller)` binding, when exactly one matching method declaration exists. Callback-local `Bind` also contributes the proven group prefix to same-file standard-router routes.
+
+### Compatibility
+
+- The artifact-facts extractor advances to `multi-language-ast-v106`. Existing graphs remain readable; the next explicit `sync` re-extracts unchanged source documents. SQLite schema and the project resolver version are unchanged.
+
+### Deliberate limits
+
+- GoFrame accepts only a literal prefix, one direct callback whose sole parameter is `*ghttp.RouterGroup` through a non-ambiguous import alias, direct callback-body statements, named package-level function handlers, or direct selectors on the supported local object bindings. Inline handlers, multiple or dynamic callbacks, batch maps, factory/wrapper/rebound objects, cross-file joins, multi-method tags, domain rules, dynamic receivers/rules, and ambiguous handlers remain unresolved.
+
+### Comparison notes
+
+- The inspected CodeGraph GoFrame resolver continues to create `g.Meta` route nodes and then joins controller methods by request type across the graph; its companion edge is heuristic and its source intentionally does not reconstruct `Group` prefixes. SymbolLattice v0.124 adds exact local callback-group and object-method registration evidence while preserving literal prefixes for its supported forms.
+- CodeGraph remains broader for cross-file standard-router composition. SymbolLattice is stronger for the new direct local slice: its route edge exists only after the literal registration, group prefix, local object binding, and one same-file target method are all syntax-proven.
+
 ## [0.123.0] - 2026-08-01
 
 ### Added

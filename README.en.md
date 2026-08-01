@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.123.0 is an early developer release. The package is not published to npm; run it from source.
+> v0.124.0 is an early developer release. The package is not published to npm; run it from source.
 
 SymbolLattice builds a queryable local code-symbol graph for a project. Every relation keeps its source rule, resolution stage, and confidence. Source code remains in the indexed project's `.symbol-lattice/index.sqlite` and is never silently uploaded.
 
@@ -48,23 +48,18 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 On Windows PowerShell, use `npm.cmd` if `npm` is unavailable. Filesystem roots and home directories are rejected unless `--force` is explicit.
 
-## v0.123.0
+## v0.124.0
 
-- Adds GoFrame v1/v2 route extraction for literal-rule `g.Server().BindHandler` calls or HTTP-method literal calls on a static `Group`, plus same-file standard-router joins of `g.Meta`, direct `Bind`, and a controller method.
-- Every new route keeps exact evidence. Existing graphs re-extract their raw facts on the next explicit `sync` because the extractor version advances.
-
-## v0.122.0
-
-- Cargo workspace `members` now accept common `*`, `?`, and `**` globs. Glob expansion honors `[workspace].exclude`, while explicit literal members retain Cargo precedence.
-- Every globbed workspace graph persists a member snapshot. Adding only a matching `Cargo.toml`, before any Rust source exists, still makes `status` stale until an explicit `sync`.
-- Cross-crate Actix Web `ServiceConfig` projection still requires member proof, root local-path proof, member opt-in, a matching target `Cargo.toml` package name, and every direct `mod` hop from target `src/lib.rs`.
+- GoFrame v1/v2 now projects literal `Group` callbacks (including proven nested prefixes), their HTTP-method routes, and `Bind` calls. A callback must directly declare the imported `*ghttp.RouterGroup` parameter.
+- `BindHandler` and Group HTTP methods now resolve direct method selectors from same-file `&Controller{}` or `new(Controller)` instances, retaining exact syntax evidence on every route.
+- The extractor advances to `multi-language-ast-v106`; existing graphs re-extract raw facts on the next explicit `sync`.
 
 ## Deliberate limits
 
 - This is not a compiler, type checker, framework runtime, or execution tracer.
 - Dynamic dispatch, reflection, macro expansion, code generation, dependency injection, and ambiguous names never become exact graph relations.
-- GoFrame intentionally does not project inline or object-method handlers, callback `Group` forms, cross-file controller/request joins, multi-method tags, domain rules, or dynamic receivers/rules.
-- Cross-file Actix Web `ServiceConfig` support accepts only one or two direct external modules from `main.rs` / `lib.rs`. Workspace crates accept literal or common-glob `members`, `exclude`, a root package or explicit member, plus either a direct inline-table `[dependencies]` `path` or a matching `{ workspace = true }` inheritance of a root local `[workspace.dependencies]` path. Character classes, brace and `!` glob patterns, Cargo's implicit path-dependency membership, inherited registry/transitive/dev/build dependencies, non-inline tables, target-specific sections, re-exports, `#[path]`, inline modules, deeper paths, closures, wrappers, dynamic callbacks, and dynamic paths remain unprojected.
+- GoFrame still rejects inline handlers, dynamic or multi-callback `Group` forms, factory/wrapper/rebound objects, cross-file controller/request joins, multi-method tags, domain rules, and dynamic receivers/rules.
+- Other frameworks cover only their implemented, evidence-backed slices; see [CHANGELOG.md](CHANGELOG.md) for the complete history and compatibility detail.
 
 ## Verification
 

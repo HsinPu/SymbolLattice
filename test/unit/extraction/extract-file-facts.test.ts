@@ -3480,6 +3480,108 @@ describe("source extraction", () => {
     ]);
   });
 
+  it("extracts GoFrame callback Group routes and local object-method handlers with exact evidence", () => {
+    const facts = extractFileFacts({
+      filePath: "cmd/server/goframe-callback.go",
+      language: "go",
+      sourceText: [
+        "package main",
+        "",
+        "import (",
+        '  "context"',
+        '  g "github.com/gogf/gf/v2/frame/g"',
+        '  ghttp "github.com/gogf/gf/v2/net/ghttp"',
+        ")",
+        "",
+        "type ListReq struct {",
+        '  g.Meta `path:"/users" method:"get"`',
+        "}",
+        "",
+        "type Controller struct{}",
+        "",
+        "func (c *Controller) List(ctx context.Context, req *ListReq) (res *ListRes, err error) {",
+        "  return",
+        "}",
+        "",
+        "func (c *Controller) Total(r *ghttp.Request) {}",
+        "",
+        "func health(r *ghttp.Request) {}",
+        "",
+        "func main() {",
+        "  server := g.Server()",
+        "  controller := &Controller{}",
+        "  replacement := new(Controller)",
+        '  server.BindHandler("GET:/total", controller.Total)',
+        '  server.BindHandler("PATCH:/new", replacement.Total)',
+        '  server.Group("/api", func(group *ghttp.RouterGroup) {',
+        '    group.GET("/health", health)',
+        '    group.POST("/method", controller.Total)',
+        "    group.Bind(&Controller{})",
+        '    group.Group("/v1", func(v1 *ghttp.RouterGroup) {',
+        '      v1.PUT("/nested", controller.Total)',
+        "    })",
+        "  })",
+        "}"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId,
+          edge.resolution,
+          edge.confidence
+        ])
+    ).toEqual([
+      [
+        "GET /total",
+        "cmd/server/goframe-callback.go#Controller.Total",
+        "framework.goframe.direct-server.bind-handler.local-object-method",
+        "exact",
+        1
+      ],
+      [
+        "PATCH /new",
+        "cmd/server/goframe-callback.go#Controller.Total",
+        "framework.goframe.direct-server.bind-handler.local-object-method",
+        "exact",
+        1
+      ],
+      [
+        "GET /api/health",
+        "cmd/server/goframe-callback.go#health",
+        "framework.goframe.direct-group.http-method.local-function",
+        "exact",
+        1
+      ],
+      [
+        "POST /api/method",
+        "cmd/server/goframe-callback.go#Controller.Total",
+        "framework.goframe.direct-group.http-method.local-object-method",
+        "exact",
+        1
+      ],
+      [
+        "PUT /api/v1/nested",
+        "cmd/server/goframe-callback.go#Controller.Total",
+        "framework.goframe.direct-group.http-method.local-object-method",
+        "exact",
+        1
+      ],
+      [
+        "GET /api/users",
+        "cmd/server/goframe-callback.go#Controller.List",
+        "framework.goframe.standard-router.g-meta.direct-bound-controller.local-method",
+        "exact",
+        1
+      ]
+    ]);
+  });
+
   it("rejects unproven GoFrame direct and standard-router shapes", () => {
     const facts = extractFileFacts({
       filePath: "cmd/server/unproven-goframe.go",
@@ -3530,10 +3632,12 @@ describe("source extraction", () => {
         "  server.BindHandler(pattern, directHandler)",
         '  server.BindHandler("GET:/host@localhost", directHandler)',
         "  controller := &Controller{}",
+        "  controller = replacement()",
         '  server.BindHandler("GET:/object", controller.Good)',
         '  objectAPI := server.Group("/object")',
         '  objectAPI.GET("/method", controller.Good)',
-        '  server.Group("/callback", func(group *ghttp.RouterGroup) {',
+        '  callbackPrefix := "/callback"',
+        "  server.Group(callbackPrefix, func(group *ghttp.RouterGroup) {",
         "    group.Bind(&Controller{})",
         "  })",
         "  server = replacement()",
