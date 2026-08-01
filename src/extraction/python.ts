@@ -5,6 +5,7 @@ import {
   createSymbolId,
   type ArtifactFacts,
   type DjangoImportedUrlconfInclusionFact,
+  type DjangoLiteralUrlconfInclusionFact,
   type DjangoUrlconfReExportFact,
   type DjangoUrlPatternRouteFact,
   type FastApiImportedRouterInclusionFact,
@@ -223,19 +224,31 @@ interface StaticDjangoPathRoute {
   readonly node: PythonSyntaxNode;
 }
 
-/** One literal `path(prefix, include(imported_urlconf))` entry in final urlpatterns. */
-interface StaticDjangoImportedUrlconfInclusion {
+/** Shared syntax for a literal `path(prefix, include(urlconf))` entry in urlpatterns. */
+interface StaticDjangoUrlconfInclusionBase {
   readonly factoryName: string;
   readonly includeFactoryName: string;
   readonly path: string;
-  readonly urlconfName: string;
   readonly node: PythonSyntaxNode;
+}
+
+/** One literal `path(prefix, include(imported_urlconf))` entry in final urlpatterns. */
+interface StaticDjangoImportedUrlconfInclusion extends StaticDjangoUrlconfInclusionBase {
+  readonly kind: "imported";
+  readonly urlconfName: string;
+}
+
+/** One literal `path(prefix, include("project.urlconf"))` entry in final urlpatterns. */
+interface StaticDjangoLiteralUrlconfInclusion extends StaticDjangoUrlconfInclusionBase {
+  readonly kind: "literal";
+  readonly moduleSpecifier: string;
 }
 
 interface StaticDjangoUrlPatternList {
   readonly node: PythonSyntaxNode;
   readonly routes: readonly StaticDjangoPathRoute[];
   readonly importedUrlconfInclusions: readonly StaticDjangoImportedUrlconfInclusion[];
+  readonly literalUrlconfInclusions: readonly StaticDjangoLiteralUrlconfInclusion[];
 }
 
 /** A one-dot, single-name Python relative import that can carry an APIRouter. */
@@ -1197,6 +1210,10 @@ function staticPlainPythonString(
   return inner.includes("\\") || /[\r\n]/u.test(inner) ? null : inner;
 }
 
+function isStaticPythonModuleSpecifier(value: string): boolean {
+  return /^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*$/u.test(value);
+}
+
 function staticDjangoRoutePath(value: string): string | null {
   if (
     value.startsWith("/") ||
@@ -1811,11 +1828,11 @@ function staticDjangoPathRoute(
   return path === null || handlerName === null ? null : { factoryName, path, handlerName, node };
 }
 
-function staticDjangoImportedUrlconfInclusion(
+function staticDjangoUrlconfInclusion(
   input: PythonExtractFileFactsInput,
   node: PythonSyntaxNode,
   pathFactoryNames: ReadonlySet<string>
-): StaticDjangoImportedUrlconfInclusion | null {
+): StaticDjangoImportedUrlconfInclusion | StaticDjangoLiteralUrlconfInclusion | null {
   if (node.name !== "CallExpression") {
     return null;
   }
@@ -1864,15 +1881,23 @@ function staticDjangoImportedUrlconfInclusion(
   const urlconfNode = includeEntries[0];
   if (
     includeFactoryName === null ||
-    urlconfNode?.name !== "VariableName" ||
     staticKeywordArgumentsAfterPositions(input, includeEntries, 1)?.size !== 0
   ) {
     return null;
   }
-  const urlconfName = declarationName(input, urlconfNode);
-  return urlconfName === null
+  if (urlconfNode?.name === "VariableName") {
+    const urlconfName = declarationName(input, urlconfNode);
+    return urlconfName === null
+      ? null
+      : { kind: "imported", factoryName, includeFactoryName, path, urlconfName, node };
+  }
+  if (urlconfNode?.name !== "String") {
+    return null;
+  }
+  const moduleSpecifier = staticPlainPythonString(input, urlconfNode);
+  return moduleSpecifier === null || !isStaticPythonModuleSpecifier(moduleSpecifier)
     ? null
-    : { factoryName, includeFactoryName, path, urlconfName, node };
+    : { kind: "literal", factoryName, includeFactoryName, path, moduleSpecifier, node };
 }
 
 function staticDjangoUrlPatternList(
@@ -1899,12 +1924,21 @@ function staticDjangoUrlPatternList(
   const routes = directChildren(value)
     .map((candidate) => staticDjangoPathRoute(input, candidate, pathFactoryNames))
     .filter((candidate): candidate is StaticDjangoPathRoute => candidate !== null);
-  const importedUrlconfInclusions = directChildren(value)
-    .map((candidate) => staticDjangoImportedUrlconfInclusion(input, candidate, pathFactoryNames))
+  const urlconfInclusions = directChildren(value)
+    .map((candidate) => staticDjangoUrlconfInclusion(input, candidate, pathFactoryNames))
     .filter(
-      (candidate): candidate is StaticDjangoImportedUrlconfInclusion => candidate !== null
+      (
+        candidate
+      ): candidate is StaticDjangoImportedUrlconfInclusion | StaticDjangoLiteralUrlconfInclusion =>
+        candidate !== null
     );
-  return { node, routes, importedUrlconfInclusions };
+  const importedUrlconfInclusions = urlconfInclusions.filter(
+    (candidate): candidate is StaticDjangoImportedUrlconfInclusion => candidate.kind === "imported"
+  );
+  const literalUrlconfInclusions = urlconfInclusions.filter(
+    (candidate): candidate is StaticDjangoLiteralUrlconfInclusion => candidate.kind === "literal"
+  );
+  return { node, routes, importedUrlconfInclusions, literalUrlconfInclusions };
 }
 
 function staticFastApiDecorator(
@@ -3018,10 +3052,12 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
     hasUrlpatterns?: true;
     readonly reExports: DjangoUrlconfReExportFact[];
     readonly importedUrlconfInclusions: DjangoImportedUrlconfInclusionFact[];
+    readonly literalUrlconfInclusions: DjangoLiteralUrlconfInclusionFact[];
   } = {
     routes: [],
     reExports: [],
-    importedUrlconfInclusions: []
+    importedUrlconfInclusions: [],
+    literalUrlconfInclusions: []
   };
   const fileName = input.filePath.split(/[\\/]/u).at(-1) ?? input.filePath;
   const fileNode: SymbolNode = {
@@ -3853,6 +3889,32 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
           urlconfName: importedUrlconf.urlconfName,
           importedUrlconfName: importedUrlconf.importedUrlconfName,
           moduleSpecifier: importedUrlconf.moduleSpecifier,
+          prefix: inclusion.path,
+          range: rangeFor(lineStarts, inclusion.node.from, inclusion.node.to)
+        });
+      }
+
+      for (const inclusion of patterns.literalUrlconfInclusions) {
+        if (
+          latestProvenDjangoPathImport(
+            input,
+            topLevelNodes,
+            djangoUrlImports,
+            inclusion.factoryName,
+            patterns.node.from
+          ) === null ||
+          latestProvenDjangoIncludeImport(
+            input,
+            topLevelNodes,
+            djangoUrlImports,
+            inclusion.includeFactoryName,
+            patterns.node.from
+          ) === null
+        ) {
+          continue;
+        }
+        djangoUrlFacts.literalUrlconfInclusions.push({
+          moduleSpecifier: inclusion.moduleSpecifier,
           prefix: inclusion.path,
           range: rangeFor(lineStarts, inclusion.node.from, inclusion.node.to)
         });

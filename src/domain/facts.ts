@@ -11,13 +11,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v141";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v142";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v45";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v46";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -402,6 +402,17 @@ export interface DjangoImportedUrlconfInclusionFact {
   readonly range: SourceRange;
 }
 
+/**
+ * A direct Django `path(prefix, include("project.urlconf"))` composition with
+ * one plain, dotted Python module name. Project resolution later proves the
+ * target is unique and lies behind regular-package boundaries.
+ */
+export interface DjangoLiteralUrlconfInclusionFact {
+  readonly moduleSpecifier: string;
+  readonly prefix: string;
+  readonly range: SourceRange;
+}
+
 /** A final, single-name relative Django URLConf export from a package initializer. */
 export interface DjangoUrlconfReExportFact {
   readonly exportedName: string;
@@ -421,6 +432,8 @@ export interface DjangoUrlFacts {
   /** Omitted only by artifact facts persisted before v0.160. */
   readonly reExports?: readonly DjangoUrlconfReExportFact[];
   readonly importedUrlconfInclusions: readonly DjangoImportedUrlconfInclusionFact[];
+  /** Omitted only by artifact facts persisted before v0.161. */
+  readonly literalUrlconfInclusions?: readonly DjangoLiteralUrlconfInclusionFact[];
 }
 
 /** One literal `g.Meta` request declaration retained for GoFrame standard routing. */

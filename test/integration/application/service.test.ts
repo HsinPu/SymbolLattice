@@ -5042,6 +5042,115 @@ describe("SymbolLatticeService", () => {
     ]);
   });
 
+  it("projects literal Django URLConf module strings through regular packages", async () => {
+    const projectPath = await createInlineProject({
+      "project/__init__.py": "",
+      "project/catalog/__init__.py": "",
+      "project/catalog/urls.py": [
+        "from django.urls import path",
+        "",
+        "def items(request):",
+        "    return None",
+        "",
+        "urlpatterns = [path('items/', items)]"
+      ].join("\n"),
+      "project/urls.py": [
+        "from django.urls import include, path",
+        "",
+        "urlpatterns = [path('api/', include('project.catalog.urls'))]"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath, { method: "ALL", pathPrefix: "/api/" });
+    const mainFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "project/urls.py");
+
+    expect(mainFacts?.djangoUrlFacts).toMatchObject({
+      literalUrlconfInclusions: [
+        {
+          moduleSpecifier: "project.catalog.urls",
+          prefix: "/api/"
+        }
+      ]
+    });
+    expect(routes.routes).toMatchObject([
+      {
+        method: "ALL",
+        path: "/api/items/",
+        route: {
+          kind: "route",
+          name: "ALL /api/items/",
+          filePath: "project/catalog/urls.py"
+        },
+        edge: {
+          kind: "routes",
+          resolution: "exact",
+          evidence: {
+            ruleId: "framework.django.literal-urlconf.path.include.local-function",
+            stage: "module",
+            resolutionPath: ["project/urls.py", "project/catalog/urls.py"]
+          }
+        },
+        handler: { qualifiedName: "project/catalog/urls.py#items" }
+      }
+    ]);
+  });
+
+  it("projects literal Django URLConf module packages through final URLConf exports", async () => {
+    const projectPath = await createInlineProject({
+      "project/__init__.py": "",
+      "project/routes/__init__.py": "from .catalog.urls import urlpatterns",
+      "project/routes/catalog/__init__.py": "",
+      "project/routes/catalog/urls.py": [
+        "from django.urls import path",
+        "",
+        "def health(request):",
+        "    return None",
+        "",
+        "urlpatterns = [path('health/', health)]"
+      ].join("\n"),
+      "project/urls.py": [
+        "from django.urls import include, path",
+        "",
+        "urlpatterns = [path('v1/', include('project.routes'))]"
+      ].join("\n")
+    });
+    const service = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+
+    await expect(service.routes(projectPath, { method: "ALL", pathPrefix: "/v1/" })).resolves.toMatchObject({
+      routes: [
+        {
+          method: "ALL",
+          path: "/v1/health/",
+          route: {
+            name: "ALL /v1/health/",
+            filePath: "project/routes/catalog/urls.py"
+          },
+          edge: {
+            kind: "routes",
+            resolution: "exact",
+            evidence: {
+              ruleId: "framework.django.literal-urlconf.reexported-path.include.local-function",
+              stage: "module",
+              resolutionPath: [
+                "project/urls.py",
+                "project/routes/__init__.py",
+                "project/routes/catalog/urls.py"
+              ]
+            }
+          },
+          handler: { qualifiedName: "project/routes/catalog/urls.py#health" }
+        }
+      ]
+    });
+  });
+
   it("projects Django URLConf exports through nested package initializers", async () => {
     const projectPath = await createInlineProject({
       "project/__init__.py": "",
@@ -5156,6 +5265,59 @@ describe("SymbolLatticeService", () => {
         "from .catalog import urls as catalog_urls",
         "",
         "urlpatterns = [path('api/', include(catalog_urls))]"
+      ].join("\n")
+    });
+    const service = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+
+    await expect(
+      service.routes(projectPath, { method: "ALL", pathPrefix: "/api/" })
+    ).resolves.toMatchObject({ routes: [] });
+  });
+
+  it("does not project literal Django URLConf module strings without a proven package boundary", async () => {
+    const projectPath = await createInlineProject({
+      "project/catalog/urls.py": [
+        "from django.urls import path",
+        "",
+        "def items(request):",
+        "    return None",
+        "",
+        "urlpatterns = [path('items/', items)]"
+      ].join("\n"),
+      "project/urls.py": [
+        "from django.urls import include, path",
+        "",
+        "urlpatterns = [path('api/', include('project.catalog.urls'))]"
+      ].join("\n")
+    });
+    const service = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+
+    await expect(
+      service.routes(projectPath, { method: "ALL", pathPrefix: "/api/" })
+    ).resolves.toMatchObject({ routes: [] });
+  });
+
+  it("does not project ambiguous literal Django URLConf module file/package targets", async () => {
+    const projectPath = await createInlineProject({
+      "project/__init__.py": "",
+      "project/catalog/__init__.py": "",
+      "project/catalog/urls.py": [
+        "from django.urls import path",
+        "",
+        "def items(request):",
+        "    return None",
+        "",
+        "urlpatterns = [path('items/', items)]"
+      ].join("\n"),
+      "project/catalog/urls/__init__.py": "",
+      "project/urls.py": [
+        "from django.urls import include, path",
+        "",
+        "urlpatterns = [path('api/', include('project.catalog.urls'))]"
       ].join("\n")
     });
     const service = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());

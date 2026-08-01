@@ -3894,6 +3894,29 @@ describe("source extraction", () => {
     });
   });
 
+  it("records literal Django URLConf module inclusion facts", () => {
+    const facts = extractFileFacts({
+      filePath: "project/urls.py",
+      language: "python",
+      sourceText: [
+        "from django.urls import include as mount, path as url",
+        "",
+        "urlpatterns = [url('api/', mount('project.catalog.urls'))]"
+      ].join("\n")
+    });
+
+    expect(facts.djangoUrlFacts).toMatchObject({
+      routes: [],
+      importedUrlconfInclusions: [],
+      literalUrlconfInclusions: [
+        {
+          moduleSpecifier: "project.catalog.urls",
+          prefix: "/api/"
+        }
+      ]
+    });
+  });
+
   it("retains final Django URLConf exports from package initializers", () => {
     const initializerFacts = extractFileFacts({
       filePath: "project/routes/__init__.py",
@@ -3972,6 +3995,24 @@ describe("source extraction", () => {
     });
 
     expect(facts.djangoUrlFacts?.importedUrlconfInclusions).toEqual([]);
+  });
+
+  it("rejects dynamic, malformed, and multi-argument Django URLConf module include strings", () => {
+    const facts = extractFileFacts({
+      filePath: "project/urls.py",
+      language: "python",
+      sourceText: [
+        "from django.urls import include, path",
+        "",
+        "urlpatterns = [",
+        "    path('dynamic/', include(urlconf_module)),",
+        "    path('malformed/', include('project..catalog.urls')),",
+        "    path('namespace/', include('project.catalog.urls', namespace='v1')),",
+        "]"
+      ].join("\n")
+    });
+
+    expect(facts.djangoUrlFacts).toMatchObject({ literalUrlconfInclusions: [] });
   });
 
   it("rejects non-final, dynamic, non-local, unsupported, and rebound Django path forms", () => {

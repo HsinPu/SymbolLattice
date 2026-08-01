@@ -6,6 +6,27 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.161.0] - 2026-08-02
+
+### Added
+
+- Django now persists a syntax-proven, plain dotted module fact for <code>path(prefix, include("project.urlconf"))</code> and projects its final child <code>urlpatterns</code> routes through one exact project-local target.
+- Literal module names can target either a regular <code>.py</code> URLConf module or a regular package <code>__init__.py</code>; the latter may continue through final single-name <code>urlpatterns</code> re-export hops.
+- Exact module-stage evidence distinguishes direct literal URLConf targets with <code>framework.django.literal-urlconf.path.include.local-function</code> from initializer re-export paths with <code>framework.django.literal-urlconf.reexported-path.include.local-function</code>.
+- New extractor and service coverage proves direct literal modules, package targets, re-export chains, malformed or multi-argument strings, dynamic values, and missing regular-package boundaries.
+
+### Compatibility
+
+- The artifact-facts extractor advances to <code>multi-language-ast-v142</code> and the project resolver to <code>project-resolver-v46</code>. Existing graphs and SQLite schema remain readable; the next explicit <code>sync</code> re-extracts facts and reprojects affected routes.
+
+### Deliberate limits
+
+- A literal include accepts only one unescaped dotted module name that maps uniquely from the project source root to one project-local <code>.py</code> module or package initializer. Every package directory must retain an <code>__init__.py</code> marker. External modules, source-root inference, namespace packages, dynamic strings, tuples, namespaces, copied values, self-includes, and ambiguous file/package targets remain non-exact.
+
+### Comparison notes
+
+- In the inspected CodeGraph baseline source tree at <code>572d22bfbe82602080e457bec655f72e3314f9ef</code>, the reviewed Django <code>resolveHandlerName</code> helper maps <code>include('module.path')</code> to an <code>imports</code> reference. SymbolLattice now covers that static string form with a stricter local-module proof, then projects verified child routes and preserves every resolution hop as evidence.
+
 ## [0.160.0] - 2026-08-02
 
 ### Added
