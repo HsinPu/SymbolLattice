@@ -3638,6 +3638,62 @@ describe("SymbolLatticeService", () => {
     );
   });
 
+  it("indexes named Sanic Blueprint group mounts with unique literal name prefixes", async () => {
+    const projectPath = await createInlineProject({
+      "api/main.py": [
+        "from sanic import Blueprint, Sanic",
+        "",
+        "app = Sanic(\"symbol-lattice\")",
+        "users = Blueprint(\"users\", url_prefix=\"/users\")",
+        "public = Blueprint.group(users, url_prefix=\"/public\", name_prefix=\"public\")",
+        "admin = Blueprint.group(users, url_prefix=\"/admin\", name_prefix=\"admin\")",
+        "",
+        "app.blueprint(public, url_prefix=\"/v1\")",
+        "app.blueprint(admin, url_prefix=\"/v2\")",
+        "",
+        "@users.get(\"/health\")",
+        "async def health(request):",
+        "    return None"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+
+    expect(routes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "GET",
+          path: "/v1/public/users/health",
+          handler: expect.objectContaining({ qualifiedName: "api/main.py#health" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId:
+                "framework.sanic.named-blueprint-group.app-blueprint.decorator.local-function",
+              stage: "syntax"
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "GET",
+          path: "/v2/admin/users/health",
+          handler: expect.objectContaining({ qualifiedName: "api/main.py#health" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId:
+                "framework.sanic.named-blueprint-group.app-blueprint.decorator.local-function",
+              stage: "syntax"
+            })
+          })
+        })
+      ])
+    );
+  });
+
   it("projects package-relative Sanic Blueprint modules through literal prefixes", async () => {
     const projectPath = await createInlineProject({
       "app/__init__.py": "",

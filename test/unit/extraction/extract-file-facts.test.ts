@@ -2996,6 +2996,59 @@ describe("source extraction", () => {
     ]);
   });
 
+  it("extracts named Sanic Blueprint group mounts with unique literal name prefixes", () => {
+    const facts = extractFileFacts({
+      filePath: "app/named_sanic_blueprint_groups.py",
+      language: "python",
+      sourceText: [
+        "from sanic import Blueprint as Router, Sanic as App",
+        "",
+        "app = App(\"symbol-lattice\")",
+        "users = Router(\"users\", url_prefix=\"/users\")",
+        "public = Router.group(users, url_prefix=\"/public\", name_prefix=\"public\")",
+        "admin = Router.group(users, url_prefix=\"/admin\", name_prefix=\"admin\")",
+        "",
+        "app.blueprint(public, url_prefix=\"/v1\")",
+        "app.blueprint(admin, url_prefix=\"/v2\")",
+        "",
+        "@users.get(\"/health\")",
+        "async def health(request):",
+        "    return None"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId,
+          edge.evidence?.stage,
+          edge.resolution,
+          edge.confidence
+        ])
+    ).toEqual([
+      [
+        "GET /v1/public/users/health",
+        "app/named_sanic_blueprint_groups.py#health",
+        "framework.sanic.named-blueprint-group.app-blueprint.decorator.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "GET /v2/admin/users/health",
+        "app/named_sanic_blueprint_groups.py#health",
+        "framework.sanic.named-blueprint-group.app-blueprint.decorator.local-function",
+        "syntax",
+        "exact",
+        1
+      ]
+    ]);
+  });
+
   it("rejects Sanic Blueprint groups with unproven members", () => {
     const facts = extractFileFacts({
       filePath: "app/unproven_sanic_blueprint_group.py",
@@ -3011,6 +3064,49 @@ describe("source extraction", () => {
         "",
         "@users.get(\"/health\")",
         "async def health(request):",
+        "    return None"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+  });
+
+  it("rejects multiple Sanic Blueprint group mounts without distinct literal name prefixes", () => {
+    const facts = extractFileFacts({
+      filePath: "app/ambiguous_sanic_blueprint_group_mounts.py",
+      language: "python",
+      sourceText: [
+        "from sanic import Blueprint, Sanic",
+        "",
+        "app = Sanic(\"symbol-lattice\")",
+        "users = Blueprint(\"users\", url_prefix=\"/users\")",
+        "public = Blueprint.group(users, url_prefix=\"/public\")",
+        "admin = Blueprint.group(users, url_prefix=\"/admin\")",
+        "app.blueprint(public)",
+        "app.blueprint(admin)",
+        "",
+        "@users.get(\"/health\")",
+        "async def health(request):",
+        "    return None",
+        "",
+        "status = Blueprint(\"status\", url_prefix=\"/status\")",
+        "one = Blueprint.group(status, url_prefix=\"/one\", name_prefix=\"same\")",
+        "two = Blueprint.group(status, url_prefix=\"/two\", name_prefix=\"same\")",
+        "app.blueprint(one)",
+        "app.blueprint(two)",
+        "",
+        "@status.get(\"/health\")",
+        "async def status_health(request):",
+        "    return None",
+        "",
+        "metrics = Blueprint(\"metrics\", url_prefix=\"/metrics\")",
+        "metrics_group = Blueprint.group(metrics, url_prefix=\"/grouped\", name_prefix=\"grouped\")",
+        "app.blueprint(metrics)",
+        "app.blueprint(metrics_group)",
+        "",
+        "@metrics.get(\"/health\")",
+        "async def metrics_health(request):",
         "    return None"
       ].join("\n")
     });

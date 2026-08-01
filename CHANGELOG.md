@@ -6,6 +6,27 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.155.0] - 2026-08-01
+
+### Added
+
+- Same-file direct Sanic Blueprint groups now accept a nonempty literal <code>name_prefix</code> made of alphanumerics, underscores, and hyphens.
+- One Blueprint may be mounted through multiple direct groups in the same app when every corresponding group has a distinct literal <code>name_prefix</code>. Those paths carry <code>framework.sanic.named-blueprint-group.app-blueprint.decorator.local-function</code> evidence.
+- The extractor now suppresses exact routes for repeated mounts without distinct names, name collisions, direct-plus-group ambiguity, or repeated nested branches.
+- Unit and service coverage verifies aliased named groups, composed registration prefixes, and rejection of unnamed or colliding repeated mounts.
+
+### Compatibility
+
+- The artifact-facts extractor advances to <code>multi-language-ast-v136</code>. The project resolver remains at <code>project-resolver-v40</code> because this is same-file extraction only. Existing graphs and SQLite schema remain readable; the next explicit <code>sync</code> re-extracts Python facts and reprojects affected Sanic routes.
+
+### Deliberate limits
+
+- This slice supports repeated mounts only through direct same-file group members, one app, and distinct restricted literal group names. Cross-file groups, copied Blueprints, list/tuple members, repeated nested branches, app-level <code>name_prefix</code>, versioning, strict-slashes controls, other options, class views, WebSockets, <code>add_route</code>, and dynamic composition remain non-exact.
+
+### Comparison notes
+
+- The inspected CodeGraph baseline source tree contains no <code>sanic</code> reference. SymbolLattice independently adds a narrow, evidence-backed named-group mounting path; it is broader for this explicit static route slice while remaining deliberately narrower than runtime framework composition.
+
 ## [0.154.0] - 2026-08-01
 
 ### Added
@@ -2902,7 +2923,8 @@ No unreleased changes.
 - Explicit full indexing, caller/callee/impact queries, and read-only MCP exploration.
 - `exact`, `heuristic`, and `unresolved` relationship states.
 
-[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.154.0...HEAD
+[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.155.0...HEAD
+[0.155.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.154.0...v0.155.0
 [0.154.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.153.0...v0.154.0
 [0.153.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.152.0...v0.153.0
 [0.152.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.151.0...v0.152.0

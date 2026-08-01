@@ -90,6 +90,7 @@ interface SanicBlueprintGroup {
   readonly constructorName: string;
   readonly memberNames: readonly string[];
   readonly prefix: string;
+  readonly namePrefix: string | null;
   readonly node: PythonSyntaxNode;
 }
 
@@ -134,6 +135,22 @@ interface StaticSanicBlueprintRegistration {
   readonly blueprintName: string;
   readonly prefix: string;
   readonly node: PythonSyntaxNode;
+}
+
+interface ProvenSanicBlueprintRegistration {
+  readonly registration: StaticSanicBlueprintRegistration;
+  readonly blueprint: SanicBlueprint;
+}
+
+interface ProvenSanicBlueprintGroupRegistration {
+  readonly registration: StaticSanicBlueprintRegistration;
+  readonly group: SanicBlueprintGroup;
+  readonly members: readonly ResolvedSanicBlueprintGroupMember[];
+}
+
+interface ResolvedSanicBlueprintGroupMount {
+  readonly registration: ProvenSanicBlueprintGroupRegistration;
+  readonly member: ResolvedSanicBlueprintGroupMember;
 }
 
 interface StaticFlaskBlueprintRegistration {
@@ -818,12 +835,19 @@ function staticSanicBlueprintGroup(
   if (
     memberNames.length === 0 ||
     keywordArguments === null ||
-    [...keywordArguments.keys()].some((argumentName) => argumentName !== "url_prefix")
+    [...keywordArguments.keys()].some(
+      (argumentName) => argumentName !== "url_prefix" && argumentName !== "name_prefix"
+    )
   ) {
     return null;
   }
   const prefix = staticSanicPrefix(input, keywordArguments);
-  return prefix === null ? null : { name, constructorName, memberNames, prefix, node };
+  const namePrefixNode = keywordArguments.get("name_prefix");
+  const namePrefix =
+    namePrefixNode === undefined ? null : staticSanicGroupNamePrefix(input, namePrefixNode);
+  return prefix === null || (namePrefixNode !== undefined && namePrefix === null)
+    ? null
+    : { name, constructorName, memberNames, prefix, namePrefix, node };
 }
 
 function staticArgumentEntries(argumentList: PythonSyntaxNode): readonly PythonSyntaxNode[] {
@@ -963,6 +987,19 @@ function staticSanicPrefix(
   return prefix === null || (prefix !== "" && (!prefix.startsWith("/") || prefix.endsWith("/")))
     ? null
     : prefix;
+}
+
+function staticSanicGroupNamePrefix(
+  input: PythonExtractFileFactsInput,
+  node: PythonSyntaxNode
+): string | null {
+  if (node.name !== "String") {
+    return null;
+  }
+  const namePrefix = staticPlainPythonString(input, node);
+  return namePrefix === null || !/^[A-Za-z0-9][A-Za-z0-9_-]*$/u.test(namePrefix)
+    ? null
+    : namePrefix;
 }
 
 function staticFastApiRouter(
@@ -2396,6 +2433,40 @@ function resolveSanicBlueprintGroupMembers(
   return members;
 }
 
+function resolvedSanicBlueprintGroupMounts(
+  registrations: readonly ProvenSanicBlueprintGroupRegistration[],
+  applicationName: string,
+  blueprint: SanicBlueprint
+): readonly ResolvedSanicBlueprintGroupMount[] {
+  const blueprintKey = nodeKey(blueprint.node);
+  const mounts: ResolvedSanicBlueprintGroupMount[] = [];
+  for (const registration of registrations) {
+    if (registration.registration.applicationName !== applicationName) {
+      continue;
+    }
+    for (const member of registration.members) {
+      if (nodeKey(member.blueprint.node) === blueprintKey) {
+        mounts.push({ registration, member });
+      }
+    }
+  }
+  return mounts;
+}
+
+function hasDistinctLiteralSanicGroupNamePrefixes(
+  mounts: readonly ResolvedSanicBlueprintGroupMount[]
+): boolean {
+  if (
+    mounts.length < 2 ||
+    !mounts.every(
+      (mount) => mount.member.groupDepth === 1 && mount.registration.group.namePrefix !== null
+    )
+  ) {
+    return false;
+  }
+  return new Set(mounts.map((mount) => mount.registration.group.namePrefix)).size === mounts.length;
+}
+
 function latestProvenFastApiApplication(
   input: PythonExtractFileFactsInput,
   topLevelNodes: readonly PythonSyntaxNode[],
@@ -3139,6 +3210,70 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
       );
       return finalBlueprint !== null && nodeKey(finalBlueprint.node) === nodeKey(blueprint.node);
     });
+    const uniqueSanicBlueprintRegistrations = sanicBlueprintRegistrations.filter(
+      (registration) =>
+        sanicBlueprintRegistrations.filter(
+          (candidate) =>
+            candidate.applicationName === registration.applicationName &&
+            candidate.blueprintName === registration.blueprintName
+        ).length === 1
+    );
+    const provenSanicBlueprintRegistrations = uniqueSanicBlueprintRegistrations.flatMap(
+      (registration): readonly ProvenSanicBlueprintRegistration[] => {
+        const application = latestProvenFrameworkInstance(
+          input,
+          topLevelNodes,
+          sanicImports,
+          sanicApplications,
+          registration.applicationName,
+          registration.node.from,
+          "Sanic"
+        );
+        const blueprint = latestProvenFrameworkInstance(
+          input,
+          topLevelNodes,
+          sanicImports,
+          sanicBlueprints,
+          registration.blueprintName,
+          registration.node.from,
+          "Blueprint"
+        );
+        return application === null || blueprint === null ? [] : [{ registration, blueprint }];
+      }
+    );
+    const provenSanicBlueprintGroupRegistrations = uniqueSanicBlueprintRegistrations.flatMap(
+      (registration): readonly ProvenSanicBlueprintGroupRegistration[] => {
+        const application = latestProvenFrameworkInstance(
+          input,
+          topLevelNodes,
+          sanicImports,
+          sanicApplications,
+          registration.applicationName,
+          registration.node.from,
+          "Sanic"
+        );
+        const group = latestProvenSanicBlueprintGroup(
+          input,
+          topLevelNodes,
+          sanicImports,
+          sanicBlueprintGroups,
+          registration.blueprintName,
+          registration.node.from
+        );
+        if (application === null || group === null) {
+          return [];
+        }
+        const members = resolveSanicBlueprintGroupMembers(
+          input,
+          topLevelNodes,
+          sanicImports,
+          sanicBlueprints,
+          sanicBlueprintGroups,
+          group
+        );
+        return members === null ? [] : [{ registration, group, members }];
+      }
+    );
     for (const router of finalRouters) {
       fastApiRouterFacts.routers.push({
         name: router.name,
@@ -3699,40 +3834,22 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
                 });
               }
             }
-            for (const registration of sanicBlueprintRegistrations) {
-              if (
-                sanicDecorator.receiver !== registration.blueprintName ||
-                sanicBlueprintRegistrations.filter(
-                  (candidate) =>
-                    candidate.applicationName === registration.applicationName &&
-                    candidate.blueprintName === registration.blueprintName
-                ).length !== 1
-              ) {
+            for (const provenRegistration of provenSanicBlueprintRegistrations) {
+              const { registration, blueprint } = provenRegistration;
+              if (nodeKey(blueprintAtDecorator.node) !== nodeKey(blueprint.node)) {
                 continue;
               }
-              const blueprintAtRegistration = latestProvenFrameworkInstance(
-                input,
-                topLevelNodes,
-                sanicImports,
-                sanicBlueprints,
-                registration.blueprintName,
-                registration.node.from,
-                "Blueprint"
+              const directMounts = provenSanicBlueprintRegistrations.filter(
+                (candidate) =>
+                  candidate.registration.applicationName === registration.applicationName &&
+                  nodeKey(candidate.blueprint.node) === nodeKey(blueprint.node)
               );
-              const applicationAtRegistration = latestProvenFrameworkInstance(
-                input,
-                topLevelNodes,
-                sanicImports,
-                sanicApplications,
+              const groupMounts = resolvedSanicBlueprintGroupMounts(
+                provenSanicBlueprintGroupRegistrations,
                 registration.applicationName,
-                registration.node.from,
-                "Sanic"
+                blueprint
               );
-              if (
-                blueprintAtRegistration === null ||
-                applicationAtRegistration === null ||
-                nodeKey(blueprintAtDecorator.node) !== nodeKey(blueprintAtRegistration.node)
-              ) {
+              if (directMounts.length !== 1 || groupMounts.length !== 0) {
                 continue;
               }
               for (const method of sanicDecorator.methods) {
@@ -3742,62 +3859,39 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
                   handler,
                   combinedRoutePath(
                     registration.prefix,
-                    blueprintAtRegistration.prefix,
+                    blueprint.prefix,
                     sanicDecorator.path
                   ),
                   "framework.sanic.direct-blueprint.app-blueprint.decorator.local-function"
                 );
               }
             }
-            for (const registration of sanicBlueprintRegistrations) {
-              if (
-                sanicBlueprintRegistrations.filter(
-                  (candidate) =>
-                    candidate.applicationName === registration.applicationName &&
-                    candidate.blueprintName === registration.blueprintName
-                ).length !== 1
-              ) {
-                continue;
-              }
-              const groupAtRegistration = latestProvenSanicBlueprintGroup(
-                input,
-                topLevelNodes,
-                sanicImports,
-                sanicBlueprintGroups,
-                registration.blueprintName,
-                registration.node.from
-              );
-              if (groupAtRegistration === null) {
-                continue;
-              }
-              const applicationAtRegistration = latestProvenFrameworkInstance(
-                input,
-                topLevelNodes,
-                sanicImports,
-                sanicApplications,
-                registration.applicationName,
-                registration.node.from,
-                "Sanic"
-              );
-              const groupMembers = resolveSanicBlueprintGroupMembers(
-                input,
-                topLevelNodes,
-                sanicImports,
-                sanicBlueprints,
-                sanicBlueprintGroups,
-                groupAtRegistration
-              );
-              const groupMember = groupMembers?.find(
+            for (const groupRegistration of provenSanicBlueprintGroupRegistrations) {
+              const { registration, members } = groupRegistration;
+              const groupMember = members.find(
                 (member) => nodeKey(member.blueprint.node) === nodeKey(blueprintAtDecorator.node)
               );
-              if (
-                applicationAtRegistration === null ||
-                groupMember === undefined
-              ) {
+              if (groupMember === undefined) {
+                continue;
+              }
+              const directMounts = provenSanicBlueprintRegistrations.filter(
+                (candidate) =>
+                  candidate.registration.applicationName === registration.applicationName &&
+                  nodeKey(candidate.blueprint.node) === nodeKey(blueprintAtDecorator.node)
+              );
+              const groupMounts = resolvedSanicBlueprintGroupMounts(
+                provenSanicBlueprintGroupRegistrations,
+                registration.applicationName,
+                blueprintAtDecorator
+              );
+              const repeatedMount = directMounts.length + groupMounts.length > 1;
+              if (repeatedMount && !hasDistinctLiteralSanicGroupNamePrefixes(groupMounts)) {
                 continue;
               }
               const ruleId =
-                groupMember.groupDepth === 1
+                repeatedMount
+                  ? "framework.sanic.named-blueprint-group.app-blueprint.decorator.local-function"
+                  : groupMember.groupDepth === 1
                   ? "framework.sanic.direct-blueprint-group.app-blueprint.decorator.local-function"
                   : "framework.sanic.direct-nested-blueprint-group.app-blueprint.decorator.local-function";
               for (const method of sanicDecorator.methods) {
