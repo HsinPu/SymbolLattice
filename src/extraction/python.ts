@@ -8,6 +8,7 @@ import {
   type DjangoUrlPatternRouteFact,
   type FastApiImportedRouterInclusionFact,
   type FastApiRouterDeclarationFact,
+  type FastApiRouterReExportFact,
   type FastApiRouterRouteFact,
   type FlaskBlueprintDeclarationFact,
   type FlaskBlueprintRouteFact,
@@ -2718,9 +2719,37 @@ function latestProvenDjangoRelativeUrlconfImport(
 }
 
 /**
+ * Finds the one direct relative import still bound to a FastAPI router name.
+ * A later assignment or import shadows an earlier import and therefore removes
+ * it from consideration.
+ */
+function latestProvenFastApiRelativeRouterImportBinding(
+  input: PythonExtractFileFactsInput,
+  topLevelNodes: readonly PythonSyntaxNode[],
+  imports: readonly StaticFastApiRelativeRouterImport[],
+  routerName: string,
+  before: number
+): StaticFastApiRelativeRouterImport | null {
+  const candidates = imports
+    .filter(
+      (candidate) =>
+        candidate.routerName === routerName &&
+        candidate.node.to <= before &&
+        !hasTopLevelRebinding(
+          input,
+          topLevelNodes,
+          candidate.routerName,
+          candidate.node.to,
+          before
+        )
+    )
+    .sort((left, right) => right.node.from - left.node.from);
+  return candidates.length === 1 ? candidates[0] ?? null : null;
+}
+
+/**
  * Finds the one direct relative import still bound to the router argument at a
- * literal `include_router` call. A later assignment or import shadows an
- * earlier import and therefore removes it from consideration.
+ * literal `include_router` call.
  */
 function latestProvenFastApiRelativeRouterImport(
   input: PythonExtractFileFactsInput,
@@ -2728,21 +2757,13 @@ function latestProvenFastApiRelativeRouterImport(
   imports: readonly StaticFastApiRelativeRouterImport[],
   inclusion: StaticFastApiRouterInclusion
 ): StaticFastApiRelativeRouterImport | null {
-  const candidates = imports
-    .filter(
-      (candidate) =>
-        candidate.routerName === inclusion.routerName &&
-        candidate.node.to <= inclusion.node.from &&
-        !hasTopLevelRebinding(
-          input,
-          topLevelNodes,
-          candidate.routerName,
-          candidate.node.to,
-          inclusion.node.from
-        )
-    )
-    .sort((left, right) => right.node.from - left.node.from);
-  return candidates.length === 1 ? candidates[0] ?? null : null;
+  return latestProvenFastApiRelativeRouterImportBinding(
+    input,
+    topLevelNodes,
+    imports,
+    inclusion.routerName,
+    inclusion.node.from
+  );
 }
 
 /**
@@ -2924,10 +2945,12 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
   const fastApiRouterFacts: {
     readonly routers: FastApiRouterDeclarationFact[];
     readonly routes: FastApiRouterRouteFact[];
+    readonly reExports: FastApiRouterReExportFact[];
     readonly importedRouterInclusions: FastApiImportedRouterInclusionFact[];
   } = {
     routers: [],
     routes: [],
+    reExports: [],
     importedRouterInclusions: []
   };
   const flaskBlueprintFacts: {
@@ -3421,6 +3444,25 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
       });
     }
     if (isPythonPackageInitializer(input.filePath)) {
+      for (const imported of relativeRouterImports) {
+        const finalImport = latestProvenFastApiRelativeRouterImportBinding(
+          input,
+          topLevelNodes,
+          relativeRouterImports,
+          imported.routerName,
+          input.sourceText.length
+        );
+        if (finalImport === null || nodeKey(finalImport.node) !== nodeKey(imported.node)) {
+          continue;
+        }
+        fastApiRouterFacts.reExports.push({
+          exportedName: imported.routerName,
+          importedRouterName: imported.importedRouterName,
+          moduleSpecifier: imported.moduleSpecifier,
+          range: rangeFor(lineStarts, imported.node.from, imported.node.to)
+        });
+      }
+
       for (const imported of relativeSanicBlueprintImports) {
         const finalImport = latestProvenSanicRelativeBlueprintImportBinding(
           input,

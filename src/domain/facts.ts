@@ -11,13 +11,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v138";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v139";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v42";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v43";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -219,6 +219,14 @@ export interface FastApiRouterRouteFact {
   readonly range: SourceRange;
 }
 
+/** A final, single-name relative APIRouter export from a package initializer. */
+export interface FastApiRouterReExportFact {
+  readonly exportedName: string;
+  readonly importedRouterName: string;
+  readonly moduleSpecifier: string;
+  readonly range: SourceRange;
+}
+
 /**
  * A direct, single-name, package-relative import mounted through a direct
  * FastAPI application's literal `include_router` call.
@@ -239,6 +247,8 @@ export interface FastApiImportedRouterInclusionFact {
 export interface FastApiRouterFacts {
   readonly routers: readonly FastApiRouterDeclarationFact[];
   readonly routes: readonly FastApiRouterRouteFact[];
+  /** Omitted only by artifact facts persisted before v0.158. */
+  readonly reExports?: readonly FastApiRouterReExportFact[];
   readonly importedRouterInclusions: readonly FastApiImportedRouterInclusionFact[];
 }
 

@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.157.0 is a developer preview and is not published to npm. Run it from source.
+> v0.158.0 is a developer preview and is not published to npm. Run it from source.
 
 SymbolLattice builds a queryable local code-symbol graph for a project. Every relation keeps its rule, resolution stage, and confidence; `exact`, `heuristic`, and `unresolved` evidence are never conflated.
 
@@ -41,11 +41,11 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 On Windows PowerShell, use `npm.cmd` if `npm` is unavailable. Index data stays in the target project's `.symbol-lattice/index.sqlite`.
 
-## v0.157.0
+## v0.158.0
 
-- Resolves Sanic Blueprints and Blueprint groups through final, single-name re-export chains in regular-package `__init__.py` files.
-- Each projected route retains every initializer and source-module hop in its `resolutionPath` evidence.
-- Only unrebound, resolvable final exports are exact; missing sources, cycles, collisions, and dynamic overrides produce no exact route.
+- Resolves FastAPI `APIRouter` `include_router(...)` routes through nested, final single-name re-export chains in regular-package `__init__.py` files.
+- Each exact route keeps the mounting module, initializer, and source-module hops in `resolutionPath` evidence.
+- Only unrebound, resolvable, unambiguous final exports are exact; missing sources, cycles, collisions, and dynamic overrides produce no exact route.
 
 ## Principles
 
@@ -55,7 +55,7 @@ On Windows PowerShell, use `npm.cmd` if `npm` is unavailable. Index data stays i
 
 ## Boundaries
 
-- Cross-file Sanic composition is limited to regular Python packages, one-leading-dot single-name relative imports, and top-level literal `Blueprint.group(...)` and `app.blueprint(...)` calls; `__init__.py` supports only final, unrebound same-shape export chains.
+- Cross-file FastAPI and Sanic composition is limited to regular Python packages, one-leading-dot single-name relative imports, and top-level literal framework registrations; `__init__.py` supports only final, unrebound same-shape export chains.
 - Dynamic composition, copied values, list/tuple members, re-exports outside initializers, namespace packages, parent-relative imports, class views, WebSockets, `add_route`, versioning, and other registration options do not become exact.
 - Reflection, runtime configuration, DI, macros, generated code, and ambiguous names are likewise never treated as static proof.
 

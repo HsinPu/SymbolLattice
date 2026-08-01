@@ -3433,6 +3433,46 @@ describe("source extraction", () => {
     });
   });
 
+  it("retains final FastAPI APIRouter exports from a package initializer", () => {
+    const facts = extractFileFacts({
+      filePath: "api/routers/__init__.py",
+      language: "python",
+      sourceText: "from .catalog import router as public_router"
+    });
+
+    expect(facts.fastApiRouterFacts).toMatchObject({
+      routers: [],
+      routes: [],
+      reExports: [
+        {
+          exportedName: "public_router",
+          importedRouterName: "router",
+          moduleSpecifier: ".catalog"
+        }
+      ],
+      importedRouterInclusions: []
+    });
+  });
+
+  it("rejects rebounded and non-initializer FastAPI APIRouter exports", () => {
+    const reboundFacts = extractFileFacts({
+      filePath: "api/routers/__init__.py",
+      language: "python",
+      sourceText: [
+        "from .catalog import router as public_router",
+        "public_router = build_router()"
+      ].join("\n")
+    });
+    const regularModuleFacts = extractFileFacts({
+      filePath: "api/routers/exports.py",
+      language: "python",
+      sourceText: "from .catalog import router as public_router"
+    });
+
+    expect(reboundFacts.fastApiRouterFacts).toMatchObject({ reExports: [] });
+    expect(regularModuleFacts.fastApiRouterFacts).toMatchObject({ reExports: [] });
+  });
+
   it("rejects parent-relative and rebound FastAPI router import inclusions", () => {
     const facts = extractFileFacts({
       filePath: "api/main.py",

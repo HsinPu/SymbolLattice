@@ -3218,6 +3218,94 @@ function projectGoFrameStandardRouterRoutes(input: {
   return { symbols, structuralEdges };
 }
 
+interface ResolvedFastApiRouterTarget {
+  readonly filePath: string;
+  readonly router: FastApiRouterDeclarationFact;
+  readonly resolutionPath: readonly string[];
+  readonly reExported: boolean;
+}
+
+function directFastApiRouterTargets(input: {
+  readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
+  readonly filePath: string;
+  readonly name: string;
+}): readonly ResolvedFastApiRouterTarget[] {
+  const facts = input.factsByFile.get(input.filePath)?.fastApiRouterFacts;
+  if (facts === undefined) {
+    return [];
+  }
+  return facts.routers
+    .filter((router) => router.name === input.name)
+    .map((router) => ({
+      filePath: input.filePath,
+      router,
+      resolutionPath: [input.filePath],
+      reExported: false
+    }));
+}
+
+/**
+ * Resolves a direct FastAPI router or one final `__init__.py` re-export chain.
+ * Every hop is a persisted single-name relative import, and a cycle or any
+ * competing local/exported binding remains unresolved.
+ */
+function resolveExactFastApiRouterTarget(input: {
+  readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
+  readonly knownFilePaths: ReadonlySet<string>;
+  readonly filePath: string;
+  readonly name: string;
+  readonly visited?: ReadonlySet<string>;
+}): ResolvedFastApiRouterTarget | null {
+  const targetKey = `${input.filePath}\u0000${input.name}`;
+  const visited = input.visited ?? new Set<string>();
+  if (visited.has(targetKey)) {
+    return null;
+  }
+  const facts = input.factsByFile.get(input.filePath)?.fastApiRouterFacts;
+  if (facts === undefined) {
+    return null;
+  }
+  const directTargets = directFastApiRouterTargets(input);
+  const reExports = (facts.reExports ?? []).filter((reExport) => reExport.exportedName === input.name);
+  if (directTargets.length + reExports.length !== 1) {
+    return null;
+  }
+  if (directTargets[0] !== undefined) {
+    return directTargets[0];
+  }
+  const reExport = reExports[0];
+  if (reExport === undefined) {
+    return null;
+  }
+  const targetFilePath = resolvePythonRelativeModule(
+    input.knownFilePaths,
+    input.filePath,
+    reExport.moduleSpecifier
+  );
+  if (targetFilePath === null) {
+    return null;
+  }
+  const nestedVisited = new Set(visited);
+  nestedVisited.add(targetKey);
+  const target = resolveExactFastApiRouterTarget({
+    factsByFile: input.factsByFile,
+    knownFilePaths: input.knownFilePaths,
+    filePath: targetFilePath,
+    name: reExport.importedRouterName,
+    visited: nestedVisited
+  });
+  return target === null
+    ? null
+    : {
+        ...target,
+        resolutionPath: compactPythonModuleResolutionPath([
+          input.filePath,
+          ...target.resolutionPath
+        ]),
+        reExported: true
+      };
+}
+
 interface ProjectedFastApiImportedRouterRoute {
   readonly inclusionFilePath: string;
   readonly routerFilePath: string;
@@ -3225,6 +3313,8 @@ interface ProjectedFastApiImportedRouterRoute {
   readonly route: FastApiRouterRouteFact;
   readonly handler: SymbolNode;
   readonly path: string;
+  readonly resolutionPath: readonly string[];
+  readonly reExported: boolean;
 }
 
 function compareProjectedFastApiImportedRouterRoute(
@@ -3250,9 +3340,10 @@ interface FastApiImportedRouterRouteProjection {
 }
 
 /**
- * Projects literal handler routes declared on an imported, direct FastAPI
- * router. Its evidence names both the mounting module and the declaration
- * module so a stored route remains auditable after indexing.
+ * Projects literal handler routes declared on an imported FastAPI router.
+ * A final package initializer re-export chain is accepted only when every hop
+ * has exact persisted evidence. Stored route evidence names every resolved
+ * module so a route remains auditable after indexing.
  */
 function projectFastApiImportedRouterRoutes(input: {
   readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
@@ -3271,25 +3362,29 @@ function projectFastApiImportedRouterRoutes(input: {
     }
 
     for (const inclusion of inclusionFacts.importedRouterInclusions) {
-      const routerFilePath = resolvePythonRelativeModule(
+      const importedRouterFilePath = resolvePythonRelativeModule(
         input.knownFilePaths,
         inclusionFilePath,
         inclusion.moduleSpecifier
       );
-      if (routerFilePath === null) {
+      if (importedRouterFilePath === null) {
         continue;
       }
+      const target = resolveExactFastApiRouterTarget({
+        factsByFile: input.factsByFile,
+        knownFilePaths: input.knownFilePaths,
+        filePath: importedRouterFilePath,
+        name: inclusion.importedRouterName
+      });
+      if (target === null) {
+        continue;
+      }
+      const routerFilePath = target.filePath;
       const routerFacts = input.factsByFile.get(routerFilePath)?.fastApiRouterFacts;
       if (routerFacts === undefined) {
         continue;
       }
-      const routers = routerFacts.routers.filter(
-        (router) => router.name === inclusion.importedRouterName
-      );
-      if (routers.length !== 1 || routers[0] === undefined) {
-        continue;
-      }
-      const router = routers[0];
+      const router = target.router;
 
       for (const route of routerFacts.routes) {
         if (route.routerName !== router.name) {
@@ -3309,7 +3404,9 @@ function projectFastApiImportedRouterRoutes(input: {
           inclusion,
           route,
           handler,
-          path
+          path,
+          resolutionPath: target.resolutionPath,
+          reExported: target.reExported
         });
       }
     }
@@ -3401,11 +3498,13 @@ function projectFastApiImportedRouterRoutes(input: {
       confidence: 1,
       referenceName: candidate.handler.name,
       evidence: referenceEvidence(
-        "framework.fastapi.imported-router.include-router.decorator.local-function",
+        candidate.reExported
+          ? "framework.fastapi.reexported-router.include-router.decorator.local-function"
+          : "framework.fastapi.imported-router.include-router.decorator.local-function",
         "module",
         [candidate.handler.id],
         [],
-        [candidate.inclusionFilePath, candidate.routerFilePath]
+        [candidate.inclusionFilePath, ...candidate.resolutionPath]
       )
     });
   }
@@ -3666,7 +3765,7 @@ interface ResolvedSanicBlueprintGroupMember {
   readonly reExported: boolean;
 }
 
-function compactSanicResolutionPath(parts: readonly string[]): readonly string[] {
+function compactPythonModuleResolutionPath(parts: readonly string[]): readonly string[] {
   const compacted: string[] = [];
   for (const part of parts) {
     if (compacted.at(-1) !== part) {
@@ -3759,7 +3858,7 @@ function resolveExactSanicBlueprintTarget(input: {
     ? null
     : {
         ...target,
-        resolutionPath: compactSanicResolutionPath([input.filePath, ...target.resolutionPath]),
+        resolutionPath: compactPythonModuleResolutionPath([input.filePath, ...target.resolutionPath]),
         reExported: true
       };
 }
@@ -3833,7 +3932,7 @@ function resolveSanicBlueprintGroupMembers(input: {
         blueprint: target.blueprint,
         prefixes: [input.group.prefix, target.blueprint.prefix],
         groupDepth: 1,
-        resolutionPath: compactSanicResolutionPath([
+        resolutionPath: compactPythonModuleResolutionPath([
           input.groupFilePath,
           ...target.resolutionPath
         ]),
@@ -3858,7 +3957,10 @@ function resolveSanicBlueprintGroupMembers(input: {
         blueprint: child.blueprint,
         prefixes: [input.group.prefix, ...child.prefixes],
         groupDepth: child.groupDepth + 1,
-        resolutionPath: compactSanicResolutionPath([input.groupFilePath, ...child.resolutionPath]),
+        resolutionPath: compactPythonModuleResolutionPath([
+          input.groupFilePath,
+          ...child.resolutionPath
+        ]),
         reExported: target.reExported || child.reExported
       });
     }
@@ -4019,7 +4121,7 @@ function projectSanicImportedBlueprintRoutes(input: {
             path,
             groupDepth: member.groupDepth,
             groupNamePrefix: target.kind === "group" ? target.group.namePrefix : null,
-            resolutionPath: compactSanicResolutionPath([
+            resolutionPath: compactPythonModuleResolutionPath([
               registrationFilePath,
               ...target.resolutionPath,
               ...member.resolutionPath

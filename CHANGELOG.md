@@ -6,6 +6,26 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.158.0] - 2026-08-02
+
+### Added
+
+- FastAPI <code>APIRouter</code> targets can now resolve through a final chain of single-name, one-leading-dot relative imports exported by regular-package <code>__init__.py</code> files.
+- Exact module-stage evidence records the mounting module, every initializer hop, and the direct router declaration module under <code>framework.fastapi.reexported-router.include-router.decorator.local-function</code>.
+- New extractor and service coverage proves nested initializer chains, aliases, rebinding rejection, non-initializer rejection, and unresolved-export rejection while preserving direct FastAPI router evidence.
+
+### Compatibility
+
+- The artifact-facts extractor advances to <code>multi-language-ast-v139</code> and the project resolver to <code>project-resolver-v43</code>. Existing graphs and SQLite schema remain readable; the next explicit <code>sync</code> re-extracts Python facts and reprojects affected routes.
+
+### Deliberate limits
+
+- Re-exports are limited to final, unrebound, single-name imports in regular-package <code>__init__.py</code> files. Parent-relative imports, import lists, star imports, copied values, non-initializer exports, dynamic composition, namespace packages, and ambiguous or missing targets remain non-exact.
+
+### Comparison notes
+
+- In the inspected CodeGraph baseline source tree at <code>572d22bfbe82602080e457bec655f72e3314f9ef</code>, the reviewed FastAPI path directly extracts decorator routes. The reviewed source did not establish an equivalent <code>include_router</code> package re-export composition path. SymbolLattice independently adds this narrow, auditable static-composition path; runtime framework composition remains outside exact analysis.
+
 ## [0.157.0] - 2026-08-02
 
 ### Added

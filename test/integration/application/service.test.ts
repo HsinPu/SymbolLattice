@@ -4538,6 +4538,104 @@ describe("SymbolLatticeService", () => {
     ]);
   });
 
+  it("projects FastAPI APIRouter exports through nested package initializers", async () => {
+    const projectPath = await createInlineProject({
+      "api/__init__.py": "",
+      "api/routers/__init__.py": "from .internal import public_router",
+      "api/routers/internal/__init__.py": "from .catalog import router as public_router",
+      "api/routers/internal/catalog.py": [
+        "from fastapi import APIRouter",
+        "router = APIRouter(prefix=\"/catalog\")",
+        "",
+        "@router.get(\"/health\")",
+        "async def health():",
+        "    return {\"ok\": True}"
+      ].join("\n"),
+      "api/main.py": [
+        "from fastapi import FastAPI",
+        "from .routers import public_router as mounted_router",
+        "app = FastAPI()",
+        "app.include_router(mounted_router, prefix=\"/v1\")"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath, { method: "GET" });
+    const routersFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "api/routers/__init__.py");
+    const internalFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "api/routers/internal/__init__.py");
+
+    expect(routersFacts?.fastApiRouterFacts).toMatchObject({
+      reExports: [
+        {
+          exportedName: "public_router",
+          importedRouterName: "public_router",
+          moduleSpecifier: ".internal"
+        }
+      ]
+    });
+    expect(internalFacts?.fastApiRouterFacts).toMatchObject({
+      reExports: [
+        {
+          exportedName: "public_router",
+          importedRouterName: "router",
+          moduleSpecifier: ".catalog"
+        }
+      ]
+    });
+    expect(routes.routes).toMatchObject([
+      {
+        method: "GET",
+        path: "/v1/catalog/health",
+        route: {
+          kind: "route",
+          name: "GET /v1/catalog/health",
+          filePath: "api/routers/internal/catalog.py"
+        },
+        edge: {
+          kind: "routes",
+          resolution: "exact",
+          evidence: {
+            ruleId: "framework.fastapi.reexported-router.include-router.decorator.local-function",
+            stage: "module",
+            resolutionPath: [
+              "api/main.py",
+              "api/routers/__init__.py",
+              "api/routers/internal/__init__.py",
+              "api/routers/internal/catalog.py"
+            ]
+          }
+        },
+        handler: { qualifiedName: "api/routers/internal/catalog.py#health" }
+      }
+    ]);
+  });
+
+  it("rejects unresolved FastAPI APIRouter package initializer exports", async () => {
+    const projectPath = await createInlineProject({
+      "api/__init__.py": "",
+      "api/routers/__init__.py": "from .missing import router as public_router",
+      "api/main.py": [
+        "from fastapi import FastAPI",
+        "from .routers import public_router",
+        "app = FastAPI()",
+        "app.include_router(public_router, prefix=\"/v1\")"
+      ].join("\n")
+    });
+    const service = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+
+    await expect(service.routes(projectPath, { method: "GET" })).resolves.toMatchObject({
+      routes: []
+    });
+  });
+
   it("does not project FastAPI router modules without a proven package boundary", async () => {
     const projectPath = await createInlineProject({
       "api/routers/catalog.py": [
