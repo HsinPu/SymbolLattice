@@ -6,6 +6,26 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.138.0] - 2026-08-01
+
+### Added
+
+- GoFrame v1/v2 standard-router projection now recognizes one direct function-local controller `var` initializer before registration: `var controller = &Controller{}; group.Bind(controller)`. It also accepts an explicit pointer type only when it exactly matches the direct `&Controller{}` or `new(Controller)` value.
+- Typed local-module controller aliases preserve the same exact controller, Bind, literal Group/Domain, source-range, and root-`go.mod` evidence as the direct form.
+- New unit and service coverage verifies inferred and matching typed `var` aliases, `new(...)`, cross-package default imports, callback shadowing, rebinding rejection, and rejection of an `interface{}` container.
+
+### Compatibility
+
+- The artifact-facts extractor advances to `multi-language-ast-v119`. Existing graphs and SQLite schema remain readable; the next explicit `sync` re-extracts Go facts and reprojects routes. The project resolver remains `project-resolver-v37`.
+
+### Deliberate limits
+
+- Var-alias support accepts exactly one direct local VarSpec with one initializer. Grouped or multiple specs, multiple values, globals, non-pointer declared types, mismatched pointer types, factory var aliases, forwarding aliases, branches, containers, dynamic values, callback shadows, and later assignments remain non-exact.
+
+### Comparison notes
+
+- The inspected CodeGraph GoFrame path still uses a heuristic request-type-to-method join without Bind-target or Group-prefix reconstruction. SymbolLattice is narrower for dynamic runtime registration, but the newly bounded typed-var slice preserves exact static registration and module evidence.
+
 ## [0.137.0] - 2026-08-01
 
 ### Added
@@ -2560,7 +2580,8 @@ No unreleased changes.
 - Explicit full indexing, caller/callee/impact queries, and read-only MCP exploration.
 - `exact`, `heuristic`, and `unresolved` relationship states.
 
-[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.137.0...HEAD
+[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.138.0...HEAD
+[0.138.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.137.0...v0.138.0
 [0.137.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.136.0...v0.137.0
 [0.136.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.135.0...v0.136.0
 [0.135.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.134.0...v0.135.0

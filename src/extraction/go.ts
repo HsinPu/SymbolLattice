@@ -1714,6 +1714,23 @@ function staticGoFrameStandardRouterControllerReference(
   };
 }
 
+function staticGoFrameStandardRouterControllerPointerTypeReference(
+  input: GoExtractFileFactsInput,
+  node: GoSyntaxNode
+): StaticGoFrameNamedTypeReference | null {
+  const match =
+    /^\*\s*(?:([A-Za-z_][A-Za-z0-9_]*)\s*\.\s*)?([A-Z][A-Za-z0-9_]*)$/u.exec(
+      nodeText(input, node)
+    );
+  if (match?.[2] === undefined) {
+    return null;
+  }
+  return {
+    name: match[2],
+    ...(match[1] === undefined ? {} : { packageAlias: match[1] })
+  };
+}
+
 function staticGoFrameStandardRouterFactoryReference(
   input: GoExtractFileFactsInput,
   node: GoSyntaxNode
@@ -1850,8 +1867,8 @@ function staticGoFrameObjectBinding(
 
 /**
  * Retain one local direct controller pointer only for a direct short
- * declaration. Later assignments invalidate the alias before it can prove a
- * Bind target.
+ * declaration or a single direct var initializer. Later assignments invalidate
+ * the alias before it can prove a Bind target.
  */
 function staticGoFrameControllerAliasBinding(
   input: GoExtractFileFactsInput,
@@ -1862,24 +1879,66 @@ function staticGoFrameControllerAliasBinding(
     return null;
   }
   const children = directChildren(node);
-  const target = children[0];
-  const operator = children[1];
-  const value = children[2];
+  let target: GoSyntaxNode | undefined;
+  let value: GoSyntaxNode | undefined;
+  let declaredType: GoSyntaxNode | undefined;
+  const shortDeclarationTarget = children[0];
+  const shortDeclarationOperator = children[1];
+  const shortDeclarationValue = children[2];
   if (
-    children.length !== 3 ||
-    target?.name !== "DefName" ||
-    operator === undefined ||
-    nodeText(input, operator) !== ":=" ||
-    value === undefined
+    children.length === 3 &&
+    shortDeclarationTarget?.name === "DefName" &&
+    shortDeclarationOperator !== undefined &&
+    nodeText(input, shortDeclarationOperator) === ":=" &&
+    shortDeclarationValue !== undefined
   ) {
-    return null;
+    target = shortDeclarationTarget;
+    value = shortDeclarationValue;
+  } else {
+    const specifications = children.filter((child) => child.name === "VarSpec");
+    if (
+      specifications.length !== 1 ||
+      children.some((child) => nodeText(input, child) === "(" || nodeText(input, child) === ")")
+    ) {
+      return null;
+    }
+    const specification = specifications[0];
+    if (specification === undefined) {
+      return null;
+    }
+    const specificationChildren = directChildren(specification);
+    const operatorIndex = specificationChildren.findIndex(
+      (child) => nodeText(input, child) === "="
+    );
+    const specificationTarget = specificationChildren[0];
+    const specificationValue = specificationChildren.at(-1);
+    if (
+      specificationTarget?.name !== "DefName" ||
+      specificationValue === undefined ||
+      operatorIndex !== specificationChildren.length - 2 ||
+      (operatorIndex !== 1 && operatorIndex !== 2)
+    ) {
+      return null;
+    }
+    target = specificationTarget;
+    value = specificationValue;
+    declaredType = operatorIndex === 2 ? specificationChildren[1] : undefined;
   }
   const name = identifierText(input, target);
-  const controller = staticGoFrameStandardRouterControllerReference(input, value);
+  const controller =
+    value === undefined ? null : staticGoFrameStandardRouterControllerReference(input, value);
+  const declaredController =
+    declaredType === undefined
+      ? undefined
+      : staticGoFrameStandardRouterControllerPointerTypeReference(input, declaredType);
   const controllerScopeName = controller?.packageAlias ?? controller?.name;
   return name === null ||
     name === "_" ||
     controller === null ||
+    (declaredController !== undefined &&
+      (declaredController === null ||
+        declaredController.name !== controller.name ||
+        declaredController.packageAlias !== controller.packageAlias)) ||
     shadowedNames.has(name) ||
     (controllerScopeName !== undefined && shadowedNames.has(controllerScopeName))
     ? null
