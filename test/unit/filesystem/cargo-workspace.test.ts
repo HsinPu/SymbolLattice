@@ -186,7 +186,7 @@ describe("Cargo workspace crate module resolution", () => {
     const projectPath = await createProject({
       "Cargo.toml": [
         "[workspace]",
-        'members = ["apps/server", "crates/api-routes"]',
+        'members = ["apps/server/", "crates/api-routes/"]',
         "",
         "[workspace.dependencies]",
         'api = { package = "api-routes", path = "crates/api-routes" }'
@@ -317,5 +317,128 @@ describe("Cargo workspace crate module resolution", () => {
       strategy: "unresolved",
       configurationPaths: ["Cargo.toml", "apps/server/Cargo.toml"]
     });
+  });
+
+  it("resolves globbed Cargo members while honoring glob exclusions", async () => {
+    const projectPath = await createProject({
+      "Cargo.toml": [
+        "[workspace]",
+        'members = ["apps/?erver", "crates/**"]',
+        'exclude = ["crates/ignored"]'
+      ].join("\n"),
+      "apps/server/Cargo.toml": [
+        "[package]",
+        'name = "server"',
+        "",
+        "[dependencies]",
+        'api-routes = { path = "../../crates/api-routes" }',
+        'ignored = { path = "../../crates/ignored" }'
+      ].join("\n"),
+      "apps/server/src/main.rs": [
+        "use api_routes::routes::configure;",
+        "use ignored::hidden;"
+      ].join("\n"),
+      "crates/api-routes/Cargo.toml": [
+        "[package]",
+        'name = "api-routes"'
+      ].join("\n"),
+      "crates/api-routes/src/lib.rs": "pub mod routes;",
+      "crates/ignored/Cargo.toml": [
+        "[package]",
+        'name = "ignored"'
+      ].join("\n"),
+      "crates/ignored/src/lib.rs": "pub fn hidden() {}",
+      "crates/ignored/nested/Cargo.toml": [
+        "[package]",
+        'name = "ignored-nested"'
+      ].join("\n"),
+      "crates/ignored/nested/src/lib.rs": "pub fn hidden() {}"
+    });
+    const scan = await new FileSystemSourceCatalog().scan(projectPath);
+
+    expect(scan.moduleResolver.resolve("apps/server/src/main.rs", "api_routes")).toEqual({
+      targetFilePath: "crates/api-routes/src/lib.rs",
+      strategy: "cargo-workspace-crate",
+      configurationPaths: [
+        "Cargo.toml",
+        "apps/server/Cargo.toml",
+        "crates/api-routes/Cargo.toml"
+      ]
+    });
+    expect(scan.moduleResolver.resolve("apps/server/src/main.rs", "ignored")).toEqual({
+      targetFilePath: null,
+      strategy: "unresolved",
+      configurationPaths: ["Cargo.toml", "apps/server/Cargo.toml"]
+    });
+    expect(
+      scan.indexInputs.configurationInputs
+        .filter((input) => input.kind === "cargo-workspace-package-manifest")
+        .map((input) => input.path)
+    ).toEqual(["apps/server/Cargo.toml", "crates/api-routes/Cargo.toml"]);
+    expect(scan.indexInputs.configurationInputs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "cargo-workspace-member-glob",
+          path: ".symbol-lattice/cargo-workspace-members.json",
+          state: "present"
+        })
+      ])
+    );
+  });
+
+  it("keeps a literal Cargo member when the same path is listed in exclude", async () => {
+    const projectPath = await createProject({
+      "Cargo.toml": [
+        "[workspace]",
+        'members = ["apps/server/", "crates/api-routes/"]',
+        'exclude = ["crates/api-routes"]'
+      ].join("\n"),
+      "apps/server/Cargo.toml": [
+        "[package]",
+        'name = "server"',
+        "",
+        "[dependencies]",
+        'api-routes = { path = "../../crates/api-routes" }'
+      ].join("\n"),
+      "apps/server/src/main.rs": "use api_routes::routes::configure;",
+      "crates/api-routes/Cargo.toml": [
+        "[package]",
+        'name = "api-routes"'
+      ].join("\n"),
+      "crates/api-routes/src/lib.rs": "pub mod routes;"
+    });
+    const scan = await new FileSystemSourceCatalog().scan(projectPath);
+
+    expect(scan.moduleResolver.resolve("apps/server/src/main.rs", "api_routes")).toEqual({
+      targetFilePath: "crates/api-routes/src/lib.rs",
+      strategy: "cargo-workspace-crate",
+      configurationPaths: [
+        "Cargo.toml",
+        "apps/server/Cargo.toml",
+        "crates/api-routes/Cargo.toml"
+      ]
+    });
+  });
+
+  it("fails closed for an invalid Cargo member glob", async () => {
+    const projectPath = await createProject({
+      "Cargo.toml": [
+        "[workspace]",
+        'members = ["apps/[server"]'
+      ].join("\n"),
+      "apps/server/src/main.rs": "use api::routes::configure;"
+    });
+    const scan = await new FileSystemSourceCatalog().scan(projectPath);
+
+    expect(scan.moduleResolver.resolve("apps/server/src/main.rs", "api")).toEqual({
+      targetFilePath: null,
+      strategy: "unresolved",
+      configurationPaths: ["Cargo.toml"]
+    });
+    expect(scan.indexInputs.configurationInputs).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: "cargo-workspace-member-glob" })
+      ])
+    );
   });
 });

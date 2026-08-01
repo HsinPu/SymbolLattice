@@ -6,6 +6,28 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.122.0] - 2026-08-01
+
+### Added
+
+- Cargo workspace resolution now expands common `[workspace].members` globs (`*`, `?`, and `**`) and applies `[workspace].exclude` while selecting glob candidates. Explicit literal members retain Cargo precedence over the exclusion list.
+- Glob expansion walks only project-relative directories, skips the same hard-excluded directories as source discovery, and fails closed for unsafe or unsupported patterns instead of guessing a member.
+- Each globbed workspace persists a deterministic `cargo-workspace-member-glob` configuration snapshot. A newly added matching `Cargo.toml` therefore marks the graph stale even if it has no Rust source yet.
+
+### Compatibility
+
+- The project resolver advances to `project-resolver-v32` and the project-input identity advances to `project-inputs-v3`. Existing graphs remain readable; the next explicit `sync` or fresh `init` rebuilds their Cargo membership and freshness inputs. Artifact-fact and SQLite schemas are unchanged.
+
+### Deliberate limits
+
+- Cargo glob handling is intentionally limited to `*`, `?`, and `**`. Character classes, brace and `!` patterns, Cargo's implicit path-dependency membership, registry/transitive/dev/build dependencies, non-inline dependency tables, target-specific dependency sections, custom library paths, and crates without a scanned `src/lib.rs` remain unresolved.
+- Cross-crate Actix projection remains limited to one or two direct module hops and literal callbacks/routes. Re-exports, `#[path]`, inline modules, macros, wrappers, closures, and dynamic paths remain unresolved.
+
+### Comparison notes
+
+- The checked CodeGraph Cargo helper expands `members` with `picomatch` and a bounded directory walk, but its shown member parser does not apply `[workspace].exclude`. SymbolLattice adds exclusion handling, explicit freshness tracking, and local-path/package/module proof; its glob grammar is currently narrower than CodeGraph's `picomatch` surface.
+- CodeGraph remains ahead in daemon lifecycle, socket/PID registry, cross-client coordination, worker-pool concurrency, and broader semantic resolution. v0.122 is a verified Cargo-aware route-analysis increment, not a general parity claim.
+
 ## [0.121.0] - 2026-08-01
 
 ### Added
@@ -2228,7 +2250,8 @@ No unreleased changes.
 - Explicit full indexing, caller/callee/impact queries, and read-only MCP exploration.
 - `exact`, `heuristic`, and `unresolved` relationship states.
 
-[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.121.0...HEAD
+[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.122.0...HEAD
+[0.122.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.121.0...v0.122.0
 [0.121.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.120.0...v0.121.0
 [0.35.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.34.0...v0.35.0
 [0.34.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.33.0...v0.34.0

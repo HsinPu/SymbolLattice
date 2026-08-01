@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 
 import {
@@ -11,6 +11,7 @@ import type {
   ResolvedModule,
   SourceDocument
 } from "../../ports/source-catalog.js";
+import { HARD_EXCLUDED_DIRECTORY_NAMES, hashSource } from "./discovery.js";
 import { readProjectConfigurationInput } from "./project-inputs.js";
 
 interface LoadedCargoManifest {
@@ -40,14 +41,21 @@ interface CargoWorkspacePackage {
   readonly pathDependencies: readonly CargoPathDependency[];
 }
 
+interface CargoWorkspacePattern {
+  readonly raw: string;
+  readonly segments: readonly string[];
+  readonly hasGlob: boolean;
+}
+
 export interface CargoWorkspaceProjectModuleResolver {
   readonly moduleResolver: ProjectModuleResolver;
-  /** Root and explicit member manifests persisted with the graph generation. */
+  /** Root, selected member manifests, and any Cargo member-glob snapshot. */
   readonly configurationInputs: readonly ProjectConfigurationInput[];
 }
 
 const RUST_CRATE_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/u;
 const CARGO_WORKSPACE_INHERITANCE_FIELDS = new Set(["workspace", "optional", "features"]);
+const CARGO_WORKSPACE_MEMBER_GLOB_INPUT_PATH = ".symbol-lattice/cargo-workspace-members.json";
 
 function configurationError(path: string, message: string): ProjectConfigurationError {
   return new ProjectConfigurationError(`Invalid Cargo workspace configuration at ${path}: ${message}`);
@@ -486,10 +494,259 @@ function parseWorkspaceInheritedPathDependencies(
   );
 }
 
-function memberRootPath(projectPath: string, member: string): string | null {
-  if (member === "" || /[*?{}!]/u.test(member)) {
+function parseCargoWorkspacePathSegments(value: string): readonly string[] | null {
+  const normalized = value.replaceAll("\\", "/");
+  if (
+    value === "" ||
+    value.includes("\u0000") ||
+    isAbsolute(normalized) ||
+    /^[A-Za-z]:\//u.test(normalized) ||
+    normalized.startsWith("/")
+  ) {
     return null;
   }
+
+  const segments: string[] = [];
+  const rawSegments = normalized.split("/");
+  for (const [index, segment] of rawSegments.entries()) {
+    if (segment === "") {
+      if (index !== rawSegments.length - 1) {
+        return null;
+      }
+      continue;
+    }
+    if (segment === ".") {
+      continue;
+    }
+    if (segment === ".." || HARD_EXCLUDED_DIRECTORY_NAMES.has(segment)) {
+      return null;
+    }
+    segments.push(segment);
+  }
+  if (segments.length === 0) {
+    return null;
+  }
+
+  return segments;
+}
+
+function parseCargoWorkspacePattern(value: string): CargoWorkspacePattern | null {
+  const segments = parseCargoWorkspacePathSegments(value);
+  if (
+    segments === null ||
+    segments.some(
+      (segment) =>
+        segment.includes("{") ||
+        segment.includes("}") ||
+        segment.includes("!") ||
+        segment.includes("[") ||
+        segment.includes("]")
+    )
+  ) {
+    return null;
+  }
+
+  return {
+    raw: value,
+    segments,
+    hasGlob: segments.some((segment) => segment.includes("*") || segment.includes("?"))
+  };
+}
+
+function parseCargoWorkspacePatterns(rawValue: string | undefined): readonly CargoWorkspacePattern[] | null {
+  if (rawValue === undefined) {
+    return [];
+  }
+
+  const values = parseTomlStringArray(rawValue);
+  if (values === null) {
+    return null;
+  }
+
+  const patterns: CargoWorkspacePattern[] = [];
+  for (const value of values) {
+    const pattern = parseCargoWorkspacePattern(value);
+    if (pattern === null) {
+      return null;
+    }
+    patterns.push(pattern);
+  }
+  return patterns;
+}
+
+function parseCargoWorkspaceExcludePaths(rawValue: string | undefined): readonly string[] | null {
+  if (rawValue === undefined) {
+    return [];
+  }
+
+  const values = parseTomlStringArray(rawValue);
+  if (values === null) {
+    return null;
+  }
+
+  const paths: string[] = [];
+  for (const value of values) {
+    const segments = parseCargoWorkspacePathSegments(value);
+    if (segments === null) {
+      return null;
+    }
+    paths.push(segments.join("/"));
+  }
+  return paths;
+}
+
+function cargoGlobSegmentMatches(pattern: string, value: string): boolean {
+  let patternIndex = 0;
+  let valueIndex = 0;
+  let wildcardIndex = -1;
+  let wildcardValueIndex = -1;
+
+  while (valueIndex < value.length) {
+    const patternCharacter = pattern[patternIndex];
+    if (patternCharacter === value[valueIndex] || patternCharacter === "?") {
+      patternIndex += 1;
+      valueIndex += 1;
+      continue;
+    }
+
+    if (patternCharacter === "*") {
+      wildcardIndex = patternIndex;
+      patternIndex += 1;
+      wildcardValueIndex = valueIndex;
+      continue;
+    }
+
+    if (wildcardIndex !== -1) {
+      patternIndex = wildcardIndex + 1;
+      wildcardValueIndex += 1;
+      valueIndex = wildcardValueIndex;
+      continue;
+    }
+
+    return false;
+  }
+
+  while (pattern[patternIndex] === "*") {
+    patternIndex += 1;
+  }
+
+  return patternIndex === pattern.length;
+}
+
+function cargoWorkspacePathMatches(
+  patternSegments: readonly string[],
+  pathSegments: readonly string[],
+  patternIndex = 0,
+  pathIndex = 0
+): boolean {
+  const patternSegment = patternSegments[patternIndex];
+  if (patternSegment === undefined) {
+    return pathIndex === pathSegments.length;
+  }
+
+  if (patternSegment === "**") {
+    if (patternIndex === patternSegments.length - 1) {
+      return true;
+    }
+
+    for (let candidateIndex = pathIndex; candidateIndex <= pathSegments.length; candidateIndex += 1) {
+      if (cargoWorkspacePathMatches(patternSegments, pathSegments, patternIndex + 1, candidateIndex)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  const pathSegment = pathSegments[pathIndex];
+  return (
+    pathSegment !== undefined &&
+    cargoGlobSegmentMatches(patternSegment, pathSegment) &&
+    cargoWorkspacePathMatches(patternSegments, pathSegments, patternIndex + 1, pathIndex + 1)
+  );
+}
+
+function matchesCargoWorkspacePatterns(
+  relativeRootPath: string,
+  patterns: readonly CargoWorkspacePattern[]
+): boolean {
+  return patterns.some((pattern) =>
+    cargoWorkspacePathMatches(pattern.segments, relativeRootPath.split("/"))
+  );
+}
+
+function isCargoWorkspacePathExcluded(
+  relativeRootPath: string,
+  excludePaths: readonly string[]
+): boolean {
+  return excludePaths.some(
+    (excludePath) =>
+      relativeRootPath === excludePath || relativeRootPath.startsWith(`${excludePath}/`)
+  );
+}
+
+async function discoverGlobbedCargoWorkspaceMemberManifestPaths(
+  projectPath: string,
+  memberPatterns: readonly CargoWorkspacePattern[],
+  excludePaths: readonly string[]
+): Promise<readonly string[]> {
+  const manifestPaths: string[] = [];
+
+  async function visit(directoryPath: string, relativeDirectoryPath: string): Promise<void> {
+    const entries = await readdir(directoryPath, { withFileTypes: true });
+    for (const entry of entries.sort((left, right) => compareStableText(left.name, right.name))) {
+      const childPath = resolve(directoryPath, entry.name);
+      const childRelativePath =
+        relativeDirectoryPath === "."
+          ? entry.name
+          : `${relativeDirectoryPath}/${entry.name}`;
+
+      if (entry.isDirectory()) {
+        if (!HARD_EXCLUDED_DIRECTORY_NAMES.has(entry.name)) {
+          await visit(childPath, childRelativePath);
+        }
+        continue;
+      }
+
+      if (
+        entry.isFile() &&
+        entry.name === "Cargo.toml" &&
+        relativeDirectoryPath !== "." &&
+        matchesCargoWorkspacePatterns(relativeDirectoryPath, memberPatterns) &&
+        !isCargoWorkspacePathExcluded(relativeDirectoryPath, excludePaths)
+      ) {
+        manifestPaths.push(childRelativePath);
+      }
+    }
+  }
+
+  if (memberPatterns.length > 0) {
+    await visit(projectPath, ".");
+  }
+
+  return manifestPaths.sort(compareStableText);
+}
+
+function cargoWorkspaceMemberGlobInput(
+  memberPatterns: readonly CargoWorkspacePattern[],
+  excludePaths: readonly string[],
+  manifestPaths: readonly string[]
+): ProjectConfigurationInput {
+  const snapshot = JSON.stringify({
+    memberPatterns: memberPatterns.map((pattern) => pattern.raw),
+    excludePaths,
+    manifestPaths
+  });
+
+  return {
+    kind: "cargo-workspace-member-glob",
+    path: CARGO_WORKSPACE_MEMBER_GLOB_INPUT_PATH,
+    state: "present",
+    contentHash: hashSource(snapshot)
+  };
+}
+
+function memberRootPath(projectPath: string, member: string): string | null {
   const absolutePath = resolve(projectPath, member);
   return projectRelativePath(projectPath, absolutePath);
 }
@@ -511,8 +768,9 @@ function packageForFile(
  * Resolves a Rust crate only when the importing source belongs to an explicit
  * Cargo workspace member and that member declares either one direct inline-table
  * path dependency or an explicit `{ workspace = true }` inheritance from a
- * root `[workspace.dependencies]` local path. It deliberately does not infer
- * registry, glob, or transitive dependencies.
+ * root `[workspace.dependencies]` local path. It recognizes the common Cargo
+ * member-glob subset (`*`, `?`, and `**`) with excludes, but deliberately does
+ * not infer registry or transitive dependencies.
  */
 export async function createCargoWorkspaceProjectModuleResolver(input: {
   readonly projectPath: string;
@@ -540,9 +798,10 @@ export async function createCargoWorkspaceProjectModuleResolver(input: {
   const workspacePathDependencies = parsePathDependencies(rootManifest, "workspace.dependencies", {
     rejectOptional: true
   });
-  const rawMemberValues = rootManifest.sections.get("workspace")?.get("members");
-  const memberValues = rawMemberValues === undefined ? [] : parseTomlStringArray(rawMemberValues);
-  if (memberValues === null) {
+  const workspaceSection = rootManifest.sections.get("workspace");
+  const memberPatterns = parseCargoWorkspacePatterns(workspaceSection?.get("members"));
+  const excludePaths = parseCargoWorkspaceExcludePaths(workspaceSection?.get("exclude"));
+  if (memberPatterns === null || excludePaths === null) {
     return {
       moduleResolver: { resolve: (_fromFilePath, _moduleSpecifier) => unresolved([rootInput.path]) },
       configurationInputs: [rootInput]
@@ -550,17 +809,29 @@ export async function createCargoWorkspaceProjectModuleResolver(input: {
   }
 
   const memberRoots = new Set<string>();
-  for (const member of memberValues) {
-    const relativeRootPath = memberRootPath(projectPath, member);
+  const explicitMemberRoots = new Set<string>();
+  for (const memberPattern of memberPatterns.filter((pattern) => !pattern.hasGlob)) {
+    const relativeRootPath = memberRootPath(projectPath, memberPattern.segments.join("/"));
     if (relativeRootPath === null) {
       return {
         moduleResolver: { resolve: (_fromFilePath, _moduleSpecifier) => unresolved([rootInput.path]) },
         configurationInputs: [rootInput]
       };
     }
-    if (memberRoots.has(relativeRootPath)) {
-      throw configurationError(rootInput.path, `duplicate workspace member "${member}"`);
+    if (explicitMemberRoots.has(relativeRootPath)) {
+      throw configurationError(rootInput.path, `duplicate workspace member "${memberPattern.raw}"`);
     }
+    explicitMemberRoots.add(relativeRootPath);
+    memberRoots.add(relativeRootPath);
+  }
+  const globbedMemberPatterns = memberPatterns.filter((pattern) => pattern.hasGlob);
+  const globbedMemberManifestPaths = await discoverGlobbedCargoWorkspaceMemberManifestPaths(
+    projectPath,
+    globbedMemberPatterns,
+    excludePaths
+  );
+  for (const manifestPath of globbedMemberManifestPaths) {
+    const relativeRootPath = manifestPath.slice(0, -"/Cargo.toml".length);
     memberRoots.add(relativeRootPath);
   }
   const rootPackageName = parseTomlString(rootManifest.sections.get("package")?.get("name") ?? "");
@@ -656,6 +927,18 @@ export async function createCargoWorkspaceProjectModuleResolver(input: {
         };
       }
     },
-    configurationInputs: [rootInput, ...memberManifests.map((manifest) => manifest.input)]
+    configurationInputs: [
+      rootInput,
+      ...memberManifests.map((manifest) => manifest.input),
+      ...(globbedMemberPatterns.length === 0
+        ? []
+        : [
+            cargoWorkspaceMemberGlobInput(
+              memberPatterns,
+              excludePaths,
+              globbedMemberManifestPaths
+            )
+          ])
+    ]
   };
 }

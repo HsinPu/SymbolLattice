@@ -4817,6 +4817,43 @@ describe("SymbolLatticeService", () => {
     });
   });
 
+  it("marks a Cargo glob workspace stale when a matching member manifest appears", async () => {
+    const projectPath = await createInlineProject({
+      "Cargo.toml": [
+        "[workspace]",
+        'members = ["apps/*", "crates/*"]'
+      ].join("\n"),
+      "apps/server/Cargo.toml": [
+        "[package]",
+        'name = "server"',
+        "",
+        "[dependencies]",
+        'api-routes = { path = "../../crates/api-routes" }'
+      ].join("\n"),
+      "apps/server/src/main.rs": "use api_routes::routes::configure;",
+      "crates/api-routes/Cargo.toml": [
+        "[package]",
+        'name = "api-routes"'
+      ].join("\n"),
+      "crates/api-routes/src/lib.rs": "pub mod routes;"
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    await mkdir(join(projectPath, "crates", "telemetry"), { recursive: true });
+    await writeFile(
+      join(projectPath, "crates", "telemetry", "Cargo.toml"),
+      ["[package]", 'name = "telemetry"'].join("\n"),
+      "utf8"
+    );
+
+    expect(await service.getStatus(projectPath)).toMatchObject({
+      stale: true,
+      staleReasons: ["project-inputs-changed"]
+    });
+  });
+
   it("projects Rust Actix ServiceConfig routes through a workspace-inherited Cargo local path dependency", async () => {
     const projectPath = await createInlineProject({
       "Cargo.toml": [

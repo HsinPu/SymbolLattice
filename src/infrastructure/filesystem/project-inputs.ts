@@ -239,6 +239,8 @@ function configurationInputKindOrder(kind: ProjectConfigurationInputKind): numbe
       return 6;
     case "cargo-workspace-package-manifest":
       return 7;
+    case "cargo-workspace-member-glob":
+      return 8;
   }
 }
 
