@@ -4003,6 +4003,110 @@ describe("SymbolLatticeService", () => {
     expect(routes.routes).toEqual([]);
   });
 
+  it("projects package-relative Sanic Blueprint and group exports through nested package initializers", async () => {
+    const projectPath = await createInlineProject({
+      "app/__init__.py": "",
+      "app/routes/__init__.py": "from .exports import public_api",
+      "app/routes/exports/__init__.py": "from .api import api as public_api",
+      "app/routes/exports/catalog.py": [
+        "from sanic import Blueprint as Router",
+        "catalog = Router(\"catalog\", url_prefix=\"/catalog\")",
+        "",
+        "@catalog.get(\"/items\")",
+        "async def items(request):",
+        "    return None"
+      ].join("\n"),
+      "app/routes/exports/api.py": [
+        "from sanic import Blueprint as Router",
+        "from .catalog import catalog as catalog_blueprint",
+        "api = Router.group(catalog_blueprint, url_prefix=\"/api\")"
+      ].join("\n"),
+      "app/health/__init__.py": "from .status import status as status_blueprint",
+      "app/health/status.py": [
+        "from sanic import Blueprint as Router",
+        "status = Router(\"status\", url_prefix=\"/status\")",
+        "",
+        "@status.get(\"/health\")",
+        "async def health(request):",
+        "    return None"
+      ].join("\n"),
+      "app/main.py": [
+        "from sanic import Sanic as App",
+        "from .routes import public_api as api_group",
+        "from .health import status_blueprint",
+        "app = App(\"symbol-lattice\")",
+        "app.blueprint(api_group, url_prefix=\"/v1\")",
+        "app.blueprint(status_blueprint, url_prefix=\"/v2\")"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath, { method: "GET" });
+
+    expect(routes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: "/v1/api/catalog/items",
+          route: expect.objectContaining({ filePath: "app/routes/exports/catalog.py" }),
+          handler: expect.objectContaining({ qualifiedName: "app/routes/exports/catalog.py#items" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.sanic.reexported-blueprint-group.app-blueprint.decorator.local-function",
+              stage: "module",
+              resolutionPath: [
+                "app/main.py",
+                "app/routes/__init__.py",
+                "app/routes/exports/__init__.py",
+                "app/routes/exports/api.py",
+                "app/routes/exports/catalog.py"
+              ]
+            })
+          })
+        }),
+        expect.objectContaining({
+          path: "/v2/status/health",
+          route: expect.objectContaining({ filePath: "app/health/status.py" }),
+          handler: expect.objectContaining({ qualifiedName: "app/health/status.py#health" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.sanic.reexported-blueprint.app-blueprint.decorator.local-function",
+              stage: "module",
+              resolutionPath: [
+                "app/main.py",
+                "app/health/__init__.py",
+                "app/health/status.py"
+              ]
+            })
+          })
+        })
+      ])
+    );
+  });
+
+  it("rejects unresolved package initializer Sanic Blueprint exports", async () => {
+    const projectPath = await createInlineProject({
+      "app/__init__.py": "",
+      "app/routes/__init__.py": "from .missing import api as public_api",
+      "app/main.py": [
+        "from sanic import Sanic as App",
+        "from .routes import public_api",
+        "app = App(\"symbol-lattice\")",
+        "app.blueprint(public_api, url_prefix=\"/v1\")"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath, { method: "GET" });
+
+    expect(routes.routes).toEqual([]);
+  });
+
   it("indexes Scala source plus Play conf/routes with exact package-class-method handler proof", async () => {
     const projectPath = await createInlineProject({
       "app/controllers/HealthController.scala": [

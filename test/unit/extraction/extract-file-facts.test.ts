@@ -3300,6 +3300,47 @@ describe("source extraction", () => {
     });
   });
 
+  it("retains final Sanic Blueprint exports from a package initializer", () => {
+    const facts = extractFileFacts({
+      filePath: "app/routes/__init__.py",
+      language: "python",
+      sourceText: "from .api import api as public_api"
+    });
+
+    expect(facts.sanicBlueprintFacts).toMatchObject({
+      blueprints: [],
+      groups: [],
+      reExports: [
+        {
+          exportedName: "public_api",
+          importedName: "api",
+          moduleSpecifier: ".api"
+        }
+      ],
+      routes: [],
+      importedBlueprintRegistrations: []
+    });
+  });
+
+  it("rejects rebounded and non-initializer Sanic Blueprint exports", () => {
+    const reboundFacts = extractFileFacts({
+      filePath: "app/routes/__init__.py",
+      language: "python",
+      sourceText: [
+        "from .api import api as public_api",
+        "public_api = build_blueprint()"
+      ].join("\n")
+    });
+    const regularModuleFacts = extractFileFacts({
+      filePath: "app/routes/exports.py",
+      language: "python",
+      sourceText: "from .api import api as public_api"
+    });
+
+    expect(reboundFacts.sanicBlueprintFacts).toMatchObject({ reExports: [] });
+    expect(regularModuleFacts.sanicBlueprintFacts).toMatchObject({ reExports: [] });
+  });
+
   it("rejects parent-relative and rebound imported Sanic Blueprint registrations", () => {
     const facts = extractFileFacts({
       filePath: "app/main.py",

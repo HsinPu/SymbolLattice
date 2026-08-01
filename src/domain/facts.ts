@@ -11,13 +11,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v137";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v138";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v41";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v42";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -338,12 +338,25 @@ export interface SanicBlueprintGroupDeclarationFact {
 }
 
 /**
+ * A final, single-name relative import exposed by a package `__init__.py`.
+ * The target remains unclassified until project resolution proves a Blueprint
+ * or Blueprint group in the source module.
+ */
+export interface SanicBlueprintReExportFact {
+  readonly exportedName: string;
+  readonly importedName: string;
+  readonly moduleSpecifier: string;
+  readonly range: SourceRange;
+}
+
+/**
  * Syntax-only facts used to project literal routes through directly imported
  * Sanic Blueprints and Blueprint groups in one proven Python package.
  */
 export interface SanicBlueprintFacts {
   readonly blueprints: readonly SanicBlueprintDeclarationFact[];
   readonly groups: readonly SanicBlueprintGroupDeclarationFact[];
+  readonly reExports: readonly SanicBlueprintReExportFact[];
   readonly routes: readonly SanicBlueprintRouteFact[];
   readonly importedBlueprintRegistrations: readonly SanicImportedBlueprintRegistrationFact[];
 }

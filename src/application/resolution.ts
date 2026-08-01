@@ -1893,8 +1893,9 @@ function mountedPythonRoutePathParts(parts: readonly string[]): string | null {
  * Resolves the intentionally narrow Python framework import surface. A direct
  * `from .module import binding` is accepted only when both files live in one
  * regular package whose traversed directories contain `__init__.py` markers.
- * This excludes namespace packages, parent-relative imports, import chains,
- * and circular self-imports until they have dedicated fact models.
+ * This primitive excludes namespace packages, parent-relative imports, and
+ * circular self-imports. A higher-level resolver may compose it only through
+ * persisted, final `__init__.py` re-export facts with dedicated safeguards.
  */
 function resolvePythonRelativeModule(
   knownFilePaths: ReadonlySet<string>,
@@ -3620,6 +3621,7 @@ interface ProjectedSanicImportedBlueprintRoute {
   /** Applies only to the outer imported group and enables distinct repeated mounts. */
   readonly groupNamePrefix: string | null;
   readonly resolutionPath: readonly string[];
+  readonly reExported: boolean;
 }
 
 function compareProjectedSanicImportedBlueprintRoute(
@@ -3644,11 +3646,15 @@ type ResolvedSanicBlueprintTarget =
       readonly kind: "blueprint";
       readonly filePath: string;
       readonly blueprint: SanicBlueprintDeclarationFact;
+      readonly resolutionPath: readonly string[];
+      readonly reExported: boolean;
     }
   | {
       readonly kind: "group";
       readonly filePath: string;
       readonly group: SanicBlueprintGroupDeclarationFact;
+      readonly resolutionPath: readonly string[];
+      readonly reExported: boolean;
     };
 
 interface ResolvedSanicBlueprintGroupMember {
@@ -3657,6 +3663,7 @@ interface ResolvedSanicBlueprintGroupMember {
   readonly prefixes: readonly string[];
   readonly groupDepth: number;
   readonly resolutionPath: readonly string[];
+  readonly reExported: boolean;
 }
 
 function compactSanicResolutionPath(parts: readonly string[]): readonly string[] {
@@ -3669,24 +3676,92 @@ function compactSanicResolutionPath(parts: readonly string[]): readonly string[]
   return compacted;
 }
 
-function resolveExactSanicBlueprintTarget(input: {
+function directSanicBlueprintTargets(input: {
   readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
   readonly filePath: string;
   readonly name: string;
+}): readonly ResolvedSanicBlueprintTarget[] {
+  const facts = input.factsByFile.get(input.filePath)?.sanicBlueprintFacts;
+  if (facts === undefined) {
+    return [];
+  }
+  const blueprints = facts.blueprints.filter((blueprint) => blueprint.name === input.name);
+  const groups = (facts.groups ?? []).filter((group) => group.name === input.name);
+  return [
+    ...blueprints.map((blueprint) => ({
+      kind: "blueprint" as const,
+      filePath: input.filePath,
+      blueprint,
+      resolutionPath: [input.filePath],
+      reExported: false
+    })),
+    ...groups.map((group) => ({
+      kind: "group" as const,
+      filePath: input.filePath,
+      group,
+      resolutionPath: [input.filePath],
+      reExported: false
+    }))
+  ];
+}
+
+/**
+ * Resolves a direct Sanic target or one final `__init__.py` re-export chain.
+ * Every hop is a persisted single-name relative import, and a cycle or any
+ * competing local/exported binding remains unresolved.
+ */
+function resolveExactSanicBlueprintTarget(input: {
+  readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
+  readonly knownFilePaths: ReadonlySet<string>;
+  readonly filePath: string;
+  readonly name: string;
+  readonly visited?: ReadonlySet<string>;
 }): ResolvedSanicBlueprintTarget | null {
+  const targetKey = `${input.filePath}\u0000${input.name}`;
+  const visited = input.visited ?? new Set<string>();
+  if (visited.has(targetKey)) {
+    return null;
+  }
   const facts = input.factsByFile.get(input.filePath)?.sanicBlueprintFacts;
   if (facts === undefined) {
     return null;
   }
-  const blueprints = facts.blueprints.filter((blueprint) => blueprint.name === input.name);
-  const groups = (facts.groups ?? []).filter((group) => group.name === input.name);
-  if (blueprints.length + groups.length !== 1) {
+  const directTargets = directSanicBlueprintTargets(input);
+  const reExports = (facts.reExports ?? []).filter((reExport) => reExport.exportedName === input.name);
+  if (directTargets.length + reExports.length !== 1) {
     return null;
   }
-  if (blueprints[0] !== undefined) {
-    return { kind: "blueprint", filePath: input.filePath, blueprint: blueprints[0] };
+  if (directTargets[0] !== undefined) {
+    return directTargets[0];
   }
-  return groups[0] === undefined ? null : { kind: "group", filePath: input.filePath, group: groups[0] };
+  const reExport = reExports[0];
+  if (reExport === undefined) {
+    return null;
+  }
+  const targetFilePath = resolvePythonRelativeModule(
+    input.knownFilePaths,
+    input.filePath,
+    reExport.moduleSpecifier
+  );
+  if (targetFilePath === null) {
+    return null;
+  }
+  const nestedVisited = new Set(visited);
+  nestedVisited.add(targetKey);
+  const target = resolveExactSanicBlueprintTarget({
+    factsByFile: input.factsByFile,
+    knownFilePaths: input.knownFilePaths,
+    filePath: targetFilePath,
+    name: reExport.importedName,
+    visited: nestedVisited
+  });
+  return target === null
+    ? null
+    : {
+        ...target,
+        resolutionPath: compactSanicResolutionPath([input.filePath, ...target.resolutionPath]),
+        reExported: true
+      };
 }
 
 function resolveSanicBlueprintGroupMemberTarget(input: {
@@ -3696,12 +3771,13 @@ function resolveSanicBlueprintGroupMemberTarget(input: {
   readonly member: SanicBlueprintGroupMemberFact;
 }): ResolvedSanicBlueprintTarget | null {
   if (input.member.kind === "blueprint" || input.member.kind === "group") {
-    const target = resolveExactSanicBlueprintTarget({
+    const targets = directSanicBlueprintTargets({
       factsByFile: input.factsByFile,
       filePath: input.groupFilePath,
       name: input.member.name
     });
-    return target === null || target.kind !== input.member.kind ? null : target;
+    const target = targets.length === 1 ? targets[0] : undefined;
+    return target === undefined || target.kind !== input.member.kind ? null : target;
   }
 
   const importedFilePath = resolvePythonRelativeModule(
@@ -3714,6 +3790,7 @@ function resolveSanicBlueprintGroupMemberTarget(input: {
   }
   return resolveExactSanicBlueprintTarget({
     factsByFile: input.factsByFile,
+    knownFilePaths: input.knownFilePaths,
     filePath: importedFilePath,
     name: input.member.importedName
   });
@@ -3756,7 +3833,11 @@ function resolveSanicBlueprintGroupMembers(input: {
         blueprint: target.blueprint,
         prefixes: [input.group.prefix, target.blueprint.prefix],
         groupDepth: 1,
-        resolutionPath: compactSanicResolutionPath([input.groupFilePath, target.filePath])
+        resolutionPath: compactSanicResolutionPath([
+          input.groupFilePath,
+          ...target.resolutionPath
+        ]),
+        reExported: target.reExported
       });
       continue;
     }
@@ -3777,7 +3858,8 @@ function resolveSanicBlueprintGroupMembers(input: {
         blueprint: child.blueprint,
         prefixes: [input.group.prefix, ...child.prefixes],
         groupDepth: child.groupDepth + 1,
-        resolutionPath: compactSanicResolutionPath([input.groupFilePath, ...child.resolutionPath])
+        resolutionPath: compactSanicResolutionPath([input.groupFilePath, ...child.resolutionPath]),
+        reExported: target.reExported || child.reExported
       });
     }
   }
@@ -3796,12 +3878,22 @@ function resolveSanicBlueprintGroupMembers(input: {
 function sanicImportedBlueprintRouteRuleId(input: {
   readonly groupDepth: number;
   readonly namedGroupMount: boolean;
+  readonly reExported: boolean;
 }): string {
   if (input.groupDepth === 0) {
-    return "framework.sanic.imported-blueprint.app-blueprint.decorator.local-function";
+    return input.reExported
+      ? "framework.sanic.reexported-blueprint.app-blueprint.decorator.local-function"
+      : "framework.sanic.imported-blueprint.app-blueprint.decorator.local-function";
   }
   if (input.namedGroupMount) {
-    return "framework.sanic.imported-named-blueprint-group.app-blueprint.decorator.local-function";
+    return input.reExported
+      ? "framework.sanic.reexported-named-blueprint-group.app-blueprint.decorator.local-function"
+      : "framework.sanic.imported-named-blueprint-group.app-blueprint.decorator.local-function";
+  }
+  if (input.reExported) {
+    return input.groupDepth === 1
+      ? "framework.sanic.reexported-blueprint-group.app-blueprint.decorator.local-function"
+      : "framework.sanic.reexported-nested-blueprint-group.app-blueprint.decorator.local-function";
   }
   return input.groupDepth === 1
     ? "framework.sanic.imported-blueprint-group.app-blueprint.decorator.local-function"
@@ -3866,6 +3958,7 @@ function projectSanicImportedBlueprintRoutes(input: {
       }
       const target = resolveExactSanicBlueprintTarget({
         factsByFile: input.factsByFile,
+        knownFilePaths: input.knownFilePaths,
         filePath: importedFilePath,
         name: registration.importedBlueprintName
       });
@@ -3881,7 +3974,8 @@ function projectSanicImportedBlueprintRoutes(input: {
                 blueprint: target.blueprint,
                 prefixes: [target.blueprint.prefix],
                 groupDepth: 0,
-                resolutionPath: [target.filePath]
+                resolutionPath: target.resolutionPath,
+                reExported: target.reExported
               }
             ]
           : (resolveSanicBlueprintGroupMembers({
@@ -3927,8 +4021,10 @@ function projectSanicImportedBlueprintRoutes(input: {
             groupNamePrefix: target.kind === "group" ? target.group.namePrefix : null,
             resolutionPath: compactSanicResolutionPath([
               registrationFilePath,
+              ...target.resolutionPath,
               ...member.resolutionPath
-            ])
+            ]),
+            reExported: target.reExported || member.reExported
           });
         }
       }
@@ -4063,7 +4159,8 @@ function projectSanicImportedBlueprintRoutes(input: {
       evidence: referenceEvidence(
         sanicImportedBlueprintRouteRuleId({
           groupDepth: candidate.groupDepth,
-          namedGroupMount: namedGroupMountKeys.has(mountKey)
+          namedGroupMount: namedGroupMountKeys.has(mountKey),
+          reExported: candidate.reExported
         }),
         "module",
         [candidate.handler.id],

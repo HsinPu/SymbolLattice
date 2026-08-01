@@ -17,6 +17,7 @@ import {
   type SanicBlueprintDeclarationFact,
   type SanicBlueprintGroupDeclarationFact,
   type SanicBlueprintGroupMemberFact,
+  type SanicBlueprintReExportFact,
   type SanicBlueprintRouteFact,
   type SanicImportedBlueprintRegistrationFact,
   type SourcePosition,
@@ -2886,6 +2887,10 @@ function combinedRoutePath(...parts: readonly string[]): string {
   return parts.join("");
 }
 
+function isPythonPackageInitializer(filePath: string): boolean {
+  return filePath.replaceAll("\\", "/").split("/").at(-1) === "__init__.py";
+}
+
 /**
  * Extracts conservative Python file facts. The Python surface records
  * declarations, containment, direct FastAPI/Flask/Sanic decorators, direct
@@ -2937,11 +2942,13 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
   const sanicBlueprintFacts: {
     readonly blueprints: SanicBlueprintDeclarationFact[];
     readonly groups: SanicBlueprintGroupDeclarationFact[];
+    readonly reExports: SanicBlueprintReExportFact[];
     readonly routes: SanicBlueprintRouteFact[];
     readonly importedBlueprintRegistrations: SanicImportedBlueprintRegistrationFact[];
   } = {
     blueprints: [],
     groups: [],
+    reExports: [],
     routes: [],
     importedBlueprintRegistrations: []
   };
@@ -3412,6 +3419,26 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
         members,
         range: rangeFor(lineStarts, group.node.from, group.node.to)
       });
+    }
+    if (isPythonPackageInitializer(input.filePath)) {
+      for (const imported of relativeSanicBlueprintImports) {
+        const finalImport = latestProvenSanicRelativeBlueprintImportBinding(
+          input,
+          topLevelNodes,
+          relativeSanicBlueprintImports,
+          imported.blueprintName,
+          input.sourceText.length
+        );
+        if (finalImport === null || nodeKey(finalImport.node) !== nodeKey(imported.node)) {
+          continue;
+        }
+        sanicBlueprintFacts.reExports.push({
+          exportedName: imported.blueprintName,
+          importedName: imported.importedBlueprintName,
+          moduleSpecifier: imported.moduleSpecifier,
+          range: rangeFor(lineStarts, imported.node.from, imported.node.to)
+        });
+      }
     }
 
     for (const application of starletteApplications) {

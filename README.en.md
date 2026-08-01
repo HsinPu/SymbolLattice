@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.156.0 is a developer preview and is not published to npm. Run it from source.
+> v0.157.0 is a developer preview and is not published to npm. Run it from source.
 
 SymbolLattice builds a queryable local code-symbol graph for a project. Every relation keeps its rule, resolution stage, and confidence; `exact`, `heuristic`, and `unresolved` evidence are never conflated.
 
@@ -41,12 +41,11 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 On Windows PowerShell, use `npm.cmd` if `npm` is unavailable. Index data stays in the target project's `.symbol-lattice/index.sqlite`.
 
-## v0.156.0
+## v0.157.0
 
-- Recursively projects Sanic `Blueprint.group(...)` routes across package-relative import paths in one proven Python package.
-- Supports direct and imported Blueprint members, nested groups, aliases, and exact composition of group, Blueprint, mount, and decorator prefixes.
-- Every projected cross-file group route carries the complete module-hop `resolutionPath` as evidence.
-- Repeated mounts in one app are exact only when each direct group has a distinct literal `name_prefix`; cycles, duplicate leaves, collisions, and unproven members create no exact route.
+- Resolves Sanic Blueprints and Blueprint groups through final, single-name re-export chains in regular-package `__init__.py` files.
+- Each projected route retains every initializer and source-module hop in its `resolutionPath` evidence.
+- Only unrebound, resolvable final exports are exact; missing sources, cycles, collisions, and dynamic overrides produce no exact route.
 
 ## Principles
 
@@ -56,8 +55,8 @@ On Windows PowerShell, use `npm.cmd` if `npm` is unavailable. Index data stays i
 
 ## Boundaries
 
-- Cross-file Sanic composition is limited to regular Python packages, one-leading-dot single-name relative imports, and top-level literal `Blueprint.group(...)` and `app.blueprint(...)` calls.
-- Dynamic composition, copied values, list/tuple members, re-exports, namespace packages, parent-relative imports, class views, WebSockets, `add_route`, versioning, and other registration options do not become exact.
+- Cross-file Sanic composition is limited to regular Python packages, one-leading-dot single-name relative imports, and top-level literal `Blueprint.group(...)` and `app.blueprint(...)` calls; `__init__.py` supports only final, unrebound same-shape export chains.
+- Dynamic composition, copied values, list/tuple members, re-exports outside initializers, namespace packages, parent-relative imports, class views, WebSockets, `add_route`, versioning, and other registration options do not become exact.
 - Reflection, runtime configuration, DI, macros, generated code, and ambiguous names are likewise never treated as static proof.
 
 ## Verification

@@ -6,6 +6,26 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.157.0] - 2026-08-02
+
+### Added
+
+- Sanic Blueprint and Blueprint-group targets can now resolve through a final chain of single-name, one-leading-dot relative imports exported by regular-package <code>__init__.py</code> files.
+- Exact module-stage evidence now records every initializer and source-module hop for a re-exported target, including nested group member resolution.
+- New extractor and service coverage proves nested initializer chains, direct Blueprint and group targets, rebinding rejection, non-initializer rejection, and unresolved-export rejection.
+
+### Compatibility
+
+- The artifact-facts extractor advances to <code>multi-language-ast-v138</code> and the project resolver to <code>project-resolver-v42</code>. Existing graphs and SQLite schema remain readable; the next explicit <code>sync</code> re-extracts Python facts and reprojects affected routes.
+
+### Deliberate limits
+
+- Re-exports are limited to final, unrebound, single-name imports in regular-package <code>__init__.py</code> files. Parent-relative imports, import lists, star imports, copied values, non-initializer exports, dynamic composition, namespace packages, and ambiguous or missing targets remain non-exact.
+
+### Comparison notes
+
+- The inspected CodeGraph baseline source tree at <code>572d22bfbe82602080e457bec655f72e3314f9ef</code> contains no <code>sanic</code> reference. SymbolLattice independently adds conservative, evidence-backed initializer re-export resolution for this framework-specific route surface.
+
 ## [0.156.0] - 2026-08-01
 
 ### Added
