@@ -11,13 +11,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v144";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v145";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v47";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v48";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -390,11 +390,11 @@ export interface DjangoUrlPatternRouteFact {
 }
 
 /** The Django URL-pattern factory used for one statically proven URLConf mount. */
-export type DjangoUrlconfInclusionFactory = "path" | "re_path";
+export type DjangoUrlconfInclusionFactory = "path" | "re_path" | "url";
 
 /**
- * A direct Django `path` or bounded static `re_path` composition where the
- * included URLConf arrived through a single-name package-relative import.
+ * A direct Django `path`, bounded static `re_path`, or legacy `url` composition
+ * where the included URLConf arrived through a single-name package-relative import.
  */
 export interface DjangoImportedUrlconfInclusionFact {
   /** Omitted only by artifact facts persisted before v0.163; defaults to `path`. */
@@ -408,9 +408,9 @@ export interface DjangoImportedUrlconfInclusionFact {
 }
 
 /**
- * A direct Django `path` or bounded static `re_path` composition with one
- * plain, dotted Python module name. Project resolution later proves the target
- * is unique and lies behind regular-package boundaries.
+ * A direct Django `path`, bounded static `re_path`, or legacy `url` composition
+ * with one plain, dotted Python module name. Project resolution later proves the
+ * target is unique and lies behind regular-package boundaries.
  */
 export interface DjangoLiteralUrlconfInclusionFact {
   /** Omitted only by artifact facts persisted before v0.163; defaults to `path`. */

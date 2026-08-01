@@ -3882,6 +3882,76 @@ describe("source extraction", () => {
     ]);
   });
 
+  it("extracts fully anchored literal legacy Django url urlpatterns with exact same-file handlers", () => {
+    const facts = extractFileFacts({
+      filePath: "project/urls.py",
+      language: "python",
+      sourceText: [
+        "from django.conf.urls import url as route",
+        "",
+        "def home(request):",
+        "    return None",
+        "",
+        "def health(request):",
+        "    return None",
+        "",
+        "urlpatterns = [",
+        "    route(r'^$', home),",
+        "    route(r'^health/$', health, name='health'),",
+        "]"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId,
+          edge.evidence?.stage,
+          edge.resolution,
+          edge.confidence
+        ])
+    ).toEqual([
+      [
+        "ALL /",
+        "project/urls.py#home",
+        "framework.django.direct-urlpatterns.url.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "ALL /health/",
+        "project/urls.py#health",
+        "framework.django.direct-urlpatterns.url.local-function",
+        "syntax",
+        "exact",
+        1
+      ]
+    ]);
+  });
+
+  it("rejects a legacy Django url name imported from the modern django.urls module", () => {
+    const facts = extractFileFacts({
+      filePath: "project/urls.py",
+      language: "python",
+      sourceText: [
+        "from django.urls import url",
+        "",
+        "def health(request):",
+        "    return None",
+        "",
+        "urlpatterns = [url(r'^health/$', health)]"
+      ].join("\n")
+    });
+
+    expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+    expect(facts.djangoUrlFacts).toMatchObject({ routes: [] });
+  });
+
   it("keeps a Django path route when its alias is rebound after urlpatterns", () => {
     const facts = extractFileFacts({
       filePath: "project/urls.py",
@@ -4099,6 +4169,49 @@ describe("source extraction", () => {
     });
   });
 
+  it("records static legacy Django url URLConf inclusion facts", () => {
+    const importedFacts = extractFileFacts({
+      filePath: "project/urls.py",
+      language: "python",
+      sourceText: [
+        "from django.conf.urls import include as mount, url as route",
+        "from .catalog import urls as catalog_urls",
+        "",
+        "urlpatterns = [route(r'^api/', mount(catalog_urls))]"
+      ].join("\n")
+    });
+    const literalFacts = extractFileFacts({
+      filePath: "project/urls.py",
+      language: "python",
+      sourceText: [
+        "from django.conf.urls import include as mount, url as route",
+        "",
+        "urlpatterns = [route('^internal/', mount('project.catalog.urls'))]"
+      ].join("\n")
+    });
+
+    expect(importedFacts.djangoUrlFacts).toMatchObject({
+      importedUrlconfInclusions: [
+        {
+          factory: "url",
+          urlconfName: "catalog_urls",
+          importedUrlconfName: "urls",
+          moduleSpecifier: ".catalog.urls",
+          prefix: "/api/"
+        }
+      ]
+    });
+    expect(literalFacts.djangoUrlFacts).toMatchObject({
+      literalUrlconfInclusions: [
+        {
+          factory: "url",
+          moduleSpecifier: "project.catalog.urls",
+          prefix: "/internal/"
+        }
+      ]
+    });
+  });
+
   it("rejects non-static Django re_path URLConf inclusion forms", () => {
     const facts = extractFileFacts({
       filePath: "project/urls.py",
@@ -4117,6 +4230,34 @@ describe("source extraction", () => {
     });
 
     expect(facts.djangoUrlFacts).toMatchObject({
+      importedUrlconfInclusions: [],
+      literalUrlconfInclusions: []
+    });
+  });
+
+  it("rejects non-static legacy Django url route and inclusion forms", () => {
+    const facts = extractFileFacts({
+      filePath: "project/urls.py",
+      language: "python",
+      sourceText: [
+        "from django.conf.urls import include, url",
+        "from .catalog import urls as catalog_urls",
+        "",
+        "def health(request):",
+        "    return None",
+        "",
+        "urlpatterns = [",
+        "    url('health/', health),",
+        "    url(r'^users/(?P<user_id>[0-9]+)/$', health),",
+        "    url(r'^escaped\\/$', health),",
+        "    url(r'^api/$', include(catalog_urls)),",
+        "    url(r'^internal', include('project.catalog.urls')),",
+        "]"
+      ].join("\n")
+    });
+
+    expect(facts.djangoUrlFacts).toMatchObject({
+      routes: [],
       importedUrlconfInclusions: [],
       literalUrlconfInclusions: []
     });

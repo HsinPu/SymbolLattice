@@ -4550,18 +4550,28 @@ function djangoUrlconfInclusionRuleId(
         ? "framework.django.reexported-urlconf.path.include.local-function"
         : "framework.django.imported-urlconf.path.include.local-function";
     }
+    if (factory === "re_path") {
+      return reExported
+        ? "framework.django.reexported-urlconf.re-path.include.local-function"
+        : "framework.django.imported-urlconf.re-path.include.local-function";
+    }
     return reExported
-      ? "framework.django.reexported-urlconf.re-path.include.local-function"
-      : "framework.django.imported-urlconf.re-path.include.local-function";
+      ? "framework.django.reexported-urlconf.url.include.local-function"
+      : "framework.django.imported-urlconf.url.include.local-function";
   }
   if (factory === "path") {
     return reExported
       ? "framework.django.literal-urlconf.reexported-path.include.local-function"
       : "framework.django.literal-urlconf.path.include.local-function";
   }
+  if (factory === "re_path") {
+    return reExported
+      ? "framework.django.literal-urlconf.reexported-re-path.include.local-function"
+      : "framework.django.literal-urlconf.re-path.include.local-function";
+  }
   return reExported
-    ? "framework.django.literal-urlconf.reexported-re-path.include.local-function"
-    : "framework.django.literal-urlconf.re-path.include.local-function";
+    ? "framework.django.literal-urlconf.reexported-url.include.local-function"
+    : "framework.django.literal-urlconf.url.include.local-function";
 }
 
 interface ResolvedDjangoUrlconfInclusion {

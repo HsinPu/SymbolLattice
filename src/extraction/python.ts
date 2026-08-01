@@ -53,6 +53,10 @@ interface FrameworkNamedImport {
   readonly node: PythonSyntaxNode;
 }
 
+interface DjangoUrlImport extends FrameworkNamedImport {
+  readonly source: "django.urls" | "django.conf.urls";
+}
+
 interface FrameworkDirectInstance {
   readonly name: string;
   readonly constructorName: string;
@@ -216,9 +220,9 @@ interface StaticAioHttpRouteTableRegistration {
   readonly node: PythonSyntaxNode;
 }
 
-type DjangoUrlPatternFactory = "path" | "re_path";
+type DjangoUrlPatternFactory = "path" | "re_path" | "url";
 
-/** One direct literal `django.urls.path(...)` or `re_path(...)` entry in final urlpatterns. */
+/** One direct literal `path(...)`, `re_path(...)`, or legacy `url(...)` entry in final urlpatterns. */
 interface StaticDjangoUrlPatternRoute {
   readonly factoryName: string;
   readonly factory: DjangoUrlPatternFactory;
@@ -527,8 +531,17 @@ function staticFlaskImports(
 function staticDjangoUrlImports(
   input: PythonExtractFileFactsInput,
   node: PythonSyntaxNode
-): readonly FrameworkNamedImport[] {
-  return staticNamedFrameworkImports(input, node, "django.urls");
+): readonly DjangoUrlImport[] {
+  return [
+    ...staticNamedFrameworkImports(input, node, "django.urls").map((candidate) => ({
+      ...candidate,
+      source: "django.urls" as const
+    })),
+    ...staticNamedFrameworkImports(input, node, "django.conf.urls").map((candidate) => ({
+      ...candidate,
+      source: "django.conf.urls" as const
+    }))
+  ];
 }
 
 function staticStarletteApplicationImports(
@@ -1231,7 +1244,7 @@ function staticDjangoRoutePath(value: string): string | null {
   return "/" + value;
 }
 
-/** Retains one unescaped, single-line raw string literal used by Django `re_path`. */
+/** Retains one unescaped, single-line raw string literal used by Django regex URL factories. */
 function staticDjangoRawPythonString(
   input: PythonExtractFileFactsInput,
   node: PythonSyntaxNode
@@ -1280,7 +1293,7 @@ const DJANGO_RE_PATH_META_CHARACTERS = new Set([
 ]);
 
 /**
- * Projects only a full-match literal `re_path` pattern to one exact route.
+ * Projects only a full-match literal `re_path` or legacy `url` pattern to one exact route.
  * Prefix and regex-semantic patterns intentionally remain outside exact evidence.
  */
 function staticDjangoRePathRoutePath(value: string): string | null {
@@ -1297,7 +1310,7 @@ function staticDjangoRePathRoutePath(value: string): string | null {
 }
 
 /**
- * Projects only a start-anchored, slash-terminated literal `re_path` prefix
+ * Projects only a start-anchored, slash-terminated literal `re_path` or legacy `url` prefix
  * used to mount a child URLConf. The terminal `$` form is deliberately not a
  * prefix mount, and a non-slash ending would not preserve child concatenation.
  */
@@ -3417,13 +3430,21 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
       .filter((candidate): candidate is StaticDjangoRelativeUrlconfImport => candidate !== null);
     const djangoRouteFactories = new Map<string, DjangoUrlPatternFactory[]>();
     for (const candidate of djangoUrlImports) {
-      if (candidate.importedName === "path" || candidate.importedName === "re_path") {
-        const factories = djangoRouteFactories.get(candidate.alias) ?? [];
-        if (!factories.includes(candidate.importedName)) {
-          factories.push(candidate.importedName);
-        }
-        djangoRouteFactories.set(candidate.alias, factories);
+      const factory =
+        candidate.source === "django.urls" &&
+        (candidate.importedName === "path" || candidate.importedName === "re_path")
+          ? candidate.importedName
+          : candidate.source === "django.conf.urls" && candidate.importedName === "url"
+            ? candidate.importedName
+            : null;
+      if (factory === null) {
+        continue;
       }
+      const factories = djangoRouteFactories.get(candidate.alias) ?? [];
+      if (!factories.includes(factory)) {
+        factories.push(factory);
+      }
+      djangoRouteFactories.set(candidate.alias, factories);
     }
     const djangoUrlPatternLists = topLevelNodes
       .map((node) => staticDjangoUrlPatternList(input, node, djangoRouteFactories))
@@ -3997,7 +4018,9 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
           route.path,
           route.factory === "path"
             ? "framework.django.direct-urlpatterns.path.local-function"
-            : "framework.django.direct-urlpatterns.re-path.local-function"
+            : route.factory === "re_path"
+              ? "framework.django.direct-urlpatterns.re-path.local-function"
+              : "framework.django.direct-urlpatterns.url.local-function"
         );
         djangoUrlFacts.routes.push({
           path: route.path,

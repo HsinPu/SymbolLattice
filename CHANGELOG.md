@@ -6,6 +6,26 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.164.0] - 2026-08-02
+
+### Added
+
+- Django now accepts legacy <code>django.conf.urls.url(...)</code> as a bounded static regex factory for direct local-function routes and imported or literal <code>include(...)</code> URLConf mounts, including final package-initializer re-export chains.
+- Legacy <code>url</code> routes and mounts emit distinct syntax- and module-stage evidence rules, keeping them separate from modern <code>path</code> and <code>re_path</code> analysis.
+- The accepted <code>url</code> subset reuses the exact <code>re_path</code> contract: direct routes require a literal, anchored <code>^...$</code> pattern; mounts require a literal, start-anchored, slash-terminated <code>^.../</code> prefix. New coverage proves aliases, direct routes, imported and literal mounts, re-exports, and rejection boundaries.
+
+### Compatibility
+
+- The artifact-facts extractor advances to <code>multi-language-ast-v145</code> and the project resolver to <code>project-resolver-v48</code>. Existing graphs and SQLite schema remain readable; the next explicit <code>sync</code> re-extracts Django facts and rebuilds projected route evidence. Earlier facts with an omitted factory still default to <code>path</code>.
+
+### Deliberate limits
+
+- Exact legacy <code>url</code> analysis excludes captures, wildcards, escapes, regex operators, missing anchors, dynamic values, non-slash mount endings, class-based views, namespaces, tuples, positional <code>kwargs</code>, imported handlers, and ambiguous or non-local URLConfs. Those forms remain non-exact.
+
+### Comparison notes
+
+- The inspected CodeGraph Django resolver broadly discovers direct <code>path</code>/<code>re_path</code>/<code>url</code> call shapes and turns string <code>include('module.path')</code> into an import reference. SymbolLattice now independently turns the narrow, proven legacy <code>url</code> subset into concrete local routes with auditable direct or cross-file evidence; CodeGraph retains broader handler-shape coverage such as class views.
+
 ## [0.163.0] - 2026-08-02
 
 ### Added
