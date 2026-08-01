@@ -3669,7 +3669,7 @@ function projectSanicImportedBlueprintRoutes(input: {
         if (handler?.kind !== "function" || handler.filePath !== blueprintFilePath) {
           continue;
         }
-        const path = mountedPythonRoutePath("", blueprint.prefix, route.path);
+        const path = mountedPythonRoutePath(registration.prefix, blueprint.prefix, route.path);
         if (path === null) {
           continue;
         }

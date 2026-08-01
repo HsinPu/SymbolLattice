@@ -113,10 +113,11 @@ interface StaticSanicDecorator {
   readonly node: PythonSyntaxNode;
 }
 
-/** One direct literal `app.blueprint(blueprint)` registration. */
+/** One direct literal `app.blueprint(blueprint, url_prefix="/prefix")` registration. */
 interface StaticSanicBlueprintRegistration {
   readonly applicationName: string;
   readonly blueprintName: string;
+  readonly prefix: string;
   readonly node: PythonSyntaxNode;
 }
 
@@ -2063,12 +2064,15 @@ function staticSanicBlueprintRegistration(
     applicationName === null ||
     blueprintNode?.name !== "VariableName" ||
     keywordArguments === null ||
-    keywordArguments.size !== 0
+    [...keywordArguments.keys()].some((name) => name !== "url_prefix")
   ) {
     return null;
   }
   const blueprintName = declarationName(input, blueprintNode);
-  return blueprintName === null ? null : { applicationName, blueprintName, node };
+  const prefix = staticSanicPrefix(input, keywordArguments);
+  return blueprintName === null || prefix === null
+    ? null
+    : { applicationName, blueprintName, prefix, node };
 }
 
 function staticFlaskBlueprintRegistration(
@@ -3329,6 +3333,7 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
         blueprintName: importedBlueprint.blueprintName,
         importedBlueprintName: importedBlueprint.importedBlueprintName,
         moduleSpecifier: importedBlueprint.moduleSpecifier,
+        prefix: registration.prefix,
         range: rangeFor(lineStarts, registration.node.from, registration.node.to)
       });
     }
@@ -3518,7 +3523,11 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
                   method,
                   sanicDecorator.node,
                   handler,
-                  combinedRoutePath(blueprintAtRegistration.prefix, sanicDecorator.path),
+                  combinedRoutePath(
+                    registration.prefix,
+                    blueprintAtRegistration.prefix,
+                    sanicDecorator.path
+                  ),
                   "framework.sanic.direct-blueprint.app-blueprint.decorator.local-function"
                 );
               }

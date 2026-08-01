@@ -2815,7 +2815,7 @@ describe("source extraction", () => {
         "app = App(\"symbol-lattice\")",
         "api = Router(\"api\", url_prefix=\"/api\")",
         "",
-        "app.blueprint(api)",
+        "app.blueprint(api, url_prefix=\"/v1\")",
         "",
         "@api.get(\"/health\")",
         "async def health(request):",
@@ -2849,7 +2849,7 @@ describe("source extraction", () => {
         ])
     ).toEqual([
       [
-        "GET /api/health",
+        "GET /v1/api/health",
         "app/sanic_blueprints.py#health",
         "framework.sanic.direct-blueprint.app-blueprint.decorator.local-function",
         "syntax",
@@ -2857,7 +2857,7 @@ describe("source extraction", () => {
         1
       ],
       [
-        "PATCH /api/jobs/<job_id>",
+        "PATCH /v1/api/jobs/<job_id>",
         "app/sanic_blueprints.py#update_or_delete_job",
         "framework.sanic.direct-blueprint.app-blueprint.decorator.local-function",
         "syntax",
@@ -2865,7 +2865,7 @@ describe("source extraction", () => {
         1
       ],
       [
-        "DELETE /api/jobs/<job_id>",
+        "DELETE /v1/api/jobs/<job_id>",
         "app/sanic_blueprints.py#update_or_delete_job",
         "framework.sanic.direct-blueprint.app-blueprint.decorator.local-function",
         "syntax",
@@ -2883,7 +2883,7 @@ describe("source extraction", () => {
     ]);
   });
 
-  it("rejects unmounted, dynamic, configured, rebound, and shadowed Sanic Blueprints", () => {
+  it("rejects unmounted, dynamic, unsupported configured, rebound, and shadowed Sanic Blueprints", () => {
     const facts = extractFileFacts({
       filePath: "app/unproven_sanic_blueprints.py",
       language: "python",
@@ -2913,10 +2913,18 @@ describe("source extraction", () => {
         "    return None",
         "",
         "registered = Blueprint(\"registered\")",
-        "app.blueprint(registered, url_prefix=\"/override\")",
+        "app.blueprint(registered, version=1)",
         "",
         "@registered.patch(\"/jobs/<job_id>\")",
-        "async def overridden_handler(request, job_id):",
+        "async def configured_registration_handler(request, job_id):",
+        "    return None",
+        "",
+        "dynamic_registration = Blueprint(\"dynamic_registration\")",
+        "dynamic_registration_prefix = \"/override\"",
+        "app.blueprint(dynamic_registration, url_prefix=dynamic_registration_prefix)",
+        "",
+        "@dynamic_registration.patch(\"/dynamic\")",
+        "async def dynamic_registration_handler(request):",
         "    return None",
         "",
         "duplicate = Blueprint(\"duplicate\")",
@@ -2968,7 +2976,7 @@ describe("source extraction", () => {
         "from sanic import Sanic as App",
         "from .routes.catalog import catalog as catalog_blueprint",
         "app = App(\"symbol-lattice\")",
-        "app.blueprint(catalog_blueprint)"
+        "app.blueprint(catalog_blueprint, url_prefix=\"/v1\")"
       ].join("\n")
     });
 
@@ -2992,7 +3000,8 @@ describe("source extraction", () => {
           applicationName: "app",
           blueprintName: "catalog_blueprint",
           importedBlueprintName: "catalog",
-          moduleSpecifier: ".routes.catalog"
+          moduleSpecifier: ".routes.catalog",
+          prefix: "/v1"
         }
       ]
     });

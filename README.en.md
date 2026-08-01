@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.151.0 is a developer preview. The package is not published to npm; run it from source.
+> v0.152.0 is a developer preview. The package is not published to npm; run it from source.
 
 SymbolLattice builds a queryable local code-symbol graph for a project. Every relation retains its rule, resolution stage, and confidence; exact, heuristic, and unresolved evidence are never conflated.
 
@@ -41,17 +41,17 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 On Windows PowerShell, use npm.cmd if npm is unavailable. Index data stays in the target project's .symbol-lattice/index.sqlite.
 
-## v0.151.0
+## v0.152.0
 
-- Adds cross-file direct Sanic Blueprint projection: a Blueprint and decorator route in a source module can become an exact route through a package-relative import and app.blueprint(...).
-- A route is exact only when the import, Sanic app, Blueprint, literal prefix/path/method, source handler, and no-rebinding conditions are all syntax-proven.
+- Adds literal Sanic Blueprint registration url_prefix support. Both same-file and cross-file routes compose the registration prefix, Blueprint prefix, and decorator path into an exact route.
+- A route is exact only when the import, Sanic app, Blueprint, every literal prefix/path/method, source handler, and no-rebinding conditions are all syntax-proven.
 - Cross-file evidence retains both the registration and source modules; the next explicit sync rebuilds existing indexes.
 
 ## Boundaries
 
 - All indexing and queries stay local; source is never silently uploaded.
 - Dynamic dispatch, reflection, macros, generated code, DI, ambiguous names, and runtime configuration never become exact relations.
-- This Sanic slice accepts only a single-name, one-dot relative Blueprint import, a direct option-free app.blueprint(...) registration, and top-level local function handlers. Blueprint groups/copies, registration options, class views, WebSockets, add_route, and dynamic composition remain unsupported.
+- This Sanic slice accepts only a single-name, one-dot relative Blueprint import, a direct one-Blueprint app.blueprint(...) registration with an optional literal url_prefix, and top-level local function handlers. Blueprint groups/copies, other registration options, class views, WebSockets, add_route, and dynamic composition remain unsupported.
 
 ## Verification
 

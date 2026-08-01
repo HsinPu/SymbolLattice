@@ -3537,7 +3537,7 @@ describe("SymbolLatticeService", () => {
         "from sanic import Sanic as App",
         "from .routes.catalog import catalog as catalog_blueprint",
         "app = App(\"symbol-lattice\")",
-        "app.blueprint(catalog_blueprint)"
+        "app.blueprint(catalog_blueprint, url_prefix=\"/v1\")"
       ].join("\n")
     });
     const graphStore = new SqliteGraphStore();
@@ -3557,7 +3557,8 @@ describe("SymbolLatticeService", () => {
         {
           moduleSpecifier: ".routes.catalog",
           importedBlueprintName: "catalog",
-          blueprintName: "catalog_blueprint"
+          blueprintName: "catalog_blueprint",
+          prefix: "/v1"
         }
       ]
     });
@@ -3568,10 +3569,10 @@ describe("SymbolLatticeService", () => {
     expect(routes.routes).toMatchObject([
       {
         method: "GET",
-        path: "/catalog/items",
+        path: "/v1/catalog/items",
         route: {
           kind: "route",
-          name: "GET /catalog/items",
+          name: "GET /v1/catalog/items",
           filePath: "app/routes/catalog.py"
         },
         edge: {

@@ -11,13 +11,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v132";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v133";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v39";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v40";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -307,6 +307,7 @@ export interface SanicImportedBlueprintRegistrationFact {
   readonly blueprintName: string;
   readonly importedBlueprintName: string;
   readonly moduleSpecifier: string;
+  readonly prefix: string;
   readonly range: SourceRange;
 }
 

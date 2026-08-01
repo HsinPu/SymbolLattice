@@ -6,6 +6,26 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.152.0] - 2026-08-01
+
+### Added
+
+- Direct Sanic Blueprint registrations now accept one literal <code>url_prefix</code> option. Same-file projection composes the registration prefix, Blueprint prefix, and decorator path.
+- Cross-file Sanic Blueprint registration facts now retain the literal registration prefix, and the project resolver composes it with the imported Blueprint prefix and source route path.
+- Unit and service coverage verifies same-file and package-relative cross-file composition plus rejection of dynamic prefixes and unsupported registration options.
+
+### Compatibility
+
+- The artifact-facts extractor advances to <code>multi-language-ast-v133</code> and the project resolver to <code>project-resolver-v40</code>. Existing graphs and SQLite schema remain readable; the next explicit <code>sync</code> re-extracts Python facts and reprojects affected Sanic routes.
+
+### Deliberate limits
+
+- This slice supports one direct Blueprint argument and at most one literal <code>url_prefix</code> keyword. Multiple Blueprints, registration <code>version</code> or other options, groups/copies, dynamic prefixes, indirect construction, class views, WebSockets, <code>add_route</code>, and ambiguity remain non-exact.
+
+### Comparison notes
+
+- The inspected CodeGraph baseline source tree contains no <code>sanic</code> reference. SymbolLattice independently adds a narrow, evidence-backed path for composed Sanic registration prefixes; it is broader for this explicit static route slice while remaining deliberately narrower than runtime framework composition.
+
 ## [0.151.0] - 2026-08-01
 
 ### Added
@@ -2841,7 +2861,8 @@ No unreleased changes.
 - Explicit full indexing, caller/callee/impact queries, and read-only MCP exploration.
 - `exact`, `heuristic`, and `unresolved` relationship states.
 
-[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.151.0...HEAD
+[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.152.0...HEAD
+[0.152.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.151.0...v0.152.0
 [0.151.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.150.0...v0.151.0
 [0.150.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.149.0...v0.150.0
 [0.149.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.148.0...v0.149.0
