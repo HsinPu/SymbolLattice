@@ -291,7 +291,7 @@ export const FRAMEWORK_CAPABILITIES = [
     routeFramework: "iris",
     routeRegistrations: [],
     surfaces: [
-      "direct Iris v12 Application methods",
+      "direct Iris v12 Application/Party HTTP methods and Handle registrations",
       "same-function literal Party prefixes"
     ]
   },

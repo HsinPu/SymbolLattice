@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.140.0 是開發者預覽版，尚未發布到 npm；請從原始碼執行。
+> v0.141.0 是開發者預覽版，尚未發布到 npm；請從原始碼執行。
 
 SymbolLattice 為專案建立可查詢的本機程式碼符號圖譜。每條關係都保留來源規則、解析階段與信心值；原始碼僅保存於受索引專案的 `.symbol-lattice/index.sqlite`，不會被靜默上傳。
 
@@ -49,11 +49,11 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 Windows PowerShell 若沒有 `npm` 指令，請改用 `npm.cmd`。檔案系統根目錄與使用者家目錄需要明確加上 `--force` 才會接受。
 
-## v0.140.0
+## v0.141.0
 
-- 新增 Go Iris v12 路由：可從 `iris.New()`、字面量 `Party` 前綴與具名 handler 建立 `exact` route。
-- 支援巢狀 `Party`，保留完整前綴與路由來源規則；僅接受明確 `github.com/kataras/iris/v12` import 與未重綁 receiver。
-- artifact facts 升級為 `multi-language-ast-v121`；下次明確 `sync` 會重新萃取 Go facts 並重投影路由。
+- Iris v12 現支援 `Handle("GET", "/path", handler)` 的單一具名 handler，Application 與巢狀 `Party` 都可建立 `exact` route。
+- `Handle` 必須使用可識別的 Iris v12 import、未重綁 receiver、標準大寫 HTTP method 與字面量路徑；完整 `Party` 前綴會保留。
+- artifact facts 升級為 `multi-language-ast-v122`；下次明確 `sync` 會重新萃取 Go facts 並重投影路由。
 
 ## 已知限制
 
@@ -63,7 +63,7 @@ Windows PowerShell 若沒有 `npm` 指令，請改用 `npm.cmd`。檔案系統�
 - GoFrame 鏈式 receiver 僅支援 `g.Server()` 起點與有限的字面量 `Domain`／單參數 `Group` 鏈；任意方法鏈、動態前綴、變數傳遞與不受支援的 callback 形狀不會成為精確關係。
 - GoFrame 跨檔 standard router 僅支援可靜態證明的 direct pointer（`&Controller{}`／`new(Controller)`）、無參數 `Factory()`，及同一函式內未重綁的一層 pointer/factory alias。pointer alias 可用 `:=`，或單一直接 initializer 的 `var`；有型別註記時必須是與右側相符的 pointer 型別。factory alias 可用 `:=` 或無型別、單一直接 initializer 的 `var`。每個 `Bind(...)` argument 必須獨立成立；slice 展開、動態值、全域、群組式或多值 `var`、有型別的 factory `var`、轉送、分支、map/interface/DI 容器、callback 同名遮蔽、重綁與歧義不會成為 `exact`。顯式 import alias 可直接使用；預設 import 必須由目標 `package` 宣告證明，絕不從 import 路徑猜測。`.`／`_` import、外部/傳遞模組、`replace`、巢狀模組選擇與 build tag 保持未解析。
 - 未綁定的 GoFrame request-signature 候選永遠是 `heuristic`，不代表 runtime 已註冊路由；反射、動態 Bind 與未知 prefix／host 維持未解析。
-- Iris 目前僅支援 `iris.New()`、單一具名 handler 與字面量 `Party` 前綴；`Default`、`Handle`、MVC、middleware、動態路徑與重綁 receiver 不會成為 `exact`。
+- Iris 目前僅支援 `iris.New()`、單一具名 handler、字面量 `Party` 前綴，以及標準大寫 method 的 `Handle`；`Default`、MVC、middleware、自訂或小寫 method、動態路徑與重綁 receiver 不會成為 `exact`。
 - 其他框架只涵蓋已實作且可驗證的切片；完整變更請見 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 驗證

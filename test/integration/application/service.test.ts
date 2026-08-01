@@ -4154,7 +4154,7 @@ describe("SymbolLatticeService", () => {
     expect(search.results).toMatchObject([{ filePath: "cmd/server/main.go", language: "go" }]);
   });
 
-  it("indexes Go Iris v12 Application and literal Party routes with exact syntax evidence", async () => {
+  it("indexes Go Iris v12 Application, Party, and Handle routes with exact syntax evidence", async () => {
     const projectPath = await createInlineProject({
       "cmd/server/main.go": [
         "package main",
@@ -4168,7 +4168,7 @@ describe("SymbolLatticeService", () => {
         "  app := iris.New()",
         '  app.Get("/health", health)',
         '  api := app.Party("/api")',
-        '  api.Delete("/users", deleteUser)',
+        '  api.Handle("DELETE", "/users", deleteUser)',
         "}"
       ].join("\n")
     });
@@ -4199,7 +4199,7 @@ describe("SymbolLatticeService", () => {
           edge: expect.objectContaining({
             resolution: "exact",
             evidence: expect.objectContaining({
-              ruleId: "framework.iris.direct-party.method.local-function",
+              ruleId: "framework.iris.direct-party.handle.local-function",
               stage: "syntax"
             })
           })
@@ -4213,7 +4213,7 @@ describe("SymbolLatticeService", () => {
         handler: { qualifiedName: "cmd/server/main.go#deleteUser" },
         edge: {
           resolution: "exact",
-          evidence: { ruleId: "framework.iris.direct-party.method.local-function", stage: "syntax" }
+          evidence: { ruleId: "framework.iris.direct-party.handle.local-function", stage: "syntax" }
         }
       }
     ]);

@@ -93,6 +93,7 @@ interface StaticIrisBinding {
 
 interface StaticIrisRoute {
   readonly receiver: IrisReceiver;
+  readonly registration: "method" | "handle";
   readonly method: RouteMethod;
   readonly path: string;
   readonly handlerName: string;
@@ -357,6 +358,18 @@ const IRIS_ROUTE_METHODS: Readonly<Record<string, RouteMethod>> = {
   Connect: "CONNECT",
   Any: "ALL"
 };
+
+const IRIS_HANDLE_ROUTE_METHODS = new Set<RouteMethod>([
+  "GET",
+  "POST",
+  "PUT",
+  "PATCH",
+  "DELETE",
+  "HEAD",
+  "OPTIONS",
+  "TRACE",
+  "CONNECT"
+]);
 
 const NET_HTTP_PATTERN_METHODS = new Set<RouteMethod>([
   "GET",
@@ -2510,25 +2523,49 @@ function staticIrisRoute(
     return null;
   }
   const call = staticSelectorCall(input, expression);
-  if (call === null || call.arguments_.length !== 2) {
+  if (call === null) {
     return null;
   }
   const receiver = receivers.get(call.receiverName);
-  const method = IRIS_ROUTE_METHODS[call.methodName];
-  const pathNode = call.arguments_[0];
-  const handlerNode = call.arguments_[1];
+  const isHandle = call.methodName === "Handle";
+  const method = isHandle
+    ? call.arguments_[0] === undefined
+      ? null
+      : staticIrisHandleMethod(input, call.arguments_[0])
+    : IRIS_ROUTE_METHODS[call.methodName];
+  const pathNode = call.arguments_[isHandle ? 1 : 0];
+  const handlerNode = call.arguments_[isHandle ? 2 : 1];
   const path = pathNode === undefined ? null : staticLiteralSlashPath(input, pathNode);
   const handlerName =
     handlerNode?.name === "VariableName" ? identifierText(input, handlerNode) : null;
   if (
+    call.arguments_.length !== (isHandle ? 3 : 2) ||
     receiver === undefined ||
     method === undefined ||
+    method === null ||
     path === null ||
     handlerName === null
   ) {
     return null;
   }
-  return { receiver, method, path, handlerName, node };
+  return {
+    receiver,
+    registration: isHandle ? "handle" : "method",
+    method,
+    path,
+    handlerName,
+    node
+  };
+}
+
+function staticIrisHandleMethod(
+  input: GoExtractFileFactsInput,
+  node: GoSyntaxNode
+): RouteMethod | null {
+  const method = staticPlainGoString(input, node);
+  return method !== null && IRIS_HANDLE_ROUTE_METHODS.has(method as RouteMethod)
+    ? (method as RouteMethod)
+    : null;
 }
 
 function staticNetHttpMuxBinding(
@@ -2864,9 +2901,13 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
       combinedRoutePath(routeFact.receiver.prefix, routeFact.path),
       routeFact.node,
       handler,
-      routeFact.receiver.kind === "app"
-        ? "framework.iris.direct-app.method.local-function"
-        : "framework.iris.direct-party.method.local-function"
+      routeFact.registration === "handle"
+        ? routeFact.receiver.kind === "app"
+          ? "framework.iris.direct-app.handle.local-function"
+          : "framework.iris.direct-party.handle.local-function"
+        : routeFact.receiver.kind === "app"
+          ? "framework.iris.direct-app.method.local-function"
+          : "framework.iris.direct-party.method.local-function"
     );
   }
 

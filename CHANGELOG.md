@@ -6,6 +6,26 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.141.0] - 2026-08-01
+
+### Added
+
+- Go Iris v12 extraction now proves direct and literal-Party `Handle("METHOD", "/path", handler)` registrations with one named local function handler. The accepted uppercase methods are `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD`, `OPTIONS`, `TRACE`, and `CONNECT`.
+- Handle routes preserve the same static Iris import, unrebound Application/Party receiver, composed Party prefix, source range, and exact rule evidence as the v0.140 verb-method slice.
+- New unit and service coverage verifies direct and nested-Party Handle routes, query lookup, dynamic/custom/lowercase method rejection, dynamic paths, inline or middleware handlers, and receiver rebinding rejection.
+
+### Compatibility
+
+- The artifact-facts extractor advances to `multi-language-ast-v122`. Existing graphs and SQLite schema remain readable; the next explicit `sync` re-extracts Go facts and reprojects routes. The project resolver remains `project-resolver-v37`.
+
+### Deliberate limits
+
+- Iris Handle extraction accepts exactly three arguments: a standard uppercase literal method, literal slash path, and one named handler. `Default`, `ANY`/custom/lowercase methods, extra handlers, inline handlers, middleware, MVC, dynamic values, var bindings, forwarding, branches, callbacks, reassignment, and ambiguity remain non-exact.
+
+### Comparison notes
+
+- The inspected CodeGraph Go matcher intentionally uses a generic two-argument receiver-method pattern, so it does not directly model Iris' three-argument Handle signature. SymbolLattice is still narrower for dynamic and reflective Iris forms, but now provides exact application/Party-aware evidence for this otherwise uncovered static slice.
+
 ## [0.140.0] - 2026-08-01
 
 ### Added
@@ -2620,7 +2640,8 @@ No unreleased changes.
 - Explicit full indexing, caller/callee/impact queries, and read-only MCP exploration.
 - `exact`, `heuristic`, and `unresolved` relationship states.
 
-[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.140.0...HEAD
+[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.141.0...HEAD
+[0.141.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.140.0...v0.141.0
 [0.140.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.139.0...v0.140.0
 [0.139.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.138.0...v0.139.0
 [0.138.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.137.0...v0.138.0

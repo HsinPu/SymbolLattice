@@ -3045,15 +3045,19 @@ describe("source extraction", () => {
         "func headHealth(ctx i.Context) {}",
         "func createUser(ctx i.Context) {}",
         "func search(ctx i.Context) {}",
+        "func updateUser(ctx i.Context) {}",
+        "func status(ctx i.Context) {}",
         "",
         "func main() {",
         "  app := i.New()",
         '  app.Get("/health", health)',
         '  app.Head("/health", headHealth)',
+        '  app.Handle("PATCH", "/users/{id}", updateUser)',
         '  api := app.Party("/api")',
         '  v1 := api.Party("/v1")',
         '  v1.Post("/users", createUser)',
         '  v1.Any("/search", search)',
+        '  v1.Handle("GET", "/status", status)',
         "}"
       ].join("\n")
     });
@@ -3088,6 +3092,14 @@ describe("source extraction", () => {
         1
       ],
       [
+        "PATCH /users/{id}",
+        "cmd/server/iris.go#updateUser",
+        "framework.iris.direct-app.handle.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
         "POST /api/v1/users",
         "cmd/server/iris.go#createUser",
         "framework.iris.direct-party.method.local-function",
@@ -3099,6 +3111,14 @@ describe("source extraction", () => {
         "ALL /api/v1/search",
         "cmd/server/iris.go#search",
         "framework.iris.direct-party.method.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "GET /api/v1/status",
+        "cmd/server/iris.go#status",
+        "framework.iris.direct-party.handle.local-function",
         "syntax",
         "exact",
         1
@@ -3129,7 +3149,14 @@ describe("source extraction", () => {
         "  app.Get(path, health)",
         '  app.Get("/inline", func(ctx iris.Context) {})',
         '  app.Get("/middleware", auth, health)',
-        '  app.Handle("GET", "/handle", stable)',
+        '  method := "GET"',
+        '  app.Handle(method, "/dynamic-method", stable)',
+        '  app.Handle("BREW", "/unsupported-method", stable)',
+        '  app.Handle("get", "/lowercase-method", stable)',
+        '  app.Handle("ANY", "/all-method", stable)',
+        '  app.Handle("GET", path, stable)',
+        '  app.Handle("GET", "/inline-handle", func(ctx iris.Context) {})',
+        '  app.Handle("GET", "/middleware-handle", auth, stable)',
         "  health := fallback",
         '  app.Get("/rebound-handler", health)',
         "  app = buildApp()",
