@@ -4364,6 +4364,73 @@ describe("SymbolLatticeService", () => {
     ]);
   });
 
+  it("indexes httprouter direct methods with exact syntax evidence", async () => {
+    const projectPath = await createInlineProject({
+      "cmd/server/main.go": [
+        "package main",
+        "",
+        "import (",
+        '  "net/http"',
+        '  "github.com/julienschmidt/httprouter"',
+        ")",
+        "",
+        "func health(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {}",
+        "func updateUser(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {}",
+        "",
+        "func main() {",
+        "  router := httprouter.New()",
+        '  router.GET("/health", health)',
+        '  router.PATCH("/users/:id", updateUser)',
+        "}"
+      ].join("\n")
+    });
+    const service = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+    const patchRoutes = await service.routes(projectPath, { method: "PATCH" });
+
+    expect(routes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "GET",
+          path: "/health",
+          handler: expect.objectContaining({ qualifiedName: "cmd/server/main.go#health" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.httprouter.direct-router.method.local-function",
+              stage: "syntax"
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "PATCH",
+          path: "/users/:id",
+          handler: expect.objectContaining({ qualifiedName: "cmd/server/main.go#updateUser" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.httprouter.direct-router.method.local-function",
+              stage: "syntax"
+            })
+          })
+        })
+      ])
+    );
+    expect(patchRoutes.routes).toMatchObject([
+      {
+        method: "PATCH",
+        path: "/users/:id",
+        handler: { qualifiedName: "cmd/server/main.go#updateUser" },
+        edge: {
+          resolution: "exact",
+          evidence: { ruleId: "framework.httprouter.direct-router.method.local-function", stage: "syntax" }
+        }
+      }
+    ]);
+  });
+
   it("indexes Go net/http default and literal ServeMux routes with exact syntax evidence", async () => {
     const projectPath = await createInlineProject({
       "cmd/server/main.go": [

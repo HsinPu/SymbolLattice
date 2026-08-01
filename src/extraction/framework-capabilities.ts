@@ -27,6 +27,7 @@ export const FRAMEWORK_CAPABILITY_IDS = [
   "iris",
   "beego",
   "gorilla-mux",
+  "httprouter",
   "net-http",
   "chi",
   "goframe",
@@ -315,6 +316,16 @@ export const FRAMEWORK_CAPABILITIES = [
     surfaces: [
       "direct mux.NewRouter HandleFunc registrations",
       "literal direct named-function handlers with optional literal Methods chains"
+    ]
+  },
+  {
+    id: "httprouter",
+    languages: ["go"],
+    routeFramework: "httprouter",
+    routeRegistrations: [],
+    surfaces: [
+      "direct httprouter.New router HTTP methods",
+      "literal direct named-function HTTP handle registrations"
     ]
   },
   {

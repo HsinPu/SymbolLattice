@@ -6,6 +6,26 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.144.0] - 2026-08-01
+
+### Added
+
+- Go HttpRouter extraction now proves direct short-variable `httprouter.New()` routers and direct `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD`, and `OPTIONS` registrations with one named local function handler.
+- Literal HttpRouter named and catch-all path parameters, such as `/users/:id` and `/files/*path`, remain part of the exact route path instead of being flattened or inferred.
+- New unit and service coverage verifies explicit/default imports, HTTP method queries, literal path parameters, and rejection of shadowed or rebound aliases, dynamic paths, inline or wrapped handlers, extra arguments, unsupported `TRACE`, `Handle`, `Handler`, and `HandlerFunc` forms.
+
+### Compatibility
+
+- The artifact-facts extractor advances to `multi-language-ast-v125`. Existing graphs and SQLite schema remain readable; the next explicit `sync` re-extracts Go facts and reprojects routes. The project resolver remains `project-resolver-v37`.
+
+### Deliberate limits
+
+- HttpRouter extraction is limited to direct `httprouter.New()` short declarations, literal slash paths, and one named handler on the documented verb methods. `Handle`, `Handler`, `HandlerFunc`, `ServeFiles`, `GlobalOPTIONS`, host switching, wrappers, var aliases, forwarding, branches, callbacks, reassignment, dynamic values, and ambiguity remain non-exact.
+
+### Comparison notes
+
+- The inspected CodeGraph Go matcher can discover a broad set of uppercase receiver methods with a literal path, but does not prove an HttpRouter import, `New()` receiver, or same-file handler. SymbolLattice is deliberately narrower for generic and wrapper APIs, but records framework-proven exact routes including HttpRouter parameter patterns.
+
 ## [0.143.0] - 2026-08-01
 
 ### Added
@@ -2680,7 +2700,8 @@ No unreleased changes.
 - Explicit full indexing, caller/callee/impact queries, and read-only MCP exploration.
 - `exact`, `heuristic`, and `unresolved` relationship states.
 
-[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.143.0...HEAD
+[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.144.0...HEAD
+[0.144.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.143.0...v0.144.0
 [0.143.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.142.0...v0.143.0
 [0.142.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.141.0...v0.142.0
 [0.141.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.140.0...v0.141.0

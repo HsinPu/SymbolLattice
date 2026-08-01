@@ -3398,6 +3398,125 @@ describe("source extraction", () => {
     expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
   });
 
+  it("extracts direct Go httprouter methods with exact evidence", () => {
+    const facts = extractFileFacts({
+      filePath: "cmd/server/httprouter.go",
+      language: "go",
+      sourceText: [
+        "package main",
+        "",
+        "import (",
+        '  http "net/http"',
+        '  hr "github.com/julienschmidt/httprouter"',
+        ")",
+        "",
+        "func health(w http.ResponseWriter, r *http.Request, ps hr.Params) {}",
+        "func createUser(w http.ResponseWriter, r *http.Request, ps hr.Params) {}",
+        "func updateUser(w http.ResponseWriter, r *http.Request, ps hr.Params) {}",
+        "func healthOptions(w http.ResponseWriter, r *http.Request, ps hr.Params) {}",
+        "",
+        "func main() {",
+        "  router := hr.New()",
+        '  router.GET("/health", health)',
+        '  router.POST("/users", createUser)',
+        '  router.PATCH("/users/:id", updateUser)',
+        '  router.OPTIONS("/health", healthOptions)',
+        "}"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId,
+          edge.evidence?.stage,
+          edge.resolution,
+          edge.confidence
+        ])
+    ).toEqual([
+      [
+        "GET /health",
+        "cmd/server/httprouter.go#health",
+        "framework.httprouter.direct-router.method.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "POST /users",
+        "cmd/server/httprouter.go#createUser",
+        "framework.httprouter.direct-router.method.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "PATCH /users/:id",
+        "cmd/server/httprouter.go#updateUser",
+        "framework.httprouter.direct-router.method.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "OPTIONS /health",
+        "cmd/server/httprouter.go#healthOptions",
+        "framework.httprouter.direct-router.method.local-function",
+        "syntax",
+        "exact",
+        1
+      ]
+    ]);
+  });
+
+  it("rejects shadowed, dynamic, inline, wrapped, unsupported, and rebound Go httprouter route shapes", () => {
+    const facts = extractFileFacts({
+      filePath: "cmd/server/unproven-httprouter.go",
+      language: "go",
+      sourceText: [
+        "package main",
+        "",
+        "import (",
+        '  http "net/http"',
+        '  hr "github.com/julienschmidt/httprouter"',
+        ")",
+        "",
+        "func health(w http.ResponseWriter, r *http.Request, ps hr.Params) {}",
+        "func stable(w http.ResponseWriter, r *http.Request, ps hr.Params) {}",
+        "",
+        "func shadowed(hr int) {",
+        "  router := hr.New()",
+        '  router.GET("/shadowed", health)',
+        "}",
+        "",
+        "func main() {",
+        '  path := "/dynamic"',
+        "  router := hr.New()",
+        "  router.GET(path, health)",
+        '  router.GET("/inline", func(w http.ResponseWriter, r *http.Request, ps hr.Params) {})',
+        '  router.GET("/wrapped", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))',
+        '  router.GET("/middleware", auth, stable)',
+        '  router.Handle("GET", "/handle", stable)',
+        '  router.HandlerFunc("GET", "/handler-func", stable)',
+        '  router.TRACE("/unsupported", stable)',
+        "  health := fallback",
+        '  router.HEAD("/rebound-handler", health)',
+        "  router = buildRouter()",
+        '  router.POST("/rebound-router", stable)',
+        "  var legacy = hr.New()",
+        '  legacy.GET("/var-binding", stable)',
+        "}"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+  });
+
   it("extracts direct Go net/http default and literal ServeMux HandleFunc routes with exact evidence", () => {
     const facts = extractFileFacts({
       filePath: "cmd/server/http.go",

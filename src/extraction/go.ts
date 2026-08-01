@@ -119,6 +119,17 @@ interface StaticGorillaMuxRoute {
   readonly node: GoSyntaxNode;
 }
 
+interface StaticHttpRouterBinding {
+  readonly name: string;
+}
+
+interface StaticHttpRouterRoute {
+  readonly method: RouteMethod;
+  readonly path: string;
+  readonly handlerName: string;
+  readonly node: GoSyntaxNode;
+}
+
 interface StaticNetHttpMuxBinding {
   readonly name: string;
 }
@@ -320,6 +331,7 @@ const ECHO_PACKAGE_PATHS = [
 const IRIS_PACKAGE_PATH = "github.com/kataras/iris/v12";
 const BEEGO_PACKAGE_PATH = "github.com/beego/beego/v2/server/web";
 const GORILLA_MUX_PACKAGE_PATH = "github.com/gorilla/mux";
+const HTTPROUTER_PACKAGE_PATH = "github.com/julienschmidt/httprouter";
 const NET_HTTP_PACKAGE_PATH = "net/http";
 const CHI_PACKAGE_PATHS = ["github.com/go-chi/chi/v5"] as const;
 const GOFRAME_G_PACKAGE_PATHS = [
@@ -413,6 +425,16 @@ const GORILLA_MUX_METHODS = new Set<RouteMethod>([
   "TRACE",
   "CONNECT"
 ]);
+
+const HTTPROUTER_ROUTE_METHODS: Readonly<Record<string, RouteMethod>> = {
+  GET: "GET",
+  POST: "POST",
+  PUT: "PUT",
+  PATCH: "PATCH",
+  DELETE: "DELETE",
+  HEAD: "HEAD",
+  OPTIONS: "OPTIONS"
+};
 
 const NET_HTTP_PATTERN_METHODS = new Set<RouteMethod>([
   "GET",
@@ -740,6 +762,13 @@ function staticGorillaMuxImportAliases(
   root: GoSyntaxNode
 ): readonly string[] {
   return staticPackageImportAliases(input, root, [GORILLA_MUX_PACKAGE_PATH], "mux");
+}
+
+function staticHttpRouterImportAliases(
+  input: GoExtractFileFactsInput,
+  root: GoSyntaxNode
+): readonly string[] {
+  return staticPackageImportAliases(input, root, [HTTPROUTER_PACKAGE_PATH], "httprouter");
 }
 
 function staticNetHttpImportAliases(
@@ -2775,6 +2804,52 @@ function staticGorillaMuxRoutes(
       );
 }
 
+function staticHttpRouterBinding(
+  input: GoExtractFileFactsInput,
+  node: GoSyntaxNode,
+  httpRouterAliases: ReadonlySet<string>,
+  shadowedNames: ReadonlySet<string>
+): StaticHttpRouterBinding | null {
+  const declaration = staticShortVariableCall(input, node);
+  if (
+    declaration === null ||
+    !httpRouterAliases.has(declaration.receiverName) ||
+    shadowedNames.has(declaration.receiverName) ||
+    declaration.methodName !== "New" ||
+    declaration.arguments_.length !== 0
+  ) {
+    return null;
+  }
+  return { name: declaration.name };
+}
+
+function staticHttpRouterRoute(
+  input: GoExtractFileFactsInput,
+  node: GoSyntaxNode,
+  receivers: ReadonlySet<string>
+): StaticHttpRouterRoute | null {
+  if (node.name !== "ExprStatement") {
+    return null;
+  }
+  const expression = directChildren(node)[0];
+  if (expression === undefined) {
+    return null;
+  }
+  const call = staticSelectorCall(input, expression);
+  if (call === null || call.arguments_.length !== 2) {
+    return null;
+  }
+  const method = HTTPROUTER_ROUTE_METHODS[call.methodName];
+  const pathNode = call.arguments_[0];
+  const handlerNode = call.arguments_[1];
+  const path = pathNode === undefined ? null : staticLiteralSlashPath(input, pathNode);
+  const handlerName =
+    handlerNode?.name === "VariableName" ? identifierText(input, handlerNode) : null;
+  return !receivers.has(call.receiverName) || method === undefined || path === null || handlerName === null
+    ? null
+    : { method, path, handlerName, node };
+}
+
 function staticNetHttpMuxBinding(
   input: GoExtractFileFactsInput,
   node: GoSyntaxNode,
@@ -2919,6 +2994,7 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
   const irisCapability = frameworkCapability("iris");
   const beegoCapability = frameworkCapability("beego");
   const gorillaMuxCapability = frameworkCapability("gorilla-mux");
+  const httpRouterCapability = frameworkCapability("httprouter");
   const netHttpCapability = frameworkCapability("net-http");
   const chiCapability = frameworkCapability("chi");
   const goFrameCapability = frameworkCapability("goframe");
@@ -2929,6 +3005,7 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
     !irisCapability.languages.includes(input.language) ||
     !beegoCapability.languages.includes(input.language) ||
     !gorillaMuxCapability.languages.includes(input.language) ||
+    !httpRouterCapability.languages.includes(input.language) ||
     !netHttpCapability.languages.includes(input.language) ||
     !chiCapability.languages.includes(input.language) ||
     !goFrameCapability.languages.includes(input.language)
@@ -3144,6 +3221,16 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
     );
   }
 
+  function addHttpRouterRoute(routeFact: StaticHttpRouterRoute, handler: SymbolNode): void {
+    addResolvedRoute(
+      routeFact.method,
+      routeFact.path,
+      routeFact.node,
+      handler,
+      "framework.httprouter.direct-router.method.local-function"
+    );
+  }
+
   function addNetHttpRoute(routeFact: StaticNetHttpRoute, handler: SymbolNode): void {
     addResolvedRoute(
       routeFact.method,
@@ -3344,6 +3431,7 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
     const irisAliases = staticIrisImportAliases(input, root);
     const beegoAliases = staticBeegoImportAliases(input, root);
     const gorillaMuxAliases = staticGorillaMuxImportAliases(input, root);
+    const httpRouterAliases = staticHttpRouterImportAliases(input, root);
     const netHttpAliases = staticNetHttpImportAliases(input, root);
     const chiAliases = staticChiImportAliases(input, root);
     const goFrameAliases = staticGoFrameImportAliases(input, root);
@@ -3693,6 +3781,9 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
       const visibleGorillaMuxAliases = new Set(
         gorillaMuxAliases.filter((alias) => !functionDeclaration.parameterNames.includes(alias))
       );
+      const visibleHttpRouterAliases = new Set(
+        httpRouterAliases.filter((alias) => !functionDeclaration.parameterNames.includes(alias))
+      );
       const visibleNetHttpAliases = new Set(
         netHttpAliases.filter((alias) => !functionDeclaration.parameterNames.includes(alias))
       );
@@ -3704,6 +3795,7 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
       const echoReceivers = new Map<string, EchoReceiver>();
       const irisReceivers = new Map<string, IrisReceiver>();
       const gorillaMuxRouters = new Set<string>();
+      const httpRouterReceivers = new Set<string>();
       const netHttpMuxes = new Set<string>();
       const chiReceivers = new Set<string>();
       const shadowedNames = new Set(functionDeclaration.parameterNames);
@@ -3843,6 +3935,26 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
           }
         }
 
+        const httpRouterBinding = staticHttpRouterBinding(
+          input,
+          statement,
+          visibleHttpRouterAliases,
+          shadowedNames
+        );
+        if (httpRouterBinding !== null) {
+          httpRouterReceivers.add(httpRouterBinding.name);
+        }
+        const httpRouterRoute = staticHttpRouterRoute(input, statement, httpRouterReceivers);
+        if (httpRouterRoute !== null && !shadowedNames.has(httpRouterRoute.handlerName)) {
+          const candidates = functionsByName.get(httpRouterRoute.handlerName) ?? [];
+          if (candidates.length === 1) {
+            const handler = candidates[0];
+            if (handler !== undefined) {
+              addHttpRouterRoute(httpRouterRoute, handler);
+            }
+          }
+        }
+
         const muxBinding = staticNetHttpMuxBinding(
           input,
           statement,
@@ -3915,6 +4027,9 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
         const retainedGorillaMuxBindings = new Set(
           [gorillaMuxBinding?.name].filter((name): name is string => name !== undefined)
         );
+        const retainedHttpRouterBindings = new Set(
+          [httpRouterBinding?.name].filter((name): name is string => name !== undefined)
+        );
         const retainedChiBindings = new Set(
           [chiBinding?.name].filter((name): name is string => name !== undefined)
         );
@@ -3936,6 +4051,9 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
           }
           if (!retainedGorillaMuxBindings.has(name)) {
             gorillaMuxRouters.delete(name);
+          }
+          if (!retainedHttpRouterBindings.has(name)) {
+            httpRouterReceivers.delete(name);
           }
           if (!retainedChiBindings.has(name)) {
             chiReceivers.delete(name);

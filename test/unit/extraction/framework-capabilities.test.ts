@@ -34,6 +34,7 @@ describe("first-party framework capabilities", () => {
       "iris",
       "beego",
       "gorilla-mux",
+      "httprouter",
       "net-http",
       "chi",
       "goframe",
@@ -257,6 +258,15 @@ describe("first-party framework capabilities", () => {
       surfaces: [
         "direct mux.NewRouter HandleFunc registrations",
         "literal direct named-function handlers with optional literal Methods chains"
+      ]
+    });
+    expect(frameworkCapability("httprouter")).toMatchObject({
+      languages: ["go"],
+      routeFramework: "httprouter",
+      routeRegistrations: [],
+      surfaces: [
+        "direct httprouter.New router HTTP methods",
+        "literal direct named-function HTTP handle registrations"
       ]
     });
     expect(frameworkCapability("net-http")).toMatchObject({
