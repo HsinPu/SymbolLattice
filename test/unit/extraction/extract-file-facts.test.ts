@@ -2883,6 +2883,85 @@ describe("source extraction", () => {
     ]);
   });
 
+  it("extracts direct Sanic Blueprint group decorators with composed literal prefixes", () => {
+    const facts = extractFileFacts({
+      filePath: "app/sanic_blueprint_groups.py",
+      language: "python",
+      sourceText: [
+        "from sanic import Blueprint as Router, Sanic as App",
+        "",
+        "app = App(\"symbol-lattice\")",
+        "users = Router(\"users\", url_prefix=\"/users\")",
+        "reports = Router(\"reports\", url_prefix=\"/reports\")",
+        "api = Router.group(users, reports, url_prefix=\"/api\")",
+        "",
+        "app.blueprint(api, url_prefix=\"/v1\")",
+        "",
+        "@users.get(\"/health\")",
+        "async def health(request):",
+        "    return None",
+        "",
+        "@reports.post(\"/summary\")",
+        "async def summary(request):",
+        "    return None"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId,
+          edge.evidence?.stage,
+          edge.resolution,
+          edge.confidence
+        ])
+    ).toEqual([
+      [
+        "GET /v1/api/users/health",
+        "app/sanic_blueprint_groups.py#health",
+        "framework.sanic.direct-blueprint-group.app-blueprint.decorator.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "POST /v1/api/reports/summary",
+        "app/sanic_blueprint_groups.py#summary",
+        "framework.sanic.direct-blueprint-group.app-blueprint.decorator.local-function",
+        "syntax",
+        "exact",
+        1
+      ]
+    ]);
+  });
+
+  it("rejects Sanic Blueprint groups with unproven members", () => {
+    const facts = extractFileFacts({
+      filePath: "app/unproven_sanic_blueprint_group.py",
+      language: "python",
+      sourceText: [
+        "from sanic import Blueprint, Sanic",
+        "",
+        "app = Sanic(\"symbol-lattice\")",
+        "users = Blueprint(\"users\", url_prefix=\"/users\")",
+        "unknown = object()",
+        "api = Blueprint.group(users, unknown, url_prefix=\"/api\")",
+        "app.blueprint(api, url_prefix=\"/v1\")",
+        "",
+        "@users.get(\"/health\")",
+        "async def health(request):",
+        "    return None"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+  });
+
   it("rejects unmounted, dynamic, unsupported configured, rebound, and shadowed Sanic Blueprints", () => {
     const facts = extractFileFacts({
       filePath: "app/unproven_sanic_blueprints.py",
