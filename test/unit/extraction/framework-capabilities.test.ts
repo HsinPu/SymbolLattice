@@ -32,6 +32,7 @@ describe("first-party framework capabilities", () => {
       "fiber",
       "echo",
       "iris",
+      "beego",
       "net-http",
       "chi",
       "goframe",
@@ -237,6 +238,15 @@ describe("first-party framework capabilities", () => {
       surfaces: [
         "direct Iris v12 Application/Party HTTP methods and Handle registrations",
         "same-function literal Party prefixes"
+      ]
+    });
+    expect(frameworkCapability("beego")).toMatchObject({
+      languages: ["go"],
+      routeFramework: "beego",
+      routeRegistrations: [],
+      surfaces: [
+        "direct Beego v2 web package functional HTTP registrations",
+        "literal direct named-function handlers"
       ]
     });
     expect(frameworkCapability("net-http")).toMatchObject({

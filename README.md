@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.141.0 是開發者預覽版，尚未發布到 npm；請從原始碼執行。
+> v0.142.0 是開發者預覽版，尚未發布到 npm；請從原始碼執行。
 
 SymbolLattice 為專案建立可查詢的本機程式碼符號圖譜。每條關係都保留來源規則、解析階段與信心值；原始碼僅保存於受索引專案的 `.symbol-lattice/index.sqlite`，不會被靜默上傳。
 
@@ -49,11 +49,11 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 Windows PowerShell 若沒有 `npm` 指令，請改用 `npm.cmd`。檔案系統根目錄與使用者家目錄需要明確加上 `--force` 才會接受。
 
-## v0.141.0
+## v0.142.0
 
-- Iris v12 現支援 `Handle("GET", "/path", handler)` 的單一具名 handler，Application 與巢狀 `Party` 都可建立 `exact` route。
-- `Handle` 必須使用可識別的 Iris v12 import、未重綁 receiver、標準大寫 HTTP method 與字面量路徑；完整 `Party` 前綴會保留。
-- artifact facts 升級為 `multi-language-ast-v122`；下次明確 `sync` 會重新萃取 Go facts 並重投影路由。
+- 新增 Go Beego v2 functional routes：`web.Get/Post/Put/Patch/Delete/Head/Options("/path", handler)` 可建立 `exact` route。
+- 只接受明確 `github.com/beego/beego/v2/server/web` import、字面量路徑與同檔具名 handler；import alias 與重綁定都會受到證據檢查。
+- artifact facts 升級為 `multi-language-ast-v123`；下次明確 `sync` 會重新萃取 Go facts 並重投影路由。
 
 ## 已知限制
 
@@ -64,6 +64,7 @@ Windows PowerShell 若沒有 `npm` 指令，請改用 `npm.cmd`。檔案系統�
 - GoFrame 跨檔 standard router 僅支援可靜態證明的 direct pointer（`&Controller{}`／`new(Controller)`）、無參數 `Factory()`，及同一函式內未重綁的一層 pointer/factory alias。pointer alias 可用 `:=`，或單一直接 initializer 的 `var`；有型別註記時必須是與右側相符的 pointer 型別。factory alias 可用 `:=` 或無型別、單一直接 initializer 的 `var`。每個 `Bind(...)` argument 必須獨立成立；slice 展開、動態值、全域、群組式或多值 `var`、有型別的 factory `var`、轉送、分支、map/interface/DI 容器、callback 同名遮蔽、重綁與歧義不會成為 `exact`。顯式 import alias 可直接使用；預設 import 必須由目標 `package` 宣告證明，絕不從 import 路徑猜測。`.`／`_` import、外部/傳遞模組、`replace`、巢狀模組選擇與 build tag 保持未解析。
 - 未綁定的 GoFrame request-signature 候選永遠是 `heuristic`，不代表 runtime 已註冊路由；反射、動態 Bind 與未知 prefix／host 維持未解析。
 - Iris 目前僅支援 `iris.New()`、單一具名 handler、字面量 `Party` 前綴，以及標準大寫 method 的 `Handle`；`Default`、MVC、middleware、自訂或小寫 method、動態路徑與重綁 receiver 不會成為 `exact`。
+- Beego 目前僅支援 v2 `web` package 的 direct functional HTTP methods；Namespace、controller/MVC、Router、annotation、middleware、動態路徑與重綁 package alias 不會成為 `exact`。
 - 其他框架只涵蓋已實作且可驗證的切片；完整變更請見 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 驗證

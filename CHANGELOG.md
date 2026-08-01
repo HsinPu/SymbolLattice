@@ -6,6 +6,26 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.142.0] - 2026-08-01
+
+### Added
+
+- Go Beego v2 extraction now proves direct `github.com/beego/beego/v2/server/web` functional registrations: `web.Get`, `Post`, `Put`, `Patch`, `Delete`, `Head`, and `Options` with a literal slash path and one named local function handler.
+- Explicit Beego import aliases and default `web` imports are accepted only while visible and unrebound in the registering function. Every emitted route retains exact syntax evidence under `framework.beego.direct-package-function.local-function`.
+- New unit and service coverage verifies direct v2 routes, import aliases, exact query results, and rejection of shadowed or rebound aliases, dynamic paths, inline/middleware handlers, and unsupported `Any` routes.
+
+### Compatibility
+
+- The artifact-facts extractor advances to `multi-language-ast-v123`. Existing graphs and SQLite schema remain readable; the next explicit `sync` re-extracts Go facts and reprojects routes. The project resolver remains `project-resolver-v37`.
+
+### Deliberate limits
+
+- Beego extraction is limited to direct v2 `web` package functional registrations with a literal path and one named handler. Namespace composition, controller/MVC, Router/RESTRouter, annotation routing, middleware, `Any`, dynamic values, v1 packages, var aliases, forwarding, branches, callbacks, reassignment, and ambiguity remain non-exact.
+
+### Comparison notes
+
+- The inspected CodeGraph Go matcher can discover a broad range of `Get`/`Post`-like receiver calls but does not require a Beego v2 import and cannot distinguish Beego's package-level API from an unrelated identifier. SymbolLattice is narrower for dynamic and controller forms, but emits exact, framework-proven direct-function routes for the supported slice.
+
 ## [0.141.0] - 2026-08-01
 
 ### Added
@@ -2640,7 +2660,8 @@ No unreleased changes.
 - Explicit full indexing, caller/callee/impact queries, and read-only MCP exploration.
 - `exact`, `heuristic`, and `unresolved` relationship states.
 
-[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.141.0...HEAD
+[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.142.0...HEAD
+[0.142.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.141.0...v0.142.0
 [0.141.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.140.0...v0.141.0
 [0.140.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.139.0...v0.140.0
 [0.139.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.138.0...v0.139.0

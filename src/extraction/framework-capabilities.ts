@@ -25,6 +25,7 @@ export const FRAMEWORK_CAPABILITY_IDS = [
   "fiber",
   "echo",
   "iris",
+  "beego",
   "net-http",
   "chi",
   "goframe",
@@ -293,6 +294,16 @@ export const FRAMEWORK_CAPABILITIES = [
     surfaces: [
       "direct Iris v12 Application/Party HTTP methods and Handle registrations",
       "same-function literal Party prefixes"
+    ]
+  },
+  {
+    id: "beego",
+    languages: ["go"],
+    routeFramework: "beego",
+    routeRegistrations: [],
+    surfaces: [
+      "direct Beego v2 web package functional HTTP registrations",
+      "literal direct named-function handlers"
     ]
   },
   {

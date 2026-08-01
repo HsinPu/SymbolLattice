@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.141.0 is an early developer release. The package is not published to npm; run it from source.
+> v0.142.0 is an early developer release. The package is not published to npm; run it from source.
 
 SymbolLattice builds a queryable local code-symbol graph for a project. Each relation retains its source rule, resolution stage, and confidence. Source remains in the indexed project's `.symbol-lattice/index.sqlite` and is never silently uploaded.
 
@@ -49,11 +49,11 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 On Windows PowerShell, use `npm.cmd` if `npm` is unavailable. Filesystem roots and home directories are rejected unless `--force` is explicit.
 
-## v0.141.0
+## v0.142.0
 
-- Iris v12 now supports `Handle("GET", "/path", handler)` with one named handler; both Application and nested Party registrations become `exact` routes.
-- Handle requires a proven Iris v12 import, an unrebound receiver, a standard uppercase HTTP method, and a literal path; the full Party prefix is retained.
-- Artifact facts advance to `multi-language-ast-v122`; the next explicit `sync` re-extracts Go facts and reprojects routes.
+- Go Beego v2 functional routes are now extracted as `exact`: `web.Get/Post/Put/Patch/Delete/Head/Options("/path", handler)`.
+- Extraction requires a proven `github.com/beego/beego/v2/server/web` import, a literal path, and a same-file named handler; import aliases and rebinding remain evidence-checked.
+- Artifact facts advance to `multi-language-ast-v123`; the next explicit `sync` re-extracts Go facts and reprojects routes.
 
 ## Deliberate limits
 
@@ -64,6 +64,7 @@ On Windows PowerShell, use `npm.cmd` if `npm` is unavailable. Filesystem roots a
 - Cross-file GoFrame standard routing supports only statically proven direct pointers (`&Controller{}` / `new(Controller)`), no-argument `Factory()` calls, and one unrebound same-function pointer/factory alias. A pointer alias may use `:=`, or one directly initialized `var`; a declared type must be the matching pointer type. A factory alias may use `:=` or one untyped directly initialized `var`. Each `Bind(...)` argument must prove itself independently; slice expansion, dynamic values, globals, grouped/multi-value var declarations, typed factory vars, forwarding, branches, map/interface/DI containers, callback shadowing, rebinding, and ambiguity never become `exact`. Explicit import aliases are accepted directly; default imports require a matching target `package` clause and are never inferred from the import path. `.`/`_` imports, external/transitive modules, `replace`, nested-module selection, and build tags remain unresolved.
 - Unbound GoFrame request-signature candidates are always `heuristic`, never proof of runtime route registration; reflection, dynamic Bind calls, and unknown prefixes or hosts remain unresolved.
 - Iris currently supports only `iris.New()`, one named handler, literal `Party` prefixes, and `Handle` with a standard uppercase method. `Default`, MVC, middleware, custom or lowercase methods, dynamic paths, and rebound receivers never become `exact`.
+- Beego currently supports only direct v2 `web` package functional HTTP methods. Namespaces, controller/MVC, Router, annotations, middleware, dynamic paths, and rebound package aliases never become `exact`.
 - Other frameworks expose only implemented, evidence-backed slices; see [CHANGELOG.md](CHANGELOG.md) for the full history.
 
 ## Verification

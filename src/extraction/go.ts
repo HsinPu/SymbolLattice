@@ -100,6 +100,13 @@ interface StaticIrisRoute {
   readonly node: GoSyntaxNode;
 }
 
+interface StaticBeegoRoute {
+  readonly method: RouteMethod;
+  readonly path: string;
+  readonly handlerName: string;
+  readonly node: GoSyntaxNode;
+}
+
 interface StaticNetHttpMuxBinding {
   readonly name: string;
 }
@@ -299,6 +306,7 @@ const ECHO_PACKAGE_PATHS = [
   "github.com/labstack/echo/v5"
 ] as const;
 const IRIS_PACKAGE_PATH = "github.com/kataras/iris/v12";
+const BEEGO_PACKAGE_PATH = "github.com/beego/beego/v2/server/web";
 const NET_HTTP_PACKAGE_PATH = "net/http";
 const CHI_PACKAGE_PATHS = ["github.com/go-chi/chi/v5"] as const;
 const GOFRAME_G_PACKAGE_PATHS = [
@@ -370,6 +378,16 @@ const IRIS_HANDLE_ROUTE_METHODS = new Set<RouteMethod>([
   "TRACE",
   "CONNECT"
 ]);
+
+const BEEGO_ROUTE_METHODS: Readonly<Record<string, RouteMethod>> = {
+  Get: "GET",
+  Post: "POST",
+  Put: "PUT",
+  Patch: "PATCH",
+  Delete: "DELETE",
+  Head: "HEAD",
+  Options: "OPTIONS"
+};
 
 const NET_HTTP_PATTERN_METHODS = new Set<RouteMethod>([
   "GET",
@@ -683,6 +701,13 @@ function staticIrisImportAliases(
   root: GoSyntaxNode
 ): readonly string[] {
   return staticPackageImportAliases(input, root, [IRIS_PACKAGE_PATH], "iris");
+}
+
+function staticBeegoImportAliases(
+  input: GoExtractFileFactsInput,
+  root: GoSyntaxNode
+): readonly string[] {
+  return staticPackageImportAliases(input, root, [BEEGO_PACKAGE_PATH], "web");
 }
 
 function staticNetHttpImportAliases(
@@ -2568,6 +2593,40 @@ function staticIrisHandleMethod(
     : null;
 }
 
+function staticBeegoRoute(
+  input: GoExtractFileFactsInput,
+  node: GoSyntaxNode,
+  beegoAliases: ReadonlySet<string>,
+  shadowedNames: ReadonlySet<string>
+): StaticBeegoRoute | null {
+  if (node.name !== "ExprStatement") {
+    return null;
+  }
+  const expression = directChildren(node)[0];
+  if (expression === undefined) {
+    return null;
+  }
+  const call = staticSelectorCall(input, expression);
+  if (
+    call === null ||
+    !beegoAliases.has(call.receiverName) ||
+    shadowedNames.has(call.receiverName) ||
+    call.arguments_.length !== 2
+  ) {
+    return null;
+  }
+  const method = BEEGO_ROUTE_METHODS[call.methodName];
+  const pathNode = call.arguments_[0];
+  const handlerNode = call.arguments_[1];
+  const path = pathNode === undefined ? null : staticLiteralSlashPath(input, pathNode);
+  const handlerName =
+    handlerNode?.name === "VariableName" ? identifierText(input, handlerNode) : null;
+  if (method === undefined || path === null || handlerName === null) {
+    return null;
+  }
+  return { method, path, handlerName, node };
+}
+
 function staticNetHttpMuxBinding(
   input: GoExtractFileFactsInput,
   node: GoSyntaxNode,
@@ -2710,6 +2769,7 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
   const fiberCapability = frameworkCapability("fiber");
   const echoCapability = frameworkCapability("echo");
   const irisCapability = frameworkCapability("iris");
+  const beegoCapability = frameworkCapability("beego");
   const netHttpCapability = frameworkCapability("net-http");
   const chiCapability = frameworkCapability("chi");
   const goFrameCapability = frameworkCapability("goframe");
@@ -2718,6 +2778,7 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
     !fiberCapability.languages.includes(input.language) ||
     !echoCapability.languages.includes(input.language) ||
     !irisCapability.languages.includes(input.language) ||
+    !beegoCapability.languages.includes(input.language) ||
     !netHttpCapability.languages.includes(input.language) ||
     !chiCapability.languages.includes(input.language) ||
     !goFrameCapability.languages.includes(input.language)
@@ -2908,6 +2969,16 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
         : routeFact.receiver.kind === "app"
           ? "framework.iris.direct-app.method.local-function"
           : "framework.iris.direct-party.method.local-function"
+    );
+  }
+
+  function addBeegoRoute(routeFact: StaticBeegoRoute, handler: SymbolNode): void {
+    addResolvedRoute(
+      routeFact.method,
+      routeFact.path,
+      routeFact.node,
+      handler,
+      "framework.beego.direct-package-function.local-function"
     );
   }
 
@@ -3109,6 +3180,7 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
     const fiberAliases = staticFiberImportAliases(input, root);
     const echoAliases = staticEchoImportAliases(input, root);
     const irisAliases = staticIrisImportAliases(input, root);
+    const beegoAliases = staticBeegoImportAliases(input, root);
     const netHttpAliases = staticNetHttpImportAliases(input, root);
     const chiAliases = staticChiImportAliases(input, root);
     const goFrameAliases = staticGoFrameImportAliases(input, root);
@@ -3452,6 +3524,9 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
       const visibleIrisAliases = new Set(
         irisAliases.filter((alias) => !functionDeclaration.parameterNames.includes(alias))
       );
+      const visibleBeegoAliases = new Set(
+        beegoAliases.filter((alias) => !functionDeclaration.parameterNames.includes(alias))
+      );
       const visibleNetHttpAliases = new Set(
         netHttpAliases.filter((alias) => !functionDeclaration.parameterNames.includes(alias))
       );
@@ -3558,6 +3633,22 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
             const handler = candidates[0];
             if (handler !== undefined) {
               addIrisRoute(irisRoute, handler);
+            }
+          }
+        }
+
+        const beegoRoute = staticBeegoRoute(
+          input,
+          statement,
+          visibleBeegoAliases,
+          shadowedNames
+        );
+        if (beegoRoute !== null && !shadowedNames.has(beegoRoute.handlerName)) {
+          const candidates = functionsByName.get(beegoRoute.handlerName) ?? [];
+          if (candidates.length === 1) {
+            const handler = candidates[0];
+            if (handler !== undefined) {
+              addBeegoRoute(beegoRoute, handler);
             }
           }
         }

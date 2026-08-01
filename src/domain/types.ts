@@ -58,6 +58,7 @@ export type RouteFramework =
   | "fiber"
   | "echo"
   | "iris"
+  | "beego"
   | "net-http"
   | "chi"
   | "goframe"

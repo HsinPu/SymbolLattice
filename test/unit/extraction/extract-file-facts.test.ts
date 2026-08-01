@@ -3177,6 +3177,111 @@ describe("source extraction", () => {
     expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
   });
 
+  it("extracts direct Go Beego v2 functional routes with exact evidence", () => {
+    const facts = extractFileFacts({
+      filePath: "cmd/server/beego.go",
+      language: "go",
+      sourceText: [
+        "package main",
+        "",
+        'import b "github.com/beego/beego/v2/server/web"',
+        "",
+        "func health() {}",
+        "func createUser() {}",
+        "func deleteUser() {}",
+        "func healthOptions() {}",
+        "",
+        "func main() {",
+        '  b.Get("/health", health)',
+        '  b.Post("/users", createUser)',
+        '  b.Delete("/users/{id}", deleteUser)',
+        '  b.Options("/health", healthOptions)',
+        "}"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId,
+          edge.evidence?.stage,
+          edge.resolution,
+          edge.confidence
+        ])
+    ).toEqual([
+      [
+        "GET /health",
+        "cmd/server/beego.go#health",
+        "framework.beego.direct-package-function.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "POST /users",
+        "cmd/server/beego.go#createUser",
+        "framework.beego.direct-package-function.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "DELETE /users/{id}",
+        "cmd/server/beego.go#deleteUser",
+        "framework.beego.direct-package-function.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "OPTIONS /health",
+        "cmd/server/beego.go#healthOptions",
+        "framework.beego.direct-package-function.local-function",
+        "syntax",
+        "exact",
+        1
+      ]
+    ]);
+  });
+
+  it("rejects shadowed, dynamic, inline, middleware, unsupported, and rebound Go Beego route shapes", () => {
+    const facts = extractFileFacts({
+      filePath: "cmd/server/unproven-beego.go",
+      language: "go",
+      sourceText: [
+        "package main",
+        "",
+        'import b "github.com/beego/beego/v2/server/web"',
+        "",
+        "func health() {}",
+        "func stable() {}",
+        "",
+        "func shadowed(b int) {",
+        '  b.Get("/shadowed", health)',
+        "}",
+        "",
+        "func main() {",
+        '  path := "/dynamic"',
+        "  b.Get(path, health)",
+        '  b.Get("/inline", func() {})',
+        '  b.Get("/middleware", auth, health)',
+        '  b.Any("/unsupported", stable)',
+        "  health := fallback",
+        '  b.Get("/rebound-handler", health)',
+        "  b := buildRouter()",
+        '  b.Get("/rebound-package", stable)',
+        "}"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+  });
+
   it("extracts direct Go net/http default and literal ServeMux HandleFunc routes with exact evidence", () => {
     const facts = extractFileFacts({
       filePath: "cmd/server/http.go",
