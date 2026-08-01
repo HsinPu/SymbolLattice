@@ -5042,6 +5042,105 @@ describe("SymbolLatticeService", () => {
     ]);
   });
 
+  it("projects Django URLConf exports through nested package initializers", async () => {
+    const projectPath = await createInlineProject({
+      "project/__init__.py": "",
+      "project/routes/__init__.py": "from .internal import urlpatterns as public_patterns",
+      "project/routes/internal/__init__.py": "from .catalog.urls import urlpatterns",
+      "project/routes/internal/catalog/__init__.py": "",
+      "project/routes/internal/catalog/urls.py": [
+        "from django.urls import path",
+        "",
+        "def health(request):",
+        "    return None",
+        "",
+        "urlpatterns = [path('health/', health)]"
+      ].join("\n"),
+      "project/urls.py": [
+        "from django.urls import include, path",
+        "from .routes import public_patterns as mounted_patterns",
+        "",
+        "urlpatterns = [path('v1/', include(mounted_patterns))]"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath, { method: "ALL", pathPrefix: "/v1/" });
+    const routesFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "project/routes/__init__.py");
+    const internalFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "project/routes/internal/__init__.py");
+
+    expect(routesFacts?.djangoUrlFacts).toMatchObject({
+      reExports: [
+        {
+          exportedName: "public_patterns",
+          importedUrlconfName: "urlpatterns",
+          moduleSpecifier: ".internal"
+        }
+      ]
+    });
+    expect(internalFacts?.djangoUrlFacts).toMatchObject({
+      reExports: [
+        {
+          exportedName: "urlpatterns",
+          importedUrlconfName: "urlpatterns",
+          moduleSpecifier: ".catalog.urls"
+        }
+      ]
+    });
+    expect(routes.routes).toMatchObject([
+      {
+        method: "ALL",
+        path: "/v1/health/",
+        route: {
+          kind: "route",
+          name: "ALL /v1/health/",
+          filePath: "project/routes/internal/catalog/urls.py"
+        },
+        edge: {
+          kind: "routes",
+          resolution: "exact",
+          evidence: {
+            ruleId: "framework.django.reexported-urlconf.path.include.local-function",
+            stage: "module",
+            resolutionPath: [
+              "project/urls.py",
+              "project/routes/__init__.py",
+              "project/routes/internal/__init__.py",
+              "project/routes/internal/catalog/urls.py"
+            ]
+          }
+        },
+        handler: { qualifiedName: "project/routes/internal/catalog/urls.py#health" }
+      }
+    ]);
+  });
+
+  it("rejects unresolved Django URLConf package initializer exports", async () => {
+    const projectPath = await createInlineProject({
+      "project/__init__.py": "",
+      "project/routes/__init__.py": "from .missing import urlpatterns as public_patterns",
+      "project/urls.py": [
+        "from django.urls import include, path",
+        "from .routes import public_patterns",
+        "",
+        "urlpatterns = [path('v1/', include(public_patterns))]"
+      ].join("\n")
+    });
+    const service = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+
+    await expect(service.routes(projectPath, { method: "ALL", pathPrefix: "/v1/" })).resolves.toMatchObject({
+      routes: []
+    });
+  });
+
   it("does not project Django URLConf modules without a proven package boundary", async () => {
     const projectPath = await createInlineProject({
       "project/catalog/urls.py": [

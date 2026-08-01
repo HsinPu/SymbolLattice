@@ -5,6 +5,7 @@ import {
   createSymbolId,
   type ArtifactFacts,
   type DjangoImportedUrlconfInclusionFact,
+  type DjangoUrlconfReExportFact,
   type DjangoUrlPatternRouteFact,
   type FastApiImportedRouterInclusionFact,
   type FastApiRouterDeclarationFact,
@@ -264,7 +265,7 @@ interface StaticSanicRelativeBlueprintImport {
 /** A package-relative import that can expose a final Django URLConf. */
 interface StaticDjangoRelativeUrlconfImport {
   readonly moduleSpecifier: string;
-  readonly importedUrlconfName: "urls" | "urlpatterns";
+  readonly importedUrlconfName: string;
   readonly urlconfName: string;
   readonly node: PythonSyntaxNode;
 }
@@ -627,11 +628,11 @@ function staticSanicRelativeBlueprintImport(
 }
 
 /**
- * Retains two direct relative imports that unambiguously name a sibling Django
- * URLConf: `from .catalog import urls [as local_urls]` and
- * `from .catalog.urls import urlpatterns [as local_patterns]`.
+ * Retains one-dot, single-name relative imports used as a Django URLConf binding.
+ * `urls` retains its direct module meaning; any other name projects only after
+ * project resolution proves a final `__init__.py` re-export or `urlpatterns`.
  *
- * The resolver later proves the regular-package boundary and target `urls.py`.
+ * The resolver later proves the regular-package boundary and every target hop.
  * Other import shapes can bind arbitrary runtime values and remain unsupported.
  */
 function staticDjangoRelativeUrlconfImport(
@@ -641,19 +642,16 @@ function staticDjangoRelativeUrlconfImport(
   if (node.name !== "ImportStatement") {
     return null;
   }
-  const match = /^from[ \t]+(\.[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)[ \t]+import[ \t]+(urls|urlpatterns)(?:[ \t]+as[ \t]+([A-Za-z_][A-Za-z0-9_]*))?[ \t]*$/u.exec(
+  const match = /^from[ \t]+(\.[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)[ \t]+import[ \t]+([A-Za-z_][A-Za-z0-9_]*)(?:[ \t]+as[ \t]+([A-Za-z_][A-Za-z0-9_]*))?[ \t]*$/u.exec(
     nodeText(input, node)
   );
   if (match?.[1] === undefined || match[2] === undefined) {
     return null;
   }
 
-  const importedUrlconfName = match[2] as "urls" | "urlpatterns";
+  const importedUrlconfName = match[2];
   const importedModule = match[1];
-  if (
-    (importedUrlconfName === "urls" && importedModule.endsWith(".urls")) ||
-    (importedUrlconfName === "urlpatterns" && !importedModule.endsWith(".urls"))
-  ) {
+  if (importedUrlconfName === "urls" && importedModule.endsWith(".urls")) {
     return null;
   }
   const moduleSpecifier =
@@ -2696,27 +2694,44 @@ function latestProvenStarletteRouteList(
  * Finds the one direct package-relative URLConf import still bound to an
  * `include` argument. A later assignment or import makes the binding unsafe.
  */
+function latestProvenDjangoRelativeUrlconfImportBinding(
+  input: PythonExtractFileFactsInput,
+  topLevelNodes: readonly PythonSyntaxNode[],
+  imports: readonly StaticDjangoRelativeUrlconfImport[],
+  urlconfName: string,
+  before: number
+): StaticDjangoRelativeUrlconfImport | null {
+  const candidates = imports
+    .filter(
+      (candidate) =>
+        candidate.urlconfName === urlconfName &&
+        candidate.node.to <= before &&
+        !hasTopLevelRebinding(
+          input,
+          topLevelNodes,
+          candidate.urlconfName,
+          candidate.node.to,
+          before
+        )
+    )
+    .sort((left, right) => right.node.from - left.node.from);
+  return candidates.length === 1 ? candidates[0] ?? null : null;
+}
+
+/** Finds the one direct package-relative URLConf import still bound to `include`. */
 function latestProvenDjangoRelativeUrlconfImport(
   input: PythonExtractFileFactsInput,
   topLevelNodes: readonly PythonSyntaxNode[],
   imports: readonly StaticDjangoRelativeUrlconfImport[],
   inclusion: StaticDjangoImportedUrlconfInclusion
 ): StaticDjangoRelativeUrlconfImport | null {
-  const candidates = imports
-    .filter(
-      (candidate) =>
-        candidate.urlconfName === inclusion.urlconfName &&
-        candidate.node.to <= inclusion.node.from &&
-        !hasTopLevelRebinding(
-          input,
-          topLevelNodes,
-          candidate.urlconfName,
-          candidate.node.to,
-          inclusion.node.from
-        )
-    )
-    .sort((left, right) => right.node.from - left.node.from);
-  return candidates.length === 1 ? candidates[0] ?? null : null;
+  return latestProvenDjangoRelativeUrlconfImportBinding(
+    input,
+    topLevelNodes,
+    imports,
+    inclusion.urlconfName,
+    inclusion.node.from
+  );
 }
 
 /**
@@ -3000,9 +3015,12 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
   };
   const djangoUrlFacts: {
     readonly routes: DjangoUrlPatternRouteFact[];
+    hasUrlpatterns?: true;
+    readonly reExports: DjangoUrlconfReExportFact[];
     readonly importedUrlconfInclusions: DjangoImportedUrlconfInclusionFact[];
   } = {
     routes: [],
+    reExports: [],
     importedUrlconfInclusions: []
   };
   const fileName = input.filePath.split(/[\\/]/u).at(-1) ?? input.filePath;
@@ -3467,6 +3485,25 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
       });
     }
     if (isPythonPackageInitializer(input.filePath)) {
+      for (const imported of relativeDjangoUrlconfImports) {
+        const finalImport = latestProvenDjangoRelativeUrlconfImportBinding(
+          input,
+          topLevelNodes,
+          relativeDjangoUrlconfImports,
+          imported.urlconfName,
+          input.sourceText.length
+        );
+        if (finalImport === null || nodeKey(finalImport.node) !== nodeKey(imported.node)) {
+          continue;
+        }
+        djangoUrlFacts.reExports.push({
+          exportedName: imported.urlconfName,
+          importedUrlconfName: imported.importedUrlconfName,
+          moduleSpecifier: imported.moduleSpecifier,
+          range: rangeFor(lineStarts, imported.node.from, imported.node.to)
+        });
+      }
+
       for (const imported of relativeRouterImports) {
         const finalImport = latestProvenFastApiRelativeRouterImportBinding(
           input,
@@ -3738,6 +3775,7 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
       ) {
         continue;
       }
+      djangoUrlFacts.hasUrlpatterns = true;
       for (const route of patterns.routes) {
         if (
           latestProvenDjangoPathImport(

@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.159.0 is a developer preview and is not published to npm. Run it from source.
+> v0.160.0 is a developer preview and is not published to npm. Run it from source.
 
 SymbolLattice builds a queryable local code-symbol graph for a project. Every relation keeps its rule, resolution stage, and confidence; `exact`, `heuristic`, and `unresolved` evidence are never conflated.
 
@@ -41,11 +41,11 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 On Windows PowerShell, use `npm.cmd` if `npm` is unavailable. Index data stays in the target project's `.symbol-lattice/index.sqlite`.
 
-## v0.159.0
+## v0.160.0
 
-- Resolves Flask `Blueprint` `register_blueprint(...)` routes through nested, final single-name re-export chains in regular-package `__init__.py` files.
-- Each exact route keeps the mounting module, initializer, and source-module hops in `resolutionPath` evidence.
-- Only unrebound, resolvable, unambiguous final exports are exact; missing sources, cycles, collisions, and dynamic overrides produce no exact route.
+- Django `include(...)` now resolves through nested, final single-name URLConf re-export chains in regular-package `__init__.py` files.
+- Every exact route records the mounting module, initializer hops, and source `urlpatterns` module in `resolutionPath` evidence.
+- Missing, competing, rebound, or dynamic values never produce an exact route.
 
 ## Principles
 
@@ -55,8 +55,8 @@ On Windows PowerShell, use `npm.cmd` if `npm` is unavailable. Index data stays i
 
 ## Boundaries
 
-- Cross-file FastAPI and Sanic composition is limited to regular Python packages, one-leading-dot single-name relative imports, and top-level literal framework registrations; `__init__.py` supports only final, unrebound same-shape export chains.
-- Dynamic composition, copied values, list/tuple members, re-exports outside initializers, namespace packages, parent-relative imports, class views, WebSockets, `add_route`, versioning, and other registration options do not become exact.
+- Cross-file Python routing currently covers FastAPI `include_router`, Flask `register_blueprint`, Sanic `app.blueprint`, and Django `include`. It accepts only one-leading-dot, single-name relative imports in regular packages plus final, unrebound `__init__.py` export chains.
+- Dynamic composition, copied values, list/tuple members, exports outside initializers, namespace packages, parent-relative imports, class views, WebSockets, `add_route`, versioning, and other registration options do not become exact.
 - Reflection, runtime configuration, DI, macros, generated code, and ambiguous names are likewise never treated as static proof.
 
 ## Verification

@@ -11,13 +11,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v140";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v141";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v44";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v45";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -395,9 +395,18 @@ export interface DjangoUrlPatternRouteFact {
  */
 export interface DjangoImportedUrlconfInclusionFact {
   readonly urlconfName: string;
-  readonly importedUrlconfName: "urls" | "urlpatterns";
+  /** Direct `urls`/`urlpatterns` bindings or a final initializer re-export name. */
+  readonly importedUrlconfName: string;
   readonly moduleSpecifier: string;
   readonly prefix: string;
+  readonly range: SourceRange;
+}
+
+/** A final, single-name relative Django URLConf export from a package initializer. */
+export interface DjangoUrlconfReExportFact {
+  readonly exportedName: string;
+  readonly importedUrlconfName: string;
+  readonly moduleSpecifier: string;
   readonly range: SourceRange;
 }
 
@@ -407,6 +416,10 @@ export interface DjangoImportedUrlconfInclusionFact {
  */
 export interface DjangoUrlFacts {
   readonly routes: readonly DjangoUrlPatternRouteFact[];
+  /** Present only when the file has a final, syntax-proven `urlpatterns` list. */
+  readonly hasUrlpatterns?: true;
+  /** Omitted only by artifact facts persisted before v0.160. */
+  readonly reExports?: readonly DjangoUrlconfReExportFact[];
   readonly importedUrlconfInclusions: readonly DjangoImportedUrlconfInclusionFact[];
 }
 

@@ -6,6 +6,26 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.160.0] - 2026-08-02
+
+### Added
+
+- Django URLConf targets can now resolve through a final chain of single-name, one-leading-dot relative imports exported by regular-package <code>__init__.py</code> files.
+- Exact module-stage evidence records the inclusion module, every initializer hop, and the source URLConf module under <code>framework.django.reexported-urlconf.path.include.local-function</code>.
+- New extractor and service coverage proves nested initializer chains, aliases, re-exported <code>urlpatterns</code>, rebinding rejection, non-initializer rejection, and unresolved-export rejection while preserving direct Django URLConf evidence and sync behavior.
+
+### Compatibility
+
+- The artifact-facts extractor advances to <code>multi-language-ast-v141</code> and the project resolver to <code>project-resolver-v45</code>. Existing graphs and SQLite schema remain readable; the next explicit <code>sync</code> re-extracts Python facts and reprojects affected routes.
+
+### Deliberate limits
+
+- Re-exports are limited to final, unrebound, single-name imports in regular-package <code>__init__.py</code> files and must terminate at a syntax-proven <code>urlpatterns</code> list. Parent-relative imports, import lists, star imports, copied values, non-initializer exports, dynamic composition, namespace packages, and ambiguous or missing targets remain non-exact.
+
+### Comparison notes
+
+- In the inspected CodeGraph baseline source tree at <code>572d22bfbe82602080e457bec655f72e3314f9ef</code>, the reviewed Django resolver creates route nodes from direct <code>path</code>/<code>re_path</code>/<code>url</code> calls and turns string <code>include('app.urls')</code> values into module references. The reviewed path did not establish recursive <code>__init__.py</code> URLConf re-export composition. SymbolLattice independently adds this narrow, auditable static-composition path; runtime framework composition remains outside exact analysis.
+
 ## [0.159.0] - 2026-08-02
 
 ### Added

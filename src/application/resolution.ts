@@ -4379,6 +4379,96 @@ function isStaticDjangoUrlPatternPath(value: string): boolean {
   return value.startsWith("/") && !value.includes("\\") && !value.includes("//");
 }
 
+interface ResolvedDjangoUrlconfTarget {
+  readonly filePath: string;
+  readonly resolutionPath: readonly string[];
+  readonly reExported: boolean;
+}
+
+function directDjangoUrlconfTargets(input: {
+  readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
+  readonly filePath: string;
+  readonly name: string;
+}): readonly ResolvedDjangoUrlconfTarget[] {
+  const facts = input.factsByFile.get(input.filePath)?.djangoUrlFacts;
+  if (
+    facts === undefined ||
+    facts.hasUrlpatterns !== true ||
+    (input.name !== "urls" && input.name !== "urlpatterns")
+  ) {
+    return [];
+  }
+  return [
+    {
+      filePath: input.filePath,
+      resolutionPath: [input.filePath],
+      reExported: false
+    }
+  ];
+}
+
+/**
+ * Resolves a direct Django URLConf or one final `__init__.py` re-export chain.
+ * Every hop is a persisted single-name relative import, and a cycle or any
+ * competing direct/exported binding remains unresolved.
+ */
+function resolveExactDjangoUrlconfTarget(input: {
+  readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
+  readonly knownFilePaths: ReadonlySet<string>;
+  readonly filePath: string;
+  readonly name: string;
+  readonly visited?: ReadonlySet<string>;
+}): ResolvedDjangoUrlconfTarget | null {
+  const targetKey = `${input.filePath}\u0000${input.name}`;
+  const visited = input.visited ?? new Set<string>();
+  if (visited.has(targetKey)) {
+    return null;
+  }
+  const facts = input.factsByFile.get(input.filePath)?.djangoUrlFacts;
+  if (facts === undefined) {
+    return null;
+  }
+  const directTargets = directDjangoUrlconfTargets(input);
+  const reExports = (facts.reExports ?? []).filter((reExport) => reExport.exportedName === input.name);
+  if (directTargets.length + reExports.length !== 1) {
+    return null;
+  }
+  if (directTargets[0] !== undefined) {
+    return directTargets[0];
+  }
+  const reExport = reExports[0];
+  if (reExport === undefined) {
+    return null;
+  }
+  const targetFilePath = resolvePythonRelativeModule(
+    input.knownFilePaths,
+    input.filePath,
+    reExport.moduleSpecifier
+  );
+  if (targetFilePath === null) {
+    return null;
+  }
+  const nestedVisited = new Set(visited);
+  nestedVisited.add(targetKey);
+  const target = resolveExactDjangoUrlconfTarget({
+    factsByFile: input.factsByFile,
+    knownFilePaths: input.knownFilePaths,
+    filePath: targetFilePath,
+    name: reExport.importedUrlconfName,
+    visited: nestedVisited
+  });
+  return target === null
+    ? null
+    : {
+        ...target,
+        resolutionPath: compactPythonModuleResolutionPath([
+          input.filePath,
+          ...target.resolutionPath
+        ]),
+        reExported: true
+      };
+}
+
 function mountedDjangoUrlconfRoutePath(prefix: string, routePath: string): string | null {
   if (!isStaticDjangoUrlPatternPath(prefix) || !isStaticDjangoUrlPatternPath(routePath)) {
     return null;
@@ -4394,6 +4484,8 @@ interface ProjectedDjangoImportedUrlconfRoute {
   readonly route: DjangoUrlPatternRouteFact;
   readonly handler: SymbolNode;
   readonly path: string;
+  readonly resolutionPath: readonly string[];
+  readonly reExported: boolean;
 }
 
 function compareProjectedDjangoImportedUrlconfRoute(
@@ -4419,8 +4511,8 @@ interface DjangoImportedUrlconfRouteProjection {
 
 /**
  * Projects literal child URL patterns through a directly imported Django
- * URLConf. Evidence records both URLConf modules so callers can distinguish a
- * project-level path from a child URLConf-local route.
+ * URLConf. A final package initializer re-export chain is accepted only when
+ * every hop has exact persisted evidence.
  */
 function projectDjangoImportedUrlconfRoutes(input: {
   readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
@@ -4439,14 +4531,24 @@ function projectDjangoImportedUrlconfRoutes(input: {
     }
 
     for (const inclusion of inclusionFacts.importedUrlconfInclusions) {
-      const urlconfFilePath = resolvePythonRelativeModule(
+      const importedUrlconfFilePath = resolvePythonRelativeModule(
         input.knownFilePaths,
         inclusionFilePath,
         inclusion.moduleSpecifier
       );
-      if (urlconfFilePath === null) {
+      if (importedUrlconfFilePath === null) {
         continue;
       }
+      const target = resolveExactDjangoUrlconfTarget({
+        factsByFile: input.factsByFile,
+        knownFilePaths: input.knownFilePaths,
+        filePath: importedUrlconfFilePath,
+        name: inclusion.importedUrlconfName
+      });
+      if (target === null) {
+        continue;
+      }
+      const urlconfFilePath = target.filePath;
       const urlconfFacts = input.factsByFile.get(urlconfFilePath)?.djangoUrlFacts;
       if (urlconfFacts === undefined) {
         continue;
@@ -4467,7 +4569,9 @@ function projectDjangoImportedUrlconfRoutes(input: {
           inclusion,
           route,
           handler,
-          path
+          path,
+          resolutionPath: target.resolutionPath,
+          reExported: target.reExported
         });
       }
     }
@@ -4558,11 +4662,13 @@ function projectDjangoImportedUrlconfRoutes(input: {
       confidence: 1,
       referenceName: candidate.handler.name,
       evidence: referenceEvidence(
-        "framework.django.imported-urlconf.path.include.local-function",
+        candidate.reExported
+          ? "framework.django.reexported-urlconf.path.include.local-function"
+          : "framework.django.imported-urlconf.path.include.local-function",
         "module",
         [candidate.handler.id],
         [],
-        [candidate.inclusionFilePath, candidate.urlconfFilePath]
+        [candidate.inclusionFilePath, ...candidate.resolutionPath]
       )
     });
   }

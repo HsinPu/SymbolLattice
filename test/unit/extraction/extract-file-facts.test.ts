@@ -3894,6 +3894,65 @@ describe("source extraction", () => {
     });
   });
 
+  it("retains final Django URLConf exports from package initializers", () => {
+    const initializerFacts = extractFileFacts({
+      filePath: "project/routes/__init__.py",
+      language: "python",
+      sourceText: "from .catalog.urls import urlpatterns as public_patterns"
+    });
+    const mainFacts = extractFileFacts({
+      filePath: "project/urls.py",
+      language: "python",
+      sourceText: [
+        "from django.urls import include, path",
+        "from .routes import public_patterns as mounted_patterns",
+        "",
+        "urlpatterns = [path('api/', include(mounted_patterns))]"
+      ].join("\n")
+    });
+
+    expect(initializerFacts.djangoUrlFacts).toMatchObject({
+      routes: [],
+      reExports: [
+        {
+          exportedName: "public_patterns",
+          importedUrlconfName: "urlpatterns",
+          moduleSpecifier: ".catalog.urls"
+        }
+      ],
+      importedUrlconfInclusions: []
+    });
+    expect(mainFacts.djangoUrlFacts).toMatchObject({
+      importedUrlconfInclusions: [
+        {
+          urlconfName: "mounted_patterns",
+          importedUrlconfName: "public_patterns",
+          moduleSpecifier: ".routes",
+          prefix: "/api/"
+        }
+      ]
+    });
+  });
+
+  it("rejects rebounded and non-initializer Django URLConf exports", () => {
+    const reboundFacts = extractFileFacts({
+      filePath: "project/routes/__init__.py",
+      language: "python",
+      sourceText: [
+        "from .catalog.urls import urlpatterns as public_patterns",
+        "public_patterns = build_urlconf()"
+      ].join("\n")
+    });
+    const regularModuleFacts = extractFileFacts({
+      filePath: "project/routes/exports.py",
+      language: "python",
+      sourceText: "from .catalog.urls import urlpatterns as public_patterns"
+    });
+
+    expect(reboundFacts.djangoUrlFacts).toMatchObject({ reExports: [] });
+    expect(regularModuleFacts.djangoUrlFacts).toMatchObject({ reExports: [] });
+  });
+
   it("rejects dynamic, parent-relative, and rebound Django URLConf inclusion forms", () => {
     const facts = extractFileFacts({
       filePath: "project/urls.py",
