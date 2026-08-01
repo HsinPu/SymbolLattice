@@ -6,6 +6,26 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.135.0] - 2026-08-01
+
+### Added
+
+- GoFrame v1/v2 standard-router projection now recognizes one local factory alias before registration: `controller := NewController(); group.Bind(controller)` and its local-module qualified equivalent can become exact when the underlying factory already satisfies the v0.134 direct-pointer proof.
+- The lexical extractor carries each eligible alias only within the current direct statement sequence and callback scope. A later assignment invalidates it before the next Bind, while callback parameters with the same name hide an outer alias.
+- New unit and service coverage verifies local aliases, root-`go.mod` default-imported factories, preserved Group/Domain evidence, and rebind rejection.
+
+### Compatibility
+
+- The artifact-facts extractor advances to `multi-language-ast-v116`. Existing graphs and SQLite schema remain readable; the next explicit `sync` re-extracts Go facts and reprojects routes. The project resolver remains `project-resolver-v37`.
+
+### Deliberate limits
+
+- Alias support accepts only one direct short declaration (`:=`) whose right side is an already supported no-argument factory call. Package globals, `var` declarations, assignments, forwarding aliases, branches, maps, interfaces, DI containers, dynamic function values, and alias rebindings do not become exact relations.
+
+### Comparison notes
+
+- The inspected CodeGraph GoFrame resolver recognizes reflective `group.Bind(user.NewV1())` but leaves the route-to-method link heuristic and does not reconstruct the Group prefix. SymbolLattice remains narrower in syntax but now supports the common local alias form and keeps exact factory, request, controller, Bind, Group/Domain, and local-module evidence for the proven subset.
+
 ## [0.134.0] - 2026-08-01
 
 ### Added
@@ -2500,7 +2520,8 @@ No unreleased changes.
 - Explicit full indexing, caller/callee/impact queries, and read-only MCP exploration.
 - `exact`, `heuristic`, and `unresolved` relationship states.
 
-[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.134.0...HEAD
+[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.135.0...HEAD
+[0.135.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.134.0...v0.135.0
 [0.134.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.133.0...v0.134.0
 [0.133.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.132.0...v0.133.0
 [0.132.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.131.0...v0.132.0

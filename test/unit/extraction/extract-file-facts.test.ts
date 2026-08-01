@@ -3552,6 +3552,51 @@ describe("source extraction", () => {
     );
   });
 
+  it("retains a local GoFrame factory alias only until that alias is rebound", () => {
+    const facts = extractFileFacts({
+      filePath: "api/goframe-factory-alias.go",
+      language: "go",
+      sourceText: [
+        "package api",
+        "",
+        "import (",
+        '  g "github.com/gogf/gf/v2/frame/g"',
+        '  ghttp "github.com/gogf/gf/v2/net/ghttp"',
+        ")",
+        "",
+        "type Controller struct{}",
+        "",
+        "func NewController() *Controller { return &Controller{} }",
+        "",
+        "func Register() {",
+        "  controller := NewController()",
+        '  g.Server().Group("/v1").Bind(controller)',
+        "  controller = NewController()",
+        '  g.Server().Group("/rebound").Bind(controller)',
+        '  g.Server().Group("/callback", func(controller *ghttp.RouterGroup) {',
+        "    controller.Bind(controller)",
+        "  })",
+        "}"
+      ].join("\n")
+    });
+
+    expect(facts.goFrameStandardRouterFacts?.controllerFactoryBindings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          factoryName: "NewController",
+          prefix: "/v1",
+          domains: []
+        })
+      ])
+    );
+    expect(facts.goFrameStandardRouterFacts?.controllerFactoryBindings).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ prefix: "/rebound" })])
+    );
+    expect(facts.goFrameStandardRouterFacts?.controllerFactoryBindings).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ prefix: "/callback" })])
+    );
+  });
+
   it("extracts literal GoFrame v1 BindHandler routes", () => {
     const facts = extractFileFacts({
       filePath: "cmd/server/goframe-v1.go",

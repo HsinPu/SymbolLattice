@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.134.0 是開發者預覽版，尚未發布到 npm；請從原始碼執行。
+> v0.135.0 是開發者預覽版，尚未發布到 npm；請從原始碼執行。
 
 SymbolLattice 為專案建立可查詢的本機程式碼符號圖譜。每條關係都保留來源規則、解析階段與信心值；原始碼僅保存於受索引專案的 `.symbol-lattice/index.sqlite`，不會被靜默上傳。
 
@@ -49,11 +49,11 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 Windows PowerShell 若沒有 `npm` 指令，請改用 `npm.cmd`。檔案系統根目錄與使用者家目錄需要明確加上 `--force` 才會接受。
 
-## v0.134.0
+## v0.135.0
 
-- GoFrame v1/v2 現支援可靜態證明的 factory Bind：`Bind(NewController())` 與 `Bind(handlers.NewV1())` 可投影為保留 `Group` 前綴與 `Domain` host 的 `exact` route。
-- 僅接受無參數 factory，且宣告回傳 `*Controller` 並直接回傳相同型別的 `&Controller{}` 或 `new(Controller)`；同 package 與根目錄 `go.mod` 的本機跨 package 均可驗證。
-- artifact facts 升級為 `multi-language-ast-v115`、project resolver 升級為 `project-resolver-v37`；下次明確 `sync` 會重新萃取 Go facts 並重投影路由。
+- GoFrame v1/v2 現支援一層本機 factory alias：`controller := NewController()` 或 `controller := handlers.NewV1()` 後的 `Bind(controller)` 可投影為保留 `Group` 前綴與 `Domain` host 的 `exact` route。
+- alias 僅接受直接 `:=` 無參數 factory 呼叫；任何再賦值、參數遮蔽、動態呼叫或不一致的 factory 回傳型別都不會成為 exact。
+- artifact facts 升級為 `multi-language-ast-v116`；下次明確 `sync` 會重新萃取 Go facts 並重投影路由。
 
 ## 已知限制
 
@@ -61,7 +61,7 @@ Windows PowerShell 若沒有 `npm` 指令，請改用 `npm.cmd`。檔案系統�
 - 動態派發、反射、巨集展開、程式碼產生、依賴注入與歧義名稱不會成為 `exact` 關係。
 - GoFrame Domain 僅接受可證明的字面量、非萬用字元 host；動態值、空白項目、萬用字元與重綁定 receiver 保持未解析。
 - GoFrame 鏈式 receiver 僅支援 `g.Server()` 起點與有限的字面量 `Domain`／單參數 `Group` 鏈；任意方法鏈、動態前綴、變數傳遞與不受支援的 callback 形狀不會成為精確關係。
-- GoFrame 跨檔 standard router 支援直接 `Bind(&Controller{})`，以及已證明的 `Bind(Factory())`；factory 必須無參數、宣告本機 `*Controller` 回傳型別，並直接回傳同型別指標。顯式 alias 可直接使用，預設 import 必須由目標 `package` 宣告證明 qualifier，不能從 import 路徑猜測。`.`／`_` import、外部/傳遞模組、`replace`、巢狀模組選擇、build tag、依賴注入、轉送呼叫、分支或歧義 Controller 方法不會成為精確關係。
+- GoFrame 跨檔 standard router 支援直接 `Bind(&Controller{})`、已證明的 `Bind(Factory())`，以及一層 `alias := Factory(); Bind(alias)`。factory 必須無參數、宣告本機 `*Controller` 回傳型別，並直接回傳同型別指標；alias 只能是未重綁的短宣告。顯式 alias 可直接使用，預設 import 必須由目標 `package` 宣告證明 qualifier，不能從 import 路徑猜測。`.`／`_` import、外部/傳遞模組、`replace`、巢狀模組選擇、build tag、依賴注入、轉送呼叫、分支或歧義 Controller 方法不會成為精確關係。
 - 未綁定的 GoFrame request-signature 候選永遠是 `heuristic`，不代表 runtime 已註冊路由；反射、動態 Bind 與未知 prefix／host 維持未解析。
 - 其他框架只涵蓋已實作且可驗證的切片；完整變更請見 [CHANGELOG.md](CHANGELOG.md)。
 

@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.134.0 is an early developer release. The package is not published to npm; run it from source.
+> v0.135.0 is an early developer release. The package is not published to npm; run it from source.
 
 SymbolLattice builds a queryable local code-symbol graph for a project. Each relation retains its source rule, resolution stage, and confidence. Source remains in the indexed project's `.symbol-lattice/index.sqlite` and is never silently uploaded.
 
@@ -49,11 +49,11 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 On Windows PowerShell, use `npm.cmd` if `npm` is unavailable. Filesystem roots and home directories are rejected unless `--force` is explicit.
 
-## v0.134.0
+## v0.135.0
 
-- GoFrame v1/v2 now supports statically proven factory Binds: `Bind(NewController())` and `Bind(handlers.NewV1())` project to `exact` routes while retaining literal `Group` prefixes and `Domain` hosts.
-- A factory must take no arguments, declare `*Controller`, and directly return the same `&Controller{}` or `new(Controller)` value. Same-package and root-`go.mod` local cross-package proof are supported.
-- Artifact facts advance to `multi-language-ast-v115` and the project resolver to `project-resolver-v37`; the next explicit `sync` re-extracts Go facts and reprojects routes.
+- GoFrame v1/v2 now supports one local factory alias: after `controller := NewController()` or `controller := handlers.NewV1()`, `Bind(controller)` projects to an `exact` route while retaining literal `Group` prefixes and `Domain` hosts.
+- An alias must be a direct `:=` no-argument factory call. Reassignment, parameter shadowing, dynamic calls, and mismatched factory return types never become exact.
+- Artifact facts advance to `multi-language-ast-v116`; the next explicit `sync` re-extracts Go facts and reprojects routes.
 
 ## Deliberate limits
 
@@ -61,7 +61,7 @@ On Windows PowerShell, use `npm.cmd` if `npm` is unavailable. Filesystem roots a
 - Dynamic dispatch, reflection, macro expansion, code generation, dependency injection, and ambiguous names never become exact graph relations.
 - GoFrame Domain extraction accepts only proven literal, non-wildcard hosts. Dynamic values, empty entries, wildcards, and rebound receivers remain unresolved.
 - Chained GoFrame receivers are limited to a `g.Server()` root and a finite literal `Domain`/one-argument `Group` chain. Arbitrary method calls, dynamic prefixes, variable propagation, and unsupported callback forms never become exact relations.
-- Cross-file GoFrame standard routing supports direct `Bind(&Controller{})` and proven `Bind(Factory())` calls. A factory must have no arguments, declare a local `*Controller` result, and directly return that pointer type. Explicit aliases are accepted directly; default imports require a matching target `package` clause and are never inferred from the import path. `.`/`_` imports, external/transitive modules, `replace`, nested-module selection, build tags, dependency injection, forwarding calls, branches, and ambiguous controller methods never become exact relations.
+- Cross-file GoFrame standard routing supports direct `Bind(&Controller{})`, proven `Bind(Factory())`, and one `alias := Factory(); Bind(alias)` hop. A factory must have no arguments, declare a local `*Controller` result, and directly return that pointer type; an alias must be an unrebound short declaration. Explicit aliases are accepted directly; default imports require a matching target `package` clause and are never inferred from the import path. `.`/`_` imports, external/transitive modules, `replace`, nested-module selection, build tags, dependency injection, forwarding calls, branches, and ambiguous controller methods never become exact relations.
 - Unbound GoFrame request-signature candidates are always `heuristic`, never proof of runtime route registration; reflection, dynamic Bind calls, and unknown prefixes or hosts remain unresolved.
 - Other frameworks expose only implemented, evidence-backed slices; see [CHANGELOG.md](CHANGELOG.md) for the full history.
 

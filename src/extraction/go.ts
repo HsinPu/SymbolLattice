@@ -226,6 +226,11 @@ interface StaticGoFrameControllerFactoryBinding {
   readonly node: GoSyntaxNode;
 }
 
+interface StaticGoFrameControllerFactoryAliasBinding {
+  readonly name: string;
+  readonly factory: StaticGoFrameNamedTypeReference;
+}
+
 interface StaticGoFrameRequest {
   readonly name: string;
   readonly method: RouteMethod;
@@ -1873,12 +1878,50 @@ function staticGoFrameControllerBinding(
       };
 }
 
+/**
+ * Retain one local factory result only for a direct short declaration. Later
+ * assignments invalidate the alias before it can prove a Bind target.
+ */
+function staticGoFrameControllerFactoryAliasBinding(
+  input: GoExtractFileFactsInput,
+  node: GoSyntaxNode,
+  shadowedNames: ReadonlySet<string>
+): StaticGoFrameControllerFactoryAliasBinding | null {
+  if (node.name !== "VarDecl") {
+    return null;
+  }
+  const children = directChildren(node);
+  const target = children[0];
+  const operator = children[1];
+  const value = children[2];
+  if (
+    children.length !== 3 ||
+    target?.name !== "DefName" ||
+    operator === undefined ||
+    nodeText(input, operator) !== ":=" ||
+    value === undefined
+  ) {
+    return null;
+  }
+  const name = identifierText(input, target);
+  const factory = staticGoFrameStandardRouterFactoryReference(input, value);
+  const factoryScopeName = factory?.packageAlias ?? factory?.name;
+  return name === null ||
+    name === "_" ||
+    factory === null ||
+    shadowedNames.has(name) ||
+    (factoryScopeName !== undefined && shadowedNames.has(factoryScopeName))
+    ? null
+    : { name, factory };
+}
+
 function staticGoFrameControllerFactoryBinding(
   input: GoExtractFileFactsInput,
   node: GoSyntaxNode,
   receivers: ReadonlyMap<string, GoFrameReceiver>,
   goFrameAliases: ReadonlySet<string>,
-  shadowedNames: ReadonlySet<string>
+  shadowedNames: ReadonlySet<string>,
+  factoryAliases: ReadonlyMap<string, StaticGoFrameNamedTypeReference>
 ): StaticGoFrameControllerFactoryBinding | null {
   if (node.name !== "ExprStatement") {
     return null;
@@ -1892,12 +1935,21 @@ function staticGoFrameControllerFactoryBinding(
     return null;
   }
   const factoryNode = call.arguments_[0];
-  const factory =
+  const directFactory =
     factoryNode === undefined
       ? null
       : staticGoFrameStandardRouterFactoryReference(input, factoryNode);
+  const factoryAliasName =
+    factoryNode?.name === "VariableName" ? identifierText(input, factoryNode) : null;
+  const factory =
+    directFactory ??
+    (factoryAliasName === null ? null : (factoryAliases.get(factoryAliasName) ?? null));
+  const factoryComesFromAlias = directFactory === null && factoryAliasName !== null && factory !== null;
   const factoryScopeName = factory?.packageAlias ?? factory?.name;
-  return factory === null || (factoryScopeName !== undefined && shadowedNames.has(factoryScopeName))
+  return factory === null ||
+    (!factoryComesFromAlias &&
+      factoryScopeName !== undefined &&
+      shadowedNames.has(factoryScopeName))
     ? null
     : {
         receiver: call.receiver,
@@ -2855,6 +2907,7 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
       statements: readonly GoSyntaxNode[],
       receivers: Map<string, GoFrameReceiver>,
       objectBindings: Map<string, string>,
+      factoryAliases: Map<string, StaticGoFrameNamedTypeReference>,
       shadowedNames: Set<string>,
       objectRouteNameMutatedServers: Set<GoFrameServerReceiver>,
       visibleGoFrameAliases: ReadonlySet<string>,
@@ -2901,6 +2954,14 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
         const objectBinding = staticGoFrameObjectBinding(input, statement);
         if (objectBinding !== null) {
           objectBindings.set(objectBinding.name, objectBinding.controllerName);
+        }
+        const factoryAliasBinding = staticGoFrameControllerFactoryAliasBinding(
+          input,
+          statement,
+          shadowedNames
+        );
+        if (factoryAliasBinding !== null) {
+          factoryAliases.set(factoryAliasBinding.name, factoryAliasBinding.factory);
         }
         const objectRouteNameMutation = staticGoFrameObjectRouteNameMutation(
           input,
@@ -3012,7 +3073,8 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
           statement,
           receivers,
           activeGoFrameAliases,
-          shadowedNames
+          shadowedNames,
+          factoryAliases
         );
         if (controllerFactoryBinding !== null) {
           goFrameControllerFactoryBindings.push(controllerFactoryBinding);
@@ -3030,12 +3092,15 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
           const callbackReceivers = new Map(receivers);
           callbackReceivers.set(callback.parameterName, callback.receiver);
           const callbackObjects = new Map(objectBindings);
+          const callbackFactoryAliases = new Map(factoryAliases);
+          callbackFactoryAliases.delete(callback.parameterName);
           const callbackShadowedNames = new Set(shadowedNames);
           callbackShadowedNames.add(callback.parameterName);
           extractGoFrameDirectStatements(
             directChildren(callback.body),
             callbackReceivers,
             callbackObjects,
+            callbackFactoryAliases,
             callbackShadowedNames,
             objectRouteNameMutatedServers,
             visibleGoFrameAliases,
@@ -3055,12 +3120,18 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
         const retainedObjectBindings = new Set(
           [objectBinding?.name].filter((name): name is string => name !== undefined)
         );
+        const retainedFactoryAliases = new Set(
+          [factoryAliasBinding?.name].filter((name): name is string => name !== undefined)
+        );
         for (const name of directBoundNames(input, statement)) {
           if (!retainedReceiverBindings.has(name)) {
             receivers.delete(name);
           }
           if (!retainedObjectBindings.has(name)) {
             objectBindings.delete(name);
+          }
+          if (!retainedFactoryAliases.has(name)) {
+            factoryAliases.delete(name);
           }
           shadowedNames.add(name);
         }
@@ -3261,6 +3332,7 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
         directChildren(functionDeclaration.body),
         new Map<string, GoFrameReceiver>(),
         new Map<string, string>(),
+        new Map<string, StaticGoFrameNamedTypeReference>(),
         new Set(functionDeclaration.parameterNames),
         new Set<GoFrameServerReceiver>(),
         visibleGoFrameAliases,

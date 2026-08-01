@@ -5286,6 +5286,93 @@ describe("SymbolLatticeService", () => {
     );
   });
 
+  it("projects a GoFrame route when a default-imported factory is bound through one local alias", async () => {
+    const projectPath = await createInlineProject({
+      "go.mod": "module example.test/warehouse\n\ngo 1.22\n",
+      "api/requests/list.go": [
+        "package contracts",
+        "",
+        'import "github.com/gogf/gf/v2/frame/g"',
+        "",
+        "type ListReq struct {",
+        '  g.Meta `path:"/users" method:"GET"`',
+        "}"
+      ].join("\n"),
+      "api/controllers/users.go": [
+        "package handlers",
+        "",
+        "import (",
+        '  "context"',
+        '  "example.test/warehouse/api/requests"',
+        ")",
+        "",
+        "type UsersController struct{}",
+        "",
+        "func NewV1() *UsersController { return &UsersController{} }",
+        "func (c *UsersController) List(ctx context.Context, req *contracts.ListReq) {}"
+      ].join("\n"),
+      "cmd/server/routes.go": [
+        "package main",
+        "",
+        "import (",
+        '  "example.test/warehouse/api/controllers"',
+        '  "github.com/gogf/gf/v2/frame/g"',
+        ")",
+        "",
+        "func Register() {",
+        "  controller := handlers.NewV1()",
+        '  g.Server().Domain("api.example.test").Group("/v1").Bind(controller)',
+        "}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath, { domain: "api.example.test" });
+    const bindingFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "cmd/server/routes.go");
+
+    expect(bindingFacts?.goFrameStandardRouterFacts).toMatchObject({
+      controllerFactoryBindings: [
+        expect.objectContaining({
+          factoryName: "NewV1",
+          factoryPackageAlias: "handlers",
+          prefix: "/v1",
+          domains: ["api.example.test"]
+        })
+      ]
+    });
+    expect(routes.routes).toHaveLength(1);
+    expect(routes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "GET",
+          path: "/v1/users",
+          domain: "api.example.test",
+          handler: expect.objectContaining({
+            qualifiedName: "api/controllers/users.go#UsersController.List"
+          }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            confidence: 1,
+            evidence: expect.objectContaining({
+              ruleId: "framework.goframe.standard-router.g-meta.go-module.factory-bind",
+              stage: "module",
+              configurationPaths: ["go.mod"],
+              resolutionPath: [
+                "api/requests/list.go",
+                "api/controllers/users.go",
+                "cmd/server/routes.go"
+              ]
+            })
+          })
+        })
+      ])
+    );
+  });
+
   it("keeps an unproven GoFrame factory Bind separate from exact route evidence", async () => {
     const projectPath = await createInlineProject({
       "api/request.go": [
