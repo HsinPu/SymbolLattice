@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.142.0 是開發者預覽版，尚未發布到 npm；請從原始碼執行。
+> v0.143.0 是開發者預覽版，尚未發布到 npm；請從原始碼執行。
 
 SymbolLattice 為專案建立可查詢的本機程式碼符號圖譜。每條關係都保留來源規則、解析階段與信心值；原始碼僅保存於受索引專案的 `.symbol-lattice/index.sqlite`，不會被靜默上傳。
 
@@ -49,11 +49,11 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 Windows PowerShell 若沒有 `npm` 指令，請改用 `npm.cmd`。檔案系統根目錄與使用者家目錄需要明確加上 `--force` 才會接受。
 
-## v0.142.0
+## v0.143.0
 
-- 新增 Go Beego v2 functional routes：`web.Get/Post/Put/Patch/Delete/Head/Options("/path", handler)` 可建立 `exact` route。
-- 只接受明確 `github.com/beego/beego/v2/server/web` import、字面量路徑與同檔具名 handler；import alias 與重綁定都會受到證據檢查。
-- artifact facts 升級為 `multi-language-ast-v123`；下次明確 `sync` 會重新萃取 Go facts 並重投影路由。
+- 新增 Go Gorilla/mux：`router := mux.NewRouter()` 的 `HandleFunc("/path", handler)` 及單一 `Methods("GET", ...)` 連鎖可建立 `exact` route。
+- 僅接受明確 `github.com/gorilla/mux` import、未重綁 router、字面量路徑與同檔具名 handler；`Methods` 必須是標準大寫 HTTP method。
+- artifact facts 升級為 `multi-language-ast-v124`；下次明確 `sync` 會重新萃取 Go facts 並重投影路由。
 
 ## 已知限制
 
@@ -65,6 +65,7 @@ Windows PowerShell 若沒有 `npm` 指令，請改用 `npm.cmd`。檔案系統�
 - 未綁定的 GoFrame request-signature 候選永遠是 `heuristic`，不代表 runtime 已註冊路由；反射、動態 Bind 與未知 prefix／host 維持未解析。
 - Iris 目前僅支援 `iris.New()`、單一具名 handler、字面量 `Party` 前綴，以及標準大寫 method 的 `Handle`；`Default`、MVC、middleware、自訂或小寫 method、動態路徑與重綁 receiver 不會成為 `exact`。
 - Beego 目前僅支援 v2 `web` package 的 direct functional HTTP methods；Namespace、controller/MVC、Router、annotation、middleware、動態路徑與重綁 package alias 不會成為 `exact`。
+- Gorilla/mux 目前僅支援 `mux.NewRouter()` 的 direct `HandleFunc` 與單一 `Methods` 連鎖；Subrouter、PathPrefix、Host、Headers、Schemes、middleware、其他 matcher chain、動態值與重綁都不會成為 `exact`。
 - 其他框架只涵蓋已實作且可驗證的切片；完整變更請見 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 驗證

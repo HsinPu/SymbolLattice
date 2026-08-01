@@ -4282,6 +4282,88 @@ describe("SymbolLatticeService", () => {
     ]);
   });
 
+  it("indexes Gorilla/mux literal HandleFunc Methods chains with exact syntax evidence", async () => {
+    const projectPath = await createInlineProject({
+      "cmd/server/main.go": [
+        "package main",
+        "",
+        "import (",
+        '  "net/http"',
+        '  "github.com/gorilla/mux"',
+        ")",
+        "",
+        "func health(w http.ResponseWriter, r *http.Request) {}",
+        "func updateUser(w http.ResponseWriter, r *http.Request) {}",
+        "",
+        "func main() {",
+        "  router := mux.NewRouter()",
+        '  router.HandleFunc("/health", health)',
+        '  router.HandleFunc("/users/{id}", updateUser).Methods("PUT", "PATCH")',
+        "}"
+      ].join("\n")
+    });
+    const service = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+    const patchRoutes = await service.routes(projectPath, { method: "PATCH" });
+
+    expect(routes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "ALL",
+          path: "/health",
+          handler: expect.objectContaining({ qualifiedName: "cmd/server/main.go#health" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.gorilla-mux.direct-router.handle-func.local-function",
+              stage: "syntax"
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "PUT",
+          path: "/users/{id}",
+          handler: expect.objectContaining({ qualifiedName: "cmd/server/main.go#updateUser" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.gorilla-mux.direct-router.handle-func-methods.local-function",
+              stage: "syntax"
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "PATCH",
+          path: "/users/{id}",
+          handler: expect.objectContaining({ qualifiedName: "cmd/server/main.go#updateUser" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.gorilla-mux.direct-router.handle-func-methods.local-function",
+              stage: "syntax"
+            })
+          })
+        })
+      ])
+    );
+    expect(patchRoutes.routes).toMatchObject([
+      {
+        method: "PATCH",
+        path: "/users/{id}",
+        handler: { qualifiedName: "cmd/server/main.go#updateUser" },
+        edge: {
+          resolution: "exact",
+          evidence: {
+            ruleId: "framework.gorilla-mux.direct-router.handle-func-methods.local-function",
+            stage: "syntax"
+          }
+        }
+      }
+    ]);
+  });
+
   it("indexes Go net/http default and literal ServeMux routes with exact syntax evidence", async () => {
     const projectPath = await createInlineProject({
       "cmd/server/main.go": [

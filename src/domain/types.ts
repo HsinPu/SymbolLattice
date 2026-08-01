@@ -59,6 +59,7 @@ export type RouteFramework =
   | "echo"
   | "iris"
   | "beego"
+  | "gorilla-mux"
   | "net-http"
   | "chi"
   | "goframe"

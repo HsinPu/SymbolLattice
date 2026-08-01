@@ -26,6 +26,7 @@ export const FRAMEWORK_CAPABILITY_IDS = [
   "echo",
   "iris",
   "beego",
+  "gorilla-mux",
   "net-http",
   "chi",
   "goframe",
@@ -304,6 +305,16 @@ export const FRAMEWORK_CAPABILITIES = [
     surfaces: [
       "direct Beego v2 web package functional HTTP registrations",
       "literal direct named-function handlers"
+    ]
+  },
+  {
+    id: "gorilla-mux",
+    languages: ["go"],
+    routeFramework: "gorilla-mux",
+    routeRegistrations: [],
+    surfaces: [
+      "direct mux.NewRouter HandleFunc registrations",
+      "literal direct named-function handlers with optional literal Methods chains"
     ]
   },
   {

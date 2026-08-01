@@ -3282,6 +3282,122 @@ describe("source extraction", () => {
     expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
   });
 
+  it("extracts direct Gorilla/mux HandleFunc routes with literal Methods chains and exact evidence", () => {
+    const facts = extractFileFacts({
+      filePath: "cmd/server/gorilla-mux.go",
+      language: "go",
+      sourceText: [
+        "package main",
+        "",
+        "import (",
+        '  http "net/http"',
+        '  m "github.com/gorilla/mux"',
+        ")",
+        "",
+        "func health(w http.ResponseWriter, r *http.Request) {}",
+        "func createUser(w http.ResponseWriter, r *http.Request) {}",
+        "func updateUser(w http.ResponseWriter, r *http.Request) {}",
+        "",
+        "func main() {",
+        "  router := m.NewRouter()",
+        '  router.HandleFunc("/health", health)',
+        '  router.HandleFunc("/users", createUser).Methods("POST")',
+        '  router.HandleFunc("/users/{id}", updateUser).Methods("PUT", "PATCH")',
+        "}"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId,
+          edge.evidence?.stage,
+          edge.resolution,
+          edge.confidence
+        ])
+    ).toEqual([
+      [
+        "ALL /health",
+        "cmd/server/gorilla-mux.go#health",
+        "framework.gorilla-mux.direct-router.handle-func.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "POST /users",
+        "cmd/server/gorilla-mux.go#createUser",
+        "framework.gorilla-mux.direct-router.handle-func-methods.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "PUT /users/{id}",
+        "cmd/server/gorilla-mux.go#updateUser",
+        "framework.gorilla-mux.direct-router.handle-func-methods.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "PATCH /users/{id}",
+        "cmd/server/gorilla-mux.go#updateUser",
+        "framework.gorilla-mux.direct-router.handle-func-methods.local-function",
+        "syntax",
+        "exact",
+        1
+      ]
+    ]);
+  });
+
+  it("rejects shadowed, dynamic, inline, unsupported, composed, and rebound Gorilla/mux route shapes", () => {
+    const facts = extractFileFacts({
+      filePath: "cmd/server/unproven-gorilla-mux.go",
+      language: "go",
+      sourceText: [
+        "package main",
+        "",
+        "import (",
+        '  http "net/http"',
+        '  m "github.com/gorilla/mux"',
+        ")",
+        "",
+        "func health(w http.ResponseWriter, r *http.Request) {}",
+        "func stable(w http.ResponseWriter, r *http.Request) {}",
+        "",
+        "func shadowed(m int) {",
+        "  router := m.NewRouter()",
+        '  router.HandleFunc("/shadowed", health).Methods("GET")',
+        "}",
+        "",
+        "func main() {",
+        '  path := "/dynamic"',
+        '  method := "GET"',
+        "  router := m.NewRouter()",
+        '  router.HandleFunc(path, health).Methods("GET")',
+        '  router.HandleFunc("/inline", func(w http.ResponseWriter, r *http.Request) {}).Methods("GET")',
+        '  router.HandleFunc("/unsupported", stable).Methods("BREW")',
+        '  router.HandleFunc("/lowercase", stable).Methods("get")',
+        '  router.HandleFunc("/dynamic-method", stable).Methods(method)',
+        '  router.HandleFunc("/empty", stable).Methods()',
+        '  router.HandleFunc("/composed", stable).Name("detail").Methods("GET")',
+        "  router = buildRouter()",
+        '  router.HandleFunc("/rebound", stable).Methods("GET")',
+        "  var legacy = m.NewRouter()",
+        '  legacy.HandleFunc("/var-binding", stable).Methods("GET")',
+        "}"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+  });
+
   it("extracts direct Go net/http default and literal ServeMux HandleFunc routes with exact evidence", () => {
     const facts = extractFileFacts({
       filePath: "cmd/server/http.go",

@@ -6,6 +6,26 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.143.0] - 2026-08-01
+
+### Added
+
+- Go Gorilla/mux extraction now proves direct short-variable `mux.NewRouter()` receivers and `HandleFunc("/path", handler)` registrations with one named local function handler.
+- A direct single `HandleFunc(...).Methods("GET", ...)` chain emits one exact route for each distinct standard uppercase literal HTTP method, instead of treating the route as method-agnostic.
+- New unit and service coverage verifies explicit/default imports, all-method and method-bounded routes, persisted route queries, and rejection of shadowed or rebound aliases, dynamic values, inline handlers, unsupported methods, empty method lists, and extra matcher chains.
+
+### Compatibility
+
+- The artifact-facts extractor advances to `multi-language-ast-v124`. Existing graphs and SQLite schema remain readable; the next explicit `sync` re-extracts Go facts and reprojects routes. The project resolver remains `project-resolver-v37`.
+
+### Deliberate limits
+
+- Gorilla/mux extraction is limited to direct `mux.NewRouter()` short declarations, one named handler, a literal slash path, and an optional single `Methods(...)` chain containing one or more standard uppercase literals. Subrouters, `Handle`, `PathPrefix`, `Host`, `Headers`, `Schemes`, route names, middleware, further matcher chains, var aliases, forwarding, branches, callbacks, reassignment, dynamic values, custom methods, and ambiguity remain non-exact.
+
+### Comparison notes
+
+- The inspected CodeGraph Go matcher recognizes a generic `HandleFunc("/path", handler)` shape, but does not prove Gorilla/mux provenance or preserve a chained `Methods(...)` restriction; chained registrations can be represented as broad `ALL` handlers. SymbolLattice is narrower for other mux matchers, but emits import- and receiver-proven per-method exact routes for the supported chain.
+
 ## [0.142.0] - 2026-08-01
 
 ### Added
@@ -2660,7 +2680,8 @@ No unreleased changes.
 - Explicit full indexing, caller/callee/impact queries, and read-only MCP exploration.
 - `exact`, `heuristic`, and `unresolved` relationship states.
 
-[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.142.0...HEAD
+[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.143.0...HEAD
+[0.143.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.142.0...v0.143.0
 [0.142.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.141.0...v0.142.0
 [0.141.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.140.0...v0.141.0
 [0.140.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.139.0...v0.140.0
