@@ -2965,7 +2965,11 @@ function projectedRouteSymbol(route: SymbolNode, path: string, declarationOrdina
   const methodSeparator = route.name.indexOf(" ");
   const method = route.name.slice(0, methodSeparator);
   const name = `${method} ${path}`;
-  const qualifiedName = `${route.filePath}#route:${name}`;
+  const routeQualifiedNamePrefix = `${route.filePath}#route:${route.name}`;
+  const routeIdentitySuffix = route.qualifiedName.startsWith(routeQualifiedNamePrefix)
+    ? route.qualifiedName.slice(routeQualifiedNamePrefix.length)
+    : "";
+  const qualifiedName = `${route.filePath}#route:${name}${routeIdentitySuffix}`;
   return {
     ...route,
     id: createSymbolId({
@@ -3004,7 +3008,10 @@ function projectedRouteEdge(
             ...(edge.targetId === null ? [] : [edge.targetId]),
             ...source.controllerIds,
             ...source.moduleIds
-          ].sort(compareStableText)
+          ].sort(compareStableText),
+          ...(edge.evidence?.routeDomain === undefined
+            ? {}
+            : { routeDomain: edge.evidence.routeDomain })
         }
       : edge.evidence;
 

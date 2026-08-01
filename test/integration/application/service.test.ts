@@ -2897,6 +2897,9 @@ describe("SymbolLatticeService", () => {
     await expect(service.routes(projectPath, { pathPrefix: "api" })).rejects.toMatchObject({
       code: "INVALID_ROUTE_PATH_PREFIX"
     });
+    await expect(service.routes(projectPath, { domain: " api.example.test" })).rejects.toMatchObject({
+      code: "INVALID_ROUTE_DOMAIN"
+    });
     await expect(service.routes(projectPath, { limit: 0 })).rejects.toMatchObject({
       code: "INVALID_ROUTE_LIMIT"
     });
@@ -4576,6 +4579,80 @@ describe("SymbolLatticeService", () => {
         })
       ])
     );
+  });
+
+  it("indexes literal GoFrame Domain object routes and filters exact host conditions", async () => {
+    const projectPath = await createInlineProject({
+      "cmd/server/main.go": [
+        "package main",
+        "",
+        "import (",
+        '  g "github.com/gogf/gf/v2/frame/g"',
+        '  "github.com/gogf/gf/v2/net/ghttp"',
+        ")",
+        "",
+        "type Controller struct{}",
+        "",
+        "func (c *Controller) Health(r *ghttp.Request) {}",
+        "func (c *Controller) Get(r *ghttp.Request) {}",
+        "func (c *Controller) Delete(r *ghttp.Request) {}",
+        "",
+        "func main() {",
+        "  server := g.Server()",
+        "  controller := &Controller{}",
+        '  server.BindObjectMethod("GET:/global", controller, "Health")',
+        '  api := server.Domain("api.example.test, api-alt.example.test")',
+        '  api.BindObjectMethod("GET:/health", controller, "Health")',
+        '  api.BindObjectRest("/items", controller)',
+        "}"
+      ].join("\n")
+    });
+    const service = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const apiRoutes = await service.routes(projectPath, { domain: "api.example.test" });
+    const alternateRoutes = await service.routes(projectPath, { domain: "api-alt.example.test" });
+    const hostlessRoutes = await service.routes(projectPath, { pathPrefix: "/global" });
+
+    expect(apiRoutes.routes).toHaveLength(3);
+    expect(apiRoutes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "GET",
+          path: "/health",
+          domain: "api.example.test",
+          handler: expect.objectContaining({ qualifiedName: "cmd/server/main.go#Controller.Health" }),
+          edge: expect.objectContaining({
+            evidence: expect.objectContaining({
+              ruleId: "framework.goframe.domain.bind-object-method.local-object-method",
+              routeDomain: "api.example.test"
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "GET",
+          path: "/items",
+          domain: "api.example.test",
+          handler: expect.objectContaining({ qualifiedName: "cmd/server/main.go#Controller.Get" })
+        }),
+        expect.objectContaining({
+          method: "DELETE",
+          path: "/items",
+          domain: "api.example.test",
+          handler: expect.objectContaining({ qualifiedName: "cmd/server/main.go#Controller.Delete" })
+        })
+      ])
+    );
+    expect(alternateRoutes.routes).toHaveLength(3);
+    expect(alternateRoutes.routes.every((route) => route.domain === "api-alt.example.test")).toBe(true);
+    expect(hostlessRoutes.routes).toMatchObject([
+      {
+        method: "GET",
+        path: "/global",
+        domain: null,
+        handler: { qualifiedName: "cmd/server/main.go#Controller.Health" }
+      }
+    ]);
   });
 
   it("indexes GoFrame literal Map and ALLMap batch routes with exact evidence", async () => {

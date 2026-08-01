@@ -249,6 +249,8 @@ export interface RoutesToolArguments {
   readonly method?: RouteMethod | undefined;
   /** Slash-leading route path prefix. */
   readonly path?: string | undefined;
+  /** Exact literal route domain condition. */
+  readonly domain?: string | undefined;
   readonly limit?: number | undefined;
 }
 
@@ -683,6 +685,7 @@ const routesOutputSchema = z
             .refine((path) => path === "*" || path.startsWith("/"), {
               message: "A persisted route path must begin with '/' or be '*'."
             }),
+          domain: z.string().nullable(),
           route: z.object({}).passthrough(),
           edge: z.object({}).passthrough(),
           handler: z.object({}).passthrough().nullable()
@@ -1134,6 +1137,7 @@ export async function runRoutesTool(
     const options: RoutesOptions = {
       ...(arguments_.method === undefined ? {} : { method: arguments_.method }),
       ...(arguments_.path === undefined ? {} : { pathPrefix: arguments_.path }),
+      ...(arguments_.domain === undefined ? {} : { domain: arguments_.domain }),
       ...(arguments_.limit === undefined ? {} : { limit: arguments_.limit })
     };
     const result = await service.routes(arguments_.projectPath ?? defaultProjectPath, options);
@@ -1595,6 +1599,14 @@ export function createMcpServer(
             .startsWith("/")
             .optional()
             .describe("Optional nonempty slash-leading route path prefix."),
+          domain: z
+            .string()
+            .min(1)
+            .refine((value) => value === value.trim(), {
+              message: "Route domain must not have surrounding whitespace."
+            })
+            .optional()
+            .describe("Optional exact literal route domain condition."),
           limit: z
             .number()
             .int()

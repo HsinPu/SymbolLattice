@@ -163,6 +163,7 @@ function routesResult(): RoutesResult {
       {
         method: "GET",
         path: "/api/users",
+        domain: "api.example.test",
         route,
         edge: {
           id: "edge:route:get-users",
@@ -1073,6 +1074,8 @@ describe("symbol-lattice v0.14 routes CLI", () => {
         "GET",
         "--path",
         "/api",
+        "--domain",
+        "api.example.test",
         "--limit",
         "7",
         "--json"
@@ -1083,7 +1086,7 @@ describe("symbol-lattice v0.14 routes CLI", () => {
     expect(calls).toEqual([
       {
         projectPath: resolve("C:/positional-project"),
-        options: { method: "GET", pathPrefix: "/api", limit: 7 }
+        options: { method: "GET", pathPrefix: "/api", domain: "api.example.test", limit: 7 }
       }
     ]);
     expect(mutationCalls).toEqual([]);
@@ -1135,6 +1138,7 @@ describe("symbol-lattice v0.14 routes CLI", () => {
   it.each([
     [["--method", "get"], "Expected one of: GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS, TRACE, CONNECT, ALL, NAVIGATE"],
     [["--path", "api"], "Expected a non-empty route path prefix beginning with"],
+    [["--domain", " "], "Expected a non-empty exact route domain without surrounding whitespace"],
     [["--limit", "101"], "Expected an integer between 1 and 100"]
   ])("rejects invalid route filter %j before invoking the service", async (arguments_, message) => {
     const routes = vi.fn();

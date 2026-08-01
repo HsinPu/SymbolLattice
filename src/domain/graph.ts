@@ -129,6 +129,8 @@ export interface ChildRelation {
 export interface RouteRecord {
   readonly method: RouteMethod;
   readonly path: string;
+  /** Exact host condition, or null when the persisted route is not domain-bound. */
+  readonly domain: string | null;
   readonly route: SymbolNode;
   readonly edge: GraphEdge;
   /** Null when the route handler could not be resolved to an indexed symbol. */
@@ -635,6 +637,7 @@ export function getRoutes(graph: SymbolGraph): readonly RouteRecord[] {
 
     routes.push({
       ...parsed,
+      domain: edge.evidence?.routeDomain ?? null,
       route,
       edge,
       handler: isResolvedGraphEdge(edge) ? symbolsById.get(edge.targetId) ?? null : null

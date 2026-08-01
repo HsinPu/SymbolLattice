@@ -2045,6 +2045,9 @@ describe("source extraction", () => {
       ].join("\n")
     });
 
+    expect(facts.symbols.map((symbol) => symbol.id)).toEqual(
+      [...new Set(facts.symbols.map((symbol) => symbol.id))]
+    );
     const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
     expect(facts.symbols.filter((symbol) => symbol.kind === "entrypoint").map((symbol) => symbol.name)).toEqual([
       "graphql query author",
@@ -3814,6 +3817,131 @@ describe("source extraction", () => {
     ]);
   });
 
+  it("extracts literal GoFrame Domain object routes with exact host evidence", () => {
+    const facts = extractFileFacts({
+      filePath: "cmd/server/goframe-domain-object.go",
+      language: "go",
+      sourceText: [
+        "package main",
+        "",
+        "import (",
+        '  g "github.com/gogf/gf/v2/frame/g"',
+        '  "github.com/gogf/gf/v2/net/ghttp"',
+        ")",
+        "",
+        "type Controller struct{}",
+        "",
+        "func (c *Controller) Show(r *ghttp.Request) {}",
+        "func (c *Controller) Health(r *ghttp.Request) {}",
+        "func (c *Controller) Get(r *ghttp.Request) {}",
+        "func (c *Controller) Delete(r *ghttp.Request) {}",
+        "",
+        "func main() {",
+        "  server := g.Server()",
+        "  controller := &Controller{}",
+        '  server.Domain("api.example.test").BindObject("GET:/objects", controller, "Show")',
+        '  admin := server.Domain("admin.example.test, admin-alt.example.test")',
+        '  admin.BindObjectMethod("POST:/health", controller, "Health")',
+        '  admin.BindObjectRest("/items", controller)',
+        "}"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId,
+          edge.evidence?.routeDomain
+        ])
+    ).toEqual([
+      [
+        "GET /objects/show",
+        "cmd/server/goframe-domain-object.go#Controller.Show",
+        "framework.goframe.domain.bind-object.local-object-method",
+        "api.example.test"
+      ],
+      [
+        "POST /health",
+        "cmd/server/goframe-domain-object.go#Controller.Health",
+        "framework.goframe.domain.bind-object-method.local-object-method",
+        "admin.example.test"
+      ],
+      [
+        "POST /health",
+        "cmd/server/goframe-domain-object.go#Controller.Health",
+        "framework.goframe.domain.bind-object-method.local-object-method",
+        "admin-alt.example.test"
+      ],
+      [
+        "GET /items",
+        "cmd/server/goframe-domain-object.go#Controller.Get",
+        "framework.goframe.domain.bind-object-rest.local-object-method",
+        "admin.example.test"
+      ],
+      [
+        "GET /items",
+        "cmd/server/goframe-domain-object.go#Controller.Get",
+        "framework.goframe.domain.bind-object-rest.local-object-method",
+        "admin-alt.example.test"
+      ],
+      [
+        "DELETE /items",
+        "cmd/server/goframe-domain-object.go#Controller.Delete",
+        "framework.goframe.domain.bind-object-rest.local-object-method",
+        "admin.example.test"
+      ],
+      [
+        "DELETE /items",
+        "cmd/server/goframe-domain-object.go#Controller.Delete",
+        "framework.goframe.domain.bind-object-rest.local-object-method",
+        "admin-alt.example.test"
+      ]
+    ]);
+  });
+
+  it("extracts literal GoFrame v1 Domain BindHandler routes with exact host evidence", () => {
+    const facts = extractFileFacts({
+      filePath: "cmd/server/goframe-domain-handler.go",
+      language: "go",
+      sourceText: [
+        "package main",
+        "",
+        "import (",
+        '  g "github.com/gogf/gf/frame/g"',
+        '  "github.com/gogf/gf/net/ghttp"',
+        ")",
+        "",
+        "func health(r *ghttp.Request) {}",
+        "",
+        "func main() {",
+        "  server := g.Server()",
+        '  api := server.Domain("api.example.test, api-alt.example.test")',
+        '  api.BindHandler("GET:/health", health)',
+        '  server.Domain("admin.example.test").BindHandler("POST:/status", health)',
+        "}"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          edge.evidence?.ruleId,
+          edge.evidence?.routeDomain
+        ])
+    ).toEqual([
+      ["GET /health", "framework.goframe.domain.bind-handler.local-function", "api.example.test"],
+      ["GET /health", "framework.goframe.domain.bind-handler.local-function", "api-alt.example.test"],
+      ["POST /status", "framework.goframe.domain.bind-handler.local-function", "admin.example.test"]
+    ]);
+  });
+
   it("rejects unproven GoFrame BindObject and BindObjectRest shapes", () => {
     const facts = extractFileFacts({
       filePath: "cmd/server/unproven-goframe-bind-object.go",
@@ -3884,6 +4012,20 @@ describe("source extraction", () => {
         "  controller := &Controller{}",
         "  alias.SetNameToUriType(ghttp.UriTypeFullName)",
         '  server.BindObject("/alias-configured", controller, "Show")',
+        "}",
+        "",
+        "func unprovenDomain() {",
+        "  server := g.Server()",
+        "  controller := &Controller{}",
+        '  dynamicDomain := "api.example.test"',
+        '  server.Domain(dynamicDomain).BindObject("/dynamic-domain", controller, "Show")',
+        '  server.Domain("*.example.test").BindObject("/wildcard-domain", controller, "Show")',
+        '  server.Domain("api.example.test, ").BindObject("/empty-domain", controller, "Show")',
+        '  api := server.Domain("api.example.test")',
+        "  server.SetNameToUriType(ghttp.UriTypeFullName)",
+        '  api.BindObject("/configured-domain", controller, "Show")',
+        "  api = replacement()",
+        '  api.BindObjectRest("/rebound-domain", controller)',
         "}",
         "",
         "func trailingPath() {",

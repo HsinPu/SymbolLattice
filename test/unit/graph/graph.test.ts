@@ -57,6 +57,7 @@ function edge(input: {
   readonly startLine?: number;
   readonly startColumn?: number;
   readonly referenceName?: string | null;
+  readonly evidence?: GraphEdge["evidence"];
 }): GraphEdge {
   const startLine = input.startLine ?? 1;
   const startColumn = input.startColumn ?? 1;
@@ -72,7 +73,8 @@ function edge(input: {
     },
     resolution: input.resolution ?? "exact",
     confidence: input.resolution === "heuristic" ? 0.7 : 1,
-    referenceName: input.referenceName ?? null
+    referenceName: input.referenceName ?? null,
+    ...(input.evidence === undefined ? {} : { evidence: input.evidence })
   };
 }
 
@@ -354,7 +356,18 @@ describe("pure graph traversal", () => {
     const routeGraph = {
       symbols: [handler, unresolvedRoute, localRoute],
       edges: [
-        edge({ id: "health-routes-handler", sourceId: "local-route", targetId: "handler", kind: "routes" }),
+        edge({
+          id: "health-routes-handler",
+          sourceId: "local-route",
+          targetId: "handler",
+          kind: "routes",
+          evidence: {
+            ruleId: "framework.goframe.domain.bind-handler.local-function",
+            stage: "syntax",
+            candidateSymbolIds: ["handler"],
+            routeDomain: "api.example.test"
+          }
+        }),
         edge({
           id: "unknown-routes-handler",
           sourceId: "unresolved-route",
@@ -369,6 +382,7 @@ describe("pure graph traversal", () => {
       {
         method: "GET",
         path: "/health",
+        domain: "api.example.test",
         route: localRoute,
         edge: routeGraph.edges[0],
         handler
@@ -376,6 +390,7 @@ describe("pure graph traversal", () => {
       {
         method: "POST",
         path: "/unknown",
+        domain: null,
         route: unresolvedRoute,
         edge: routeGraph.edges[1],
         handler: null

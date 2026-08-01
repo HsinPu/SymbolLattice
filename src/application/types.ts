@@ -217,12 +217,14 @@ export interface SearchResult {
 export const DEFAULT_ROUTE_LIMIT = 50;
 export const MAX_ROUTE_LIMIT = 100;
 
-/** Optional exact discriminator and prefix filters for persisted route records. */
+/** Optional exact discriminator, path-prefix, and host-condition filters for persisted route records. */
 export interface RoutesOptions {
   /** One supported uppercase HTTP method, ALL, or the NAVIGATE client-route discriminator. */
   readonly method?: RouteMethod;
   /** A nonempty route-path prefix beginning with a forward slash. */
   readonly pathPrefix?: string;
+  /** One exact literal route host condition, without normalization. */
+  readonly domain?: string;
   /** Maximum persisted route records returned from the active generation. */
   readonly limit?: number;
 }

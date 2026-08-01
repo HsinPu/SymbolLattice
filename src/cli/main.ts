@@ -99,6 +99,7 @@ interface SearchCommandOptions extends ProjectOptions {
 interface RoutesCommandOptions extends ProjectOptions {
   readonly method?: NonNullable<RoutesOptions["method"]>;
   readonly path?: string;
+  readonly domain?: string;
   readonly limit?: number;
 }
 
@@ -284,6 +285,13 @@ function parseRouteMethod(value: string): NonNullable<RoutesOptions["method"]> {
 function parseRoutePathPrefix(value: string): string {
   if (value.length === 0 || !value.startsWith("/")) {
     throw new Error('Expected a non-empty route path prefix beginning with "/".');
+  }
+  return value;
+}
+
+function parseRouteDomain(value: string): string {
+  if (value.length === 0 || value !== value.trim()) {
+    throw new Error("Expected a non-empty exact route domain without surrounding whitespace.");
   }
   return value;
 }
@@ -793,6 +801,11 @@ export function createProgram(
       parseRoutePathPrefix
     )
     .option(
+      "--domain <exact-domain>",
+      "Restrict results to one exact literal route domain",
+      parseRouteDomain
+    )
+    .option(
       "--limit <count>",
       `Maximum route records to return (1-${MAX_ROUTE_LIMIT})`,
       (value: string) => parseBoundedPositiveInteger(value, MAX_ROUTE_LIMIT)
@@ -801,6 +814,7 @@ export function createProgram(
       const routeOptions: RoutesOptions = {
         ...(options.method === undefined ? {} : { method: options.method }),
         ...(options.path === undefined ? {} : { pathPrefix: options.path }),
+        ...(options.domain === undefined ? {} : { domain: options.domain }),
         ...(options.limit === undefined ? {} : { limit: options.limit })
       };
       render(

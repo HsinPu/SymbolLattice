@@ -209,6 +209,7 @@ interface NormalizedGenerationDiffRequest {
 interface NormalizedRoutesRequest {
   readonly method?: RouteMethod;
   readonly pathPrefix?: string;
+  readonly domain?: string;
   readonly limit: number;
 }
 
@@ -1080,7 +1081,8 @@ export class SymbolLatticeService {
     const matchingRoutes = getRoutes(context.snapshot).filter(
       (route) =>
         (request.method === undefined || route.method === request.method) &&
-        (request.pathPrefix === undefined || route.path.startsWith(request.pathPrefix))
+        (request.pathPrefix === undefined || route.path.startsWith(request.pathPrefix)) &&
+        (request.domain === undefined || route.domain === request.domain)
     );
 
     return {
@@ -2342,10 +2344,22 @@ export class SymbolLatticeService {
       );
     }
 
+    const domain = options.domain;
+    if (
+      domain !== undefined &&
+      (typeof domain !== "string" || domain.length === 0 || domain !== domain.trim())
+    ) {
+      throw new SymbolLatticeError(
+        "INVALID_ROUTE_DOMAIN",
+        "Route domain must be non-empty text without surrounding whitespace."
+      );
+    }
+
     return {
       limit,
       ...(method === undefined ? {} : { method }),
-      ...(pathPrefix === undefined ? {} : { pathPrefix })
+      ...(pathPrefix === undefined ? {} : { pathPrefix }),
+      ...(domain === undefined ? {} : { domain })
     };
   }
 

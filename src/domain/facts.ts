@@ -11,7 +11,7 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v109";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v110";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
@@ -40,6 +40,8 @@ export interface EdgeEvidence {
   readonly ruleId: string;
   readonly stage: EdgeEvidenceStage;
   readonly candidateSymbolIds: readonly string[];
+  /** Exact host condition of a literal HTTP route registration, when one exists. */
+  readonly routeDomain?: string;
   /** Project-relative config files that participated in module resolution. */
   readonly configurationPaths?: readonly string[];
   /** Project-relative file hops used to reach an exact re-export target. */

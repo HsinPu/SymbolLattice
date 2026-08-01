@@ -542,6 +542,7 @@ function routesResult(): RoutesResult {
       {
         method: "GET",
         path: "/api/users",
+        domain: "api.example.test",
         route,
         edge: {
           id: "edge:route:get-users",
@@ -559,6 +560,7 @@ function routesResult(): RoutesResult {
       {
         method: "POST",
         path: "/api/missing",
+        domain: null,
         route: unresolvedRoute,
         edge: {
           id: "edge:route:post-missing",
@@ -1046,6 +1048,7 @@ describe("SymbolLattice MCP server", () => {
       properties: {
         method: expect.objectContaining({ type: "string" }),
         path: expect.objectContaining({ type: "string" }),
+        domain: expect.objectContaining({ type: "string" }),
         limit: expect.objectContaining({ type: "integer", minimum: 1, maximum: 100 })
       }
     });
@@ -1067,6 +1070,7 @@ describe("SymbolLattice MCP server", () => {
         projectPath: "C:/chosen-project",
         method: "GET",
         path: "/api",
+        domain: "api.example.test",
         limit: 7
       }
     });
@@ -1076,15 +1080,20 @@ describe("SymbolLattice MCP server", () => {
       status: { stale: false },
       bounds: { limit: 7, maximumLimit: 100 },
       routes: [
-        { method: "GET", path: "/api/users", handler: { name: "listUsers" } },
-        { method: "POST", path: "/api/missing", handler: null }
+        {
+          method: "GET",
+          path: "/api/users",
+          domain: "api.example.test",
+          handler: { name: "listUsers" }
+        },
+        { method: "POST", path: "/api/missing", domain: null, handler: null }
       ],
       truncated: false
     });
     expect(routeCalls).toEqual([
       {
         projectPath: "C:/chosen-project",
-        options: { method: "GET", pathPrefix: "/api", limit: 7 }
+        options: { method: "GET", pathPrefix: "/api", domain: "api.example.test", limit: 7 }
       }
     ]);
 
@@ -1096,7 +1105,7 @@ describe("SymbolLattice MCP server", () => {
     expect(routeCalls).toEqual([
       {
         projectPath: "C:/chosen-project",
-        options: { method: "GET", pathPrefix: "/api", limit: 7 }
+        options: { method: "GET", pathPrefix: "/api", domain: "api.example.test", limit: 7 }
       },
       {
         projectPath: "C:/default-project",
@@ -1116,6 +1125,13 @@ describe("SymbolLattice MCP server", () => {
       arguments: { path: "api" }
     });
     expect(invalidPath.isError).toBe(true);
+    expect(routeCalls).toHaveLength(2);
+
+    const invalidDomain = await client.callTool({
+      name: "symbol_lattice_routes",
+      arguments: { domain: " " }
+    });
+    expect(invalidDomain.isError).toBe(true);
     expect(routeCalls).toHaveLength(2);
   });
 

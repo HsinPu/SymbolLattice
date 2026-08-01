@@ -34,6 +34,7 @@ export class SymbolLatticeError extends Error {
       | "INVALID_IMPACT_LIMIT"
       | "INVALID_PROJECT_CONFIGURATION"
       | "INVALID_PROJECT_PATH"
+      | "INVALID_ROUTE_DOMAIN"
       | "INVALID_ROUTE_LIMIT"
       | "INVALID_ROUTE_METHOD"
       | "INVALID_ROUTE_PATH_PREFIX"

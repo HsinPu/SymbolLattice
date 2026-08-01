@@ -6,6 +6,31 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.128.0] - 2026-08-01
+
+### Added
+
+- GoFrame v1/v2 extraction now projects literal `Server.Domain(...)` registrations for `BindHandler`, `BindObjectMethod`, selected `BindObject`, and `BindObjectRest`. One comma-separated literal domain list produces one exact route edge per non-wildcard host condition.
+- Persisted route records now expose `domain`, using `null` when no host condition exists. `SymbolLatticeService.routes`, CLI `routes --domain <host>`, and MCP `symbol_lattice_routes` all support the same exact domain filter.
+
+### Fixed
+
+- Route projection now preserves a source route's identity suffix, preventing symbol-ID collisions when otherwise identical method/path registrations differ only by their exact GoFrame domain condition.
+
+### Compatibility
+
+- The artifact-facts extractor advances to `multi-language-ast-v110`. Existing graphs remain readable with `domain: null` for old route evidence; the next explicit `sync` re-extracts unchanged source documents. SQLite schema and the project resolver version are unchanged.
+
+### Deliberate limits
+
+- Domain extraction requires a proven `g.Server()` receiver, one literal nonempty non-wildcard host or comma list, and a supported direct or un-rebound variable registration shape. Dynamic values, empty list entries, wildcards, wrapper/factory receivers, rebindings, and unproven handlers remain unresolved.
+- The host condition is an exact route attribute, not a hostname parser or a runtime deployment model. It is never merged into a host-agnostic route.
+
+### Comparison notes
+
+- At inspected CodeGraph commit `572d22bfbe82602080e457bec655f72e3314f9ef`, GoFrame route synthesis is centered on `g.Meta` standard-router metadata and does not emit direct `Server.Domain(...).Bind*` object or handler route edges with host evidence.
+- SymbolLattice v0.128 is stronger for the supported direct-domain slice because every result retains the literal host condition and a same-file exact handler edge. CodeGraph remains broader for its cross-file `g.Meta` standard-router synthesis, where SymbolLattice remains deliberately conservative.
+
 ## [0.127.0] - 2026-08-01
 
 ### Added
@@ -2352,7 +2377,8 @@ No unreleased changes.
 - Explicit full indexing, caller/callee/impact queries, and read-only MCP exploration.
 - `exact`, `heuristic`, and `unresolved` relationship states.
 
-[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.127.0...HEAD
+[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.128.0...HEAD
+[0.128.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.127.0...v0.128.0
 [0.127.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.126.0...v0.127.0
 [0.126.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.125.0...v0.126.0
 [0.123.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.122.0...v0.123.0

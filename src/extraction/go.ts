@@ -107,10 +107,28 @@ interface StaticChiRoute {
   readonly node: GoSyntaxNode;
 }
 
-interface GoFrameReceiver {
-  readonly kind: "server" | "group";
+interface GoFrameServerReceiver {
+  readonly kind: "server";
   readonly prefix: string;
 }
+
+interface GoFrameDomainReceiver {
+  readonly kind: "domain";
+  readonly prefix: string;
+  /** Exact literal host conditions inherited by every registration on this receiver. */
+  readonly domains: readonly string[];
+  readonly server: GoFrameServerReceiver;
+}
+
+interface GoFrameGroupReceiver {
+  readonly kind: "group";
+  readonly prefix: string;
+  /** Empty for an ordinary Server group; otherwise inherited from a Domain group. */
+  readonly domains: readonly string[];
+  readonly server: GoFrameServerReceiver;
+}
+
+type GoFrameReceiver = GoFrameServerReceiver | GoFrameDomainReceiver | GoFrameGroupReceiver;
 
 interface StaticGoFrameBinding {
   readonly name: string;
@@ -855,6 +873,73 @@ function staticSelectorCall(
     : { receiverName, methodName, arguments_: staticArgumentEntries(argumentList) };
 }
 
+interface StaticGoFrameRegistrationCall extends StaticSelectorCall {
+  readonly receiver: GoFrameReceiver;
+}
+
+/**
+ * A direct receiver call, or the documented `server.Domain("host").Method(...)`
+ * form. Chained Group calls are deliberately left unresolved until their full
+ * prefix and callback semantics have equivalent proof.
+ */
+function staticGoFrameRegistrationCall(
+  input: GoExtractFileFactsInput,
+  node: GoSyntaxNode,
+  receivers: ReadonlyMap<string, GoFrameReceiver>
+): StaticGoFrameRegistrationCall | null {
+  const direct = staticSelectorCall(input, node);
+  if (direct !== null) {
+    const receiver = receivers.get(direct.receiverName);
+    return receiver === undefined ? null : { ...direct, receiver };
+  }
+  if (node.name !== "CallExpr") {
+    return null;
+  }
+  const children = directChildren(node);
+  const selector = children[0];
+  const argumentList = children[1];
+  if (
+    children.length !== 2 ||
+    selector?.name !== "SelectorExpr" ||
+    argumentList?.name !== "Arguments"
+  ) {
+    return null;
+  }
+  const selectorChildren = directChildren(selector);
+  const domainCallNode = selectorChildren[0];
+  const methodNode = selectorChildren[2];
+  if (
+    selectorChildren.length !== 3 ||
+    domainCallNode?.name !== "CallExpr" ||
+    methodNode?.name !== "FieldName"
+  ) {
+    return null;
+  }
+  const domainCall = staticSelectorCall(input, domainCallNode);
+  const methodName = identifierText(input, methodNode);
+  if (
+    domainCall === null ||
+    domainCall.methodName !== "Domain" ||
+    domainCall.arguments_.length !== 1 ||
+    methodName === null
+  ) {
+    return null;
+  }
+  const domainNode = domainCall.arguments_[0];
+  const receiver =
+    domainNode === undefined
+      ? null
+      : staticGoFrameDomainReceiver(input, receivers.get(domainCall.receiverName), domainNode);
+  return receiver === null
+    ? null
+    : {
+        receiverName: domainCall.receiverName,
+        methodName,
+        arguments_: staticArgumentEntries(argumentList),
+        receiver
+      };
+}
+
 function staticGoFrameHandler(
   input: GoExtractFileFactsInput,
   node: GoSyntaxNode
@@ -931,6 +1016,37 @@ function staticGoFrameServerBinding(
   return { name: declaration.name, receiver: { kind: "server", prefix: "" } };
 }
 
+function goFrameServerReceiver(receiver: GoFrameReceiver): GoFrameServerReceiver {
+  return receiver.kind === "server" ? receiver : receiver.server;
+}
+
+function staticGoFrameDomainNames(
+  input: GoExtractFileFactsInput,
+  node: GoSyntaxNode
+): readonly string[] | null {
+  const value = staticPlainGoString(input, node);
+  if (value === null) {
+    return null;
+  }
+  const domains = value.split(",").map((domain) => domain.trim());
+  return domains.length === 0 ||
+    domains.some((domain) => domain.length === 0 || /[\s*\/@\\]/u.test(domain)) ||
+    new Set(domains).size !== domains.length
+    ? null
+    : domains;
+}
+
+function staticGoFrameDomainReceiver(
+  input: GoExtractFileFactsInput,
+  parent: GoFrameReceiver | undefined,
+  domainNode: GoSyntaxNode
+): GoFrameDomainReceiver | null {
+  const domains = staticGoFrameDomainNames(input, domainNode);
+  return parent?.kind !== "server" || domains === null
+    ? null
+    : { kind: "domain", prefix: parent.prefix, domains, server: parent };
+}
+
 function staticGoFrameReceiverAliasBinding(
   input: GoExtractFileFactsInput,
   node: GoSyntaxNode,
@@ -956,6 +1072,27 @@ function staticGoFrameReceiverAliasBinding(
   const sourceName = identifierText(input, value);
   const receiver = sourceName === null ? undefined : receivers.get(sourceName);
   return name === null || receiver === undefined ? null : { name, receiver };
+}
+
+function staticGoFrameDomainBinding(
+  input: GoExtractFileFactsInput,
+  node: GoSyntaxNode,
+  receivers: ReadonlyMap<string, GoFrameReceiver>
+): StaticGoFrameBinding | null {
+  const declaration = staticShortVariableCall(input, node);
+  if (
+    declaration === null ||
+    declaration.methodName !== "Domain" ||
+    declaration.arguments_.length !== 1
+  ) {
+    return null;
+  }
+  const domainNode = declaration.arguments_[0];
+  const receiver =
+    domainNode === undefined
+      ? null
+      : staticGoFrameDomainReceiver(input, receivers.get(declaration.receiverName), domainNode);
+  return receiver === null ? null : { name: declaration.name, receiver };
 }
 
 function staticGoFrameGroupPrefix(
@@ -990,7 +1127,12 @@ function staticGoFrameGroupBinding(
   }
   return {
     name: declaration.name,
-    receiver: { kind: "group", prefix: combinedRoutePath(parent.prefix, prefix) }
+    receiver: {
+      kind: "group",
+      prefix: combinedRoutePath(parent.prefix, prefix),
+      domains: parent.kind === "server" ? [] : parent.domains,
+      server: goFrameServerReceiver(parent)
+    }
   };
 }
 
@@ -1049,7 +1191,12 @@ function staticGoFrameGroupCallback(
   return parameterName === undefined || goFrameHttpAliases.has(parameterName)
     ? null
     : {
-        receiver: { kind: "group", prefix: combinedRoutePath(parent.prefix, prefix) },
+        receiver: {
+          kind: "group",
+          prefix: combinedRoutePath(parent.prefix, prefix),
+          domains: parent.kind === "server" ? [] : parent.domains,
+          server: goFrameServerReceiver(parent)
+        },
         parameterName,
         body
       };
@@ -1085,18 +1232,18 @@ function staticGoFrameDirectRoute(
   if (expression === undefined) {
     return null;
   }
-  const call = staticSelectorCall(input, expression);
+  const call = staticGoFrameRegistrationCall(input, expression, receivers);
   if (call === null || call.arguments_.length !== 2) {
     return null;
   }
-  const receiver = receivers.get(call.receiverName);
+  const receiver = call.receiver;
   const patternNode = call.arguments_[0];
   const handlerNode = call.arguments_[1];
   const handler = handlerNode === undefined ? null : staticGoFrameHandler(input, handlerNode);
   if (receiver === undefined || handler === null || patternNode === undefined) {
     return null;
   }
-  if (receiver.kind === "server") {
+  if (receiver.kind === "server" || receiver.kind === "domain") {
     const pattern = call.methodName === "BindHandler"
       ? staticGoFrameBindHandlerPattern(input, patternNode)
       : null;
@@ -1356,7 +1503,7 @@ function staticGoFrameObjectRouteNameMutation(
   input: GoExtractFileFactsInput,
   node: GoSyntaxNode,
   receivers: ReadonlyMap<string, GoFrameReceiver>
-): GoFrameReceiver | null {
+): GoFrameServerReceiver | null {
   if (node.name !== "ExprStatement") {
     return null;
   }
@@ -1434,11 +1581,11 @@ function staticGoFrameBindObjectMethodRoute(
   if (expression === undefined) {
     return null;
   }
-  const call = staticSelectorCall(input, expression);
+  const call = staticGoFrameRegistrationCall(input, expression, receivers);
   if (call === null || call.methodName !== "BindObjectMethod" || call.arguments_.length !== 3) {
     return null;
   }
-  const receiver = receivers.get(call.receiverName);
+  const receiver = call.receiver;
   const patternNode = call.arguments_[0];
   const objectNode = call.arguments_[1];
   const methodNode = call.arguments_[2];
@@ -1448,7 +1595,7 @@ function staticGoFrameBindObjectMethodRoute(
       ? null
       : staticGoFrameBoundObjectControllerName(input, objectNode, objectBindings);
   const methodName = methodNode === undefined ? null : staticPlainGoString(input, methodNode);
-  return receiver?.kind !== "server" ||
+  return (receiver.kind !== "server" && receiver.kind !== "domain") ||
     pattern === null ||
     controllerName === null ||
     methodName === null ||
@@ -1462,7 +1609,7 @@ function staticGoFrameBindObjectRoute(
   node: GoSyntaxNode,
   receivers: ReadonlyMap<string, GoFrameReceiver>,
   objectBindings: ReadonlyMap<string, string>,
-  objectRouteNameMutatedServers: ReadonlySet<GoFrameReceiver>
+  objectRouteNameMutatedServers: ReadonlySet<GoFrameServerReceiver>
 ): StaticGoFrameBindObjectRoute | null {
   if (node.name !== "ExprStatement") {
     return null;
@@ -1471,11 +1618,11 @@ function staticGoFrameBindObjectRoute(
   if (expression === undefined) {
     return null;
   }
-  const call = staticSelectorCall(input, expression);
+  const call = staticGoFrameRegistrationCall(input, expression, receivers);
   if (call === null || call.methodName !== "BindObject" || call.arguments_.length !== 3) {
     return null;
   }
-  const receiver = receivers.get(call.receiverName);
+  const receiver = call.receiver;
   const patternNode = call.arguments_[0];
   const objectNode = call.arguments_[1];
   const methodsNode = call.arguments_[2];
@@ -1486,8 +1633,8 @@ function staticGoFrameBindObjectRoute(
       : staticGoFrameBoundObjectControllerName(input, objectNode, objectBindings);
   const methodNames =
     methodsNode === undefined ? null : staticGoFrameBindObjectMethodNames(input, methodsNode);
-  return receiver?.kind !== "server" ||
-    objectRouteNameMutatedServers.has(receiver) ||
+  return (receiver.kind !== "server" && receiver.kind !== "domain") ||
+    objectRouteNameMutatedServers.has(goFrameServerReceiver(receiver)) ||
     pattern === null ||
     controllerName === null ||
     methodNames === null
@@ -1508,11 +1655,11 @@ function staticGoFrameBindObjectRestRoute(
   if (expression === undefined) {
     return null;
   }
-  const call = staticSelectorCall(input, expression);
+  const call = staticGoFrameRegistrationCall(input, expression, receivers);
   if (call === null || call.methodName !== "BindObjectRest" || call.arguments_.length !== 2) {
     return null;
   }
-  const receiver = receivers.get(call.receiverName);
+  const receiver = call.receiver;
   const patternNode = call.arguments_[0];
   const objectNode = call.arguments_[1];
   const path = patternNode === undefined ? null : staticGoFrameObjectRestPath(input, patternNode);
@@ -1520,7 +1667,9 @@ function staticGoFrameBindObjectRestRoute(
     objectNode === undefined
       ? null
       : staticGoFrameBoundObjectControllerName(input, objectNode, objectBindings);
-  return receiver?.kind !== "server" || path === null || controllerName === null
+  return (receiver.kind !== "server" && receiver.kind !== "domain") ||
+    path === null ||
+    controllerName === null
     ? null
     : { receiver, path, controllerName, node };
 }
@@ -1994,10 +2143,12 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
     path: string,
     node: GoSyntaxNode,
     handler: SymbolNode,
-    ruleId: string
+    ruleId: string,
+    domain?: string
   ): void {
     const routeName = `${method} ${path}`;
-    const qualifiedName = `${input.filePath}#route:${routeName}`;
+    const domainIdentity = domain === undefined ? "" : `:domain:${encodeURIComponent(domain)}`;
+    const qualifiedName = `${input.filePath}#route:${routeName}${domainIdentity}`;
     const identity = `${qualifiedName}\u0000route`;
     const declarationOrdinal = declarationOrdinals.get(identity) ?? 0;
     declarationOrdinals.set(identity, declarationOrdinal + 1);
@@ -2039,7 +2190,8 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
       evidence: {
         ruleId,
         stage: "syntax",
-        candidateSymbolIds: [handler.id]
+        candidateSymbolIds: [handler.id],
+        ...(domain === undefined ? {} : { routeDomain: domain })
       }
     });
   }
@@ -2134,6 +2286,24 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
     return symbol;
   }
 
+  function addGoFrameResolvedRoute(
+    method: RouteMethod,
+    path: string,
+    node: GoSyntaxNode,
+    handler: SymbolNode,
+    ruleId: string,
+    receiver: GoFrameReceiver
+  ): void {
+    const domains = receiver.kind === "server" ? [] : receiver.domains;
+    if (domains.length === 0) {
+      addResolvedRoute(method, path, node, handler, ruleId);
+      return;
+    }
+    for (const domain of domains) {
+      addResolvedRoute(method, path, node, handler, ruleId, domain);
+    }
+  }
+
   function addGoFrameRoute(
     routeFact: StaticGoFrameRoute,
     handler: SymbolNode
@@ -2149,16 +2319,21 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
       : routeFact.handler.kind === "function"
         ? routeFact.receiver.kind === "server"
           ? "framework.goframe.direct-server.bind-handler.local-function"
-          : "framework.goframe.direct-group.http-method.local-function"
+          : routeFact.receiver.kind === "domain"
+            ? "framework.goframe.domain.bind-handler.local-function"
+            : "framework.goframe.direct-group.http-method.local-function"
         : routeFact.receiver.kind === "server"
           ? "framework.goframe.direct-server.bind-handler.local-object-method"
-          : "framework.goframe.direct-group.http-method.local-object-method";
-    addResolvedRoute(
+          : routeFact.receiver.kind === "domain"
+            ? "framework.goframe.domain.bind-handler.local-object-method"
+            : "framework.goframe.direct-group.http-method.local-object-method";
+    addGoFrameResolvedRoute(
       routeFact.method,
       combinedRoutePath(routeFact.receiver.prefix, routeFact.path),
       routeFact.node,
       handler,
-      ruleId
+      ruleId,
+      routeFact.receiver
     );
   }
 
@@ -2166,12 +2341,15 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
     routeFact: StaticGoFrameBindObjectMethodRoute,
     handler: SymbolNode
   ): void {
-    addResolvedRoute(
+    addGoFrameResolvedRoute(
       routeFact.method,
       combinedRoutePath(routeFact.receiver.prefix, routeFact.path),
       routeFact.node,
       handler,
-      "framework.goframe.direct-server.bind-object-method.local-object-method"
+      routeFact.receiver.kind === "domain"
+        ? "framework.goframe.domain.bind-object-method.local-object-method"
+        : "framework.goframe.direct-server.bind-object-method.local-object-method",
+      routeFact.receiver
     );
   }
 
@@ -2180,20 +2358,26 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
     methodName: string,
     handler: SymbolNode
   ): void {
-    addResolvedRoute(
+    addGoFrameResolvedRoute(
       routeFact.method,
       staticGoFrameObjectRoutePath(routeFact.path, methodName),
       routeFact.node,
       handler,
-      "framework.goframe.direct-server.bind-object.local-object-method"
+      routeFact.receiver.kind === "domain"
+        ? "framework.goframe.domain.bind-object.local-object-method"
+        : "framework.goframe.direct-server.bind-object.local-object-method",
+      routeFact.receiver
     );
     if (methodName === "Index") {
-      addResolvedRoute(
+      addGoFrameResolvedRoute(
         routeFact.method,
         routeFact.path,
         routeFact.node,
         handler,
-        "framework.goframe.direct-server.bind-object.local-object-method"
+        routeFact.receiver.kind === "domain"
+          ? "framework.goframe.domain.bind-object.local-object-method"
+          : "framework.goframe.direct-server.bind-object.local-object-method",
+        routeFact.receiver
       );
     }
   }
@@ -2203,12 +2387,15 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
     method: RouteMethod,
     handler: SymbolNode
   ): void {
-    addResolvedRoute(
+    addGoFrameResolvedRoute(
       method,
       routeFact.path,
       routeFact.node,
       handler,
-      "framework.goframe.direct-server.bind-object-rest.local-object-method"
+      routeFact.receiver.kind === "domain"
+        ? "framework.goframe.domain.bind-object-rest.local-object-method"
+        : "framework.goframe.direct-server.bind-object-rest.local-object-method",
+      routeFact.receiver
     );
   }
 
@@ -2217,12 +2404,13 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
     request: StaticGoFrameRequest,
     method: StaticGoFrameControllerMethod
   ): void {
-    addResolvedRoute(
+    addGoFrameResolvedRoute(
       request.method,
       combinedRoutePath(binding.receiver.prefix, request.path),
       request.node,
       goFrameMethodSymbol(method),
-      "framework.goframe.standard-router.g-meta.direct-bound-controller.local-method"
+      "framework.goframe.standard-router.g-meta.direct-bound-controller.local-method",
+      binding.receiver
     );
   }
 
@@ -2323,7 +2511,7 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
       receivers: Map<string, GoFrameReceiver>,
       objectBindings: Map<string, string>,
       shadowedNames: Set<string>,
-      objectRouteNameMutatedServers: Set<GoFrameReceiver>,
+      objectRouteNameMutatedServers: Set<GoFrameServerReceiver>,
       visibleGoFrameAliases: ReadonlySet<string>,
       visibleGoFrameHttpAliases: ReadonlySet<string>
     ): void {
@@ -2344,6 +2532,10 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
         );
         if (receiverAliasBinding !== null) {
           receivers.set(receiverAliasBinding.name, receiverAliasBinding.receiver);
+        }
+        const domainBinding = staticGoFrameDomainBinding(input, statement, receivers);
+        if (domainBinding !== null) {
+          receivers.set(domainBinding.name, domainBinding.receiver);
         }
         const groupBinding = staticGoFrameGroupBinding(input, statement, receivers);
         if (groupBinding !== null) {
@@ -2474,7 +2666,7 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
         }
 
         const retainedReceiverBindings = new Set(
-          [serverBinding?.name, receiverAliasBinding?.name, groupBinding?.name].filter(
+          [serverBinding?.name, receiverAliasBinding?.name, domainBinding?.name, groupBinding?.name].filter(
             (name): name is string => name !== undefined
           )
         );
@@ -2688,7 +2880,7 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
         new Map<string, GoFrameReceiver>(),
         new Map<string, string>(),
         new Set(functionDeclaration.parameterNames),
-        new Set<GoFrameReceiver>(),
+        new Set<GoFrameServerReceiver>(),
         visibleGoFrameAliases,
         visibleGoFrameHttpAliases
       );
