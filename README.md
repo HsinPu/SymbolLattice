@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.132.0 是開發者預覽版，尚未發布到 npm；請從原始碼執行。
+> v0.133.0 是開發者預覽版，尚未發布到 npm；請從原始碼執行。
 
 SymbolLattice 為專案建立可查詢的本機程式碼符號圖譜。每條關係都保留來源規則、解析階段與信心值；原始碼僅保存於受索引專案的 `.symbol-lattice/index.sqlite`，不會被靜默上傳。
 
@@ -49,11 +49,11 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 Windows PowerShell 若沒有 `npm` 指令，請改用 `npm.cmd`。檔案系統根目錄與使用者家目錄需要明確加上 `--force` 才會接受。
 
-## v0.132.0
+## v0.133.0
 
-- GoFrame v1/v2 跨 package standard router 現可接受 Go 預設 import；只有根 `go.mod` 能解析目標，且目標 `package` 宣告與原始碼 qualifier 完全一致時才建立 exact route。
-- Controller 與 request 兩端都可使用預設 import，同時保留既有鏈式 `Group` 前綴、`Domain` host、規則與設定證據。
-- 萃取器升級為 `multi-language-ast-v114`、project resolver 升級為 `project-resolver-v35`；下次明確 `sync` 會重新萃取並投影 GoFrame facts。
+- GoFrame v1/v2 現可在沒有可辨識靜態 `Bind` 時，將唯一的 `g.Meta` request／Controller signature 對應列為 `heuristic` route。
+- 候選僅保留 request 宣告的 path；不猜測 `Group` 前綴或 `Domain`，且遇到已知 Bind、同 request 多個方法、或無法證明的跨 package import 便不輸出。
+- project resolver 升級為 `project-resolver-v36`；下次明確 `sync` 會重投影既有 GoFrame facts，無須重萃取。
 
 ## 已知限制
 
@@ -62,6 +62,7 @@ Windows PowerShell 若沒有 `npm` 指令，請改用 `npm.cmd`。檔案系統�
 - GoFrame Domain 僅接受可證明的字面量、非萬用字元 host；動態值、空白項目、萬用字元與重綁定 receiver 保持未解析。
 - GoFrame 鏈式 receiver 僅支援 `g.Server()` 起點與有限的字面量 `Domain`／單參數 `Group` 鏈；任意方法鏈、動態前綴、變數傳遞與不受支援的 callback 形狀不會成為精確關係。
 - GoFrame 跨檔 standard router 支援同 package，或根目錄 `go.mod` 下的本機跨 package 唯一對應；顯式 alias 可直接使用，預設 import 必須由目標 `package` 宣告證明 qualifier，不能從 import 路徑猜測。`.`／`_` import、外部/傳遞模組、`replace`、巢狀模組選擇、build tag 與歧義 Controller 方法不會成為精確關係。
+- 未綁定的 GoFrame request-signature 候選永遠是 `heuristic`，不代表 runtime 已註冊路由；反射、動態 Bind 與未知 prefix／host 維持未解析。
 - 其他框架只涵蓋已實作且可驗證的切片；完整變更請見 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 驗證

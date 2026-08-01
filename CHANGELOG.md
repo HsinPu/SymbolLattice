@@ -6,6 +6,26 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.133.0] - 2026-08-01
+
+### Added
+
+- GoFrame v1/v2 standard-router projection now emits one bounded `heuristic` route when a literal `g.Meta` request and exactly one eligible controller method share a proven request type, but no identifiable static `Bind` names that controller.
+- Same-package and root-`go.mod` local cross-package signatures are supported. Cross-package candidates reuse explicit-alias and target-`package`-proven default-import resolution, retain their request/controller resolution path and any `go.mod` configuration evidence, and never infer an import package name from its path.
+- Candidate synthesis rejects duplicate controller signatures, duplicate request declarations, known static Bind controllers, unresolved aliased Bind names, and unproven imports. This prevents an unprefixed candidate from competing with an existing exact Group/Domain route.
+
+### Compatibility
+
+- The project resolver advances to `project-resolver-v36`. Existing artifact facts and SQLite schema remain compatible; the next explicit `sync` reprojects existing facts without re-extraction.
+
+### Deliberate limits
+
+- These candidates are `heuristic` with confidence `0.7`, not proof that GoFrame registered a route. They expose only the literal `g.Meta` path and no inferred Group prefix or Domain host. Runtime reflection, dynamic Bind calls, rebindings, build tags, `replace`, nested modules, external/transitive modules, and ambiguity remain unresolved.
+
+### Comparison notes
+
+- This moves toward the inspected CodeGraph GoFrame synthesizer, which joins `g.Meta` request types to method signatures as heuristic edges. SymbolLattice keeps a stricter local-module proof for cross-package candidates and suppresses candidates whenever observed static Bind evidence could make an unprefixed route misleading.
+
 ## [0.132.0] - 2026-08-01
 
 ### Added
@@ -2460,7 +2480,8 @@ No unreleased changes.
 - Explicit full indexing, caller/callee/impact queries, and read-only MCP exploration.
 - `exact`, `heuristic`, and `unresolved` relationship states.
 
-[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.132.0...HEAD
+[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.133.0...HEAD
+[0.133.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.132.0...v0.133.0
 [0.132.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.131.0...v0.132.0
 [0.131.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.130.0...v0.131.0
 [0.130.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.129.0...v0.130.0
