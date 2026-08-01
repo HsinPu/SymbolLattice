@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.126.0 為開發者預覽版，尚未發布至 npm；請從原始碼執行。
+> v0.127.0 為開發者預覽版，尚未發布至 npm；請從原始碼執行。
 
 SymbolLattice 會建立可查詢的本機程式碼符號圖譜。每一條關係都保留來源規則、解析階段與信心值；原始碼只保存在索引專案的 `.symbol-lattice/index.sqlite`，不會被靜默上傳。
 
@@ -48,16 +48,18 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 Windows PowerShell 若沒有 `npm` 指令，請改用 `npm.cmd`。檔案系統根目錄與使用者家目錄需要明確加上 `--force` 才會接受。
 
-## v0.126.0
+## v0.127.0
 
-- GoFrame v1/v2 現可精確投影 `Server.BindObjectMethod(pattern, object, method)`：pattern 與 method 必須是字面量，object 須為直接 `new(Controller)`、`&Controller{}` 或未重綁的同函式本地物件。
-- 只接受同檔唯一、公開且簽章為 `func (receiver) Method(*ghttp.Request)` 的 Controller 方法；動態值、factory/rebound object、非 Server receiver 與不符簽章的方法都維持未解析。
-- 擷取器版本升為 `multi-language-ast-v108`；下一次明確 `sync` 會重新擷取既有來源。
+- GoFrame v1/v2 新增精確投影 `Server.BindObject(pattern, object, "Index, Show")`；`Index` 同時產生基底路徑與 `/index`，其餘選取方法會附加至字面量路徑。
+- `Server.BindObjectRest(pattern, object)` 現會把同檔案的 HTTP 命名處理器對應至相同字面量路徑：`GET`、`POST`、`PUT`、`PATCH`、`DELETE`、`HEAD`、`OPTIONS`、`TRACE`、`CONNECT`。
+- 只接受直接 `new(Controller)`、`&Controller{}` 或未重綁的同函式本地物件，以及唯一公開的 `func(*ghttp.Request)` 方法；若同一函式中可追蹤的同一 Server 已設定 `SetNameToUriType`，`BindObject` 保持未解析。
+- 擷取器版本升為 `multi-language-ast-v109`；下一次明確 `sync` 會重新擷取既有來源。
 
 ## 明確限制
 
 - 這不是編譯器、型別檢查器、框架 runtime 或執行追蹤器。
 - 動態派發、反射、巨集展開、程式碼產生、依賴注入與模糊名稱不會成為 exact 圖譜關係。
+- GoFrame `BindObject` 只處理一個明確的方法選取字串、簡單預設命名與非尾端斜線的字面量路徑；未篩選反射掃描、內建 `{.struct}` / `{.method}`、額外 variadic selector、非簡單方法名稱、`Init` / `Shut` 生命週期回呼、Group/Domain 物件註冊與跨檔 Controller 都維持未解析。
 - GoFrame batch 僅接受直接 `g.Map` 字面量；raw map、動態 key/value、inline handler、部分 batch、動態 receiver、factory/wrapper/rebound object、跨檔 controller/request join、多 method tag 與 domain rule 都維持未解析。
 - 其他框架僅涵蓋已實作且可驗證的切片；完整歷程與相容性請見 [CHANGELOG.md](CHANGELOG.md)。
 

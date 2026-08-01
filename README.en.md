@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.126.0 is an early developer release. The package is not published to npm; run it from source.
+> v0.127.0 is an early developer release. The package is not published to npm; run it from source.
 
 SymbolLattice builds a queryable local code-symbol graph for a project. Every relation keeps its source rule, resolution stage, and confidence. Source code remains in the indexed project's `.symbol-lattice/index.sqlite` and is never silently uploaded.
 
@@ -48,16 +48,18 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 On Windows PowerShell, use `npm.cmd` if `npm` is unavailable. Filesystem roots and home directories are rejected unless `--force` is explicit.
 
-## v0.126.0
+## v0.127.0
 
-- GoFrame v1/v2 now projects literal `Server.BindObjectMethod(pattern, object, method)` registrations. The pattern and method must be literals; the object must be direct `new(Controller)`, `&Controller{}`, or an un-rebound same-function local binding.
-- Only one unique same-file public controller method with a `func (receiver) Method(*ghttp.Request)` signature is accepted. Dynamic values, factory/rebound objects, non-Server receivers, and unsupported method signatures remain unresolved.
-- The extractor advances to `multi-language-ast-v108`; existing graphs re-extract raw facts on the next explicit `sync`.
+- GoFrame v1/v2 now exactly projects `Server.BindObject(pattern, object, "Index, Show")`; `Index` emits both the base path and `/index`, while other selected methods are appended to the literal path.
+- `Server.BindObjectRest(pattern, object)` now maps same-file HTTP-named handlers to one literal path: `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD`, `OPTIONS`, `TRACE`, and `CONNECT`.
+- Only direct `new(Controller)`, `&Controller{}`, or un-rebound same-function local objects with one unique public `func(*ghttp.Request)` method are accepted. `BindObject` remains unresolved after a tracked same-function call to `SetNameToUriType` on that Server.
+- The extractor advances to `multi-language-ast-v109`; existing graphs re-extract raw facts on the next explicit `sync`.
 
 ## Deliberate limits
 
 - This is not a compiler, type checker, framework runtime, or execution tracer.
 - Dynamic dispatch, reflection, macro expansion, code generation, dependency injection, and ambiguous names never become exact graph relations.
+- GoFrame `BindObject` requires one explicit method-selection string, simple default names, and a literal path without a trailing slash. Unfiltered reflection, `{.struct}` / `{.method}`, extra variadic selectors, non-simple method names, `Init` / `Shut` lifecycle callbacks, Group/Domain object registration, and cross-file controllers remain unresolved.
 - GoFrame batch extraction accepts only direct `g.Map` literals. Raw maps, dynamic keys or values, inline handlers, partial batches, dynamic receivers, factory/wrapper/rebound objects, cross-file controller/request joins, multi-method tags, and domain rules remain unresolved.
 - Other frameworks cover only their implemented, evidence-backed slices; see [CHANGELOG.md](CHANGELOG.md) for complete history and compatibility detail.
 

@@ -6,6 +6,28 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.127.0] - 2026-08-01
+
+### Added
+
+- GoFrame v1/v2 extraction now projects literal `Server.BindObject(pattern, object, "Method[, Method]")` registrations when every selected controller method is a unique same-file public `func(*ghttp.Request)` handler. The projection preserves a literal HTTP method or the `ALL` fallback; `Index` emits both the derived `/index` route and its base-path alias.
+- Literal `Server.BindObjectRest(pattern, object)` registrations now project unique same-file REST object methods at the same path for `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD`, `OPTIONS`, `TRACE`, and `CONNECT`.
+- Both surfaces accept direct `new(Controller)` / `&Controller{}` values or one un-rebound same-function local binding, and retain exact syntax evidence under `framework.goframe.direct-server.bind-object.local-object-method` or `framework.goframe.direct-server.bind-object-rest.local-object-method`.
+
+### Compatibility
+
+- The artifact-facts extractor advances to `multi-language-ast-v109`. Existing graphs remain readable; the next explicit `sync` re-extracts unchanged source documents. SQLite schema and the project resolver version are unchanged.
+
+### Deliberate limits
+
+- `BindObject` requires exactly one literal selector string with at least one unique simple default-name method, one literal non-trailing-slash pattern without `{.struct}` or `{.method}`, and a proven `g.Server()` receiver. Unfiltered reflection, extra variadic selectors, non-simple name conversion, `Init` / `Shut` lifecycle callbacks, factory/wrapper/rebound objects, cross-file controllers, ambiguous or unsupported handlers, Group/Domain receivers, and Domain host conditions remain unresolved.
+- A tracked same-function `SetNameToUriType` call on the same Server makes subsequent `BindObject` registrations unresolved rather than assuming the default URI naming rule. `BindObjectRest` requires a literal path and only projects the proved HTTP-named handler subset.
+
+### Comparison notes
+
+- At inspected CodeGraph commit `572d22bfbe82602080e457bec655f72e3314f9ef`, the GoFrame resolver starts only for files containing `g.Meta`, emits standard-router metadata route nodes, and deliberately does not reconstruct reflective Group prefixes. It does not project direct `BindObject` or `BindObjectRest` route-to-method registrations.
+- SymbolLattice v0.127 is stronger for the supported direct-object slice because every emitted edge has a literal registration, one static object identity, and one unique same-file handler signature. CodeGraph remains broader for its cross-file `g.Meta` standard-router synthesis, where SymbolLattice stays intentionally conservative.
+
 ## [0.126.0] - 2026-08-01
 
 ### Added
@@ -2330,7 +2352,9 @@ No unreleased changes.
 - Explicit full indexing, caller/callee/impact queries, and read-only MCP exploration.
 - `exact`, `heuristic`, and `unresolved` relationship states.
 
-[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.123.0...HEAD
+[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.127.0...HEAD
+[0.127.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.126.0...v0.127.0
+[0.126.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.125.0...v0.126.0
 [0.123.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.122.0...v0.123.0
 [0.122.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.121.0...v0.122.0
 [0.121.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.120.0...v0.121.0

@@ -3579,6 +3579,325 @@ describe("source extraction", () => {
     ]);
   });
 
+  it("extracts selected literal GoFrame BindObject routes with exact evidence", () => {
+    const facts = extractFileFacts({
+      filePath: "cmd/server/goframe-bind-object.go",
+      language: "go",
+      sourceText: [
+        "package main",
+        "",
+        "import (",
+        '  g "github.com/gogf/gf/v2/frame/g"',
+        '  "github.com/gogf/gf/v2/net/ghttp"',
+        ")",
+        "",
+        "type Controller struct{}",
+        "",
+        "func (c *Controller) Index(r *ghttp.Request) {}",
+        "func (c *Controller) Show(r *ghttp.Request) {}",
+        "func (c Controller) Health(r *ghttp.Request) {}",
+        "",
+        "func main() {",
+        "  server := g.Server()",
+        "  controller := new(Controller)",
+        '  server.BindObject("/object", controller, "Index, Show")',
+        '  server.BindObject("GET:/api", &Controller{}, "Health")',
+        "}"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId,
+          edge.evidence?.stage,
+          edge.resolution,
+          edge.confidence
+        ])
+    ).toEqual([
+      [
+        "ALL /object/index",
+        "cmd/server/goframe-bind-object.go#Controller.Index",
+        "framework.goframe.direct-server.bind-object.local-object-method",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "ALL /object",
+        "cmd/server/goframe-bind-object.go#Controller.Index",
+        "framework.goframe.direct-server.bind-object.local-object-method",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "ALL /object/show",
+        "cmd/server/goframe-bind-object.go#Controller.Show",
+        "framework.goframe.direct-server.bind-object.local-object-method",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "GET /api/health",
+        "cmd/server/goframe-bind-object.go#Controller.Health",
+        "framework.goframe.direct-server.bind-object.local-object-method",
+        "syntax",
+        "exact",
+        1
+      ]
+    ]);
+  });
+
+  it("extracts literal GoFrame BindObjectRest routes with exact evidence", () => {
+    const facts = extractFileFacts({
+      filePath: "cmd/server/goframe-bind-object-rest.go",
+      language: "go",
+      sourceText: [
+        "package main",
+        "",
+        "import (",
+        '  g "github.com/gogf/gf/v2/frame/g"',
+        '  "github.com/gogf/gf/v2/net/ghttp"',
+        ")",
+        "",
+        "type Controller struct{}",
+        "",
+        "func (c *Controller) Get(r *ghttp.Request) {}",
+        "func (c *Controller) Post(r *ghttp.Request) {}",
+        "func (c *Controller) Put(r *ghttp.Request) {}",
+        "func (c *Controller) Patch(r *ghttp.Request) {}",
+        "func (c *Controller) Delete(r *ghttp.Request) {}",
+        "func (c *Controller) Head(r *ghttp.Request) {}",
+        "func (c *Controller) Options(r *ghttp.Request) {}",
+        "func (c *Controller) Trace(r *ghttp.Request) {}",
+        "func (c *Controller) Connect(r *ghttp.Request) {}",
+        "func (c *Controller) Hello(r *ghttp.Request) {}",
+        "",
+        "func main() {",
+        "  server := g.Server()",
+        "  controller := &Controller{}",
+        "  server.SetNameToUriType(ghttp.UriTypeFullName)",
+        '  server.BindObjectRest("/objects", controller)',
+        "}"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId,
+          edge.resolution,
+          edge.confidence
+        ])
+    ).toEqual([
+      [
+        "GET /objects",
+        "cmd/server/goframe-bind-object-rest.go#Controller.Get",
+        "framework.goframe.direct-server.bind-object-rest.local-object-method",
+        "exact",
+        1
+      ],
+      [
+        "POST /objects",
+        "cmd/server/goframe-bind-object-rest.go#Controller.Post",
+        "framework.goframe.direct-server.bind-object-rest.local-object-method",
+        "exact",
+        1
+      ],
+      [
+        "PUT /objects",
+        "cmd/server/goframe-bind-object-rest.go#Controller.Put",
+        "framework.goframe.direct-server.bind-object-rest.local-object-method",
+        "exact",
+        1
+      ],
+      [
+        "PATCH /objects",
+        "cmd/server/goframe-bind-object-rest.go#Controller.Patch",
+        "framework.goframe.direct-server.bind-object-rest.local-object-method",
+        "exact",
+        1
+      ],
+      [
+        "DELETE /objects",
+        "cmd/server/goframe-bind-object-rest.go#Controller.Delete",
+        "framework.goframe.direct-server.bind-object-rest.local-object-method",
+        "exact",
+        1
+      ],
+      [
+        "HEAD /objects",
+        "cmd/server/goframe-bind-object-rest.go#Controller.Head",
+        "framework.goframe.direct-server.bind-object-rest.local-object-method",
+        "exact",
+        1
+      ],
+      [
+        "OPTIONS /objects",
+        "cmd/server/goframe-bind-object-rest.go#Controller.Options",
+        "framework.goframe.direct-server.bind-object-rest.local-object-method",
+        "exact",
+        1
+      ],
+      [
+        "TRACE /objects",
+        "cmd/server/goframe-bind-object-rest.go#Controller.Trace",
+        "framework.goframe.direct-server.bind-object-rest.local-object-method",
+        "exact",
+        1
+      ],
+      [
+        "CONNECT /objects",
+        "cmd/server/goframe-bind-object-rest.go#Controller.Connect",
+        "framework.goframe.direct-server.bind-object-rest.local-object-method",
+        "exact",
+        1
+      ]
+    ]);
+  });
+
+  it("extracts selected GoFrame v1 BindObject and BindObjectRest routes", () => {
+    const facts = extractFileFacts({
+      filePath: "cmd/server/goframe-v1-bind-object.go",
+      language: "go",
+      sourceText: [
+        "package main",
+        "",
+        "import (",
+        '  g "github.com/gogf/gf/frame/g"',
+        '  "github.com/gogf/gf/net/ghttp"',
+        ")",
+        "",
+        "type Controller struct{}",
+        "",
+        "func (c *Controller) Show(r *ghttp.Request) {}",
+        "func (c *Controller) Get(r *ghttp.Request) {}",
+        "",
+        "func main() {",
+        "  server := g.Server()",
+        '  server.BindObject("/legacy", new(Controller), "Show")',
+        '  server.BindObjectRest("/legacy-rest", &Controller{})',
+        "}"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId
+        ])
+    ).toEqual([
+      [
+        "ALL /legacy/show",
+        "cmd/server/goframe-v1-bind-object.go#Controller.Show",
+        "framework.goframe.direct-server.bind-object.local-object-method"
+      ],
+      [
+        "GET /legacy-rest",
+        "cmd/server/goframe-v1-bind-object.go#Controller.Get",
+        "framework.goframe.direct-server.bind-object-rest.local-object-method"
+      ]
+    ]);
+  });
+
+  it("rejects unproven GoFrame BindObject and BindObjectRest shapes", () => {
+    const facts = extractFileFacts({
+      filePath: "cmd/server/unproven-goframe-bind-object.go",
+      language: "go",
+      sourceText: [
+        "package main",
+        "",
+        "import (",
+        '  g "github.com/gogf/gf/v2/frame/g"',
+        '  "github.com/gogf/gf/v2/net/ghttp"',
+        ")",
+        "",
+        "type Controller struct{}",
+        "type InvalidRest struct{}",
+        "",
+        "func (c *Controller) Index(r *ghttp.Request) {}",
+        "func (c *Controller) Show(r *ghttp.Request) {}",
+        "func (c *Controller) Get(r *ghttp.Request) {}",
+        "func (c *Controller) UserName(r *ghttp.Request) {}",
+        "func (c *Controller) Init(r *ghttp.Request) {}",
+        "func (c *Controller) Shut(r *ghttp.Request) {}",
+        "func (c *InvalidRest) Get(r *ghttp.Request) error { return nil }",
+        "",
+        "func main() {",
+        "  server := g.Server()",
+        "  controller := &Controller{}",
+        '  dynamicPattern := "/dynamic"',
+        '  dynamicMethods := "Show"',
+        '  server.BindObject("/all-methods", controller)',
+        '  server.BindObject(dynamicPattern, controller, "Show")',
+        '  server.BindObject("/dynamic-methods", controller, dynamicMethods)',
+        '  server.BindObject("/{.method}", controller, "Show")',
+        '  server.BindObject("/unsupported-name", controller, "UserName")',
+        '  server.BindObject("/invalid-selection", controller, "Show, Missing")',
+        '  server.BindObject("/lifecycle", controller, "Init, Shut")',
+        '  server.BindObject("/extra-methods", controller, "Show", "Index")',
+        '  api := server.Group("/api")',
+        '  api.BindObject("/group", controller, "Show")',
+        '  api.BindObjectRest("/group-rest", controller)',
+        '  server.BindObjectRest(dynamicPattern, controller)',
+        '  server.BindObjectRest("GET:/not-a-rest-path", controller)',
+        '  server.BindObjectRest("/invalid-rest", &InvalidRest{})',
+        "  controller = factory()",
+        '  server.BindObject("/rebound-object", controller, "Show")',
+        "  server = replacement()",
+        '  server.BindObjectRest("/rebound-server", &Controller{})',
+        "}",
+        "",
+        "func configuredServer() {",
+        "  server := g.Server()",
+        "  controller := &Controller{}",
+        "  server.SetNameToUriType(ghttp.UriTypeFullName)",
+        '  server.BindObject("/configured", controller, "Show")',
+        "}",
+        "",
+        "func callbackMutation() {",
+        "  server := g.Server()",
+        "  controller := &Controller{}",
+        '  server.Group("/config", func(group *ghttp.RouterGroup) {',
+        "    server.SetNameToUriType(ghttp.UriTypeFullName)",
+        "  })",
+        '  server.BindObject("/callback-configured", controller, "Show")',
+        "}",
+        "",
+        "func aliasMutation() {",
+        "  server := g.Server()",
+        "  alias := server",
+        "  controller := &Controller{}",
+        "  alias.SetNameToUriType(ghttp.UriTypeFullName)",
+        '  server.BindObject("/alias-configured", controller, "Show")',
+        "}",
+        "",
+        "func trailingPath() {",
+        "  server := g.Server()",
+        "  controller := &Controller{}",
+        '  server.BindObject("/trailing/", controller, "Show")',
+        "}"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+  });
+
   it("rejects unproven GoFrame BindObjectMethod shapes", () => {
     const facts = extractFileFacts({
       filePath: "cmd/server/unproven-goframe-bind-object-method.go",
