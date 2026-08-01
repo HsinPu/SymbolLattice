@@ -6,6 +6,26 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.139.0] - 2026-08-01
+
+### Added
+
+- GoFrame v1/v2 standard-router projection now recognizes one untyped direct function-local factory var initializer before registration: `var controller = NewController(); group.Bind(controller)` and its local-module qualified equivalent.
+- Controller-pointer and factory aliases now share one bounded direct-local-alias parser, keeping short declarations, supported var forms, rebinding invalidation, and callback parameter shadowing consistent.
+- New unit and service coverage verifies same-package and default-imported cross-package factory var aliases, exact Group/Domain/module evidence, typed-var rejection, callback shadowing, and rebinding rejection.
+
+### Compatibility
+
+- The artifact-facts extractor advances to `multi-language-ast-v120`. Existing graphs and SQLite schema remain readable; the next explicit `sync` re-extracts Go facts and reprojects routes. The project resolver remains `project-resolver-v37`.
+
+### Deliberate limits
+
+- A factory var alias must be one untyped direct local VarSpec whose right side is an already supported no-argument factory call. Typed factory vars, grouped or multiple specs, multiple values, globals, forwarding aliases, branches, containers, dynamic values, callback shadows, and later assignments remain non-exact.
+
+### Comparison notes
+
+- The inspected CodeGraph GoFrame path remains a heuristic request-type-to-method join without static Bind-target alias tracking or Group-prefix reconstruction. SymbolLattice remains narrower for dynamic registration, but now proves a common local factory var form with exact registration and module evidence.
+
 ## [0.138.0] - 2026-08-01
 
 ### Added
@@ -2580,7 +2600,8 @@ No unreleased changes.
 - Explicit full indexing, caller/callee/impact queries, and read-only MCP exploration.
 - `exact`, `heuristic`, and `unresolved` relationship states.
 
-[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.138.0...HEAD
+[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.139.0...HEAD
+[0.139.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.138.0...v0.139.0
 [0.138.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.137.0...v0.138.0
 [0.137.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.136.0...v0.137.0
 [0.136.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.135.0...v0.136.0

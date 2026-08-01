@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.138.0 是開發者預覽版，尚未發布到 npm；請從原始碼執行。
+> v0.139.0 是開發者預覽版，尚未發布到 npm；請從原始碼執行。
 
 SymbolLattice 為專案建立可查詢的本機程式碼符號圖譜。每條關係都保留來源規則、解析階段與信心值；原始碼僅保存於受索引專案的 `.symbol-lattice/index.sqlite`，不會被靜默上傳。
 
@@ -49,11 +49,11 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 Windows PowerShell 若沒有 `npm` 指令，請改用 `npm.cmd`。檔案系統根目錄與使用者家目錄需要明確加上 `--force` 才會接受。
 
-## v0.138.0
+## v0.139.0
 
-- GoFrame v1/v2 現支援同一函式內直接初始化的 controller `var` alias：`var controller = &Controller{}`，或型別相符的 `var controller *Controller = new(Controller)` 後，`Bind(controller)` 可產生 `exact` route。
-- 有型別註記時必須與右側 controller pointer 完全相符；`interface{}` 容器、群組式／多值 `var` 宣告、重新賦值與 callback 同名參數不會升格為 exact。既有 `Group`、`Domain` 與根 `go.mod` 證據會保留。
-- artifact facts 升級為 `multi-language-ast-v119`；下次明確 `sync` 會重新萃取 Go facts 並重投影路由。
+- GoFrame v1/v2 現支援同一函式內無型別的 factory `var` alias：`var controller = NewController()` 或 `var controller = handlers.NewV1()` 後，`Bind(controller)` 可產生 `exact` route。
+- factory alias 保留已證明 factory、`Group` 前綴、`Domain` host 與根 `go.mod` 跨套件證據；有型別註記的 factory `var`、群組式／多值宣告、重新賦值與 callback 同名參數保持非精確。
+- artifact facts 升級為 `multi-language-ast-v120`；下次明確 `sync` 會重新萃取 Go facts 並重投影路由。
 
 ## 已知限制
 
@@ -61,7 +61,7 @@ Windows PowerShell 若沒有 `npm` 指令，請改用 `npm.cmd`。檔案系統�
 - 動態派發、反射、巨集展開、程式碼產生、依賴注入與歧義名稱不會成為 `exact` 關係。
 - GoFrame Domain 僅接受可證明的字面量、非萬用字元 host；動態值、空白項目、萬用字元與重綁定 receiver 保持未解析。
 - GoFrame 鏈式 receiver 僅支援 `g.Server()` 起點與有限的字面量 `Domain`／單參數 `Group` 鏈；任意方法鏈、動態前綴、變數傳遞與不受支援的 callback 形狀不會成為精確關係。
-- GoFrame 跨檔 standard router 僅支援可靜態證明的 direct pointer（`&Controller{}`／`new(Controller)`）、無參數 `Factory()`，及同一函式內未重綁的一層 pointer/factory alias。pointer alias 可用 `:=`，或單一直接 initializer 的 `var`；有型別註記時必須是與右側相符的 pointer 型別。每個 `Bind(...)` argument 必須獨立成立；slice 展開、動態值、全域、群組式或多值 `var`、轉送、分支、map/interface/DI 容器、callback 同名遮蔽、重綁與歧義不會成為 `exact`。顯式 import alias 可直接使用；預設 import 必須由目標 `package` 宣告證明，絕不從 import 路徑猜測。`.`／`_` import、外部/傳遞模組、`replace`、巢狀模組選擇與 build tag 保持未解析。
+- GoFrame 跨檔 standard router 僅支援可靜態證明的 direct pointer（`&Controller{}`／`new(Controller)`）、無參數 `Factory()`，及同一函式內未重綁的一層 pointer/factory alias。pointer alias 可用 `:=`，或單一直接 initializer 的 `var`；有型別註記時必須是與右側相符的 pointer 型別。factory alias 可用 `:=` 或無型別、單一直接 initializer 的 `var`。每個 `Bind(...)` argument 必須獨立成立；slice 展開、動態值、全域、群組式或多值 `var`、有型別的 factory `var`、轉送、分支、map/interface/DI 容器、callback 同名遮蔽、重綁與歧義不會成為 `exact`。顯式 import alias 可直接使用；預設 import 必須由目標 `package` 宣告證明，絕不從 import 路徑猜測。`.`／`_` import、外部/傳遞模組、`replace`、巢狀模組選擇與 build tag 保持未解析。
 - 未綁定的 GoFrame request-signature 候選永遠是 `heuristic`，不代表 runtime 已註冊路由；反射、動態 Bind 與未知 prefix／host 維持未解析。
 - 其他框架只涵蓋已實作且可驗證的切片；完整變更請見 [CHANGELOG.md](CHANGELOG.md)。
 

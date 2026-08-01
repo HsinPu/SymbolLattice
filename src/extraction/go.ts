@@ -218,6 +218,12 @@ interface StaticGoFrameControllerAliasBinding {
   readonly controller: StaticGoFrameNamedTypeReference;
 }
 
+interface StaticGoFrameLocalAliasDeclaration {
+  readonly name: string;
+  readonly value: GoSyntaxNode;
+  readonly declaredType?: GoSyntaxNode;
+}
+
 interface StaticGoFrameControllerFactory {
   readonly factoryName: string;
   readonly controllerName: string;
@@ -1866,22 +1872,18 @@ function staticGoFrameObjectBinding(
 }
 
 /**
- * Retain one local direct controller pointer only for a direct short
- * declaration or a single direct var initializer. Later assignments invalidate
- * the alias before it can prove a Bind target.
+ * Returns exactly one direct function-local alias declaration. A grouped or
+ * multi-value var declaration is deliberately outside this bounded dataflow
+ * surface.
  */
-function staticGoFrameControllerAliasBinding(
+function staticGoFrameLocalAliasDeclaration(
   input: GoExtractFileFactsInput,
-  node: GoSyntaxNode,
-  shadowedNames: ReadonlySet<string>
-): StaticGoFrameControllerAliasBinding | null {
+  node: GoSyntaxNode
+): StaticGoFrameLocalAliasDeclaration | null {
   if (node.name !== "VarDecl") {
     return null;
   }
   const children = directChildren(node);
-  let target: GoSyntaxNode | undefined;
-  let value: GoSyntaxNode | undefined;
-  let declaredType: GoSyntaxNode | undefined;
   const shortDeclarationTarget = children[0];
   const shortDeclarationOperator = children[1];
   const shortDeclarationValue = children[2];
@@ -1892,57 +1894,71 @@ function staticGoFrameControllerAliasBinding(
     nodeText(input, shortDeclarationOperator) === ":=" &&
     shortDeclarationValue !== undefined
   ) {
-    target = shortDeclarationTarget;
-    value = shortDeclarationValue;
-  } else {
-    const specifications = children.filter((child) => child.name === "VarSpec");
-    if (
-      specifications.length !== 1 ||
-      children.some((child) => nodeText(input, child) === "(" || nodeText(input, child) === ")")
-    ) {
-      return null;
-    }
-    const specification = specifications[0];
-    if (specification === undefined) {
-      return null;
-    }
-    const specificationChildren = directChildren(specification);
-    const operatorIndex = specificationChildren.findIndex(
-      (child) => nodeText(input, child) === "="
-    );
-    const specificationTarget = specificationChildren[0];
-    const specificationValue = specificationChildren.at(-1);
-    if (
-      specificationTarget?.name !== "DefName" ||
-      specificationValue === undefined ||
-      operatorIndex !== specificationChildren.length - 2 ||
-      (operatorIndex !== 1 && operatorIndex !== 2)
-    ) {
-      return null;
-    }
-    target = specificationTarget;
-    value = specificationValue;
-    declaredType = operatorIndex === 2 ? specificationChildren[1] : undefined;
+    const name = identifierText(input, shortDeclarationTarget);
+    return name === null || name === "_" ? null : { name, value: shortDeclarationValue };
+  }
+  const specifications = children.filter((child) => child.name === "VarSpec");
+  if (
+    specifications.length !== 1 ||
+    children.some((child) => nodeText(input, child) === "(" || nodeText(input, child) === ")")
+  ) {
+    return null;
+  }
+  const specification = specifications[0];
+  if (specification === undefined) {
+    return null;
+  }
+  const specificationChildren = directChildren(specification);
+  const operatorIndex = specificationChildren.findIndex((child) => nodeText(input, child) === "=");
+  const target = specificationChildren[0];
+  const value = specificationChildren.at(-1);
+  if (
+    target?.name !== "DefName" ||
+    value === undefined ||
+    operatorIndex !== specificationChildren.length - 2 ||
+    (operatorIndex !== 1 && operatorIndex !== 2)
+  ) {
+    return null;
   }
   const name = identifierText(input, target);
-  const controller =
-    value === undefined ? null : staticGoFrameStandardRouterControllerReference(input, value);
+  return name === null || name === "_"
+    ? null
+    : {
+        name,
+        value,
+        ...(operatorIndex === 2 ? { declaredType: specificationChildren[1] } : {})
+      };
+}
+
+/**
+ * Retain one local direct controller pointer only for a direct short
+ * declaration or a single direct var initializer. Later assignments invalidate
+ * the alias before it can prove a Bind target.
+ */
+function staticGoFrameControllerAliasBinding(
+  input: GoExtractFileFactsInput,
+  node: GoSyntaxNode,
+  shadowedNames: ReadonlySet<string>
+): StaticGoFrameControllerAliasBinding | null {
+  const declaration = staticGoFrameLocalAliasDeclaration(input, node);
+  if (declaration === null) {
+    return null;
+  }
+  const controller = staticGoFrameStandardRouterControllerReference(input, declaration.value);
   const declaredController =
-    declaredType === undefined
+    declaration.declaredType === undefined
       ? undefined
-      : staticGoFrameStandardRouterControllerPointerTypeReference(input, declaredType);
+      : staticGoFrameStandardRouterControllerPointerTypeReference(input, declaration.declaredType);
   const controllerScopeName = controller?.packageAlias ?? controller?.name;
-  return name === null ||
-    name === "_" ||
-    controller === null ||
+  return controller === null ||
     (declaredController !== undefined &&
       (declaredController === null ||
         declaredController.name !== controller.name ||
         declaredController.packageAlias !== controller.packageAlias)) ||
-    shadowedNames.has(name) ||
+    shadowedNames.has(declaration.name) ||
     (controllerScopeName !== undefined && shadowedNames.has(controllerScopeName))
     ? null
-    : { name, controller };
+    : { name: declaration.name, controller };
 }
 
 function staticGoFrameControllerBindings(
@@ -1987,40 +2003,26 @@ function staticGoFrameControllerBindings(
 }
 
 /**
- * Retain one local factory result only for a direct short declaration. Later
- * assignments invalidate the alias before it can prove a Bind target.
+ * Retain one local factory result only for a direct short declaration or an
+ * untyped direct var initializer. Later assignments invalidate the alias before
+ * it can prove a Bind target.
  */
 function staticGoFrameControllerFactoryAliasBinding(
   input: GoExtractFileFactsInput,
   node: GoSyntaxNode,
   shadowedNames: ReadonlySet<string>
 ): StaticGoFrameControllerFactoryAliasBinding | null {
-  if (node.name !== "VarDecl") {
+  const declaration = staticGoFrameLocalAliasDeclaration(input, node);
+  if (declaration === null || declaration.declaredType !== undefined) {
     return null;
   }
-  const children = directChildren(node);
-  const target = children[0];
-  const operator = children[1];
-  const value = children[2];
-  if (
-    children.length !== 3 ||
-    target?.name !== "DefName" ||
-    operator === undefined ||
-    nodeText(input, operator) !== ":=" ||
-    value === undefined
-  ) {
-    return null;
-  }
-  const name = identifierText(input, target);
-  const factory = staticGoFrameStandardRouterFactoryReference(input, value);
+  const factory = staticGoFrameStandardRouterFactoryReference(input, declaration.value);
   const factoryScopeName = factory?.packageAlias ?? factory?.name;
-  return name === null ||
-    name === "_" ||
-    factory === null ||
-    shadowedNames.has(name) ||
+  return factory === null ||
+    shadowedNames.has(declaration.name) ||
     (factoryScopeName !== undefined && shadowedNames.has(factoryScopeName))
     ? null
-    : { name, factory };
+    : { name: declaration.name, factory };
 }
 
 function staticGoFrameControllerFactoryBindings(

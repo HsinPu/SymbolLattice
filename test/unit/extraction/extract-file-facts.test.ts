@@ -3711,6 +3711,50 @@ describe("source extraction", () => {
     );
   });
 
+  it("retains an untyped GoFrame factory var alias only until it is rebound", () => {
+    const facts = extractFileFacts({
+      filePath: "api/goframe-factory-var-alias.go",
+      language: "go",
+      sourceText: [
+        "package api",
+        "",
+        "import (",
+        '  g "github.com/gogf/gf/v2/frame/g"',
+        '  ghttp "github.com/gogf/gf/v2/net/ghttp"',
+        ")",
+        "",
+        "type Controller struct{}",
+        "",
+        "func NewController() *Controller { return &Controller{} }",
+        "",
+        "func Register() {",
+        "  var controller = NewController()",
+        "  var typed *Controller = NewController()",
+        '  g.Server().Group("/v1").Bind(controller, typed)',
+        '  g.Server().Group("/callback", func(controller *ghttp.RouterGroup) {',
+        "    controller.Bind(controller)",
+        "  })",
+        "  controller = NewController()",
+        '  g.Server().Group("/rebound").Bind(controller)',
+        "}"
+      ].join("\n")
+    });
+
+    expect(facts.goFrameStandardRouterFacts?.controllerFactoryBindings).toEqual([
+      expect.objectContaining({
+        factoryName: "NewController",
+        prefix: "/v1",
+        domains: []
+      })
+    ]);
+    expect(facts.goFrameStandardRouterFacts?.controllerFactoryBindings).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ prefix: "/callback" }),
+        expect.objectContaining({ prefix: "/rebound" })
+      ])
+    );
+  });
+
   it("retains every statically proven GoFrame Bind argument in one batch", () => {
     const facts = extractFileFacts({
       filePath: "api/goframe-batch-bind.go",
