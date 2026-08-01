@@ -4185,6 +4185,102 @@ describe("source extraction", () => {
     ]);
   });
 
+  it("extracts exact GoFrame routes through literal chained Domain and Group receivers", () => {
+    const facts = extractFileFacts({
+      filePath: "cmd/server/goframe-chained-receivers.go",
+      language: "go",
+      sourceText: [
+        "package main",
+        "",
+        "import (",
+        '  "context"',
+        '  g "github.com/gogf/gf/v2/frame/g"',
+        '  ghttp "github.com/gogf/gf/v2/net/ghttp"',
+        ")",
+        "",
+        "type ChainReq struct {",
+        '  g.Meta `path:"/users" method:"GET"`',
+        "}",
+        "",
+        "type Controller struct{}",
+        "",
+        "func (c *Controller) List(ctx context.Context, req *ChainReq) {}",
+        "func health(r *ghttp.Request) {}",
+        "",
+        "func main() {",
+        '  g.Server().Group("/plain").Group("/v1").GET("/health", health)',
+        '  g.Server().Group("/batch").Map(g.Map{"GET:/health": health})',
+        '  g.Server().Domain("api.example.test").Group("/api").Group("/v1").Bind(&Controller{})',
+        '  g.Server().Domain("callbacks.example.test").Group("/callback", func(group *ghttp.RouterGroup) {',
+        '    group.Group("/v2", func(v2 *ghttp.RouterGroup) {',
+        '      v2.GET("/health", health)',
+        "    })",
+        "  })",
+        '  api := g.Server().Group("/bound").Group("/v3")',
+        "  api.Bind(&Controller{})",
+        "}"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    const routes = facts.edges
+      .filter((edge) => edge.kind === "routes")
+      .map((edge) => ({
+        name: symbolsById.get(edge.sourceId)?.name,
+        handler: symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+        ruleId: edge.evidence?.ruleId,
+        domain: edge.evidence?.routeDomain ?? null,
+        resolution: edge.resolution,
+        confidence: edge.confidence
+      }));
+
+    expect(routes).toHaveLength(5);
+    expect(routes).toEqual(
+      expect.arrayContaining([
+        {
+          name: "GET /plain/v1/health",
+          handler: "cmd/server/goframe-chained-receivers.go#health",
+          ruleId: "framework.goframe.direct-group.http-method.local-function",
+          domain: null,
+          resolution: "exact",
+          confidence: 1
+        },
+        {
+          name: "GET /batch/health",
+          handler: "cmd/server/goframe-chained-receivers.go#health",
+          ruleId: "framework.goframe.group.map.local-function",
+          domain: null,
+          resolution: "exact",
+          confidence: 1
+        },
+        {
+          name: "GET /api/v1/users",
+          handler: "cmd/server/goframe-chained-receivers.go#Controller.List",
+          ruleId: "framework.goframe.standard-router.g-meta.direct-bound-controller.local-method",
+          domain: "api.example.test",
+          resolution: "exact",
+          confidence: 1
+        },
+        {
+          name: "GET /callback/v2/health",
+          handler: "cmd/server/goframe-chained-receivers.go#health",
+          ruleId: "framework.goframe.direct-group.http-method.local-function",
+          domain: "callbacks.example.test",
+          resolution: "exact",
+          confidence: 1
+        },
+        {
+          name: "GET /bound/v3/users",
+          handler: "cmd/server/goframe-chained-receivers.go#Controller.List",
+          ruleId: "framework.goframe.standard-router.g-meta.direct-bound-controller.local-method",
+          domain: null,
+          resolution: "exact",
+          confidence: 1
+        }
+      ])
+    );
+  });
+
   it("extracts literal GoFrame Map and ALLMap batch routes with exact evidence", () => {
     const facts = extractFileFacts({
       filePath: "cmd/server/goframe-map.go",
@@ -4357,6 +4453,7 @@ describe("source extraction", () => {
         "func shadowed(g int) {",
         "  server := g.Server()",
         '  server.BindHandler("GET:/shadowed", directHandler)',
+        '  g.Server().Group("/shadowed-chain").GET("/wrong", directHandler)',
         "}",
         "",
         "func mismatched() {",
@@ -4381,7 +4478,8 @@ describe("source extraction", () => {
         "  })",
         "  server = replacement()",
         '  server.BindHandler("GET:/rebound", directHandler)',
-        '  api := g.Server().Group("/api")',
+        '  server.Group("/rebound-chain").GET("/wrong", directHandler)',
+        "  api := g.Server().Group(callbackPrefix)",
         "  api.Bind(&Controller{})",
         "}"
       ].join("\n")

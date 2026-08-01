@@ -4438,6 +4438,84 @@ describe("SymbolLatticeService", () => {
     ).toHaveLength(1);
   });
 
+  it("persists exact GoFrame routes through literal chained Domain and Group receivers", async () => {
+    const projectPath = await createInlineProject({
+      "cmd/server/main.go": [
+        "package main",
+        "",
+        "import (",
+        '  "context"',
+        '  g "github.com/gogf/gf/v2/frame/g"',
+        '  ghttp "github.com/gogf/gf/v2/net/ghttp"',
+        ")",
+        "",
+        "type ListReq struct {",
+        '  g.Meta `path:"/users" method:"GET"`',
+        "}",
+        "",
+        "type Controller struct{}",
+        "",
+        "func (c *Controller) List(ctx context.Context, req *ListReq) {}",
+        "func health(r *ghttp.Request) {}",
+        "",
+        "func main() {",
+        '  g.Server().Domain("api.example.test").Group("/api").Group("/v1").GET("/health", health)',
+        '  api := g.Server().Domain("api.example.test").Group("/api").Group("/v1")',
+        "  api.Bind(&Controller{})",
+        "}"
+      ].join("\n")
+    });
+    const service = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath, { domain: "api.example.test" });
+
+    expect(routes.routes).toHaveLength(2);
+    expect(routes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "GET",
+          path: "/api/v1/health",
+          domain: "api.example.test",
+          handler: expect.objectContaining({ qualifiedName: "cmd/server/main.go#health" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            confidence: 1,
+            evidence: expect.objectContaining({
+              ruleId: "framework.goframe.direct-group.http-method.local-function",
+              routeDomain: "api.example.test"
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "GET",
+          path: "/api/v1/users",
+          domain: "api.example.test",
+          handler: expect.objectContaining({ qualifiedName: "cmd/server/main.go#Controller.List" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            confidence: 1,
+            evidence: expect.objectContaining({
+              ruleId: "framework.goframe.standard-router.g-meta.direct-bound-controller.local-method",
+              routeDomain: "api.example.test"
+            })
+          })
+        })
+      ])
+    );
+
+    await writeFile(join(projectPath, "unrelated.go"), "package main\n\nconst Ready = true\n", "utf8");
+    const synced = await service.sync({ projectPath });
+    const routesAfterReuse = await service.routes(projectPath, { domain: "api.example.test" });
+
+    expect(synced.lastIndexWork).toMatchObject({
+      mode: "incremental",
+      reExtractedFiles: ["unrelated.go"],
+      reusedArtifactFiles: ["cmd/server/main.go"]
+    });
+    expect(routesAfterReuse.routes).toHaveLength(2);
+  });
+
   it("projects GoFrame standard-router routes across one proven package directory", async () => {
     const projectPath = await createInlineProject({
       "api/request.go": [
@@ -4466,10 +4544,7 @@ describe("SymbolLatticeService", () => {
         "import \"github.com/gogf/gf/v2/frame/g\"",
         "",
         "func Register() {",
-        "  server := g.Server()",
-        '  domain := server.Domain("api.example.test, api-alt.example.test")',
-        '  api := domain.Group("/v1")',
-        "  api.Bind(&Controller{})",
+        '  g.Server().Domain("api.example.test, api-alt.example.test").Group("/v1").Bind(&Controller{})',
         "}"
       ].join("\n"),
       "other/request.go": [

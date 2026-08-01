@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.130.0 是開發者預覽版，尚未發布到 npm；請從原始碼執行。
+> v0.131.0 是開發者預覽版，尚未發布到 npm；請從原始碼執行。
 
 SymbolLattice 為專案建立可查詢的本機程式碼符號圖譜。每條關係都保留來源規則、解析階段與信心值；原始碼僅保存於受索引專案的 `.symbol-lattice/index.sqlite`，不會被靜默上傳。
 
@@ -49,17 +49,18 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 Windows PowerShell 若沒有 `npm` 指令，請改用 `npm.cmd`。檔案系統根目錄與使用者家目錄需要明確加上 `--force` 才會接受。
 
-## v0.130.0
+## v0.131.0
 
-- GoFrame v1/v2 standard router 現可透過根目錄 `go.mod` 的本機模組路徑，精確串連跨 package 的 `g.Meta`、`*request.ListReq` 與 `Bind(&controller.UsersController{})`。
-- 僅接受顯式 Go import alias、唯一的本機 package 與唯一的 Controller 方法；Group 前綴、`Server.Domain(...)` host 與 `go.mod` 設定證據會保留在路由邊上。
-- `go.mod` 會成為索引設定的一部分；變更後的明確 `sync` 會重新投影路由，同時可重用未變動的 Go 原始 facts。
+- GoFrame v1/v2 現可精確追蹤字面量鏈式 receiver，例如 `g.Server().Domain(...).Group(...).Group(...)`。
+- 直接 HTTP route、`Map`、callback `Group` 與 standard-router `Bind(&Controller{})` 都會保留完整前綴與 Domain host 證據。
+- 僅接受可見的 `g.Server()` 起點、字面量 `Domain` 與單參數 `Group`；萃取器升級為 `multi-language-ast-v113`，下次明確 `sync` 會重建 Go 原始 facts。
 
 ## 已知限制
 
 - 這不是編譯器、型別檢查器、框架 runtime 或執行期追蹤器。
 - 動態派發、反射、巨集展開、程式碼產生、依賴注入與歧義名稱不會成為 `exact` 關係。
 - GoFrame Domain 僅接受可證明的字面量、非萬用字元 host；動態值、空白項目、萬用字元與重綁定 receiver 保持未解析。
+- GoFrame 鏈式 receiver 僅支援 `g.Server()` 起點與有限的字面量 `Domain`／單參數 `Group` 鏈；任意方法鏈、動態前綴、變數傳遞與不受支援的 callback 形狀不會成為精確關係。
 - GoFrame 跨檔 standard router 支援同 package，或根目錄 `go.mod` 下使用顯式 alias 的本機跨 package 唯一對應；隱式 alias、外部/傳遞模組、`replace`、巢狀模組選擇、build tag 與歧義 Controller 方法不會成為精確關係。
 - 其他框架只涵蓋已實作且可驗證的切片；完整變更請見 [CHANGELOG.md](CHANGELOG.md)。
 

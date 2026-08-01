@@ -6,6 +6,26 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.131.0] - 2026-08-01
+
+### Added
+
+- GoFrame v1/v2 route extraction now resolves a finite literal receiver chain rooted at a visible `g.Server()`: `Domain("host")` followed by one or more one-argument `Group("/prefix")` calls. Direct HTTP registrations, `Map`/`ALLMap`, callback Groups, and standard-router `Bind(&Controller{})` preserve the complete prefix and literal host condition.
+- The same chain can be stored in one local receiver binding, so `api := g.Server().Group("/api").Group("/v1")` remains exact only while each segment is static and the binding is not rebound.
+- New unit and service-level coverage verifies nested prefixes, literal domain evidence, callback propagation, map routes, standard-router bindings, incremental reuse, alias shadowing, and receiver rebinding rejection.
+
+### Compatibility
+
+- The artifact-facts extractor advances to `multi-language-ast-v113`. Existing graphs remain readable; the next explicit `sync` refreshes Go raw facts. Project-resolver and SQLite schema versions are unchanged.
+
+### Deliberate limits
+
+- Chained evidence is limited to a visible GoFrame import alias, `g.Server()` with no arguments, literal non-wildcard `Domain`, and literal one-argument `Group`. Arbitrary call chains, dynamic prefixes or hosts, variable propagation, unsupported callback shapes, `replace`, build tags, and runtime registration remain unresolved.
+
+### Comparison notes
+
+- The inspected CodeGraph GoFrame synthesizer snapshot does not reconstruct Group prefixes. SymbolLattice v0.131 remains narrower in accepted syntax, but records the exact static chain, Domain host, rule, and persisted route edge for the supported slice.
+
 ## [0.130.0] - 2026-08-01
 
 ### Added
@@ -2420,7 +2440,8 @@ No unreleased changes.
 - Explicit full indexing, caller/callee/impact queries, and read-only MCP exploration.
 - `exact`, `heuristic`, and `unresolved` relationship states.
 
-[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.130.0...HEAD
+[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.131.0...HEAD
+[0.131.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.130.0...v0.131.0
 [0.130.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.129.0...v0.130.0
 [0.129.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.128.0...v0.129.0
 [0.128.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.127.0...v0.128.0
