@@ -6,6 +6,26 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.151.0] - 2026-08-01
+
+### Added
+
+- Python extraction now retains independent Sanic Blueprint facts for direct Blueprint declarations, direct decorator routes, and direct option-free <code>app.blueprint(imported_blueprint)</code> registrations.
+- The project resolver now projects a source module's literal Sanic Blueprint route through a one-dot, single-name package-relative import into the registering module. The projected route retains both module paths as exact module-stage evidence.
+- New unit and service coverage verifies import aliases, source Blueprint prefix composition, persisted facts, exact route evidence, parent-relative rejection, imported-binding rebinding, and source-Blueprint rebinding rejection.
+
+### Compatibility
+
+- The artifact-facts extractor advances to <code>multi-language-ast-v132</code> and the project resolver to <code>project-resolver-v39</code>. Existing graphs and SQLite schema remain readable; the next explicit <code>sync</code> re-extracts Python facts and reprojects cross-file Sanic Blueprint routes.
+
+### Deliberate limits
+
+- This slice accepts only a direct one-dot, single-name relative import, a direct option-free one-Blueprint <code>app.blueprint(...)</code> call, literal source Blueprint prefix/path/method, and a source-module top-level local function handler. Parent-relative imports, import lists, groups/copies, registration options, dynamic construction, class views, WebSockets, <code>add_route</code>, and ambiguity remain non-exact.
+
+### Comparison notes
+
+- The inspected CodeGraph baseline source tree contains no <code>sanic</code> reference. SymbolLattice independently models a narrow, evidence-backed Sanic cross-file composition path and exposes exact provenance across both modules. It is broader for this explicit direct Blueprint path while remaining deliberately narrower than runtime framework behavior.
+
 ## [0.150.0] - 2026-08-01
 
 ### Added
@@ -2821,7 +2841,8 @@ No unreleased changes.
 - Explicit full indexing, caller/callee/impact queries, and read-only MCP exploration.
 - `exact`, `heuristic`, and `unresolved` relationship states.
 
-[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.150.0...HEAD
+[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.151.0...HEAD
+[0.151.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.150.0...v0.151.0
 [0.150.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.149.0...v0.150.0
 [0.149.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.148.0...v0.149.0
 [0.148.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.147.0...v0.148.0

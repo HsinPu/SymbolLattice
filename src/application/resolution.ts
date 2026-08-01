@@ -11,6 +11,8 @@ import {
   type FastApiRouterRouteFact,
   type FlaskBlueprintRouteFact,
   type FlaskImportedBlueprintRegistrationFact,
+  type SanicBlueprintRouteFact,
+  type SanicImportedBlueprintRegistrationFact,
   type FastifyPluginRouteFact,
   type FastifyPluginSymbolReference,
   type GoFrameStandardRouterBindingFact,
@@ -3586,6 +3588,201 @@ function projectFlaskImportedBlueprintRoutes(input: {
   return { symbols, structuralEdges };
 }
 
+interface ProjectedSanicImportedBlueprintRoute {
+  readonly registrationFilePath: string;
+  readonly blueprintFilePath: string;
+  readonly registration: SanicImportedBlueprintRegistrationFact;
+  readonly route: SanicBlueprintRouteFact;
+  readonly handler: SymbolNode;
+  readonly path: string;
+}
+
+function compareProjectedSanicImportedBlueprintRoute(
+  left: ProjectedSanicImportedBlueprintRoute,
+  right: ProjectedSanicImportedBlueprintRoute
+): number {
+  return (
+    compareStableText(left.registrationFilePath, right.registrationFilePath) ||
+    left.registration.range.start.line - right.registration.range.start.line ||
+    left.registration.range.start.column - right.registration.range.start.column ||
+    compareStableText(left.blueprintFilePath, right.blueprintFilePath) ||
+    left.route.range.start.line - right.route.range.start.line ||
+    left.route.range.start.column - right.route.range.start.column ||
+    compareStableText(left.route.method, right.route.method) ||
+    compareStableText(left.path, right.path) ||
+    compareStableText(left.handler.id, right.handler.id)
+  );
+}
+
+interface SanicImportedBlueprintRouteProjection {
+  readonly symbols: readonly SymbolNode[];
+  readonly structuralEdges: readonly GraphEdge[];
+}
+
+/**
+ * Projects literal handler routes declared on a directly imported Sanic
+ * Blueprint. Evidence identifies both the module that registers the Blueprint
+ * and the module that declares the handler route.
+ */
+function projectSanicImportedBlueprintRoutes(input: {
+  readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
+  readonly knownFilePaths: ReadonlySet<string>;
+  readonly fileSymbols: ReadonlyMap<string, SymbolNode>;
+  readonly symbolsById: ReadonlyMap<string, SymbolNode>;
+}): SanicImportedBlueprintRouteProjection {
+  const candidates: ProjectedSanicImportedBlueprintRoute[] = [];
+
+  for (const [registrationFilePath, facts] of [...input.factsByFile.entries()].sort(([left], [right]) =>
+    compareStableText(left, right)
+  )) {
+    const registrationFacts = facts.sanicBlueprintFacts;
+    if (registrationFacts === undefined) {
+      continue;
+    }
+
+    for (const registration of registrationFacts.importedBlueprintRegistrations) {
+      const blueprintFilePath = resolvePythonRelativeModule(
+        input.knownFilePaths,
+        registrationFilePath,
+        registration.moduleSpecifier
+      );
+      if (blueprintFilePath === null) {
+        continue;
+      }
+      const blueprintFacts = input.factsByFile.get(blueprintFilePath)?.sanicBlueprintFacts;
+      if (blueprintFacts === undefined) {
+        continue;
+      }
+      const blueprints = blueprintFacts.blueprints.filter(
+        (blueprint) => blueprint.name === registration.importedBlueprintName
+      );
+      if (blueprints.length !== 1 || blueprints[0] === undefined) {
+        continue;
+      }
+      const blueprint = blueprints[0];
+
+      for (const route of blueprintFacts.routes) {
+        if (route.blueprintName !== blueprint.name) {
+          continue;
+        }
+        const handler = input.symbolsById.get(route.handlerId);
+        if (handler?.kind !== "function" || handler.filePath !== blueprintFilePath) {
+          continue;
+        }
+        const path = mountedPythonRoutePath("", blueprint.prefix, route.path);
+        if (path === null) {
+          continue;
+        }
+        candidates.push({
+          registrationFilePath,
+          blueprintFilePath,
+          registration,
+          route,
+          handler,
+          path
+        });
+      }
+    }
+  }
+
+  const symbols: SymbolNode[] = [];
+  const structuralEdges: GraphEdge[] = [];
+  const declarationOrdinals = new Map<string, number>();
+  const seen = new Set<string>();
+  for (const candidate of [...candidates].sort(compareProjectedSanicImportedBlueprintRoute)) {
+    const dedupeKey = [
+      candidate.registrationFilePath,
+      candidate.registration.range.start.line,
+      candidate.registration.range.start.column,
+      candidate.blueprintFilePath,
+      candidate.route.range.start.line,
+      candidate.route.range.start.column,
+      candidate.route.method,
+      candidate.path,
+      candidate.handler.id
+    ].join("\u0000");
+    if (seen.has(dedupeKey)) {
+      continue;
+    }
+    seen.add(dedupeKey);
+
+    const file = input.fileSymbols.get(candidate.blueprintFilePath);
+    if (file === undefined) {
+      continue;
+    }
+    const name = candidate.route.method + " " + candidate.path;
+    const qualifiedName = candidate.blueprintFilePath + "#route:" + name;
+    const declarationOrdinal = declarationOrdinals.get(qualifiedName) ?? 0;
+    declarationOrdinals.set(qualifiedName, declarationOrdinal + 1);
+    const route: SymbolNode = {
+      id: createSymbolId({
+        filePath: candidate.blueprintFilePath,
+        qualifiedName,
+        kind: "route",
+        declarationOrdinal
+      }),
+      name,
+      qualifiedName,
+      kind: "route",
+      filePath: candidate.blueprintFilePath,
+      range: candidate.route.range,
+      isExported: false,
+      declarationOrdinal
+    };
+    symbols.push(route);
+    structuralEdges.push({
+      id: createEdgeId({
+        sourceId: file.id,
+        targetId: route.id,
+        kind: "contains",
+        line: candidate.route.range.start.line,
+        column: candidate.route.range.start.column,
+        referenceName: route.name
+      }),
+      sourceId: file.id,
+      targetId: route.id,
+      kind: "contains",
+      filePath: candidate.blueprintFilePath,
+      range: candidate.route.range,
+      resolution: "exact",
+      confidence: 1,
+      referenceName: route.name,
+      evidence: {
+        ruleId: "syntax.containment",
+        stage: "syntax",
+        candidateSymbolIds: [route.id]
+      }
+    });
+    structuralEdges.push({
+      id: createEdgeId({
+        sourceId: route.id,
+        targetId: candidate.handler.id,
+        kind: "routes",
+        line: candidate.route.range.start.line,
+        column: candidate.route.range.start.column,
+        referenceName: candidate.handler.name
+      }),
+      sourceId: route.id,
+      targetId: candidate.handler.id,
+      kind: "routes",
+      filePath: candidate.blueprintFilePath,
+      range: candidate.route.range,
+      resolution: "exact",
+      confidence: 1,
+      referenceName: candidate.handler.name,
+      evidence: referenceEvidence(
+        "framework.sanic.imported-blueprint.app-blueprint.decorator.local-function",
+        "module",
+        [candidate.handler.id],
+        [],
+        [candidate.registrationFilePath, candidate.blueprintFilePath]
+      )
+    });
+  }
+
+  return { symbols, structuralEdges };
+}
+
 function isStaticDjangoUrlPatternPath(value: string): boolean {
   return value.startsWith("/") && !value.includes("\\") && !value.includes("//");
 }
@@ -4334,6 +4531,18 @@ export function resolveProjectFacts(input: {
   symbols.push(...flaskImportedBlueprintRouteProjection.symbols);
   structuralEdges.push(...flaskImportedBlueprintRouteProjection.structuralEdges);
   for (const symbol of flaskImportedBlueprintRouteProjection.symbols) {
+    symbolsById.set(symbol.id, symbol);
+  }
+
+  const sanicImportedBlueprintRouteProjection = projectSanicImportedBlueprintRoutes({
+    factsByFile,
+    knownFilePaths,
+    fileSymbols,
+    symbolsById
+  });
+  symbols.push(...sanicImportedBlueprintRouteProjection.symbols);
+  structuralEdges.push(...sanicImportedBlueprintRouteProjection.structuralEdges);
+  for (const symbol of sanicImportedBlueprintRouteProjection.symbols) {
     symbolsById.set(symbol.id, symbol);
   }
 

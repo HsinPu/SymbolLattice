@@ -673,6 +673,9 @@ function artifactFactsPayload(facts: PersistedArtifactFacts): ArtifactFacts {
     ...(facts.flaskBlueprintFacts === undefined
       ? {}
       : { flaskBlueprintFacts: facts.flaskBlueprintFacts }),
+    ...(facts.sanicBlueprintFacts === undefined
+      ? {}
+      : { sanicBlueprintFacts: facts.sanicBlueprintFacts }),
     ...(facts.djangoUrlFacts === undefined ? {} : { djangoUrlFacts: facts.djangoUrlFacts }),
     ...(facts.goFrameStandardRouterFacts === undefined
       ? {}

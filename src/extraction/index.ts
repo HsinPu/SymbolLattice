@@ -96,7 +96,8 @@ export type {
   NestGraphqlFacts,
   NestRouteFacts,
   ReExportBinding,
-  ReferenceScope
+  ReferenceScope,
+  SanicBlueprintFacts
 } from "../domain/index.js";
 export {
   FRAMEWORK_CAPABILITIES,

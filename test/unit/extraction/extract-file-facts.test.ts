@@ -2948,6 +2948,97 @@ describe("source extraction", () => {
     expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
   });
 
+  it("retains proven cross-file Sanic Blueprint and package-relative registration facts", () => {
+    const blueprintFacts = extractFileFacts({
+      filePath: "app/routes/catalog.py",
+      language: "python",
+      sourceText: [
+        "from sanic import Blueprint as Router",
+        "catalog = Router(\"catalog\", url_prefix=\"/catalog\")",
+        "",
+        "@catalog.get(\"/items\")",
+        "async def items(request):",
+        "    return None"
+      ].join("\n")
+    });
+    const mainFacts = extractFileFacts({
+      filePath: "app/main.py",
+      language: "python",
+      sourceText: [
+        "from sanic import Sanic as App",
+        "from .routes.catalog import catalog as catalog_blueprint",
+        "app = App(\"symbol-lattice\")",
+        "app.blueprint(catalog_blueprint)"
+      ].join("\n")
+    });
+
+    expect(blueprintFacts.sanicBlueprintFacts).toMatchObject({
+      blueprints: [{ name: "catalog", prefix: "/catalog" }],
+      routes: [
+        {
+          blueprintName: "catalog",
+          method: "GET",
+          path: "/items",
+          handlerId: expect.any(String)
+        }
+      ],
+      importedBlueprintRegistrations: []
+    });
+    expect(mainFacts.sanicBlueprintFacts).toMatchObject({
+      blueprints: [],
+      routes: [],
+      importedBlueprintRegistrations: [
+        {
+          applicationName: "app",
+          blueprintName: "catalog_blueprint",
+          importedBlueprintName: "catalog",
+          moduleSpecifier: ".routes.catalog"
+        }
+      ]
+    });
+  });
+
+  it("rejects parent-relative and rebound imported Sanic Blueprint registrations", () => {
+    const facts = extractFileFacts({
+      filePath: "app/main.py",
+      language: "python",
+      sourceText: [
+        "from sanic import Sanic",
+        "from ..routes.catalog import catalog",
+        "app = Sanic(\"symbol-lattice\")",
+        "app.blueprint(catalog)",
+        "",
+        "from .routes.catalog import catalog as catalog_blueprint",
+        "catalog_blueprint = build_blueprint()",
+        "app.blueprint(catalog_blueprint)"
+      ].join("\n")
+    });
+
+    expect(facts.sanicBlueprintFacts?.importedBlueprintRegistrations).toEqual([]);
+  });
+
+  it("does not retain cross-file Sanic Blueprint facts when the source Blueprint is later rebound", () => {
+    const facts = extractFileFacts({
+      filePath: "app/routes/catalog.py",
+      language: "python",
+      sourceText: [
+        "from sanic import Blueprint",
+        "catalog = Blueprint(\"catalog\")",
+        "",
+        "@catalog.get(\"/items\")",
+        "async def items(request):",
+        "    return None",
+        "",
+        "catalog = build_blueprint()"
+      ].join("\n")
+    });
+
+    expect(facts.sanicBlueprintFacts).toMatchObject({
+      blueprints: [],
+      routes: []
+    });
+  });
+
   it("retains proven cross-file FastAPI router and package-relative inclusion facts", () => {
     const routerFacts = extractFileFacts({
       filePath: "api/routers/catalog.py",

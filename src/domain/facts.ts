@@ -11,13 +11,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v131";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v132";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v38";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v39";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -280,6 +280,44 @@ export interface FlaskBlueprintFacts {
   readonly blueprints: readonly FlaskBlueprintDeclarationFact[];
   readonly routes: readonly FlaskBlueprintRouteFact[];
   readonly importedBlueprintRegistrations: readonly FlaskImportedBlueprintRegistrationFact[];
+}
+
+/** A direct, top-level Sanic `Blueprint` binding with a literal URL prefix. */
+export interface SanicBlueprintDeclarationFact {
+  readonly name: string;
+  readonly prefix: string;
+  readonly range: SourceRange;
+}
+
+/** A literal route decorated directly on a syntax-proven Sanic Blueprint. */
+export interface SanicBlueprintRouteFact {
+  readonly blueprintName: string;
+  readonly method: RouteMethod;
+  readonly path: string;
+  readonly handlerId: string;
+  readonly range: SourceRange;
+}
+
+/**
+ * A direct, option-free `app.blueprint(imported_blueprint)` registration from
+ * one package-relative Python module into another.
+ */
+export interface SanicImportedBlueprintRegistrationFact {
+  readonly applicationName: string;
+  readonly blueprintName: string;
+  readonly importedBlueprintName: string;
+  readonly moduleSpecifier: string;
+  readonly range: SourceRange;
+}
+
+/**
+ * Syntax-only facts used to project literal routes through a directly imported
+ * Sanic Blueprint in another module of the same proven Python package.
+ */
+export interface SanicBlueprintFacts {
+  readonly blueprints: readonly SanicBlueprintDeclarationFact[];
+  readonly routes: readonly SanicBlueprintRouteFact[];
+  readonly importedBlueprintRegistrations: readonly SanicImportedBlueprintRegistrationFact[];
 }
 
 /** A literal route in a final Django `urlpatterns` list with a local function handler. */
@@ -606,6 +644,8 @@ export interface ArtifactFacts {
   readonly fastApiRouterFacts?: FastApiRouterFacts;
   /** Omitted only by artifact facts persisted before v0.111. */
   readonly flaskBlueprintFacts?: FlaskBlueprintFacts;
+  /** Omitted only by artifact facts persisted before v0.151. */
+  readonly sanicBlueprintFacts?: SanicBlueprintFacts;
   /** Omitted only by artifact facts persisted before v0.112. */
   readonly djangoUrlFacts?: DjangoUrlFacts;
   /** Omitted only by artifact facts persisted before v0.129. */

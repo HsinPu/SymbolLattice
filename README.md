@@ -2,7 +2,7 @@
 
 # SymbolLattice
 
-**證據優先、可查詢的本機程式碼智慧**
+**可驗證、可查詢的本機程式碼情報圖譜**
 
 [![Version](https://img.shields.io/github/v/tag/HsinPu/symbol-lattice?label=version)](https://github.com/HsinPu/symbol-lattice/tags)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D22.13-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
@@ -14,22 +14,15 @@
 </div>
 
 > [!IMPORTANT]
-> v0.150.0 是開發者預覽版，尚未發布到 npm；請從原始碼執行。
+> v0.151.0 是開發者預覽版；套件尚未發佈至 npm，請由原始碼執行。
 
-SymbolLattice 為專案建立可查詢的本機程式碼符號圖譜。每條關係都保留來源規則、解析階段與信心值；原始碼僅保存於受索引專案的 `.symbol-lattice/index.sqlite`，不會被靜默上傳。
-
-## 重點
-
-- 從 AST 建立檔案、符號、匯入/匯出、型別階層、路由、進入點與跨檔案關係。
-- 不把模糊資訊偽裝為精確結果：關係明確標示為 `exact`、`heuristic` 或 `unresolved`。
-- 支援前端、後端、JVM、系統、資料、IaC、樣板與 schema 語言，並提供受限、可稽核的框架路由解析。
-- 提供 CLI 與唯讀 MCP 查詢：符號、關係、路由、進入點、影響範圍、歷程、差異與索引狀態。
+SymbolLattice 為專案建立可查詢的本機程式碼符號圖譜。每條關係都保留規則、解析階段與信心值；它明確區分 exact、heuristic 與 unresolved，不會把猜測升格為事實。
 
 ## 快速開始
 
-需求：Node.js `>=22.13 <25` 與 npm。
+需要 Node.js 22.13 以上且低於 25，以及 npm。
 
-```bash
+~~~bash
 git clone https://github.com/HsinPu/symbol-lattice.git
 cd symbol-lattice
 npm install
@@ -38,46 +31,33 @@ npm run build
 # 明確建立本機索引
 node dist/cli/main.js init /path/to/project
 
-# 唯讀查詢；原始碼變更後才明確執行 sync
+# 唯讀查詢；來源變更後才明確同步
 node dist/cli/main.js routes --project /path/to/project --method GET
-node dist/cli/main.js routes --project /path/to/project --domain api.example.test
 node dist/cli/main.js sync /path/to/project
 
-# 啟動唯讀 MCP host
+# 啟動唯讀 MCP 主機
 node dist/cli/main.js serve --mcp --project /path/to/project
-```
+~~~
 
-Windows PowerShell 若沒有 `npm` 指令，請改用 `npm.cmd`。檔案系統根目錄與使用者家目錄需要明確加上 `--force` 才會接受。
+Windows PowerShell 若無法使用 npm，請改用 npm.cmd。索引資料保留在目標專案的 .symbol-lattice/index.sqlite。
 
-## v0.150.0
+## v0.151.0
 
-- Sanic 新增同檔 direct Blueprint 路由：支援 `Blueprint(..., url_prefix="/...")`、`app.blueprint(bp)` 與 Blueprint 上既有的 decorator route。
-- Blueprint 可在 route decorator 前或後掛載；仍只接受可證明的 import、app、Blueprint、字面量 prefix／path／method 與未重綁定組合。重複的同 app–Blueprint 掛載保守地不建立 `exact` route。
-- artifact facts 升級為 `multi-language-ast-v131`；project resolver 維持 `project-resolver-v38`。
+- 支援跨檔直連 Sanic Blueprint：來源模組的 Blueprint 與 decorator route，可透過 package-relative import 與 app.blueprint(...) 投影為精確路由。
+- 僅在 import、Sanic app、Blueprint、字面 prefix/path/method、來源 handler 與未重綁定都能語法證明時產生 exact 路由。
+- 跨檔投影保留註冊模組與來源模組的證據路徑；下一次明確 sync 會重建既有索引。
 
-## 已知限制
+## 設計界線
 
-- 這不是編譯器、型別檢查器、框架 runtime 或執行期追蹤器。
-- 動態派發、反射、巨集展開、程式碼產生、依賴注入與歧義名稱不會成為 `exact` 關係。
-- GoFrame Domain 僅接受可證明的字面量、非萬用字元 host；動態值、空白項目、萬用字元與重綁定 receiver 保持未解析。
-- GoFrame 鏈式 receiver 僅支援 `g.Server()` 起點與有限的字面量 `Domain`／單參數 `Group` 鏈；任意方法鏈、動態前綴、變數傳遞與不受支援的 callback 形狀不會成為精確關係。
-- GoFrame 跨檔 standard router 僅支援可靜態證明的 direct pointer（`&Controller{}`／`new(Controller)`）、無參數 `Factory()`，及同一函式內未重綁的一層 pointer/factory alias。pointer alias 可用 `:=`，或單一直接 initializer 的 `var`；有型別註記時必須是與右側相符的 pointer 型別。factory alias 可用 `:=` 或無型別、單一直接 initializer 的 `var`。每個 `Bind(...)` argument 必須獨立成立；slice 展開、動態值、全域、群組式或多值 `var`、有型別的 factory `var`、轉送、分支、map/interface/DI 容器、callback 同名遮蔽、重綁與歧義不會成為 `exact`。顯式 import alias 可直接使用；預設 import 必須由目標 `package` 宣告證明，絕不從 import 路徑猜測。`.`／`_` import、外部/傳遞模組、`replace`、巢狀模組選擇與 build tag 保持未解析。
-- 未綁定的 GoFrame request-signature 候選永遠是 `heuristic`，不代表 runtime 已註冊路由；反射、動態 Bind 與未知 prefix／host 維持未解析。
-- Iris 目前僅支援 `iris.New()`、單一具名 handler、字面量 `Party` 前綴，以及標準大寫 method 的 `Handle`；`Default`、MVC、middleware、自訂或小寫 method、動態路徑與重綁 receiver 不會成為 `exact`。
-- Beego 目前僅支援 v2 `web` package 的 direct functional HTTP methods；Namespace、controller/MVC、Router、annotation、middleware、動態路徑與重綁 package alias 不會成為 `exact`。
-- Gorilla/mux 目前僅支援 `mux.NewRouter()` 的 direct `HandleFunc` 與單一 `Methods` 連鎖；Subrouter、PathPrefix、Host、Headers、Schemes、middleware、其他 matcher chain、動態值與重綁都不會成為 `exact`。
-- HttpRouter 目前僅支援 `httprouter.New()` 的 direct HTTP method；`Handle`、`Handler`／`HandlerFunc`、自動 OPTIONS、wrapper、動態值與重綁都不會成為 `exact`。
-- Rails 目前僅支援 direct `Rails.application.routes.draw` 內的字面量 verb、`resources`／`resource`、標準 action 與陣列形狀的 `only`／`except`。namespace、scope、巢狀 resource、自訂 path/controller、單一 symbol filter、動態值與慣例檔案/class/action 不唯一時不會成為 `exact`。
-- Starlette 目前只支援 direct import、頂層字面量 `Route` list，以及由 `Starlette(routes=...)` 掛載的同檔頂層具名 function endpoint。`Mount`／`Router`、class endpoint、混合或動態 list、tuple、不支援的 `Route` 選項、跨檔 route、handler 定義在 route 之後、重綁與歧義均不會成為 `exact`。
-- aiohttp 目前支援 direct `from aiohttp import web`、`web.Application()`、頂層 `app.router.add_get`／`add_post`／`add_put`／`add_patch`／`add_delete`／`add_head`／`add_route`，以及具名或 inline 字面量 `app.router.add_routes([web.get(...)])` table 與同檔頂層具名 function handler。`RouteTableDef`、decorator、class view、subapp、動態值、非大寫或 wildcard `route`／`add_route` method、非字面量 `allow_head`、handler 定義在 entry 之後、重綁與歧義均不會成為 `exact`。
-- Sanic 目前支援 direct app decorator，以及同檔 direct `Blueprint(..., url_prefix=...)` + `app.blueprint(bp)`。跨檔 Blueprint import、Blueprint group／copy、registration options、`Sanic.get_app`、`add_route`、class view、WebSocket、version／其他設定、動態 path 或 methods、非大寫或 wildcard method、外部 handler、重綁與歧義均不會成為 `exact`。
-- 其他框架只涵蓋已實作且可驗證的切片；完整變更請見 [CHANGELOG.md](CHANGELOG.md)。
+- 所有索引與查詢皆在本機進行；不會悄悄上傳原始碼。
+- 動態派發、反射、巨集、程式碼生成、DI、模糊名稱與執行期設定不會成為 exact 關係。
+- 此 Sanic 版本只接受單一名稱、一層相對路徑的 Blueprint import、直接無選項 app.blueprint(...) 註冊與頂層本機函式 handler。Blueprint groups/copies、註冊選項、class views、WebSocket、add_route 與動態組合暫不推斷。
 
 ## 驗證
 
-```bash
+~~~bash
 npm run check
 npm test
 npm run build
 git diff --check
-```
+~~~

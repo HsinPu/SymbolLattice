@@ -3521,6 +3521,73 @@ describe("SymbolLatticeService", () => {
     );
   });
 
+  it("projects package-relative Sanic Blueprint modules through literal prefixes", async () => {
+    const projectPath = await createInlineProject({
+      "app/__init__.py": "",
+      "app/routes/__init__.py": "",
+      "app/routes/catalog.py": [
+        "from sanic import Blueprint as Router",
+        "catalog = Router(\"catalog\", url_prefix=\"/catalog\")",
+        "",
+        "@catalog.get(\"/items\")",
+        "async def items(request):",
+        "    return None"
+      ].join("\n"),
+      "app/main.py": [
+        "from sanic import Sanic as App",
+        "from .routes.catalog import catalog as catalog_blueprint",
+        "app = App(\"symbol-lattice\")",
+        "app.blueprint(catalog_blueprint)"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath, { method: "GET" });
+    const mainFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "app/main.py");
+    const blueprintFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "app/routes/catalog.py");
+
+    expect(mainFacts?.sanicBlueprintFacts).toMatchObject({
+      importedBlueprintRegistrations: [
+        {
+          moduleSpecifier: ".routes.catalog",
+          importedBlueprintName: "catalog",
+          blueprintName: "catalog_blueprint"
+        }
+      ]
+    });
+    expect(blueprintFacts?.sanicBlueprintFacts).toMatchObject({
+      blueprints: [{ name: "catalog", prefix: "/catalog" }],
+      routes: [{ blueprintName: "catalog", method: "GET", path: "/items" }]
+    });
+    expect(routes.routes).toMatchObject([
+      {
+        method: "GET",
+        path: "/catalog/items",
+        route: {
+          kind: "route",
+          name: "GET /catalog/items",
+          filePath: "app/routes/catalog.py"
+        },
+        edge: {
+          kind: "routes",
+          resolution: "exact",
+          evidence: {
+            ruleId: "framework.sanic.imported-blueprint.app-blueprint.decorator.local-function",
+            stage: "module",
+            resolutionPath: ["app/main.py", "app/routes/catalog.py"]
+          }
+        },
+        handler: { qualifiedName: "app/routes/catalog.py#items" }
+      }
+    ]);
+  });
+
   it("indexes Scala source plus Play conf/routes with exact package-class-method handler proof", async () => {
     const projectPath = await createInlineProject({
       "app/controllers/HealthController.scala": [

@@ -14,6 +14,9 @@ import {
   type FlaskImportedBlueprintRegistrationFact,
   type GraphEdge,
   type RouteMethod,
+  type SanicBlueprintDeclarationFact,
+  type SanicBlueprintRouteFact,
+  type SanicImportedBlueprintRegistrationFact,
   type SourcePosition,
   type SourceRange,
   type SymbolKind,
@@ -206,6 +209,14 @@ interface StaticFastApiRelativeRouterImport {
 
 /** A one-dot, single-name Python relative import that can carry a Flask Blueprint. */
 interface StaticFlaskRelativeBlueprintImport {
+  readonly moduleSpecifier: string;
+  readonly importedBlueprintName: string;
+  readonly blueprintName: string;
+  readonly node: PythonSyntaxNode;
+}
+
+/** A one-dot, single-name Python relative import that can carry a Sanic Blueprint. */
+interface StaticSanicRelativeBlueprintImport {
   readonly moduleSpecifier: string;
   readonly importedBlueprintName: string;
   readonly blueprintName: string;
@@ -533,6 +544,32 @@ function staticFlaskRelativeBlueprintImport(
   input: PythonExtractFileFactsInput,
   node: PythonSyntaxNode
 ): StaticFlaskRelativeBlueprintImport | null {
+  if (node.name !== "ImportStatement") {
+    return null;
+  }
+  const match = /^from[ \t]+(\.[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)[ \t]+import[ \t]+([A-Za-z_][A-Za-z0-9_]*)(?:[ \t]+as[ \t]+([A-Za-z_][A-Za-z0-9_]*))?[ \t]*$/u.exec(
+    nodeText(input, node)
+  );
+  if (match?.[1] === undefined || match[2] === undefined) {
+    return null;
+  }
+
+  return {
+    moduleSpecifier: match[1],
+    importedBlueprintName: match[2],
+    blueprintName: match[3] ?? match[2],
+    node
+  };
+}
+
+/**
+ * Retains only the direct package-relative import form that can pass a Sanic
+ * Blueprint to `app.blueprint`: `from .package.module import blueprint [as local_blueprint]`.
+ */
+function staticSanicRelativeBlueprintImport(
+  input: PythonExtractFileFactsInput,
+  node: PythonSyntaxNode
+): StaticSanicRelativeBlueprintImport | null {
   if (node.name !== "ImportStatement") {
     return null;
   }
@@ -2444,6 +2481,34 @@ function latestProvenFlaskRelativeBlueprintImport(
   return candidates.length === 1 ? candidates[0] ?? null : null;
 }
 
+/**
+ * Finds the one direct relative import still bound to a Sanic Blueprint
+ * argument at a literal `app.blueprint` call. A later assignment or import
+ * shadows an earlier import and therefore removes it from consideration.
+ */
+function latestProvenSanicRelativeBlueprintImport(
+  input: PythonExtractFileFactsInput,
+  topLevelNodes: readonly PythonSyntaxNode[],
+  imports: readonly StaticSanicRelativeBlueprintImport[],
+  registration: StaticSanicBlueprintRegistration
+): StaticSanicRelativeBlueprintImport | null {
+  const candidates = imports
+    .filter(
+      (candidate) =>
+        candidate.blueprintName === registration.blueprintName &&
+        candidate.node.to <= registration.node.from &&
+        !hasTopLevelRebinding(
+          input,
+          topLevelNodes,
+          candidate.blueprintName,
+          candidate.node.to,
+          registration.node.from
+        )
+    )
+    .sort((left, right) => right.node.from - left.node.from);
+  return candidates.length === 1 ? candidates[0] ?? null : null;
+}
+
 function combinedRoutePath(...parts: readonly string[]): string {
   return parts.join("");
 }
@@ -2491,6 +2556,15 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
     readonly blueprints: FlaskBlueprintDeclarationFact[];
     readonly routes: FlaskBlueprintRouteFact[];
     readonly importedBlueprintRegistrations: FlaskImportedBlueprintRegistrationFact[];
+  } = {
+    blueprints: [],
+    routes: [],
+    importedBlueprintRegistrations: []
+  };
+  const sanicBlueprintFacts: {
+    readonly blueprints: SanicBlueprintDeclarationFact[];
+    readonly routes: SanicBlueprintRouteFact[];
+    readonly importedBlueprintRegistrations: SanicImportedBlueprintRegistrationFact[];
   } = {
     blueprints: [],
     routes: [],
@@ -2672,6 +2746,9 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
     const relativeBlueprintImports = topLevelNodes
       .map((node) => staticFlaskRelativeBlueprintImport(input, node))
       .filter((candidate): candidate is StaticFlaskRelativeBlueprintImport => candidate !== null);
+    const relativeSanicBlueprintImports = topLevelNodes
+      .map((node) => staticSanicRelativeBlueprintImport(input, node))
+      .filter((candidate): candidate is StaticSanicRelativeBlueprintImport => candidate !== null);
     const applicationConstructorNames = new Set(
       imports
         .filter((candidate) => candidate.importedName === "FastAPI")
@@ -2829,6 +2906,18 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
       );
       return finalBlueprint !== null && nodeKey(finalBlueprint.node) === nodeKey(blueprint.node);
     });
+    const finalSanicBlueprints = sanicBlueprints.filter((blueprint) => {
+      const finalBlueprint = latestProvenFrameworkInstance(
+        input,
+        topLevelNodes,
+        sanicImports,
+        sanicBlueprints,
+        blueprint.name,
+        input.sourceText.length,
+        "Blueprint"
+      );
+      return finalBlueprint !== null && nodeKey(finalBlueprint.node) === nodeKey(blueprint.node);
+    });
     for (const router of finalRouters) {
       fastApiRouterFacts.routers.push({
         name: router.name,
@@ -2838,6 +2927,13 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
     }
     for (const blueprint of finalFlaskBlueprints) {
       flaskBlueprintFacts.blueprints.push({
+        name: blueprint.name,
+        prefix: blueprint.prefix,
+        range: rangeFor(lineStarts, blueprint.node.from, blueprint.node.to)
+      });
+    }
+    for (const blueprint of finalSanicBlueprints) {
+      sanicBlueprintFacts.blueprints.push({
         name: blueprint.name,
         prefix: blueprint.prefix,
         range: rangeFor(lineStarts, blueprint.node.from, blueprint.node.to)
@@ -3205,6 +3301,38 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
       });
     }
 
+    for (const registration of sanicBlueprintRegistrations) {
+      if (
+        latestProvenFrameworkInstance(
+          input,
+          topLevelNodes,
+          sanicImports,
+          sanicApplications,
+          registration.applicationName,
+          registration.node.from,
+          "Sanic"
+        ) === null
+      ) {
+        continue;
+      }
+      const importedBlueprint = latestProvenSanicRelativeBlueprintImport(
+        input,
+        topLevelNodes,
+        relativeSanicBlueprintImports,
+        registration
+      );
+      if (importedBlueprint === null) {
+        continue;
+      }
+      sanicBlueprintFacts.importedBlueprintRegistrations.push({
+        applicationName: registration.applicationName,
+        blueprintName: importedBlueprint.blueprintName,
+        importedBlueprintName: importedBlueprint.importedBlueprintName,
+        moduleSpecifier: importedBlueprint.moduleSpecifier,
+        range: rangeFor(lineStarts, registration.node.from, registration.node.to)
+      });
+    }
+
     for (const statement of topLevelNodes) {
       const functionNode = decoratedDefinition(statement);
       if (functionNode === null || functionNode.name !== "FunctionDefinition" || !isTopLevelFunction(functionNode)) {
@@ -3335,6 +3463,20 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
             "Blueprint"
           );
           if (blueprintAtDecorator !== null) {
+            const finalBlueprint = finalSanicBlueprints.find(
+              (blueprint) => nodeKey(blueprint.node) === nodeKey(blueprintAtDecorator.node)
+            );
+            if (finalBlueprint !== undefined) {
+              for (const method of sanicDecorator.methods) {
+                sanicBlueprintFacts.routes.push({
+                  blueprintName: finalBlueprint.name,
+                  method,
+                  path: sanicDecorator.path,
+                  handlerId: handler.id,
+                  range: rangeFor(lineStarts, sanicDecorator.node.from, sanicDecorator.node.to)
+                });
+              }
+            }
             for (const registration of sanicBlueprintRegistrations) {
               if (
                 sanicDecorator.receiver !== registration.blueprintName ||
@@ -3515,6 +3657,7 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
     },
     fastApiRouterFacts,
     flaskBlueprintFacts,
+    sanicBlueprintFacts,
     djangoUrlFacts
   };
 }
