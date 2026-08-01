@@ -6,6 +6,26 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.145.0] - 2026-08-01
+
+### Added
+
+- Ruby on Rails extraction now expands direct `Rails.application.routes.draw` `resources` and singular `resource` declarations into literal RESTful route facts. Direct literal array-shaped `only` and `except` filters are retained; an `update` action emits both `PATCH` and `PUT` routes.
+- Rails direct verb and RESTful routes now retain pending controller-action evidence when a same-file method is unavailable. The project resolver promotes a route only when the conventional `app/controllers/<controller>_controller.rb` file, matching controller class, and requested method are each uniquely syntax-proven.
+- New unit and service coverage verifies plural and singular resources, action filters, both update verbs, rejected dynamic/unsupported declarations, exact conventional cross-file resolution, and missing or ambiguous controller evidence.
+
+### Compatibility
+
+- The artifact-facts extractor advances to `multi-language-ast-v126` and the project resolver to `project-resolver-v38`. Existing graphs and SQLite schema remain readable; the next explicit `sync` re-extracts Ruby facts and reprojects Rails routes.
+
+### Deliberate limits
+
+- Rails support is limited to direct `Rails.application.routes.draw` blocks, literal standard-action `resources`/`resource` declarations, literal array-shaped `only`/`except` filters, and unique conventional controller files/classes/methods. Namespaces, scopes, nested resources, custom paths/controllers, dynamic values, non-array filters, aliases, wrappers, and ambiguous or missing candidates remain non-exact.
+
+### Comparison notes
+
+- The inspected CodeGraph Rails resolver expands direct RESTful resources and uses controller conventions, but its route extraction is regex-driven. SymbolLattice uses the Ruby AST, preserves separate `PATCH` and `PUT` update routes, and requires one exact conventional file/class/method chain before publishing a cross-file handler edge.
+
 ## [0.144.0] - 2026-08-01
 
 ### Added
@@ -2700,7 +2720,8 @@ No unreleased changes.
 - Explicit full indexing, caller/callee/impact queries, and read-only MCP exploration.
 - `exact`, `heuristic`, and `unresolved` relationship states.
 
-[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.144.0...HEAD
+[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.145.0...HEAD
+[0.145.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.144.0...v0.145.0
 [0.144.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.143.0...v0.144.0
 [0.143.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.142.0...v0.143.0
 [0.142.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.141.0...v0.142.0

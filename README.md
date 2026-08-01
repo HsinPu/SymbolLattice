@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.144.0 是開發者預覽版，尚未發布到 npm；請從原始碼執行。
+> v0.145.0 是開發者預覽版，尚未發布到 npm；請從原始碼執行。
 
 SymbolLattice 為專案建立可查詢的本機程式碼符號圖譜。每條關係都保留來源規則、解析階段與信心值；原始碼僅保存於受索引專案的 `.symbol-lattice/index.sqlite`，不會被靜默上傳。
 
@@ -49,11 +49,11 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 Windows PowerShell 若沒有 `npm` 指令，請改用 `npm.cmd`。檔案系統根目錄與使用者家目錄需要明確加上 `--force` 才會接受。
 
-## v0.144.0
+## v0.145.0
 
-- 新增 Go HttpRouter：`router := httprouter.New()` 的 direct `GET/POST/PUT/PATCH/DELETE/HEAD/OPTIONS("/path", handler)` 可建立 `exact` route。
-- 僅接受明確 `github.com/julienschmidt/httprouter` import、未重綁 router、字面量路徑與同檔具名 handler；`/users/:id` 等 HttpRouter path parameter 會保留。
-- artifact facts 升級為 `multi-language-ast-v125`；下次明確 `sync` 會重新萃取 Go facts 並重投影路由。
+- Ruby on Rails 新增 direct `resources`／`resource` RESTful 路由：支援標準 action 的字面量 `only`／`except` 陣列，`update` 會保留各自的 `PATCH` 與 `PUT` route。
+- Rails direct verb 與 resource 路由會依慣例驗證 `app/controllers/<controller>_controller.rb`、class 與 action method；三者唯一才是跨檔 `exact`，缺漏或歧義保持 `unresolved`。
+- artifact facts 升級為 `multi-language-ast-v126`，project resolver 升級為 `project-resolver-v38`；下次明確 `sync` 會重新萃取 Ruby facts 並重投影路由。
 
 ## 已知限制
 
@@ -67,6 +67,7 @@ Windows PowerShell 若沒有 `npm` 指令，請改用 `npm.cmd`。檔案系統�
 - Beego 目前僅支援 v2 `web` package 的 direct functional HTTP methods；Namespace、controller/MVC、Router、annotation、middleware、動態路徑與重綁 package alias 不會成為 `exact`。
 - Gorilla/mux 目前僅支援 `mux.NewRouter()` 的 direct `HandleFunc` 與單一 `Methods` 連鎖；Subrouter、PathPrefix、Host、Headers、Schemes、middleware、其他 matcher chain、動態值與重綁都不會成為 `exact`。
 - HttpRouter 目前僅支援 `httprouter.New()` 的 direct HTTP method；`Handle`、`Handler`／`HandlerFunc`、自動 OPTIONS、wrapper、動態值與重綁都不會成為 `exact`。
+- Rails 目前僅支援 direct `Rails.application.routes.draw` 內的字面量 verb、`resources`／`resource`、標準 action 與陣列形狀的 `only`／`except`。namespace、scope、巢狀 resource、自訂 path/controller、單一 symbol filter、動態值與慣例檔案/class/action 不唯一時不會成為 `exact`。
 - 其他框架只涵蓋已實作且可驗證的切片；完整變更請見 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 驗證

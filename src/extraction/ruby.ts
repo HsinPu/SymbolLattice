@@ -5,6 +5,8 @@ import {
   createSymbolId,
   type ArtifactFacts,
   type GraphEdge,
+  type PendingReference,
+  type RouteRegistration,
   type RouteMethod,
   type SourcePosition,
   type SourceRange,
@@ -45,6 +47,7 @@ interface StaticRailsRoute {
   readonly path: string;
   readonly action: StaticRailsControllerAction;
   readonly node: RubySyntaxNode;
+  readonly routeRegistration?: Extract<RouteRegistration, "rails-resources" | "rails-resource">;
 }
 
 interface StaticRubyMemberCall {
@@ -62,6 +65,25 @@ const RAILS_ROUTE_METHODS: Readonly<Record<string, RouteMethod>> = {
   head: "HEAD",
   options: "OPTIONS"
 };
+
+const RAILS_PLURAL_RESOURCE_ACTIONS = [
+  "index",
+  "create",
+  "new",
+  "show",
+  "edit",
+  "update",
+  "destroy"
+] as const;
+
+const RAILS_SINGULAR_RESOURCE_ACTIONS = [
+  "create",
+  "new",
+  "show",
+  "edit",
+  "update",
+  "destroy"
+] as const;
 
 function directChildren(node: RubySyntaxNode): readonly RubySyntaxNode[] {
   return node.children();
@@ -259,8 +281,19 @@ function staticRailsToAction(node: RubySyntaxNode): StaticRailsControllerAction 
   if (match === null || match[1] === undefined || match[2] === undefined) {
     return null;
   }
-  const controller = match[1];
-  const action = match[2];
+  return staticRailsControllerAction(match[1], match[2]);
+}
+
+function staticRailsControllerAction(
+  controller: string,
+  action: string
+): StaticRailsControllerAction | null {
+  if (
+    !/^([a-z_][a-z0-9_]*(?:\/[a-z_][a-z0-9_]*)*)$/u.test(controller) ||
+    !/^[a-z_][a-zA-Z0-9_]*$/u.test(action)
+  ) {
+    return null;
+  }
   const localControllerName = controller.includes("/")
     ? null
     : controller
@@ -297,6 +330,151 @@ function staticRailsRoute(node: RubySyntaxNode): StaticRailsRoute | null {
   return path === null || action === null ? null : { method, path, action, node };
 }
 
+function staticRailsSimpleSymbol(node: RubySyntaxNode): string | null {
+  if (node.kind() !== "simple_symbol") {
+    return null;
+  }
+  const match = /^:([a-z_][a-z0-9_]*)$/u.exec(nodeText(node));
+  return match?.[1] ?? null;
+}
+
+function staticRailsResourceFilter(
+  node: RubySyntaxNode,
+  allowedActions: readonly string[]
+): readonly string[] | null {
+  if (node.kind() !== "pair") {
+    return null;
+  }
+  const children = directChildren(node);
+  const key = children[0];
+  const separator = children[1];
+  const value = children[2];
+  if (
+    children.length !== 3 ||
+    key?.kind() !== "hash_key_symbol" ||
+    nodeText(key) !== "only" && nodeText(key) !== "except" ||
+    separator?.kind() !== ":" ||
+    value?.kind() !== "array"
+  ) {
+    return null;
+  }
+  const entries = directChildren(value);
+  if (
+    entries.length < 2 ||
+    entries[0]?.kind() !== "[" ||
+    entries.at(-1)?.kind() !== "]" ||
+    entries.some(
+      (entry, index) =>
+        index !== 0 &&
+        index !== entries.length - 1 &&
+        entry.kind() !== "simple_symbol" &&
+        entry.kind() !== ","
+    )
+  ) {
+    return null;
+  }
+  const selected = entries
+    .filter((entry) => entry.kind() === "simple_symbol")
+    .map(staticRailsSimpleSymbol);
+  if (
+    selected.some((entry) => entry === null) ||
+    new Set(selected).size !== selected.length ||
+    selected.some((entry) => entry === null || !allowedActions.includes(entry))
+  ) {
+    return null;
+  }
+  const selectedActions = new Set(selected.filter((entry): entry is string => entry !== null));
+  return nodeText(key) === "only"
+    ? allowedActions.filter((action) => selectedActions.has(action))
+    : allowedActions.filter((action) => !selectedActions.has(action));
+}
+
+function pluralizeRailsResource(resource: string): string {
+  if (/[^aeiou]y$/u.test(resource)) {
+    return resource.slice(0, -1) + "ies";
+  }
+  if (/(s|x|z|ch|sh)$/u.test(resource)) {
+    return resource + "es";
+  }
+  return resource + "s";
+}
+
+function staticRailsResourceRoutes(node: RubySyntaxNode): readonly StaticRailsRoute[] {
+  if (node.kind() !== "call") {
+    return [];
+  }
+  const children = directChildren(node);
+  const nameNode = children[0];
+  const argumentList = children[1];
+  const methodName = nameNode === undefined ? null : identifierText(nameNode);
+  const plural = methodName === "resources";
+  if (
+    (methodName !== "resources" && methodName !== "resource") ||
+    argumentList?.kind() !== "argument_list" ||
+    children.length !== 2
+  ) {
+    return [];
+  }
+  const arguments_ = directChildren(argumentList);
+  const resourceNode = arguments_[0];
+  const filterNode = arguments_[2];
+  const allowedActions = plural ? RAILS_PLURAL_RESOURCE_ACTIONS : RAILS_SINGULAR_RESOURCE_ACTIONS;
+  if (
+    resourceNode === undefined ||
+    staticRailsSimpleSymbol(resourceNode) === null ||
+    !(
+      arguments_.length === 1 ||
+      (arguments_.length === 3 && arguments_[1]?.kind() === "," && filterNode !== undefined)
+    )
+  ) {
+    return [];
+  }
+  const resource = staticRailsSimpleSymbol(resourceNode);
+  if (resource === null) {
+    return [];
+  }
+  const selectedActions =
+    filterNode === undefined ? allowedActions : staticRailsResourceFilter(filterNode, allowedActions);
+  if (selectedActions === null) {
+    return [];
+  }
+  const controller = plural ? resource : pluralizeRailsResource(resource);
+  const routeRegistration = plural ? "rails-resources" : "rails-resource";
+  const basePath = "/" + resource;
+  const itemPath = plural ? basePath + "/:id" : basePath;
+  return selectedActions.flatMap((actionName): readonly StaticRailsRoute[] => {
+    const action = staticRailsControllerAction(controller, actionName);
+    if (action === null) {
+      return [];
+    }
+    const route = (method: RouteMethod, path: string): StaticRailsRoute => ({
+      method,
+      path,
+      action,
+      node,
+      routeRegistration
+    });
+    switch (actionName) {
+      case "index":
+        return [route("GET", basePath)];
+      case "create":
+        return [route("POST", basePath)];
+      case "new":
+        return [route("GET", basePath + "/new")];
+      case "show":
+        return [route("GET", itemPath)];
+      case "edit":
+        return [route("GET", itemPath + "/edit")];
+      case "update":
+        return [route("PATCH", itemPath), route("PUT", itemPath)];
+      case "destroy":
+        return [route("DELETE", itemPath)];
+      default:
+        return [];
+    }
+  });
+}
+
 export function extractRubyFileFacts(input: RubyExtractFileFactsInput): ArtifactFacts {
   const railsCapability = frameworkCapability("rails");
   if (!railsCapability.languages.includes(input.language)) {
@@ -307,6 +485,7 @@ export function extractRubyFileFacts(input: RubyExtractFileFactsInput): Artifact
   const lineStarts = lineStartsFor(input.sourceText);
   const symbols: SymbolNode[] = [];
   const edges: GraphEdge[] = [];
+  const pendingReferences: PendingReference[] = [];
   const declarationOrdinals = new Map<string, number>();
   const fileName = input.filePath.split(/[\\/]/u).at(-1) ?? input.filePath;
   const fileNode: SymbolNode = {
@@ -452,15 +631,16 @@ export function extractRubyFileFacts(input: RubyExtractFileFactsInput): Artifact
     symbols.push(route);
     addContainment(fileNode, route, routeFact.node);
     const referenceName = routeFact.action.controller + "#" + routeFact.action.action;
-    edges.push({
-      id: createEdgeId({
+    const edgeId = createEdgeId({
         sourceId: route.id,
         targetId: handler?.id ?? null,
         kind: "routes",
         line: range.start.line,
         column: range.start.column,
         referenceName
-      }),
+      });
+    edges.push({
+      id: edgeId,
       sourceId: route.id,
       targetId: handler?.id ?? null,
       kind: "routes",
@@ -471,13 +651,45 @@ export function extractRubyFileFacts(input: RubyExtractFileFactsInput): Artifact
       referenceName,
       evidence: {
         ruleId:
-          handler === null
-            ? "framework.rails.direct-routes-draw.literal-controller-action.unresolved-controller-method"
-            : "framework.rails.direct-routes-draw.literal-controller-action.local-method",
+          routeFact.routeRegistration === "rails-resources"
+            ? handler === null
+              ? "framework.rails.resources.direct-routes-draw.literal-resource.unresolved-controller-method"
+              : "framework.rails.resources.direct-routes-draw.literal-resource.local-method"
+            : routeFact.routeRegistration === "rails-resource"
+              ? handler === null
+                ? "framework.rails.resource.direct-routes-draw.literal-resource.unresolved-controller-method"
+                : "framework.rails.resource.direct-routes-draw.literal-resource.local-method"
+              : handler === null
+                ? "framework.rails.direct-routes-draw.literal-controller-action.unresolved-controller-method"
+                : "framework.rails.direct-routes-draw.literal-controller-action.local-method",
         stage: "syntax",
         candidateSymbolIds: handler === null ? [] : [handler.id]
       }
     });
+    if (handler === null && routeFact.action.localControllerName !== null) {
+      if (routeFact.routeRegistration === undefined) {
+        pendingReferences.push({
+          id: edgeId,
+          sourceId: route.id,
+          filePath: input.filePath,
+          referenceName,
+          relationKind: "routes",
+          routeFramework: "rails",
+          range
+        });
+      } else {
+        pendingReferences.push({
+          id: edgeId,
+          sourceId: route.id,
+          filePath: input.filePath,
+          referenceName,
+          relationKind: "routes",
+          routeFramework: "rails",
+          routeRegistration: routeFact.routeRegistration,
+          range
+        });
+      }
+    }
   }
 
   if (!hasSyntaxError(root)) {
@@ -510,9 +722,10 @@ export function extractRubyFileFacts(input: RubyExtractFileFactsInput): Artifact
       if (body === null) {
         continue;
       }
-      for (const routeDeclaration of directChildren(body)
-        .map((node) => staticRailsRoute(node))
-        .filter((candidate): candidate is StaticRailsRoute => candidate !== null)) {
+      for (const routeDeclaration of directChildren(body).flatMap((node) => {
+        const directRoute = staticRailsRoute(node);
+        return directRoute === null ? staticRailsResourceRoutes(node) : [directRoute];
+      })) {
         const localHandlerCandidates =
           routeDeclaration.action.localControllerName === null
             ? []
@@ -531,7 +744,7 @@ export function extractRubyFileFacts(input: RubyExtractFileFactsInput): Artifact
   return {
     symbols,
     edges,
-    pendingReferences: [],
+    pendingReferences,
     localBindings: [],
     referenceScopes: [],
     importBindings: [],

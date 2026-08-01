@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.144.0 is an early developer release. The package is not published to npm; run it from source.
+> v0.145.0 is an early developer release. The package is not published to npm; run it from source.
 
 SymbolLattice builds a queryable local code-symbol graph for a project. Each relation retains its source rule, resolution stage, and confidence. Source remains in the indexed project's `.symbol-lattice/index.sqlite` and is never silently uploaded.
 
@@ -49,11 +49,11 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 On Windows PowerShell, use `npm.cmd` if `npm` is unavailable. Filesystem roots and home directories are rejected unless `--force` is explicit.
 
-## v0.144.0
+## v0.145.0
 
-- Go HttpRouter direct methods are now extracted as `exact`: `router := httprouter.New()` followed by `GET/POST/PUT/PATCH/DELETE/HEAD/OPTIONS("/path", handler)`.
-- Extraction requires a proven `github.com/julienschmidt/httprouter` import, an unrebound router, a literal path, and a same-file named handler; HttpRouter path parameters such as `/users/:id` are retained.
-- Artifact facts advance to `multi-language-ast-v125`; the next explicit `sync` re-extracts Go facts and reprojects routes.
+- Ruby on Rails now extracts direct `resources`/`resource` RESTful routes, including literal array-shaped standard-action `only`/`except` filters. An `update` action preserves separate `PATCH` and `PUT` routes.
+- Rails direct verb and resource routes prove a conventional `app/controllers/<controller>_controller.rb` file, class, and action method before becoming cross-file `exact`; missing or ambiguous evidence remains `unresolved`.
+- Artifact facts advance to `multi-language-ast-v126` and the project resolver to `project-resolver-v38`; the next explicit `sync` re-extracts Ruby facts and reprojects routes.
 
 ## Deliberate limits
 
@@ -67,6 +67,7 @@ On Windows PowerShell, use `npm.cmd` if `npm` is unavailable. Filesystem roots a
 - Beego currently supports only direct v2 `web` package functional HTTP methods. Namespaces, controller/MVC, Router, annotations, middleware, dynamic paths, and rebound package aliases never become `exact`.
 - Gorilla/mux currently supports only direct `mux.NewRouter()` `HandleFunc` registrations and one `Methods` chain. Subrouters, PathPrefix, Host, Headers, Schemes, middleware, other matcher chains, dynamic values, and rebinding never become `exact`.
 - HttpRouter currently supports only direct `httprouter.New()` HTTP methods. `Handle`, `Handler`, `HandlerFunc`, automatic OPTIONS behavior, wrappers, dynamic values, and rebinding never become `exact`.
+- Rails currently supports only literal verb, `resources`, and `resource` declarations inside direct `Rails.application.routes.draw` blocks, with standard actions and array-shaped `only`/`except` filters. Namespaces, scopes, nested resources, custom paths/controllers, single-symbol filters, dynamic values, and non-unique conventional file/class/action evidence never become `exact`.
 - Other frameworks expose only implemented, evidence-backed slices; see [CHANGELOG.md](CHANGELOG.md) for the full history.
 
 ## Verification

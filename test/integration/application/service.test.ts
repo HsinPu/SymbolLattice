@@ -9654,7 +9654,7 @@ describe("SymbolLatticeService", () => {
     expect(search.results).toMatchObject([{ filePath: "src/Program.cs", language: "csharp" }]);
   });
 
-  it("indexes Ruby Rails routes and retains explicit unresolved controller evidence", async () => {
+  it("resolves Ruby Rails direct routes through conventional controllers and retains missing action evidence", async () => {
     const projectPath = await createInlineProject({
       "config/routes.rb": [
         "Rails.application.routes.draw do",
@@ -9681,14 +9681,16 @@ describe("SymbolLatticeService", () => {
         expect.objectContaining({
           method: "GET",
           path: "/health",
-          handler: null,
+          handler: expect.objectContaining({
+            qualifiedName: "app/controllers/health_controller.rb#HealthController.show"
+          }),
           edge: expect.objectContaining({
             referenceName: "health#show",
-            resolution: "unresolved",
+            resolution: "exact",
             evidence: expect.objectContaining({
               ruleId:
-                "framework.rails.direct-routes-draw.literal-controller-action.unresolved-controller-method",
-              stage: "syntax"
+                "framework.rails.direct-routes-draw.literal-controller-action.conventional-file-class-method",
+              stage: "module"
             })
           })
         }),
@@ -9704,9 +9706,9 @@ describe("SymbolLatticeService", () => {
       {
         method: "GET",
         path: "/health",
-        handler: null,
+        handler: { qualifiedName: "app/controllers/health_controller.rb#HealthController.show" },
         edge: {
-          resolution: "unresolved",
+          resolution: "exact",
           referenceName: "health#show"
         }
       }
@@ -9717,6 +9719,159 @@ describe("SymbolLatticeService", () => {
         expect.objectContaining({ filePath: "app/controllers/health_controller.rb", language: "ruby" })
       ])
     );
+  });
+
+  it("resolves Rails direct and RESTful resource routes to unique conventional cross-file controllers", async () => {
+    const projectPath = await createInlineProject({
+      "config/routes.rb": [
+        "Rails.application.routes.draw do",
+        "  get \"/health\", to: \"health#show\"",
+        "  resources :articles, only: [:index, :show, :update]",
+        "  resource :profile, only: [:show]",
+        "end"
+      ].join("\n"),
+      "app/controllers/health_controller.rb": [
+        "class HealthController",
+        "  def show",
+        "  end",
+        "end"
+      ].join("\n"),
+      "app/controllers/articles_controller.rb": [
+        "class ArticlesController",
+        "  def index",
+        "  end",
+        "",
+        "  def show",
+        "  end",
+        "",
+        "  def update",
+        "  end",
+        "end"
+      ].join("\n"),
+      "app/controllers/profiles_controller.rb": [
+        "class ProfilesController",
+        "  def show",
+        "  end",
+        "end"
+      ].join("\n")
+    });
+    const service = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+
+    expect(routes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "GET",
+          path: "/health",
+          handler: expect.objectContaining({
+            qualifiedName: "app/controllers/health_controller.rb#HealthController.show"
+          }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId:
+                "framework.rails.direct-routes-draw.literal-controller-action.conventional-file-class-method",
+              stage: "module"
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "GET",
+          path: "/articles",
+          handler: expect.objectContaining({
+            qualifiedName: "app/controllers/articles_controller.rb#ArticlesController.index"
+          }),
+          edge: expect.objectContaining({
+            evidence: expect.objectContaining({
+              ruleId:
+                "framework.rails.resources.direct-routes-draw.literal-resource.conventional-file-class-method",
+              stage: "module"
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "GET",
+          path: "/articles/:id",
+          handler: expect.objectContaining({
+            qualifiedName: "app/controllers/articles_controller.rb#ArticlesController.show"
+          })
+        }),
+        expect.objectContaining({
+          method: "PATCH",
+          path: "/articles/:id",
+          handler: expect.objectContaining({
+            qualifiedName: "app/controllers/articles_controller.rb#ArticlesController.update"
+          })
+        }),
+        expect.objectContaining({
+          method: "PUT",
+          path: "/articles/:id",
+          handler: expect.objectContaining({
+            qualifiedName: "app/controllers/articles_controller.rb#ArticlesController.update"
+          })
+        }),
+        expect.objectContaining({
+          method: "GET",
+          path: "/profile",
+          handler: expect.objectContaining({
+            qualifiedName: "app/controllers/profiles_controller.rb#ProfilesController.show"
+          }),
+          edge: expect.objectContaining({
+            evidence: expect.objectContaining({
+              ruleId:
+                "framework.rails.resource.direct-routes-draw.literal-resource.conventional-file-class-method",
+              stage: "module"
+            })
+          })
+        })
+      ])
+    );
+    expect(routes.routes).toHaveLength(6);
+  });
+
+  it("keeps Rails conventional controller routes unresolved when the controller class is ambiguous", async () => {
+    const projectPath = await createInlineProject({
+      "config/routes.rb": [
+        "Rails.application.routes.draw do",
+        "  resources :articles, only: [:show]",
+        "end"
+      ].join("\n"),
+      "app/controllers/articles_controller.rb": [
+        "class ArticlesController",
+        "  def show",
+        "  end",
+        "end",
+        "",
+        "class ArticlesController",
+        "  def show",
+        "  end",
+        "end"
+      ].join("\n")
+    });
+    const service = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+
+    expect(routes.routes).toMatchObject([
+      {
+        method: "GET",
+        path: "/articles/:id",
+        handler: null,
+        edge: {
+          resolution: "unresolved",
+          referenceName: "articles#show",
+          evidence: {
+            ruleId:
+              "framework.rails.resources.direct-routes-draw.literal-resource.unresolved-controller-method",
+            stage: "unresolved",
+            candidateSymbolIds: expect.any(Array)
+          }
+        }
+      }
+    ]);
   });
 
   it("indexes Kotlin Ktor callable-reference routes as persisted exact function evidence", async () => {

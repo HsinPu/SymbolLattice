@@ -529,7 +529,9 @@ describe("first-party framework capabilities", () => {
       routeRegistrations: [],
       surfaces: [
         "direct Rails.application.routes.draw blocks",
-        "literal direct verb routes with controller-action strings"
+        "literal direct verb routes with controller-action strings",
+        "literal direct resources/resource RESTful declarations with only/except action filters",
+        "unique conventional app/controllers class-method route handler resolution"
       ]
     });
     expect(frameworkCapability("ktor")).toMatchObject({

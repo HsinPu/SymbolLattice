@@ -9235,6 +9235,149 @@ describe("source extraction", () => {
     ]);
   });
 
+  it("extracts direct Ruby Rails RESTful resources and resource routes with literal action filters", () => {
+    const facts = extractFileFacts({
+      filePath: "config/routes.rb",
+      language: "ruby",
+      sourceText: [
+        "Rails.application.routes.draw do",
+        "  resources :articles, only: [:index, :show, :update]",
+        "  resource :profile, except: [:new]",
+        "end",
+        "",
+        "class ArticlesController",
+        "  def index",
+        "  end",
+        "",
+        "  def show",
+        "  end",
+        "",
+        "  def update",
+        "  end",
+        "end",
+        "",
+        "class ProfilesController",
+        "  def create",
+        "  end",
+        "",
+        "  def show",
+        "  end",
+        "",
+        "  def edit",
+        "  end",
+        "",
+        "  def update",
+        "  end",
+        "",
+        "  def destroy",
+        "  end",
+        "end"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId,
+          edge.resolution,
+          edge.confidence
+        ])
+    ).toEqual([
+      [
+        "GET /articles",
+        "config/routes.rb#ArticlesController.index",
+        "framework.rails.resources.direct-routes-draw.literal-resource.local-method",
+        "exact",
+        1
+      ],
+      [
+        "GET /articles/:id",
+        "config/routes.rb#ArticlesController.show",
+        "framework.rails.resources.direct-routes-draw.literal-resource.local-method",
+        "exact",
+        1
+      ],
+      [
+        "PATCH /articles/:id",
+        "config/routes.rb#ArticlesController.update",
+        "framework.rails.resources.direct-routes-draw.literal-resource.local-method",
+        "exact",
+        1
+      ],
+      [
+        "PUT /articles/:id",
+        "config/routes.rb#ArticlesController.update",
+        "framework.rails.resources.direct-routes-draw.literal-resource.local-method",
+        "exact",
+        1
+      ],
+      [
+        "POST /profile",
+        "config/routes.rb#ProfilesController.create",
+        "framework.rails.resource.direct-routes-draw.literal-resource.local-method",
+        "exact",
+        1
+      ],
+      [
+        "GET /profile",
+        "config/routes.rb#ProfilesController.show",
+        "framework.rails.resource.direct-routes-draw.literal-resource.local-method",
+        "exact",
+        1
+      ],
+      [
+        "GET /profile/edit",
+        "config/routes.rb#ProfilesController.edit",
+        "framework.rails.resource.direct-routes-draw.literal-resource.local-method",
+        "exact",
+        1
+      ],
+      [
+        "PATCH /profile",
+        "config/routes.rb#ProfilesController.update",
+        "framework.rails.resource.direct-routes-draw.literal-resource.local-method",
+        "exact",
+        1
+      ],
+      [
+        "PUT /profile",
+        "config/routes.rb#ProfilesController.update",
+        "framework.rails.resource.direct-routes-draw.literal-resource.local-method",
+        "exact",
+        1
+      ],
+      [
+        "DELETE /profile",
+        "config/routes.rb#ProfilesController.destroy",
+        "framework.rails.resource.direct-routes-draw.literal-resource.local-method",
+        "exact",
+        1
+      ]
+    ]);
+  });
+
+  it("rejects dynamic or unsupported direct Ruby Rails resource declarations", () => {
+    const facts = extractFileFacts({
+      filePath: "config/routes.rb",
+      language: "ruby",
+      sourceText: [
+        "Rails.application.routes.draw do",
+        "  resources resource_name",
+        "  resources :articles, only: permitted_actions",
+        "  resources :articles, only: [:index, :archive]",
+        "  resource :profile, as: :account",
+        "end"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+  });
+
   it("requires a direct Ruby Rails routes.draw block, literal route/action shape, and valid syntax", () => {
     const unproven = extractFileFacts({
       filePath: "config/routes.rb",

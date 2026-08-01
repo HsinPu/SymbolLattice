@@ -98,6 +98,8 @@ export type RouteRegistration =
   | "fastify-inline-plugin-prefix"
   | "fastify-local-plugin-prefix"
   | "fastify-imported-plugin-prefix"
+  | "rails-resources"
+  | "rails-resource"
   | "nextjs-app-router"
   | "nextjs-pages-router"
   | "sveltekit-filesystem-page"
