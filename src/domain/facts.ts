@@ -11,7 +11,7 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v117";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v118";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
@@ -330,7 +330,7 @@ export interface GoFrameStandardRouterControllerMethodFact {
   readonly handlerId: string;
 }
 
-/** One exact `Server` or `RouterGroup` `Bind(&Controller{})` registration. */
+/** One exact `Server` or `RouterGroup` controller `Bind` registration. */
 export interface GoFrameStandardRouterBindingFact {
   readonly controllerName: string;
   /** Go package qualifier used for a cross-package controller type, when present. */

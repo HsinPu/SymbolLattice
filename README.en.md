@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.136.0 is an early developer release. The package is not published to npm; run it from source.
+> v0.137.0 is an early developer release. The package is not published to npm; run it from source.
 
 SymbolLattice builds a queryable local code-symbol graph for a project. Each relation retains its source rule, resolution stage, and confidence. Source remains in the indexed project's `.symbol-lattice/index.sqlite` and is never silently uploaded.
 
@@ -49,11 +49,11 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 On Windows PowerShell, use `npm.cmd` if `npm` is unavailable. Filesystem roots and home directories are rejected unless `--force` is explicit.
 
-## v0.136.0
+## v0.137.0
 
-- GoFrame v1/v2 now evaluates each provable argument in a variadic `Bind(...)`: `&Controller{}`, `Factory()`, and the already supported one-hop factory alias each project to an `exact` route while retaining literal `Group` prefixes and `Domain` hosts.
-- An unprovable argument never becomes exact and does not block the independently proven controllers in the same batch.
-- Artifact facts advance to `multi-language-ast-v117`; the next explicit `sync` re-extracts Go facts and reprojects routes.
+- GoFrame v1/v2 now supports an unrebound controller-pointer short declaration in the same function: after `controller := &Controller{}` or `controller := new(Controller)`, `Bind(controller)` can project an `exact` route and coexist with other proven arguments in the same variadic `Bind(...)`.
+- A controller alias retains the direct-Bind `Group` prefix, `Domain` host, and root-`go.mod` cross-package evidence. Reassignment and a callback parameter of the same name invalidate the alias.
+- Artifact facts advance to `multi-language-ast-v118`; the next explicit `sync` re-extracts Go facts and reprojects routes.
 
 ## Deliberate limits
 
@@ -61,7 +61,7 @@ On Windows PowerShell, use `npm.cmd` if `npm` is unavailable. Filesystem roots a
 - Dynamic dispatch, reflection, macro expansion, code generation, dependency injection, and ambiguous names never become exact graph relations.
 - GoFrame Domain extraction accepts only proven literal, non-wildcard hosts. Dynamic values, empty entries, wildcards, and rebound receivers remain unresolved.
 - Chained GoFrame receivers are limited to a `g.Server()` root and a finite literal `Domain`/one-argument `Group` chain. Arbitrary method calls, dynamic prefixes, variable propagation, and unsupported callback forms never become exact relations.
-- Cross-file GoFrame standard routing supports one or more direct `&Controller{}` values, proven `Factory()` calls, and one `alias := Factory(); Bind(alias)` hop in the same `Bind(...)`. A factory must have no arguments, declare a local `*Controller` result, and directly return that pointer type; an alias must be an unrebound short declaration. Each argument must satisfy the proof independently; slice expansion, dynamic values, and unproven arguments never become exact. Explicit aliases are accepted directly; default imports require a matching target `package` clause and are never inferred from the import path. `.`/`_` imports, external/transitive modules, `replace`, nested-module selection, build tags, dependency injection, forwarding calls, branches, and ambiguous controller methods never become exact relations.
+- Cross-file GoFrame standard routing supports only statically proven direct pointers (`&Controller{}` / `new(Controller)`), no-argument `Factory()` calls, and one unrebound same-function pointer/factory short-declaration alias. Each `Bind(...)` argument must prove itself independently; slice expansion, dynamic values, `var`/globals, forwarding, branches, map/interface/DI containers, callback shadowing, rebinding, and ambiguity never become `exact`. Explicit import aliases are accepted directly; default imports require a matching target `package` clause and are never inferred from the import path. `.`/`_` imports, external/transitive modules, `replace`, nested-module selection, and build tags remain unresolved.
 - Unbound GoFrame request-signature candidates are always `heuristic`, never proof of runtime route registration; reflection, dynamic Bind calls, and unknown prefixes or hosts remain unresolved.
 - Other frameworks expose only implemented, evidence-backed slices; see [CHANGELOG.md](CHANGELOG.md) for the full history.
 

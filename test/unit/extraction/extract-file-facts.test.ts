@@ -3597,6 +3597,56 @@ describe("source extraction", () => {
     );
   });
 
+  it("retains direct GoFrame controller pointer aliases only until they are rebound", () => {
+    const facts = extractFileFacts({
+      filePath: "api/goframe-controller-alias.go",
+      language: "go",
+      sourceText: [
+        "package api",
+        "",
+        "import (",
+        '  g "github.com/gogf/gf/v2/frame/g"',
+        '  ghttp "github.com/gogf/gf/v2/net/ghttp"',
+        ")",
+        "",
+        "type Controller struct{}",
+        "type SecondController struct{}",
+        "",
+        "func Register() {",
+        "  controller := &Controller{}",
+        "  second := new(SecondController)",
+        '  g.Server().Domain("api.example.test").Group("/v1").Bind(controller, second)',
+        '  g.Server().Group("/callback", func(controller *ghttp.RouterGroup) {',
+        "    controller.Bind(controller)",
+        "  })",
+        "  controller = &Controller{}",
+        '  g.Server().Group("/rebound").Bind(controller)',
+        "}"
+      ].join("\n")
+    });
+
+    expect(facts.goFrameStandardRouterFacts?.controllerBindings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          controllerName: "Controller",
+          prefix: "/v1",
+          domains: ["api.example.test"]
+        }),
+        expect.objectContaining({
+          controllerName: "SecondController",
+          prefix: "/v1",
+          domains: ["api.example.test"]
+        })
+      ])
+    );
+    expect(facts.goFrameStandardRouterFacts?.controllerBindings).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ prefix: "/callback" })])
+    );
+    expect(facts.goFrameStandardRouterFacts?.controllerBindings).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ prefix: "/rebound" })])
+    );
+  });
+
   it("retains every statically proven GoFrame Bind argument in one batch", () => {
     const facts = extractFileFacts({
       filePath: "api/goframe-batch-bind.go",

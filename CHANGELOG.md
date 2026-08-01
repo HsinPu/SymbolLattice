@@ -6,6 +6,26 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.137.0] - 2026-08-01
+
+### Added
+
+- GoFrame v1/v2 standard-router projection now recognizes one unrebound same-function controller-pointer short declaration before registration: `controller := &Controller{}; group.Bind(controller)` or `controller := new(Controller); group.Bind(controller)`. Each alias can coexist with other independently proven arguments in a variadic `Bind(...)` call.
+- Alias bindings retain the exact direct-controller route evidence: literal Group prefix, Domain host condition, source range, and same-package or root-`go.mod` local-module proof.
+- New unit and service coverage verifies direct and `new(...)` aliases, variadic coexistence with an unknown argument, callback shadowing, rebinding rejection, and default-imported cross-package controller resolution.
+
+### Compatibility
+
+- The artifact-facts extractor advances to `multi-language-ast-v118`. Existing graphs and SQLite schema remain readable; the next explicit `sync` re-extracts Go facts and reprojects routes. The project resolver remains `project-resolver-v37`.
+
+### Deliberate limits
+
+- Pointer-alias support accepts only a direct function-local `:=` whose right side is an already supported `&Controller{}` or `new(Controller)` shape. `var` declarations, globals, forwarding aliases, branches, maps, interfaces, DI containers, dynamic values, callback shadows, and later assignments do not become exact relations.
+
+### Comparison notes
+
+- The inspected CodeGraph GoFrame path still joins `g.Meta` request metadata to controller methods heuristically and deliberately does not reconstruct reflective Group prefixes. SymbolLattice remains narrower for dynamic registration, but this static alias slice emits exact controller, Bind, Group/Domain, and local-module evidence.
+
 ## [0.136.0] - 2026-08-01
 
 ### Added
@@ -2540,7 +2560,8 @@ No unreleased changes.
 - Explicit full indexing, caller/callee/impact queries, and read-only MCP exploration.
 - `exact`, `heuristic`, and `unresolved` relationship states.
 
-[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.136.0...HEAD
+[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.137.0...HEAD
+[0.137.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.136.0...v0.137.0
 [0.136.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.135.0...v0.136.0
 [0.135.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.134.0...v0.135.0
 [0.134.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.133.0...v0.134.0
