@@ -6,6 +6,26 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.125.0] - 2026-08-01
+
+### Added
+
+- GoFrame v1/v2 extraction now projects one literal `Group.Map(g.Map{...})` batch registration when every map key has an explicit HTTP method and every value is a unique same-file package-level function or direct method selector on a supported local object binding.
+- Literal `Group.ALLMap(g.Map{...})` paths now project as `ALL` routes under the proven static or callback-group prefix. Batch entries retain their own exact syntax evidence, including distinct function and local-object-method rule IDs.
+
+### Compatibility
+
+- The artifact-facts extractor advances to `multi-language-ast-v107`. Existing graphs remain readable; the next explicit `sync` re-extracts unchanged source documents. SQLite schema and the project resolver version are unchanged.
+
+### Deliberate limits
+
+- GoFrame batch extraction accepts only a direct `g.Map` typed literal on one proven `RouterGroup`. `Map` requires an explicit supported HTTP-method key, while `ALLMap` requires a plain literal path. Raw map types, dynamic keys or values, inline handlers, partial batches, dynamic receivers, factory/wrapper/rebound objects, cross-file joins, multi-method tags, domain rules, and ambiguous handlers remain unresolved.
+
+### Comparison notes
+
+- The inspected CodeGraph GoFrame resolver creates metadata routes only for files containing `g.Meta`, explicitly leaves `Group` prefixes unreconstructed, and its companion request-type-to-method synthesis marks edges as heuristic. SymbolLattice v0.125 adds exact direct local `Map`/`ALLMap` evidence with complete supported group prefixes.
+- CodeGraph remains broader for reflective, cross-file standard-router composition. SymbolLattice is stronger for the supported batch-registration slice because each projected route requires a literal map entry, a proven Group receiver and prefix, and one unique same-file handler target.
+
 ## [0.124.0] - 2026-08-01
 
 ### Added

@@ -9,12 +9,12 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![License](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
 
-[繁體中文](README.md) · [English](README.en.md)
+[繁體中文](README.md) | [English](README.en.md)
 
 </div>
 
 > [!IMPORTANT]
-> v0.124.0 is an early developer release. The package is not published to npm; run it from source.
+> v0.125.0 is an early developer release. The package is not published to npm; run it from source.
 
 SymbolLattice builds a queryable local code-symbol graph for a project. Every relation keeps its source rule, resolution stage, and confidence. Source code remains in the indexed project's `.symbol-lattice/index.sqlite` and is never silently uploaded.
 
@@ -48,18 +48,18 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 On Windows PowerShell, use `npm.cmd` if `npm` is unavailable. Filesystem roots and home directories are rejected unless `--force` is explicit.
 
-## v0.124.0
+## v0.125.0
 
-- GoFrame v1/v2 now projects literal `Group` callbacks (including proven nested prefixes), their HTTP-method routes, and `Bind` calls. A callback must directly declare the imported `*ghttp.RouterGroup` parameter.
-- `BindHandler` and Group HTTP methods now resolve direct method selectors from same-file `&Controller{}` or `new(Controller)` instances, retaining exact syntax evidence on every route.
-- The extractor advances to `multi-language-ast-v106`; existing graphs re-extract raw facts on the next explicit `sync`.
+- GoFrame v1/v2 now projects literal `Group.Map(g.Map{...})` registrations. Every key must contain an explicit HTTP method and literal path; every value must be a unique same-file package-level function or a supported local object-method selector.
+- Literal `Group.ALLMap(g.Map{...})` paths now become `ALL` routes under static and proven callback-group prefixes.
+- The extractor advances to `multi-language-ast-v107`; existing graphs re-extract raw facts on the next explicit `sync`.
 
 ## Deliberate limits
 
 - This is not a compiler, type checker, framework runtime, or execution tracer.
 - Dynamic dispatch, reflection, macro expansion, code generation, dependency injection, and ambiguous names never become exact graph relations.
-- GoFrame still rejects inline handlers, dynamic or multi-callback `Group` forms, factory/wrapper/rebound objects, cross-file controller/request joins, multi-method tags, domain rules, and dynamic receivers/rules.
-- Other frameworks cover only their implemented, evidence-backed slices; see [CHANGELOG.md](CHANGELOG.md) for the complete history and compatibility detail.
+- GoFrame batch extraction accepts only direct `g.Map` literals. Raw maps, dynamic keys or values, inline handlers, partial batches, dynamic receivers, factory/wrapper/rebound objects, cross-file controller/request joins, multi-method tags, and domain rules remain unresolved.
+- Other frameworks cover only their implemented, evidence-backed slices; see [CHANGELOG.md](CHANGELOG.md) for complete history and compatibility detail.
 
 ## Verification
 

@@ -4428,6 +4428,120 @@ describe("SymbolLatticeService", () => {
     );
   });
 
+  it("indexes GoFrame literal Map and ALLMap batch routes with exact evidence", async () => {
+    const projectPath = await createInlineProject({
+      "cmd/server/main.go": [
+        "package main",
+        "",
+        "import (",
+        '  g "github.com/gogf/gf/v2/frame/g"',
+        '  ghttp "github.com/gogf/gf/v2/net/ghttp"',
+        ")",
+        "",
+        "type Controller struct{}",
+        "",
+        "func list(r *ghttp.Request) {}",
+        "func create(r *ghttp.Request) {}",
+        "func (c *Controller) Update(r *ghttp.Request) {}",
+        "",
+        "func main() {",
+        "  server := g.Server()",
+        "  controller := &Controller{}",
+        '  api := server.Group("/api")',
+        '  api.Map(g.Map{"GET: /users": list, "POST: /users": create, "PATCH: /users/:id": controller.Update})',
+        '  api.ALLMap(g.Map{"/health": list})',
+        '  server.Group("/callback", func(group *ghttp.RouterGroup) {',
+        '    group.ALLMap(g.Map{"/status": controller.Update})',
+        "  })",
+        "}"
+      ].join("\n")
+    });
+    const service = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+    const getRoutes = await service.routes(projectPath, { method: "GET" });
+
+    expect(routes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "GET",
+          path: "/api/users",
+          handler: expect.objectContaining({ qualifiedName: "cmd/server/main.go#list" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.goframe.group.map.local-function",
+              stage: "syntax"
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "POST",
+          path: "/api/users",
+          handler: expect.objectContaining({ qualifiedName: "cmd/server/main.go#create" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.goframe.group.map.local-function",
+              stage: "syntax"
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "PATCH",
+          path: "/api/users/:id",
+          handler: expect.objectContaining({ qualifiedName: "cmd/server/main.go#Controller.Update" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.goframe.group.map.local-object-method",
+              stage: "syntax"
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "ALL",
+          path: "/api/health",
+          handler: expect.objectContaining({ qualifiedName: "cmd/server/main.go#list" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.goframe.group.all-map.local-function",
+              stage: "syntax"
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "ALL",
+          path: "/callback/status",
+          handler: expect.objectContaining({ qualifiedName: "cmd/server/main.go#Controller.Update" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.goframe.group.all-map.local-object-method",
+              stage: "syntax"
+            })
+          })
+        })
+      ])
+    );
+    expect(getRoutes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "GET",
+          path: "/api/users",
+          handler: expect.objectContaining({ qualifiedName: "cmd/server/main.go#list" })
+        })
+      ])
+    );
+    expect(getRoutes.routes).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ method: "POST", path: "/api/users" })
+      ])
+    );
+  });
+
   it("indexes Rust Axum routes and retains Rust source-search filtering", async () => {
     const projectPath = await createInlineProject({
       "src/http.rs": [

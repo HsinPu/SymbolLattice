@@ -125,6 +125,17 @@ interface StaticGoFrameDirectRoute {
   readonly node: GoSyntaxNode;
 }
 
+interface StaticGoFrameMapRoute {
+  readonly receiver: GoFrameReceiver;
+  readonly method: RouteMethod;
+  readonly path: string;
+  readonly handler: StaticGoFrameHandler;
+  readonly node: GoSyntaxNode;
+  readonly batchKind: "map" | "all-map";
+}
+
+type StaticGoFrameRoute = StaticGoFrameDirectRoute | StaticGoFrameMapRoute;
+
 interface StaticGoFrameFunctionHandler {
   readonly kind: "function";
   readonly name: string;
@@ -288,6 +299,10 @@ function directChildren(node: GoSyntaxNode): readonly GoSyntaxNode[] {
     children.push(child);
   }
   return children;
+}
+
+function isGoComment(node: GoSyntaxNode): boolean {
+  return node.name === "LineComment" || node.name === "BlockComment";
 }
 
 function nodeText(input: GoExtractFileFactsInput, node: GoSyntaxNode): string {
@@ -969,6 +984,164 @@ function staticGoFrameDirectRoute(
   return method === undefined || path === null ? null : { receiver, method, path, handler, node };
 }
 
+interface StaticGoFrameMapEntry {
+  readonly key: GoSyntaxNode;
+  readonly value: GoSyntaxNode;
+  readonly node: GoSyntaxNode;
+}
+
+function staticGoFrameMapEntries(
+  input: GoExtractFileFactsInput,
+  node: GoSyntaxNode,
+  goFrameAliases: ReadonlySet<string>
+): readonly StaticGoFrameMapEntry[] | null {
+  if (node.name !== "TypedLiteral") {
+    return null;
+  }
+  const children = directChildren(node);
+  const mapType = children[0];
+  const literal = children[1];
+  if (
+    children.length !== 2 ||
+    mapType?.name !== "QualifiedType" ||
+    literal?.name !== "LiteralValue"
+  ) {
+    return null;
+  }
+  const typeChildren = directChildren(mapType);
+  const mapAlias = typeChildren[0] === undefined ? null : identifierText(input, typeChildren[0]);
+  const mapTypeName = typeChildren[2] === undefined ? null : identifierText(input, typeChildren[2]);
+  if (
+    typeChildren.length !== 3 ||
+    typeChildren[0]?.name !== "VariableName" ||
+    typeChildren[2]?.name !== "TypeName" ||
+    mapAlias === null ||
+    !goFrameAliases.has(mapAlias) ||
+    mapTypeName !== "Map"
+  ) {
+    return null;
+  }
+  const literalChildren = directChildren(literal).filter((child) => !isGoComment(child));
+  if (
+    literalChildren.some(
+      (child) => child.name !== "{" && child.name !== "}" && child.name !== "," && child.name !== "Element"
+    )
+  ) {
+    return null;
+  }
+  const entries: StaticGoFrameMapEntry[] = [];
+  for (const element of literalChildren.filter((child) => child.name === "Element")) {
+    const elementChildren = directChildren(element);
+    const keyNode = elementChildren[0];
+    const separator = elementChildren[1];
+    const value = elementChildren[2];
+    const keyChildren = keyNode === undefined ? [] : directChildren(keyNode);
+    const key = keyChildren[0];
+    if (
+      elementChildren.length !== 3 ||
+      keyNode?.name !== "Key" ||
+      keyChildren.length !== 1 ||
+      key === undefined ||
+      separator === undefined ||
+      nodeText(input, separator) !== ":" ||
+      value === undefined
+    ) {
+      return null;
+    }
+    entries.push({ key, value, node: element });
+  }
+  return entries;
+}
+
+function staticGoFrameMapPattern(
+  input: GoExtractFileFactsInput,
+  node: GoSyntaxNode
+): { readonly method: RouteMethod; readonly path: string } | null {
+  const rule = staticPlainGoString(input, node);
+  if (rule === null) {
+    return null;
+  }
+  const match = /^\s*(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS|TRACE|CONNECT|ALL|ANY)\s*:\s*(.+?)\s*$/iu.exec(
+    rule
+  );
+  if (match?.[1] === undefined || match[2] === undefined) {
+    return null;
+  }
+  const method = staticGoFrameRouteMethod(match[1]);
+  const path = staticGoFrameRoutePath(match[2].trim());
+  return method === null || path === null ? null : { method, path };
+}
+
+function staticGoFrameAllMapPath(
+  input: GoExtractFileFactsInput,
+  node: GoSyntaxNode
+): string | null {
+  const path = staticPlainGoString(input, node);
+  if (
+    path === null ||
+    /^\s*(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS|TRACE|CONNECT|ALL|ANY)\s*:/iu.test(path)
+  ) {
+    return null;
+  }
+  return staticGoFrameRoutePath(path);
+}
+
+function staticGoFrameMapRoutes(
+  input: GoExtractFileFactsInput,
+  node: GoSyntaxNode,
+  receivers: ReadonlyMap<string, GoFrameReceiver>,
+  goFrameAliases: ReadonlySet<string>
+): readonly StaticGoFrameMapRoute[] | null {
+  if (node.name !== "ExprStatement") {
+    return null;
+  }
+  const expression = directChildren(node)[0];
+  if (expression === undefined) {
+    return null;
+  }
+  const call = staticSelectorCall(input, expression);
+  if (
+    call === null ||
+    (call.methodName !== "Map" && call.methodName !== "ALLMap") ||
+    call.arguments_.length !== 1
+  ) {
+    return null;
+  }
+  const receiver = receivers.get(call.receiverName);
+  const mapNode = call.arguments_[0];
+  if (receiver?.kind !== "group" || mapNode === undefined) {
+    return null;
+  }
+  const entries = staticGoFrameMapEntries(input, mapNode, goFrameAliases);
+  if (entries === null) {
+    return null;
+  }
+  const batchKind = call.methodName === "Map" ? "map" : "all-map";
+  const routes: StaticGoFrameMapRoute[] = [];
+  for (const entry of entries) {
+    const handler = staticGoFrameHandler(input, entry.value);
+    const pattern =
+      batchKind === "map"
+        ? staticGoFrameMapPattern(input, entry.key)
+        : (() => {
+            const path = staticGoFrameAllMapPath(input, entry.key);
+            return path === null ? null : { method: "ALL" as const, path };
+          })();
+    if (handler === null || pattern === null) {
+      return null;
+    }
+    routes.push({
+      receiver,
+      method: pattern.method,
+      path: pattern.path,
+      handler,
+      node: entry.node,
+      batchKind
+    });
+  }
+  return routes;
+}
+
 function staticGoFrameControllerName(
   input: GoExtractFileFactsInput,
   node: GoSyntaxNode
@@ -1641,17 +1814,25 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
     return symbol;
   }
 
-  function addGoFrameDirectRoute(
-    routeFact: StaticGoFrameDirectRoute,
+  function addGoFrameRoute(
+    routeFact: StaticGoFrameRoute,
     handler: SymbolNode
   ): void {
-    const ruleId = routeFact.handler.kind === "function"
-      ? routeFact.receiver.kind === "server"
-        ? "framework.goframe.direct-server.bind-handler.local-function"
-        : "framework.goframe.direct-group.http-method.local-function"
-      : routeFact.receiver.kind === "server"
-        ? "framework.goframe.direct-server.bind-handler.local-object-method"
-        : "framework.goframe.direct-group.http-method.local-object-method";
+    const ruleId = "batchKind" in routeFact
+      ? routeFact.batchKind === "map"
+        ? routeFact.handler.kind === "function"
+          ? "framework.goframe.group.map.local-function"
+          : "framework.goframe.group.map.local-object-method"
+        : routeFact.handler.kind === "function"
+          ? "framework.goframe.group.all-map.local-function"
+          : "framework.goframe.group.all-map.local-object-method"
+      : routeFact.handler.kind === "function"
+        ? routeFact.receiver.kind === "server"
+          ? "framework.goframe.direct-server.bind-handler.local-function"
+          : "framework.goframe.direct-group.http-method.local-function"
+        : routeFact.receiver.kind === "server"
+          ? "framework.goframe.direct-server.bind-handler.local-object-method"
+          : "framework.goframe.direct-group.http-method.local-object-method";
     addResolvedRoute(
       routeFact.method,
       combinedRoutePath(routeFact.receiver.prefix, routeFact.path),
@@ -1712,7 +1893,7 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
     }
 
     function addGoFrameRouteHandler(
-      routeFact: StaticGoFrameDirectRoute,
+      routeFact: StaticGoFrameRoute,
       objectBindings: ReadonlyMap<string, string>,
       shadowedNames: ReadonlySet<string>
     ): void {
@@ -1724,7 +1905,7 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
         if (candidates.length === 1) {
           const handler = candidates[0];
           if (handler !== undefined) {
-            addGoFrameDirectRoute(routeFact, handler);
+            addGoFrameRoute(routeFact, handler);
           }
         }
         return;
@@ -1739,7 +1920,7 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
       if (candidates.length === 1) {
         const method = candidates[0];
         if (method !== undefined) {
-          addGoFrameDirectRoute(routeFact, goFrameMethodSymbol(method));
+          addGoFrameRoute(routeFact, goFrameMethodSymbol(method));
         }
       }
     }
@@ -1773,6 +1954,17 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
         const routeFact = staticGoFrameDirectRoute(input, statement, receivers);
         if (routeFact !== null) {
           addGoFrameRouteHandler(routeFact, objectBindings, shadowedNames);
+        }
+        const mapRoutes = staticGoFrameMapRoutes(
+          input,
+          statement,
+          receivers,
+          new Set([...visibleGoFrameAliases].filter((alias) => !shadowedNames.has(alias)))
+        );
+        if (mapRoutes !== null) {
+          for (const mapRoute of mapRoutes) {
+            addGoFrameRouteHandler(mapRoute, objectBindings, shadowedNames);
+          }
         }
         const controllerBinding = staticGoFrameControllerBinding(input, statement, receivers);
         if (controllerBinding !== null) {

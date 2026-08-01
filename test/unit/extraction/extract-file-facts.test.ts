@@ -3582,6 +3582,142 @@ describe("source extraction", () => {
     ]);
   });
 
+  it("extracts literal GoFrame Map and ALLMap batch routes with exact evidence", () => {
+    const facts = extractFileFacts({
+      filePath: "cmd/server/goframe-map.go",
+      language: "go",
+      sourceText: [
+        "package main",
+        "",
+        "import (",
+        '  g "github.com/gogf/gf/v2/frame/g"',
+        '  ghttp "github.com/gogf/gf/v2/net/ghttp"',
+        ")",
+        "",
+        "type Controller struct{}",
+        "",
+        "func list(r *ghttp.Request) {}",
+        "func create(r *ghttp.Request) {}",
+        "func (c *Controller) Update(r *ghttp.Request) {}",
+        "",
+        "func main() {",
+        "  server := g.Server()",
+        "  controller := &Controller{}",
+        '  api := server.Group("/api")',
+        "  api.Map(g.Map{",
+        '    "GET:    /users": list, // list users',
+        '    "POST:/users": create,',
+        '    "PATCH: /users/:id": controller.Update,',
+        "  })",
+        "  api.ALLMap(g.Map{",
+        '    "/health": list, // health check',
+        '    "/status": controller.Update, /* status endpoint */',
+        "  })",
+        '  server.Group("/callback", func(group *ghttp.RouterGroup) {',
+        "    group.Map(g.Map{",
+        '      "DELETE: /users/:id": controller.Update,',
+        "    })",
+        '    group.ALLMap(g.Map{"/ping": list})',
+        "  })",
+        "}"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId,
+          edge.resolution,
+          edge.confidence
+        ])
+    ).toEqual([
+      [
+        "GET /api/users",
+        "cmd/server/goframe-map.go#list",
+        "framework.goframe.group.map.local-function",
+        "exact",
+        1
+      ],
+      [
+        "POST /api/users",
+        "cmd/server/goframe-map.go#create",
+        "framework.goframe.group.map.local-function",
+        "exact",
+        1
+      ],
+      [
+        "PATCH /api/users/:id",
+        "cmd/server/goframe-map.go#Controller.Update",
+        "framework.goframe.group.map.local-object-method",
+        "exact",
+        1
+      ],
+      [
+        "ALL /api/health",
+        "cmd/server/goframe-map.go#list",
+        "framework.goframe.group.all-map.local-function",
+        "exact",
+        1
+      ],
+      [
+        "ALL /api/status",
+        "cmd/server/goframe-map.go#Controller.Update",
+        "framework.goframe.group.all-map.local-object-method",
+        "exact",
+        1
+      ],
+      [
+        "DELETE /callback/users/:id",
+        "cmd/server/goframe-map.go#Controller.Update",
+        "framework.goframe.group.map.local-object-method",
+        "exact",
+        1
+      ],
+      [
+        "ALL /callback/ping",
+        "cmd/server/goframe-map.go#list",
+        "framework.goframe.group.all-map.local-function",
+        "exact",
+        1
+      ]
+    ]);
+  });
+
+  it("rejects unsupported GoFrame batch map forms without projecting partial routes", () => {
+    const facts = extractFileFacts({
+      filePath: "cmd/server/unproven-goframe-map.go",
+      language: "go",
+      sourceText: [
+        "package main",
+        "",
+        "import (",
+        '  g "github.com/gogf/gf/v2/frame/g"',
+        '  ghttp "github.com/gogf/gf/v2/net/ghttp"',
+        ")",
+        "",
+        "func health(r *ghttp.Request) {}",
+        "",
+        "func main() {",
+        "  server := g.Server()",
+        '  api := server.Group("/api")',
+        '  dynamicRule := "GET:/dynamic"',
+        '  api.Map(g.Map{dynamicRule: health, "GET:/otherwise-valid": health})',
+        '  api.ALLMap(g.Map{"GET:/wrong-method": health})',
+        '  api.Map(map[string]interface{}{"GET:/raw-map": health})',
+        '  api.Map(g.Map{"GET:/inline": func(r *ghttp.Request) {}})',
+        '  api.Map(g.Map{"GET:/factory": handlerFactory()})',
+        "}"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+  });
+
   it("rejects unproven GoFrame direct and standard-router shapes", () => {
     const facts = extractFileFacts({
       filePath: "cmd/server/unproven-goframe.go",
