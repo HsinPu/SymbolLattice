@@ -3345,6 +3345,209 @@ describe("source extraction", () => {
     expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
   });
 
+  it("extracts direct and standard-router GoFrame routes with exact evidence", () => {
+    const facts = extractFileFacts({
+      filePath: "cmd/server/goframe.go",
+      language: "go",
+      sourceText: [
+        "package main",
+        "",
+        "import (",
+        '  "context"',
+        '  g "github.com/gogf/gf/v2/frame/g"',
+        ")",
+        "",
+        "type ListReq struct {",
+        '  g.Meta `path:"users" method:"get"`',
+        "}",
+        "",
+        "type HealthReq struct {",
+        '  g.Meta `path:"/health"`',
+        "}",
+        "",
+        "type Controller struct{}",
+        "",
+        "func (c *Controller) List(ctx context.Context, req *ListReq) (res *ListRes, err error) {",
+        "  return",
+        "}",
+        "",
+        "func (c *Controller) Health(ctx context.Context, req *HealthReq) (res *HealthRes, err error) {",
+        "  return",
+        "}",
+        "",
+        "func directHandler(ctx context.Context, req *DirectReq) (res *DirectRes, err error) {",
+        "  return",
+        "}",
+        "",
+        "func groupHandler(ctx context.Context, req *GroupReq) (res *GroupRes, err error) {",
+        "  return",
+        "}",
+        "",
+        "func main() {",
+        "  server := g.Server()",
+        '  server.BindHandler("POST:/direct", directHandler)',
+        '  api := server.Group("/api")',
+        '  api.DELETE("/direct-group", groupHandler)',
+        "  api.Bind(&Controller{})",
+        "}"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId,
+          edge.evidence?.stage,
+          edge.resolution,
+          edge.confidence
+        ])
+    ).toEqual([
+      [
+        "POST /direct",
+        "cmd/server/goframe.go#directHandler",
+        "framework.goframe.direct-server.bind-handler.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "DELETE /api/direct-group",
+        "cmd/server/goframe.go#groupHandler",
+        "framework.goframe.direct-group.http-method.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "GET /api/users",
+        "cmd/server/goframe.go#Controller.List",
+        "framework.goframe.standard-router.g-meta.direct-bound-controller.local-method",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "ALL /api/health",
+        "cmd/server/goframe.go#Controller.Health",
+        "framework.goframe.standard-router.g-meta.direct-bound-controller.local-method",
+        "syntax",
+        "exact",
+        1
+      ]
+    ]);
+  });
+
+  it("extracts literal GoFrame v1 BindHandler routes", () => {
+    const facts = extractFileFacts({
+      filePath: "cmd/server/goframe-v1.go",
+      language: "go",
+      sourceText: [
+        "package main",
+        "",
+        "import (",
+        '  g "github.com/gogf/gf/frame/g"',
+        '  "github.com/gogf/gf/net/ghttp"',
+        ")",
+        "",
+        "func health(r *ghttp.Request) {}",
+        "",
+        "func main() {",
+        "  server := g.Server()",
+        '  server.BindHandler("GET:/health", health)',
+        "}"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId
+        ])
+    ).toEqual([
+      [
+        "GET /health",
+        "cmd/server/goframe-v1.go#health",
+        "framework.goframe.direct-server.bind-handler.local-function"
+      ]
+    ]);
+  });
+
+  it("rejects unproven GoFrame direct and standard-router shapes", () => {
+    const facts = extractFileFacts({
+      filePath: "cmd/server/unproven-goframe.go",
+      language: "go",
+      sourceText: [
+        "package main",
+        "",
+        "import (",
+        '  "context"',
+        '  g "github.com/gogf/gf/v2/frame/g"',
+        '  ghttp "github.com/gogf/gf/v2/net/ghttp"',
+        ")",
+        "",
+        "type GoodReq struct {",
+        '  g.Meta `path:"/good" method:"get"`',
+        "}",
+        "",
+        "type InvalidMethodReq struct {",
+        '  g.Meta `path:"/invalid" method:"GET,POST"`',
+        "}",
+        "",
+        "type WrongReq struct {",
+        '  g.Meta `path:"/wrong" method:"get"`',
+        "}",
+        "",
+        "type Controller struct{}",
+        "type WrongController struct{}",
+        "",
+        "func (c *Controller) Good(ctx context.Context, req *GoodReq) (res *GoodRes, err error) { return }",
+        "func (c *Controller) Invalid(ctx context.Context, req *InvalidMethodReq) (res *InvalidRes, err error) { return }",
+        "func (c *WrongController) Wrong(ctx context.Context, req *DifferentReq) (res *WrongRes, err error) { return }",
+        "func directHandler(ctx context.Context, req *DirectReq) (res *DirectRes, err error) { return }",
+        "",
+        "func shadowed(g int) {",
+        "  server := g.Server()",
+        '  server.BindHandler("GET:/shadowed", directHandler)',
+        "}",
+        "",
+        "func mismatched() {",
+        "  server := g.Server()",
+        "  server.Bind(&WrongController{})",
+        "}",
+        "",
+        "func main() {",
+        "  server := g.Server()",
+        '  server.BindHandler("GET:/inline", func(ctx context.Context, req *DirectReq) (res *DirectRes, err error) { return })',
+        "  pattern := \"GET:/dynamic\"",
+        "  server.BindHandler(pattern, directHandler)",
+        '  server.BindHandler("GET:/host@localhost", directHandler)',
+        "  controller := &Controller{}",
+        '  server.BindHandler("GET:/object", controller.Good)',
+        '  objectAPI := server.Group("/object")',
+        '  objectAPI.GET("/method", controller.Good)',
+        '  server.Group("/callback", func(group *ghttp.RouterGroup) {',
+        "    group.Bind(&Controller{})",
+        "  })",
+        "  server = replacement()",
+        '  server.BindHandler("GET:/rebound", directHandler)',
+        '  api := g.Server().Group("/api")',
+        "  api.Bind(&Controller{})",
+        "}"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+  });
+
   it("extracts direct Java Spring Web literal controller method mappings with exact evidence", () => {
     const facts = extractFileFacts({
       filePath: "src/api/UserController.java",

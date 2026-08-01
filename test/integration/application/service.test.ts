@@ -4265,6 +4265,129 @@ describe("SymbolLatticeService", () => {
     ]);
   });
 
+  it("indexes GoFrame direct and same-file standard-router routes with exact evidence", async () => {
+    const projectPath = await createInlineProject({
+      "cmd/server/main.go": [
+        "package main",
+        "",
+        "import (",
+        '  "context"',
+        '  "github.com/gogf/gf/v2/frame/g"',
+        ")",
+        "",
+        "type ListReq struct {",
+        '  g.Meta `path:"/users" method:"get"`',
+        "}",
+        "",
+        "type Controller struct{}",
+        "",
+        "func (c *Controller) List(ctx context.Context, req *ListReq) (res *ListRes, err error) {",
+        "  return",
+        "}",
+        "",
+        "func health(ctx context.Context, req *HealthReq) (res *HealthRes, err error) {",
+        "  return",
+        "}",
+        "",
+        "func groupHealth(ctx context.Context, req *GroupHealthReq) (res *GroupHealthRes, err error) {",
+        "  return",
+        "}",
+        "",
+        "func main() {",
+        "  server := g.Server()",
+        '  server.BindHandler("GET:/health", health)',
+        '  api := server.Group("/api")',
+        '  api.GET("/group-health", groupHealth)',
+        "  api.Bind(&Controller{})",
+        "}"
+      ].join("\n")
+    });
+    const service = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+    const getRoutes = await service.routes(projectPath, { method: "GET" });
+
+    expect(routes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "GET",
+          path: "/health",
+          handler: expect.objectContaining({ qualifiedName: "cmd/server/main.go#health" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.goframe.direct-server.bind-handler.local-function",
+              stage: "syntax"
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "GET",
+          path: "/api/group-health",
+          handler: expect.objectContaining({ qualifiedName: "cmd/server/main.go#groupHealth" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.goframe.direct-group.http-method.local-function",
+              stage: "syntax"
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "GET",
+          path: "/api/users",
+          handler: expect.objectContaining({ qualifiedName: "cmd/server/main.go#Controller.List" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.goframe.standard-router.g-meta.direct-bound-controller.local-method",
+              stage: "syntax"
+            })
+          })
+        })
+      ])
+    );
+    expect(getRoutes.routes).toMatchObject([
+      {
+        method: "GET",
+        path: "/api/users",
+        handler: { qualifiedName: "cmd/server/main.go#Controller.List" },
+        edge: {
+          resolution: "exact",
+          evidence: {
+            ruleId: "framework.goframe.standard-router.g-meta.direct-bound-controller.local-method",
+            stage: "syntax"
+          }
+        }
+      },
+      {
+        method: "GET",
+        path: "/health",
+        handler: { qualifiedName: "cmd/server/main.go#health" },
+        edge: {
+          resolution: "exact",
+          evidence: {
+            ruleId: "framework.goframe.direct-server.bind-handler.local-function",
+            stage: "syntax"
+          }
+        }
+      },
+      {
+        method: "GET",
+        path: "/api/group-health",
+        handler: { qualifiedName: "cmd/server/main.go#groupHealth" },
+        edge: {
+          resolution: "exact",
+          evidence: {
+            ruleId: "framework.goframe.direct-group.http-method.local-function",
+            stage: "syntax"
+          }
+        }
+      }
+    ]);
+  });
+
   it("indexes Rust Axum routes and retains Rust source-search filtering", async () => {
     const projectPath = await createInlineProject({
       "src/http.rs": [

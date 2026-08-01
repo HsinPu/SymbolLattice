@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.122.0 is an early developer release. The package is not published to npm; run it from source.
+> v0.123.0 is an early developer release. The package is not published to npm; run it from source.
 
 SymbolLattice builds a queryable local code-symbol graph for a project. Every relation keeps its source rule, resolution stage, and confidence. Source code remains in the indexed project's `.symbol-lattice/index.sqlite` and is never silently uploaded.
 
@@ -48,6 +48,11 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 On Windows PowerShell, use `npm.cmd` if `npm` is unavailable. Filesystem roots and home directories are rejected unless `--force` is explicit.
 
+## v0.123.0
+
+- Adds GoFrame v1/v2 route extraction for literal-rule `g.Server().BindHandler` calls or HTTP-method literal calls on a static `Group`, plus same-file standard-router joins of `g.Meta`, direct `Bind`, and a controller method.
+- Every new route keeps exact evidence. Existing graphs re-extract their raw facts on the next explicit `sync` because the extractor version advances.
+
 ## v0.122.0
 
 - Cargo workspace `members` now accept common `*`, `?`, and `**` globs. Glob expansion honors `[workspace].exclude`, while explicit literal members retain Cargo precedence.
@@ -58,6 +63,7 @@ On Windows PowerShell, use `npm.cmd` if `npm` is unavailable. Filesystem roots a
 
 - This is not a compiler, type checker, framework runtime, or execution tracer.
 - Dynamic dispatch, reflection, macro expansion, code generation, dependency injection, and ambiguous names never become exact graph relations.
+- GoFrame intentionally does not project inline or object-method handlers, callback `Group` forms, cross-file controller/request joins, multi-method tags, domain rules, or dynamic receivers/rules.
 - Cross-file Actix Web `ServiceConfig` support accepts only one or two direct external modules from `main.rs` / `lib.rs`. Workspace crates accept literal or common-glob `members`, `exclude`, a root package or explicit member, plus either a direct inline-table `[dependencies]` `path` or a matching `{ workspace = true }` inheritance of a root local `[workspace.dependencies]` path. Character classes, brace and `!` glob patterns, Cargo's implicit path-dependency membership, inherited registry/transitive/dev/build dependencies, non-inline tables, target-specific sections, re-exports, `#[path]`, inline modules, deeper paths, closures, wrappers, dynamic callbacks, and dynamic paths remain unprojected.
 
 ## Verification

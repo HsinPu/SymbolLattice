@@ -6,6 +6,26 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.123.0] - 2026-08-01
+
+### Added
+
+- GoFrame v1/v2 extraction now emits exact routes for literal-rule `g.Server().BindHandler` calls and static `Group` HTTP-method calls that name one unique package-level function.
+- Same-file standard-router extraction now joins a literal `g.Meta` path/method tag, a directly bound controller, and its exported `context.Context, *Request` method. The resulting route retains syntax-stage evidence and a concrete controller-method symbol.
+
+### Compatibility
+
+- The artifact-facts extractor advances to `multi-language-ast-v105`. Existing graphs remain readable; the next explicit `sync` re-extracts unchanged source documents. SQLite schema and the project resolver version are unchanged.
+
+### Deliberate limits
+
+- GoFrame extraction rejects inline and object-method handler forms, callback `Group` forms, cross-file controller/request joins, multi-method tags, domain rules, dynamic receivers, dynamic rules, aliases with ambiguous imports, rebindings, and non-unique handlers.
+
+### Comparison notes
+
+- CodeGraph's GoFrame resolver recognizes `g.Meta` route nodes and joins controller methods by request-type signatures across the graph, but deliberately leaves reflective `Group` prefixes unreconstructed. SymbolLattice v0.123 additionally requires direct same-file controller binding before creating an exact route and preserves static group prefixes for its supported forms.
+- CodeGraph remains broader for cross-file GoFrame composition. SymbolLattice is stricter for the supported slice: a route edge exists only when its literal registration/binding and handler are all syntax-proven.
+
 ## [0.122.0] - 2026-08-01
 
 ### Added
@@ -2250,7 +2270,8 @@ No unreleased changes.
 - Explicit full indexing, caller/callee/impact queries, and read-only MCP exploration.
 - `exact`, `heuristic`, and `unresolved` relationship states.
 
-[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.122.0...HEAD
+[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.123.0...HEAD
+[0.123.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.122.0...v0.123.0
 [0.122.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.121.0...v0.122.0
 [0.121.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.120.0...v0.121.0
 [0.35.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.34.0...v0.35.0

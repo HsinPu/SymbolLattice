@@ -26,6 +26,7 @@ export const FRAMEWORK_CAPABILITY_IDS = [
   "echo",
   "net-http",
   "chi",
+  "goframe",
   "axum",
   "actix-web",
   "rocket",
@@ -301,6 +302,16 @@ export const FRAMEWORK_CAPABILITIES = [
     surfaces: [
       "direct chi.NewRouter and chi.NewMux router methods",
       "literal direct named-handler HTTP registrations"
+    ]
+  },
+  {
+    id: "goframe",
+    languages: ["go"],
+    routeFramework: "goframe",
+    routeRegistrations: [],
+    surfaces: [
+      "direct g.Server BindHandler and static Group HTTP-method literal-rule named local functions",
+      "same-file standard-router g.Meta request metadata with directly bound controller methods"
     ]
   },
   {

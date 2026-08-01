@@ -33,6 +33,7 @@ describe("first-party framework capabilities", () => {
       "echo",
       "net-http",
       "chi",
+      "goframe",
       "axum",
       "actix-web",
       "rocket",
@@ -244,6 +245,15 @@ describe("first-party framework capabilities", () => {
       surfaces: [
         "direct chi.NewRouter and chi.NewMux router methods",
         "literal direct named-handler HTTP registrations"
+      ]
+    });
+    expect(frameworkCapability("goframe")).toMatchObject({
+      languages: ["go"],
+      routeFramework: "goframe",
+      routeRegistrations: [],
+      surfaces: [
+        "direct g.Server BindHandler and static Group HTTP-method literal-rule named local functions",
+        "same-file standard-router g.Meta request metadata with directly bound controller methods"
       ]
     });
     expect(frameworkCapability("axum")).toMatchObject({

@@ -59,6 +59,7 @@ export type RouteFramework =
   | "echo"
   | "net-http"
   | "chi"
+  | "goframe"
   | "axum"
   | "actix-web"
   | "rocket"
