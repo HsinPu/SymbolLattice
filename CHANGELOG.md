@@ -6,6 +6,26 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.146.0] - 2026-08-01
+
+### Added
+
+- Python extraction now recognizes direct Starlette `Route(...)` tables passed through `Starlette(routes=...)`, including top-level named lists and inline literal lists, exact named imports or aliases, literal slash paths, literal uppercase standard HTTP method lists, and the documented default `GET` method.
+- A Starlette route becomes an exact same-file handler relation only after SymbolLattice proves the route factory import, application constructor import, route-list mount, a uniquely named top-level function handler declared before the route, and the absence of relevant rebinding.
+- New unit and service coverage verifies named and inline tables, import aliases, default and multi-method routes, and rejection of dynamic, unmounted, unsupported, rebound, or ambiguously ordered declarations.
+
+### Compatibility
+
+- The artifact-facts extractor advances to `multi-language-ast-v127`. Existing graphs and SQLite schema remain readable; the next explicit `sync` re-extracts Python facts and reprojects Starlette routes. The project resolver remains `project-resolver-v38`.
+
+### Deliberate limits
+
+- Starlette support is intentionally limited to direct imports, top-level literal `Route` lists mounted by `Starlette(routes=...)`, and same-file top-level named function endpoints. `Mount`, `Router`, class endpoints, mixed or dynamic lists, tuples, unsupported route options, cross-file routes, handlers declared after routes, rebinding, and ambiguity remain non-exact.
+
+### Comparison notes
+
+- The inspected CodeGraph Python framework module contains a generic FastAPI decorator extractor but no Starlette-specific `Starlette` or `Route` branch. SymbolLattice independently uses its AST to require import, mount, handler-order, and rebinding proof for this narrow Starlette slice; it remains deliberately narrower for classes, mounts, routers, dynamic composition, and cross-file routes.
+
 ## [0.145.0] - 2026-08-01
 
 ### Added
@@ -2720,7 +2740,8 @@ No unreleased changes.
 - Explicit full indexing, caller/callee/impact queries, and read-only MCP exploration.
 - `exact`, `heuristic`, and `unresolved` relationship states.
 
-[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.145.0...HEAD
+[Unreleased]: https://github.com/HsinPu/symbol-lattice/compare/v0.146.0...HEAD
+[0.146.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.145.0...v0.146.0
 [0.145.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.144.0...v0.145.0
 [0.144.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.143.0...v0.144.0
 [0.143.0]: https://github.com/HsinPu/symbol-lattice/compare/v0.142.0...v0.143.0

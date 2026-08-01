@@ -21,6 +21,7 @@ export const FRAMEWORK_CAPABILITY_IDS = [
   "fastapi",
   "flask",
   "django",
+  "starlette",
   "gin",
   "fiber",
   "echo",
@@ -256,6 +257,16 @@ export const FRAMEWORK_CAPABILITIES = [
       "direct django.urls path imports",
       "final literal urlpatterns lists with same-file top-level function handlers",
       "package-relative imported URLConfs through direct path and include composition"
+    ]
+  },
+  {
+    id: "starlette",
+    languages: ["python"],
+    routeFramework: "starlette",
+    routeRegistrations: [],
+    surfaces: [
+      "direct Starlette applications with literal Route lists",
+      "same-file top-level function endpoints"
     ]
   },
   {

@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.145.0 is an early developer release. The package is not published to npm; run it from source.
+> v0.146.0 is an early developer release. The package is not published to npm; run it from source.
 
 SymbolLattice builds a queryable local code-symbol graph for a project. Each relation retains its source rule, resolution stage, and confidence. Source remains in the indexed project's `.symbol-lattice/index.sqlite` and is never silently uploaded.
 
@@ -49,11 +49,11 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 On Windows PowerShell, use `npm.cmd` if `npm` is unavailable. Filesystem roots and home directories are rejected unless `--force` is explicit.
 
-## v0.145.0
+## v0.146.0
 
-- Ruby on Rails now extracts direct `resources`/`resource` RESTful routes, including literal array-shaped standard-action `only`/`except` filters. An `update` action preserves separate `PATCH` and `PUT` routes.
-- Rails direct verb and resource routes prove a conventional `app/controllers/<controller>_controller.rb` file, class, and action method before becoming cross-file `exact`; missing or ambiguous evidence remains `unresolved`.
-- Artifact facts advance to `multi-language-ast-v126` and the project resolver to `project-resolver-v38`; the next explicit `sync` re-extracts Ruby facts and reprojects routes.
+- Starlette now extracts direct `Route(...)` tables passed to `Starlette(routes=...)`: named or inline literal lists, import aliases, slash paths, literal uppercase HTTP methods, and the default `GET` are supported.
+- A relation becomes `exact` only when the `Route` import, table mount, same-file top-level function handler, declaration order, and absence of rebinding are all proven.
+- Artifact facts advance to `multi-language-ast-v127`; the project resolver remains `project-resolver-v38`, and the next explicit `sync` re-extracts Python facts and reprojects routes.
 
 ## Deliberate limits
 
@@ -68,6 +68,7 @@ On Windows PowerShell, use `npm.cmd` if `npm` is unavailable. Filesystem roots a
 - Gorilla/mux currently supports only direct `mux.NewRouter()` `HandleFunc` registrations and one `Methods` chain. Subrouters, PathPrefix, Host, Headers, Schemes, middleware, other matcher chains, dynamic values, and rebinding never become `exact`.
 - HttpRouter currently supports only direct `httprouter.New()` HTTP methods. `Handle`, `Handler`, `HandlerFunc`, automatic OPTIONS behavior, wrappers, dynamic values, and rebinding never become `exact`.
 - Rails currently supports only literal verb, `resources`, and `resource` declarations inside direct `Rails.application.routes.draw` blocks, with standard actions and array-shaped `only`/`except` filters. Namespaces, scopes, nested resources, custom paths/controllers, single-symbol filters, dynamic values, and non-unique conventional file/class/action evidence never become `exact`.
+- Starlette currently supports only direct imports, top-level literal `Route` lists, and same-file top-level named function endpoints mounted through `Starlette(routes=...)`. `Mount`/`Router`, class endpoints, mixed or dynamic lists, tuples, unsupported `Route` options, cross-file routes, handlers declared after routes, rebinding, and ambiguity never become `exact`.
 - Other frameworks expose only implemented, evidence-backed slices; see [CHANGELOG.md](CHANGELOG.md) for the full history.
 
 ## Verification

@@ -28,6 +28,7 @@ describe("first-party framework capabilities", () => {
       "fastapi",
       "flask",
       "django",
+      "starlette",
       "gin",
       "fiber",
       "echo",
@@ -204,6 +205,15 @@ describe("first-party framework capabilities", () => {
         "direct django.urls path imports",
         "final literal urlpatterns lists with same-file top-level function handlers",
         "package-relative imported URLConfs through direct path and include composition"
+      ]
+    });
+    expect(frameworkCapability("starlette")).toMatchObject({
+      languages: ["python"],
+      routeFramework: "starlette",
+      routeRegistrations: [],
+      surfaces: [
+        "direct Starlette applications with literal Route lists",
+        "same-file top-level function endpoints"
       ]
     });
     expect(frameworkCapability("gin")).toMatchObject({

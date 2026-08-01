@@ -29,7 +29,7 @@ export interface PythonExtractFileFactsInput {
 
 type PythonSyntaxNode = ReturnType<typeof parser.parse>["topNode"];
 
-type FrameworkImportedConstructor = "FastAPI" | "APIRouter" | "Flask" | "Blueprint";
+type FrameworkImportedConstructor = "FastAPI" | "APIRouter" | "Flask" | "Blueprint" | "Starlette";
 
 interface FrameworkNamedImport {
   readonly importedName: string;
@@ -53,6 +53,11 @@ interface FlaskApplication extends FrameworkDirectInstance {}
 
 interface FlaskBlueprint extends FrameworkDirectInstance {
   readonly prefix: string;
+}
+
+interface StarletteApplication extends FrameworkDirectInstance {
+  readonly routeListName: string | null;
+  readonly inlineRoutes: readonly StaticStarletteRoute[] | null;
 }
 
 interface StaticFastApiDecorator {
@@ -80,6 +85,22 @@ interface StaticFlaskBlueprintRegistration {
   readonly applicationName: string;
   readonly blueprintName: string;
   readonly prefix: string;
+  readonly node: PythonSyntaxNode;
+}
+
+/** One direct literal `starlette.routing.Route(...)` entry. */
+interface StaticStarletteRoute {
+  readonly factoryName: string;
+  readonly methods: readonly RouteMethod[];
+  readonly path: string;
+  readonly handlerName: string;
+  readonly node: PythonSyntaxNode;
+}
+
+/** A direct top-level literal list passed through a Starlette `routes=` option. */
+interface StaticStarletteRouteList {
+  readonly name: string;
+  readonly routes: readonly StaticStarletteRoute[];
   readonly node: PythonSyntaxNode;
 }
 
@@ -150,6 +171,17 @@ const FLASK_SHORTCUT_DECORATOR_METHODS: Readonly<Record<string, RouteMethod>> = 
 };
 
 const FLASK_ROUTE_METHODS = new Set<RouteMethod>([
+  "GET",
+  "POST",
+  "PUT",
+  "PATCH",
+  "DELETE",
+  "HEAD",
+  "OPTIONS",
+  "TRACE"
+]);
+
+const STARLETTE_ROUTE_METHODS = new Set<RouteMethod>([
   "GET",
   "POST",
   "PUT",
@@ -313,6 +345,20 @@ function staticDjangoUrlImports(
   node: PythonSyntaxNode
 ): readonly FrameworkNamedImport[] {
   return staticNamedFrameworkImports(input, node, "django.urls");
+}
+
+function staticStarletteApplicationImports(
+  input: PythonExtractFileFactsInput,
+  node: PythonSyntaxNode
+): readonly FrameworkNamedImport[] {
+  return staticNamedFrameworkImports(input, node, "starlette.applications");
+}
+
+function staticStarletteRoutingImports(
+  input: PythonExtractFileFactsInput,
+  node: PythonSyntaxNode
+): readonly FrameworkNamedImport[] {
+  return staticNamedFrameworkImports(input, node, "starlette.routing");
 }
 
 /**
@@ -804,6 +850,188 @@ function staticDjangoRoutePath(value: string): string | null {
   return "/" + value;
 }
 
+function staticStarletteRoutePath(value: string): string | null {
+  if (
+    value === "" ||
+    !value.startsWith("/") ||
+    value.includes("\\") ||
+    value.includes("?") ||
+    value.includes("#") ||
+    value.split("/").includes("..")
+  ) {
+    return null;
+  }
+  return value;
+}
+
+function staticStarletteRouteMethods(
+  input: PythonExtractFileFactsInput,
+  node: PythonSyntaxNode
+): readonly RouteMethod[] | null {
+  if (node.name !== "ArrayExpression") {
+    return null;
+  }
+  const entries = directChildren(node).filter((child) => !["[", "]", ","].includes(child.name));
+  if (entries.length === 0) {
+    return null;
+  }
+  const methods: RouteMethod[] = [];
+  for (const entry of entries) {
+    if (entry.name !== "String") {
+      return null;
+    }
+    const method = staticPlainPythonString(input, entry);
+    if (method === null || !STARLETTE_ROUTE_METHODS.has(method as RouteMethod)) {
+      return null;
+    }
+    const normalized = method as RouteMethod;
+    if (methods.includes(normalized)) {
+      return null;
+    }
+    methods.push(normalized);
+  }
+  return methods;
+}
+
+function staticStarletteRoute(
+  input: PythonExtractFileFactsInput,
+  node: PythonSyntaxNode,
+  routeFactoryNames: ReadonlySet<string>
+): StaticStarletteRoute | null {
+  if (node.name !== "CallExpression") {
+    return null;
+  }
+  const callChildren = directChildren(node);
+  const factoryNode = callChildren[0];
+  const arguments_ = callChildren[1];
+  if (
+    callChildren.length !== 2 ||
+    factoryNode?.name !== "VariableName" ||
+    arguments_?.name !== "ArgList"
+  ) {
+    return null;
+  }
+  const factoryName = declarationName(input, factoryNode);
+  if (factoryName === null || !routeFactoryNames.has(factoryName)) {
+    return null;
+  }
+
+  const entries = staticArgumentEntries(arguments_);
+  const pathNode = entries[0];
+  const positionalEndpoint =
+    entries[1]?.name === "VariableName" && entries[2]?.name !== "AssignOp";
+  const keywordArguments = positionalEndpoint
+    ? staticKeywordArgumentsAfterPositions(input, entries, 2)
+    : staticKeywordArgumentsAfterFirst(input, entries);
+  const handlerNode = positionalEndpoint ? entries[1] : keywordArguments?.get("endpoint");
+  if (
+    pathNode?.name !== "String" ||
+    handlerNode?.name !== "VariableName" ||
+    keywordArguments === null ||
+    [...keywordArguments.keys()].some((name) => !["endpoint", "methods", "name"].includes(name)) ||
+    (positionalEndpoint && keywordArguments.has("endpoint"))
+  ) {
+    return null;
+  }
+  const nameNode = keywordArguments.get("name");
+  if (nameNode !== undefined && (nameNode.name !== "String" || staticPlainPythonString(input, nameNode) === null)) {
+    return null;
+  }
+  const rawPath = staticPlainPythonString(input, pathNode);
+  const path = rawPath === null ? null : staticStarletteRoutePath(rawPath);
+  const handlerName = declarationName(input, handlerNode);
+  const methodsNode = keywordArguments.get("methods");
+  const methods =
+    methodsNode === undefined ? ["GET" as const] : staticStarletteRouteMethods(input, methodsNode);
+  return path === null || handlerName === null || methods === null
+    ? null
+    : { factoryName, methods, path, handlerName, node };
+}
+
+function staticStarletteRouteEntries(
+  input: PythonExtractFileFactsInput,
+  node: PythonSyntaxNode,
+  routeFactoryNames: ReadonlySet<string>
+): readonly StaticStarletteRoute[] | null {
+  if (node.name !== "ArrayExpression") {
+    return null;
+  }
+  const entries = directChildren(node).filter((child) => !["[", "]", ","].includes(child.name));
+  const routes: StaticStarletteRoute[] = [];
+  for (const entry of entries) {
+    const route = staticStarletteRoute(input, entry, routeFactoryNames);
+    if (route === null) {
+      return null;
+    }
+    routes.push(route);
+  }
+  return routes;
+}
+
+function staticStarletteRouteList(
+  input: PythonExtractFileFactsInput,
+  node: PythonSyntaxNode,
+  routeFactoryNames: ReadonlySet<string>
+): StaticStarletteRouteList | null {
+  if (node.name !== "AssignStatement") {
+    return null;
+  }
+  const children = directChildren(node);
+  const target = children[0];
+  const operator = children[1];
+  const value = children[2];
+  if (
+    children.length !== 3 ||
+    target?.name !== "VariableName" ||
+    operator?.name !== "AssignOp" ||
+    value?.name !== "ArrayExpression"
+  ) {
+    return null;
+  }
+  const name = declarationName(input, target);
+  const routes = staticStarletteRouteEntries(input, value, routeFactoryNames);
+  return name === null || routes === null ? null : { name, routes, node };
+}
+
+function staticStarletteApplication(
+  input: PythonExtractFileFactsInput,
+  node: PythonSyntaxNode,
+  constructorNames: ReadonlySet<string>,
+  routeFactoryNames: ReadonlySet<string>
+): StarletteApplication | null {
+  const assignment = staticFrameworkConstructorAssignment(input, node, constructorNames);
+  if (assignment === null) {
+    return null;
+  }
+  const keywordArguments = staticKeywordArguments(input, staticArgumentEntries(assignment.arguments_));
+  const routesNode = keywordArguments?.get("routes");
+  if (keywordArguments === null || routesNode === undefined) {
+    return null;
+  }
+  if (routesNode.name === "VariableName") {
+    const routeListName = declarationName(input, routesNode);
+    return routeListName === null
+      ? null
+      : {
+          name: assignment.name,
+          constructorName: assignment.constructorName,
+          routeListName,
+          inlineRoutes: null,
+          node: assignment.node
+        };
+  }
+  const inlineRoutes = staticStarletteRouteEntries(input, routesNode, routeFactoryNames);
+  return inlineRoutes === null
+    ? null
+    : {
+        name: assignment.name,
+        constructorName: assignment.constructorName,
+        routeListName: null,
+        inlineRoutes,
+        node: assignment.node
+      };
+}
+
 function staticDjangoPathRoute(
   input: PythonExtractFileFactsInput,
   node: PythonSyntaxNode,
@@ -1280,6 +1508,44 @@ function latestProvenDjangoIncludeImport(
   return candidates.length === 1 ? candidates[0] ?? null : null;
 }
 
+function latestProvenStarletteRouteImport(
+  input: PythonExtractFileFactsInput,
+  topLevelNodes: readonly PythonSyntaxNode[],
+  imports: readonly FrameworkNamedImport[],
+  factoryName: string,
+  before: number
+): FrameworkNamedImport | null {
+  const candidates = imports
+    .filter(
+      (candidate) =>
+        candidate.importedName === "Route" &&
+        candidate.alias === factoryName &&
+        hasUnambiguousFrameworkImportAlias(imports, candidate) &&
+        candidate.node.to <= before &&
+        !hasTopLevelRebinding(input, topLevelNodes, candidate.alias, candidate.node.to, before)
+    )
+    .sort((left, right) => right.node.from - left.node.from);
+  return candidates.length === 1 ? candidates[0] ?? null : null;
+}
+
+function latestProvenStarletteRouteList(
+  input: PythonExtractFileFactsInput,
+  topLevelNodes: readonly PythonSyntaxNode[],
+  routeLists: readonly StaticStarletteRouteList[],
+  routeListName: string,
+  before: number
+): StaticStarletteRouteList | null {
+  const candidates = routeLists
+    .filter(
+      (candidate) =>
+        candidate.name === routeListName &&
+        candidate.node.to <= before &&
+        !hasTopLevelRebinding(input, topLevelNodes, candidate.name, candidate.node.to, before)
+    )
+    .sort((left, right) => right.node.from - left.node.from);
+  return candidates.length === 1 ? candidates[0] ?? null : null;
+}
+
 /**
  * Finds the one direct package-relative URLConf import still bound to an
  * `include` argument. A later assignment or import makes the binding unsafe.
@@ -1377,10 +1643,12 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
   const fastApiCapability = frameworkCapability("fastapi");
   const flaskCapability = frameworkCapability("flask");
   const djangoCapability = frameworkCapability("django");
+  const starletteCapability = frameworkCapability("starlette");
   if (
     !fastApiCapability.languages.includes(input.language) ||
     !flaskCapability.languages.includes(input.language) ||
-    !djangoCapability.languages.includes(input.language)
+    !djangoCapability.languages.includes(input.language) ||
+    !starletteCapability.languages.includes(input.language)
   ) {
     throw new Error("Python framework extraction was invoked for an unsupported source language.");
   }
@@ -1636,6 +1904,35 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
     const djangoUrlPatternLists = topLevelNodes
       .map((node) => staticDjangoUrlPatternList(input, node, djangoPathFactoryNames))
       .filter((candidate): candidate is StaticDjangoUrlPatternList => candidate !== null);
+    const starletteApplicationImports = topLevelNodes.flatMap((node) =>
+      staticStarletteApplicationImports(input, node)
+    );
+    const starletteRoutingImports = topLevelNodes.flatMap((node) =>
+      staticStarletteRoutingImports(input, node)
+    );
+    const starletteApplicationConstructorNames = new Set(
+      starletteApplicationImports
+        .filter((candidate) => candidate.importedName === "Starlette")
+        .map((candidate) => candidate.alias)
+    );
+    const starletteRouteFactoryNames = new Set(
+      starletteRoutingImports
+        .filter((candidate) => candidate.importedName === "Route")
+        .map((candidate) => candidate.alias)
+    );
+    const starletteRouteLists = topLevelNodes
+      .map((node) => staticStarletteRouteList(input, node, starletteRouteFactoryNames))
+      .filter((candidate): candidate is StaticStarletteRouteList => candidate !== null);
+    const starletteApplications = topLevelNodes
+      .map((node) =>
+        staticStarletteApplication(
+          input,
+          node,
+          starletteApplicationConstructorNames,
+          starletteRouteFactoryNames
+        )
+      )
+      .filter((candidate): candidate is StarletteApplication => candidate !== null);
     const topLevelFunctions = topLevelNodes.flatMap((statement) => {
       const functionNode =
         decoratedDefinition(statement) ??
@@ -1688,6 +1985,92 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
         prefix: blueprint.prefix,
         range: rangeFor(lineStarts, blueprint.node.from, blueprint.node.to)
       });
+    }
+
+    for (const application of starletteApplications) {
+      if (
+        hasTopLevelRebinding(
+          input,
+          topLevelNodes,
+          application.name,
+          application.node.to,
+          input.sourceText.length
+        )
+      ) {
+        continue;
+      }
+      const provenApplication = latestProvenFrameworkInstance(
+        input,
+        topLevelNodes,
+        starletteApplicationImports,
+        starletteApplications,
+        application.name,
+        application.node.to,
+        "Starlette"
+      );
+      if (
+        provenApplication === null ||
+        nodeKey(provenApplication.node) !== nodeKey(application.node)
+      ) {
+        continue;
+      }
+      const routeList =
+        application.inlineRoutes === null
+          ? application.routeListName === null
+            ? null
+            : latestProvenStarletteRouteList(
+                input,
+                topLevelNodes,
+                starletteRouteLists,
+                application.routeListName,
+                application.node.from
+              )
+          : null;
+      const routes = application.inlineRoutes ?? routeList?.routes;
+      if (routes === undefined) {
+        continue;
+      }
+      for (const route of routes) {
+        if (
+          latestProvenStarletteRouteImport(
+            input,
+            topLevelNodes,
+            starletteRoutingImports,
+            route.factoryName,
+            route.node.from
+          ) === null
+        ) {
+          continue;
+        }
+        const handlers = topLevelFunctions.filter(
+          (candidate) =>
+            candidate.name === route.handlerName &&
+            candidate.node.to <= route.node.from &&
+            !hasTopLevelRebinding(
+              input,
+              topLevelNodes,
+              candidate.name,
+              candidate.node.to,
+              route.node.from
+            )
+        );
+        if (handlers.length !== 1) {
+          continue;
+        }
+        const handler = handlers[0];
+        if (handler === undefined) {
+          continue;
+        }
+        for (const method of route.methods) {
+          addPythonRoute(
+            method,
+            route.node,
+            handler.symbol,
+            route.path,
+            "framework.starlette.direct-application.routes.local-function"
+          );
+        }
+      }
     }
 
     for (const patterns of djangoUrlPatternLists) {

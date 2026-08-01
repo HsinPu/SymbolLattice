@@ -2287,6 +2287,122 @@ describe("source extraction", () => {
 
   });
 
+  it("extracts direct Starlette Route lists and inline route lists with exact local handlers", () => {
+    const facts = extractFileFacts({
+      filePath: "app/starlette_app.py",
+      language: "python",
+      sourceText: [
+        "from starlette.applications import Starlette as App",
+        "from starlette.routing import Route as HttpRoute",
+        "",
+        "async def health(request):",
+        "    return None",
+        "",
+        "def jobs(request):",
+        "    return None",
+        "",
+        "async def inline_handler(request):",
+        "    return None",
+        "",
+        "routes = [",
+        "    HttpRoute(\"/health\", endpoint=health, name=\"health\"),",
+        "    HttpRoute(\"/jobs\", jobs, methods=[\"GET\", \"POST\"], name=\"jobs\"),",
+        "]",
+        "app = App(debug=True, routes=routes)",
+        "inline_app = App(routes=[HttpRoute(\"/inline\", inline_handler, methods=[\"PATCH\"])])"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId,
+          edge.evidence?.stage,
+          edge.resolution,
+          edge.confidence
+        ])
+    ).toEqual([
+      [
+        "GET /health",
+        "app/starlette_app.py#health",
+        "framework.starlette.direct-application.routes.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "GET /jobs",
+        "app/starlette_app.py#jobs",
+        "framework.starlette.direct-application.routes.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "POST /jobs",
+        "app/starlette_app.py#jobs",
+        "framework.starlette.direct-application.routes.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "PATCH /inline",
+        "app/starlette_app.py#inline_handler",
+        "framework.starlette.direct-application.routes.local-function",
+        "syntax",
+        "exact",
+        1
+      ]
+    ]);
+  });
+
+  it("rejects unmounted, dynamic, rebound, and unsupported Starlette Route list shapes", () => {
+    const facts = extractFileFacts({
+      filePath: "app/unproven_starlette.py",
+      language: "python",
+      sourceText: [
+        "from starlette.applications import Starlette",
+        "from starlette.routing import Route",
+        "",
+        "async def handler(request):",
+        "    return None",
+        "",
+        "path = \"/dynamic\"",
+        "dynamic_path = [Route(path, handler)]",
+        "dynamic_app = Starlette(routes=dynamic_path)",
+        "",
+        "dynamic_methods = [Route(\"/methods\", handler, methods=allowed_methods)]",
+        "methods_app = Starlette(routes=dynamic_methods)",
+        "",
+        "unmounted = [Route(\"/unmounted\", handler)]",
+        "",
+        "rebound = [Route(\"/rebound\", handler)]",
+        "rebound = build_routes()",
+        "rebound_app = Starlette(routes=rebound)",
+        "",
+        "rebound_application = Starlette(routes=[Route(\"/app-rebound\", handler)])",
+        "rebound_application = build_application()",
+        "",
+        "late_handler_routes = [Route(\"/late-handler\", late_handler)]",
+        "late_handler_app = Starlette(routes=late_handler_routes)",
+        "async def late_handler(request):",
+        "    return None",
+        "",
+        "Route = replacement",
+        "shadowed = [Route(\"/shadowed\", handler)]",
+        "shadowed_app = Starlette(routes=shadowed)"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+  });
+
   it("retains proven cross-file FastAPI router and package-relative inclusion facts", () => {
     const routerFacts = extractFileFacts({
       filePath: "api/routers/catalog.py",

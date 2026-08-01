@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.145.0 是開發者預覽版，尚未發布到 npm；請從原始碼執行。
+> v0.146.0 是開發者預覽版，尚未發布到 npm；請從原始碼執行。
 
 SymbolLattice 為專案建立可查詢的本機程式碼符號圖譜。每條關係都保留來源規則、解析階段與信心值；原始碼僅保存於受索引專案的 `.symbol-lattice/index.sqlite`，不會被靜默上傳。
 
@@ -49,11 +49,11 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 Windows PowerShell 若沒有 `npm` 指令，請改用 `npm.cmd`。檔案系統根目錄與使用者家目錄需要明確加上 `--force` 才會接受。
 
-## v0.145.0
+## v0.146.0
 
-- Ruby on Rails 新增 direct `resources`／`resource` RESTful 路由：支援標準 action 的字面量 `only`／`except` 陣列，`update` 會保留各自的 `PATCH` 與 `PUT` route。
-- Rails direct verb 與 resource 路由會依慣例驗證 `app/controllers/<controller>_controller.rb`、class 與 action method；三者唯一才是跨檔 `exact`，缺漏或歧義保持 `unresolved`。
-- artifact facts 升級為 `multi-language-ast-v126`，project resolver 升級為 `project-resolver-v38`；下次明確 `sync` 會重新萃取 Ruby facts 並重投影路由。
+- Starlette 新增 direct `Route(...)` 路由表擷取：支援傳入 `Starlette(routes=...)` 的具名或 inline 字面量 list、匯入別名、斜線路徑、字面量大寫 HTTP methods，以及預設 `GET`。
+- 僅在 `Route` 匯入、路由表掛載、同檔頂層 function handler、定義順序與未重綁定都能被證明時，才產生 `exact` 關係。
+- artifact facts 升級為 `multi-language-ast-v127`；project resolver 維持 `project-resolver-v38`，下次明確 `sync` 會重新萃取 Python facts 並重投影路由。
 
 ## 已知限制
 
@@ -68,6 +68,7 @@ Windows PowerShell 若沒有 `npm` 指令，請改用 `npm.cmd`。檔案系統�
 - Gorilla/mux 目前僅支援 `mux.NewRouter()` 的 direct `HandleFunc` 與單一 `Methods` 連鎖；Subrouter、PathPrefix、Host、Headers、Schemes、middleware、其他 matcher chain、動態值與重綁都不會成為 `exact`。
 - HttpRouter 目前僅支援 `httprouter.New()` 的 direct HTTP method；`Handle`、`Handler`／`HandlerFunc`、自動 OPTIONS、wrapper、動態值與重綁都不會成為 `exact`。
 - Rails 目前僅支援 direct `Rails.application.routes.draw` 內的字面量 verb、`resources`／`resource`、標準 action 與陣列形狀的 `only`／`except`。namespace、scope、巢狀 resource、自訂 path/controller、單一 symbol filter、動態值與慣例檔案/class/action 不唯一時不會成為 `exact`。
+- Starlette 目前只支援 direct import、頂層字面量 `Route` list，以及由 `Starlette(routes=...)` 掛載的同檔頂層具名 function endpoint。`Mount`／`Router`、class endpoint、混合或動態 list、tuple、不支援的 `Route` 選項、跨檔 route、handler 定義在 route 之後、重綁與歧義均不會成為 `exact`。
 - 其他框架只涵蓋已實作且可驗證的切片；完整變更請見 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 驗證

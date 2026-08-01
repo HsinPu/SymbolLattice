@@ -54,6 +54,7 @@ export type RouteFramework =
   | "fastapi"
   | "flask"
   | "django"
+  | "starlette"
   | "gin"
   | "fiber"
   | "echo"

@@ -3138,6 +3138,68 @@ describe("SymbolLatticeService", () => {
     ]);
   });
 
+  it("indexes direct Starlette Route-list routes with exact local handler proof", async () => {
+    const projectPath = await createInlineProject({
+      "api/main.py": [
+        "from starlette.applications import Starlette",
+        "from starlette.routing import Route",
+        "",
+        "async def health(request):",
+        "    return None",
+        "",
+        "def create_job(request):",
+        "    return None",
+        "",
+        "routes = [",
+        "    Route(\"/health\", health),",
+        "    Route(\"/jobs\", endpoint=create_job, methods=[\"POST\"]),",
+        "]",
+        "app = Starlette(routes=routes)"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+    const persistedFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "api/main.py");
+
+    expect(persistedFacts).toMatchObject({
+      language: "python",
+      extractorVersion: ARTIFACT_FACTS_EXTRACTOR_VERSION
+    });
+    expect(routes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "GET",
+          path: "/health",
+          handler: expect.objectContaining({ qualifiedName: "api/main.py#health" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.starlette.direct-application.routes.local-function",
+              stage: "syntax"
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "POST",
+          path: "/jobs",
+          handler: expect.objectContaining({ qualifiedName: "api/main.py#create_job" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.starlette.direct-application.routes.local-function",
+              stage: "syntax"
+            })
+          })
+        })
+      ])
+    );
+  });
+
   it("indexes direct final Django urlpatterns routes with exact local handler proof", async () => {
     const projectPath = await createInlineProject({
       "config/urls.py": [
