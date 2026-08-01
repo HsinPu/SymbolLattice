@@ -6,6 +6,26 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.126.0] - 2026-08-01
+
+### Added
+
+- GoFrame v1/v2 extraction now projects literal `Server.BindObjectMethod(pattern, object, method)` registrations. The pattern preserves one literal HTTP method or the `ALL` fallback, while the target must be a unique same-file public `func(*ghttp.Request)` controller method.
+- Supported objects are direct `new(Controller)` / `&Controller{}` values or one un-rebound local binding created from either form. Every resulting route retains exact syntax evidence under `framework.goframe.direct-server.bind-object-method.local-object-method`.
+
+### Compatibility
+
+- The artifact-facts extractor advances to `multi-language-ast-v108`. Existing graphs remain readable; the next explicit `sync` re-extracts unchanged source documents. SQLite schema and the project resolver version are unchanged.
+
+### Deliberate limits
+
+- `BindObjectMethod` accepts only one proven `g.Server()` receiver, a literal pattern, a direct supported object or un-rebound local object binding, and one case-sensitive public literal method name with a unique same-file `*ghttp.Request` handler signature. Dynamic values, factories, wrappers, rebindings, Domain registrations, Group receivers, cross-file controllers, ambiguous methods, unsupported signatures, and multi-method registrations remain unresolved.
+
+### Comparison notes
+
+- The inspected CodeGraph GoFrame resolver only starts for files containing `g.Meta` and creates metadata routes for reflective standard routing; it does not project a direct `BindObjectMethod` route-to-method edge. SymbolLattice v0.126 therefore adds an exact, directly evidenced slice even in files without `g.Meta`.
+- CodeGraph remains broader for its heuristic cross-file `g.Meta` request-type synthesis. SymbolLattice is intentionally narrower here: one source registration, one static object identity, and one same-file verified handler signature are required before emitting an exact edge.
+
 ## [0.125.0] - 2026-08-01
 
 ### Added

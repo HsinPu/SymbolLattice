@@ -310,7 +310,7 @@ export const FRAMEWORK_CAPABILITIES = [
     routeFramework: "goframe",
     routeRegistrations: [],
     surfaces: [
-      "direct g.Server BindHandler and static or callback Group HTTP-method literal rules with named local functions or direct local object methods",
+      "direct g.Server BindHandler or BindObjectMethod literal rules and static or callback Group HTTP-method literal rules with named local functions or direct local object methods",
       "literal g.Map batch rules and ALLMap paths on static or callback Groups with named local functions or direct local object methods",
       "same-file standard-router g.Meta request metadata with directly bound controller methods"
     ]

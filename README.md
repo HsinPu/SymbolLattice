@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.125.0 為開發者預覽版，尚未發布至 npm；請從原始碼執行。
+> v0.126.0 為開發者預覽版，尚未發布至 npm；請從原始碼執行。
 
 SymbolLattice 會建立可查詢的本機程式碼符號圖譜。每一條關係都保留來源規則、解析階段與信心值；原始碼只保存在索引專案的 `.symbol-lattice/index.sqlite`，不會被靜默上傳。
 
@@ -48,11 +48,11 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 Windows PowerShell 若沒有 `npm` 指令，請改用 `npm.cmd`。檔案系統根目錄與使用者家目錄需要明確加上 `--force` 才會接受。
 
-## v0.125.0
+## v0.126.0
 
-- GoFrame v1/v2 現可精確投影 `Group.Map(g.Map{...})`：每個 key 必須是明確 HTTP method 與字面路徑，value 則須為同檔唯一的套件函式或支援的本地物件方法。
-- `Group.ALLMap(g.Map{...})` 現會將字面路徑投影為 `ALL` 路由，包含靜態群組與已證明的 callback 群組前綴。
-- 擷取器版本升為 `multi-language-ast-v107`；下一次明確 `sync` 會重新擷取既有來源。
+- GoFrame v1/v2 現可精確投影 `Server.BindObjectMethod(pattern, object, method)`：pattern 與 method 必須是字面量，object 須為直接 `new(Controller)`、`&Controller{}` 或未重綁的同函式本地物件。
+- 只接受同檔唯一、公開且簽章為 `func (receiver) Method(*ghttp.Request)` 的 Controller 方法；動態值、factory/rebound object、非 Server receiver 與不符簽章的方法都維持未解析。
+- 擷取器版本升為 `multi-language-ast-v108`；下一次明確 `sync` 會重新擷取既有來源。
 
 ## 明確限制
 

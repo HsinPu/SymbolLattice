@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.125.0 is an early developer release. The package is not published to npm; run it from source.
+> v0.126.0 is an early developer release. The package is not published to npm; run it from source.
 
 SymbolLattice builds a queryable local code-symbol graph for a project. Every relation keeps its source rule, resolution stage, and confidence. Source code remains in the indexed project's `.symbol-lattice/index.sqlite` and is never silently uploaded.
 
@@ -48,11 +48,11 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 On Windows PowerShell, use `npm.cmd` if `npm` is unavailable. Filesystem roots and home directories are rejected unless `--force` is explicit.
 
-## v0.125.0
+## v0.126.0
 
-- GoFrame v1/v2 now projects literal `Group.Map(g.Map{...})` registrations. Every key must contain an explicit HTTP method and literal path; every value must be a unique same-file package-level function or a supported local object-method selector.
-- Literal `Group.ALLMap(g.Map{...})` paths now become `ALL` routes under static and proven callback-group prefixes.
-- The extractor advances to `multi-language-ast-v107`; existing graphs re-extract raw facts on the next explicit `sync`.
+- GoFrame v1/v2 now projects literal `Server.BindObjectMethod(pattern, object, method)` registrations. The pattern and method must be literals; the object must be direct `new(Controller)`, `&Controller{}`, or an un-rebound same-function local binding.
+- Only one unique same-file public controller method with a `func (receiver) Method(*ghttp.Request)` signature is accepted. Dynamic values, factory/rebound objects, non-Server receivers, and unsupported method signatures remain unresolved.
+- The extractor advances to `multi-language-ast-v108`; existing graphs re-extract raw facts on the next explicit `sync`.
 
 ## Deliberate limits
 

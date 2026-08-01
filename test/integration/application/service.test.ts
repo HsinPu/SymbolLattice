@@ -4428,6 +4428,72 @@ describe("SymbolLatticeService", () => {
     );
   });
 
+  it("indexes GoFrame BindObjectMethod routes with exact evidence", async () => {
+    const projectPath = await createInlineProject({
+      "cmd/server/main.go": [
+        "package main",
+        "",
+        "import (",
+        '  g "github.com/gogf/gf/v2/frame/g"',
+        '  "github.com/gogf/gf/v2/net/ghttp"',
+        ")",
+        "",
+        "type Controller struct{}",
+        "",
+        "func (c *Controller) Health(r *ghttp.Request) {}",
+        "func (c Controller) Status(r *ghttp.Request) {}",
+        "",
+        "func main() {",
+        "  server := g.Server()",
+        "  controller := new(Controller)",
+        '  server.BindObjectMethod("GET:/health", &Controller{}, "Health")',
+        '  server.BindObjectMethod("/status", controller, "Status")',
+        "}"
+      ].join("\n")
+    });
+    const service = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+    const getRoutes = await service.routes(projectPath, { method: "GET" });
+
+    expect(routes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "GET",
+          path: "/health",
+          handler: expect.objectContaining({ qualifiedName: "cmd/server/main.go#Controller.Health" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.goframe.direct-server.bind-object-method.local-object-method",
+              stage: "syntax"
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "ALL",
+          path: "/status",
+          handler: expect.objectContaining({ qualifiedName: "cmd/server/main.go#Controller.Status" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.goframe.direct-server.bind-object-method.local-object-method",
+              stage: "syntax"
+            })
+          })
+        })
+      ])
+    );
+    expect(getRoutes.routes).toMatchObject([
+      {
+        method: "GET",
+        path: "/health",
+        handler: { qualifiedName: "cmd/server/main.go#Controller.Health" }
+      }
+    ]);
+  });
+
   it("indexes GoFrame literal Map and ALLMap batch routes with exact evidence", async () => {
     const projectPath = await createInlineProject({
       "cmd/server/main.go": [
