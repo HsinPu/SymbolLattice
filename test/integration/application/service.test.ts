@@ -12413,7 +12413,9 @@ describe("SymbolLatticeService", () => {
       ].join("\n"),
       "ios/CalendarModule.swift": [
         "@objc(CalendarModule)",
-        "final class CalendarModule: NSObject {",
+        "final class CalendarModule: NSObject {}",
+        "",
+        "extension CalendarModule {",
         "  @objc(createEvent:)",
         "  func writeEvent(name: String) {}",
         "  @objc(deleteEvent:)",
@@ -12436,11 +12438,11 @@ describe("SymbolLatticeService", () => {
     );
     const writeEvent = await service.find(
       projectPath,
-      "ios/CalendarModule.swift#CalendarModule.writeEvent"
+      "ios/CalendarModule.swift#extension:CalendarModule.writeEvent"
     );
     const removeStoredEvent = await service.find(
       projectPath,
-      "ios/CalendarModule.swift#CalendarModule.removeStoredEvent"
+      "ios/CalendarModule.swift#extension:CalendarModule.removeStoredEvent"
     );
     const createEventTarget = createEvent.symbols[0];
     const removeEventTarget = removeEvent.symbols[0];

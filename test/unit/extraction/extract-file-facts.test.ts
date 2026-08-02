@@ -13937,6 +13937,87 @@ describe("source extraction", () => {
     expect(implicit.swiftObjectiveCFacts).toBeUndefined();
   });
 
+  it("extracts direct Swift extension methods and only proves their bridge identity from one same-file explicit class", () => {
+    const sameFile = extractFileFacts({
+      filePath: "ios/CalendarModule.swift",
+      language: "swift",
+      sourceText: [
+        "@objc(CalendarModule)",
+        "final class CalendarModule: NSObject {}",
+        "",
+        "extension CalendarModule {",
+        "  @objc(createEvent:withFoo:)",
+        "  func writeEvent(name: String, withFoo value: Int) {}",
+        "  func localHelper() {}",
+        "  @objc",
+        "  func inferredName() {}",
+        "}",
+        "",
+        "extension MissingModule {",
+        "  @objc(remove:)",
+        "  func removeStoredEvent(eventId: String) {}",
+        "}"
+      ].join("\n")
+    });
+    const separateFile = extractFileFacts({
+      filePath: "ios/CalendarModule+Extras.swift",
+      language: "swift",
+      sourceText: [
+        "extension CalendarModule {",
+        "  @objc(createEvent:)",
+        "  func writeEvent(name: String) {}",
+        "}"
+      ].join("\n")
+    });
+    const duplicateClass = extractFileFacts({
+      filePath: "ios/DuplicateCalendarModule.swift",
+      language: "swift",
+      sourceText: [
+        "@objc(CalendarModule)",
+        "class CalendarModule: NSObject {}",
+        "class CalendarModule: NSObject {}",
+        "extension CalendarModule {",
+        "  @objc(createEvent:)",
+        "  func writeEvent(name: String) {}",
+        "}"
+      ].join("\n")
+    });
+
+    expect(
+      sameFile.symbols
+        .filter((symbol) => symbol.kind === "class")
+        .map((symbol) => [symbol.name, symbol.qualifiedName])
+    ).toEqual([
+      ["CalendarModule", "ios/CalendarModule.swift#CalendarModule"],
+      ["extension CalendarModule", "ios/CalendarModule.swift#extension:CalendarModule"],
+      ["extension MissingModule", "ios/CalendarModule.swift#extension:MissingModule"]
+    ]);
+    expect(
+      sameFile.symbols
+        .filter((symbol) => symbol.kind === "method")
+        .map((symbol) => symbol.qualifiedName)
+    ).toEqual([
+      "ios/CalendarModule.swift#extension:CalendarModule.writeEvent",
+      "ios/CalendarModule.swift#extension:CalendarModule.localHelper",
+      "ios/CalendarModule.swift#extension:CalendarModule.inferredName",
+      "ios/CalendarModule.swift#extension:MissingModule.removeStoredEvent"
+    ]);
+    expect(sameFile.swiftObjectiveCFacts?.methods).toEqual([
+      expect.objectContaining({
+        objcClassName: "CalendarModule",
+        selector: "createEvent:withFoo:",
+        filePath: "ios/CalendarModule.swift"
+      })
+    ]);
+    expect(
+      separateFile.symbols
+        .filter((symbol) => symbol.kind === "method")
+        .map((symbol) => symbol.qualifiedName)
+    ).toEqual(["ios/CalendarModule+Extras.swift#extension:CalendarModule.writeEvent"]);
+    expect(separateFile.swiftObjectiveCFacts).toBeUndefined();
+    expect(duplicateClass.swiftObjectiveCFacts).toBeUndefined();
+  });
+
   it("extracts direct Dart Flutter MaterialApp literal routes maps with exact local evidence", () => {
     const facts = extractFileFacts({
       filePath: "lib/main.dart",

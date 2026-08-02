@@ -6,6 +6,26 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.195.0] - 2026-08-02
+
+### Added
+
+- Swift extraction now retains a direct top-level <code>extension TypeName</code> as a visibly named syntax container and records its direct methods. This preserves the source declaration without falsely representing an extension as inheritance or lexical containment inside the original class declaration.
+- A direct extension method can now supply a React Native external-bridge implementation fact only when exactly one direct, top-level class with the same Swift type name appears in the same file and explicitly declares <code>@objc(Class)</code>. The method must still declare one explicit <code>@objc(selector)</code> and have a body.
+- The existing resolver consequently projects an exact, inspectable Objective-C external-bridge <code>references</code> edge to a uniquely proven method inside that extension. Extraction, resolver, and SQLite-backed service tests cover queryable extension symbols, same-file proof, cross-file rejection, fact persistence, reopened indexes, and bridge callee queries.
+
+### Compatibility
+
+- The artifact-facts extractor advances to <code>multi-language-ast-v174</code>; the project resolver remains <code>project-resolver-v62</code> because it already projects uniquely retained Swift Objective-C facts. Existing graphs and SQLite schema remain readable; the next explicit <code>sync</code> or <code>index</code> refreshes Swift facts before projecting eligible extension implementations.
+
+### Deliberate limits
+
+- This accepts only a direct top-level extension whose target is one unqualified type identifier; qualified or parameterized target syntax does not form a bridge fact. A bridge fact additionally requires one same-file direct top-level class with the same Swift name and an explicit Objective-C class identity. Cross-file type-name matching, nested targets, bare <code>@objc</code>, inferred selectors, wrappers, generated output, runtime registration, and zero/multi-candidate results remain unproven.
+
+### Comparison notes
+
+- The inspected CodeGraph React Native path covers legacy <code>RCT_EXPORT_*</code> macros and has a separate generic Swift-to-Objective-C selector resolver, but does not extract <code>RCT_EXTERN_*</code> external bridge declarations. SymbolLattice independently expands its bounded external-bridge surface by preserving direct extension declarations and requiring same-file, explicit Objective-C class-and-selector evidence before connecting an <code>RCT_EXTERN_*</code> declaration to an extension method. This is stronger only for this narrowly evidenced interop case, not a claim of broader overall React Native coverage.
+
 ## [0.194.0] - 2026-08-02
 
 ### Added

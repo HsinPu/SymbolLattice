@@ -32,6 +32,13 @@ interface StaticSwiftType {
   readonly objcClassName: string | null;
 }
 
+interface StaticSwiftExtension {
+  /** A single direct, unqualified type identifier; parameterized target syntax is excluded. */
+  readonly extendedTypeName: string;
+  readonly node: SwiftSyntaxNode;
+  readonly body: SwiftSyntaxNode;
+}
+
 interface StaticSwiftFunction {
   readonly name: string;
   readonly node: SwiftSyntaxNode;
@@ -260,6 +267,42 @@ function staticSwiftType(node: SwiftSyntaxNode): StaticSwiftType | null {
   }
 
   return null;
+}
+
+/**
+ * Accepts a direct `extension TypeName { ... }` declaration as syntax only.
+ * It deliberately does not assert that the target type is local, inherited,
+ * or identical to a declaration in another file.
+ */
+function staticSwiftExtension(node: SwiftSyntaxNode): StaticSwiftExtension | null {
+  if (node.kind() !== "class_declaration") {
+    return null;
+  }
+  const children = directChildren(node);
+  const extensionKeywords = children.filter((child) => child.kind() === "extension");
+  const userTypes = children.filter((child) => child.kind() === "user_type");
+  const target = userTypes[0];
+  const body = children.find((child) => child.kind() === "class_body");
+  if (
+    extensionKeywords.length !== 1 ||
+    target === undefined ||
+    body === undefined ||
+    userTypes.length !== 1
+  ) {
+    return null;
+  }
+  const targetChildren = directChildren(target);
+  const typeIdentifiers = targetChildren.filter((child) => child.kind() === "type_identifier");
+  const nameNode = typeIdentifiers[0];
+  const extendedTypeName = nameNode === undefined ? null : identifierText(nameNode);
+  if (
+    extendedTypeName === null ||
+    typeIdentifiers.length !== 1 ||
+    targetChildren.length !== 1
+  ) {
+    return null;
+  }
+  return { extendedTypeName, node, body };
 }
 
 function staticSwiftFunction(node: SwiftSyntaxNode): StaticSwiftFunction | null {
@@ -551,6 +594,34 @@ export function extractSwiftFileFacts(input: SwiftExtractFileFactsInput): Artifa
     return symbol;
   }
 
+  /**
+   * `SymbolKind` has no extension category. Keep the exact syntax container
+   * visibly named as an extension instead of claiming that its members are
+   * lexically contained by the extended type or that it is an inheritance edge.
+   */
+  function addExtension(declaration: StaticSwiftExtension): SymbolNode {
+    const qualifiedName = input.filePath + "#extension:" + declaration.extendedTypeName;
+    const declarationOrdinal = nextOrdinal(qualifiedName, "class");
+    const symbol: SymbolNode = {
+      id: createSymbolId({
+        filePath: input.filePath,
+        qualifiedName,
+        kind: "class",
+        declarationOrdinal
+      }),
+      name: "extension " + declaration.extendedTypeName,
+      qualifiedName,
+      kind: "class",
+      filePath: input.filePath,
+      range: rangeForNode(declaration.node),
+      isExported: true,
+      declarationOrdinal
+    };
+    symbols.push(symbol);
+    addContainment(fileNode, symbol, declaration.node);
+    return symbol;
+  }
+
   function addMethod(parent: SymbolNode, declaration: StaticSwiftFunction): SymbolNode {
     const qualifiedName = parent.qualifiedName + "." + declaration.name;
     const declarationOrdinal = nextOrdinal(qualifiedName, "method");
@@ -647,15 +718,29 @@ export function extractSwiftFileFacts(input: SwiftExtractFileFactsInput): Artifa
 
   if (!hasSyntaxError(root)) {
     const topLevel = directChildren(root);
+    const topLevelTypes = topLevel
+      .map((node) => staticSwiftType(node))
+      .filter((candidate): candidate is StaticSwiftType => candidate !== null);
+    const topLevelExtensions = topLevel
+      .map((node) => staticSwiftExtension(node))
+      .filter((candidate): candidate is StaticSwiftExtension => candidate !== null);
     const topLevelFunctions = topLevel
       .filter((node) => node.kind() === "function_declaration")
       .map((node) => staticSwiftFunction(node))
       .filter((candidate): candidate is StaticSwiftFunction => candidate !== null);
     const functionsByName = new Map<string, SymbolNode[]>();
+    const classesBySwiftName = new Map<string, StaticSwiftType[]>();
 
-    for (const declaration of topLevel
-      .map((node) => staticSwiftType(node))
-      .filter((candidate): candidate is StaticSwiftType => candidate !== null)) {
+    for (const declaration of topLevelTypes) {
+      if (declaration.kind !== "class") {
+        continue;
+      }
+      const candidates = classesBySwiftName.get(declaration.name) ?? [];
+      candidates.push(declaration);
+      classesBySwiftName.set(declaration.name, candidates);
+    }
+
+    for (const declaration of topLevelTypes) {
       const typeSymbol = addType(declaration);
       for (const methodDeclaration of directChildren(declaration.body)
         .map((node) => staticSwiftFunction(node))
@@ -668,6 +753,31 @@ export function extractSwiftFileFacts(input: SwiftExtractFileFactsInput): Artifa
         ) {
           swiftObjectiveCMethods.push({
             objcClassName: declaration.objcClassName,
+            selector: methodDeclaration.objcSelector,
+            methodId: methodSymbol.id,
+            filePath: input.filePath,
+            range: methodSymbol.range
+          });
+        }
+      }
+    }
+
+    for (const declaration of topLevelExtensions) {
+      const extensionSymbol = addExtension(declaration);
+      const candidateClasses = classesBySwiftName.get(declaration.extendedTypeName) ?? [];
+      const candidateClass = candidateClasses.length === 1 ? candidateClasses[0] : undefined;
+      for (const methodDeclaration of directChildren(declaration.body)
+        .map((node) => staticSwiftFunction(node))
+        .filter((candidate): candidate is StaticSwiftFunction => candidate !== null)) {
+        const methodSymbol = addMethod(extensionSymbol, methodDeclaration);
+        if (
+          candidateClass?.objcClassName !== null &&
+          candidateClass?.objcClassName !== undefined &&
+          methodDeclaration.objcSelector !== null &&
+          methodDeclaration.body !== null
+        ) {
+          swiftObjectiveCMethods.push({
+            objcClassName: candidateClass.objcClassName,
             selector: methodDeclaration.objcSelector,
             methodId: methodSymbol.id,
             filePath: input.filePath,

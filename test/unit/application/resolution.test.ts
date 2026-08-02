@@ -2915,7 +2915,9 @@ describe("TypeScript configuration module resolution", () => {
         language: "swift",
         sourceText: [
           "@objc(CalendarModule)",
-          "final class CalendarModule: NSObject {",
+          "final class CalendarModule: NSObject {}",
+          "",
+          "extension CalendarModule {",
           "  @objc(createEvent:withFoo:bar:)",
           "  func writeEvent(name: String, withFoo a: Int, bar b: Int) {}",
           "  @objc(currentEvent)",

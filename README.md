@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.194.0 是開發者預覽版，請從原始碼執行。
+> v0.195.0 是開發者預覽版，請從原始碼執行。
 
 SymbolLattice 在本機建立可查詢的程式碼符號圖譜。每一條關係都保留規則、證據階段與信心值；`exact`、`heuristic`、`unresolved` 不會混為一談。
 
@@ -41,12 +41,12 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 Windows PowerShell 若找不到 npm，請使用 `npm.cmd`。索引資料會寫入目標專案的 `.symbol-lattice/index.sqlite`。
 
-## v0.194.0 重點
+## v0.195.0 重點
 
-- React Native 的 `RCT_EXTERN_*` Objective-C bridge 會保留完整 selector，例如 `createEvent:withFoo:bar:`。
-- Swift 僅在同時出現明確的 `@objc(Class)` 與 `@objc(selector)` 時，才會建立 bridge 宣告到 Swift 實作的精確 `references` 關係。
-- 找不到或有多個 Swift 候選時，關係會保留為 `unresolved` 並附上候選符號，不會由 Swift 名稱或慣例猜測。
-- 原始 bridge 與 Swift interop 事實可保存至 SQLite，重新開啟索引後仍可從 bridge 查到 Swift 實作。
+- 直接的 Swift `extension TypeName` 及其直接方法現在會保留為可查詢的語法容器，不會假裝成繼承關係。
+- 當同一檔案中恰有一個明確 `@objc(Class)` 的頂層 class，且 extension 方法也明確標示 `@objc(selector)` 時，`RCT_EXTERN_*` bridge 才會建立精確、可解釋的 Swift `references` 關係。
+- extension 位於其他檔案、類別候選不唯一、裸 `@objc` 或推導 selector 時，都不會由名稱或慣例猜測 bridge 目標。
+- 擴充後的 Swift interop 事實可保存至 SQLite；重開索引後仍可從 Objective-C bridge 查到 extension 中的 Swift 實作。
 
 ## 證據原則
 
@@ -57,7 +57,8 @@ Windows PowerShell 若找不到 npm，請使用 `npm.cmd`。索引資料會寫�
 ## 靜態分析邊界
 
 - 僅接受直接、單行的 `RCT_EXTERN_MODULE`、`RCT_EXTERN_REMAP_MODULE` 與對應方法巨集。
-- Swift 僅接受頂層 class 中直接宣告、明確命名的 `@objc` 類別與 selector；裸 `@objc`、推導 selector、extension、包裝巨集與動態註冊不會被推測。
+- Swift 會保留直接、頂層的 `extension TypeName` 與其直接方法。extension 方法要成為 bridge 實作，仍須同檔唯一的明確 `@objc(Class)` 類別與明確 `@objc(selector)`；不會跨檔案以型別名稱配對。
+- 裸 `@objc`、推導 selector、限定或帶型別參數的 extension target、包裝巨集與動態註冊不會被推測。
 - 不掃描建置產物，也不將執行期註冊、反射、程式碼產生或模糊候選標示為精確關係。
 
 ## 驗證

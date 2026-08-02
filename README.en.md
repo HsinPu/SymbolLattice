@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.194.0 is a developer preview. Run it from source.
+> v0.195.0 is a developer preview. Run it from source.
 
 SymbolLattice builds a queryable local code-symbol graph. Every relation retains its rule, evidence stage, and confidence; exact, heuristic, and unresolved evidence are never conflated.
 
@@ -41,12 +41,12 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 On Windows PowerShell, use `npm.cmd` if npm is unavailable. Index data stays in the target project's `.symbol-lattice/index.sqlite`.
 
-## v0.194.0 highlights
+## v0.195.0 highlights
 
-- React Native `RCT_EXTERN_*` Objective-C bridge declarations retain the full selector, such as `createEvent:withFoo:bar:`.
-- A bridge declaration links to Swift source only when an explicit `@objc(Class)` and `@objc(selector)` identify one unique implementation; the edge is exact and inspectable.
-- Missing or colliding Swift candidates remain `unresolved` with candidate symbol ids. Swift names and conventions are never used as a fallback.
-- Raw bridge and Swift interop facts persist in SQLite, so a reopened index can trace a bridge declaration to its Swift implementation.
+- Direct Swift `extension TypeName` declarations and their direct methods now remain queryable syntax containers; they are never misrepresented as inheritance.
+- An `RCT_EXTERN_*` bridge gains an exact, explainable Swift `references` edge only when one same-file top-level class explicitly declares `@objc(Class)` and the extension method explicitly declares `@objc(selector)`.
+- Extensions in another file, non-unique class candidates, bare `@objc`, and inferred selectors never use a name- or convention-based bridge fallback.
+- The expanded Swift interop facts persist in SQLite, so a reopened index can trace an Objective-C bridge to a Swift implementation inside an extension.
 
 ## Principles
 
@@ -57,7 +57,8 @@ On Windows PowerShell, use `npm.cmd` if npm is unavailable. Index data stays in 
 ## Static-analysis boundaries
 
 - Only direct, single-line `RCT_EXTERN_MODULE`, `RCT_EXTERN_REMAP_MODULE`, and matching method macros are accepted.
-- Swift support is limited to direct methods in top-level classes with explicitly named `@objc` class and selector attributes. Bare `@objc`, inferred selectors, extensions, wrappers, and dynamic registration are not guessed.
+- Swift retains direct top-level `extension TypeName` declarations and their direct methods. An extension method becomes a bridge implementation only with one same-file, explicitly named `@objc(Class)` class and an explicit `@objc(selector)`; type names are never joined across files.
+- Bare `@objc`, inferred selectors, qualified or parameterized extension targets, wrapper macros, and dynamic registration are not guessed.
 - Build output, runtime registration, reflection, code generation, and ambiguous candidates are never presented as exact relations.
 
 ## Verification
