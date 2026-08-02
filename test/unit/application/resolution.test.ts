@@ -3155,4 +3155,163 @@ describe("TypeScript configuration module resolution", () => {
       )
     ).toBe(false);
   });
+
+  it("projects a React Native TurboModule through one static default re-export chain", () => {
+    const sourceDocuments: readonly SourceDocument[] = [
+      {
+        absolutePath: "C:/project/src/mobile/NativeCalendar.ts",
+        relativePath: "src/mobile/NativeCalendar.ts",
+        language: "typescript",
+        sourceText: [
+          'import { TurboModuleRegistry } from "react-native";',
+          'const Calendar = TurboModuleRegistry.getEnforcing("CalendarModule");',
+          "export default Calendar;"
+        ].join("\n"),
+        contentHash: "re-export-leaf"
+      },
+      {
+        absolutePath: "C:/project/src/mobile/NativeCalendarBarrel.ts",
+        relativePath: "src/mobile/NativeCalendarBarrel.ts",
+        language: "typescript",
+        sourceText: 'export { default } from "./NativeCalendar";',
+        contentHash: "re-export-barrel"
+      },
+      {
+        absolutePath: "C:/project/src/mobile/NativeCalendarApi.ts",
+        relativePath: "src/mobile/NativeCalendarApi.ts",
+        language: "typescript",
+        sourceText: [
+          'import Calendar from "./NativeCalendarBarrel";',
+          "export default Calendar;"
+        ].join("\n"),
+        contentHash: "re-export-api"
+      },
+      {
+        absolutePath: "C:/project/src/mobile/useCalendar.ts",
+        relativePath: "src/mobile/useCalendar.ts",
+        language: "typescript",
+        sourceText: [
+          'import Calendar from "./NativeCalendarApi";',
+          "export function schedule() { Calendar.createEvent(); }"
+        ].join("\n"),
+        contentHash: "re-export-consumer"
+      },
+      {
+        absolutePath: "C:/project/src/mobile/UnsafeCalendarFacade.ts",
+        relativePath: "src/mobile/UnsafeCalendarFacade.ts",
+        language: "typescript",
+        sourceText: [
+          'import Calendar from "./NativeCalendar";',
+          "const Plain = { createEvent() {} };",
+          "export default Plain;",
+          "void Calendar;"
+        ].join("\n"),
+        contentHash: "unsafe-facade"
+      },
+      {
+        absolutePath: "C:/project/src/mobile/useUnsafeCalendar.ts",
+        relativePath: "src/mobile/useUnsafeCalendar.ts",
+        language: "typescript",
+        sourceText: [
+          'import Calendar from "./UnsafeCalendarFacade";',
+          "export function ignore() { Calendar.createEvent(); }"
+        ].join("\n"),
+        contentHash: "unsafe-consumer"
+      },
+      {
+        absolutePath: "C:/project/android/CalendarModule.java",
+        relativePath: "android/CalendarModule.java",
+        language: "java",
+        sourceText: [
+          "import com.facebook.react.bridge.ReactContextBaseJavaModule;",
+          "import com.facebook.react.bridge.ReactMethod;",
+          "public class CalendarModule extends ReactContextBaseJavaModule {",
+          '  public String getName() { return "CalendarModule"; }',
+          "  @ReactMethod public void createEvent() {}",
+          "}"
+        ].join("\n"),
+        contentHash: "re-export-android"
+      },
+      {
+        absolutePath: "C:/project/ios/CalendarModule.m",
+        relativePath: "ios/CalendarModule.m",
+        language: "objc",
+        sourceText: [
+          "#import <React/RCTBridgeModule.h>",
+          "@implementation CalendarModule",
+          "RCT_EXPORT_MODULE(CalendarModule)",
+          "RCT_EXPORT_METHOD(createEvent)",
+          "@end"
+        ].join("\n"),
+        contentHash: "re-export-ios"
+      }
+    ];
+    const snapshot = resolveProjectFacts({
+      sourceDocuments,
+      extractedFiles: sourceDocuments.map((document) =>
+        extractFileFacts({
+          filePath: document.relativePath,
+          language: document.language,
+          sourceText: document.sourceText
+        })
+      ),
+      indexedAt: "2026-08-02T00:00:00.000Z"
+    });
+    const schedule = snapshot.symbols.find(
+      (symbol) => symbol.filePath === "src/mobile/useCalendar.ts" && symbol.name === "schedule"
+    );
+    const ignore = snapshot.symbols.find(
+      (symbol) => symbol.filePath === "src/mobile/useUnsafeCalendar.ts" && symbol.name === "ignore"
+    );
+    const android = snapshot.symbols.find(
+      (symbol) => symbol.filePath === "android/CalendarModule.java" && symbol.name === "createEvent"
+    );
+    const ios = snapshot.symbols.find(
+      (symbol) => symbol.filePath === "ios/CalendarModule.m" && symbol.name === "createEvent"
+    );
+
+    expect(schedule).toBeDefined();
+    expect(ignore).toBeDefined();
+    expect(android).toBeDefined();
+    expect(ios).toBeDefined();
+    expect(
+      snapshot.edges.filter(
+        (edge) => edge.sourceId === schedule?.id && edge.referenceName === "CalendarModule.createEvent"
+      )
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          targetId: android?.id,
+          resolution: "exact",
+          evidence: expect.objectContaining({
+            ruleId:
+              "framework.react-native.turbo-modules.default-re-export.literal-module-and-method.android.exact-target",
+            resolutionPath: [
+              "src/mobile/NativeCalendarApi.ts",
+              "src/mobile/NativeCalendarBarrel.ts",
+              "src/mobile/NativeCalendar.ts"
+            ]
+          })
+        }),
+        expect.objectContaining({
+          targetId: ios?.id,
+          resolution: "exact",
+          evidence: expect.objectContaining({
+            ruleId:
+              "framework.react-native.turbo-modules.default-re-export.literal-module-and-method.ios.exact-target",
+            resolutionPath: [
+              "src/mobile/NativeCalendarApi.ts",
+              "src/mobile/NativeCalendarBarrel.ts",
+              "src/mobile/NativeCalendar.ts"
+            ]
+          })
+        })
+      ])
+    );
+    expect(
+      snapshot.edges.some(
+        (edge) => edge.sourceId === ignore?.id && edge.targetId === android?.id && edge.kind === "calls"
+      )
+    ).toBe(false);
+  });
 });

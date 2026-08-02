@@ -17,7 +17,7 @@ export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v168";
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v58";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v59";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",

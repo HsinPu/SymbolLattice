@@ -30,6 +30,7 @@ import {
   type NestSymbolReference,
   type PendingReference,
   type ResolutionKind,
+  type ReactNativeTurboModuleDefaultImportCallFact,
   type RustActixImportedServiceConfigMountFact,
   type RustActixServiceConfigDeclarationFact,
   type RustActixServiceConfigRouteFact,
@@ -161,6 +162,8 @@ interface ReactNativeBridgeReference {
   readonly moduleName: string;
   readonly methodName: string;
   readonly range: SourceRange;
+  /** Static local-export hops that proved a cross-file bridge identity. */
+  readonly resolutionPath?: readonly string[];
 }
 
 function reactNativeNativeModulesRuleId(
@@ -171,7 +174,7 @@ function reactNativeNativeModulesRuleId(
 }
 
 function reactNativeTurboModuleRuleId(
-  surface: "default-import" | "direct-registry" | "spec-contract",
+  surface: "default-import" | "default-re-export" | "direct-registry" | "spec-contract",
   platform: "android" | "ios" | "any",
   suffix: "exact-target" | "unresolved-target" | "ambiguous-platform-target"
 ): string {
@@ -245,7 +248,9 @@ function projectReactNativeBridgeReferences(input: {
             evidence: referenceEvidence(
               input.ruleId(platform, "exact-target"),
               "module",
-              [target.methodId]
+              [target.methodId],
+              [],
+              reference.resolutionPath ?? []
             )
           });
         } else if (platformCandidates.length > 1) {
@@ -277,7 +282,9 @@ function projectReactNativeBridgeReferences(input: {
               candidates.length === 0 ? "unresolved-target" : "ambiguous-platform-target"
             ),
             "module",
-            candidateIds
+            candidateIds,
+            [],
+            reference.resolutionPath ?? []
           )
         });
       }
@@ -324,6 +331,7 @@ function projectReactNativeTurboModuleSpecMethods(input: {
 function projectReactNativeTurboModuleDefaultImportCalls(input: {
   readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
   readonly moduleTargetPathByKey: ReadonlyMap<string, string>;
+  readonly exportSurfaces: ReadonlyMap<string, ExportSurface>;
 }): readonly GraphEdge[] {
   const defaultExportByFilePath = new Map<string, { readonly moduleName: string }>();
   for (const [filePath, facts] of [...input.factsByFile.entries()].sort(([left], [right]) =>
@@ -340,26 +348,77 @@ function projectReactNativeTurboModuleDefaultImportCalls(input: {
     }
   }
 
-  return projectReactNativeBridgeReferences({
-    factsByFile: input.factsByFile,
-    sourceFacts: (facts) =>
-      (facts.reactNativeFacts?.turboModuleDefaultImportCalls ?? []).flatMap((call) => {
-        const targetPath = input.moduleTargetPathByKey.get(moduleKey(call.filePath, call.moduleSpecifier));
-        const targetExport = targetPath === undefined ? undefined : defaultExportByFilePath.get(targetPath);
-        return targetExport === undefined
-          ? []
-          : [
-              {
-                sourceId: call.sourceId,
-                filePath: call.filePath,
-                moduleName: targetExport.moduleName,
-                methodName: call.methodName,
-                range: call.range
-              }
-            ];
-      }),
-    ruleId: (platform, suffix) => reactNativeTurboModuleRuleId("default-import", platform, suffix)
-  });
+  type DefaultImportSurface = "default-import" | "default-re-export";
+  interface DefaultImportReference extends ReactNativeBridgeReference {
+    readonly surface: DefaultImportSurface;
+  }
+
+  const referenceForCall = (
+    call: ReactNativeTurboModuleDefaultImportCallFact
+  ): DefaultImportReference | null => {
+    const targetPath = input.moduleTargetPathByKey.get(moduleKey(call.filePath, call.moduleSpecifier));
+    if (targetPath === undefined) {
+      return null;
+    }
+
+    const directExport = defaultExportByFilePath.get(targetPath);
+    if (directExport !== undefined) {
+      return {
+        sourceId: call.sourceId,
+        filePath: call.filePath,
+        moduleName: directExport.moduleName,
+        methodName: call.methodName,
+        range: call.range,
+        surface: "default-import"
+      };
+    }
+
+    const defaultSurface = input.exportSurfaces.get(targetPath)?.get("default");
+    if (
+      defaultSurface === undefined ||
+      !defaultSurface.explicit ||
+      defaultSurface.ambiguous ||
+      defaultSurface.candidates.length !== 1
+    ) {
+      return null;
+    }
+
+    const candidate = defaultSurface.candidates[0];
+    if (candidate === undefined || candidate.isTypeOnly || candidate.path.length < 2) {
+      return null;
+    }
+
+    const declarationFilePath = candidate.path.at(-1);
+    const declarationExport =
+      declarationFilePath === undefined
+        ? undefined
+        : defaultExportByFilePath.get(declarationFilePath);
+    if (declarationExport === undefined) {
+      return null;
+    }
+
+    return {
+      sourceId: call.sourceId,
+      filePath: call.filePath,
+      moduleName: declarationExport.moduleName,
+      methodName: call.methodName,
+      range: call.range,
+      resolutionPath: candidate.path,
+      surface: "default-re-export"
+    };
+  };
+
+  return (["default-import", "default-re-export"] as const).flatMap((surface) =>
+    projectReactNativeBridgeReferences({
+      factsByFile: input.factsByFile,
+      sourceFacts: (facts) =>
+        (facts.reactNativeFacts?.turboModuleDefaultImportCalls ?? []).flatMap((call) => {
+          const reference = referenceForCall(call);
+          return reference?.surface === surface ? [reference] : [];
+        }),
+      ruleId: (platform, suffix) => reactNativeTurboModuleRuleId(surface, platform, suffix)
+    })
+  );
 }
 
 const CICS_TRANSACTION_REFERENCE = /^cics-transid:([A-Za-z0-9$#@]{1,4})$/iu;
@@ -5777,7 +5836,8 @@ export function resolveProjectFacts(input: {
   resolvedEdges.push(
     ...projectReactNativeTurboModuleDefaultImportCalls({
       factsByFile,
-      moduleTargetPathByKey
+      moduleTargetPathByKey,
+      exportSurfaces
     })
   );
 

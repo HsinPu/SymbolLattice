@@ -620,7 +620,7 @@ describe("first-party framework capabilities", () => {
       surfaces: [
         "direct react-native NativeModules named or namespace imports with literal module and method calls",
         "direct TurboModuleRegistry named or namespace imports with literal registry bindings, calls, and exported TypeScript specs",
-        "cross-file default-import TurboModule calls only when the resolved local target directly exports a literal registry result",
+        "cross-file default-import TurboModule calls through a resolved local default export or static default re-export chain anchored at a literal registry result",
         "direct Android ReactContextBaseJavaModule classes with literal getName values and direct ReactMethod annotations",
         "direct Objective-C RCTBridgeModule imports with one RCT_EXPORT_MODULE and direct RCT_EXPORT_METHOD macros"
       ]

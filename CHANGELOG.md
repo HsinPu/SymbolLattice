@@ -6,6 +6,26 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.189.0] - 2026-08-02
+
+### Added
+
+- React Native TurboModule default-import projection now follows a static local default re-export chain after the existing export-surface resolver proves every hop. It supports both <code>export { default } from "./NativeCalendar"</code> and an imported binding immediately re-exported as default.
+- The terminal declaration must still retain exactly one direct literal Registry default-export fact. A projected Android or iOS bridge edge now includes the ordered <code>resolutionPath</code> through the barrel files, making the cross-file proof inspectable rather than relying on a method-name guess.
+- Unit coverage proves a two-hop chain, Android/iOS fan-out, full evidence path, and rejection of a façade that imports a TurboModule but default-exports a different local wrapper. The persisted-service test proves the same result survives SQLite storage and reopening.
+
+### Compatibility
+
+- The project resolver advances to <code>project-resolver-v59</code>. Raw artifact facts stay compatible; the next explicit <code>sync</code> or <code>index</code> recomputes bridge projections with the new re-export semantics.
+
+### Deliberate limits
+
+- This version does not infer named-export-to-default adapters, namespace spec imports, mutable or computed aliases, custom wrappers, runtime registration, Codegen-generated Android base classes, or iOS/Swift Codegen implementations.
+
+### Comparison notes
+
+- CodeGraph retains generic import and re-export metadata, while its inspected React Native bridge resolver resolves common default-import calls from their bare method name. SymbolLattice independently reuses its deterministic export-surface graph only after a literal terminal Registry proof, retains every barrel hop as evidence, and then matches literal module name plus method name. CodeGraph remains broader across conventions; SymbolLattice is stricter and more auditable for this implemented path.
+
 ## [0.188.0] - 2026-08-02
 
 ### Added

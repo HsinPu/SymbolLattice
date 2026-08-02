@@ -12380,7 +12380,7 @@ describe("SymbolLatticeService", () => {
     );
   });
 
-  it("persists React Native TurboModule default-import bridge calls through a proven local export", async () => {
+  it("persists React Native TurboModule default-import bridge calls through a static re-export chain", async () => {
     const projectPath = await createInlineProject({
       "src/mobile/NativeCalendar.ts": [
         'import { TurboModuleRegistry } from "react-native";',
@@ -12389,8 +12389,13 @@ describe("SymbolLatticeService", () => {
         'const Calendar = TurboModuleRegistry.getEnforcing<Spec>("CalendarModule");',
         "export default Calendar;"
       ].join("\n"),
+      "src/mobile/NativeCalendarBarrel.ts": 'export { default } from "./NativeCalendar";',
+      "src/mobile/NativeCalendarApi.ts": [
+        'import Calendar from "./NativeCalendarBarrel";',
+        "export default Calendar;"
+      ].join("\n"),
       "src/mobile/useCalendar.ts": [
-        'import Calendar from "./NativeCalendar";',
+        'import Calendar from "./NativeCalendarApi";',
         "export function schedule() { Calendar.createEvent(); }"
       ].join("\n"),
       "android/CalendarModule.java": [
@@ -12428,7 +12433,7 @@ describe("SymbolLatticeService", () => {
           filePath: "src/mobile/useCalendar.ts",
           reactNativeFacts: expect.objectContaining({
             turboModuleDefaultImportCalls: [
-              expect.objectContaining({ moduleSpecifier: "./NativeCalendar", methodName: "createEvent" })
+              expect.objectContaining({ moduleSpecifier: "./NativeCalendarApi", methodName: "createEvent" })
             ]
           })
         })
@@ -12443,7 +12448,12 @@ describe("SymbolLatticeService", () => {
             resolution: "exact",
             evidence: expect.objectContaining({
               ruleId:
-                "framework.react-native.turbo-modules.default-import.literal-module-and-method.android.exact-target"
+                "framework.react-native.turbo-modules.default-re-export.literal-module-and-method.android.exact-target",
+              resolutionPath: [
+                "src/mobile/NativeCalendarApi.ts",
+                "src/mobile/NativeCalendarBarrel.ts",
+                "src/mobile/NativeCalendar.ts"
+              ]
             })
           })
         })
@@ -12460,8 +12470,13 @@ describe("SymbolLatticeService", () => {
           edge: expect.objectContaining({
             evidence: expect.objectContaining({
               ruleId:
-                "framework.react-native.turbo-modules.default-import.literal-module-and-method.android.exact-target",
-              stage: "module"
+                "framework.react-native.turbo-modules.default-re-export.literal-module-and-method.android.exact-target",
+              stage: "module",
+              resolutionPath: [
+                "src/mobile/NativeCalendarApi.ts",
+                "src/mobile/NativeCalendarBarrel.ts",
+                "src/mobile/NativeCalendar.ts"
+              ]
             })
           })
         })

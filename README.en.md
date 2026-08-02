@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.188.0 is a developer preview and is not published to npm. Run it from source.
+> v0.189.0 is a developer preview and is not published to npm. Run it from source.
 
 SymbolLattice builds a queryable local code-symbol graph. Every relation retains its rule, resolution stage, and confidence; `exact`, `heuristic`, and `unresolved` evidence are never conflated.
 
@@ -41,10 +41,10 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 On Windows PowerShell, use `npm.cmd` if `npm` is unavailable. Index data stays in the target project's `.symbol-lattice/index.sqlite`.
 
-## v0.188.0 highlights
+## v0.189.0 highlights
 
-- New cross-file TurboModule default-import support links direct calls such as `import Calendar from "./NativeCalendar"` back to a proven local TurboModule default export.
-- The target must directly default-export a literal Registry result or immutable Registry binding. Ordinary default imports are never treated as React Native bridges.
+- TurboModule default imports now follow static re-export chains, including `export { default } from "./NativeCalendar"` and an import followed by a direct default export.
+- The terminal target must still be one unique literal Registry result or immutable Registry binding. Each edge retains its re-export path; ordinary wrappers and default imports are never treated as React Native bridges.
 - Both `NativeModules` and TurboModules resolve on module plus method name. Unique Android and iOS implementations stay as separate `exact` edges; same-platform collisions remain `unresolved`.
 
 ## Principles
@@ -55,7 +55,7 @@ On Windows PowerShell, use `npm.cmd` if `npm` is unavailable. Index data stays i
 
 ## Static-analysis boundaries
 
-- React Native currently covers strict `NativeModules`, direct TurboModule Registry and TypeScript specs, plus consumers of proven local default exports. Default-export re-export chains, Codegen-generated native base classes, runtime registration, indirect or dynamic names, Swift, and custom macro wrappers remain out of scope.
+- React Native currently covers strict `NativeModules`, direct TurboModule Registry and TypeScript specs, plus static re-export chains anchored at proven local default exports. Named exports, namespace spec imports, Codegen-generated native base classes, runtime registration, indirect or dynamic names, Swift, and custom macro wrappers remain out of scope.
 - Spring Web supports direct Java/Kotlin controllers, literal class prefixes, HTTP shortcuts, and provable `RequestMethod` collections; conditions, proxies, and runtime routing are not inferred.
 - Spring `@ConfigurationProperties` supports direct Java/Kotlin classes, Java `record` declarations, and Java/Kotlin `@Bean` members in direct `@Configuration` classes.
 
