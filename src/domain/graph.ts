@@ -5,13 +5,16 @@ import {
   type SymbolNode
 } from "./types.js";
 
-const DEFAULT_IMPACT_EDGE_KINDS: readonly EdgeKind[] = [
+/** Exact static edge kinds eligible for bounded impact evidence. */
+export const DEFAULT_EXACT_IMPACT_EDGE_KINDS = [
   "calls",
   "references",
   "routes",
   "handles",
   "imports"
-];
+] as const satisfies readonly EdgeKind[];
+
+const DEFAULT_IMPACT_EDGE_KINDS: readonly EdgeKind[] = DEFAULT_EXACT_IMPACT_EDGE_KINDS;
 
 /**
  * HTTP methods plus the explicit client-navigation discriminator represented
@@ -166,6 +169,24 @@ export interface ImpactPath {
   readonly symbols: readonly SymbolNode[];
   readonly edges: readonly GraphEdge[];
   readonly steps: readonly ImpactStep[];
+}
+
+/** Explicit bounds for a reverse traversal that accepts exact evidence only. */
+export interface ExactImpactTraversalOptions {
+  /** Maximum reverse dependency hops from the root symbol. */
+  readonly maxDepth: number;
+  /** Maximum unique impacted symbols retained as shortest evidence paths. */
+  readonly maxResults: number;
+  /** Defaults to static call, reference, route, handler, and import edges. */
+  readonly edgeKinds?: readonly EdgeKind[];
+}
+
+/** A bounded, exact-only reverse impact traversal. */
+export interface ExactImpactTraversalResult {
+  /** One deterministic shortest exact path for every retained impacted symbol. */
+  readonly paths: readonly ImpactPath[];
+  /** True only when another exact impacted symbol was found after the path cap. */
+  readonly resultLimitReached: boolean;
 }
 
 /** One directed evidence step, aligned with its graph edge from source to target. */
@@ -955,6 +976,33 @@ function incomingResolvedRelations(
   return relations.sort(compareRelations);
 }
 
+function incomingExactRelations(
+  graph: SymbolGraph,
+  symbolsById: ReadonlyMap<string, SymbolNode>,
+  targetId: string,
+  edgeKinds: readonly EdgeKind[]
+): GraphRelation[] {
+  const relations: GraphRelation[] = [];
+
+  for (const edge of graph.edges) {
+    if (
+      !isResolvedGraphEdge(edge) ||
+      edge.resolution !== "exact" ||
+      edge.targetId !== targetId ||
+      !edgeKinds.includes(edge.kind)
+    ) {
+      continue;
+    }
+
+    const source = symbolsById.get(edge.sourceId);
+    if (source !== undefined) {
+      relations.push({ symbol: source, edge });
+    }
+  }
+
+  return relations.sort(compareRelations);
+}
+
 function incomingExactFileRelations(
   graph: SymbolGraph,
   symbolsById: ReadonlyMap<string, SymbolNode>,
@@ -1130,4 +1178,67 @@ export function getImpactPaths(
   }
 
   return impactedPaths.sort(compareImpactPaths);
+}
+
+/**
+ * Traverses incoming exact static edges with a deterministic result cap.
+ * Each retained impacted symbol has one shortest evidence path; alternative
+ * paths to an already seen symbol are intentionally not counted.
+ */
+export function getBoundedExactImpactPaths(
+  graph: SymbolGraph,
+  symbolId: string,
+  options: ExactImpactTraversalOptions
+): ExactImpactTraversalResult {
+  assertPositiveDepth(options.maxDepth);
+  assertPositiveBound(options.maxResults, "maxResults");
+  const edgeKinds = options.edgeKinds ?? DEFAULT_EXACT_IMPACT_EDGE_KINDS;
+
+  const symbolsById = createSymbolIndex(graph.symbols);
+  const root = symbolsById.get(symbolId);
+  if (root === undefined) {
+    return { paths: [], resultLimitReached: false };
+  }
+
+  const seenSymbolIds = new Set<string>([root.id]);
+  const paths: ImpactPath[] = [];
+  let resultLimitReached = false;
+  let frontier: TraversalState[] = [{ terminal: root, path: createRootPath(root) }];
+
+  for (let depth = 1; depth <= options.maxDepth && frontier.length > 0; depth += 1) {
+    const nextFrontier: TraversalState[] = [];
+
+    for (const state of frontier.sort((left, right) => compareImpactPaths(left.path, right.path))) {
+      const relations = incomingExactRelations(
+        graph,
+        symbolsById,
+        state.terminal.id,
+        edgeKinds
+      );
+
+      for (const relation of relations) {
+        if (seenSymbolIds.has(relation.symbol.id)) {
+          continue;
+        }
+        if (paths.length >= options.maxResults) {
+          resultLimitReached = true;
+          continue;
+        }
+
+        seenSymbolIds.add(relation.symbol.id);
+        const path = extendImpactPath(
+          state.path,
+          state.terminal,
+          relation.symbol,
+          relation.edge
+        );
+        paths.push(path);
+        nextFrontier.push({ terminal: relation.symbol, path });
+      }
+    }
+
+    frontier = nextFrontier;
+  }
+
+  return { paths: paths.sort(compareImpactPaths), resultLimitReached };
 }

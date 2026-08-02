@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.206.0 is a developer preview. Run it from source.
+> v0.207.0 is a developer preview. Run it from source.
 
 SymbolLattice builds a queryable local code-symbol graph. Every relation retains its rule, evidence stage, and confidence; exact, heuristic, and unresolved evidence are never conflated.
 
@@ -34,6 +34,9 @@ node dist/cli/main.js init /path/to/project
 # Retrieve one persisted-generation structural investigation from keywords
 node dist/cli/main.js investigate "user token" --project /path/to/project --json
 
+# Re-rank candidates with bounded, exact reverse-dependency evidence
+node dist/cli/main.js investigate "user token" --project /path/to/project --ranking impact --json
+
 # Explicitly synchronize after source changes
 node dist/cli/main.js sync /path/to/project
 
@@ -49,23 +52,16 @@ On Windows PowerShell, use `npm.cmd` if npm is unavailable. Index data stays in 
 > [!NOTE]
 > MCP tools never create or update a graph themselves. The default `serve --mcp` auto-sync is a separate host-owned background watcher; use `--no-auto-sync` for fully manual updates.
 
-## v0.206.0 highlights
+## v0.207.0 highlights
 
-- The MCP read-worker pool can now use up to 8 workers. Its default remains available CPUs minus one with a ceiling, and it grows only when queued work needs it; `SYMBOL_LATTICE_MCP_QUERY_POOL_SIZE=1..8` provides an explicit override.
-
-- `npm run build && npm run verify:mcp-worker-generation` uses a temporary project to prove a real compiled MCP worker: it reads generation one, the host runs `sync`, and that same worker reads generation two with zero fallback and zero worker crashes. The fixture is removed automatically.
-
-- Every valid `init`/`sync` prefers SQLite WAL. An existing graph converts in place while retaining its active generation; no reindex is required.
-- A WAL read transaction stays on one generation snapshot while the writer can commit a new one; the reader observes it only after that transaction ends.
-- After its first database-backed read, each MCP worker retains one read-only SQLite connection for its default project. Every query still uses a separate committed snapshot, so later requests can observe a generation published by `sync`.
-- Queries that override `projectPath` keep short-lived read-only connections, preventing unbounded cross-project connection caching in a worker.
-- The worker's SQLite store also refuses schema and graph writes, so an accidental future `init`/`index`/`sync` path cannot rewrite the database.
-- When SQLite returns an existing non-WAL mode, it retains it; an active rollback-journal reader keeps SQLite's existing writer-lock error. This release changes no `synchronous`, checkpoint, cross-process-cache, or hidden-sync setting.
+- `investigate --ranking impact` orders candidates with `exact` reverse-dependency evidence: at most 3 hops and 24 shortest paths per candidate. Nearer dependents receive more weight, and the full score breakdown is returned in `impactSignals`.
+- `lexical` remains the default; `structure` and existing flows are unchanged. Extra graph traversal happens only for `impact`; other ranking modes return `impactSignals: null`.
+- Every valid `init`/`sync` prefers SQLite WAL. MCP workers retain a read-only database boundary, and the read pool grows on demand to at most 8 workers.
 
 ## Boundaries
 
 - This is a local code graph, not an RDF/SPARQL knowledge graph or ontology-reasoning system.
-- Queries read persisted generations only; they do not use LLMs, PageRank, runtime guesses, or undisclosed weights.
+- Queries read persisted generations only. The `impact` score uses no LLMs, PageRank, runtime guesses, heuristic edges, or undisclosed weights.
 - Indexing and querying stay local. Source changes are reported as freshness state, never substituted for indexed evidence.
 - WAL is for same-machine local SQLite. Network filesystems, manual checkpoint management, and multi-writer coordination remain unsupported.
 

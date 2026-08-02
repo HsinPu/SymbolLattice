@@ -6,6 +6,29 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.207.0] - 2026-08-02
+
+### Added
+
+- `investigate --ranking impact` reorders persisted lexical candidates using bounded reverse-impact evidence through exactly resolved `calls`, `references`, `routes`, `handles`, and `imports` edges. Each candidate retains at most one deterministic shortest path per impacted symbol, up to three hops and 24 paths.
+- Every impact-ranked selection returns `impactSignals`: fixed bounds, exact dependent counts, depth buckets, final discovery-edge counts, the disclosed integer score, and a truncation flag. The score is `sum(countAtDepth * (maxDepth - depth + 1))`.
+- The CLI accepts `--ranking impact`; the read-only MCP schema advertises the same mode and validates its fixed, complete impact-evidence shape.
+
+### Compatibility
+
+- `lexical` remains the default ranking and `structure` behavior is unchanged. Selection records now add `impactSignals`; it is `null` unless `bounds.ranking` is `impact`. Runtime JSON consumers receive an additive field; TypeScript integrations constructing `InvestigationSelection` must provide it.
+- SQLite schema, indexed data, `init`/`sync` behavior, existing query semantics, worker isolation, and default MCP read-only behavior are unchanged.
+
+### Deliberate limits
+
+- Impact ranking begins with persisted lexical candidates. It is not full-graph PageRank, RWR, semantic retrieval, runtime analysis, dynamic-dispatch inference, or a substitute for the existing general impact query.
+- Only `exact` static edges count. The fixed three-hop / 24-path bounds report truncation rather than silently treating omitted dependents as absent.
+
+### Comparison notes
+
+- CodeGraph remains broader with FTS, RWR/personalized PageRank, and richer query computation. SymbolLattice independently adds a deterministic static ranking whose evidence and scoring can be inspected item by item.
+- For a narrowly bounded static-impact explanation, SymbolLattice is more explicit about retained paths, edge classes, score arithmetic, and truncation. That does not make it broader or more complete than CodeGraph's ranking system.
+
 ## [0.206.0] - 2026-08-02
 
 ### Added

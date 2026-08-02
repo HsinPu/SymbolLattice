@@ -1089,6 +1089,92 @@ describe("SymbolLatticeService", () => {
     expect(structural.contexts[0]?.reference).toBe("src/b-connected.ts#rankProbe");
   });
 
+  it("optionally reorders lexical candidates with disclosed bounded exact multi-hop impact", async () => {
+    const projectPath = await createInlineProject({
+      "src/a-isolated.ts": [
+        "export function rankImpact(): string {",
+        '  const lexicalEvidence = "rankImpact rankImpact rankImpact rankImpact rankImpact";',
+        "  return lexicalEvidence;",
+        "}",
+        ""
+      ].join("\\n"),
+      "src/b-impacted.ts": [
+        "export function rankImpact(): string {",
+        '  return "impacted";',
+        "}",
+        ""
+      ].join("\\n"),
+      "src/c-direct.ts": [
+        'import { rankImpact } from "./b-impacted.js";',
+        "",
+        "export function invokeFirst(): string {",
+        "  return rankImpact();",
+        "}",
+        "",
+        "export function invokeSecond(): string {",
+        "  return invokeFirst();",
+        "}",
+        ""
+      ].join("\\n")
+    });
+    const service = createService();
+    await service.init({ projectPath });
+
+    const lexical = await service.investigate(projectPath, "rankImpact", {
+      ranking: "lexical",
+      searchLimit: 12,
+      symbolLimit: 1
+    });
+    const impact = await service.investigate(projectPath, "rankImpact", {
+      ranking: "impact",
+      searchLimit: 12,
+      symbolLimit: 1
+    });
+    const lexicalCandidate = lexical.selection.items[0];
+    const impactCandidate = impact.selection.items[0];
+    if (lexicalCandidate === undefined || impactCandidate === undefined) {
+      throw new Error("Expected impact-ranked investigation candidates.");
+    }
+
+    expect(lexical.bounds.ranking).toBe("lexical");
+    expect(lexicalCandidate.symbol.filePath).toBe("src/a-isolated.ts");
+    expect(lexicalCandidate.impactSignals).toBeNull();
+    expect(impact.bounds.ranking).toBe("impact");
+    expect(impactCandidate.symbol.filePath).toBe("src/b-impacted.ts");
+    expect(impactCandidate.impactSignals).toMatchObject({
+      maxDepth: 3,
+      pathLimit: 24,
+      directExactDependentCount: expect.any(Number),
+      multiHopExactDependentCount: expect.any(Number),
+      truncated: false
+    });
+    expect(impactCandidate.impactSignals?.directExactDependentCount).toBeGreaterThan(0);
+    expect(impactCandidate.impactSignals?.multiHopExactDependentCount).toBeGreaterThan(0);
+    expect(impactCandidate.impactSignals?.score).toBeGreaterThan(0);
+    const impactSignals = impactCandidate.impactSignals;
+    if (impactSignals === null) {
+      throw new Error("Expected impact signals for impact ranking.");
+    }
+    expect(impactSignals.exactDependentCount).toBe(
+      impactSignals.pathCountsByDepth.reduce((total, item) => total + item.count, 0)
+    );
+    expect(impactSignals.score).toBe(
+      impactSignals.pathCountsByDepth.reduce(
+        (total, item) => total + item.count * (impactSignals.maxDepth - item.depth + 1),
+        0
+      )
+    );
+    expect(impactCandidate.impactSignals?.pathCountsByDepth).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ depth: 1, count: expect.any(Number) }),
+        expect.objectContaining({ depth: 2, count: expect.any(Number) })
+      ])
+    );
+    expect(impactCandidate.impactSignals?.finalEdgeKindCounts).toEqual(
+      expect.arrayContaining([expect.objectContaining({ kind: "calls", count: expect.any(Number) })])
+    );
+  });
+
   it("bounds selected investigation declaration source without reading live files", async () => {
     const padding = Array.from(
       { length: NODE_SOURCE_LINE_LIMIT },

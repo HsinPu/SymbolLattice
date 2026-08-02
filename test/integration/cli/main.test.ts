@@ -1096,7 +1096,7 @@ describe("symbol-lattice investigate CLI", () => {
         "--symbol-limit",
         "2",
         "--ranking",
-        "structure",
+        "impact",
         "--path",
         " src/ ",
         "--language",
@@ -1121,7 +1121,7 @@ describe("symbol-lattice investigate CLI", () => {
         options: {
           searchLimit: 7,
           symbolLimit: 2,
-          ranking: "structure",
+          ranking: "impact",
           pathPrefix: "src/",
           language: "python",
           relationLimit: 3,
@@ -1155,7 +1155,7 @@ describe("symbol-lattice investigate CLI", () => {
         ["node", "symbol-lattice", "investigate", "user", "--ranking", "semantic"],
         { from: "node" }
       )
-    ).rejects.toThrow("Expected one of: lexical, structure");
+    ).rejects.toThrow("Expected one of: lexical, structure, impact");
   });
 });
 

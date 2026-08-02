@@ -9,6 +9,7 @@ import {
   getChildren,
   getCallers,
   getEntrypoints,
+  getBoundedExactImpactPaths,
   getImpactPaths,
   getParents,
   getRoutes,
@@ -530,6 +531,21 @@ describe("pure graph traversal", () => {
       "transitive"
     ]);
     expect(() => getImpactPaths(graph, "changed", 0)).toThrow("positive integer");
+  });
+
+  it("bounds exact reverse impact paths and excludes heuristic evidence", () => {
+    expect(
+      getBoundedExactImpactPaths(graph, "changed", { maxDepth: 2, maxResults: 1 })
+    ).toMatchObject({
+      paths: [expect.objectContaining({ symbols: [expect.anything(), expect.objectContaining({ id: "direct" })] })],
+      resultLimitReached: true
+    });
+    expect(() => getBoundedExactImpactPaths(graph, "changed", { maxDepth: 0, maxResults: 1 })).toThrow(
+      "positive integer"
+    );
+    expect(() => getBoundedExactImpactPaths(graph, "changed", { maxDepth: 1, maxResults: 0 })).toThrow(
+      "positive integer"
+    );
   });
 
   it("finds exact affected test-file paths through imports and barrel exports", () => {

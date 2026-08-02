@@ -7,6 +7,7 @@ import {
   attributeGitHunkSide,
   classifyTestFile,
   diffGenerationSnapshots,
+  DEFAULT_EXACT_IMPACT_EDGE_KINDS,
   DEFAULT_SOURCE_SEARCH_LIMIT,
   ENTRYPOINT_OPERATIONS,
   ENTRYPOINT_TRANSPORTS,
@@ -17,6 +18,7 @@ import {
   getChildren,
   getCallers,
   getEntrypoints,
+  getBoundedExactImpactPaths,
   getImpactPaths,
   getParents,
   getRoutes,
@@ -87,6 +89,8 @@ import {
   DEFAULT_CONTEXT_IMPACT_LIMIT,
   DEFAULT_CONTEXT_MAX_HOPS,
   DEFAULT_CONTEXT_RELATION_LIMIT,
+  INVESTIGATE_IMPACT_RANKING_MAX_DEPTH,
+  INVESTIGATE_IMPACT_RANKING_PATH_LIMIT,
   DEFAULT_INVESTIGATE_RANKING_STRATEGY,
   DEFAULT_INVESTIGATE_SEARCH_LIMIT,
   DEFAULT_INVESTIGATE_SYMBOL_LIMIT,
@@ -151,6 +155,7 @@ import type {
   ImpactOptions,
   ImpactResult,
   InvestigationDeclaration,
+  InvestigationImpactSignals,
   InvestigateOptions,
   InvestigateRankingStrategy,
   InvestigateResult,
@@ -214,6 +219,7 @@ interface InvestigationCandidate {
   readonly candidateRank: number;
   readonly symbol: SymbolNode;
   readonly structuralSignals: InvestigationStructuralSignals;
+  readonly impactSignals: InvestigationImpactSignals | null;
 }
 
 interface NormalizedAffectedTestsRequest {
@@ -2691,7 +2697,7 @@ export class SymbolLatticeService {
     symbolLimit: number,
     ranking: InvestigateRankingStrategy
   ): InvestigationSelectionResult {
-    const candidates: Array<Omit<InvestigationCandidate, "structuralSignals">> = [];
+    const candidates: Array<Omit<InvestigationCandidate, "structuralSignals" | "impactSignals">> = [];
     const selectedSymbolIds = new Set<string>();
 
     for (const sourceResult of searchResults) {
@@ -2709,6 +2715,10 @@ export class SymbolLatticeService {
     }
 
     const structuralSignalsBySymbolId = this.investigationStructuralSignals(snapshot, selectedSymbolIds);
+    const impactSignalsBySymbolId =
+      ranking === "impact"
+        ? this.investigationImpactSignals(snapshot, selectedSymbolIds)
+        : null;
     const ranked = candidates
       .map((candidate): InvestigationCandidate => ({
         ...candidate,
@@ -2717,7 +2727,8 @@ export class SymbolLatticeService {
           directExactCalleeCount: 0,
           isExported: candidate.symbol.isExported,
           score: candidate.symbol.isExported ? 1 : 0
-        }
+        },
+        impactSignals: impactSignalsBySymbolId?.get(candidate.symbol.id) ?? null
       }))
       .sort((left, right) => this.compareInvestigationCandidates(left, right, ranking));
     const items = ranked.slice(0, symbolLimit).map((candidate, index): InvestigationSelection => ({
@@ -2725,6 +2736,7 @@ export class SymbolLatticeService {
       sourceRank: candidate.sourceRank,
       candidateRank: candidate.candidateRank,
       structuralSignals: candidate.structuralSignals,
+      impactSignals: candidate.impactSignals,
       symbol: candidate.symbol
     }));
 
@@ -2784,6 +2796,80 @@ export class SymbolLatticeService {
     );
   }
 
+  /**
+   * Scores only shortest paths through exactly resolved static dependents.
+   * The bounded score intentionally never incorporates lexical rank, runtime
+   * guesses, semantic similarity, or heuristic edges.
+   */
+  private investigationImpactSignals(
+    snapshot: GraphSnapshot,
+    candidateIds: ReadonlySet<string>
+  ): ReadonlyMap<string, InvestigationImpactSignals> {
+    const maxDepth = INVESTIGATE_IMPACT_RANKING_MAX_DEPTH;
+    const pathLimit = INVESTIGATE_IMPACT_RANKING_PATH_LIMIT;
+
+    return new Map(
+      [...candidateIds]
+        .sort(compareText)
+        .map((symbolId): readonly [string, InvestigationImpactSignals] => {
+          const traversal = getBoundedExactImpactPaths(snapshot, symbolId, {
+            maxDepth,
+            maxResults: pathLimit
+          });
+          const pathCountsByDepth: Array<{ depth: number; count: number }> = Array.from(
+            { length: maxDepth },
+            (_, index) => ({ depth: index + 1, count: 0 })
+          );
+          const finalEdgeCounts = new Map(
+            DEFAULT_EXACT_IMPACT_EDGE_KINDS.map((kind) => [kind, 0])
+          );
+
+          for (const path of traversal.paths) {
+            const depthCount = pathCountsByDepth[path.edges.length - 1];
+            if (depthCount !== undefined) {
+              depthCount.count += 1;
+            }
+            const finalEdge = path.edges.at(-1);
+            if (finalEdge !== undefined) {
+              const exactImpactKind = DEFAULT_EXACT_IMPACT_EDGE_KINDS.find(
+                (kind) => kind === finalEdge.kind
+              );
+              if (exactImpactKind === undefined) {
+                continue;
+              }
+              finalEdgeCounts.set(
+                exactImpactKind,
+                (finalEdgeCounts.get(exactImpactKind) ?? 0) + 1
+              );
+            }
+          }
+
+          const directExactDependentCount = pathCountsByDepth[0]?.count ?? 0;
+          const exactDependentCount = traversal.paths.length;
+          return [
+            symbolId,
+            {
+              maxDepth,
+              pathLimit,
+              exactDependentCount,
+              directExactDependentCount,
+              multiHopExactDependentCount: exactDependentCount - directExactDependentCount,
+              pathCountsByDepth,
+              finalEdgeKindCounts: DEFAULT_EXACT_IMPACT_EDGE_KINDS.map((kind) => ({
+                kind,
+                count: finalEdgeCounts.get(kind) ?? 0
+              })),
+              score: pathCountsByDepth.reduce(
+                (total, item) => total + item.count * (maxDepth - item.depth + 1),
+                0
+              ),
+              truncated: traversal.resultLimitReached
+            }
+          ];
+        })
+    );
+  }
+
   private compareInvestigationCandidates(
     left: InvestigationCandidate,
     right: InvestigationCandidate,
@@ -2793,6 +2879,13 @@ export class SymbolLatticeService {
       const structuralDifference = right.structuralSignals.score - left.structuralSignals.score;
       if (structuralDifference !== 0) {
         return structuralDifference;
+      }
+    }
+    if (ranking === "impact") {
+      const impactDifference =
+        (right.impactSignals?.score ?? 0) - (left.impactSignals?.score ?? 0);
+      if (impactDifference !== 0) {
+        return impactDifference;
       }
     }
 

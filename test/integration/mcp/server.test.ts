@@ -514,7 +514,7 @@ function investigateResult(): InvestigateResult {
       maximumSearchLimit: 100,
       symbolLimit: 2,
       maximumSymbolLimit: 8,
-      ranking: "lexical",
+      ranking: "impact",
       declarationSource: {
         sourceLineLimit: 200,
         sourceCharacterLimit: 16_000
@@ -533,6 +533,27 @@ function investigateResult(): InvestigateResult {
             directExactCalleeCount: 0,
             isExported: true,
             score: 1
+          },
+          impactSignals: {
+            maxDepth: 3,
+            pathLimit: 24,
+            exactDependentCount: 2,
+            directExactDependentCount: 1,
+            multiHopExactDependentCount: 1,
+            pathCountsByDepth: [
+              { depth: 1, count: 1 },
+              { depth: 2, count: 1 },
+              { depth: 3, count: 0 }
+            ],
+            finalEdgeKindCounts: [
+              { kind: "calls", count: 2 },
+              { kind: "references", count: 0 },
+              { kind: "routes", count: 0 },
+              { kind: "handles", count: 0 },
+              { kind: "imports", count: 0 }
+            ],
+            score: 5,
+            truncated: false
           },
           symbol: candidate
         }
@@ -1732,7 +1753,7 @@ describe("SymbolLattice MCP server", () => {
         query: "user",
         searchLimit: 4,
         symbolLimit: 2,
-        ranking: "structure",
+        ranking: "impact",
         path: "src/",
         language: "typescript",
         relationLimit: 3,
@@ -1745,8 +1766,21 @@ describe("SymbolLattice MCP server", () => {
     expect(result.isError).not.toBe(true);
     expect(result.structuredContent).toMatchObject({
       query: "user",
-      bounds: { ranking: "lexical" },
-      selection: { total: 1, truncated: false },
+      bounds: { ranking: "impact" },
+      selection: {
+        items: [
+          {
+            impactSignals: {
+              maxDepth: 3,
+              pathLimit: 24,
+              exactDependentCount: 2,
+              score: 5
+            }
+          }
+        ],
+        total: 1,
+        truncated: false
+      },
       declarations: [
         {
           reference: "src/users.ts#userById",
@@ -1763,7 +1797,7 @@ describe("SymbolLattice MCP server", () => {
         options: {
           searchLimit: 4,
           symbolLimit: 2,
-          ranking: "structure",
+          ranking: "impact",
           pathPrefix: "src/",
           language: "typescript",
           relationLimit: 3,

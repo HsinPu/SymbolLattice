@@ -24,6 +24,8 @@ import {
   MAX_CONTEXT_MAX_HOPS,
   MAX_CONTEXT_REFERENCES,
   MAX_CONTEXT_RELATION_LIMIT,
+  INVESTIGATE_IMPACT_RANKING_MAX_DEPTH,
+  INVESTIGATE_IMPACT_RANKING_PATH_LIMIT,
   INVESTIGATE_RANKING_STRATEGIES,
   MAX_INVESTIGATE_SYMBOL_LIMIT,
   MAX_GENERATION_DIFF_LIMIT,
@@ -66,7 +68,11 @@ import type {
   SearchOptions,
   SearchResult
 } from "../application/types.js";
-import { ARTIFACT_LANGUAGES, MAX_SOURCE_SEARCH_LIMIT } from "../domain/index.js";
+import {
+  ARTIFACT_LANGUAGES,
+  DEFAULT_EXACT_IMPACT_EDGE_KINDS,
+  MAX_SOURCE_SEARCH_LIMIT
+} from "../domain/index.js";
 import { SYMBOL_LATTICE_VERSION } from "../version.js";
 import {
   MCP_READ_QUERY_POOL_STATES,
@@ -791,6 +797,32 @@ const investigateOutputSchema = z
             isExported: z.boolean(),
             score: z.number().int().nonnegative()
           }),
+          impactSignals: z
+            .object({
+              maxDepth: z.literal(INVESTIGATE_IMPACT_RANKING_MAX_DEPTH),
+              pathLimit: z.literal(INVESTIGATE_IMPACT_RANKING_PATH_LIMIT),
+              exactDependentCount: z.number().int().nonnegative(),
+              directExactDependentCount: z.number().int().nonnegative(),
+              multiHopExactDependentCount: z.number().int().nonnegative(),
+              pathCountsByDepth: z.tuple([
+                z.object({ depth: z.literal(1), count: z.number().int().nonnegative() }),
+                z.object({ depth: z.literal(2), count: z.number().int().nonnegative() }),
+                z.object({
+                  depth: z.literal(INVESTIGATE_IMPACT_RANKING_MAX_DEPTH),
+                  count: z.number().int().nonnegative()
+                })
+              ]),
+              finalEdgeKindCounts: z.tuple([
+                z.object({ kind: z.literal(DEFAULT_EXACT_IMPACT_EDGE_KINDS[0]), count: z.number().int().nonnegative() }),
+                z.object({ kind: z.literal(DEFAULT_EXACT_IMPACT_EDGE_KINDS[1]), count: z.number().int().nonnegative() }),
+                z.object({ kind: z.literal(DEFAULT_EXACT_IMPACT_EDGE_KINDS[2]), count: z.number().int().nonnegative() }),
+                z.object({ kind: z.literal(DEFAULT_EXACT_IMPACT_EDGE_KINDS[3]), count: z.number().int().nonnegative() }),
+                z.object({ kind: z.literal(DEFAULT_EXACT_IMPACT_EDGE_KINDS[4]), count: z.number().int().nonnegative() })
+              ]),
+              score: z.number().int().nonnegative(),
+              truncated: z.boolean()
+            })
+            .nullable(),
           symbol: z.object({}).passthrough()
         })
       ),
@@ -1842,7 +1874,7 @@ export function createMcpServer(
           ranking: z
             .enum(INVESTIGATE_RANKING_STRATEGIES)
             .optional()
-            .describe("`lexical` preserves persisted FTS order; `structure` uses disclosed direct static graph signals."),
+            .describe("`lexical` preserves persisted FTS order; `structure` uses direct static signals; `impact` uses bounded exact reverse-impact evidence."),
           path: z.string().trim().min(1).optional().describe("Optional project-relative source-path prefix."),
           language: z.enum(ARTIFACT_LANGUAGES).optional().describe("Optional indexed source language filter."),
           relationLimit: z

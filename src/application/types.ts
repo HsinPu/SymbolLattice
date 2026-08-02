@@ -16,6 +16,7 @@ import type { GenerationSnapshotDiff } from "../domain/generation-history.js";
 import type { IndexWork } from "../domain/index-work.js";
 import type {
   ArtifactLanguage,
+  EdgeKind,
   GraphEdge,
   GraphSnapshot,
   IndexCounts,
@@ -84,8 +85,11 @@ export const MAX_CONTEXT_IMPACT_LIMIT = 25;
 export const DEFAULT_INVESTIGATE_SEARCH_LIMIT = 12;
 export const DEFAULT_INVESTIGATE_SYMBOL_LIMIT = 4;
 export const MAX_INVESTIGATE_SYMBOL_LIMIT = MAX_CONTEXT_REFERENCES;
-/** Ranking is explicit: lexical preserves FTS order, structure uses disclosed static graph signals. */
-export const INVESTIGATE_RANKING_STRATEGIES = ["lexical", "structure"] as const;
+/** Fixed safety bounds for the exact multi-hop investigation ranking. */
+export const INVESTIGATE_IMPACT_RANKING_MAX_DEPTH = 3;
+export const INVESTIGATE_IMPACT_RANKING_PATH_LIMIT = 24;
+/** Ranking is explicit: lexical preserves FTS order; structure and impact disclose static graph signals. */
+export const INVESTIGATE_RANKING_STRATEGIES = ["lexical", "structure", "impact"] as const;
 export type InvestigateRankingStrategy = (typeof INVESTIGATE_RANKING_STRATEGIES)[number];
 export const DEFAULT_INVESTIGATE_RANKING_STRATEGY: InvestigateRankingStrategy = "lexical";
 export const MAX_IMPACT_LIMIT = 100;
@@ -525,7 +529,7 @@ export interface InvestigateOptions extends ContextOptions {
   readonly searchLimit?: number;
   /** Maximum distinct exact symbol candidates expanded into graph context. */
   readonly symbolLimit?: number;
-  /** `lexical` preserves persisted FTS order; `structure` reorders with disclosed static signals. */
+  /** `lexical` preserves persisted FTS order; `structure` and `impact` use disclosed static signals. */
   readonly ranking?: InvestigateRankingStrategy;
   /** Project-relative directory or file prefix for the persisted source search. */
   readonly pathPrefix?: string;
@@ -640,6 +644,39 @@ export interface InvestigationStructuralSignals {
   readonly score: number;
 }
 
+/** One fixed-depth bucket in a candidate exact reverse-impact traversal. */
+export interface InvestigationImpactDepthCount {
+  /** One-based shortest reverse-impact depth from the candidate. */
+  readonly depth: number;
+  /** Unique impacted symbols first discovered at this depth. */
+  readonly count: number;
+}
+
+/** Count of final discovery-edge kinds across retained shortest exact impact paths. */
+export interface InvestigationImpactEdgeKindCount {
+  readonly kind: EdgeKind;
+  readonly count: number;
+}
+
+/**
+ * Disclosed exact reverse-impact evidence for the optional `impact` ranking.
+ * The score is `sum(countAtDepth * (maxDepth - depth + 1))`; it has no FTS,
+ * runtime, semantic, heuristic, or undisclosed weighting component.
+ */
+export interface InvestigationImpactSignals {
+  readonly maxDepth: number;
+  readonly pathLimit: number;
+  /** Number of retained unique impacted symbols, each represented by one shortest exact path. */
+  readonly exactDependentCount: number;
+  readonly directExactDependentCount: number;
+  readonly multiHopExactDependentCount: number;
+  readonly pathCountsByDepth: readonly InvestigationImpactDepthCount[];
+  readonly finalEdgeKindCounts: readonly InvestigationImpactEdgeKindCount[];
+  readonly score: number;
+  /** True when another exact impacted symbol was found after the path limit. */
+  readonly truncated: boolean;
+}
+
 /** One selected declaration, traced back to its persisted lexical-search candidate. */
 export interface InvestigationSelection {
   /** One-based position after the requested ranking strategy has been applied. */
@@ -649,6 +686,8 @@ export interface InvestigationSelection {
   /** One-based rank in that source result's `symbolCandidates`. */
   readonly candidateRank: number;
   readonly structuralSignals: InvestigationStructuralSignals;
+  /** Present only when `bounds.ranking` is `impact`; otherwise null to avoid extra traversal work. */
+  readonly impactSignals: InvestigationImpactSignals | null;
   readonly symbol: SymbolNode;
 }
 
