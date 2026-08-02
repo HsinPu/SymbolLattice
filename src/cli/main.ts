@@ -12,6 +12,7 @@ import {
   MAX_CONTEXT_IMPACT_LIMIT,
   MAX_CONTEXT_MAX_HOPS,
   MAX_CONTEXT_RELATION_LIMIT,
+  INVESTIGATE_RANKING_STRATEGIES,
   MAX_INVESTIGATE_SYMBOL_LIMIT,
   MAX_GENERATION_DIFF_LIMIT,
   MAX_GENERATION_HISTORY_LIMIT,
@@ -101,6 +102,7 @@ interface SearchCommandOptions extends ProjectOptions {
 interface InvestigateCommandOptions extends ProjectOptions {
   readonly searchLimit?: number;
   readonly symbolLimit?: number;
+  readonly ranking?: NonNullable<InvestigateOptions["ranking"]>;
   readonly path?: string;
   readonly language?: NonNullable<InvestigateOptions["language"]>;
   readonly relationLimit?: number;
@@ -286,6 +288,16 @@ function parseSearchLanguage(value: string): NonNullable<SearchOptions["language
     throw new Error(`Expected one of: ${ARTIFACT_LANGUAGES.join(", ")}; received "${value}".`);
   }
   return language as NonNullable<SearchOptions["language"]>;
+}
+
+function parseInvestigateRanking(value: string): NonNullable<InvestigateOptions["ranking"]> {
+  const ranking = value.trim();
+  if (!INVESTIGATE_RANKING_STRATEGIES.includes(ranking as NonNullable<InvestigateOptions["ranking"]>)) {
+    throw new Error(
+      `Expected one of: ${INVESTIGATE_RANKING_STRATEGIES.join(", ")}; received "${value}".`
+    );
+  }
+  return ranking as NonNullable<InvestigateOptions["ranking"]>;
 }
 
 function parseRouteMethod(value: string): NonNullable<RoutesOptions["method"]> {
@@ -813,6 +825,11 @@ export function createProgram(
       `Maximum selected symbol contexts (1-${MAX_INVESTIGATE_SYMBOL_LIMIT})`,
       (value: string) => parseBoundedPositiveInteger(value, MAX_INVESTIGATE_SYMBOL_LIMIT)
     )
+    .option(
+      "--ranking <lexical|structure>",
+      "Select persisted FTS order or disclosed static-structure ranking",
+      parseInvestigateRanking
+    )
     .option("--path <project-relative-prefix>", "Restrict persisted source matches to a project-relative prefix", parseSearchPath)
     .option(
       "--language <language>",
@@ -843,6 +860,7 @@ export function createProgram(
       const investigateOptions: InvestigateOptions = {
         ...(options.searchLimit === undefined ? {} : { searchLimit: options.searchLimit }),
         ...(options.symbolLimit === undefined ? {} : { symbolLimit: options.symbolLimit }),
+        ...(options.ranking === undefined ? {} : { ranking: options.ranking }),
         ...(options.path === undefined ? {} : { pathPrefix: options.path }),
         ...(options.language === undefined ? {} : { language: options.language }),
         ...(options.relationLimit === undefined ? {} : { relationLimit: options.relationLimit }),

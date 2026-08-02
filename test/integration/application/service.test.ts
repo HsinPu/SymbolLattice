@@ -932,6 +932,7 @@ describe("SymbolLatticeService", () => {
         maximumSearchLimit: 100,
         symbolLimit: 2,
         maximumSymbolLimit: 8,
+        ranking: "lexical",
         declarationSource: {
           sourceLineLimit: NODE_SOURCE_LINE_LIMIT,
           sourceCharacterLimit: NODE_SOURCE_CHARACTER_LIMIT
@@ -954,8 +955,15 @@ describe("SymbolLatticeService", () => {
       selection: {
         items: [
           expect.objectContaining({
+            selectionRank: 1,
             sourceRank: expect.any(Number),
             candidateRank: expect.any(Number),
+            structuralSignals: expect.objectContaining({
+              directExactCallerCount: expect.any(Number),
+              directExactCalleeCount: expect.any(Number),
+              isExported: true,
+              score: expect.any(Number)
+            }),
             symbol: expect.objectContaining({
               qualifiedName: "src/target.ts#investigateTarget"
             })
@@ -1003,6 +1011,82 @@ describe("SymbolLatticeService", () => {
     await expect(
       service.investigate(projectPath, "investigateTarget", { symbolLimit: 9 })
     ).rejects.toMatchObject({ code: "INVALID_INVESTIGATE_SYMBOL_LIMIT" });
+    await expect(
+      service.investigate(projectPath, "investigateTarget", {
+        ranking: "unproven" as never
+      })
+    ).rejects.toMatchObject({ code: "INVALID_INVESTIGATE_RANKING" });
+  });
+
+  it("optionally reorders lexical candidates with disclosed direct static structure", async () => {
+    const projectPath = await createInlineProject({
+      "src/a-isolated.ts": [
+        "export function rankProbe(): string {",
+        '  const lexicalEvidence = "rankProbe rankProbe rankProbe rankProbe rankProbe";',
+        "  return lexicalEvidence;",
+        "}",
+        ""
+      ].join("\n"),
+      "src/b-connected.ts": [
+        "export function rankProbe(): string {",
+        '  return "connected";',
+        "}",
+        ""
+      ].join("\n"),
+      "src/caller.ts": [
+        'import { rankProbe } from "./b-connected.js";',
+        "",
+        "function invokeConnectedProbe(): string {",
+        "  return rankProbe();",
+        "}",
+        ""
+      ].join("\n")
+    });
+    const service = createService();
+    await service.init({ projectPath });
+
+    const lexical = await service.investigate(projectPath, "rankProbe", {
+      ranking: "lexical",
+      searchLimit: 10,
+      symbolLimit: 1
+    });
+    const structural = await service.investigate(projectPath, "rankProbe", {
+      ranking: "structure",
+      searchLimit: 10,
+      symbolLimit: 1
+    });
+    const lexicalCandidate = lexical.selection.items[0];
+    const structuralCandidate = structural.selection.items[0];
+    if (lexicalCandidate === undefined || structuralCandidate === undefined) {
+      throw new Error("Expected ranked investigation candidates.");
+    }
+
+    expect(lexical.bounds.ranking).toBe("lexical");
+    expect(lexicalCandidate).toMatchObject({
+      selectionRank: 1,
+      symbol: { filePath: "src/a-isolated.ts" },
+      structuralSignals: {
+        directExactCallerCount: 0,
+        directExactCalleeCount: 0,
+        isExported: true,
+        score: 1
+      }
+    });
+    expect(structural.bounds.ranking).toBe("structure");
+    expect(structuralCandidate).toMatchObject({
+      selectionRank: 1,
+      symbol: { filePath: "src/b-connected.ts" },
+      structuralSignals: expect.objectContaining({
+        directExactCallerCount: expect.any(Number),
+        isExported: true
+      })
+    });
+    expect(structuralCandidate.structuralSignals.directExactCallerCount).toBeGreaterThan(0);
+    expect(structuralCandidate.structuralSignals.score).toBeGreaterThan(
+      lexicalCandidate.structuralSignals.score
+    );
+    expect(structural.declarations[0]?.reference).toBe("src/b-connected.ts#rankProbe");
+    expect(structural.contexts[0]?.reference).toBe("src/b-connected.ts#rankProbe");
   });
 
   it("bounds selected investigation declaration source without reading live files", async () => {

@@ -512,6 +512,7 @@ function investigateResult(): InvestigateResult {
       maximumSearchLimit: 100,
       symbolLimit: 2,
       maximumSymbolLimit: 8,
+      ranking: "lexical",
       declarationSource: {
         sourceLineLimit: 200,
         sourceCharacterLimit: 16_000
@@ -520,7 +521,20 @@ function investigateResult(): InvestigateResult {
     },
     search: { results: search.results },
     selection: {
-      items: [{ sourceRank: 1, candidateRank: 1, symbol: candidate }],
+      items: [
+        {
+          selectionRank: 1,
+          sourceRank: 1,
+          candidateRank: 1,
+          structuralSignals: {
+            directExactCallerCount: 0,
+            directExactCalleeCount: 0,
+            isExported: true,
+            score: 1
+          },
+          symbol: candidate
+        }
+      ],
       total: 1,
       truncated: false
     },
@@ -1631,6 +1645,7 @@ describe("SymbolLattice MCP server", () => {
         query: "user",
         searchLimit: 4,
         symbolLimit: 2,
+        ranking: "structure",
         path: "src/",
         language: "typescript",
         relationLimit: 3,
@@ -1643,6 +1658,7 @@ describe("SymbolLattice MCP server", () => {
     expect(result.isError).not.toBe(true);
     expect(result.structuredContent).toMatchObject({
       query: "user",
+      bounds: { ranking: "lexical" },
       selection: { total: 1, truncated: false },
       declarations: [
         {
@@ -1660,6 +1676,7 @@ describe("SymbolLattice MCP server", () => {
         options: {
           searchLimit: 4,
           symbolLimit: 2,
+          ranking: "structure",
           pathPrefix: "src/",
           language: "typescript",
           relationLimit: 3,

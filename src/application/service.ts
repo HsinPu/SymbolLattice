@@ -87,6 +87,7 @@ import {
   DEFAULT_CONTEXT_IMPACT_LIMIT,
   DEFAULT_CONTEXT_MAX_HOPS,
   DEFAULT_CONTEXT_RELATION_LIMIT,
+  DEFAULT_INVESTIGATE_RANKING_STRATEGY,
   DEFAULT_INVESTIGATE_SEARCH_LIMIT,
   DEFAULT_INVESTIGATE_SYMBOL_LIMIT,
   DEFAULT_ENTRYPOINT_LIMIT,
@@ -98,6 +99,7 @@ import {
   MAX_CONTEXT_IMPACT_LIMIT,
   MAX_CONTEXT_MAX_HOPS,
   MAX_CONTEXT_REFERENCES,
+  INVESTIGATE_RANKING_STRATEGIES,
   MAX_CONTEXT_RELATION_LIMIT,
   MAX_INVESTIGATE_SYMBOL_LIMIT,
   MAX_ENTRYPOINT_LIMIT,
@@ -150,9 +152,11 @@ import type {
   ImpactResult,
   InvestigationDeclaration,
   InvestigateOptions,
+  InvestigateRankingStrategy,
   InvestigateResult,
   InvestigationSelection,
   InvestigationSelectionResult,
+  InvestigationStructuralSignals,
   NodeBounds,
   NodeResult,
   NodeSource,
@@ -201,7 +205,15 @@ interface ContextRequest {
 interface InvestigateRequest {
   readonly search: SourceSearchRequest;
   readonly symbolLimit: number;
+  readonly ranking: InvestigateRankingStrategy;
   readonly contextBounds: ContextBounds;
+}
+
+interface InvestigationCandidate {
+  readonly sourceRank: number;
+  readonly candidateRank: number;
+  readonly symbol: SymbolNode;
+  readonly structuralSignals: InvestigationStructuralSignals;
 }
 
 interface NormalizedAffectedTestsRequest {
@@ -1151,7 +1163,12 @@ export class SymbolLatticeService {
     const searchResults = bundle.hits.map((hit, index) =>
       this.toSourceSearchHitResult(hit, index + 1, request.search.terms, bundle.snapshot)
     );
-    const selection = this.investigationSelection(searchResults, request.symbolLimit);
+    const selection = this.investigationSelection(
+      searchResults,
+      bundle.snapshot,
+      request.symbolLimit,
+      request.ranking
+    );
     const matches: readonly SymbolMatch[] = selection.items.map(({ symbol }) => ({
       status: "exact",
       reference: symbol.qualifiedName,
@@ -1187,6 +1204,7 @@ export class SymbolLatticeService {
         maximumSearchLimit: MAX_SOURCE_SEARCH_LIMIT,
         symbolLimit: request.symbolLimit,
         maximumSymbolLimit: MAX_INVESTIGATE_SYMBOL_LIMIT,
+        ranking: request.ranking,
         declarationSource: {
           sourceLineLimit: NODE_SOURCE_LINE_LIMIT,
           sourceCharacterLimit: NODE_SOURCE_CHARACTER_LIMIT
@@ -2164,7 +2182,18 @@ export class SymbolLatticeService {
       );
     }
 
-    return { search, symbolLimit, contextBounds: this.contextBounds(options) };
+    const ranking = options.ranking ?? DEFAULT_INVESTIGATE_RANKING_STRATEGY;
+    if (
+      typeof ranking !== "string" ||
+      !INVESTIGATE_RANKING_STRATEGIES.includes(ranking as InvestigateRankingStrategy)
+    ) {
+      throw new SymbolLatticeError(
+        "INVALID_INVESTIGATE_RANKING",
+        `Investigate ranking must be one of: ${INVESTIGATE_RANKING_STRATEGIES.join(", ")}.`
+      );
+    }
+
+    return { search, symbolLimit, ranking, contextBounds: this.contextBounds(options) };
   }
 
   private contextBounds(options: ContextOptions): ContextBounds {
@@ -2658,11 +2687,12 @@ export class SymbolLatticeService {
 
   private investigationSelection(
     searchResults: readonly SourceSearchHitResult[],
-    symbolLimit: number
+    snapshot: GraphSnapshot,
+    symbolLimit: number,
+    ranking: InvestigateRankingStrategy
   ): InvestigationSelectionResult {
-    const items: InvestigationSelection[] = [];
+    const candidates: Array<Omit<InvestigationCandidate, "structuralSignals">> = [];
     const selectedSymbolIds = new Set<string>();
-    let total = 0;
 
     for (const sourceResult of searchResults) {
       for (const [candidateIndex, symbol] of sourceResult.symbolCandidates.entries()) {
@@ -2670,18 +2700,108 @@ export class SymbolLatticeService {
           continue;
         }
         selectedSymbolIds.add(symbol.id);
-        total += 1;
-        if (items.length < symbolLimit) {
-          items.push({
-            sourceRank: sourceResult.rank,
-            candidateRank: candidateIndex + 1,
-            symbol
-          });
-        }
+        candidates.push({
+          sourceRank: sourceResult.rank,
+          candidateRank: candidateIndex + 1,
+          symbol
+        });
       }
     }
 
-    return { items, total, truncated: total > symbolLimit };
+    const structuralSignalsBySymbolId = this.investigationStructuralSignals(snapshot, selectedSymbolIds);
+    const ranked = candidates
+      .map((candidate): InvestigationCandidate => ({
+        ...candidate,
+        structuralSignals: structuralSignalsBySymbolId.get(candidate.symbol.id) ?? {
+          directExactCallerCount: 0,
+          directExactCalleeCount: 0,
+          isExported: candidate.symbol.isExported,
+          score: candidate.symbol.isExported ? 1 : 0
+        }
+      }))
+      .sort((left, right) => this.compareInvestigationCandidates(left, right, ranking));
+    const items = ranked.slice(0, symbolLimit).map((candidate, index): InvestigationSelection => ({
+      selectionRank: index + 1,
+      sourceRank: candidate.sourceRank,
+      candidateRank: candidate.candidateRank,
+      structuralSignals: candidate.structuralSignals,
+      symbol: candidate.symbol
+    }));
+
+    return { items, total: candidates.length, truncated: candidates.length > symbolLimit };
+  }
+
+  /**
+   * Counts only direct, exactly resolved call/reference/route/handler edges in
+   * one active snapshot. The result is a disclosed signal, not semantic or
+   * dynamic-dispatch inference.
+   */
+  private investigationStructuralSignals(
+    snapshot: GraphSnapshot,
+    candidateIds: ReadonlySet<string>
+  ): ReadonlyMap<string, InvestigationStructuralSignals> {
+    const counts = new Map<string, { callerCount: number; calleeCount: number }>();
+    for (const candidateId of candidateIds) {
+      counts.set(candidateId, { callerCount: 0, calleeCount: 0 });
+    }
+
+    for (const edge of snapshot.edges) {
+      const isDirectStructuralEdge =
+        edge.kind === "calls" ||
+        edge.kind === "references" ||
+        edge.kind === "routes" ||
+        edge.kind === "handles";
+      if (!isDirectStructuralEdge || edge.resolution !== "exact") {
+        continue;
+      }
+
+      if (edge.targetId !== null) {
+        const target = counts.get(edge.targetId);
+        if (target !== undefined) {
+          target.callerCount += 1;
+        }
+      }
+      const source = counts.get(edge.sourceId);
+      if (source !== undefined) {
+        source.calleeCount += 1;
+      }
+    }
+
+    const symbolsById = new Map(snapshot.symbols.map((symbol) => [symbol.id, symbol]));
+    return new Map(
+      [...counts].map(([symbolId, count]) => {
+        const isExported = symbolsById.get(symbolId)?.isExported ?? false;
+        return [
+          symbolId,
+          {
+            directExactCallerCount: count.callerCount,
+            directExactCalleeCount: count.calleeCount,
+            isExported,
+            score: count.callerCount + count.calleeCount + (isExported ? 1 : 0)
+          }
+        ];
+      })
+    );
+  }
+
+  private compareInvestigationCandidates(
+    left: InvestigationCandidate,
+    right: InvestigationCandidate,
+    ranking: InvestigateRankingStrategy
+  ): number {
+    if (ranking === "structure") {
+      const structuralDifference = right.structuralSignals.score - left.structuralSignals.score;
+      if (structuralDifference !== 0) {
+        return structuralDifference;
+      }
+    }
+
+    return (
+      left.sourceRank - right.sourceRank ||
+      left.candidateRank - right.candidateRank ||
+      compareText(left.symbol.qualifiedName, right.symbol.qualifiedName) ||
+      compareText(left.symbol.id, right.symbol.id)
+    );
   }
 
   /**

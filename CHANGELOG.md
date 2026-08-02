@@ -6,6 +6,28 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.199.0] - 2026-08-02
+
+### Added
+
+- `investigate` now accepts an explicit `ranking` strategy. The backwards-compatible `lexical` default preserves the persisted FTS ordering; optional `structure` ranks candidates by disclosed direct exact callers, direct exact callees, and an export bonus before falling back to lexical rank.
+- Each selected candidate now returns `selectionRank` and `structuralSignals`. The score is exactly `callerCount + calleeCount + (isExported ? 1 : 0)` and never incorporates undisclosed FTS weights, LLM output, runtime guesses, or dynamic dispatch.
+- CLI `investigate --ranking lexical|structure` and MCP `symbol_lattice_investigate` expose and validate the same choice. Service, CLI, and MCP integration coverage proves default preservation, structural reordering, signal disclosure, forwarding, and invalid-value rejection.
+
+### Compatibility
+
+- Existing `investigate` callers retain the `lexical` order unless they explicitly request `structure`. The response additions are generation-bound and require neither a schema migration nor a reindex.
+
+### Deliberate limits
+
+- `structure` uses only direct edges whose persisted resolution is `exact` and whose kind is `calls`, `references`, `routes`, or `handles`. It is not a global graph-centrality algorithm, multi-hop score, semantic search, PageRank, or inferred runtime model.
+- Lexical source rank remains the deterministic tie breaker for equal structural scores, so equally supported candidates keep the index's FTS ordering.
+
+### Comparison notes
+
+- The inspected CodeGraph explore worker combines FTS, RWR/personalized PageRank, impact analysis, and output building. SymbolLattice now has an independently implemented, auditable static ranking slice, but it does not claim equivalence to CodeGraph's propagation or query-quality model.
+- SymbolLattice exposes the whole small scoring formula and each signal with the selected answer. That is stronger for explaining this narrow ranking decision; CodeGraph remains broader in structural ranking and concurrent MCP query execution.
+
 ## [0.198.0] - 2026-08-02
 
 ### Added

@@ -24,6 +24,7 @@ import {
   MAX_CONTEXT_MAX_HOPS,
   MAX_CONTEXT_REFERENCES,
   MAX_CONTEXT_RELATION_LIMIT,
+  INVESTIGATE_RANKING_STRATEGIES,
   MAX_INVESTIGATE_SYMBOL_LIMIT,
   MAX_GENERATION_DIFF_LIMIT,
   MAX_GENERATION_HISTORY_LIMIT,
@@ -262,6 +263,7 @@ export interface InvestigateToolArguments {
   readonly projectPath?: string | undefined;
   readonly searchLimit?: number | undefined;
   readonly symbolLimit?: number | undefined;
+  readonly ranking?: InvestigateOptions["ranking"];
   /** Project-relative source-path prefix. */
   readonly path?: string | undefined;
   readonly language?: InvestigateOptions["language"];
@@ -705,6 +707,7 @@ const investigateOutputSchema = z
       maximumSearchLimit: z.literal(MAX_SOURCE_SEARCH_LIMIT),
       symbolLimit: z.number().int().min(1).max(MAX_INVESTIGATE_SYMBOL_LIMIT),
       maximumSymbolLimit: z.literal(MAX_INVESTIGATE_SYMBOL_LIMIT),
+      ranking: z.enum(INVESTIGATE_RANKING_STRATEGIES),
       declarationSource: z.object({
         sourceLineLimit: z.number().int().positive(),
         sourceCharacterLimit: z.number().int().positive()
@@ -725,8 +728,15 @@ const investigateOutputSchema = z
     selection: z.object({
       items: z.array(
         z.object({
+          selectionRank: z.number().int().positive(),
           sourceRank: z.number().int().positive(),
           candidateRank: z.number().int().positive(),
+          structuralSignals: z.object({
+            directExactCallerCount: z.number().int().nonnegative(),
+            directExactCalleeCount: z.number().int().nonnegative(),
+            isExported: z.boolean(),
+            score: z.number().int().nonnegative()
+          }),
           symbol: z.object({}).passthrough()
         })
       ),
@@ -1218,6 +1228,7 @@ export async function runInvestigateTool(
     const options: InvestigateOptions = {
       ...(arguments_.searchLimit === undefined ? {} : { searchLimit: arguments_.searchLimit }),
       ...(arguments_.symbolLimit === undefined ? {} : { symbolLimit: arguments_.symbolLimit }),
+      ...(arguments_.ranking === undefined ? {} : { ranking: arguments_.ranking }),
       ...(arguments_.path === undefined ? {} : { pathPrefix: arguments_.path }),
       ...(arguments_.language === undefined ? {} : { language: arguments_.language }),
       ...(arguments_.relationLimit === undefined ? {} : { relationLimit: arguments_.relationLimit }),
@@ -1716,6 +1727,10 @@ export function createMcpServer(
             .max(MAX_INVESTIGATE_SYMBOL_LIMIT)
             .optional()
             .describe(`Maximum distinct declaration contexts returned (1-${MAX_INVESTIGATE_SYMBOL_LIMIT}).`),
+          ranking: z
+            .enum(INVESTIGATE_RANKING_STRATEGIES)
+            .optional()
+            .describe("`lexical` preserves persisted FTS order; `structure` uses disclosed direct static graph signals."),
           path: z.string().trim().min(1).optional().describe("Optional project-relative source-path prefix."),
           language: z.enum(ARTIFACT_LANGUAGES).optional().describe("Optional indexed source language filter."),
           relationLimit: z

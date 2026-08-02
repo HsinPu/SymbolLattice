@@ -84,6 +84,10 @@ export const MAX_CONTEXT_IMPACT_LIMIT = 25;
 export const DEFAULT_INVESTIGATE_SEARCH_LIMIT = 12;
 export const DEFAULT_INVESTIGATE_SYMBOL_LIMIT = 4;
 export const MAX_INVESTIGATE_SYMBOL_LIMIT = MAX_CONTEXT_REFERENCES;
+/** Ranking is explicit: lexical preserves FTS order, structure uses disclosed static graph signals. */
+export const INVESTIGATE_RANKING_STRATEGIES = ["lexical", "structure"] as const;
+export type InvestigateRankingStrategy = (typeof INVESTIGATE_RANKING_STRATEGIES)[number];
+export const DEFAULT_INVESTIGATE_RANKING_STRATEGY: InvestigateRankingStrategy = "lexical";
 export const MAX_IMPACT_LIMIT = 100;
 
 /** Bounded changed-file analysis mirrors common CI diff sizes without unbounded reads. */
@@ -521,6 +525,8 @@ export interface InvestigateOptions extends ContextOptions {
   readonly searchLimit?: number;
   /** Maximum distinct exact symbol candidates expanded into graph context. */
   readonly symbolLimit?: number;
+  /** `lexical` preserves persisted FTS order; `structure` reorders with disclosed static signals. */
+  readonly ranking?: InvestigateRankingStrategy;
   /** Project-relative directory or file prefix for the persisted source search. */
   readonly pathPrefix?: string;
   /** Restricts the persisted source search to one indexed language. */
@@ -625,12 +631,24 @@ export interface ContextResult {
   readonly evidencePaths: readonly ContextEvidencePath[];
 }
 
+/** Direct, exact static graph facts used only by the optional `structure` selection strategy. */
+export interface InvestigationStructuralSignals {
+  readonly directExactCallerCount: number;
+  readonly directExactCalleeCount: number;
+  readonly isExported: boolean;
+  /** `callerCount + calleeCount + (isExported ? 1 : 0)`; it does not include FTS relevance. */
+  readonly score: number;
+}
+
 /** One selected declaration, traced back to its persisted lexical-search candidate. */
 export interface InvestigationSelection {
+  /** One-based position after the requested ranking strategy has been applied. */
+  readonly selectionRank: number;
   /** One-based rank in `search.results`. */
   readonly sourceRank: number;
   /** One-based rank in that source result's `symbolCandidates`. */
   readonly candidateRank: number;
+  readonly structuralSignals: InvestigationStructuralSignals;
   readonly symbol: SymbolNode;
 }
 
@@ -661,6 +679,8 @@ export interface InvestigateBounds {
   readonly maximumSearchLimit: number;
   readonly symbolLimit: number;
   readonly maximumSymbolLimit: number;
+  /** Actual selection strategy; `lexical` is the backwards-compatible default. */
+  readonly ranking: InvestigateRankingStrategy;
   /** Fixed bounds applied independently to every selected declaration source. */
   readonly declarationSource: {
     readonly sourceLineLimit: number;

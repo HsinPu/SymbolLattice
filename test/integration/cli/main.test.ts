@@ -141,6 +141,7 @@ function investigateResult(): InvestigateResult {
       maximumSearchLimit: 100,
       symbolLimit: 2,
       maximumSymbolLimit: 8,
+      ranking: "lexical",
       declarationSource: {
         sourceLineLimit: 200,
         sourceCharacterLimit: 16_000
@@ -1094,6 +1095,8 @@ describe("symbol-lattice investigate CLI", () => {
         "7",
         "--symbol-limit",
         "2",
+        "--ranking",
+        "structure",
         "--path",
         " src/ ",
         "--language",
@@ -1118,6 +1121,7 @@ describe("symbol-lattice investigate CLI", () => {
         options: {
           searchLimit: 7,
           symbolLimit: 2,
+          ranking: "structure",
           pathPrefix: "src/",
           language: "python",
           relationLimit: 3,
@@ -1140,6 +1144,18 @@ describe("symbol-lattice investigate CLI", () => {
         { from: "node" }
       )
     ).rejects.toThrow("Expected an integer between 1 and 8");
+  });
+
+  it("rejects an unsupported investigation ranking before invoking the service", async () => {
+    const program = createProgram({} as SymbolLatticeService);
+    program.exitOverride();
+
+    await expect(
+      program.parseAsync(
+        ["node", "symbol-lattice", "investigate", "user", "--ranking", "semantic"],
+        { from: "node" }
+      )
+    ).rejects.toThrow("Expected one of: lexical, structure");
   });
 });
 
