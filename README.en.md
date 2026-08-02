@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.209.0 is a developer preview. Run it from source.
+> v0.210.0 is a developer preview. Run it from source.
 
 SymbolLattice builds a queryable local code-symbol graph. Every relation retains its rule, evidence stage, and confidence; exact, heuristic, and unresolved evidence are never conflated.
 
@@ -58,16 +58,16 @@ On Windows PowerShell, use `npm.cmd` if npm is unavailable. Index data stays in 
 > [!NOTE]
 > MCP tools never create or update a graph themselves. The default `serve --mcp` auto-sync is a separate host-owned background watcher; use `--no-auto-sync` for fully manual updates.
 
-## v0.209.0 highlights
+## v0.210.0 highlights
 
-- Added `investigate --ranking topology`: it builds a bidirectional `exact` static-relation scope from persisted lexical candidates, then reorders them with a fixed-iteration restart walk.
-- Each topology-ranked selection discloses `topologySignals`: seed and scope counts, retained neighbors, fixed 3-hop / 500-symbol / 64-seed / 20-iteration / 0.2-restart bounds, and node- or depth-bound state.
-- The CLI and read-only `symbol_lattice_investigate` MCP tool both accept `topology`; an isolated lexical hit retains lexical evidence but receives no synthetic topology score merely for being a seed.
+- `investigate --ranking topology` now includes exactly resolved `extends` and `implements` relationships in its bidirectional static scope, alongside calls, references, routes, handlers, and imports.
+- Each topology-ranked selection now discloses `scopedExactIncidentEdgeKindCounts` in `topologySignals`: fixed-order counts of the persisted relation incidences retained for that candidate, making ranking evidence auditable.
+- Relation counts are diagnostic only and do not weight the neighbor-deduplicated topology score; heuristic and unresolved relations remain excluded.
 
 ## Boundaries
 
 - This is a local code graph, not an RDF/SPARQL knowledge graph or ontology-reasoning system.
-- Queries read persisted generations only. `investigate --ranking impact` and `topology` use bounded `exact` static evidence; `topology` is not whole-graph PageRank, semantic ranking, dynamic-dispatch inference, or runtime analysis. The general `impact` query retains its existing resolved static relations, and its summary never upgrades or conflates edge confidence.
+- Queries read persisted generations only. `investigate --ranking impact` and `topology` use bounded `exact` static evidence; topology currently uses `calls`, `references`, `routes`, `handles`, `imports`, `extends`, and `implements`. It is not whole-graph PageRank, semantic ranking, dynamic-dispatch inference, or runtime analysis. The general `impact` query retains its existing resolved static relations, and its summary never upgrades or conflates edge confidence.
 - `impact.summary` describes only the paths actually returned. When `--limit` or the MCP bound produces `truncated: true`, it is not a complete-graph impact claim.
 - Indexing and querying stay local. Source changes are reported as freshness state, never substituted for indexed evidence.
 - WAL is for same-machine local SQLite. Network filesystems, manual checkpoint management, and multi-writer coordination remain unsupported.

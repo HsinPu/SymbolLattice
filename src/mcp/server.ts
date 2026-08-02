@@ -79,6 +79,7 @@ import type {
 import {
   ARTIFACT_LANGUAGES,
   DEFAULT_EXACT_IMPACT_EDGE_KINDS,
+  DEFAULT_EXACT_TOPOLOGY_EDGE_KINDS,
   MAX_SOURCE_SEARCH_LIMIT
 } from "../domain/index.js";
 import { SYMBOL_LATTICE_VERSION } from "../version.js";
@@ -832,11 +833,43 @@ const investigateOutputSchema = z
               iterationCount: z.literal(INVESTIGATE_TOPOLOGY_RANKING_ITERATION_COUNT),
               restartProbability: z.literal(INVESTIGATE_TOPOLOGY_RANKING_RESTART_PROBABILITY),
               edgeKinds: z.tuple([
-                z.literal(DEFAULT_EXACT_IMPACT_EDGE_KINDS[0]),
-                z.literal(DEFAULT_EXACT_IMPACT_EDGE_KINDS[1]),
-                z.literal(DEFAULT_EXACT_IMPACT_EDGE_KINDS[2]),
-                z.literal(DEFAULT_EXACT_IMPACT_EDGE_KINDS[3]),
-                z.literal(DEFAULT_EXACT_IMPACT_EDGE_KINDS[4])
+                z.literal(DEFAULT_EXACT_TOPOLOGY_EDGE_KINDS[0]),
+                z.literal(DEFAULT_EXACT_TOPOLOGY_EDGE_KINDS[1]),
+                z.literal(DEFAULT_EXACT_TOPOLOGY_EDGE_KINDS[2]),
+                z.literal(DEFAULT_EXACT_TOPOLOGY_EDGE_KINDS[3]),
+                z.literal(DEFAULT_EXACT_TOPOLOGY_EDGE_KINDS[4]),
+                z.literal(DEFAULT_EXACT_TOPOLOGY_EDGE_KINDS[5]),
+                z.literal(DEFAULT_EXACT_TOPOLOGY_EDGE_KINDS[6])
+              ]),
+              scopedExactIncidentEdgeKindCounts: z.tuple([
+                z.object({
+                  kind: z.literal(DEFAULT_EXACT_TOPOLOGY_EDGE_KINDS[0]),
+                  count: z.number().int().nonnegative()
+                }),
+                z.object({
+                  kind: z.literal(DEFAULT_EXACT_TOPOLOGY_EDGE_KINDS[1]),
+                  count: z.number().int().nonnegative()
+                }),
+                z.object({
+                  kind: z.literal(DEFAULT_EXACT_TOPOLOGY_EDGE_KINDS[2]),
+                  count: z.number().int().nonnegative()
+                }),
+                z.object({
+                  kind: z.literal(DEFAULT_EXACT_TOPOLOGY_EDGE_KINDS[3]),
+                  count: z.number().int().nonnegative()
+                }),
+                z.object({
+                  kind: z.literal(DEFAULT_EXACT_TOPOLOGY_EDGE_KINDS[4]),
+                  count: z.number().int().nonnegative()
+                }),
+                z.object({
+                  kind: z.literal(DEFAULT_EXACT_TOPOLOGY_EDGE_KINDS[5]),
+                  count: z.number().int().nonnegative()
+                }),
+                z.object({
+                  kind: z.literal(DEFAULT_EXACT_TOPOLOGY_EDGE_KINDS[6]),
+                  count: z.number().int().nonnegative()
+                })
               ]),
               score: z.number().nonnegative(),
               traversalTruncated: z.boolean(),

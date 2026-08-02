@@ -706,6 +706,71 @@ describe("pure graph traversal", () => {
     });
   });
 
+  it("uses exact hierarchy edges in topology relevance and reports their persisted incidences", () => {
+    const base = symbol({ id: "base", name: "Base", filePath: "src/a-base.ts", kind: "class" });
+    const contract = symbol({
+      id: "contract",
+      name: "Contract",
+      filePath: "src/b-contract.ts",
+      kind: "interface"
+    });
+    const implementation = symbol({
+      id: "implementation",
+      name: "Implementation",
+      filePath: "src/c-implementation.ts",
+      kind: "class"
+    });
+    const heuristicChild = symbol({
+      id: "heuristic-child",
+      name: "HeuristicChild",
+      filePath: "src/d-heuristic.ts",
+      kind: "class"
+    });
+    const relevance = getBoundedExactTopologyRelevance(
+      {
+        symbols: [heuristicChild, implementation, contract, base],
+        edges: [
+          edge({
+            id: "implementation-extends-base",
+            sourceId: implementation.id,
+            targetId: base.id,
+            kind: "extends"
+          }),
+          edge({
+            id: "implementation-implements-contract",
+            sourceId: implementation.id,
+            targetId: contract.id,
+            kind: "implements"
+          }),
+          edge({
+            id: "heuristic-child-extends-base",
+            sourceId: heuristicChild.id,
+            targetId: base.id,
+            kind: "extends",
+            resolution: "heuristic"
+          })
+        ]
+      },
+      {
+        seedSymbolIds: [base.id],
+        maxHops: 2,
+        maxVisitedSymbols: 10,
+        iterations: 20,
+        restartProbability: 0.2
+      }
+    );
+
+    expect(relevance.scopedSymbolIds).toEqual([base.id, contract.id, implementation.id]);
+    expect(relevance.scoresBySymbolId.get(base.id)).toBeGreaterThan(0);
+    expect(relevance.scoresBySymbolId.get(implementation.id)).toBeGreaterThan(0);
+    expect(relevance.scopedExactIncidentEdgeKindCountsBySymbolId.get(base.id)?.get("extends")).toBe(1);
+    expect(relevance.scopedExactIncidentEdgeKindCountsBySymbolId.get(base.id)?.get("implements")).toBe(0);
+    expect(relevance.scopedExactIncidentEdgeKindCountsBySymbolId.get(contract.id)?.get("implements")).toBe(1);
+    expect(relevance.scopedExactIncidentEdgeKindCountsBySymbolId.get(implementation.id)?.get("extends")).toBe(1);
+    expect(relevance.scopedExactIncidentEdgeKindCountsBySymbolId.get(implementation.id)?.get("implements")).toBe(1);
+    expect(relevance.scopedExactIncidentEdgeKindCountsBySymbolId.has(heuristicChild.id)).toBe(false);
+  });
+
   it("finds exact affected test-file paths through imports and barrel exports", () => {
     const changedFile = symbol({ id: "changed-file", name: "math.ts", filePath: "src/math.ts", kind: "file" });
     const barrelFile = symbol({ id: "barrel-file", name: "index.ts", filePath: "src/index.ts", kind: "file" });

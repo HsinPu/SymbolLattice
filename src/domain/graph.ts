@@ -1,4 +1,5 @@
 import {
+  HIERARCHY_RELATION_KINDS,
   type EdgeKind,
   type GraphEdge,
   type HierarchyRelationKind,
@@ -12,6 +13,12 @@ export const DEFAULT_EXACT_IMPACT_EDGE_KINDS = [
   "routes",
   "handles",
   "imports"
+] as const satisfies readonly EdgeKind[];
+
+/** Exact static edge kinds eligible for bounded topology relevance. */
+export const DEFAULT_EXACT_TOPOLOGY_EDGE_KINDS = [
+  ...DEFAULT_EXACT_IMPACT_EDGE_KINDS,
+  ...HIERARCHY_RELATION_KINDS
 ] as const satisfies readonly EdgeKind[];
 
 const DEFAULT_IMPACT_EDGE_KINDS: readonly EdgeKind[] = DEFAULT_EXACT_IMPACT_EDGE_KINDS;
@@ -244,7 +251,7 @@ export interface ExactTopologyRelevanceOptions {
   readonly iterations: number;
   /** Strictly between zero and one; the probability returned to the seed vector each iteration. */
   readonly restartProbability: number;
-  /** Defaults to static call, reference, route, handler, and import edges. */
+  /** Defaults to static call, reference, route, handler, import, and hierarchy edges. */
   readonly edgeKinds?: readonly EdgeKind[];
 }
 
@@ -259,6 +266,16 @@ export interface ExactTopologyRelevanceResult {
   readonly scoresBySymbolId: ReadonlyMap<string, number>;
   /** Exact-static neighbor counts inside the retained bounded scope. */
   readonly scopedExactNeighborCountsBySymbolId: ReadonlyMap<string, number>;
+  /**
+   * Exact static persisted-edge incidences inside the retained scope, grouped
+   * by endpoint and edge kind. Each eligible edge increments both endpoints;
+   * multiplicity is disclosed as diagnostics only and does not weight the
+   * neighbor-deduplicated relevance walk.
+   */
+  readonly scopedExactIncidentEdgeKindCountsBySymbolId: ReadonlyMap<
+    string,
+    ReadonlyMap<EdgeKind, number>
+  >;
   /** Retained scope IDs in deterministic source order. */
   readonly scopedSymbolIds: readonly string[];
   /** Existing unique seeds retained before bounded scope expansion. */
@@ -1258,6 +1275,47 @@ function buildExactTopologyAdjacency(
   return adjacency;
 }
 
+function buildScopedExactTopologyIncidentEdgeKindCounts(
+  graph: SymbolGraph,
+  scopedSymbolIds: readonly string[],
+  edgeKinds: readonly EdgeKind[]
+): ReadonlyMap<string, ReadonlyMap<EdgeKind, number>> {
+  const scopedSymbolIdSet = new Set(scopedSymbolIds);
+  const eligibleEdgeKinds = new Set(edgeKinds);
+  const countsBySymbolId = new Map<string, Map<EdgeKind, number>>();
+
+  for (const symbolId of scopedSymbolIds) {
+    const counts = new Map<EdgeKind, number>();
+    for (const kind of edgeKinds) {
+      counts.set(kind, 0);
+    }
+    countsBySymbolId.set(symbolId, counts);
+  }
+
+  for (const edge of graph.edges) {
+    if (
+      edge.resolution !== "exact" ||
+      edge.targetId === null ||
+      edge.sourceId === edge.targetId ||
+      !eligibleEdgeKinds.has(edge.kind) ||
+      !scopedSymbolIdSet.has(edge.sourceId) ||
+      !scopedSymbolIdSet.has(edge.targetId)
+    ) {
+      continue;
+    }
+
+    const sourceCounts = countsBySymbolId.get(edge.sourceId);
+    const targetCounts = countsBySymbolId.get(edge.targetId);
+    if (sourceCounts === undefined || targetCounts === undefined) {
+      continue;
+    }
+    sourceCounts.set(edge.kind, (sourceCounts.get(edge.kind) ?? 0) + 1);
+    targetCounts.set(edge.kind, (targetCounts.get(edge.kind) ?? 0) + 1);
+  }
+
+  return countsBySymbolId;
+}
+
 /**
  * Builds a bounded undirected exact-static topology around lexical seed
  * symbols, then runs a fixed restart walk within that retained scope. The
@@ -1273,7 +1331,7 @@ export function getBoundedExactTopologyRelevance(
   assertPositiveBound(options.iterations, "iterations");
   assertRestartProbability(options.restartProbability);
 
-  const edgeKinds = options.edgeKinds ?? DEFAULT_EXACT_IMPACT_EDGE_KINDS;
+  const edgeKinds = options.edgeKinds ?? DEFAULT_EXACT_TOPOLOGY_EDGE_KINDS;
   const symbolsById = createSymbolIndex(graph.symbols);
   const adjacency = buildExactTopologyAdjacency(graph, symbolsById, edgeKinds);
   const retainedSeedSymbolIds: string[] = [];
@@ -1296,6 +1354,7 @@ export function getBoundedExactTopologyRelevance(
     return {
       scoresBySymbolId: new Map(),
       scopedExactNeighborCountsBySymbolId: new Map(),
+      scopedExactIncidentEdgeKindCountsBySymbolId: new Map(),
       scopedSymbolIds: [],
       seedSymbolIds: [],
       traversalTruncated,
@@ -1340,6 +1399,8 @@ export function getBoundedExactTopologyRelevance(
   const scopedSymbolIds = [...scopedSymbolIdSet].sort((left, right) =>
     compareTopologySymbolIds(symbolsById, left, right)
   );
+  const scopedExactIncidentEdgeKindCountsBySymbolId =
+    buildScopedExactTopologyIncidentEdgeKindCounts(graph, scopedSymbolIds, edgeKinds);
   const indexBySymbolId = new Map(scopedSymbolIds.map((symbolId, index) => [symbolId, index]));
   const neighborIndexes = scopedSymbolIds.map((symbolId) =>
     (adjacency.get(symbolId) ?? []).flatMap((neighborId) => {
@@ -1389,6 +1450,7 @@ export function getBoundedExactTopologyRelevance(
   return {
     scoresBySymbolId,
     scopedExactNeighborCountsBySymbolId,
+    scopedExactIncidentEdgeKindCountsBySymbolId,
     scopedSymbolIds,
     seedSymbolIds: retainedSeedSymbolIds,
     traversalTruncated,

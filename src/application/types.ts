@@ -706,6 +706,12 @@ export interface InvestigationTopologySignals {
   readonly scopeSymbolCount: number;
   /** Exact-static neighbors retained for this candidate inside that scope. */
   readonly scopedExactNeighborCount: number;
+  /**
+   * Exact persisted-edge incidences for this candidate inside the retained
+   * scope. Every relation kind is present in fixed order; counts do not alter
+   * the neighbor-deduplicated topology score.
+   */
+  readonly scopedExactIncidentEdgeKindCounts: readonly InvestigationTopologyEdgeKindCount[];
   readonly iterationCount: number;
   readonly restartProbability: number;
   readonly edgeKinds: readonly EdgeKind[];
@@ -714,6 +720,12 @@ export interface InvestigationTopologySignals {
   readonly traversalTruncated: boolean;
   /** The maximum-hop boundary left at least one exact-static neighbor outside the scope. */
   readonly depthLimitReached: boolean;
+}
+
+/** One exact persisted relation kind and its incident-edge count for a topology candidate. */
+export interface InvestigationTopologyEdgeKindCount {
+  readonly kind: EdgeKind;
+  readonly count: number;
 }
 
 /** One selected declaration, traced back to its persisted lexical-search candidate. */

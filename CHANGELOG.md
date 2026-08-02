@@ -6,6 +6,29 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.210.0] - 2026-08-03
+
+### Added
+
+- `investigate --ranking topology` now traverses exactly resolved `extends` and `implements` edges in addition to `calls`, `references`, `routes`, `handles`, and `imports`. Its bounded undirected scope and fixed restart-walk algorithm remain unchanged.
+- Every topology-ranked selection now includes `topologySignals.scopedExactIncidentEdgeKindCounts`: one fixed-order count for every eligible relation kind. Counts represent persisted in-scope edge incidences at that candidate; every eligible edge contributes to both endpoints.
+- Unit, application, and MCP coverage prove exact hierarchy inclusion, heuristic-edge exclusion, deterministic diagnostic output, and schema validation of the expanded topology contract.
+
+### Compatibility
+
+- `lexical` remains the default ranking; `structure`, `impact`, CLI syntax, SQLite generations, and `init`/`sync` behavior are unchanged. `topologySignals` gains an additive diagnostic field and its fixed `edgeKinds` tuple expands from five to seven kinds.
+- Existing indexes remain readable. The next query uses the persisted relations already present in its active generation; no schema migration or reindex is required for this ranking-only change.
+
+### Deliberate limits
+
+- Hierarchy evidence is accepted only where the active graph already has an exactly resolved persisted `extends` or `implements` edge. This does not infer virtual dispatch, runtime mixins, semantic type compatibility, or relationships absent from the indexed graph.
+- The relation incidence counts explain retained evidence but do not introduce multi-edge weighting. Scores remain bounded, query-seeded, neighbor-deduplicated, non-restart connectivity values rather than probabilities or completeness claims.
+
+### Comparison notes
+
+- CodeGraph's inspected relevance path includes hierarchy relations among a broader set of graph evidence. SymbolLattice independently closes this specific static-ranking gap while preserving explicit bounds and per-candidate evidence counts.
+- SymbolLattice is more explicit here about exactly which retained edge kinds touched each candidate. CodeGraph remains broader in relation coverage, query composition, dynamic-dispatch handling, and mature relevance tuning; this release narrows one auditable parity gap rather than claiming full parity.
+
 ## [0.209.0] - 2026-08-03
 
 ### Added

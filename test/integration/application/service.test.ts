@@ -1243,9 +1243,14 @@ describe("SymbolLatticeService", () => {
       seeded: true,
       scopeSymbolCount: expect.any(Number),
       scopedExactNeighborCount: expect.any(Number),
+      scopedExactIncidentEdgeKindCounts: expect.arrayContaining([
+        expect.objectContaining({ kind: "calls", count: expect.any(Number) }),
+        expect.objectContaining({ kind: "extends", count: 0 }),
+        expect.objectContaining({ kind: "implements", count: 0 })
+      ]),
       iterationCount: 20,
       restartProbability: 0.2,
-      edgeKinds: ["calls", "references", "routes", "handles", "imports"],
+      edgeKinds: ["calls", "references", "routes", "handles", "imports", "extends", "implements"],
       score: expect.any(Number),
       traversalTruncated: expect.any(Boolean),
       depthLimitReached: expect.any(Boolean)
@@ -1256,6 +1261,55 @@ describe("SymbolLatticeService", () => {
     expect(topologyCandidate.topologySignals?.score).toBeGreaterThan(0);
     expect(topology.declarations[0]?.reference).toBe("src/b-connected.ts#rankTopology");
     expect(topology.contexts[0]?.reference).toBe("src/b-connected.ts#rankTopology");
+  });
+
+  it("uses exact persisted hierarchy evidence in topology-ranked investigation signals", async () => {
+    const projectPath = await createInlineProject({
+      "src/a-isolated.ts": [
+        "export function rankHierarchyTopology(): string {",
+        '  const lexicalEvidence = "rankHierarchyTopology rankHierarchyTopology rankHierarchyTopology";',
+        "  return lexicalEvidence;",
+        "}",
+        ""
+      ].join("\n"),
+      "src/b-contract.ts": "export interface rankHierarchyTopology { run(): string; }\n",
+      "src/c-implementation.ts": [
+        'import type { rankHierarchyTopology } from "./b-contract";',
+        "export class ConcreteTopology implements rankHierarchyTopology {",
+        '  run(): string { return "connected"; }',
+        "}",
+        ""
+      ].join("\n")
+    });
+    const service = createService();
+    await service.init({ projectPath });
+
+    const hierarchy = await service.hierarchy(projectPath, "src/b-contract.ts#rankHierarchyTopology");
+    const topology = await service.investigate(projectPath, "rankHierarchyTopology", {
+      ranking: "topology",
+      searchLimit: 12,
+      symbolLimit: 8
+    });
+    const contractCandidate = topology.selection.items.find(
+      ({ symbol }) => symbol.qualifiedName === "src/b-contract.ts#rankHierarchyTopology"
+    );
+
+    expect(hierarchy.children).toEqual([
+      expect.objectContaining({
+        relation: "implements",
+        child: expect.objectContaining({ name: "ConcreteTopology" }),
+        edge: expect.objectContaining({ kind: "implements", resolution: "exact" })
+      })
+    ]);
+    expect(contractCandidate?.topologySignals).toMatchObject({
+      edgeKinds: ["calls", "references", "routes", "handles", "imports", "extends", "implements"],
+      scopedExactNeighborCount: expect.any(Number),
+      score: expect.any(Number)
+    });
+    expect(contractCandidate?.topologySignals?.scopedExactIncidentEdgeKindCounts).toEqual(
+      expect.arrayContaining([expect.objectContaining({ kind: "implements", count: 1 })])
+    );
+    expect(contractCandidate?.topologySignals?.score).toBeGreaterThan(0);
   });
 
   it("bounds selected investigation declaration source without reading live files", async () => {

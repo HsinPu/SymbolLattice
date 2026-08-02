@@ -8,6 +8,7 @@ import {
   classifyTestFile,
   diffGenerationSnapshots,
   DEFAULT_EXACT_IMPACT_EDGE_KINDS,
+  DEFAULT_EXACT_TOPOLOGY_EDGE_KINDS,
   DEFAULT_SOURCE_SEARCH_LIMIT,
   ENTRYPOINT_OPERATIONS,
   ENTRYPOINT_TRANSPORTS,
@@ -2901,15 +2902,18 @@ export class SymbolLatticeService {
       maxVisitedSymbols: INVESTIGATE_TOPOLOGY_RANKING_MAX_VISITED_SYMBOLS,
       iterations: INVESTIGATE_TOPOLOGY_RANKING_ITERATION_COUNT,
       restartProbability: INVESTIGATE_TOPOLOGY_RANKING_RESTART_PROBABILITY,
-      edgeKinds: DEFAULT_EXACT_IMPACT_EDGE_KINDS
+      edgeKinds: DEFAULT_EXACT_TOPOLOGY_EDGE_KINDS
     });
     const seedSymbolIdSet = new Set(topology.seedSymbolIds);
     const seedTruncated = candidates.length > topology.seedSymbolIds.length;
 
     return new Map(
-      candidates.map(({ symbol }): readonly [string, InvestigationTopologySignals] => [
-        symbol.id,
-        {
+      candidates.map(({ symbol }): readonly [string, InvestigationTopologySignals] => {
+        const scopedExactIncidentEdgeKindCounts =
+          topology.scopedExactIncidentEdgeKindCountsBySymbolId.get(symbol.id);
+        return [
+          symbol.id,
+          {
           maxHops: INVESTIGATE_TOPOLOGY_RANKING_MAX_HOPS,
           maxVisitedSymbols: INVESTIGATE_TOPOLOGY_RANKING_MAX_VISITED_SYMBOLS,
           seedLimit: INVESTIGATE_TOPOLOGY_RANKING_SEED_LIMIT,
@@ -2919,14 +2923,19 @@ export class SymbolLatticeService {
           scopeSymbolCount: topology.scopedSymbolIds.length,
           scopedExactNeighborCount:
             topology.scopedExactNeighborCountsBySymbolId.get(symbol.id) ?? 0,
+          scopedExactIncidentEdgeKindCounts: DEFAULT_EXACT_TOPOLOGY_EDGE_KINDS.map((kind) => ({
+            kind,
+            count: scopedExactIncidentEdgeKindCounts?.get(kind) ?? 0
+          })),
           iterationCount: INVESTIGATE_TOPOLOGY_RANKING_ITERATION_COUNT,
           restartProbability: INVESTIGATE_TOPOLOGY_RANKING_RESTART_PROBABILITY,
-          edgeKinds: DEFAULT_EXACT_IMPACT_EDGE_KINDS,
+          edgeKinds: DEFAULT_EXACT_TOPOLOGY_EDGE_KINDS,
           score: topology.scoresBySymbolId.get(symbol.id) ?? 0,
           traversalTruncated: topology.traversalTruncated,
           depthLimitReached: topology.depthLimitReached
-        }
-      ])
+          }
+        ];
+      })
     );
   }
 
