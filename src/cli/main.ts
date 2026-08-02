@@ -12,6 +12,7 @@ import {
   MAX_CONTEXT_IMPACT_LIMIT,
   MAX_CONTEXT_MAX_HOPS,
   MAX_CONTEXT_RELATION_LIMIT,
+  MAX_INVESTIGATE_SYMBOL_LIMIT,
   MAX_GENERATION_DIFF_LIMIT,
   MAX_GENERATION_HISTORY_LIMIT,
   MAX_GIT_HUNK_LIMIT,
@@ -32,6 +33,7 @@ import {
   validateWatchInterval,
   type AcquiredAutoSyncOwnerLease,
   type ContextOptions,
+  type InvestigateOptions,
   type AffectedTestsOptions,
   type AutoSyncDiagnosticJournal,
   type AutoSyncDiagnosticJournalOptions,
@@ -94,6 +96,17 @@ interface SearchCommandOptions extends ProjectOptions {
   readonly limit?: number;
   readonly path?: string;
   readonly language?: NonNullable<SearchOptions["language"]>;
+}
+
+interface InvestigateCommandOptions extends ProjectOptions {
+  readonly searchLimit?: number;
+  readonly symbolLimit?: number;
+  readonly path?: string;
+  readonly language?: NonNullable<InvestigateOptions["language"]>;
+  readonly relationLimit?: number;
+  readonly maxHops?: number;
+  readonly impactDepth?: number;
+  readonly impactLimit?: number;
 }
 
 interface RoutesCommandOptions extends ProjectOptions {
@@ -785,6 +798,64 @@ export function createProgram(
       };
       render(
         await service.search(defaultProjectPath(options), normalizeSearchQuery(query), searchOptions),
+        options
+      );
+    });
+
+  addJsonOption(addProjectOption(program.command("investigate <query>")))
+    .option(
+      "--search-limit <count>",
+      `Maximum indexed source matches to inspect (1-${MAX_SOURCE_SEARCH_LIMIT})`,
+      parseSearchLimit
+    )
+    .option(
+      "--symbol-limit <count>",
+      `Maximum selected symbol contexts (1-${MAX_INVESTIGATE_SYMBOL_LIMIT})`,
+      (value: string) => parseBoundedPositiveInteger(value, MAX_INVESTIGATE_SYMBOL_LIMIT)
+    )
+    .option("--path <project-relative-prefix>", "Restrict persisted source matches to a project-relative prefix", parseSearchPath)
+    .option(
+      "--language <language>",
+      "Restrict persisted source matches to one supported indexed language",
+      parseSearchLanguage
+    )
+    .option(
+      "--relation-limit <count>",
+      `Maximum callers and callees per selected symbol (1-${MAX_CONTEXT_RELATION_LIMIT})`,
+      (value: string) => parseBoundedPositiveInteger(value, MAX_CONTEXT_RELATION_LIMIT)
+    )
+    .option(
+      "--max-hops <count>",
+      `Maximum directed evidence-path hops (1-${MAX_CONTEXT_MAX_HOPS})`,
+      (value: string) => parseBoundedPositiveInteger(value, MAX_CONTEXT_MAX_HOPS)
+    )
+    .option(
+      "--impact-depth <count>",
+      `Maximum reverse impact depth per selected symbol (1-${MAX_CONTEXT_IMPACT_DEPTH})`,
+      (value: string) => parseBoundedPositiveInteger(value, MAX_CONTEXT_IMPACT_DEPTH)
+    )
+    .option(
+      "--impact-limit <count>",
+      `Maximum reverse impact paths per selected symbol (1-${MAX_CONTEXT_IMPACT_LIMIT})`,
+      (value: string) => parseBoundedPositiveInteger(value, MAX_CONTEXT_IMPACT_LIMIT)
+    )
+    .action(async (query: string, options: InvestigateCommandOptions) => {
+      const investigateOptions: InvestigateOptions = {
+        ...(options.searchLimit === undefined ? {} : { searchLimit: options.searchLimit }),
+        ...(options.symbolLimit === undefined ? {} : { symbolLimit: options.symbolLimit }),
+        ...(options.path === undefined ? {} : { pathPrefix: options.path }),
+        ...(options.language === undefined ? {} : { language: options.language }),
+        ...(options.relationLimit === undefined ? {} : { relationLimit: options.relationLimit }),
+        ...(options.maxHops === undefined ? {} : { maxHops: options.maxHops }),
+        ...(options.impactDepth === undefined ? {} : { impactDepth: options.impactDepth }),
+        ...(options.impactLimit === undefined ? {} : { impactLimit: options.impactLimit })
+      };
+      render(
+        await service.investigate(
+          defaultProjectPath(options),
+          normalizeSearchQuery(query),
+          investigateOptions
+        ),
         options
       );
     });

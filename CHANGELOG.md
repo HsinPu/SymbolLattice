@@ -6,6 +6,31 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.197.0] - 2026-08-02
+
+### Added
+
+- `SymbolLatticeService.investigate(projectPath, query, options)` builds one bounded structural response from one persisted source-search/graph generation. It returns lexical source hits, deterministic exact-symbol selection, generation-bound source excerpts, callers, callees, reverse impact, and directed evidence paths without creating or refreshing an index.
+- Read-only `investigate <query>` CLI command and capability-gated, idempotent `symbol_lattice_investigate` MCP tool. Both expose independent source-match, selected-symbol, relation, path, and impact bounds.
+- Investigation selection discloses the originating source rank, candidate rank, distinct-candidate total, and truncation state. Duplicate symbol candidates are de-duplicated deterministically; a hit with no overlapping declaration remains source evidence only.
+- Service, CLI, and MCP integration coverage proves active-generation evidence, stale-source behavior, unavailable source-search rejection, bound validation, argument forwarding, capability gating, and the no-indexing query boundary.
+
+### Compatibility
+
+- No SQLite schema migration or reindex is required for indexes that already have the persisted source-search projection. The new library, CLI, and MCP surfaces are additive.
+- A legacy graph-store adapter or old active generation without compatible persisted source search returns `SOURCE_SEARCH_UNAVAILABLE`; an explicit `sync` backfills the projection. Existing `explore`, `context`, and `search` contracts remain unchanged.
+
+### Deliberate limits
+
+- This is lexical retrieval plus static graph expansion, not natural-language semantic ranking. It does not use an LLM, RWR/personalized PageRank, inferred dynamic dispatch, or fabricated symbol candidates.
+- Only declarations whose persisted range overlaps a selected lexical match can be expanded. Non-declaration hits remain visible in `search.results` but do not become graph contexts.
+- Context uses persisted excerpts and existing bounded traversal; it does not claim complete-file source output or complete codebase reasoning.
+
+### Comparison notes
+
+- The inspected CodeGraph `codegraph_explore` path composes FTS, RWR/personalized PageRank, impact analysis, and response composition for one-question agent context, including relevant source and call paths. SymbolLattice now has an evidence-bound one-query starting point, but does not yet match CodeGraph's semantic ranking or full source-oriented composition.
+- SymbolLattice explicitly exposes the lexical-to-symbol selection trail and preserves one active-generation boundary through the returned status, source evidence, and graph context. This improves auditability of this local query surface; it is not a claim of broader overall parity.
+
 ## [0.196.0] - 2026-08-02
 
 ### Added

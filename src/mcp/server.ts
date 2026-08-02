@@ -24,6 +24,7 @@ import {
   MAX_CONTEXT_MAX_HOPS,
   MAX_CONTEXT_REFERENCES,
   MAX_CONTEXT_RELATION_LIMIT,
+  MAX_INVESTIGATE_SYMBOL_LIMIT,
   MAX_GENERATION_DIFF_LIMIT,
   MAX_GENERATION_HISTORY_LIMIT,
   MAX_GIT_HUNK_LIMIT,
@@ -53,6 +54,8 @@ import type {
   GitHunksResult,
   HierarchyOptions,
   HierarchyResult,
+  InvestigateOptions,
+  InvestigateResult,
   NodeResult,
   EntryPointOperation,
   EntryPointTransport,
@@ -62,7 +65,7 @@ import type {
   SearchOptions,
   SearchResult
 } from "../application/types.js";
-import { ARTIFACT_LANGUAGES } from "../domain/index.js";
+import { ARTIFACT_LANGUAGES, MAX_SOURCE_SEARCH_LIMIT } from "../domain/index.js";
 import { SYMBOL_LATTICE_VERSION } from "../version.js";
 
 export interface ExploreService {
@@ -118,6 +121,15 @@ export interface ExplainEdgeService {
 /** Minimal retrieval seam so existing explore-only embeddings remain usable. */
 export interface SearchService {
   search(projectPath: string, query: string, options?: SearchOptions): Promise<SearchResult>;
+}
+
+/** Additive one-question structural context seam for compatible read-only embeddings. */
+export interface InvestigateService {
+  investigate(
+    projectPath: string,
+    query: string,
+    options?: InvestigateOptions
+  ): Promise<InvestigateResult>;
 }
 
 /** Additive active-generation route inventory seam for existing read-only embeddings. */
@@ -176,6 +188,7 @@ export interface AutoSyncDiagnosticJournalService {
 export type ReadOnlyMcpService = ExploreService & ExplainEdgeService;
 export type NodeMcpService = ExploreService & NodeService;
 export type SearchMcpService = ExploreService & SearchService;
+export type InvestigateMcpService = ExploreService & InvestigateService;
 export type RoutesMcpService = ExploreService & RoutesService;
 export type EntrypointsMcpService = ExploreService & EntrypointsService;
 export type HierarchyMcpService = ExploreService & HierarchyService;
@@ -244,6 +257,20 @@ export interface SearchToolArguments {
   readonly language?: SearchOptions["language"];
 }
 
+export interface InvestigateToolArguments {
+  readonly query: string;
+  readonly projectPath?: string | undefined;
+  readonly searchLimit?: number | undefined;
+  readonly symbolLimit?: number | undefined;
+  /** Project-relative source-path prefix. */
+  readonly path?: string | undefined;
+  readonly language?: InvestigateOptions["language"];
+  readonly relationLimit?: number | undefined;
+  readonly maxHops?: number | undefined;
+  readonly impactDepth?: number | undefined;
+  readonly impactLimit?: number | undefined;
+}
+
 export interface RoutesToolArguments {
   readonly projectPath?: string | undefined;
   readonly method?: RouteMethod | undefined;
@@ -309,6 +336,7 @@ export type GitAffectedTestsToolResponse = ReadOnlyToolResponse;
 export type GitHunksToolResponse = ReadOnlyToolResponse;
 export type ExplainEdgeToolResponse = ReadOnlyToolResponse;
 export type SearchToolResponse = ReadOnlyToolResponse;
+export type InvestigateToolResponse = ReadOnlyToolResponse;
 export type RoutesToolResponse = ReadOnlyToolResponse;
 export type EntrypointsToolResponse = ReadOnlyToolResponse;
 export type HierarchyToolResponse = ReadOnlyToolResponse;
@@ -668,6 +696,44 @@ const searchOutputSchema = z
   })
   .passthrough();
 
+const investigateOutputSchema = z
+  .object({
+    status: indexStatusOutputSchema,
+    query: z.string(),
+    bounds: z.object({
+      searchLimit: z.number().int().min(1).max(MAX_SOURCE_SEARCH_LIMIT),
+      maximumSearchLimit: z.literal(MAX_SOURCE_SEARCH_LIMIT),
+      symbolLimit: z.number().int().min(1).max(MAX_INVESTIGATE_SYMBOL_LIMIT),
+      maximumSymbolLimit: z.literal(MAX_INVESTIGATE_SYMBOL_LIMIT),
+      context: z.object({
+        maxReferences: z.number().int().positive(),
+        matchCandidateLimit: z.number().int().positive(),
+        relationLimit: z.number().int().positive(),
+        maxHops: z.number().int().positive(),
+        maxVisitedSymbolsPerPath: z.number().int().positive(),
+        impactDepth: z.number().int().positive(),
+        impactLimit: z.number().int().positive()
+      })
+    }),
+    search: z.object({
+      results: z.array(z.object({}).passthrough())
+    }),
+    selection: z.object({
+      items: z.array(
+        z.object({
+          sourceRank: z.number().int().positive(),
+          candidateRank: z.number().int().positive(),
+          symbol: z.object({}).passthrough()
+        })
+      ),
+      total: z.number().int().nonnegative(),
+      truncated: z.boolean()
+    }),
+    contexts: z.array(z.object({}).passthrough()),
+    evidencePaths: z.array(z.object({}).passthrough())
+  })
+  .passthrough();
+
 const routesOutputSchema = z
   .object({
     status: indexStatusOutputSchema,
@@ -838,6 +904,10 @@ function supportsNode(service: ExploreService): service is NodeMcpService {
 
 function supportsSearch(service: ExploreService): service is SearchMcpService {
   return "search" in service && typeof service.search === "function";
+}
+
+function supportsInvestigate(service: ExploreService): service is InvestigateMcpService {
+  return "investigate" in service && typeof service.investigate === "function";
 }
 
 function supportsRoutes(service: ExploreService): service is RoutesMcpService {
@@ -1114,6 +1184,37 @@ export async function runSearchTool(
       ...(arguments_.language === undefined ? {} : { language: arguments_.language })
     };
     const result = await service.search(
+      arguments_.projectPath ?? defaultProjectPath,
+      arguments_.query,
+      options
+    );
+    return {
+      content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      structuredContent: result as unknown as Record<string, unknown>
+    };
+  } catch (error) {
+    return renderToolError(error);
+  }
+}
+
+/** Builds a one-question, persisted-generation graph context without indexing. */
+export async function runInvestigateTool(
+  service: InvestigateService,
+  defaultProjectPath: string,
+  arguments_: InvestigateToolArguments
+): Promise<InvestigateToolResponse> {
+  try {
+    const options: InvestigateOptions = {
+      ...(arguments_.searchLimit === undefined ? {} : { searchLimit: arguments_.searchLimit }),
+      ...(arguments_.symbolLimit === undefined ? {} : { symbolLimit: arguments_.symbolLimit }),
+      ...(arguments_.path === undefined ? {} : { pathPrefix: arguments_.path }),
+      ...(arguments_.language === undefined ? {} : { language: arguments_.language }),
+      ...(arguments_.relationLimit === undefined ? {} : { relationLimit: arguments_.relationLimit }),
+      ...(arguments_.maxHops === undefined ? {} : { maxHops: arguments_.maxHops }),
+      ...(arguments_.impactDepth === undefined ? {} : { impactDepth: arguments_.impactDepth }),
+      ...(arguments_.impactLimit === undefined ? {} : { impactLimit: arguments_.impactLimit })
+    };
+    const result = await service.investigate(
       arguments_.projectPath ?? defaultProjectPath,
       arguments_.query,
       options
@@ -1576,6 +1677,72 @@ export function createMcpServer(
         }
       },
       async (arguments_) => runSearchTool(searchService, defaultProjectPath, arguments_)
+    );
+  }
+
+  const investigateService = supportsInvestigate(service) ? service : null;
+  if (investigateService !== null) {
+    server.registerTool(
+      "symbol_lattice_investigate",
+      {
+        title: "Investigate one question through a SymbolLattice generation",
+        description:
+          "Searches persisted source evidence, deterministically selects overlapping declarations, and returns their generation-bound source, callers, callees, impact, and adjacent proof paths. This tool never creates or refreshes an index.",
+        inputSchema: {
+          query: z.string().trim().min(1).describe("Words or identifier fragments to investigate in indexed source text."),
+          projectPath: z.string().trim().min(1).optional().describe("Optional path to an already indexed project."),
+          searchLimit: z
+            .number()
+            .int()
+            .min(1)
+            .max(MAX_SOURCE_SEARCH_LIMIT)
+            .optional()
+            .describe(`Maximum persisted source matches examined (1-${MAX_SOURCE_SEARCH_LIMIT}).`),
+          symbolLimit: z
+            .number()
+            .int()
+            .min(1)
+            .max(MAX_INVESTIGATE_SYMBOL_LIMIT)
+            .optional()
+            .describe(`Maximum distinct declaration contexts returned (1-${MAX_INVESTIGATE_SYMBOL_LIMIT}).`),
+          path: z.string().trim().min(1).optional().describe("Optional project-relative source-path prefix."),
+          language: z.enum(ARTIFACT_LANGUAGES).optional().describe("Optional indexed source language filter."),
+          relationLimit: z
+            .number()
+            .int()
+            .min(1)
+            .max(MAX_CONTEXT_RELATION_LIMIT)
+            .optional()
+            .describe("Maximum direct callers and callees included for each selected symbol."),
+          maxHops: z
+            .number()
+            .int()
+            .min(1)
+            .max(MAX_CONTEXT_MAX_HOPS)
+            .optional()
+            .describe("Maximum directed call/route/import hops in adjacent evidence paths."),
+          impactDepth: z
+            .number()
+            .int()
+            .min(1)
+            .max(MAX_CONTEXT_IMPACT_DEPTH)
+            .optional()
+            .describe("Maximum reverse dependency depth included for each selected symbol."),
+          impactLimit: z
+            .number()
+            .int()
+            .min(1)
+            .max(MAX_CONTEXT_IMPACT_LIMIT)
+            .optional()
+            .describe("Maximum reverse-impact paths included for each selected symbol.")
+        },
+        outputSchema: investigateOutputSchema,
+        annotations: {
+          readOnlyHint: true,
+          idempotentHint: true
+        }
+      },
+      async (arguments_) => runInvestigateTool(investigateService, defaultProjectPath, arguments_)
     );
   }
 

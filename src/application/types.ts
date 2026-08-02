@@ -80,6 +80,10 @@ export const DEFAULT_CONTEXT_IMPACT_DEPTH = 2;
 export const MAX_CONTEXT_IMPACT_DEPTH = 3;
 export const DEFAULT_CONTEXT_IMPACT_LIMIT = 8;
 export const MAX_CONTEXT_IMPACT_LIMIT = 25;
+/** One-question investigations stay compact while selecting enough persisted evidence to be useful. */
+export const DEFAULT_INVESTIGATE_SEARCH_LIMIT = 12;
+export const DEFAULT_INVESTIGATE_SYMBOL_LIMIT = 4;
+export const MAX_INVESTIGATE_SYMBOL_LIMIT = MAX_CONTEXT_REFERENCES;
 export const MAX_IMPACT_LIMIT = 100;
 
 /** Bounded changed-file analysis mirrors common CI diff sizes without unbounded reads. */
@@ -508,6 +512,21 @@ export interface ContextOptions {
   readonly impactLimit?: number;
 }
 
+/**
+ * Input bounds for one persisted-source query that is expanded into graph
+ * context. Search and graph-context limits remain independent and explicit.
+ */
+export interface InvestigateOptions extends ContextOptions {
+  /** Maximum matching indexed source files examined for candidate symbols. */
+  readonly searchLimit?: number;
+  /** Maximum distinct exact symbol candidates expanded into graph context. */
+  readonly symbolLimit?: number;
+  /** Project-relative directory or file prefix for the persisted source search. */
+  readonly pathPrefix?: string;
+  /** Restricts the persisted source search to one indexed language. */
+  readonly language?: ArtifactLanguage;
+}
+
 /** Actual bounded values used to assemble a context result. */
 export interface ContextBounds {
   readonly maxReferences: number;
@@ -602,6 +621,50 @@ export interface ContextEvidencePath {
 export interface ContextResult {
   readonly status: IndexStatus;
   readonly bounds: ContextBounds;
+  readonly contexts: readonly SymbolContext[];
+  readonly evidencePaths: readonly ContextEvidencePath[];
+}
+
+/** One selected declaration, traced back to its persisted lexical-search candidate. */
+export interface InvestigationSelection {
+  /** One-based rank in `search.results`. */
+  readonly sourceRank: number;
+  /** One-based rank in that source result's `symbolCandidates`. */
+  readonly candidateRank: number;
+  readonly symbol: SymbolNode;
+}
+
+/** Deterministic candidate selection disclosure for a one-question investigation. */
+export interface InvestigationSelectionResult {
+  readonly items: readonly InvestigationSelection[];
+  /** Distinct candidate symbols found before the request's symbol bound is applied. */
+  readonly total: number;
+  /** True when the explicit symbol bound omitted otherwise eligible candidates. */
+  readonly truncated: boolean;
+}
+
+/** Actual bounds used for one persisted-source investigation. */
+export interface InvestigateBounds {
+  readonly searchLimit: number;
+  readonly maximumSearchLimit: number;
+  readonly symbolLimit: number;
+  readonly maximumSymbolLimit: number;
+  readonly context: ContextBounds;
+}
+
+/**
+ * A one-question structural response assembled entirely from one active,
+ * persisted graph/source generation. It does not perform semantic inference or
+ * create a new index generation.
+ */
+export interface InvestigateResult {
+  readonly status: IndexStatus;
+  readonly query: string;
+  readonly bounds: InvestigateBounds;
+  readonly search: {
+    readonly results: readonly SourceSearchHitResult[];
+  };
+  readonly selection: InvestigationSelectionResult;
   readonly contexts: readonly SymbolContext[];
   readonly evidencePaths: readonly ContextEvidencePath[];
 }

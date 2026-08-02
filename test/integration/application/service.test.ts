@@ -895,6 +895,101 @@ describe("SymbolLatticeService", () => {
     });
   });
 
+  it("investigates persisted lexical evidence into bounded active-generation graph context", async () => {
+    const projectPath = await createInlineProject({
+      "src/entry.ts": [
+        'import { investigateTarget } from "./target.js";',
+        "",
+        "export function investigateEntry(): string {",
+        "  return investigateTarget();",
+        "}",
+        ""
+      ].join("\n"),
+      "src/target.ts": [
+        "export function investigateTarget(): string {",
+        '  return "indexed target evidence";',
+        "}",
+        ""
+      ].join("\n")
+    });
+    const service = createService();
+    await service.init({ projectPath });
+
+    const result = await service.investigate(projectPath, "investigateTarget", {
+      searchLimit: 4,
+      symbolLimit: 2,
+      relationLimit: 1,
+      maxHops: 2,
+      impactDepth: 2,
+      impactLimit: 1
+    });
+
+    expect(result).toMatchObject({
+      status: { stale: false },
+      query: "investigateTarget",
+      bounds: {
+        searchLimit: 4,
+        maximumSearchLimit: 100,
+        symbolLimit: 2,
+        maximumSymbolLimit: 8,
+        context: {
+          relationLimit: 1,
+          maxHops: 2,
+          impactDepth: 2,
+          impactLimit: 1
+        }
+      },
+      search: {
+        results: expect.arrayContaining([
+          expect.objectContaining({
+            filePath: "src/target.ts",
+            symbolCandidates: [expect.objectContaining({ name: "investigateTarget" })]
+          })
+        ])
+      },
+      selection: {
+        items: [
+          expect.objectContaining({
+            sourceRank: expect.any(Number),
+            candidateRank: expect.any(Number),
+            symbol: expect.objectContaining({
+              qualifiedName: "src/target.ts#investigateTarget"
+            })
+          })
+        ],
+        total: 1,
+        truncated: false
+      },
+      contexts: [
+        expect.objectContaining({
+          reference: "src/target.ts#investigateTarget",
+          match: expect.objectContaining({ status: "exact" }),
+          sourceAvailability: "active-generation",
+          source: expect.objectContaining({ filePath: "src/target.ts" }),
+          callers: expect.objectContaining({
+            items: [expect.objectContaining({ symbol: expect.objectContaining({ name: "investigateEntry" }) })]
+          })
+        })
+      ],
+      evidencePaths: []
+    });
+
+    await writeFile(
+      join(projectPath, "src", "target.ts"),
+      'export function investigateTarget(): string { return "live replacement"; }\n',
+      "utf8"
+    );
+    const stale = await service.investigate(projectPath, "investigateTarget");
+    expect(stale).toMatchObject({ status: { stale: true } });
+    expect(stale.contexts[0]?.source?.lines.map((line) => line.text).join("\n")).toContain(
+      "indexed target evidence"
+    );
+
+    await expect(
+      service.investigate(projectPath, "investigateTarget", { symbolLimit: 9 })
+    ).rejects.toMatchObject({ code: "INVALID_INVESTIGATE_SYMBOL_LIMIT" });
+  });
+
   it("selects affected conventionally named test files from exact active-generation file evidence", async () => {
     const projectPath = await createInlineProject({
       "src/math.ts": [
@@ -1597,6 +1692,19 @@ describe("SymbolLatticeService", () => {
         }
       ],
       evidencePaths: [{ status: "not-applicable", path: null }]
+    });
+  });
+
+  it("requires persisted source search before investigating one question", async () => {
+    const projectPath = await createFixtureProject();
+    const service = new SymbolLatticeService(
+      createV03GraphStore(new SqliteGraphStore()),
+      new FileSystemSourceCatalog()
+    );
+    await service.init({ projectPath });
+
+    await expect(service.investigate(projectPath, "add")).rejects.toMatchObject({
+      code: "SOURCE_SEARCH_UNAVAILABLE"
     });
   });
 

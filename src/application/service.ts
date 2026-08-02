@@ -87,6 +87,8 @@ import {
   DEFAULT_CONTEXT_IMPACT_LIMIT,
   DEFAULT_CONTEXT_MAX_HOPS,
   DEFAULT_CONTEXT_RELATION_LIMIT,
+  DEFAULT_INVESTIGATE_SEARCH_LIMIT,
+  DEFAULT_INVESTIGATE_SYMBOL_LIMIT,
   DEFAULT_ENTRYPOINT_LIMIT,
   DEFAULT_GENERATION_DIFF_LIMIT,
   DEFAULT_GENERATION_HISTORY_LIMIT,
@@ -97,6 +99,7 @@ import {
   MAX_CONTEXT_MAX_HOPS,
   MAX_CONTEXT_REFERENCES,
   MAX_CONTEXT_RELATION_LIMIT,
+  MAX_INVESTIGATE_SYMBOL_LIMIT,
   MAX_ENTRYPOINT_LIMIT,
   MAX_GENERATION_DIFF_LIMIT,
   MAX_GENERATION_HISTORY_LIMIT,
@@ -145,6 +148,10 @@ import type {
   HierarchyResult,
   ImpactOptions,
   ImpactResult,
+  InvestigateOptions,
+  InvestigateResult,
+  InvestigationSelection,
+  InvestigationSelectionResult,
   NodeBounds,
   NodeResult,
   NodeSource,
@@ -188,6 +195,12 @@ interface NormalizedImpactOptions {
 interface ContextRequest {
   readonly references: readonly string[];
   readonly bounds: ContextBounds;
+}
+
+interface InvestigateRequest {
+  readonly search: SourceSearchRequest;
+  readonly symbolLimit: number;
+  readonly contextBounds: ContextBounds;
 }
 
 interface NormalizedAffectedTestsRequest {
@@ -1092,6 +1105,92 @@ export class SymbolLatticeService {
       results: bundle.hits.map((hit, index) =>
         this.toSourceSearchHitResult(hit, index + 1, request.terms, bundle.snapshot)
       )
+    };
+  }
+
+  /**
+   * Starts from persisted lexical evidence, then expands its exact declaration
+   * candidates into bounded graph context from that same active generation.
+   * This is deliberately read-only: it never creates or refreshes an index.
+   */
+  public async investigate(
+    projectPath: string,
+    query: string,
+    options: InvestigateOptions = {}
+  ): Promise<InvestigateResult> {
+    const request = this.investigateRequest(query, options);
+    const normalizedProjectPath = resolve(projectPath);
+    const initialBundle = this.getActiveGraphBundle(normalizedProjectPath);
+    if (!initialBundle.status.initialized) {
+      throw new SymbolLatticeError(
+        "MISSING_INDEX",
+        `No SymbolLattice index exists for ${normalizedProjectPath}. Run "symbol-lattice init ${normalizedProjectPath}" first.`
+      );
+    }
+
+    const getActiveSourceSearchBundle = this.graphStore.getActiveSourceSearchBundle;
+    if (typeof getActiveSourceSearchBundle !== "function") {
+      throw new SymbolLatticeError(
+        "SOURCE_SEARCH_UNAVAILABLE",
+        `The configured SymbolLattice graph store for ${normalizedProjectPath} does not expose persisted source search. Upgrade the adapter and run "symbol-lattice sync ${normalizedProjectPath}".`
+      );
+    }
+    const bundle = getActiveSourceSearchBundle.call(
+      this.graphStore,
+      normalizedProjectPath,
+      request.search
+    );
+    if (bundle.sourceSearchVersion !== SOURCE_SEARCH_INDEX_VERSION) {
+      throw new SymbolLatticeError(
+        "SOURCE_SEARCH_UNAVAILABLE",
+        `The active SymbolLattice index for ${normalizedProjectPath} has no compatible persisted source-search projection. Run "symbol-lattice sync ${normalizedProjectPath}" to backfill it.`
+      );
+    }
+
+    const searchResults = bundle.hits.map((hit, index) =>
+      this.toSourceSearchHitResult(hit, index + 1, request.search.terms, bundle.snapshot)
+    );
+    const selection = this.investigationSelection(searchResults, request.symbolLimit);
+    const matches: readonly SymbolMatch[] = selection.items.map(({ symbol }) => ({
+      status: "exact",
+      reference: symbol.qualifiedName,
+      symbol,
+      candidates: [symbol]
+    }));
+    const read: ContextRead = {
+      bundle,
+      matches,
+      documentsByFilePath: new Map(
+        bundle.hits.map(
+          (hit): readonly [string, IndexedSourceDocument] => [
+            hit.filePath,
+            {
+              filePath: hit.filePath,
+              language: hit.language,
+              sourceText: hit.sourceText
+            }
+          ]
+        )
+      )
+    };
+    const contexts = read.matches.map((match) =>
+      this.toSymbolContext(match.reference, match, read, request.contextBounds)
+    );
+
+    return {
+      status: await this.getStatusForBundle(normalizedProjectPath, bundle),
+      query: request.search.query,
+      bounds: {
+        searchLimit: request.search.limit,
+        maximumSearchLimit: MAX_SOURCE_SEARCH_LIMIT,
+        symbolLimit: request.symbolLimit,
+        maximumSymbolLimit: MAX_INVESTIGATE_SYMBOL_LIMIT,
+        context: request.contextBounds
+      },
+      search: { results: searchResults },
+      selection,
+      contexts,
+      evidencePaths: this.contextEvidencePaths(read.matches, bundle, request.contextBounds)
     };
   }
 
@@ -2036,39 +2135,64 @@ export class SymbolLatticeService {
 
     return {
       references: normalizedReferences,
-      bounds: {
-        maxReferences: MAX_CONTEXT_REFERENCES,
-        matchCandidateLimit: CONTEXT_MATCH_CANDIDATE_LIMIT,
-        relationLimit: this.boundedContextOption(
-          options.relationLimit,
-          DEFAULT_CONTEXT_RELATION_LIMIT,
-          MAX_CONTEXT_RELATION_LIMIT,
-          "INVALID_CONTEXT_RELATION_LIMIT",
-          "Context relation limit"
-        ),
-        maxHops: this.boundedContextOption(
-          options.maxHops,
-          DEFAULT_CONTEXT_MAX_HOPS,
-          MAX_CONTEXT_MAX_HOPS,
-          "INVALID_CONTEXT_MAX_HOPS",
-          "Context maximum hops"
-        ),
-        maxVisitedSymbolsPerPath: CONTEXT_MAX_VISITED_SYMBOLS,
-        impactDepth: this.boundedContextOption(
-          options.impactDepth,
-          DEFAULT_CONTEXT_IMPACT_DEPTH,
-          MAX_CONTEXT_IMPACT_DEPTH,
-          "INVALID_CONTEXT_IMPACT_DEPTH",
-          "Context impact depth"
-        ),
-        impactLimit: this.boundedContextOption(
-          options.impactLimit,
-          DEFAULT_CONTEXT_IMPACT_LIMIT,
-          MAX_CONTEXT_IMPACT_LIMIT,
-          "INVALID_CONTEXT_IMPACT_LIMIT",
-          "Context impact limit"
-        )
-      }
+      bounds: this.contextBounds(options)
+    };
+  }
+
+  private investigateRequest(query: string, options: InvestigateOptions): InvestigateRequest {
+    const search = this.sourceSearchRequest(query, {
+      limit: options.searchLimit ?? DEFAULT_INVESTIGATE_SEARCH_LIMIT,
+      ...(options.pathPrefix === undefined ? {} : { pathPrefix: options.pathPrefix }),
+      ...(options.language === undefined ? {} : { language: options.language })
+    });
+    const symbolLimit = options.symbolLimit ?? DEFAULT_INVESTIGATE_SYMBOL_LIMIT;
+    if (
+      !Number.isSafeInteger(symbolLimit) ||
+      symbolLimit < 1 ||
+      symbolLimit > MAX_INVESTIGATE_SYMBOL_LIMIT
+    ) {
+      throw new SymbolLatticeError(
+        "INVALID_INVESTIGATE_SYMBOL_LIMIT",
+        `Investigate symbol limit must be a whole number from 1 to ${MAX_INVESTIGATE_SYMBOL_LIMIT}.`
+      );
+    }
+
+    return { search, symbolLimit, contextBounds: this.contextBounds(options) };
+  }
+
+  private contextBounds(options: ContextOptions): ContextBounds {
+    return {
+      maxReferences: MAX_CONTEXT_REFERENCES,
+      matchCandidateLimit: CONTEXT_MATCH_CANDIDATE_LIMIT,
+      relationLimit: this.boundedContextOption(
+        options.relationLimit,
+        DEFAULT_CONTEXT_RELATION_LIMIT,
+        MAX_CONTEXT_RELATION_LIMIT,
+        "INVALID_CONTEXT_RELATION_LIMIT",
+        "Context relation limit"
+      ),
+      maxHops: this.boundedContextOption(
+        options.maxHops,
+        DEFAULT_CONTEXT_MAX_HOPS,
+        MAX_CONTEXT_MAX_HOPS,
+        "INVALID_CONTEXT_MAX_HOPS",
+        "Context maximum hops"
+      ),
+      maxVisitedSymbolsPerPath: CONTEXT_MAX_VISITED_SYMBOLS,
+      impactDepth: this.boundedContextOption(
+        options.impactDepth,
+        DEFAULT_CONTEXT_IMPACT_DEPTH,
+        MAX_CONTEXT_IMPACT_DEPTH,
+        "INVALID_CONTEXT_IMPACT_DEPTH",
+        "Context impact depth"
+      ),
+      impactLimit: this.boundedContextOption(
+        options.impactLimit,
+        DEFAULT_CONTEXT_IMPACT_LIMIT,
+        MAX_CONTEXT_IMPACT_LIMIT,
+        "INVALID_CONTEXT_IMPACT_LIMIT",
+        "Context impact limit"
+      )
     };
   }
 
@@ -2523,6 +2647,34 @@ export class SymbolLatticeService {
       lexicalReason: lexicalReason(terms, lexicalMatch.matchingTerms),
       symbolCandidates
     };
+  }
+
+  private investigationSelection(
+    searchResults: readonly SourceSearchHitResult[],
+    symbolLimit: number
+  ): InvestigationSelectionResult {
+    const items: InvestigationSelection[] = [];
+    const selectedSymbolIds = new Set<string>();
+    let total = 0;
+
+    for (const sourceResult of searchResults) {
+      for (const [candidateIndex, symbol] of sourceResult.symbolCandidates.entries()) {
+        if (selectedSymbolIds.has(symbol.id)) {
+          continue;
+        }
+        selectedSymbolIds.add(symbol.id);
+        total += 1;
+        if (items.length < symbolLimit) {
+          items.push({
+            sourceRank: sourceResult.rank,
+            candidateRank: candidateIndex + 1,
+            symbol
+          });
+        }
+      }
+    }
+
+    return { items, total, truncated: total > symbolLimit };
   }
 
   private extractPersistedFacts(

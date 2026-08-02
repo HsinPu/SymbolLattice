@@ -23,6 +23,8 @@ import {
   type GitHunksResult,
   type HierarchyOptions,
   type HierarchyResult,
+  type InvestigateOptions,
+  type InvestigateResult,
   type NodeResult,
   type RoutesOptions,
   type RoutesResult,
@@ -43,6 +45,7 @@ import {
   runGitAffectedTestsTool,
   runGitHunksTool,
   runHierarchyTool,
+  runInvestigateTool,
   runNodeTool,
   runRoutesTool,
   runSearchTool,
@@ -494,6 +497,31 @@ function searchResult(): SearchResult {
         ]
       }
     ]
+  };
+}
+
+function investigateResult(): InvestigateResult {
+  const search = searchResult();
+  const context = contextResult();
+  const candidate = search.results[0]!.symbolCandidates[0]!;
+  return {
+    status: search.status,
+    query: "user",
+    bounds: {
+      searchLimit: 4,
+      maximumSearchLimit: 100,
+      symbolLimit: 2,
+      maximumSymbolLimit: 8,
+      context: context.bounds
+    },
+    search: { results: search.results },
+    selection: {
+      items: [{ sourceRank: 1, candidateRank: 1, symbol: candidate }],
+      total: 1,
+      truncated: false
+    },
+    contexts: context.contexts,
+    evidencePaths: context.evidencePaths
   };
 }
 
@@ -1544,6 +1572,80 @@ describe("SymbolLattice MCP server", () => {
     ]);
   });
 
+  it("registers one-question investigation only when the service supports it", async () => {
+    const investigateCalls: Array<{
+      projectPath: string;
+      query: string;
+      options: InvestigateOptions;
+    }> = [];
+    const server = createMcpServer(
+      {
+        async explore(): Promise<ExploreResult> {
+          return exploreResult();
+        },
+        async investigate(
+          projectPath: string,
+          query: string,
+          options: InvestigateOptions = {}
+        ): Promise<InvestigateResult> {
+          investigateCalls.push({ projectPath, query, options });
+          return investigateResult();
+        }
+      },
+      "C:/default-project"
+    );
+    const client = new Client({ name: "symbol-lattice-investigate-test", version: "1.0.0" });
+    const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+    closeCallbacks.push(() => client.close(), () => server.close());
+
+    const tools = await client.listTools();
+    expect(tools.tools.map((tool) => tool.name)).toEqual([
+      "symbol_lattice_explore",
+      "symbol_lattice_investigate"
+    ]);
+
+    const result = await client.callTool({
+      name: "symbol_lattice_investigate",
+      arguments: {
+        projectPath: "C:/chosen-project",
+        query: "user",
+        searchLimit: 4,
+        symbolLimit: 2,
+        path: "src/",
+        language: "typescript",
+        relationLimit: 3,
+        maxHops: 2,
+        impactDepth: 2,
+        impactLimit: 4
+      }
+    });
+
+    expect(result.isError).not.toBe(true);
+    expect(result.structuredContent).toMatchObject({
+      query: "user",
+      selection: { total: 1, truncated: false },
+      contexts: [{ sourceAvailability: "not-applicable" }]
+    });
+    expect(investigateCalls).toEqual([
+      {
+        projectPath: "C:/chosen-project",
+        query: "user",
+        options: {
+          searchLimit: 4,
+          symbolLimit: 2,
+          pathPrefix: "src/",
+          language: "typescript",
+          relationLimit: 3,
+          maxHops: 2,
+          impactDepth: 2,
+          impactLimit: 4
+        }
+      }
+    ]);
+  });
+
   it("registers affected-test analysis only when the service supports it", async () => {
     const affectedCalls: Array<{
       projectPath: string;
@@ -2020,6 +2122,21 @@ describe("SymbolLattice MCP server", () => {
     expect(response.content[0]?.text).toContain("MISSING_INDEX");
   });
 
+  it("returns one-question investigation errors without indexing", async () => {
+    const response = await runInvestigateTool(
+      {
+        async investigate(): Promise<InvestigateResult> {
+          throw new SymbolLatticeError("MISSING_INDEX", "Run symbol-lattice init first.");
+        }
+      },
+      "C:/project",
+      { query: "anything", searchLimit: 3, symbolLimit: 2 }
+    );
+
+    expect(response).toMatchObject({ isError: true });
+    expect(response.content[0]?.text).toContain("MISSING_INDEX");
+  });
+
   it("returns route inventory errors without indexing", async () => {
     const response = await runRoutesTool(
       {
@@ -2140,6 +2257,9 @@ describe("SymbolLattice MCP server", () => {
       async search(): Promise<SearchResult> {
         return searchResult();
       },
+      async investigate(): Promise<InvestigateResult> {
+        return investigateResult();
+      },
       async routes(): Promise<RoutesResult> {
         return routesResult();
       },
@@ -2185,6 +2305,7 @@ describe("SymbolLattice MCP server", () => {
     await runGitAffectedTestsTool(service, "C:/project", {});
     await runGitHunksTool(service, "C:/project", { baseRef: "origin/main" });
     await runSearchTool(service, "C:/project", { query: "user" });
+    await runInvestigateTool(service, "C:/project", { query: "user" });
     await runRoutesTool(service, "C:/project", { method: "GET", path: "/api" });
     await runHierarchyTool(service, "C:/project", { reference: "src/base.ts#Base" });
     await runGenerationHistoryTool(service, "C:/project", {});

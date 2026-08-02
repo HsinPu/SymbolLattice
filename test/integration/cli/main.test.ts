@@ -29,6 +29,8 @@ import {
   type ImpactResult,
   type HierarchyOptions,
   type HierarchyResult,
+  type InvestigateOptions,
+  type InvestigateResult,
   type NodeResult,
   type RoutesOptions,
   type RoutesResult,
@@ -126,6 +128,25 @@ function searchResult(): SearchResult {
   return {
     status: resultStatus(),
     results: []
+  };
+}
+
+function investigateResult(): InvestigateResult {
+  const context = contextResult();
+  return {
+    status: resultStatus(),
+    query: "User Token",
+    bounds: {
+      searchLimit: 7,
+      maximumSearchLimit: 100,
+      symbolLimit: 2,
+      maximumSymbolLimit: 8,
+      context: context.bounds
+    },
+    search: { results: [] },
+    selection: { items: [], total: 0, truncated: false },
+    contexts: context.contexts,
+    evidencePaths: context.evidencePaths
   };
 }
 
@@ -1037,6 +1058,83 @@ describe("symbol-lattice search CLI", () => {
         { from: "node" }
       )
     ).rejects.toThrow("Expected an integer between 1 and 100");
+  });
+});
+
+describe("symbol-lattice investigate CLI", () => {
+  it("forwards persisted-source, selection, and graph-context bounds as one read-only request", async () => {
+    const calls: Array<{ projectPath: string; query: string; options: InvestigateOptions }> = [];
+    const result = investigateResult();
+    const service = {
+      async investigate(
+        projectPath: string,
+        query: string,
+        options: InvestigateOptions = {}
+      ): Promise<InvestigateResult> {
+        calls.push({ projectPath, query, options });
+        return result;
+      }
+    } as unknown as SymbolLatticeService;
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+    await createProgram(service).parseAsync(
+      [
+        "node",
+        "symbol-lattice",
+        "investigate",
+        "  User Token  ",
+        "--project",
+        "C:/chosen-project",
+        "--search-limit",
+        "7",
+        "--symbol-limit",
+        "2",
+        "--path",
+        " src/ ",
+        "--language",
+        "python",
+        "--relation-limit",
+        "3",
+        "--max-hops",
+        "2",
+        "--impact-depth",
+        "2",
+        "--impact-limit",
+        "4",
+        "--json"
+      ],
+      { from: "node" }
+    );
+
+    expect(calls).toEqual([
+      {
+        projectPath: resolve("C:/chosen-project"),
+        query: "User Token",
+        options: {
+          searchLimit: 7,
+          symbolLimit: 2,
+          pathPrefix: "src/",
+          language: "python",
+          relationLimit: 3,
+          maxHops: 2,
+          impactDepth: 2,
+          impactLimit: 4
+        }
+      }
+    ]);
+    expect(write).toHaveBeenCalledWith(`${JSON.stringify(result, null, 2)}\n`);
+  });
+
+  it("rejects a symbol limit outside the compact investigation bound before invoking the service", async () => {
+    const program = createProgram({} as SymbolLatticeService);
+    program.exitOverride();
+
+    await expect(
+      program.parseAsync(
+        ["node", "symbol-lattice", "investigate", "user", "--symbol-limit", "9"],
+        { from: "node" }
+      )
+    ).rejects.toThrow("Expected an integer between 1 and 8");
   });
 });
 
