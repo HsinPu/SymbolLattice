@@ -5,6 +5,7 @@ import {
   createSymbolId,
   type ArtifactFacts,
   type GraphEdge,
+  type PendingReference,
   type ReactNativeFacts,
   type RouteMethod,
   type SourcePosition,
@@ -37,8 +38,14 @@ interface StaticJavaClass {
   readonly isExported: boolean;
 }
 
+interface StaticJavaSuperclassReference {
+  readonly name: string;
+  readonly node: JavaSyntaxNode;
+}
+
 interface StaticJavaMethod {
   readonly name: string;
+  readonly nameNode: JavaSyntaxNode;
   readonly node: JavaSyntaxNode;
   readonly body: JavaSyntaxNode;
   readonly annotations: readonly StaticJavaAnnotation[];
@@ -895,7 +902,7 @@ function staticJavaClass(
   const nameNode = children.find((child) => child.name === "Definition");
   const body = children.find((child) => child.name === "ClassBody");
   const name = nameNode === undefined ? null : identifierText(input, nameNode);
-  if (name === null || body === undefined) {
+  if (nameNode === undefined || name === null || body === undefined) {
     return null;
   }
   const modifiers = children.find((child) => child.name === "Modifiers");
@@ -906,6 +913,38 @@ function staticJavaClass(
     annotations: staticAnnotations(input, node),
     isExported: modifiers !== undefined && directChildren(modifiers).some((child) => child.name === "public")
   };
+}
+
+/**
+ * Retains only a direct, unqualified superclass spelling. Qualified bases and
+ * expressions need Java semantic resolution, so they remain outside this
+ * syntax-only relation.
+ */
+function staticJavaDirectSuperclass(
+  input: JavaExtractFileFactsInput,
+  declaration: StaticJavaClass
+): StaticJavaSuperclassReference | null {
+  const superclasses = directChildren(declaration.node).filter((child) => child.name === "Superclass");
+  if (superclasses.length !== 1 || superclasses[0] === undefined) {
+    return null;
+  }
+  const typeNames = directChildren(superclasses[0]).filter((child) => child.name === "TypeName");
+  if (typeNames.length !== 1 || typeNames[0] === undefined) {
+    return null;
+  }
+  const name = identifierText(input, typeNames[0]);
+  return name === null ? null : { name, node: typeNames[0] };
+}
+
+/** Java's standard override declaration is a marker annotation. */
+function hasJavaOverrideAnnotation(declaration: StaticJavaMethod): boolean {
+  return (
+    declaration.annotations.filter(
+      (annotation) =>
+        annotation.node.name === "MarkerAnnotation" &&
+        (annotation.name === "Override" || annotation.name === "java.lang.Override")
+    ).length === 1
+  );
 }
 
 function staticJavaMethod(
@@ -919,12 +958,13 @@ function staticJavaMethod(
   const nameNode = children.find((child) => child.name === "Definition");
   const body = children.find((child) => child.name === "Block");
   const name = nameNode === undefined ? null : identifierText(input, nameNode);
-  if (name === null || body === undefined) {
+  if (nameNode === undefined || name === null || body === undefined) {
     return null;
   }
   const modifiers = children.find((child) => child.name === "Modifiers");
   return {
     name,
+    nameNode,
     node,
     body,
     annotations: staticAnnotations(input, node),
@@ -1512,6 +1552,7 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
   const lineStarts = lineStartsFor(input.sourceText);
   const symbols: SymbolNode[] = [];
   const edges: GraphEdge[] = [];
+  const pendingReferences: PendingReference[] = [];
   const javaClassFacts: Array<{ symbolId: string; packageName: string }> = [];
   const springBootPropertiesValueReferences: SpringBootPropertiesValueReferenceFact[] = [];
   const springBootConfigurationPropertiesPrefixes: SpringBootConfigurationPropertiesPrefixReferenceFact[] = [];
@@ -1653,6 +1694,72 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
     return symbol;
   }
 
+  function addPendingOverrideReference(source: SymbolNode, declaration: StaticJavaMethod): void {
+    const range = rangeFor(lineStarts, declaration.nameNode.from, declaration.nameNode.to);
+    pendingReferences.push({
+      id: createEdgeId({
+        sourceId: source.id,
+        targetId: null,
+        kind: "overrides",
+        line: range.start.line,
+        column: range.start.column,
+        referenceName: declaration.name
+      }),
+      sourceId: source.id,
+      filePath: input.filePath,
+      referenceName: declaration.name,
+      relationKind: "overrides",
+      range
+    });
+  }
+
+  /**
+   * The Java extractor has no compiler classpath. It can nevertheless retain
+   * an exact hierarchy fact when one direct simple-name superclass is declared
+   * once in this same source file.
+   */
+  function addExactSameFileSuperclass(
+    child: SymbolNode,
+    declaration: StaticJavaClass,
+    classesByName: ReadonlyMap<string, readonly SymbolNode[]>
+  ): void {
+    const superclass = staticJavaDirectSuperclass(input, declaration);
+    if (superclass === null) {
+      return;
+    }
+    const candidates = (classesByName.get(superclass.name) ?? []).filter(
+      (candidate) => candidate.id !== child.id && candidate.kind === "class"
+    );
+    if (candidates.length !== 1 || candidates[0] === undefined) {
+      return;
+    }
+    const target = candidates[0];
+    const range = rangeFor(lineStarts, superclass.node.from, superclass.node.to);
+    edges.push({
+      id: createEdgeId({
+        sourceId: child.id,
+        targetId: target.id,
+        kind: "extends",
+        line: range.start.line,
+        column: range.start.column,
+        referenceName: superclass.name
+      }),
+      sourceId: child.id,
+      targetId: target.id,
+      kind: "extends",
+      filePath: input.filePath,
+      range,
+      resolution: "exact",
+      confidence: 1,
+      referenceName: superclass.name,
+      evidence: {
+        ruleId: "syntax.java.same-file.direct-superclass",
+        stage: "syntax",
+        candidateSymbolIds: [target.id]
+      }
+    });
+  }
+
   function addFrameworkRoute(
     parent: SymbolNode,
     routeFact: StaticHttpRoute,
@@ -1720,9 +1827,15 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
       .map((node) => staticJavaClass(input, node))
       .filter((candidate): candidate is StaticJavaClass => candidate !== null)
       .filter((candidate) => !hasSyntaxError(candidate.node));
+    const classesByName = new Map<string, SymbolNode[]>();
+    const declaredClasses: Array<{ declaration: StaticJavaClass; symbol: SymbolNode }> = [];
 
     for (const classDeclaration of classes) {
       const classSymbol = addClass(classDeclaration, packageName);
+      const classCandidates = classesByName.get(classDeclaration.name) ?? [];
+      classCandidates.push(classSymbol);
+      classesByName.set(classDeclaration.name, classCandidates);
+      declaredClasses.push({ declaration: classDeclaration, symbol: classSymbol });
       for (const reference of staticSpringBootPropertiesReferences(
         input,
         classDeclaration,
@@ -1804,7 +1917,11 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
         .filter((candidate) => !overlapsRecord(candidate.node));
       const symbolsByMethod = new Map<StaticJavaMethod, SymbolNode>();
       for (const methodDeclaration of methods) {
-        symbolsByMethod.set(methodDeclaration, addMethod(classSymbol, methodDeclaration));
+        const methodSymbol = addMethod(classSymbol, methodDeclaration);
+        symbolsByMethod.set(methodDeclaration, methodSymbol);
+        if (hasJavaOverrideAnnotation(methodDeclaration)) {
+          addPendingOverrideReference(methodSymbol, methodDeclaration);
+        }
       }
       const reactNativeModule = staticJavaReactNativeModule(
         input,
@@ -1909,6 +2026,10 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
         }
       }
     }
+
+    for (const { declaration, symbol } of declaredClasses) {
+      addExactSameFileSuperclass(symbol, declaration, classesByName);
+    }
   }
 
   if (recordInspection.isSyntaxClean) {
@@ -1938,7 +2059,7 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
   return {
     symbols,
     edges,
-    pendingReferences: [],
+    pendingReferences,
     localBindings: [],
     referenceScopes: [],
     importBindings: [],

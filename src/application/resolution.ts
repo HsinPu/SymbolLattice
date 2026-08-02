@@ -2477,9 +2477,10 @@ interface ExactOverrideResolution {
 }
 
 /**
- * A TypeScript `override` modifier alone does not expose semantic type-checker
- * data. Retain an exact edge only when the persisted graph independently proves
- * one direct parent class and one same-named method contained by that parent.
+ * An explicit language-level override marker alone does not expose semantic
+ * type-checker data. Retain an exact edge only when the persisted graph
+ * independently proves one direct parent class and one same-named method
+ * contained by that parent.
  */
 function resolveExactOverrideTarget(input: {
   readonly reference: PendingReference & { readonly relationKind: "overrides" };
@@ -6973,11 +6974,15 @@ export function resolveProjectFacts(input: {
       containedIdsByContainerId.set(edge.sourceId, contained);
     }
   }
+  // TypeScript heritage arrives through pending-reference resolution, while
+  // evidence-first extractors may already persist a same-file hierarchy edge.
+  // Both forms must be available before projecting an exact override relation.
+  const overrideHierarchyEdges = [...structuralEdges, ...resolvedEdges];
   for (const reference of overrideReferences) {
     const resolution = resolveExactOverrideTarget({
       reference,
       symbolsById,
-      resolvedEdges,
+      resolvedEdges: overrideHierarchyEdges,
       containerIdsByContainedId,
       containedIdsByContainerId
     });

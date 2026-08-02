@@ -5,6 +5,7 @@ import {
   createSymbolId,
   type ArtifactFacts,
   type GraphEdge,
+  type PendingReference,
   type ReactNativeFacts,
   type RouteMethod,
   type SourcePosition,
@@ -36,9 +37,15 @@ interface StaticKotlinType {
 
 interface StaticKotlinFunction {
   readonly name: string;
+  readonly nameNode: KotlinSyntaxNode;
   readonly node: KotlinSyntaxNode;
   readonly body: KotlinSyntaxNode | null;
   readonly receiverName: string | null;
+}
+
+interface StaticKotlinSupertypeReference {
+  readonly name: string;
+  readonly node: KotlinSyntaxNode;
 }
 
 type StaticKotlinReactNativeModuleKind = "direct" | "codegen-spec";
@@ -251,17 +258,70 @@ function staticKotlinFunction(node: KotlinSyntaxNode): StaticKotlinFunction | nu
   const identifiers = children.filter((child) => child.kind() === "simple_identifier");
   const nameNode = identifiers.at(-1);
   const name = nameNode === undefined ? null : identifierText(nameNode);
-  if (name === null) {
+  if (nameNode === undefined || name === null) {
     return null;
   }
   const receiver = children.find((child) => child.kind() === "user_type");
   const body = children.find((child) => child.kind() === "function_body") ?? null;
   return {
     name,
+    nameNode,
     node,
     body,
     receiverName: receiver === undefined ? null : nodeText(receiver)
   };
+}
+
+/**
+ * Retains only simple direct supertype spellings. Qualified names, aliases,
+ * and generic resolution require Kotlin semantic analysis and stay deferred.
+ */
+function staticKotlinDirectSupertypeReferences(
+  declaration: StaticKotlinType
+): readonly StaticKotlinSupertypeReference[] {
+  if (declaration.kind !== "class") {
+    return [];
+  }
+  const references: StaticKotlinSupertypeReference[] = [];
+  for (const specifier of directChildren(declaration.node).filter(
+    (child) => child.kind() === "delegation_specifier"
+  )) {
+    const children = directChildren(specifier);
+    const constructor = children.find((child) => child.kind() === "constructor_invocation");
+    const userTypes =
+      constructor === undefined
+        ? children.filter((child) => child.kind() === "user_type")
+        : directChildren(constructor).filter((child) => child.kind() === "user_type");
+    if (userTypes.length !== 1 || userTypes[0] === undefined) {
+      continue;
+    }
+    const typeIdentifiers = directChildren(userTypes[0]).filter(
+      (child) => child.kind() === "type_identifier"
+    );
+    if (typeIdentifiers.length !== 1 || typeIdentifiers[0] === undefined) {
+      continue;
+    }
+    const name = identifierText(typeIdentifiers[0]);
+    if (name !== null) {
+      references.push({ name, node: typeIdentifiers[0] });
+    }
+  }
+  return references;
+}
+
+/** Kotlin's `override` is a direct member modifier in the parsed declaration. */
+function hasKotlinOverrideModifier(declaration: StaticKotlinFunction): boolean {
+  const modifiers = directChildren(declaration.node).filter((child) => child.kind() === "modifiers");
+  if (modifiers.length !== 1 || modifiers[0] === undefined) {
+    return false;
+  }
+  return (
+    directChildren(modifiers[0]).filter(
+      (modifier) =>
+        modifier.kind() === "member_modifier" &&
+        directChildren(modifier).some((child) => child.kind() === "override")
+    ).length === 1
+  );
 }
 
 function staticDirectImportPaths(root: KotlinSyntaxNode): ReadonlySet<string> {
@@ -1502,6 +1562,7 @@ export function extractKotlinFileFacts(input: KotlinExtractFileFactsInput): Arti
   const lineStarts = lineStartsFor(input.sourceText);
   const symbols: SymbolNode[] = [];
   const edges: GraphEdge[] = [];
+  const pendingReferences: PendingReference[] = [];
   const springBootPropertiesValueReferences: SpringBootPropertiesValueReferenceFact[] = [];
   const springBootConfigurationPropertiesPrefixes: SpringBootConfigurationPropertiesPrefixReferenceFact[] = [];
   const reactNativeNativeMethods: ReactNativeFacts["nativeMethods"][number][] = [];
@@ -1604,6 +1665,70 @@ export function extractKotlinFileFacts(input: KotlinExtractFileFactsInput): Arti
     return symbol;
   }
 
+  function addPendingOverrideReference(source: SymbolNode, declaration: StaticKotlinFunction): void {
+    const range = rangeForNode(declaration.nameNode);
+    pendingReferences.push({
+      id: createEdgeId({
+        sourceId: source.id,
+        targetId: null,
+        kind: "overrides",
+        line: range.start.line,
+        column: range.start.column,
+        referenceName: declaration.name
+      }),
+      sourceId: source.id,
+      filePath: input.filePath,
+      referenceName: declaration.name,
+      relationKind: "overrides",
+      range
+    });
+  }
+
+  /**
+   * Retain a hierarchy edge only when one direct simple-name Kotlin supertype
+   * resolves to exactly one other class in the same file. Interfaces remain out
+   * of scope for this class-only override projection.
+   */
+  function addExactSameFileSuperclass(
+    child: SymbolNode,
+    declaration: StaticKotlinType,
+    typesByName: ReadonlyMap<string, readonly SymbolNode[]>
+  ): void {
+    const candidates = staticKotlinDirectSupertypeReferences(declaration)
+      .flatMap((reference) =>
+        (typesByName.get(reference.name) ?? []).map((symbol) => ({ reference, symbol }))
+      )
+      .filter(({ symbol }) => symbol.id !== child.id && symbol.kind === "class");
+    if (candidates.length !== 1 || candidates[0] === undefined) {
+      return;
+    }
+    const { reference, symbol: target } = candidates[0];
+    const range = rangeForNode(reference.node);
+    edges.push({
+      id: createEdgeId({
+        sourceId: child.id,
+        targetId: target.id,
+        kind: "extends",
+        line: range.start.line,
+        column: range.start.column,
+        referenceName: reference.name
+      }),
+      sourceId: child.id,
+      targetId: target.id,
+      kind: "extends",
+      filePath: input.filePath,
+      range,
+      resolution: "exact",
+      confidence: 1,
+      referenceName: reference.name,
+      evidence: {
+        ruleId: "syntax.kotlin.same-file.direct-superclass",
+        stage: "syntax",
+        candidateSymbolIds: [target.id]
+      }
+    });
+  }
+
   function addFunction(declaration: StaticKotlinFunction): SymbolNode {
     const qualifiedName = input.filePath + "#" + declaration.name;
     const declarationOrdinal = nextOrdinal(qualifiedName, "function");
@@ -1690,11 +1815,17 @@ export function extractKotlinFileFacts(input: KotlinExtractFileFactsInput): Arti
       .map((node) => staticKotlinFunction(node))
       .filter((candidate): candidate is StaticKotlinFunction => candidate !== null);
     const functionsByName = new Map<string, SymbolNode[]>();
+    const typesByName = new Map<string, SymbolNode[]>();
+    const declaredTypes: Array<{ declaration: StaticKotlinType; symbol: SymbolNode }> = [];
 
     for (const declaration of topLevel
       .map((node) => staticKotlinType(node))
       .filter((candidate): candidate is StaticKotlinType => candidate !== null)) {
       const typeSymbol = addType(declaration);
+      const typeCandidates = typesByName.get(declaration.name) ?? [];
+      typeCandidates.push(typeSymbol);
+      typesByName.set(declaration.name, typeCandidates);
+      declaredTypes.push({ declaration, symbol: typeSymbol });
       const springWebPrefixes = staticKotlinSpringWebController(declaration, imports)
         ? staticKotlinSpringWebClassPrefixes(declaration, imports)
         : null;
@@ -1760,6 +1891,9 @@ export function extractKotlinFileFacts(input: KotlinExtractFileFactsInput): Arti
       );
       for (const methodDeclaration of methods) {
         const methodSymbol = addMethod(typeSymbol, methodDeclaration);
+        if (declaration.kind === "class" && hasKotlinOverrideModifier(methodDeclaration)) {
+          addPendingOverrideReference(methodSymbol, methodDeclaration);
+        }
         if (
           reactNativeModule !== null &&
           isKotlinReactNativeMethod(methodDeclaration, imports, reactNativeModule.kind)
@@ -1804,6 +1938,10 @@ export function extractKotlinFileFacts(input: KotlinExtractFileFactsInput): Arti
       }
     }
 
+    for (const { declaration, symbol } of declaredTypes) {
+      addExactSameFileSuperclass(symbol, declaration, typesByName);
+    }
+
     for (const functionDeclaration of topLevelFunctions) {
       const symbol = addFunction(functionDeclaration);
       const candidates = functionsByName.get(functionDeclaration.name) ?? [];
@@ -1841,7 +1979,7 @@ export function extractKotlinFileFacts(input: KotlinExtractFileFactsInput): Arti
   return {
     symbols,
     edges,
-    pendingReferences: [],
+    pendingReferences,
     localBindings: [],
     referenceScopes: [],
     importBindings: [],

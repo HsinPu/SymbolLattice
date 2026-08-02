@@ -268,6 +268,74 @@ describe("source extraction", () => {
     ]);
   });
 
+  it("extracts Java and Kotlin explicit overrides with same-file direct superclass evidence", () => {
+    const java = extractFileFacts({
+      filePath: "src/java-overrides.java",
+      language: "java",
+      sourceText: [
+        "class JavaBase { void run() {} }",
+        "class JavaChild extends JavaBase {",
+        "  @Override void run() {}",
+        "  void unmarked() {}",
+        "}"
+      ].join("\n")
+    });
+    const kotlin = extractFileFacts({
+      filePath: "src/kotlin-overrides.kt",
+      language: "kotlin",
+      sourceText: [
+        "abstract class KotlinBase { abstract fun run() }",
+        "class KotlinChild : KotlinBase() {",
+        "  override fun run() {}",
+        "  fun unmarked() {}",
+        "}"
+      ].join("\n")
+    });
+    const javaSymbol = (qualifiedName: string) =>
+      java.symbols.find((symbol) => symbol.qualifiedName === qualifiedName);
+    const kotlinSymbol = (qualifiedName: string) =>
+      kotlin.symbols.find((symbol) => symbol.qualifiedName === qualifiedName);
+
+    expect(java.edges.filter((edge) => edge.kind === "extends")).toEqual([
+      expect.objectContaining({
+        sourceId: javaSymbol("src/java-overrides.java#JavaChild")?.id,
+        targetId: javaSymbol("src/java-overrides.java#JavaBase")?.id,
+        resolution: "exact",
+        confidence: 1,
+        referenceName: "JavaBase",
+        evidence: {
+          ruleId: "syntax.java.same-file.direct-superclass",
+          stage: "syntax",
+          candidateSymbolIds: [javaSymbol("src/java-overrides.java#JavaBase")?.id]
+        }
+      })
+    ]);
+    expect(kotlin.edges.filter((edge) => edge.kind === "extends")).toEqual([
+      expect.objectContaining({
+        sourceId: kotlinSymbol("src/kotlin-overrides.kt#KotlinChild")?.id,
+        targetId: kotlinSymbol("src/kotlin-overrides.kt#KotlinBase")?.id,
+        resolution: "exact",
+        confidence: 1,
+        referenceName: "KotlinBase",
+        evidence: {
+          ruleId: "syntax.kotlin.same-file.direct-superclass",
+          stage: "syntax",
+          candidateSymbolIds: [kotlinSymbol("src/kotlin-overrides.kt#KotlinBase")?.id]
+        }
+      })
+    ]);
+    expect(
+      java.pendingReferences
+        .filter((reference) => reference.relationKind === "overrides")
+        .map((reference) => [reference.sourceId, reference.referenceName])
+    ).toEqual([[javaSymbol("src/java-overrides.java#JavaChild.run")?.id, "run"]]);
+    expect(
+      kotlin.pendingReferences
+        .filter((reference) => reference.relationKind === "overrides")
+        .map((reference) => [reference.sourceId, reference.referenceName])
+    ).toEqual([[kotlinSymbol("src/kotlin-overrides.kt#KotlinChild.run")?.id, "run"]]);
+  });
+
   it("extracts direct TypeScript heritage identifiers with exact ranges and lexical scopes", () => {
     const facts = extractFileFacts({
       filePath: "src/heritage.ts",

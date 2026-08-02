@@ -1399,6 +1399,50 @@ describe("SymbolLatticeService", () => {
     expect(childMethodCandidate?.topologySignals?.score).toBeGreaterThan(0);
   });
 
+  it("persists exact same-file Java and Kotlin override evidence through init", async () => {
+    const projectPath = await createInlineProject({
+      "src/JavaOverrides.java": [
+        "class JavaBase { void run() {} }",
+        "class JavaChild extends JavaBase { @Override void run() {} }"
+      ].join("\n"),
+      "src/KotlinOverrides.kt": [
+        "abstract class KotlinBase { abstract fun run() }",
+        "class KotlinChild : KotlinBase() { override fun run() {} }"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+
+    const snapshot = graphStore.getSnapshot(projectPath);
+    const symbol = (qualifiedName: string) =>
+      snapshot.symbols.find((candidate) => candidate.qualifiedName === qualifiedName);
+    const overrideEdge = (sourceQualifiedName: string) =>
+      snapshot.edges.find(
+        (edge) => edge.sourceId === symbol(sourceQualifiedName)?.id && edge.kind === "overrides"
+      );
+    for (const [sourceQualifiedName, targetQualifiedName] of [
+      ["src/JavaOverrides.java#JavaChild.run", "src/JavaOverrides.java#JavaBase.run"],
+      ["src/KotlinOverrides.kt#KotlinChild.run", "src/KotlinOverrides.kt#KotlinBase.run"]
+    ] as const) {
+      expect(overrideEdge(sourceQualifiedName)).toMatchObject({
+        targetId: symbol(targetQualifiedName)?.id,
+        resolution: "exact",
+        confidence: 1,
+        evidence: { ruleId: "syntax.override.explicit-direct-base-method", stage: "syntax" }
+      });
+    }
+    expect(
+      graphStore
+        .getArtifactFacts(projectPath)
+        .flatMap((facts) => facts.pendingReferences)
+        .filter((reference) => reference.relationKind === "overrides")
+        .map((reference) => reference.filePath)
+        .sort()
+    ).toEqual(["src/JavaOverrides.java", "src/KotlinOverrides.kt"]);
+  });
+
   it("bounds selected investigation declaration source without reading live files", async () => {
     const padding = Array.from(
       { length: NODE_SOURCE_LINE_LIMIT },

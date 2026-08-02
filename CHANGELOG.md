@@ -6,6 +6,29 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.213.0] - 2026-08-03
+
+### Added
+
+- Java methods with the standard `@Override` marker and Kotlin class methods with `override fun` now persist `overrides` references.
+- A Java/Kotlin reference becomes an exact `overrides` edge only when the graph proves one uniquely named direct parent class in the same source file and one same-named direct method contained by that parent. The resolver now considers both persisted structural hierarchy facts and normally resolved hierarchy edges for this proof.
+- Unit and project-resolution coverage prove exact same-file Java/Kotlin superclass links, explicit-marker extraction, unmarked-method rejection, and explicit unresolved results for missing external parents and interface implementations.
+
+### Compatibility
+
+- Existing SQLite data remains readable. The artifact-facts extractor advances to `multi-language-ast-v178` and the project resolver advances to `project-resolver-v64`; run `sync` or `index` once to refresh an existing graph. No database schema migration is required.
+- The public topology tuple remains at nine edge kinds. Exact Java/Kotlin `overrides` edges participate in the existing bounded topology ranking; `impact` traversal is unchanged.
+
+### Deliberate limits
+
+- Java/Kotlin exact hierarchy evidence is limited to a simple-name direct parent class declared exactly once in the same source file. External or qualified parents, aliases, interfaces, indirect ancestors, and ambiguous candidates remain unresolved rather than inferred.
+- This is not compiler-backed override verification: parameter types, return types, visibility, generics, and runtime virtual dispatch are not type-checked. A matching parent method name is necessary but not a claim of complete language semantics.
+
+### Comparison notes
+
+- CodeGraph currently has Java and Kotlin extractors and lists `overrides` among its graph edge kinds. Its JVM interface/abstract-dispatch pass links base methods to same-named implementations with heuristic `calls` edges across a broader set of languages; SymbolLattice independently adds a narrower first-class `overrides` edge with exact same-file evidence.
+- SymbolLattice is stronger for this bounded slice in disclosing the source marker, parent-class boundary, candidate uniqueness, and unresolved outcome. CodeGraph remains materially broader in cross-file hierarchy, interface dispatch, dynamic-dispatch reachability, and overall relation extraction.
+
 ## [0.212.0] - 2026-08-03
 
 ### Added

@@ -958,6 +958,110 @@ describe("explicit TypeScript override resolution", () => {
   });
 });
 
+describe("explicit Java and Kotlin override resolution", () => {
+  it("resolves only same-file direct superclass methods and leaves external bases unresolved", () => {
+    const sourceDocuments: readonly SourceDocument[] = [
+      {
+        absolutePath: "C:/project/src/JavaOverrides.java",
+        relativePath: "src/JavaOverrides.java",
+        language: "java",
+        sourceText: [
+          "class JavaBase { void run() {} }",
+          "class JavaChild extends JavaBase { @Override void run() {} }"
+        ].join("\n"),
+        contentHash: "java-overrides"
+      },
+      {
+        absolutePath: "C:/project/src/KotlinOverrides.kt",
+        relativePath: "src/KotlinOverrides.kt",
+        language: "kotlin",
+        sourceText: [
+          "abstract class KotlinBase { abstract fun run() }",
+          "class KotlinChild : KotlinBase() { override fun run() {} }"
+        ].join("\n"),
+        contentHash: "kotlin-overrides"
+      },
+      {
+        absolutePath: "C:/project/src/ExternalOverrides.java",
+        relativePath: "src/ExternalOverrides.java",
+        language: "java",
+        sourceText: "class JavaExternal extends MissingBase { @Override void run() {} }",
+        contentHash: "java-external"
+      },
+      {
+        absolutePath: "C:/project/src/ExternalOverrides.kt",
+        relativePath: "src/ExternalOverrides.kt",
+        language: "kotlin",
+        sourceText: "class KotlinExternal : MissingBase() { override fun run() {} }",
+        contentHash: "kotlin-external"
+      },
+      {
+        absolutePath: "C:/project/src/InterfaceOverrides.java",
+        relativePath: "src/InterfaceOverrides.java",
+        language: "java",
+        sourceText: [
+          "interface JavaContract { void run(); }",
+          "class JavaInterfaceChild implements JavaContract { @Override public void run() {} }"
+        ].join("\n"),
+        contentHash: "java-interface"
+      },
+      {
+        absolutePath: "C:/project/src/InterfaceOverrides.kt",
+        relativePath: "src/InterfaceOverrides.kt",
+        language: "kotlin",
+        sourceText: [
+          "interface KotlinContract { fun run() }",
+          "class KotlinInterfaceChild : KotlinContract { override fun run() {} }"
+        ].join("\n"),
+        contentHash: "kotlin-interface"
+      }
+    ];
+    const snapshot = snapshotWithResolver(sourceDocuments, undefined);
+    const symbol = (qualifiedName: string) =>
+      snapshot.symbols.find((candidate) => candidate.qualifiedName === qualifiedName);
+    const overrideEdge = (sourceQualifiedName: string) =>
+      snapshot.edges.find(
+        (edge) => edge.sourceId === symbol(sourceQualifiedName)?.id && edge.kind === "overrides"
+      );
+
+    for (const [sourceQualifiedName, targetQualifiedName] of [
+      ["src/JavaOverrides.java#JavaChild.run", "src/JavaOverrides.java#JavaBase.run"],
+      ["src/KotlinOverrides.kt#KotlinChild.run", "src/KotlinOverrides.kt#KotlinBase.run"]
+    ] as const) {
+      expect(overrideEdge(sourceQualifiedName)).toMatchObject({
+        targetId: symbol(targetQualifiedName)?.id,
+        resolution: "exact",
+        confidence: 1,
+        evidence: { ruleId: "syntax.override.explicit-direct-base-method", stage: "syntax" }
+      });
+    }
+
+    for (const sourceQualifiedName of [
+      "src/ExternalOverrides.java#JavaExternal.run",
+      "src/ExternalOverrides.kt#KotlinExternal.run",
+      "src/InterfaceOverrides.java#JavaInterfaceChild.run",
+      "src/InterfaceOverrides.kt#KotlinInterfaceChild.run"
+    ]) {
+      expect(overrideEdge(sourceQualifiedName)).toMatchObject({
+        targetId: null,
+        resolution: "unresolved",
+        confidence: 0,
+        evidence: { ruleId: "syntax.override.unresolved-direct-base-method", stage: "unresolved" }
+      });
+    }
+    expect(
+      snapshot.pendingReferences
+        .filter((reference) => reference.relationKind === "overrides")
+        .map((reference) => reference.filePath)
+    ).toEqual([
+      "src/ExternalOverrides.java",
+      "src/ExternalOverrides.kt",
+      "src/InterfaceOverrides.java",
+      "src/InterfaceOverrides.kt"
+    ]);
+  });
+});
+
 describe("literal route handler resolution", () => {
   it("resolves local, imported, and re-exported route handlers exactly", () => {
     const sourceDocuments: readonly SourceDocument[] = [
