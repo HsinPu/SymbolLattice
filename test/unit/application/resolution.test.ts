@@ -860,6 +860,104 @@ describe("direct class instantiation resolution", () => {
   });
 });
 
+describe("explicit TypeScript override resolution", () => {
+  it("resolves only a unique method on an exactly resolved direct parent class", () => {
+    const sourceDocuments: readonly SourceDocument[] = [
+      {
+        absolutePath: "C:/project/src/base.ts",
+        relativePath: "src/base.ts",
+        language: "typescript",
+        sourceText: [
+          "export class ImportedBase { run(): string { return \"base\"; } }",
+          "export class ReexportedBase { render(): string { return \"base\"; } }",
+          "export class AmbiguousBase {",
+          "  run(value: string): string;",
+          "  run(value: number): string;",
+          "  run(value: string | number): string { return String(value); }",
+          "}"
+        ].join("\n"),
+        contentHash: "base"
+      },
+      {
+        absolutePath: "C:/project/src/barrel.ts",
+        relativePath: "src/barrel.ts",
+        language: "typescript",
+        sourceText: 'export { ReexportedBase } from "./base";',
+        contentHash: "barrel"
+      },
+      {
+        absolutePath: "C:/project/src/children.ts",
+        relativePath: "src/children.ts",
+        language: "typescript",
+        sourceText: [
+          'import { ImportedBase } from "./base";',
+          'import { AmbiguousBase } from "./base";',
+          'import { ReexportedBase } from "./barrel";',
+          "export class LocalBase { localRun(): string { return \"base\"; } }",
+          "export class LocalChild extends LocalBase { override localRun(): string { return \"child\"; } }",
+          "export class ImportedChild extends ImportedBase { override run(): string { return \"child\"; } }",
+          "export class ReexportedChild extends ReexportedBase { override render(): string { return \"child\"; } }",
+          "export class NoBaseMethod extends LocalBase { override missing(): string { return \"child\"; } }",
+          "export class AmbiguousChild extends AmbiguousBase { override run(value: string | number): string { return String(value); } }",
+          "export class UnmarkedChild extends LocalBase { localRun(): string { return \"child\"; } }"
+        ].join("\n"),
+        contentHash: "children"
+      },
+      {
+        absolutePath: "C:/project/src/unproven.ts",
+        relativePath: "src/unproven.ts",
+        language: "typescript",
+        sourceText:
+          'export class UnprovenChild extends MissingBase { override run(): string { return "child"; } }',
+        contentHash: "unproven"
+      }
+    ];
+    const snapshot = snapshotWithResolver(sourceDocuments, undefined);
+    const symbol = (qualifiedName: string) =>
+      snapshot.symbols.find((candidate) => candidate.qualifiedName === qualifiedName);
+    const overrideEdge = (sourceQualifiedName: string, referenceName: string) =>
+      snapshot.edges.find(
+        (edge) =>
+          edge.sourceId === symbol(sourceQualifiedName)?.id &&
+          edge.kind === "overrides" &&
+          edge.referenceName === referenceName
+      );
+
+    for (const [sourceQualifiedName, referenceName, targetQualifiedName] of [
+      ["src/children.ts#LocalChild.localRun", "localRun", "src/children.ts#LocalBase.localRun"],
+      ["src/children.ts#ImportedChild.run", "run", "src/base.ts#ImportedBase.run"],
+      ["src/children.ts#ReexportedChild.render", "render", "src/base.ts#ReexportedBase.render"]
+    ] as const) {
+      expect(overrideEdge(sourceQualifiedName, referenceName)).toMatchObject({
+        targetId: symbol(targetQualifiedName)?.id,
+        resolution: "exact",
+        confidence: 1,
+        evidence: { ruleId: "syntax.override.explicit-direct-base-method", stage: "syntax" }
+      });
+    }
+
+    for (const [sourceQualifiedName, referenceName] of [
+      ["src/children.ts#NoBaseMethod.missing", "missing"],
+      ["src/children.ts#AmbiguousChild.run", "run"],
+      ["src/unproven.ts#UnprovenChild.run", "run"]
+    ] as const) {
+      expect(overrideEdge(sourceQualifiedName, referenceName)).toMatchObject({
+        targetId: null,
+        resolution: "unresolved",
+        confidence: 0,
+        evidence: { ruleId: "syntax.override.unresolved-direct-base-method", stage: "unresolved" }
+      });
+    }
+    expect(overrideEdge("src/children.ts#UnmarkedChild.localRun", "localRun")).toBeUndefined();
+    expect(
+      snapshot.pendingReferences
+        .filter((reference) => reference.relationKind === "overrides")
+        .map((reference) => reference.referenceName)
+        .sort()
+    ).toEqual(["missing", "run", "run"]);
+  });
+});
+
 describe("literal route handler resolution", () => {
   it("resolves local, imported, and re-exported route handlers exactly", () => {
     const sourceDocuments: readonly SourceDocument[] = [

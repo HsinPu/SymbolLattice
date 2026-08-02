@@ -160,6 +160,12 @@ function hasDefaultModifier(node: ts.Node): boolean {
   return modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.DefaultKeyword) ?? false;
 }
 
+/** TypeScript's `override` modifier is the sole supported override declaration signal. */
+function hasOverrideModifier(node: ts.MethodDeclaration): boolean {
+  const modifiers = (node as ModifierCarrier).modifiers;
+  return modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.OverrideKeyword) ?? false;
+}
+
 function declarationName(node: ts.NamedDeclaration): string | null {
   if (node.name === undefined) {
     return null;
@@ -5410,6 +5416,15 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
           reference.identifier
         );
       }
+    }
+    if (
+      declaredSymbol !== null &&
+      ts.isMethodDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      hasOverrideModifier(node) &&
+      currentOwner().kind === "class"
+    ) {
+      addPendingReference(declaredSymbol.id, node.name.text, "overrides", node.name);
     }
     if (info !== null && declaredSymbol !== null) {
       const enclosingScopeId = declarationScopeId(sourceFile, node, info);

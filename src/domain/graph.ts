@@ -19,7 +19,8 @@ export const DEFAULT_EXACT_IMPACT_EDGE_KINDS = [
 export const DEFAULT_EXACT_TOPOLOGY_EDGE_KINDS = [
   ...DEFAULT_EXACT_IMPACT_EDGE_KINDS,
   ...HIERARCHY_RELATION_KINDS,
-  "instantiates"
+  "instantiates",
+  "overrides"
 ] as const satisfies readonly EdgeKind[];
 
 const DEFAULT_IMPACT_EDGE_KINDS: readonly EdgeKind[] = DEFAULT_EXACT_IMPACT_EDGE_KINDS;

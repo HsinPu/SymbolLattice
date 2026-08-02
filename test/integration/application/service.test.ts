@@ -1250,7 +1250,7 @@ describe("SymbolLatticeService", () => {
       ]),
       iterationCount: 20,
       restartProbability: 0.2,
-      edgeKinds: ["calls", "references", "routes", "handles", "imports", "extends", "implements", "instantiates"],
+      edgeKinds: ["calls", "references", "routes", "handles", "imports", "extends", "implements", "instantiates", "overrides"],
       score: expect.any(Number),
       traversalTruncated: expect.any(Boolean),
       depthLimitReached: expect.any(Boolean)
@@ -1302,7 +1302,7 @@ describe("SymbolLatticeService", () => {
       })
     ]);
     expect(contractCandidate?.topologySignals).toMatchObject({
-      edgeKinds: ["calls", "references", "routes", "handles", "imports", "extends", "implements", "instantiates"],
+      edgeKinds: ["calls", "references", "routes", "handles", "imports", "extends", "implements", "instantiates", "overrides"],
       scopedExactNeighborCount: expect.any(Number),
       score: expect.any(Number)
     });
@@ -1343,7 +1343,7 @@ describe("SymbolLatticeService", () => {
     );
 
     expect(widgetCandidate?.topologySignals).toMatchObject({
-      edgeKinds: ["calls", "references", "routes", "handles", "imports", "extends", "implements", "instantiates"],
+      edgeKinds: ["calls", "references", "routes", "handles", "imports", "extends", "implements", "instantiates", "overrides"],
       scopedExactNeighborCount: expect.any(Number),
       score: expect.any(Number)
     });
@@ -1351,6 +1351,52 @@ describe("SymbolLatticeService", () => {
       expect.arrayContaining([expect.objectContaining({ kind: "instantiates", count: 1 })])
     );
     expect(widgetCandidate?.topologySignals?.score).toBeGreaterThan(0);
+  });
+
+  it("uses exact persisted TypeScript override evidence in topology-ranked investigation signals", async () => {
+    const projectPath = await createInlineProject({
+      "src/a-isolated.ts": [
+        "export function rankOverrideTopology(): string {",
+        '  const lexicalEvidence = "rankOverrideTopology rankOverrideTopology rankOverrideTopology";',
+        "  return lexicalEvidence;",
+        "}",
+        ""
+      ].join("\n"),
+      "src/b-base.ts": [
+        "export class ParentTopology {",
+        '  rankOverrideTopology(): string { return "base"; }',
+        "}",
+        ""
+      ].join("\n"),
+      "src/c-child.ts": [
+        'import { ParentTopology } from "./b-base";',
+        "export class ChildTopology extends ParentTopology {",
+        '  override rankOverrideTopology(): string { return "child"; }',
+        "}",
+        ""
+      ].join("\n")
+    });
+    const service = createService();
+    await service.init({ projectPath });
+
+    const topology = await service.investigate(projectPath, "rankOverrideTopology", {
+      ranking: "topology",
+      searchLimit: 12,
+      symbolLimit: 8
+    });
+    const childMethodCandidate = topology.selection.items.find(
+      ({ symbol }) => symbol.qualifiedName === "src/c-child.ts#ChildTopology.rankOverrideTopology"
+    );
+
+    expect(childMethodCandidate?.topologySignals).toMatchObject({
+      edgeKinds: ["calls", "references", "routes", "handles", "imports", "extends", "implements", "instantiates", "overrides"],
+      scopedExactNeighborCount: expect.any(Number),
+      score: expect.any(Number)
+    });
+    expect(childMethodCandidate?.topologySignals?.scopedExactIncidentEdgeKindCounts).toEqual(
+      expect.arrayContaining([expect.objectContaining({ kind: "overrides", count: 1 })])
+    );
+    expect(childMethodCandidate?.topologySignals?.score).toBeGreaterThan(0);
   });
 
   it("bounds selected investigation declaration source without reading live files", async () => {

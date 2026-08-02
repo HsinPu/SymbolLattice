@@ -6,6 +6,29 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.212.0] - 2026-08-03
+
+### Added
+
+- Native TypeScript class methods with an explicit `override` modifier now persist an `overrides` reference. It becomes an exact edge only when the active graph proves one exact direct `extends` target and exactly one same-named method directly contained by that parent class.
+- Bounded `investigate --ranking topology` now treats exactly resolved `overrides` edges as bidirectional connectivity evidence. `topologySignals.edgeKinds` and `scopedExactIncidentEdgeKindCounts` expand from eight to nine fixed-order kinds.
+- Unit, application, graph, and MCP coverage prove explicit-modifier extraction, local/imported/re-exported direct-parent resolution, missing-parent and missing-method rejection, overload ambiguity rejection, heuristic-edge exclusion, persistence through `init`, and the expanded response schema.
+
+### Compatibility
+
+- Existing SQLite data remains readable, but the artifact-facts extractor version advances to `multi-language-ast-v177`. Run `sync` once on an existing index to re-extract source facts and add eligible override relations; no database schema migration is required.
+- The fixed topology output tuple now appends `overrides`. Consumers that validate its exact length must accept nine entries. `impact` ranking and traversal keep their existing five eligible edge kinds.
+
+### Deliberate limits
+
+- This release accepts only named native TypeScript `MethodDeclaration` nodes carrying an explicit `override` modifier. It deliberately excludes unmarked methods, computed names, accessors, object-literal methods, mixins, indirect ancestors, and all non-TypeScript language syntaxes.
+- The resolver requires a uniquely proven direct parent and a unique same-named direct parent method. It does not run TypeScript compiler signature checks, infer virtual dispatch, or choose among overloaded parent methods.
+
+### Comparison notes
+
+- CodeGraph's inspected type and topology-ranking relation sets list `overrides`; its broader callback synthesizers also bridge superclass or interface methods to implementations across multiple languages through heuristic dispatch `calls` edges. SymbolLattice independently adds a first-class, exact-evidence `overrides` edge for its deliberately narrow TypeScript slice.
+- SymbolLattice is more explicit in this slice about the extraction token, parent proof, candidate uniqueness, unresolved result, and per-result relation incidence. CodeGraph remains substantially broader in language coverage, dispatch modeling, query composition, and mature relation extraction.
+
 ## [0.211.0] - 2026-08-03
 
 ### Added

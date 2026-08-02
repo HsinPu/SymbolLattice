@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.211.0 is a developer preview. Run it from source.
+> v0.212.0 is a developer preview. Run it from source.
 
 SymbolLattice builds a local, queryable code-symbol graph. Every relation retains its rule, evidence stage, and confidence; `exact`, `heuristic`, and `unresolved` evidence are never conflated.
 
@@ -28,7 +28,7 @@ cd symbol-lattice
 npm install
 npm run build
 
-# Create the first code knowledge graph
+# Create the first local code knowledge graph
 node dist/cli/main.js init /path/to/project
 
 # Query persisted graph evidence
@@ -49,18 +49,18 @@ Index data is stored in the target project's `.symbol-lattice/index.sqlite`. On 
 > [!NOTE]
 > MCP queries never create or update a graph. The default `serve --mcp` auto-sync is a host-owned background watcher; use `--no-auto-sync` for a fully manual `init`/`sync` workflow.
 
-## v0.211.0 highlights
+## v0.212.0 highlights
 
-- Direct TypeScript and JavaScript `new ClassName()` expressions now produce `instantiates` relations.
-- Only uniquely proven local, imported, or re-exported `class` targets receive exact edges. Function constructors, unimported same-name classes, member access, and dynamic constructors are never guessed as exact.
-- `investigate --ranking topology` now includes exact `instantiates` edges and discloses fixed-order relation counts in each result's `topologySignals`.
-- Run `sync` once on an existing index to re-extract facts and obtain the new relation.
+- Native TypeScript class methods with an explicit `override` modifier can now produce `overrides` relations.
+- An `exact` edge requires one exactly resolved direct parent class and exactly one same-named method directly contained by that parent. Unmarked, unresolved, missing, or ambiguous candidates are never guessed.
+- `investigate --ranking topology` now includes exact `overrides` relations and exposes nine fixed-order relation counts in every result's `topologySignals`.
+- Run `sync` once on an existing index to re-extract facts and add eligible override relations.
 
 ## Scope and guarantees
 
 - This is a local code graph, not an RDF/SPARQL knowledge base or ontology-reasoning system.
-- Topology ranking uses only bounded, persisted, `exact` `calls`, `references`, `routes`, `handles`, `imports`, `extends`, `implements`, and `instantiates` relations. It is not whole-graph PageRank, runtime analysis, or dynamic-dispatch inference.
-- `instantiates` currently covers direct class construction in native TypeScript and JavaScript files; Astro endpoint route projection remains unaffected.
+- Topology ranking uses only bounded, persisted, `exact` `calls`, `references`, `routes`, `handles`, `imports`, `extends`, `implements`, `instantiates`, and `overrides` relations. It is not whole-graph PageRank, runtime analysis, or dynamic-dispatch inference.
+- `overrides` currently covers only named native TypeScript class methods with an `override` modifier. It does not type-check signatures with the TypeScript compiler or infer accessors, computed names, mixins, indirect ancestors, or ambiguous overloads.
 - Indexing and querying stay local. Live file contents determine freshness only and never replace indexed evidence.
 
 ## Verification

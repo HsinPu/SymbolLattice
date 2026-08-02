@@ -548,7 +548,7 @@ function investigateResult(): InvestigateResult {
             scopedExactNeighborCount: 1,
             iterationCount: 20,
             restartProbability: 0.2,
-            edgeKinds: ["calls", "references", "routes", "handles", "imports", "extends", "implements", "instantiates"],
+            edgeKinds: ["calls", "references", "routes", "handles", "imports", "extends", "implements", "instantiates", "overrides"],
             scopedExactIncidentEdgeKindCounts: [
               { kind: "calls", count: 1 },
               { kind: "references", count: 0 },
@@ -557,7 +557,8 @@ function investigateResult(): InvestigateResult {
               { kind: "imports", count: 0 },
               { kind: "extends", count: 0 },
               { kind: "implements", count: 0 },
-              { kind: "instantiates", count: 0 }
+              { kind: "instantiates", count: 0 },
+              { kind: "overrides", count: 0 }
             ],
             score: 0.16,
             traversalTruncated: false,

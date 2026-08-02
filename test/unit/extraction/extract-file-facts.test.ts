@@ -234,6 +234,40 @@ describe("source extraction", () => {
     ]);
   });
 
+  it("extracts only explicit TypeScript override method declarations", () => {
+    const facts = extractFileFacts({
+      filePath: "src/overrides.ts",
+      language: "typescript",
+      sourceText: [
+        "class Base { run(): void {} }",
+        "class Child extends Base {",
+        "  override run(): void {}",
+        "  runWithoutModifier(): void {}",
+        "}",
+        "const utility = { override() {} };",
+        "class ComputedChild extends Base { override [\"run\"](): void {} }"
+      ].join("\n")
+    });
+    const overriddenMethod = facts.symbols.find(
+      (symbol) => symbol.qualifiedName === "src/overrides.ts#Child.run"
+    );
+
+    expect(
+      facts.pendingReferences
+        .filter((reference) => reference.relationKind === "overrides")
+        .map((reference) => [reference.sourceId, reference.referenceName, reference.range])
+    ).toEqual([
+      [
+        overriddenMethod?.id,
+        "run",
+        {
+          start: { line: 3, column: 12 },
+          end: { line: 3, column: 15 }
+        }
+      ]
+    ]);
+  });
+
   it("extracts direct TypeScript heritage identifiers with exact ranges and lexical scopes", () => {
     const facts = extractFileFacts({
       filePath: "src/heritage.ts",

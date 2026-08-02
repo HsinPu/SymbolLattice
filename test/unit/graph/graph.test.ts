@@ -815,6 +815,61 @@ describe("pure graph traversal", () => {
     expect(relevance.scopedExactIncidentEdgeKindCountsBySymbolId.has(heuristicCreator.id)).toBe(false);
   });
 
+  it("uses exact override edges in default topology relevance and excludes heuristic evidence", () => {
+    const baseMethod = symbol({
+      id: "base-method",
+      name: "run",
+      filePath: "src/a-base.ts",
+      kind: "method"
+    });
+    const overridingMethod = symbol({
+      id: "overriding-method",
+      name: "run",
+      filePath: "src/b-child.ts",
+      kind: "method"
+    });
+    const heuristicMethod = symbol({
+      id: "heuristic-method",
+      name: "run",
+      filePath: "src/c-heuristic.ts",
+      kind: "method"
+    });
+    const relevance = getBoundedExactTopologyRelevance(
+      {
+        symbols: [heuristicMethod, overridingMethod, baseMethod],
+        edges: [
+          edge({
+            id: "child-overrides-base",
+            sourceId: overridingMethod.id,
+            targetId: baseMethod.id,
+            kind: "overrides"
+          }),
+          edge({
+            id: "heuristic-child-overrides-base",
+            sourceId: heuristicMethod.id,
+            targetId: baseMethod.id,
+            kind: "overrides",
+            resolution: "heuristic"
+          })
+        ]
+      },
+      {
+        seedSymbolIds: [baseMethod.id],
+        maxHops: 2,
+        maxVisitedSymbols: 10,
+        iterations: 20,
+        restartProbability: 0.2
+      }
+    );
+
+    expect(relevance.scopedSymbolIds).toEqual([baseMethod.id, overridingMethod.id]);
+    expect(relevance.scoresBySymbolId.get(baseMethod.id)).toBeGreaterThan(0);
+    expect(relevance.scoresBySymbolId.get(overridingMethod.id)).toBeGreaterThan(0);
+    expect(relevance.scopedExactIncidentEdgeKindCountsBySymbolId.get(baseMethod.id)?.get("overrides")).toBe(1);
+    expect(relevance.scopedExactIncidentEdgeKindCountsBySymbolId.get(overridingMethod.id)?.get("overrides")).toBe(1);
+    expect(relevance.scopedExactIncidentEdgeKindCountsBySymbolId.has(heuristicMethod.id)).toBe(false);
+  });
+
   it("finds exact affected test-file paths through imports and barrel exports", () => {
     const changedFile = symbol({ id: "changed-file", name: "math.ts", filePath: "src/math.ts", kind: "file" });
     const barrelFile = symbol({ id: "barrel-file", name: "index.ts", filePath: "src/index.ts", kind: "file" });

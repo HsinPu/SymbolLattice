@@ -840,7 +840,8 @@ const investigateOutputSchema = z
                 z.literal(DEFAULT_EXACT_TOPOLOGY_EDGE_KINDS[4]),
                 z.literal(DEFAULT_EXACT_TOPOLOGY_EDGE_KINDS[5]),
                 z.literal(DEFAULT_EXACT_TOPOLOGY_EDGE_KINDS[6]),
-                z.literal(DEFAULT_EXACT_TOPOLOGY_EDGE_KINDS[7])
+                z.literal(DEFAULT_EXACT_TOPOLOGY_EDGE_KINDS[7]),
+                z.literal(DEFAULT_EXACT_TOPOLOGY_EDGE_KINDS[8])
               ]),
               scopedExactIncidentEdgeKindCounts: z.tuple([
                 z.object({
@@ -873,6 +874,10 @@ const investigateOutputSchema = z
                 }),
                 z.object({
                   kind: z.literal(DEFAULT_EXACT_TOPOLOGY_EDGE_KINDS[7]),
+                  count: z.number().int().nonnegative()
+                }),
+                z.object({
+                  kind: z.literal(DEFAULT_EXACT_TOPOLOGY_EDGE_KINDS[8]),
                   count: z.number().int().nonnegative()
                 })
               ]),

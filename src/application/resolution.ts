@@ -2459,6 +2459,81 @@ function instantiationRuleId(
   return `syntax.new-expression.${suffix}`;
 }
 
+function isOverrideReference(
+  reference: PendingReference
+): reference is PendingReference & { readonly relationKind: "overrides" } {
+  return reference.relationKind === "overrides";
+}
+
+function overrideRuleId(
+  suffix: "explicit-direct-base-method" | "unresolved-direct-base-method"
+): string {
+  return `syntax.override.${suffix}`;
+}
+
+interface ExactOverrideResolution {
+  readonly target: SymbolNode | null;
+  readonly candidates: readonly SymbolNode[];
+}
+
+/**
+ * A TypeScript `override` modifier alone does not expose semantic type-checker
+ * data. Retain an exact edge only when the persisted graph independently proves
+ * one direct parent class and one same-named method contained by that parent.
+ */
+function resolveExactOverrideTarget(input: {
+  readonly reference: PendingReference & { readonly relationKind: "overrides" };
+  readonly symbolsById: ReadonlyMap<string, SymbolNode>;
+  readonly resolvedEdges: readonly GraphEdge[];
+  readonly containerIdsByContainedId: ReadonlyMap<string, ReadonlySet<string>>;
+  readonly containedIdsByContainerId: ReadonlyMap<string, ReadonlySet<string>>;
+}): ExactOverrideResolution {
+  const source = input.symbolsById.get(input.reference.sourceId);
+  if (source?.kind !== "method" || source.name !== input.reference.referenceName) {
+    return { target: null, candidates: [] };
+  }
+
+  const owners = [...(input.containerIdsByContainedId.get(source.id) ?? [])]
+    .map((id) => input.symbolsById.get(id))
+    .filter((candidate): candidate is SymbolNode => candidate?.kind === "class")
+    .sort((left, right) => compareStableText(left.id, right.id));
+  const owner = owners[0];
+  if (owners.length !== 1 || owner === undefined) {
+    return { target: null, candidates: [] };
+  }
+
+  const baseClasses = [...new Set(
+    input.resolvedEdges
+      .filter(
+        (edge) =>
+          edge.kind === "extends" &&
+          edge.sourceId === owner.id &&
+          edge.resolution === "exact" &&
+          edge.targetId !== null
+      )
+      .map((edge) => edge.targetId)
+  )]
+    .map((id) => (id === null ? undefined : input.symbolsById.get(id)))
+    .filter((candidate): candidate is SymbolNode => candidate?.kind === "class")
+    .sort((left, right) => compareStableText(left.id, right.id));
+  const baseClass = baseClasses[0];
+  if (baseClasses.length !== 1 || baseClass === undefined) {
+    return { target: null, candidates: [] };
+  }
+
+  const candidates = [...(input.containedIdsByContainerId.get(baseClass.id) ?? [])]
+    .map((id) => input.symbolsById.get(id))
+    .filter(
+      (candidate): candidate is SymbolNode =>
+        candidate?.kind === "method" && candidate.name === input.reference.referenceName
+    )
+    .sort((left, right) => compareStableText(left.id, right.id));
+  return {
+    target: candidates.length === 1 ? candidates[0] ?? null : null,
+    candidates
+  };
+}
+
 function importBindingSupportsSpace(
   binding: ExtractedFileFacts["importBindings"][number],
   expectedSpace: BindingSpace
@@ -6875,6 +6950,65 @@ export function resolveProjectFacts(input: {
             exportedCandidates.map((candidate) => candidate.symbol)
           ),
           exactImportedConfigurationPaths
+        )
+      )
+    );
+  }
+
+  const overrideReferences = [...references]
+    .filter(isOverrideReference)
+    .sort((left, right) => compareStableText(left.id, right.id));
+  const containerIdsByContainedId = new Map<string, Set<string>>();
+  const containedIdsByContainerId = new Map<string, Set<string>>();
+  if (overrideReferences.length > 0) {
+    for (const edge of structuralEdges) {
+      if (edge.kind !== "contains" || edge.resolution !== "exact" || edge.targetId === null) {
+        continue;
+      }
+      const containers = containerIdsByContainedId.get(edge.targetId) ?? new Set<string>();
+      containers.add(edge.sourceId);
+      containerIdsByContainedId.set(edge.targetId, containers);
+      const contained = containedIdsByContainerId.get(edge.sourceId) ?? new Set<string>();
+      contained.add(edge.targetId);
+      containedIdsByContainerId.set(edge.sourceId, contained);
+    }
+  }
+  for (const reference of overrideReferences) {
+    const resolution = resolveExactOverrideTarget({
+      reference,
+      symbolsById,
+      resolvedEdges,
+      containerIdsByContainedId,
+      containedIdsByContainerId
+    });
+    if (resolution.target !== null) {
+      resolvedEdges.push(
+        referenceEdge(
+          reference,
+          resolution.target.id,
+          "exact",
+          1,
+          referenceEvidence(
+            overrideRuleId("explicit-direct-base-method"),
+            "syntax",
+            candidateSymbolIds(resolution.candidates)
+          )
+        )
+      );
+      continue;
+    }
+
+    unresolvedReferences.push(reference);
+    resolvedEdges.push(
+      referenceEdge(
+        reference,
+        null,
+        "unresolved",
+        0,
+        referenceEvidence(
+          overrideRuleId("unresolved-direct-base-method"),
+          "unresolved",
+          candidateSymbolIds(resolution.candidates)
         )
       )
     );
