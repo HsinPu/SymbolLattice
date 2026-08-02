@@ -65,6 +65,8 @@ const SPRING_REQUEST_MAPPING_PATH = "org.springframework.web.bind.annotation.Req
 const SPRING_VALUE_PATH = "org.springframework.beans.factory.annotation.Value";
 const SPRING_CONFIGURATION_PROPERTIES_PATH =
   "org.springframework.boot.context.properties.ConfigurationProperties";
+const SPRING_CONFIGURATION_PATH = "org.springframework.context.annotation.Configuration";
+const SPRING_BEAN_PATH = "org.springframework.context.annotation.Bean";
 const MICRONAUT_CONTROLLER_PATH = "io.micronaut.http.annotation.Controller";
 const JAKARTA_REST_PATH_PATHS = ["jakarta.ws.rs.Path", "javax.ws.rs.Path"] as const;
 const SPRING_BOOT_PROPERTIES_KEY = /^[A-Za-z0-9][A-Za-z0-9._-]*$/u;
@@ -1017,6 +1019,64 @@ function staticSpringBootConfigurationPropertiesPrefixReferences(
   return prefix === null ? [] : [{ prefix, node: annotation.node }];
 }
 
+/**
+ * Retains a configuration prefix on one direct concrete `@Bean` method only
+ * inside a direct `@Configuration` class. All three Spring annotation types
+ * require exact import or fully-qualified proof. This intentionally models a
+ * source-proven factory relationship, not Spring's runtime bean registration.
+ */
+function staticSpringBootBeanConfigurationPropertiesPrefixReferences(
+  input: JavaExtractFileFactsInput,
+  owner: StaticJavaClass,
+  method: StaticJavaMethod,
+  imports: ReadonlyMap<string, string>
+): readonly StaticSpringBootConfigurationPropertiesPrefixReference[] {
+  if (!directChildren(method.node).some((child) => child.name === "Block")) {
+    return [];
+  }
+  const annotationsNamedConfiguration = owner.annotations.filter(
+    (annotation) => annotation.name === "Configuration" || annotation.name === SPRING_CONFIGURATION_PATH
+  );
+  const configurationAnnotations = annotationsNamedConfiguration.filter((annotation) =>
+    annotationMatches(annotation, SPRING_CONFIGURATION_PATH, imports)
+  );
+  if (
+    annotationsNamedConfiguration.length !== configurationAnnotations.length ||
+    configurationAnnotations.length !== 1
+  ) {
+    return [];
+  }
+  const annotationsNamedBean = method.annotations.filter(
+    (annotation) => annotation.name === "Bean" || annotation.name === SPRING_BEAN_PATH
+  );
+  const beanAnnotations = annotationsNamedBean.filter((annotation) =>
+    annotationMatches(annotation, SPRING_BEAN_PATH, imports)
+  );
+  if (annotationsNamedBean.length !== beanAnnotations.length || beanAnnotations.length !== 1) {
+    return [];
+  }
+  const annotationsNamedConfigurationProperties = method.annotations.filter(
+    (annotation) =>
+      annotation.name === "ConfigurationProperties" ||
+      annotation.name === SPRING_CONFIGURATION_PROPERTIES_PATH
+  );
+  const configurationPropertiesAnnotations = annotationsNamedConfigurationProperties.filter(
+    (annotation) => annotationMatches(annotation, SPRING_CONFIGURATION_PROPERTIES_PATH, imports)
+  );
+  if (
+    annotationsNamedConfigurationProperties.length !== configurationPropertiesAnnotations.length ||
+    configurationPropertiesAnnotations.length !== 1
+  ) {
+    return [];
+  }
+  const annotation = configurationPropertiesAnnotations[0];
+  if (annotation === undefined) {
+    return [];
+  }
+  const prefix = staticSpringBootConfigurationPropertiesPrefix(input, annotation);
+  return prefix === null ? [] : [{ prefix, node: annotation.node }];
+}
+
 function joinHttpPaths(prefix: string, path: string): string {
   const segments = [prefix, path]
     .flatMap((value) => value.split("/"))
@@ -1030,8 +1090,9 @@ function joinHttpPaths(prefix: string, path: string): string {
  * surface proves a direct controller annotation, unambiguous framework import
  * (or fully-qualified annotation), one literal mapping path, and the exact
  * local method declaration. Spring Boot properties retain direct field-level
- * literal `@Value` placeholders and direct Java class-level or direct top-level
- * record-level `@ConfigurationProperties` literal prefixes.
+ * literal `@Value` placeholders and direct Java class-level, direct top-level
+ * record-level, or proven `@Bean` factory-method `@ConfigurationProperties`
+ * literal prefixes.
  */
 export function extractJavaFileFacts(input: JavaExtractFileFactsInput): ArtifactFacts {
   const springWebCapability = frameworkCapability("spring-web");
@@ -1348,6 +1409,25 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
       const symbolsByMethod = new Map<StaticJavaMethod, SymbolNode>();
       for (const methodDeclaration of methods) {
         symbolsByMethod.set(methodDeclaration, addMethod(classSymbol, methodDeclaration));
+      }
+      for (const methodDeclaration of methods) {
+        const methodSymbol = symbolsByMethod.get(methodDeclaration);
+        if (methodSymbol === undefined) {
+          continue;
+        }
+        for (const reference of staticSpringBootBeanConfigurationPropertiesPrefixReferences(
+          input,
+          classDeclaration,
+          methodDeclaration,
+          imports
+        )) {
+          springBootConfigurationPropertiesPrefixes.push({
+            sourceId: methodSymbol.id,
+            filePath: input.filePath,
+            prefix: reference.prefix,
+            range: rangeFor(lineStarts, reference.node.from, reference.node.to)
+          });
+        }
       }
 
       if (isSpringController(classDeclaration, imports)) {

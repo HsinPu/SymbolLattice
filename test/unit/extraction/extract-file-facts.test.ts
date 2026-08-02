@@ -8021,6 +8021,114 @@ describe("source extraction", () => {
     ).toEqual(["HostProperties:host"]);
   });
 
+  it("retains direct Java @Bean method Spring Boot @ConfigurationProperties literal-prefix facts", () => {
+    const facts = extractFileFacts({
+      filePath: "src/config/PropertiesFactory.java",
+      language: "java",
+      sourceText: [
+        "import org.springframework.boot.context.properties.ConfigurationProperties;",
+        "import org.springframework.context.annotation.Bean;",
+        "import org.springframework.context.annotation.Configuration;",
+        "",
+        "@Configuration(proxyBeanMethods = false)",
+        "class PropertiesFactory {",
+        "  @Bean",
+        '  @ConfigurationProperties(prefix = "app.cache")',
+        "  CacheProperties cacheProperties() { return new CacheProperties(); }",
+        "",
+        '  @org.springframework.context.annotation.Bean(name = "clientProperties")',
+        '  @org.springframework.boot.context.properties.ConfigurationProperties("service.client")',
+        "  ClientProperties clientProperties() { return new ClientProperties(); }",
+        "}",
+        "",
+        "@org.springframework.context.annotation.Configuration",
+        "class FullyQualifiedFactory {",
+        "  @org.springframework.context.annotation.Bean",
+        '@org.springframework.boot.context.properties.ConfigurationProperties(prefix = "full.factory")',
+        "  Object fullProperties() { return new Object(); }",
+        "}"
+      ].join("\n")
+    });
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+
+    expect(
+      facts.symbols.filter((symbol) => symbol.kind === "method").map((symbol) => symbol.name)
+    ).toEqual(["cacheProperties", "clientProperties", "fullProperties"]);
+    expect(
+      facts.springBootPropertiesFacts?.configurationPropertiesPrefixes
+        .map((reference) => `${symbolsById.get(reference.sourceId)?.name}:${reference.prefix}`)
+        .sort()
+    ).toEqual([
+      "cacheProperties:app.cache",
+      "clientProperties:service.client",
+      "fullProperties:full.factory"
+    ]);
+  });
+
+  it("rejects Java @ConfigurationProperties factory methods without exact configuration and bean proof", () => {
+    const rejected = [
+      [
+        "src/config/MissingConfiguration.java",
+        [
+          "import org.springframework.boot.context.properties.ConfigurationProperties;",
+          "import org.springframework.context.annotation.Bean;",
+          "class MissingConfiguration {",
+          "  @Bean",
+          '  @ConfigurationProperties(prefix = "missing.configuration")',
+          "  Object properties() { return new Object(); }",
+          "}"
+        ].join("\n")
+      ],
+      [
+        "src/config/MissingBean.java",
+        [
+          "import org.springframework.boot.context.properties.ConfigurationProperties;",
+          "import org.springframework.context.annotation.Configuration;",
+          "@Configuration",
+          "class MissingBean {",
+          '  @ConfigurationProperties(prefix = "missing.bean")',
+          "  Object properties() { return new Object(); }",
+          "}"
+        ].join("\n")
+      ],
+      [
+        "src/config/AbstractFactory.java",
+        [
+          "import org.springframework.boot.context.properties.ConfigurationProperties;",
+          "import org.springframework.context.annotation.Bean;",
+          "import org.springframework.context.annotation.Configuration;",
+          "@Configuration",
+          "abstract class AbstractFactory {",
+          "  @Bean",
+          '  @ConfigurationProperties(prefix = "abstract.factory")',
+          "  abstract Object properties();",
+          "}"
+        ].join("\n")
+      ],
+      [
+        "src/config/WildcardBean.java",
+        [
+          "import org.springframework.boot.context.properties.ConfigurationProperties;",
+          "import org.springframework.context.annotation.Configuration;",
+          "import org.springframework.context.annotation.*;",
+          "@Configuration",
+          "class WildcardBean {",
+          "  @Bean",
+          '  @ConfigurationProperties(prefix = "wildcard.bean")',
+          "  Object properties() { return new Object(); }",
+          "}"
+        ].join("\n")
+      ]
+    ] as const;
+
+    expect(
+      rejected.map(([filePath, sourceText]) =>
+        extractFileFacts({ filePath, language: "java", sourceText }).springBootPropertiesFacts
+          ?.configurationPropertiesPrefixes
+      )
+    ).toEqual([[], [], [], []]);
+  });
+
   it("retains direct Java Spring Boot @Value concrete-method parameter facts", () => {
     const facts = extractFileFacts({
       filePath: "src/config/MethodConfig.java",

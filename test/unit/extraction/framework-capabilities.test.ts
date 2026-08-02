@@ -407,6 +407,7 @@ describe("first-party framework capabilities", () => {
         "direct imported or fully-qualified @Value literal-key annotations on direct top-level Kotlin object properties, concrete-method parameters, or qualifying one-parameter concrete methods",
         "direct imported or fully-qualified @ConfigurationProperties literal-prefix annotations on direct Java or Kotlin classes",
         "direct imported or fully-qualified @ConfigurationProperties literal-prefix annotations on direct top-level Java records",
+        "direct concrete Java @Bean methods in direct @Configuration classes when all Spring annotations are exact imported or fully-qualified and the prefix is literal",
         "Kotlin regular-string placeholders with an explicit escaped dollar sign",
         "unique literal keys in conventional application or bootstrap properties or YAML files",
         "case/dash/underscore relaxed-key fallback only when one canonical configuration candidate exists",

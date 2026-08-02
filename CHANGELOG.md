@@ -6,6 +6,22 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.180.0] - 2026-08-02
+
+### Added
+
+- Direct concrete Java <code>@Bean</code> methods inside direct <code>@Configuration</code> classes now contribute parser-backed Spring <code>@ConfigurationProperties</code> literal-prefix facts. The graph uses the existing method symbol as the source owner, making factory-method configuration impact queries traceable to the declaration.
+- All three Spring annotations must be an exact direct import or a fully-qualified name. The accepted prefix remains one positional literal or one <code>prefix =</code> literal; the existing per-leaf YAML/properties resolver, confidence <code>0.85</code>, explicit ambiguity, source-value omission, and explicit-sync re-projection are reused unchanged.
+- New unit, capability, and service coverage proves imported and fully-qualified annotations, exact method ownership, missing-configuration/bean rejection, abstract-method rejection, wildcard rejection, source-value omission, and unchanged-artifact reuse after configuration withdrawal.
+
+### Deliberate limits
+
+- This is not general Spring bean discovery. The slice excludes <code>@Bean</code> methods outside direct <code>@Configuration</code> classes, Kotlin factory methods, nested classes, abstract/interface methods, meta-annotations, aliases/wildcard imports, <code>value =</code>, multiple attributes, nonliteral prefixes, factory return-type inspection, profiles, imports, precedence, validation, environment overrides, and runtime registration or binding behavior.
+
+### Comparison notes
+
+- The inspected CodeGraph Spring binding path uses one Java/Kotlin text pattern for <code>@ConfigurationProperties</code>, so it can recognize method annotations without proving an owner. SymbolLattice independently requires the AST-proven <code>@Configuration</code> → concrete <code>@Bean</code> → literal <code>@ConfigurationProperties</code> chain and records the method owner, range, per-leaf candidates, and unresolved ambiguity. CodeGraph remains broader; SymbolLattice is more specific and auditable for supported factory methods.
+
 ## [0.179.0] - 2026-08-02
 
 ### Added
