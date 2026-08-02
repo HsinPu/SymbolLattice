@@ -445,6 +445,19 @@ interface StaticReactNativeTurboModuleCall {
   readonly expression: ts.PropertyAccessExpression;
 }
 
+/** A direct method call through one lexically proven default import. */
+interface StaticReactNativeTurboModuleDefaultImportCall {
+  readonly moduleSpecifier: string;
+  readonly methodName: string;
+  readonly expression: ts.PropertyAccessExpression;
+}
+
+/** One direct default export of a literal or immutable TurboModule registry result. */
+interface StaticReactNativeTurboModuleDefaultExport {
+  readonly moduleName: string;
+  readonly expression: ts.Expression;
+}
+
 /** One direct `TurboModuleRegistry.get*<Spec>("Module")` registration. */
 interface StaticReactNativeTurboModuleRegistryCall {
   readonly moduleName: string;
@@ -1151,6 +1164,68 @@ function staticReactNativeTurboModuleCall(
   return moduleName === undefined || moduleName === null
     ? null
     : { moduleName, methodName: methodAccess.name.text, expression: methodAccess };
+}
+
+function directDefaultImportModuleSpecifier(binding: RouteBinding | undefined): string | null {
+  if (
+    binding === undefined ||
+    !ts.isIdentifier(binding.declaration) ||
+    !ts.isImportClause(binding.declaration.parent)
+  ) {
+    return null;
+  }
+  const importClause = binding.declaration.parent;
+  if (importClause.name !== binding.declaration || importClause.isTypeOnly || !ts.isImportDeclaration(importClause.parent)) {
+    return null;
+  }
+  const importDeclaration = importClause.parent;
+  return ts.isStringLiteral(importDeclaration.moduleSpecifier) ? importDeclaration.moduleSpecifier.text : null;
+}
+
+/**
+ * Retains a default-import call only as a candidate. Project resolution emits a
+ * bridge edge later only when the imported local file directly exports a proven
+ * TurboModule registry result.
+ */
+function staticReactNativeTurboModuleDefaultImportCall(
+  sourceFile: ts.SourceFile,
+  node: ts.CallExpression,
+  bindings: ScopedRouteReceiverBindings
+): StaticReactNativeTurboModuleDefaultImportCall | null {
+  if (node.questionDotToken !== undefined || !ts.isPropertyAccessExpression(node.expression)) {
+    return null;
+  }
+  const methodAccess = node.expression;
+  if (methodAccess.questionDotToken !== undefined || !ts.isIdentifier(methodAccess.expression)) {
+    return null;
+  }
+  const binding = visibleRouteBinding(sourceFile, methodAccess.expression, bindings);
+  const moduleSpecifier = directDefaultImportModuleSpecifier(binding);
+  return moduleSpecifier === null
+    ? null
+    : { moduleSpecifier, methodName: methodAccess.name.text, expression: methodAccess };
+}
+
+function staticReactNativeTurboModuleDefaultExport(
+  sourceFile: ts.SourceFile,
+  node: ts.ExportAssignment,
+  bindings: ScopedRouteReceiverBindings
+): StaticReactNativeTurboModuleDefaultExport | null {
+  if (node.isExportEquals) {
+    return null;
+  }
+  const expression = unwrapReactNativeTurboModuleExpression(node.expression);
+  const direct = staticReactNativeTurboModuleRegistryResult(sourceFile, expression, bindings);
+  if (direct !== null) {
+    return { moduleName: direct.moduleName, expression };
+  }
+  if (!ts.isIdentifier(expression)) {
+    return null;
+  }
+  const binding = visibleRouteBinding(sourceFile, expression, bindings);
+  return binding?.kind === "react-native-turbo-module" && binding.reactNativeTurboModuleName !== undefined
+    ? { moduleName: binding.reactNativeTurboModuleName, expression }
+    : null;
 }
 
 function directReactNativeTurboModuleBaseType(
@@ -4751,11 +4826,15 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
   const reactNativeFacts: {
     nativeModuleCalls: ReactNativeFacts["nativeModuleCalls"][number][];
     turboModuleCalls: ReactNativeFacts["turboModuleCalls"][number][];
+    turboModuleDefaultImportCalls: ReactNativeFacts["turboModuleDefaultImportCalls"][number][];
+    turboModuleDefaultExports: ReactNativeFacts["turboModuleDefaultExports"][number][];
     turboModuleSpecMethods: ReactNativeFacts["turboModuleSpecMethods"][number][];
     nativeMethods: ReactNativeFacts["nativeMethods"][number][];
   } = {
     nativeModuleCalls: [],
     turboModuleCalls: [],
+    turboModuleDefaultImportCalls: [],
+    turboModuleDefaultExports: [],
     turboModuleSpecMethods: [],
     nativeMethods: []
   };
@@ -5541,6 +5620,36 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
               moduleName: turboModuleCall.moduleName,
               methodName: turboModuleCall.methodName,
               range: sourceRange(sourceFile, turboModuleCall.expression)
+            });
+          }
+
+          const defaultImportCall = staticReactNativeTurboModuleDefaultImportCall(
+            sourceFile,
+            node,
+            routeReceiverBindings
+          );
+          if (defaultImportCall !== null && owner !== undefined) {
+            reactNativeFacts.turboModuleDefaultImportCalls.push({
+              sourceId: owner.id,
+              filePath: input.filePath,
+              moduleSpecifier: defaultImportCall.moduleSpecifier,
+              methodName: defaultImportCall.methodName,
+              range: sourceRange(sourceFile, defaultImportCall.expression)
+            });
+          }
+        }
+
+        if (ts.isExportAssignment(node)) {
+          const defaultExport = staticReactNativeTurboModuleDefaultExport(
+            sourceFile,
+            node,
+            routeReceiverBindings
+          );
+          if (defaultExport !== null) {
+            reactNativeFacts.turboModuleDefaultExports.push({
+              filePath: input.filePath,
+              moduleName: defaultExport.moduleName,
+              range: sourceRange(sourceFile, defaultExport.expression)
             });
           }
         }

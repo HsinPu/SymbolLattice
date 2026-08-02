@@ -18448,6 +18448,36 @@ describe("source extraction", () => {
         "void First; void Second;"
       ].join("\n")
     });
+    const defaultExport = extractFileFacts({
+      filePath: "src/mobile/NativeImportedCalendar.ts",
+      language: "typescript",
+      sourceText: [
+        'import { TurboModuleRegistry } from "react-native";',
+        'const Calendar = TurboModuleRegistry.getEnforcing("CalendarModule");',
+        "export default Calendar;"
+      ].join("\n")
+    });
+    const defaultImport = extractFileFacts({
+      filePath: "src/mobile/useCalendar.ts",
+      language: "typescript",
+      sourceText: [
+        'import Calendar from "./NativeImportedCalendar";',
+        "export function schedule() {",
+        "  Calendar.createEvent();",
+        "  Calendar?.cancelEvent();",
+        "}"
+      ].join("\n")
+    });
+    const shadowedDefaultImport = extractFileFacts({
+      filePath: "src/mobile/shadowed-default-import.ts",
+      language: "typescript",
+      sourceText: [
+        'import Calendar from "./NativeImportedCalendar";',
+        "export function schedule(Calendar: { createEvent(): void }) {",
+        "  Calendar.createEvent();",
+        "}"
+      ].join("\n")
+    });
 
     expect(named.reactNativeFacts?.turboModuleCalls).toEqual([
       expect.objectContaining({ moduleName: "CalendarModule", methodName: "createEvent" })
@@ -18473,5 +18503,12 @@ describe("source extraction", () => {
       expect.objectContaining({ moduleName: "DirectModule", methodName: "refresh" })
     ]);
     expect(ambiguousSpec.reactNativeFacts?.turboModuleSpecMethods).toEqual([]);
+    expect(defaultExport.reactNativeFacts?.turboModuleDefaultExports).toEqual([
+      expect.objectContaining({ moduleName: "CalendarModule" })
+    ]);
+    expect(defaultImport.reactNativeFacts?.turboModuleDefaultImportCalls).toEqual([
+      expect.objectContaining({ moduleSpecifier: "./NativeImportedCalendar", methodName: "createEvent" })
+    ]);
+    expect(shadowedDefaultImport.reactNativeFacts?.turboModuleDefaultImportCalls).toEqual([]);
   });
 });

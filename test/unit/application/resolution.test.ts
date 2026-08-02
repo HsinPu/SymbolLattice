@@ -3026,4 +3026,133 @@ describe("TypeScript configuration module resolution", () => {
     expect(unresolved).toMatchObject({ resolution: "unresolved", confidence: 0 });
     expect(unresolved?.evidence?.candidateSymbolIds).toHaveLength(2);
   });
+
+  it("projects a React Native TurboModule default import only through a proven local default export", () => {
+    const sourceDocuments: readonly SourceDocument[] = [
+      {
+        absolutePath: "C:/project/src/mobile/NativeCalendar.ts",
+        relativePath: "src/mobile/NativeCalendar.ts",
+        language: "typescript",
+        sourceText: [
+          'import { TurboModuleRegistry } from "react-native";',
+          'import type { TurboModule } from "react-native";',
+          "export interface Spec extends TurboModule { createEvent(): void; }",
+          'const Calendar = TurboModuleRegistry.getEnforcing<Spec>("CalendarModule");',
+          "export default Calendar;"
+        ].join("\n"),
+        contentHash: "default-export"
+      },
+      {
+        absolutePath: "C:/project/src/mobile/useCalendar.ts",
+        relativePath: "src/mobile/useCalendar.ts",
+        language: "typescript",
+        sourceText: [
+          'import Calendar from "./NativeCalendar";',
+          "export function schedule() { Calendar.createEvent(); }"
+        ].join("\n"),
+        contentHash: "default-import"
+      },
+      {
+        absolutePath: "C:/project/src/mobile/Plain.ts",
+        relativePath: "src/mobile/Plain.ts",
+        language: "typescript",
+        sourceText: "export default { createEvent() {} };",
+        contentHash: "plain-export"
+      },
+      {
+        absolutePath: "C:/project/src/mobile/usePlain.ts",
+        relativePath: "src/mobile/usePlain.ts",
+        language: "typescript",
+        sourceText: [
+          'import Plain from "./Plain";',
+          "export function ignore() { Plain.createEvent(); }"
+        ].join("\n"),
+        contentHash: "plain-import"
+      },
+      {
+        absolutePath: "C:/project/android/CalendarModule.java",
+        relativePath: "android/CalendarModule.java",
+        language: "java",
+        sourceText: [
+          "import com.facebook.react.bridge.ReactContextBaseJavaModule;",
+          "import com.facebook.react.bridge.ReactMethod;",
+          "public class CalendarModule extends ReactContextBaseJavaModule {",
+          '  public String getName() { return "CalendarModule"; }',
+          "  @ReactMethod public void createEvent() {}",
+          "}"
+        ].join("\n"),
+        contentHash: "default-android"
+      },
+      {
+        absolutePath: "C:/project/ios/CalendarModule.m",
+        relativePath: "ios/CalendarModule.m",
+        language: "objc",
+        sourceText: [
+          "#import <React/RCTBridgeModule.h>",
+          "@implementation CalendarModule",
+          "RCT_EXPORT_MODULE(CalendarModule)",
+          "RCT_EXPORT_METHOD(createEvent)",
+          "@end"
+        ].join("\n"),
+        contentHash: "default-ios"
+      }
+    ];
+    const snapshot = resolveProjectFacts({
+      sourceDocuments,
+      extractedFiles: sourceDocuments.map((document) =>
+        extractFileFacts({
+          filePath: document.relativePath,
+          language: document.language,
+          sourceText: document.sourceText
+        })
+      ),
+      indexedAt: "2026-08-02T00:00:00.000Z"
+    });
+    const schedule = snapshot.symbols.find(
+      (symbol) => symbol.filePath === "src/mobile/useCalendar.ts" && symbol.name === "schedule"
+    );
+    const ignore = snapshot.symbols.find(
+      (symbol) => symbol.filePath === "src/mobile/usePlain.ts" && symbol.name === "ignore"
+    );
+    const android = snapshot.symbols.find(
+      (symbol) => symbol.filePath === "android/CalendarModule.java" && symbol.name === "createEvent"
+    );
+    const ios = snapshot.symbols.find(
+      (symbol) => symbol.filePath === "ios/CalendarModule.m" && symbol.name === "createEvent"
+    );
+
+    expect(schedule).toBeDefined();
+    expect(ignore).toBeDefined();
+    expect(android).toBeDefined();
+    expect(ios).toBeDefined();
+    expect(
+      snapshot.edges.filter(
+        (edge) => edge.sourceId === schedule?.id && edge.referenceName === "CalendarModule.createEvent"
+      )
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          targetId: android?.id,
+          resolution: "exact",
+          evidence: expect.objectContaining({
+            ruleId:
+              "framework.react-native.turbo-modules.default-import.literal-module-and-method.android.exact-target"
+          })
+        }),
+        expect.objectContaining({
+          targetId: ios?.id,
+          resolution: "exact",
+          evidence: expect.objectContaining({
+            ruleId:
+              "framework.react-native.turbo-modules.default-import.literal-module-and-method.ios.exact-target"
+          })
+        })
+      ])
+    );
+    expect(
+      snapshot.edges.some(
+        (edge) => edge.sourceId === ignore?.id && edge.targetId === android?.id && edge.kind === "calls"
+      )
+    ).toBe(false);
+  });
 });

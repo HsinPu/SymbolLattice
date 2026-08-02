@@ -961,6 +961,8 @@ export function extractObjectiveCFileFacts(input: ObjectiveCExtractFileFactsInpu
     reactNativeFacts: {
       nativeModuleCalls: [],
       turboModuleCalls: [],
+      turboModuleDefaultImportCalls: [],
+      turboModuleDefaultExports: [],
       turboModuleSpecMethods: [],
       nativeMethods: reactNativeNativeMethods
     }

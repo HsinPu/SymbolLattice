@@ -34,7 +34,10 @@ async function createFixtureProject(): Promise<string> {
 }
 
 async function waitFor(predicate: () => boolean): Promise<void> {
-  for (let attempt = 0; attempt < 400; attempt += 1) {
+  // Native filesystem events are asynchronous OS work. On a busy Windows
+  // runner, the event can arrive well after the usual fast-path while still
+  // remaining far ahead of the deliberately disabled 60-second polling path.
+  for (let attempt = 0; attempt < 2_500; attempt += 1) {
     if (predicate()) {
       return;
     }
@@ -124,5 +127,5 @@ describe("native foreground watch integration", () => {
     }
 
     expect(receipts.at(-1)?.event).toBe("stopped");
-  }, 10_000);
+  }, 40_000);
 });

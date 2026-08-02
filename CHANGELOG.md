@@ -6,6 +6,26 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.188.0] - 2026-08-02
+
+### Added
+
+- Parser-backed React Native TurboModule resolution now follows a direct default import across files when the resolved local target directly default-exports either a literal <code>TurboModuleRegistry.get*</code> result or an immutable local registry binding. This supports the conventional <code>import NativeCalendar from "./NativeCalendar"; NativeCalendar.createEvent()</code> shape without treating arbitrary default imports as bridges.
+- Extraction persists default-import call candidates separately from proven default-export identities. Project resolution emits a bridge edge only after the existing exact local module resolver connects the two files and the target has exactly one direct TurboModule default-export fact.
+- Default-import bridge edges retain the same module-and-method identity, independent Android/iOS exact targets, and unresolved collision behavior as direct Registry calls. New unit and persisted-service coverage proves target proof, lexical shadow rejection, ordinary-default-import rejection, platform fan-out, SQLite persistence, and re-opened-service queries.
+
+### Compatibility
+
+- The artifact-facts extractor advances to <code>multi-language-ast-v168</code> and the project resolver advances to <code>project-resolver-v58</code>. Existing graphs and SQLite schema remain readable; the next explicit <code>sync</code> or <code>index</code> refreshes eligible source and recomputes React Native bridge projections.
+
+### Deliberate limits
+
+- This version accepts only direct local default exports. Default re-export chains, named exports, namespace imports of a spec file, generated Android TurboModule base classes, iOS/Swift Codegen implementations, runtime registration, indirect/mutable aliases, dynamic or computed names, optional dispatch, and custom wrappers remain excluded.
+
+### Comparison notes
+
+- The inspected CodeGraph React Native resolver strips a caller receiver to its bare method name before matching native candidates, so its broader call surface does not retain a local TurboModule module-file proof at this boundary. SymbolLattice independently follows the project module resolver, requires a direct local default-export registry proof, and then matches by literal module name plus method name while preserving separate Android/iOS edges. CodeGraph remains broader across native conventions; SymbolLattice is stricter and more explainable for the implemented default-import path.
+
 ## [0.187.0] - 2026-08-02
 
 ### Added

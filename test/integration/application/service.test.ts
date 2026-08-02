@@ -12380,6 +12380,95 @@ describe("SymbolLatticeService", () => {
     );
   });
 
+  it("persists React Native TurboModule default-import bridge calls through a proven local export", async () => {
+    const projectPath = await createInlineProject({
+      "src/mobile/NativeCalendar.ts": [
+        'import { TurboModuleRegistry } from "react-native";',
+        'import type { TurboModule } from "react-native";',
+        "export interface Spec extends TurboModule { createEvent(): void; }",
+        'const Calendar = TurboModuleRegistry.getEnforcing<Spec>("CalendarModule");',
+        "export default Calendar;"
+      ].join("\n"),
+      "src/mobile/useCalendar.ts": [
+        'import Calendar from "./NativeCalendar";',
+        "export function schedule() { Calendar.createEvent(); }"
+      ].join("\n"),
+      "android/CalendarModule.java": [
+        "import com.facebook.react.bridge.ReactContextBaseJavaModule;",
+        "import com.facebook.react.bridge.ReactMethod;",
+        "public class CalendarModule extends ReactContextBaseJavaModule {",
+        '  public String getName() { return "CalendarModule"; }',
+        "  @ReactMethod public void createEvent() {}",
+        "}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const persistedFacts = graphStore.getArtifactFacts(projectPath);
+    const javaMethod = await service.find(
+      projectPath,
+      "android/CalendarModule.java#CalendarModule.createEvent"
+    );
+    const javaTarget = javaMethod.symbols[0];
+    if (javaTarget === undefined) {
+      throw new Error("Expected indexed React Native TurboModule default-import target.");
+    }
+
+    expect(persistedFacts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          filePath: "src/mobile/NativeCalendar.ts",
+          reactNativeFacts: expect.objectContaining({
+            turboModuleDefaultExports: [expect.objectContaining({ moduleName: "CalendarModule" })]
+          })
+        }),
+        expect.objectContaining({
+          filePath: "src/mobile/useCalendar.ts",
+          reactNativeFacts: expect.objectContaining({
+            turboModuleDefaultImportCalls: [
+              expect.objectContaining({ moduleSpecifier: "./NativeCalendar", methodName: "createEvent" })
+            ]
+          })
+        })
+      ])
+    );
+    const callers = await service.callers(projectPath, javaTarget.qualifiedName);
+    expect(callers.relations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          symbol: expect.objectContaining({ name: "schedule" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId:
+                "framework.react-native.turbo-modules.default-import.literal-module-and-method.android.exact-target"
+            })
+          })
+        })
+      ])
+    );
+
+    const reopened = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+    await reopened.init({ projectPath });
+    const persistedCallers = await reopened.callers(projectPath, javaTarget.qualifiedName);
+    expect(persistedCallers.relations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          symbol: expect.objectContaining({ name: "schedule" }),
+          edge: expect.objectContaining({
+            evidence: expect.objectContaining({
+              ruleId:
+                "framework.react-native.turbo-modules.default-import.literal-module-and-method.android.exact-target",
+              stage: "module"
+            })
+          })
+        })
+      ])
+    );
+  });
+
   it("indexes NestJS decorator routes as persisted exact method evidence", async () => {
     const projectPath = await createInlineProject({
       "src/cats.controller.ts": [

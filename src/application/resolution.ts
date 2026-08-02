@@ -171,7 +171,7 @@ function reactNativeNativeModulesRuleId(
 }
 
 function reactNativeTurboModuleRuleId(
-  surface: "direct-registry" | "spec-contract",
+  surface: "default-import" | "direct-registry" | "spec-contract",
   platform: "android" | "ios" | "any",
   suffix: "exact-target" | "unresolved-target" | "ambiguous-platform-target"
 ): string {
@@ -313,6 +313,52 @@ function projectReactNativeTurboModuleSpecMethods(input: {
     ...input,
     sourceFacts: (facts) => facts.reactNativeFacts?.turboModuleSpecMethods ?? [],
     ruleId: (platform, suffix) => reactNativeTurboModuleRuleId("spec-contract", platform, suffix)
+  });
+}
+
+/**
+ * Resolves a consumer's immutable default import only after its local target
+ * proves that its default export is a literal TurboModule registry result. The
+ * candidate call alone never creates a framework edge.
+ */
+function projectReactNativeTurboModuleDefaultImportCalls(input: {
+  readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
+  readonly moduleTargetPathByKey: ReadonlyMap<string, string>;
+}): readonly GraphEdge[] {
+  const defaultExportByFilePath = new Map<string, { readonly moduleName: string }>();
+  for (const [filePath, facts] of [...input.factsByFile.entries()].sort(([left], [right]) =>
+    compareStableText(left, right)
+  )) {
+    const exports = [...(facts.reactNativeFacts?.turboModuleDefaultExports ?? [])].sort((left, right) =>
+      compareStableText(
+        `${left.moduleName}\u0000${left.range.start.line}\u0000${left.range.start.column}`,
+        `${right.moduleName}\u0000${right.range.start.line}\u0000${right.range.start.column}`
+      )
+    );
+    if (exports.length === 1 && exports[0] !== undefined) {
+      defaultExportByFilePath.set(filePath, { moduleName: exports[0].moduleName });
+    }
+  }
+
+  return projectReactNativeBridgeReferences({
+    factsByFile: input.factsByFile,
+    sourceFacts: (facts) =>
+      (facts.reactNativeFacts?.turboModuleDefaultImportCalls ?? []).flatMap((call) => {
+        const targetPath = input.moduleTargetPathByKey.get(moduleKey(call.filePath, call.moduleSpecifier));
+        const targetExport = targetPath === undefined ? undefined : defaultExportByFilePath.get(targetPath);
+        return targetExport === undefined
+          ? []
+          : [
+              {
+                sourceId: call.sourceId,
+                filePath: call.filePath,
+                moduleName: targetExport.moduleName,
+                methodName: call.methodName,
+                range: call.range
+              }
+            ];
+      }),
+    ruleId: (platform, suffix) => reactNativeTurboModuleRuleId("default-import", platform, suffix)
   });
 }
 
@@ -5727,6 +5773,13 @@ export function resolveProjectFacts(input: {
     moduleResolutionByKey,
     moduleTargetPathByKey
   });
+
+  resolvedEdges.push(
+    ...projectReactNativeTurboModuleDefaultImportCalls({
+      factsByFile,
+      moduleTargetPathByKey
+    })
+  );
 
   const rustActixImportedServiceConfigRouteProjection = projectRustActixImportedServiceConfigRoutes({
     factsByFile,

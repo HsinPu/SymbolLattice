@@ -11,13 +11,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v167";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v168";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v57";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v58";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -778,6 +778,22 @@ export interface ReactNativeTurboModuleCallFact {
   readonly range: SourceRange;
 }
 
+/** A direct method call through one default import that may later prove to be a TurboModule. */
+export interface ReactNativeTurboModuleDefaultImportCallFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly moduleSpecifier: string;
+  readonly methodName: string;
+  readonly range: SourceRange;
+}
+
+/** One direct default export of a literal React Native TurboModule registry result. */
+export interface ReactNativeTurboModuleDefaultExportFact {
+  readonly filePath: string;
+  readonly moduleName: string;
+  readonly range: SourceRange;
+}
+
 /** One method declared by a statically proven React Native TurboModule TypeScript spec. */
 export interface ReactNativeTurboModuleSpecMethodFact {
   readonly sourceId: string;
@@ -805,6 +821,8 @@ export interface ReactNativeNativeMethodFact {
 export interface ReactNativeFacts {
   readonly nativeModuleCalls: readonly ReactNativeNativeModuleCallFact[];
   readonly turboModuleCalls: readonly ReactNativeTurboModuleCallFact[];
+  readonly turboModuleDefaultImportCalls: readonly ReactNativeTurboModuleDefaultImportCallFact[];
+  readonly turboModuleDefaultExports: readonly ReactNativeTurboModuleDefaultExportFact[];
   readonly turboModuleSpecMethods: readonly ReactNativeTurboModuleSpecMethodFact[];
   readonly nativeMethods: readonly ReactNativeNativeMethodFact[];
 }

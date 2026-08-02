@@ -1858,6 +1858,8 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
     reactNativeFacts: {
       nativeModuleCalls: [],
       turboModuleCalls: [],
+      turboModuleDefaultImportCalls: [],
+      turboModuleDefaultExports: [],
       turboModuleSpecMethods: [],
       nativeMethods: reactNativeNativeMethods
     }
