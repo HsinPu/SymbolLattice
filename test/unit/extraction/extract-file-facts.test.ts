@@ -11495,6 +11495,88 @@ describe("source extraction", () => {
     ).toEqual([[], [], [], []]);
   });
 
+  it("retains direct Kotlin Spring @ConfigurationProperties literal-prefix facts", () => {
+    const facts = extractFileFacts({
+      filePath: "src/config/CacheProperties.kt",
+      language: "kotlin",
+      sourceText: [
+        "import org.springframework.boot.context.properties.ConfigurationProperties",
+        "",
+        '@ConfigurationProperties(prefix = "app.cache")',
+        "class CacheProperties {}",
+        "",
+        '@ConfigurationProperties("service.client")',
+        "class ClientProperties {}",
+        "",
+        '@org.springframework.boot.context.properties.ConfigurationProperties(prefix = "full.name")',
+        "class FullyQualifiedProperties {}"
+      ].join("\n")
+    });
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+
+    expect(
+      facts.springBootPropertiesFacts?.configurationPropertiesPrefixes?.map((reference) => [
+        symbolsById.get(reference.sourceId)?.name,
+        reference.prefix,
+        reference.range.start
+      ])
+    ).toEqual([
+      ["CacheProperties", "app.cache", { line: 3, column: 1 }],
+      ["ClientProperties", "service.client", { line: 6, column: 1 }],
+      ["FullyQualifiedProperties", "full.name", { line: 9, column: 1 }]
+    ]);
+    expect(facts.springBootPropertiesFacts?.valueReferences).toEqual([]);
+  });
+
+  it("rejects unproven, dynamic, value-alias, multi-attribute, and raw Kotlin ConfigurationProperties forms", () => {
+    const directImportFacts = extractFileFacts({
+      filePath: "src/config/UnsupportedConfigurationProperties.kt",
+      language: "kotlin",
+      sourceText: [
+        "import org.springframework.boot.context.properties.ConfigurationProperties",
+        "",
+        '@ConfigurationProperties(value = "value.alias")',
+        "class ValueAlias {}",
+        "",
+        '@ConfigurationProperties(prefix = "multiple.attributes", ignoreUnknownFields = false)',
+        "class MultipleAttributes {}",
+        "",
+        "@ConfigurationProperties(prefix = prefix)",
+        "class DynamicIdentifier {}",
+        "",
+        '@ConfigurationProperties(prefix = "dynamic.${prefix}")',
+        "class DynamicInterpolation {}",
+        "",
+        '@ConfigurationProperties("""raw.prefix""")',
+        "class RawString {}"
+      ].join("\n")
+    });
+    const aliasedImportFacts = extractFileFacts({
+      filePath: "src/config/AliasedConfigurationProperties.kt",
+      language: "kotlin",
+      sourceText: [
+        "import org.springframework.boot.context.properties.ConfigurationProperties as SpringProperties",
+        "",
+        '@SpringProperties(prefix = "aliased.prefix")',
+        "class AliasedProperties {}"
+      ].join("\n")
+    });
+    const wildcardImportFacts = extractFileFacts({
+      filePath: "src/config/WildcardConfigurationProperties.kt",
+      language: "kotlin",
+      sourceText: [
+        "import org.springframework.boot.context.properties.*",
+        "",
+        '@ConfigurationProperties(prefix = "wildcard.prefix")',
+        "class WildcardProperties {}"
+      ].join("\n")
+    });
+
+    expect(directImportFacts.springBootPropertiesFacts?.configurationPropertiesPrefixes).toEqual([]);
+    expect(aliasedImportFacts.springBootPropertiesFacts?.configurationPropertiesPrefixes).toEqual([]);
+    expect(wildcardImportFacts.springBootPropertiesFacts?.configurationPropertiesPrefixes).toEqual([]);
+  });
+
   it("requires direct Kotlin Ktor imports, Application.module shape, literal callable-reference routes, and valid syntax", () => {
     const unproven = extractFileFacts({
       filePath: "src/Application.kt",

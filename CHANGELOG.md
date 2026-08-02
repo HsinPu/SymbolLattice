@@ -6,6 +6,27 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.172.0] - 2026-08-02
+
+### Added
+
+- Kotlin direct top-level classes now contribute parser-proven Spring <code>@ConfigurationProperties</code> literal-prefix facts to the same project-local leaf resolver already used by Java. An exact import or fully-qualified annotation proves the framework type; accepted syntax is one plain regular-string positional literal or one <code>prefix =</code> literal.
+- Kotlin prefix facts receive the same per-leaf behavior as Java: one YAML or <code>.properties</code> candidate creates a <code>heuristic</code> <code>0.85</code> relation, while each profile or format collision remains explicit <code>unresolved</code> evidence with all candidates and configuration paths.
+- New Kotlin extraction and service coverage proves imported and fully-qualified annotations, positional and <code>prefix =</code> literals, YAML/properties projection, per-leaf ambiguity, missing-prefix evidence, explicit synchronization withdrawal, and rejection of interpolation, raw strings, aliases, wildcard imports, <code>value =</code>, multiple attributes, and dynamic expressions.
+
+### Compatibility
+
+- The artifact-facts extractor advances to <code>multi-language-ast-v153</code>. The generic configuration-prefix resolver remains <code>project-resolver-v54</code> because it already projects persisted prefix facts independently of source language; the next explicit <code>sync</code> re-extracts eligible Kotlin artifacts and rebuilds their relations. Existing graphs and SQLite schema remain readable.
+
+### Deliberate limits
+
+- Kotlin support is limited to direct top-level classes with one plain regular string. Constructor parameters, annotations on properties/functions/parameters, use-site targets, raw strings, escapes, interpolation, aliases, wildcard imports, <code>value =</code>, multiple attributes, nonliteral prefixes, relaxed key binding, collections, nested-object field ownership, configuration imports, active-profile selection, source precedence, environment overrides, validation, and runtime behavior remain outside analysis.
+- The relation reports the namespace's unique indexed leaves, not a field-by-field Spring binding result. Profile and source collisions remain unresolved rather than selected.
+
+### Comparison notes
+
+- The inspected CodeGraph Spring extractor has broader Java/Kotlin text-pattern coverage, relaxed-key normalization, and closest-candidate selection. SymbolLattice now matches its direct Java/Kotlin prefix language surface with parser-backed syntax and Kotlin-specific interpolation/raw-string guards, then exposes every uniquely proven leaf and every conflicting leaf separately. SymbolLattice is stronger for auditable static evidence and per-leaf impact traversal; CodeGraph remains broader for relaxed and runtime-like configuration behavior.
+
 ## [0.171.0] - 2026-08-02
 
 ### Added
