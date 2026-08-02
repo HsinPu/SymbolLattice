@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.172.0 is a developer preview and is not published to npm. Run it from source.
+> v0.173.0 is a developer preview and is not published to npm. Run it from source.
 
 SymbolLattice builds a queryable local code-symbol graph for a project. Every relation retains its rule, resolution stage, and confidence; `exact`, `heuristic`, and `unresolved` evidence are never conflated.
 
@@ -41,11 +41,11 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 On Windows PowerShell, use `npm.cmd` if `npm` is unavailable. Index data stays in the target project's `.symbol-lattice/index.sqlite`.
 
-## v0.172.0 highlights
+## v0.173.0 highlights
 
-- Direct Java and Kotlin top-level class Spring `@ConfigurationProperties("prefix")` and `prefix = "prefix"` annotations now expand to existing YAML and `.properties` configuration leaves.
-- Each unique leaf produces a traceable `heuristic` relation at confidence `0.85`; profile or cross-format collisions remain `unresolved` instead of guessing runtime precedence.
-- Kotlin accepts only a plain, non-escaped, non-interpolated regular string; raw strings, `value =`, multiple attributes, alias/wildcard imports, and dynamic prefixes produce no graph relation.
+- Spring configuration keys now conservatively recognize relaxed spellings such as `cache-list`, `cache_list`, `cacheList`, and `CACHE_LIST`; dotted segment boundaries are never rearranged.
+- A literal spelling remains `exact` only when it is the sole member of its canonical group; when absent, one canonical candidate creates a `heuristic` relation at confidence `0.75`.
+- If normalization yields multiple candidates, the related `@Value` or `@ConfigurationProperties` key remains `unresolved` rather than selecting a configuration source.
 
 ## Principles
 
@@ -55,7 +55,7 @@ On Windows PowerShell, use `npm.cmd` if `npm` is unavailable. Index data stays i
 
 ## Static-analysis boundaries
 
-- Spring Boot `@Value` supports only direct Java class fields or Kotlin class properties using an escaped-dollar regular string. `@ConfigurationProperties` accepts only a direct Java or Kotlin top-level class, an exact import or fully qualified name, and one literal positional or `prefix =` argument. Kotlin raw strings, interpolation, `value =`, multiple attributes, alias/wildcard imports, relaxed binding, lists, merge keys, dynamic values, config imports, active profiles, and runtime precedence remain outside analysis.
+- Spring Boot `@Value` supports only direct Java class fields or Kotlin class properties using an escaped-dollar regular string. `@ConfigurationProperties` accepts only a direct Java or Kotlin top-level class, an exact import or fully qualified name, and one literal positional or `prefix =` argument. Relaxed binding only lowercases and removes `-`/`_` within identical dotted segments, and only when there is one candidate; field/collection binding, lists, merge keys, dynamic values, config imports, active profiles, and runtime precedence remain outside analysis.
 - COBOL CICS accepts only a direct `RETURN` or `START` completed by `END-EXEC` with one literal `TRANSID`. Its target must be the unique indexed, pre-`PROCEDURE DIVISION`, `TRAN`-named literal owner; because the CICS CSD is external configuration, this remains `heuristic`, not a runtime guarantee.
 - Dynamic composition, external or namespace packages, parent-relative imports, copied or container values, decorated or imported classes, WebSockets, `add_route`, versioning, and ambiguous targets never become `exact` results.
 

@@ -425,11 +425,26 @@ function springBootConfigRuleId(
 }
 
 /**
- * Projects a direct Java field `@Value("${literal.key}")` only through one
- * unique, parser-proven key in a conventional application/bootstrap properties
- * or YAML file. Profile precedence, format precedence, and duplicate-key
- * selection are runtime semantics, so zero or multiple candidates remain
- * explicit unresolved references.
+ * Conservative Spring relaxed-key identity. Dots remain segment boundaries;
+ * only case, hyphens, and underscores normalize within those segments.
+ */
+function canonicalSpringBootConfigKey(key: string): string {
+  return key.toLowerCase().replaceAll("-", "").replaceAll("_", "");
+}
+
+function springBootRelaxedConfigRuleId(
+  source: SpringBootConfigKeySource | "config",
+  suffix: "unique-key" | "ambiguous-key"
+): string {
+  return `framework.spring-boot.${source}.direct-value.relaxed-key.${suffix}`;
+}
+
+/**
+ * Projects a direct Java/Kotlin `@Value("${literal.key}")` fact through one
+ * parser-proven conventional application/bootstrap properties or YAML key.
+ * A lone literal spelling stays exact; relaxed case/dash/underscore matching
+ * is a lower-confidence fallback. Profile precedence, format precedence, and
+ * every duplicate canonical identity remain explicit unresolved references.
  */
 function projectSpringBootPropertiesReferences(input: {
   readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
@@ -456,12 +471,16 @@ function projectSpringBootPropertiesReferences(input: {
       if (sourceSymbol === undefined) {
         continue;
       }
+      const canonicalReferenceKey = canonicalSpringBootConfigKey(reference.key);
       const candidates = configKeySymbols
-        .filter((candidate) => candidate.symbol.name === reference.key)
+        .filter(
+          (candidate) => canonicalSpringBootConfigKey(candidate.symbol.name) === canonicalReferenceKey
+        )
         .sort((left, right) => compareStableText(left.symbol.id, right.symbol.id));
       const target = candidates.length === 1 ? candidates[0]?.symbol : undefined;
-      const suffix =
-        target !== undefined ? "exact-key" : candidates.length === 0 ? "unresolved-key" : "ambiguous-key";
+      const isLiteralGroup =
+        candidates.length > 0 && candidates.every((candidate) => candidate.symbol.name === reference.key);
+      const isRelaxedGroup = candidates.length > 0 && !isLiteralGroup;
       const candidateSources = new Set(candidates.map((candidate) => candidate.source));
       const ruleSource =
         candidateSources.size > 1
@@ -481,15 +500,32 @@ function projectSpringBootPropertiesReferences(input: {
         kind: "references",
         filePath: reference.filePath,
         range: reference.range,
-        resolution: target === undefined ? "unresolved" : "exact",
-        confidence: target === undefined ? 0 : 1,
+        resolution: target === undefined ? "unresolved" : isRelaxedGroup ? "heuristic" : "exact",
+        confidence: target === undefined ? 0 : isRelaxedGroup ? 0.75 : 1,
         referenceName: reference.key,
-        evidence: referenceEvidence(
-          springBootConfigRuleId(ruleSource, suffix),
-          target === undefined ? "unresolved" : "module",
-          candidateSymbolIds(candidates.map((candidate) => candidate.symbol)),
-          candidates.map((candidate) => candidate.symbol.filePath)
-        )
+        evidence: isRelaxedGroup
+          ? referenceEvidence(
+              springBootRelaxedConfigRuleId(
+                ruleSource,
+                target === undefined ? "ambiguous-key" : "unique-key"
+              ),
+              target === undefined ? "unresolved" : "heuristic",
+              candidateSymbolIds(candidates.map((candidate) => candidate.symbol)),
+              candidates.map((candidate) => candidate.symbol.filePath)
+            )
+          : referenceEvidence(
+              springBootConfigRuleId(
+                ruleSource,
+                target !== undefined
+                  ? "exact-key"
+                  : candidates.length === 0
+                    ? "unresolved-key"
+                    : "ambiguous-key"
+              ),
+              target === undefined ? "unresolved" : "module",
+              candidateSymbolIds(candidates.map((candidate) => candidate.symbol)),
+              candidates.map((candidate) => candidate.symbol.filePath)
+            )
       });
     }
   }
@@ -502,11 +538,18 @@ function springBootConfigurationPropertiesRuleId(
   return `framework.spring-boot.configuration-properties.literal-prefix.${suffix}`;
 }
 
+function springBootConfigurationPropertiesRelaxedRuleId(
+  suffix: "unique-leaf" | "ambiguous-leaf"
+): string {
+  return `framework.spring-boot.configuration-properties.relaxed-prefix.${suffix}`;
+}
+
 /**
- * A Java `@ConfigurationProperties(prefix = "app.cache")` class proves the
- * static prefix but not Spring's active-profile or source-precedence outcome.
- * Project every parser-proven descendant key only when that individual leaf
- * has one candidate; preserve collisions and missing prefixes as unresolved.
+ * A Java/Kotlin `@ConfigurationProperties(prefix = "app.cache")` class proves
+ * the static prefix but not Spring's active-profile or source-precedence
+ * outcome. Project each unique canonical descendant leaf, retaining literal
+ * spelling at 0.85 and relaxed matching at 0.75; collisions and missing
+ * prefixes remain unresolved.
  */
 function projectSpringBootConfigurationPropertiesPrefixes(input: {
   readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
@@ -532,17 +575,19 @@ function projectSpringBootConfigurationPropertiesPrefixes(input: {
       if (sourceSymbol === undefined) {
         continue;
       }
-      const candidatesByKey = new Map<string, SpringBootConfigKeyCandidate[]>();
-      const descendantPrefix = `${reference.prefix}.`;
+      const candidatesByCanonicalKey = new Map<string, SpringBootConfigKeyCandidate[]>();
+      const literalDescendantPrefix = `${reference.prefix}.`;
+      const canonicalDescendantPrefix = `${canonicalSpringBootConfigKey(reference.prefix)}.`;
       for (const candidate of configKeySymbols) {
-        if (!candidate.symbol.name.startsWith(descendantPrefix)) {
+        const canonicalCandidateKey = canonicalSpringBootConfigKey(candidate.symbol.name);
+        if (!canonicalCandidateKey.startsWith(canonicalDescendantPrefix)) {
           continue;
         }
-        const candidates = candidatesByKey.get(candidate.symbol.name) ?? [];
+        const candidates = candidatesByCanonicalKey.get(canonicalCandidateKey) ?? [];
         candidates.push(candidate);
-        candidatesByKey.set(candidate.symbol.name, candidates);
+        candidatesByCanonicalKey.set(canonicalCandidateKey, candidates);
       }
-      const leaves = [...candidatesByKey.entries()].sort(([left], [right]) =>
+      const leaves = [...candidatesByCanonicalKey.entries()].sort(([left], [right]) =>
         compareStableText(left, right)
       );
       if (leaves.length === 0) {
@@ -571,13 +616,24 @@ function projectSpringBootConfigurationPropertiesPrefixes(input: {
         });
         continue;
       }
-      for (const [key, candidates] of leaves) {
+      for (const [canonicalKey, candidates] of leaves) {
         const orderedCandidates = [...candidates].sort((left, right) =>
           compareStableText(left.symbol.id, right.symbol.id)
         );
         const target = orderedCandidates.length === 1 ? orderedCandidates[0]?.symbol : undefined;
-        const suffix = target === undefined ? "ambiguous-leaf" : "unique-leaf";
-        const referenceName = `${reference.prefix}:${key}`;
+        const literalCandidateNames = new Set(
+          orderedCandidates
+            .filter((candidate) => candidate.symbol.name.startsWith(literalDescendantPrefix))
+            .map((candidate) => candidate.symbol.name)
+        );
+        const literalKey = [...literalCandidateNames][0];
+        const isLiteralGroup =
+          literalKey !== undefined &&
+          literalCandidateNames.size === 1 &&
+          orderedCandidates.every((candidate) => candidate.symbol.name === literalKey);
+        const referenceName = isLiteralGroup
+          ? `${reference.prefix}:${literalKey}`
+          : `${reference.prefix}:relaxed:${canonicalKey}`;
         edges.push({
           id: createEdgeId({
             sourceId: sourceSymbol.id,
@@ -593,10 +649,16 @@ function projectSpringBootConfigurationPropertiesPrefixes(input: {
           filePath: reference.filePath,
           range: reference.range,
           resolution: target === undefined ? "unresolved" : "heuristic",
-          confidence: target === undefined ? 0 : 0.85,
+          confidence: target === undefined ? 0 : isLiteralGroup ? 0.85 : 0.75,
           referenceName,
           evidence: referenceEvidence(
-            springBootConfigurationPropertiesRuleId(suffix),
+            isLiteralGroup
+              ? springBootConfigurationPropertiesRuleId(
+                  target === undefined ? "ambiguous-leaf" : "unique-leaf"
+                )
+              : springBootConfigurationPropertiesRelaxedRuleId(
+                  target === undefined ? "ambiguous-leaf" : "unique-leaf"
+                ),
             target === undefined ? "unresolved" : "heuristic",
             candidateSymbolIds(orderedCandidates.map((candidate) => candidate.symbol)),
             orderedCandidates.map((candidate) => candidate.symbol.filePath)

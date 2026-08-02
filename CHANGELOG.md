@@ -6,6 +6,28 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.173.0] - 2026-08-02
+
+### Added
+
+- Spring Boot configuration resolution now applies one conservative relaxed-key identity inside unchanged dotted segments: case folds to lowercase and hyphens/underscores are removed. This allows source-proven Java/Kotlin <code>@Value</code> and <code>@ConfigurationProperties</code> facts to reach spellings such as <code>cache-list</code>, <code>cache_list</code>, <code>cacheList</code>, and <code>CACHE_LIST</code>.
+- A literal key remains <code>exact</code> only when its complete canonical group contains that one spelling. When a literal spelling is absent, exactly one normalized candidate creates <code>heuristic</code> confidence <code>0.75</code> evidence; the new rule IDs distinguish direct-value and configuration-prefix relaxed resolution from literal evidence.
+- Any duplicate canonical identity, including a literal key alongside a differently spelled normalized variant, remains explicit <code>unresolved</code> evidence with every candidate and configuration path. Prefix traversal applies the same rule per descendant leaf, preserving exact leaves, normalized leaves, and collisions separately.
+- New service and capability coverage proves Java/Kotlin-compatible fact projection, unique camel/kebab/snake fallback, cross-format canonical collisions, source-value non-retention, unchanged-artifact sync re-projection, and absence of a selected collision target.
+
+### Compatibility
+
+- The project resolver advances to <code>project-resolver-v55</code>; artifact extraction remains <code>multi-language-ast-v153</code>. Existing graphs and SQLite schema remain readable, and the next explicit <code>sync</code> reprojects retained facts under the new canonical-key rules even when the source artifact itself is reused.
+
+### Deliberate limits
+
+- Relaxed binding never removes, inserts, or reorders dots, and it does not interpret property values, nested-object fields, collections, indices, aliases, configuration imports, active profiles, source precedence, environment overrides, validation, or runtime Spring behavior.
+- A normalized match is evidence of a possible static binding only. It receives lower confidence than literal syntax, and every competing canonical spelling remains unresolved rather than being selected.
+
+### Comparison notes
+
+- The inspected CodeGraph Spring resolver also normalizes case, hyphens, and underscores, but its broader text-pattern pipeline resolves a closest configuration candidate. SymbolLattice independently adds the same bounded key equivalence behind parser-proven facts, preserves dots as structural boundaries, lowers fallback confidence to <code>0.75</code>, and refuses to select any canonical collision. SymbolLattice is stronger for auditable ambiguity; CodeGraph remains broader for text-surface and runtime-like configuration coverage.
+
 ## [0.172.0] - 2026-08-02
 
 ### Added

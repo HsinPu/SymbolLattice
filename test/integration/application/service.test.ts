@@ -15657,6 +15657,213 @@ describe("SymbolLatticeService", () => {
     });
   });
 
+  it("projects conservative Spring relaxed-key fallbacks without selecting canonical collisions", async () => {
+    const projectPath = await createInlineProject({
+      "config/application.yml": [
+        "app:",
+        "  cache-settings:",
+        "    max-size: relaxed-secret",
+        "    shared-mode: yaml"
+      ].join("\n"),
+      "config/application.properties": [
+        "service.client-timeout=5000",
+        "client.request-timeout=1000",
+        "client.request_timeout=2000",
+        "app.cache_settings.shared_mode=properties"
+      ].join("\n"),
+      "src/config/RelaxedConfig.java": [
+        "import org.springframework.beans.factory.annotation.Value;",
+        "import org.springframework.boot.context.properties.ConfigurationProperties;",
+        "",
+        "class RelaxedValueConfig {",
+        '  @Value("${service.clientTimeout}")',
+        "  private String timeout;",
+        '  @Value("${client.requestTimeout}")',
+        "  private String requestTimeout;",
+        "}",
+        "",
+        '@ConfigurationProperties("app.cacheSettings")',
+        "class RelaxedPrefixConfig {}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    const indexed = await service.init({ projectPath });
+    const valueConfig = (
+      await service.find(projectPath, "src/config/RelaxedConfig.java#RelaxedValueConfig")
+    ).symbols[0];
+    const prefixConfig = (
+      await service.find(projectPath, "src/config/RelaxedConfig.java#RelaxedPrefixConfig")
+    ).symbols[0];
+    const clientTimeout = (
+      await service.find(projectPath, "config/application.properties#properties-key:service.client-timeout")
+    ).symbols[0];
+    const requestTimeoutDash = (
+      await service.find(projectPath, "config/application.properties#properties-key:client.request-timeout")
+    ).symbols[0];
+    const requestTimeoutUnderscore = (
+      await service.find(projectPath, "config/application.properties#properties-key:client.request_timeout")
+    ).symbols[0];
+    const maxSize = (
+      await service.find(projectPath, "config/application.yml#spring-boot-yaml-key:app.cache-settings.max-size")
+    ).symbols[0];
+    const yamlSharedMode = (
+      await service.find(projectPath, "config/application.yml#spring-boot-yaml-key:app.cache-settings.shared-mode")
+    ).symbols[0];
+    const propertiesSharedMode = (
+      await service.find(projectPath, "config/application.properties#properties-key:app.cache_settings.shared_mode")
+    ).symbols[0];
+    if (
+      valueConfig === undefined ||
+      prefixConfig === undefined ||
+      clientTimeout === undefined ||
+      requestTimeoutDash === undefined ||
+      requestTimeoutUnderscore === undefined ||
+      maxSize === undefined ||
+      yamlSharedMode === undefined ||
+      propertiesSharedMode === undefined
+    ) {
+      throw new Error("Expected indexed relaxed Spring configuration symbols.");
+    }
+
+    const timeoutCallers = await service.callers(projectPath, clientTimeout.qualifiedName);
+    const prefixCallees = await service.callees(projectPath, prefixConfig.qualifiedName);
+    const javaFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "src/config/RelaxedConfig.java");
+    const yamlFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "config/application.yml");
+    const snapshot = graphStore.getSnapshot(projectPath);
+    const timeoutReference = snapshot.edges.find(
+      (edge) => edge.sourceId === valueConfig.id && edge.targetId === clientTimeout.id
+    );
+    const requestTimeoutReference = snapshot.edges.find(
+      (edge) =>
+        edge.sourceId === valueConfig.id &&
+        edge.kind === "references" &&
+        edge.referenceName === "client.requestTimeout"
+    );
+    const maxSizeReference = snapshot.edges.find(
+      (edge) => edge.sourceId === prefixConfig.id && edge.targetId === maxSize.id
+    );
+    const sharedModeReference = snapshot.edges.find(
+      (edge) =>
+        edge.sourceId === prefixConfig.id &&
+        edge.kind === "references" &&
+        edge.referenceName === "app.cacheSettings:relaxed:app.cachesettings.sharedmode"
+    );
+
+    expect(indexed).toMatchObject({
+      stale: false,
+      counts: { files: 3, symbols: 11, edges: 12 }
+    });
+    expect(javaFacts?.springBootPropertiesFacts).toMatchObject({
+      valueReferences: [
+        { sourceId: valueConfig.id, key: "service.clientTimeout" },
+        { sourceId: valueConfig.id, key: "client.requestTimeout" }
+      ],
+      configurationPropertiesPrefixes: [{ sourceId: prefixConfig.id, prefix: "app.cacheSettings" }]
+    });
+    expect(JSON.stringify(yamlFacts)).not.toContain("relaxed-secret");
+    expect(timeoutCallers.relations).toEqual([
+      expect.objectContaining({
+        symbol: expect.objectContaining({ id: valueConfig.id }),
+        edge: expect.objectContaining({
+          kind: "references",
+          resolution: "heuristic",
+          confidence: 0.75,
+          referenceName: "service.clientTimeout",
+          evidence: expect.objectContaining({
+            ruleId: "framework.spring-boot.properties.direct-value.relaxed-key.unique-key",
+            stage: "heuristic",
+            candidateSymbolIds: [clientTimeout.id],
+            configurationPaths: ["config/application.properties"]
+          })
+        })
+      })
+    ]);
+    expect(prefixCallees.relations.map((relation) => relation.symbol.id)).toEqual([maxSize.id]);
+    expect(timeoutReference).toMatchObject({
+      kind: "references",
+      resolution: "heuristic",
+      confidence: 0.75,
+      referenceName: "service.clientTimeout"
+    });
+    expect(requestTimeoutReference).toMatchObject({
+      targetId: null,
+      resolution: "unresolved",
+      confidence: 0,
+      evidence: {
+        ruleId: "framework.spring-boot.properties.direct-value.relaxed-key.ambiguous-key",
+        stage: "unresolved",
+        candidateSymbolIds: expect.arrayContaining([requestTimeoutDash.id, requestTimeoutUnderscore.id]),
+        configurationPaths: ["config/application.properties"]
+      }
+    });
+    expect(maxSizeReference).toMatchObject({
+      kind: "references",
+      resolution: "heuristic",
+      confidence: 0.75,
+      referenceName: "app.cacheSettings:relaxed:app.cachesettings.maxsize",
+      evidence: {
+        ruleId: "framework.spring-boot.configuration-properties.relaxed-prefix.unique-leaf",
+        stage: "heuristic",
+        candidateSymbolIds: [maxSize.id],
+        configurationPaths: ["config/application.yml"]
+      }
+    });
+    expect(sharedModeReference).toMatchObject({
+      targetId: null,
+      resolution: "unresolved",
+      confidence: 0,
+      evidence: {
+        ruleId: "framework.spring-boot.configuration-properties.relaxed-prefix.ambiguous-leaf",
+        stage: "unresolved",
+        candidateSymbolIds: expect.arrayContaining([yamlSharedMode.id, propertiesSharedMode.id]),
+        configurationPaths: expect.arrayContaining([
+          "config/application.yml",
+          "config/application.properties"
+        ])
+      }
+    });
+
+    await writeFile(
+      join(projectPath, "config", "application.yml"),
+      ["feature:", "  enabled: true"].join("\n"),
+      "utf8"
+    );
+    await writeFile(
+      join(projectPath, "config", "application.properties"),
+      ["service.client-timeout=5000", "client.request-timeout=1000", "client.request_timeout=2000"].join(
+        "\n"
+      ),
+      "utf8"
+    );
+    const synced = await service.sync({ projectPath });
+    const prefixAfterSync = graphStore
+      .getSnapshot(projectPath)
+      .edges.find(
+        (edge) =>
+          edge.sourceId === prefixConfig.id &&
+          edge.kind === "references" &&
+          edge.referenceName === "app.cacheSettings"
+      );
+
+    expect(synced.lastIndexWork?.reusedArtifactFiles).toContain("src/config/RelaxedConfig.java");
+    expect(prefixAfterSync).toMatchObject({
+      targetId: null,
+      resolution: "unresolved",
+      confidence: 0,
+      evidence: {
+        ruleId: "framework.spring-boot.configuration-properties.literal-prefix.unresolved-prefix",
+        stage: "unresolved",
+        candidateSymbolIds: []
+      }
+    });
+  });
+
   it("indexes direct Shell and Bash functions with persisted source search", async () => {
     const projectPath = await createInlineProject({
       "scripts/deploy.sh": [

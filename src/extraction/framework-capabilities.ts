@@ -479,6 +479,7 @@ export const FRAMEWORK_CAPABILITIES = [
       "direct imported or fully-qualified @ConfigurationProperties literal-prefix annotations on direct Java or Kotlin classes",
       "Kotlin regular-string placeholders with an explicit escaped dollar sign",
       "unique literal keys in conventional application or bootstrap properties or YAML files",
+      "case/dash/underscore relaxed-key fallback only when one canonical configuration candidate exists",
       "direct nested YAML mapping leaves without anchors, tags, sequences, aliases, nulls, or multiline scalars"
     ]
   },
