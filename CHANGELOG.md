@@ -6,6 +6,31 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.200.0] - 2026-08-02
+
+### Added
+
+- The CLI `serve --mcp` host now owns a bounded read-query worker pool. It starts one worker eagerly, grows only when ready workers cannot satisfy queued work, and caps concurrency at four workers. `SYMBOL_LATTICE_MCP_QUERY_POOL_SIZE=1..4` provides a deliberate host-local override.
+- A worker receives only one serializable request for an existing read-only MCP graph tool. It constructs a separate read-only SymbolLattice service, so it has no `init`, `index`, `sync`, watcher, owner-lease, or diagnostic-journal capability.
+- The MCP server now has an injectable read-query execution seam. Every graph retrieval tool can use it, while auto-sync status, diagnostics, and journal endpoints stay on the host-owned service path.
+- Pool coverage proves cold-start fallback, demand-driven growth, one-crash retry, worker-size validation, and MCP dispatch separation. A built-worker smoke check proves the compiled file can answer a read request off the transport process.
+
+### Compatibility
+
+- SQLite schema, graph generations, CLI request shapes, and MCP tool schemas are unchanged. No reindex or migration is required.
+- `createMcpServer`, `startMcpServer`, and legacy programmatic `serveMcp` retain their direct-service behavior unless a caller explicitly supplies an executor. The CLI MCP host opts into the pooled executor.
+
+### Deliberate limits
+
+- A worker opens the existing SQLite store through the normal read-only service methods; it does not cache or mutate a database connection, observe host-only watcher state, or claim live-source truth.
+- Before the first worker is ready, after an exhausted crash budget, or after a 45-second queue wait, the request falls back to the existing in-process handler. This favors an available, equivalent read over a hidden failure.
+- The pool does not alter search, traversal, ranking, source bounds, or graph semantics. It is execution isolation only.
+
+### Comparison notes
+
+- The inspected CodeGraph path uses a separate query worker pool with worker-owned WAL readers for CPU-heavy FTS, RWR/personalized PageRank, impact analysis, and response construction. SymbolLattice independently adds a smaller, bounded worker protocol around its persisted read tools; it does not copy CodeGraph's pool or claim its broader scoring model.
+- SymbolLattice now explicitly confines every worker to a serializable read-tool allowlist and preserves a tested compatibility fallback to the main-process handler. This is stronger for this narrow capability boundary and failure transparency; CodeGraph remains broader in query computation and persistent reader design.
+
 ## [0.199.0] - 2026-08-02
 
 ### Added

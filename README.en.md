@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.199.0 is a developer preview. Run it from source.
+> v0.200.0 is a developer preview. Run it from source.
 
 SymbolLattice builds a queryable local code-symbol graph. Every relation retains its rule, evidence stage, and confidence; exact, heuristic, and unresolved evidence are never conflated.
 
@@ -28,33 +28,39 @@ cd symbol-lattice
 npm install
 npm run build
 
-# Explicitly create a local code graph
+# Explicitly create a local code-symbol graph
 node dist/cli/main.js init /path/to/project
 
-# Retrieve one persisted-generation structural context from keywords
+# Retrieve one persisted-generation structural investigation from keywords
 node dist/cli/main.js investigate "user token" --project /path/to/project --json
 
 # Explicitly synchronize after source changes
 node dist/cli/main.js sync /path/to/project
 
-# Start a read-only MCP host
+# Start an MCP host; tools stay read-only and background auto-sync is enabled by default
 node dist/cli/main.js serve --mcp --project /path/to/project
+
+# Require manual init/sync only
+node dist/cli/main.js serve --mcp --project /path/to/project --no-auto-sync
 ```
 
 On Windows PowerShell, use `npm.cmd` if npm is unavailable. Index data stays in the target project's `.symbol-lattice/index.sqlite`.
 
-## v0.199.0 highlights
+> [!NOTE]
+> MCP tools never create or update a graph themselves. The default `serve --mcp` auto-sync is a separate host-owned background watcher; use `--no-auto-sync` for fully manual updates.
 
-- `investigate --ranking lexical|structure`: default `lexical` preserves persisted FTS order; `structure` reorders only with resolved direct static relationships and export status.
-- Every selected candidate discloses final rank, direct exact caller/callee counts, export state, and score. No LLM, dynamic guess, or hidden weight is added to the result.
-- Selected symbols still include declaration source from the same graph generation, capped at 200 physical lines or 16,000 UTF-16 code units with total size and truncation disclosed.
-- `init` creates a local code-symbol graph snapshot; only `sync` updates it. `investigate`, CLI, and MCP queries remain read-only.
+## v0.200.0 highlights
+
+- `serve --mcp` can run graph reads through a bounded worker pool, capped at four workers by default. Set `SYMBOL_LATTICE_MCP_QUERY_POOL_SIZE=1..4` to tune it.
+- Workers accept only existing read-only graph tools. They never receive `init`, `index`, `sync`, or automatic-watch capabilities, and an MCP query cannot trigger them.
+- Before a worker warms, when the pool becomes unavailable, or after a bounded queue wait, the request safely falls back to the existing main-process read path.
+- `investigate --ranking lexical|structure` preserves FTS order or applies disclosed direct-static structure ranking.
 
 ## Boundaries
 
 - This is a local code graph, not an RDF/SPARQL knowledge graph or ontology-reasoning system.
-- `investigate` selects only persisted lexical matches and overlapping declarations; it does not use LLMs, PageRank, or guessed dynamic relationships.
-- Indexing and querying stay local. When source files change, the result reports staleness while still showing only evidence from the indexed generation.
+- Queries read persisted generations only; they do not use LLMs, PageRank, runtime guesses, or undisclosed weights.
+- Indexing and querying stay local. Source changes are reported as freshness state, never substituted for indexed evidence.
 
 ## Verification
 

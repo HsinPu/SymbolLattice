@@ -67,7 +67,7 @@ import {
   SqliteGraphStore
 } from "../infrastructure/sqlite/index.js";
 import {
-  startMcpServer,
+  startMcpServerWithReadQueryPool,
   type AutoSyncDiagnosticJournalService,
   type AutoSyncDiagnosticsService,
   type AutoSyncStatusService,
@@ -533,7 +533,7 @@ export async function runForegroundWatch(
 export async function runMcpWithAutoSync(
   service: SymbolLatticeService,
   options: McpAutoSyncOptions,
-  serverRunner: McpServerRunner = startMcpServer,
+  serverRunner: McpServerRunner = startMcpServerWithReadQueryPool,
   watchStarter: McpWatchStarter = startForegroundWatch,
   journalFactory: McpAutoSyncJournalFactory = (projectPath, writable) =>
     new SqliteAutoSyncDiagnosticJournal(projectPath, { writable }),

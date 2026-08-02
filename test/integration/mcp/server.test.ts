@@ -49,7 +49,8 @@ import {
   runNodeTool,
   runRoutesTool,
   runSearchTool,
-  startMcpServer
+  startMcpServer,
+  type McpReadQueryExecutor
 } from "../../../src/mcp/index.js";
 
 const closeCallbacks: Array<() => Promise<void>> = [];
@@ -837,6 +838,41 @@ describe("SymbolLattice MCP server", () => {
 
     expect(lifecycleInput.listenerCount("end")).toBe(0);
     expect(lifecycleInput.listenerCount("close")).toBe(0);
+  });
+
+  it("routes graph reads through an injected executor while host auto-sync stays local", async () => {
+    const dispatched: string[] = [];
+    const executor: McpReadQueryExecutor = {
+      async execute(toolName, _arguments, fallback) {
+        dispatched.push(toolName);
+        return fallback();
+      }
+    };
+    let autoSyncCalls = 0;
+    const server = createMcpServer(
+      {
+        async explore(): Promise<ExploreResult> {
+          return exploreResult();
+        },
+        async autoSyncStatus(): Promise<AutoSyncStatusResult> {
+          autoSyncCalls += 1;
+          return autoSyncStatusResult();
+        }
+      },
+      "C:/default-project",
+      { readQueryExecutor: executor }
+    );
+    const client = new Client({ name: "symbol-lattice-query-executor-test", version: "1.0.0" });
+    const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+    closeCallbacks.push(() => client.close(), () => server.close());
+
+    await client.callTool({ name: "symbol_lattice_explore", arguments: { query: "App" } });
+    await client.callTool({ name: "symbol_lattice_auto_sync_status", arguments: {} });
+
+    expect(dispatched).toEqual(["explore"]);
+    expect(autoSyncCalls).toBe(1);
   });
 
   it("exposes read-only retrieval tools and forwards projects and filters", async () => {

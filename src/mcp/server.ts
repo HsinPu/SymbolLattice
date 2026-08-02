@@ -68,6 +68,11 @@ import type {
 } from "../application/types.js";
 import { ARTIFACT_LANGUAGES, MAX_SOURCE_SEARCH_LIMIT } from "../domain/index.js";
 import { SYMBOL_LATTICE_VERSION } from "../version.js";
+import {
+  McpReadQueryPool,
+  type McpReadQueryExecutor
+} from "./read-query-pool.js";
+import type { McpReadToolName } from "./read-query-protocol.js";
 
 export interface ExploreService {
   explore(projectPath: string, reference: string): Promise<ExploreResult>;
@@ -347,6 +352,20 @@ export type GenerationDiffToolResponse = ReadOnlyToolResponse;
 export type AutoSyncStatusToolResponse = ReadOnlyToolResponse;
 export type AutoSyncDiagnosticsToolResponse = ReadOnlyToolResponse;
 export type AutoSyncDiagnosticJournalToolResponse = ReadOnlyToolResponse;
+
+/** Optional execution seam for graph reads that must not own an index writer. */
+export interface CreateMcpServerOptions {
+  readonly readQueryExecutor?: McpReadQueryExecutor | undefined;
+}
+
+function executeReadTool<TResponse extends ReadOnlyToolResponse>(
+  executor: McpReadQueryExecutor | undefined,
+  toolName: McpReadToolName,
+  arguments_: unknown,
+  fallback: () => Promise<TResponse>
+): Promise<TResponse> {
+  return executor === undefined ? fallback() : executor.execute(toolName, arguments_, fallback);
+}
 
 const sourcePositionOutputSchema = z.object({
   line: z.number().int(),
@@ -1390,9 +1409,11 @@ export async function runExplainEdgeTool(
 
 export function createMcpServer(
   service: ExploreService,
-  defaultProjectPath: string
+  defaultProjectPath: string,
+  options: CreateMcpServerOptions = {}
 ): McpServer {
   const server = new McpServer({ name: "symbol-lattice", version: SYMBOL_LATTICE_VERSION });
+  const readQueryExecutor = options.readQueryExecutor;
 
   server.registerTool(
     "symbol_lattice_explore",
@@ -1410,7 +1431,10 @@ export function createMcpServer(
         idempotentHint: true
       }
     },
-    async (arguments_) => runExploreTool(service, defaultProjectPath, arguments_)
+    async (arguments_) =>
+      executeReadTool(readQueryExecutor, "explore", arguments_, () =>
+        runExploreTool(service, defaultProjectPath, arguments_)
+      )
   );
 
   const autoSyncStatusService = supportsAutoSyncStatus(service) ? service : null;
@@ -1505,7 +1529,10 @@ export function createMcpServer(
           idempotentHint: true
         }
       },
-      async (arguments_) => runNodeTool(nodeService, defaultProjectPath, arguments_)
+      async (arguments_) =>
+        executeReadTool(readQueryExecutor, "node", arguments_, () =>
+          runNodeTool(nodeService, defaultProjectPath, arguments_)
+        )
     );
   }
 
@@ -1559,7 +1586,10 @@ export function createMcpServer(
           idempotentHint: true
         }
       },
-      async (arguments_) => runContextTool(contextService, defaultProjectPath, arguments_)
+      async (arguments_) =>
+        executeReadTool(readQueryExecutor, "context", arguments_, () =>
+          runContextTool(contextService, defaultProjectPath, arguments_)
+        )
     );
   }
 
@@ -1599,7 +1629,10 @@ export function createMcpServer(
           idempotentHint: true
         }
       },
-      async (arguments_) => runAffectedTestsTool(affectedTestsService, defaultProjectPath, arguments_)
+      async (arguments_) =>
+        executeReadTool(readQueryExecutor, "affected-tests", arguments_, () =>
+          runAffectedTestsTool(affectedTestsService, defaultProjectPath, arguments_)
+        )
     );
   }
 
@@ -1640,7 +1673,10 @@ export function createMcpServer(
           idempotentHint: true
         }
       },
-      async (arguments_) => runGitAffectedTestsTool(gitAffectedTestsService, defaultProjectPath, arguments_)
+      async (arguments_) =>
+        executeReadTool(readQueryExecutor, "git-affected-tests", arguments_, () =>
+          runGitAffectedTestsTool(gitAffectedTestsService, defaultProjectPath, arguments_)
+        )
     );
   }
 
@@ -1673,7 +1709,10 @@ export function createMcpServer(
           idempotentHint: true
         }
       },
-      async (arguments_) => runGitHunksTool(gitHunksService, defaultProjectPath, arguments_)
+      async (arguments_) =>
+        executeReadTool(readQueryExecutor, "git-hunks", arguments_, () =>
+          runGitHunksTool(gitHunksService, defaultProjectPath, arguments_)
+        )
     );
   }
 
@@ -1698,7 +1737,10 @@ export function createMcpServer(
           idempotentHint: true
         }
       },
-      async (arguments_) => runSearchTool(searchService, defaultProjectPath, arguments_)
+      async (arguments_) =>
+        executeReadTool(readQueryExecutor, "search", arguments_, () =>
+          runSearchTool(searchService, defaultProjectPath, arguments_)
+        )
     );
   }
 
@@ -1768,7 +1810,10 @@ export function createMcpServer(
           idempotentHint: true
         }
       },
-      async (arguments_) => runInvestigateTool(investigateService, defaultProjectPath, arguments_)
+      async (arguments_) =>
+        executeReadTool(readQueryExecutor, "investigate", arguments_, () =>
+          runInvestigateTool(investigateService, defaultProjectPath, arguments_)
+        )
     );
   }
 
@@ -1814,7 +1859,10 @@ export function createMcpServer(
           idempotentHint: true
         }
       },
-      async (arguments_) => runRoutesTool(routesService, defaultProjectPath, arguments_)
+      async (arguments_) =>
+        executeReadTool(readQueryExecutor, "routes", arguments_, () =>
+          runRoutesTool(routesService, defaultProjectPath, arguments_)
+        )
     );
   }
 
@@ -1855,7 +1903,10 @@ export function createMcpServer(
           idempotentHint: true
         }
       },
-      async (arguments_) => runEntrypointsTool(entrypointsService, defaultProjectPath, arguments_)
+      async (arguments_) =>
+        executeReadTool(readQueryExecutor, "entrypoints", arguments_, () =>
+          runEntrypointsTool(entrypointsService, defaultProjectPath, arguments_)
+        )
     );
   }
 
@@ -1884,7 +1935,10 @@ export function createMcpServer(
           idempotentHint: true
         }
       },
-      async (arguments_) => runHierarchyTool(hierarchyService, defaultProjectPath, arguments_)
+      async (arguments_) =>
+        executeReadTool(readQueryExecutor, "hierarchy", arguments_, () =>
+          runHierarchyTool(hierarchyService, defaultProjectPath, arguments_)
+        )
     );
   }
 
@@ -1913,7 +1967,9 @@ export function createMcpServer(
         }
       },
       async (arguments_) =>
-        runGenerationHistoryTool(generationHistoryService, defaultProjectPath, arguments_)
+        executeReadTool(readQueryExecutor, "generation-history", arguments_, () =>
+          runGenerationHistoryTool(generationHistoryService, defaultProjectPath, arguments_)
+        )
     );
   }
 
@@ -1953,7 +2009,9 @@ export function createMcpServer(
         }
       },
       async (arguments_) =>
-        runGenerationDiffTool(generationDiffService, defaultProjectPath, arguments_)
+        executeReadTool(readQueryExecutor, "generation-diff", arguments_, () =>
+          runGenerationDiffTool(generationDiffService, defaultProjectPath, arguments_)
+        )
     );
   }
 
@@ -1980,7 +2038,10 @@ export function createMcpServer(
           idempotentHint: true
         }
       },
-      async (arguments_) => runExplainEdgeTool(explainEdgeService, defaultProjectPath, arguments_)
+      async (arguments_) =>
+        executeReadTool(readQueryExecutor, "explain-edge", arguments_, () =>
+          runExplainEdgeTool(explainEdgeService, defaultProjectPath, arguments_)
+        )
     );
   }
 
@@ -2006,6 +2067,8 @@ export interface McpLifecycleInput {
 export interface McpServerOptions {
   readonly transport?: Transport;
   readonly lifecycleInput?: McpLifecycleInput;
+  /** Optional host-owned executor for persisted graph read tools only. */
+  readonly readQueryExecutor?: McpReadQueryExecutor;
 }
 
 /**
@@ -2020,7 +2083,9 @@ export async function startMcpServer(
   defaultProjectPath: string,
   options: McpServerOptions = {}
 ): Promise<McpServerSession> {
-  const server = createMcpServer(service, defaultProjectPath);
+  const server = createMcpServer(service, defaultProjectPath, {
+    readQueryExecutor: options.readQueryExecutor
+  });
   const transport = options.transport ?? new StdioServerTransport();
   const lifecycleInput = options.lifecycleInput ?? process.stdin;
   let resolveClosed: (() => void) | null = null;
@@ -2078,6 +2143,42 @@ export async function startMcpServer(
   }
 
   return { closed, close };
+}
+
+/**
+ * Starts an MCP session with a bounded worker-thread executor for graph reads.
+ *
+ * The executor has no indexing or watcher capability. If its first worker has
+ * not warmed yet, or it becomes unhealthy, individual tool calls retain the
+ * existing in-process read handler as a safe compatibility fallback.
+ */
+export async function startMcpServerWithReadQueryPool(
+  service: ExploreService,
+  defaultProjectPath: string,
+  options: Omit<McpServerOptions, "readQueryExecutor"> = {}
+): Promise<McpServerSession> {
+  const readQueryPool = new McpReadQueryPool({ defaultProjectPath });
+  let session: McpServerSession;
+  try {
+    session = await startMcpServer(service, defaultProjectPath, {
+      ...options,
+      readQueryExecutor: readQueryPool
+    });
+  } catch (error) {
+    await readQueryPool.close();
+    throw error;
+  }
+
+  return {
+    closed: session.closed.finally(() => readQueryPool.close()),
+    async close(): Promise<void> {
+      try {
+        await session.close();
+      } finally {
+        await readQueryPool.close();
+      }
+    }
+  };
 }
 
 /** Backward-compatible one-shot stdio server start for programmatic callers. */
