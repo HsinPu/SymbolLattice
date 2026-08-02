@@ -6,6 +6,27 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.175.0] - 2026-08-02
+
+### Added
+
+- Parser-backed Spring <code>@Value</code> facts now include parameters on direct concrete methods of direct top-level Java and Kotlin classes. The relation remains owned by the enclosing class, while Java requires a direct <code>MethodDeclaration</code> body and Kotlin requires a direct <code>function_body</code>.
+- Method facts reuse the established exact-import/fully-qualified annotation proof, Java literal-placeholder guard, Kotlin escaped-dollar regular-string guard, relaxed-key fallback, collision-safe unresolved evidence, value non-retention, and explicit-sync projection behavior.
+- New extraction, capability, and service coverage proves Java/Kotlin imported and fully-qualified method parameters, exact and relaxed resolution, class-owned callers, source-value omission, unchanged-artifact sync withdrawal, and rejection of abstract/interface/top-level/dynamic/named/use-site/alias/wildcard/raw forms.
+
+### Compatibility
+
+- The artifact-facts extractor advances to <code>multi-language-ast-v155</code>; the project resolver remains <code>project-resolver-v55</code>. Existing graphs and SQLite schema remain readable, while the next explicit <code>sync</code> or <code>index</code> re-extracts eligible Java/Kotlin artifacts under the new method surface.
+
+### Deliberate limits
+
+- This remains bounded syntax analysis, not a general Spring injection model. Java methods without a block, nested declarations, and nonliteral annotation forms are excluded. Kotlin abstract/interface/top-level functions, secondary constructors, use-site targets, raw strings, interpolation, aliases, wildcard imports, named arguments, expressions, and nested placeholders are excluded.
+- The graph deliberately models the directly enclosing class rather than inventing parameter symbols or inferring deployed method invocation, dependency injection order, profiles, precedence, environment overrides, validation, collection binding, or value semantics.
+
+### Comparison notes
+
+- CodeGraph's inspected Spring path uses a broad Java/Kotlin text pattern that can cover more annotation placements without proving their AST owner or import binding. SymbolLattice independently adds the direct concrete-method subset with parser-proven declaration ownership, type proof, Kotlin string semantics, and collision-preserving evidence. SymbolLattice is stronger for auditable static facts; CodeGraph remains broader for permissive placement matching and automatic configuration-candidate selection.
+
 ## [0.174.0] - 2026-08-02
 
 ### Added

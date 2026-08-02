@@ -15414,6 +15414,149 @@ describe("SymbolLatticeService", () => {
     });
   });
 
+  it("projects direct Java and Kotlin Spring @Value method parameters through conservative configuration resolution", async () => {
+    const projectPath = await createInlineProject({
+      "config/application.properties": [
+        "method.java.port=java-method-secret",
+        "method.kotlin-mode=kotlin-method-secret"
+      ].join("\n"),
+      "src/config/JavaMethodConfig.java": [
+        "import org.springframework.beans.factory.annotation.Value;",
+        "",
+        "class JavaMethodConfig {",
+        '  void configure(@Value("${method.java.port}") String port) {}',
+        "}"
+      ].join("\n"),
+      "src/config/KotlinMethodConfig.kt": [
+        "import org.springframework.beans.factory.annotation.Value",
+        "",
+        "class KotlinMethodConfig {",
+        '  fun configure(@Value("\\${method.kotlinMode}") mode: String) {}',
+        "}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    const indexed = await service.init({ projectPath });
+    const javaConfig = (
+      await service.find(projectPath, "src/config/JavaMethodConfig.java#JavaMethodConfig")
+    ).symbols[0];
+    const kotlinConfig = (
+      await service.find(projectPath, "src/config/KotlinMethodConfig.kt#KotlinMethodConfig")
+    ).symbols[0];
+    const javaPort = (
+      await service.find(projectPath, "config/application.properties#properties-key:method.java.port")
+    ).symbols[0];
+    const kotlinMode = (
+      await service.find(projectPath, "config/application.properties#properties-key:method.kotlin-mode")
+    ).symbols[0];
+    if (
+      javaConfig === undefined ||
+      kotlinConfig === undefined ||
+      javaPort === undefined ||
+      kotlinMode === undefined
+    ) {
+      throw new Error("Expected indexed Spring method configuration symbols.");
+    }
+
+    const javaFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "src/config/JavaMethodConfig.java");
+    const kotlinFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "src/config/KotlinMethodConfig.kt");
+    const propertiesFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "config/application.properties");
+    const snapshot = graphStore.getSnapshot(projectPath);
+    const javaReference = snapshot.edges.find(
+      (edge) => edge.sourceId === javaConfig.id && edge.targetId === javaPort.id
+    );
+    const kotlinReference = snapshot.edges.find(
+      (edge) => edge.sourceId === kotlinConfig.id && edge.targetId === kotlinMode.id
+    );
+    const javaCallers = await service.callers(projectPath, javaPort.qualifiedName);
+    const kotlinCallers = await service.callers(projectPath, kotlinMode.qualifiedName);
+
+    expect(indexed).toMatchObject({
+      stale: false,
+      counts: { files: 3, symbols: 9, edges: 8 }
+    });
+    expect(javaFacts?.springBootPropertiesFacts?.valueReferences).toEqual([
+      expect.objectContaining({ sourceId: javaConfig.id, key: "method.java.port" })
+    ]);
+    expect(kotlinFacts?.springBootPropertiesFacts?.valueReferences).toEqual([
+      expect.objectContaining({ sourceId: kotlinConfig.id, key: "method.kotlinMode" })
+    ]);
+    expect(JSON.stringify(propertiesFacts)).not.toContain("method-secret");
+    expect(javaCallers.relations.map((relation) => relation.symbol.id)).toEqual([javaConfig.id]);
+    expect(kotlinCallers.relations.map((relation) => relation.symbol.id)).toEqual([kotlinConfig.id]);
+    expect(javaReference).toMatchObject({
+      kind: "references",
+      resolution: "exact",
+      confidence: 1,
+      referenceName: "method.java.port",
+      evidence: expect.objectContaining({
+        ruleId: "framework.spring-boot.properties.direct-value.literal-key.exact-key",
+        stage: "module",
+        candidateSymbolIds: [javaPort.id],
+        configurationPaths: ["config/application.properties"]
+      })
+    });
+    expect(kotlinReference).toMatchObject({
+      kind: "references",
+      resolution: "heuristic",
+      confidence: 0.75,
+      referenceName: "method.kotlinMode",
+      evidence: expect.objectContaining({
+        ruleId: "framework.spring-boot.properties.direct-value.relaxed-key.unique-key",
+        stage: "heuristic",
+        candidateSymbolIds: [kotlinMode.id],
+        configurationPaths: ["config/application.properties"]
+      })
+    });
+
+    await writeFile(
+      join(projectPath, "config", "application.properties"),
+      "feature.enabled=true\n",
+      "utf8"
+    );
+    const synced = await service.sync({ projectPath });
+    const afterSync = graphStore.getSnapshot(projectPath);
+    const javaAfterSync = afterSync.edges.find(
+      (edge) =>
+        edge.sourceId === javaConfig.id &&
+        edge.kind === "references" &&
+        edge.referenceName === "method.java.port"
+    );
+    const kotlinAfterSync = afterSync.edges.find(
+      (edge) =>
+        edge.sourceId === kotlinConfig.id &&
+        edge.kind === "references" &&
+        edge.referenceName === "method.kotlinMode"
+    );
+
+    expect(synced.lastIndexWork?.reusedArtifactFiles).toEqual(
+      expect.arrayContaining([
+        "src/config/JavaMethodConfig.java",
+        "src/config/KotlinMethodConfig.kt"
+      ])
+    );
+    expect(javaAfterSync).toMatchObject({
+      targetId: null,
+      resolution: "unresolved",
+      confidence: 0,
+      evidence: expect.objectContaining({ stage: "unresolved", candidateSymbolIds: [] })
+    });
+    expect(kotlinAfterSync).toMatchObject({
+      targetId: null,
+      resolution: "unresolved",
+      confidence: 0,
+      evidence: expect.objectContaining({ stage: "unresolved", candidateSymbolIds: [] })
+    });
+  });
+
   it("projects conservative Java @ConfigurationProperties prefixes to unique Spring Boot configuration leaves", async () => {
     const projectPath = await createInlineProject({
       "config/application.yml": [

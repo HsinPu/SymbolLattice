@@ -442,6 +442,69 @@ function staticKotlinSpringBootConstructorParameterReferences(
 }
 
 /**
+ * Retains direct concrete class-method parameter `@Value` annotations.
+ * Top-level functions, abstract declarations, secondary constructors,
+ * use-site targets, aliases, and dynamic strings stay outside this slice.
+ */
+function staticKotlinSpringBootMethodParameterReferences(
+  declaration: StaticKotlinType,
+  imports: ReadonlySet<string>
+): readonly StaticKotlinSpringBootPropertiesReference[] {
+  if (declaration.kind !== "class") {
+    return [];
+  }
+  const references: StaticKotlinSpringBootPropertiesReference[] = [];
+  for (const method of directChildren(declaration.body)) {
+    if (method.kind() !== "function_declaration") {
+      continue;
+    }
+    const hasBody = directChildren(method).some((child) => child.kind() === "function_body");
+    if (!hasBody) {
+      continue;
+    }
+    const parameters = directChildren(method).find(
+      (child) => child.kind() === "function_value_parameters"
+    );
+    if (parameters === undefined) {
+      continue;
+    }
+    const parameterChildren = directChildren(parameters);
+    for (const [index, modifiers] of parameterChildren.entries()) {
+      if (
+        modifiers.kind() !== "parameter_modifiers" ||
+        parameterChildren[index + 1]?.kind() !== "parameter"
+      ) {
+        continue;
+      }
+      const annotations = directChildren(modifiers).filter((child) => child.kind() === "annotation");
+      const annotationsNamedValue = annotations.filter((annotation) => {
+        const name = staticKotlinAnnotationName(annotation);
+        return name === "Value" || name === SPRING_VALUE_IMPORT;
+      });
+      const valueAnnotations = annotationsNamedValue.filter((annotation) => {
+        const name = staticKotlinAnnotationName(annotation);
+        return name === SPRING_VALUE_IMPORT || (name === "Value" && imports.has(SPRING_VALUE_IMPORT));
+      });
+      if (
+        annotationsNamedValue.length !== valueAnnotations.length ||
+        valueAnnotations.length !== 1
+      ) {
+        continue;
+      }
+      const annotation = valueAnnotations[0];
+      if (annotation === undefined) {
+        continue;
+      }
+      const key = staticKotlinSpringBootPropertiesKey(annotation);
+      if (key !== null) {
+        references.push({ key, node: annotation });
+      }
+    }
+  }
+  return references;
+}
+
+/**
  * Retains one direct Kotlin top-level-class configuration prefix only after an
  * exact import or fully-qualified annotation proves Spring's type. The shared
  * project resolver fans the fact out to individually unique configuration
@@ -822,6 +885,17 @@ export function extractKotlinFileFacts(input: KotlinExtractFileFactsInput): Arti
         });
       }
       for (const reference of staticKotlinSpringBootConstructorParameterReferences(
+        declaration,
+        imports
+      )) {
+        springBootPropertiesValueReferences.push({
+          sourceId: typeSymbol.id,
+          filePath: input.filePath,
+          key: reference.key,
+          range: rangeForNode(reference.node)
+        });
+      }
+      for (const reference of staticKotlinSpringBootMethodParameterReferences(
         declaration,
         imports
       )) {

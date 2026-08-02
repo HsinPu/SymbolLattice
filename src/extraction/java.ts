@@ -867,6 +867,60 @@ function staticSpringBootConstructorParameterReferences(
 }
 
 /**
+ * Retains direct concrete-method parameter `@Value` annotations after the same
+ * exact Spring type proof as fields and constructors. Abstract methods,
+ * interfaces, nested declarations, and nonliteral annotation surfaces stay
+ * outside this first method-injection slice.
+ */
+function staticSpringBootMethodParameterReferences(
+  input: JavaExtractFileFactsInput,
+  declaration: StaticJavaClass,
+  imports: ReadonlyMap<string, string>
+): readonly StaticSpringBootPropertiesReference[] {
+  const references: StaticSpringBootPropertiesReference[] = [];
+  for (const method of directChildren(declaration.body)) {
+    if (method.name !== "MethodDeclaration") {
+      continue;
+    }
+    const hasBody = directChildren(method).some((child) => child.name === "Block");
+    if (!hasBody) {
+      continue;
+    }
+    const parameters = directChildren(method).find((child) => child.name === "FormalParameters");
+    if (parameters === undefined) {
+      continue;
+    }
+    for (const parameter of directChildren(parameters)) {
+      if (parameter.name !== "FormalParameter") {
+        continue;
+      }
+      const annotations = staticAnnotations(input, parameter);
+      const annotationsNamedValue = annotations.filter(
+        (annotation) => annotation.name === "Value" || annotation.name === SPRING_VALUE_PATH
+      );
+      const valueAnnotations = annotationsNamedValue.filter((annotation) =>
+        annotationMatches(annotation, SPRING_VALUE_PATH, imports)
+      );
+      if (
+        annotationsNamedValue.length !== valueAnnotations.length ||
+        valueAnnotations.length !== 1
+      ) {
+        continue;
+      }
+      const annotation = valueAnnotations[0];
+      if (annotation === undefined) {
+        continue;
+      }
+      const key = staticSpringBootPropertiesKey(input, annotation);
+      if (key !== null) {
+        references.push({ key, node: annotation.node });
+      }
+    }
+  }
+  return references;
+}
+
+/**
  * A direct top-level Java class may own one statically proven Spring Boot
  * configuration prefix. The project resolver later fans it out only to
  * parser-proven leaf keys, keeping profile and format ambiguity explicit.
@@ -1115,6 +1169,18 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
         });
       }
       for (const reference of staticSpringBootConstructorParameterReferences(
+        input,
+        classDeclaration,
+        imports
+      )) {
+        springBootPropertiesValueReferences.push({
+          sourceId: classSymbol.id,
+          filePath: input.filePath,
+          key: reference.key,
+          range: rangeFor(lineStarts, reference.node.from, reference.node.to)
+        });
+      }
+      for (const reference of staticSpringBootMethodParameterReferences(
         input,
         classDeclaration,
         imports

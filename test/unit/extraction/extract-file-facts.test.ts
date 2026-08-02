@@ -7752,7 +7752,6 @@ describe("source extraction", () => {
         '    @Value("${nested.${key}}") String nested,',
         '    @Value("${dynamic}" + suffix) String dynamic',
         "  ) {}",
-        '  void configure(@Value("${method.only}") String method) {}',
         "}"
       ].join("\n")
     });
@@ -7763,6 +7762,80 @@ describe("source extraction", () => {
         "import org.springframework.beans.factory.annotation.*;",
         "class WildcardConstructorValues {",
         '  WildcardConstructorValues(@Value("${unproven.key}") String value) {}',
+        "}"
+      ].join("\n")
+    });
+
+    expect(directImportFacts.springBootPropertiesFacts?.valueReferences).toEqual([]);
+    expect(wildcardImportFacts.springBootPropertiesFacts?.valueReferences).toEqual([]);
+  });
+
+  it("retains direct Java Spring Boot @Value concrete-method parameter facts", () => {
+    const facts = extractFileFacts({
+      filePath: "src/config/MethodConfig.java",
+      language: "java",
+      sourceText: [
+        "import org.springframework.beans.factory.annotation.Value;",
+        "",
+        "class MethodConfig {",
+        "  void configure(",
+        '    @Value("${server.port}") String port,',
+        '    @Value("${feature.enabled:false}") boolean enabled',
+        "  ) {}",
+        "}",
+        "",
+        "class FullyQualifiedMethodConfig {",
+        "  void setName(",
+        '    @org.springframework.beans.factory.annotation.Value("${app.name}") String name',
+        "  ) {}",
+        "}"
+      ].join("\n")
+    });
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+
+    expect(
+      facts.springBootPropertiesFacts?.valueReferences.map((reference) => [
+        symbolsById.get(reference.sourceId)?.name,
+        reference.key,
+        reference.range.start
+      ])
+    ).toEqual([
+      ["MethodConfig", "server.port", { line: 5, column: 5 }],
+      ["MethodConfig", "feature.enabled", { line: 6, column: 5 }],
+      ["FullyQualifiedMethodConfig", "app.name", { line: 12, column: 5 }]
+    ]);
+    expect(facts.edges.filter((edge) => edge.kind === "references")).toEqual([]);
+  });
+
+  it("rejects unsupported Java Spring @Value method-parameter forms", () => {
+    const directImportFacts = extractFileFacts({
+      filePath: "src/config/UnsupportedMethodValues.java",
+      language: "java",
+      sourceText: [
+        "import org.springframework.beans.factory.annotation.Value;",
+        "class UnsupportedMethodValues {",
+        "  void configure(",
+        '    @Value(value = "${named.argument}") String named,',
+        '    @Value("${nested.${key}}") String nested,',
+        '    @Value("${dynamic}" + suffix) String dynamic',
+        "  ) {}",
+        '  @Value("${method.annotation}") void annotatedMethod(String value) {}',
+        "}",
+        "abstract class AbstractMethodValues {",
+        '  abstract void configure(@Value("${abstract.key}") String value);',
+        "}",
+        "interface InterfaceMethodValues {",
+        '  void configure(@Value("${interface.key}") String value);',
+        "}"
+      ].join("\n")
+    });
+    const wildcardImportFacts = extractFileFacts({
+      filePath: "src/config/WildcardMethodValues.java",
+      language: "java",
+      sourceText: [
+        "import org.springframework.beans.factory.annotation.*;",
+        "class WildcardMethodValues {",
+        '  void configure(@Value("${unproven.key}") String value) {}',
         "}"
       ].join("\n")
     });
@@ -11667,15 +11740,131 @@ describe("source extraction", () => {
           '  constructor(@Value("\\${secondary.key}") value: String)',
           "}"
         ].join("\n")
-      ],
+      ]
+    ] as const;
+
+    expect(
+      rejected.map(([filePath, sourceText]) =>
+        extractFileFacts({ filePath, language: "kotlin", sourceText }).springBootPropertiesFacts?.valueReferences
+      )
+    ).toEqual([[], [], [], [], [], [], []]);
+  });
+
+  it("retains direct Kotlin Spring @Value concrete-method parameter facts", () => {
+    const facts = extractFileFacts({
+      filePath: "src/config/MethodConfig.kt",
+      language: "kotlin",
+      sourceText: [
+        "import org.springframework.beans.factory.annotation.Value",
+        "",
+        "class MethodConfig {",
+        "  fun configure(",
+        '    @Value("\\${server.port}") port: String,',
+        '    @Value("\\${feature.enabled:false}") enabled: Boolean',
+        "  ) {}",
+        "}",
+        "",
+        "class FullyQualifiedMethodConfig {",
+        "  fun setName(",
+        '    @org.springframework.beans.factory.annotation.Value("\\${app.name}") name: String',
+        "  ) {}",
+        "}"
+      ].join("\n")
+    });
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+
+    expect(
+      facts.springBootPropertiesFacts?.valueReferences.map((reference) => [
+        symbolsById.get(reference.sourceId)?.name,
+        reference.key,
+        reference.range.start
+      ])
+    ).toEqual([
+      ["MethodConfig", "server.port", { line: 5, column: 5 }],
+      ["MethodConfig", "feature.enabled", { line: 6, column: 5 }],
+      ["FullyQualifiedMethodConfig", "app.name", { line: 12, column: 5 }]
+    ]);
+    expect(facts.edges.filter((edge) => edge.kind === "references")).toEqual([]);
+  });
+
+  it("rejects unsupported Kotlin Spring @Value method-parameter forms", () => {
+    const rejected = [
       [
-        "src/config/MethodConstructor.kt",
+        "src/config/DynamicMethod.kt",
         [
           "import org.springframework.beans.factory.annotation.Value",
           "",
-          "class MethodConstructor {",
-          '  fun configure(@Value("\\${method.key}") value: String) = value',
+          "class DynamicMethod {",
+          '  fun configure(@Value("${dynamic.key}") value: String) {}',
           "}"
+        ].join("\n")
+      ],
+      [
+        "src/config/NamedMethod.kt",
+        [
+          "import org.springframework.beans.factory.annotation.Value",
+          "",
+          "class NamedMethod {",
+          '  fun configure(@Value(value = "\\${named.key}") value: String) {}',
+          "}"
+        ].join("\n")
+      ],
+      [
+        "src/config/UseSiteMethod.kt",
+        [
+          "import org.springframework.beans.factory.annotation.Value",
+          "",
+          "class UseSiteMethod {",
+          '  fun configure(@param:Value("\\${use.site.key}") value: String) {}',
+          "}"
+        ].join("\n")
+      ],
+      [
+        "src/config/RawMethod.kt",
+        [
+          "import org.springframework.beans.factory.annotation.Value",
+          "",
+          "class RawMethod {",
+          '  fun configure(@Value("""\\${raw.key}""") value: String) {}',
+          "}"
+        ].join("\n")
+      ],
+      [
+        "src/config/AliasedMethod.kt",
+        [
+          "import org.springframework.beans.factory.annotation.Value as SpringValue",
+          "",
+          "class AliasedMethod {",
+          '  fun configure(@SpringValue("\\${aliased.key}") value: String) {}',
+          "}"
+        ].join("\n")
+      ],
+      [
+        "src/config/WildcardMethod.kt",
+        [
+          "import org.springframework.beans.factory.annotation.*",
+          "",
+          "class WildcardMethod {",
+          '  fun configure(@Value("\\${wildcard.key}") value: String) {}',
+          "}"
+        ].join("\n")
+      ],
+      [
+        "src/config/AbstractMethod.kt",
+        [
+          "import org.springframework.beans.factory.annotation.Value",
+          "",
+          "abstract class AbstractMethod {",
+          '  abstract fun configure(@Value("\\${abstract.key}") value: String)',
+          "}"
+        ].join("\n")
+      ],
+      [
+        "src/config/TopLevelMethod.kt",
+        [
+          "import org.springframework.beans.factory.annotation.Value",
+          "",
+          'fun configure(@Value("\\${top.level.key}") value: String) {}'
         ].join("\n")
       ]
     ] as const;

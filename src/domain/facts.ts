@@ -11,7 +11,7 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v154";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v155";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
@@ -626,7 +626,8 @@ export interface JavaFacts {
 
 /**
  * One direct Spring `@Value` literal-key annotation on a Java field or
- * constructor parameter, or a Kotlin class property or primary-constructor parameter.
+ * constructor or concrete-method parameter, or a Kotlin class property,
+ * primary-constructor parameter, or concrete-method parameter.
  */
 export interface SpringBootPropertiesValueReferenceFact {
   /** Stable symbol identity of the directly enclosing Java or Kotlin class. */
