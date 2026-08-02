@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.202.0 is a developer preview. Run it from source.
+> v0.203.0 is a developer preview. Run it from source.
 
 SymbolLattice builds a queryable local code-symbol graph. Every relation retains its rule, evidence stage, and confidence; exact, heuristic, and unresolved evidence are never conflated.
 
@@ -49,13 +49,13 @@ On Windows PowerShell, use `npm.cmd` if npm is unavailable. Index data stays in 
 > [!NOTE]
 > MCP tools never create or update a graph themselves. The default `serve --mcp` auto-sync is a separate host-owned background watcher; use `--no-auto-sync` for fully manual updates.
 
-## v0.202.0 highlights
+## v0.203.0 highlights
 
-- `npm run benchmark:mcp` measures the read-only MCP worker pool on a fixed TypeScript graph that is created and removed in a temporary directory; it never indexes, reads, or writes your project.
-- The report emits sequential and concurrent `explore`/`investigate` P50/P95, error and fallback counts, query-pool state, and a main-process event-loop-delay sample; errors or fallbacks produce a non-zero exit.
-- Defaults are two workers, four concurrent calls, and 24 requests. Tune with `SYMBOL_LATTICE_BENCHMARK_POOL_SIZE=1..4`, `SYMBOL_LATTICE_BENCHMARK_CONCURRENCY=1..16`, `SYMBOL_LATTICE_BENCHMARK_REQUESTS=1..512`, and `SYMBOL_LATTICE_BENCHMARK_WARMUP=1..64`.
-- Results are same-machine, same-version comparison baselines, not cross-hardware performance promises or fixed pass thresholds.
-- MCP workers still accept existing read-only graph tools only; a query cannot trigger `init`, `index`, `sync`, or automatic watching.
+- After its first database-backed read, each MCP worker retains one read-only SQLite connection for its default project. Every query still uses a separate committed snapshot, so later requests can observe a generation published by `sync`.
+- Queries that override `projectPath` keep short-lived read-only connections, preventing unbounded cross-project connection caching in a worker.
+- The worker's SQLite store also refuses schema and graph writes, so an accidental future `init`/`index`/`sync` path cannot rewrite the database.
+- `npm run benchmark:mcp` still measures a fixed temporary graph's P50/P95, fallback, error, pool, and event-loop data. Its output is a same-machine comparison baseline, not a performance promise.
+- This is not a WAL or cross-process cache layer, and it performs no hidden rebuilding, synchronization, or live-source reads.
 
 ## Boundaries
 

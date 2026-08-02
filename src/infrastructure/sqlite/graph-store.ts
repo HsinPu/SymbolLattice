@@ -1505,12 +1505,50 @@ function readActiveGenerationBundle(
   };
 }
 
+export interface SqliteGraphStoreOptions {
+  /**
+   * Keeps one read-only connection open for this one project. Every read still
+   * begins and commits its own SQLite snapshot, so a later request observes a
+   * writer's committed active-generation switch.
+   */
+  readonly persistentReadProjectPath?: string | undefined;
+  /** Refuses every schema or projection write while retaining read capabilities. */
+  readonly readOnly?: boolean | undefined;
+}
+
 export class SqliteGraphStore implements GraphStore {
+  private readonly persistentReadProjectPath: string | null;
+  private readonly readOnly: boolean;
+  private persistentReadDatabase: DatabaseSync | null = null;
+
+  public constructor(options: SqliteGraphStoreOptions = {}) {
+    this.persistentReadProjectPath =
+      options.persistentReadProjectPath === undefined
+        ? null
+        : resolve(options.persistentReadProjectPath);
+    this.readOnly = options.readOnly ?? false;
+  }
+
+  /** Releases the optional worker-local persistent read connection. */
+  public close(): void {
+    const database = this.persistentReadDatabase;
+    this.persistentReadDatabase = null;
+    if (database !== null) {
+      database.close();
+    }
+  }
+
+  /** True only when this store has opened its configured persistent reader. */
+  public get persistentReadConnectionOpen(): boolean {
+    return this.persistentReadDatabase !== null;
+  }
+
   public isInitialized(projectPath: string): boolean {
     return existsSync(databasePathFor(projectPath));
   }
 
   public initialize(projectPath: string): void {
+    this.assertWritable();
     const databasePath = databasePathFor(projectPath);
     const databaseExisted = existsSync(databasePath);
     mkdirSync(resolve(databasePath, ".."), { recursive: true });
@@ -1552,14 +1590,9 @@ export class SqliteGraphStore implements GraphStore {
       };
     }
 
-    const database = new DatabaseSync(databasePathFor(normalizedProjectPath), { readOnly: true });
-    try {
-      return readConsistently(database, () =>
-        readActiveGraphBundle(database, normalizedProjectPath)
-      );
-    } finally {
-      database.close();
-    }
+    return this.withReadDatabase(normalizedProjectPath, (database) =>
+      readActiveGraphBundle(database, normalizedProjectPath)
+    );
   }
 
   public getActiveGenerationBundle(projectPath: string): ActiveGenerationBundle {
@@ -1576,14 +1609,9 @@ export class SqliteGraphStore implements GraphStore {
       };
     }
 
-    const database = new DatabaseSync(databasePathFor(normalizedProjectPath), { readOnly: true });
-    try {
-      return readConsistently(database, () =>
-        readActiveGenerationBundle(database, normalizedProjectPath)
-      );
-    } finally {
-      database.close();
-    }
+    return this.withReadDatabase(normalizedProjectPath, (database) =>
+      readActiveGenerationBundle(database, normalizedProjectPath)
+    );
   }
 
   public getActiveSourceSearchBundle(
@@ -1598,23 +1626,18 @@ export class SqliteGraphStore implements GraphStore {
       };
     }
 
-    const database = new DatabaseSync(databasePathFor(normalizedProjectPath), { readOnly: true });
-    try {
-      return readConsistently(database, () => {
-        const graphBundle = readActiveGraphBundle(database, normalizedProjectPath);
-        return {
-          ...graphBundle,
-          hits: readActiveSourceSearchHits(
-            database,
-            graphBundle.status.generationId,
-            graphBundle.sourceSearchVersion ?? null,
-            request
-          )
-        };
-      });
-    } finally {
-      database.close();
-    }
+    return this.withReadDatabase(normalizedProjectPath, (database) => {
+      const graphBundle = readActiveGraphBundle(database, normalizedProjectPath);
+      return {
+        ...graphBundle,
+        hits: readActiveSourceSearchHits(
+          database,
+          graphBundle.status.generationId,
+          graphBundle.sourceSearchVersion ?? null,
+          request
+        )
+      };
+    });
   }
 
   public getActiveSourceDocumentsBundle(
@@ -1629,23 +1652,18 @@ export class SqliteGraphStore implements GraphStore {
       };
     }
 
-    const database = new DatabaseSync(databasePathFor(normalizedProjectPath), { readOnly: true });
-    try {
-      return readConsistently(database, () => {
-        const graphBundle = readActiveGraphBundle(database, normalizedProjectPath);
-        return {
-          ...graphBundle,
-          documents: readActiveSourceDocuments(
-            database,
-            graphBundle.status.generationId,
-            graphBundle.sourceSearchVersion ?? null,
-            filePaths
-          )
-        };
-      });
-    } finally {
-      database.close();
-    }
+    return this.withReadDatabase(normalizedProjectPath, (database) => {
+      const graphBundle = readActiveGraphBundle(database, normalizedProjectPath);
+      return {
+        ...graphBundle,
+        documents: readActiveSourceDocuments(
+          database,
+          graphBundle.status.generationId,
+          graphBundle.sourceSearchVersion ?? null,
+          filePaths
+        )
+      };
+    });
   }
 
   public getGenerationHistoryBundle(projectPath: string): GenerationHistoryBundle | null {
@@ -1654,14 +1672,9 @@ export class SqliteGraphStore implements GraphStore {
       return null;
     }
 
-    const database = new DatabaseSync(databasePathFor(normalizedProjectPath), { readOnly: true });
-    try {
-      return readConsistently(database, () =>
-        readGenerationHistoryBundle(database, normalizedProjectPath)
-      );
-    } finally {
-      database.close();
-    }
+    return this.withReadDatabase(normalizedProjectPath, (database) =>
+      readGenerationHistoryBundle(database, normalizedProjectPath)
+    );
   }
 
   public getGenerationSnapshotBundle(
@@ -1673,14 +1686,9 @@ export class SqliteGraphStore implements GraphStore {
       return null;
     }
 
-    const database = new DatabaseSync(databasePathFor(normalizedProjectPath), { readOnly: true });
-    try {
-      return readConsistently(database, () =>
-        readGenerationSnapshotBundle(database, normalizedProjectPath, generationId)
-      );
-    } finally {
-      database.close();
-    }
+    return this.withReadDatabase(normalizedProjectPath, (database) =>
+      readGenerationSnapshotBundle(database, normalizedProjectPath, generationId)
+    );
   }
 
   public getGenerationComparisonBundle(
@@ -1693,22 +1701,18 @@ export class SqliteGraphStore implements GraphStore {
       return null;
     }
 
-    const database = new DatabaseSync(databasePathFor(normalizedProjectPath), { readOnly: true });
-    try {
-      return readConsistently(database, () =>
-        readGenerationComparisonBundle(
-          database,
-          normalizedProjectPath,
-          fromGenerationId,
-          toGenerationId
-        )
-      );
-    } finally {
-      database.close();
-    }
+    return this.withReadDatabase(normalizedProjectPath, (database) =>
+      readGenerationComparisonBundle(
+        database,
+        normalizedProjectPath,
+        fromGenerationId,
+        toGenerationId
+      )
+    );
   }
 
   public replaceProjectFacts(input: ReplaceProjectFactsInput): void {
+    this.assertWritable();
     const normalizedProjectPath = resolve(input.projectPath);
     this.initialize(normalizedProjectPath);
     const database = new DatabaseSync(databasePathFor(normalizedProjectPath));
@@ -1792,6 +1796,38 @@ export class SqliteGraphStore implements GraphStore {
       }
     } finally {
       database.close();
+    }
+  }
+
+  private withReadDatabase<T>(
+    normalizedProjectPath: string,
+    read: (database: DatabaseSync) => T
+  ): T {
+    const isPersistent = normalizedProjectPath === this.persistentReadProjectPath;
+    const database = isPersistent
+      ? this.openPersistentReadDatabase(normalizedProjectPath)
+      : new DatabaseSync(databasePathFor(normalizedProjectPath), { readOnly: true });
+    try {
+      return readConsistently(database, () => read(database));
+    } finally {
+      if (!isPersistent) {
+        database.close();
+      }
+    }
+  }
+
+  private openPersistentReadDatabase(normalizedProjectPath: string): DatabaseSync {
+    if (this.persistentReadDatabase === null) {
+      this.persistentReadDatabase = new DatabaseSync(databasePathFor(normalizedProjectPath), {
+        readOnly: true
+      });
+    }
+    return this.persistentReadDatabase;
+  }
+
+  private assertWritable(): void {
+    if (this.readOnly) {
+      throw new Error("This SqliteGraphStore is configured read-only.");
     }
   }
 }

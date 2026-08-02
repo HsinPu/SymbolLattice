@@ -22,6 +22,7 @@ import {
 import { SqliteGraphStore } from "../../../src/infrastructure/sqlite/index.js";
 
 const temporaryDirectories: string[] = [];
+const persistentReadStores: SqliteGraphStore[] = [];
 const INDEX_DIRECTORY_NAME = ".symbol-lattice";
 const DATABASE_FILE_NAME = "index.sqlite";
 
@@ -498,6 +499,9 @@ function createLegacyV1Index(projectPath: string, graphSnapshot: GraphSnapshot):
 }
 
 afterEach(async () => {
+  for (const store of persistentReadStores.splice(0)) {
+    store.close();
+  }
   await Promise.all(
     temporaryDirectories.splice(0).map((directoryPath) =>
       rm(directoryPath, { recursive: true, force: true })
@@ -552,6 +556,97 @@ describe("SqliteGraphStore", () => {
     expect(store.getGenerationHistoryBundle(projectPath)).toBeNull();
     expect(store.getGenerationSnapshotBundle(projectPath, "generation:missing")).toBeNull();
     expect(store.getGenerationComparisonBundle(projectPath, "generation:missing")).toBeNull();
+  });
+
+  it("refuses every write when configured as a read-only worker store", async () => {
+    const projectPath = await temporaryProject();
+    const store = new SqliteGraphStore({ persistentReadProjectPath: projectPath, readOnly: true });
+    persistentReadStores.push(store);
+    const graphSnapshot = snapshot([symbol("readonly", "readonly")]);
+
+    expect(() => store.initialize(projectPath)).toThrow("configured read-only");
+    expect(() =>
+      store.replaceProjectFacts({
+        projectPath,
+        snapshot: graphSnapshot,
+        indexedAt: "2026-08-02T00:00:00.000Z",
+        artifactFacts: persistedFacts(graphSnapshot),
+        indexInputs: indexInputs("read-only"),
+        resolverVersion: "test-resolver-read-only"
+      })
+    ).toThrow("configured read-only");
+    expect(store.isInitialized(projectPath)).toBe(false);
+  });
+
+  it("keeps a default-project reader open across committed generations and reopens it after close", async () => {
+    const projectPath = await temporaryProject();
+    const writer = new SqliteGraphStore();
+    const persistentReader = new SqliteGraphStore({ persistentReadProjectPath: projectPath });
+    persistentReadStores.push(persistentReader);
+    const firstSnapshot = snapshot([symbol("first", "first")]);
+    expect(persistentReader.persistentReadConnectionOpen).toBe(false);
+
+    writer.replaceProjectFacts({
+      projectPath,
+      snapshot: firstSnapshot,
+      indexedAt: "2026-08-02T00:00:00.000Z",
+      artifactFacts: persistedFacts(firstSnapshot),
+      indexInputs: indexInputs("persistent-first"),
+      resolverVersion: "test-resolver-persistent-first",
+      sourceDocuments: sourceDocuments(firstSnapshot, "export const firstNeedle = 'firstNeedle';"),
+      sourceSearchVersion: SOURCE_SEARCH_INDEX_VERSION
+    });
+
+    const firstGenerationId = persistentReader.getStatus(projectPath).generationId;
+    expect(persistentReader.getActiveSourceSearchBundle(projectPath, sourceSearchRequest("firstNeedle"))).toMatchObject({
+      status: { generationId: firstGenerationId },
+      hits: [{ sourceText: "export const firstNeedle = 'firstNeedle';" }]
+    });
+    expect(persistentReader.persistentReadConnectionOpen).toBe(true);
+
+    const secondSnapshot = snapshot([symbol("second", "second")]);
+    writer.replaceProjectFacts({
+      projectPath,
+      snapshot: secondSnapshot,
+      indexedAt: "2026-08-02T00:01:00.000Z",
+      artifactFacts: persistedFacts(secondSnapshot),
+      indexInputs: indexInputs("persistent-second"),
+      resolverVersion: "test-resolver-persistent-second",
+      sourceDocuments: sourceDocuments(secondSnapshot, "export const secondNeedle = 'secondNeedle';"),
+      sourceSearchVersion: SOURCE_SEARCH_INDEX_VERSION
+    });
+
+    const secondBundle = persistentReader.getActiveSourceSearchBundle(
+      projectPath,
+      sourceSearchRequest("secondNeedle")
+    );
+    expect(secondBundle).toMatchObject({
+      status: { indexedAt: "2026-08-02T00:01:00.000Z" },
+      hits: [{ sourceText: "export const secondNeedle = 'secondNeedle';" }]
+    });
+    expect(secondBundle.status.generationId).not.toBe(firstGenerationId);
+
+    persistentReader.close();
+    persistentReader.close();
+    expect(persistentReader.persistentReadConnectionOpen).toBe(false);
+
+    const thirdSnapshot = snapshot([symbol("third", "third")]);
+    writer.replaceProjectFacts({
+      projectPath,
+      snapshot: thirdSnapshot,
+      indexedAt: "2026-08-02T00:02:00.000Z",
+      artifactFacts: persistedFacts(thirdSnapshot),
+      indexInputs: indexInputs("persistent-third"),
+      resolverVersion: "test-resolver-persistent-third",
+      sourceDocuments: sourceDocuments(thirdSnapshot, "export const thirdNeedle = 'thirdNeedle';"),
+      sourceSearchVersion: SOURCE_SEARCH_INDEX_VERSION
+    });
+
+    expect(persistentReader.getActiveSourceSearchBundle(projectPath, sourceSearchRequest("thirdNeedle"))).toMatchObject({
+      status: { indexedAt: "2026-08-02T00:02:00.000Z" },
+      hits: [{ sourceText: "export const thirdNeedle = 'thirdNeedle';" }]
+    });
+    expect(persistentReader.persistentReadConnectionOpen).toBe(true);
   });
 
   it("persists active-generation artifact facts and edge evidence, then clears stale facts", async () => {

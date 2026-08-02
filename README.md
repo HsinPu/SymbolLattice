@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.202.0 為開發者預覽版，請從原始碼執行。
+> v0.203.0 為開發者預覽版，請從原始碼執行。
 
 SymbolLattice 會建立可查詢的本機「程式碼符號圖譜」。每一條關係都保留規則、證據階段與信心等級；`exact`、`heuristic`、`unresolved` 絕不混為一談。
 
@@ -49,13 +49,13 @@ Windows PowerShell 若找不到 npm，請使用 `npm.cmd`。索引資料保存�
 > [!NOTE]
 > MCP 工具本身永遠不會建立或更新圖譜。`serve --mcp` 的預設自動同步是主機擁有的獨立背景監看；若需要完全手動更新，使用 `--no-auto-sync`。
 
-## v0.202.0 重點
+## v0.203.0 重點
 
-- `npm run benchmark:mcp` 以建立後即刪除的固定 TypeScript 圖譜量測 MCP 唯讀工作池；不會索引、讀取或寫入你的專案。
-- 報表輸出循序與併發 `explore`／`investigate` 的 P50／P95、錯誤與回退數、工作池狀態，以及主程序事件迴圈延遲取樣；有錯誤或回退時以非零狀態結束。
-- 預設為 2 個工作者、4 併發、24 個請求；可用 `SYMBOL_LATTICE_BENCHMARK_POOL_SIZE=1..4`、`SYMBOL_LATTICE_BENCHMARK_CONCURRENCY=1..16`、`SYMBOL_LATTICE_BENCHMARK_REQUESTS=1..512` 與 `SYMBOL_LATTICE_BENCHMARK_WARMUP=1..64` 調整。
-- 結果是同機、同版本的比較基線，不是跨硬體的效能承諾或固定通過門檻。
-- MCP 工作者仍只接受既有唯讀圖譜工具；`init`、`index`、`sync` 與自動同步監看不會由查詢觸發。
+- 預設專案的每位 MCP 工作者會在首次資料庫讀取後保留一個唯讀 SQLite 連線；每次查詢仍使用獨立已提交快照，因此後續查詢可看見 `sync` 發布的新世代。
+- 覆寫 `projectPath` 的查詢維持短暫唯讀連線，避免工作者無上限快取跨專案連線。
+- 工作者的 SQLite store 同時拒絕架構與圖譜寫入，即使未來程式碼誤觸 `init`／`index`／`sync` 路徑也不會改寫資料庫。
+- `npm run benchmark:mcp` 仍可量測固定暫存圖譜的 P50／P95、回退、錯誤、工作池與事件迴圈；結果是同機比較基線，不是效能承諾。
+- 這不是 WAL 或跨程序快取層；沒有隱藏的重建、同步或即時原始碼讀取。
 
 ## 範圍與限制
 

@@ -6,6 +6,29 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.203.0] - 2026-08-02
+
+### Added
+
+- A read-query worker now gives its default project one lazily opened persistent read-only `DatabaseSync` connection. Each graph-store operation still opens and commits a fresh SQLite snapshot, so no request carries a previous generation into the next request.
+- `SqliteGraphStore` accepts `persistentReadProjectPath` for this bounded one-project lifecycle, exposes idempotent `close()`, and reopens the connection lazily if another read follows closure. Project-path overrides keep the original short-lived reader behavior.
+- `SqliteGraphStore` also accepts `readOnly: true`, which rejects schema initialization and projection replacement. Query workers use both options, making their read-only storage boundary enforceable below the MCP tool allowlist.
+- Integration coverage proves connection opening, committed-generation visibility through the same reader, idempotent close/reopen, and write refusal. Worker teardown explicitly attempts to release its retained reader.
+
+### Compatibility
+
+- SQLite schema, graph generations, retained-history format, CLI arguments, MCP request/response schemas, and non-worker graph-store behavior are unchanged. Existing callers get per-operation read connections unless they opt into the bounded persistent default-project path.
+
+### Deliberate limits
+
+- This release does not enable or require WAL mode, add cross-process connection sharing, cache graph objects, retain connections for arbitrary project paths, or change snapshot consistency. A project-path override deliberately remains transient.
+- A retained connection does not bypass index freshness. It reads only the database's next committed active generation and never triggers `init`, `index`, `sync`, watcher activity, or live-source substitution.
+
+### Comparison notes
+
+- CodeGraph's worker-owned WAL readers remain broader: they are paired with persistent reader infrastructure and a richer FTS/RWR/PageRank/impact query engine. SymbolLattice independently adds the narrower safe lifecycle first, including an explicit per-request snapshot boundary and storage-level write refusal.
+- The projects still cannot be compared directly on latency: their query semantics, fixture size, runtime, database setup, and output construction differ. The local benchmark remains a regression baseline rather than a cross-project claim.
+
 ## [0.202.0] - 2026-08-02
 
 ### Added

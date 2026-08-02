@@ -74,15 +74,25 @@ function errorResponse(message: string): ReadOnlyToolResponse {
   };
 }
 
-function createReadOnlyService(): SymbolLatticeService {
+function createReadOnlyService(defaultProjectPath: string): {
+  readonly service: SymbolLatticeService;
+  readonly close: () => void;
+} {
   const gitChangeSetProvider = new FileSystemGitChangeSetProvider();
-  return new SymbolLatticeService(
-    new SqliteGraphStore(),
-    new FileSystemSourceCatalog(),
-    undefined,
-    gitChangeSetProvider,
-    gitChangeSetProvider
-  );
+  const graphStore = new SqliteGraphStore({
+    persistentReadProjectPath: defaultProjectPath,
+    readOnly: true
+  });
+  return {
+    service: new SymbolLatticeService(
+      graphStore,
+      new FileSystemSourceCatalog(),
+      undefined,
+      gitChangeSetProvider,
+      gitChangeSetProvider
+    ),
+    close: () => graphStore.close()
+  };
 }
 
 async function execute(
@@ -127,16 +137,27 @@ if (parentPort !== null) {
   const port = parentPort;
   const configuration = workerConfiguration(workerData);
   let service: SymbolLatticeService | null = null;
+  let closeReadStore: (() => void) | null = null;
   let initializationError: string | null = null;
 
   try {
     if (configuration === null) {
       throw new Error("Missing MCP worker default project path.");
     }
-    service = createReadOnlyService();
+    const readOnlyService = createReadOnlyService(configuration.defaultProjectPath);
+    service = readOnlyService.service;
+    closeReadStore = readOnlyService.close;
   } catch (error) {
     initializationError = error instanceof Error ? error.message : String(error);
   }
+
+  process.once("exit", () => {
+    try {
+      closeReadStore?.();
+    } catch {
+      // Worker teardown still releases the OS handle if SQLite is already closing.
+    }
+  });
 
   port.postMessage(
     initializationError === null
