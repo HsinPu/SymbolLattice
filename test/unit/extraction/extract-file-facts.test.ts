@@ -18384,4 +18384,94 @@ describe("source extraction", () => {
     ]);
     expect(shadowed.reactNativeFacts?.nativeModuleCalls).toEqual([]);
   });
+
+  it("retains only direct evidence-backed React Native TurboModule contracts and calls", () => {
+    const named = extractFileFacts({
+      filePath: "src/mobile/NativeCalendar.ts",
+      language: "typescript",
+      sourceText: [
+        'import { TurboModuleRegistry as Registry } from "react-native";',
+        'import type { TurboModule as NativeTurboModule } from "react-native";',
+        "export interface Spec extends NativeTurboModule {",
+        "  createEvent(name: string): void;",
+        "  cancelEvent(): void;",
+        "}",
+        'const Calendar = Registry.getEnforcing<Spec>("CalendarModule");',
+        "export function schedule() {",
+        "  Calendar.createEvent(\"planning\");",
+        "  Calendar?.cancelEvent();",
+        "}"
+      ].join("\n")
+    });
+    const namespace = extractFileFacts({
+      filePath: "src/mobile/NativeDevice.ts",
+      language: "typescript",
+      sourceText: [
+        'import * as ReactNative from "react-native";',
+        "export interface DeviceSpec extends ReactNative.TurboModule {",
+        "  refresh(): void;",
+        "}",
+        'const Device = ReactNative.TurboModuleRegistry.get<DeviceSpec>("DeviceModule")!;',
+        "export function refresh() { Device.refresh(); }"
+      ].join("\n")
+    });
+    const shadowed = extractFileFacts({
+      filePath: "src/mobile/shadowed-turbo.ts",
+      language: "typescript",
+      sourceText: [
+        'import { TurboModuleRegistry } from "react-native";',
+        "export function local(TurboModuleRegistry: { getEnforcing(name: string): { refresh(): void } }) {",
+        '  const Device = TurboModuleRegistry.getEnforcing("DeviceModule");',
+        "  Device.refresh();",
+        "}"
+      ].join("\n")
+    });
+    const chained = extractFileFacts({
+      filePath: "src/mobile/chained-turbo.ts",
+      language: "typescript",
+      sourceText: [
+        'import { TurboModuleRegistry } from "react-native";',
+        "export function refresh() {",
+        '  TurboModuleRegistry.getEnforcing("DirectModule").refresh();',
+        "}"
+      ].join("\n")
+    });
+    const ambiguousSpec = extractFileFacts({
+      filePath: "src/mobile/AmbiguousNative.ts",
+      language: "typescript",
+      sourceText: [
+        'import { TurboModuleRegistry } from "react-native";',
+        'import type { TurboModule } from "react-native";',
+        "export interface Spec extends TurboModule { refresh(): void; }",
+        'const First = TurboModuleRegistry.getEnforcing<Spec>("FirstModule");',
+        'const Second = TurboModuleRegistry.getEnforcing<Spec>("SecondModule");',
+        "void First; void Second;"
+      ].join("\n")
+    });
+
+    expect(named.reactNativeFacts?.turboModuleCalls).toEqual([
+      expect.objectContaining({ moduleName: "CalendarModule", methodName: "createEvent" })
+    ]);
+    expect(named.reactNativeFacts?.turboModuleSpecMethods).toEqual([
+      expect.objectContaining({ moduleName: "CalendarModule", methodName: "createEvent" }),
+      expect.objectContaining({ moduleName: "CalendarModule", methodName: "cancelEvent" })
+    ]);
+    expect(named.symbols).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ qualifiedName: "src/mobile/NativeCalendar.ts#Spec.createEvent", kind: "method" }),
+        expect.objectContaining({ qualifiedName: "src/mobile/NativeCalendar.ts#Spec.cancelEvent", kind: "method" })
+      ])
+    );
+    expect(namespace.reactNativeFacts?.turboModuleCalls).toEqual([
+      expect.objectContaining({ moduleName: "DeviceModule", methodName: "refresh" })
+    ]);
+    expect(namespace.reactNativeFacts?.turboModuleSpecMethods).toEqual([
+      expect.objectContaining({ moduleName: "DeviceModule", methodName: "refresh" })
+    ]);
+    expect(shadowed.reactNativeFacts?.turboModuleCalls).toEqual([]);
+    expect(chained.reactNativeFacts?.turboModuleCalls).toEqual([
+      expect.objectContaining({ moduleName: "DirectModule", methodName: "refresh" })
+    ]);
+    expect(ambiguousSpec.reactNativeFacts?.turboModuleSpecMethods).toEqual([]);
+  });
 });

@@ -11,13 +11,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v166";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v167";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v56";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v57";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -769,6 +769,24 @@ export interface ReactNativeNativeModuleCallFact {
   readonly range: SourceRange;
 }
 
+/** One direct JavaScript call through a statically proven TurboModule registry binding. */
+export interface ReactNativeTurboModuleCallFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly moduleName: string;
+  readonly methodName: string;
+  readonly range: SourceRange;
+}
+
+/** One method declared by a statically proven React Native TurboModule TypeScript spec. */
+export interface ReactNativeTurboModuleSpecMethodFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly moduleName: string;
+  readonly methodName: string;
+  readonly range: SourceRange;
+}
+
 /** One direct native implementation method exported by a React Native bridge. */
 export interface ReactNativeNativeMethodFact {
   readonly platform: "android" | "ios";
@@ -786,6 +804,8 @@ export interface ReactNativeNativeMethodFact {
  */
 export interface ReactNativeFacts {
   readonly nativeModuleCalls: readonly ReactNativeNativeModuleCallFact[];
+  readonly turboModuleCalls: readonly ReactNativeTurboModuleCallFact[];
+  readonly turboModuleSpecMethods: readonly ReactNativeTurboModuleSpecMethodFact[];
   readonly nativeMethods: readonly ReactNativeNativeMethodFact[];
 }
 

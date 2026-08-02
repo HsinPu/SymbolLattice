@@ -150,21 +150,43 @@ function reactNativeBridgeReferenceName(moduleName: string, methodName: string):
   return `${moduleName}.${methodName}`;
 }
 
-function reactNativeBridgeRuleId(
+type ReactNativeBridgeRuleId = (
+  platform: "android" | "ios" | "any",
+  suffix: "exact-target" | "unresolved-target" | "ambiguous-platform-target"
+) => string;
+
+interface ReactNativeBridgeReference {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly moduleName: string;
+  readonly methodName: string;
+  readonly range: SourceRange;
+}
+
+function reactNativeNativeModulesRuleId(
   platform: "android" | "ios" | "any",
   suffix: "exact-target" | "unresolved-target" | "ambiguous-platform-target"
 ): string {
   return `framework.react-native.native-modules.direct-module-and-method.${platform}.${suffix}`;
 }
 
+function reactNativeTurboModuleRuleId(
+  surface: "direct-registry" | "spec-contract",
+  platform: "android" | "ios" | "any",
+  suffix: "exact-target" | "unresolved-target" | "ambiguous-platform-target"
+): string {
+  return `framework.react-native.turbo-modules.${surface}.literal-module-and-method.${platform}.${suffix}`;
+}
+
 /**
- * Projects a proven JavaScript NativeModules call to every independently
- * unique platform implementation. This preserves Android and iOS targets
- * instead of choosing one by method spelling; collisions within a platform
- * remain explicit unresolved bridge edges.
+ * Projects one syntax-proven React Native bridge surface to every independently
+ * unique platform implementation. Android and iOS targets are both retained;
+ * collisions within a platform remain explicit unresolved edges.
  */
-function projectReactNativeNativeModuleCalls(input: {
+function projectReactNativeBridgeReferences(input: {
   readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
+  readonly sourceFacts: (facts: ExtractedFileFacts) => readonly ReactNativeBridgeReference[];
+  readonly ruleId: ReactNativeBridgeRuleId;
 }): readonly GraphEdge[] {
   const methodsByBridgeKey = new Map<string, ReactNativeNativeMethodFact[]>();
   for (const [, facts] of [...input.factsByFile.entries()].sort(([left], [right]) =>
@@ -182,15 +204,15 @@ function projectReactNativeNativeModuleCalls(input: {
   for (const [, facts] of [...input.factsByFile.entries()].sort(([left], [right]) =>
     compareStableText(left, right)
   )) {
-    const calls = [...(facts.reactNativeFacts?.nativeModuleCalls ?? [])].sort((left, right) =>
+    const references = [...input.sourceFacts(facts)].sort((left, right) =>
       compareStableText(
         `${left.sourceId}\u0000${left.moduleName}\u0000${left.methodName}\u0000${left.range.start.line}\u0000${left.range.start.column}`,
         `${right.sourceId}\u0000${right.moduleName}\u0000${right.methodName}\u0000${right.range.start.line}\u0000${right.range.start.column}`
       )
     );
-    for (const call of calls) {
+    for (const reference of references) {
       const candidates = [
-        ...(methodsByBridgeKey.get(reactNativeBridgeKey(call.moduleName, call.methodName)) ?? [])
+        ...(methodsByBridgeKey.get(reactNativeBridgeKey(reference.moduleName, reference.methodName)) ?? [])
       ].sort((left, right) => compareStableText(left.methodId, right.methodId));
       const candidatesByPlatform = new Map<"android" | "ios", ReactNativeNativeMethodFact[]>();
       for (const candidate of candidates) {
@@ -205,23 +227,23 @@ function projectReactNativeNativeModuleCalls(input: {
           const target = platformCandidates[0];
           edges.push({
             id: createEdgeId({
-              sourceId: call.sourceId,
+              sourceId: reference.sourceId,
               targetId: target.methodId,
               kind: "calls",
-              line: call.range.start.line,
-              column: call.range.start.column,
-              referenceName: reactNativeBridgeReferenceName(call.moduleName, call.methodName)
+              line: reference.range.start.line,
+              column: reference.range.start.column,
+              referenceName: reactNativeBridgeReferenceName(reference.moduleName, reference.methodName)
             }),
-            sourceId: call.sourceId,
+            sourceId: reference.sourceId,
             targetId: target.methodId,
             kind: "calls",
-            filePath: call.filePath,
-            range: call.range,
+            filePath: reference.filePath,
+            range: reference.range,
             resolution: "exact",
             confidence: 1,
-            referenceName: reactNativeBridgeReferenceName(call.moduleName, call.methodName),
+            referenceName: reactNativeBridgeReferenceName(reference.moduleName, reference.methodName),
             evidence: referenceEvidence(
-              reactNativeBridgeRuleId(platform, "exact-target"),
+              input.ruleId(platform, "exact-target"),
               "module",
               [target.methodId]
             )
@@ -234,23 +256,23 @@ function projectReactNativeNativeModuleCalls(input: {
         const candidateIds = ambiguousCandidates.map((candidate) => candidate.methodId);
         edges.push({
           id: createEdgeId({
-            sourceId: call.sourceId,
+            sourceId: reference.sourceId,
             targetId: null,
             kind: "calls",
-            line: call.range.start.line,
-            column: call.range.start.column,
-            referenceName: reactNativeBridgeReferenceName(call.moduleName, call.methodName)
+            line: reference.range.start.line,
+            column: reference.range.start.column,
+            referenceName: reactNativeBridgeReferenceName(reference.moduleName, reference.methodName)
           }),
-          sourceId: call.sourceId,
+          sourceId: reference.sourceId,
           targetId: null,
           kind: "calls",
-          filePath: call.filePath,
-          range: call.range,
+          filePath: reference.filePath,
+          range: reference.range,
           resolution: "unresolved",
           confidence: 0,
-          referenceName: reactNativeBridgeReferenceName(call.moduleName, call.methodName),
+          referenceName: reactNativeBridgeReferenceName(reference.moduleName, reference.methodName),
           evidence: referenceEvidence(
-            reactNativeBridgeRuleId(
+            input.ruleId(
               "any",
               candidates.length === 0 ? "unresolved-target" : "ambiguous-platform-target"
             ),
@@ -262,6 +284,36 @@ function projectReactNativeNativeModuleCalls(input: {
     }
   }
   return edges;
+}
+
+function projectReactNativeNativeModuleCalls(input: {
+  readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
+}): readonly GraphEdge[] {
+  return projectReactNativeBridgeReferences({
+    ...input,
+    sourceFacts: (facts) => facts.reactNativeFacts?.nativeModuleCalls ?? [],
+    ruleId: reactNativeNativeModulesRuleId
+  });
+}
+
+function projectReactNativeTurboModuleCalls(input: {
+  readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
+}): readonly GraphEdge[] {
+  return projectReactNativeBridgeReferences({
+    ...input,
+    sourceFacts: (facts) => facts.reactNativeFacts?.turboModuleCalls ?? [],
+    ruleId: (platform, suffix) => reactNativeTurboModuleRuleId("direct-registry", platform, suffix)
+  });
+}
+
+function projectReactNativeTurboModuleSpecMethods(input: {
+  readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
+}): readonly GraphEdge[] {
+  return projectReactNativeBridgeReferences({
+    ...input,
+    sourceFacts: (facts) => facts.reactNativeFacts?.turboModuleSpecMethods ?? [],
+    ruleId: (platform, suffix) => reactNativeTurboModuleRuleId("spec-contract", platform, suffix)
+  });
 }
 
 const CICS_TRANSACTION_REFERENCE = /^cics-transid:([A-Za-z0-9$#@]{1,4})$/iu;
@@ -5593,6 +5645,16 @@ export function resolveProjectFacts(input: {
   );
   resolvedEdges.push(
     ...projectReactNativeNativeModuleCalls({
+      factsByFile
+    })
+  );
+  resolvedEdges.push(
+    ...projectReactNativeTurboModuleCalls({
+      factsByFile
+    })
+  );
+  resolvedEdges.push(
+    ...projectReactNativeTurboModuleSpecMethods({
       factsByFile
     })
   );

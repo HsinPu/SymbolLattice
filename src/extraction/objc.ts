@@ -960,6 +960,8 @@ export function extractObjectiveCFileFacts(input: ObjectiveCExtractFileFactsInpu
     ...emptyFacts(symbols, edges),
     reactNativeFacts: {
       nativeModuleCalls: [],
+      turboModuleCalls: [],
+      turboModuleSpecMethods: [],
       nativeMethods: reactNativeNativeMethods
     }
   };

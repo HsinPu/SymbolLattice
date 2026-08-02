@@ -388,12 +388,16 @@ type RouteBindingKind =
   | "react-router-data-router-factory"
   | "react-router-elements-factory"
   | "react-native-native-modules"
+  | "react-native-turbo-module-registry"
+  | "react-native-turbo-module"
   | "react-native-namespace"
   | "other";
 
 interface RouteBinding {
   readonly declaration: ts.Node;
   kind: RouteBindingKind;
+  /** Literal registry name retained only for an immutable direct TurboModule binding. */
+  reactNativeTurboModuleName?: string;
   /** Static Fastify prefix inherited by a proven plugin callback. */
   prefix?: string;
   /** Provenance for the prefix that projected this callback's routes. */
@@ -432,6 +436,28 @@ interface StaticReactNativeNativeModuleCall {
   readonly moduleName: string;
   readonly methodName: string;
   readonly expression: ts.PropertyAccessExpression;
+}
+
+/** A direct call through an immutable TurboModule registry result. */
+interface StaticReactNativeTurboModuleCall {
+  readonly moduleName: string;
+  readonly methodName: string;
+  readonly expression: ts.PropertyAccessExpression;
+}
+
+/** One direct `TurboModuleRegistry.get*<Spec>("Module")` registration. */
+interface StaticReactNativeTurboModuleRegistryCall {
+  readonly moduleName: string;
+  readonly typeName: string | null;
+}
+
+/** One direct, exported TurboModule TypeScript contract. */
+interface StaticReactNativeTurboModuleSpec {
+  readonly moduleName: string;
+  readonly methods: readonly {
+    readonly name: string;
+    readonly declaration: ts.MethodSignature;
+  }[];
 }
 
 interface StaticFastifyRoute {
@@ -897,8 +923,12 @@ function namedReactNativeImportBindingKind(
   if (!isReactNativeImport(statement) || element.isTypeOnly) {
     return "other";
   }
-  return (element.propertyName?.text ?? element.name.text) === "NativeModules"
-    ? "react-native-native-modules"
+  const importedName = element.propertyName?.text ?? element.name.text;
+  if (importedName === "NativeModules") {
+    return "react-native-native-modules";
+  }
+  return importedName === "TurboModuleRegistry"
+    ? "react-native-turbo-module-registry"
     : "other";
 }
 
@@ -1017,6 +1047,213 @@ function staticReactNativeNativeModuleCall(
         expression: methodAccess
       }
     : null;
+}
+
+/**
+ * Recognizes exactly `TurboModuleRegistry.get*<Spec>("Module")` through a
+ * direct named or namespace import from react-native. The module name remains
+ * literal; type arguments are retained only when they are one bare identifier.
+ */
+function staticReactNativeTurboModuleRegistryCall(
+  sourceFile: ts.SourceFile,
+  node: ts.CallExpression,
+  bindings: ScopedRouteReceiverBindings
+): StaticReactNativeTurboModuleRegistryCall | null {
+  const moduleNameArgument = node.arguments[0];
+  if (
+    node.questionDotToken !== undefined ||
+    node.arguments.length !== 1 ||
+    moduleNameArgument === undefined ||
+    !ts.isStringLiteral(moduleNameArgument) ||
+    !ts.isPropertyAccessExpression(node.expression) ||
+    node.expression.questionDotToken !== undefined ||
+    (node.expression.name.text !== "get" && node.expression.name.text !== "getEnforcing")
+  ) {
+    return null;
+  }
+
+  const receiver = node.expression.expression;
+  const directRegistry =
+    ts.isIdentifier(receiver) &&
+    visibleRouteBindingKind(sourceFile, receiver, bindings) === "react-native-turbo-module-registry";
+  const namespaceRegistry =
+    ts.isPropertyAccessExpression(receiver) &&
+    receiver.questionDotToken === undefined &&
+    receiver.name.text === "TurboModuleRegistry" &&
+    ts.isIdentifier(receiver.expression) &&
+    visibleRouteBindingKind(sourceFile, receiver.expression, bindings) === "react-native-namespace";
+  if (!directRegistry && !namespaceRegistry) {
+    return null;
+  }
+
+  const typeArgument = node.typeArguments?.length === 1 ? node.typeArguments[0] : undefined;
+  const typeName =
+    typeArgument !== undefined &&
+    ts.isTypeReferenceNode(typeArgument) &&
+    ts.isIdentifier(typeArgument.typeName) &&
+    typeArgument.typeArguments === undefined
+      ? typeArgument.typeName.text
+      : null;
+  return { moduleName: moduleNameArgument.text, typeName };
+}
+
+function unwrapReactNativeTurboModuleExpression(expression: ts.Expression): ts.Expression {
+  let current = expression;
+  while (
+    ts.isParenthesizedExpression(current) ||
+    ts.isAsExpression(current) ||
+    ts.isTypeAssertionExpression(current) ||
+    ts.isNonNullExpression(current)
+  ) {
+    current = current.expression;
+  }
+  return current;
+}
+
+function staticReactNativeTurboModuleRegistryResult(
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+  bindings: ScopedRouteReceiverBindings
+): StaticReactNativeTurboModuleRegistryCall | null {
+  const unwrapped = unwrapReactNativeTurboModuleExpression(expression);
+  return ts.isCallExpression(unwrapped)
+    ? staticReactNativeTurboModuleRegistryCall(sourceFile, unwrapped, bindings)
+    : null;
+}
+
+/**
+ * Recognizes `const Module = TurboModuleRegistry.get*<Spec>("Module")` and
+ * the direct chained form `TurboModuleRegistry.get*<Spec>("Module").method()`.
+ * Mutable bindings, optional chains, and computed access remain outside the
+ * evidence surface.
+ */
+function staticReactNativeTurboModuleCall(
+  sourceFile: ts.SourceFile,
+  node: ts.CallExpression,
+  bindings: ScopedRouteReceiverBindings
+): StaticReactNativeTurboModuleCall | null {
+  if (
+    node.questionDotToken !== undefined ||
+    !ts.isPropertyAccessExpression(node.expression) ||
+    node.expression.questionDotToken !== undefined
+  ) {
+    return null;
+  }
+
+  const methodAccess = node.expression;
+  const receiver = methodAccess.expression;
+  const localBinding =
+    ts.isIdentifier(receiver) ? visibleRouteBinding(sourceFile, receiver, bindings) : undefined;
+  const moduleName =
+    localBinding?.kind === "react-native-turbo-module"
+      ? localBinding.reactNativeTurboModuleName
+      : staticReactNativeTurboModuleRegistryResult(sourceFile, receiver, bindings)?.moduleName;
+  return moduleName === undefined || moduleName === null
+    ? null
+    : { moduleName, methodName: methodAccess.name.text, expression: methodAccess };
+}
+
+function directReactNativeTurboModuleBaseType(
+  sourceFile: ts.SourceFile,
+  declaration: ts.InterfaceDeclaration,
+  base: ts.ExpressionWithTypeArguments,
+  bindings: ScopedRouteReceiverBindings
+): boolean {
+  if (declaration.typeParameters?.some((parameter) => parameter.name.text === "TurboModule") === true) {
+    return false;
+  }
+
+  if (
+    ts.isPropertyAccessExpression(base.expression) &&
+    base.expression.questionDotToken === undefined &&
+    base.expression.name.text === "TurboModule" &&
+    ts.isIdentifier(base.expression.expression) &&
+    visibleRouteBindingKind(sourceFile, base.expression.expression, bindings) === "react-native-namespace"
+  ) {
+    return true;
+  }
+
+  if (!ts.isIdentifier(base.expression)) {
+    return false;
+  }
+
+  const localName = base.expression.text;
+  return sourceFile.statements.some((statement) => {
+    const importClause = ts.isImportDeclaration(statement) ? statement.importClause : undefined;
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteral(statement.moduleSpecifier) ||
+      statement.moduleSpecifier.text !== "react-native" ||
+      importClause?.namedBindings === undefined ||
+      !ts.isNamedImports(importClause.namedBindings)
+    ) {
+      return false;
+    }
+    return importClause.namedBindings.elements.some(
+      (element) =>
+        element.name.text === localName &&
+        (element.propertyName?.text ?? element.name.text) === "TurboModule"
+    );
+  });
+}
+
+/**
+ * Retains a spec only when its direct `TurboModule` base and exactly one
+ * literal registry registration jointly prove the contract's module identity.
+ */
+function staticReactNativeTurboModuleSpec(
+  sourceFile: ts.SourceFile,
+  declaration: ts.InterfaceDeclaration,
+  bindings: ScopedRouteReceiverBindings
+): StaticReactNativeTurboModuleSpec | null {
+  const heritageClauses = declaration.heritageClauses;
+  if (!hasExportModifier(declaration) || heritageClauses === undefined || heritageClauses.length !== 1) {
+    return null;
+  }
+  const extendsClause = heritageClauses[0];
+  if (
+    extendsClause === undefined ||
+    extendsClause.token !== ts.SyntaxKind.ExtendsKeyword ||
+    extendsClause.types.length !== 1 ||
+    extendsClause.types[0] === undefined ||
+    !directReactNativeTurboModuleBaseType(sourceFile, declaration, extendsClause.types[0], bindings)
+  ) {
+    return null;
+  }
+
+  const registrations: StaticReactNativeTurboModuleRegistryCall[] = [];
+  const collectRegistrations = (node: ts.Node): void => {
+    if (ts.isCallExpression(node)) {
+      const registration = staticReactNativeTurboModuleRegistryCall(sourceFile, node, bindings);
+      if (registration?.typeName === declaration.name.text) {
+        registrations.push(registration);
+      }
+    }
+    ts.forEachChild(node, collectRegistrations);
+  };
+  ts.forEachChild(sourceFile, collectRegistrations);
+  if (registrations.length !== 1 || registrations[0] === undefined) {
+    return null;
+  }
+
+  const seenNames = new Set<string>();
+  const methods: StaticReactNativeTurboModuleSpec["methods"][number][] = [];
+  for (const member of declaration.members) {
+    if (!ts.isMethodSignature(member)) {
+      continue;
+    }
+    if (
+      member.questionToken !== undefined ||
+      member.typeParameters !== undefined ||
+      !ts.isIdentifier(member.name) ||
+      seenNames.has(member.name.text)
+    ) {
+      return null;
+    }
+    seenNames.add(member.name.text);
+    methods.push({ name: member.name.text, declaration: member });
+  }
+  return methods.length === 0 ? null : { moduleName: registrations[0].moduleName, methods };
 }
 
 function isExpressReceiverInitializer(
@@ -1141,6 +1378,25 @@ function markRouteReceiver(
     ?.find((candidate) => candidate.declaration === declaration);
   if (binding !== undefined) {
     binding.kind = bindingKind;
+  }
+}
+
+function markReactNativeTurboModuleReceiver(
+  byScopeId: Map<string, Map<string, RouteBinding[]>>,
+  scopeId: string | undefined,
+  declaration: ts.VariableDeclaration,
+  moduleName: string
+): void {
+  if (scopeId === undefined || !ts.isIdentifier(declaration.name)) {
+    return;
+  }
+  const binding = byScopeId
+    .get(scopeId)
+    ?.get(declaration.name.text)
+    ?.find((candidate) => candidate.declaration === declaration);
+  if (binding !== undefined) {
+    binding.kind = "react-native-turbo-module";
+    binding.reactNativeTurboModuleName = moduleName;
   }
 }
 
@@ -1691,7 +1947,25 @@ function collectScopedRouteReceiverBindings(sourceFile: ts.SourceFile): ScopedRo
   }
 
   function collectRootReceivers(node: ts.Node): void {
+    const turboModuleRegistration =
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.initializer !== undefined &&
+      isConstVariableDeclaration(node)
+        ? staticReactNativeTurboModuleRegistryResult(sourceFile, node.initializer, { byScopeId })
+        : null;
     if (
+      turboModuleRegistration !== null &&
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name)
+    ) {
+      markReactNativeTurboModuleReceiver(
+        byScopeId,
+        variableBindingScopeId(sourceFile, node),
+        node,
+        turboModuleRegistration.moduleName
+      );
+    } else if (
       ts.isVariableDeclaration(node) &&
       ts.isIdentifier(node.name) &&
       node.initializer !== undefined &&
@@ -4476,9 +4750,13 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
   };
   const reactNativeFacts: {
     nativeModuleCalls: ReactNativeFacts["nativeModuleCalls"][number][];
+    turboModuleCalls: ReactNativeFacts["turboModuleCalls"][number][];
+    turboModuleSpecMethods: ReactNativeFacts["turboModuleSpecMethods"][number][];
     nativeMethods: ReactNativeFacts["nativeMethods"][number][];
   } = {
     nativeModuleCalls: [],
+    turboModuleCalls: [],
+    turboModuleSpecMethods: [],
     nativeMethods: []
   };
   const stack: SymbolNode[] = [];
@@ -4886,6 +5164,35 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
     return symbol;
   }
 
+  function addReactNativeTurboModuleSpecMethod(
+    specSymbol: SymbolNode,
+    declaration: ts.MethodSignature,
+    name: string
+  ): SymbolNode {
+    const qualifiedName = `${specSymbol.qualifiedName}.${name}`;
+    const identity = `${qualifiedName}\u0000method`;
+    const declarationOrdinal = declarationOrdinals.get(identity) ?? 0;
+    declarationOrdinals.set(identity, declarationOrdinal + 1);
+    const symbol: SymbolNode = {
+      id: createSymbolId({
+        filePath: input.filePath,
+        qualifiedName,
+        kind: "method",
+        declarationOrdinal
+      }),
+      name,
+      qualifiedName,
+      kind: "method",
+      filePath: input.filePath,
+      range: sourceRange(sourceFile, declaration),
+      isExported: specSymbol.isExported,
+      declarationOrdinal
+    };
+    symbols.push(symbol);
+    addResolvedEdge(specSymbol.id, symbol.id, "contains", declaration, name);
+    return symbol;
+  }
+
   function visit(node: ts.Node): void {
     ownerByNode.set(node, currentOwner());
     if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {
@@ -5209,21 +5516,57 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
     }),
     frameworkExtractionPass("react-native", {
       visit(node) {
-        if (!ts.isCallExpression(node)) {
+        if (ts.isCallExpression(node)) {
+          const owner = ownerByNode.get(node);
+          const nativeModuleCall = staticReactNativeNativeModuleCall(
+            sourceFile,
+            node,
+            routeReceiverBindings
+          );
+          if (nativeModuleCall !== null && owner !== undefined) {
+            reactNativeFacts.nativeModuleCalls.push({
+              sourceId: owner.id,
+              filePath: input.filePath,
+              moduleName: nativeModuleCall.moduleName,
+              methodName: nativeModuleCall.methodName,
+              range: sourceRange(sourceFile, nativeModuleCall.expression)
+            });
+          }
+
+          const turboModuleCall = staticReactNativeTurboModuleCall(sourceFile, node, routeReceiverBindings);
+          if (turboModuleCall !== null && owner !== undefined) {
+            reactNativeFacts.turboModuleCalls.push({
+              sourceId: owner.id,
+              filePath: input.filePath,
+              moduleName: turboModuleCall.moduleName,
+              methodName: turboModuleCall.methodName,
+              range: sourceRange(sourceFile, turboModuleCall.expression)
+            });
+          }
+        }
+
+        if (!ts.isInterfaceDeclaration(node)) {
           return;
         }
-        const call = staticReactNativeNativeModuleCall(sourceFile, node, routeReceiverBindings);
-        const owner = ownerByNode.get(node);
-        if (call === null || owner === undefined) {
+        const spec = staticReactNativeTurboModuleSpec(sourceFile, node, routeReceiverBindings);
+        const specSymbol = symbolsByDeclaration.get(node);
+        if (spec === null || specSymbol?.kind !== "interface") {
           return;
         }
-        reactNativeFacts.nativeModuleCalls.push({
-          sourceId: owner.id,
-          filePath: input.filePath,
-          moduleName: call.moduleName,
-          methodName: call.methodName,
-          range: sourceRange(sourceFile, call.expression)
-        });
+        for (const method of spec.methods) {
+          const methodSymbol = addReactNativeTurboModuleSpecMethod(
+            specSymbol,
+            method.declaration,
+            method.name
+          );
+          reactNativeFacts.turboModuleSpecMethods.push({
+            sourceId: methodSymbol.id,
+            filePath: input.filePath,
+            moduleName: spec.moduleName,
+            methodName: method.name,
+            range: sourceRange(sourceFile, method.declaration)
+          });
+        }
       }
     }),
     frameworkExtractionPass("vue-router", {

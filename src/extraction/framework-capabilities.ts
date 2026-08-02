@@ -715,6 +715,7 @@ export const FRAMEWORK_CAPABILITIES = [
     routeRegistrations: [],
     surfaces: [
       "direct react-native NativeModules named or namespace imports with literal module and method calls",
+      "direct TurboModuleRegistry named or namespace imports with literal registry bindings, calls, and exported TypeScript specs",
       "direct Android ReactContextBaseJavaModule classes with literal getName values and direct ReactMethod annotations",
       "direct Objective-C RCTBridgeModule imports with one RCT_EXPORT_MODULE and direct RCT_EXPORT_METHOD macros"
     ]

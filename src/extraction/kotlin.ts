@@ -1762,6 +1762,8 @@ export function extractKotlinFileFacts(input: KotlinExtractFileFactsInput): Arti
     },
     reactNativeFacts: {
       nativeModuleCalls: [],
+      turboModuleCalls: [],
+      turboModuleSpecMethods: [],
       nativeMethods: reactNativeNativeMethods
     }
   };

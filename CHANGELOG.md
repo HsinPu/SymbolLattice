@@ -6,6 +6,27 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.187.0] - 2026-08-02
+
+### Added
+
+- Parser-backed React Native TurboModule extraction now recognizes direct named or namespace imports of <code>TurboModuleRegistry</code>, literal <code>get</code>/<code>getEnforcing</code> registrations, immutable local registry results, and direct chained registry calls. Lexical shadowing, optional chains, computed access, mutable aliases, and dynamic module names remain outside this surface.
+- An exported TypeScript <code>interface Spec extends TurboModule</code> with exactly one literal registry registration now gains queryable method symbols. Each proven spec method retains its module-and-method identity and is independently projected to matching Java, Kotlin, and Objective-C bridge implementations.
+- TurboModule caller and spec-contract resolution reuse the multi-platform safety model: every uniquely proven Android and iOS implementation receives its own exact <code>calls</code> edge; missing targets and duplicate same-platform implementations remain explicit unresolved edges with candidate ids.
+- New extractor, resolver, capability, and persisted-service coverage proves named and namespace forms, local and chained calls, TypeScript type aliases, spec-method symbols, optional-chain and shadow rejection, platform fan-out, ambiguity handling, SQLite persistence, and re-opened-service queries.
+
+### Compatibility
+
+- The artifact-facts extractor advances to <code>multi-language-ast-v167</code> and the project resolver advances to <code>project-resolver-v57</code>. Existing graphs and SQLite schema remain readable; the next explicit <code>sync</code> or <code>index</code> refreshes eligible source and recomputes React Native bridge projections.
+
+### Deliberate limits
+
+- This is a bounded TurboModule surface, not full Codegen/runtime modeling. Cross-file default-import receivers, generated Android TurboModule base classes, iOS/Swift Codegen implementations, <code>RCT_REMAP_METHOD</code>, runtime registration, indirect/mutable registry aliases, multiple registrations for one spec, dynamic or computed names, optional dispatch, and custom wrappers remain excluded.
+
+### Comparison notes
+
+- The inspected CodeGraph resolver recognizes TurboModule spec text and then matches native methods by method spelling across native candidates. SymbolLattice independently requires direct React Native import proof, an exported direct <code>TurboModule</code> interface, and exactly one literal registry registration before projecting a spec contract; it also keeps the literal module name and preserves distinct Android/iOS edges. CodeGraph still covers broader native/TurboModule conventions; SymbolLattice is stricter and more auditable for this implemented Registry-and-spec subset.
+
 ## [0.186.0] - 2026-08-02
 
 ### Added

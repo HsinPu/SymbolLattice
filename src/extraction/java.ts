@@ -1857,6 +1857,8 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
     },
     reactNativeFacts: {
       nativeModuleCalls: [],
+      turboModuleCalls: [],
+      turboModuleSpecMethods: [],
       nativeMethods: reactNativeNativeMethods
     }
   };

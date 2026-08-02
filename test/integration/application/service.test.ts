@@ -12281,6 +12281,105 @@ describe("SymbolLatticeService", () => {
     );
   });
 
+  it("persists React Native TurboModule specs and direct registry calls across Android and iOS", async () => {
+    const projectPath = await createInlineProject({
+      "src/mobile/NativeCalendar.ts": [
+        'import { TurboModuleRegistry } from "react-native";',
+        'import type { TurboModule } from "react-native";',
+        "export interface Spec extends TurboModule {",
+        "  createEvent(): void;",
+        "}",
+        'const Calendar = TurboModuleRegistry.getEnforcing<Spec>("CalendarModule");',
+        "export function schedule() { Calendar.createEvent(); }"
+      ].join("\n"),
+      "android/CalendarModule.java": [
+        "import com.facebook.react.bridge.ReactContextBaseJavaModule;",
+        "import com.facebook.react.bridge.ReactMethod;",
+        "public class CalendarModule extends ReactContextBaseJavaModule {",
+        '  public String getName() { return "CalendarModule"; }',
+        "  @ReactMethod public void createEvent() {}",
+        "}"
+      ].join("\n"),
+      "ios/CalendarModule.m": [
+        "#import <React/RCTBridgeModule.h>",
+        "@implementation CalendarModule",
+        "RCT_EXPORT_MODULE(CalendarModule)",
+        "RCT_EXPORT_METHOD(createEvent)",
+        "@end"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const persistedFacts = graphStore.getArtifactFacts(projectPath);
+    const javaMethod = await service.find(
+      projectPath,
+      "android/CalendarModule.java#CalendarModule.createEvent"
+    );
+    const specMethod = await service.find(projectPath, "src/mobile/NativeCalendar.ts#Spec.createEvent");
+    const javaTarget = javaMethod.symbols[0];
+    const specTarget = specMethod.symbols[0];
+    if (javaTarget === undefined || specTarget === undefined) {
+      throw new Error("Expected indexed React Native TurboModule symbols.");
+    }
+
+    expect(persistedFacts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          filePath: "src/mobile/NativeCalendar.ts",
+          reactNativeFacts: expect.objectContaining({
+            turboModuleCalls: [expect.objectContaining({ moduleName: "CalendarModule" })],
+            turboModuleSpecMethods: [expect.objectContaining({ methodName: "createEvent" })]
+          })
+        })
+      ])
+    );
+    const callers = await service.callers(projectPath, javaTarget.qualifiedName);
+    expect(callers.relations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          symbol: expect.objectContaining({ name: "schedule" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId:
+                "framework.react-native.turbo-modules.direct-registry.literal-module-and-method.android.exact-target"
+            })
+          })
+        }),
+        expect.objectContaining({
+          symbol: expect.objectContaining({ id: specTarget.id }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId:
+                "framework.react-native.turbo-modules.spec-contract.literal-module-and-method.android.exact-target"
+            })
+          })
+        })
+      ])
+    );
+
+    const reopened = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+    await reopened.init({ projectPath });
+    const persistedCallers = await reopened.callers(projectPath, javaTarget.qualifiedName);
+    expect(persistedCallers.relations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          symbol: expect.objectContaining({ name: "schedule" }),
+          edge: expect.objectContaining({
+            evidence: expect.objectContaining({
+              ruleId:
+                "framework.react-native.turbo-modules.direct-registry.literal-module-and-method.android.exact-target",
+              stage: "module"
+            })
+          })
+        })
+      ])
+    );
+  });
+
   it("indexes NestJS decorator routes as persisted exact method evidence", async () => {
     const projectPath = await createInlineProject({
       "src/cats.controller.ts": [
