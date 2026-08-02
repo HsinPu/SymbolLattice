@@ -12569,6 +12569,128 @@ describe("source extraction", () => {
     expect(facts.springBootPropertiesFacts?.valueReferences).toEqual([]);
   });
 
+  it("retains direct Kotlin @Bean method Spring @ConfigurationProperties literal-prefix facts", () => {
+    const facts = extractFileFacts({
+      filePath: "src/config/PropertiesFactory.kt",
+      language: "kotlin",
+      sourceText: [
+        "import org.springframework.boot.context.properties.ConfigurationProperties",
+        "import org.springframework.context.annotation.Bean",
+        "import org.springframework.context.annotation.Configuration",
+        "",
+        "@Configuration(proxyBeanMethods = false)",
+        "class PropertiesFactory {",
+        "  @Bean",
+        '  @ConfigurationProperties(prefix = "app.cache")',
+        "  fun cacheProperties(): CacheProperties = CacheProperties()",
+        "",
+        '  @org.springframework.context.annotation.Bean(name = "clientProperties")',
+        '  @org.springframework.boot.context.properties.ConfigurationProperties("service.client")',
+        "  fun clientProperties(): ClientProperties { return ClientProperties() }",
+        "}",
+        "",
+        "@org.springframework.context.annotation.Configuration",
+        "class FullyQualifiedFactory {",
+        "  @org.springframework.context.annotation.Bean",
+        '@org.springframework.boot.context.properties.ConfigurationProperties(prefix = "full.factory")',
+        "  fun fullProperties(): Any = Any()",
+        "}"
+      ].join("\n")
+    });
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+
+    expect(
+      facts.symbols.filter((symbol) => symbol.kind === "method").map((symbol) => symbol.name)
+    ).toEqual(["cacheProperties", "clientProperties", "fullProperties"]);
+    expect(
+      facts.springBootPropertiesFacts?.configurationPropertiesPrefixes
+        .map((reference) => `${symbolsById.get(reference.sourceId)?.name}:${reference.prefix}`)
+        .sort()
+    ).toEqual([
+      "cacheProperties:app.cache",
+      "clientProperties:service.client",
+      "fullProperties:full.factory"
+    ]);
+  });
+
+  it("rejects Kotlin factory @ConfigurationProperties without exact configuration and bean proof", () => {
+    const rejected = [
+      [
+        "src/config/MissingConfiguration.kt",
+        [
+          "import org.springframework.boot.context.properties.ConfigurationProperties",
+          "import org.springframework.context.annotation.Bean",
+          "class MissingConfiguration {",
+          "  @Bean",
+          '  @ConfigurationProperties(prefix = "missing.configuration")',
+          "  fun properties(): Any = Any()",
+          "}"
+        ].join("\n")
+      ],
+      [
+        "src/config/MissingBean.kt",
+        [
+          "import org.springframework.boot.context.properties.ConfigurationProperties",
+          "import org.springframework.context.annotation.Configuration",
+          "@Configuration",
+          "class MissingBean {",
+          '  @ConfigurationProperties(prefix = "missing.bean")',
+          "  fun properties(): Any = Any()",
+          "}"
+        ].join("\n")
+      ],
+      [
+        "src/config/AbstractFactory.kt",
+        [
+          "import org.springframework.boot.context.properties.ConfigurationProperties",
+          "import org.springframework.context.annotation.Bean",
+          "import org.springframework.context.annotation.Configuration",
+          "@Configuration",
+          "abstract class AbstractFactory {",
+          "  @Bean",
+          '  @ConfigurationProperties(prefix = "abstract.factory")',
+          "  abstract fun properties(): Any",
+          "}"
+        ].join("\n")
+      ],
+      [
+        "src/config/WildcardBeanFactory.kt",
+        [
+          "import org.springframework.boot.context.properties.ConfigurationProperties",
+          "import org.springframework.context.annotation.Configuration",
+          "import org.springframework.context.annotation.*",
+          "@Configuration",
+          "class WildcardBeanFactory {",
+          "  @Bean",
+          '  @ConfigurationProperties(prefix = "wildcard.bean")',
+          "  fun properties(): Any = Any()",
+          "}"
+        ].join("\n")
+      ],
+      [
+        "src/config/ObjectFactory.kt",
+        [
+          "import org.springframework.boot.context.properties.ConfigurationProperties",
+          "import org.springframework.context.annotation.Bean",
+          "import org.springframework.context.annotation.Configuration",
+          "@Configuration",
+          "object ObjectFactory {",
+          "  @Bean",
+          '  @ConfigurationProperties(prefix = "object.factory")',
+          "  fun properties(): Any = Any()",
+          "}"
+        ].join("\n")
+      ]
+    ] as const;
+
+    expect(
+      rejected.map(([filePath, sourceText]) =>
+        extractFileFacts({ filePath, language: "kotlin", sourceText }).springBootPropertiesFacts
+          ?.configurationPropertiesPrefixes
+      )
+    ).toEqual([[], [], [], [], []]);
+  });
+
   it("rejects unproven, dynamic, value-alias, multi-attribute, and raw Kotlin ConfigurationProperties forms", () => {
     const directImportFacts = extractFileFacts({
       filePath: "src/config/UnsupportedConfigurationProperties.kt",

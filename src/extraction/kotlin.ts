@@ -79,6 +79,8 @@ const KTOR_ROUTE_IMPORT_PREFIX = "io.ktor.server.routing.";
 const SPRING_VALUE_IMPORT = "org.springframework.beans.factory.annotation.Value";
 const SPRING_CONFIGURATION_PROPERTIES_IMPORT =
   "org.springframework.boot.context.properties.ConfigurationProperties";
+const SPRING_CONFIGURATION_IMPORT = "org.springframework.context.annotation.Configuration";
+const SPRING_BEAN_IMPORT = "org.springframework.context.annotation.Bean";
 const SPRING_BOOT_PROPERTIES_KEY = /^[A-Za-z0-9][A-Za-z0-9._-]*$/u;
 
 function directChildren(node: KotlinSyntaxNode): readonly KotlinSyntaxNode[] {
@@ -244,16 +246,60 @@ function staticKotlinAnnotationInvocation(annotation: KotlinSyntaxNode): KotlinS
 }
 
 function staticKotlinAnnotationName(annotation: KotlinSyntaxNode): string | null {
-  const invocation = staticKotlinAnnotationInvocation(annotation);
-  if (invocation === null) {
+  if (annotation.kind() !== "annotation") {
     return null;
   }
-  const userTypes = directChildren(invocation).filter((child) => child.kind() === "user_type");
-  if (userTypes.length !== 1 || userTypes[0] === undefined) {
+  const children = directChildren(annotation);
+  if (children.length !== 2) {
     return null;
   }
-  const name = nodeText(userTypes[0]);
+  const subject = children[1];
+  let userType: KotlinSyntaxNode | undefined;
+  if (subject?.kind() === "user_type") {
+    userType = subject;
+  } else if (subject?.kind() === "constructor_invocation") {
+    const userTypes = directChildren(subject).filter((child) => child.kind() === "user_type");
+    if (userTypes.length !== 1 || userTypes[0] === undefined) {
+      return null;
+    }
+    userType = userTypes[0];
+  }
+  if (userType === undefined) {
+    return null;
+  }
+  const name = nodeText(userType);
   return /^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*$/u.test(name) ? name : null;
+}
+
+/**
+ * Resolves one annotation only when its source spelling is a fully-qualified
+ * target or its unaliased simple name has the exact direct import. This keeps
+ * the framework facts independent of Kotlin's broader name-resolution rules.
+ */
+function staticKotlinExactlyOneProvenAnnotation(
+  annotations: readonly KotlinSyntaxNode[],
+  expectedImport: string,
+  imports: ReadonlySet<string>
+): KotlinSyntaxNode | null {
+  const expectedName = expectedImport.split(".").at(-1);
+  if (expectedName === undefined) {
+    return null;
+  }
+  const annotationsNamedExpected = annotations.filter((annotation) => {
+    const name = staticKotlinAnnotationName(annotation);
+    return name === expectedName || name === expectedImport;
+  });
+  const provenAnnotations = annotationsNamedExpected.filter((annotation) => {
+    const name = staticKotlinAnnotationName(annotation);
+    return name === expectedImport || (name === expectedName && imports.has(expectedImport));
+  });
+  if (
+    annotationsNamedExpected.length !== provenAnnotations.length ||
+    provenAnnotations.length !== 1
+  ) {
+    return null;
+  }
+  return provenAnnotations[0] ?? null;
 }
 
 /**
@@ -634,6 +680,52 @@ function staticKotlinSpringBootConfigurationPropertiesPrefixReferences(
   }
   const annotation = configurationPropertiesAnnotations[0];
   if (annotation === undefined) {
+    return [];
+  }
+  const prefix = staticKotlinSpringBootConfigurationPropertiesPrefix(annotation);
+  return prefix === null ? [] : [{ prefix, node: annotation }];
+}
+
+/**
+ * Retains a configuration prefix on one direct concrete Kotlin `@Bean`
+ * function only inside a direct `@Configuration` class. The class, bean
+ * function, and properties annotation each require exact import or
+ * fully-qualified proof. This models a source-proven factory relationship,
+ * not Spring's runtime bean registration or binding result.
+ */
+function staticKotlinSpringBootBeanConfigurationPropertiesPrefixReferences(
+  declaration: StaticKotlinType,
+  method: StaticKotlinFunction,
+  imports: ReadonlySet<string>
+): readonly StaticKotlinSpringBootConfigurationPropertiesPrefixReference[] {
+  if (declaration.kind !== "class" || declaration.isObject || method.body === null) {
+    return [];
+  }
+  const typeModifiers = directChildren(declaration.node).find((child) => child.kind() === "modifiers");
+  if (typeModifiers === undefined) {
+    return [];
+  }
+  const typeAnnotations = directChildren(typeModifiers).filter((child) => child.kind() === "annotation");
+  if (
+    staticKotlinExactlyOneProvenAnnotation(typeAnnotations, SPRING_CONFIGURATION_IMPORT, imports) ===
+    null
+  ) {
+    return [];
+  }
+  const methodModifiers = directChildren(method.node).find((child) => child.kind() === "modifiers");
+  if (methodModifiers === undefined) {
+    return [];
+  }
+  const methodAnnotations = directChildren(methodModifiers).filter((child) => child.kind() === "annotation");
+  if (staticKotlinExactlyOneProvenAnnotation(methodAnnotations, SPRING_BEAN_IMPORT, imports) === null) {
+    return [];
+  }
+  const annotation = staticKotlinExactlyOneProvenAnnotation(
+    methodAnnotations,
+    SPRING_CONFIGURATION_PROPERTIES_IMPORT,
+    imports
+  );
+  if (annotation === null) {
     return [];
   }
   const prefix = staticKotlinSpringBootConfigurationPropertiesPrefix(annotation);
@@ -1024,7 +1116,19 @@ export function extractKotlinFileFacts(input: KotlinExtractFileFactsInput): Arti
       for (const methodDeclaration of directChildren(declaration.body)
         .map((node) => staticKotlinFunction(node))
         .filter((candidate): candidate is StaticKotlinFunction => candidate !== null)) {
-        addMethod(typeSymbol, methodDeclaration);
+        const methodSymbol = addMethod(typeSymbol, methodDeclaration);
+        for (const reference of staticKotlinSpringBootBeanConfigurationPropertiesPrefixReferences(
+          declaration,
+          methodDeclaration,
+          imports
+        )) {
+          springBootConfigurationPropertiesPrefixes.push({
+            sourceId: methodSymbol.id,
+            filePath: input.filePath,
+            prefix: reference.prefix,
+            range: rangeForNode(reference.node)
+          });
+        }
       }
     }
 

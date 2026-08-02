@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.180.0 is a developer preview and is not published to npm. Run it from source.
+> v0.181.0 is a developer preview and is not published to npm. Run it from source.
 
 SymbolLattice builds a queryable local code-symbol graph for a project. Every relation retains its rule, resolution stage, and confidence; `exact`, `heuristic`, and `unresolved` evidence are never conflated.
 
@@ -41,22 +41,22 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 On Windows PowerShell, use `npm.cmd` if `npm` is unavailable. Index data stays in the target project's `.symbol-lattice/index.sqlite`.
 
-## v0.180.0 highlights
+## v0.181.0 highlights
 
-- Spring `@ConfigurationProperties` now supports concrete `@Bean` factory methods in direct Java `@Configuration` classes; prefix relations originate from the method symbol and retain traceable evidence for every configuration leaf.
-- `@Configuration`, `@Bean`, and `@ConfigurationProperties` each require an exact import or fully-qualified Spring name, plus one literal positional or `prefix =` argument; ordinary methods, nested classes, dynamic values, and runtime bean registration remain excluded.
+- Spring `@ConfigurationProperties` now supports concrete `@Bean` functions in direct Kotlin `@Configuration` classes; prefix relations originate from the function symbol and are traceable to every configuration leaf.
+- `@Configuration`, `@Bean`, and `@ConfigurationProperties` each require an exact direct import or fully-qualified Spring name. The prefix must be one positional literal or one `prefix =` literal.
+- The established per-leaf resolver, `0.85` confidence, explicit unresolved ambiguity, source-value omission, and explicit-sync re-projection remain intact.
 
 ## Principles
 
 - Indexing and querying stay local; source is never silently uploaded.
-- `init` and `sync` are explicit writes. CLI and MCP queries remain read-only and never update the graph themselves.
+- `init` and `sync` are explicit writes. CLI and MCP queries remain read-only.
 - A relation needs reproducible static evidence. Otherwise it remains unresolved instead of guessed.
 
 ## Static-analysis boundaries
 
-- Spring Boot `@Value` supports only direct top-level Java-class fields, constructor parameters, concrete-method parameters, direct concrete one-parameter methods, or direct top-level `record` components. Direct top-level Kotlin classes and braced `object` declarations support properties, concrete-method parameters, and qualifying one-parameter method annotations; classes additionally support primary constructors. It requires an exact import or fully-qualified name and one literal placeholder; Kotlin requires an escaped-dollar regular string. A proven parameter `@Value` prevents a duplicate method-annotation relation. `@ConfigurationProperties` accepts only one literal positional or `prefix =` argument on direct Java/Kotlin classes, direct top-level Java records, or concrete Java `@Bean` methods in direct `@Configuration` classes; the factory-method path requires exact import or fully-qualified proof for all three Spring annotations. Abstract/interface/top-level methods, secondary constructors, nested records, nested/companion/anonymous objects, use-site targets, alias/wildcard imports, field/collection binding, lists, merge keys, dynamic values, config imports, active profiles, and runtime precedence remain outside analysis.
-- COBOL CICS accepts only a direct `RETURN` or `START` completed by `END-EXEC` with one literal `TRANSID`. Its target must be the unique indexed, pre-`PROCEDURE DIVISION`, `TRAN`-named literal owner; because the CICS CSD is external configuration, this remains `heuristic`, not a runtime guarantee.
-- Dynamic composition, external or namespace packages, parent-relative imports, copied or container values, decorated or imported classes, WebSockets, `add_route`, versioning, and ambiguous targets never become `exact` results.
+- Spring `@ConfigurationProperties` supports direct Java/Kotlin classes, direct top-level Java `record` declarations, and concrete Java/Kotlin `@Bean` members in direct `@Configuration` classes.
+- The factory-method path does not infer runtime bean registration or binding. Nested classes, Kotlin `object` factories, abstract/interface/top-level functions, alias or wildcard imports, `value =`, multiple attributes, dynamic prefixes, profiles, precedence, and environment overrides remain out of scope.
 
 ## Verification
 

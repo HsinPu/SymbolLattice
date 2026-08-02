@@ -6,6 +6,27 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.181.0] - 2026-08-02
+
+### Added
+
+- Direct concrete Kotlin <code>@Bean</code> functions inside direct <code>@Configuration</code> classes now contribute parser-backed Spring <code>@ConfigurationProperties</code> literal-prefix facts. The existing method symbol owns each relation, making factory-method configuration impact queries traceable to the declaration.
+- Kotlin annotation proof now understands both bare marker spellings and invoked annotations. <code>@Configuration</code>, <code>@Bean</code>, and <code>@ConfigurationProperties</code> each require an exact direct import or a fully-qualified name; the accepted prefix remains one positional literal or one <code>prefix =</code> literal.
+- New unit, capability, and service coverage proves imported and fully-qualified Kotlin annotations, expression and block function bodies, exact function ownership, missing-configuration/bean rejection, abstract-function rejection, wildcard rejection, Kotlin-object exclusion, source-value omission, and unchanged-artifact reuse after configuration withdrawal.
+- The durable SQLite journal bound test now declares a 120-second semantic-test timeout for its intentional 130-event persistence workload. Product journal behavior is unchanged.
+
+### Compatibility
+
+- The artifact-facts extractor advances to <code>multi-language-ast-v161</code>. Existing graphs and SQLite schema remain readable; the next explicit <code>sync</code> or <code>index</code> re-extracts eligible Kotlin artifacts under the factory-method surface.
+
+### Deliberate limits
+
+- This is not general Kotlin or Spring bean discovery. The slice excludes factory functions outside direct <code>@Configuration</code> classes, Kotlin <code>object</code> factories, nested classes, abstract/interface/top-level functions, meta-annotations, aliases/wildcard imports, <code>value =</code>, multiple attributes, nonliteral prefixes, return-type inspection, profiles, imports, precedence, validation, environment overrides, and runtime registration or binding behavior.
+
+### Comparison notes
+
+- The inspected CodeGraph Spring binding path uses one Java/Kotlin text pattern for <code>@ConfigurationProperties</code>, so it can recognize a function annotation without proving the factory owner. SymbolLattice independently requires the AST-proven <code>@Configuration</code> -> concrete <code>@Bean</code> -> literal <code>@ConfigurationProperties</code> chain and records the function owner, range, per-leaf candidates, and unresolved ambiguity. CodeGraph remains broader; SymbolLattice is more specific and auditable for supported Kotlin factory functions.
+
 ## [0.180.0] - 2026-08-02
 
 ### Added

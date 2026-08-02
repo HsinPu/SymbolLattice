@@ -16253,6 +16253,162 @@ describe("SymbolLatticeService", () => {
     });
   });
 
+  it("projects direct Kotlin @Bean method @ConfigurationProperties prefixes through conservative configuration resolution", async () => {
+    const projectPath = await createInlineProject({
+      "config/application.yml": ["app:", "  cache:", "    size: cache-secret"].join("\n"),
+      "config/bootstrap.properties": "service.client.timeout=client-secret\n",
+      "src/config/BeanConfiguration.kt": [
+        "import org.springframework.boot.context.properties.ConfigurationProperties",
+        "import org.springframework.context.annotation.Bean",
+        "import org.springframework.context.annotation.Configuration",
+        "",
+        "@Configuration",
+        "class BeanConfiguration {",
+        "  @Bean",
+        '  @ConfigurationProperties(prefix = "app.cache")',
+        "  fun cacheProperties(): CacheProperties = CacheProperties()",
+        "",
+        "  @Bean",
+        '@org.springframework.boot.context.properties.ConfigurationProperties("service.client")',
+        "  fun clientProperties(): ClientProperties = ClientProperties()",
+        "}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    const indexed = await service.init({ projectPath });
+    const cacheProperties = (
+      await service.find(projectPath, "src/config/BeanConfiguration.kt#BeanConfiguration.cacheProperties")
+    ).symbols[0];
+    const clientProperties = (
+      await service.find(projectPath, "src/config/BeanConfiguration.kt#BeanConfiguration.clientProperties")
+    ).symbols[0];
+    const cacheSize = (
+      await service.find(projectPath, "config/application.yml#spring-boot-yaml-key:app.cache.size")
+    ).symbols[0];
+    const clientTimeout = (
+      await service.find(projectPath, "config/bootstrap.properties#properties-key:service.client.timeout")
+    ).symbols[0];
+    if (
+      cacheProperties === undefined ||
+      clientProperties === undefined ||
+      cacheSize === undefined ||
+      clientTimeout === undefined
+    ) {
+      throw new Error("Expected indexed Kotlin factory ConfigurationProperties symbols.");
+    }
+
+    const factoryFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "src/config/BeanConfiguration.kt");
+    const yamlFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "config/application.yml");
+    const propertiesFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "config/bootstrap.properties");
+    const snapshot = graphStore.getSnapshot(projectPath);
+    const cacheSizeReference = snapshot.edges.find(
+      (edge) => edge.sourceId === cacheProperties.id && edge.targetId === cacheSize.id
+    );
+    const clientTimeoutReference = snapshot.edges.find(
+      (edge) => edge.sourceId === clientProperties.id && edge.targetId === clientTimeout.id
+    );
+    const cacheSizeCallers = await service.callers(projectPath, cacheSize.qualifiedName);
+    const clientTimeoutCallers = await service.callers(projectPath, clientTimeout.qualifiedName);
+
+    expect(indexed).toMatchObject({
+      stale: false,
+      counts: { files: 3, symbols: 8, edges: 7 }
+    });
+    expect(factoryFacts?.springBootPropertiesFacts?.configurationPropertiesPrefixes).toEqual([
+      expect.objectContaining({ sourceId: cacheProperties.id, prefix: "app.cache" }),
+      expect.objectContaining({ sourceId: clientProperties.id, prefix: "service.client" })
+    ]);
+    expect(JSON.stringify(yamlFacts)).not.toContain("cache-secret");
+    expect(JSON.stringify(propertiesFacts)).not.toContain("client-secret");
+    expect(cacheSizeCallers.relations.map((relation) => relation.symbol.id)).toEqual([
+      cacheProperties.id
+    ]);
+    expect(clientTimeoutCallers.relations.map((relation) => relation.symbol.id)).toEqual([
+      clientProperties.id
+    ]);
+    expect(cacheSizeReference).toMatchObject({
+      kind: "references",
+      resolution: "heuristic",
+      confidence: 0.85,
+      referenceName: "app.cache:app.cache.size",
+      evidence: expect.objectContaining({
+        ruleId: "framework.spring-boot.configuration-properties.literal-prefix.unique-leaf",
+        stage: "heuristic",
+        candidateSymbolIds: [cacheSize.id],
+        configurationPaths: ["config/application.yml"]
+      })
+    });
+    expect(clientTimeoutReference).toMatchObject({
+      kind: "references",
+      resolution: "heuristic",
+      confidence: 0.85,
+      referenceName: "service.client:service.client.timeout",
+      evidence: expect.objectContaining({
+        ruleId: "framework.spring-boot.configuration-properties.literal-prefix.unique-leaf",
+        stage: "heuristic",
+        candidateSymbolIds: [clientTimeout.id],
+        configurationPaths: ["config/bootstrap.properties"]
+      })
+    });
+
+    await writeFile(
+      join(projectPath, "config", "application.yml"),
+      ["feature:", "  enabled: true"].join("\n"),
+      "utf8"
+    );
+    await writeFile(
+      join(projectPath, "config", "bootstrap.properties"),
+      "feature.enabled=false\n",
+      "utf8"
+    );
+    const synced = await service.sync({ projectPath });
+    const afterSync = graphStore.getSnapshot(projectPath);
+    const cachePrefixAfterSync = afterSync.edges.find(
+      (edge) =>
+        edge.sourceId === cacheProperties.id &&
+        edge.kind === "references" &&
+        edge.referenceName === "app.cache"
+    );
+    const clientPrefixAfterSync = afterSync.edges.find(
+      (edge) =>
+        edge.sourceId === clientProperties.id &&
+        edge.kind === "references" &&
+        edge.referenceName === "service.client"
+    );
+
+    expect(synced.lastIndexWork?.reusedArtifactFiles).toEqual(
+      expect.arrayContaining(["src/config/BeanConfiguration.kt"])
+    );
+    expect(cachePrefixAfterSync).toMatchObject({
+      targetId: null,
+      resolution: "unresolved",
+      confidence: 0,
+      evidence: expect.objectContaining({
+        ruleId: "framework.spring-boot.configuration-properties.literal-prefix.unresolved-prefix",
+        stage: "unresolved",
+        candidateSymbolIds: []
+      })
+    });
+    expect(clientPrefixAfterSync).toMatchObject({
+      targetId: null,
+      resolution: "unresolved",
+      confidence: 0,
+      evidence: expect.objectContaining({
+        ruleId: "framework.spring-boot.configuration-properties.literal-prefix.unresolved-prefix",
+        stage: "unresolved",
+        candidateSymbolIds: []
+      })
+    });
+  });
+
   it("projects conservative Java @ConfigurationProperties prefixes to unique Spring Boot configuration leaves", async () => {
     const projectPath = await createInlineProject({
       "config/application.yml": [

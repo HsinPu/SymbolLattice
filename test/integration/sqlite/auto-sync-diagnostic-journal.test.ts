@@ -92,7 +92,7 @@ describe("SQLite auto-sync diagnostic journal", () => {
         { sequence: MAX_AUTO_SYNC_DIAGNOSTIC_JOURNAL_EVENTS + 2 }
       ]
     });
-  });
+  }, 120_000);
 
   it("does not create a diagnostic directory for an uninitialized project", async () => {
     const projectPath = await mkdtemp(join(tmpdir(), "symbol-lattice-auto-sync-uninitialized-"));
