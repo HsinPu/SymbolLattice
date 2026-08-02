@@ -245,6 +245,8 @@ function configurationInputKindOrder(kind: ProjectConfigurationInputKind): numbe
       return 9;
     case "astro-config":
       return 10;
+    case "xcode-project":
+      return 11;
   }
 }
 

@@ -12496,13 +12496,21 @@ describe("SymbolLatticeService", () => {
         expect.objectContaining({
           filePath: "ios/CalendarModule.swift",
           swiftObjectiveCFacts: expect.objectContaining({
-            methods: [
+            methods: [],
+            types: [
               expect.objectContaining({
+                swiftTypeName: "CalendarModule",
                 objcClassName: "CalendarModule",
+                filePath: "ios/CalendarModule.swift"
+              })
+            ],
+            extensionMethods: [
+              expect.objectContaining({
+                extendedTypeName: "CalendarModule",
                 selector: "createEvent:"
               }),
               expect.objectContaining({
-                objcClassName: "CalendarModule",
+                extendedTypeName: "CalendarModule",
                 selector: "deleteEvent:"
               })
             ]
@@ -12581,6 +12589,128 @@ describe("SymbolLatticeService", () => {
         })
       ])
     );
+  });
+
+  it("reprojects cross-file Swift extensions when Xcode source-target membership changes", async () => {
+    const projectFile = (includeExtension: boolean): string =>
+      [
+        "{",
+        "  objects = {",
+        "    APP = { isa = PBXNativeTarget; buildPhases = ( SOURCES, ); };",
+        "    SOURCES = {",
+        "      isa = PBXSourcesBuildPhase;",
+        "      files = (",
+        "        BUILD_EXPORT,",
+        "        BUILD_MODULE,",
+        ...(includeExtension ? ["        BUILD_EXTENSION,"] : []),
+        "      );",
+        "    };",
+        "    BUILD_EXPORT = { isa = PBXBuildFile; fileRef = EXPORT; };",
+        "    BUILD_MODULE = { isa = PBXBuildFile; fileRef = MODULE; };",
+        "    BUILD_EXTENSION = { isa = PBXBuildFile; fileRef = EXTENSION; };",
+        "    ROOT = {",
+        "      isa = PBXGroup;",
+        "      children = ( EXPORT, MODULE, EXTENSION, );",
+        "      sourceTree = \"<group>\";",
+        "    };",
+        "    EXPORT = { isa = PBXFileReference; path = CalendarModuleExport.m; sourceTree = \"<group>\"; };",
+        "    MODULE = { isa = PBXFileReference; path = CalendarModule.swift; sourceTree = \"<group>\"; };",
+        "    EXTENSION = { isa = PBXFileReference; path = CalendarModule+Extras.swift; sourceTree = \"<group>\"; };",
+        "    PROJECT = { isa = PBXProject; mainGroup = ROOT; };",
+        "  };",
+        "  rootObject = PROJECT;",
+        "}"
+      ].join("\n");
+    const projectPath = await createInlineProject({
+      "ios/CalendarModuleExport.m": [
+        "#import <React/RCTBridgeModule.h>",
+        "@interface RCT_EXTERN_MODULE(CalendarModule, NSObject)",
+        "RCT_EXTERN_METHOD(createEvent:(NSString *)name)",
+        "@end"
+      ].join("\n"),
+      "ios/CalendarModule.swift": [
+        "@objc(CalendarModule)",
+        "final class CalendarModule: NSObject {}"
+      ].join("\n"),
+      "ios/CalendarModule+Extras.swift": [
+        "extension CalendarModule {",
+        "  @objc(createEvent:)",
+        "  func writeEvent(name: String) {}",
+        "}"
+      ].join("\n"),
+      "ios/App.xcodeproj/project.pbxproj": projectFile(true)
+    });
+    const graphStore = new SqliteGraphStore();
+    let extractionCount = 0;
+    const service = new SymbolLatticeService(
+      graphStore,
+      new FileSystemSourceCatalog(),
+      (input) => {
+        extractionCount += 1;
+        return extractFileFacts(input);
+      }
+    );
+
+    await service.init({ projectPath });
+    const bridge = (await service.find(
+      projectPath,
+      "ios/CalendarModuleExport.m#extern:CalendarModule.createEvent"
+    )).symbols[0];
+    const extensionMethod = (await service.find(
+      projectPath,
+      "ios/CalendarModule+Extras.swift#extension:CalendarModule.writeEvent"
+    )).symbols[0];
+    if (bridge === undefined || extensionMethod === undefined) {
+      throw new Error("Expected the Xcode-target Swift bridge fixture to be indexed.");
+    }
+    expect(
+      graphStore.getSnapshot(projectPath).edges.find(
+        (edge) =>
+          edge.sourceId === bridge.id &&
+          edge.referenceName === "CalendarModule.createEvent:" &&
+          edge.targetId === extensionMethod.id
+      )?.evidence
+    ).toMatchObject({
+      ruleId:
+        "framework.react-native.swift-extern.xcode-target.explicit-objc-class-and-selector.exact-target",
+      configurationPaths: ["ios/App.xcodeproj/project.pbxproj"]
+    });
+
+    await writeFile(
+      join(projectPath, "ios", "App.xcodeproj", "project.pbxproj"),
+      projectFile(false),
+      "utf8"
+    );
+    expect(await service.getStatus(projectPath)).toMatchObject({
+      stale: true,
+      staleReasons: ["project-inputs-changed"]
+    });
+    const synced = await service.sync({ projectPath });
+
+    expect(extractionCount).toBe(3);
+    expect(synced.lastIndexWork).toMatchObject({
+      mode: "incremental",
+      reExtractedFiles: [],
+      reusedArtifactFiles: [
+        "ios/CalendarModule+Extras.swift",
+        "ios/CalendarModule.swift",
+        "ios/CalendarModuleExport.m"
+      ]
+    });
+    expect(
+      graphStore.getSnapshot(projectPath).edges.find(
+        (edge) => edge.sourceId === bridge.id && edge.referenceName === "CalendarModule.createEvent:"
+      )
+    ).toMatchObject({
+      targetId: null,
+      resolution: "unresolved",
+      confidence: 0,
+      evidence: expect.objectContaining({
+        ruleId:
+          "framework.react-native.swift-extern.xcode-target.explicit-objc-class-and-selector.unresolved-target",
+        candidateSymbolIds: [extensionMethod.id]
+      })
+    });
   });
 
   it("persists React Native Codegen Spec bridge targets only after their TypeScript contracts are unique", async () => {

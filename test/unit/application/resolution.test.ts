@@ -3012,6 +3012,216 @@ describe("TypeScript configuration module resolution", () => {
     }
   });
 
+  it("projects a cross-file Swift extension only through one shared Xcode target", () => {
+    const sourceDocuments: readonly SourceDocument[] = [
+      {
+        absolutePath: "C:/project/ios/CalendarModuleExport.m",
+        relativePath: "ios/CalendarModuleExport.m",
+        language: "objc",
+        sourceText: [
+          "#import <React/RCTBridgeModule.h>",
+          "@interface RCT_EXTERN_MODULE(CalendarModule, NSObject)",
+          "RCT_EXTERN_METHOD(createEvent:(NSString *)name)",
+          "@end"
+        ].join("\n"),
+        contentHash: "cross-file-bridge"
+      },
+      {
+        absolutePath: "C:/project/ios/CalendarModule.swift",
+        relativePath: "ios/CalendarModule.swift",
+        language: "swift",
+        sourceText: [
+          "@objc(CalendarModule)",
+          "final class CalendarModule: NSObject {}"
+        ].join("\n"),
+        contentHash: "cross-file-type"
+      },
+      {
+        absolutePath: "C:/project/ios/CalendarModule+Extras.swift",
+        relativePath: "ios/CalendarModule+Extras.swift",
+        language: "swift",
+        sourceText: [
+          "extension CalendarModule {",
+          "  @objc(createEvent:)",
+          "  func writeEvent(name: String) {}",
+          "}"
+        ].join("\n"),
+        contentHash: "cross-file-extension"
+      },
+      {
+        absolutePath: "C:/project/ios/OtherTargetCalendarModule.swift",
+        relativePath: "ios/OtherTargetCalendarModule.swift",
+        language: "swift",
+        sourceText: [
+          "@objc(CalendarModule)",
+          "final class CalendarModule: NSObject {}"
+        ].join("\n"),
+        contentHash: "cross-file-other-target"
+      }
+    ];
+    const snapshot = resolveProjectFacts({
+      sourceDocuments,
+      extractedFiles: sourceDocuments.map((document) =>
+        extractFileFacts({
+          filePath: document.relativePath,
+          language: document.language,
+          sourceText: document.sourceText
+        })
+      ),
+      indexedAt: "2026-08-02T00:00:00.000Z",
+      xcodeTargetMemberships: [
+        {
+          filePath: "ios/CalendarModuleExport.m",
+          targetId: "ios/App.xcodeproj/project.pbxproj#APP",
+          configurationPath: "ios/App.xcodeproj/project.pbxproj"
+        },
+        {
+          filePath: "ios/CalendarModule.swift",
+          targetId: "ios/App.xcodeproj/project.pbxproj#APP",
+          configurationPath: "ios/App.xcodeproj/project.pbxproj"
+        },
+        {
+          filePath: "ios/CalendarModule+Extras.swift",
+          targetId: "ios/App.xcodeproj/project.pbxproj#APP",
+          configurationPath: "ios/App.xcodeproj/project.pbxproj"
+        },
+        {
+          filePath: "ios/OtherTargetCalendarModule.swift",
+          targetId: "ios/App.xcodeproj/project.pbxproj#OTHER",
+          configurationPath: "ios/App.xcodeproj/project.pbxproj"
+        }
+      ]
+    });
+    const bridge = snapshot.symbols.find(
+      (symbol) => symbol.filePath === "ios/CalendarModuleExport.m" && symbol.name === "createEvent"
+    );
+    const extensionMethod = snapshot.symbols.find(
+      (symbol) =>
+        symbol.filePath === "ios/CalendarModule+Extras.swift" && symbol.name === "writeEvent"
+    );
+
+    expect(bridge).toBeDefined();
+    expect(extensionMethod).toBeDefined();
+    expect(
+      snapshot.edges.find(
+        (edge) =>
+          edge.sourceId === bridge?.id &&
+          edge.referenceName === "CalendarModule.createEvent:" &&
+          edge.targetId === extensionMethod?.id
+      )
+    ).toMatchObject({
+      resolution: "exact",
+      confidence: 1,
+      evidence: expect.objectContaining({
+        ruleId:
+          "framework.react-native.swift-extern.xcode-target.explicit-objc-class-and-selector.exact-target",
+        stage: "module",
+        configurationPaths: ["ios/App.xcodeproj/project.pbxproj"]
+      })
+    });
+  });
+
+  it("keeps cross-file Swift extensions unresolved without one shared Xcode target", () => {
+    const sourceDocuments: readonly SourceDocument[] = [
+      {
+        absolutePath: "C:/project/ios/CalendarModuleExport.m",
+        relativePath: "ios/CalendarModuleExport.m",
+        language: "objc",
+        sourceText: [
+          "#import <React/RCTBridgeModule.h>",
+          "@interface RCT_EXTERN_MODULE(CalendarModule, NSObject)",
+          "RCT_EXTERN_METHOD(createEvent:(NSString *)name)",
+          "@end"
+        ].join("\n"),
+        contentHash: "unproven-cross-file-bridge"
+      },
+      {
+        absolutePath: "C:/project/ios/CalendarModule.swift",
+        relativePath: "ios/CalendarModule.swift",
+        language: "swift",
+        sourceText: [
+          "@objc(CalendarModule)",
+          "final class CalendarModule: NSObject {}"
+        ].join("\n"),
+        contentHash: "unproven-cross-file-type"
+      },
+      {
+        absolutePath: "C:/project/ios/CalendarModule+Extras.swift",
+        relativePath: "ios/CalendarModule+Extras.swift",
+        language: "swift",
+        sourceText: [
+          "extension CalendarModule {",
+          "  @objc(createEvent:)",
+          "  func writeEvent(name: String) {}",
+          "}"
+        ].join("\n"),
+        contentHash: "unproven-cross-file-extension"
+      }
+    ];
+    const extractedFiles = sourceDocuments.map((document) =>
+      extractFileFacts({
+        filePath: document.relativePath,
+        language: document.language,
+        sourceText: document.sourceText
+      })
+    );
+    const withoutTargetEvidence = resolveProjectFacts({
+      sourceDocuments,
+      extractedFiles,
+      indexedAt: "2026-08-02T00:00:00.000Z"
+    });
+    const ambiguousTargetEvidence = resolveProjectFacts({
+      sourceDocuments,
+      extractedFiles,
+      indexedAt: "2026-08-02T00:00:00.000Z",
+      xcodeTargetMemberships: ["FIRST", "SECOND"].flatMap((targetName) =>
+        [
+          "ios/CalendarModuleExport.m",
+          "ios/CalendarModule.swift",
+          "ios/CalendarModule+Extras.swift"
+        ].map((filePath) => ({
+          filePath,
+          targetId: `ios/App.xcodeproj/project.pbxproj#${targetName}`,
+          configurationPath: "ios/App.xcodeproj/project.pbxproj"
+        }))
+      )
+    });
+    const extensionMethod = extractedFiles
+      .flatMap((facts) => facts.symbols)
+      .find(
+        (symbol) =>
+          symbol.filePath === "ios/CalendarModule+Extras.swift" && symbol.name === "writeEvent"
+      );
+    const unresolved = withoutTargetEvidence.edges.find(
+      (edge) => edge.referenceName === "CalendarModule.createEvent:"
+    );
+    const ambiguous = ambiguousTargetEvidence.edges.find(
+      (edge) => edge.referenceName === "CalendarModule.createEvent:"
+    );
+
+    expect(unresolved).toMatchObject({
+      targetId: null,
+      resolution: "unresolved",
+      confidence: 0,
+      evidence: expect.objectContaining({
+        ruleId:
+          "framework.react-native.swift-extern.xcode-target.explicit-objc-class-and-selector.unresolved-target",
+        candidateSymbolIds: [extensionMethod?.id]
+      })
+    });
+    expect(ambiguous).toMatchObject({
+      targetId: null,
+      resolution: "unresolved",
+      confidence: 0,
+      evidence: expect.objectContaining({
+        ruleId:
+          "framework.react-native.swift-extern.xcode-target.explicit-objc-class-and-selector.ambiguous-target",
+        candidateSymbolIds: [extensionMethod?.id],
+        configurationPaths: ["ios/App.xcodeproj/project.pbxproj"]
+      })
+    });
+  });
+
   it("keeps unmatched and colliding Swift external bridge identities unresolved", () => {
     const sourceDocuments: readonly SourceDocument[] = [
       {

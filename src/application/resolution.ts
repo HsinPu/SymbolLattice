@@ -36,14 +36,17 @@ import {
   type RustActixServiceConfigRouteFact,
   type ReactNativeNativeMethodFact,
   type SourceRange,
+  type SwiftObjectiveCExtensionMethodFact,
   type SwiftObjectiveCMethodFact,
+  type SwiftObjectiveCTypeFact,
   type SymbolNode
 } from "../domain/index.js";
 import type { ExtractedFileFacts } from "../extraction/index.js";
 import type {
   ProjectModuleResolver,
   ResolvedModule,
-  SourceDocument
+  SourceDocument,
+  XcodeTargetMembership
 } from "../ports/source-catalog.js";
 
 function normalizedParts(fromFilePath: string, moduleSpecifier: string): string[] | null {
@@ -367,16 +370,144 @@ function reactNativeSwiftExternalBridgeRuleId(
   return `framework.react-native.swift-extern.direct-objc-class-and-selector.${suffix}`;
 }
 
+function reactNativeSwiftXcodeExternalBridgeRuleId(
+  suffix: ReactNativeSwiftExternalBridgeRuleSuffix
+): string {
+  return `framework.react-native.swift-extern.xcode-target.explicit-objc-class-and-selector.${suffix}`;
+}
+
+interface SwiftExternalBridgeCandidate {
+  readonly candidateKey: string;
+  readonly methodId: string;
+  readonly source: "direct" | "same-file-extension" | "xcode-target-extension";
+  readonly configurationPaths: readonly string[];
+}
+
+interface UnprovenSwiftExternalBridgeCandidate {
+  readonly candidateKey: string;
+  readonly methodId: string;
+  readonly reason: "unresolved" | "ambiguous";
+  readonly configurationPaths: readonly string[];
+}
+
+function swiftTypeCandidateKey(type: SwiftObjectiveCTypeFact): string {
+  return [
+    type.filePath,
+    type.range.start.line,
+    type.range.start.column,
+    type.range.end.line,
+    type.range.end.column
+  ].join("\u0000");
+}
+
+function uniqueSwiftExternalBridgeCandidates(
+  candidates: readonly SwiftExternalBridgeCandidate[]
+): readonly SwiftExternalBridgeCandidate[] {
+  const byKey = new Map<string, SwiftExternalBridgeCandidate>();
+  for (const candidate of candidates) {
+    if (!byKey.has(candidate.candidateKey)) {
+      byKey.set(candidate.candidateKey, candidate);
+    }
+  }
+  return [...byKey.values()].sort((left, right) =>
+    compareStableText(left.candidateKey, right.candidateKey)
+  );
+}
+
+function uniqueUnprovenSwiftExternalBridgeCandidates(
+  candidates: readonly UnprovenSwiftExternalBridgeCandidate[]
+): readonly UnprovenSwiftExternalBridgeCandidate[] {
+  const byKey = new Map<string, UnprovenSwiftExternalBridgeCandidate>();
+  for (const candidate of candidates) {
+    if (!byKey.has(candidate.candidateKey)) {
+      byKey.set(candidate.candidateKey, candidate);
+    }
+  }
+  return [...byKey.values()].sort((left, right) =>
+    compareStableText(left.candidateKey, right.candidateKey)
+  );
+}
+
+function xcodeTargetMembershipsByFile(
+  memberships: readonly XcodeTargetMembership[] | undefined
+): ReadonlyMap<string, readonly XcodeTargetMembership[]> {
+  const membershipsByFile = new Map<string, Map<string, XcodeTargetMembership>>();
+  for (const membership of memberships ?? []) {
+    const byTarget = membershipsByFile.get(membership.filePath) ?? new Map<string, XcodeTargetMembership>();
+    const key = `${membership.targetId}\u0000${membership.configurationPath}`;
+    if (!byTarget.has(key)) {
+      byTarget.set(key, membership);
+    }
+    membershipsByFile.set(membership.filePath, byTarget);
+  }
+  return new Map(
+    [...membershipsByFile.entries()].map(([filePath, byTarget]) => [
+      filePath,
+      [...byTarget.values()].sort((left, right) =>
+        compareStableText(
+          `${left.targetId}\u0000${left.configurationPath}`,
+          `${right.targetId}\u0000${right.configurationPath}`
+        )
+      )
+    ])
+  );
+}
+
+/**
+ * A target name is not sufficient evidence by itself: the bridge declaration,
+ * Swift type, and extension implementation must all share exactly one native
+ * target record from the same `.pbxproj` revision.
+ */
+function sharedXcodeTargetMemberships(input: {
+  readonly bridgeFilePath: string;
+  readonly typeFilePath: string;
+  readonly extensionFilePath: string;
+  readonly membershipsByFile: ReadonlyMap<string, readonly XcodeTargetMembership[]>;
+}): readonly XcodeTargetMembership[] {
+  const bridgeMemberships = input.membershipsByFile.get(input.bridgeFilePath) ?? [];
+  const typeMemberships = input.membershipsByFile.get(input.typeFilePath) ?? [];
+  const extensionMemberships = input.membershipsByFile.get(input.extensionFilePath) ?? [];
+  const shared: XcodeTargetMembership[] = [];
+  for (const bridgeMembership of bridgeMemberships) {
+    const matchingTypeMemberships = typeMemberships.filter(
+      (membership) => membership.targetId === bridgeMembership.targetId
+    );
+    const matchingExtensionMemberships = extensionMemberships.filter(
+      (membership) => membership.targetId === bridgeMembership.targetId
+    );
+    if (matchingTypeMemberships.length !== 1 || matchingExtensionMemberships.length !== 1) {
+      continue;
+    }
+    const typeMembership = matchingTypeMemberships[0];
+    const extensionMembership = matchingExtensionMemberships[0];
+    if (
+      typeMembership === undefined ||
+      extensionMembership === undefined ||
+      typeMembership.configurationPath !== bridgeMembership.configurationPath ||
+      extensionMembership.configurationPath !== bridgeMembership.configurationPath
+    ) {
+      continue;
+    }
+    shared.push(bridgeMembership);
+  }
+  return shared.sort((left, right) => compareStableText(left.targetId, right.targetId));
+}
+
 /**
  * Links an external Objective-C React Native bridge declaration to Swift source
  * only when both an explicit `@objc(Class)` and `@objc(selector)` match one
- * unique implementation. The JavaScript call remains linked to the bridge
- * declaration, preserving the distinct runtime boundary.
+ * unique implementation. A same-file extension is lexically direct; a
+ * cross-file extension also requires one shared Xcode native target. The
+ * JavaScript call remains linked to the bridge declaration, preserving the
+ * distinct runtime boundary.
  */
 function projectReactNativeSwiftExternalBridgeReferences(input: {
   readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
+  readonly xcodeTargetMemberships?: readonly XcodeTargetMembership[];
 }): readonly GraphEdge[] {
   const swiftMethodsByIdentity = new Map<string, SwiftObjectiveCMethodFact[]>();
+  const swiftTypesByName = new Map<string, SwiftObjectiveCTypeFact[]>();
+  const swiftExtensionMethodsBySelector = new Map<string, SwiftObjectiveCExtensionMethodFact[]>();
   for (const [, facts] of [...input.factsByFile.entries()].sort(([left], [right]) =>
     compareStableText(left, right)
   )) {
@@ -386,8 +517,19 @@ function projectReactNativeSwiftExternalBridgeReferences(input: {
       candidates.push(method);
       swiftMethodsByIdentity.set(key, candidates);
     }
+    for (const type of facts.swiftObjectiveCFacts?.types ?? []) {
+      const candidates = swiftTypesByName.get(type.swiftTypeName) ?? [];
+      candidates.push(type);
+      swiftTypesByName.set(type.swiftTypeName, candidates);
+    }
+    for (const method of facts.swiftObjectiveCFacts?.extensionMethods ?? []) {
+      const candidates = swiftExtensionMethodsBySelector.get(method.selector) ?? [];
+      candidates.push(method);
+      swiftExtensionMethodsBySelector.set(method.selector, candidates);
+    }
   }
 
+  const membershipsByFile = xcodeTargetMembershipsByFile(input.xcodeTargetMemberships);
   const edges: GraphEdge[] = [];
   for (const [, facts] of [...input.factsByFile.entries()].sort(([left], [right]) =>
     compareStableText(left, right)
@@ -400,17 +542,94 @@ function projectReactNativeSwiftExternalBridgeReferences(input: {
         )
     );
     for (const bridge of bridges) {
-      const candidates = [
+      const exactCandidates: SwiftExternalBridgeCandidate[] = [
         ...(swiftMethodsByIdentity.get(
           reactNativeSwiftExternalBridgeKey(bridge.objcClassName, bridge.selector)
-        ) ?? [])
+        ) ?? []).map((method) => ({
+          candidateKey: `direct\u0000${method.methodId}`,
+          methodId: method.methodId,
+          source: "direct" as const,
+          configurationPaths: []
+        }))
+      ];
+      const unprovenCandidates: UnprovenSwiftExternalBridgeCandidate[] = [];
+      const extensionMethods = [
+        ...(swiftExtensionMethodsBySelector.get(bridge.selector) ?? [])
       ].sort((left, right) => compareStableText(left.methodId, right.methodId));
+      for (const extensionMethod of extensionMethods) {
+        const typeCandidates = [
+          ...(swiftTypesByName.get(extensionMethod.extendedTypeName) ?? [])
+        ].sort((left, right) => compareStableText(swiftTypeCandidateKey(left), swiftTypeCandidateKey(right)));
+        const sameFileTypes = typeCandidates.filter(
+          (type) => type.filePath === extensionMethod.filePath
+        );
+        if (sameFileTypes.length === 1 && sameFileTypes[0] !== undefined) {
+          const sameFileType = sameFileTypes[0];
+          if (sameFileType.objcClassName === bridge.objcClassName) {
+            exactCandidates.push({
+              candidateKey: `same-file-extension\u0000${extensionMethod.methodId}\u0000${swiftTypeCandidateKey(sameFileType)}`,
+              methodId: extensionMethod.methodId,
+              source: "same-file-extension",
+              configurationPaths: []
+            });
+          }
+          continue;
+        }
+        if (sameFileTypes.length > 1) {
+          if (sameFileTypes.some((type) => type.objcClassName === bridge.objcClassName)) {
+            unprovenCandidates.push({
+              candidateKey: `same-file-extension\u0000${extensionMethod.methodId}`,
+              methodId: extensionMethod.methodId,
+              reason: "ambiguous",
+              configurationPaths: []
+            });
+          }
+          continue;
+        }
+
+        for (const type of typeCandidates) {
+          if (type.objcClassName !== bridge.objcClassName) {
+            continue;
+          }
+          const sharedMemberships = sharedXcodeTargetMemberships({
+            bridgeFilePath: bridge.filePath,
+            typeFilePath: type.filePath,
+            extensionFilePath: extensionMethod.filePath,
+            membershipsByFile
+          });
+          const candidateKey = `xcode-target-extension\u0000${extensionMethod.methodId}\u0000${swiftTypeCandidateKey(type)}`;
+          if (sharedMemberships.length === 1 && sharedMemberships[0] !== undefined) {
+            exactCandidates.push({
+              candidateKey,
+              methodId: extensionMethod.methodId,
+              source: "xcode-target-extension",
+              configurationPaths: [sharedMemberships[0].configurationPath]
+            });
+            continue;
+          }
+          unprovenCandidates.push({
+            candidateKey,
+            methodId: extensionMethod.methodId,
+            reason: sharedMemberships.length > 1 ? "ambiguous" : "unresolved",
+            configurationPaths: sharedMemberships.map(
+              (membership) => membership.configurationPath
+            )
+          });
+        }
+      }
+
+      const candidates = uniqueSwiftExternalBridgeCandidates(exactCandidates);
+      const unproven = uniqueUnprovenSwiftExternalBridgeCandidates(unprovenCandidates);
       const referenceName = reactNativeSwiftExternalBridgeReferenceName(
         bridge.objcClassName,
         bridge.selector
       );
       if (candidates.length === 1 && candidates[0] !== undefined) {
         const target = candidates[0];
+        const ruleId =
+          target.source === "xcode-target-extension"
+            ? reactNativeSwiftXcodeExternalBridgeRuleId("exact-target")
+            : reactNativeSwiftExternalBridgeRuleId("exact-target");
         edges.push({
           id: createEdgeId({
             sourceId: bridge.methodId,
@@ -429,9 +648,50 @@ function projectReactNativeSwiftExternalBridgeReferences(input: {
           confidence: 1,
           referenceName,
           evidence: referenceEvidence(
-            reactNativeSwiftExternalBridgeRuleId("exact-target"),
+            ruleId,
             "module",
-            [target.methodId]
+            [target.methodId],
+            target.configurationPaths
+          )
+        });
+        continue;
+      }
+
+      if (candidates.length > 1 || unproven.length > 0) {
+        const hasXcodeCandidate =
+          unproven.length > 0 || candidates.some((candidate) => candidate.source === "xcode-target-extension");
+        const xcodeAmbiguous =
+          unproven.some((candidate) => candidate.reason === "ambiguous") || candidates.length > 1;
+        const unresolvedCandidates = candidates.length > 0 ? candidates : unproven;
+        const configurationPaths = unresolvedCandidates.flatMap(
+          (candidate) => candidate.configurationPaths
+        );
+        edges.push({
+          id: createEdgeId({
+            sourceId: bridge.methodId,
+            targetId: null,
+            kind: "references",
+            line: bridge.range.start.line,
+            column: bridge.range.start.column,
+            referenceName
+          }),
+          sourceId: bridge.methodId,
+          targetId: null,
+          kind: "references",
+          filePath: bridge.filePath,
+          range: bridge.range,
+          resolution: "unresolved",
+          confidence: 0,
+          referenceName,
+          evidence: referenceEvidence(
+            hasXcodeCandidate
+              ? reactNativeSwiftXcodeExternalBridgeRuleId(
+                  xcodeAmbiguous ? "ambiguous-target" : "unresolved-target"
+                )
+              : reactNativeSwiftExternalBridgeRuleId("ambiguous-target"),
+            "unresolved",
+            unresolvedCandidates.map((candidate) => candidate.methodId),
+            configurationPaths
           )
         });
         continue;
@@ -455,11 +715,9 @@ function projectReactNativeSwiftExternalBridgeReferences(input: {
         confidence: 0,
         referenceName,
         evidence: referenceEvidence(
-          reactNativeSwiftExternalBridgeRuleId(
-            candidates.length === 0 ? "unresolved-target" : "ambiguous-target"
-          ),
+          reactNativeSwiftExternalBridgeRuleId("unresolved-target"),
           "unresolved",
-          candidates.map((candidate) => candidate.methodId)
+          []
         )
       });
     }
@@ -5847,6 +6105,8 @@ export function resolveProjectFacts(input: {
   readonly indexedAt: string;
   /** Optional for v0.2-compatible callers; the catalog supplies it for indexed projects. */
   readonly moduleResolver?: ProjectModuleResolver;
+  /** Optional for callers predating Xcode target membership evidence. */
+  readonly xcodeTargetMemberships?: readonly XcodeTargetMembership[];
 }): GraphSnapshot {
   const symbols = input.extractedFiles.flatMap((facts) => facts.symbols);
   const structuralEdges = input.extractedFiles.flatMap((facts) => facts.edges);
@@ -5929,7 +6189,10 @@ export function resolveProjectFacts(input: {
   );
   resolvedEdges.push(
     ...projectReactNativeSwiftExternalBridgeReferences({
-      factsByFile
+      factsByFile,
+      ...(input.xcodeTargetMemberships === undefined
+        ? {}
+        : { xcodeTargetMemberships: input.xcodeTargetMemberships })
     })
   );
   resolvedEdges.push(

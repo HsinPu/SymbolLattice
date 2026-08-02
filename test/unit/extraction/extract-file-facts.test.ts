@@ -13934,10 +13934,26 @@ describe("source extraction", () => {
         filePath: "ios/CalendarModule.swift"
       })
     ]);
-    expect(implicit.swiftObjectiveCFacts).toBeUndefined();
+    expect(explicit.swiftObjectiveCFacts?.types).toEqual([
+      expect.objectContaining({
+        swiftTypeName: "CalendarModule",
+        objcClassName: "CalendarModule",
+        filePath: "ios/CalendarModule.swift"
+      })
+    ]);
+    expect(implicit.swiftObjectiveCFacts).toMatchObject({
+      methods: [],
+      types: [
+        expect.objectContaining({
+          swiftTypeName: "AnotherModule",
+          objcClassName: "AnotherModule",
+          filePath: "ios/ImplicitCalendarModule.swift"
+        })
+      ]
+    });
   });
 
-  it("extracts direct Swift extension methods and only proves their bridge identity from one same-file explicit class", () => {
+  it("extracts direct Swift extension methods as separate class-and-selector facts", () => {
     const sameFile = extractFileFacts({
       filePath: "ios/CalendarModule.swift",
       language: "swift",
@@ -14002,20 +14018,57 @@ describe("source extraction", () => {
       "ios/CalendarModule.swift#extension:CalendarModule.inferredName",
       "ios/CalendarModule.swift#extension:MissingModule.removeStoredEvent"
     ]);
-    expect(sameFile.swiftObjectiveCFacts?.methods).toEqual([
-      expect.objectContaining({
-        objcClassName: "CalendarModule",
-        selector: "createEvent:withFoo:",
-        filePath: "ios/CalendarModule.swift"
-      })
-    ]);
+    expect(sameFile.swiftObjectiveCFacts).toMatchObject({
+      methods: [],
+      types: [
+        expect.objectContaining({
+          swiftTypeName: "CalendarModule",
+          objcClassName: "CalendarModule",
+          filePath: "ios/CalendarModule.swift"
+        })
+      ],
+      extensionMethods: [
+        expect.objectContaining({
+          extendedTypeName: "CalendarModule",
+          selector: "createEvent:withFoo:",
+          filePath: "ios/CalendarModule.swift"
+        }),
+        expect.objectContaining({
+          extendedTypeName: "MissingModule",
+          selector: "remove:",
+          filePath: "ios/CalendarModule.swift"
+        })
+      ]
+    });
     expect(
       separateFile.symbols
         .filter((symbol) => symbol.kind === "method")
         .map((symbol) => symbol.qualifiedName)
     ).toEqual(["ios/CalendarModule+Extras.swift#extension:CalendarModule.writeEvent"]);
-    expect(separateFile.swiftObjectiveCFacts).toBeUndefined();
-    expect(duplicateClass.swiftObjectiveCFacts).toBeUndefined();
+    expect(separateFile.swiftObjectiveCFacts).toMatchObject({
+      methods: [],
+      extensionMethods: [
+        expect.objectContaining({
+          extendedTypeName: "CalendarModule",
+          selector: "createEvent:",
+          filePath: "ios/CalendarModule+Extras.swift"
+        })
+      ]
+    });
+    expect(duplicateClass.swiftObjectiveCFacts).toMatchObject({
+      methods: [],
+      types: [
+        expect.objectContaining({ swiftTypeName: "CalendarModule", objcClassName: "CalendarModule" }),
+        expect.objectContaining({ swiftTypeName: "CalendarModule", objcClassName: null })
+      ],
+      extensionMethods: [
+        expect.objectContaining({
+          extendedTypeName: "CalendarModule",
+          selector: "createEvent:",
+          filePath: "ios/DuplicateCalendarModule.swift"
+        })
+      ]
+    });
   });
 
   it("extracts direct Dart Flutter MaterialApp literal routes maps with exact local evidence", () => {

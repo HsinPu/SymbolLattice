@@ -11,13 +11,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v174";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v175";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v62";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v63";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -842,9 +842,39 @@ export interface SwiftObjectiveCMethodFact {
   readonly range: SourceRange;
 }
 
+/**
+ * A direct Swift type declaration relevant to an explicit Objective-C bridge.
+ * `objcClassName` is null when a same-file extension has a direct local type
+ * but that type does not provide an explicit Objective-C class identity.
+ */
+export interface SwiftObjectiveCTypeFact {
+  readonly swiftTypeName: string;
+  readonly objcClassName: string | null;
+  readonly filePath: string;
+  readonly range: SourceRange;
+}
+
+/**
+ * A direct Swift extension implementation with an explicit selector. Its
+ * Objective-C class identity remains unresolved until a project-level rule
+ * proves the extended Swift type.
+ */
+export interface SwiftObjectiveCExtensionMethodFact {
+  readonly extendedTypeName: string;
+  readonly selector: string;
+  /** Stable symbol identity of the Swift extension implementation method. */
+  readonly methodId: string;
+  readonly filePath: string;
+  readonly range: SourceRange;
+}
+
 /** Syntax-only Swift Objective-C interop facts. */
 export interface SwiftObjectiveCFacts {
   readonly methods: readonly SwiftObjectiveCMethodFact[];
+  /** Omitted by raw facts persisted before v0.196. */
+  readonly types?: readonly SwiftObjectiveCTypeFact[];
+  /** Omitted by raw facts persisted before v0.196. */
+  readonly extensionMethods?: readonly SwiftObjectiveCExtensionMethodFact[];
 }
 
 /**

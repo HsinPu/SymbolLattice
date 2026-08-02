@@ -2554,7 +2554,10 @@ export class SymbolLatticeService {
       sourceDocuments: scan.sourceDocuments,
       extractedFiles: artifactFacts,
       indexedAt,
-      moduleResolver: scan.moduleResolver
+      moduleResolver: scan.moduleResolver,
+      ...(scan.xcodeTargetMemberships === undefined
+        ? {}
+        : { xcodeTargetMemberships: scan.xcodeTargetMemberships })
     });
     this.graphStore.replaceProjectFacts({
       projectPath,

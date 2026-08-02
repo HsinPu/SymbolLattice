@@ -18,6 +18,7 @@ import { createGoModuleProjectModuleResolver } from "./go-module.js";
 import { buildProjectIndexInputs } from "./project-inputs.js";
 import { createWorkspaceProjectModuleResolver } from "./workspace.js";
 import { detectAstroProject } from "./astro-project.js";
+import { detectXcodeProjectEvidence } from "./xcode-project.js";
 
 function mergeConfigurationPaths(
   ...configurationPathGroups: readonly (readonly string[])[]
@@ -58,6 +59,7 @@ export class FileSystemSourceCatalog implements SourceCatalog {
       sourceDocuments
     });
     const astroProject = await detectAstroProject(normalizedProjectPath);
+    const xcodeProject = await detectXcodeProjectEvidence(normalizedProjectPath, sourceDocuments);
     const inputOptions =
       options?.scopeRoots === undefined
         ? {
@@ -66,7 +68,8 @@ export class FileSystemSourceCatalog implements SourceCatalog {
               ...workspaceResolver.configurationInputs,
               ...cargoWorkspaceResolver.configurationInputs,
               ...goModuleResolver.configurationInputs,
-              ...astroProject.configurationInputs
+              ...astroProject.configurationInputs,
+              ...xcodeProject.configurationInputs
             ]
           }
         : {
@@ -76,7 +79,8 @@ export class FileSystemSourceCatalog implements SourceCatalog {
               ...workspaceResolver.configurationInputs,
               ...cargoWorkspaceResolver.configurationInputs,
               ...goModuleResolver.configurationInputs,
-              ...astroProject.configurationInputs
+              ...astroProject.configurationInputs,
+              ...xcodeProject.configurationInputs
             ]
           };
     const indexInputs = await buildProjectIndexInputs(normalizedProjectPath, inputOptions);
@@ -85,6 +89,7 @@ export class FileSystemSourceCatalog implements SourceCatalog {
       sourceDocuments,
       indexInputs,
       frameworkEvidence: { astro: astroProject.enabled },
+      xcodeTargetMemberships: xcodeProject.targetMemberships,
       moduleResolver: {
         resolve(fromFilePath, moduleSpecifier) {
           if (fromFilePath.endsWith(".go")) {

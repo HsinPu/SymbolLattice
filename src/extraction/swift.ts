@@ -8,7 +8,9 @@ import {
   type RouteMethod,
   type SourcePosition,
   type SourceRange,
+  type SwiftObjectiveCExtensionMethodFact,
   type SwiftObjectiveCMethodFact,
+  type SwiftObjectiveCTypeFact,
   type SymbolNode
 } from "../domain/index.js";
 import { frameworkCapability } from "./framework-capabilities.js";
@@ -518,6 +520,8 @@ export function extractSwiftFileFacts(input: SwiftExtractFileFactsInput): Artifa
   const symbols: SymbolNode[] = [];
   const edges: GraphEdge[] = [];
   const swiftObjectiveCMethods: SwiftObjectiveCMethodFact[] = [];
+  const swiftObjectiveCTypes: SwiftObjectiveCTypeFact[] = [];
+  const swiftObjectiveCExtensionMethods: SwiftObjectiveCExtensionMethodFact[] = [];
   const declarationOrdinals = new Map<string, number>();
   const fileName = input.filePath.split(/[\\/]/u).at(-1) ?? input.filePath;
   const fileNode: SymbolNode = {
@@ -729,19 +733,20 @@ export function extractSwiftFileFacts(input: SwiftExtractFileFactsInput): Artifa
       .map((node) => staticSwiftFunction(node))
       .filter((candidate): candidate is StaticSwiftFunction => candidate !== null);
     const functionsByName = new Map<string, SymbolNode[]>();
-    const classesBySwiftName = new Map<string, StaticSwiftType[]>();
-
-    for (const declaration of topLevelTypes) {
-      if (declaration.kind !== "class") {
-        continue;
-      }
-      const candidates = classesBySwiftName.get(declaration.name) ?? [];
-      candidates.push(declaration);
-      classesBySwiftName.set(declaration.name, candidates);
-    }
+    const extendedTypeNames = new Set(
+      topLevelExtensions.map((declaration) => declaration.extendedTypeName)
+    );
 
     for (const declaration of topLevelTypes) {
       const typeSymbol = addType(declaration);
+      if (declaration.objcClassName !== null || extendedTypeNames.has(declaration.name)) {
+        swiftObjectiveCTypes.push({
+          swiftTypeName: declaration.name,
+          objcClassName: declaration.objcClassName,
+          filePath: input.filePath,
+          range: typeSymbol.range
+        });
+      }
       for (const methodDeclaration of directChildren(declaration.body)
         .map((node) => staticSwiftFunction(node))
         .filter((candidate): candidate is StaticSwiftFunction => candidate !== null)) {
@@ -764,20 +769,16 @@ export function extractSwiftFileFacts(input: SwiftExtractFileFactsInput): Artifa
 
     for (const declaration of topLevelExtensions) {
       const extensionSymbol = addExtension(declaration);
-      const candidateClasses = classesBySwiftName.get(declaration.extendedTypeName) ?? [];
-      const candidateClass = candidateClasses.length === 1 ? candidateClasses[0] : undefined;
       for (const methodDeclaration of directChildren(declaration.body)
         .map((node) => staticSwiftFunction(node))
         .filter((candidate): candidate is StaticSwiftFunction => candidate !== null)) {
         const methodSymbol = addMethod(extensionSymbol, methodDeclaration);
         if (
-          candidateClass?.objcClassName !== null &&
-          candidateClass?.objcClassName !== undefined &&
           methodDeclaration.objcSelector !== null &&
           methodDeclaration.body !== null
         ) {
-          swiftObjectiveCMethods.push({
-            objcClassName: candidateClass.objcClassName,
+          swiftObjectiveCExtensionMethods.push({
+            extendedTypeName: declaration.extendedTypeName,
             selector: methodDeclaration.objcSelector,
             methodId: methodSymbol.id,
             filePath: input.filePath,
@@ -837,8 +838,18 @@ export function extractSwiftFileFacts(input: SwiftExtractFileFactsInput): Artifa
       routes: [],
       importedRouterInclusions: []
     },
-    ...(swiftObjectiveCMethods.length === 0
+    ...(swiftObjectiveCMethods.length === 0 &&
+    swiftObjectiveCTypes.length === 0 &&
+    swiftObjectiveCExtensionMethods.length === 0
       ? {}
-      : { swiftObjectiveCFacts: { methods: swiftObjectiveCMethods } })
+      : {
+          swiftObjectiveCFacts: {
+            methods: swiftObjectiveCMethods,
+            ...(swiftObjectiveCTypes.length === 0 ? {} : { types: swiftObjectiveCTypes }),
+            ...(swiftObjectiveCExtensionMethods.length === 0
+              ? {}
+              : { extensionMethods: swiftObjectiveCExtensionMethods })
+          }
+        })
   };
 }

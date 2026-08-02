@@ -6,6 +6,27 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.196.0] - 2026-08-02
+
+### Added
+
+- In-project <code>.xcodeproj/project.pbxproj</code> files are now parsed as bounded ASCII/OpenStep configuration evidence. SymbolLattice retains only a native target's direct <code>PBXSourcesBuildPhase</code> membership when its <code>PBXFileReference</code> safely resolves to an indexed source document.
+- Swift extraction now persists separate direct type facts and explicit Objective-C extension-selector facts. This keeps a cross-file extension's class identity unresolved until project evidence proves it instead of baking in a name match during extraction.
+- A React Native <code>RCT_EXTERN_*</code> bridge now reaches a split Swift class and extension only when the bridge, the explicit <code>@objc(Class)</code> type, and the explicit <code>@objc(selector)</code> extension method share exactly one Xcode native target. The resulting edge includes the participating <code>project.pbxproj</code> path.
+- Xcode configuration-only changes now invalidate the graph projection, reuse unchanged SQLite artifact facts, and preserve a missing or ambiguous cross-file target as an explicit unresolved edge. Parser, resolver, and SQLite-backed service tests cover exact, missing, ambiguous, malformed, and changed target evidence.
+
+### Compatibility
+
+- The artifact-facts extractor advances to <code>multi-language-ast-v175</code>, the project resolver advances to <code>project-resolver-v63</code>, and project index inputs advance to <code>project-inputs-v6</code>. Existing graphs and SQLite schema remain readable; the next explicit <code>sync</code> or <code>index</code> refreshes the Swift facts and Xcode configuration evidence.
+
+### Deliberate limits
+
+- This is static project-file evidence, not an Xcode build or type-check. It accepts direct <code>PBXNativeTarget</code> source build phases and safely resolvable <code>PBXFileReference</code> paths through <code>PBXGroup</code> or <code>SOURCE_ROOT</code>. Unsupported or malformed OpenStep syntax, non-source phases, unresolved paths, zero/multiple shared targets, runtime registration, generated code, and type-name-only matches remain unproven.
+
+### Comparison notes
+
+- The inspected CodeGraph baseline has a generic Swift-to-Objective-C selector path and legacy React Native <code>RCT_EXPORT_*</code> support, but no corresponding <code>RCT_EXTERN_*</code> extractor or Xcode target-membership join. SymbolLattice independently adds this bounded three-file proof chain. This is stronger only for this specifically evidenced external-bridge case, not a claim of broader overall React Native or Xcode coverage.
+
 ## [0.195.0] - 2026-08-02
 
 ### Added

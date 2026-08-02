@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.195.0 is a developer preview. Run it from source.
+> v0.196.0 is a developer preview. Run it from source.
 
 SymbolLattice builds a queryable local code-symbol graph. Every relation retains its rule, evidence stage, and confidence; exact, heuristic, and unresolved evidence are never conflated.
 
@@ -41,12 +41,12 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 On Windows PowerShell, use `npm.cmd` if npm is unavailable. Index data stays in the target project's `.symbol-lattice/index.sqlite`.
 
-## v0.195.0 highlights
+## v0.196.0 highlights
 
-- Direct Swift `extension TypeName` declarations and their direct methods now remain queryable syntax containers; they are never misrepresented as inheritance.
-- An `RCT_EXTERN_*` bridge gains an exact, explainable Swift `references` edge only when one same-file top-level class explicitly declares `@objc(Class)` and the extension method explicitly declares `@objc(selector)`.
-- Extensions in another file, non-unique class candidates, bare `@objc`, and inferred selectors never use a name- or convention-based bridge fallback.
-- The expanded Swift interop facts persist in SQLite, so a reopened index can trace an Objective-C bridge to a Swift implementation inside an extension.
+- React Native `RCT_EXTERN_*` bridges can now reach a Swift class and extension split across files through an exact, explainable `references` edge.
+- A cross-file link requires explicit `@objc(Class)`, explicit `@objc(selector)`, and one shared Xcode native target containing the Objective-C bridge, Swift class, and Swift extension.
+- `.xcodeproj/project.pbxproj` is tracked as index configuration evidence. When target membership changes, a sync reprojects the graph while reusing unchanged raw facts.
+- Missing, conflicting, or unsafe target evidence remains `unresolved`; matching Swift type names alone never create a bridge edge.
 
 ## Principles
 
@@ -57,9 +57,9 @@ On Windows PowerShell, use `npm.cmd` if npm is unavailable. Index data stays in 
 ## Static-analysis boundaries
 
 - Only direct, single-line `RCT_EXTERN_MODULE`, `RCT_EXTERN_REMAP_MODULE`, and matching method macros are accepted.
-- Swift retains direct top-level `extension TypeName` declarations and their direct methods. An extension method becomes a bridge implementation only with one same-file, explicitly named `@objc(Class)` class and an explicit `@objc(selector)`; type names are never joined across files.
+- Swift retains direct top-level `extension TypeName` declarations and their direct methods. A cross-file bridge requires one shared Xcode `PBXNativeTarget` source target; a same-file direct class can still prove the relation through explicit syntax.
 - Bare `@objc`, inferred selectors, qualified or parameterized extension targets, wrapper macros, and dynamic registration are not guessed.
-- Build output, runtime registration, reflection, code generation, and ambiguous candidates are never presented as exact relations.
+- Only `PBXFileReference` source entries safely recovered from an Xcode `PBXSourcesBuildPhase` are used. SymbolLattice does not build Xcode projects, and build output, runtime registration, reflection, code generation, and ambiguous candidates are never presented as exact relations.
 
 ## Verification
 
