@@ -11926,6 +11926,85 @@ describe("SymbolLatticeService", () => {
     expect(search.results).toMatchObject([{ filePath: "src/Application.kt", language: "kotlin" }]);
   });
 
+  it("indexes Kotlin Spring Web controller routes as persisted exact method evidence", async () => {
+    const projectPath = await createInlineProject({
+      "src/api/StatusController.kt": [
+        "import org.springframework.web.bind.annotation.RestController",
+        "import org.springframework.web.bind.annotation.RequestMapping",
+        "import org.springframework.web.bind.annotation.GetMapping",
+        "import org.springframework.web.bind.annotation.PostMapping",
+        "",
+        "@RestController",
+        '@RequestMapping("/system")',
+        "class StatusController {",
+        '  @GetMapping("/health")',
+        '  fun health(): String = "ok"',
+        "",
+        '  @PostMapping(path = "/refresh")',
+        '  fun refresh(): String = "ok"',
+        "}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+    const getRoutes = await service.routes(projectPath, { method: "GET" });
+    const search = await service.search(projectPath, "health", { language: "kotlin" });
+    const persistedFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "src/api/StatusController.kt");
+
+    expect(persistedFacts).toMatchObject({
+      language: "kotlin",
+      extractorVersion: ARTIFACT_FACTS_EXTRACTOR_VERSION
+    });
+    expect(routes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "GET",
+          path: "/system/health",
+          handler: expect.objectContaining({
+            qualifiedName: "src/api/StatusController.kt#StatusController.health"
+          }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId:
+                "framework.spring-web.direct-kotlin-controller.literal-method-mapping.local-function",
+              stage: "syntax"
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "POST",
+          path: "/system/refresh",
+          handler: expect.objectContaining({
+            qualifiedName: "src/api/StatusController.kt#StatusController.refresh"
+          })
+        })
+      ])
+    );
+    expect(getRoutes.routes).toMatchObject([
+      {
+        method: "GET",
+        path: "/system/health",
+        handler: { qualifiedName: "src/api/StatusController.kt#StatusController.health" },
+        edge: {
+          resolution: "exact",
+          evidence: {
+            ruleId: "framework.spring-web.direct-kotlin-controller.literal-method-mapping.local-function",
+            stage: "syntax"
+          }
+        }
+      }
+    ]);
+    expect(search.results).toMatchObject([
+      { filePath: "src/api/StatusController.kt", language: "kotlin" }
+    ]);
+  });
+
   it("indexes NestJS decorator routes as persisted exact method evidence", async () => {
     const projectPath = await createInlineProject({
       "src/cats.controller.ts": [

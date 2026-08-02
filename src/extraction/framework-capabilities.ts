@@ -442,12 +442,12 @@ export const FRAMEWORK_CAPABILITIES = [
   },
   {
     id: "spring-web",
-    languages: ["java"],
+    languages: ["java", "kotlin"],
     routeFramework: "spring-web",
     routeRegistrations: [],
     surfaces: [
       "direct imported or fully-qualified Spring controller annotations",
-      "literal class and HTTP-method mapping annotations on direct local methods"
+      "literal class and HTTP-method mapping annotations on direct local Java methods or concrete Kotlin functions"
     ]
   },
   {

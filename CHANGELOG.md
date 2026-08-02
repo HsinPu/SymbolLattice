@@ -6,6 +6,26 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.182.0] - 2026-08-02
+
+### Added
+
+- Parser-backed Spring Web extraction now supports direct Kotlin controller routes. A direct top-level concrete class with one exact imported or fully-qualified <code>@RestController</code> or <code>@Controller</code> may contribute routes from one literal class <code>@RequestMapping</code> and one literal direct-function <code>@GetMapping</code>, <code>@PostMapping</code>, <code>@PutMapping</code>, <code>@PatchMapping</code>, or <code>@DeleteMapping</code> annotation.
+- Each accepted route is contained by its controller class and links with <code>exact</code> / <code>1.0</code> evidence to the direct concrete Kotlin function that handles it. Bare mappings, positional literals, and one <code>path =</code> or <code>value =</code> literal are supported; route-path joining is canonical and shared with the Java contract.
+- New unit, framework-capability, and persisted-service coverage proves imported and fully-qualified annotations, GET/POST/PUT/PATCH/DELETE routes, expression and block function bodies, source-search filtering, exact route evidence, and rejection of missing proof, wildcard imports, dynamic or multi-attribute paths, Kotlin objects, abstract functions, plain classes, and method-level <code>@RequestMapping</code>.
+
+### Compatibility
+
+- The artifact-facts extractor advances to <code>multi-language-ast-v162</code>. Existing graphs and SQLite schema remain readable; the next explicit <code>sync</code> or <code>index</code> re-extracts eligible Kotlin artifacts under the Spring Web route surface.
+
+### Deliberate limits
+
+- This is not general Kotlin or Spring route discovery. Nested declarations, Kotlin <code>object</code> controllers, interfaces, abstract/top-level functions, aliases/wildcard imports, composed annotations, dynamic/raw/escaped strings, arrays, multiple conditions, method-level <code>@RequestMapping</code>, runtime proxy registration, profiles, conditions, security, media types, path-variable semantics, and deployment routing remain outside analysis.
+
+### Comparison notes
+
+- The inspected CodeGraph Java framework resolver recognizes Spring Java and Kotlin source with text patterns and includes method-level <code>@RequestMapping</code> handling. It remains broader for permissive syntax coverage. SymbolLattice implements an independent AST-only Kotlin subset that proves the exact controller, annotation type, literal path shape, local concrete function, containment, source range, and evidence rule. For the supported surface SymbolLattice is more auditable; CodeGraph remains functionally broader.
+
 ## [0.181.0] - 2026-08-02
 
 ### Added

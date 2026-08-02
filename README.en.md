@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.181.0 is a developer preview and is not published to npm. Run it from source.
+> v0.182.0 is a developer preview and is not published to npm. Run it from source.
 
 SymbolLattice builds a queryable local code-symbol graph for a project. Every relation retains its rule, resolution stage, and confidence; `exact`, `heuristic`, and `unresolved` evidence are never conflated.
 
@@ -41,11 +41,11 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 On Windows PowerShell, use `npm.cmd` if `npm` is unavailable. Index data stays in the target project's `.symbol-lattice/index.sqlite`.
 
-## v0.181.0 highlights
+## v0.182.0 highlights
 
-- Spring `@ConfigurationProperties` now supports concrete `@Bean` functions in direct Kotlin `@Configuration` classes; prefix relations originate from the function symbol and are traceable to every configuration leaf.
-- `@Configuration`, `@Bean`, and `@ConfigurationProperties` each require an exact direct import or fully-qualified Spring name. The prefix must be one positional literal or one `prefix =` literal.
-- The established per-leaf resolver, `0.85` confidence, explicit unresolved ambiguity, source-value omission, and explicit-sync re-projection remain intact.
+- Spring Web now supports direct Kotlin controllers: one proven `@RestController` or `@Controller` class, one class-level `@RequestMapping`, and direct concrete functions with HTTP method mappings.
+- GET, POST, PUT, PATCH, and DELETE support bare annotations, one positional literal, or one `path =` / `value =` literal. Every route links to its local handler with `exact` evidence.
+- Annotations require an exact direct import or fully-qualified Spring name. Aliases, wildcard imports, dynamic or multi-attribute paths, Kotlin `object` controllers, abstract functions, and method-level `@RequestMapping` are deliberately excluded.
 
 ## Principles
 
@@ -55,6 +55,7 @@ On Windows PowerShell, use `npm.cmd` if `npm` is unavailable. Index data stays i
 
 ## Static-analysis boundaries
 
+- Spring Web supports direct top-level concrete Kotlin controllers and literal direct-function HTTP method annotations. Runtime routing, conditions, proxies, nested declarations, and method-level `@RequestMapping` remain out of scope.
 - Spring `@ConfigurationProperties` supports direct Java/Kotlin classes, direct top-level Java `record` declarations, and concrete Java/Kotlin `@Bean` members in direct `@Configuration` classes.
 - The factory-method path does not infer runtime bean registration or binding. Nested classes, Kotlin `object` factories, abstract/interface/top-level functions, alias or wildcard imports, `value =`, multiple attributes, dynamic prefixes, profiles, precedence, and environment overrides remain out of scope.
 

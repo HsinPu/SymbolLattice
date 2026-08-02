@@ -11962,6 +11962,244 @@ describe("source extraction", () => {
     ]);
   });
 
+  it("extracts direct Kotlin Spring Web literal controller method mappings with exact evidence", () => {
+    const importedFacts = extractFileFacts({
+      filePath: "src/api/KotlinControllers.kt",
+      language: "kotlin",
+      sourceText: [
+        "import org.springframework.web.bind.annotation.RestController",
+        "import org.springframework.web.bind.annotation.RequestMapping",
+        "import org.springframework.web.bind.annotation.GetMapping",
+        "import org.springframework.web.bind.annotation.PostMapping",
+        "import org.springframework.web.bind.annotation.PutMapping",
+        "import org.springframework.web.bind.annotation.PatchMapping",
+        "import org.springframework.web.bind.annotation.DeleteMapping",
+        "",
+        "@RestController",
+        '@RequestMapping("/api")',
+        "class UserController {",
+        "  @GetMapping",
+        "  fun list(): Int = 1",
+        '  @PostMapping(path = "/users")',
+        "  fun create() {}",
+        '  @PutMapping(value = "/{id}")',
+        "  fun replace() {}",
+        '  @PatchMapping("/{id}")',
+        "  fun patch() {}",
+        '  @DeleteMapping("/{id}")',
+        "  fun remove() {}",
+        "}"
+      ].join("\n")
+    });
+    const fullyQualifiedFacts = extractFileFacts({
+      filePath: "src/api/KotlinControllers.kt",
+      language: "kotlin",
+      sourceText: [
+        "@org.springframework.stereotype.Controller",
+        '@org.springframework.web.bind.annotation.RequestMapping(value = "/system")',
+        "class StatusController {",
+        '  @org.springframework.web.bind.annotation.GetMapping("/health")',
+        "  fun health() {}",
+        "}"
+      ].join("\n")
+    });
+    const symbolsById = new Map(
+      [...importedFacts.symbols, ...fullyQualifiedFacts.symbols].map((symbol) => [symbol.id, symbol])
+    );
+
+    expect(
+      [...importedFacts.edges, ...fullyQualifiedFacts.edges]
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId,
+          edge.evidence?.stage,
+          edge.resolution,
+          edge.confidence
+        ])
+    ).toEqual([
+      [
+        "GET /api",
+        "src/api/KotlinControllers.kt#UserController.list",
+        "framework.spring-web.direct-kotlin-controller.literal-method-mapping.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "POST /api/users",
+        "src/api/KotlinControllers.kt#UserController.create",
+        "framework.spring-web.direct-kotlin-controller.literal-method-mapping.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "PUT /api/{id}",
+        "src/api/KotlinControllers.kt#UserController.replace",
+        "framework.spring-web.direct-kotlin-controller.literal-method-mapping.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "PATCH /api/{id}",
+        "src/api/KotlinControllers.kt#UserController.patch",
+        "framework.spring-web.direct-kotlin-controller.literal-method-mapping.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "DELETE /api/{id}",
+        "src/api/KotlinControllers.kt#UserController.remove",
+        "framework.spring-web.direct-kotlin-controller.literal-method-mapping.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "GET /system/health",
+        "src/api/KotlinControllers.kt#StatusController.health",
+        "framework.spring-web.direct-kotlin-controller.literal-method-mapping.local-function",
+        "syntax",
+        "exact",
+        1
+      ]
+    ]);
+  });
+
+  it("rejects Kotlin Spring Web routes without strict controller, mapping, and literal proof", () => {
+    const rejected = [
+      [
+        "src/api/UnprovenMethod.kt",
+        [
+          "import org.springframework.web.bind.annotation.RestController",
+          "import org.springframework.web.bind.annotation.RequestMapping",
+          "",
+          "@RestController",
+          '@RequestMapping("/api")',
+          "class UnprovenMethod {",
+          '  @PostMapping("/orders")',
+          "  fun create() {}",
+          "}"
+        ].join("\n")
+      ],
+      [
+        "src/api/DynamicPrefix.kt",
+        [
+          "import org.springframework.web.bind.annotation.RestController",
+          "import org.springframework.web.bind.annotation.RequestMapping",
+          "import org.springframework.web.bind.annotation.GetMapping",
+          "",
+          "@RestController",
+          "@RequestMapping(prefix)",
+          "class DynamicPrefix {",
+          '  @GetMapping("/health")',
+          "  fun health() {}",
+          "}"
+        ].join("\n")
+      ],
+      [
+        "src/api/MultipleAttributes.kt",
+        [
+          "import org.springframework.web.bind.annotation.RestController",
+          "import org.springframework.web.bind.annotation.GetMapping",
+          "",
+          "@RestController",
+          "class MultipleAttributes {",
+          '  @GetMapping(path = "/health", produces = "application/json")',
+          "  fun health() {}",
+          "}"
+        ].join("\n")
+      ],
+      [
+        "src/api/MethodRequestMapping.kt",
+        [
+          "import org.springframework.web.bind.annotation.RestController",
+          "import org.springframework.web.bind.annotation.RequestMapping",
+          "import org.springframework.web.bind.annotation.GetMapping",
+          "",
+          "@RestController",
+          "class MethodRequestMapping {",
+          '  @RequestMapping("/health")',
+          "  @GetMapping",
+          "  fun health() {}",
+          "}"
+        ].join("\n")
+      ],
+      [
+        "src/api/Wildcard.kt",
+        [
+          "import org.springframework.web.bind.annotation.*",
+          "",
+          "@RestController",
+          "class Wildcard {",
+          '  @GetMapping("/health")',
+          "  fun health() {}",
+          "}"
+        ].join("\n")
+      ],
+      [
+        "src/api/ObjectController.kt",
+        [
+          "import org.springframework.web.bind.annotation.RestController",
+          "import org.springframework.web.bind.annotation.GetMapping",
+          "",
+          "@RestController",
+          "object ObjectController {",
+          '  @GetMapping("/health")',
+          "  fun health() {}",
+          "}"
+        ].join("\n")
+      ],
+      [
+        "src/api/AbstractController.kt",
+        [
+          "import org.springframework.web.bind.annotation.RestController",
+          "import org.springframework.web.bind.annotation.GetMapping",
+          "",
+          "@RestController",
+          "abstract class AbstractController {",
+          '  @GetMapping("/health")',
+          "  abstract fun health()",
+          "}"
+        ].join("\n")
+      ],
+      [
+        "src/api/PlainClass.kt",
+        [
+          "import org.springframework.web.bind.annotation.GetMapping",
+          "",
+          "class PlainClass {",
+          '  @GetMapping("/health")',
+          "  fun health() {}",
+          "}"
+        ].join("\n")
+      ]
+    ] as const;
+
+    expect(
+      rejected.map(([filePath, sourceText]) => {
+        const facts = extractFileFacts({ filePath, language: "kotlin", sourceText });
+        return [
+          facts.symbols.filter((symbol) => symbol.kind === "route"),
+          facts.edges.filter((edge) => edge.kind === "routes")
+        ];
+      })
+    ).toEqual([
+      [[], []],
+      [[], []],
+      [[], []],
+      [[], []],
+      [[], []],
+      [[], []],
+      [[], []],
+      [[], []]
+    ]);
+  });
+
   it("retains direct Kotlin Spring @Value property facts only for escaped literal placeholders", () => {
     const facts = extractFileFacts({
       filePath: "src/config/AppConfig.kt",

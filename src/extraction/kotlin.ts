@@ -48,6 +48,12 @@ interface StaticKtorRoute {
   readonly node: KotlinSyntaxNode;
 }
 
+interface StaticKotlinSpringWebRoute {
+  readonly method: RouteMethod;
+  readonly path: string;
+  readonly node: KotlinSyntaxNode;
+}
+
 interface StaticKotlinCall {
   readonly name: string;
   readonly suffix: KotlinSyntaxNode;
@@ -81,7 +87,20 @@ const SPRING_CONFIGURATION_PROPERTIES_IMPORT =
   "org.springframework.boot.context.properties.ConfigurationProperties";
 const SPRING_CONFIGURATION_IMPORT = "org.springframework.context.annotation.Configuration";
 const SPRING_BEAN_IMPORT = "org.springframework.context.annotation.Bean";
+const SPRING_REST_CONTROLLER_IMPORT =
+  "org.springframework.web.bind.annotation.RestController";
+const SPRING_CONTROLLER_IMPORT = "org.springframework.stereotype.Controller";
+const SPRING_REQUEST_MAPPING_IMPORT =
+  "org.springframework.web.bind.annotation.RequestMapping";
 const SPRING_BOOT_PROPERTIES_KEY = /^[A-Za-z0-9][A-Za-z0-9._-]*$/u;
+
+const SPRING_METHOD_MAPPING_IMPORTS: Readonly<Record<string, RouteMethod>> = {
+  "org.springframework.web.bind.annotation.GetMapping": "GET",
+  "org.springframework.web.bind.annotation.PostMapping": "POST",
+  "org.springframework.web.bind.annotation.PutMapping": "PUT",
+  "org.springframework.web.bind.annotation.PatchMapping": "PATCH",
+  "org.springframework.web.bind.annotation.DeleteMapping": "DELETE"
+};
 
 function directChildren(node: KotlinSyntaxNode): readonly KotlinSyntaxNode[] {
   return node.children();
@@ -271,6 +290,29 @@ function staticKotlinAnnotationName(annotation: KotlinSyntaxNode): string | null
   return /^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*$/u.test(name) ? name : null;
 }
 
+function staticKotlinAnnotationHasExpectedName(
+  annotation: KotlinSyntaxNode,
+  expectedImport: string
+): boolean {
+  const expectedName = expectedImport.split(".").at(-1);
+  const name = staticKotlinAnnotationName(annotation);
+  return name !== null && expectedName !== undefined && (name === expectedName || name === expectedImport);
+}
+
+function staticKotlinAnnotationMatches(
+  annotation: KotlinSyntaxNode,
+  expectedImport: string,
+  imports: ReadonlySet<string>
+): boolean {
+  const expectedName = expectedImport.split(".").at(-1);
+  const name = staticKotlinAnnotationName(annotation);
+  return (
+    name !== null &&
+    expectedName !== undefined &&
+    (name === expectedImport || (name === expectedName && imports.has(expectedImport)))
+  );
+}
+
 /**
  * Resolves one annotation only when its source spelling is a fully-qualified
  * target or its unaliased simple name has the exact direct import. This keeps
@@ -281,18 +323,12 @@ function staticKotlinExactlyOneProvenAnnotation(
   expectedImport: string,
   imports: ReadonlySet<string>
 ): KotlinSyntaxNode | null {
-  const expectedName = expectedImport.split(".").at(-1);
-  if (expectedName === undefined) {
-    return null;
-  }
-  const annotationsNamedExpected = annotations.filter((annotation) => {
-    const name = staticKotlinAnnotationName(annotation);
-    return name === expectedName || name === expectedImport;
-  });
-  const provenAnnotations = annotationsNamedExpected.filter((annotation) => {
-    const name = staticKotlinAnnotationName(annotation);
-    return name === expectedImport || (name === expectedName && imports.has(expectedImport));
-  });
+  const annotationsNamedExpected = annotations.filter((annotation) =>
+    staticKotlinAnnotationHasExpectedName(annotation, expectedImport)
+  );
+  const provenAnnotations = annotationsNamedExpected.filter((annotation) =>
+    staticKotlinAnnotationMatches(annotation, expectedImport, imports)
+  );
   if (
     annotationsNamedExpected.length !== provenAnnotations.length ||
     provenAnnotations.length !== 1
@@ -360,6 +396,180 @@ function staticKotlinPlainStringLiteral(node: KotlinSyntaxNode): string | null {
     return null;
   }
   return source.slice(1, -1);
+}
+
+/**
+ * Accepts a Spring Web annotation with no arguments, one positional literal,
+ * or one `path` / `value` literal. Arrays, placeholders, composed arguments,
+ * and all dynamic forms remain outside this parser-backed route surface.
+ */
+function staticKotlinSpringAnnotationPath(annotation: KotlinSyntaxNode): string | null {
+  if (annotation.kind() !== "annotation") {
+    return null;
+  }
+  const annotationChildren = directChildren(annotation);
+  if (annotationChildren.length !== 2) {
+    return null;
+  }
+  if (annotationChildren[1]?.kind() === "user_type") {
+    return "";
+  }
+  const invocation = staticKotlinAnnotationInvocation(annotation);
+  if (invocation === null) {
+    return null;
+  }
+  const argumentLists = directChildren(invocation).filter((child) => child.kind() === "value_arguments");
+  if (argumentLists.length !== 1 || argumentLists[0] === undefined) {
+    return null;
+  }
+  const arguments_ = directChildren(argumentLists[0]).filter(
+    (child) => child.kind() === "value_argument"
+  );
+  if (arguments_.length === 0) {
+    return "";
+  }
+  if (arguments_.length !== 1 || arguments_[0] === undefined) {
+    return null;
+  }
+  const argumentChildren = directChildren(arguments_[0]);
+  let literal: KotlinSyntaxNode | undefined;
+  if (argumentChildren.length === 1) {
+    literal = argumentChildren[0];
+  } else if (
+    argumentChildren.length === 3 &&
+    argumentChildren[0]?.kind() === "simple_identifier" &&
+    (nodeText(argumentChildren[0]) === "path" || nodeText(argumentChildren[0]) === "value") &&
+    argumentChildren[1]?.kind() === "="
+  ) {
+    literal = argumentChildren[2];
+  } else {
+    return null;
+  }
+  return literal === undefined ? null : staticKotlinPlainStringLiteral(literal);
+}
+
+function staticKotlinSpringPath(annotation: KotlinSyntaxNode): string | null {
+  const path = staticKotlinSpringAnnotationPath(annotation);
+  if (path === null) {
+    return null;
+  }
+  return path.length === 0 || (path.startsWith("/") && !path.includes("//")) ? path : null;
+}
+
+function staticKotlinAnnotations(node: KotlinSyntaxNode): readonly KotlinSyntaxNode[] {
+  const modifiers = directChildren(node).find((child) => child.kind() === "modifiers");
+  return modifiers === undefined
+    ? []
+    : directChildren(modifiers).filter((child) => child.kind() === "annotation");
+}
+
+/**
+ * A Kotlin Spring controller is accepted only when one direct top-level class
+ * has exactly one exact `@RestController` or `@Controller` annotation. Objects,
+ * interfaces, aliases, wildcard imports, and ambiguous same-name annotations
+ * deliberately cannot establish the route owner.
+ */
+function staticKotlinSpringWebController(
+  declaration: StaticKotlinType,
+  imports: ReadonlySet<string>
+): boolean {
+  if (declaration.kind !== "class" || declaration.isObject) {
+    return false;
+  }
+  const annotations = staticKotlinAnnotations(declaration.node);
+  const controllerImports = [SPRING_REST_CONTROLLER_IMPORT, SPRING_CONTROLLER_IMPORT] as const;
+  const annotationsNamedController = annotations.filter((annotation) =>
+    controllerImports.some((controllerImport) =>
+      staticKotlinAnnotationHasExpectedName(annotation, controllerImport)
+    )
+  );
+  const controllers = annotationsNamedController.filter((annotation) =>
+    controllerImports.some((controllerImport) =>
+      staticKotlinAnnotationMatches(annotation, controllerImport, imports)
+    )
+  );
+  return (
+    annotationsNamedController.length === controllers.length &&
+    controllers.length === 1
+  );
+}
+
+function staticKotlinSpringWebClassPrefix(
+  declaration: StaticKotlinType,
+  imports: ReadonlySet<string>
+): string | null {
+  const annotations = staticKotlinAnnotations(declaration.node);
+  const annotationsNamedRequestMapping = annotations.filter((annotation) =>
+    staticKotlinAnnotationHasExpectedName(annotation, SPRING_REQUEST_MAPPING_IMPORT)
+  );
+  const mappings = annotationsNamedRequestMapping.filter((annotation) =>
+    staticKotlinAnnotationMatches(annotation, SPRING_REQUEST_MAPPING_IMPORT, imports)
+  );
+  if (
+    annotationsNamedRequestMapping.length !== mappings.length ||
+    mappings.length > 1
+  ) {
+    return null;
+  }
+  if (mappings.length === 0) {
+    return "";
+  }
+  const mapping = mappings[0];
+  return mapping === undefined ? null : staticKotlinSpringPath(mapping);
+}
+
+/**
+ * Mirrors the supported Java shortcut surface while making Kotlin import proof
+ * explicit. Method-level `@RequestMapping` remains intentionally deferred,
+ * including its broad default-method semantics.
+ */
+function staticKotlinSpringWebMethodRoute(
+  declaration: StaticKotlinFunction,
+  imports: ReadonlySet<string>
+): StaticKotlinSpringWebRoute | null {
+  if (declaration.body === null) {
+    return null;
+  }
+  const annotations = staticKotlinAnnotations(declaration.node);
+  const annotationsNamedRequestMapping = annotations.filter((annotation) =>
+    staticKotlinAnnotationHasExpectedName(annotation, SPRING_REQUEST_MAPPING_IMPORT)
+  );
+  const requestMappings = annotationsNamedRequestMapping.filter((annotation) =>
+    staticKotlinAnnotationMatches(annotation, SPRING_REQUEST_MAPPING_IMPORT, imports)
+  );
+  if (
+    annotationsNamedRequestMapping.length !== requestMappings.length ||
+    requestMappings.length > 0
+  ) {
+    return null;
+  }
+  const annotationsNamedMappings = annotations.filter((annotation) =>
+    Object.keys(SPRING_METHOD_MAPPING_IMPORTS).some((mappingImport) =>
+      staticKotlinAnnotationHasExpectedName(annotation, mappingImport)
+    )
+  );
+  const mappings = annotationsNamedMappings.flatMap((annotation) => {
+    const method = Object.entries(SPRING_METHOD_MAPPING_IMPORTS).find(([mappingImport]) =>
+      staticKotlinAnnotationMatches(annotation, mappingImport, imports)
+    )?.[1];
+    return method === undefined ? [] : [{ annotation, method }];
+  });
+  if (annotationsNamedMappings.length !== mappings.length || mappings.length !== 1) {
+    return null;
+  }
+  const mapping = mappings[0];
+  if (mapping === undefined) {
+    return null;
+  }
+  const path = staticKotlinSpringPath(mapping.annotation);
+  return path === null ? null : { method: mapping.method, path, node: mapping.annotation };
+}
+
+function joinHttpPaths(prefix: string, path: string): string {
+  const segments = [prefix, path]
+    .flatMap((value) => value.split("/"))
+    .filter((segment) => segment.length > 0);
+  return "/" + segments.join("/");
 }
 
 /**
@@ -864,6 +1074,10 @@ function staticKtorRouteStatements(
 }
 
 export function extractKotlinFileFacts(input: KotlinExtractFileFactsInput): ArtifactFacts {
+  const springWebCapability = frameworkCapability("spring-web");
+  if (!springWebCapability.languages.includes(input.language)) {
+    throw new Error("Kotlin Spring Web extraction was invoked for an unsupported source language.");
+  }
   const ktorCapability = frameworkCapability("ktor");
   if (!ktorCapability.languages.includes(input.language)) {
     throw new Error("Ktor framework extraction was invoked for an unsupported source language.");
@@ -1001,9 +1215,18 @@ export function extractKotlinFileFacts(input: KotlinExtractFileFactsInput): Arti
     return symbol;
   }
 
-  function addKtorRoute(routeFact: StaticKtorRoute, handler: SymbolNode): void {
+  function addFrameworkRoute(
+    parent: SymbolNode,
+    routeFact: {
+      readonly method: RouteMethod;
+      readonly path: string;
+      readonly node: KotlinSyntaxNode;
+    },
+    handler: SymbolNode,
+    ruleId: string
+  ): void {
     const routeName = routeFact.method + " " + routeFact.path;
-    const qualifiedName = input.filePath + "#route:" + routeName;
+    const qualifiedName = parent.qualifiedName + "#route:" + routeName;
     const declarationOrdinal = nextOrdinal(qualifiedName, "route");
     const range = rangeForNode(routeFact.node);
     const route: SymbolNode = {
@@ -1022,7 +1245,7 @@ export function extractKotlinFileFacts(input: KotlinExtractFileFactsInput): Arti
       declarationOrdinal
     };
     symbols.push(route);
-    addContainment(fileNode, route, routeFact.node);
+    addContainment(parent, route, routeFact.node);
     edges.push({
       id: createEdgeId({
         sourceId: route.id,
@@ -1041,8 +1264,7 @@ export function extractKotlinFileFacts(input: KotlinExtractFileFactsInput): Arti
       confidence: 1,
       referenceName: handler.name,
       evidence: {
-        ruleId:
-          "framework.ktor.direct-application-module.routing.literal-route.callable-reference.local-function",
+        ruleId,
         stage: "syntax",
         candidateSymbolIds: [handler.id]
       }
@@ -1061,6 +1283,9 @@ export function extractKotlinFileFacts(input: KotlinExtractFileFactsInput): Arti
       .map((node) => staticKotlinType(node))
       .filter((candidate): candidate is StaticKotlinType => candidate !== null)) {
       const typeSymbol = addType(declaration);
+      const springWebPrefix = staticKotlinSpringWebController(declaration, imports)
+        ? staticKotlinSpringWebClassPrefix(declaration, imports)
+        : null;
       for (const reference of staticKotlinSpringBootPropertiesReferences(declaration, imports)) {
         springBootPropertiesValueReferences.push({
           sourceId: typeSymbol.id,
@@ -1129,6 +1354,17 @@ export function extractKotlinFileFacts(input: KotlinExtractFileFactsInput): Arti
             range: rangeForNode(reference.node)
           });
         }
+        if (springWebPrefix !== null) {
+          const route = staticKotlinSpringWebMethodRoute(methodDeclaration, imports);
+          if (route !== null) {
+            addFrameworkRoute(
+              typeSymbol,
+              { ...route, path: joinHttpPaths(springWebPrefix, route.path) },
+              methodSymbol,
+              "framework.spring-web.direct-kotlin-controller.literal-method-mapping.local-function"
+            );
+          }
+        }
       }
     }
 
@@ -1153,7 +1389,12 @@ export function extractKotlinFileFacts(input: KotlinExtractFileFactsInput): Arti
           if (handlerCandidates.length === 1) {
             const handler = handlerCandidates[0];
             if (handler !== undefined) {
-              addKtorRoute(route, handler);
+              addFrameworkRoute(
+                fileNode,
+                route,
+                handler,
+                "framework.ktor.direct-application-module.routing.literal-route.callable-reference.local-function"
+              );
             }
           }
         }
