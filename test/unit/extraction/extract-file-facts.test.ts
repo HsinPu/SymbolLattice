@@ -7899,6 +7899,128 @@ describe("source extraction", () => {
     ).toEqual(["Host:host.port"]);
   });
 
+  it("retains direct Java record Spring Boot @ConfigurationProperties literal-prefix facts", () => {
+    const facts = extractFileFacts({
+      filePath: "src/config/RecordProperties.java",
+      language: "java",
+      sourceText: [
+        "package example.config;",
+        "",
+        "import org.springframework.boot.context.properties.ConfigurationProperties;",
+        "",
+        '@ConfigurationProperties(prefix = "app.cache")',
+        "record CacheProperties(String size) {}",
+        "",
+        '@org.springframework.boot.context.properties.ConfigurationProperties("service.client")',
+        "public record ClientProperties(String timeout) {}",
+        "",
+        '@ConfigurationProperties(prefix = "legacy")',
+        "class LegacyProperties {}"
+      ].join("\n")
+    });
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+
+    expect(
+      facts.symbols
+        .filter((symbol) => symbol.kind === "class")
+        .map((symbol) => symbol.name)
+        .sort()
+    ).toEqual(["CacheProperties", "ClientProperties", "LegacyProperties"]);
+    expect(
+      facts.springBootPropertiesFacts?.configurationPropertiesPrefixes
+        .map(
+          (reference) =>
+            `${symbolsById.get(reference.sourceId)?.name}:${reference.prefix}`
+        )
+        .sort()
+    ).toEqual([
+      "CacheProperties:app.cache",
+      "ClientProperties:service.client",
+      "LegacyProperties:legacy"
+    ]);
+    expect(facts.springBootPropertiesFacts?.valueReferences).toEqual([]);
+  });
+
+  it("rejects unsupported Java record @ConfigurationProperties forms", () => {
+    const rejected = [
+      [
+        "src/config/ValueAliasRecord.java",
+        [
+          "import org.springframework.boot.context.properties.ConfigurationProperties;",
+          '@ConfigurationProperties(value = "value.alias")',
+          "record ValueAliasRecord(String value) {}"
+        ].join("\n")
+      ],
+      [
+        "src/config/MultipleRecord.java",
+        [
+          "import org.springframework.boot.context.properties.ConfigurationProperties;",
+          '@ConfigurationProperties(prefix = "multiple.prefix", ignoreUnknownFields = false)',
+          "record MultipleRecord(String value) {}"
+        ].join("\n")
+      ],
+      [
+        "src/config/WildcardRecord.java",
+        [
+          "import org.springframework.boot.context.properties.*;",
+          '@ConfigurationProperties(prefix = "wildcard.prefix")',
+          "record WildcardRecord(String value) {}"
+        ].join("\n")
+      ],
+      [
+        "src/config/DynamicRecord.java",
+        [
+          "import org.springframework.boot.context.properties.ConfigurationProperties;",
+          "@ConfigurationProperties(prefix = PREFIX)",
+          "record DynamicRecord(String value) {}"
+        ].join("\n")
+      ],
+      [
+        "src/config/NestedRecord.java",
+        [
+          "import org.springframework.boot.context.properties.ConfigurationProperties;",
+          "class Host {",
+          '  @ConfigurationProperties(prefix = "nested.prefix")',
+          "  record NestedRecord(String value) {}",
+          "}"
+        ].join("\n")
+      ]
+    ] as const;
+
+    expect(
+      rejected.map(([filePath, sourceText]) =>
+        extractFileFacts({ filePath, language: "java", sourceText }).springBootPropertiesFacts
+          ?.configurationPropertiesPrefixes
+      )
+    ).toEqual([[], [], [], [], []]);
+  });
+
+  it("retains unaffected Java class @ConfigurationProperties facts while excluding nested records", () => {
+    const facts = extractFileFacts({
+      filePath: "src/config/HostProperties.java",
+      language: "java",
+      sourceText: [
+        "import org.springframework.boot.context.properties.ConfigurationProperties;",
+        "",
+        '@ConfigurationProperties(prefix = "host")',
+        "class HostProperties {",
+        '  @ConfigurationProperties(prefix = "nested.prefix")',
+        "  record NestedProperties(String value) {}",
+        "}"
+      ].join("\n")
+    });
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "class").map((symbol) => symbol.name)).toEqual([
+      "HostProperties"
+    ]);
+    expect(
+      facts.springBootPropertiesFacts?.configurationPropertiesPrefixes.map(
+        (reference) => `${symbolsById.get(reference.sourceId)?.name}:${reference.prefix}`
+      )
+    ).toEqual(["HostProperties:host"]);
+  });
+
   it("retains direct Java Spring Boot @Value concrete-method parameter facts", () => {
     const facts = extractFileFacts({
       filePath: "src/config/MethodConfig.java",

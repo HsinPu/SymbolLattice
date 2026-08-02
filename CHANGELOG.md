@@ -6,6 +6,22 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.179.0] - 2026-08-02
+
+### Added
+
+- Direct top-level Java <code>record</code> declarations now contribute parser-backed Spring <code>@ConfigurationProperties</code> literal-prefix facts. One positional literal or one <code>prefix =</code> literal on an exact imported or fully-qualified annotation is retained against the record's class-like symbol owner.
+- The existing per-leaf configuration resolver is reused unchanged: every unique descendant YAML or <code>.properties</code> key is a <code>heuristic</code> <code>0.85</code> record-to-key relation, while collisions and missing prefixes stay explicit unresolved evidence. Configuration values remain absent from facts and graph evidence.
+- New unit, capability, and service coverage proves imported and fully-qualified forms, positional and named prefix literals, exact record ownership, nested-record exclusion, unsupported-form rejection, source-value omission, and explicit-sync withdrawal while the Java artifact is reused.
+
+### Deliberate limits
+
+- This is a declaration-level, direct-top-level Java record slice, not general Spring constructor binding. Nested records, canonical constructors, record methods, <code>value =</code>, multiple attributes, aliases, wildcard imports, escaped or dynamic prefixes, collections, field ownership, profiles, imports, precedence, validation, environment overrides, and runtime behavior remain outside analysis.
+
+### Comparison notes
+
+- The inspected CodeGraph Spring binding path recognizes <code>@ConfigurationProperties</code> with a text pattern shared across Java/Kotlin. SymbolLattice independently uses the Java record AST plus exact import/fully-qualified proof and has narrower syntax coverage, but preserves record ownership, source range, each candidate leaf, and unresolved ambiguity as graph evidence. CodeGraph remains broader; SymbolLattice is more auditable at this static boundary.
+
 ## [0.178.0] - 2026-08-02
 
 ### Added

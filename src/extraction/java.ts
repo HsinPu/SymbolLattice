@@ -1030,8 +1030,8 @@ function joinHttpPaths(prefix: string, path: string): string {
  * surface proves a direct controller annotation, unambiguous framework import
  * (or fully-qualified annotation), one literal mapping path, and the exact
  * local method declaration. Spring Boot properties retain direct field-level
- * literal `@Value` placeholders and direct Java class-level
- * `@ConfigurationProperties` literal prefixes.
+ * literal `@Value` placeholders and direct Java class-level or direct top-level
+ * record-level `@ConfigurationProperties` literal prefixes.
  */
 export function extractJavaFileFacts(input: JavaExtractFileFactsInput): ArtifactFacts {
   const springWebCapability = frameworkCapability("spring-web");
@@ -1411,6 +1411,15 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
           sourceId: recordSymbol.id,
           filePath: input.filePath,
           key: reference.key,
+          range: rangeFor(lineStarts, referenceRange.start.index, referenceRange.end.index)
+        });
+      }
+      for (const reference of recordDeclaration.configurationPropertiesPrefixes) {
+        const referenceRange = reference.node.range();
+        springBootConfigurationPropertiesPrefixes.push({
+          sourceId: recordSymbol.id,
+          filePath: input.filePath,
+          prefix: reference.prefix,
           range: rangeFor(lineStarts, referenceRange.start.index, referenceRange.end.index)
         });
       }

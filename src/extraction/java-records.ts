@@ -14,11 +14,17 @@ export interface JavaRecordPropertiesReference {
   readonly node: SgNode;
 }
 
+export interface JavaRecordConfigurationPropertiesPrefixReference {
+  readonly prefix: string;
+  readonly node: SgNode;
+}
+
 export interface StaticJavaRecord {
   readonly name: string;
   readonly node: SgNode;
   readonly isExported: boolean;
   readonly valueReferences: readonly JavaRecordPropertiesReference[];
+  readonly configurationPropertiesPrefixes: readonly JavaRecordConfigurationPropertiesPrefixReference[];
 }
 
 export interface JavaRecordInspection {
@@ -36,6 +42,8 @@ interface StaticJavaRecordAnnotation {
 }
 
 const SPRING_VALUE_PATH = "org.springframework.beans.factory.annotation.Value";
+const SPRING_CONFIGURATION_PROPERTIES_PATH =
+  "org.springframework.boot.context.properties.ConfigurationProperties";
 const SPRING_BOOT_PROPERTIES_KEY = /^[A-Za-z0-9][A-Za-z0-9._-]*$/u;
 const JAVA_DOTTED_IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)*$/u;
 
@@ -160,6 +168,51 @@ function staticJavaRecordPropertiesKey(annotation: StaticJavaRecordAnnotation): 
   return key !== null && SPRING_BOOT_PROPERTIES_KEY.test(key) ? key : null;
 }
 
+/**
+ * Mirrors the established Java class surface: one positional literal prefix or
+ * one literal `prefix =` argument only. `value =`, multiple attributes,
+ * escapes, and dynamic expressions remain out of scope.
+ */
+function staticJavaRecordConfigurationPropertiesPrefix(
+  annotation: StaticJavaRecordAnnotation
+): string | null {
+  const argumentLists = directChildren(annotation.node).filter(
+    (child) => child.kind() === "annotation_argument_list"
+  );
+  if (argumentLists.length !== 1 || argumentLists[0] === undefined) {
+    return null;
+  }
+  const values = directChildren(argumentLists[0]).filter((child) => {
+    const kind = child.kind();
+    return kind !== "(" && kind !== ")" && kind !== ",";
+  });
+  if (values.length !== 1 || values[0] === undefined) {
+    return null;
+  }
+  const value = values[0];
+  if (value.kind() === "string_literal") {
+    const prefix = staticPlainJavaString(value);
+    return prefix !== null && SPRING_BOOT_PROPERTIES_KEY.test(prefix) ? prefix : null;
+  }
+  if (value.kind() !== "element_value_pair") {
+    return null;
+  }
+  const pair = directChildren(value);
+  const key = pair[0];
+  const literal = pair[2];
+  if (
+    pair.length !== 3 ||
+    key?.kind() !== "identifier" ||
+    key.text() !== "prefix" ||
+    pair[1]?.kind() !== "=" ||
+    literal === undefined
+  ) {
+    return null;
+  }
+  const prefix = staticPlainJavaString(literal);
+  return prefix !== null && SPRING_BOOT_PROPERTIES_KEY.test(prefix) ? prefix : null;
+}
+
 function staticJavaRecordValueReferences(
   declaration: SgNode,
   imports: ReadonlyMap<string, string>
@@ -201,6 +254,33 @@ function staticJavaRecordValueReferences(
   return references;
 }
 
+function staticJavaRecordConfigurationPropertiesPrefixReferences(
+  declaration: SgNode,
+  imports: ReadonlyMap<string, string>
+): readonly JavaRecordConfigurationPropertiesPrefixReference[] {
+  const annotations = staticJavaRecordAnnotations(declaration);
+  const annotationsNamedConfigurationProperties = annotations.filter(
+    (annotation) =>
+      annotation.name === "ConfigurationProperties" ||
+      annotation.name === SPRING_CONFIGURATION_PROPERTIES_PATH
+  );
+  const configurationPropertiesAnnotations = annotationsNamedConfigurationProperties.filter(
+    (annotation) => annotationMatches(annotation, SPRING_CONFIGURATION_PROPERTIES_PATH, imports)
+  );
+  if (
+    annotationsNamedConfigurationProperties.length !== configurationPropertiesAnnotations.length ||
+    configurationPropertiesAnnotations.length !== 1
+  ) {
+    return [];
+  }
+  const annotation = configurationPropertiesAnnotations[0];
+  if (annotation === undefined) {
+    return [];
+  }
+  const prefix = staticJavaRecordConfigurationPropertiesPrefix(annotation);
+  return prefix === null ? [] : [{ prefix, node: annotation.node }];
+}
+
 function staticJavaRecord(
   declaration: SgNode,
   imports: ReadonlyMap<string, string>
@@ -226,7 +306,11 @@ function staticJavaRecord(
     name,
     node: declaration,
     isExported: modifiers !== undefined && directChildren(modifiers).some((child) => child.kind() === "public"),
-    valueReferences: staticJavaRecordValueReferences(declaration, imports)
+    valueReferences: staticJavaRecordValueReferences(declaration, imports),
+    configurationPropertiesPrefixes: staticJavaRecordConfigurationPropertiesPrefixReferences(
+      declaration,
+      imports
+    )
   };
 }
 

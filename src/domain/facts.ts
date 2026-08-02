@@ -11,7 +11,7 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v158";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v159";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
@@ -638,9 +638,12 @@ export interface SpringBootPropertiesValueReferenceFact {
   readonly range: SourceRange;
 }
 
-/** One direct Java or Kotlin class `@ConfigurationProperties` literal-prefix annotation. */
+/**
+ * One direct Java/Kotlin class or direct top-level Java record
+ * `@ConfigurationProperties` literal-prefix annotation.
+ */
 export interface SpringBootConfigurationPropertiesPrefixReferenceFact {
-  /** Stable symbol identity of the directly annotated Java or Kotlin class. */
+  /** Stable symbol identity of the directly annotated owner. */
   readonly sourceId: string;
   readonly filePath: string;
   readonly prefix: string;
@@ -649,8 +652,9 @@ export interface SpringBootConfigurationPropertiesPrefixReferenceFact {
 
 /**
  * Syntax-only Spring Boot configuration facts. The project resolver links
- * literal `@Value` keys and Java/Kotlin `@ConfigurationProperties` prefixes only to
- * parser-proven keys in conventional application/bootstrap properties or YAML files.
+ * literal `@Value` keys and `@ConfigurationProperties` prefixes from direct Java/Kotlin
+ * classes or direct top-level Java records only to parser-proven keys in conventional
+ * application/bootstrap properties or YAML files.
  */
 export interface SpringBootPropertiesFacts {
   readonly valueReferences: readonly SpringBootPropertiesValueReferenceFact[];
