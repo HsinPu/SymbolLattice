@@ -80,6 +80,54 @@ describe("McpReadQueryPool", () => {
     );
   });
 
+  it("reports a redacted health snapshot with no project or query content", async () => {
+    const workers: FakeQueryWorker[] = [];
+    const pool = new McpReadQueryPool({
+      defaultProjectPath: "C:/private-project",
+      size: 2,
+      createWorker: () => {
+        const worker = new FakeQueryWorker();
+        workers.push(worker);
+        return worker;
+      }
+    });
+
+    expect(pool.queryPoolStatus()).toEqual({
+      state: "warming",
+      capacity: 2,
+      workers: { live: 1, pending: 1, idle: 0, crashes: 0 },
+      requests: { inflight: 0, queued: 0 },
+      fallbacks: {
+        coldStart: 0,
+        unavailable: 0,
+        queueTimeout: 0,
+        workerFailure: 0,
+        invalidWorkerResponse: 0,
+        unsupportedTool: 0,
+        total: 0
+      }
+    });
+
+    await pool.execute("explore", { query: "privateSymbol" }, async () => response("fallback"));
+    expect(pool.queryPoolStatus().fallbacks).toMatchObject({ coldStart: 1, total: 1 });
+    expect(JSON.stringify(pool.queryPoolStatus())).not.toContain("private");
+
+    const worker = workers[0];
+    worker?.ready();
+    const pending = pool.execute("search", { query: "active" }, async () => response("fallback-active"));
+    expect(pool.queryPoolStatus()).toMatchObject({
+      state: "ready",
+      requests: { inflight: 1, queued: 0 }
+    });
+    const request = worker?.requests[0];
+    if (request === undefined) {
+      throw new Error("Expected the ready worker to receive a request.");
+    }
+    worker?.respond(request, response("active"));
+    await expect(pending).resolves.toEqual(response("active"));
+    await pool.close();
+  });
+
   it("uses the existing handler until the eager worker has warmed", async () => {
     const workers: FakeQueryWorker[] = [];
     const pool = new McpReadQueryPool({
@@ -162,6 +210,10 @@ describe("McpReadQueryPool", () => {
 
     firstWorker?.exit(13);
     expect(workers).toHaveLength(2);
+    expect(pool.queryPoolStatus()).toMatchObject({
+      state: "recovering",
+      workers: { crashes: 1, pending: 1 }
+    });
     const replacement = workers[1];
     replacement?.ready();
     const retriedRequest = replacement?.requests[0];
@@ -197,11 +249,24 @@ describe("McpReadQueryPool", () => {
         return response("fallback-after-wait");
       });
       expect(workers[0]?.requests).toHaveLength(1);
+      const timedOutRequest = workers[0]?.requests[0];
+      if (timedOutRequest === undefined) {
+        throw new Error("Expected the worker to receive the timed request.");
+      }
 
       await vi.advanceTimersByTimeAsync(25);
 
       await expect(pending).resolves.toEqual(response("fallback-after-wait"));
       expect(fallbackCalls).toBe(1);
+      expect(pool.queryPoolStatus()).toMatchObject({
+        requests: { inflight: 1, queued: 0 },
+        fallbacks: { queueTimeout: 1, total: 1 }
+      });
+
+      workers[0]?.respond(timedOutRequest, response("late-worker-result"));
+      await Promise.resolve();
+      expect(fallbackCalls).toBe(1);
+      expect(pool.queryPoolStatus().requests).toEqual({ inflight: 0, queued: 0 });
     } finally {
       await pool.close();
       vi.useRealTimers();

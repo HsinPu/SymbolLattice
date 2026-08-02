@@ -50,7 +50,8 @@ import {
   runRoutesTool,
   runSearchTool,
   startMcpServer,
-  type McpReadQueryExecutor
+  type McpReadQueryExecutor,
+  type McpReadQueryPoolDiagnostics
 } from "../../../src/mcp/index.js";
 
 const closeCallbacks: Array<() => Promise<void>> = [];
@@ -873,6 +874,56 @@ describe("SymbolLattice MCP server", () => {
 
     expect(dispatched).toEqual(["explore"]);
     expect(autoSyncCalls).toBe(1);
+  });
+
+  it("exposes query-pool health only when a host-owned status service is supplied", async () => {
+    const diagnostics: McpReadQueryPoolDiagnostics = {
+      state: "ready",
+      capacity: 2,
+      workers: { live: 2, pending: 0, idle: 1, crashes: 1 },
+      requests: { inflight: 1, queued: 3 },
+      fallbacks: {
+        coldStart: 1,
+        unavailable: 0,
+        queueTimeout: 2,
+        workerFailure: 0,
+        invalidWorkerResponse: 0,
+        unsupportedTool: 0,
+        total: 3
+      }
+    };
+    let statusCalls = 0;
+    const server = createMcpServer(
+      {
+        async explore(): Promise<ExploreResult> {
+          return exploreResult();
+        }
+      },
+      "C:/default-project",
+      {
+        queryPoolStatusService: {
+          queryPoolStatus(): McpReadQueryPoolDiagnostics {
+            statusCalls += 1;
+            return diagnostics;
+          }
+        }
+      }
+    );
+    const client = new Client({ name: "symbol-lattice-query-pool-status-test", version: "1.0.0" });
+    const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+    closeCallbacks.push(() => client.close(), () => server.close());
+
+    expect((await client.listTools()).tools.map((tool) => tool.name)).toEqual([
+      "symbol_lattice_explore",
+      "symbol_lattice_query_pool_status"
+    ]);
+
+    const result = await client.callTool({ name: "symbol_lattice_query_pool_status", arguments: {} });
+    expect(result.isError).not.toBe(true);
+    expect(result.structuredContent).toEqual(diagnostics);
+    expect(statusCalls).toBe(1);
   });
 
   it("exposes read-only retrieval tools and forwards projects and filters", async () => {

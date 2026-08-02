@@ -6,6 +6,32 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.201.0] - 2026-08-02
+
+### Added
+
+- `symbol_lattice_query_pool_status` is now registered by the CLI's pooled MCP host. It returns only host-local pool state, capacity, worker/queue counts, crash count, and fallback counters; it contains no project path, query text, source, symbol, or graph data.
+- `McpReadQueryPool.queryPoolStatus()` exposes the same typed snapshot for programmatic hosts. Its state distinguishes `warming`, `ready`, `recovering`, `degraded`, and `closed` without relying on logs or hidden globals.
+- Fallback counters distinguish cold-start, unavailable pool, queue timeout, exhausted worker failure, invalid worker response, and unsupported operation. Tests prove the snapshot is redacted, queue state is truthful, and the MCP status tool is host-owned rather than a graph-worker request.
+
+### Corrected
+
+- A timed-out request now enters its compatibility fallback exactly once. If its worker replies later, the result merely returns that worker to the idle pool and cannot race with or overwrite the already selected fallback response.
+
+### Compatibility
+
+- SQLite schema, graph generations, CLI arguments, and existing MCP tool schemas are unchanged. The new MCP status tool appears only on a host that explicitly owns the pooled executor; legacy direct embeddings retain their existing tool list.
+
+### Deliberate limits
+
+- Counters are process-lifetime observations, not persisted telemetry, billing, tracing, timing percentiles, or cross-host aggregation. They deliberately omit all project and request identifiers.
+- The status endpoint observes the pool only; it does not probe workers, retry work, start a pool, read a graph, or alter automatic-sync behavior.
+
+### Comparison notes
+
+- The inspected CodeGraph `QueryPool` exposes internal size, live-worker, health, and readiness getters, but the reviewed MCP path did not establish a corresponding public pool-status tool. SymbolLattice independently makes a smaller, redacted host status contract available through MCP.
+- CodeGraph still has the broader and more mature execution path: persistent worker-side readers and CPU-heavy FTS/RWR/PageRank/impact computation. SymbolLattice's advantage here is a narrowly scoped, explicitly non-content-bearing operational contract and a tested late-result fallback rule.
+
 ## [0.200.0] - 2026-08-02
 
 ### Added

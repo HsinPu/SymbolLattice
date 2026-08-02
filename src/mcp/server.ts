@@ -69,8 +69,10 @@ import type {
 import { ARTIFACT_LANGUAGES, MAX_SOURCE_SEARCH_LIMIT } from "../domain/index.js";
 import { SYMBOL_LATTICE_VERSION } from "../version.js";
 import {
+  MCP_READ_QUERY_POOL_STATES,
   McpReadQueryPool,
-  type McpReadQueryExecutor
+  type McpReadQueryExecutor,
+  type McpReadQueryPoolStatusService
 } from "./read-query-pool.js";
 import type { McpReadToolName } from "./read-query-protocol.js";
 
@@ -190,6 +192,9 @@ export interface AutoSyncDiagnosticJournalService {
     options?: AutoSyncDiagnosticJournalOptions
   ): Promise<AutoSyncDiagnosticJournalResult>;
 }
+
+/** Optional host-owned operational seam for a bounded MCP read-query pool. */
+export interface QueryPoolStatusService extends McpReadQueryPoolStatusService {}
 
 export type ReadOnlyMcpService = ExploreService & ExplainEdgeService;
 export type NodeMcpService = ExploreService & NodeService;
@@ -325,6 +330,8 @@ export interface AutoSyncDiagnosticJournalToolArguments {
   readonly limit?: number | undefined;
 }
 
+export interface QueryPoolStatusToolArguments {}
+
 export interface ReadOnlyToolResponse {
   readonly [key: string]: unknown;
   readonly content: {
@@ -352,10 +359,12 @@ export type GenerationDiffToolResponse = ReadOnlyToolResponse;
 export type AutoSyncStatusToolResponse = ReadOnlyToolResponse;
 export type AutoSyncDiagnosticsToolResponse = ReadOnlyToolResponse;
 export type AutoSyncDiagnosticJournalToolResponse = ReadOnlyToolResponse;
+export type QueryPoolStatusToolResponse = ReadOnlyToolResponse;
 
 /** Optional execution seam for graph reads that must not own an index writer. */
 export interface CreateMcpServerOptions {
   readonly readQueryExecutor?: McpReadQueryExecutor | undefined;
+  readonly queryPoolStatusService?: QueryPoolStatusService | undefined;
 }
 
 function executeReadTool<TResponse extends ReadOnlyToolResponse>(
@@ -530,6 +539,32 @@ const autoSyncDiagnosticJournalOutputSchema = z
     events: z
       .array(autoSyncDiagnosticEventOutputSchema)
       .max(MAX_AUTO_SYNC_DIAGNOSTIC_JOURNAL_EVENTS)
+  })
+  .passthrough();
+
+const queryPoolStatusOutputSchema = z
+  .object({
+    state: z.enum(MCP_READ_QUERY_POOL_STATES),
+    capacity: z.number().int().positive(),
+    workers: z.object({
+      live: z.number().int().nonnegative(),
+      pending: z.number().int().nonnegative(),
+      idle: z.number().int().nonnegative(),
+      crashes: z.number().int().nonnegative()
+    }),
+    requests: z.object({
+      inflight: z.number().int().nonnegative(),
+      queued: z.number().int().nonnegative()
+    }),
+    fallbacks: z.object({
+      coldStart: z.number().int().nonnegative(),
+      unavailable: z.number().int().nonnegative(),
+      queueTimeout: z.number().int().nonnegative(),
+      workerFailure: z.number().int().nonnegative(),
+      invalidWorkerResponse: z.number().int().nonnegative(),
+      unsupportedTool: z.number().int().nonnegative(),
+      total: z.number().int().nonnegative()
+    })
   })
   .passthrough();
 
@@ -1041,6 +1076,22 @@ export async function runAutoSyncStatusTool(
   }
 }
 
+/** Returns host-local read-query worker health without reading project content. */
+export async function runQueryPoolStatusTool(
+  service: QueryPoolStatusService,
+  _arguments: QueryPoolStatusToolArguments = {}
+): Promise<QueryPoolStatusToolResponse> {
+  try {
+    const result = await service.queryPoolStatus();
+    return {
+      content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      structuredContent: result as unknown as Record<string, unknown>
+    };
+  } catch (error) {
+    return renderToolError(error);
+  }
+}
+
 /** Returns bounded host-owned watcher history without triggering index work. */
 export async function runAutoSyncDiagnosticsTool(
   service: AutoSyncDiagnosticsService,
@@ -1436,6 +1487,25 @@ export function createMcpServer(
         runExploreTool(service, defaultProjectPath, arguments_)
       )
   );
+
+  const queryPoolStatusService = options.queryPoolStatusService ?? null;
+  if (queryPoolStatusService !== null) {
+    server.registerTool(
+      "symbol_lattice_query_pool_status",
+      {
+        title: "Inspect SymbolLattice MCP query-pool health",
+        description:
+          "Returns host-local query-worker, queue, crash, and fallback counters. It contains no project path, source, query, or graph data and never creates, indexes, or synchronizes a project.",
+        inputSchema: {},
+        outputSchema: queryPoolStatusOutputSchema,
+        annotations: {
+          readOnlyHint: true,
+          idempotentHint: true
+        }
+      },
+      async (arguments_) => runQueryPoolStatusTool(queryPoolStatusService, arguments_)
+    );
+  }
 
   const autoSyncStatusService = supportsAutoSyncStatus(service) ? service : null;
   if (autoSyncStatusService !== null) {
@@ -2069,6 +2139,8 @@ export interface McpServerOptions {
   readonly lifecycleInput?: McpLifecycleInput;
   /** Optional host-owned executor for persisted graph read tools only. */
   readonly readQueryExecutor?: McpReadQueryExecutor;
+  /** Optional host-owned status surface for the read-query executor. */
+  readonly queryPoolStatusService?: QueryPoolStatusService;
 }
 
 /**
@@ -2084,7 +2156,8 @@ export async function startMcpServer(
   options: McpServerOptions = {}
 ): Promise<McpServerSession> {
   const server = createMcpServer(service, defaultProjectPath, {
-    readQueryExecutor: options.readQueryExecutor
+    readQueryExecutor: options.readQueryExecutor,
+    queryPoolStatusService: options.queryPoolStatusService
   });
   const transport = options.transport ?? new StdioServerTransport();
   const lifecycleInput = options.lifecycleInput ?? process.stdin;
@@ -2155,14 +2228,15 @@ export async function startMcpServer(
 export async function startMcpServerWithReadQueryPool(
   service: ExploreService,
   defaultProjectPath: string,
-  options: Omit<McpServerOptions, "readQueryExecutor"> = {}
+  options: Omit<McpServerOptions, "readQueryExecutor" | "queryPoolStatusService"> = {}
 ): Promise<McpServerSession> {
   const readQueryPool = new McpReadQueryPool({ defaultProjectPath });
   let session: McpServerSession;
   try {
     session = await startMcpServer(service, defaultProjectPath, {
       ...options,
-      readQueryExecutor: readQueryPool
+      readQueryExecutor: readQueryPool,
+      queryPoolStatusService: readQueryPool
     });
   } catch (error) {
     await readQueryPool.close();

@@ -12,10 +12,52 @@ import type {
 /** A deliberately conservative cap protects memory on long-lived MCP hosts. */
 export const MAX_MCP_READ_QUERY_WORKERS = 4;
 export const DEFAULT_MCP_READ_QUERY_QUEUE_TIMEOUT_MS = 45_000;
+export const MCP_READ_QUERY_POOL_STATES = [
+  "warming",
+  "ready",
+  "recovering",
+  "degraded",
+  "closed"
+] as const;
+
+export type McpReadQueryPoolState = (typeof MCP_READ_QUERY_POOL_STATES)[number];
+
+export interface McpReadQueryFallbacks {
+  readonly coldStart: number;
+  readonly unavailable: number;
+  readonly queueTimeout: number;
+  readonly workerFailure: number;
+  readonly invalidWorkerResponse: number;
+  readonly unsupportedTool: number;
+  readonly total: number;
+}
+
+export interface McpReadQueryPoolDiagnostics {
+  readonly state: McpReadQueryPoolState;
+  readonly capacity: number;
+  readonly workers: {
+    readonly live: number;
+    readonly pending: number;
+    readonly idle: number;
+    readonly crashes: number;
+  };
+  /** Worker work only; a timed-out request may remain in flight until its worker returns. */
+  readonly requests: {
+    readonly inflight: number;
+    readonly queued: number;
+  };
+  readonly fallbacks: McpReadQueryFallbacks;
+}
+
+export interface McpReadQueryPoolStatusService {
+  queryPoolStatus(): McpReadQueryPoolDiagnostics;
+}
 
 const MAX_MCP_READ_QUERY_WORKER_CRASHES = 4;
 const MAX_MCP_READ_QUERY_RETRIES = 1;
 const MAX_MCP_READ_QUERY_CONCURRENT_SPAWNS = 2;
+
+type McpReadQueryFallbackReason = Exclude<keyof McpReadQueryFallbacks, "total">;
 
 export interface McpReadQueryWorker {
   postMessage(message: McpReadWorkerRequest): void;
@@ -52,6 +94,7 @@ interface QueryJob {
   readonly resolve: (response: ReadOnlyToolResponse) => void;
   retries: number;
   settled: boolean;
+  fallbackStarted: boolean;
   timer?: NodeJS.Timeout | undefined;
 }
 
@@ -114,7 +157,7 @@ function isReadOnlyToolResponse(value: unknown): value is ReadOnlyToolResponse {
  * when the pool is unavailable, or after a bounded queue wait, it delegates to the
  * existing handler so an unavailable worker cannot make the MCP host unusable.
  */
-export class McpReadQueryPool implements McpReadQueryExecutor {
+export class McpReadQueryPool implements McpReadQueryExecutor, McpReadQueryPoolStatusService {
   private readonly maxSize: number;
   private readonly queueTimeoutMs: number;
   private readonly createWorker: () => McpReadQueryWorker;
@@ -127,6 +170,14 @@ export class McpReadQueryPool implements McpReadQueryExecutor {
   private totalCrashes = 0;
   private everReady = false;
   private destroyed = false;
+  private readonly fallbackCounts: Record<McpReadQueryFallbackReason, number> = {
+    coldStart: 0,
+    unavailable: 0,
+    queueTimeout: 0,
+    workerFailure: 0,
+    invalidWorkerResponse: 0,
+    unsupportedTool: 0
+  };
 
   public constructor(options: McpReadQueryPoolOptions) {
     const requestedSize = positiveSafeInteger(options.size, resolveMcpReadQueryPoolSize());
@@ -165,14 +216,43 @@ export class McpReadQueryPool implements McpReadQueryExecutor {
     return this.workers.size;
   }
 
+  /** Returns host-local execution counters without exposing any query or project data. */
+  public queryPoolStatus(): McpReadQueryPoolDiagnostics {
+    const totalFallbacks = Object.values(this.fallbackCounts).reduce((total, count) => total + count, 0);
+    return {
+      state: this.statusState(),
+      capacity: this.maxSize,
+      workers: {
+        live: this.workers.size,
+        pending: this.pendingWorkers.size,
+        idle: this.idle.length,
+        crashes: this.totalCrashes
+      },
+      requests: {
+        inflight: this.inflight.size,
+        queued: this.queue.filter((job) => !job.settled && !job.fallbackStarted).length
+      },
+      fallbacks: {
+        ...this.fallbackCounts,
+        total: totalFallbacks
+      }
+    };
+  }
+
   public execute<TResponse extends ReadOnlyToolResponse>(
     toolName: McpReadToolName,
     arguments_: unknown,
     fallback: () => Promise<TResponse>
   ): Promise<TResponse> {
-    if (!isMcpReadToolName(toolName) || !this.healthy || !this.ready) {
+    if (!isMcpReadToolName(toolName)) {
+      return this.fallbackImmediately("unsupportedTool", fallback);
+    }
+    if (!this.healthy) {
+      return this.fallbackImmediately("unavailable", fallback);
+    }
+    if (!this.ready) {
       this.ensureWarmWorker();
-      return fallback();
+      return this.fallbackImmediately("coldStart", fallback);
     }
 
     return new Promise<TResponse>((resolve) => {
@@ -183,10 +263,11 @@ export class McpReadQueryPool implements McpReadQueryExecutor {
         fallback: async () => fallback(),
         resolve: (response) => resolve(response as TResponse),
         retries: 0,
-        settled: false
+        settled: false,
+        fallbackStarted: false
       };
       job.timer = setTimeout(() => {
-        this.settleWithFallback(job);
+        this.settleWithFallback(job, "queueTimeout");
       }, this.queueTimeoutMs);
       job.timer.unref?.();
       this.queue.push(job);
@@ -274,10 +355,14 @@ export class McpReadQueryPool implements McpReadQueryExecutor {
 
     this.inflight.delete(worker);
     this.idle.push(worker);
+    if (job.fallbackStarted) {
+      this.drain();
+      return;
+    }
     if (isReadOnlyToolResponse(typed.response)) {
       this.settle(job, typed.response);
     } else {
-      this.settleWithFallback(job);
+      this.settleWithFallback(job, "invalidWorkerResponse");
     }
     this.drain();
   }
@@ -302,12 +387,12 @@ export class McpReadQueryPool implements McpReadQueryExecutor {
       // The worker already exited or could not be terminated.
     }
 
-    if (job !== undefined) {
+    if (job !== undefined && !job.fallbackStarted) {
       if (job.retries < MAX_MCP_READ_QUERY_RETRIES && this.healthy) {
         job.retries += 1;
         this.queue.unshift(job);
       } else {
-        this.settleWithFallback(job);
+        this.settleWithFallback(job, "workerFailure");
       }
     }
 
@@ -327,7 +412,7 @@ export class McpReadQueryPool implements McpReadQueryExecutor {
 
     while (this.idle.length > 0 && this.queue.length > 0) {
       const job = this.queue.shift();
-      if (job === undefined || job.settled) {
+      if (job === undefined || job.settled || job.fallbackStarted) {
         continue;
       }
 
@@ -350,10 +435,22 @@ export class McpReadQueryPool implements McpReadQueryExecutor {
     }
   }
 
-  private settleWithFallback(job: QueryJob): void {
-    if (job.settled) {
+  private fallbackImmediately<TResponse extends ReadOnlyToolResponse>(
+    reason: McpReadQueryFallbackReason,
+    fallback: () => Promise<TResponse>
+  ): Promise<TResponse> {
+    this.fallbackCounts[reason] += 1;
+    return fallback();
+  }
+
+  private settleWithFallback(job: QueryJob, reason: McpReadQueryFallbackReason): void {
+    if (job.settled || job.fallbackStarted) {
       return;
     }
+
+    job.fallbackStarted = true;
+    this.fallbackCounts[reason] += 1;
+    this.queue = this.queue.filter((queued) => queued !== job);
 
     void job
       .fallback()
@@ -374,5 +471,25 @@ export class McpReadQueryPool implements McpReadQueryExecutor {
       clearTimeout(job.timer);
     }
     job.resolve(response);
+  }
+
+  private statusState(): McpReadQueryPoolState {
+    if (this.destroyed) {
+      return "closed";
+    }
+    if (!this.healthy) {
+      return "degraded";
+    }
+    if (!this.everReady) {
+      return "warming";
+    }
+    if (
+      this.workers.size > 0 &&
+      this.pendingWorkers.size === this.workers.size &&
+      this.inflight.size === 0
+    ) {
+      return "recovering";
+    }
+    return "ready";
   }
 }
