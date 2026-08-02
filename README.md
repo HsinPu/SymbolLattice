@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.201.0 為開發者預覽版，請從原始碼執行。
+> v0.202.0 為開發者預覽版，請從原始碼執行。
 
 SymbolLattice 會建立可查詢的本機「程式碼符號圖譜」。每一條關係都保留規則、證據階段與信心等級；`exact`、`heuristic`、`unresolved` 絕不混為一談。
 
@@ -49,13 +49,13 @@ Windows PowerShell 若找不到 npm，請使用 `npm.cmd`。索引資料保存�
 > [!NOTE]
 > MCP 工具本身永遠不會建立或更新圖譜。`serve --mcp` 的預設自動同步是主機擁有的獨立背景監看；若需要完全手動更新，使用 `--no-auto-sync`。
 
-## v0.201.0 重點
+## v0.202.0 重點
 
-- `serve --mcp` 的圖譜讀取可由有界工作池並行處理，預設最多 4 個工作者；可用 `SYMBOL_LATTICE_MCP_QUERY_POOL_SIZE=1..4` 調整。
-- MCP `symbol_lattice_query_pool_status` 會回傳不含路徑、查詢或程式碼的工作者、佇列、崩潰與回退統計。
-- 工作池只接受既有的唯讀圖譜工具。`init`、`index`、`sync` 與自動同步監看不會交給工作者，也不會由 MCP 查詢觸發。
-- 首個工作者尚未就緒、工作池不可用或佇列等待過久時，請求會安全回退到原本的主程序讀取路徑；逾時後的晚到工作者結果不會覆蓋回退回應。
-- `investigate --ranking lexical|structure` 可保留 FTS 次序，或以揭露的直接靜態關係進行可稽核的重排。
+- `npm run benchmark:mcp` 以建立後即刪除的固定 TypeScript 圖譜量測 MCP 唯讀工作池；不會索引、讀取或寫入你的專案。
+- 報表輸出循序與併發 `explore`／`investigate` 的 P50／P95、錯誤與回退數、工作池狀態，以及主程序事件迴圈延遲取樣；有錯誤或回退時以非零狀態結束。
+- 預設為 2 個工作者、4 併發、24 個請求；可用 `SYMBOL_LATTICE_BENCHMARK_POOL_SIZE=1..4`、`SYMBOL_LATTICE_BENCHMARK_CONCURRENCY=1..16`、`SYMBOL_LATTICE_BENCHMARK_REQUESTS=1..512` 與 `SYMBOL_LATTICE_BENCHMARK_WARMUP=1..64` 調整。
+- 結果是同機、同版本的比較基線，不是跨硬體的效能承諾或固定通過門檻。
+- MCP 工作者仍只接受既有唯讀圖譜工具；`init`、`index`、`sync` 與自動同步監看不會由查詢觸發。
 
 ## 範圍與限制
 

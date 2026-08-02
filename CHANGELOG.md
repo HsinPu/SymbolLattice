@@ -6,6 +6,26 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.202.0] - 2026-08-02
+
+### Added
+
+- `npm run benchmark:mcp` creates a fixed 48-file TypeScript fixture in a temporary directory, indexes only that disposable graph, runs warm-up plus sequential and concurrent worker-pool reads, then removes the whole fixture. It never accesses a user-selected project.
+- The JSON benchmark contract reports nearest-rank P50/P95 latency, minimum/mean/maximum latency, error and fallback counts, redacted before/after pool diagnostics, and a bounded main-process event-loop-delay sample. A worker readiness failure, error response, or fallback produces a non-zero exit after the report is emitted.
+- Environment controls make the load shape explicit and bounded: `SYMBOL_LATTICE_BENCHMARK_POOL_SIZE=1..4`, `SYMBOL_LATTICE_BENCHMARK_CONCURRENCY=1..16`, `SYMBOL_LATTICE_BENCHMARK_REQUESTS=1..512`, and `SYMBOL_LATTICE_BENCHMARK_WARMUP=1..64`.
+- The metrics implementation has deterministic unit coverage for percentile, fallback, error, empty-input, and invalid-latency behavior. A release smoke run exercises real compiled workers against the disposable indexed graph.
+
+### Deliberate limits
+
+- This is a reproducible local baseline, not a benchmark claim across machines, Node versions, disks, source trees, or MCP clients. It records measurements rather than enforcing timing thresholds.
+- The fixture is intentionally small and synthetic. It demonstrates pool scheduling, worker expansion, response success, fallback avoidance, and host responsiveness; it is not a substitute for a production-scale corpus, CPU/RSS profiling, or a CodeGraph-versus-SymbolLattice shootout.
+- The benchmark is read-only after fixture initialization. It does not alter graph query semantics, persistence policy, SQLite connection lifetime, ranking, or user-project data.
+
+### Comparison notes
+
+- CodeGraph remains ahead in persistent worker-side WAL readers and broader CPU-heavy query computation. This release closes an important verification gap on the SymbolLattice side by making its own worker-pool behavior repeatable and observable under a declared workload.
+- The two projects do not yet share a fixture, query semantics, hardware envelope, or reporting harness, so their latency values must not be compared directly.
+
 ## [0.201.0] - 2026-08-02
 
 ### Added
