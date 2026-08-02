@@ -41,7 +41,14 @@ interface StaticObjectiveCMethod {
 
 type ReactNativeObjectiveCMethodRuleId =
   | "framework.react-native.objc.rct-export-method"
-  | "framework.react-native.objc.rct-remap-method";
+  | "framework.react-native.objc.rct-remap-method"
+  | "framework.react-native.objc.rct-extern-method"
+  | "framework.react-native.objc.rct-extern-remap-method"
+  | "framework.react-native.objc.rct-extern-blocking-synchronous-method";
+
+type ReactNativeObjectiveCExternModuleRuleId =
+  | "framework.react-native.objc.rct-extern-module"
+  | "framework.react-native.objc.rct-extern-remap-module";
 
 interface StaticReactNativeObjectiveCMethod extends StaticObjectiveCMethod {
   readonly reactNativeRuleId: ReactNativeObjectiveCMethodRuleId;
@@ -49,6 +56,15 @@ interface StaticReactNativeObjectiveCMethod extends StaticObjectiveCMethod {
 
 interface StaticReactNativeObjectiveCModule {
   readonly moduleName: string;
+  readonly methods: readonly StaticReactNativeObjectiveCMethod[];
+}
+
+/** One source-proven Objective-C declaration that exports an external Swift or private class. */
+interface StaticReactNativeObjectiveCExternModule {
+  readonly objcClassName: string;
+  readonly moduleName: string;
+  readonly container: StaticObjectiveCContainer;
+  readonly reactNativeRuleId: ReactNativeObjectiveCExternModuleRuleId;
   readonly methods: readonly StaticReactNativeObjectiveCMethod[];
 }
 
@@ -79,6 +95,10 @@ const DIRECT_PROTOCOL_LIST =
   /^<[ \t]*[A-Za-z_][A-Za-z0-9_]*(?:[ \t]*,[ \t]*[A-Za-z_][A-Za-z0-9_]*)*[ \t]*>$/u;
 const DIRECT_INTERFACE_SUFFIX =
   /^(?::[ \t]*[A-Za-z_][A-Za-z0-9_]*(?:[ \t]*<[ \t]*[A-Za-z_][A-Za-z0-9_]*(?:[ \t]*,[ \t]*[A-Za-z_][A-Za-z0-9_]*)*[ \t]*>)?|<[ \t]*[A-Za-z_][A-Za-z0-9_]*(?:[ \t]*,[ \t]*[A-Za-z_][A-Za-z0-9_]*)*[ \t]*>)$/u;
+const DIRECT_RCT_EXTERN_MODULE_HEADER =
+  /^[ \t]*@interface[ \t]+RCT_EXTERN_MODULE[ \t]*\([ \t]*([A-Za-z_][A-Za-z0-9_]*)[ \t]*,[ \t]*([A-Za-z_][A-Za-z0-9_]*)[ \t]*\)[ \t]*$/u;
+const DIRECT_RCT_EXTERN_REMAP_MODULE_HEADER =
+  /^[ \t]*@interface[ \t]+RCT_EXTERN_REMAP_MODULE[ \t]*\([ \t]*([A-Za-z_$][A-Za-z0-9_$]*)?[ \t]*,[ \t]*([A-Za-z_][A-Za-z0-9_]*)[ \t]*,[ \t]*([A-Za-z_][A-Za-z0-9_]*)[ \t]*\)[ \t]*$/u;
 
 /**
  * React Native exposes a no-argument RCT_EXPORT_MODULE() under the
@@ -699,13 +719,251 @@ function staticReactNativeObjectiveCModule(
   return methods.length === 0 ? null : { moduleName, methods };
 }
 
+function directReactNativeObjectiveCExternModuleHeader(
+  line: ObjectiveCLine
+): {
+  readonly objcClassName: string;
+  readonly moduleName: string;
+  readonly reactNativeRuleId: ReactNativeObjectiveCExternModuleRuleId;
+} | null {
+  const direct = DIRECT_RCT_EXTERN_MODULE_HEADER.exec(line.text);
+  if (direct !== null) {
+    const objcClassName = direct[1];
+    return objcClassName === undefined
+      ? null
+      : {
+          objcClassName,
+          moduleName: objcClassName,
+          reactNativeRuleId: "framework.react-native.objc.rct-extern-module"
+        };
+  }
+
+  const remapped = DIRECT_RCT_EXTERN_REMAP_MODULE_HEADER.exec(line.text);
+  if (remapped === null) {
+    return null;
+  }
+  const jsName = remapped[1];
+  const objcClassName = remapped[2];
+  if (objcClassName === undefined) {
+    return null;
+  }
+  const moduleName = jsName ?? objcClassName;
+  return REACT_NATIVE_BRIDGE_IDENTIFIER.test(moduleName)
+    ? {
+        objcClassName,
+        moduleName,
+        reactNativeRuleId: "framework.react-native.objc.rct-extern-remap-module"
+      }
+    : null;
+}
+
+function topLevelCommaOffsets(
+  sourceText: string,
+  from: number,
+  to: number
+): readonly number[] | null {
+  const commas: number[] = [];
+  let parenthesisDepth = 0;
+  for (let index = from; index < to; index += 1) {
+    const character = sourceText.charAt(index);
+    if (character === "(") {
+      parenthesisDepth += 1;
+    } else if (character === ")") {
+      parenthesisDepth -= 1;
+      if (parenthesisDepth < 0) {
+        return null;
+      }
+    } else if (character === "," && parenthesisDepth === 0) {
+      commas.push(index);
+    }
+  }
+  return parenthesisDepth === 0 ? commas : null;
+}
+
+function directIdentifierArgument(
+  sourceText: string,
+  from: number,
+  to: number
+): string | null {
+  const start = skipHorizontalWhitespace(sourceText, from, to);
+  const identifier = identifierAt(sourceText, start, to);
+  if (identifier === null) {
+    return null;
+  }
+  return skipHorizontalWhitespace(sourceText, identifier.end, to) === to ? identifier.name : null;
+}
+
+function directExternSelectorName(
+  sourceText: string,
+  from: number,
+  to: number
+): string | null {
+  const start = skipHorizontalWhitespace(sourceText, from, to);
+  const selector = identifierAt(sourceText, start, to);
+  if (selector === null) {
+    return null;
+  }
+  const next = skipHorizontalWhitespace(sourceText, selector.end, to);
+  return next === to || sourceText.charAt(next) === ":" ? selector.name : null;
+}
+
+/**
+ * Parses one single-line external-module method macro. `undefined` means the
+ * line is not a bridge macro; `null` means it resembles one but is not a
+ * complete direct proof, so the surrounding external declaration is rejected.
+ */
+function directReactNativeObjectiveCExternMethod(
+  sanitizedSource: string,
+  line: ObjectiveCLine
+): StaticReactNativeObjectiveCMethod | null | undefined {
+  const start = firstCodeOffset(line);
+  const macro = [
+    {
+      name: "RCT_EXTERN_METHOD",
+      ruleId: "framework.react-native.objc.rct-extern-method" as const,
+      remapped: false
+    },
+    {
+      name: "RCT_EXTERN__BLOCKING_SYNCHRONOUS_METHOD",
+      ruleId: "framework.react-native.objc.rct-extern-blocking-synchronous-method" as const,
+      remapped: false
+    },
+    {
+      name: "_RCT_EXTERN_REMAP_METHOD",
+      ruleId: "framework.react-native.objc.rct-extern-remap-method" as const,
+      remapped: true
+    }
+  ].find((candidate) =>
+    sanitizedSource.startsWith(candidate.name, start) &&
+    !isIdentifierPart(sanitizedSource.charAt(start + candidate.name.length))
+  );
+  if (macro === undefined) {
+    return undefined;
+  }
+
+  const opening = skipHorizontalWhitespace(sanitizedSource, start + macro.name.length, line.end);
+  if (sanitizedSource.charAt(opening) !== "(") {
+    return null;
+  }
+  const closing = closingParenthesisOnLine(sanitizedSource, opening, line.end);
+  if (
+    closing === null ||
+    skipHorizontalWhitespace(sanitizedSource, closing + 1, line.end) !== line.end
+  ) {
+    return null;
+  }
+
+  const commas = topLevelCommaOffsets(sanitizedSource, opening + 1, closing);
+  if (commas === null) {
+    return null;
+  }
+  if (!macro.remapped) {
+    if (commas.length !== 0) {
+      return null;
+    }
+    const name = directExternSelectorName(sanitizedSource, opening + 1, closing);
+    return name === null ? null : { start, end: closing + 1, name, reactNativeRuleId: macro.ruleId };
+  }
+
+  const firstComma = commas[0];
+  const secondComma = commas[1];
+  if (firstComma === undefined || secondComma === undefined || commas.length !== 2) {
+    return null;
+  }
+  const name = directIdentifierArgument(sanitizedSource, opening + 1, firstComma);
+  const selector = directExternSelectorName(sanitizedSource, firstComma + 1, secondComma);
+  const synchronous = directIdentifierArgument(sanitizedSource, secondComma + 1, closing);
+  if (name === null || selector === null || (synchronous !== "NO" && synchronous !== "YES")) {
+    return null;
+  }
+  return { start, end: closing + 1, name, reactNativeRuleId: macro.ruleId };
+}
+
+/**
+ * Collects direct `RCT_EXTERN_*` declarations used as an Objective-C bridge
+ * for Swift or otherwise external React Native modules. This models the
+ * declaration file itself; a later release may link it to Swift source only
+ * when class and selector identity can be independently proven.
+ */
+function collectDirectReactNativeObjectiveCExternModules(
+  sanitizedSource: string,
+  lines: readonly ObjectiveCLine[]
+): readonly StaticReactNativeObjectiveCExternModule[] | null {
+  const modules: StaticReactNativeObjectiveCExternModule[] = [];
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+    const line = lines[lineIndex];
+    if (line === undefined) {
+      return null;
+    }
+    const header = directReactNativeObjectiveCExternModuleHeader(line);
+    if (header === null) {
+      continue;
+    }
+
+    let endLine = lineIndex + 1;
+    for (; endLine < lines.length; endLine += 1) {
+      const candidate = lines[endLine];
+      if (candidate === undefined) {
+        return null;
+      }
+      if (DIRECT_END_DIRECTIVE.test(candidate.text)) {
+        break;
+      }
+      if (OBJECTIVE_C_CONTAINER_DIRECTIVE.test(candidate.text)) {
+        return null;
+      }
+    }
+    const end = lines[endLine];
+    if (end === undefined) {
+      return null;
+    }
+
+    const container: StaticObjectiveCContainer = {
+      kind: "interface",
+      name: header.objcClassName,
+      start: firstCodeOffset(line),
+      end: end.end,
+      bodyStartLine: lineIndex + 1,
+      endLine
+    };
+    const methods: StaticReactNativeObjectiveCMethod[] = [];
+    const methodNames = new Set<string>();
+    let valid = true;
+    for (let bodyLine = container.bodyStartLine; bodyLine < container.endLine; bodyLine += 1) {
+      const candidate = lines[bodyLine];
+      if (candidate === undefined) {
+        return null;
+      }
+      const method = directReactNativeObjectiveCExternMethod(sanitizedSource, candidate);
+      if (method === null) {
+        valid = false;
+        break;
+      }
+      if (method !== undefined) {
+        if (methodNames.has(method.name)) {
+          valid = false;
+          break;
+        }
+        methodNames.add(method.name);
+        methods.push(method);
+      }
+    }
+    if (valid) {
+      modules.push({ ...header, container, methods });
+    }
+    lineIndex = endLine;
+  }
+  return modules;
+}
+
 /**
  * Extracts a conservative Objective-C source subset from .m, .mm, and
  * source-proven .h files: complete direct non-category implementations,
  * ordinary class interfaces, and protocols. Implementations contribute
  * one-line brace-bodied methods; interfaces and protocols contribute one-line
  * semicolon-terminated method declarations. Categories, properties, calls,
- * inheritance edges, and Swift bridging remain deliberately out of scope.
+ * inheritance edges, and matching an external bridge declaration back to a
+ * Swift implementation remain deliberately out of scope.
  */
 export function extractObjectiveCFileFacts(input: ObjectiveCExtractFileFactsInput): ArtifactFacts {
   const reactNativeCapability = frameworkCapability("react-native");
@@ -799,6 +1057,36 @@ export function extractObjectiveCFileFacts(input: ObjectiveCExtractFileFactsInpu
     return symbol;
   }
 
+  function addReactNativeExternModule(
+    externModule: StaticReactNativeObjectiveCExternModule
+  ): SymbolNode {
+    const qualifiedName = input.filePath + "#extern:" + externModule.objcClassName;
+    const declarationOrdinal = nextOrdinal(qualifiedName, "class");
+    const range = rangeFor(
+      lineStarts,
+      externModule.container.start,
+      externModule.container.end
+    );
+    const symbol: SymbolNode = {
+      id: createSymbolId({
+        filePath: input.filePath,
+        qualifiedName,
+        kind: "class",
+        declarationOrdinal
+      }),
+      name: externModule.objcClassName,
+      qualifiedName,
+      kind: "class",
+      filePath: input.filePath,
+      range,
+      isExported: true,
+      declarationOrdinal
+    };
+    symbols.push(symbol);
+    addContainment(fileNode, symbol, range, externModule.reactNativeRuleId);
+    return symbol;
+  }
+
   function addProtocol(container: StaticObjectiveCContainer): SymbolNode {
     const qualifiedName = input.filePath + "#protocol:" + container.name;
     const declarationOrdinal = nextOrdinal(qualifiedName, "interface");
@@ -862,6 +1150,12 @@ export function extractObjectiveCFileFacts(input: ObjectiveCExtractFileFactsInpu
   const containers = collectDirectContainers(lines);
   if (containers === null) {
     return emptyFacts(symbols, edges);
+  }
+  const reactNativeExternModules = REACT_NATIVE_BRIDGE_HEADER.test(input.sourceText)
+    ? collectDirectReactNativeObjectiveCExternModules(sanitized.text, lines)
+    : [];
+  if (reactNativeExternModules === null) {
+    return emptyFacts([fileNode], []);
   }
 
   const methodsByContainer = new Map<StaticObjectiveCContainer, readonly StaticObjectiveCMethod[]>();
@@ -1005,6 +1299,21 @@ export function extractObjectiveCFileFacts(input: ObjectiveCExtractFileFactsInpu
           range: rangeFor(lineStarts, method.start, method.end)
         });
       }
+    }
+  }
+
+  for (const externModule of reactNativeExternModules) {
+    const parent = addReactNativeExternModule(externModule);
+    for (const method of externModule.methods) {
+      const methodSymbol = addMethod(parent, method, method.reactNativeRuleId);
+      reactNativeNativeMethods.push({
+        platform: "ios",
+        moduleName: externModule.moduleName,
+        methodName: method.name,
+        methodId: methodSymbol.id,
+        filePath: input.filePath,
+        range: rangeFor(lineStarts, method.start, method.end)
+      });
     }
   }
 

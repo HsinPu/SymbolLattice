@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.192.0 為開發者預覽版，尚未發佈至 npm；請由原始碼執行。
+> v0.193.0 為開發者預覽版，尚未發佈至 npm；請由原始碼執行。
 
 SymbolLattice 在本機建立可查詢的程式碼符號圖譜。每一條關係都保留規則、解析階段與信心值，嚴格區分 exact、heuristic 與 unresolved。
 
@@ -41,11 +41,11 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 Windows PowerShell 若找不到 npm，請改用 npm.cmd。索引資料保存在目標專案的 .symbol-lattice/index.sqlite。
 
-## v0.192.0 重點
+## v0.193.0 重點
 
-- 支援 Objective-C 無參數 RCT_EXPORT_MODULE()：以實作類別名稱產生模組名，並依官方慣例移除 RCT 或 RK 前綴。
-- 支援 RCT_REMAP_METHOD 的明確 JavaScript 方法名稱，並保留與 RCT_EXPORT_METHOD 不同的來源規則。
-- NativeModules 呼叫會精確連到對應 iOS macro 方法，結果可經 SQLite 索引、重新開啟與 callers 查詢驗證。
+- 支援 Swift 常見的 Objective-C 外部 bridge 宣告：RCT_EXTERN_MODULE 與 RCT_EXTERN_REMAP_MODULE。
+- 支援 RCT_EXTERN_METHOD、_RCT_EXTERN_REMAP_METHOD 與同步方法巨集；每種來源都保留獨立證據規則。
+- NativeModules 呼叫會精確連到已證明的 iOS bridge 宣告方法，並已驗證 SQLite 索引、重新開啟與 callers 查詢。
 
 ## 核心原則
 
@@ -55,9 +55,10 @@ Windows PowerShell 若找不到 npm，請改用 npm.cmd。索引資料保存在�
 
 ## 靜態分析邊界
 
-- Objective-C 僅接受直接 bridge header、剛好一個直接 RCT_EXPORT_MODULE，以及直接 RCT_EXPORT_METHOD 或 RCT_REMAP_METHOD；同一 JavaScript 方法名衝突時不產生原生目標。
+- Objective-C 實作僅接受直接 bridge header、剛好一個直接 RCT_EXPORT_MODULE，以及直接 RCT_EXPORT_METHOD 或 RCT_REMAP_METHOD；同一 JavaScript 方法名衝突時不產生原生目標。
+- Swift 外部 bridge 僅接受同一個直接 Objective-C 宣告、RCT_EXTERN_MODULE 或 RCT_EXTERN_REMAP_MODULE，及單行直接 RCT_EXTERN 方法巨集；它先建立可驗證的 bridge 宣告目標，不猜測對應的 Swift 函式。
 - Android Codegen 只接受直接 Spec 父類別、可證明的 getName()、直接覆寫與唯一 TypeScript TurboModule 合約的交集。
-- 不掃描建置產物，也不推斷執行期註冊、動態名稱、間接包裝、Swift 實作或自訂 macro wrapper。
+- 不掃描建置產物，也不推斷執行期註冊、動態名稱、間接包裝、Swift 函式對應或自訂 macro wrapper。
 
 ## 驗證
 

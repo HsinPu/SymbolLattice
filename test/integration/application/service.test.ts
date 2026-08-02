@@ -12390,6 +12390,109 @@ describe("SymbolLatticeService", () => {
     );
   });
 
+  it("persists React Native Swift external bridge declarations and their exact NativeModules callers", async () => {
+    const projectPath = await createInlineProject({
+      "src/mobile/bridge.ts": [
+        'import { NativeModules } from "react-native";',
+        "export function schedule() {",
+        "  NativeModules.CalendarModule.createEvent();",
+        "  NativeModules.CalendarJS.removeEvent();",
+        "}"
+      ].join("\n"),
+      "ios/CalendarModuleExport.m": [
+        "#import <React/RCTBridgeModule.h>",
+        "@interface RCT_EXTERN_MODULE(CalendarModule, NSObject)",
+        "RCT_EXTERN_METHOD(createEvent:(NSString *)name)",
+        "@end"
+      ].join("\n"),
+      "ios/RemappedCalendarModuleExport.m": [
+        "#import <React/RCTBridgeModule.h>",
+        "@interface RCT_EXTERN_REMAP_MODULE(CalendarJS, CalendarModule, NSObject)",
+        "_RCT_EXTERN_REMAP_METHOD(removeEvent, deleteEvent:(NSString *)eventId, NO)",
+        "@end"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const persistedFacts = graphStore.getArtifactFacts(projectPath);
+    const createEvent = await service.find(
+      projectPath,
+      "ios/CalendarModuleExport.m#extern:CalendarModule.createEvent"
+    );
+    const removeEvent = await service.find(
+      projectPath,
+      "ios/RemappedCalendarModuleExport.m#extern:CalendarModule.removeEvent"
+    );
+    const createEventTarget = createEvent.symbols[0];
+    const removeEventTarget = removeEvent.symbols[0];
+    if (createEventTarget === undefined || removeEventTarget === undefined) {
+      throw new Error("Expected indexed React Native Swift external bridge methods.");
+    }
+
+    expect(persistedFacts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          filePath: "ios/CalendarModuleExport.m",
+          reactNativeFacts: expect.objectContaining({
+            nativeMethods: [
+              expect.objectContaining({
+                moduleName: "CalendarModule",
+                methodName: "createEvent"
+              })
+            ]
+          })
+        }),
+        expect.objectContaining({
+          filePath: "ios/RemappedCalendarModuleExport.m",
+          reactNativeFacts: expect.objectContaining({
+            nativeMethods: [
+              expect.objectContaining({
+                moduleName: "CalendarJS",
+                methodName: "removeEvent"
+              })
+            ]
+          })
+        })
+      ])
+    );
+    for (const target of [createEventTarget, removeEventTarget]) {
+      const callers = await service.callers(projectPath, target.qualifiedName);
+      expect(callers.relations).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            symbol: expect.objectContaining({ name: "schedule" }),
+            edge: expect.objectContaining({
+              resolution: "exact",
+              confidence: 1,
+              evidence: expect.objectContaining({
+                ruleId: "framework.react-native.native-modules.direct-module-and-method.ios.exact-target",
+                stage: "module"
+              })
+            })
+          })
+        ])
+      );
+    }
+
+    const reopened = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+    await reopened.init({ projectPath });
+    const persistedCallers = await reopened.callers(projectPath, createEventTarget.qualifiedName);
+    expect(persistedCallers.relations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          symbol: expect.objectContaining({ name: "schedule" }),
+          edge: expect.objectContaining({
+            evidence: expect.objectContaining({
+              ruleId: "framework.react-native.native-modules.direct-module-and-method.ios.exact-target"
+            })
+          })
+        })
+      ])
+    );
+  });
+
   it("persists React Native Codegen Spec bridge targets only after their TypeScript contracts are unique", async () => {
     const projectPath = await createInlineProject({
       "src/mobile/NativeCalendar.ts": [

@@ -18462,6 +18462,47 @@ describe("source extraction", () => {
         "@end"
       ].join("\n")
     });
+    const objectiveCExtern = extractFileFacts({
+      filePath: "ios/CalendarModuleExport.m",
+      language: "objc",
+      sourceText: [
+        "#import <React/RCTBridgeModule.h>",
+        "@interface RCT_EXTERN_MODULE(CalendarModule, NSObject)",
+        "RCT_EXTERN_METHOD(createEvent:(NSString *)name)",
+        "RCT_EXTERN__BLOCKING_SYNCHRONOUS_METHOD(currentEvent)",
+        "@end"
+      ].join("\n")
+    });
+    const objectiveCExternRemapped = extractFileFacts({
+      filePath: "ios/RemappedCalendarModuleExport.m",
+      language: "objc",
+      sourceText: [
+        "#import <React/RCTBridgeModule.h>",
+        "@interface RCT_EXTERN_REMAP_MODULE(CalendarJS, CalendarModule, NSObject)",
+        "_RCT_EXTERN_REMAP_METHOD(removeEvent, deleteEvent:(NSString *)eventId, NO)",
+        "@end"
+      ].join("\n")
+    });
+    const objectiveCExternCollision = extractFileFacts({
+      filePath: "ios/CollisionModuleExport.m",
+      language: "objc",
+      sourceText: [
+        "#import <React/RCTBridgeModule.h>",
+        "@interface RCT_EXTERN_MODULE(CollisionModule, NSObject)",
+        "RCT_EXTERN_METHOD(removeEvent)",
+        "_RCT_EXTERN_REMAP_METHOD(removeEvent, deleteEvent:(NSString *)eventId, NO)",
+        "@end"
+      ].join("\n")
+    });
+    const objectiveCExternWithoutBridgeHeader = extractFileFacts({
+      filePath: "ios/UnprovenModuleExport.m",
+      language: "objc",
+      sourceText: [
+        "@interface RCT_EXTERN_MODULE(UnprovenModule, NSObject)",
+        "RCT_EXTERN_METHOD(createEvent)",
+        "@end"
+      ].join("\n")
+    });
     const shadowed = extractFileFacts({
       filePath: "src/mobile/shadowed.ts",
       language: "typescript",
@@ -18560,6 +18601,65 @@ describe("source extraction", () => {
       })
     ]);
     expect(objectiveCRemapCollision.reactNativeFacts?.nativeMethods).toEqual([]);
+    expect(objectiveCExtern.reactNativeFacts?.nativeMethods).toEqual([
+      expect.objectContaining({
+        platform: "ios",
+        moduleName: "CalendarModule",
+        methodName: "createEvent"
+      }),
+      expect.objectContaining({
+        platform: "ios",
+        moduleName: "CalendarModule",
+        methodName: "currentEvent"
+      })
+    ]);
+    expect(objectiveCExtern.edges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          referenceName: "CalendarModule",
+          evidence: expect.objectContaining({
+            ruleId: "framework.react-native.objc.rct-extern-module"
+          })
+        }),
+        expect.objectContaining({
+          referenceName: "createEvent",
+          evidence: expect.objectContaining({
+            ruleId: "framework.react-native.objc.rct-extern-method"
+          })
+        }),
+        expect.objectContaining({
+          referenceName: "currentEvent",
+          evidence: expect.objectContaining({
+            ruleId: "framework.react-native.objc.rct-extern-blocking-synchronous-method"
+          })
+        })
+      ])
+    );
+    expect(objectiveCExternRemapped.reactNativeFacts?.nativeMethods).toEqual([
+      expect.objectContaining({
+        platform: "ios",
+        moduleName: "CalendarJS",
+        methodName: "removeEvent"
+      })
+    ]);
+    expect(objectiveCExternRemapped.edges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          referenceName: "CalendarModule",
+          evidence: expect.objectContaining({
+            ruleId: "framework.react-native.objc.rct-extern-remap-module"
+          })
+        }),
+        expect.objectContaining({
+          referenceName: "removeEvent",
+          evidence: expect.objectContaining({
+            ruleId: "framework.react-native.objc.rct-extern-remap-method"
+          })
+        })
+      ])
+    );
+    expect(objectiveCExternCollision.reactNativeFacts?.nativeMethods).toEqual([]);
+    expect(objectiveCExternWithoutBridgeHeader.reactNativeFacts?.nativeMethods).toEqual([]);
     expect(shadowed.reactNativeFacts?.nativeModuleCalls).toEqual([]);
   });
 

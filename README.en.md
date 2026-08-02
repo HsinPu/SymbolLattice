@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.192.0 is a developer preview and is not published to npm. Run it from source.
+> v0.193.0 is a developer preview and is not published to npm. Run it from source.
 
 SymbolLattice builds a queryable local code-symbol graph. Every relation retains its rule, resolution stage, and confidence; exact, heuristic, and unresolved evidence are never conflated.
 
@@ -41,11 +41,11 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 On Windows PowerShell, use npm.cmd if npm is unavailable. Index data stays in the target project's .symbol-lattice/index.sqlite.
 
-## v0.192.0 highlights
+## v0.193.0 highlights
 
-- Supports a no-argument Objective-C RCT_EXPORT_MODULE() by deriving its module name from the implementation class and removing the documented RCT or RK prefix.
-- Supports RCT_REMAP_METHOD with its explicit JavaScript method name and distinct source-rule evidence from RCT_EXPORT_METHOD.
-- NativeModules calls resolve exactly to the corresponding iOS macro method, including SQLite persistence, reopen, and callers-query verification.
+- Supports the conventional Objective-C external bridge declaration used by Swift: RCT_EXTERN_MODULE and RCT_EXTERN_REMAP_MODULE.
+- Supports RCT_EXTERN_METHOD, _RCT_EXTERN_REMAP_METHOD, and the synchronous external-method macro with distinct source-rule evidence for each form.
+- NativeModules calls resolve exactly to proven iOS bridge-declaration methods, with SQLite persistence, reopen, and callers-query verification.
 
 ## Principles
 
@@ -55,9 +55,10 @@ On Windows PowerShell, use npm.cmd if npm is unavailable. Index data stays in th
 
 ## Static-analysis boundaries
 
-- Objective-C accepts only a direct bridge header, exactly one direct RCT_EXPORT_MODULE, and direct RCT_EXPORT_METHOD or RCT_REMAP_METHOD macros. A duplicate JavaScript method name emits no native target.
+- Objective-C implementations accept only a direct bridge header, exactly one direct RCT_EXPORT_MODULE, and direct RCT_EXPORT_METHOD or RCT_REMAP_METHOD macros. A duplicate JavaScript method name emits no native target.
+- A Swift external bridge accepts only one direct Objective-C declaration, RCT_EXTERN_MODULE or RCT_EXTERN_REMAP_MODULE, and single-line direct RCT_EXTERN method macros. It creates a verifiable bridge-declaration target; it does not guess a corresponding Swift function.
 - Android Codegen accepts only the intersection of a direct Spec superclass, a proven getName(), a direct override, and one unique TypeScript TurboModule contract.
-- It does not scan build output or infer runtime registration, dynamic names, indirect wrappers, Swift implementations, or custom macro wrappers.
+- It does not scan build output or infer runtime registration, dynamic names, indirect wrappers, Swift-function linkage, or custom macro wrappers.
 
 ## Verification
 

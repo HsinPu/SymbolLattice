@@ -6,6 +6,26 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.193.0] - 2026-08-02
+
+### Added
+
+- Objective-C React Native extraction now recognizes direct <code>RCT_EXTERN_MODULE</code> and <code>RCT_EXTERN_REMAP_MODULE</code> declarations, the conventional bridge surface for Swift or private native classes.
+- Direct <code>RCT_EXTERN_METHOD</code>, <code>_RCT_EXTERN_REMAP_METHOD</code>, and <code>RCT_EXTERN__BLOCKING_SYNCHRONOUS_METHOD</code> declarations now emit exact iOS native-method facts with distinct source-rule evidence. Explicit module and JavaScript-method remaps remain literal and inspectable.
+- Unit, project-resolution, and SQLite-backed service coverage prove default and remapped module names, ordinary and synchronous methods, duplicate-name rejection, exact NativeModules projection, fact persistence, reopened indexes, and callers queries.
+
+### Compatibility
+
+- The artifact-facts extractor advances to <code>multi-language-ast-v172</code>; the project resolver remains <code>project-resolver-v61</code> because the existing literal module-plus-method projection already handles these direct bridge facts. Existing graphs and SQLite schema remain readable; the next explicit <code>sync</code> or <code>index</code> refreshes eligible Objective-C bridge declarations.
+
+### Deliberate limits
+
+- This recognizes only a direct bridge-header import, one-line <code>RCT_EXTERN_*</code> declarations, direct identifiers, balanced same-line macro arguments, and unique JavaScript method names within that declaration. It does not parse generated/preprocessed output, wrapped or multiline macros, runtime registration, dynamic names, or link the Objective-C bridge declaration to a Swift class or selector.
+
+### Comparison notes
+
+- The inspected CodeGraph React Native path does not contain <code>RCT_EXTERN_*</code> extraction. SymbolLattice independently adds a conservative Swift-bridge declaration model: it retains literal module-plus-method identity, macro-specific evidence, and exact iOS NativeModules edges, while deliberately leaving actual Swift source linkage for a later evidence-proven slice. This is stronger on this bounded declaration surface, not a claim of broader overall React Native coverage.
+
 ## [0.192.0] - 2026-08-02
 
 ### Added

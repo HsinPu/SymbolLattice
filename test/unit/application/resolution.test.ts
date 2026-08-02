@@ -2868,6 +2868,98 @@ describe("TypeScript configuration module resolution", () => {
     );
   });
 
+  it("projects direct React Native Swift external bridge declarations through NativeModules", () => {
+    const sourceDocuments: readonly SourceDocument[] = [
+      {
+        absolutePath: "C:/project/src/bridge.ts",
+        relativePath: "src/bridge.ts",
+        language: "typescript",
+        sourceText: [
+          'import { NativeModules } from "react-native";',
+          "export function schedule() {",
+          "  NativeModules.CalendarModule.createEvent();",
+          "  NativeModules.CalendarModule.currentEvent();",
+          "  NativeModules.CalendarJS.removeEvent();",
+          "}"
+        ].join("\n"),
+        contentHash: "swift-extern-bridge"
+      },
+      {
+        absolutePath: "C:/project/ios/CalendarModuleExport.m",
+        relativePath: "ios/CalendarModuleExport.m",
+        language: "objc",
+        sourceText: [
+          "#import <React/RCTBridgeModule.h>",
+          "@interface RCT_EXTERN_MODULE(CalendarModule, NSObject)",
+          "RCT_EXTERN_METHOD(createEvent:(NSString *)name)",
+          "RCT_EXTERN__BLOCKING_SYNCHRONOUS_METHOD(currentEvent)",
+          "@end"
+        ].join("\n"),
+        contentHash: "swift-extern-default"
+      },
+      {
+        absolutePath: "C:/project/ios/RemappedCalendarModuleExport.m",
+        relativePath: "ios/RemappedCalendarModuleExport.m",
+        language: "objc",
+        sourceText: [
+          "#import <React/RCTBridgeModule.h>",
+          "@interface RCT_EXTERN_REMAP_MODULE(CalendarJS, CalendarModule, NSObject)",
+          "_RCT_EXTERN_REMAP_METHOD(removeEvent, deleteEvent:(NSString *)eventId, NO)",
+          "@end"
+        ].join("\n"),
+        contentHash: "swift-extern-remapped"
+      }
+    ];
+    const snapshot = resolveProjectFacts({
+      sourceDocuments,
+      extractedFiles: sourceDocuments.map((document) =>
+        extractFileFacts({
+          filePath: document.relativePath,
+          language: document.language,
+          sourceText: document.sourceText
+        })
+      ),
+      indexedAt: "2026-08-02T00:00:00.000Z"
+    });
+    const schedule = snapshot.symbols.find(
+      (symbol) => symbol.filePath === "src/bridge.ts" && symbol.name === "schedule"
+    );
+    const createEvent = snapshot.symbols.find(
+      (symbol) => symbol.filePath === "ios/CalendarModuleExport.m" && symbol.name === "createEvent"
+    );
+    const currentEvent = snapshot.symbols.find(
+      (symbol) => symbol.filePath === "ios/CalendarModuleExport.m" && symbol.name === "currentEvent"
+    );
+    const removeEvent = snapshot.symbols.find(
+      (symbol) =>
+        symbol.filePath === "ios/RemappedCalendarModuleExport.m" && symbol.name === "removeEvent"
+    );
+
+    expect(schedule).toBeDefined();
+    expect(createEvent).toBeDefined();
+    expect(currentEvent).toBeDefined();
+    expect(removeEvent).toBeDefined();
+    for (const [referenceName, target] of [
+      ["CalendarModule.createEvent", createEvent],
+      ["CalendarModule.currentEvent", currentEvent],
+      ["CalendarJS.removeEvent", removeEvent]
+    ] as const) {
+      expect(
+        snapshot.edges.find(
+          (edge) => edge.sourceId === schedule?.id && edge.referenceName === referenceName
+        )
+      ).toMatchObject({
+        targetId: target?.id,
+        resolution: "exact",
+        confidence: 1,
+        evidence: expect.objectContaining({
+          ruleId: "framework.react-native.native-modules.direct-module-and-method.ios.exact-target",
+          stage: "module"
+        })
+      });
+    }
+  });
+
   it("keeps colliding React Native implementations on one platform unresolved", () => {
     const sourceDocuments: readonly SourceDocument[] = [
       {
