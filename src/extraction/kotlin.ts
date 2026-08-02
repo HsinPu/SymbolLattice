@@ -470,6 +470,85 @@ function staticKotlinSpringPath(annotation: KotlinSyntaxNode): string | null {
   return path.length === 0 || (path.startsWith("/") && !path.includes("//")) ? path : null;
 }
 
+function staticKotlinSpringPathsFromValue(value: KotlinSyntaxNode): readonly string[] | null {
+  const literals =
+    value.kind() === "collection_literal"
+      ? directChildren(value).filter(
+          (child) => child.kind() !== "[" && child.kind() !== "]" && child.kind() !== ","
+        )
+      : [value];
+  if (literals.length === 0) {
+    return null;
+  }
+  const paths = literals.map((literal) => staticKotlinPlainStringLiteral(literal));
+  if (paths.some((path): path is null => path === null)) {
+    return null;
+  }
+  const exactPaths = paths as readonly string[];
+  const canonicalPaths = exactPaths.map((path) => {
+    if (path.length === 0) {
+      return "";
+    }
+    return path.startsWith("/") && !path.includes("//") ? joinHttpPaths(path, "") : null;
+  });
+  if (canonicalPaths.some((path): path is null => path === null)) {
+    return null;
+  }
+  const exactCanonicalPaths = canonicalPaths as readonly string[];
+  return new Set(exactCanonicalPaths).size === exactCanonicalPaths.length
+    ? exactCanonicalPaths
+    : null;
+}
+
+/**
+ * Accepts a class-level Spring path as one literal or a non-empty, unique
+ * literal collection. Conditions and dynamic values remain excluded so the
+ * cross-product with direct local handlers stays evidence-backed.
+ */
+function staticKotlinSpringWebClassPaths(annotation: KotlinSyntaxNode): readonly string[] | null {
+  if (annotation.kind() !== "annotation") {
+    return null;
+  }
+  const annotationChildren = directChildren(annotation);
+  if (annotationChildren.length !== 2) {
+    return null;
+  }
+  if (annotationChildren[1]?.kind() === "user_type") {
+    return [""];
+  }
+  const invocation = staticKotlinAnnotationInvocation(annotation);
+  if (invocation === null) {
+    return null;
+  }
+  const argumentLists = directChildren(invocation).filter((child) => child.kind() === "value_arguments");
+  if (argumentLists.length !== 1 || argumentLists[0] === undefined) {
+    return null;
+  }
+  const arguments_ = directChildren(argumentLists[0]).filter(
+    (child) => child.kind() === "value_argument"
+  );
+  if (arguments_.length === 0) {
+    return [""];
+  }
+  if (arguments_.length !== 1 || arguments_[0] === undefined) {
+    return null;
+  }
+  const argumentChildren = directChildren(arguments_[0]);
+  if (argumentChildren.length === 1 && argumentChildren[0] !== undefined) {
+    return staticKotlinSpringPathsFromValue(argumentChildren[0]);
+  }
+  if (
+    argumentChildren.length !== 3 ||
+    argumentChildren[0]?.kind() !== "simple_identifier" ||
+    (nodeText(argumentChildren[0]) !== "path" && nodeText(argumentChildren[0]) !== "value") ||
+    argumentChildren[1]?.kind() !== "=" ||
+    argumentChildren[2] === undefined
+  ) {
+    return null;
+  }
+  return staticKotlinSpringPathsFromValue(argumentChildren[2]);
+}
+
 function staticKotlinSpringRequestMethodValue(
   node: KotlinSyntaxNode,
   imports: ReadonlySet<string>
@@ -634,10 +713,10 @@ function staticKotlinSpringWebController(
   );
 }
 
-function staticKotlinSpringWebClassPrefix(
+function staticKotlinSpringWebClassPrefixes(
   declaration: StaticKotlinType,
   imports: ReadonlySet<string>
-): string | null {
+): readonly string[] | null {
   const annotations = staticKotlinAnnotations(declaration.node);
   const annotationsNamedRequestMapping = annotations.filter((annotation) =>
     staticKotlinAnnotationHasExpectedName(annotation, SPRING_REQUEST_MAPPING_IMPORT)
@@ -652,10 +731,10 @@ function staticKotlinSpringWebClassPrefix(
     return null;
   }
   if (mappings.length === 0) {
-    return "";
+    return [""];
   }
   const mapping = mappings[0];
-  return mapping === undefined ? null : staticKotlinSpringPath(mapping);
+  return mapping === undefined ? null : staticKotlinSpringWebClassPaths(mapping);
 }
 
 /**
@@ -1432,8 +1511,8 @@ export function extractKotlinFileFacts(input: KotlinExtractFileFactsInput): Arti
       .map((node) => staticKotlinType(node))
       .filter((candidate): candidate is StaticKotlinType => candidate !== null)) {
       const typeSymbol = addType(declaration);
-      const springWebPrefix = staticKotlinSpringWebController(declaration, imports)
-        ? staticKotlinSpringWebClassPrefix(declaration, imports)
+      const springWebPrefixes = staticKotlinSpringWebController(declaration, imports)
+        ? staticKotlinSpringWebClassPrefixes(declaration, imports)
         : null;
       for (const reference of staticKotlinSpringBootPropertiesReferences(declaration, imports)) {
         springBootPropertiesValueReferences.push({
@@ -1503,15 +1582,17 @@ export function extractKotlinFileFacts(input: KotlinExtractFileFactsInput): Arti
             range: rangeForNode(reference.node)
           });
         }
-        if (springWebPrefix !== null) {
+        if (springWebPrefixes !== null) {
           const routes = staticKotlinSpringWebMethodRoutes(methodDeclaration, imports);
-          for (const route of routes) {
-            addFrameworkRoute(
-              typeSymbol,
-              { ...route, path: joinHttpPaths(springWebPrefix, route.path) },
-              methodSymbol,
-              route.ruleId
-            );
+          for (const springWebPrefix of springWebPrefixes) {
+            for (const route of routes) {
+              addFrameworkRoute(
+                typeSymbol,
+                { ...route, path: joinHttpPaths(springWebPrefix, route.path) },
+                methodSymbol,
+                route.ruleId
+              );
+            }
           }
         }
       }

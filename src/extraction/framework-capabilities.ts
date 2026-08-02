@@ -447,7 +447,7 @@ export const FRAMEWORK_CAPABILITIES = [
     routeRegistrations: [],
     surfaces: [
       "direct imported or fully-qualified Spring controller annotations",
-      "literal class and HTTP-method mapping annotations, including one or more exact RequestMapping method enums, on direct local Java methods or concrete Kotlin functions"
+      "one or more literal class-level paths and HTTP-method mapping annotations, including one or more exact RequestMapping method enums, on direct local Java methods or concrete Kotlin functions"
     ]
   },
   {

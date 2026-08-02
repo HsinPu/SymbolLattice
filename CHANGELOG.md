@@ -6,6 +6,26 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.185.0] - 2026-08-02
+
+### Added
+
+- Parser-backed Spring Web extraction now expands one direct class-level <code>@RequestMapping</code> path into one or more exact prefixes. Java accepts a single literal or literal <code>{ ... }</code> array; Kotlin accepts a single literal or literal <code>[ ... ]</code> collection, in positional, <code>path =</code>, or <code>value =</code> form.
+- Every unique class prefix is cross-producted with every already-proven direct local method route, including the explicit multi-<code>RequestMethod</code> surface added in v0.184. Trailing-slash-equivalent, duplicate prefixes are rejected before a duplicate route can enter the graph.
+- New unit and persisted-service coverage proves Java/Kotlin class-prefix expansion, multi-prefix × multi-method combinations, canonical path joining, method-filtered route queries, and rejection of duplicate or conditional class mappings.
+
+### Compatibility
+
+- The artifact-facts extractor advances to <code>multi-language-ast-v165</code>. Existing graphs and SQLite schema remain readable; the next explicit <code>sync</code> or <code>index</code> re-extracts eligible Java and Kotlin Spring controller artifacts under the expanded class-prefix surface.
+
+### Deliberate limits
+
+- This remains a bounded static Spring route surface. Method-level path arrays, default/ALL mappings, empty or duplicate method collections, headers, params, consumes, produces, custom/composed annotations, aliases/wildcard imports, dynamic or escaped paths, class-path conditions, profiles, security, proxy registration, and deployed routing behavior remain excluded.
+
+### Comparison notes
+
+- The inspected CodeGraph Spring resolver uses <code>parseMappingPath</code>, which selects the first quoted path when deriving a class prefix before it joins method routes. SymbolLattice independently parses and cross-products every non-ambiguous literal class prefix while retaining the source-ranged, language-specific exact handler evidence for each route. CodeGraph remains more permissive in general; SymbolLattice is more complete for this static literal collection subset.
+
 ## [0.184.0] - 2026-08-02
 
 ### Added

@@ -270,6 +270,88 @@ function staticSpringPath(
   return path.startsWith("/") && !path.includes("//") ? path : null;
 }
 
+function staticSpringPathsFromValue(
+  input: JavaExtractFileFactsInput,
+  value: JavaSyntaxNode
+): readonly string[] | null {
+  const literals =
+    value.name === "ElementValueArrayInitializer"
+      ? directChildren(value).filter((child) => !["{", "}", ","].includes(child.name))
+      : [value];
+  if (literals.length === 0) {
+    return null;
+  }
+  const paths = literals.map((literal) => staticPlainJavaString(input, literal));
+  if (paths.some((path): path is null => path === null)) {
+    return null;
+  }
+  const exactPaths = paths as readonly string[];
+  const canonicalPaths = exactPaths.map((path) => {
+    if (path.length === 0) {
+      return "";
+    }
+    return path.startsWith("/") && !path.includes("//") ? joinHttpPaths(path, "") : null;
+  });
+  if (canonicalPaths.some((path): path is null => path === null)) {
+    return null;
+  }
+  const exactCanonicalPaths = canonicalPaths as readonly string[];
+  return new Set(exactCanonicalPaths).size === exactCanonicalPaths.length
+    ? exactCanonicalPaths
+    : null;
+}
+
+/**
+ * Accepts one literal class-level Spring path or a non-empty, unique literal
+ * array. Request conditions and dynamic values are deliberately excluded so a
+ * class prefix never turns a local method route into a plausible false positive.
+ */
+function staticSpringClassPaths(
+  input: JavaExtractFileFactsInput,
+  annotation: StaticJavaAnnotation
+): readonly string[] | null {
+  if (annotation.node.name === "MarkerAnnotation") {
+    return [""];
+  }
+  if (annotation.node.name !== "Annotation") {
+    return null;
+  }
+  const arguments_ = directChildren(annotation.node).find(
+    (child) => child.name === "AnnotationArgumentList"
+  );
+  if (arguments_ === undefined) {
+    return null;
+  }
+  const values = directChildren(arguments_).filter(
+    (child) => !["(", ")", ","].includes(child.name)
+  );
+  if (values.length === 0) {
+    return [""];
+  }
+  if (values.length !== 1 || values[0] === undefined) {
+    return null;
+  }
+  const value = values[0];
+  if (value.name === "StringLiteral" || value.name === "ElementValueArrayInitializer") {
+    return staticSpringPathsFromValue(input, value);
+  }
+  if (value.name !== "ElementValuePair") {
+    return null;
+  }
+  const pair = directChildren(value);
+  const key = pair[0] === undefined ? null : identifierText(input, pair[0]);
+  const argument = pair[2];
+  if (
+    pair.length !== 3 ||
+    pair[1]?.name !== "AssignOp" ||
+    (key !== "path" && key !== "value") ||
+    argument === undefined
+  ) {
+    return null;
+  }
+  return staticSpringPathsFromValue(input, argument);
+}
+
 function staticSpringRequestMethod(
   input: JavaExtractFileFactsInput,
   node: JavaSyntaxNode,
@@ -677,11 +759,11 @@ function staticJavaMethod(
   };
 }
 
-function staticClassPrefix(
+function staticClassPrefixes(
   input: JavaExtractFileFactsInput,
   declaration: StaticJavaClass,
   imports: ReadonlyMap<string, string>
-): string | null {
+): readonly string[] | null {
   const annotationsNamedRequestMapping = declaration.annotations.filter(
     (annotation) => annotation.name === "RequestMapping" || annotation.name === SPRING_REQUEST_MAPPING_PATH
   );
@@ -694,10 +776,10 @@ function staticClassPrefix(
     return null;
   }
   if (mappings.length === 0) {
-    return "";
+    return [""];
   }
   const mapping = mappings[0];
-  return mapping === undefined ? null : staticSpringPath(input, mapping);
+  return mapping === undefined ? null : staticSpringClassPaths(input, mapping);
 }
 
 function staticMethodRoutes(
@@ -1567,20 +1649,22 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
       }
 
       if (isSpringController(classDeclaration, imports)) {
-        const prefix = staticClassPrefix(input, classDeclaration, imports);
-        if (prefix !== null) {
+        const prefixes = staticClassPrefixes(input, classDeclaration, imports);
+        if (prefixes !== null) {
           for (const methodDeclaration of methods) {
             const routes = staticMethodRoutes(input, methodDeclaration, imports);
             const handler = symbolsByMethod.get(methodDeclaration);
             if (handler !== undefined) {
-              for (const route of routes) {
-                addFrameworkRoute(
-                  classSymbol,
-                  { ...route, path: joinHttpPaths(prefix, route.path) },
-                  handler,
-                  route.ruleId ??
-                    "framework.spring-web.direct-controller.literal-method-mapping.local-method"
-                );
+              for (const prefix of prefixes) {
+                for (const route of routes) {
+                  addFrameworkRoute(
+                    classSymbol,
+                    { ...route, path: joinHttpPaths(prefix, route.path) },
+                    handler,
+                    route.ruleId ??
+                      "framework.spring-web.direct-controller.literal-method-mapping.local-method"
+                  );
+                }
               }
             }
           }

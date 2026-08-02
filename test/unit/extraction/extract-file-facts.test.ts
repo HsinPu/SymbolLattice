@@ -7378,6 +7378,121 @@ describe("source extraction", () => {
     ).toEqual([[], [], [], [], []]);
   });
 
+  it("cross-products unique literal Java Spring class prefixes with direct method routes", () => {
+    const facts = extractFileFacts({
+      filePath: "src/api/VersionedController.java",
+      language: "java",
+      sourceText: [
+        "import org.springframework.web.bind.annotation.RestController;",
+        "import org.springframework.web.bind.annotation.RequestMapping;",
+        "import org.springframework.web.bind.annotation.RequestMethod;",
+        "import org.springframework.web.bind.annotation.GetMapping;",
+        "",
+        "@RestController",
+        '@RequestMapping(path = { "/api", "/v2/" })',
+        "class VersionedController {",
+        '  @GetMapping("/status")',
+        '  String status() { return "ok"; }',
+        "",
+        '  @RequestMapping(value = "/jobs", method = { RequestMethod.POST, RequestMethod.DELETE })',
+        '  String jobs() { return "ok"; }',
+        "}"
+      ].join("\n")
+    });
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId,
+          edge.resolution
+        ])
+    ).toEqual([
+      [
+        "GET /api/status",
+        "src/api/VersionedController.java#VersionedController.status",
+        "framework.spring-web.direct-controller.literal-method-mapping.local-method",
+        "exact"
+      ],
+      [
+        "GET /v2/status",
+        "src/api/VersionedController.java#VersionedController.status",
+        "framework.spring-web.direct-controller.literal-method-mapping.local-method",
+        "exact"
+      ],
+      [
+        "POST /api/jobs",
+        "src/api/VersionedController.java#VersionedController.jobs",
+        "framework.spring-web.direct-controller.literal-request-mapping.local-method",
+        "exact"
+      ],
+      [
+        "DELETE /api/jobs",
+        "src/api/VersionedController.java#VersionedController.jobs",
+        "framework.spring-web.direct-controller.literal-request-mapping.local-method",
+        "exact"
+      ],
+      [
+        "POST /v2/jobs",
+        "src/api/VersionedController.java#VersionedController.jobs",
+        "framework.spring-web.direct-controller.literal-request-mapping.local-method",
+        "exact"
+      ],
+      [
+        "DELETE /v2/jobs",
+        "src/api/VersionedController.java#VersionedController.jobs",
+        "framework.spring-web.direct-controller.literal-request-mapping.local-method",
+        "exact"
+      ]
+    ]);
+  });
+
+  it("rejects ambiguous Java Spring class prefix collections", () => {
+    const rejected = [
+      [
+        "src/api/DuplicatePrefixController.java",
+        [
+          "import org.springframework.web.bind.annotation.RestController;",
+          "import org.springframework.web.bind.annotation.RequestMapping;",
+          "import org.springframework.web.bind.annotation.GetMapping;",
+          "",
+          "@RestController",
+          '@RequestMapping({ "/api", "/api/" })',
+          "class DuplicatePrefixController {",
+          '  @GetMapping("/status")',
+          "  String status() { return \"ok\"; }",
+          "}"
+        ].join("\n")
+      ],
+      [
+        "src/api/ConditionalPrefixController.java",
+        [
+          "import org.springframework.web.bind.annotation.RestController;",
+          "import org.springframework.web.bind.annotation.RequestMapping;",
+          "import org.springframework.web.bind.annotation.GetMapping;",
+          "",
+          "@RestController",
+          '@RequestMapping(path = { "/api", "/v2" }, produces = "application/json")',
+          "class ConditionalPrefixController {",
+          '  @GetMapping("/status")',
+          "  String status() { return \"ok\"; }",
+          "}"
+        ].join("\n")
+      ]
+    ] as const;
+
+    expect(
+      rejected.map(([filePath, sourceText]) =>
+        extractFileFacts({ filePath, language: "java", sourceText }).edges.filter(
+          (edge) => edge.kind === "routes"
+        )
+      )
+    ).toEqual([[], []]);
+  });
+
   it("accepts direct Spring Controller, PutMapping, and PatchMapping imports", () => {
     const facts = extractFileFacts({
       filePath: "src/api/SettingsController.java",
@@ -12507,6 +12622,121 @@ describe("source extraction", () => {
         )
       )
     ).toEqual([[], [], [], [], []]);
+  });
+
+  it("cross-products unique literal Kotlin Spring class prefixes with direct function routes", () => {
+    const facts = extractFileFacts({
+      filePath: "src/api/VersionedKotlinController.kt",
+      language: "kotlin",
+      sourceText: [
+        "import org.springframework.web.bind.annotation.RestController",
+        "import org.springframework.web.bind.annotation.RequestMapping",
+        "import org.springframework.web.bind.annotation.RequestMethod",
+        "import org.springframework.web.bind.annotation.GetMapping",
+        "",
+        "@RestController",
+        '@RequestMapping(path = ["/api", "/v2/"])',
+        "class VersionedKotlinController {",
+        '  @GetMapping("/status")',
+        '  fun status(): String = "ok"',
+        "",
+        '  @RequestMapping(value = "/jobs", method = [RequestMethod.POST, RequestMethod.DELETE])',
+        '  fun jobs(): String = "ok"',
+        "}"
+      ].join("\n")
+    });
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId,
+          edge.resolution
+        ])
+    ).toEqual([
+      [
+        "GET /api/status",
+        "src/api/VersionedKotlinController.kt#VersionedKotlinController.status",
+        "framework.spring-web.direct-kotlin-controller.literal-method-mapping.local-function",
+        "exact"
+      ],
+      [
+        "GET /v2/status",
+        "src/api/VersionedKotlinController.kt#VersionedKotlinController.status",
+        "framework.spring-web.direct-kotlin-controller.literal-method-mapping.local-function",
+        "exact"
+      ],
+      [
+        "POST /api/jobs",
+        "src/api/VersionedKotlinController.kt#VersionedKotlinController.jobs",
+        "framework.spring-web.direct-kotlin-controller.literal-request-mapping.local-function",
+        "exact"
+      ],
+      [
+        "DELETE /api/jobs",
+        "src/api/VersionedKotlinController.kt#VersionedKotlinController.jobs",
+        "framework.spring-web.direct-kotlin-controller.literal-request-mapping.local-function",
+        "exact"
+      ],
+      [
+        "POST /v2/jobs",
+        "src/api/VersionedKotlinController.kt#VersionedKotlinController.jobs",
+        "framework.spring-web.direct-kotlin-controller.literal-request-mapping.local-function",
+        "exact"
+      ],
+      [
+        "DELETE /v2/jobs",
+        "src/api/VersionedKotlinController.kt#VersionedKotlinController.jobs",
+        "framework.spring-web.direct-kotlin-controller.literal-request-mapping.local-function",
+        "exact"
+      ]
+    ]);
+  });
+
+  it("rejects ambiguous Kotlin Spring class prefix collections", () => {
+    const rejected = [
+      [
+        "src/api/DuplicateKotlinPrefixController.kt",
+        [
+          "import org.springframework.web.bind.annotation.RestController",
+          "import org.springframework.web.bind.annotation.RequestMapping",
+          "import org.springframework.web.bind.annotation.GetMapping",
+          "",
+          "@RestController",
+          '@RequestMapping(["/api", "/api/"])',
+          "class DuplicateKotlinPrefixController {",
+          '  @GetMapping("/status")',
+          "  fun status(): String = \"ok\"",
+          "}"
+        ].join("\n")
+      ],
+      [
+        "src/api/ConditionalKotlinPrefixController.kt",
+        [
+          "import org.springframework.web.bind.annotation.RestController",
+          "import org.springframework.web.bind.annotation.RequestMapping",
+          "import org.springframework.web.bind.annotation.GetMapping",
+          "",
+          "@RestController",
+          '@RequestMapping(path = ["/api", "/v2"], produces = "application/json")',
+          "class ConditionalKotlinPrefixController {",
+          '  @GetMapping("/status")',
+          "  fun status(): String = \"ok\"",
+          "}"
+        ].join("\n")
+      ]
+    ] as const;
+
+    expect(
+      rejected.map(([filePath, sourceText]) =>
+        extractFileFacts({ filePath, language: "kotlin", sourceText }).edges.filter(
+          (edge) => edge.kind === "routes"
+        )
+      )
+    ).toEqual([[], []]);
   });
 
   it("rejects Kotlin Spring Web routes without strict controller, mapping, and literal proof", () => {

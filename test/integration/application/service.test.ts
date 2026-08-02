@@ -12013,7 +12013,7 @@ describe("SymbolLatticeService", () => {
         "import org.springframework.web.bind.annotation.RequestMethod;",
         "",
         "@RestController",
-        '@RequestMapping("/java")',
+        '@RequestMapping({ "/java", "/java-v2/" })',
         "class JavaRequestMappingController {",
         '  @RequestMapping(value = "/health", method = { RequestMethod.GET, RequestMethod.POST })',
         '  String health() { return "ok"; }',
@@ -12025,7 +12025,7 @@ describe("SymbolLatticeService", () => {
         "import org.springframework.web.bind.annotation.RequestMethod",
         "",
         "@RestController",
-        '@RequestMapping("/kotlin")',
+        '@RequestMapping(path = ["/kotlin", "/kotlin-v2/"])',
         "class KotlinRequestMappingController {",
         '  @RequestMapping(path = "/info", method = [RequestMethod.HEAD, RequestMethod.OPTIONS])',
         "  fun info() {}",
@@ -12055,11 +12055,26 @@ describe("SymbolLatticeService", () => {
       language: "kotlin",
       extractorVersion: ARTIFACT_FACTS_EXTRACTOR_VERSION
     });
+    expect(routes.routes).toHaveLength(8);
     expect(routes.routes).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           method: "GET",
           path: "/java/health",
+          handler: expect.objectContaining({
+            qualifiedName: "src/api/JavaRequestMappingController.java#JavaRequestMappingController.health"
+          }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.spring-web.direct-controller.literal-request-mapping.local-method",
+              stage: "syntax"
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "GET",
+          path: "/java-v2/health",
           handler: expect.objectContaining({
             qualifiedName: "src/api/JavaRequestMappingController.java#JavaRequestMappingController.health"
           }),
@@ -12102,6 +12117,22 @@ describe("SymbolLatticeService", () => {
           })
         }),
         expect.objectContaining({
+          method: "HEAD",
+          path: "/kotlin-v2/info",
+          handler: expect.objectContaining({
+            qualifiedName:
+              "src/api/KotlinRequestMappingController.kt#KotlinRequestMappingController.info"
+          }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId:
+                "framework.spring-web.direct-kotlin-controller.literal-request-mapping.local-function",
+              stage: "syntax"
+            })
+          })
+        }),
+        expect.objectContaining({
           method: "OPTIONS",
           path: "/kotlin/info",
           handler: expect.objectContaining({
@@ -12119,42 +12150,27 @@ describe("SymbolLatticeService", () => {
         })
       ])
     );
-    expect(headRoutes.routes).toMatchObject([
-      {
-        method: "HEAD",
-        path: "/kotlin/info",
-        handler: {
-          qualifiedName: "src/api/KotlinRequestMappingController.kt#KotlinRequestMappingController.info"
-        },
-        edge: {
-          resolution: "exact",
-          evidence: {
-            ruleId:
-              "framework.spring-web.direct-kotlin-controller.literal-request-mapping.local-function",
-            stage: "syntax"
-          }
-        }
-      }
-    ]);
-    expect(postRoutes.routes).toMatchObject([
-      {
-        method: "POST",
-        path: "/java/health",
-        handler: {
-          qualifiedName: "src/api/JavaRequestMappingController.java#JavaRequestMappingController.health"
-        }
-      }
-    ]);
-    expect(optionsRoutes.routes).toMatchObject([
-      {
-        method: "OPTIONS",
-        path: "/kotlin/info",
-        handler: {
-          qualifiedName:
-            "src/api/KotlinRequestMappingController.kt#KotlinRequestMappingController.info"
-        }
-      }
-    ]);
+    expect(headRoutes.routes).toHaveLength(2);
+    expect(headRoutes.routes.map(({ method, path }) => ({ method, path }))).toEqual(
+      expect.arrayContaining([
+        { method: "HEAD", path: "/kotlin/info" },
+        { method: "HEAD", path: "/kotlin-v2/info" }
+      ])
+    );
+    expect(postRoutes.routes.map(({ method, path }) => ({ method, path }))).toEqual(
+      expect.arrayContaining([
+        { method: "POST", path: "/java/health" },
+        { method: "POST", path: "/java-v2/health" }
+      ])
+    );
+    expect(postRoutes.routes).toHaveLength(2);
+    expect(optionsRoutes.routes.map(({ method, path }) => ({ method, path }))).toEqual(
+      expect.arrayContaining([
+        { method: "OPTIONS", path: "/kotlin/info" },
+        { method: "OPTIONS", path: "/kotlin-v2/info" }
+      ])
+    );
+    expect(optionsRoutes.routes).toHaveLength(2);
   });
 
   it("indexes NestJS decorator routes as persisted exact method evidence", async () => {
