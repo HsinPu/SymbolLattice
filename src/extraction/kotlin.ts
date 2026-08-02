@@ -494,31 +494,37 @@ function staticKotlinSpringRequestMethodValue(
   return method;
 }
 
-function staticKotlinSpringRequestMethod(
+function staticKotlinSpringRequestMethods(
   node: KotlinSyntaxNode,
   imports: ReadonlySet<string>
-): RouteMethod | null {
+): readonly RouteMethod[] | null {
   if (node.kind() !== "collection_literal") {
     return null;
   }
   const values = directChildren(node).filter(
-    (child) => child.kind() !== "[" && child.kind() !== "]"
+    (child) => child.kind() !== "[" && child.kind() !== "]" && child.kind() !== ","
   );
-  return values.length === 1 && values[0] !== undefined
-    ? staticKotlinSpringRequestMethodValue(values[0], imports)
-    : null;
+  if (values.length === 0) {
+    return null;
+  }
+  const methods = values.map((value) => staticKotlinSpringRequestMethodValue(value, imports));
+  if (methods.some((method): method is null => method === null)) {
+    return null;
+  }
+  const exactMethods = methods as readonly RouteMethod[];
+  return new Set(exactMethods).size === exactMethods.length ? exactMethods : null;
 }
 
 /**
- * Retains one direct Kotlin method-level `@RequestMapping` only when its
- * request-method array has one exact enum value. The optional path is one
- * positional, `path =`, or `value =` literal; conditions and multi-method
- * mappings remain deliberately outside this static evidence boundary.
+ * Retains direct Kotlin method-level `@RequestMapping` routes only when its
+ * request-method array has one or more exact enum values. Each exact enum
+ * produces one route. The optional path is one positional, `path =`, or
+ * `value =` literal; conditions remain outside this static evidence boundary.
  */
-function staticKotlinSpringWebRequestMappingRoute(
+function staticKotlinSpringWebRequestMappingRoutes(
   annotation: KotlinSyntaxNode,
   imports: ReadonlySet<string>
-): StaticKotlinSpringWebRoute | null {
+): readonly StaticKotlinSpringWebRoute[] | null {
   const invocation = staticKotlinAnnotationInvocation(annotation);
   if (invocation === null) {
     return null;
@@ -535,7 +541,7 @@ function staticKotlinSpringWebRequestMappingRoute(
   }
   let path = "";
   let hasPath = false;
-  let method: RouteMethod | null = null;
+  let methods: readonly RouteMethod[] | null = null;
   for (const argument of arguments_) {
     const argumentChildren = directChildren(argument);
     if (argumentChildren.length === 1) {
@@ -572,21 +578,21 @@ function staticKotlinSpringWebRequestMappingRoute(
       hasPath = true;
       continue;
     }
-    if (key !== "method" || method !== null) {
+    if (key !== "method" || methods !== null) {
       return null;
     }
-    method = staticKotlinSpringRequestMethod(value, imports);
-    if (method === null) {
+    methods = staticKotlinSpringRequestMethods(value, imports);
+    if (methods === null) {
       return null;
     }
   }
-  return method !== null && (path.length === 0 || (path.startsWith("/") && !path.includes("//")))
-    ? {
+  return methods !== null && (path.length === 0 || (path.startsWith("/") && !path.includes("//")))
+    ? methods.map((method) => ({
         method,
         path,
         node: annotation,
         ruleId: "framework.spring-web.direct-kotlin-controller.literal-request-mapping.local-function"
-      }
+      }))
     : null;
 }
 
@@ -653,16 +659,16 @@ function staticKotlinSpringWebClassPrefix(
 }
 
 /**
- * Supports the shortcut surface and one separately proven method-level
- * `@RequestMapping(method = [RequestMethod.X])` form. Broad default-method
- * semantics, conditions, and multi-method arrays remain intentionally absent.
+ * Supports the shortcut surface and separately proven method-level
+ * `@RequestMapping(method = [RequestMethod.X, ...])` forms. Broad default
+ * method semantics and conditions remain intentionally absent.
  */
-function staticKotlinSpringWebMethodRoute(
+function staticKotlinSpringWebMethodRoutes(
   declaration: StaticKotlinFunction,
   imports: ReadonlySet<string>
-): StaticKotlinSpringWebRoute | null {
+): readonly StaticKotlinSpringWebRoute[] {
   if (declaration.body === null) {
-    return null;
+    return [];
   }
   const annotations = staticKotlinAnnotations(declaration.node);
   const annotationsNamedRequestMapping = annotations.filter((annotation) =>
@@ -672,12 +678,12 @@ function staticKotlinSpringWebMethodRoute(
     staticKotlinAnnotationMatches(annotation, SPRING_REQUEST_MAPPING_IMPORT, imports)
   );
   if (annotationsNamedRequestMapping.length !== requestMappings.length) {
-    return null;
+    return [];
   }
   if (requestMappings.length > 0) {
     return requestMappings.length === 1 && requestMappings[0] !== undefined
-      ? staticKotlinSpringWebRequestMappingRoute(requestMappings[0], imports)
-      : null;
+      ? (staticKotlinSpringWebRequestMappingRoutes(requestMappings[0], imports) ?? [])
+      : [];
   }
   const annotationsNamedMappings = annotations.filter((annotation) =>
     Object.keys(SPRING_METHOD_MAPPING_IMPORTS).some((mappingImport) =>
@@ -691,21 +697,21 @@ function staticKotlinSpringWebMethodRoute(
     return method === undefined ? [] : [{ annotation, method }];
   });
   if (annotationsNamedMappings.length !== mappings.length || mappings.length !== 1) {
-    return null;
+    return [];
   }
   const mapping = mappings[0];
   if (mapping === undefined) {
-    return null;
+    return [];
   }
   const path = staticKotlinSpringPath(mapping.annotation);
   return path === null
-    ? null
-    : {
+    ? []
+    : [{
         method: mapping.method,
         path,
         node: mapping.annotation,
         ruleId: "framework.spring-web.direct-kotlin-controller.literal-method-mapping.local-function"
-      };
+      }];
 }
 
 function joinHttpPaths(prefix: string, path: string): string {
@@ -1498,8 +1504,8 @@ export function extractKotlinFileFacts(input: KotlinExtractFileFactsInput): Arti
           });
         }
         if (springWebPrefix !== null) {
-          const route = staticKotlinSpringWebMethodRoute(methodDeclaration, imports);
-          if (route !== null) {
+          const routes = staticKotlinSpringWebMethodRoutes(methodDeclaration, imports);
+          for (const route of routes) {
             addFrameworkRoute(
               typeSymbol,
               { ...route, path: joinHttpPaths(springWebPrefix, route.path) },

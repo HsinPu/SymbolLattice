@@ -292,17 +292,37 @@ function staticSpringRequestMethod(
   return method;
 }
 
+function staticSpringRequestMethods(
+  input: JavaExtractFileFactsInput,
+  node: JavaSyntaxNode,
+  imports: ReadonlyMap<string, string>
+): readonly RouteMethod[] | null {
+  const values =
+    node.name === "ElementValueArrayInitializer"
+      ? directChildren(node).filter((child) => !["{", "}", ","].includes(child.name))
+      : [node];
+  if (values.length === 0) {
+    return null;
+  }
+  const methods = values.map((value) => staticSpringRequestMethod(input, value, imports));
+  if (methods.some((method): method is null => method === null)) {
+    return null;
+  }
+  const exactMethods = methods as readonly RouteMethod[];
+  return new Set(exactMethods).size === exactMethods.length ? exactMethods : null;
+}
+
 /**
- * Retains one direct method-level Spring `@RequestMapping` when a single
- * RequestMethod enum value is provable. The optional route path is one
- * positional, `path =`, or `value =` literal; all other request conditions
- * and multi-method forms remain deliberately outside this static slice.
+ * Retains direct method-level Spring `@RequestMapping` routes when one or more
+ * RequestMethod enum values are provable. Each exact enum produces one route.
+ * The optional route path is one positional, `path =`, or `value =` literal;
+ * all other request conditions remain deliberately outside this static slice.
  */
-function staticSpringRequestMappingRoute(
+function staticSpringRequestMappingRoutes(
   input: JavaExtractFileFactsInput,
   annotation: StaticJavaAnnotation,
   imports: ReadonlyMap<string, string>
-): StaticHttpRoute | null {
+): readonly StaticHttpRoute[] | null {
   if (annotation.node.name !== "Annotation") {
     return null;
   }
@@ -320,7 +340,7 @@ function staticSpringRequestMappingRoute(
   }
   let path = "";
   let hasPath = false;
-  let method: RouteMethod | null = null;
+  let methods: readonly RouteMethod[] | null = null;
   for (const value of values) {
     if (value.name === "StringLiteral") {
       if (hasPath) {
@@ -355,21 +375,21 @@ function staticSpringRequestMappingRoute(
       hasPath = true;
       continue;
     }
-    if (key !== "method" || method !== null) {
+    if (key !== "method" || methods !== null) {
       return null;
     }
-    method = staticSpringRequestMethod(input, argument, imports);
-    if (method === null) {
+    methods = staticSpringRequestMethods(input, argument, imports);
+    if (methods === null) {
       return null;
     }
   }
-  return method !== null && (path.length === 0 || (path.startsWith("/") && !path.includes("//")))
-    ? {
+  return methods !== null && (path.length === 0 || (path.startsWith("/") && !path.includes("//")))
+    ? methods.map((method) => ({
         method,
         path,
         node: annotation.node,
         ruleId: "framework.spring-web.direct-controller.literal-request-mapping.local-method"
-      }
+      }))
     : null;
 }
 
@@ -680,11 +700,11 @@ function staticClassPrefix(
   return mapping === undefined ? null : staticSpringPath(input, mapping);
 }
 
-function staticMethodRoute(
+function staticMethodRoutes(
   input: JavaExtractFileFactsInput,
   declaration: StaticJavaMethod,
   imports: ReadonlyMap<string, string>
-): StaticHttpRoute | null {
+): readonly StaticHttpRoute[] {
   const annotationsNamedRequestMapping = declaration.annotations.filter(
     (annotation) => annotation.name === "RequestMapping" || annotation.name === SPRING_REQUEST_MAPPING_PATH
   );
@@ -692,12 +712,12 @@ function staticMethodRoute(
     annotationMatches(annotation, SPRING_REQUEST_MAPPING_PATH, imports)
   );
   if (annotationsNamedRequestMapping.length !== requestMappings.length) {
-    return null;
+    return [];
   }
   if (requestMappings.length > 0) {
     return requestMappings.length === 1 && requestMappings[0] !== undefined
-      ? staticSpringRequestMappingRoute(input, requestMappings[0], imports)
-      : null;
+      ? (staticSpringRequestMappingRoutes(input, requestMappings[0], imports) ?? [])
+      : [];
   }
   const mappings = declaration.annotations.flatMap((annotation) => {
     const method = Object.entries(SPRING_METHOD_MAPPING_PATHS).find(([path]) =>
@@ -706,14 +726,14 @@ function staticMethodRoute(
     return method === undefined ? [] : [{ annotation, method }];
   });
   if (mappings.length !== 1) {
-    return null;
+    return [];
   }
   const mapping = mappings[0];
   if (mapping === undefined) {
-    return null;
+    return [];
   }
   const path = staticSpringPath(input, mapping.annotation);
-  return path === null ? null : { method: mapping.method, path, node: mapping.annotation.node };
+  return path === null ? [] : [{ method: mapping.method, path, node: mapping.annotation.node }];
 }
 
 function staticMicronautClassPrefix(
@@ -1550,16 +1570,18 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
         const prefix = staticClassPrefix(input, classDeclaration, imports);
         if (prefix !== null) {
           for (const methodDeclaration of methods) {
-            const route = staticMethodRoute(input, methodDeclaration, imports);
+            const routes = staticMethodRoutes(input, methodDeclaration, imports);
             const handler = symbolsByMethod.get(methodDeclaration);
-            if (route !== null && handler !== undefined) {
-              addFrameworkRoute(
-                classSymbol,
-                { ...route, path: joinHttpPaths(prefix, route.path) },
-                handler,
-                route.ruleId ??
-                  "framework.spring-web.direct-controller.literal-method-mapping.local-method"
-              );
+            if (handler !== undefined) {
+              for (const route of routes) {
+                addFrameworkRoute(
+                  classSymbol,
+                  { ...route, path: joinHttpPaths(prefix, route.path) },
+                  handler,
+                  route.ruleId ??
+                    "framework.spring-web.direct-controller.literal-method-mapping.local-method"
+                );
+              }
             }
           }
         }

@@ -7191,6 +7191,9 @@ describe("source extraction", () => {
         "",
         '  @RequestMapping(path = "/capabilities", method = RequestMethod.OPTIONS)',
         "  void options() {}",
+        "",
+        '  @RequestMapping(path = "/batch", method = { RequestMethod.GET, RequestMethod.POST })',
+        '  String batch() { return "batch"; }',
         "}"
       ].join("\n")
     });
@@ -7271,6 +7274,20 @@ describe("source extraction", () => {
         1
       ],
       [
+        "GET /api/batch",
+        "src/api/RequestMethodController.java#RequestMethodController.batch",
+        "framework.spring-web.direct-controller.literal-request-mapping.local-method",
+        "exact",
+        1
+      ],
+      [
+        "POST /api/batch",
+        "src/api/RequestMethodController.java#RequestMethodController.batch",
+        "framework.spring-web.direct-controller.literal-request-mapping.local-method",
+        "exact",
+        1
+      ],
+      [
         "TRACE /system/trace",
         "src/api/FullyQualifiedRequestMethodController.java#FullyQualifiedRequestMethodController.trace",
         "framework.spring-web.direct-controller.literal-request-mapping.local-method",
@@ -7280,7 +7297,7 @@ describe("source extraction", () => {
     ]);
   });
 
-  it("rejects Java Spring RequestMapping routes without one exact static method", () => {
+  it("rejects Java Spring RequestMapping routes without a non-empty, unique exact method collection", () => {
     const rejected = [
       [
         "src/api/MissingRequestMethodImport.java",
@@ -7296,15 +7313,29 @@ describe("source extraction", () => {
         ].join("\n")
       ],
       [
-        "src/api/MultipleRequestMethods.java",
+        "src/api/DuplicateRequestMethods.java",
         [
           "import org.springframework.web.bind.annotation.RestController;",
           "import org.springframework.web.bind.annotation.RequestMapping;",
           "import org.springframework.web.bind.annotation.RequestMethod;",
           "",
           "@RestController",
-          "class MultipleRequestMethods {",
-          "  @RequestMapping(method = { RequestMethod.GET, RequestMethod.POST })",
+          "class DuplicateRequestMethods {",
+          "  @RequestMapping(method = { RequestMethod.GET, RequestMethod.GET })",
+          "  String health() { return \"ok\"; }",
+          "}"
+        ].join("\n")
+      ],
+      [
+        "src/api/EmptyRequestMethods.java",
+        [
+          "import org.springframework.web.bind.annotation.RestController;",
+          "import org.springframework.web.bind.annotation.RequestMapping;",
+          "import org.springframework.web.bind.annotation.RequestMethod;",
+          "",
+          "@RestController",
+          "class EmptyRequestMethods {",
+          "  @RequestMapping(method = {})",
           "  String health() { return \"ok\"; }",
           "}"
         ].join("\n")
@@ -7344,7 +7375,7 @@ describe("source extraction", () => {
         const facts = extractFileFacts({ filePath, language: "java", sourceText });
         return facts.edges.filter((edge) => edge.kind === "routes");
       })
-    ).toEqual([[], [], [], []]);
+    ).toEqual([[], [], [], [], []]);
   });
 
   it("accepts direct Spring Controller, PutMapping, and PatchMapping imports", () => {
@@ -12290,6 +12321,9 @@ describe("source extraction", () => {
         "",
         '  @RequestMapping(path = "/capabilities", method = [RequestMethod.OPTIONS])',
         "  fun options() {}",
+        "",
+        '  @RequestMapping(path = "/batch", method = [RequestMethod.GET, RequestMethod.POST])',
+        '  fun batch(): String = "batch"',
         "}"
       ].join("\n")
     });
@@ -12370,6 +12404,20 @@ describe("source extraction", () => {
         1
       ],
       [
+        "GET /api/batch",
+        "src/api/KotlinRequestMethodController.kt#KotlinRequestMethodController.batch",
+        "framework.spring-web.direct-kotlin-controller.literal-request-mapping.local-function",
+        "exact",
+        1
+      ],
+      [
+        "POST /api/batch",
+        "src/api/KotlinRequestMethodController.kt#KotlinRequestMethodController.batch",
+        "framework.spring-web.direct-kotlin-controller.literal-request-mapping.local-function",
+        "exact",
+        1
+      ],
+      [
         "TRACE /system/trace",
         "src/api/FullyQualifiedKotlinRequestMethodController.kt#FullyQualifiedKotlinRequestMethodController.trace",
         "framework.spring-web.direct-kotlin-controller.literal-request-mapping.local-function",
@@ -12379,7 +12427,7 @@ describe("source extraction", () => {
     ]);
   });
 
-  it("rejects Kotlin Spring RequestMapping routes without one exact static method", () => {
+  it("rejects Kotlin Spring RequestMapping routes without a non-empty, unique exact method collection", () => {
     const rejected = [
       [
         "src/api/MissingKotlinRequestMethodImport.kt",
@@ -12395,15 +12443,29 @@ describe("source extraction", () => {
         ].join("\n")
       ],
       [
-        "src/api/MultipleKotlinRequestMethods.kt",
+        "src/api/DuplicateKotlinRequestMethods.kt",
         [
           "import org.springframework.web.bind.annotation.RestController",
           "import org.springframework.web.bind.annotation.RequestMapping",
           "import org.springframework.web.bind.annotation.RequestMethod",
           "",
           "@RestController",
-          "class MultipleKotlinRequestMethods {",
-          "  @RequestMapping(method = [RequestMethod.GET, RequestMethod.POST])",
+          "class DuplicateKotlinRequestMethods {",
+          "  @RequestMapping(method = [RequestMethod.GET, RequestMethod.GET])",
+          "  fun health() {}",
+          "}"
+        ].join("\n")
+      ],
+      [
+        "src/api/EmptyKotlinRequestMethods.kt",
+        [
+          "import org.springframework.web.bind.annotation.RestController",
+          "import org.springframework.web.bind.annotation.RequestMapping",
+          "import org.springframework.web.bind.annotation.RequestMethod",
+          "",
+          "@RestController",
+          "class EmptyKotlinRequestMethods {",
+          "  @RequestMapping(method = [])",
           "  fun health() {}",
           "}"
         ].join("\n")
@@ -12444,7 +12506,7 @@ describe("source extraction", () => {
           (edge) => edge.kind === "routes"
         )
       )
-    ).toEqual([[], [], [], []]);
+    ).toEqual([[], [], [], [], []]);
   });
 
   it("rejects Kotlin Spring Web routes without strict controller, mapping, and literal proof", () => {

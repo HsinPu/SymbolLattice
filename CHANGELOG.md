@@ -6,6 +6,26 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.184.0] - 2026-08-02
+
+### Added
+
+- Parser-backed Spring Web extraction now splits one direct method-level <code>@RequestMapping</code> into one exact route per unique, imported or fully-qualified <code>RequestMethod</code> enum. Java accepts a single enum or a literal <code>{ ... }</code> array; Kotlin accepts a literal <code>[ ... ]</code> collection.
+- Every emitted Java or Kotlin route keeps the existing local-handler relation, source range, syntax-stage evidence, and language-specific rule id. The mapping path remains one static <code>path =</code> or <code>value =</code> literal, or inherits the proven class prefix when omitted.
+- New unit and persisted-service coverage proves Java/Kotlin multi-method route splitting, method-filtered route queries, unique handler evidence, and rejection of missing imports, empty or duplicate collections, extra request conditions, dynamic values, and unsupported enums.
+
+### Compatibility
+
+- The artifact-facts extractor advances to <code>multi-language-ast-v164</code>. Existing graphs and SQLite schema remain readable; the next explicit <code>sync</code> or <code>index</code> re-extracts eligible Java and Kotlin Spring controller artifacts under the expanded <code>RequestMapping</code> method surface.
+
+### Deliberate limits
+
+- This remains a bounded static Spring route surface. Default/ALL mappings, empty or duplicate arrays, headers, params, consumes, produces, custom/composed annotations, aliases/wildcard imports, dynamic or escaped paths, class-path conditions, profiles, security, proxy registration, and deployed routing behavior remain excluded.
+
+### Comparison notes
+
+- The inspected CodeGraph Spring resolver continues to use text patterns and may produce a broad default method when no explicit <code>method =</code> value is found. SymbolLattice independently splits only parser-proven, explicit, unique enum values into routes, retaining evidence for every resulting handler edge. CodeGraph remains more permissive; SymbolLattice is stricter and more auditable for this supported subset.
+
 ## [0.183.0] - 2026-08-02
 
 ### Added

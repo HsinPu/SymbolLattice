@@ -12015,7 +12015,7 @@ describe("SymbolLatticeService", () => {
         "@RestController",
         '@RequestMapping("/java")',
         "class JavaRequestMappingController {",
-        '  @RequestMapping(value = "/health", method = RequestMethod.GET)',
+        '  @RequestMapping(value = "/health", method = { RequestMethod.GET, RequestMethod.POST })',
         '  String health() { return "ok"; }',
         "}"
       ].join("\n"),
@@ -12027,7 +12027,7 @@ describe("SymbolLatticeService", () => {
         "@RestController",
         '@RequestMapping("/kotlin")',
         "class KotlinRequestMappingController {",
-        '  @RequestMapping(path = "/info", method = [RequestMethod.HEAD])',
+        '  @RequestMapping(path = "/info", method = [RequestMethod.HEAD, RequestMethod.OPTIONS])',
         "  fun info() {}",
         "}"
       ].join("\n")
@@ -12038,6 +12038,8 @@ describe("SymbolLatticeService", () => {
     await service.init({ projectPath });
     const routes = await service.routes(projectPath);
     const headRoutes = await service.routes(projectPath, { method: "HEAD" });
+    const postRoutes = await service.routes(projectPath, { method: "POST" });
+    const optionsRoutes = await service.routes(projectPath, { method: "OPTIONS" });
     const javaFacts = graphStore
       .getArtifactFacts(projectPath)
       .find((facts) => facts.filePath === "src/api/JavaRequestMappingController.java");
@@ -12070,7 +12072,37 @@ describe("SymbolLatticeService", () => {
           })
         }),
         expect.objectContaining({
+          method: "POST",
+          path: "/java/health",
+          handler: expect.objectContaining({
+            qualifiedName: "src/api/JavaRequestMappingController.java#JavaRequestMappingController.health"
+          }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.spring-web.direct-controller.literal-request-mapping.local-method",
+              stage: "syntax"
+            })
+          })
+        }),
+        expect.objectContaining({
           method: "HEAD",
+          path: "/kotlin/info",
+          handler: expect.objectContaining({
+            qualifiedName:
+              "src/api/KotlinRequestMappingController.kt#KotlinRequestMappingController.info"
+          }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId:
+                "framework.spring-web.direct-kotlin-controller.literal-request-mapping.local-function",
+              stage: "syntax"
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "OPTIONS",
           path: "/kotlin/info",
           handler: expect.objectContaining({
             qualifiedName:
@@ -12101,6 +12133,25 @@ describe("SymbolLatticeService", () => {
               "framework.spring-web.direct-kotlin-controller.literal-request-mapping.local-function",
             stage: "syntax"
           }
+        }
+      }
+    ]);
+    expect(postRoutes.routes).toMatchObject([
+      {
+        method: "POST",
+        path: "/java/health",
+        handler: {
+          qualifiedName: "src/api/JavaRequestMappingController.java#JavaRequestMappingController.health"
+        }
+      }
+    ]);
+    expect(optionsRoutes.routes).toMatchObject([
+      {
+        method: "OPTIONS",
+        path: "/kotlin/info",
+        handler: {
+          qualifiedName:
+            "src/api/KotlinRequestMappingController.kt#KotlinRequestMappingController.info"
         }
       }
     ]);
