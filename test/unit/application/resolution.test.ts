@@ -2766,6 +2766,108 @@ describe("TypeScript configuration module resolution", () => {
     );
   });
 
+  it("projects default-name and remapped Objective-C React Native exports", () => {
+    const sourceDocuments: readonly SourceDocument[] = [
+      {
+        absolutePath: "C:/project/src/bridge.ts",
+        relativePath: "src/bridge.ts",
+        language: "typescript",
+        sourceText: [
+          'import { NativeModules } from "react-native";',
+          "export function schedule() {",
+          "  NativeModules.CalendarModule.removeEvent();",
+          "  NativeModules.LocationModule.beginTracking();",
+          "}"
+        ].join("\n"),
+        contentHash: "objc-remap-bridge"
+      },
+      {
+        absolutePath: "C:/project/ios/RCTCalendarModule.m",
+        relativePath: "ios/RCTCalendarModule.m",
+        language: "objc",
+        sourceText: [
+          "#import <React/RCTBridgeModule.h>",
+          "@implementation RCTCalendarModule",
+          "RCT_EXPORT_MODULE()",
+          "RCT_REMAP_METHOD(removeEvent, deleteEvent:(NSString *)eventId)",
+          "@end"
+        ].join("\n"),
+        contentHash: "objc-rct-remap"
+      },
+      {
+        absolutePath: "C:/project/ios/RKLocationModule.m",
+        relativePath: "ios/RKLocationModule.m",
+        language: "objc",
+        sourceText: [
+          "#import <React/RCTBridgeModule.h>",
+          "@implementation RKLocationModule",
+          "RCT_EXPORT_MODULE()",
+          "RCT_REMAP_METHOD(beginTracking, startTracking:(BOOL)enabled)",
+          "@end"
+        ].join("\n"),
+        contentHash: "objc-rk-remap"
+      }
+    ];
+    const snapshot = resolveProjectFacts({
+      sourceDocuments,
+      extractedFiles: sourceDocuments.map((document) =>
+        extractFileFacts({
+          filePath: document.relativePath,
+          language: document.language,
+          sourceText: document.sourceText
+        })
+      ),
+      indexedAt: "2026-08-02T00:00:00.000Z"
+    });
+    const schedule = snapshot.symbols.find(
+      (symbol) => symbol.filePath === "src/bridge.ts" && symbol.name === "schedule"
+    );
+    const removeEvent = snapshot.symbols.find(
+      (symbol) => symbol.filePath === "ios/RCTCalendarModule.m" && symbol.name === "removeEvent"
+    );
+    const beginTracking = snapshot.symbols.find(
+      (symbol) => symbol.filePath === "ios/RKLocationModule.m" && symbol.name === "beginTracking"
+    );
+
+    expect(schedule).toBeDefined();
+    expect(removeEvent).toBeDefined();
+    expect(beginTracking).toBeDefined();
+    expect(
+      snapshot.edges.filter(
+        (edge) => edge.sourceId === schedule?.id && edge.referenceName === "CalendarModule.removeEvent"
+      )
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          targetId: removeEvent?.id,
+          resolution: "exact",
+          confidence: 1,
+          evidence: expect.objectContaining({
+            ruleId: "framework.react-native.native-modules.direct-module-and-method.ios.exact-target",
+            stage: "module"
+          })
+        })
+      ])
+    );
+    expect(
+      snapshot.edges.filter(
+        (edge) => edge.sourceId === schedule?.id && edge.referenceName === "LocationModule.beginTracking"
+      )
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          targetId: beginTracking?.id,
+          resolution: "exact",
+          confidence: 1,
+          evidence: expect.objectContaining({
+            ruleId: "framework.react-native.native-modules.direct-module-and-method.ios.exact-target",
+            stage: "module"
+          })
+        })
+      ])
+    );
+  });
+
   it("keeps colliding React Native implementations on one platform unresolved", () => {
     const sourceDocuments: readonly SourceDocument[] = [
       {

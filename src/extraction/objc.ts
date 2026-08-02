@@ -39,9 +39,17 @@ interface StaticObjectiveCMethod {
   readonly end: number;
 }
 
+type ReactNativeObjectiveCMethodRuleId =
+  | "framework.react-native.objc.rct-export-method"
+  | "framework.react-native.objc.rct-remap-method";
+
+interface StaticReactNativeObjectiveCMethod extends StaticObjectiveCMethod {
+  readonly reactNativeRuleId: ReactNativeObjectiveCMethodRuleId;
+}
+
 interface StaticReactNativeObjectiveCModule {
   readonly moduleName: string;
-  readonly methods: readonly StaticObjectiveCMethod[];
+  readonly methods: readonly StaticReactNativeObjectiveCMethod[];
 }
 
 interface SanitizedObjectiveCSource {
@@ -71,6 +79,20 @@ const DIRECT_PROTOCOL_LIST =
   /^<[ \t]*[A-Za-z_][A-Za-z0-9_]*(?:[ \t]*,[ \t]*[A-Za-z_][A-Za-z0-9_]*)*[ \t]*>$/u;
 const DIRECT_INTERFACE_SUFFIX =
   /^(?::[ \t]*[A-Za-z_][A-Za-z0-9_]*(?:[ \t]*<[ \t]*[A-Za-z_][A-Za-z0-9_]*(?:[ \t]*,[ \t]*[A-Za-z_][A-Za-z0-9_]*)*[ \t]*>)?|<[ \t]*[A-Za-z_][A-Za-z0-9_]*(?:[ \t]*,[ \t]*[A-Za-z_][A-Za-z0-9_]*)*[ \t]*>)$/u;
+
+/**
+ * React Native exposes a no-argument RCT_EXPORT_MODULE() under the
+ * implementation class name after trimming its documented RCT or RK prefix.
+ */
+function staticReactNativeObjectiveCDefaultModuleName(className: string): string {
+  if (className.startsWith("RCT") && className.length > 3) {
+    return className.slice(3);
+  }
+  if (className.startsWith("RK") && className.length > 2) {
+    return className.slice(2);
+  }
+  return className;
+}
 
 function lineStartsFor(sourceText: string): readonly number[] {
   const starts = [0];
@@ -622,11 +644,11 @@ function staticReactNativeObjectiveCModule(
   if (moduleMacros.length !== 1 || moduleMacros[0] === undefined) {
     return null;
   }
-  const moduleName = moduleMacros[0][1] ?? container.name;
+  const moduleName = moduleMacros[0][1] ?? staticReactNativeObjectiveCDefaultModuleName(container.name);
   if (!REACT_NATIVE_BRIDGE_IDENTIFIER.test(moduleName)) {
     return null;
   }
-  const methods: StaticObjectiveCMethod[] = [];
+  const methods: StaticReactNativeObjectiveCMethod[] = [];
   const seenMethodNames = new Set<string>();
   for (const match of body.matchAll(/\bRCT_EXPORT_METHOD\s*\(\s*([A-Za-z_$][A-Za-z0-9_$]*)\b/gu)) {
     if (match.index === undefined) {
@@ -642,7 +664,37 @@ function staticReactNativeObjectiveCModule(
       return null;
     }
     seenMethodNames.add(name);
-    methods.push({ start, end: start + match[0].length, name });
+    methods.push({
+      start,
+      end: start + match[0].length,
+      name,
+      reactNativeRuleId: "framework.react-native.objc.rct-export-method"
+    });
+  }
+  for (
+    const match of body.matchAll(
+      /\bRCT_REMAP_METHOD\s*\(\s*([A-Za-z_$][A-Za-z0-9_$]*)\s*,\s*([A-Za-z_$][A-Za-z0-9_$]*)\b/gu
+    )
+  ) {
+    if (match.index === undefined) {
+      return null;
+    }
+    const start = container.start + match.index;
+    const name = match[1];
+    if (
+      name === undefined ||
+      !isDirectObjectiveCContainerMember(sanitizedSource, container, start) ||
+      seenMethodNames.has(name)
+    ) {
+      return null;
+    }
+    seenMethodNames.add(name);
+    methods.push({
+      start,
+      end: start + match[0].length,
+      name,
+      reactNativeRuleId: "framework.react-native.objc.rct-remap-method"
+    });
   }
   return methods.length === 0 ? null : { moduleName, methods };
 }
@@ -777,7 +829,7 @@ export function extractObjectiveCFileFacts(input: ObjectiveCExtractFileFactsInpu
     ruleId:
       | "language.objc.method.direct-declaration"
       | "language.objc.method.direct-implementation"
-      | "framework.react-native.objc.rct-export-method"
+      | ReactNativeObjectiveCMethodRuleId
   ): SymbolNode {
     const qualifiedName = parent.qualifiedName + "." + method.name;
     const declarationOrdinal = nextOrdinal(qualifiedName, "method");
@@ -942,7 +994,7 @@ export function extractObjectiveCFileFacts(input: ObjectiveCExtractFileFactsInpu
         const methodSymbol = addMethod(
           parent,
           method,
-          "framework.react-native.objc.rct-export-method"
+          method.reactNativeRuleId
         );
         reactNativeNativeMethods.push({
           platform: "ios",

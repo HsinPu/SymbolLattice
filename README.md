@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.191.0 為開發者預覽版，尚未發佈至 npm；請由原始碼執行。
+> v0.192.0 為開發者預覽版，尚未發佈至 npm；請由原始碼執行。
 
 SymbolLattice 在本機建立可查詢的程式碼符號圖譜。每一條關係都保留規則、解析階段與信心值，嚴格區分 exact、heuristic 與 unresolved。
 
@@ -41,11 +41,11 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 Windows PowerShell 若找不到 npm，請改用 npm.cmd。索引資料保存在目標專案的 .symbol-lattice/index.sqlite。
 
-## v0.191.0 重點
+## v0.192.0 重點
 
-- 支援官方 React Native Codegen 的 Java 與 Kotlin Spec 子類別：直接匯入或完全限定的 Spec 父類別、可證明的 getName() 模組名稱，以及直接覆寫的方法。
-- Codegen 原生方法必須與同專案唯一的 TypeScript TurboModule module-plus-method 合約相符，才會建立跨語言呼叫邊。
-- 直接 Registry、TypeScript 規格、預設匯入與靜態預設再匯出都保留可追溯的 Codegen 規則；零份或多份合約維持 unresolved。
+- 支援 Objective-C 無參數 RCT_EXPORT_MODULE()：以實作類別名稱產生模組名，並依官方慣例移除 RCT 或 RK 前綴。
+- 支援 RCT_REMAP_METHOD 的明確 JavaScript 方法名稱，並保留與 RCT_EXPORT_METHOD 不同的來源規則。
+- NativeModules 呼叫會精確連到對應 iOS macro 方法，結果可經 SQLite 索引、重新開啟與 callers 查詢驗證。
 
 ## 核心原則
 
@@ -55,9 +55,9 @@ Windows PowerShell 若找不到 npm，請改用 npm.cmd。索引資料保存在�
 
 ## 靜態分析邊界
 
-- Codegen 只接受直接父類別、字面或類別本地不可變 getName() 值、Java @Override 或 Kotlin override 方法，以及唯一 TypeScript 合約的交集。
+- Objective-C 僅接受直接 bridge header、剛好一個直接 RCT_EXPORT_MODULE，以及直接 RCT_EXPORT_METHOD 或 RCT_REMAP_METHOD；同一 JavaScript 方法名衝突時不產生原生目標。
+- Android Codegen 只接受直接 Spec 父類別、可證明的 getName()、直接覆寫與唯一 TypeScript TurboModule 合約的交集。
 - 不掃描建置產物，也不推斷執行期註冊、動態名稱、間接包裝、Swift 實作或自訂 macro wrapper。
-- React Native 也涵蓋嚴格的 NativeModules、直接 TurboModule Registry、TypeScript 規格與已證明本機預設匯出的靜態再匯出鏈。
 
 ## 驗證
 

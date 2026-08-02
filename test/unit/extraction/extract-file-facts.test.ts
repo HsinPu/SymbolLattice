@@ -18427,6 +18427,41 @@ describe("source extraction", () => {
         "@end"
       ].join("\n")
     });
+    const objectiveCDefaultAndRemapped = extractFileFacts({
+      filePath: "ios/RCTCalendarModule.m",
+      language: "objc",
+      sourceText: [
+        "#import <React/RCTBridgeModule.h>",
+        "@implementation RCTCalendarModule",
+        "RCT_EXPORT_MODULE()",
+        "RCT_EXPORT_METHOD(createEvent:(NSString *)name)",
+        "RCT_REMAP_METHOD(removeEvent, deleteEvent:(NSString *)eventId)",
+        "@end"
+      ].join("\n")
+    });
+    const objectiveCDefaultRk = extractFileFacts({
+      filePath: "ios/RKLocationModule.m",
+      language: "objc",
+      sourceText: [
+        "#import <React/RCTBridgeModule.h>",
+        "@implementation RKLocationModule",
+        "RCT_EXPORT_MODULE()",
+        "RCT_REMAP_METHOD(beginTracking, startTracking:(BOOL)enabled)",
+        "@end"
+      ].join("\n")
+    });
+    const objectiveCRemapCollision = extractFileFacts({
+      filePath: "ios/CollisionModule.m",
+      language: "objc",
+      sourceText: [
+        "#import <React/RCTBridgeModule.h>",
+        "@implementation CollisionModule",
+        "RCT_EXPORT_MODULE()",
+        "RCT_EXPORT_METHOD(removeEvent)",
+        "RCT_REMAP_METHOD(removeEvent, deleteEvent:(NSString *)eventId)",
+        "@end"
+      ].join("\n")
+    });
     const shadowed = extractFileFacts({
       filePath: "src/mobile/shadowed.ts",
       language: "typescript",
@@ -18495,6 +18530,36 @@ describe("source extraction", () => {
         methodName: "createEvent"
       })
     ]);
+    expect(objectiveCDefaultAndRemapped.reactNativeFacts?.nativeMethods).toEqual([
+      expect.objectContaining({
+        platform: "ios",
+        moduleName: "CalendarModule",
+        methodName: "createEvent"
+      }),
+      expect.objectContaining({
+        platform: "ios",
+        moduleName: "CalendarModule",
+        methodName: "removeEvent"
+      })
+    ]);
+    expect(objectiveCDefaultAndRemapped.edges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          referenceName: "removeEvent",
+          evidence: expect.objectContaining({
+            ruleId: "framework.react-native.objc.rct-remap-method"
+          })
+        })
+      ])
+    );
+    expect(objectiveCDefaultRk.reactNativeFacts?.nativeMethods).toEqual([
+      expect.objectContaining({
+        platform: "ios",
+        moduleName: "LocationModule",
+        methodName: "beginTracking"
+      })
+    ]);
+    expect(objectiveCRemapCollision.reactNativeFacts?.nativeMethods).toEqual([]);
     expect(shadowed.reactNativeFacts?.nativeModuleCalls).toEqual([]);
   });
 

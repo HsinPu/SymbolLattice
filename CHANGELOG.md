@@ -6,6 +6,26 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.192.0] - 2026-08-02
+
+### Added
+
+- Objective-C React Native extraction now recognizes a direct no-argument <code>RCT_EXPORT_MODULE()</code> by deriving the module name from its implementation class and trimming the documented <code>RCT</code> or <code>RK</code> prefix.
+- Direct <code>RCT_REMAP_METHOD(jsName, nativeSelector:...)</code> macros now emit a native method under their explicit JavaScript name. Their symbol containment evidence uses a dedicated remap rule; collisions with direct <code>RCT_EXPORT_METHOD</code> names stay rejected.
+- Unit and persisted-service coverage prove RCT and RK default names, remapped JavaScript names, cross-file NativeModules projection, macro-rule evidence, collision rejection, SQLite persistence, and reopen queries.
+
+### Compatibility
+
+- The artifact-facts extractor advances to <code>multi-language-ast-v171</code> and the project resolver advances to <code>project-resolver-v61</code>. Existing graphs and SQLite schema remain readable; the next explicit <code>sync</code> or <code>index</code> refreshes eligible Objective-C facts and bridge projections.
+
+### Deliberate limits
+
+- Extraction still requires one direct bridge-header import, exactly one direct module macro, and direct macro calls in a non-category implementation. It does not infer <code>RCT_EXTERN_*</code> Swift bridges, wrapped macros, generated code, runtime registration, dynamic names, or arbitrary preprocessor expansion.
+
+### Comparison notes
+
+- The inspected CodeGraph React Native resolver recognizes <code>RCT_REMAP_METHOD</code> and an <code>RCT_EXPORT_MODULE()</code> fallback that trims <code>RCT</code>. SymbolLattice independently applies the same direct macro semantics under stricter import/container checks, additionally supports the documented <code>RK</code> prefix, preserves literal module-plus-method identity, and retains every unique iOS target as an exact edge. CodeGraph remains broader in convention-driven matching; this change improves parity for this bounded Objective-C surface.
+
 ## [0.191.0] - 2026-08-02
 
 ### Added

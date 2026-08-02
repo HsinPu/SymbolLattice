@@ -12285,6 +12285,111 @@ describe("SymbolLatticeService", () => {
     );
   });
 
+  it("persists default-name and remapped Objective-C React Native exports", async () => {
+    const projectPath = await createInlineProject({
+      "src/mobile/bridge.ts": [
+        'import { NativeModules } from "react-native";',
+        "export function schedule() {",
+        "  NativeModules.CalendarModule.removeEvent();",
+        "  NativeModules.LocationModule.beginTracking();",
+        "}"
+      ].join("\n"),
+      "ios/RCTCalendarModule.m": [
+        "#import <React/RCTBridgeModule.h>",
+        "@implementation RCTCalendarModule",
+        "RCT_EXPORT_MODULE()",
+        "RCT_REMAP_METHOD(removeEvent, deleteEvent:(NSString *)eventId)",
+        "@end"
+      ].join("\n"),
+      "ios/RKLocationModule.m": [
+        "#import <React/RCTBridgeModule.h>",
+        "@implementation RKLocationModule",
+        "RCT_EXPORT_MODULE()",
+        "RCT_REMAP_METHOD(beginTracking, startTracking:(BOOL)enabled)",
+        "@end"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const persistedFacts = graphStore.getArtifactFacts(projectPath);
+    const removeEvent = await service.find(
+      projectPath,
+      "ios/RCTCalendarModule.m#RCTCalendarModule.removeEvent"
+    );
+    const beginTracking = await service.find(
+      projectPath,
+      "ios/RKLocationModule.m#RKLocationModule.beginTracking"
+    );
+    const removeEventTarget = removeEvent.symbols[0];
+    const beginTrackingTarget = beginTracking.symbols[0];
+    if (removeEventTarget === undefined || beginTrackingTarget === undefined) {
+      throw new Error("Expected indexed remapped Objective-C React Native methods.");
+    }
+
+    expect(persistedFacts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          filePath: "ios/RCTCalendarModule.m",
+          reactNativeFacts: expect.objectContaining({
+            nativeMethods: [
+              expect.objectContaining({
+                moduleName: "CalendarModule",
+                methodName: "removeEvent"
+              })
+            ]
+          })
+        }),
+        expect.objectContaining({
+          filePath: "ios/RKLocationModule.m",
+          reactNativeFacts: expect.objectContaining({
+            nativeMethods: [
+              expect.objectContaining({
+                moduleName: "LocationModule",
+                methodName: "beginTracking"
+              })
+            ]
+          })
+        })
+      ])
+    );
+    for (const target of [removeEventTarget, beginTrackingTarget]) {
+      const callers = await service.callers(projectPath, target.qualifiedName);
+      expect(callers.relations).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            symbol: expect.objectContaining({ name: "schedule" }),
+            edge: expect.objectContaining({
+              resolution: "exact",
+              confidence: 1,
+              evidence: expect.objectContaining({
+                ruleId: "framework.react-native.native-modules.direct-module-and-method.ios.exact-target",
+                stage: "module"
+              })
+            })
+          })
+        ])
+      );
+    }
+
+    const reopened = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+    await reopened.init({ projectPath });
+    const persistedCallers = await reopened.callers(projectPath, removeEventTarget.qualifiedName);
+    expect(persistedCallers.relations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          symbol: expect.objectContaining({ name: "schedule" }),
+          edge: expect.objectContaining({
+            evidence: expect.objectContaining({
+              ruleId: "framework.react-native.native-modules.direct-module-and-method.ios.exact-target"
+            })
+          })
+        })
+      ])
+    );
+  });
+
   it("persists React Native Codegen Spec bridge targets only after their TypeScript contracts are unique", async () => {
     const projectPath = await createInlineProject({
       "src/mobile/NativeCalendar.ts": [

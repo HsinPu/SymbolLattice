@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.191.0 is a developer preview and is not published to npm. Run it from source.
+> v0.192.0 is a developer preview and is not published to npm. Run it from source.
 
 SymbolLattice builds a queryable local code-symbol graph. Every relation retains its rule, resolution stage, and confidence; exact, heuristic, and unresolved evidence are never conflated.
 
@@ -41,11 +41,11 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 On Windows PowerShell, use npm.cmd if npm is unavailable. Index data stays in the target project's .symbol-lattice/index.sqlite.
 
-## v0.191.0 highlights
+## v0.192.0 highlights
 
-- Supports the official React Native Codegen implementation shape for Java and Kotlin Spec subclasses: a directly imported or fully-qualified Spec superclass, a proven getName() module identity, and a direct override method.
-- A Codegen native method becomes a cross-language target only when exactly one project-local TypeScript TurboModule module-plus-method contract matches it.
-- Direct Registry, TypeScript spec, default-import, and static default re-export edges retain dedicated Codegen rules; zero or multiple contracts stay unresolved.
+- Supports a no-argument Objective-C RCT_EXPORT_MODULE() by deriving its module name from the implementation class and removing the documented RCT or RK prefix.
+- Supports RCT_REMAP_METHOD with its explicit JavaScript method name and distinct source-rule evidence from RCT_EXPORT_METHOD.
+- NativeModules calls resolve exactly to the corresponding iOS macro method, including SQLite persistence, reopen, and callers-query verification.
 
 ## Principles
 
@@ -55,9 +55,9 @@ On Windows PowerShell, use npm.cmd if npm is unavailable. Index data stays in th
 
 ## Static-analysis boundaries
 
-- Codegen accepts only the intersection of a direct superclass, a literal or class-local immutable getName() value, Java @Override or Kotlin override methods, and one unique TypeScript contract.
+- Objective-C accepts only a direct bridge header, exactly one direct RCT_EXPORT_MODULE, and direct RCT_EXPORT_METHOD or RCT_REMAP_METHOD macros. A duplicate JavaScript method name emits no native target.
+- Android Codegen accepts only the intersection of a direct Spec superclass, a proven getName(), a direct override, and one unique TypeScript TurboModule contract.
 - It does not scan build output or infer runtime registration, dynamic names, indirect wrappers, Swift implementations, or custom macro wrappers.
-- React Native also covers strict NativeModules, direct TurboModule Registry, TypeScript specs, and static re-export chains anchored at proven local default exports.
 
 ## Verification
 
