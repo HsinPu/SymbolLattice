@@ -15826,6 +15826,128 @@ describe("SymbolLatticeService", () => {
     });
   });
 
+  it("projects direct Java record component Spring @Value facts through conservative configuration resolution", async () => {
+    const projectPath = await createInlineProject({
+      "config/application.properties": [
+        "record.port=record-port-secret",
+        "record-mode=record-mode-secret"
+      ].join("\n"),
+      "src/config/RecordConfig.java": [
+        "import org.springframework.beans.factory.annotation.Value;",
+        "",
+        "record RecordConfig(",
+        '  @Value("${record.port}") String port,',
+        '  @Value("${recordMode}") String mode',
+        ") {}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    const indexed = await service.init({ projectPath });
+    const recordConfig = (
+      await service.find(projectPath, "src/config/RecordConfig.java#RecordConfig")
+    ).symbols[0];
+    const port = (
+      await service.find(projectPath, "config/application.properties#properties-key:record.port")
+    ).symbols[0];
+    const mode = (
+      await service.find(projectPath, "config/application.properties#properties-key:record-mode")
+    ).symbols[0];
+    if (recordConfig === undefined || port === undefined || mode === undefined) {
+      throw new Error("Expected indexed Java record configuration symbols.");
+    }
+
+    const recordFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "src/config/RecordConfig.java");
+    const propertiesFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "config/application.properties");
+    const snapshot = graphStore.getSnapshot(projectPath);
+    const portReference = snapshot.edges.find(
+      (edge) => edge.sourceId === recordConfig.id && edge.targetId === port.id
+    );
+    const modeReference = snapshot.edges.find(
+      (edge) => edge.sourceId === recordConfig.id && edge.targetId === mode.id
+    );
+    const portCallers = await service.callers(projectPath, port.qualifiedName);
+    const modeCallers = await service.callers(projectPath, mode.qualifiedName);
+
+    expect(indexed).toMatchObject({
+      stale: false,
+      counts: { files: 2, symbols: 5, edges: 5 }
+    });
+    expect(recordFacts?.springBootPropertiesFacts?.valueReferences).toEqual([
+      expect.objectContaining({ sourceId: recordConfig.id, key: "record.port" }),
+      expect.objectContaining({ sourceId: recordConfig.id, key: "recordMode" })
+    ]);
+    expect(JSON.stringify(propertiesFacts)).not.toContain("record-port-secret");
+    expect(JSON.stringify(propertiesFacts)).not.toContain("record-mode-secret");
+    expect(portCallers.relations.map((relation) => relation.symbol.id)).toEqual([recordConfig.id]);
+    expect(modeCallers.relations.map((relation) => relation.symbol.id)).toEqual([recordConfig.id]);
+    expect(portReference).toMatchObject({
+      kind: "references",
+      resolution: "exact",
+      confidence: 1,
+      referenceName: "record.port",
+      evidence: expect.objectContaining({
+        ruleId: "framework.spring-boot.properties.direct-value.literal-key.exact-key",
+        stage: "module",
+        candidateSymbolIds: [port.id],
+        configurationPaths: ["config/application.properties"]
+      })
+    });
+    expect(modeReference).toMatchObject({
+      kind: "references",
+      resolution: "heuristic",
+      confidence: 0.75,
+      referenceName: "recordMode",
+      evidence: expect.objectContaining({
+        ruleId: "framework.spring-boot.properties.direct-value.relaxed-key.unique-key",
+        stage: "heuristic",
+        candidateSymbolIds: [mode.id],
+        configurationPaths: ["config/application.properties"]
+      })
+    });
+
+    await writeFile(
+      join(projectPath, "config", "application.properties"),
+      "feature.enabled=true\n",
+      "utf8"
+    );
+    const synced = await service.sync({ projectPath });
+    const afterSync = graphStore.getSnapshot(projectPath);
+    const portAfterSync = afterSync.edges.find(
+      (edge) =>
+        edge.sourceId === recordConfig.id &&
+        edge.kind === "references" &&
+        edge.referenceName === "record.port"
+    );
+    const modeAfterSync = afterSync.edges.find(
+      (edge) =>
+        edge.sourceId === recordConfig.id &&
+        edge.kind === "references" &&
+        edge.referenceName === "recordMode"
+    );
+
+    expect(synced.lastIndexWork?.reusedArtifactFiles).toEqual(
+      expect.arrayContaining(["src/config/RecordConfig.java"])
+    );
+    expect(portAfterSync).toMatchObject({
+      targetId: null,
+      resolution: "unresolved",
+      confidence: 0,
+      evidence: expect.objectContaining({ stage: "unresolved", candidateSymbolIds: [] })
+    });
+    expect(modeAfterSync).toMatchObject({
+      targetId: null,
+      resolution: "unresolved",
+      confidence: 0,
+      evidence: expect.objectContaining({ stage: "unresolved", candidateSymbolIds: [] })
+    });
+  });
+
   it("projects conservative Java @ConfigurationProperties prefixes to unique Spring Boot configuration leaves", async () => {
     const projectPath = await createInlineProject({
       "config/application.yml": [

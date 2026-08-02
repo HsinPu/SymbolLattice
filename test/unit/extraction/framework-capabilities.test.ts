@@ -403,6 +403,7 @@ describe("first-party framework capabilities", () => {
       routeRegistrations: [],
       surfaces: [
         "direct imported or fully-qualified @Value literal-key annotations on direct Java fields, constructor parameters, concrete-method parameters, or qualifying one-parameter concrete methods, or Kotlin class properties, primary-constructor parameters, concrete-method parameters, or qualifying one-parameter concrete methods",
+        "direct imported or fully-qualified @Value literal-key annotations on direct top-level Java record components",
         "direct imported or fully-qualified @Value literal-key annotations on direct top-level Kotlin object properties, concrete-method parameters, or qualifying one-parameter concrete methods",
         "direct imported or fully-qualified @ConfigurationProperties literal-prefix annotations on direct Java or Kotlin classes",
         "Kotlin regular-string placeholders with an explicit escaped dollar sign",

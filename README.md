@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.177.0 是開發者預覽版，尚未發佈至 npm；請由原始碼執行。
+> v0.178.0 是開發者預覽版，尚未發佈至 npm；請由原始碼執行。
 
 SymbolLattice 為專案建立可查詢的本機程式碼符號圖譜。每條關係都保留規則、解析階段與信心值，並嚴格區分 `exact`、`heuristic` 與 `unresolved` 證據。
 
@@ -41,10 +41,10 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 Windows PowerShell 若無法使用 `npm`，請改用 `npm.cmd`。索引資料保存在目標專案的 `.symbol-lattice/index.sqlite`。
 
-## v0.177.0 重點
+## v0.178.0 重點
 
-- Spring `@Value` 現支援具大括號、直接頂層 Kotlin `object` 的屬性、具實體 body 的方法參數，以及唯一參數的方法註解；圖譜以 class-like 擁有者呈現 `object`。
-- 仍要求精確 import／完整 Spring 名稱與 Kotlin 跳脫 `$` 的規則字串；nested、companion 與匿名 object 不會被納入。
+- Spring `@Value` 現支援直接頂層 Java `record` 的元件；圖譜以 class-like 擁有者呈現 `record`，並沿用既有的精確與 relaxed 設定鍵解析證據。
+- 僅接受精確 import／完整 Spring 名稱與單一字面 placeholder；巢狀 record、canonical constructor、record 方法與 `@ConfigurationProperties` record 綁定不納入。
 
 ## 核心原則
 
@@ -54,7 +54,7 @@ Windows PowerShell 若無法使用 `npm`，請改用 `npm.cmd`。索引資料保
 
 ## 靜態分析邊界
 
-- Spring Boot `@Value` 僅連結 Java 直接頂層類別的欄位、建構子參數、具實體 body 的方法參數，或具實體 body 且唯一參數的方法本身；Kotlin 直接頂層類別與具大括號的 `object` 支援屬性、具實體 body 的方法參數與唯一參數的方法註解，類別另支援 primary constructor。必須是精確 import／完整名稱與單一字面 placeholder，且 Kotlin 必須使用跳脫 `$` 的規則字串。若參數已有可證明的 `@Value`，方法註解不重複發出關係。`@ConfigurationProperties` 僅接受直接 Java／Kotlin 類別上的單一字面位置參數或 `prefix =` 參數。abstract／介面／top-level 方法、secondary constructor、nested／companion／匿名 object、use-site target、別名／wildcard import、欄位／集合綁定、列表、合併鍵、動態值、設定匯入、profile 啟用與執行時優先順序都不支援。
+- Spring Boot `@Value` 僅連結 Java 直接頂層類別的欄位、建構子參數、具實體 body 的方法參數、具實體 body 且唯一參數的方法本身，或直接頂層 `record` 的元件；Kotlin 直接頂層類別與具大括號的 `object` 支援屬性、具實體 body 的方法參數與唯一參數的方法註解，類別另支援 primary constructor。必須是精確 import／完整名稱與單一字面 placeholder，且 Kotlin 必須使用跳脫 `$` 的規則字串。若參數已有可證明的 `@Value`，方法註解不重複發出關係。`@ConfigurationProperties` 僅接受直接 Java／Kotlin 類別上的單一字面位置參數或 `prefix =` 參數，不支援 record。abstract／介面／top-level 方法、secondary constructor、nested record、nested／companion／匿名 object、use-site target、別名／wildcard import、欄位／集合綁定、列表、合併鍵、動態值、設定匯入、profile 啟用與執行時優先順序都不支援。
 - COBOL CICS 僅接受已由 `END-EXEC` 完整結束、含單一字面 `TRANSID` 的直接 `RETURN` 或 `START`。目標須是索引內唯一、在 `PROCEDURE DIVISION` 前宣告且名稱含 `TRAN` 的字面交易碼；CICS CSD 屬外部設定，因此關係保持 `heuristic`，而非執行時保證。
 - 動態組合、外部或 namespace 套件、父層相對匯入、複製或容器值、已裝飾或匯入的類別、WebSocket、`add_route`、版本設定與模糊目標，都不會成為 `exact` 結果。
 

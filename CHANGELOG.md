@@ -6,6 +6,27 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.178.0] - 2026-08-02
+
+### Added
+
+- Parser-backed Spring <code>@Value</code> facts now include components on direct top-level Java <code>record</code> declarations. The shared graph has no separate record kind, so each accepted record is intentionally represented as a class-like symbol.
+- A narrowly scoped modern Java grammar is used only to prove record ownership, imports, component annotations, and literal placeholder form; the established Lezer Java extractor continues to handle ordinary classes and routes. Record spans also protect the legacy path from misclassifying nested record components as enclosing-class methods while preserving unaffected enclosing-class facts.
+- Record-component facts reuse exact-import/fully-qualified annotation proof, literal and relaxed configuration-key resolution, collision-safe unresolved evidence, source-value non-retention, explicit-sync projection behavior, and unchanged-artifact reuse.
+- New extraction, capability, and service coverage proves imported and fully-qualified records, exact and relaxed resolution, class-like callers, source-value omission, explicit-sync withdrawal, rejection of named/wildcard/dynamic/nested forms, and preservation of an outer class's unaffected direct facts.
+
+### Compatibility
+
+- The artifact-facts extractor advances to <code>multi-language-ast-v158</code>; the project resolver remains <code>project-resolver-v55</code>. Existing graphs and SQLite schema remain readable, while the next explicit <code>sync</code> or <code>index</code> re-extracts eligible Java artifacts under the record-component surface.
+
+### Deliberate limits
+
+- This is not general Java record or Spring constructor analysis. Only direct top-level record components qualify. Nested records, canonical constructors, record methods, component/accessor symbols, declaration-level <code>@Value</code>, <code>@ConfigurationProperties</code> records, aliases, wildcard imports, named arguments, expressions, escaped strings, nested placeholders, profiles, precedence, validation, collection binding, and values remain outside analysis.
+
+### Comparison notes
+
+- CodeGraph's inspected Java Spring path uses a broad text regex around <code>@Value</code>, which can cover more placements but does not prove modern Java record ownership, exact annotation type, import binding, argument shape, or nesting. SymbolLattice independently adds the narrow direct-top-level record subset with parser-proven ownership, legacy-parser guardrails, and collision-preserving resolution evidence. SymbolLattice is stronger for static auditability; CodeGraph remains broader and more permissive.
+
 ## [0.177.0] - 2026-08-02
 
 ### Added

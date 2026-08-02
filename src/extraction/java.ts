@@ -13,6 +13,7 @@ import {
   type SymbolNode
 } from "../domain/index.js";
 import { frameworkCapability } from "./framework-capabilities.js";
+import { inspectJavaRecords, type StaticJavaRecord } from "./java-records.js";
 
 export interface JavaExtractFileFactsInput {
   readonly filePath: string;
@@ -1051,6 +1052,7 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
   }
 
   const root = parser.parse(input.sourceText).topNode;
+  const recordInspection = inspectJavaRecords({ sourceText: input.sourceText });
   const lineStarts = lineStartsFor(input.sourceText);
   const symbols: SymbolNode[] = [];
   const edges: GraphEdge[] = [];
@@ -1083,8 +1085,11 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
     return ordinal;
   }
 
-  function addContainment(parent: SymbolNode, child: SymbolNode, node: JavaSyntaxNode): void {
-    const range = rangeFor(lineStarts, node.from, node.to);
+  function addContainmentAtRange(
+    parent: SymbolNode,
+    child: SymbolNode,
+    range: SourceRange
+  ): void {
     edges.push({
       id: createEdgeId({
         sourceId: parent.id,
@@ -1110,6 +1115,10 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
     });
   }
 
+  function addContainment(parent: SymbolNode, child: SymbolNode, node: JavaSyntaxNode): void {
+    addContainmentAtRange(parent, child, rangeFor(lineStarts, node.from, node.to));
+  }
+
   function addClass(declaration: StaticJavaClass, packageName: string | null): SymbolNode {
     const qualifiedName = `${input.filePath}#${declaration.name}`;
     const declarationOrdinal = nextOrdinal(qualifiedName, "class");
@@ -1130,6 +1139,34 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
     };
     symbols.push(symbol);
     addContainment(fileNode, symbol, declaration.node);
+    if (packageName !== null) {
+      javaClassFacts.push({ symbolId: symbol.id, packageName });
+    }
+    return symbol;
+  }
+
+  function addRecord(declaration: StaticJavaRecord, packageName: string | null): SymbolNode {
+    const qualifiedName = `${input.filePath}#${declaration.name}`;
+    const declarationOrdinal = nextOrdinal(qualifiedName, "class");
+    const nodeRange = declaration.node.range();
+    const range = rangeFor(lineStarts, nodeRange.start.index, nodeRange.end.index);
+    const symbol: SymbolNode = {
+      id: createSymbolId({
+        filePath: input.filePath,
+        qualifiedName,
+        kind: "class",
+        declarationOrdinal
+      }),
+      name: declaration.name,
+      qualifiedName,
+      kind: "class",
+      filePath: input.filePath,
+      range,
+      isExported: declaration.isExported,
+      declarationOrdinal
+    };
+    symbols.push(symbol);
+    addContainmentAtRange(fileNode, symbol, range);
     if (packageName !== null) {
       javaClassFacts.push({ symbolId: symbol.id, packageName });
     }
@@ -1211,12 +1248,21 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
     });
   }
 
-  if (!hasSyntaxError(root)) {
+  const canUseLegacyJavaRoot =
+    !hasSyntaxError(root) ||
+    (recordInspection.isSyntaxClean && recordInspection.recordRanges.length > 0);
+  const packageName = canUseLegacyJavaRoot ? staticJavaPackage(input, root) : null;
+  const overlapsRecord = (node: JavaSyntaxNode): boolean =>
+    recordInspection.recordRanges.some(
+      (recordRange) => node.from < recordRange.end && recordRange.start < node.to
+    );
+
+  if (canUseLegacyJavaRoot) {
     const imports = staticJavaImports(input, root);
-    const packageName = staticJavaPackage(input, root);
     const classes = directChildren(root)
       .map((node) => staticJavaClass(input, node))
-      .filter((candidate): candidate is StaticJavaClass => candidate !== null);
+      .filter((candidate): candidate is StaticJavaClass => candidate !== null)
+      .filter((candidate) => !hasSyntaxError(candidate.node));
 
     for (const classDeclaration of classes) {
       const classSymbol = addClass(classDeclaration, packageName);
@@ -1225,6 +1271,9 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
         classDeclaration,
         imports
       )) {
+        if (overlapsRecord(reference.node)) {
+          continue;
+        }
         springBootPropertiesValueReferences.push({
           sourceId: classSymbol.id,
           filePath: input.filePath,
@@ -1237,6 +1286,9 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
         classDeclaration,
         imports
       )) {
+        if (overlapsRecord(reference.node)) {
+          continue;
+        }
         springBootPropertiesValueReferences.push({
           sourceId: classSymbol.id,
           filePath: input.filePath,
@@ -1249,6 +1301,9 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
         classDeclaration,
         imports
       )) {
+        if (overlapsRecord(reference.node)) {
+          continue;
+        }
         springBootPropertiesValueReferences.push({
           sourceId: classSymbol.id,
           filePath: input.filePath,
@@ -1261,6 +1316,9 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
         classDeclaration,
         imports
       )) {
+        if (overlapsRecord(reference.node)) {
+          continue;
+        }
         springBootPropertiesValueReferences.push({
           sourceId: classSymbol.id,
           filePath: input.filePath,
@@ -1273,6 +1331,9 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
         classDeclaration,
         imports
       )) {
+        if (overlapsRecord(reference.node)) {
+          continue;
+        }
         springBootConfigurationPropertiesPrefixes.push({
           sourceId: classSymbol.id,
           filePath: input.filePath,
@@ -1282,7 +1343,8 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
       }
       const methods = directChildren(classDeclaration.body)
         .map((node) => staticJavaMethod(input, node))
-        .filter((candidate): candidate is StaticJavaMethod => candidate !== null);
+        .filter((candidate): candidate is StaticJavaMethod => candidate !== null)
+        .filter((candidate) => !overlapsRecord(candidate.node));
       const symbolsByMethod = new Map<StaticJavaMethod, SymbolNode>();
       for (const methodDeclaration of methods) {
         symbolsByMethod.set(methodDeclaration, addMethod(classSymbol, methodDeclaration));
@@ -1336,6 +1398,21 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
             );
           }
         }
+      }
+    }
+  }
+
+  if (recordInspection.isSyntaxClean) {
+    for (const recordDeclaration of recordInspection.records) {
+      const recordSymbol = addRecord(recordDeclaration, packageName);
+      for (const reference of recordDeclaration.valueReferences) {
+        const referenceRange = reference.node.range();
+        springBootPropertiesValueReferences.push({
+          sourceId: recordSymbol.id,
+          filePath: input.filePath,
+          key: reference.key,
+          range: rangeFor(lineStarts, referenceRange.start.index, referenceRange.end.index)
+        });
       }
     }
   }

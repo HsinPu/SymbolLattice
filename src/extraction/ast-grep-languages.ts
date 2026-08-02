@@ -1,5 +1,6 @@
 import csharp from "@ast-grep/lang-csharp";
 import dart from "@ast-grep/lang-dart";
+import java from "@ast-grep/lang-java";
 import kotlin from "@ast-grep/lang-kotlin";
 import ruby from "@ast-grep/lang-ruby";
 import scala from "@ast-grep/lang-scala";
@@ -10,6 +11,6 @@ import { parse, registerDynamicLanguage, type SgNode } from "@ast-grep/napi";
  * ast-grep replaces, rather than merges, its dynamic-language registry.
  * Register every first-party grammar together so extractors remain composable.
  */
-registerDynamicLanguage({ csharp, dart, kotlin, ruby, scala, swift });
+registerDynamicLanguage({ csharp, dart, java, kotlin, ruby, scala, swift });
 
 export { parse, type SgNode };

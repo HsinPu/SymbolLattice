@@ -7770,6 +7770,135 @@ describe("source extraction", () => {
     expect(wildcardImportFacts.springBootPropertiesFacts?.valueReferences).toEqual([]);
   });
 
+  it("retains direct Java record component Spring Boot @Value facts", () => {
+    const facts = extractFileFacts({
+      filePath: "src/config/RecordConfig.java",
+      language: "java",
+      sourceText: [
+        "package example.config;",
+        "",
+        "import org.springframework.beans.factory.annotation.Value;",
+        "",
+        "record RecordConfig(",
+        '  @Value("${server.port}") String port,',
+        '  @Value("${feature.enabled:false}") boolean enabled',
+        ") {}",
+        "",
+        "public record FullyQualifiedRecord(",
+        '  @org.springframework.beans.factory.annotation.Value("${app.name}") String name',
+        ") {}",
+        "",
+        "class LegacyConfig {",
+        '  @Value("${legacy.port}")',
+        "  String port;",
+        "}"
+      ].join("\n")
+    });
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+
+    expect(
+      facts.symbols
+        .filter((symbol) => symbol.kind === "class")
+        .map((symbol) => symbol.name)
+        .sort()
+    ).toEqual(["FullyQualifiedRecord", "LegacyConfig", "RecordConfig"]);
+    expect(
+      facts.springBootPropertiesFacts?.valueReferences
+        .map((reference) => `${symbolsById.get(reference.sourceId)?.name}:${reference.key}`)
+        .sort()
+    ).toEqual([
+      "FullyQualifiedRecord:app.name",
+      "LegacyConfig:legacy.port",
+      "RecordConfig:feature.enabled",
+      "RecordConfig:server.port"
+    ]);
+    expect(
+      facts.javaFacts?.classes
+        .map(
+          (javaClass) =>
+            `${symbolsById.get(javaClass.symbolId)?.name}:${javaClass.packageName}`
+        )
+        .sort()
+    ).toEqual([
+      "FullyQualifiedRecord:example.config",
+      "LegacyConfig:example.config",
+      "RecordConfig:example.config"
+    ]);
+    expect(facts.edges.filter((edge) => edge.kind === "references")).toEqual([]);
+  });
+
+  it("rejects unsupported Java record component Spring @Value forms", () => {
+    const rejected = [
+      [
+        "src/config/NamedRecord.java",
+        [
+          "import org.springframework.beans.factory.annotation.Value;",
+          "",
+          'record NamedRecord(@Value(value = "${named.key}") String value) {}'
+        ].join("\n")
+      ],
+      [
+        "src/config/WildcardRecord.java",
+        [
+          "import org.springframework.beans.factory.annotation.*;",
+          "",
+          'record WildcardRecord(@Value("${wildcard.key}") String value) {}'
+        ].join("\n")
+      ],
+      [
+        "src/config/NestedRecord.java",
+        [
+          "import org.springframework.beans.factory.annotation.Value;",
+          "",
+          "class Host {",
+          '  record NestedRecord(@Value("${nested.key}") String value) {}',
+          "}"
+        ].join("\n")
+      ],
+      [
+        "src/config/DynamicRecord.java",
+        [
+          "import org.springframework.beans.factory.annotation.Value;",
+          "",
+          'record DynamicRecord(@Value("${dynamic.${key}}") String value) {}'
+        ].join("\n")
+      ]
+    ] as const;
+
+    expect(
+      rejected.map(([filePath, sourceText]) =>
+        extractFileFacts({ filePath, language: "java", sourceText }).springBootPropertiesFacts?.valueReferences
+      )
+    ).toEqual([[], [], [], []]);
+  });
+
+  it("retains unaffected Java class facts while excluding nested record components", () => {
+    const facts = extractFileFacts({
+      filePath: "src/config/Host.java",
+      language: "java",
+      sourceText: [
+        "import org.springframework.beans.factory.annotation.Value;",
+        "",
+        "class Host {",
+        '  @Value("${host.port}")',
+        "  String port;",
+        '  record NestedRecord(@Value("${nested.key}") String value) {}',
+        "}"
+      ].join("\n")
+    });
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "class").map((symbol) => symbol.name)).toEqual([
+      "Host"
+    ]);
+    expect(facts.symbols.filter((symbol) => symbol.kind === "method")).toEqual([]);
+    expect(
+      facts.springBootPropertiesFacts?.valueReferences.map(
+        (reference) => `${symbolsById.get(reference.sourceId)?.name}:${reference.key}`
+      )
+    ).toEqual(["Host:host.port"]);
+  });
+
   it("retains direct Java Spring Boot @Value concrete-method parameter facts", () => {
     const facts = extractFileFacts({
       filePath: "src/config/MethodConfig.java",
