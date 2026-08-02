@@ -7819,7 +7819,6 @@ describe("source extraction", () => {
         '    @Value("${nested.${key}}") String nested,',
         '    @Value("${dynamic}" + suffix) String dynamic',
         "  ) {}",
-        '  @Value("${method.annotation}") void annotatedMethod(String value) {}',
         "}",
         "abstract class AbstractMethodValues {",
         '  abstract void configure(@Value("${abstract.key}") String value);',
@@ -7842,6 +7841,92 @@ describe("source extraction", () => {
 
     expect(directImportFacts.springBootPropertiesFacts?.valueReferences).toEqual([]);
     expect(wildcardImportFacts.springBootPropertiesFacts?.valueReferences).toEqual([]);
+  });
+
+  it("retains direct Java Spring Boot @Value concrete-method annotation facts", () => {
+    const facts = extractFileFacts({
+      filePath: "src/config/MethodAnnotationConfig.java",
+      language: "java",
+      sourceText: [
+        "import org.springframework.beans.factory.annotation.Value;",
+        "",
+        "class MethodAnnotationConfig {",
+        '  @Value("${server.port}")',
+        "  void configure(String port) {}",
+        '  @Value("${feature.enabled:false}")',
+        "  void setEnabled(boolean enabled) {}",
+        "}",
+        "",
+        "class FullyQualifiedMethodAnnotationConfig {",
+        '  @org.springframework.beans.factory.annotation.Value("${app.name}")',
+        "  void setName(String name) {}",
+        "}"
+      ].join("\n")
+    });
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+
+    expect(
+      facts.springBootPropertiesFacts?.valueReferences.map((reference) => [
+        symbolsById.get(reference.sourceId)?.name,
+        reference.key,
+        reference.range.start
+      ])
+    ).toEqual([
+      ["MethodAnnotationConfig", "server.port", { line: 4, column: 3 }],
+      ["MethodAnnotationConfig", "feature.enabled", { line: 6, column: 3 }],
+      ["FullyQualifiedMethodAnnotationConfig", "app.name", { line: 11, column: 3 }]
+    ]);
+    expect(facts.edges.filter((edge) => edge.kind === "references")).toEqual([]);
+  });
+
+  it("rejects unsupported Java Spring @Value concrete-method annotation forms", () => {
+    const directImportFacts = extractFileFacts({
+      filePath: "src/config/UnsupportedMethodAnnotationValues.java",
+      language: "java",
+      sourceText: [
+        "import org.springframework.beans.factory.annotation.Value;",
+        "class UnsupportedMethodAnnotationValues {",
+        '  @Value(value = "${named.argument}") void named(String value) {}',
+        '  @Value("${nested.${key}}") void nested(String value) {}',
+        '  @Value("${dynamic}" + suffix) void dynamic(String value) {}',
+        '  @Value("${zero.parameters}") void zero() {}',
+        '  @Value("${multiple.parameters}") void multiple(String first, String second) {}',
+        "}",
+        "abstract class AbstractMethodAnnotationValues {",
+        '  @Value("${abstract.key}") abstract void configure(String value);',
+        "}",
+        "interface InterfaceMethodAnnotationValues {",
+        '  @Value("${interface.key}") void configure(String value);',
+        "}"
+      ].join("\n")
+    });
+    const wildcardImportFacts = extractFileFacts({
+      filePath: "src/config/WildcardMethodAnnotationValues.java",
+      language: "java",
+      sourceText: [
+        "import org.springframework.beans.factory.annotation.*;",
+        "class WildcardMethodAnnotationValues {",
+        '  @Value("${unproven.key}") void configure(String value) {}',
+        "}"
+      ].join("\n")
+    });
+    const duplicateFacts = extractFileFacts({
+      filePath: "src/config/DuplicateMethodAnnotationValues.java",
+      language: "java",
+      sourceText: [
+        "import org.springframework.beans.factory.annotation.Value;",
+        "class DuplicateMethodAnnotationValues {",
+        '  @Value("${method.key}")',
+        '  void configure(@Value("${parameter.key}") String value) {}',
+        "}"
+      ].join("\n")
+    });
+
+    expect(directImportFacts.springBootPropertiesFacts?.valueReferences).toEqual([]);
+    expect(wildcardImportFacts.springBootPropertiesFacts?.valueReferences).toEqual([]);
+    expect(duplicateFacts.springBootPropertiesFacts?.valueReferences.map((reference) => reference.key)).toEqual([
+      "parameter.key"
+    ]);
   });
 
   it("rejects non-field, unproven, dynamic, named-argument, and nested Spring @Value forms", () => {
@@ -11874,6 +11959,156 @@ describe("source extraction", () => {
         extractFileFacts({ filePath, language: "kotlin", sourceText }).springBootPropertiesFacts?.valueReferences
       )
     ).toEqual([[], [], [], [], [], [], [], []]);
+  });
+
+  it("retains direct Kotlin Spring @Value concrete-method annotation facts", () => {
+    const facts = extractFileFacts({
+      filePath: "src/config/MethodAnnotationConfig.kt",
+      language: "kotlin",
+      sourceText: [
+        "import org.springframework.beans.factory.annotation.Value",
+        "",
+        "class MethodAnnotationConfig {",
+        '  @Value("\\${server.port}")',
+        "  fun configure(port: String) {}",
+        '  @Value("\\${feature.enabled:false}")',
+        "  fun setEnabled(enabled: Boolean) {}",
+        "}",
+        "",
+        "class FullyQualifiedMethodAnnotationConfig {",
+        '  @org.springframework.beans.factory.annotation.Value("\\${app.name}")',
+        "  fun setName(name: String) {}",
+        "}"
+      ].join("\n")
+    });
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+
+    expect(
+      facts.springBootPropertiesFacts?.valueReferences.map((reference) => [
+        symbolsById.get(reference.sourceId)?.name,
+        reference.key,
+        reference.range.start
+      ])
+    ).toEqual([
+      ["MethodAnnotationConfig", "server.port", { line: 4, column: 3 }],
+      ["MethodAnnotationConfig", "feature.enabled", { line: 6, column: 3 }],
+      ["FullyQualifiedMethodAnnotationConfig", "app.name", { line: 11, column: 3 }]
+    ]);
+    expect(facts.edges.filter((edge) => edge.kind === "references")).toEqual([]);
+  });
+
+  it("rejects unsupported Kotlin Spring @Value concrete-method annotation forms", () => {
+    const rejected = [
+      [
+        "src/config/DynamicMethodAnnotation.kt",
+        [
+          "import org.springframework.beans.factory.annotation.Value",
+          "",
+          "class DynamicMethodAnnotation {",
+          '  @Value("${dynamic.key}")',
+          "  fun configure(value: String) {}",
+          "}"
+        ].join("\n")
+      ],
+      [
+        "src/config/NamedMethodAnnotation.kt",
+        [
+          "import org.springframework.beans.factory.annotation.Value",
+          "",
+          "class NamedMethodAnnotation {",
+          '  @Value(value = "\\${named.key}")',
+          "  fun configure(value: String) {}",
+          "}"
+        ].join("\n")
+      ],
+      [
+        "src/config/RawMethodAnnotation.kt",
+        [
+          "import org.springframework.beans.factory.annotation.Value",
+          "",
+          "class RawMethodAnnotation {",
+          '  @Value("""\\${raw.key}""")',
+          "  fun configure(value: String) {}",
+          "}"
+        ].join("\n")
+      ],
+      [
+        "src/config/ArityMethodAnnotation.kt",
+        [
+          "import org.springframework.beans.factory.annotation.Value",
+          "",
+          "class ArityMethodAnnotation {",
+          '  @Value("\\${zero.key}")',
+          "  fun zero() {}",
+          '  @Value("\\${multiple.key}")',
+          "  fun multiple(first: String, second: String) {}",
+          "}"
+        ].join("\n")
+      ],
+      [
+        "src/config/AbstractMethodAnnotation.kt",
+        [
+          "import org.springframework.beans.factory.annotation.Value",
+          "",
+          "abstract class AbstractMethodAnnotation {",
+          '  @Value("\\${abstract.key}")',
+          "  abstract fun configure(value: String)",
+          "}"
+        ].join("\n")
+      ],
+      [
+        "src/config/TopLevelMethodAnnotation.kt",
+        [
+          "import org.springframework.beans.factory.annotation.Value",
+          "",
+          '  @Value("\\${top.level.key}")',
+          "fun configure(value: String) {}"
+        ].join("\n")
+      ],
+      [
+        "src/config/AliasedMethodAnnotation.kt",
+        [
+          "import org.springframework.beans.factory.annotation.Value as SpringValue",
+          "",
+          "class AliasedMethodAnnotation {",
+          '  @SpringValue("\\${aliased.key}")',
+          "  fun configure(value: String) {}",
+          "}"
+        ].join("\n")
+      ],
+      [
+        "src/config/WildcardMethodAnnotation.kt",
+        [
+          "import org.springframework.beans.factory.annotation.*",
+          "",
+          "class WildcardMethodAnnotation {",
+          '  @Value("\\${wildcard.key}")',
+          "  fun configure(value: String) {}",
+          "}"
+        ].join("\n")
+      ]
+    ] as const;
+    const duplicateFacts = extractFileFacts({
+      filePath: "src/config/DuplicateMethodAnnotation.kt",
+      language: "kotlin",
+      sourceText: [
+        "import org.springframework.beans.factory.annotation.Value",
+        "",
+        "class DuplicateMethodAnnotation {",
+        '  @Value("\\${method.key}")',
+        '  fun configure(@Value("\\${parameter.key}") value: String) {}',
+        "}"
+      ].join("\n")
+    });
+
+    expect(
+      rejected.map(([filePath, sourceText]) =>
+        extractFileFacts({ filePath, language: "kotlin", sourceText }).springBootPropertiesFacts?.valueReferences
+      )
+    ).toEqual([[], [], [], [], [], [], [], []]);
+    expect(duplicateFacts.springBootPropertiesFacts?.valueReferences.map((reference) => reference.key)).toEqual([
+      "parameter.key"
+    ]);
   });
 
   it("retains direct Kotlin Spring @ConfigurationProperties literal-prefix facts", () => {

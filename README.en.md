@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.175.0 is a developer preview and is not published to npm. Run it from source.
+> v0.176.0 is a developer preview and is not published to npm. Run it from source.
 
 SymbolLattice builds a queryable local code-symbol graph for a project. Every relation retains its rule, resolution stage, and confidence; `exact`, `heuristic`, and `unresolved` evidence are never conflated.
 
@@ -41,10 +41,10 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 On Windows PowerShell, use `npm.cmd` if `npm` is unavailable. Index data stays in the target project's `.symbol-lattice/index.sqlite`.
 
-## v0.175.0 highlights
+## v0.176.0 highlights
 
-- Spring `@Value` now creates configuration relations from Java/Kotlin direct-class method parameters with a concrete body, while retaining the owning class as the graph source.
-- Fields, constructors, and methods share the same evidence: exact keys remain `exact`, one relaxed spelling creates `heuristic 0.75` evidence, and normalized collisions remain `unresolved`.
+- Spring `@Value` now supports direct annotations on Java/Kotlin concrete one-parameter methods, while retaining the owning class as the graph source.
+- If that parameter already has a proven Spring `@Value`, parameter evidence wins to avoid duplicate or conflicting relations; exact, relaxed, and collision rules otherwise stay unchanged.
 
 ## Principles
 
@@ -54,7 +54,7 @@ On Windows PowerShell, use `npm.cmd` if `npm` is unavailable. Index data stays i
 
 ## Static-analysis boundaries
 
-- Spring Boot `@Value` supports only direct top-level Java-class fields, constructor parameters, or concrete-method parameters, or direct top-level Kotlin-class properties, primary-constructor parameters, or concrete-method parameters. It requires an exact import or fully-qualified name and one literal placeholder; Kotlin requires an escaped-dollar regular string. `@ConfigurationProperties` accepts only one literal positional or `prefix =` argument. Abstract/interface/top-level methods, secondary constructors, use-site targets, alias/wildcard imports, field/collection binding, lists, merge keys, dynamic values, config imports, active profiles, and runtime precedence remain outside analysis.
+- Spring Boot `@Value` supports only direct top-level Java-class fields, constructor parameters, concrete-method parameters, or direct concrete one-parameter methods; Kotlin has the same property, primary-constructor, method-parameter, and method-annotation scope. It requires an exact import or fully-qualified name and one literal placeholder; Kotlin requires an escaped-dollar regular string. A proven parameter `@Value` prevents a duplicate method-annotation relation. `@ConfigurationProperties` accepts only one literal positional or `prefix =` argument. Abstract/interface/top-level methods, secondary constructors, use-site targets, alias/wildcard imports, field/collection binding, lists, merge keys, dynamic values, config imports, active profiles, and runtime precedence remain outside analysis.
 - COBOL CICS accepts only a direct `RETURN` or `START` completed by `END-EXEC` with one literal `TRANSID`. Its target must be the unique indexed, pre-`PROCEDURE DIVISION`, `TRAN`-named literal owner; because the CICS CSD is external configuration, this remains `heuristic`, not a runtime guarantee.
 - Dynamic composition, external or namespace packages, parent-relative imports, copied or container values, decorated or imported classes, WebSockets, `add_route`, versioning, and ambiguous targets never become `exact` results.
 

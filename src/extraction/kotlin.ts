@@ -505,6 +505,88 @@ function staticKotlinSpringBootMethodParameterReferences(
 }
 
 /**
+ * Retains one direct concrete-method `@Value` annotation only when its method
+ * has exactly one parameter and that parameter has no separately proven Spring
+ * `@Value`. This keeps method-level and parameter-level injection evidence from
+ * producing duplicate or contradictory class-owned configuration facts.
+ */
+function staticKotlinSpringBootMethodAnnotationReferences(
+  declaration: StaticKotlinType,
+  imports: ReadonlySet<string>
+): readonly StaticKotlinSpringBootPropertiesReference[] {
+  if (declaration.kind !== "class") {
+    return [];
+  }
+  const references: StaticKotlinSpringBootPropertiesReference[] = [];
+  for (const method of directChildren(declaration.body)) {
+    if (method.kind() !== "function_declaration") {
+      continue;
+    }
+    const methodChildren = directChildren(method);
+    if (!methodChildren.some((child) => child.kind() === "function_body")) {
+      continue;
+    }
+    const parameters = methodChildren.find(
+      (child) => child.kind() === "function_value_parameters"
+    );
+    if (parameters === undefined) {
+      continue;
+    }
+    const parameterChildren = directChildren(parameters);
+    const parameterIndexes = parameterChildren
+      .map((child, index) => (child.kind() === "parameter" ? index : -1))
+      .filter((index) => index >= 0);
+    const parameterIndex = parameterIndexes[0];
+    if (parameterIndexes.length !== 1 || parameterIndex === undefined) {
+      continue;
+    }
+    const parameterModifiers = parameterChildren[parameterIndex - 1];
+    const parameterHasSpringValue =
+      parameterModifiers?.kind() === "parameter_modifiers" &&
+      directChildren(parameterModifiers)
+        .filter((child) => child.kind() === "annotation")
+        .some((annotation) => {
+          const name = staticKotlinAnnotationName(annotation);
+          return (
+            (name === "Value" && imports.has(SPRING_VALUE_IMPORT)) ||
+            name === SPRING_VALUE_IMPORT
+          );
+        });
+    if (parameterHasSpringValue) {
+      continue;
+    }
+    const modifiers = methodChildren.find((child) => child.kind() === "modifiers");
+    if (modifiers === undefined) {
+      continue;
+    }
+    const annotations = directChildren(modifiers).filter((child) => child.kind() === "annotation");
+    const annotationsNamedValue = annotations.filter((annotation) => {
+      const name = staticKotlinAnnotationName(annotation);
+      return name === "Value" || name === SPRING_VALUE_IMPORT;
+    });
+    const valueAnnotations = annotationsNamedValue.filter((annotation) => {
+      const name = staticKotlinAnnotationName(annotation);
+      return name === SPRING_VALUE_IMPORT || (name === "Value" && imports.has(SPRING_VALUE_IMPORT));
+    });
+    if (
+      annotationsNamedValue.length !== valueAnnotations.length ||
+      valueAnnotations.length !== 1
+    ) {
+      continue;
+    }
+    const annotation = valueAnnotations[0];
+    if (annotation === undefined) {
+      continue;
+    }
+    const key = staticKotlinSpringBootPropertiesKey(annotation);
+    if (key !== null) {
+      references.push({ key, node: annotation });
+    }
+  }
+  return references;
+}
+
+/**
  * Retains one direct Kotlin top-level-class configuration prefix only after an
  * exact import or fully-qualified annotation proves Spring's type. The shared
  * project resolver fans the fact out to individually unique configuration
@@ -896,6 +978,17 @@ export function extractKotlinFileFacts(input: KotlinExtractFileFactsInput): Arti
         });
       }
       for (const reference of staticKotlinSpringBootMethodParameterReferences(
+        declaration,
+        imports
+      )) {
+        springBootPropertiesValueReferences.push({
+          sourceId: typeSymbol.id,
+          filePath: input.filePath,
+          key: reference.key,
+          range: rangeForNode(reference.node)
+        });
+      }
+      for (const reference of staticKotlinSpringBootMethodAnnotationReferences(
         declaration,
         imports
       )) {
