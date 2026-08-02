@@ -2444,6 +2444,21 @@ function isHeritageTarget(
   return symbol.kind === "class" || symbol.kind === "interface" || symbol.kind === "type";
 }
 
+/** Direct `new Identifier()` facts resolve only to a statically declared class. */
+function isInstantiationTarget(symbol: SymbolNode): boolean {
+  return symbol.kind === "class";
+}
+
+function instantiationRuleId(
+  suffix:
+    | "local-class-binding"
+    | "imported-class-target"
+    | "reexported-class-target"
+    | "unresolved-class-target"
+): string {
+  return `syntax.new-expression.${suffix}`;
+}
+
 function importBindingSupportsSpace(
   binding: ExtractedFileFacts["importBindings"][number],
   expectedSpace: BindingSpace
@@ -6406,7 +6421,13 @@ export function resolveProjectFacts(input: {
 
   for (const reference of [...references].sort((left, right) => compareStableText(left.id, right.id))) {
     const isHeritage = isHeritageReference(reference);
-    if (reference.relationKind !== "calls" && reference.relationKind !== "routes" && !isHeritage) {
+    const isInstantiation = reference.relationKind === "instantiates";
+    if (
+      reference.relationKind !== "calls" &&
+      reference.relationKind !== "routes" &&
+      !isHeritage &&
+      !isInstantiation
+    ) {
       continue;
     }
     const isRouteHandler = reference.relationKind === "routes";
@@ -6575,7 +6596,9 @@ export function resolveProjectFacts(input: {
     const exactImportedBindings = matchingImportedBindings.filter(({ binding }) =>
       heritage !== null
         ? importBindingSupportsSpace(binding, heritage.expectedSpace)
-        : !isRouteHandler || binding.isTypeOnly !== true
+        : isRouteHandler || isInstantiation
+          ? binding.isTypeOnly !== true
+          : true
     );
     const allExactImportedCandidates = canonicalExportCandidates(
       matchingImportedBindings.flatMap(({ binding, targetPath }) =>
@@ -6596,6 +6619,9 @@ export function resolveProjectFacts(input: {
             isHeritageTarget(candidate.symbol, heritage)
           );
         }
+        if (isInstantiation) {
+          return candidate.isTypeOnly !== true && isInstantiationTarget(candidate.symbol);
+        }
         return !isRouteHandler || !candidate.isTypeOnly;
       })
     );
@@ -6613,9 +6639,11 @@ export function resolveProjectFacts(input: {
     );
     const exportedCandidates = allExportCandidatesForName(exportSurfaces, reference.referenceName);
     const scopedCandidates =
-      heritage === null
-        ? scopedLocal.candidates
-        : scopedLocal.candidates.filter((candidate) => isHeritageTarget(candidate, heritage));
+      heritage !== null
+        ? scopedLocal.candidates.filter((candidate) => isHeritageTarget(candidate, heritage))
+        : isInstantiation
+          ? scopedLocal.candidates.filter((candidate) => isInstantiationTarget(candidate))
+          : scopedLocal.candidates;
 
     if (scopedLocal.hasBinding) {
       if (scopedCandidates.length === 1 && scopedCandidates[0] !== undefined) {
@@ -6631,9 +6659,11 @@ export function resolveProjectFacts(input: {
                     heritage.relationKind,
                     heritage.expectedSpace === "value" ? "local-value-binding" : "local-type-binding"
                   )
+                : isInstantiation
+                  ? instantiationRuleId("local-class-binding")
                 : isRouteHandler
-                ? staticRouteHandlerRuleId(reference, "local-handler")
-                : "lexical.local-binding",
+                  ? staticRouteHandlerRuleId(reference, "local-handler")
+                  : "lexical.local-binding",
               "lexical",
               candidateSymbolIds(scopedLocal.candidates)
             )
@@ -6650,9 +6680,11 @@ export function resolveProjectFacts(input: {
             referenceEvidence(
               heritage !== null
                 ? heritageRuleId(heritage.relationKind, "unresolved-target")
+                : isInstantiation
+                  ? instantiationRuleId("unresolved-class-target")
                 : isRouteHandler
-                ? staticRouteHandlerRuleId(reference, "unresolved-handler")
-                : "reference.unresolved",
+                  ? staticRouteHandlerRuleId(reference, "unresolved-handler")
+                  : "reference.unresolved",
               "unresolved",
               candidateSymbolIds(scopedLocal.candidates)
             )
@@ -6686,13 +6718,17 @@ export function resolveProjectFacts(input: {
                   heritage.relationKind,
                   resolutionPath.length === 0 ? "imported-target" : "reexported-target"
                 )
+              : isInstantiation
+                ? instantiationRuleId(
+                    resolutionPath.length === 0 ? "imported-class-target" : "reexported-class-target"
+                  )
               : isRouteHandler
-              ? resolutionPath.length === 0
-                ? staticRouteHandlerRuleId(reference, "imported-handler")
-                : staticRouteHandlerRuleId(reference, "reexported-handler")
-              : resolutionPath.length === 0
-                ? "module.explicit-import-binding"
-                : "module.reexported-import-binding",
+                ? resolutionPath.length === 0
+                  ? staticRouteHandlerRuleId(reference, "imported-handler")
+                  : staticRouteHandlerRuleId(reference, "reexported-handler")
+                : resolutionPath.length === 0
+                  ? "module.explicit-import-binding"
+                  : "module.reexported-import-binding",
             "module",
             candidateSymbolIds(exactImportedSymbols),
             exactImportedConfigurationPaths,
@@ -6718,11 +6754,15 @@ export function resolveProjectFacts(input: {
           referenceEvidence(
             heritage !== null
               ? heritageRuleId(heritage.relationKind, "unresolved-target")
+              : isInstantiation
+                ? instantiationRuleId("unresolved-class-target")
               : isRouteHandler
-              ? staticRouteHandlerRuleId(reference, "unresolved-handler")
-              : "reference.unresolved",
+                ? staticRouteHandlerRuleId(reference, "unresolved-handler")
+                : "reference.unresolved",
             "unresolved",
-            candidateSymbolIds(heritage === null ? exactImportedSymbols : allExactImportedSymbols),
+            candidateSymbolIds(
+              isInstantiation || heritage !== null ? allExactImportedSymbols : exactImportedSymbols
+            ),
             exactImportedConfigurationPaths
           )
         )
@@ -6734,7 +6774,7 @@ export function resolveProjectFacts(input: {
     // `extends` or `implements` needs a direct lexical, import, or re-export
     // proof in its required namespace; a project-wide name match would make a
     // type relationship look certain when it is not.
-    if (heritage !== null) {
+    if (heritage !== null || isInstantiation) {
       unresolvedReferences.push(reference);
       resolvedEdges.push(
         referenceEdge(
@@ -6743,9 +6783,15 @@ export function resolveProjectFacts(input: {
           "unresolved",
           0,
           referenceEvidence(
-            heritageRuleId(heritage.relationKind, "unresolved-target"),
+            heritage !== null
+              ? heritageRuleId(heritage.relationKind, "unresolved-target")
+              : instantiationRuleId("unresolved-class-target"),
             "unresolved",
-            candidateSymbolIds(allExactImportedSymbols),
+            candidateSymbolIds(
+              allExactImportedSymbols,
+              importedCandidates.map((candidate) => candidate.symbol),
+              exportedCandidates.map((candidate) => candidate.symbol)
+            ),
             exactImportedConfigurationPaths
           )
         )

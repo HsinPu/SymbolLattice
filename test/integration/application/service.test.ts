@@ -1250,7 +1250,7 @@ describe("SymbolLatticeService", () => {
       ]),
       iterationCount: 20,
       restartProbability: 0.2,
-      edgeKinds: ["calls", "references", "routes", "handles", "imports", "extends", "implements"],
+      edgeKinds: ["calls", "references", "routes", "handles", "imports", "extends", "implements", "instantiates"],
       score: expect.any(Number),
       traversalTruncated: expect.any(Boolean),
       depthLimitReached: expect.any(Boolean)
@@ -1302,7 +1302,7 @@ describe("SymbolLatticeService", () => {
       })
     ]);
     expect(contractCandidate?.topologySignals).toMatchObject({
-      edgeKinds: ["calls", "references", "routes", "handles", "imports", "extends", "implements"],
+      edgeKinds: ["calls", "references", "routes", "handles", "imports", "extends", "implements", "instantiates"],
       scopedExactNeighborCount: expect.any(Number),
       score: expect.any(Number)
     });
@@ -1310,6 +1310,47 @@ describe("SymbolLatticeService", () => {
       expect.arrayContaining([expect.objectContaining({ kind: "implements", count: 1 })])
     );
     expect(contractCandidate?.topologySignals?.score).toBeGreaterThan(0);
+  });
+
+  it("uses exact persisted class instantiation evidence in topology-ranked investigation signals", async () => {
+    const projectPath = await createInlineProject({
+      "src/a-isolated.ts": [
+        "export function rankInstantiationTopology(): string {",
+        '  const lexicalEvidence = "rankInstantiationTopology rankInstantiationTopology rankInstantiationTopology";',
+        "  return lexicalEvidence;",
+        "}",
+        ""
+      ].join("\n"),
+      "src/b-widget.ts": "export class rankInstantiationTopology {}\n",
+      "src/c-creator.ts": [
+        'import { rankInstantiationTopology } from "./b-widget";',
+        "export function createRankInstantiationTopology(): rankInstantiationTopology {",
+        "  return new rankInstantiationTopology();",
+        "}",
+        ""
+      ].join("\n")
+    });
+    const service = createService();
+    await service.init({ projectPath });
+
+    const topology = await service.investigate(projectPath, "rankInstantiationTopology", {
+      ranking: "topology",
+      searchLimit: 12,
+      symbolLimit: 8
+    });
+    const widgetCandidate = topology.selection.items.find(
+      ({ symbol }) => symbol.qualifiedName === "src/b-widget.ts#rankInstantiationTopology"
+    );
+
+    expect(widgetCandidate?.topologySignals).toMatchObject({
+      edgeKinds: ["calls", "references", "routes", "handles", "imports", "extends", "implements", "instantiates"],
+      scopedExactNeighborCount: expect.any(Number),
+      score: expect.any(Number)
+    });
+    expect(widgetCandidate?.topologySignals?.scopedExactIncidentEdgeKindCounts).toEqual(
+      expect.arrayContaining([expect.objectContaining({ kind: "instantiates", count: 1 })])
+    );
+    expect(widgetCandidate?.topologySignals?.score).toBeGreaterThan(0);
   });
 
   it("bounds selected investigation declaration source without reading live files", async () => {

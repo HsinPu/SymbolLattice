@@ -29,6 +29,7 @@ export const EDGE_KINDS = [
   "exports",
   "references",
   "calls",
+  "instantiates",
   "routes",
   "handles",
   ...HIERARCHY_RELATION_KINDS
@@ -229,7 +230,7 @@ export interface PendingReference {
   readonly referenceName: string;
   readonly relationKind: Extract<
     EdgeKind,
-    "calls" | "imports" | "exports" | "routes" | HierarchyRelationKind
+    "calls" | "instantiates" | "imports" | "exports" | "routes" | HierarchyRelationKind
   >;
   /** Present only for syntax-proven framework route or client-navigation handlers. */
   readonly routeFramework?: RouteFramework;

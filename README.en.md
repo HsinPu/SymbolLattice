@@ -14,9 +14,9 @@
 </div>
 
 > [!IMPORTANT]
-> v0.210.0 is a developer preview. Run it from source.
+> v0.211.0 is a developer preview. Run it from source.
 
-SymbolLattice builds a queryable local code-symbol graph. Every relation retains its rule, evidence stage, and confidence; exact, heuristic, and unresolved evidence are never conflated.
+SymbolLattice builds a local, queryable code-symbol graph. Every relation retains its rule, evidence stage, and confidence; `exact`, `heuristic`, and `unresolved` evidence are never conflated.
 
 ## Quick start
 
@@ -28,49 +28,40 @@ cd symbol-lattice
 npm install
 npm run build
 
-# Explicitly create a local code-symbol graph
+# Create the first code knowledge graph
 node dist/cli/main.js init /path/to/project
 
-# Retrieve one persisted-generation structural investigation from keywords
+# Query persisted graph evidence
 node dist/cli/main.js investigate "user token" --project /path/to/project --json
 
-# Re-rank candidates with bounded, exact reverse-dependency evidence
-node dist/cli/main.js investigate "user token" --project /path/to/project --ranking impact --json
-
-# Re-rank from query-matched seeds through bounded bidirectional exact-static topology
+# Re-rank with bounded exact topology evidence
 node dist/cli/main.js investigate "user token" --project /path/to/project --ranking topology --json
 
-# Inspect persisted reverse impact; the summary covers only returned paths
-node dist/cli/main.js impact "src/handlers.ts#users" --project /path/to/project --depth 3 --limit 100 --json
-
-# Explicitly synchronize after source changes
+# Explicitly refresh the graph after source changes
 node dist/cli/main.js sync /path/to/project
 
-# Start an MCP host; tools stay read-only and background auto-sync is enabled by default
+# Start a read-only MCP query host
 node dist/cli/main.js serve --mcp --project /path/to/project
-
-# Require manual init/sync only
-node dist/cli/main.js serve --mcp --project /path/to/project --no-auto-sync
 ```
 
-On Windows PowerShell, use `npm.cmd` if npm is unavailable. Index data stays in the target project's `.symbol-lattice/index.sqlite`.
+Index data is stored in the target project's `.symbol-lattice/index.sqlite`. On Windows PowerShell, use `npm.cmd` when npm is unavailable.
 
 > [!NOTE]
-> MCP tools never create or update a graph themselves. The default `serve --mcp` auto-sync is a separate host-owned background watcher; use `--no-auto-sync` for fully manual updates.
+> MCP queries never create or update a graph. The default `serve --mcp` auto-sync is a host-owned background watcher; use `--no-auto-sync` for a fully manual `init`/`sync` workflow.
 
-## v0.210.0 highlights
+## v0.211.0 highlights
 
-- `investigate --ranking topology` now includes exactly resolved `extends` and `implements` relationships in its bidirectional static scope, alongside calls, references, routes, handlers, and imports.
-- Each topology-ranked selection now discloses `scopedExactIncidentEdgeKindCounts` in `topologySignals`: fixed-order counts of the persisted relation incidences retained for that candidate, making ranking evidence auditable.
-- Relation counts are diagnostic only and do not weight the neighbor-deduplicated topology score; heuristic and unresolved relations remain excluded.
+- Direct TypeScript and JavaScript `new ClassName()` expressions now produce `instantiates` relations.
+- Only uniquely proven local, imported, or re-exported `class` targets receive exact edges. Function constructors, unimported same-name classes, member access, and dynamic constructors are never guessed as exact.
+- `investigate --ranking topology` now includes exact `instantiates` edges and discloses fixed-order relation counts in each result's `topologySignals`.
+- Run `sync` once on an existing index to re-extract facts and obtain the new relation.
 
-## Boundaries
+## Scope and guarantees
 
-- This is a local code graph, not an RDF/SPARQL knowledge graph or ontology-reasoning system.
-- Queries read persisted generations only. `investigate --ranking impact` and `topology` use bounded `exact` static evidence; topology currently uses `calls`, `references`, `routes`, `handles`, `imports`, `extends`, and `implements`. It is not whole-graph PageRank, semantic ranking, dynamic-dispatch inference, or runtime analysis. The general `impact` query retains its existing resolved static relations, and its summary never upgrades or conflates edge confidence.
-- `impact.summary` describes only the paths actually returned. When `--limit` or the MCP bound produces `truncated: true`, it is not a complete-graph impact claim.
-- Indexing and querying stay local. Source changes are reported as freshness state, never substituted for indexed evidence.
-- WAL is for same-machine local SQLite. Network filesystems, manual checkpoint management, and multi-writer coordination remain unsupported.
+- This is a local code graph, not an RDF/SPARQL knowledge base or ontology-reasoning system.
+- Topology ranking uses only bounded, persisted, `exact` `calls`, `references`, `routes`, `handles`, `imports`, `extends`, `implements`, and `instantiates` relations. It is not whole-graph PageRank, runtime analysis, or dynamic-dispatch inference.
+- `instantiates` currently covers direct class construction in native TypeScript and JavaScript files; Astro endpoint route projection remains unaffected.
+- Indexing and querying stay local. Live file contents determine freshness only and never replace indexed evidence.
 
 ## Verification
 

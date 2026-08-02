@@ -18,7 +18,8 @@ export const DEFAULT_EXACT_IMPACT_EDGE_KINDS = [
 /** Exact static edge kinds eligible for bounded topology relevance. */
 export const DEFAULT_EXACT_TOPOLOGY_EDGE_KINDS = [
   ...DEFAULT_EXACT_IMPACT_EDGE_KINDS,
-  ...HIERARCHY_RELATION_KINDS
+  ...HIERARCHY_RELATION_KINDS,
+  "instantiates"
 ] as const satisfies readonly EdgeKind[];
 
 const DEFAULT_IMPACT_EDGE_KINDS: readonly EdgeKind[] = DEFAULT_EXACT_IMPACT_EDGE_KINDS;

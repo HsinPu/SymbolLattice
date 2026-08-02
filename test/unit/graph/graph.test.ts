@@ -771,6 +771,50 @@ describe("pure graph traversal", () => {
     expect(relevance.scopedExactIncidentEdgeKindCountsBySymbolId.has(heuristicChild.id)).toBe(false);
   });
 
+  it("uses exact class instantiation edges in default topology relevance and excludes heuristic evidence", () => {
+    const creator = symbol({ id: "creator", name: "createWidget", filePath: "src/a-creator.ts" });
+    const widget = symbol({ id: "widget", name: "Widget", filePath: "src/b-widget.ts", kind: "class" });
+    const heuristicCreator = symbol({
+      id: "heuristic-creator",
+      name: "guessWidget",
+      filePath: "src/c-heuristic.ts"
+    });
+    const relevance = getBoundedExactTopologyRelevance(
+      {
+        symbols: [heuristicCreator, widget, creator],
+        edges: [
+          edge({
+            id: "creator-instantiates-widget",
+            sourceId: creator.id,
+            targetId: widget.id,
+            kind: "instantiates"
+          }),
+          edge({
+            id: "heuristic-creator-instantiates-widget",
+            sourceId: heuristicCreator.id,
+            targetId: widget.id,
+            kind: "instantiates",
+            resolution: "heuristic"
+          })
+        ]
+      },
+      {
+        seedSymbolIds: [widget.id],
+        maxHops: 2,
+        maxVisitedSymbols: 10,
+        iterations: 20,
+        restartProbability: 0.2
+      }
+    );
+
+    expect(relevance.scopedSymbolIds).toEqual([creator.id, widget.id]);
+    expect(relevance.scoresBySymbolId.get(creator.id)).toBeGreaterThan(0);
+    expect(relevance.scoresBySymbolId.get(widget.id)).toBeGreaterThan(0);
+    expect(relevance.scopedExactIncidentEdgeKindCountsBySymbolId.get(creator.id)?.get("instantiates")).toBe(1);
+    expect(relevance.scopedExactIncidentEdgeKindCountsBySymbolId.get(widget.id)?.get("instantiates")).toBe(1);
+    expect(relevance.scopedExactIncidentEdgeKindCountsBySymbolId.has(heuristicCreator.id)).toBe(false);
+  });
+
   it("finds exact affected test-file paths through imports and barrel exports", () => {
     const changedFile = symbol({ id: "changed-file", name: "math.ts", filePath: "src/math.ts", kind: "file" });
     const barrelFile = symbol({ id: "barrel-file", name: "index.ts", filePath: "src/index.ts", kind: "file" });

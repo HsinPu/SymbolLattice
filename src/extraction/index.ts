@@ -4784,6 +4784,8 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
     true,
     scriptKindFor(input)
   );
+  const isAstroEndpointSource =
+    input.frameworkEvidence?.astro === true && astroEndpointPath(input.filePath) !== null;
   const explicitExportNames = collectExplicitExportNames(sourceFile);
   const symbols: SymbolNode[] = [];
   const edges: GraphEdge[] = [];
@@ -5464,6 +5466,15 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
     }
     if (declaredSymbol !== null) {
       stack.push(declaredSymbol);
+    }
+
+    if (
+      (input.language === "typescript" || input.language === "javascript") &&
+      !isAstroEndpointSource &&
+      ts.isNewExpression(node) &&
+      ts.isIdentifier(node.expression)
+    ) {
+      addPendingReference(currentOwner().id, node.expression.text, "instantiates", node.expression);
     }
 
     if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {

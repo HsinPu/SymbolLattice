@@ -727,6 +727,139 @@ describe("direct TypeScript heritage resolution", () => {
   });
 });
 
+describe("direct class instantiation resolution", () => {
+  it("resolves local, imported, re-exported, and JavaScript classes exactly without name guessing", () => {
+    const sourceDocuments: readonly SourceDocument[] = [
+      {
+        absolutePath: "C:/project/src/widgets.ts",
+        relativePath: "src/widgets.ts",
+        language: "typescript",
+        sourceText: [
+          "export class ImportedWidget {}",
+          "export class ReexportedWidget {}",
+          "export function Factory() {}"
+        ].join("\n"),
+        contentHash: "widgets"
+      },
+      {
+        absolutePath: "C:/project/src/barrel.ts",
+        relativePath: "src/barrel.ts",
+        language: "typescript",
+        sourceText: 'export { ReexportedWidget } from "./widgets";',
+        contentHash: "barrel"
+      },
+      {
+        absolutePath: "C:/project/src/default-widget.ts",
+        relativePath: "src/default-widget.ts",
+        language: "typescript",
+        sourceText: "export default class DefaultWidget {}",
+        contentHash: "default-widget"
+      },
+      {
+        absolutePath: "C:/project/src/consumer.ts",
+        relativePath: "src/consumer.ts",
+        language: "typescript",
+        sourceText: [
+          'import { ImportedWidget, Factory } from "./widgets";',
+          'import { ReexportedWidget } from "./barrel";',
+          'import DefaultWidget from "./default-widget";',
+          'import type { ImportedWidget as TypeOnlyWidget } from "./widgets";',
+          "class LocalWidget {}",
+          "export function createLocal() { return new LocalWidget(); }",
+          "export function createImported() { return new ImportedWidget(); }",
+          "export function createReexported() { return new ReexportedWidget(); }",
+          "export function createDefault() { return new DefaultWidget(); }",
+          "export function createTypeOnly() { return new TypeOnlyWidget(); }",
+          "export function createFactory() { return new Factory(); }"
+        ].join("\n"),
+        contentHash: "consumer"
+      },
+      {
+        absolutePath: "C:/project/src/unproven.ts",
+        relativePath: "src/unproven.ts",
+        language: "typescript",
+        sourceText: "export function createUnproven() { return new ImportedWidget(); }",
+        contentHash: "unproven"
+      },
+      {
+        absolutePath: "C:/project/src/js-widget.js",
+        relativePath: "src/js-widget.js",
+        language: "javascript",
+        sourceText: "export class JavaScriptWidget {}",
+        contentHash: "js-widget"
+      },
+      {
+        absolutePath: "C:/project/src/js-consumer.js",
+        relativePath: "src/js-consumer.js",
+        language: "javascript",
+        sourceText:
+          'import { JavaScriptWidget } from "./js-widget.js"; export function createJavaScript() { return new JavaScriptWidget(); }',
+        contentHash: "js-consumer"
+      }
+    ];
+    const snapshot = snapshotWithResolver(sourceDocuments, undefined);
+    const symbol = (qualifiedName: string) =>
+      snapshot.symbols.find((candidate) => candidate.qualifiedName === qualifiedName);
+    const instantiationEdge = (sourceQualifiedName: string, referenceName: string) =>
+      snapshot.edges.find(
+        (edge) =>
+          edge.sourceId === symbol(sourceQualifiedName)?.id &&
+          edge.kind === "instantiates" &&
+          edge.referenceName === referenceName
+      );
+
+    expect(instantiationEdge("src/consumer.ts#createLocal", "LocalWidget")).toMatchObject({
+      targetId: symbol("src/consumer.ts#LocalWidget")?.id,
+      resolution: "exact",
+      confidence: 1,
+      evidence: { ruleId: "syntax.new-expression.local-class-binding", stage: "lexical" }
+    });
+    expect(instantiationEdge("src/consumer.ts#createImported", "ImportedWidget")).toMatchObject({
+      targetId: symbol("src/widgets.ts#ImportedWidget")?.id,
+      resolution: "exact",
+      confidence: 1,
+      evidence: { ruleId: "syntax.new-expression.imported-class-target", stage: "module" }
+    });
+    expect(instantiationEdge("src/consumer.ts#createReexported", "ReexportedWidget")).toMatchObject({
+      targetId: symbol("src/widgets.ts#ReexportedWidget")?.id,
+      resolution: "exact",
+      confidence: 1,
+      evidence: { ruleId: "syntax.new-expression.reexported-class-target", stage: "module" }
+    });
+    expect(instantiationEdge("src/consumer.ts#createDefault", "DefaultWidget")).toMatchObject({
+      targetId: symbol("src/default-widget.ts#DefaultWidget")?.id,
+      resolution: "exact",
+      confidence: 1,
+      evidence: { ruleId: "syntax.new-expression.imported-class-target", stage: "module" }
+    });
+    expect(instantiationEdge("src/js-consumer.js#createJavaScript", "JavaScriptWidget")).toMatchObject({
+      targetId: symbol("src/js-widget.js#JavaScriptWidget")?.id,
+      resolution: "exact",
+      confidence: 1,
+      evidence: { ruleId: "syntax.new-expression.imported-class-target", stage: "module" }
+    });
+
+    for (const [sourceQualifiedName, referenceName] of [
+      ["src/consumer.ts#createFactory", "Factory"],
+      ["src/consumer.ts#createTypeOnly", "TypeOnlyWidget"],
+      ["src/unproven.ts#createUnproven", "ImportedWidget"]
+    ] as const) {
+      expect(instantiationEdge(sourceQualifiedName, referenceName)).toMatchObject({
+        targetId: null,
+        resolution: "unresolved",
+        confidence: 0,
+        evidence: { ruleId: "syntax.new-expression.unresolved-class-target", stage: "unresolved" }
+      });
+    }
+    expect(
+      snapshot.pendingReferences
+        .filter((reference) => reference.relationKind === "instantiates")
+        .map((reference) => reference.referenceName)
+        .sort()
+    ).toEqual(["Factory", "ImportedWidget", "TypeOnlyWidget"]);
+  });
+});
+
 describe("literal route handler resolution", () => {
   it("resolves local, imported, and re-exported route handlers exactly", () => {
     const sourceDocuments: readonly SourceDocument[] = [

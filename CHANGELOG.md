@@ -6,6 +6,29 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.211.0] - 2026-08-03
+
+### Added
+
+- Direct TypeScript and JavaScript `new Identifier()` syntax now records an `instantiates` pending reference. It becomes an exact graph edge only when the identifier resolves uniquely to a local, imported, or re-exported `class` declaration.
+- Bounded `investigate --ranking topology` now treats exactly resolved `instantiates` edges as bidirectional connectivity evidence. `topologySignals.edgeKinds` and `scopedExactIncidentEdgeKindCounts` expand from seven to eight fixed-order kinds.
+- Unit, application, graph, and MCP coverage prove exact local, named-import, default-import, and re-export resolution, JavaScript coverage, persistence through `init`, topology incidence diagnostics, and exclusion of heuristic construction edges.
+
+### Compatibility
+
+- Existing SQLite data remains readable, but the artifact-facts extractor version advances to `multi-language-ast-v176`. Run `sync` once on an existing index to re-extract source facts and add eligible construction edges; no database schema migration is required.
+- The fixed topology output tuple now appends `instantiates`. Consumers that validate its exact length must accept eight entries. `impact` ranking and traversal keep their existing five eligible edge kinds.
+
+### Deliberate limits
+
+- This release accepts only direct identifier construction with a proven `class` target. It deliberately leaves `new Namespace.Widget()`, computed or call-based constructors, function constructors, ambiguous names, and unimported project-wide name matches unresolved.
+- Astro endpoint files retain their route-only projection behavior; their `new Response()` expressions are not promoted into construction graph edges by this release.
+
+### Comparison notes
+
+- CodeGraph's inspected topology/relevance edge set includes `instantiates`. SymbolLattice independently closes the direct TypeScript/JavaScript class-construction slice while exposing per-edge evidence and per-candidate incidence counts.
+- CodeGraph remains broader in the inspected relation set, including `overrides`, `returns`, and `type_of`, and this release does not claim parity for their extraction or ranking behavior.
+
 ## [0.210.0] - 2026-08-03
 
 ### Added

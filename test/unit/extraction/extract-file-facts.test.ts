@@ -174,6 +174,66 @@ describe("source extraction", () => {
     ).toEqual(["twice"]);
   });
 
+  it("extracts direct TypeScript and JavaScript constructor identifiers without guessing dynamic forms", () => {
+    const typescriptFacts = extractFileFacts({
+      filePath: "src/constructors.ts",
+      language: "typescript",
+      sourceText: [
+        "class LocalWidget {}",
+        "export function createLocal() {",
+        "  return new LocalWidget();",
+        "}",
+        "new LocalWidget();",
+        "new Namespace.Widget();",
+        "new (resolveConstructor())();"
+      ].join("\n")
+    });
+    const createLocal = typescriptFacts.symbols.find((symbol) => symbol.name === "createLocal");
+    const file = typescriptFacts.symbols.find((symbol) => symbol.kind === "file");
+
+    expect(
+      typescriptFacts.pendingReferences
+        .filter((reference) => reference.relationKind === "instantiates")
+        .map((reference) => [reference.sourceId, reference.referenceName, reference.range])
+    ).toEqual([
+      [
+        createLocal?.id,
+        "LocalWidget",
+        {
+          start: { line: 3, column: 14 },
+          end: { line: 3, column: 25 }
+        }
+      ],
+      [
+        file?.id,
+        "LocalWidget",
+        {
+          start: { line: 5, column: 5 },
+          end: { line: 5, column: 16 }
+        }
+      ]
+    ]);
+
+    const javascriptFacts = extractFileFacts({
+      filePath: "src/constructors.js",
+      language: "javascript",
+      sourceText:
+        "export class JavaScriptWidget {} export function createJavaScript() { return new JavaScriptWidget(); }"
+    });
+    const createJavaScript = javascriptFacts.symbols.find(
+      (symbol) => symbol.name === "createJavaScript"
+    );
+
+    expect(
+      javascriptFacts.pendingReferences.filter((reference) => reference.relationKind === "instantiates")
+    ).toEqual([
+      expect.objectContaining({
+        sourceId: createJavaScript?.id,
+        referenceName: "JavaScriptWidget"
+      })
+    ]);
+  });
+
   it("extracts direct TypeScript heritage identifiers with exact ranges and lexical scopes", () => {
     const facts = extractFileFacts({
       filePath: "src/heritage.ts",
