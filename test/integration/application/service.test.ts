@@ -13478,6 +13478,108 @@ describe("SymbolLatticeService", () => {
     );
   });
 
+  it("indexes Astro endpoints only with unique config evidence and updates them across config drift", async () => {
+    const projectPath = await createInlineProject({
+      "src/pages/api/[id].json.ts": [
+        "export function GET() { return new Response(); }",
+        "export const POST = () => new Response();"
+      ].join("\n"),
+      "src/pages/health.mjs": "export const HEAD = () => new Response();\n",
+      "src/pages/next-like.ts": "export default function Page() { return null; }\n",
+      "src/shared.ts": "export const shared = true;\n"
+    });
+    const graphStore = new SqliteGraphStore();
+    let extractionCount = 0;
+    const service = new SymbolLatticeService(
+      graphStore,
+      new FileSystemSourceCatalog(),
+      (input) => {
+        extractionCount += 1;
+        return extractFileFacts(input);
+      }
+    );
+
+    await service.init({ projectPath });
+    expect(extractionCount).toBe(4);
+    expect((await service.routes(projectPath, { method: "GET" })).routes).toEqual([]);
+    expect((await service.routes(projectPath, { method: "NAVIGATE" })).routes).toEqual(
+      expect.arrayContaining([expect.objectContaining({ path: "/next-like" })])
+    );
+
+    await writeFile(join(projectPath, "astro.config.mjs"), "export default {};\n", "utf8");
+    const enabled = await service.sync({ projectPath });
+    const enabledRoutes = await service.routes(projectPath);
+
+    expect(extractionCount).toBe(8);
+    expect(enabled).toMatchObject({ stale: false, staleReasons: [] });
+    expect(enabled.lastIndexWork).toMatchObject({
+      reExtractedFiles: [
+        "astro.config.mjs",
+        "src/pages/api/[id].json.ts",
+        "src/pages/health.mjs",
+        "src/pages/next-like.ts"
+      ],
+      reusedArtifactFiles: ["src/shared.ts"],
+      reuseInvalidationReasons: expect.arrayContaining([
+        "framework-evidence-changed",
+        "missing-persisted-facts"
+      ])
+    });
+    expect(graphStore.getIndexInputs(projectPath)?.configurationInputs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: "astro-config", path: "astro.config.mjs", state: "present" })
+      ])
+    );
+    expect(enabledRoutes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "GET",
+          path: "/api/:id.json",
+          handler: expect.objectContaining({ qualifiedName: "src/pages/api/[id].json.ts#GET" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.astro.filesystem-endpoint.local-handler",
+              stage: "lexical"
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "POST",
+          path: "/api/:id.json",
+          handler: expect.objectContaining({ qualifiedName: "src/pages/api/[id].json.ts#POST" })
+        }),
+        expect.objectContaining({
+          method: "HEAD",
+          path: "/health",
+          handler: expect.objectContaining({ qualifiedName: "src/pages/health.mjs#HEAD" })
+        })
+      ])
+    );
+    expect(enabledRoutes.routes).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ method: "NAVIGATE", path: "/next-like" })])
+    );
+
+    await rm(join(projectPath, "astro.config.mjs"));
+    const disabled = await service.sync({ projectPath });
+
+    expect(extractionCount).toBe(11);
+    expect(disabled).toMatchObject({ stale: false, staleReasons: [] });
+    expect(disabled.lastIndexWork).toMatchObject({
+      reExtractedFiles: [
+        "src/pages/api/[id].json.ts",
+        "src/pages/health.mjs",
+        "src/pages/next-like.ts"
+      ],
+      reusedArtifactFiles: ["src/shared.ts"],
+      reuseInvalidationReasons: ["framework-evidence-changed"]
+    });
+    expect((await service.routes(projectPath, { method: "GET" })).routes).toEqual([]);
+    expect((await service.routes(projectPath, { method: "NAVIGATE" })).routes).toEqual(
+      expect.arrayContaining([expect.objectContaining({ path: "/next-like" })])
+    );
+  });
+
   it("indexes Razor default components and literal Blazor page directives", async () => {
     const projectPath = await createInlineProject({
       "Components/Home.razor": ['@page "/"', "<h1>Home</h1>"].join("\n"),

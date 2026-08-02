@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.166.0 is a developer preview and is not published to npm. Run it from source.
+> v0.167.0 is a developer preview and is not published to npm. Run it from source.
 
 SymbolLattice builds a queryable local code-symbol graph for a project. Every relation keeps its rule, resolution stage, and confidence; `exact`, `heuristic`, and `unresolved` evidence are never conflated.
 
@@ -41,11 +41,11 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 On Windows PowerShell, use `npm.cmd` if `npm` is unavailable. Index data stays in the target project's `.symbol-lattice/index.sqlite`.
 
-## v0.166.0 highlights
+## v0.167.0 highlights
 
-- Astro `src/pages/**/*.astro` now supports whole-segment `[slug]` parameters and final `[...parts]` rest parameters, producing navigation routes such as `/blog/:slug` and `/docs/*parts`.
-- Dynamic-directory `index.astro` pages use the same default component, route query, impact analysis, and auditable evidence as existing static pages.
-- The framework capability catalog explicitly exposes static, parameter, and final-rest support for safer tool integration.
+- With one root `astro.config.*` proof, direct HTTP endpoints in `src/pages` `.ts`, `.js`, and `.mjs` files are extracted, including routes such as `GET /api/:id.json`.
+- Direct `function`, `const` arrow/function-expression, and TypeScript type-wrapped handlers retain `astro-filesystem-endpoint` provenance and auditable `exact` evidence.
+- Adding or removing Astro configuration makes `sync` re-extract only affected endpoint files and prevents a same-directory Next.js pages-router misclassification.
 
 ## Principles
 
@@ -55,7 +55,7 @@ On Windows PowerShell, use `npm.cmd` if `npm` is unavailable. Index data stays i
 
 ## Static-analysis boundaries
 
-- Astro navigation covers `.astro` files beneath `src/pages`; parameters must occupy a whole path segment, names must be unique, and a rest parameter must be final. TypeScript/JavaScript endpoints, MDX, optional parameters, routing configuration, and middleware are not yet `exact`.
+- Astro navigation covers static, whole-segment parameter, and final-rest `.astro` paths beneath `src/pages`. Endpoints require exactly one root `astro.config.js`, `.mjs`, `.cjs`, `.ts`, `.mts`, or `.cts` and direct HTTP exports from `.ts`, `.js`, or `.mjs`; indirect exports, mutable bindings, duplicate methods, MDX, optional parameters, routing configuration, and middleware never become `exact`.
 - Django `Class.as_view()` accepts only an undecorated, unique, top-level local class declared before final `urlpatterns` without rebinding; the call must be direct and argument-free. It does not infer framework inheritance or runtime `as_view` behavior.
 - Dynamic composition, external or namespace packages, parent-relative imports, copied or container values, decorated or imported classes, WebSockets, `add_route`, versioning, and ambiguous targets never become `exact` results.
 

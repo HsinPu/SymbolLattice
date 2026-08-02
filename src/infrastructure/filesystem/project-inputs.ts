@@ -243,6 +243,8 @@ function configurationInputKindOrder(kind: ProjectConfigurationInputKind): numbe
       return 8;
     case "go-module":
       return 9;
+    case "astro-config":
+      return 10;
   }
 }
 

@@ -6,6 +6,28 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.167.0] - 2026-08-02
+
+### Added
+
+- Astro endpoint extraction now accepts exact direct HTTP exports from <code>src/pages/**/*.ts</code>, <code>.js</code>, and <code>.mjs</code> only when one root <code>astro.config.*</code> file proves the project convention. Direct function declarations, immutable arrow/function-expression exports, and type-only parentheses, assertions, or <code>satisfies</code> wrappers resolve to their local handlers.
+- The new <code>astro-filesystem-endpoint</code> registration preserves the HTTP method, canonical file-derived path, local handler, and separate lexical evidence. It covers the graph's supported HTTP methods plus <code>ALL</code>, preserves output suffixes such as <code>src/pages/api/[id].json.ts</code> → <code>GET /api/:id.json</code>, and adds <code>.mjs</code> to JavaScript source discovery and project-local module candidates.
+- Root Astro configuration candidates are included in project-index inputs. Creation or removal changes only re-extracts affected <code>src/pages</code> endpoint sources during <code>sync</code>, while unrelated configuration drift keeps raw-artifact reuse. The same evidence prevents an eligible Astro endpoint source file from also becoming a Next.js pages-router navigation route.
+- New extraction, filesystem, discovery, capability, and end-to-end sync coverage proves config presence, ambiguity rejection, direct handler forms, typed endpoint wrappers, HTTP method paths, dynamic JSON suffixes, <code>.mjs</code>, Next.js collision prevention, and config enable/disable transitions.
+
+### Compatibility
+
+- The artifact-facts extractor advances to <code>multi-language-ast-v148</code>; the project resolver advances to <code>project-resolver-v50</code> for endpoint provenance and <code>.mjs</code> module candidates. Project-index inputs advance to <code>project-inputs-v5</code> to track Astro configuration candidates. Existing graphs and SQLite schema remain readable; the next explicit <code>sync</code> refreshes facts and project resolution.
+
+### Deliberate limits
+
+- Endpoint proof requires exactly one root <code>astro.config.js</code>, <code>.mjs</code>, <code>.cjs</code>, <code>.ts</code>, <code>.mts</code>, or <code>.cts</code>. Missing or multiple config files disable endpoint conventions.
+- Only direct local named HTTP exports are exact. Re-exports, identifier indirection, mutable bindings, duplicate methods, runtime expressions, dynamic configuration, middleware, Markdown/MDX/HTML pages, optional parameters, and arbitrary HTTP verbs remain outside the proof boundary.
+
+### Comparison notes
+
+- The inspected CodeGraph Astro resolver recognizes broader <code>src/pages</code> route files (<code>.astro</code>, <code>.ts</code>, <code>.js</code>, <code>.mjs</code>) through filename transformation. SymbolLattice now reaches endpoint extension parity while adding explicit config evidence, exact local-handler route edges, type-wrapper support, and incremental evidence-transition handling. CodeGraph remains broader for permissive filename fragments and project detection; SymbolLattice deliberately leaves those forms non-exact until they can retain comparable proof.
+
 ## [0.166.0] - 2026-08-02
 
 ### Added

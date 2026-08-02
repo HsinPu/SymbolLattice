@@ -54,6 +54,7 @@ describe("source discovery", () => {
     await writeFile(join(projectPath, "src", "g.lua"), "local answer = 42\n", "utf8");
     await writeFile(join(projectPath, "src", "g.luau"), "--!strict\nlocal answer: number = 42\n", "utf8");
     await writeFile(join(projectPath, "src", "g.m"), "@implementation Answer\n@end\n", "utf8");
+    await writeFile(join(projectPath, "src", "g.mjs"), "export const answer = 42;\n", "utf8");
     await writeFile(join(projectPath, "src", "g.mm"), "@implementation Answer\n@end\n", "utf8");
     await writeFile(join(projectPath, "src", "g.h"), "@interface Answer : NSObject\n@end\n", "utf8");
     await writeFile(join(projectPath, "src", "g.ml"), "let answer = 42\n", "utf8");
@@ -119,6 +120,7 @@ describe("source discovery", () => {
       "src/g.lua",
       "src/g.luau",
       "src/g.m",
+      "src/g.mjs",
       "src/g.ml",
       "src/g.mm",
       "src/g.nim",
@@ -175,6 +177,7 @@ describe("source discovery", () => {
       "lua",
       "luau",
       "objc",
+      "javascript",
       "ocaml",
       "objc",
       "nim",

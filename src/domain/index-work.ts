@@ -17,7 +17,8 @@ export interface IndexWork {
 
 export const INDEX_WORK_REUSE_INVALIDATION_REASONS = [
   "extractor-version-changed",
-  "missing-persisted-facts"
+  "missing-persisted-facts",
+  "framework-evidence-changed"
 ] as const;
 
 export type IndexWorkReuseInvalidationReason =

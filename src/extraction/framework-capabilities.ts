@@ -174,10 +174,13 @@ export const FRAMEWORK_CAPABILITIES = [
   },
   {
     id: "astro",
-    languages: ["astro"],
+    languages: ["astro", "typescript", "javascript"],
     routeFramework: "astro",
-    routeRegistrations: ["astro-filesystem-page"],
-    surfaces: ["src/pages static, parameter, and final rest .astro convention-derived default components"]
+    routeRegistrations: ["astro-filesystem-page", "astro-filesystem-endpoint"],
+    surfaces: [
+      "src/pages static, parameter, and final rest .astro convention-derived default components",
+      "unique-config evidence-backed direct TypeScript, JavaScript, and MJS HTTP endpoint exports"
+    ]
   },
   {
     id: "blazor",

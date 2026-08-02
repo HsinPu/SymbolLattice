@@ -1,4 +1,4 @@
-import type { IndexedFile } from "../domain/types.js";
+import type { IndexedFile, ProjectFrameworkEvidence } from "../domain/types.js";
 import type { ProjectIndexInputs } from "../domain/index-inputs.js";
 
 export interface SourceDocument {
@@ -38,6 +38,8 @@ export interface ProjectScan {
   readonly sourceDocuments: readonly SourceDocument[];
   readonly indexInputs: ProjectIndexInputs;
   readonly moduleResolver: ProjectModuleResolver;
+  /** Optional for compatibility with custom source catalogs from earlier releases. */
+  readonly frameworkEvidence?: ProjectFrameworkEvidence;
 }
 
 export interface SourceCatalog {

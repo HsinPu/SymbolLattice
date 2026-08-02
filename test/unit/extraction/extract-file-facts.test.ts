@@ -13296,6 +13296,102 @@ describe("source extraction", () => {
     ]);
   });
 
+  it("extracts direct evidence-backed Astro TypeScript, JavaScript, and MJS endpoint handlers", () => {
+    const typescriptEndpoint = extractFileFacts({
+      filePath: "src/pages/api/[id].json.ts",
+      language: "typescript",
+      frameworkEvidence: { astro: true },
+      sourceText: [
+        "export function GET() { return new Response(); }",
+        "export const POST = async () => new Response();",
+        "export const ALL = (async () => new Response()) satisfies (context: unknown) => Promise<Response>;"
+      ].join("\n")
+    });
+    const mjsEndpoint = extractFileFacts({
+      filePath: "src/pages/health.mjs",
+      language: "javascript",
+      frameworkEvidence: { astro: true },
+      sourceText: "export const HEAD = () => new Response();"
+    });
+
+    expect(typescriptEndpoint.symbols.filter((symbol) => symbol.kind === "route").map((symbol) => symbol.name)).toEqual([
+      "GET /api/:id.json",
+      "POST /api/:id.json",
+      "ALL /api/:id.json"
+    ]);
+    expect(
+      typescriptEndpoint.pendingReferences.map((reference) => [
+        reference.referenceName,
+        reference.routeFramework,
+        reference.routeRegistration
+      ])
+    ).toEqual([
+      ["GET", "astro", "astro-filesystem-endpoint"],
+      ["POST", "astro", "astro-filesystem-endpoint"],
+      ["ALL", "astro", "astro-filesystem-endpoint"]
+    ]);
+    expect(mjsEndpoint.symbols.filter((symbol) => symbol.kind === "route").map((symbol) => symbol.name)).toEqual([
+      "HEAD /health"
+    ]);
+  });
+
+  it("requires Astro project evidence for endpoints and prevents a Next.js pages collision", () => {
+    const endpointWithoutEvidence = extractFileFacts({
+      filePath: "src/pages/api.ts",
+      language: "typescript",
+      sourceText: "export function GET() { return new Response(); }"
+    });
+    const nextLikeSource = "export default function Page() { return null; }";
+    const nextLikeFile = extractFileFacts({
+      filePath: "src/pages/catalog.ts",
+      language: "typescript",
+      sourceText: nextLikeSource
+    });
+    const astroProjectFile = extractFileFacts({
+      filePath: "src/pages/catalog.ts",
+      language: "typescript",
+      frameworkEvidence: { astro: true },
+      sourceText: nextLikeSource
+    });
+
+    expect(endpointWithoutEvidence.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(nextLikeFile.symbols.filter((symbol) => symbol.kind === "route").map((symbol) => symbol.name)).toEqual([
+      "NAVIGATE /catalog"
+    ]);
+    expect(astroProjectFile.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+  });
+
+  it("fails closed for indirect, mutable, and duplicate Astro endpoint exports", () => {
+    const indirect = extractFileFacts({
+      filePath: "src/pages/api.ts",
+      language: "typescript",
+      frameworkEvidence: { astro: true },
+      sourceText: [
+        "const handler = () => new Response();",
+        "export { handler as GET };"
+      ].join("\n")
+    });
+    const mutable = extractFileFacts({
+      filePath: "src/pages/api.ts",
+      language: "typescript",
+      frameworkEvidence: { astro: true },
+      sourceText: "export let GET = () => new Response();"
+    });
+    const duplicate = extractFileFacts({
+      filePath: "src/pages/api.ts",
+      language: "typescript",
+      frameworkEvidence: { astro: true },
+      sourceText: [
+        "export function GET() { return new Response(); }",
+        "export const GET = () => new Response();"
+      ].join("\n")
+    });
+
+    expect(indirect.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(mutable.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(duplicate.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+  });
+
   it("fails closed for malformed Astro frontmatter, unsupported dynamic paths, and private Astro pages", () => {
     const malformedFrontmatter = extractFileFacts({
       filePath: "src/pages/index.astro",

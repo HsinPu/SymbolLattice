@@ -77,7 +77,7 @@ function modulePathCandidates(fromFilePath: string, moduleSpecifier: string): re
   const withoutExtension = extensionMatch === null ? rawPath : rawPath.slice(0, -extensionMatch[0].length);
   const candidates = new Set<string>([rawPath]);
 
-  for (const extension of [".ts", ".tsx", ".js", ".jsx"]) {
+  for (const extension of [".ts", ".tsx", ".js", ".mjs", ".jsx"]) {
     candidates.add(`${withoutExtension}${extension}`);
     candidates.add(`${rawPath}/index${extension}`);
   }
@@ -649,7 +649,14 @@ function staticRouteHandlerRuleId(
     return "framework.sveltekit.filesystem-page." + suffix;
   }
   if (reference.routeFramework === "astro") {
-    return "framework.astro.filesystem-page." + suffix;
+    return (
+      "framework.astro." +
+      (reference.routeRegistration === "astro-filesystem-endpoint"
+        ? "filesystem-endpoint"
+        : "filesystem-page") +
+      "." +
+      suffix
+    );
   }
   if (reference.routeFramework === "blazor") {
     return "framework.blazor.page-directive." + suffix;

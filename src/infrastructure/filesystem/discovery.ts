@@ -13,6 +13,7 @@ export const SUPPORTED_EXTENSIONS: ReadonlyMap<string, SupportedLanguage> = new 
   [".ts", "typescript"],
   [".tsx", "typescript"],
   [".js", "javascript"],
+  [".mjs", "javascript"],
   [".jsx", "javascript"],
   [".ets", "arkts"],
   [".vue", "vue"],

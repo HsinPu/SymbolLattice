@@ -1,5 +1,6 @@
 import ts from "typescript";
 
+import { astroFilesystemRoutePath } from "./astro-routes.js";
 import { createEdgeId, createSymbolId } from "../domain/ids.js";
 import type {
   ArtifactFacts,
@@ -148,53 +149,6 @@ function hasExportModifier(node: ts.Node): boolean {
  * segments, whole-segment parameters such as `[slug]`, and one final rest
  * parameter such as `[...parts]`; `index.astro` maps to its containing path.
  */
-function astroPagePath(filePath: string): string | null {
-  const normalizedPath = filePath.replaceAll("\\", "/");
-  const prefix = "src/pages/";
-  const suffix = ".astro";
-  if (!normalizedPath.startsWith(prefix) || !normalizedPath.endsWith(suffix)) {
-    return null;
-  }
-
-  const withoutExtension = normalizedPath.slice(prefix.length, -suffix.length);
-  if (withoutExtension.length === 0) {
-    return null;
-  }
-  const segments = withoutExtension.split("/");
-  const fileSegments = segments.at(-1) === "index" ? segments.slice(0, -1) : segments;
-  const routeSegments: string[] = [];
-  const parameterNames = new Set<string>();
-
-  for (const [index, segment] of fileSegments.entries()) {
-    const parameter = /^\[([A-Za-z][A-Za-z0-9_]*)\]$/u.exec(segment);
-    const restParameter = /^\[\.\.\.([A-Za-z][A-Za-z0-9_]*)\]$/u.exec(segment);
-    if (restParameter !== null) {
-      const name = restParameter[1];
-      if (name === undefined || index !== fileSegments.length - 1 || parameterNames.has(name)) {
-        return null;
-      }
-      parameterNames.add(name);
-      routeSegments.push("*" + name);
-      continue;
-    }
-    if (parameter !== null) {
-      const name = parameter[1];
-      if (name === undefined || parameterNames.has(name)) {
-        return null;
-      }
-      parameterNames.add(name);
-      routeSegments.push(":" + name);
-      continue;
-    }
-    if (!/^[A-Za-z0-9][A-Za-z0-9._~-]*$/u.test(segment) || segment.startsWith("_")) {
-      return null;
-    }
-    routeSegments.push(segment);
-  }
-
-  return routeSegments.length === 0 ? "/" : "/" + routeSegments.join("/");
-}
-
 /**
  * Extracts source-visible declarations from a compact, auditable Astro SFC
  * subset. The optional frontmatter is TypeScript-capable; template and client
@@ -363,7 +317,7 @@ export function extractAstroFileFacts(input: AstroExtractFileFactsInput): Artifa
     }
   }
 
-  const routePath = astroPagePath(input.filePath);
+  const routePath = astroFilesystemRoutePath(input.filePath, [".astro"]);
   if (routePath !== null) {
     const routeName = "NAVIGATE " + routePath;
     const route: SymbolNode = {

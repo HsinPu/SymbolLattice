@@ -36,6 +36,7 @@ import { extractRustFileFacts } from "./rust.js";
 import { extractSwiftFileFacts } from "./swift.js";
 import { extractSvelteFileFacts } from "./svelte.js";
 import { extractAstroFileFacts } from "./astro.js";
+import { astroEndpointPath } from "./astro-routes.js";
 import { extractArkTsFileFacts } from "./arkts.js";
 import { extractCfmlFileFacts } from "./cfml.js";
 import { extractNixFileFacts } from "./nix.js";
@@ -75,6 +76,7 @@ import {
   type NestGraphqlFacts,
   type NestRouteFacts,
   type PendingReference,
+  type ProjectFrameworkEvidence,
   type ReExportBinding,
   type ReferenceScope,
   type RouteRegistration,
@@ -113,6 +115,8 @@ export interface ExtractFileFactsInput {
   readonly filePath: string;
   readonly sourceText: string;
   readonly language: ExtractionLanguage;
+  /** Project-wide framework proof supplied by the source catalog when available. */
+  readonly frameworkEvidence?: ProjectFrameworkEvidence;
 }
 
 /** @deprecated Use ArtifactFacts from the domain package. */
@@ -478,6 +482,15 @@ interface StaticNextRoute extends StaticReactRouterRoute {
     RouteRegistration,
     "nextjs-pages-router" | "nextjs-app-router"
   >;
+}
+
+/** A direct Astro endpoint handler exposed from an evidence-backed source file. */
+interface StaticAstroEndpointRoute {
+  readonly method: RouteMethod;
+  readonly path: string;
+  readonly handler: ts.Identifier;
+  readonly declaration: ts.Node;
+  readonly routeRegistration: Extract<RouteRegistration, "astro-filesystem-endpoint">;
 }
 
 interface FrameworkExtractionPass {
@@ -2256,7 +2269,15 @@ function staticNextDefaultExport(sourceFile: ts.SourceFile): StaticNextDefaultEx
   return candidates.length === 1 ? candidates[0] ?? null : null;
 }
 
-function staticNextRoute(sourceFile: ts.SourceFile): StaticNextRoute | null {
+function staticNextRoute(
+  sourceFile: ts.SourceFile,
+  frameworkEvidence: ProjectFrameworkEvidence | undefined
+): StaticNextRoute | null {
+  // An Astro project's `src/pages/*.ts|js|mjs` files are endpoints, not
+  // Next.js navigation components. Preserve Next.js behavior everywhere else.
+  if (frameworkEvidence?.astro === true && astroEndpointPath(sourceFile.fileName) !== null) {
+    return null;
+  }
   const defaultExport = staticNextDefaultExport(sourceFile);
   if (defaultExport === null) {
     return null;
@@ -2283,6 +2304,116 @@ function staticNextRoute(sourceFile: ts.SourceFile): StaticNextRoute | null {
         declaration: defaultExport.declaration,
         routeRegistration: "nextjs-app-router"
       };
+}
+
+const ASTRO_ENDPOINT_METHODS: ReadonlySet<string> = new Set([
+  "GET",
+  "POST",
+  "PUT",
+  "PATCH",
+  "DELETE",
+  "HEAD",
+  "OPTIONS",
+  "TRACE",
+  "CONNECT",
+  "ALL"
+]);
+
+function astroEndpointMethod(name: string): RouteMethod | null {
+  return ASTRO_ENDPOINT_METHODS.has(name) ? (name as RouteMethod) : null;
+}
+
+/**
+ * Type-only wrappers do not alter the value bound to an endpoint export. Keep
+ * them transparent while rejecting calls, conditionals, and other runtime
+ * expressions whose handler identity is not syntactically direct.
+ */
+function directAstroEndpointHandler(
+  expression: ts.Expression
+): ts.ArrowFunction | ts.FunctionExpression | null {
+  let current = expression;
+  while (
+    ts.isParenthesizedExpression(current) ||
+    ts.isAsExpression(current) ||
+    ts.isTypeAssertionExpression(current) ||
+    ts.isSatisfiesExpression(current)
+  ) {
+    current = current.expression;
+  }
+  return ts.isArrowFunction(current) || ts.isFunctionExpression(current) ? current : null;
+}
+
+function staticAstroEndpointRoutes(
+  sourceFile: ts.SourceFile,
+  frameworkEvidence: ProjectFrameworkEvidence | undefined
+): readonly StaticAstroEndpointRoute[] {
+  if (frameworkEvidence?.astro !== true) {
+    return [];
+  }
+  const path = astroEndpointPath(sourceFile.fileName);
+  if (path === null) {
+    return [];
+  }
+
+  const candidates: StaticAstroEndpointRoute[] = [];
+  for (const statement of sourceFile.statements) {
+    if (
+      ts.isFunctionDeclaration(statement) &&
+      statement.name !== undefined &&
+      statement.body !== undefined &&
+      hasExportModifier(statement) &&
+      !hasDefaultModifier(statement)
+    ) {
+      const method = astroEndpointMethod(statement.name.text);
+      if (method !== null) {
+        candidates.push({
+          method,
+          path,
+          handler: statement.name,
+          declaration: statement,
+          routeRegistration: "astro-filesystem-endpoint"
+        });
+      }
+      continue;
+    }
+
+    if (
+      !ts.isVariableStatement(statement) ||
+      !hasExportModifier(statement) ||
+      hasDefaultModifier(statement) ||
+      (statement.declarationList.flags & ts.NodeFlags.Const) === 0
+    ) {
+      continue;
+    }
+    for (const declaration of statement.declarationList.declarations) {
+      if (
+        !ts.isIdentifier(declaration.name) ||
+        declaration.initializer === undefined ||
+        directAstroEndpointHandler(declaration.initializer) === null
+      ) {
+        continue;
+      }
+      const method = astroEndpointMethod(declaration.name.text);
+      if (method !== null) {
+        candidates.push({
+          method,
+          path,
+          handler: declaration.name,
+          declaration,
+          routeRegistration: "astro-filesystem-endpoint"
+        });
+      }
+    }
+  }
+
+  const uniqueMethods = new Set<string>();
+  for (const candidate of candidates) {
+    if (uniqueMethods.has(candidate.method)) {
+      return [];
+    }
+    uniqueMethods.add(candidate.method);
+  }
+  return candidates;
 }
 
 function isStaticReactRouterJsxRouteElement(
@@ -4403,6 +4534,7 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
       | StaticElysiaRoute
       | StaticFastifyRoute
       | StaticNextRoute
+      | StaticAstroEndpointRoute
       | StaticReactRouterRoute
       | StaticVueRouterRoute,
     routeFramework: NonNullable<PendingReference["routeFramework"]>,
@@ -4465,6 +4597,10 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
 
   function addStaticNextRoute(route: StaticNextRoute): void {
     addStaticRoute(route.declaration, route, "nextjs", route.routeRegistration);
+  }
+
+  function addStaticAstroEndpointRoute(route: StaticAstroEndpointRoute): void {
+    addStaticRoute(route.declaration, route, "astro", route.routeRegistration);
   }
 
   function addFastifyPluginFacts(node: ts.CallExpression): void {
@@ -4986,9 +5122,16 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
     }),
     frameworkExtractionPass("nextjs", {
       finalize() {
-        const route = staticNextRoute(sourceFile);
+        const route = staticNextRoute(sourceFile, input.frameworkEvidence);
         if (route !== null) {
           addStaticNextRoute(route);
+        }
+      }
+    }),
+    frameworkExtractionPass("astro", {
+      finalize() {
+        for (const route of staticAstroEndpointRoutes(sourceFile, input.frameworkEvidence)) {
+          addStaticAstroEndpointRoute(route);
         }
       }
     })

@@ -719,6 +719,21 @@ function reusedArtifactFacts(
   );
 }
 
+function astroProjectEnabled(indexInputs: ProjectIndexInputs | null): boolean {
+  return (
+    indexInputs?.configurationInputs.filter(
+      (input) => input.kind === "astro-config" && input.state === "present"
+    ).length === 1
+  );
+}
+
+function isAstroEndpointSourceDocument(document: SourceDocument): boolean {
+  return (
+    (document.language === "typescript" || document.language === "javascript") &&
+    /^src\/pages\/.+\.(?:ts|js|mjs)$/iu.test(document.relativePath.replaceAll("\\", "/"))
+  );
+}
+
 function reverseDependencyInvalidation(
   snapshot: GraphSnapshot,
   changedFiles: ReadonlySet<string>,
@@ -812,7 +827,7 @@ export class SymbolLatticeService {
       : null;
     const scan = await this.scanForIndex(projectPath, options, bundle?.indexInputs ?? null);
     const artifactFacts = scan.sourceDocuments.map((document) =>
-      this.extractPersistedFacts(document)
+      this.extractPersistedFacts(document, scan.frameworkEvidence)
     );
     this.replaceGeneration(projectPath, scan, artifactFacts, fullIndexWork(scan.sourceDocuments));
     return this.getStatus(projectPath);
@@ -838,6 +853,8 @@ export class SymbolLatticeService {
     const configurationChanged =
       bundle.indexInputs === null || bundle.indexInputs.fingerprint !== scan.indexInputs.fingerprint;
     const resolverChanged = bundle.resolverVersion !== PROJECT_RESOLVER_VERSION;
+    const astroFrameworkEvidenceChanged =
+      (scan.frameworkEvidence?.astro ?? false) !== astroProjectEnabled(bundle.indexInputs);
     const persistedFactsByPath = new Map(
       bundle.artifactFacts.map((facts) => [facts.filePath, facts])
     );
@@ -848,17 +865,28 @@ export class SymbolLatticeService {
 
     for (const document of scan.sourceDocuments) {
       const persisted = persistedFactsByPath.get(document.relativePath);
-      if (persisted !== undefined && reusedArtifactFacts(document, persisted)) {
+      const requiresAstroEndpointReextraction =
+        astroFrameworkEvidenceChanged && isAstroEndpointSourceDocument(document);
+      if (
+        !requiresAstroEndpointReextraction &&
+        persisted !== undefined &&
+        reusedArtifactFacts(document, persisted)
+      ) {
         artifactFacts.push(persisted);
         reusedArtifactFiles.push(document.relativePath);
         continue;
       }
       if (persisted === undefined) {
         reuseInvalidationReasons.add("missing-persisted-facts");
-      } else if (persisted.extractorVersion !== ARTIFACT_FACTS_EXTRACTOR_VERSION) {
-        reuseInvalidationReasons.add("extractor-version-changed");
+      } else {
+        if (persisted.extractorVersion !== ARTIFACT_FACTS_EXTRACTOR_VERSION) {
+          reuseInvalidationReasons.add("extractor-version-changed");
+        }
+        if (requiresAstroEndpointReextraction) {
+          reuseInvalidationReasons.add("framework-evidence-changed");
+        }
       }
-      artifactFacts.push(this.extractPersistedFacts(document));
+      artifactFacts.push(this.extractPersistedFacts(document, scan.frameworkEvidence));
       reExtractedFiles.push(document.relativePath);
     }
 
@@ -2497,12 +2525,16 @@ export class SymbolLatticeService {
     };
   }
 
-  private extractPersistedFacts(document: SourceDocument): PersistedArtifactFacts {
+  private extractPersistedFacts(
+    document: SourceDocument,
+    frameworkEvidence?: ExtractFileFactsInput["frameworkEvidence"]
+  ): PersistedArtifactFacts {
     return {
       ...this.artifactFactsExtractor({
         filePath: document.relativePath,
         sourceText: document.sourceText,
-        language: document.language
+        language: document.language,
+        ...(frameworkEvidence === undefined ? {} : { frameworkEvidence })
       }),
       filePath: document.relativePath,
       language: document.language,

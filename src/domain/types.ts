@@ -107,9 +107,19 @@ export type RouteRegistration =
   | "nextjs-pages-router"
   | "sveltekit-filesystem-page"
   | "astro-filesystem-page"
+  | "astro-filesystem-endpoint"
   | "blazor-page-directive"
   | "react-router-data-router"
   | "react-router-create-routes-from-elements";
+
+/**
+ * Project-wide framework evidence discovered without evaluating application
+ * configuration. Extractors may use it only to enable conventions that would
+ * otherwise be ambiguous with another framework.
+ */
+export interface ProjectFrameworkEvidence {
+  readonly astro: boolean;
+}
 
 export const ARTIFACT_LANGUAGES = [
   "typescript",

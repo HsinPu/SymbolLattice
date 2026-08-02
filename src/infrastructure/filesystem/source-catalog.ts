@@ -17,6 +17,7 @@ import { createCargoWorkspaceProjectModuleResolver } from "./cargo-workspace.js"
 import { createGoModuleProjectModuleResolver } from "./go-module.js";
 import { buildProjectIndexInputs } from "./project-inputs.js";
 import { createWorkspaceProjectModuleResolver } from "./workspace.js";
+import { detectAstroProject } from "./astro-project.js";
 
 function mergeConfigurationPaths(
   ...configurationPathGroups: readonly (readonly string[])[]
@@ -56,6 +57,7 @@ export class FileSystemSourceCatalog implements SourceCatalog {
       projectPath: normalizedProjectPath,
       sourceDocuments
     });
+    const astroProject = await detectAstroProject(normalizedProjectPath);
     const inputOptions =
       options?.scopeRoots === undefined
         ? {
@@ -63,7 +65,8 @@ export class FileSystemSourceCatalog implements SourceCatalog {
               ...typeScriptResolver.configurationInputs,
               ...workspaceResolver.configurationInputs,
               ...cargoWorkspaceResolver.configurationInputs,
-              ...goModuleResolver.configurationInputs
+              ...goModuleResolver.configurationInputs,
+              ...astroProject.configurationInputs
             ]
           }
         : {
@@ -72,7 +75,8 @@ export class FileSystemSourceCatalog implements SourceCatalog {
               ...typeScriptResolver.configurationInputs,
               ...workspaceResolver.configurationInputs,
               ...cargoWorkspaceResolver.configurationInputs,
-              ...goModuleResolver.configurationInputs
+              ...goModuleResolver.configurationInputs,
+              ...astroProject.configurationInputs
             ]
           };
     const indexInputs = await buildProjectIndexInputs(normalizedProjectPath, inputOptions);
@@ -80,6 +84,7 @@ export class FileSystemSourceCatalog implements SourceCatalog {
     return {
       sourceDocuments,
       indexInputs,
+      frameworkEvidence: { astro: astroProject.enabled },
       moduleResolver: {
         resolve(fromFilePath, moduleSpecifier) {
           if (fromFilePath.endsWith(".go")) {
