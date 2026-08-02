@@ -6,6 +6,28 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.168.0] - 2026-08-02
+
+### Added
+
+- COBOL now retains complete direct <code>EXEC CICS RETURN</code> and <code>EXEC CICS START</code> commands with exactly one literal <code>TRANSID</code> option as pending cross-program call facts. CICS command strings and comments are excluded, and an incomplete command is discarded before a later direct command can be considered.
+- The new <code>cics</code> framework capability records direct CICS transaction handoffs and direct, pre-<code>PROCEDURE DIVISION</code> level-number data declarations whose name contains <code>TRAN</code> and whose literal <code>VALUE</code> is a one-to-four-character transaction id.
+- Project resolution matches a transaction hop only when exactly one indexed COBOL program owns that id. The resulting call edge records <code>framework.cics.literal-transid.unique-program-owner</code>, the concrete candidate symbol, and <code>heuristic</code> confidence <code>0.85</code>; missing or duplicate owners remain unresolved with their candidates retained.
+- New extraction, capability, and service coverage proves multiline and single-line commands, quoted literal forms, direct owner facts, dynamic and commented rejection, malformed-command recovery, unique resolution, duplicate owners, and missing owners.
+
+### Compatibility
+
+- The artifact-facts extractor advances to <code>multi-language-ast-v149</code> and the project resolver to <code>project-resolver-v51</code>. Existing graphs and SQLite schema remain readable; the next explicit <code>sync</code> re-extracts COBOL facts and rebuilds transaction-hop projection.
+
+### Deliberate limits
+
+- The supported command surface is only a direct line-start <code>EXEC CICS RETURN</code> or <code>START</code> command, completed by <code>END-EXEC</code>, with exactly one direct quoted transaction id. Variable values, <code>RUN TRANSID</code>, CICS macros, command aliases, copy-expanded source, nested programs, and runtime dispatch remain outside analysis.
+- The CICS CSD is not source-controlled by the scanner. A unique <code>TRAN</code>-named local declaration is useful project evidence but cannot prove deployed transaction routing, so no CICS edge is labeled <code>exact</code>. Ambiguous owners intentionally produce no target edge.
+
+### Comparison notes
+
+- The inspected CodeGraph CICS resolver also follows literal CICS transaction references and <code>TRAN</code>-named COBOL data declarations. It is broader for same-file dereferenced values and uses the first transaction-owner declaration when collisions occur. SymbolLattice independently implements the direct-literal subset, persists explicit owner facts, and treats duplicate owners as unresolved instead of selecting one; CodeGraph remains broader while SymbolLattice provides a stricter collision boundary and auditable candidate evidence.
+
 ## [0.167.0] - 2026-08-02
 
 ### Added

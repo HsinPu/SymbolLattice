@@ -15,6 +15,7 @@ export const FRAMEWORK_CAPABILITY_IDS = [
   "blazor",
   "arkui",
   "terraform",
+  "cics",
   "shopify-liquid",
   "twig",
   "nextjs",
@@ -205,6 +206,15 @@ export const FRAMEWORK_CAPABILITIES = [
     surfaces: [
       "complete top-level literal resource and data blocks",
       "complete top-level literal module variable and output blocks"
+    ]
+  },
+  {
+    id: "cics",
+    languages: ["cobol"],
+    routeRegistrations: [],
+    surfaces: [
+      "direct literal EXEC CICS RETURN and START TRANSID commands",
+      "unique TRAN-named direct COBOL transaction-owner declarations"
     ]
   },
   {

@@ -11,13 +11,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v148";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v149";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v50";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v51";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -720,6 +720,23 @@ export interface SolidityFacts {
   readonly inheritanceReferences: readonly SolidityInheritanceFact[];
 }
 
+/** A direct COBOL data declaration that conventionally owns one CICS transaction id. */
+export interface CobolCicsTransactionOwnerFact {
+  readonly transactionId: string;
+  /** Stable symbol identity of the source-proven COBOL program declaration. */
+  readonly programId: string;
+  readonly range: SourceRange;
+}
+
+/**
+ * Syntax-only COBOL CICS ownership facts. A CICS resource definition is
+ * external to the repository, so the project resolver treats this convention
+ * as a bounded heuristic rather than an exact runtime guarantee.
+ */
+export interface CobolCicsFacts {
+  readonly transactionOwners: readonly CobolCicsTransactionOwnerFact[];
+}
+
 /**
  * Syntax-proven, file-local facts. They deliberately retain unresolved source
  * references so later resolution stages can be recomputed without reparsing.
@@ -765,6 +782,8 @@ export interface ArtifactFacts {
   readonly twigFacts?: TwigFacts;
   /** Omitted only by artifact facts persisted before v0.72. */
   readonly bladeFacts?: BladeFacts;
+  /** Omitted only by artifact facts persisted before v0.168. */
+  readonly cobolCicsFacts?: CobolCicsFacts;
 }
 
 /**

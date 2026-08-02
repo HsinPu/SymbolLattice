@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.167.0 is a developer preview and is not published to npm. Run it from source.
+> v0.168.0 is a developer preview and is not published to npm. Run it from source.
 
 SymbolLattice builds a queryable local code-symbol graph for a project. Every relation keeps its rule, resolution stage, and confidence; `exact`, `heuristic`, and `unresolved` evidence are never conflated.
 
@@ -41,11 +41,11 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 On Windows PowerShell, use `npm.cmd` if `npm` is unavailable. Index data stays in the target project's `.symbol-lattice/index.sqlite`.
 
-## v0.167.0 highlights
+## v0.168.0 highlights
 
-- With one root `astro.config.*` proof, direct HTTP endpoints in `src/pages` `.ts`, `.js`, and `.mjs` files are extracted, including routes such as `GET /api/:id.json`.
-- Direct `function`, `const` arrow/function-expression, and TypeScript type-wrapped handlers retain `astro-filesystem-endpoint` provenance and auditable `exact` evidence.
-- Adding or removing Astro configuration makes `sync` re-extract only affected endpoint files and prevents a same-directory Next.js pages-router misclassification.
+- COBOL CICS now recognizes literal `EXEC CICS RETURN/START TRANSID(...)` commands and retains transaction-to-program hops as queryable call relations.
+- When one verifiable `TRAN`-named program owns a transaction id in the project, the relation retains its rule, candidate program, and `heuristic` confidence of `0.85`.
+- Dynamic transaction ids, incomplete commands, comments and strings, duplicate owners, and CSD mappings outside the index stay unresolved rather than guessed.
 
 ## Principles
 
@@ -56,6 +56,7 @@ On Windows PowerShell, use `npm.cmd` if `npm` is unavailable. Index data stays i
 ## Static-analysis boundaries
 
 - Astro navigation covers static, whole-segment parameter, and final-rest `.astro` paths beneath `src/pages`. Endpoints require exactly one root `astro.config.js`, `.mjs`, `.cjs`, `.ts`, `.mts`, or `.cts` and direct HTTP exports from `.ts`, `.js`, or `.mjs`; indirect exports, mutable bindings, duplicate methods, MDX, optional parameters, routing configuration, and middleware never become `exact`.
+- COBOL CICS accepts only a direct `RETURN` or `START` completed by `END-EXEC` with one literal `TRANSID`. Its target must be the unique indexed, pre-`PROCEDURE DIVISION`, `TRAN`-named literal owner; because the CICS CSD is external configuration, this remains `heuristic`, not a runtime guarantee.
 - Django `Class.as_view()` accepts only an undecorated, unique, top-level local class declared before final `urlpatterns` without rebinding; the call must be direct and argument-free. It does not infer framework inheritance or runtime `as_view` behavior.
 - Dynamic composition, external or namespace packages, parent-relative imports, copied or container values, decorated or imported classes, WebSockets, `add_route`, versioning, and ambiguous targets never become `exact` results.
 

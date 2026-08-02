@@ -141,6 +141,48 @@ function referenceEvidence(
   };
 }
 
+const CICS_TRANSACTION_REFERENCE = /^cics-transid:([A-Za-z0-9$#@]{1,4})$/iu;
+
+interface CobolCicsTransactionResolution {
+  readonly candidates: readonly SymbolNode[];
+  readonly target: SymbolNode | null;
+}
+
+/**
+ * CICS transaction-to-program definitions reside in an external CSD. A unique
+ * source-proven TRAN-named COBOL owner is therefore a bounded convention, not
+ * an exact runtime guarantee. Ambiguity deliberately remains unresolved.
+ */
+function resolveCobolCicsTransactionTarget(input: {
+  readonly reference: PendingReference;
+  readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
+  readonly symbolsById: ReadonlyMap<string, SymbolNode>;
+}): CobolCicsTransactionResolution | null {
+  const match = CICS_TRANSACTION_REFERENCE.exec(input.reference.referenceName);
+  const transactionId = match?.[1]?.toUpperCase();
+  if (transactionId === undefined) {
+    return null;
+  }
+
+  const candidatesById = new Map<string, SymbolNode>();
+  for (const facts of input.factsByFile.values()) {
+    for (const owner of facts.cobolCicsFacts?.transactionOwners ?? []) {
+      if (owner.transactionId.toUpperCase() !== transactionId) {
+        continue;
+      }
+      const target = input.symbolsById.get(owner.programId);
+      if (target !== undefined) {
+        candidatesById.set(target.id, target);
+      }
+    }
+  }
+  const candidates = [...candidatesById.values()].sort((left, right) => compareStableText(left.id, right.id));
+  return {
+    candidates,
+    target: candidates.length === 1 ? candidates[0] ?? null : null
+  };
+}
+
 function liquidTemplateReferenceRuleId(
   kind: "render" | "include" | "section",
   suffix: "exact-target" | "unresolved-target"
@@ -5428,6 +5470,47 @@ export function resolveProjectFacts(input: {
       );
       continue;
     }
+
+    const cobolCicsTransactionResolution = resolveCobolCicsTransactionTarget({
+      reference,
+      factsByFile,
+      symbolsById
+    });
+    if (cobolCicsTransactionResolution !== null) {
+      const candidates = candidateSymbolIds(cobolCicsTransactionResolution.candidates);
+      if (cobolCicsTransactionResolution.target !== null) {
+        resolvedEdges.push(
+          referenceEdge(
+            reference,
+            cobolCicsTransactionResolution.target.id,
+            "heuristic",
+            0.85,
+            referenceEvidence(
+              "framework.cics.literal-transid.unique-program-owner",
+              "heuristic",
+              candidates
+            )
+          )
+        );
+      } else {
+        unresolvedReferences.push(reference);
+        resolvedEdges.push(
+          referenceEdge(
+            reference,
+            null,
+            "unresolved",
+            0,
+            referenceEvidence(
+              "framework.cics.literal-transid.unresolved-program-owner",
+              "unresolved",
+              candidates
+            )
+          )
+        );
+      }
+      continue;
+    }
+
     const expectedSpace = heritage?.expectedSpace ?? "value";
     const playRouteResolution = isRouteHandler
       ? resolveExactPlayRouteHandler({ reference, factsByFile, symbolsById })

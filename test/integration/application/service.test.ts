@@ -10510,6 +10510,121 @@ describe("SymbolLatticeService", () => {
     expect(search.results).toMatchObject([{ filePath: "cobol/Billing.cbl", language: "cobol" }]);
   });
 
+  it("projects unique COBOL CICS transaction owners while preserving ambiguous and missing hops", async () => {
+    const projectPath = await createInlineProject({
+      "cobol/Caller.cbl": [
+        "       IDENTIFICATION DIVISION.",
+        "       PROGRAM-ID. CALLER.",
+        "       PROCEDURE DIVISION.",
+        "       MAIN-LOGIC.",
+        "           EXEC CICS RETURN",
+        "             TRANSID('NXT1')",
+        "           END-EXEC.",
+        "       AMBIGUOUS-LOGIC.",
+        "           EXEC CICS START TRANSID('DUP1') END-EXEC.",
+        "       MISSING-LOGIC.",
+        "           EXEC CICS RETURN TRANSID('MISS') END-EXEC.",
+        "       END PROGRAM CALLER."
+      ].join("\n"),
+      "cobol/Next.cbl": [
+        "       IDENTIFICATION DIVISION.",
+        "       PROGRAM-ID. NEXT-PROGRAM.",
+        "       DATA DIVISION.",
+        "       WORKING-STORAGE SECTION.",
+        "       01 WS-TRANID PIC X(04) VALUE 'NXT1'.",
+        "       PROCEDURE DIVISION.",
+        "       MAIN-LOGIC.",
+        "           GOBACK.",
+        "       END PROGRAM NEXT-PROGRAM."
+      ].join("\n"),
+      "cobol/DuplicateLeft.cbl": [
+        "       IDENTIFICATION DIVISION.",
+        "       PROGRAM-ID. DUPLICATE-LEFT.",
+        "       DATA DIVISION.",
+        "       WORKING-STORAGE SECTION.",
+        "       01 WS-TRANSACTION PIC X(04) VALUE 'DUP1'.",
+        "       PROCEDURE DIVISION.",
+        "       MAIN-LOGIC.",
+        "           GOBACK.",
+        "       END PROGRAM DUPLICATE-LEFT."
+      ].join("\n"),
+      "cobol/DuplicateRight.cbl": [
+        "       IDENTIFICATION DIVISION.",
+        "       PROGRAM-ID. DUPLICATE-RIGHT.",
+        "       DATA DIVISION.",
+        "       WORKING-STORAGE SECTION.",
+        "       01 WS-TRANSACTION PIC X(04) VALUE 'DUP1'.",
+        "       PROCEDURE DIVISION.",
+        "       MAIN-LOGIC.",
+        "           GOBACK.",
+        "       END PROGRAM DUPLICATE-RIGHT."
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    const indexed = await service.init({ projectPath });
+    const snapshot = graphStore.getSnapshot(projectPath);
+    const mainLogic = snapshot.symbols.find(
+      (symbol) =>
+        symbol.qualifiedName === "cobol/Caller.cbl#program:CALLER#paragraph:MAIN-LOGIC"
+    );
+    const nextProgram = snapshot.symbols.find(
+      (symbol) => symbol.qualifiedName === "cobol/Next.cbl#program:NEXT-PROGRAM"
+    );
+    const duplicateLeft = snapshot.symbols.find(
+      (symbol) => symbol.qualifiedName === "cobol/DuplicateLeft.cbl#program:DUPLICATE-LEFT"
+    );
+    const duplicateRight = snapshot.symbols.find(
+      (symbol) => symbol.qualifiedName === "cobol/DuplicateRight.cbl#program:DUPLICATE-RIGHT"
+    );
+    const uniqueHop = snapshot.edges.find((edge) => edge.referenceName === "cics-transid:NXT1");
+    const ambiguousHop = snapshot.edges.find((edge) => edge.referenceName === "cics-transid:DUP1");
+    const missingHop = snapshot.edges.find((edge) => edge.referenceName === "cics-transid:MISS");
+
+    expect(indexed).toMatchObject({
+      stale: false,
+      counts: { files: 4, symbols: expect.any(Number), edges: expect.any(Number) }
+    });
+    expect(uniqueHop).toMatchObject({
+      sourceId: mainLogic?.id,
+      targetId: nextProgram?.id,
+      kind: "calls",
+      resolution: "heuristic",
+      confidence: 0.85,
+      evidence: {
+        ruleId: "framework.cics.literal-transid.unique-program-owner",
+        stage: "heuristic",
+        candidateSymbolIds: [nextProgram?.id]
+      }
+    });
+    expect(ambiguousHop).toMatchObject({
+      targetId: null,
+      kind: "calls",
+      resolution: "unresolved",
+      confidence: 0,
+      evidence: {
+        ruleId: "framework.cics.literal-transid.unresolved-program-owner",
+        stage: "unresolved",
+        candidateSymbolIds: [duplicateLeft?.id, duplicateRight?.id].sort()
+      }
+    });
+    expect(missingHop).toMatchObject({
+      targetId: null,
+      kind: "calls",
+      resolution: "unresolved",
+      confidence: 0,
+      evidence: {
+        ruleId: "framework.cics.literal-transid.unresolved-program-owner",
+        stage: "unresolved",
+        candidateSymbolIds: []
+      }
+    });
+    expect(
+      snapshot.pendingReferences.map((reference) => reference.referenceName).filter((name) => name.startsWith("cics-transid:"))
+    ).toEqual(["cics-transid:DUP1", "cics-transid:MISS"]);
+  });
+
   it("indexes Objective-C++ interfaces, protocols, and implementations with Objective-C source-search filtering", async () => {
     const projectPath = await createInlineProject({
       "src/HealthController.mm": [

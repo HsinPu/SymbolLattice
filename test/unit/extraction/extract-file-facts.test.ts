@@ -8760,6 +8760,77 @@ describe("source extraction", () => {
     expect(unterminatedLiteral.symbols.map((symbol) => symbol.kind)).toEqual(["file"]);
   });
 
+  it("retains literal COBOL CICS RETURN and START transaction hops with direct owner facts", () => {
+    const facts = extractFileFacts({
+      filePath: "cobol/dispatcher.cbl",
+      language: "cobol",
+      sourceText: [
+        "       IDENTIFICATION DIVISION.",
+        "       PROGRAM-ID. DISPATCHER.",
+        "       DATA DIVISION.",
+        "       WORKING-STORAGE SECTION.",
+        "       05 WS-TRANID PIC X(04) VALUE 'SELF'.",
+        "       PROCEDURE DIVISION.",
+        "       MAIN-LOGIC.",
+        "           EXEC CICS RETURN",
+        "             TRANSID('NEXT')",
+        "             IMMEDIATE",
+        "           END-EXEC.",
+        "       START-NEXT.",
+        "           EXEC CICS START TRANSID(\"JOB1\") END-EXEC.",
+        "       DYNAMIC.",
+        "           EXEC CICS RETURN TRANSID(WS-NEXT) END-EXEC.",
+        "           *> EXEC CICS START TRANSID('NOPE') END-EXEC.",
+        "           DISPLAY \"EXEC CICS START TRANSID('NOPE') END-EXEC.\".",
+        "       BROKEN-LOGIC.",
+        "           EXEC CICS RETURN",
+        "       NEXT-LOGIC.",
+        "           EXEC CICS START TRANSID('NEST') END-EXEC.",
+        "       END PROGRAM DISPATCHER."
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    const dispatcher = facts.symbols.find(
+      (symbol) => symbol.qualifiedName === "cobol/dispatcher.cbl#program:DISPATCHER"
+    );
+
+    expect(facts.cobolCicsFacts).toMatchObject({
+      transactionOwners: [
+        expect.objectContaining({
+          transactionId: "SELF",
+          programId: dispatcher?.id,
+          range: expect.objectContaining({
+            start: expect.objectContaining({ line: 5 })
+          })
+        })
+      ]
+    });
+    expect(
+      facts.pendingReferences.map((reference) => [
+        reference.referenceName,
+        reference.relationKind,
+        symbolsById.get(reference.sourceId)?.qualifiedName
+      ])
+    ).toEqual([
+      [
+        "cics-transid:NEXT",
+        "calls",
+        "cobol/dispatcher.cbl#program:DISPATCHER#paragraph:MAIN-LOGIC"
+      ],
+      [
+        "cics-transid:JOB1",
+        "calls",
+        "cobol/dispatcher.cbl#program:DISPATCHER#paragraph:START-NEXT"
+      ],
+      [
+        "cics-transid:NEST",
+        "calls",
+        "cobol/dispatcher.cbl#program:DISPATCHER#paragraph:NEXT-LOGIC"
+      ]
+    ]);
+  });
+
   it("extracts direct R Plumber annotation routes with exact evidence", () => {
     const facts = extractFileFacts({
       filePath: "src/plumber.R",

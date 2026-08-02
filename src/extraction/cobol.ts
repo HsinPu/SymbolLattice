@@ -2,11 +2,14 @@ import {
   createEdgeId,
   createSymbolId,
   type ArtifactFacts,
+  type CobolCicsTransactionOwnerFact,
   type GraphEdge,
+  type PendingReference,
   type SourcePosition,
   type SourceRange,
   type SymbolNode
 } from "../domain/index.js";
+import { frameworkCapability } from "./framework-capabilities.js";
 
 export interface CobolExtractFileFactsInput {
   readonly filePath: string;
@@ -31,12 +34,26 @@ interface CobolProgram {
   readonly name: string;
   readonly start: number;
   readonly end: number;
+  readonly procedureStart: number;
+  readonly procedureEnd: number;
   readonly paragraphs: readonly CobolParagraph[];
 }
 
 interface SanitizedCobolSource {
   readonly valid: boolean;
   readonly text: string;
+}
+
+interface CobolCicsTransactionOwner {
+  readonly transactionId: string;
+  readonly start: number;
+  readonly end: number;
+}
+
+interface CobolCicsTransactionHop {
+  readonly transactionId: string;
+  readonly start: number;
+  readonly end: number;
 }
 
 const COBOL_IDENTIFIER = "[A-Za-z][A-Za-z0-9-]*";
@@ -51,6 +68,14 @@ const COBOL_END_PROGRAM = new RegExp(
   "iu"
 );
 const COBOL_PARAGRAPH = new RegExp("^\\s*(" + COBOL_IDENTIFIER + ")\\s*\\.\\s*$", "iu");
+const COBOL_CICS_COMMAND_START = /^\s*EXEC\s+CICS\s+(?:RETURN|START)\b/iu;
+const COBOL_CICS_TRANSACTION_OWNER = new RegExp(
+  "^\\s*\\d{1,2}\\s+(" +
+    COBOL_IDENTIFIER +
+    ")\\b[^.]*\\bVALUE\\s+(['\"])([A-Za-z0-9$#@]{1,4})\\2\\s*\\.\\s*$",
+  "iu"
+);
+const CICS_TRANSACTION_REFERENCE_PREFIX = "cics-transid:";
 
 const COBOL_NON_PARAGRAPH_NAMES: ReadonlySet<string> = new Set([
   "ACCEPT",
@@ -180,6 +205,129 @@ function blankLine(characters: string[], line: CobolLine): void {
 function isFixedFormatCommentLine(sourceText: string, line: CobolLine): boolean {
   const indicator = sourceText[line.start + 6];
   return indicator === "*" || indicator === "/";
+}
+
+function isCobolIdentifierCharacter(character: string | undefined): boolean {
+  return character !== undefined && /[A-Za-z0-9_$#@-]/u.test(character);
+}
+
+/** Returns the offset immediately after one single-line COBOL quoted literal. */
+function afterCobolQuotedLiteral(text: string, start: number): number | null {
+  const quote = text[start];
+  if (quote !== "'" && quote !== "\"") {
+    return null;
+  }
+  for (let cursor = start + 1; cursor < text.length; cursor += 1) {
+    if (text[cursor] !== quote) {
+      continue;
+    }
+    if (text[cursor + 1] === quote) {
+      cursor += 1;
+      continue;
+    }
+    return cursor + 1;
+  }
+  return null;
+}
+
+/** Removes a free-format inline comment while preserving quoted literal offsets. */
+function commentFreeCobolLine(line: CobolLine): string {
+  let cursor = 0;
+  while (cursor < line.text.length) {
+    const character = line.text[cursor];
+    if (character === "'" || character === "\"") {
+      const next = afterCobolQuotedLiteral(line.text, cursor);
+      if (next === null) {
+        return line.text;
+      }
+      cursor = next;
+      continue;
+    }
+    if (character === "*" && line.text[cursor + 1] === ">") {
+      return line.text.slice(0, cursor);
+    }
+    cursor += 1;
+  }
+  return line.text;
+}
+
+/** Finds a COBOL keyword outside strings, preserving a fail-closed boundary. */
+function cobolKeywordIndexOutsideLiteral(text: string, keyword: string): number | null {
+  const normalizedKeyword = keyword.toUpperCase();
+  for (let cursor = 0; cursor < text.length; cursor += 1) {
+    const character = text[cursor];
+    if (character === "'" || character === "\"") {
+      const next = afterCobolQuotedLiteral(text, cursor);
+      if (next === null) {
+        return null;
+      }
+      cursor = next - 1;
+      continue;
+    }
+    if (
+      text.slice(cursor, cursor + normalizedKeyword.length).toUpperCase() !== normalizedKeyword ||
+      isCobolIdentifierCharacter(text[cursor - 1]) ||
+      isCobolIdentifierCharacter(text[cursor + normalizedKeyword.length])
+    ) {
+      continue;
+    }
+    return cursor;
+  }
+  return null;
+}
+
+function skipCobolWhitespace(text: string, start: number): number {
+  let cursor = start;
+  while (/\s/u.test(text[cursor] ?? "")) {
+    cursor += 1;
+  }
+  return cursor;
+}
+
+/**
+ * Returns one literal CICS TRANSID only when the command contains exactly one
+ * statically quoted TRANSID option. Dynamic or duplicate options are omitted.
+ */
+function literalCicsTransactionId(commandText: string): string | null {
+  let transactionId: string | null = null;
+  let optionCount = 0;
+  for (let cursor = 0; cursor < commandText.length; cursor += 1) {
+    const character = commandText[cursor];
+    if (character === "'" || character === "\"") {
+      const next = afterCobolQuotedLiteral(commandText, cursor);
+      if (next === null) {
+        return null;
+      }
+      cursor = next - 1;
+      continue;
+    }
+    if (
+      commandText.slice(cursor, cursor + "TRANSID".length).toUpperCase() !== "TRANSID" ||
+      isCobolIdentifierCharacter(commandText[cursor - 1]) ||
+      isCobolIdentifierCharacter(commandText[cursor + "TRANSID".length])
+    ) {
+      continue;
+    }
+    optionCount += 1;
+    let valueStart = skipCobolWhitespace(commandText, cursor + "TRANSID".length);
+    if (commandText[valueStart] !== "(") {
+      return null;
+    }
+    valueStart = skipCobolWhitespace(commandText, valueStart + 1);
+    const quote = commandText[valueStart];
+    const valueEnd = afterCobolQuotedLiteral(commandText, valueStart);
+    if ((quote !== "'" && quote !== "\"") || valueEnd === null) {
+      return null;
+    }
+    const value = commandText.slice(valueStart + 1, valueEnd - 1);
+    const closingParenthesis = skipCobolWhitespace(commandText, valueEnd);
+    if (commandText[closingParenthesis] !== ")" || !/^[A-Za-z0-9$#@]{1,4}$/u.test(value)) {
+      return null;
+    }
+    transactionId = value.toUpperCase();
+    cursor = closingParenthesis;
+  }
+  return optionCount === 1 ? transactionId : null;
 }
 
 /**
@@ -348,8 +496,9 @@ function directCobolProgram(
     return null;
   }
   const identificationLine = lines[identificationLineIndex];
+  const procedureLine = lines[procedureLineIndex];
   const endLine = endProgram === undefined ? undefined : lines[endProgram.index];
-  if (identificationLine === undefined) {
+  if (identificationLine === undefined || procedureLine === undefined) {
     return null;
   }
   const procedureEnd = endLine?.start ?? sourceLength;
@@ -358,17 +507,114 @@ function directCobolProgram(
     name: declaration.name,
     start: identificationLine.start,
     end,
+    procedureStart: procedureLine.end,
+    procedureEnd,
     paragraphs: collectDirectCobolParagraphs(lines, procedureLineIndex, procedureEnd)
   };
 }
 
 /**
- * Extracts one source-proven COBOL program and its direct Procedure Division
- * paragraph declarations. Data definitions, calls, copy expansion, nested
- * programs, compiler formats, and runtime semantics deliberately remain out of
- * scope for this first language slice.
+ * Retains only direct level-number data declarations before Procedure Division.
+ * The CICS resource definition lives outside the repository, so a TRAN-named
+ * literal is stored as evidence for bounded later project resolution only.
+ */
+function directCobolCicsTransactionOwners(
+  sourceText: string,
+  lines: readonly CobolLine[],
+  program: CobolProgram
+): readonly CobolCicsTransactionOwner[] {
+  const owners = new Map<string, CobolCicsTransactionOwner>();
+  for (const line of lines) {
+    if (
+      line.start < program.start ||
+      line.start >= program.procedureStart ||
+      isFixedFormatCommentLine(sourceText, line)
+    ) {
+      continue;
+    }
+    const match = COBOL_CICS_TRANSACTION_OWNER.exec(commentFreeCobolLine(line));
+    const name = match?.[1];
+    const transactionId = match?.[3];
+    if (name === undefined || transactionId === undefined || !name.toUpperCase().includes("TRAN")) {
+      continue;
+    }
+    const normalizedTransactionId = transactionId.toUpperCase();
+    if (!owners.has(normalizedTransactionId)) {
+      owners.set(normalizedTransactionId, {
+        transactionId: normalizedTransactionId,
+        start: line.start,
+        end: line.contentEnd
+      });
+    }
+  }
+  return [...owners.values()];
+}
+
+/**
+ * Retains direct CICS RETURN/START commands only when their complete command
+ * body contains one literal TRANSID option and terminates with END-EXEC.
+ */
+function directCobolCicsTransactionHops(
+  sourceText: string,
+  lines: readonly CobolLine[],
+  program: CobolProgram
+): readonly CobolCicsTransactionHop[] {
+  const hops: CobolCicsTransactionHop[] = [];
+  let command: { readonly start: number; text: string } | null = null;
+
+  for (const line of lines) {
+    if (
+      line.start < program.procedureStart ||
+      line.start >= program.procedureEnd ||
+      isFixedFormatCommentLine(sourceText, line)
+    ) {
+      continue;
+    }
+    const code = commentFreeCobolLine(line);
+    const commandStart = COBOL_CICS_COMMAND_START.exec(code);
+    if (command === null || commandStart !== null) {
+      if (commandStart === null) {
+        continue;
+      }
+      command = {
+        start: line.start + (commandStart.index ?? 0),
+        text: ""
+      };
+    }
+
+    const endExecIndex = cobolKeywordIndexOutsideLiteral(code, "END-EXEC");
+    const fragment = endExecIndex === null ? code : code.slice(0, endExecIndex + "END-EXEC".length);
+    command = { ...command, text: command.text + "\n" + fragment };
+    if (endExecIndex === null) {
+      continue;
+    }
+
+    const transactionId = literalCicsTransactionId(command.text);
+    if (transactionId !== null) {
+      hops.push({
+        transactionId,
+        start: command.start,
+        end: line.start + endExecIndex + "END-EXEC".length
+      });
+    }
+    command = null;
+  }
+
+  return hops;
+}
+
+/**
+ * Extracts one source-proven COBOL program, direct Procedure Division
+ * paragraphs, and a bounded CICS transaction handoff surface. General data
+ * definitions, calls, copy expansion, nested programs, compiler formats, and
+ * runtime semantics deliberately remain outside this language slice.
  */
 export function extractCobolFileFacts(input: CobolExtractFileFactsInput): ArtifactFacts {
+  const cicsCapability = frameworkCapability("cics");
+  if (!cicsCapability.languages.includes(input.language)) {
+    throw new Error("CICS framework extraction was invoked for an unsupported source language.");
+  }
+
   const lineStarts = lineStartsFor(input.sourceText);
   const fileName = input.filePath.split(/[\\/]/u).at(-1) ?? input.filePath;
   const fileRange = rangeFor(lineStarts, 0, input.sourceText.length);
@@ -389,6 +635,8 @@ export function extractCobolFileFacts(input: CobolExtractFileFactsInput): Artifa
   };
   const symbols: SymbolNode[] = [fileNode];
   const edges: GraphEdge[] = [];
+  const pendingReferences: PendingReference[] = [];
+  const cicsTransactionOwners: CobolCicsTransactionOwnerFact[] = [];
   const declarationOrdinals = new Map<string, number>();
 
   function nextOrdinal(qualifiedName: string, kind: SymbolNode["kind"]): number {
@@ -457,7 +705,7 @@ export function extractCobolFileFacts(input: CobolExtractFileFactsInput): Artifa
     return {
       symbols,
       edges,
-      pendingReferences: [],
+      pendingReferences,
       localBindings: [],
       referenceScopes: [],
       importBindings: [],
@@ -468,6 +716,7 @@ export function extractCobolFileFacts(input: CobolExtractFileFactsInput): Artifa
 
   const program = directCobolProgram(linesFor(sanitized.text), input.sourceText.length);
   if (program !== null) {
+    const sourceLines = linesFor(input.sourceText);
     const programSymbol = addSymbol({
       name: program.name,
       kind: "module",
@@ -478,8 +727,9 @@ export function extractCobolFileFacts(input: CobolExtractFileFactsInput): Artifa
       parent: fileNode,
       ruleId: "language.cobol.program.identification-program-id-procedure"
     });
-    for (const paragraph of program.paragraphs) {
-      addSymbol({
+    const paragraphSymbols = program.paragraphs.map((paragraph) => ({
+      paragraph,
+      symbol: addSymbol({
         name: paragraph.name,
         kind: "function",
         qualifiedName: programSymbol.qualifiedName + "#paragraph:" + paragraph.name,
@@ -488,6 +738,38 @@ export function extractCobolFileFacts(input: CobolExtractFileFactsInput): Artifa
         isExported: false,
         parent: programSymbol,
         ruleId: "language.cobol.paragraph.direct-procedure-division"
+      })
+    }));
+
+    for (const owner of directCobolCicsTransactionOwners(input.sourceText, sourceLines, program)) {
+      cicsTransactionOwners.push({
+        transactionId: owner.transactionId,
+        programId: programSymbol.id,
+        range: rangeFor(lineStarts, owner.start, owner.end)
+      });
+    }
+
+    for (const hop of directCobolCicsTransactionHops(input.sourceText, sourceLines, program)) {
+      const source =
+        paragraphSymbols.find(
+          ({ paragraph }) => hop.start >= paragraph.start && hop.start < paragraph.end
+        )?.symbol ?? programSymbol;
+      const range = rangeFor(lineStarts, hop.start, hop.end);
+      const referenceName = CICS_TRANSACTION_REFERENCE_PREFIX + hop.transactionId;
+      pendingReferences.push({
+        id: createEdgeId({
+          sourceId: source.id,
+          targetId: null,
+          kind: "calls",
+          line: range.start.line,
+          column: range.start.column,
+          referenceName
+        }),
+        sourceId: source.id,
+        filePath: input.filePath,
+        referenceName,
+        relationKind: "calls",
+        range
       });
     }
   }
@@ -495,11 +777,14 @@ export function extractCobolFileFacts(input: CobolExtractFileFactsInput): Artifa
   return {
     symbols,
     edges,
-    pendingReferences: [],
+    pendingReferences,
     localBindings: [],
     referenceScopes: [],
     importBindings: [],
     exportBindings: [],
-    reExportBindings: []
+    reExportBindings: [],
+    ...(cicsTransactionOwners.length === 0
+      ? {}
+      : { cobolCicsFacts: { transactionOwners: cicsTransactionOwners } })
   };
 }
