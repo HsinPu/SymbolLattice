@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.197.0 是開發者預覽版，請從原始碼執行。
+> v0.198.0 是開發者預覽版，請從原始碼執行。
 
 SymbolLattice 在本機建立可查詢的程式碼符號圖譜。每一條關係都保留規則、證據階段與信心值；`exact`、`heuristic`、`unresolved` 不會混為一談。
 
@@ -43,10 +43,10 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 Windows PowerShell 若找不到 npm，請使用 `npm.cmd`。索引資料會寫入目標專案的 `.symbol-lattice/index.sqlite`。
 
-## v0.197.0 重點
+## v0.198.0 重點
 
-- 新增 `investigate <query>` CLI 與 `symbol_lattice_investigate` MCP 工具：從持久化來源搜尋開始，在同一個圖譜世代中回傳已選符號的來源摘錄、呼叫者、被呼叫者、影響範圍與相鄰證據路徑。
-- 回應明確保留來源命中排名、候選排名、候選總數與截斷旗標；不會把模糊文字命中假裝成已證明的符號關係。
+- `investigate <query>` 與 `symbol_lattice_investigate` 現會在同一個圖譜世代中回傳已選符號的宣告來源；每則最多 200 行或 16,000 個 UTF-16 字元，完整大小與截斷狀態會明示。
+- 回應保留來源命中排名、候選排名、候選總數與截斷旗標；不會把模糊文字命中假裝成已證明的符號關係。
 - `init` 建立本機程式碼符號圖譜快照；`sync` 才會更新它。所有 `investigate`、CLI 與 MCP 查詢皆為唯讀。
 
 ## 使用界線

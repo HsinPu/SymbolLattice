@@ -527,6 +527,15 @@ const exploreOutputSchema = z
   })
   .passthrough();
 
+const nodeSourceOutputSchema = z.object({
+  filePath: z.string(),
+  range: sourceRangeOutputSchema,
+  text: z.string(),
+  totalLines: z.number().int().positive(),
+  totalCharacters: z.number().int().nonnegative(),
+  truncated: z.boolean()
+});
+
 const nodeOutputSchema = z
   .object({
     status: indexStatusOutputSchema,
@@ -539,16 +548,7 @@ const nodeOutputSchema = z
     match: z.object({}).passthrough(),
     matchCandidatesTruncated: z.boolean(),
     sourceAvailability: z.enum(["active-generation", "unavailable", "not-applicable"]),
-    source: z
-      .object({
-        filePath: z.string(),
-        range: sourceRangeOutputSchema,
-        text: z.string(),
-        totalLines: z.number().int().positive(),
-        totalCharacters: z.number().int().nonnegative(),
-        truncated: z.boolean()
-      })
-      .nullable(),
+    source: nodeSourceOutputSchema.nullable(),
     callers: z.object({
       items: z.array(z.object({}).passthrough()),
       truncated: z.boolean()
@@ -705,6 +705,10 @@ const investigateOutputSchema = z
       maximumSearchLimit: z.literal(MAX_SOURCE_SEARCH_LIMIT),
       symbolLimit: z.number().int().min(1).max(MAX_INVESTIGATE_SYMBOL_LIMIT),
       maximumSymbolLimit: z.literal(MAX_INVESTIGATE_SYMBOL_LIMIT),
+      declarationSource: z.object({
+        sourceLineLimit: z.number().int().positive(),
+        sourceCharacterLimit: z.number().int().positive()
+      }),
       context: z.object({
         maxReferences: z.number().int().positive(),
         matchCandidateLimit: z.number().int().positive(),
@@ -729,6 +733,13 @@ const investigateOutputSchema = z
       total: z.number().int().nonnegative(),
       truncated: z.boolean()
     }),
+    declarations: z.array(
+      z.object({
+        reference: z.string(),
+        sourceAvailability: z.enum(["active-generation", "unavailable", "not-applicable"]),
+        source: nodeSourceOutputSchema.nullable()
+      })
+    ),
     contexts: z.array(z.object({}).passthrough()),
     evidencePaths: z.array(z.object({}).passthrough())
   })

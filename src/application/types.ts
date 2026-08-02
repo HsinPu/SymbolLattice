@@ -643,12 +643,29 @@ export interface InvestigationSelectionResult {
   readonly truncated: boolean;
 }
 
+/**
+ * One bounded declaration source for a selected symbol. Entries retain the
+ * selection order and only use persisted text from the same active generation.
+ */
+export interface InvestigationDeclaration {
+  /** Matches one selected symbol's qualified name. */
+  readonly reference: string;
+  readonly sourceAvailability: SourceAvailability;
+  /** Exact persisted declaration text, subject to the declared response bounds. */
+  readonly source: NodeSource | null;
+}
+
 /** Actual bounds used for one persisted-source investigation. */
 export interface InvestigateBounds {
   readonly searchLimit: number;
   readonly maximumSearchLimit: number;
   readonly symbolLimit: number;
   readonly maximumSymbolLimit: number;
+  /** Fixed bounds applied independently to every selected declaration source. */
+  readonly declarationSource: {
+    readonly sourceLineLimit: number;
+    readonly sourceCharacterLimit: number;
+  };
   readonly context: ContextBounds;
 }
 
@@ -665,6 +682,8 @@ export interface InvestigateResult {
     readonly results: readonly SourceSearchHitResult[];
   };
   readonly selection: InvestigationSelectionResult;
+  /** Bounded exact declaration source for every selected symbol, in selection order. */
+  readonly declarations: readonly InvestigationDeclaration[];
   readonly contexts: readonly SymbolContext[];
   readonly evidencePaths: readonly ContextEvidencePath[];
 }

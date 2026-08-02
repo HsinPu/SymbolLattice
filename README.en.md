@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.197.0 is a developer preview. Run it from source.
+> v0.198.0 is a developer preview. Run it from source.
 
 SymbolLattice builds a queryable local code-symbol graph. Every relation retains its rule, evidence stage, and confidence; exact, heuristic, and unresolved evidence are never conflated.
 
@@ -43,9 +43,9 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 On Windows PowerShell, use `npm.cmd` if npm is unavailable. Index data stays in the target project's `.symbol-lattice/index.sqlite`.
 
-## v0.197.0 highlights
+## v0.198.0 highlights
 
-- Adds the `investigate <query>` CLI command and `symbol_lattice_investigate` MCP tool. They start from persisted source search and return selected symbols' source excerpts, callers, callees, impact, and adjacent proof paths from one graph generation.
+- `investigate <query>` and `symbol_lattice_investigate` now return each selected symbol's declaration source from the same graph generation. Each declaration is capped at 200 physical lines or 16,000 UTF-16 code units, with the total size and truncation disclosed.
 - Responses disclose source rank, candidate rank, candidate total, and truncation. A fuzzy text hit is never presented as a proven symbol relationship.
 - `init` creates a local code-symbol graph snapshot; only `sync` updates it. `investigate`, CLI, and MCP queries remain read-only.
 

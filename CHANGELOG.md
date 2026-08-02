@@ -6,6 +6,28 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.198.0] - 2026-08-02
+
+### Added
+
+- `SymbolLatticeService.investigate(projectPath, query, options)` now returns a `declarations` array aligned with deterministic selected-symbol order. Every item carries an exact persisted declaration range, source availability, full range size, and honest truncation state.
+- Every investigation response discloses `bounds.declarationSource`: 200 physical source lines and 16,000 UTF-16 code units per selected declaration. The source is a prefix only when `truncated` is true; it is never read from the live filesystem.
+- The read-only CLI and `symbol_lattice_investigate` MCP output now expose the same bounded declaration evidence. Service, CLI, and MCP coverage proves the active-generation path, live-source staleness, response cap, and schema propagation.
+
+### Compatibility
+
+- This is an additive response field and requires no SQLite schema migration or reindex for active source-search generations. Existing CLI and MCP requests keep their options and read-only behavior.
+
+### Deliberate limits
+
+- The response returns selected declaration ranges, not whole files, repositories, generated source, or inferred runtime implementations. A malformed persisted range is reported as unavailable rather than substituted with live content.
+- Candidate selection remains persisted lexical retrieval plus exact range overlap. It does not add LLM ranking, RWR/personalized PageRank, dynamic-dispatch inference, or any hidden ranking signal.
+
+### Comparison notes
+
+- The inspected CodeGraph `codegraph_explore` worker path combines FTS, RWR/personalized PageRank, impact analysis, and output building, and it can execute CPU-heavy reads through a bounded WAL-reader worker pool. SymbolLattice now narrows the source-payload gap by returning complete bounded declarations, but it does not yet match CodeGraph's ranking or concurrent query execution.
+- SymbolLattice explicitly preserves the lexical-to-symbol selection trail and immutable-generation source limits in the returned contract. This is a focused auditability advantage, not a claim of broader CodeGraph parity.
+
 ## [0.197.0] - 2026-08-02
 
 ### Added

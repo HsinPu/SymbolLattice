@@ -148,6 +148,7 @@ import type {
   HierarchyResult,
   ImpactOptions,
   ImpactResult,
+  InvestigationDeclaration,
   InvestigateOptions,
   InvestigateResult,
   InvestigationSelection,
@@ -1176,6 +1177,7 @@ export class SymbolLatticeService {
     const contexts = read.matches.map((match) =>
       this.toSymbolContext(match.reference, match, read, request.contextBounds)
     );
+    const declarations = this.investigationDeclarations(selection, read.documentsByFilePath);
 
     return {
       status: await this.getStatusForBundle(normalizedProjectPath, bundle),
@@ -1185,10 +1187,15 @@ export class SymbolLatticeService {
         maximumSearchLimit: MAX_SOURCE_SEARCH_LIMIT,
         symbolLimit: request.symbolLimit,
         maximumSymbolLimit: MAX_INVESTIGATE_SYMBOL_LIMIT,
+        declarationSource: {
+          sourceLineLimit: NODE_SOURCE_LINE_LIMIT,
+          sourceCharacterLimit: NODE_SOURCE_CHARACTER_LIMIT
+        },
         context: request.contextBounds
       },
       search: { results: searchResults },
       selection,
+      declarations,
       contexts,
       evidencePaths: this.contextEvidencePaths(read.matches, bundle, request.contextBounds)
     };
@@ -2675,6 +2682,31 @@ export class SymbolLatticeService {
     }
 
     return { items, total, truncated: total > symbolLimit };
+  }
+
+  /**
+   * Builds complete-but-bounded declaration evidence from the persisted source
+   * documents that produced this investigation's lexical hits. It deliberately
+   * does not issue another graph-store read, so selection, source, and context
+   * stay tied to the same active generation.
+   */
+  private investigationDeclarations(
+    selection: InvestigationSelectionResult,
+    documentsByFilePath: ReadonlyMap<string, IndexedSourceDocument>
+  ): readonly InvestigationDeclaration[] {
+    return selection.items.map(({ symbol }) => {
+      const sourceDocument = documentsByFilePath.get(symbol.filePath);
+      const source =
+        sourceDocument === undefined
+          ? null
+          : nodeSourceFromPersistedText(sourceDocument.filePath, sourceDocument.sourceText, symbol.range);
+
+      return {
+        reference: symbol.qualifiedName,
+        sourceAvailability: source === null ? "unavailable" : "active-generation",
+        source
+      };
+    });
   }
 
   private extractPersistedFacts(

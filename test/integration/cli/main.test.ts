@@ -141,10 +141,15 @@ function investigateResult(): InvestigateResult {
       maximumSearchLimit: 100,
       symbolLimit: 2,
       maximumSymbolLimit: 8,
+      declarationSource: {
+        sourceLineLimit: 200,
+        sourceCharacterLimit: 16_000
+      },
       context: context.bounds
     },
     search: { results: [] },
     selection: { items: [], total: 0, truncated: false },
+    declarations: [],
     contexts: context.contexts,
     evidencePaths: context.evidencePaths
   };

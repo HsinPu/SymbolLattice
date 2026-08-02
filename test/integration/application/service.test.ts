@@ -932,6 +932,10 @@ describe("SymbolLatticeService", () => {
         maximumSearchLimit: 100,
         symbolLimit: 2,
         maximumSymbolLimit: 8,
+        declarationSource: {
+          sourceLineLimit: NODE_SOURCE_LINE_LIMIT,
+          sourceCharacterLimit: NODE_SOURCE_CHARACTER_LIMIT
+        },
         context: {
           relationLimit: 1,
           maxHops: 2,
@@ -960,6 +964,16 @@ describe("SymbolLatticeService", () => {
         total: 1,
         truncated: false
       },
+      declarations: [
+        expect.objectContaining({
+          reference: "src/target.ts#investigateTarget",
+          sourceAvailability: "active-generation",
+          source: expect.objectContaining({
+            filePath: "src/target.ts",
+            text: expect.stringContaining("indexed target evidence")
+          })
+        })
+      ],
       contexts: [
         expect.objectContaining({
           reference: "src/target.ts#investigateTarget",
@@ -984,10 +998,48 @@ describe("SymbolLatticeService", () => {
     expect(stale.contexts[0]?.source?.lines.map((line) => line.text).join("\n")).toContain(
       "indexed target evidence"
     );
+    expect(stale.declarations[0]?.source?.text).toContain("indexed target evidence");
 
     await expect(
       service.investigate(projectPath, "investigateTarget", { symbolLimit: 9 })
     ).rejects.toMatchObject({ code: "INVALID_INVESTIGATE_SYMBOL_LIMIT" });
+  });
+
+  it("bounds selected investigation declaration source without reading live files", async () => {
+    const padding = Array.from(
+      { length: NODE_SOURCE_LINE_LIMIT },
+      (_value, index) => `  const evidence${index} = ${index};`
+    );
+    const projectPath = await createInlineProject({
+      "src/bounded-investigation.ts": [
+        "export function boundedInvestigationTarget(): number {",
+        ...padding,
+        "  return 1;",
+        "}",
+        ""
+      ].join("\n")
+    });
+    const service = createService();
+    await service.init({ projectPath });
+
+    const result = await service.investigate(projectPath, "boundedInvestigationTarget");
+    const source = result.declarations[0]?.source;
+    if (source === null || source === undefined) {
+      throw new Error("Expected bounded declaration source.");
+    }
+
+    expect(result.bounds.declarationSource).toEqual({
+      sourceLineLimit: NODE_SOURCE_LINE_LIMIT,
+      sourceCharacterLimit: NODE_SOURCE_CHARACTER_LIMIT
+    });
+    expect(result.declarations[0]).toMatchObject({
+      reference: "src/bounded-investigation.ts#boundedInvestigationTarget",
+      sourceAvailability: "active-generation"
+    });
+    expect(source).toMatchObject({ truncated: true });
+    expect(source.totalLines).toBeGreaterThan(NODE_SOURCE_LINE_LIMIT);
+    expect(source.text).toContain("boundedInvestigationTarget");
+    expect(source.text).not.toContain("return 1;");
   });
 
   it("selects affected conventionally named test files from exact active-generation file evidence", async () => {

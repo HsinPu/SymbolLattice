@@ -512,6 +512,10 @@ function investigateResult(): InvestigateResult {
       maximumSearchLimit: 100,
       symbolLimit: 2,
       maximumSymbolLimit: 8,
+      declarationSource: {
+        sourceLineLimit: 200,
+        sourceCharacterLimit: 16_000
+      },
       context: context.bounds
     },
     search: { results: search.results },
@@ -520,6 +524,20 @@ function investigateResult(): InvestigateResult {
       total: 1,
       truncated: false
     },
+    declarations: [
+      {
+        reference: candidate.qualifiedName,
+        sourceAvailability: "active-generation",
+        source: {
+          filePath: candidate.filePath,
+          range: candidate.range,
+          text: "export function userById(): void {}",
+          totalLines: 1,
+          totalCharacters: 35,
+          truncated: false
+        }
+      }
+    ],
     contexts: context.contexts,
     evidencePaths: context.evidencePaths
   };
@@ -1626,6 +1644,13 @@ describe("SymbolLattice MCP server", () => {
     expect(result.structuredContent).toMatchObject({
       query: "user",
       selection: { total: 1, truncated: false },
+      declarations: [
+        {
+          reference: "src/users.ts#userById",
+          sourceAvailability: "active-generation",
+          source: { text: "export function userById(): void {}" }
+        }
+      ],
       contexts: [{ sourceAvailability: "not-applicable" }]
     });
     expect(investigateCalls).toEqual([
