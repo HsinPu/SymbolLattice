@@ -6,6 +6,26 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.166.0] - 2026-08-02
+
+### Added
+
+- Astro filesystem routing now accepts exact <code>src/pages/**/*.astro</code> whole-segment parameters such as <code>[slug]</code> and one final rest parameter such as <code>[...parts]</code>. They become canonical navigation paths such as <code>/blog/:slug</code> and <code>/docs/*parts</code> while retaining the conventional local default component and existing route evidence.
+- Parameter pages, rest pages, and dynamic-directory <code>index.astro</code> pages participate in the existing persisted route query, callers, impact analysis, and source-search contracts without a new command or database schema.
+- New extractor, capability, and service coverage proves static, parameter, rest, and dynamic-index pages plus rejection of malformed brackets, non-final rest parameters, duplicate parameter names, private segments, and malformed frontmatter.
+
+### Compatibility
+
+- The artifact-facts extractor advances to <code>multi-language-ast-v147</code>. The project resolver remains <code>project-resolver-v49</code> because each new route still resolves only to its same-file conventional default component. Existing graphs and SQLite schema remain readable; the next explicit <code>sync</code> re-extracts Astro facts.
+
+### Deliberate limits
+
+- Astro page routing remains limited to <code>.astro</code> files beneath <code>src/pages</code>. Parameters must occupy a whole path segment, use a unique ASCII identifier, and a rest parameter must be final. Mixed filename fragments, optional parameters, Markdown/MDX/HTML pages, TypeScript/JavaScript endpoints, routing configuration, middleware, and runtime navigation remain outside <code>exact</code> analysis.
+
+### Comparison notes
+
+- The inspected CodeGraph Astro resolver maps broader <code>src/pages</code> route forms, including dynamic parameters and JavaScript/TypeScript endpoints. SymbolLattice now reaches parity for the proven <code>.astro</code> parameter and final-rest filename subset, while retaining stricter segment validation and direct local-component evidence. Endpoint extraction remains the next Astro parity gap.
+
 ## [0.165.0] - 2026-08-02
 
 ### Added

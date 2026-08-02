@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.165.0 is a developer preview and is not published to npm. Run it from source.
+> v0.166.0 is a developer preview and is not published to npm. Run it from source.
 
 SymbolLattice builds a queryable local code-symbol graph for a project. Every relation keeps its rule, resolution stage, and confidence; `exact`, `heuristic`, and `unresolved` evidence are never conflated.
 
@@ -41,11 +41,11 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 On Windows PowerShell, use `npm.cmd` if `npm` is unavailable. Index data stays in the target project's `.symbol-lattice/index.sqlite`.
 
-## v0.165.0 highlights
+## v0.166.0 highlights
 
-- Django `path`, bounded static `re_path`, and legacy `django.conf.urls.url` now recognize exact same-file `LocalClass.as_view()` routes.
-- Existing static URLConf `include(...)` projection carries those class targets through relative imports, literal URLConfs, and final package-initializer re-exports.
-- Every relation preserves its route factory, `class-as-view` handler shape, and auditable evidence rule for querying, impact analysis, and debugging.
+- Astro `src/pages/**/*.astro` now supports whole-segment `[slug]` parameters and final `[...parts]` rest parameters, producing navigation routes such as `/blog/:slug` and `/docs/*parts`.
+- Dynamic-directory `index.astro` pages use the same default component, route query, impact analysis, and auditable evidence as existing static pages.
+- The framework capability catalog explicitly exposes static, parameter, and final-rest support for safer tool integration.
 
 ## Principles
 
@@ -55,7 +55,7 @@ On Windows PowerShell, use `npm.cmd` if `npm` is unavailable. Index data stays i
 
 ## Static-analysis boundaries
 
-- Cross-file Python routing covers FastAPI `include_router`, Flask `register_blueprint`, Sanic `app.blueprint`, and Django `path`, bounded `re_path`, and legacy `url` `include(...)` mounts.
+- Astro navigation covers `.astro` files beneath `src/pages`; parameters must occupy a whole path segment, names must be unique, and a rest parameter must be final. TypeScript/JavaScript endpoints, MDX, optional parameters, routing configuration, and middleware are not yet `exact`.
 - Django `Class.as_view()` accepts only an undecorated, unique, top-level local class declared before final `urlpatterns` without rebinding; the call must be direct and argument-free. It does not infer framework inheritance or runtime `as_view` behavior.
 - Dynamic composition, external or namespace packages, parent-relative imports, copied or container values, decorated or imported classes, WebSockets, `add_route`, versioning, and ambiguous targets never become `exact` results.
 

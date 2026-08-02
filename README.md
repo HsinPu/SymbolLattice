@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.165.0 是開發者預覽版，尚未發佈到 npm；請由原始碼執行。
+> v0.166.0 是開發者預覽版，尚未發佈到 npm；請由原始碼執行。
 
 SymbolLattice 為專案建立可查詢的本機程式碼符號圖譜。每一條關係都保留規則、解析階段與信心值，並嚴格區分 `exact`、`heuristic` 與 `unresolved` 證據。
 
@@ -41,11 +41,11 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 Windows PowerShell 若無法使用 `npm`，請改用 `npm.cmd`。索引資料保存在目標專案的 `.symbol-lattice/index.sqlite`。
 
-## v0.165.0 重點
+## v0.166.0 重點
 
-- Django 的 `path`、受限靜態 `re_path` 與舊式 `django.conf.urls.url`，現在可精確辨識同檔 `LocalClass.as_view()` 路由。
-- 既有的靜態 URLConf `include(...)` 投影也支援此類別目標，涵蓋相對匯入、字串 URLConf 與最終 package initializer re-export。
-- 每條關係會保留路由工廠、`class-as-view` 處理器形態與可稽核證據規則，方便查詢、影響分析與除錯。
+- Astro `src/pages/**/*.astro` 現在支援整段參數 `[slug]` 與最後一段 rest 參數 `[...parts]`，分別建立 `/blog/:slug`、`/docs/*parts` 導覽路由。
+- 動態目錄的 `index.astro` 與原有靜態頁面共用相同的預設元件、路由查詢、影響分析與可稽核證據。
+- 框架能力清單明確揭露靜態、參數與最終 rest 的支援範圍，便於工具整合時確認可分析的表面。
 
 ## 核心原則
 
@@ -55,9 +55,9 @@ Windows PowerShell 若無法使用 `npm`，請改用 `npm.cmd`。索引資料保
 
 ## 靜態分析邊界
 
-- 跨檔 Python 路由涵蓋 FastAPI `include_router`、Flask `register_blueprint`、Sanic `app.blueprint`，以及 Django `path`、受限 `re_path`、舊式 `url` 的 `include(...)`。
+- Astro 導覽僅分析 `src/pages` 下的 `.astro`；參數必須完整佔用一個路徑段、名稱不可重複，rest 參數只能位於最後一段。TypeScript/JavaScript endpoint、MDX、選用參數、路由設定與 middleware 尚未納入 `exact`。
 - Django `Class.as_view()` 僅接受未裝飾、唯一、頂層、宣告於最終 `urlpatterns` 前且未重綁定的本機類別；呼叫必須是無參數的直接形式。這不會推論繼承關係或執行時 `as_view` 實作。
-- 動態組合、外部或 namespace 套件、父層相對匯入、複製值、容器值、已裝飾或匯入的類別、WebSocket、`add_route`、版本設定與模糊目標，都不會成為 `exact` 結果。
+- 動態組合、外部或 namespace 套件、父層相對匯入、複製或容器值、已裝飾或匯入的類別、WebSocket、`add_route`、版本設定與模糊目標，都不會成為 `exact` 結果。
 
 ## 驗證
 

@@ -13260,7 +13260,43 @@ describe("source extraction", () => {
     ]);
   });
 
-  it("fails closed for malformed Astro frontmatter and omits dynamic or private Astro pages", () => {
+  it("extracts exact Astro dynamic and rest page navigation", () => {
+    const dynamicPage = extractFileFacts({
+      filePath: "src/pages/blog/[slug].astro",
+      language: "astro",
+      sourceText: "<main>Dynamic</main>"
+    });
+    const restPage = extractFileFacts({
+      filePath: "src/pages/docs/[...parts].astro",
+      language: "astro",
+      sourceText: "<main>Docs</main>"
+    });
+    const dynamicIndexPage = extractFileFacts({
+      filePath: "src/pages/[locale]/index.astro",
+      language: "astro",
+      sourceText: "<main>Locale</main>"
+    });
+
+    expect(dynamicPage.symbols.filter((symbol) => symbol.kind === "route").map((symbol) => symbol.name)).toEqual([
+      "NAVIGATE /blog/:slug"
+    ]);
+    expect(restPage.symbols.filter((symbol) => symbol.kind === "route").map((symbol) => symbol.name)).toEqual([
+      "NAVIGATE /docs/*parts"
+    ]);
+    expect(
+      dynamicIndexPage.symbols.filter((symbol) => symbol.kind === "route").map((symbol) => symbol.name)
+    ).toEqual(["NAVIGATE /:locale"]);
+    expect(
+      [...dynamicPage.pendingReferences, ...restPage.pendingReferences, ...dynamicIndexPage.pendingReferences]
+        .map((reference) => [reference.referenceName, reference.routeFramework, reference.routeRegistration])
+    ).toEqual([
+      ["default", "astro", "astro-filesystem-page"],
+      ["default", "astro", "astro-filesystem-page"],
+      ["default", "astro", "astro-filesystem-page"]
+    ]);
+  });
+
+  it("fails closed for malformed Astro frontmatter, unsupported dynamic paths, and private Astro pages", () => {
     const malformedFrontmatter = extractFileFacts({
       filePath: "src/pages/index.astro",
       language: "astro",
@@ -13269,10 +13305,20 @@ describe("source extraction", () => {
         "const title = 1;"
       ].join("\n")
     });
-    const dynamicPage = extractFileFacts({
-      filePath: "src/pages/blog/[slug].astro",
+    const malformedDynamicPage = extractFileFacts({
+      filePath: "src/pages/blog/[slug.astro",
       language: "astro",
       sourceText: "<main>Dynamic</main>"
+    });
+    const nonTerminalRestPage = extractFileFacts({
+      filePath: "src/pages/docs/[...parts]/detail.astro",
+      language: "astro",
+      sourceText: "<main>Detail</main>"
+    });
+    const duplicateParameterPage = extractFileFacts({
+      filePath: "src/pages/[slug]/[slug].astro",
+      language: "astro",
+      sourceText: "<main>Duplicate</main>"
     });
     const privatePage = extractFileFacts({
       filePath: "src/pages/_draft.astro",
@@ -13283,11 +13329,13 @@ describe("source extraction", () => {
     expect(malformedFrontmatter.symbols.map((symbol) => [symbol.kind, symbol.name])).toEqual([
       ["file", "index.astro"]
     ]);
-    expect(dynamicPage.symbols.map((symbol) => [symbol.kind, symbol.name])).toEqual([
-      ["file", "[slug].astro"],
+    expect(malformedDynamicPage.symbols.map((symbol) => [symbol.kind, symbol.name])).toEqual([
+      ["file", "[slug.astro"],
       ["variable", "default"]
     ]);
-    expect(dynamicPage.pendingReferences).toEqual([]);
+    expect(malformedDynamicPage.pendingReferences).toEqual([]);
+    expect(nonTerminalRestPage.pendingReferences).toEqual([]);
+    expect(duplicateParameterPage.pendingReferences).toEqual([]);
     expect(privatePage.symbols.map((symbol) => [symbol.kind, symbol.name])).toEqual([
       ["file", "_draft.astro"],
       ["variable", "default"]

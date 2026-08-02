@@ -13356,7 +13356,7 @@ describe("SymbolLatticeService", () => {
     );
   });
 
-  it("indexes Astro default components and static Astro filesystem pages", async () => {
+  it("indexes Astro default components plus static, dynamic, and rest filesystem pages", async () => {
     const projectPath = await createInlineProject({
       "src/pages/index.astro": "<main>Home</main>",
       "src/pages/catalog/index.astro": [
@@ -13365,7 +13365,8 @@ describe("SymbolLatticeService", () => {
         "---",
         "<main>{title}</main>"
       ].join("\n"),
-      "src/pages/blog/[slug].astro": "<main>Dynamic</main>"
+      "src/pages/blog/[slug].astro": "<main>Dynamic</main>",
+      "src/pages/docs/[...parts].astro": "<main>Docs</main>"
     });
     const graphStore = new SqliteGraphStore();
     const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
@@ -13384,9 +13385,9 @@ describe("SymbolLatticeService", () => {
 
     expect(indexed).toMatchObject({
       stale: false,
-      counts: { files: 3, symbols: expect.any(Number), edges: expect.any(Number) }
+      counts: { files: 4, symbols: expect.any(Number), edges: expect.any(Number) }
     });
-    expect(persistedAstroFacts).toHaveLength(3);
+    expect(persistedAstroFacts).toHaveLength(4);
     expect(
       persistedAstroFacts.every(
         (facts) => facts.extractorVersion === ARTIFACT_FACTS_EXTRACTOR_VERSION
@@ -13421,10 +13422,40 @@ describe("SymbolLatticeService", () => {
               stage: "lexical"
             })
           })
+        }),
+        expect.objectContaining({
+          method: "NAVIGATE",
+          path: "/blog/:slug",
+          handler: expect.objectContaining({
+            qualifiedName: "src/pages/blog/[slug].astro#default"
+          }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.astro.filesystem-page.local-handler",
+              stage: "lexical"
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "NAVIGATE",
+          path: "/docs/*parts",
+          handler: expect.objectContaining({
+            qualifiedName: "src/pages/docs/[...parts].astro#default"
+          }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.astro.filesystem-page.local-handler",
+              stage: "lexical"
+            })
+          })
         })
       ])
     );
-    expect(routes.routes.map((route) => route.path)).not.toContain("/blog/[slug]");
+    expect(routes.routes.map((route) => route.path)).toEqual(
+      expect.arrayContaining(["/blog/:slug", "/docs/*parts"])
+    );
     expect(search.results).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ filePath: "src/pages/catalog/index.astro", language: "astro" })

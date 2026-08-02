@@ -134,7 +134,7 @@ describe("first-party framework capabilities", () => {
       languages: ["astro"],
       routeFramework: "astro",
       routeRegistrations: ["astro-filesystem-page"],
-      surfaces: ["src/pages static .astro convention-derived default components"]
+      surfaces: ["src/pages static, parameter, and final rest .astro convention-derived default components"]
     });
     expect(frameworkCapability("blazor")).toMatchObject({
       languages: ["razor"],

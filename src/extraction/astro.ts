@@ -144,10 +144,11 @@ function hasExportModifier(node: ts.Node): boolean {
 }
 
 /**
- * Deliberately narrow Astro page routing. It retains only static .astro page
- * files under src/pages and maps an index file to its containing path.
+ * Deliberately bounded Astro page routing. It accepts literal filesystem
+ * segments, whole-segment parameters such as `[slug]`, and one final rest
+ * parameter such as `[...parts]`; `index.astro` maps to its containing path.
  */
-function astroStaticPagePath(filePath: string): string | null {
+function astroPagePath(filePath: string): string | null {
   const normalizedPath = filePath.replaceAll("\\", "/");
   const prefix = "src/pages/";
   const suffix = ".astro";
@@ -160,16 +161,37 @@ function astroStaticPagePath(filePath: string): string | null {
     return null;
   }
   const segments = withoutExtension.split("/");
-  if (
-    segments.some(
-      (segment) =>
-        !/^[A-Za-z0-9][A-Za-z0-9._~-]*$/u.test(segment) || segment.startsWith("_")
-    )
-  ) {
-    return null;
+  const fileSegments = segments.at(-1) === "index" ? segments.slice(0, -1) : segments;
+  const routeSegments: string[] = [];
+  const parameterNames = new Set<string>();
+
+  for (const [index, segment] of fileSegments.entries()) {
+    const parameter = /^\[([A-Za-z][A-Za-z0-9_]*)\]$/u.exec(segment);
+    const restParameter = /^\[\.\.\.([A-Za-z][A-Za-z0-9_]*)\]$/u.exec(segment);
+    if (restParameter !== null) {
+      const name = restParameter[1];
+      if (name === undefined || index !== fileSegments.length - 1 || parameterNames.has(name)) {
+        return null;
+      }
+      parameterNames.add(name);
+      routeSegments.push("*" + name);
+      continue;
+    }
+    if (parameter !== null) {
+      const name = parameter[1];
+      if (name === undefined || parameterNames.has(name)) {
+        return null;
+      }
+      parameterNames.add(name);
+      routeSegments.push(":" + name);
+      continue;
+    }
+    if (!/^[A-Za-z0-9][A-Za-z0-9._~-]*$/u.test(segment) || segment.startsWith("_")) {
+      return null;
+    }
+    routeSegments.push(segment);
   }
 
-  const routeSegments = segments.at(-1) === "index" ? segments.slice(0, -1) : segments;
   return routeSegments.length === 0 ? "/" : "/" + routeSegments.join("/");
 }
 
@@ -341,7 +363,7 @@ export function extractAstroFileFacts(input: AstroExtractFileFactsInput): Artifa
     }
   }
 
-  const routePath = astroStaticPagePath(input.filePath);
+  const routePath = astroPagePath(input.filePath);
   if (routePath !== null) {
     const routeName = "NAVIGATE " + routePath;
     const route: SymbolNode = {
