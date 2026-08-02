@@ -739,7 +739,39 @@ function staticJavaDirectReactNativeModule(
   );
 }
 
-/** Retains one literal Android bridge module name from a direct getName body. */
+/**
+ * Reads one direct class-local `static final String` constant. This deliberately
+ * excludes expressions, non-final fields, inherited values, and multi-variable
+ * declarations so an Android bridge identity remains syntax-proven.
+ */
+function staticJavaLiteralStringConstant(
+  input: JavaExtractFileFactsInput,
+  declaration: StaticJavaClass,
+  name: string
+): string | null {
+  const values: string[] = [];
+  for (const field of directChildren(declaration.body)) {
+    if (field.name !== "FieldDeclaration") {
+      continue;
+    }
+    const match = /^((?:(?:public|protected|private|static|final)\s+)*)String\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*=\s*"([^"\\\r\n]*)"\s*;$/u.exec(
+      nodeText(input, field).trim()
+    );
+    const modifiers = new Set((match?.[1] ?? "").trim().split(/\s+/u).filter(Boolean));
+    if (
+      match?.[2] !== name ||
+      match[3] === undefined ||
+      !modifiers.has("static") ||
+      !modifiers.has("final")
+    ) {
+      continue;
+    }
+    values.push(match[3]);
+  }
+  return values.length === 1 && values[0] !== undefined ? values[0] : null;
+}
+
+/** Retains one literal Android bridge module name from a direct getName body or class constant. */
 function staticJavaReactNativeModuleName(
   input: JavaExtractFileFactsInput,
   declaration: StaticJavaClass,
@@ -753,10 +785,13 @@ function staticJavaReactNativeModuleName(
   if (getNameMethods.length !== 1 || getNameMethods[0] === undefined) {
     return null;
   }
-  const match = /^\{\s*return\s+"([^"\\\r\n]*)"\s*;\s*\}$/u.exec(
-    nodeText(input, getNameMethods[0].body)
-  );
-  const moduleName = match?.[1] ?? null;
+  const body = nodeText(input, getNameMethods[0].body);
+  const literal = /^\{\s*return\s+"([^"\\\r\n]*)"\s*;\s*\}$/u.exec(body)?.[1] ?? null;
+  const constantName = /^\{\s*return\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*;\s*\}$/u.exec(body)?.[1] ?? null;
+  const moduleName = literal ??
+    (constantName === null
+      ? null
+      : staticJavaLiteralStringConstant(input, declaration, constantName));
   return moduleName !== null && REACT_NATIVE_BRIDGE_IDENTIFIER.test(moduleName)
     ? moduleName
     : null;

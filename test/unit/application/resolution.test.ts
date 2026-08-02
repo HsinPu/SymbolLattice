@@ -2693,7 +2693,8 @@ describe("TypeScript configuration module resolution", () => {
           "import com.facebook.react.bridge.ReactContextBaseJavaModule;",
           "import com.facebook.react.bridge.ReactMethod;",
           "public class CalendarModule extends ReactContextBaseJavaModule {",
-          '  public String getName() { return "CalendarModule"; }',
+          '  private static final String NAME = "CalendarModule";',
+          "  public String getName() { return NAME; }",
           "  @ReactMethod public void createEvent() {}",
           "}"
         ].join("\n"),
@@ -3226,7 +3227,8 @@ describe("TypeScript configuration module resolution", () => {
           "import com.facebook.react.bridge.ReactContextBaseJavaModule;",
           "import com.facebook.react.bridge.ReactMethod;",
           "public class CalendarModule extends ReactContextBaseJavaModule {",
-          '  public String getName() { return "CalendarModule"; }',
+          '  private static final String NAME = "CalendarModule";',
+          "  public String getName() { return NAME; }",
           "  @ReactMethod public void createEvent() {}",
           "}"
         ].join("\n"),

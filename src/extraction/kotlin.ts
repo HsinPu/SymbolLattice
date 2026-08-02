@@ -299,7 +299,38 @@ function staticKotlinDirectReactNativeModule(
   );
 }
 
-/** Retains one literal Android bridge module name from a direct getName body. */
+/**
+ * Reads one direct companion `const val` string. Values on other nested objects,
+ * mutable properties, expressions, and inherited constants stay out of scope so
+ * a bridge module identity remains syntax-proven.
+ */
+function staticKotlinCompanionLiteralStringConstant(
+  declaration: StaticKotlinType,
+  name: string
+): string | null {
+  const values: string[] = [];
+  for (const companion of directChildren(declaration.body).filter(
+    (child) => child.kind() === "companion_object"
+  )) {
+    const body = directChildren(companion).find((child) => child.kind() === "class_body");
+    if (body === undefined) {
+      continue;
+    }
+    for (const property of directChildren(body).filter(
+      (child) => child.kind() === "property_declaration"
+    )) {
+      const match = /^(?:(?:public|protected|private|internal)\s+)?const\s+val\s+([A-Za-z_][A-Za-z0-9_]*)\s*(?::\s*(?:String|kotlin\.String)\s*)?=\s*"([^"\\\r\n]*)"\s*;?$/u.exec(
+        nodeText(property).trim()
+      );
+      if (match?.[1] === name && match[2] !== undefined) {
+        values.push(match[2]);
+      }
+    }
+  }
+  return values.length === 1 && values[0] !== undefined ? values[0] : null;
+}
+
+/** Retains one literal Android bridge module name from a direct getName body or companion constant. */
 function staticKotlinReactNativeModuleName(
   declaration: StaticKotlinType,
   methods: readonly StaticKotlinFunction[],
@@ -313,9 +344,15 @@ function staticKotlinReactNativeModuleName(
     return null;
   }
   const body = nodeText(getNameMethods[0].body);
-  const expression = /^=\s*"([^"\\\r\n]*)"\s*$/u.exec(body);
-  const block = /^\{\s*return\s+"([^"\\\r\n]*)"\s*\}$/u.exec(body);
-  const moduleName = expression?.[1] ?? block?.[1] ?? null;
+  const literalExpression = /^=\s*"([^"\\\r\n]*)"\s*$/u.exec(body)?.[1] ?? null;
+  const literalBlock = /^\{\s*return\s+"([^"\\\r\n]*)"\s*\}$/u.exec(body)?.[1] ?? null;
+  const constantExpression = /^=\s*([A-Za-z_$][A-Za-z0-9_$]*)\s*$/u.exec(body)?.[1] ?? null;
+  const constantBlock = /^\{\s*return\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*\}$/u.exec(body)?.[1] ?? null;
+  const constantName = constantExpression ?? constantBlock;
+  const moduleName = literalExpression ?? literalBlock ??
+    (constantName === null
+      ? null
+      : staticKotlinCompanionLiteralStringConstant(declaration, constantName));
   return moduleName !== null && REACT_NATIVE_BRIDGE_IDENTIFIER.test(moduleName)
     ? moduleName
     : null;

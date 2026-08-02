@@ -18323,6 +18323,32 @@ describe("source extraction", () => {
         "}"
       ].join("\n")
     });
+    const javaConstant = extractFileFacts({
+      filePath: "android/ConstantCalendarModule.java",
+      language: "java",
+      sourceText: [
+        "import com.facebook.react.bridge.ReactContextBaseJavaModule;",
+        "import com.facebook.react.bridge.ReactMethod;",
+        "public class ConstantCalendarModule extends ReactContextBaseJavaModule {",
+        '  private static final String NAME = "ConstantCalendarModule";',
+        "  public String getName() { return NAME; }",
+        "  @ReactMethod public void createConstantEvent() {}",
+        "}"
+      ].join("\n")
+    });
+    const javaMutableConstant = extractFileFacts({
+      filePath: "android/MutableCalendarModule.java",
+      language: "java",
+      sourceText: [
+        "import com.facebook.react.bridge.ReactContextBaseJavaModule;",
+        "import com.facebook.react.bridge.ReactMethod;",
+        "public class MutableCalendarModule extends ReactContextBaseJavaModule {",
+        '  private static String NAME = "MutableCalendarModule";',
+        "  public String getName() { return NAME; }",
+        "  @ReactMethod public void createMutableEvent() {}",
+        "}"
+      ].join("\n")
+    });
     const kotlin = extractFileFacts({
       filePath: "android/CalendarModule.kt",
       language: "kotlin",
@@ -18332,6 +18358,21 @@ describe("source extraction", () => {
         "class CalendarModule(context: Any) : ReactContextBaseJavaModule(context) {",
         '  override fun getName(): String = "CalendarModule"',
         "  @ReactMethod fun cancelEvent() {}",
+        "}"
+      ].join("\n")
+    });
+    const kotlinConstant = extractFileFacts({
+      filePath: "android/ConstantCalendarModule.kt",
+      language: "kotlin",
+      sourceText: [
+        "import com.facebook.react.bridge.ReactContextBaseJavaModule",
+        "import com.facebook.react.bridge.ReactMethod",
+        "class ConstantCalendarModule(context: Any) : ReactContextBaseJavaModule(context) {",
+        "  companion object {",
+        '    const val NAME: String = "ConstantCalendarModule"',
+        "  }",
+        "  override fun getName(): String = NAME",
+        "  @ReactMethod fun cancelConstantEvent() {}",
         "}"
       ].join("\n")
     });
@@ -18368,11 +18409,26 @@ describe("source extraction", () => {
         methodName: "createEvent"
       })
     ]);
+    expect(javaConstant.reactNativeFacts?.nativeMethods).toEqual([
+      expect.objectContaining({
+        platform: "android",
+        moduleName: "ConstantCalendarModule",
+        methodName: "createConstantEvent"
+      })
+    ]);
+    expect(javaMutableConstant.reactNativeFacts?.nativeMethods).toEqual([]);
     expect(kotlin.reactNativeFacts?.nativeMethods).toEqual([
       expect.objectContaining({
         platform: "android",
         moduleName: "CalendarModule",
         methodName: "cancelEvent"
+      })
+    ]);
+    expect(kotlinConstant.reactNativeFacts?.nativeMethods).toEqual([
+      expect.objectContaining({
+        platform: "android",
+        moduleName: "ConstantCalendarModule",
+        methodName: "cancelConstantEvent"
       })
     ]);
     expect(objectiveC.reactNativeFacts?.nativeMethods).toEqual([

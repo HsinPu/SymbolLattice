@@ -6,6 +6,26 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.190.0] - 2026-08-02
+
+### Added
+
+- React Native Android extraction now accepts a direct <code>getName()</code> return of one class-local Java <code>static final String</code> or Kotlin companion <code>const val</code> literal, alongside an existing direct literal return.
+- The parser keeps the existing direct <code>ReactContextBaseJavaModule</code> superclass and directly imported <code>ReactMethod</code> requirements. It emits a native-method fact only when one eligible constant and one direct <code>getName()</code> declaration prove the module identity.
+- Unit coverage proves Java and Kotlin constants, rejects a mutable Java field, and exercises both direct NativeModules and static TurboModule re-export projections. The persisted-service test proves the Java and Kotlin constant forms survive SQLite-backed indexing and caller queries.
+
+### Compatibility
+
+- The artifact-facts extractor advances to <code>multi-language-ast-v169</code>; the project resolver remains <code>project-resolver-v59</code>. Existing graphs and SQLite schema remain readable; the next explicit <code>sync</code> or <code>index</code> refreshes eligible native facts.
+
+### Deliberate limits
+
+- Only a single direct class-local literal constant is accepted. Mutable fields, computed values, aliases, inherited members, nested non-companion objects, multiple declarations, Codegen-generated base classes, runtime registration, and Swift implementations remain excluded.
+
+### Comparison notes
+
+- The inspected CodeGraph React Native parser extracts a literal <code>getName()</code> value and otherwise falls back to the class name. SymbolLattice independently adds a narrowly bounded immutable-local-constant proof while retaining source-rule evidence, direct-import checks, and literal module-plus-method matching. This is broader for the stated constant convention, not a claim of broader overall React Native coverage.
+
 ## [0.189.0] - 2026-08-02
 
 ### Added

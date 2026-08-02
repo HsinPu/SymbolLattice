@@ -12186,7 +12186,8 @@ describe("SymbolLatticeService", () => {
         "import com.facebook.react.bridge.ReactContextBaseJavaModule;",
         "import com.facebook.react.bridge.ReactMethod;",
         "public class CalendarModule extends ReactContextBaseJavaModule {",
-        '  public String getName() { return "CalendarModule"; }',
+        '  private static final String NAME = "CalendarModule";',
+        "  public String getName() { return NAME; }",
         "  @ReactMethod public void createEvent() {}",
         "}"
       ].join("\n"),
@@ -12194,7 +12195,10 @@ describe("SymbolLatticeService", () => {
         "import com.facebook.react.bridge.ReactContextBaseJavaModule",
         "import com.facebook.react.bridge.ReactMethod",
         "class CalendarModule(context: Any) : ReactContextBaseJavaModule(context) {",
-        '  override fun getName(): String = "CalendarModule"',
+        "  companion object {",
+        '    const val NAME: String = "CalendarModule"',
+        "  }",
+        "  override fun getName(): String = NAME",
         "  @ReactMethod fun cancelEvent() {}",
         "}"
       ].join("\n"),
@@ -12402,7 +12406,8 @@ describe("SymbolLatticeService", () => {
         "import com.facebook.react.bridge.ReactContextBaseJavaModule;",
         "import com.facebook.react.bridge.ReactMethod;",
         "public class CalendarModule extends ReactContextBaseJavaModule {",
-        '  public String getName() { return "CalendarModule"; }',
+        '  private static final String NAME = "CalendarModule";',
+        "  public String getName() { return NAME; }",
         "  @ReactMethod public void createEvent() {}",
         "}"
       ].join("\n")
@@ -12434,6 +12439,18 @@ describe("SymbolLatticeService", () => {
           reactNativeFacts: expect.objectContaining({
             turboModuleDefaultImportCalls: [
               expect.objectContaining({ moduleSpecifier: "./NativeCalendarApi", methodName: "createEvent" })
+            ]
+          })
+        }),
+        expect.objectContaining({
+          filePath: "android/CalendarModule.java",
+          reactNativeFacts: expect.objectContaining({
+            nativeMethods: [
+              expect.objectContaining({
+                platform: "android",
+                moduleName: "CalendarModule",
+                methodName: "createEvent"
+              })
             ]
           })
         })
