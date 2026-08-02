@@ -1,4 +1,4 @@
-import { isMap, isScalar, parseDocument } from "yaml";
+import { isMap, isScalar, parseAllDocuments, parseDocument } from "yaml";
 
 import {
   createEdgeId,
@@ -39,6 +39,8 @@ interface StaticDrupalRoute {
 }
 
 const DRUPAL_ROUTING_FILE = /\.routing\.ya?ml$/iu;
+const SPRING_BOOT_YAML_FILE = /^(application|bootstrap)(?:-[A-Za-z0-9_.-]+)?\.ya?ml$/iu;
+const SPRING_BOOT_YAML_KEY = /^[A-Za-z0-9][A-Za-z0-9._-]*$/u;
 const DRUPAL_CONTROLLER =
   /^\\Drupal\\(?:[A-Za-z_][A-Za-z0-9_]*\\)+[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_]*$/u;
 const DRUPAL_HTTP_METHODS: Readonly<Record<string, RouteMethod>> = {
@@ -109,6 +111,30 @@ function scalarSource(sourceText: string, node: unknown): YamlScalarSource | nul
   return source.includes("\r") || source.includes("\n")
     ? null
     : { value: node.value, start, end };
+}
+
+/**
+ * Returns a source-ranged, single-line scalar without retaining its value.
+ * Spring configuration values can contain secrets, so only the key's source
+ * range is ever emitted as graph data. YAML scalar values may be strings,
+ * numbers, or booleans; explicit nulls, anchors, tags, and multiline scalars
+ * remain outside this proof.
+ */
+function scalarRange(sourceText: string, node: unknown): Pick<YamlScalarSource, "start" | "end"> | null {
+  if (
+    !isScalar(node) ||
+    node.value === null ||
+    node.anchor !== undefined ||
+    node.tag !== undefined ||
+    node.range === undefined ||
+    node.range === null
+  ) {
+    return null;
+  }
+  const start = node.range[0];
+  const end = node.range[1];
+  const source = sourceText.slice(start, end);
+  return source.includes("\r") || source.includes("\n") ? null : { start, end };
 }
 
 function plainMap(node: unknown): boolean {
@@ -246,6 +272,63 @@ function staticYamlDeclarations(sourceText: string): readonly YamlDeclaration[] 
 }
 
 /**
+ * Retains only literal Spring Boot configuration leaf keys from conventional
+ * application/bootstrap YAML files. Every ancestor must be an untagged,
+ * unanchored mapping; sequences, aliases, tags, nulls, and multiline scalars
+ * are deliberately excluded. The graph stores dotted key identities and key
+ * ranges only, never configuration values.
+ */
+function staticSpringBootYamlDeclarations(
+  filePath: string,
+  sourceText: string
+): readonly YamlDeclaration[] {
+  const fileName = filePath.split(/[\\/]/u).at(-1) ?? filePath;
+  if (!SPRING_BOOT_YAML_FILE.test(fileName)) {
+    return [];
+  }
+  try {
+    const documents = parseAllDocuments(sourceText, { prettyErrors: false });
+    if (documents.length !== 1) {
+      return [];
+    }
+    const document = documents[0];
+    if (document === undefined || document.errors.length > 0 || !plainMap(document.contents)) {
+      return [];
+    }
+
+    const declarations: YamlDeclaration[] = [];
+    const visit = (mapping: unknown, ancestors: readonly string[]): void => {
+      if (!isMap(mapping) || !plainMap(mapping)) {
+        return;
+      }
+      for (const pair of mapping.items) {
+        const key = scalarSource(sourceText, pair.key);
+        if (key === null) {
+          continue;
+        }
+        const path = [...ancestors, key.value];
+        const dottedKey = path.join(".");
+        if (!SPRING_BOOT_YAML_KEY.test(dottedKey)) {
+          continue;
+        }
+        if (plainMap(pair.value)) {
+          visit(pair.value, path);
+          continue;
+        }
+        const value = scalarRange(sourceText, pair.value);
+        if (value !== null) {
+          declarations.push({ name: dottedKey, start: key.start, end: key.end });
+        }
+      }
+    };
+    visit(document.contents, []);
+    return declarations;
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Extracts source-proven YAML file and top-level scalar mapping-key symbols.
  * It intentionally excludes nested mappings/sequences, aliases, anchors,
  * tags, multi-document streams, imports, calls, and runtime configuration
@@ -256,7 +339,12 @@ export function extractYamlFileFacts(input: YamlExtractFileFactsInput): Artifact
   if (!drupalCapability.languages.includes(input.language)) {
     throw new Error("Drupal framework extraction was invoked for an unsupported source language.");
   }
+  const springBootPropertiesCapability = frameworkCapability("spring-boot-properties");
+  if (!springBootPropertiesCapability.languages.includes(input.language)) {
+    throw new Error("Spring Boot YAML extraction was invoked for an unsupported source language.");
+  }
   const declarations = staticYamlDeclarations(input.sourceText);
+  const springBootYamlDeclarations = staticSpringBootYamlDeclarations(input.filePath, input.sourceText);
   const drupalRoutes = staticDrupalRoutes(input.filePath, input.sourceText);
   const lineStarts = lineStartsFor(input.sourceText);
   const symbols: SymbolNode[] = [];
@@ -321,6 +409,53 @@ export function extractYamlFileFacts(input: YamlExtractFileFactsInput): Artifact
       referenceName: symbol.name,
       evidence: {
         ruleId: "syntax.yaml.top-level-scalar-mapping",
+        stage: "syntax",
+        candidateSymbolIds: [symbol.id]
+      }
+    });
+  }
+
+  for (const declaration of springBootYamlDeclarations) {
+    const qualifiedName = `${fileNode.qualifiedName}#spring-boot-yaml-key:${declaration.name}`;
+    const identity = `${qualifiedName}\u0000variable`;
+    const declarationOrdinal = declarationOrdinals.get(identity) ?? 0;
+    declarationOrdinals.set(identity, declarationOrdinal + 1);
+    const range = rangeFor(lineStarts, declaration.start, declaration.end);
+    const symbol: SymbolNode = {
+      id: createSymbolId({
+        filePath: input.filePath,
+        qualifiedName,
+        kind: "variable",
+        declarationOrdinal
+      }),
+      name: declaration.name,
+      qualifiedName,
+      kind: "variable",
+      filePath: input.filePath,
+      range,
+      isExported: false,
+      declarationOrdinal
+    };
+    symbols.push(symbol);
+    edges.push({
+      id: createEdgeId({
+        sourceId: fileNode.id,
+        targetId: symbol.id,
+        kind: "contains",
+        line: range.start.line,
+        column: range.start.column,
+        referenceName: symbol.name
+      }),
+      sourceId: fileNode.id,
+      targetId: symbol.id,
+      kind: "contains",
+      filePath: input.filePath,
+      range,
+      resolution: "exact",
+      confidence: 1,
+      referenceName: symbol.name,
+      evidence: {
+        ruleId: "framework.spring-boot.yaml.literal-nested-scalar-key",
         stage: "syntax",
         candidateSymbolIds: [symbol.id]
       }

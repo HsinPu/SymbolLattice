@@ -14637,7 +14637,7 @@ describe("SymbolLatticeService", () => {
 
   it("indexes YAML top-level scalar keys and retains YAML source-search filtering", async () => {
     const projectPath = await createInlineProject({
-      "config/application.yml": [
+      "config/settings.yml": [
         "service: symbol-lattice",
         "port: 3000",
         "metadata:",
@@ -14652,8 +14652,8 @@ describe("SymbolLatticeService", () => {
     const search = await service.search(projectPath, "service", { language: "yaml" });
     const persistedFacts = graphStore
       .getArtifactFacts(projectPath)
-      .find((facts) => facts.filePath === "config/application.yml");
-    const serviceKey = await service.find(projectPath, "config/application.yml#yaml-key:service");
+      .find((facts) => facts.filePath === "config/settings.yml");
+    const serviceKey = await service.find(projectPath, "config/settings.yml#yaml-key:service");
 
     expect(indexed).toMatchObject({
       stale: false,
@@ -14666,13 +14666,13 @@ describe("SymbolLatticeService", () => {
     expect(serviceKey.symbols).toMatchObject([
       {
         kind: "variable",
-        qualifiedName: "config/application.yml#yaml-key:service",
+        qualifiedName: "config/settings.yml#yaml-key:service",
         isExported: false
       }
     ]);
     expect(routes.routes).toEqual([]);
     expect(search.results).toMatchObject([
-      { filePath: "config/application.yml", language: "yaml" }
+      { filePath: "config/settings.yml", language: "yaml" }
     ]);
   });
 
@@ -14862,7 +14862,7 @@ describe("SymbolLatticeService", () => {
       confidence: 0,
       referenceName: "missing.key",
       evidence: {
-        ruleId: "framework.spring-boot.properties.direct-value.literal-key.unresolved-key",
+        ruleId: "framework.spring-boot.config.direct-value.literal-key.unresolved-key",
         stage: "unresolved",
         candidateSymbolIds: []
       }
@@ -14889,7 +14889,218 @@ describe("SymbolLatticeService", () => {
       resolution: "unresolved",
       confidence: 0,
       evidence: {
-        ruleId: "framework.spring-boot.properties.direct-value.literal-key.unresolved-key",
+        ruleId: "framework.spring-boot.config.direct-value.literal-key.unresolved-key",
+        stage: "unresolved",
+        candidateSymbolIds: []
+      }
+    });
+  });
+
+  it("projects conservative Spring Boot @Value property references across conventional YAML files", async () => {
+    const projectPath = await createInlineProject({
+      "config/application.yml": [
+        "server:",
+        "  port: 8080",
+        "feature:",
+        "  enabled: true",
+        "shared:",
+        "  mode: yaml",
+        "spring:",
+        "  datasource:",
+        "    password: yaml-secret"
+      ].join("\n"),
+      "config/application-dev.yaml": ["feature:", "  enabled: false"].join("\n"),
+      "config/bootstrap-prod.yml": ["app:", "  name: symbol-lattice"].join("\n"),
+      "config/application.properties": "shared.mode=properties\n",
+      "src/config/YamlConfig.java": [
+        "import org.springframework.beans.factory.annotation.Value;",
+        "",
+        "class YamlConfig {",
+        '  @Value("${server.port}")',
+        "  private String port;",
+        '  @Value("${feature.enabled:false}")',
+        "  private boolean enabled;",
+        '  @Value("${app.name}")',
+        "  private String appName;",
+        '  @Value("${shared.mode}")',
+        "  private String sharedMode;",
+        '  @Value("${missing.key}")',
+        "  private String missing;",
+        "}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    const indexed = await service.init({ projectPath });
+    const configurationClass = (
+      await service.find(projectPath, "src/config/YamlConfig.java#YamlConfig")
+    ).symbols[0];
+    const serverPort = (
+      await service.find(projectPath, "config/application.yml#spring-boot-yaml-key:server.port")
+    ).symbols[0];
+    const appName = (
+      await service.find(projectPath, "config/bootstrap-prod.yml#spring-boot-yaml-key:app.name")
+    ).symbols[0];
+    const applicationFeature = (
+      await service.find(projectPath, "config/application.yml#spring-boot-yaml-key:feature.enabled")
+    ).symbols[0];
+    const developmentFeature = (
+      await service.find(projectPath, "config/application-dev.yaml#spring-boot-yaml-key:feature.enabled")
+    ).symbols[0];
+    const yamlSharedMode = (
+      await service.find(projectPath, "config/application.yml#spring-boot-yaml-key:shared.mode")
+    ).symbols[0];
+    const propertiesSharedMode = (
+      await service.find(projectPath, "config/application.properties#properties-key:shared.mode")
+    ).symbols[0];
+    if (
+      configurationClass === undefined ||
+      serverPort === undefined ||
+      appName === undefined ||
+      applicationFeature === undefined ||
+      developmentFeature === undefined ||
+      yamlSharedMode === undefined ||
+      propertiesSharedMode === undefined
+    ) {
+      throw new Error("Expected indexed Spring Boot YAML configuration symbols.");
+    }
+
+    const serverPortCallers = await service.callers(projectPath, serverPort.qualifiedName);
+    const configurationCallees = await service.callees(projectPath, configurationClass.qualifiedName);
+    const yamlFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "config/application.yml");
+    const snapshot = graphStore.getSnapshot(projectPath);
+    const serverPortReference = snapshot.edges.find(
+      (edge) => edge.sourceId === configurationClass.id && edge.targetId === serverPort.id
+    );
+    const appNameReference = snapshot.edges.find(
+      (edge) => edge.sourceId === configurationClass.id && edge.targetId === appName.id
+    );
+    const ambiguousFeatureReference = snapshot.edges.find(
+      (edge) =>
+        edge.sourceId === configurationClass.id &&
+        edge.kind === "references" &&
+        edge.referenceName === "feature.enabled"
+    );
+    const mixedSharedReference = snapshot.edges.find(
+      (edge) =>
+        edge.sourceId === configurationClass.id &&
+        edge.kind === "references" &&
+        edge.referenceName === "shared.mode"
+    );
+    const missingReference = snapshot.edges.find(
+      (edge) =>
+        edge.sourceId === configurationClass.id &&
+        edge.kind === "references" &&
+        edge.referenceName === "missing.key"
+    );
+
+    expect(indexed).toMatchObject({
+      stale: false,
+      counts: { files: 5, symbols: 13, edges: 13 }
+    });
+    expect(JSON.stringify(yamlFacts)).not.toContain("yaml-secret");
+    expect(serverPortCallers.relations).toEqual([
+      expect.objectContaining({
+        symbol: expect.objectContaining({ id: configurationClass.id }),
+        edge: expect.objectContaining({
+          kind: "references",
+          resolution: "exact",
+          referenceName: "server.port",
+          evidence: expect.objectContaining({
+            ruleId: "framework.spring-boot.yaml.direct-value.literal-key.exact-key",
+            stage: "module",
+            candidateSymbolIds: [serverPort.id],
+            configurationPaths: ["config/application.yml"]
+          })
+        })
+      })
+    ]);
+    expect(configurationCallees.relations.map((relation) => relation.symbol.id)).toEqual(
+      expect.arrayContaining([serverPort.id, appName.id])
+    );
+    expect(serverPortReference).toMatchObject({
+      kind: "references",
+      resolution: "exact",
+      confidence: 1,
+      referenceName: "server.port"
+    });
+    expect(appNameReference).toMatchObject({
+      kind: "references",
+      resolution: "exact",
+      confidence: 1,
+      referenceName: "app.name",
+      evidence: expect.objectContaining({
+        ruleId: "framework.spring-boot.yaml.direct-value.literal-key.exact-key",
+        configurationPaths: ["config/bootstrap-prod.yml"]
+      })
+    });
+    expect(ambiguousFeatureReference).toMatchObject({
+      targetId: null,
+      resolution: "unresolved",
+      confidence: 0,
+      referenceName: "feature.enabled",
+      evidence: {
+        ruleId: "framework.spring-boot.yaml.direct-value.literal-key.ambiguous-key",
+        stage: "unresolved",
+        candidateSymbolIds: expect.arrayContaining([applicationFeature.id, developmentFeature.id]),
+        configurationPaths: expect.arrayContaining([
+          "config/application.yml",
+          "config/application-dev.yaml"
+        ])
+      }
+    });
+    expect(mixedSharedReference).toMatchObject({
+      targetId: null,
+      resolution: "unresolved",
+      confidence: 0,
+      referenceName: "shared.mode",
+      evidence: {
+        ruleId: "framework.spring-boot.config.direct-value.literal-key.ambiguous-key",
+        stage: "unresolved",
+        candidateSymbolIds: expect.arrayContaining([yamlSharedMode.id, propertiesSharedMode.id]),
+        configurationPaths: expect.arrayContaining([
+          "config/application.yml",
+          "config/application.properties"
+        ])
+      }
+    });
+    expect(missingReference).toMatchObject({
+      targetId: null,
+      resolution: "unresolved",
+      confidence: 0,
+      referenceName: "missing.key",
+      evidence: {
+        ruleId: "framework.spring-boot.config.direct-value.literal-key.unresolved-key",
+        stage: "unresolved",
+        candidateSymbolIds: []
+      }
+    });
+
+    await writeFile(
+      join(projectPath, "config", "application.yml"),
+      ["feature:", "  enabled: true", "shared:", "  mode: yaml"].join("\n"),
+      "utf8"
+    );
+    const synced = await service.sync({ projectPath });
+    const serverPortAfterSync = graphStore
+      .getSnapshot(projectPath)
+      .edges.find(
+        (edge) =>
+          edge.sourceId === configurationClass.id &&
+          edge.kind === "references" &&
+          edge.referenceName === "server.port"
+      );
+
+    expect(synced.lastIndexWork?.reusedArtifactFiles).toContain("src/config/YamlConfig.java");
+    expect(serverPortAfterSync).toMatchObject({
+      targetId: null,
+      resolution: "unresolved",
+      confidence: 0,
+      evidence: {
+        ruleId: "framework.spring-boot.config.direct-value.literal-key.unresolved-key",
         stage: "unresolved",
         candidateSymbolIds: []
       }

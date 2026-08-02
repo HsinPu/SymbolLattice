@@ -14479,7 +14479,7 @@ describe("source extraction", () => {
 
   it("extracts parser-proven YAML top-level scalar mapping keys with source evidence", () => {
     const facts = extractFileFacts({
-      filePath: "config/application.yaml",
+      filePath: "config/settings.yaml",
       language: "yaml",
       sourceText: [
         "# direct scalar settings",
@@ -14498,10 +14498,10 @@ describe("source extraction", () => {
     expect(
       facts.symbols.map((symbol) => [symbol.kind, symbol.qualifiedName, symbol.isExported])
     ).toEqual([
-      ["file", "config/application.yaml", true],
-      ["variable", "config/application.yaml#yaml-key:service", false],
-      ["variable", "config/application.yaml#yaml-key:port", false],
-      ["variable", "config/application.yaml#yaml-key:owner", false]
+      ["file", "config/settings.yaml", true],
+      ["variable", "config/settings.yaml#yaml-key:service", false],
+      ["variable", "config/settings.yaml#yaml-key:port", false],
+      ["variable", "config/settings.yaml#yaml-key:owner", false]
     ]);
     expect(
       facts.edges.map((edge) => [
@@ -14515,6 +14515,96 @@ describe("source extraction", () => {
       ["contains", "port", "syntax.yaml.top-level-scalar-mapping", "exact"],
       ["contains", "owner", "syntax.yaml.top-level-scalar-mapping", "exact"]
     ]);
+  });
+
+  it("extracts direct nested Spring Boot YAML leaf keys without retaining configuration values", () => {
+    const facts = extractFileFacts({
+      filePath: "config/application-dev.yaml",
+      language: "yaml",
+      sourceText: [
+        "server:",
+        "  port: 8080",
+        "feature:",
+        "  enabled: true",
+        "app:",
+        "  name: symbol-lattice",
+        "  password: top-secret",
+        "limits:",
+        "  request-timeout: 30",
+        "items:",
+        "  - ignored",
+        "anchored: &defaults",
+        "  name: ignored",
+        "copy: *defaults",
+        "tagged: !environment production",
+        "multiline: |",
+        "  ignored"
+      ].join("\n")
+    });
+    const multipleDocuments = extractFileFacts({
+      filePath: "config/bootstrap-prod.yml",
+      language: "yaml",
+      sourceText: ["app:", "  name: first", "---", "app:", "  name: second"].join("\n")
+    });
+
+    expect(facts.symbols.map((symbol) => [symbol.kind, symbol.qualifiedName, symbol.isExported])).toEqual([
+      ["file", "config/application-dev.yaml", true],
+      ["variable", "config/application-dev.yaml#spring-boot-yaml-key:server.port", false],
+      ["variable", "config/application-dev.yaml#spring-boot-yaml-key:feature.enabled", false],
+      ["variable", "config/application-dev.yaml#spring-boot-yaml-key:app.name", false],
+      ["variable", "config/application-dev.yaml#spring-boot-yaml-key:app.password", false],
+      ["variable", "config/application-dev.yaml#spring-boot-yaml-key:limits.request-timeout", false]
+    ]);
+    expect(
+      facts.edges.map((edge) => [
+        edge.kind,
+        edge.referenceName,
+        edge.evidence?.ruleId,
+        edge.resolution,
+        edge.confidence
+      ])
+    ).toEqual([
+      [
+        "contains",
+        "server.port",
+        "framework.spring-boot.yaml.literal-nested-scalar-key",
+        "exact",
+        1
+      ],
+      [
+        "contains",
+        "feature.enabled",
+        "framework.spring-boot.yaml.literal-nested-scalar-key",
+        "exact",
+        1
+      ],
+      [
+        "contains",
+        "app.name",
+        "framework.spring-boot.yaml.literal-nested-scalar-key",
+        "exact",
+        1
+      ],
+      [
+        "contains",
+        "app.password",
+        "framework.spring-boot.yaml.literal-nested-scalar-key",
+        "exact",
+        1
+      ],
+      [
+        "contains",
+        "limits.request-timeout",
+        "framework.spring-boot.yaml.literal-nested-scalar-key",
+        "exact",
+        1
+      ]
+    ]);
+    expect(JSON.stringify(facts)).not.toContain("top-secret");
+    expect(multipleDocuments.symbols.map((symbol) => [symbol.kind, symbol.name])).toEqual([
+      ["file", "bootstrap-prod.yml"]
+    ]);
+    expect(multipleDocuments.edges).toEqual([]);
   });
 
   it("extracts parser-proven Drupal routing YAML controller routes with explicit unresolved targets", () => {

@@ -14,9 +14,9 @@
 </div>
 
 > [!IMPORTANT]
-> v0.168.0 is a developer preview and is not published to npm. Run it from source.
+> v0.169.0 is a developer preview and is not published to npm. Run it from source.
 
-SymbolLattice builds a queryable local code-symbol graph for a project. Every relation keeps its rule, resolution stage, and confidence; `exact`, `heuristic`, and `unresolved` evidence are never conflated.
+SymbolLattice builds a queryable local code-symbol graph for a project. Every relation retains its rule, resolution stage, and confidence; `exact`, `heuristic`, and `unresolved` evidence are never conflated.
 
 ## Quick start
 
@@ -41,11 +41,11 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 On Windows PowerShell, use `npm.cmd` if `npm` is unavailable. Index data stays in the target project's `.symbol-lattice/index.sqlite`.
 
-## v0.168.0 highlights
+## v0.169.0 highlights
 
-- COBOL CICS now recognizes literal `EXEC CICS RETURN/START TRANSID(...)` commands and retains transaction-to-program hops as queryable call relations.
-- When one verifiable `TRAN`-named program owns a transaction id in the project, the relation retains its rule, candidate program, and `heuristic` confidence of `0.85`.
-- Dynamic transaction ids, incomplete commands, comments and strings, duplicate owners, and CSD mappings outside the index stay unresolved rather than guessed.
+- Direct Java `@Value("${key}")` fields now link to nested configuration keys in conventional `application` and `bootstrap` YAML files, such as `server.port`.
+- Only one parser-proven YAML or `.properties` candidate creates an `exact` relation. Profile, cross-format, and duplicate keys remain `unresolved` instead of assuming precedence.
+- YAML accepts only a single document with plain mapping ancestry and single-line literal leaves; anchors, tags, sequences, aliases, and values are never retained as graph data.
 
 ## Principles
 
@@ -55,9 +55,8 @@ On Windows PowerShell, use `npm.cmd` if `npm` is unavailable. Index data stays i
 
 ## Static-analysis boundaries
 
-- Astro navigation covers static, whole-segment parameter, and final-rest `.astro` paths beneath `src/pages`. Endpoints require exactly one root `astro.config.js`, `.mjs`, `.cjs`, `.ts`, `.mts`, or `.cts` and direct HTTP exports from `.ts`, `.js`, or `.mjs`; indirect exports, mutable bindings, duplicate methods, MDX, optional parameters, routing configuration, and middleware never become `exact`.
+- Spring Boot YAML supports only direct, proven literal `@Value` placeholders on Java class fields. Kotlin, `@ConfigurationProperties`, relaxed binding, lists, merge keys, dynamic values, config imports, active profiles, and runtime precedence remain outside analysis.
 - COBOL CICS accepts only a direct `RETURN` or `START` completed by `END-EXEC` with one literal `TRANSID`. Its target must be the unique indexed, pre-`PROCEDURE DIVISION`, `TRAN`-named literal owner; because the CICS CSD is external configuration, this remains `heuristic`, not a runtime guarantee.
-- Django `Class.as_view()` accepts only an undecorated, unique, top-level local class declared before final `urlpatterns` without rebinding; the call must be direct and argument-free. It does not infer framework inheritance or runtime `as_view` behavior.
 - Dynamic composition, external or namespace packages, parent-relative imports, copied or container values, decorated or imported classes, WebSockets, `add_route`, versioning, and ambiguous targets never become `exact` results.
 
 ## Verification

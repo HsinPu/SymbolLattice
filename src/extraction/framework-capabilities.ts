@@ -472,11 +472,12 @@ export const FRAMEWORK_CAPABILITIES = [
   },
   {
     id: "spring-boot-properties",
-    languages: ["java", "properties"],
+    languages: ["java", "properties", "yaml"],
     routeRegistrations: [],
     surfaces: [
       "direct imported or fully-qualified @Value literal-key annotations on direct Java fields",
-      "unique literal keys in conventional application or bootstrap properties files"
+      "unique literal keys in conventional application or bootstrap properties or YAML files",
+      "direct nested YAML mapping leaves without anchors, tags, sequences, aliases, nulls, or multiline scalars"
     ]
   },
   {

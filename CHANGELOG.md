@@ -6,6 +6,29 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.169.0] - 2026-08-02
+
+### Added
+
+- The <code>spring-boot-properties</code> capability now recognizes conventional <code>application</code> and <code>bootstrap</code> <code>.yml</code>/<code>.yaml</code> files, including profile-name variants. Its YAML pass emits dotted leaf-key symbols such as <code>server.port</code> from parser-proven, plain nested mappings without retaining configuration values.
+- Direct Java class-field <code>@Value("${literal.key}")</code> references now resolve through exactly one matching YAML or <code>.properties</code> key. Exact YAML edges retain <code>framework.spring-boot.yaml.direct-value.literal-key.exact-key</code>, their concrete candidate, and participating configuration path.
+- Duplicate YAML keys across files, YAML/properties cross-format collisions, and missing keys retain explicit unresolved edges with all candidate symbol IDs and configuration paths. No profile, source-format, or runtime-precedence selection is inferred.
+- New YAML extraction, capability, service, and sync coverage proves nested numeric/boolean/string leaves, profile file names, secret-value omission, unsupported YAML constructs, unique resolution, YAML ambiguity, mixed-format ambiguity, missing keys, and relation withdrawal after explicit synchronization.
+
+### Compatibility
+
+- The artifact-facts extractor advances to <code>multi-language-ast-v150</code> and the project resolver to <code>project-resolver-v52</code>. Existing graphs and SQLite schema remain readable; the next explicit <code>sync</code> re-extracts eligible YAML artifacts and rebuilds Spring configuration edges.
+- A missing Spring <code>@Value</code> key now reports the format-neutral <code>framework.spring-boot.config.direct-value.literal-key.unresolved-key</code> rule. Existing exact and properties-only ambiguity evidence remains unchanged.
+
+### Deliberate limits
+
+- Only one valid YAML document with untagged, unanchored mapping ancestry and a single-line scalar leaf is eligible. Sequences, aliases, merge keys, tags, nulls, multiline scalars, flow mappings, duplicate YAML keys, and malformed documents are excluded.
+- The binding source remains direct Java field <code>@Value</code> syntax. Kotlin, <code>@ConfigurationProperties</code>, parameter/method annotations, wildcard imports, relaxed key binding, placeholders within placeholders, SpEL, configuration imports, active-profile selection, environment overrides, values, and runtime behavior remain outside analysis.
+
+### Comparison notes
+
+- The inspected CodeGraph Spring resolver is broader: it extracts application/bootstrap YAML and properties keys, accepts Java and Kotlin bindings, supports <code>@ConfigurationProperties</code> prefixes, normalizes relaxed key forms, and deterministically selects among multiple config candidates. SymbolLattice independently adds parser-backed nested YAML leaves to its existing direct-Java <code>@Value</code> path, deliberately retains all cross-file and cross-format collisions as unresolved evidence, and never exposes values. CodeGraph remains broader for Spring semantics; SymbolLattice is stricter and more auditable at ambiguity boundaries.
+
 ## [0.168.0] - 2026-08-02
 
 ### Added
