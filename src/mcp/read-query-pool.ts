@@ -10,7 +10,7 @@ import type {
 } from "./read-query-protocol.js";
 
 /** A deliberately conservative cap protects memory on long-lived MCP hosts. */
-export const MAX_MCP_READ_QUERY_WORKERS = 4;
+export const MAX_MCP_READ_QUERY_WORKERS = 8;
 export const DEFAULT_MCP_READ_QUERY_QUEUE_TIMEOUT_MS = 45_000;
 export const MCP_READ_QUERY_POOL_STATES = [
   "warming",

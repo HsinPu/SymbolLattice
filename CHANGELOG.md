@@ -6,6 +6,28 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.206.0] - 2026-08-02
+
+### Added
+
+- The bounded MCP read-query pool ceiling is now eight workers. The process-aware default remains `availableParallelism() - 1` with a lower bound of one, so a small host does not pre-allocate workers it cannot use.
+- `SYMBOL_LATTICE_MCP_QUERY_POOL_SIZE` accepts explicit values from `1` through `8`; malformed, zero, or larger values retain the process-aware safe default. The pool still starts one worker and grows only for queued work.
+- `npm run benchmark:mcp` now accepts `SYMBOL_LATTICE_BENCHMARK_POOL_SIZE=1..8`. Pool unit coverage fixes the eight-worker ceiling, validates the environment edge, and deterministically drives queued work through every worker slot.
+
+### Compatibility
+
+- MCP request and response contracts, SQLite schema, WAL behavior, graph generations, worker read-only enforcement, fallback policy, and indexing behavior are unchanged. A host with more than five available CPUs may now choose a default capacity above four; set `SYMBOL_LATTICE_MCP_QUERY_POOL_SIZE=4` to retain the previous ceiling explicitly.
+
+### Deliberate limits
+
+- The pool does not eagerly start eight workers, does not cache arbitrary project connections, and still starts at most two workers concurrently. Capacity is a host-local upper bound, not a performance promise or a target number of resident workers.
+- This release does not adopt CodeGraph query algorithms, automatic sixteen-worker sizing, shared object caches, throughput thresholds, or cross-machine benchmark claims.
+
+### Comparison notes
+
+- The inspected CodeGraph `QueryPool` can auto-size up to sixteen workers. SymbolLattice independently moves from four to an explicitly verified eight-worker ceiling while preserving CPU awareness, demand-driven expansion, storage-level write refusal, and a bounded fallback path.
+- CodeGraph remains broader in worker capacity and query computation. SymbolLattice chooses a smaller ceiling with direct scheduler coverage and a reproducible disposable-fixture benchmark instead of claiming capacity parity.
+
 ## [0.205.0] - 2026-08-02
 
 ### Added

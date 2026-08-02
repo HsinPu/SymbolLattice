@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.205.0 為開發者預覽版，請從原始碼執行。
+> v0.206.0 為開發者預覽版，請從原始碼執行。
 
 SymbolLattice 會建立可查詢的本機「程式碼符號圖譜」。每一條關係都保留規則、證據階段與信心等級；`exact`、`heuristic`、`unresolved` 絕不混為一談。
 
@@ -49,7 +49,9 @@ Windows PowerShell 若找不到 npm，請使用 `npm.cmd`。索引資料保存�
 > [!NOTE]
 > MCP 工具本身永遠不會建立或更新圖譜。`serve --mcp` 的預設自動同步是主機擁有的獨立背景監看；若需要完全手動更新，使用 `--no-auto-sync`。
 
-## v0.205.0 重點
+## v0.206.0 重點
+
+- MCP 讀取 worker pool 現在最多可使用 8 個 worker。預設仍是「可用 CPU 數減一」且有上限，並只會在排隊工作需要時擴張；可用 `SYMBOL_LATTICE_MCP_QUERY_POOL_SIZE=1..8` 明確設定。
 
 - `npm run build && npm run verify:mcp-worker-generation` 會以暫存專案驗證真正編譯後的 MCP worker：先讀取第一個世代、由主程序 `sync`、再由同一工作者讀到新世代；同時要求零 fallback、零 worker crash，並自動清除暫存資料。
 
@@ -73,6 +75,7 @@ Windows PowerShell 若找不到 npm，請使用 `npm.cmd`。索引資料保存�
 npm run check
 npm test
 npm run build
+npm run benchmark:mcp
 npm run verify:mcp-worker-generation
 git diff --check
 ```

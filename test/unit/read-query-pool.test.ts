@@ -69,15 +69,76 @@ function response(text: string): ReadOnlyToolResponse {
 
 describe("McpReadQueryPool", () => {
   it("uses a conservative process-aware size and ignores malformed overrides", () => {
+    expect(MAX_MCP_READ_QUERY_WORKERS).toBe(8);
     expect(resolveMcpReadQueryPoolSize({}, 1)).toBe(1);
     expect(resolveMcpReadQueryPoolSize({}, 32)).toBe(MAX_MCP_READ_QUERY_WORKERS);
     expect(resolveMcpReadQueryPoolSize({ SYMBOL_LATTICE_MCP_QUERY_POOL_SIZE: "2" }, 32)).toBe(2);
+    expect(resolveMcpReadQueryPoolSize({ SYMBOL_LATTICE_MCP_QUERY_POOL_SIZE: "8" }, 32)).toBe(8);
     expect(resolveMcpReadQueryPoolSize({ SYMBOL_LATTICE_MCP_QUERY_POOL_SIZE: "0" }, 32)).toBe(
       MAX_MCP_READ_QUERY_WORKERS
     );
-    expect(resolveMcpReadQueryPoolSize({ SYMBOL_LATTICE_MCP_QUERY_POOL_SIZE: "99" }, 32)).toBe(
+    expect(resolveMcpReadQueryPoolSize({ SYMBOL_LATTICE_MCP_QUERY_POOL_SIZE: "eight" }, 32)).toBe(
       MAX_MCP_READ_QUERY_WORKERS
     );
+    expect(resolveMcpReadQueryPoolSize({ SYMBOL_LATTICE_MCP_QUERY_POOL_SIZE: "9" }, 32)).toBe(
+      MAX_MCP_READ_QUERY_WORKERS
+    );
+  });
+
+  it("clamps an injected worker count to the eight-worker host ceiling", async () => {
+    const workers: FakeQueryWorker[] = [];
+    const pool = new McpReadQueryPool({
+      defaultProjectPath: "C:/project",
+      size: MAX_MCP_READ_QUERY_WORKERS + 1,
+      createWorker: () => {
+        const worker = new FakeQueryWorker();
+        workers.push(worker);
+        return worker;
+      }
+    });
+
+    expect(pool.queryPoolStatus()).toMatchObject({
+      capacity: MAX_MCP_READ_QUERY_WORKERS,
+      workers: { live: 1, pending: 1 }
+    });
+    expect(workers).toHaveLength(1);
+    await pool.close();
+  });
+
+  it("expands to all eight slots when queued work needs every worker", async () => {
+    const workers: FakeQueryWorker[] = [];
+    const pool = new McpReadQueryPool({
+      defaultProjectPath: "C:/project",
+      size: MAX_MCP_READ_QUERY_WORKERS,
+      createWorker: () => {
+        const worker = new FakeQueryWorker();
+        workers.push(worker);
+        return worker;
+      }
+    });
+
+    workers[0]?.ready();
+    const pending = Array.from({ length: MAX_MCP_READ_QUERY_WORKERS }, (_, index) =>
+      pool.execute("search", { query: "queued-" + index }, async () => response("fallback"))
+    );
+
+    for (let index = 1; index < MAX_MCP_READ_QUERY_WORKERS; index += 1) {
+      const worker = workers[index];
+      if (worker === undefined) {
+        throw new Error("Expected queued work to spawn the next worker slot.");
+      }
+      worker.ready();
+    }
+
+    expect(workers).toHaveLength(MAX_MCP_READ_QUERY_WORKERS);
+    expect(pool.queryPoolStatus()).toMatchObject({
+      capacity: MAX_MCP_READ_QUERY_WORKERS,
+      workers: { live: MAX_MCP_READ_QUERY_WORKERS, pending: 0, idle: 0 },
+      requests: { inflight: MAX_MCP_READ_QUERY_WORKERS, queued: 0 }
+    });
+
+    await pool.close();
+    await expect(Promise.all(pending)).resolves.toHaveLength(MAX_MCP_READ_QUERY_WORKERS);
   });
 
   it("reports a redacted health snapshot with no project or query content", async () => {

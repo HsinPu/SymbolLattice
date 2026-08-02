@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.205.0 is a developer preview. Run it from source.
+> v0.206.0 is a developer preview. Run it from source.
 
 SymbolLattice builds a queryable local code-symbol graph. Every relation retains its rule, evidence stage, and confidence; exact, heuristic, and unresolved evidence are never conflated.
 
@@ -49,7 +49,9 @@ On Windows PowerShell, use `npm.cmd` if npm is unavailable. Index data stays in 
 > [!NOTE]
 > MCP tools never create or update a graph themselves. The default `serve --mcp` auto-sync is a separate host-owned background watcher; use `--no-auto-sync` for fully manual updates.
 
-## v0.205.0 highlights
+## v0.206.0 highlights
+
+- The MCP read-worker pool can now use up to 8 workers. Its default remains available CPUs minus one with a ceiling, and it grows only when queued work needs it; `SYMBOL_LATTICE_MCP_QUERY_POOL_SIZE=1..8` provides an explicit override.
 
 - `npm run build && npm run verify:mcp-worker-generation` uses a temporary project to prove a real compiled MCP worker: it reads generation one, the host runs `sync`, and that same worker reads generation two with zero fallback and zero worker crashes. The fixture is removed automatically.
 
@@ -73,6 +75,7 @@ On Windows PowerShell, use `npm.cmd` if npm is unavailable. Index data stays in 
 npm run check
 npm test
 npm run build
+npm run benchmark:mcp
 npm run verify:mcp-worker-generation
 git diff --check
 ```

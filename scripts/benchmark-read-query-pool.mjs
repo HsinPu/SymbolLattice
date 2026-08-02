@@ -177,7 +177,7 @@ function roundedSummary(summary) {
 }
 
 const configuration = {
-  poolSize: positiveIntegerFromEnvironment("SYMBOL_LATTICE_BENCHMARK_POOL_SIZE", 2, 4),
+  poolSize: positiveIntegerFromEnvironment("SYMBOL_LATTICE_BENCHMARK_POOL_SIZE", 2, 8),
   concurrency: positiveIntegerFromEnvironment("SYMBOL_LATTICE_BENCHMARK_CONCURRENCY", 4, 16),
   requestCount: positiveIntegerFromEnvironment("SYMBOL_LATTICE_BENCHMARK_REQUESTS", 24, 512),
   warmupRequests: positiveIntegerFromEnvironment("SYMBOL_LATTICE_BENCHMARK_WARMUP", 4, 64)
