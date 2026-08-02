@@ -6,6 +6,29 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.204.0] - 2026-08-02
+
+### Added
+
+- Every writable `SqliteGraphStore.initialize` now asks SQLite for WAL only after its schema transaction has completed successfully. New graphs receive WAL, and a valid legacy graph converts in place on its next successful initialization without replacing its active generation or requiring a reindex.
+- The store deliberately relies on SQLite's returned journal mode: a target that cannot adopt WAL retains its existing mode. This release does not change `synchronous`, checkpoint, locking, schema-version, generation, or source-evidence settings.
+- Integration coverage proves a real WAL reader holds its original active-generation snapshot while a writer commits a new generation, then observes the new generation after its transaction ends. It also proves an existing graph can convert from `DELETE` to `WAL` while retaining its snapshot.
+
+### Compatibility
+
+- The SQLite schema, public CLI and MCP contracts, retained-history format, reader lifecycle, and indexing semantics are unchanged. WAL is a persistent database journal setting, so an existing local index may switch mode after a successful explicit `init`, `index`, or `sync`.
+- A filesystem or SQLite build that leaves a non-WAL journal mode remains usable under that existing mode. A writer blocked by an active rollback-journal reader retains SQLite's existing lock/error behavior; this release does not hide, retry, or weaken that boundary.
+
+### Deliberate limits
+
+- WAL remains a same-machine local SQLite capability. Network filesystems, multi-writer coordination, manually scheduled checkpoints, tuned `wal_autocheckpoint`, and `synchronous=NORMAL` are intentionally out of scope.
+- The worker pool stays bounded at four processes, project-path overrides stay short-lived, and each read request keeps its own committed snapshot. WAL does not add a shared object cache, a live-source path, or implicit indexing.
+
+### Comparison notes
+
+- CodeGraph already pairs worker-owned WAL readers with a larger query pool and FTS/RWR/PageRank/impact execution. SymbolLattice independently closes the WAL storage baseline with explicit generation-snapshot coverage, while retaining a smaller, bounded worker model and storage-level write refusal.
+- This does not establish cross-project latency parity. Query algorithms, fixtures, connection counts, hardware, output shaping, and benchmark harnesses remain different.
+
 ## [0.203.0] - 2026-08-02
 
 ### Added

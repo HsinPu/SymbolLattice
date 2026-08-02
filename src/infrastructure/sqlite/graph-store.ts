@@ -581,6 +581,17 @@ function ensureSchema(database: DatabaseSync, databaseExisted: boolean): void {
   }
 }
 
+/**
+ * Prefer WAL only after a valid schema transaction has completed. SQLite keeps
+ * the current journal mode when a target cannot use WAL, so an unsupported
+ * filesystem remains usable with its existing durable mode. A writer lock still
+ * surfaces as SQLite's normal error rather than being hidden. We intentionally
+ * leave synchronous/checkpoint settings at SQLite defaults.
+ */
+function preferWriteAheadLogging(database: DatabaseSync): void {
+  database.prepare("PRAGMA journal_mode = WAL").get();
+}
+
 function getActiveGenerationId(database: DatabaseSync): string | null {
   return getMeta(database, ACTIVE_GENERATION_ID_META_KEY);
 }
@@ -1556,6 +1567,7 @@ export class SqliteGraphStore implements GraphStore {
 
     try {
       ensureSchema(database, databaseExisted);
+      preferWriteAheadLogging(database);
     } finally {
       database.close();
     }

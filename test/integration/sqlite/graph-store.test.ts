@@ -207,6 +207,25 @@ function readSchemaVersion(projectPath: string): string {
   }
 }
 
+function readJournalMode(projectPath: string): string {
+  const database = new DatabaseSync(databasePathFor(projectPath), { readOnly: true });
+  try {
+    const row = database.prepare("PRAGMA journal_mode").get() as unknown as {
+      readonly journal_mode: string;
+    };
+    return row.journal_mode;
+  } finally {
+    database.close();
+  }
+}
+
+function readActiveGenerationId(database: DatabaseSync): string | null {
+  const row = database
+    .prepare("SELECT value FROM meta WHERE key = ?")
+    .get("active_generation_id") as unknown as { readonly value: string } | undefined;
+  return row?.value ?? null;
+}
+
 function setSchemaVersion(projectPath: string, schemaVersion: string): void {
   const database = new DatabaseSync(databasePathFor(projectPath));
   try {
@@ -647,6 +666,91 @@ describe("SqliteGraphStore", () => {
       hits: [{ sourceText: "export const thirdNeedle = 'thirdNeedle';" }]
     });
     expect(persistentReader.persistentReadConnectionOpen).toBe(true);
+  });
+
+  it("uses WAL so an active reader keeps its snapshot while a new generation commits", async () => {
+    const projectPath = await temporaryProject();
+    const writer = new SqliteGraphStore();
+    const firstSnapshot = snapshot([symbol("wal-first", "wal-first")]);
+    writer.replaceProjectFacts({
+      projectPath,
+      snapshot: firstSnapshot,
+      indexedAt: "2026-08-02T00:00:00.000Z",
+      artifactFacts: persistedFacts(firstSnapshot),
+      indexInputs: indexInputs("wal-first"),
+      resolverVersion: "test-resolver-wal-first",
+      sourceDocuments: sourceDocuments(firstSnapshot, "export const walFirst = true;"),
+      sourceSearchVersion: SOURCE_SEARCH_INDEX_VERSION
+    });
+    expect(readJournalMode(projectPath)).toBe("wal");
+
+    const reader = new DatabaseSync(databasePathFor(projectPath), { readOnly: true });
+    let readerTransactionOpen = false;
+    try {
+      reader.exec("BEGIN");
+      readerTransactionOpen = true;
+      const firstGenerationId = readActiveGenerationId(reader);
+      expect(firstGenerationId).not.toBeNull();
+
+      const secondSnapshot = snapshot([symbol("wal-second", "wal-second")]);
+      expect(() =>
+        writer.replaceProjectFacts({
+          projectPath,
+          snapshot: secondSnapshot,
+          indexedAt: "2026-08-02T00:01:00.000Z",
+          artifactFacts: persistedFacts(secondSnapshot),
+          indexInputs: indexInputs("wal-second"),
+          resolverVersion: "test-resolver-wal-second",
+          sourceDocuments: sourceDocuments(secondSnapshot, "export const walSecond = true;"),
+          sourceSearchVersion: SOURCE_SEARCH_INDEX_VERSION
+        })
+      ).not.toThrow();
+
+      expect(readActiveGenerationId(reader)).toBe(firstGenerationId);
+      reader.exec("COMMIT");
+      readerTransactionOpen = false;
+      expect(readActiveGenerationId(reader)).not.toBe(firstGenerationId);
+    } finally {
+      if (readerTransactionOpen) {
+        try {
+          reader.exec("ROLLBACK");
+        } catch {
+          // Preserve the test failure while releasing the temporary reader.
+        }
+      }
+      reader.close();
+    }
+  });
+
+  it("converts an existing graph back to WAL without replacing its active generation", async () => {
+    const projectPath = await temporaryProject();
+    const store = new SqliteGraphStore();
+    const graphSnapshot = snapshot([symbol("wal-upgrade", "wal-upgrade")]);
+    store.replaceProjectFacts({
+      projectPath,
+      snapshot: graphSnapshot,
+      indexedAt: "2026-08-02T00:00:00.000Z",
+      artifactFacts: persistedFacts(graphSnapshot),
+      indexInputs: indexInputs("wal-upgrade"),
+      resolverVersion: "test-resolver-wal-upgrade",
+      sourceDocuments: sourceDocuments(graphSnapshot, "export const walUpgrade = true;"),
+      sourceSearchVersion: SOURCE_SEARCH_INDEX_VERSION
+    });
+    const generationId = store.getStatus(projectPath).generationId;
+
+    const legacyConnection = new DatabaseSync(databasePathFor(projectPath));
+    try {
+      legacyConnection.prepare("PRAGMA journal_mode = DELETE").get();
+    } finally {
+      legacyConnection.close();
+    }
+    expect(readJournalMode(projectPath)).toBe("delete");
+
+    store.initialize(projectPath);
+
+    expect(readJournalMode(projectPath)).toBe("wal");
+    expect(store.getStatus(projectPath).generationId).toBe(generationId);
+    expect(store.getSnapshot(projectPath)).toEqual(graphSnapshot);
   });
 
   it("persists active-generation artifact facts and edge evidence, then clears stale facts", async () => {
@@ -1669,6 +1773,7 @@ describe("SqliteGraphStore", () => {
 
     const store = new SqliteGraphStore();
     expect(() => store.initialize(projectPath)).toThrow(/schema version \"99\" is unsupported/i);
+    expect(readJournalMode(projectPath)).toBe("delete");
     expect(() => store.getStatus(projectPath)).toThrow(/schema version \"99\" is unsupported/i);
   });
 });

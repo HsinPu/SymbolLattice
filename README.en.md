@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.203.0 is a developer preview. Run it from source.
+> v0.204.0 is a developer preview. Run it from source.
 
 SymbolLattice builds a queryable local code-symbol graph. Every relation retains its rule, evidence stage, and confidence; exact, heuristic, and unresolved evidence are never conflated.
 
@@ -49,19 +49,21 @@ On Windows PowerShell, use `npm.cmd` if npm is unavailable. Index data stays in 
 > [!NOTE]
 > MCP tools never create or update a graph themselves. The default `serve --mcp` auto-sync is a separate host-owned background watcher; use `--no-auto-sync` for fully manual updates.
 
-## v0.203.0 highlights
+## v0.204.0 highlights
 
+- Every valid `init`/`sync` prefers SQLite WAL. An existing graph converts in place while retaining its active generation; no reindex is required.
+- A WAL read transaction stays on one generation snapshot while the writer can commit a new one; the reader observes it only after that transaction ends.
 - After its first database-backed read, each MCP worker retains one read-only SQLite connection for its default project. Every query still uses a separate committed snapshot, so later requests can observe a generation published by `sync`.
 - Queries that override `projectPath` keep short-lived read-only connections, preventing unbounded cross-project connection caching in a worker.
 - The worker's SQLite store also refuses schema and graph writes, so an accidental future `init`/`index`/`sync` path cannot rewrite the database.
-- `npm run benchmark:mcp` still measures a fixed temporary graph's P50/P95, fallback, error, pool, and event-loop data. Its output is a same-machine comparison baseline, not a performance promise.
-- This is not a WAL or cross-process cache layer, and it performs no hidden rebuilding, synchronization, or live-source reads.
+- When SQLite returns an existing non-WAL mode, it retains it; an active rollback-journal reader keeps SQLite's existing writer-lock error. This release changes no `synchronous`, checkpoint, cross-process-cache, or hidden-sync setting.
 
 ## Boundaries
 
 - This is a local code graph, not an RDF/SPARQL knowledge graph or ontology-reasoning system.
 - Queries read persisted generations only; they do not use LLMs, PageRank, runtime guesses, or undisclosed weights.
 - Indexing and querying stay local. Source changes are reported as freshness state, never substituted for indexed evidence.
+- WAL is for same-machine local SQLite. Network filesystems, manual checkpoint management, and multi-writer coordination remain unsupported.
 
 ## Verification
 
