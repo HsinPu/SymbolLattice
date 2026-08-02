@@ -228,6 +228,47 @@ export interface ExactImpactTraversalResult {
   readonly resultLimitReached: boolean;
 }
 
+/**
+ * Fixed resource bounds for an undirected relevance walk over exact static
+ * graph relations. The scope expands from the supplied lexical seeds before
+ * the walk starts; it never follows heuristic, unresolved, or runtime edges.
+ */
+export interface ExactTopologyRelevanceOptions {
+  /** Persisted symbol IDs that supply an equal share of the restart vector. */
+  readonly seedSymbolIds: readonly string[];
+  /** Maximum undirected exact-static hops retained around the seeds. */
+  readonly maxHops: number;
+  /** Maximum distinct symbols retained in the relevance-walk scope. */
+  readonly maxVisitedSymbols: number;
+  /** Fixed number of deterministic restart-walk iterations. */
+  readonly iterations: number;
+  /** Strictly between zero and one; the probability returned to the seed vector each iteration. */
+  readonly restartProbability: number;
+  /** Defaults to static call, reference, route, handler, and import edges. */
+  readonly edgeKinds?: readonly EdgeKind[];
+}
+
+/**
+ * A bounded exact-static topology relevance result. `scoresBySymbolId` is
+ * relative-only non-restart walk mass: direct restart mass is removed so an
+ * isolated lexical seed receives zero topology score rather than a synthetic
+ * relevance boost. The score is not an FTS, semantic, runtime, or probability
+ * confidence value.
+ */
+export interface ExactTopologyRelevanceResult {
+  readonly scoresBySymbolId: ReadonlyMap<string, number>;
+  /** Exact-static neighbor counts inside the retained bounded scope. */
+  readonly scopedExactNeighborCountsBySymbolId: ReadonlyMap<string, number>;
+  /** Retained scope IDs in deterministic source order. */
+  readonly scopedSymbolIds: readonly string[];
+  /** Existing unique seeds retained before bounded scope expansion. */
+  readonly seedSymbolIds: readonly string[];
+  /** The visited-symbol budget prevented at least one candidate from entering the scope. */
+  readonly traversalTruncated: boolean;
+  /** The hop boundary left at least one exact-static neighbor outside the scope. */
+  readonly depthLimitReached: boolean;
+}
+
 /** One directed evidence step, aligned with its graph edge from source to target. */
 export interface EvidencePathStep {
   readonly from: SymbolNode;
@@ -1152,6 +1193,207 @@ function assertPositiveBound(value: number, name: string): void {
   if (!Number.isSafeInteger(value) || value < 1) {
     throw new RangeError(`${name} must be a positive integer.`);
   }
+}
+
+function assertRestartProbability(value: number): void {
+  if (!Number.isFinite(value) || value <= 0 || value >= 1) {
+    throw new RangeError("restartProbability must be greater than zero and less than one.");
+  }
+}
+
+function compareTopologySymbolIds(
+  symbolsById: ReadonlyMap<string, SymbolNode>,
+  left: string,
+  right: string
+): number {
+  const leftSymbol = symbolsById.get(left);
+  const rightSymbol = symbolsById.get(right);
+  if (leftSymbol === undefined || rightSymbol === undefined) {
+    return compareText(left, right);
+  }
+
+  return compareSymbolNodes(leftSymbol, rightSymbol);
+}
+
+function buildExactTopologyAdjacency(
+  graph: SymbolGraph,
+  symbolsById: ReadonlyMap<string, SymbolNode>,
+  edgeKinds: readonly EdgeKind[]
+): ReadonlyMap<string, readonly string[]> {
+  const neighborIdsBySymbolId = new Map<string, Set<string>>();
+
+  for (const edge of graph.edges) {
+    if (
+      edge.resolution !== "exact" ||
+      edge.targetId === null ||
+      edge.sourceId === edge.targetId ||
+      !edgeKinds.includes(edge.kind) ||
+      !symbolsById.has(edge.sourceId) ||
+      !symbolsById.has(edge.targetId)
+    ) {
+      continue;
+    }
+
+    const sourceNeighbors = neighborIdsBySymbolId.get(edge.sourceId) ?? new Set<string>();
+    sourceNeighbors.add(edge.targetId);
+    neighborIdsBySymbolId.set(edge.sourceId, sourceNeighbors);
+
+    const targetNeighbors = neighborIdsBySymbolId.get(edge.targetId) ?? new Set<string>();
+    targetNeighbors.add(edge.sourceId);
+    neighborIdsBySymbolId.set(edge.targetId, targetNeighbors);
+  }
+
+  const adjacency = new Map<string, readonly string[]>();
+  for (const symbolId of [...symbolsById.keys()].sort((left, right) =>
+    compareTopologySymbolIds(symbolsById, left, right)
+  )) {
+    adjacency.set(
+      symbolId,
+      [...(neighborIdsBySymbolId.get(symbolId) ?? [])].sort((left, right) =>
+        compareTopologySymbolIds(symbolsById, left, right)
+      )
+    );
+  }
+
+  return adjacency;
+}
+
+/**
+ * Builds a bounded undirected exact-static topology around lexical seed
+ * symbols, then runs a fixed restart walk within that retained scope. The
+ * output score excludes direct restart mass, making it a connectivity signal
+ * rather than a reward merely for being a lexical seed.
+ */
+export function getBoundedExactTopologyRelevance(
+  graph: SymbolGraph,
+  options: ExactTopologyRelevanceOptions
+): ExactTopologyRelevanceResult {
+  assertPositiveDepth(options.maxHops);
+  assertPositiveBound(options.maxVisitedSymbols, "maxVisitedSymbols");
+  assertPositiveBound(options.iterations, "iterations");
+  assertRestartProbability(options.restartProbability);
+
+  const edgeKinds = options.edgeKinds ?? DEFAULT_EXACT_IMPACT_EDGE_KINDS;
+  const symbolsById = createSymbolIndex(graph.symbols);
+  const adjacency = buildExactTopologyAdjacency(graph, symbolsById, edgeKinds);
+  const retainedSeedSymbolIds: string[] = [];
+  const seenSeedSymbolIds = new Set<string>();
+  let traversalTruncated = false;
+
+  for (const seedSymbolId of options.seedSymbolIds) {
+    if (seenSeedSymbolIds.has(seedSymbolId) || !symbolsById.has(seedSymbolId)) {
+      continue;
+    }
+    seenSeedSymbolIds.add(seedSymbolId);
+    if (retainedSeedSymbolIds.length >= options.maxVisitedSymbols) {
+      traversalTruncated = true;
+      continue;
+    }
+    retainedSeedSymbolIds.push(seedSymbolId);
+  }
+
+  if (retainedSeedSymbolIds.length === 0) {
+    return {
+      scoresBySymbolId: new Map(),
+      scopedExactNeighborCountsBySymbolId: new Map(),
+      scopedSymbolIds: [],
+      seedSymbolIds: [],
+      traversalTruncated,
+      depthLimitReached: false
+    };
+  }
+
+  const scopedSymbolIdSet = new Set(retainedSeedSymbolIds);
+  let frontier = retainedSeedSymbolIds
+    .map((symbolId) => symbolsById.get(symbolId))
+    .filter((symbol): symbol is SymbolNode => symbol !== undefined)
+    .sort(compareSymbolNodes);
+
+  for (let depth = 0; depth < options.maxHops && frontier.length > 0; depth += 1) {
+    const nextById = new Map<string, SymbolNode>();
+    for (const terminal of frontier) {
+      for (const neighborId of adjacency.get(terminal.id) ?? []) {
+        if (scopedSymbolIdSet.has(neighborId)) {
+          continue;
+        }
+        if (scopedSymbolIdSet.size >= options.maxVisitedSymbols) {
+          traversalTruncated = true;
+          continue;
+        }
+
+        const neighbor = symbolsById.get(neighborId);
+        if (neighbor === undefined) {
+          continue;
+        }
+        scopedSymbolIdSet.add(neighbor.id);
+        nextById.set(neighbor.id, neighbor);
+      }
+    }
+    frontier = [...nextById.values()].sort(compareSymbolNodes);
+  }
+
+  const depthLimitReached =
+    !traversalTruncated &&
+    frontier.some((terminal) =>
+      (adjacency.get(terminal.id) ?? []).some((neighborId) => !scopedSymbolIdSet.has(neighborId))
+    );
+  const scopedSymbolIds = [...scopedSymbolIdSet].sort((left, right) =>
+    compareTopologySymbolIds(symbolsById, left, right)
+  );
+  const indexBySymbolId = new Map(scopedSymbolIds.map((symbolId, index) => [symbolId, index]));
+  const neighborIndexes = scopedSymbolIds.map((symbolId) =>
+    (adjacency.get(symbolId) ?? []).flatMap((neighborId) => {
+      const index = indexBySymbolId.get(neighborId);
+      return index === undefined ? [] : [index];
+    })
+  );
+  const restart = new Array<number>(scopedSymbolIds.length).fill(0);
+  const restartShare = 1 / retainedSeedSymbolIds.length;
+  for (const seedSymbolId of retainedSeedSymbolIds) {
+    const index = indexBySymbolId.get(seedSymbolId);
+    if (index !== undefined) {
+      restart[index] = restartShare;
+    }
+  }
+
+  let state = restart.slice();
+  for (let iteration = 0; iteration < options.iterations; iteration += 1) {
+    const propagated = new Array<number>(scopedSymbolIds.length).fill(0);
+    for (let index = 0; index < scopedSymbolIds.length; index += 1) {
+      const current = state[index] ?? 0;
+      const neighbors = neighborIndexes[index] ?? [];
+      if (current === 0 || neighbors.length === 0) {
+        continue;
+      }
+
+      const share = current / neighbors.length;
+      for (const neighborIndex of neighbors) {
+        propagated[neighborIndex] = (propagated[neighborIndex] ?? 0) + share;
+      }
+    }
+    state = state.map(
+      (_value, index) =>
+        (1 - options.restartProbability) * (propagated[index] ?? 0) +
+        options.restartProbability * (restart[index] ?? 0)
+    );
+  }
+
+  const scoresBySymbolId = new Map<string, number>();
+  const scopedExactNeighborCountsBySymbolId = new Map<string, number>();
+  for (const [index, symbolId] of scopedSymbolIds.entries()) {
+    const directRestartMass = options.restartProbability * (restart[index] ?? 0);
+    scoresBySymbolId.set(symbolId, Math.max(0, (state[index] ?? 0) - directRestartMass));
+    scopedExactNeighborCountsBySymbolId.set(symbolId, (neighborIndexes[index] ?? []).length);
+  }
+
+  return {
+    scoresBySymbolId,
+    scopedExactNeighborCountsBySymbolId,
+    scopedSymbolIds,
+    seedSymbolIds: retainedSeedSymbolIds,
+    traversalTruncated,
+    depthLimitReached
+  };
 }
 
 /**

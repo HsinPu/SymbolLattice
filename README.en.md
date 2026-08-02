@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.208.0 is a developer preview. Run it from source.
+> v0.209.0 is a developer preview. Run it from source.
 
 SymbolLattice builds a queryable local code-symbol graph. Every relation retains its rule, evidence stage, and confidence; exact, heuristic, and unresolved evidence are never conflated.
 
@@ -37,6 +37,9 @@ node dist/cli/main.js investigate "user token" --project /path/to/project --json
 # Re-rank candidates with bounded, exact reverse-dependency evidence
 node dist/cli/main.js investigate "user token" --project /path/to/project --ranking impact --json
 
+# Re-rank from query-matched seeds through bounded bidirectional exact-static topology
+node dist/cli/main.js investigate "user token" --project /path/to/project --ranking topology --json
+
 # Inspect persisted reverse impact; the summary covers only returned paths
 node dist/cli/main.js impact "src/handlers.ts#users" --project /path/to/project --depth 3 --limit 100 --json
 
@@ -55,16 +58,16 @@ On Windows PowerShell, use `npm.cmd` if npm is unavailable. Index data stays in 
 > [!NOTE]
 > MCP tools never create or update a graph themselves. The default `serve --mcp` auto-sync is a separate host-owned background watcher; use `--no-auto-sync` for fully manual updates.
 
-## v0.208.0 highlights
+## v0.209.0 highlights
 
-- `impact` now returns `summary`: impacted terminals are grouped by their own file with their nearest depth, symbol, and final discovery edge.
-- `summary.entrypointCoverage` lists HTTP routes and non-HTTP entrypoint records only when that record is a retained path terminal; it never infers coverage from a shared file or an intermediate hop.
-- The new read-only `symbol_lattice_impact` MCP tool runs through the MCP query worker. It accepts 1–3 hops and returns at most 100 paths; `truncated: true` means the summary is not complete.
+- Added `investigate --ranking topology`: it builds a bidirectional `exact` static-relation scope from persisted lexical candidates, then reorders them with a fixed-iteration restart walk.
+- Each topology-ranked selection discloses `topologySignals`: seed and scope counts, retained neighbors, fixed 3-hop / 500-symbol / 64-seed / 20-iteration / 0.2-restart bounds, and node- or depth-bound state.
+- The CLI and read-only `symbol_lattice_investigate` MCP tool both accept `topology`; an isolated lexical hit retains lexical evidence but receives no synthetic topology score merely for being a seed.
 
 ## Boundaries
 
 - This is a local code graph, not an RDF/SPARQL knowledge graph or ontology-reasoning system.
-- Queries read persisted generations only. The `investigate --ranking impact` score uses bounded `exact` static evidence; the general `impact` query retains its existing resolved static relations, and its summary never upgrades or conflates edge confidence.
+- Queries read persisted generations only. `investigate --ranking impact` and `topology` use bounded `exact` static evidence; `topology` is not whole-graph PageRank, semantic ranking, dynamic-dispatch inference, or runtime analysis. The general `impact` query retains its existing resolved static relations, and its summary never upgrades or conflates edge confidence.
 - `impact.summary` describes only the paths actually returned. When `--limit` or the MCP bound produces `truncated: true`, it is not a complete-graph impact claim.
 - Indexing and querying stay local. Source changes are reported as freshness state, never substituted for indexed evidence.
 - WAL is for same-machine local SQLite. Network filesystems, manual checkpoint management, and multi-writer coordination remain unsupported.

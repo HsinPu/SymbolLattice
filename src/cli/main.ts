@@ -826,8 +826,8 @@ export function createProgram(
       (value: string) => parseBoundedPositiveInteger(value, MAX_INVESTIGATE_SYMBOL_LIMIT)
     )
     .option(
-      "--ranking <lexical|structure|impact>",
-      "Select persisted FTS order, direct static structure, or bounded exact reverse-impact ranking",
+      "--ranking <lexical|structure|impact|topology>",
+      "Select persisted FTS order, direct static structure, bounded exact reverse impact, or bounded exact-static topology ranking",
       parseInvestigateRanking
     )
     .option("--path <project-relative-prefix>", "Restrict persisted source matches to a project-relative prefix", parseSearchPath)

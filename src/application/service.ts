@@ -19,6 +19,7 @@ import {
   getCallers,
   getEntrypoints,
   getBoundedExactImpactPaths,
+  getBoundedExactTopologyRelevance,
   getImpactPaths,
   getParents,
   getRoutes,
@@ -92,6 +93,11 @@ import {
   DEFAULT_CONTEXT_RELATION_LIMIT,
   INVESTIGATE_IMPACT_RANKING_MAX_DEPTH,
   INVESTIGATE_IMPACT_RANKING_PATH_LIMIT,
+  INVESTIGATE_TOPOLOGY_RANKING_ITERATION_COUNT,
+  INVESTIGATE_TOPOLOGY_RANKING_MAX_HOPS,
+  INVESTIGATE_TOPOLOGY_RANKING_MAX_VISITED_SYMBOLS,
+  INVESTIGATE_TOPOLOGY_RANKING_RESTART_PROBABILITY,
+  INVESTIGATE_TOPOLOGY_RANKING_SEED_LIMIT,
   DEFAULT_INVESTIGATE_RANKING_STRATEGY,
   DEFAULT_INVESTIGATE_SEARCH_LIMIT,
   DEFAULT_INVESTIGATE_SYMBOL_LIMIT,
@@ -163,6 +169,7 @@ import type {
   InvestigationSelection,
   InvestigationSelectionResult,
   InvestigationStructuralSignals,
+  InvestigationTopologySignals,
   NodeBounds,
   NodeResult,
   NodeSource,
@@ -220,6 +227,7 @@ interface InvestigationCandidate {
   readonly candidateRank: number;
   readonly symbol: SymbolNode;
   readonly structuralSignals: InvestigationStructuralSignals;
+  readonly topologySignals: InvestigationTopologySignals | null;
   readonly impactSignals: InvestigationImpactSignals | null;
 }
 
@@ -2693,7 +2701,9 @@ export class SymbolLatticeService {
     symbolLimit: number,
     ranking: InvestigateRankingStrategy
   ): InvestigationSelectionResult {
-    const candidates: Array<Omit<InvestigationCandidate, "structuralSignals" | "impactSignals">> = [];
+    const candidates: Array<
+      Omit<InvestigationCandidate, "structuralSignals" | "topologySignals" | "impactSignals">
+    > = [];
     const selectedSymbolIds = new Set<string>();
 
     for (const sourceResult of searchResults) {
@@ -2715,6 +2725,10 @@ export class SymbolLatticeService {
       ranking === "impact"
         ? this.investigationImpactSignals(snapshot, selectedSymbolIds)
         : null;
+    const topologySignalsBySymbolId =
+      ranking === "topology"
+        ? this.investigationTopologySignals(snapshot, candidates)
+        : null;
     const ranked = candidates
       .map((candidate): InvestigationCandidate => ({
         ...candidate,
@@ -2724,6 +2738,7 @@ export class SymbolLatticeService {
           isExported: candidate.symbol.isExported,
           score: candidate.symbol.isExported ? 1 : 0
         },
+        topologySignals: topologySignalsBySymbolId?.get(candidate.symbol.id) ?? null,
         impactSignals: impactSignalsBySymbolId?.get(candidate.symbol.id) ?? null
       }))
       .sort((left, right) => this.compareInvestigationCandidates(left, right, ranking));
@@ -2732,6 +2747,7 @@ export class SymbolLatticeService {
       sourceRank: candidate.sourceRank,
       candidateRank: candidate.candidateRank,
       structuralSignals: candidate.structuralSignals,
+      topologySignals: candidate.topologySignals,
       impactSignals: candidate.impactSignals,
       symbol: candidate.symbol
     }));
@@ -2866,6 +2882,54 @@ export class SymbolLatticeService {
     );
   }
 
+  /**
+   * Scores lexical candidates through a bounded local topology constructed
+   * from exact static edges in both directions. The graph helper removes each
+   * seed's direct restart mass from the score, so this is a connectivity signal
+   * rather than a reward merely for matching the persisted source text.
+   */
+  private investigationTopologySignals(
+    snapshot: GraphSnapshot,
+    candidates: readonly { readonly symbol: SymbolNode }[]
+  ): ReadonlyMap<string, InvestigationTopologySignals> {
+    const seedSymbolIds = candidates
+      .slice(0, INVESTIGATE_TOPOLOGY_RANKING_SEED_LIMIT)
+      .map(({ symbol }) => symbol.id);
+    const topology = getBoundedExactTopologyRelevance(snapshot, {
+      seedSymbolIds,
+      maxHops: INVESTIGATE_TOPOLOGY_RANKING_MAX_HOPS,
+      maxVisitedSymbols: INVESTIGATE_TOPOLOGY_RANKING_MAX_VISITED_SYMBOLS,
+      iterations: INVESTIGATE_TOPOLOGY_RANKING_ITERATION_COUNT,
+      restartProbability: INVESTIGATE_TOPOLOGY_RANKING_RESTART_PROBABILITY,
+      edgeKinds: DEFAULT_EXACT_IMPACT_EDGE_KINDS
+    });
+    const seedSymbolIdSet = new Set(topology.seedSymbolIds);
+    const seedTruncated = candidates.length > topology.seedSymbolIds.length;
+
+    return new Map(
+      candidates.map(({ symbol }): readonly [string, InvestigationTopologySignals] => [
+        symbol.id,
+        {
+          maxHops: INVESTIGATE_TOPOLOGY_RANKING_MAX_HOPS,
+          maxVisitedSymbols: INVESTIGATE_TOPOLOGY_RANKING_MAX_VISITED_SYMBOLS,
+          seedLimit: INVESTIGATE_TOPOLOGY_RANKING_SEED_LIMIT,
+          seedCount: topology.seedSymbolIds.length,
+          seedTruncated,
+          seeded: seedSymbolIdSet.has(symbol.id),
+          scopeSymbolCount: topology.scopedSymbolIds.length,
+          scopedExactNeighborCount:
+            topology.scopedExactNeighborCountsBySymbolId.get(symbol.id) ?? 0,
+          iterationCount: INVESTIGATE_TOPOLOGY_RANKING_ITERATION_COUNT,
+          restartProbability: INVESTIGATE_TOPOLOGY_RANKING_RESTART_PROBABILITY,
+          edgeKinds: DEFAULT_EXACT_IMPACT_EDGE_KINDS,
+          score: topology.scoresBySymbolId.get(symbol.id) ?? 0,
+          traversalTruncated: topology.traversalTruncated,
+          depthLimitReached: topology.depthLimitReached
+        }
+      ])
+    );
+  }
+
   private compareInvestigationCandidates(
     left: InvestigationCandidate,
     right: InvestigationCandidate,
@@ -2882,6 +2946,13 @@ export class SymbolLatticeService {
         (right.impactSignals?.score ?? 0) - (left.impactSignals?.score ?? 0);
       if (impactDifference !== 0) {
         return impactDifference;
+      }
+    }
+    if (ranking === "topology") {
+      const topologyDifference =
+        (right.topologySignals?.score ?? 0) - (left.topologySignals?.score ?? 0);
+      if (topologyDifference !== 0) {
+        return topologyDifference;
       }
     }
 

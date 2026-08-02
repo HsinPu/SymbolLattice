@@ -65,6 +65,17 @@ try {
     successfulResponseText(firstResponse).includes("firstWorkerGenerationNeedle"),
     "The worker did not return evidence from the first generation."
   );
+  const topologyResponse = await pool.execute(
+    "investigate",
+    { query: "firstWorkerGenerationNeedle", ranking: "topology" },
+    unexpectedFallback
+  );
+  const topologyResponseText = successfulResponseText(topologyResponse);
+  requireCondition(
+    topologyResponseText.includes('"ranking": "topology"') &&
+      topologyResponseText.includes('"topologySignals"'),
+    "The worker did not return topology-ranked investigation evidence."
+  );
   const impactResponse = await pool.execute(
     "impact",
     { reference: "src/entry.ts#firstWorkerGenerationNeedle" },
@@ -115,6 +126,7 @@ try {
         assertions: {
           workerReady: true,
           firstGenerationReturned: true,
+          topologyDispatchedThroughWorker: true,
           impactDispatchedThroughWorker: true,
           sameWorkerObservedSyncedGeneration: true,
           avoidedFallback: true,

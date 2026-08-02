@@ -517,7 +517,7 @@ function investigateResult(): InvestigateResult {
       maximumSearchLimit: 100,
       symbolLimit: 2,
       maximumSymbolLimit: 8,
-      ranking: "impact",
+      ranking: "topology",
       declarationSource: {
         sourceLineLimit: 200,
         sourceCharacterLimit: 16_000
@@ -537,27 +537,23 @@ function investigateResult(): InvestigateResult {
             isExported: true,
             score: 1
           },
-          impactSignals: {
-            maxDepth: 3,
-            pathLimit: 24,
-            exactDependentCount: 2,
-            directExactDependentCount: 1,
-            multiHopExactDependentCount: 1,
-            pathCountsByDepth: [
-              { depth: 1, count: 1 },
-              { depth: 2, count: 1 },
-              { depth: 3, count: 0 }
-            ],
-            finalEdgeKindCounts: [
-              { kind: "calls", count: 2 },
-              { kind: "references", count: 0 },
-              { kind: "routes", count: 0 },
-              { kind: "handles", count: 0 },
-              { kind: "imports", count: 0 }
-            ],
-            score: 5,
-            truncated: false
+          topologySignals: {
+            maxHops: 3,
+            maxVisitedSymbols: 500,
+            seedLimit: 64,
+            seedCount: 1,
+            seedTruncated: false,
+            seeded: true,
+            scopeSymbolCount: 2,
+            scopedExactNeighborCount: 1,
+            iterationCount: 20,
+            restartProbability: 0.2,
+            edgeKinds: ["calls", "references", "routes", "handles", "imports"],
+            score: 0.16,
+            traversalTruncated: false,
+            depthLimitReached: false
           },
+          impactSignals: null,
           symbol: candidate
         }
       ],
@@ -1984,7 +1980,7 @@ describe("SymbolLattice MCP server", () => {
         query: "user",
         searchLimit: 4,
         symbolLimit: 2,
-        ranking: "impact",
+        ranking: "topology",
         path: "src/",
         language: "typescript",
         relationLimit: 3,
@@ -1997,15 +1993,16 @@ describe("SymbolLattice MCP server", () => {
     expect(result.isError).not.toBe(true);
     expect(result.structuredContent).toMatchObject({
       query: "user",
-      bounds: { ranking: "impact" },
+      bounds: { ranking: "topology" },
       selection: {
         items: [
           {
-            impactSignals: {
-              maxDepth: 3,
-              pathLimit: 24,
-              exactDependentCount: 2,
-              score: 5
+            topologySignals: {
+              maxHops: 3,
+              maxVisitedSymbols: 500,
+              seedCount: 1,
+              scopedExactNeighborCount: 1,
+              score: 0.16
             }
           }
         ],
@@ -2028,7 +2025,7 @@ describe("SymbolLattice MCP server", () => {
         options: {
           searchLimit: 4,
           symbolLimit: 2,
-          ranking: "impact",
+          ranking: "topology",
           pathPrefix: "src/",
           language: "typescript",
           relationLimit: 3,

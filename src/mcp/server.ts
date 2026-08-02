@@ -27,6 +27,11 @@ import {
   MAX_IMPACT_LIMIT,
   INVESTIGATE_IMPACT_RANKING_MAX_DEPTH,
   INVESTIGATE_IMPACT_RANKING_PATH_LIMIT,
+  INVESTIGATE_TOPOLOGY_RANKING_ITERATION_COUNT,
+  INVESTIGATE_TOPOLOGY_RANKING_MAX_HOPS,
+  INVESTIGATE_TOPOLOGY_RANKING_MAX_VISITED_SYMBOLS,
+  INVESTIGATE_TOPOLOGY_RANKING_RESTART_PROBABILITY,
+  INVESTIGATE_TOPOLOGY_RANKING_SEED_LIMIT,
   INVESTIGATE_RANKING_STRATEGIES,
   MAX_INVESTIGATE_SYMBOL_LIMIT,
   MAX_GENERATION_DIFF_LIMIT,
@@ -814,6 +819,30 @@ const investigateOutputSchema = z
             isExported: z.boolean(),
             score: z.number().int().nonnegative()
           }),
+          topologySignals: z
+            .object({
+              maxHops: z.literal(INVESTIGATE_TOPOLOGY_RANKING_MAX_HOPS),
+              maxVisitedSymbols: z.literal(INVESTIGATE_TOPOLOGY_RANKING_MAX_VISITED_SYMBOLS),
+              seedLimit: z.literal(INVESTIGATE_TOPOLOGY_RANKING_SEED_LIMIT),
+              seedCount: z.number().int().nonnegative(),
+              seedTruncated: z.boolean(),
+              seeded: z.boolean(),
+              scopeSymbolCount: z.number().int().nonnegative(),
+              scopedExactNeighborCount: z.number().int().nonnegative(),
+              iterationCount: z.literal(INVESTIGATE_TOPOLOGY_RANKING_ITERATION_COUNT),
+              restartProbability: z.literal(INVESTIGATE_TOPOLOGY_RANKING_RESTART_PROBABILITY),
+              edgeKinds: z.tuple([
+                z.literal(DEFAULT_EXACT_IMPACT_EDGE_KINDS[0]),
+                z.literal(DEFAULT_EXACT_IMPACT_EDGE_KINDS[1]),
+                z.literal(DEFAULT_EXACT_IMPACT_EDGE_KINDS[2]),
+                z.literal(DEFAULT_EXACT_IMPACT_EDGE_KINDS[3]),
+                z.literal(DEFAULT_EXACT_IMPACT_EDGE_KINDS[4])
+              ]),
+              score: z.number().nonnegative(),
+              traversalTruncated: z.boolean(),
+              depthLimitReached: z.boolean()
+            })
+            .nullable(),
           impactSignals: z
             .object({
               maxDepth: z.literal(INVESTIGATE_IMPACT_RANKING_MAX_DEPTH),
@@ -1961,7 +1990,7 @@ export function createMcpServer(
           ranking: z
             .enum(INVESTIGATE_RANKING_STRATEGIES)
             .optional()
-            .describe("`lexical` preserves persisted FTS order; `structure` uses direct static signals; `impact` uses bounded exact reverse-impact evidence."),
+            .describe("`lexical` preserves persisted FTS order; `structure` uses direct static signals; `impact` uses bounded exact reverse-impact evidence; `topology` uses a bounded bidirectional exact-static restart walk."),
           path: z.string().trim().min(1).optional().describe("Optional project-relative source-path prefix."),
           language: z.enum(ARTIFACT_LANGUAGES).optional().describe("Optional indexed source language filter."),
           relationLimit: z

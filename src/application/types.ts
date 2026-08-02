@@ -89,8 +89,14 @@ export const MAX_INVESTIGATE_SYMBOL_LIMIT = MAX_CONTEXT_REFERENCES;
 /** Fixed safety bounds for the exact multi-hop investigation ranking. */
 export const INVESTIGATE_IMPACT_RANKING_MAX_DEPTH = 3;
 export const INVESTIGATE_IMPACT_RANKING_PATH_LIMIT = 24;
-/** Ranking is explicit: lexical preserves FTS order; structure and impact disclose static graph signals. */
-export const INVESTIGATE_RANKING_STRATEGIES = ["lexical", "structure", "impact"] as const;
+/** Fixed safety bounds for the query-seeded exact-static topology ranking. */
+export const INVESTIGATE_TOPOLOGY_RANKING_MAX_HOPS = 3;
+export const INVESTIGATE_TOPOLOGY_RANKING_MAX_VISITED_SYMBOLS = 500;
+export const INVESTIGATE_TOPOLOGY_RANKING_SEED_LIMIT = 64;
+export const INVESTIGATE_TOPOLOGY_RANKING_ITERATION_COUNT = 20;
+export const INVESTIGATE_TOPOLOGY_RANKING_RESTART_PROBABILITY = 0.2;
+/** Ranking is explicit: lexical preserves FTS order; graph-based strategies disclose static signals. */
+export const INVESTIGATE_RANKING_STRATEGIES = ["lexical", "structure", "impact", "topology"] as const;
 export type InvestigateRankingStrategy = (typeof INVESTIGATE_RANKING_STRATEGIES)[number];
 export const DEFAULT_INVESTIGATE_RANKING_STRATEGY: InvestigateRankingStrategy = "lexical";
 export const MAX_IMPACT_LIMIT = 100;
@@ -680,6 +686,36 @@ export interface InvestigationImpactSignals {
   readonly truncated: boolean;
 }
 
+/**
+ * Disclosed query-seeded exact-static topology evidence for the optional
+ * `topology` ranking. The score is fixed-iteration non-restart walk mass
+ * inside one bounded undirected scope; it is relative-only and has no FTS,
+ * runtime, semantic, or heuristic weighting component.
+ */
+export interface InvestigationTopologySignals {
+  readonly maxHops: number;
+  readonly maxVisitedSymbols: number;
+  readonly seedLimit: number;
+  /** Number of lexical candidates retained in the equal-weight restart vector. */
+  readonly seedCount: number;
+  /** True when lexical candidates beyond `seedLimit` were not used as seeds. */
+  readonly seedTruncated: boolean;
+  /** Whether this candidate itself was retained in the restart seed vector. */
+  readonly seeded: boolean;
+  /** Total exact-static symbols retained in the bounded walk scope. */
+  readonly scopeSymbolCount: number;
+  /** Exact-static neighbors retained for this candidate inside that scope. */
+  readonly scopedExactNeighborCount: number;
+  readonly iterationCount: number;
+  readonly restartProbability: number;
+  readonly edgeKinds: readonly EdgeKind[];
+  readonly score: number;
+  /** The visited-symbol bound prevented at least one exact-static neighbor from entering the scope. */
+  readonly traversalTruncated: boolean;
+  /** The maximum-hop boundary left at least one exact-static neighbor outside the scope. */
+  readonly depthLimitReached: boolean;
+}
+
 /** One selected declaration, traced back to its persisted lexical-search candidate. */
 export interface InvestigationSelection {
   /** One-based position after the requested ranking strategy has been applied. */
@@ -689,6 +725,8 @@ export interface InvestigationSelection {
   /** One-based rank in that source result's `symbolCandidates`. */
   readonly candidateRank: number;
   readonly structuralSignals: InvestigationStructuralSignals;
+  /** Present only when `bounds.ranking` is `topology`; otherwise null to avoid extra traversal work. */
+  readonly topologySignals: InvestigationTopologySignals | null;
   /** Present only when `bounds.ranking` is `impact`; otherwise null to avoid extra traversal work. */
   readonly impactSignals: InvestigationImpactSignals | null;
   readonly symbol: SymbolNode;

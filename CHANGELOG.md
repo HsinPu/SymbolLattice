@@ -6,6 +6,29 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.209.0] - 2026-08-03
+
+### Added
+
+- `investigate --ranking topology` now reorders persisted lexical candidates through a bounded undirected scope of exactly resolved `calls`, `references`, `routes`, `handles`, and `imports` relations. The scope expands at most three hops and 500 symbols from at most 64 lexical seeds, then runs 20 deterministic restart-walk iterations with a 0.2 restart probability.
+- Topology-ranked selections expose additive `topologySignals`: seed state and truncation, retained scope and neighbor counts, every fixed bound, the exact edge-kind set, relative non-restart connectivity score, and explicit node/depth boundary state. Direct restart mass is removed from the score so an isolated lexical seed cannot gain a synthetic topology boost.
+- The CLI accepts `--ranking topology`; the read-only `symbol_lattice_investigate` MCP input and output schemas advertise and validate the same mode.
+
+### Compatibility
+
+- `lexical` remains the default ranking; `structure` and `impact` behavior are unchanged. `InvestigationSelection` gains the additive `topologySignals` field, which is `null` unless `bounds.ranking` is `topology`.
+- SQLite schema, index generations, `init`/`sync`, source-search retrieval, worker isolation, and MCP read-only behavior are unchanged.
+
+### Deliberate limits
+
+- Topology ranking begins with persisted lexical declaration candidates; it does not create candidates from arbitrary graph nodes. It uses only exact static evidence and does not infer dynamic dispatch, runtime behavior, semantic similarity, or an unbounded whole-project ranking.
+- `topologySignals.score` is a relative bounded connectivity signal, not a probability, confidence level, FTS score, or completeness claim. The depth and visited-symbol flags disclose scope boundaries rather than silently treating omitted nodes as unrelated.
+
+### Comparison notes
+
+- The checked CodeGraph exploration path uses an undirected RWR/personalized-PageRank-style connectivity signal over a broader relation set as part of a richer FTS, impact, and source-composition workflow. SymbolLattice independently adds the same class of bounded query-seeded topology evidence while exposing each candidate's scope, seed, edge, and boundary state directly.
+- SymbolLattice is stronger here for a compact, structured, audit-oriented selection record and for suppressing isolated-seed restart mass. CodeGraph remains broader in relation coverage, query composition, dynamic-dispatch handling, and mature relevance tuning; this release narrows one ranking gap rather than claiming full parity.
+
 ## [0.208.0] - 2026-08-03
 
 ### Added

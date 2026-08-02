@@ -1186,6 +1186,78 @@ describe("SymbolLatticeService", () => {
     );
   });
 
+  it("optionally reorders lexical candidates with disclosed bounded exact topology relevance", async () => {
+    const projectPath = await createInlineProject({
+      "src/a-isolated.ts": [
+        "export function rankTopology(): string {",
+        '  const lexicalEvidence = "rankTopology rankTopology rankTopology rankTopology rankTopology";',
+        "  return lexicalEvidence;",
+        "}",
+        ""
+      ].join("\n"),
+      "src/b-connected.ts": [
+        "export function rankTopology(): string {",
+        '  return "connected";',
+        "}",
+        ""
+      ].join("\n"),
+      "src/c-caller.ts": [
+        'import { rankTopology } from "./b-connected.js";',
+        "",
+        "export function invokeConnectedTopology(): string {",
+        "  return rankTopology();",
+        "}",
+        ""
+      ].join("\n")
+    });
+    const service = createService();
+    await service.init({ projectPath });
+
+    const lexical = await service.investigate(projectPath, "rankTopology", {
+      ranking: "lexical",
+      searchLimit: 12,
+      symbolLimit: 1
+    });
+    const topology = await service.investigate(projectPath, "rankTopology", {
+      ranking: "topology",
+      searchLimit: 12,
+      symbolLimit: 1
+    });
+    const lexicalCandidate = lexical.selection.items[0];
+    const topologyCandidate = topology.selection.items[0];
+    if (lexicalCandidate === undefined || topologyCandidate === undefined) {
+      throw new Error("Expected topology-ranked investigation candidates.");
+    }
+
+    expect(lexical.bounds.ranking).toBe("lexical");
+    expect(lexicalCandidate.symbol.filePath).toBe("src/a-isolated.ts");
+    expect(lexicalCandidate.topologySignals).toBeNull();
+    expect(topology.bounds.ranking).toBe("topology");
+    expect(topologyCandidate.symbol.filePath).toBe("src/b-connected.ts");
+    expect(topologyCandidate.topologySignals).toMatchObject({
+      maxHops: 3,
+      maxVisitedSymbols: 500,
+      seedLimit: 64,
+      seedCount: expect.any(Number),
+      seedTruncated: false,
+      seeded: true,
+      scopeSymbolCount: expect.any(Number),
+      scopedExactNeighborCount: expect.any(Number),
+      iterationCount: 20,
+      restartProbability: 0.2,
+      edgeKinds: ["calls", "references", "routes", "handles", "imports"],
+      score: expect.any(Number),
+      traversalTruncated: expect.any(Boolean),
+      depthLimitReached: expect.any(Boolean)
+    });
+    expect(topologyCandidate.topologySignals?.seedCount).toBeGreaterThan(0);
+    expect(topologyCandidate.topologySignals?.scopeSymbolCount).toBeGreaterThan(1);
+    expect(topologyCandidate.topologySignals?.scopedExactNeighborCount).toBeGreaterThan(0);
+    expect(topologyCandidate.topologySignals?.score).toBeGreaterThan(0);
+    expect(topology.declarations[0]?.reference).toBe("src/b-connected.ts#rankTopology");
+    expect(topology.contexts[0]?.reference).toBe("src/b-connected.ts#rankTopology");
+  });
+
   it("bounds selected investigation declaration source without reading live files", async () => {
     const padding = Array.from(
       { length: NODE_SOURCE_LINE_LIMIT },

@@ -10,6 +10,7 @@ import {
   getCallers,
   getEntrypoints,
   getBoundedExactImpactPaths,
+  getBoundedExactTopologyRelevance,
   getImpactPaths,
   getParents,
   getRoutes,
@@ -637,6 +638,72 @@ describe("pure graph traversal", () => {
     expect(() => getBoundedExactImpactPaths(graph, "changed", { maxDepth: 1, maxResults: 0 })).toThrow(
       "positive integer"
     );
+  });
+
+  it("scores bounded bidirectional exact topology without rewarding isolated lexical seeds", () => {
+    const isolated = symbol({ id: "isolated", name: "isolated", filePath: "src/a-isolated.ts" });
+    const connected = symbol({ id: "connected", name: "connected", filePath: "src/b-connected.ts" });
+    const bridge = symbol({ id: "bridge", name: "bridge", filePath: "src/c-bridge.ts" });
+    const beyondBoundary = symbol({ id: "beyond", name: "beyond", filePath: "src/d-beyond.ts" });
+    const heuristicOnly = symbol({ id: "heuristic", name: "heuristic", filePath: "src/e-heuristic.ts" });
+    const topologyGraph = {
+      symbols: [beyondBoundary, heuristicOnly, connected, isolated, bridge],
+      edges: [
+        edge({ id: "connected-calls-bridge", sourceId: connected.id, targetId: bridge.id }),
+        edge({ id: "bridge-references-beyond", sourceId: bridge.id, targetId: beyondBoundary.id, kind: "references" }),
+        edge({
+          id: "isolated-heuristic-call",
+          sourceId: isolated.id,
+          targetId: heuristicOnly.id,
+          resolution: "heuristic"
+        })
+      ]
+    };
+    const options = {
+      seedSymbolIds: [isolated.id, connected.id, connected.id, "missing"],
+      maxHops: 1,
+      maxVisitedSymbols: 3,
+      iterations: 20,
+      restartProbability: 0.2
+    };
+
+    const relevance = getBoundedExactTopologyRelevance(topologyGraph, options);
+    const reordered = getBoundedExactTopologyRelevance(
+      {
+        symbols: [...topologyGraph.symbols].reverse(),
+        edges: [...topologyGraph.edges].reverse()
+      },
+      options
+    );
+
+    expect(relevance.seedSymbolIds).toEqual([isolated.id, connected.id]);
+    expect(relevance.scopedSymbolIds).toEqual([isolated.id, connected.id, bridge.id]);
+    expect(relevance.scopedExactNeighborCountsBySymbolId).toEqual(
+      new Map([
+        [isolated.id, 0],
+        [connected.id, 1],
+        [bridge.id, 1]
+      ])
+    );
+    expect(relevance.scoresBySymbolId.get(isolated.id)).toBe(0);
+    expect(relevance.scoresBySymbolId.get(connected.id)).toBeGreaterThan(0);
+    expect(relevance.scoresBySymbolId.get(bridge.id)).toBeGreaterThan(0);
+    expect(relevance.scoresBySymbolId.has(heuristicOnly.id)).toBe(false);
+    expect(relevance.depthLimitReached).toBe(true);
+    expect(relevance.traversalTruncated).toBe(false);
+    expect(reordered).toEqual(relevance);
+
+    expect(
+      getBoundedExactTopologyRelevance(topologyGraph, {
+        ...options,
+        seedSymbolIds: [connected.id],
+        maxHops: 3,
+        maxVisitedSymbols: 2
+      })
+    ).toMatchObject({
+      scopedSymbolIds: [connected.id, bridge.id],
+      traversalTruncated: true
+    });
   });
 
   it("finds exact affected test-file paths through imports and barrel exports", () => {
