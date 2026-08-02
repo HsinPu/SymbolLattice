@@ -11,13 +11,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v151";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v152";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v53";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v54";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -633,12 +633,24 @@ export interface SpringBootPropertiesValueReferenceFact {
   readonly range: SourceRange;
 }
 
+/** One direct Java class `@ConfigurationProperties` literal-prefix annotation. */
+export interface SpringBootConfigurationPropertiesPrefixReferenceFact {
+  /** Stable symbol identity of the directly annotated Java class. */
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly prefix: string;
+  readonly range: SourceRange;
+}
+
 /**
- * Syntax-only Spring Boot properties facts. The project resolver links them
- * only to one unique key in a conventional application/bootstrap properties or YAML file.
+ * Syntax-only Spring Boot configuration facts. The project resolver links
+ * literal `@Value` keys and Java `@ConfigurationProperties` prefixes only to
+ * parser-proven keys in conventional application/bootstrap properties or YAML files.
  */
 export interface SpringBootPropertiesFacts {
   readonly valueReferences: readonly SpringBootPropertiesValueReferenceFact[];
+  /** Omitted only by artifact facts persisted before v0.171. */
+  readonly configurationPropertiesPrefixes?: readonly SpringBootConfigurationPropertiesPrefixReferenceFact[];
 }
 
 /** Direct literal Shopify Liquid template tag kinds retained for project-local resolution. */

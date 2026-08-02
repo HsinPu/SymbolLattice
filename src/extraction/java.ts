@@ -8,6 +8,7 @@ import {
   type RouteMethod,
   type SourcePosition,
   type SourceRange,
+  type SpringBootConfigurationPropertiesPrefixReferenceFact,
   type SpringBootPropertiesValueReferenceFact,
   type SymbolNode
 } from "../domain/index.js";
@@ -52,10 +53,17 @@ interface StaticSpringBootPropertiesReference {
   readonly node: JavaSyntaxNode;
 }
 
+interface StaticSpringBootConfigurationPropertiesPrefixReference {
+  readonly prefix: string;
+  readonly node: JavaSyntaxNode;
+}
+
 const SPRING_REST_CONTROLLER_PATH = "org.springframework.web.bind.annotation.RestController";
 const SPRING_CONTROLLER_PATH = "org.springframework.stereotype.Controller";
 const SPRING_REQUEST_MAPPING_PATH = "org.springframework.web.bind.annotation.RequestMapping";
 const SPRING_VALUE_PATH = "org.springframework.beans.factory.annotation.Value";
+const SPRING_CONFIGURATION_PROPERTIES_PATH =
+  "org.springframework.boot.context.properties.ConfigurationProperties";
 const MICRONAUT_CONTROLLER_PATH = "io.micronaut.http.annotation.Controller";
 const JAKARTA_REST_PATH_PATHS = ["jakarta.ws.rs.Path", "javax.ws.rs.Path"] as const;
 const SPRING_BOOT_PROPERTIES_KEY = /^[A-Za-z0-9][A-Za-z0-9._-]*$/u;
@@ -333,6 +341,53 @@ function staticSpringBootPropertiesKey(
   const match = /^\$\{([A-Za-z0-9][A-Za-z0-9._-]*)(?::[^{}]*)?\}$/u.exec(literal);
   const key = match?.[1] ?? null;
   return key !== null && SPRING_BOOT_PROPERTIES_KEY.test(key) ? key : null;
+}
+
+/**
+ * Retains one direct literal prefix from `@ConfigurationProperties("app")`
+ * or `@ConfigurationProperties(prefix = "app")`. `value =`, multiple
+ * attributes, escaped strings, and dynamic forms are intentionally deferred.
+ */
+function staticSpringBootConfigurationPropertiesPrefix(
+  input: JavaExtractFileFactsInput,
+  annotation: StaticJavaAnnotation
+): string | null {
+  if (annotation.node.name !== "Annotation") {
+    return null;
+  }
+  const arguments_ = directChildren(annotation.node).find(
+    (child) => child.name === "AnnotationArgumentList"
+  );
+  if (arguments_ === undefined) {
+    return null;
+  }
+  const values = directChildren(arguments_).filter(
+    (child) => !["(", ")", ","].includes(child.name)
+  );
+  if (values.length !== 1 || values[0] === undefined) {
+    return null;
+  }
+  const value = values[0];
+  let prefix: string | null;
+  if (value.name === "StringLiteral") {
+    prefix = staticPlainJavaString(input, value);
+  } else if (value.name === "ElementValuePair") {
+    const pair = directChildren(value);
+    const key = pair[0] === undefined ? null : identifierText(input, pair[0]);
+    const literal = pair[2];
+    if (
+      pair.length !== 3 ||
+      pair[1]?.name !== "AssignOp" ||
+      key !== "prefix" ||
+      literal === undefined
+    ) {
+      return null;
+    }
+    prefix = staticPlainJavaString(input, literal);
+  } else {
+    return null;
+  }
+  return prefix !== null && SPRING_BOOT_PROPERTIES_KEY.test(prefix) ? prefix : null;
 }
 
 function staticAnnotation(input: JavaExtractFileFactsInput, node: JavaSyntaxNode): StaticJavaAnnotation | null {
@@ -760,6 +815,38 @@ function staticSpringBootPropertiesReferences(
   return references;
 }
 
+/**
+ * A direct top-level Java class may own one statically proven Spring Boot
+ * configuration prefix. The project resolver later fans it out only to
+ * parser-proven leaf keys, keeping profile and format ambiguity explicit.
+ */
+function staticSpringBootConfigurationPropertiesPrefixReferences(
+  input: JavaExtractFileFactsInput,
+  declaration: StaticJavaClass,
+  imports: ReadonlyMap<string, string>
+): readonly StaticSpringBootConfigurationPropertiesPrefixReference[] {
+  const annotationsNamedConfigurationProperties = declaration.annotations.filter(
+    (annotation) =>
+      annotation.name === "ConfigurationProperties" ||
+      annotation.name === SPRING_CONFIGURATION_PROPERTIES_PATH
+  );
+  const configurationPropertiesAnnotations = annotationsNamedConfigurationProperties.filter(
+    (annotation) => annotationMatches(annotation, SPRING_CONFIGURATION_PROPERTIES_PATH, imports)
+  );
+  if (
+    annotationsNamedConfigurationProperties.length !== configurationPropertiesAnnotations.length ||
+    configurationPropertiesAnnotations.length !== 1
+  ) {
+    return [];
+  }
+  const annotation = configurationPropertiesAnnotations[0];
+  if (annotation === undefined) {
+    return [];
+  }
+  const prefix = staticSpringBootConfigurationPropertiesPrefix(input, annotation);
+  return prefix === null ? [] : [{ prefix, node: annotation.node }];
+}
+
 function joinHttpPaths(prefix: string, path: string): string {
   const segments = [prefix, path]
     .flatMap((value) => value.split("/"))
@@ -772,8 +859,9 @@ function joinHttpPaths(prefix: string, path: string): string {
  * and Micronaut/Jakarta REST routes, as well as Spring Boot properties facts. Each HTTP
  * surface proves a direct controller annotation, unambiguous framework import
  * (or fully-qualified annotation), one literal mapping path, and the exact
- * local method declaration. Spring Boot properties retains only direct
- * field-level literal `@Value` placeholders.
+ * local method declaration. Spring Boot properties retain direct field-level
+ * literal `@Value` placeholders and direct Java class-level
+ * `@ConfigurationProperties` literal prefixes.
  */
 export function extractJavaFileFacts(input: JavaExtractFileFactsInput): ArtifactFacts {
   const springWebCapability = frameworkCapability("spring-web");
@@ -799,6 +887,7 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
   const edges: GraphEdge[] = [];
   const javaClassFacts: Array<{ symbolId: string; packageName: string }> = [];
   const springBootPropertiesValueReferences: SpringBootPropertiesValueReferenceFact[] = [];
+  const springBootConfigurationPropertiesPrefixes: SpringBootConfigurationPropertiesPrefixReferenceFact[] = [];
   const declarationOrdinals = new Map<string, number>();
   const fileName = input.filePath.split(/[\\/]/u).at(-1) ?? input.filePath;
   const fileNode: SymbolNode = {
@@ -974,6 +1063,18 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
           range: rangeFor(lineStarts, reference.node.from, reference.node.to)
         });
       }
+      for (const reference of staticSpringBootConfigurationPropertiesPrefixReferences(
+        input,
+        classDeclaration,
+        imports
+      )) {
+        springBootConfigurationPropertiesPrefixes.push({
+          sourceId: classSymbol.id,
+          filePath: input.filePath,
+          prefix: reference.prefix,
+          range: rangeFor(lineStarts, reference.node.from, reference.node.to)
+        });
+      }
       const methods = directChildren(classDeclaration.body)
         .map((node) => staticJavaMethod(input, node))
         .filter((candidate): candidate is StaticJavaMethod => candidate !== null);
@@ -1062,7 +1163,8 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
       classes: javaClassFacts
     },
     springBootPropertiesFacts: {
-      valueReferences: springBootPropertiesValueReferences
+      valueReferences: springBootPropertiesValueReferences,
+      configurationPropertiesPrefixes: springBootConfigurationPropertiesPrefixes
     }
   };
 }

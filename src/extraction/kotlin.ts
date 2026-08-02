@@ -702,7 +702,8 @@ export function extractKotlinFileFacts(input: KotlinExtractFileFactsInput): Arti
     exportBindings: [],
     reExportBindings: [],
     springBootPropertiesFacts: {
-      valueReferences: springBootPropertiesValueReferences
+      valueReferences: springBootPropertiesValueReferences,
+      configurationPropertiesPrefixes: []
     },
     nestRouteFacts: {
       routeControllers: [],

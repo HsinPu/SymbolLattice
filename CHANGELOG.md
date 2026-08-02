@@ -6,6 +6,27 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.171.0] - 2026-08-02
+
+### Added
+
+- Direct top-level Java classes now retain parser-proven Spring <code>@ConfigurationProperties</code> literal-prefix facts when one exact import or fully-qualified annotation proves the framework type. The accepted annotation surface is one positional literal or one <code>prefix =</code> literal; the source range remains the annotation and configuration values are never retained.
+- Project resolution now fans a prefix into every parser-proven descendant YAML or <code>.properties</code> leaf. Each leaf with one candidate produces a class-to-key <code>references</code> edge with <code>heuristic</code> confidence <code>0.85</code> and <code>framework.spring-boot.configuration-properties.literal-prefix.unique-leaf</code> evidence.
+- Duplicate leaves across profiles or formats remain per-leaf unresolved evidence with all candidates and configuration paths. A prefix with no eligible descendants reports <code>unresolved-prefix</code>; explicit synchronization removes obsolete leaves without re-extracting an unchanged Java artifact.
+
+### Compatibility
+
+- The artifact-facts extractor advances to <code>multi-language-ast-v152</code> and the project resolver to <code>project-resolver-v54</code>. Existing graphs and SQLite schema remain readable; the next explicit <code>sync</code> refreshes Java prefix facts and rebuilds their configuration relations.
+
+### Deliberate limits
+
+- This first prefix slice supports direct Java classes only. Kotlin <code>@ConfigurationProperties</code>, method and parameter annotations, <code>value =</code>, multiple attributes, aliases/wildcard imports, nonliteral prefixes, relaxed key binding, collections, nested-object field ownership, configuration imports, profile activation, source precedence, environment overrides, validation, and runtime behavior remain outside analysis.
+- A unique static leaf is useful evidence of a configuration namespace, not proof of Spring's deployed binding result; those edges deliberately remain <code>heuristic</code>. Every collision stays unresolved rather than selecting a configuration source.
+
+### Comparison notes
+
+- The inspected CodeGraph Spring path is broader: it uses a shared Java/Kotlin binding surface, recognizes <code>@ConfigurationProperties</code> prefixes, applies relaxed-key normalization, and selects a closest configuration candidate. SymbolLattice independently adds parser-backed Java-only prefix extraction and emits each unique descendant leaf while preserving every conflicting leaf as unresolved. SymbolLattice is more auditable for per-leaf ambiguity and impact traversal; CodeGraph remains broader for Kotlin and relaxed/runtime-like configuration behavior.
+
 ## [0.170.0] - 2026-08-02
 
 ### Added

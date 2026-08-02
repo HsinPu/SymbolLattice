@@ -390,26 +390,11 @@ interface SpringBootConfigKeyCandidate {
   readonly symbol: SymbolNode;
 }
 
-function springBootConfigRuleId(
-  source: SpringBootConfigKeySource | "config",
-  suffix: "exact-key" | "unresolved-key" | "ambiguous-key"
-): string {
-  return `framework.spring-boot.${source}.direct-value.literal-key.${suffix}`;
-}
-
-/**
- * Projects a direct Java field `@Value("${literal.key}")` only through one
- * unique, parser-proven key in a conventional application/bootstrap properties
- * or YAML file. Profile precedence, format precedence, and duplicate-key
- * selection are runtime semantics, so zero or multiple candidates remain
- * explicit unresolved references.
- */
-function projectSpringBootPropertiesReferences(input: {
-  readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
-  readonly symbolsById: ReadonlyMap<string, SymbolNode>;
-}): readonly GraphEdge[] {
+function springBootConfigKeyCandidates(
+  factsByFile: ReadonlyMap<string, ExtractedFileFacts>
+): readonly SpringBootConfigKeyCandidate[] {
   const configKeySymbols: SpringBootConfigKeyCandidate[] = [];
-  for (const [filePath, facts] of [...input.factsByFile.entries()].sort(([left], [right]) =>
+  for (const [filePath, facts] of [...factsByFile.entries()].sort(([left], [right]) =>
     compareStableText(left, right)
   )) {
     if (isSpringBootPropertiesFile(filePath)) {
@@ -429,6 +414,28 @@ function projectSpringBootPropertiesReferences(input: {
       }
     }
   }
+  return configKeySymbols;
+}
+
+function springBootConfigRuleId(
+  source: SpringBootConfigKeySource | "config",
+  suffix: "exact-key" | "unresolved-key" | "ambiguous-key"
+): string {
+  return `framework.spring-boot.${source}.direct-value.literal-key.${suffix}`;
+}
+
+/**
+ * Projects a direct Java field `@Value("${literal.key}")` only through one
+ * unique, parser-proven key in a conventional application/bootstrap properties
+ * or YAML file. Profile precedence, format precedence, and duplicate-key
+ * selection are runtime semantics, so zero or multiple candidates remain
+ * explicit unresolved references.
+ */
+function projectSpringBootPropertiesReferences(input: {
+  readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
+  readonly symbolsById: ReadonlyMap<string, SymbolNode>;
+}): readonly GraphEdge[] {
+  const configKeySymbols = springBootConfigKeyCandidates(input.factsByFile);
 
   const edges: GraphEdge[] = [];
   for (const [, facts] of [...input.factsByFile.entries()].sort(([left], [right]) =>
@@ -484,6 +491,118 @@ function projectSpringBootPropertiesReferences(input: {
           candidates.map((candidate) => candidate.symbol.filePath)
         )
       });
+    }
+  }
+  return edges;
+}
+
+function springBootConfigurationPropertiesRuleId(
+  suffix: "unique-leaf" | "ambiguous-leaf" | "unresolved-prefix"
+): string {
+  return `framework.spring-boot.configuration-properties.literal-prefix.${suffix}`;
+}
+
+/**
+ * A Java `@ConfigurationProperties(prefix = "app.cache")` class proves the
+ * static prefix but not Spring's active-profile or source-precedence outcome.
+ * Project every parser-proven descendant key only when that individual leaf
+ * has one candidate; preserve collisions and missing prefixes as unresolved.
+ */
+function projectSpringBootConfigurationPropertiesPrefixes(input: {
+  readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
+  readonly symbolsById: ReadonlyMap<string, SymbolNode>;
+}): readonly GraphEdge[] {
+  const configKeySymbols = springBootConfigKeyCandidates(input.factsByFile);
+  const edges: GraphEdge[] = [];
+  for (const [, facts] of [...input.factsByFile.entries()].sort(([left], [right]) =>
+    compareStableText(left, right)
+  )) {
+    const references = [...(facts.springBootPropertiesFacts?.configurationPropertiesPrefixes ?? [])].sort(
+      (left, right) => {
+        const bySource = compareStableText(left.sourceId, right.sourceId);
+        if (bySource !== 0) {
+          return bySource;
+        }
+        const byLine = left.range.start.line - right.range.start.line;
+        return byLine !== 0 ? byLine : left.range.start.column - right.range.start.column;
+      }
+    );
+    for (const reference of references) {
+      const sourceSymbol = input.symbolsById.get(reference.sourceId);
+      if (sourceSymbol === undefined) {
+        continue;
+      }
+      const candidatesByKey = new Map<string, SpringBootConfigKeyCandidate[]>();
+      const descendantPrefix = `${reference.prefix}.`;
+      for (const candidate of configKeySymbols) {
+        if (!candidate.symbol.name.startsWith(descendantPrefix)) {
+          continue;
+        }
+        const candidates = candidatesByKey.get(candidate.symbol.name) ?? [];
+        candidates.push(candidate);
+        candidatesByKey.set(candidate.symbol.name, candidates);
+      }
+      const leaves = [...candidatesByKey.entries()].sort(([left], [right]) =>
+        compareStableText(left, right)
+      );
+      if (leaves.length === 0) {
+        edges.push({
+          id: createEdgeId({
+            sourceId: sourceSymbol.id,
+            targetId: null,
+            kind: "references",
+            line: reference.range.start.line,
+            column: reference.range.start.column,
+            referenceName: reference.prefix
+          }),
+          sourceId: sourceSymbol.id,
+          targetId: null,
+          kind: "references",
+          filePath: reference.filePath,
+          range: reference.range,
+          resolution: "unresolved",
+          confidence: 0,
+          referenceName: reference.prefix,
+          evidence: referenceEvidence(
+            springBootConfigurationPropertiesRuleId("unresolved-prefix"),
+            "unresolved",
+            []
+          )
+        });
+        continue;
+      }
+      for (const [key, candidates] of leaves) {
+        const orderedCandidates = [...candidates].sort((left, right) =>
+          compareStableText(left.symbol.id, right.symbol.id)
+        );
+        const target = orderedCandidates.length === 1 ? orderedCandidates[0]?.symbol : undefined;
+        const suffix = target === undefined ? "ambiguous-leaf" : "unique-leaf";
+        const referenceName = `${reference.prefix}:${key}`;
+        edges.push({
+          id: createEdgeId({
+            sourceId: sourceSymbol.id,
+            targetId: target?.id ?? null,
+            kind: "references",
+            line: reference.range.start.line,
+            column: reference.range.start.column,
+            referenceName
+          }),
+          sourceId: sourceSymbol.id,
+          targetId: target?.id ?? null,
+          kind: "references",
+          filePath: reference.filePath,
+          range: reference.range,
+          resolution: target === undefined ? "unresolved" : "heuristic",
+          confidence: target === undefined ? 0 : 0.85,
+          referenceName,
+          evidence: referenceEvidence(
+            springBootConfigurationPropertiesRuleId(suffix),
+            target === undefined ? "unresolved" : "heuristic",
+            candidateSymbolIds(orderedCandidates.map((candidate) => candidate.symbol)),
+            orderedCandidates.map((candidate) => candidate.symbol.filePath)
+          )
+        });
+      }
     }
   }
   return edges;
@@ -5270,6 +5389,12 @@ export function resolveProjectFacts(input: {
   );
   resolvedEdges.push(
     ...projectSpringBootPropertiesReferences({
+      factsByFile,
+      symbolsById
+    })
+  );
+  resolvedEdges.push(
+    ...projectSpringBootConfigurationPropertiesPrefixes({
       factsByFile,
       symbolsById
     })

@@ -476,6 +476,7 @@ export const FRAMEWORK_CAPABILITIES = [
     routeRegistrations: [],
     surfaces: [
       "direct imported or fully-qualified @Value literal-key annotations on direct Java fields or Kotlin class properties",
+      "direct imported or fully-qualified @ConfigurationProperties literal-prefix annotations on direct Java classes",
       "Kotlin regular-string placeholders with an explicit escaped dollar sign",
       "unique literal keys in conventional application or bootstrap properties or YAML files",
       "direct nested YAML mapping leaves without anchors, tags, sequences, aliases, nulls, or multiline scalars"
