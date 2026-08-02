@@ -18376,6 +18376,46 @@ describe("source extraction", () => {
         "}"
       ].join("\n")
     });
+    const javaCodegen = extractFileFacts({
+      filePath: "android/NativeCalendarModule.java",
+      language: "java",
+      sourceText: [
+        "import com.example.NativeCalendarSpec;",
+        "public class NativeCalendarModule extends NativeCalendarSpec {",
+        '  private static final String NAME = "CalendarModule";',
+        "  @Override public String getName() { return NAME; }",
+        "  @Override public void createCodegenEvent() {}",
+        "  public void ignored() {}",
+        "}"
+      ].join("\n")
+    });
+    const kotlinCodegen = extractFileFacts({
+      filePath: "android/NativeCalendarModule.kt",
+      language: "kotlin",
+      sourceText: [
+        "import com.example.NativeCalendarSpec",
+        "class NativeCalendarModule(context: Any) : NativeCalendarSpec(context) {",
+        "  companion object {",
+        '    const val NAME: String = "CalendarModule"',
+        "  }",
+        "  override fun getName(): String = NAME",
+        "  override fun cancelCodegenEvent() {}",
+        "  fun ignored() {}",
+        "}"
+      ].join("\n")
+    });
+    const kotlinAmbiguousCodegenImport = extractFileFacts({
+      filePath: "android/AmbiguousCalendarModule.kt",
+      language: "kotlin",
+      sourceText: [
+        "import com.example.NativeCalendarSpec",
+        "import com.other.NativeCalendarSpec",
+        "class AmbiguousCalendarModule(context: Any) : NativeCalendarSpec(context) {",
+        '  override fun getName(): String = "CalendarModule"',
+        "  override fun ignored() {}",
+        "}"
+      ].join("\n")
+    });
     const objectiveC = extractFileFacts({
       filePath: "ios/CalendarModule.m",
       language: "objc",
@@ -18431,6 +18471,23 @@ describe("source extraction", () => {
         methodName: "cancelConstantEvent"
       })
     ]);
+    expect(javaCodegen.reactNativeFacts?.nativeMethods).toEqual([
+      expect.objectContaining({
+        platform: "android",
+        moduleName: "CalendarModule",
+        methodName: "createCodegenEvent",
+        implementationKind: "codegen-spec-override"
+      })
+    ]);
+    expect(kotlinCodegen.reactNativeFacts?.nativeMethods).toEqual([
+      expect.objectContaining({
+        platform: "android",
+        moduleName: "CalendarModule",
+        methodName: "cancelCodegenEvent",
+        implementationKind: "codegen-spec-override"
+      })
+    ]);
+    expect(kotlinAmbiguousCodegenImport.reactNativeFacts?.nativeMethods).toEqual([]);
     expect(objectiveC.reactNativeFacts?.nativeMethods).toEqual([
       expect.objectContaining({
         platform: "ios",

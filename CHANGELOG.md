@@ -6,6 +6,26 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.191.0] - 2026-08-02
+
+### Added
+
+- React Native Android extraction now recognizes the official Codegen source shape for a Java or Kotlin class with one direct imported or fully-qualified <code>*Spec</code> superclass, a directly proven literal or immutable class-local <code>getName()</code> value, and direct Java <code>@Override</code> or Kotlin <code>override</code> methods.
+- A Codegen native-method fact remains a candidate until exactly one project-local TypeScript TurboModule Spec method proves the same literal module-plus-method identity. The resolver then projects dedicated Codegen evidence for NativeModules, direct Registry, TypeScript Spec, default-import, and static default re-export surfaces.
+- Tests cover Java and Kotlin candidates, rejected ambiguous Kotlin imports, exact Java/Kotlin targets, default-import and default re-export paths, and both missing and duplicate TypeScript contracts. SQLite-backed indexing and reopen queries retain the verified targets.
+
+### Compatibility
+
+- The artifact-facts extractor advances to <code>multi-language-ast-v170</code> and the project resolver advances to <code>project-resolver-v60</code>. Existing graphs and SQLite schema remain readable; the next explicit <code>sync</code> or <code>index</code> refreshes native facts and bridge projections.
+
+### Deliberate limits
+
+- This does not scan generated build output or model runtime registration. A Codegen edge requires the intersection of a direct Spec superclass, directly proven module name, direct override, and exactly one matching project-local TypeScript contract. Indirect wrappers, dynamic names, Swift, aliases, wildcard imports, and custom macro wrappers remain out of scope.
+
+### Comparison notes
+
+- The inspected CodeGraph JVM React Native parser handles literal <code>getName()</code> values and a class-name fallback. SymbolLattice independently adds a narrower Codegen-specific proof chain that joins native source to one project-local TypeScript contract and keeps zero or duplicate contracts unresolved. This is stronger evidence for this bounded Codegen path, not a claim of broader overall React Native coverage.
+
 ## [0.190.0] - 2026-08-02
 
 ### Added

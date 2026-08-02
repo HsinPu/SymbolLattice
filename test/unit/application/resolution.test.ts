@@ -2962,6 +2962,322 @@ describe("TypeScript configuration module resolution", () => {
     ).toMatchObject({ resolution: "unresolved", confidence: 0 });
   });
 
+  it("projects React Native Codegen Spec overrides only through one unique TypeScript contract", () => {
+    const sourceDocuments: readonly SourceDocument[] = [
+      {
+        absolutePath: "C:/project/src/mobile/NativeCalendar.ts",
+        relativePath: "src/mobile/NativeCalendar.ts",
+        language: "typescript",
+        sourceText: [
+          'import { NativeModules, TurboModuleRegistry } from "react-native";',
+          'import type { TurboModule } from "react-native";',
+          "export interface Spec extends TurboModule {",
+          "  createCodegenEvent(): void;",
+          "  cancelCodegenEvent(): void;",
+          "}",
+          'const Calendar = TurboModuleRegistry.getEnforcing<Spec>("CalendarModule");',
+          "export function schedule() {",
+          "  Calendar.createCodegenEvent();",
+          "  Calendar.cancelCodegenEvent();",
+          "  NativeModules.UncontractedModule.uncontracted();",
+          "}",
+          "export default Calendar;"
+        ].join("\n"),
+        contentHash: "codegen-calendar"
+      },
+      {
+        absolutePath: "C:/project/src/mobile/useCalendar.ts",
+        relativePath: "src/mobile/useCalendar.ts",
+        language: "typescript",
+        sourceText: [
+          'import Calendar from "./NativeCalendar";',
+          "export function defaultSchedule() { Calendar.createCodegenEvent(); }"
+        ].join("\n"),
+        contentHash: "codegen-default-import"
+      },
+      {
+        absolutePath: "C:/project/src/mobile/NativeCalendarBarrel.ts",
+        relativePath: "src/mobile/NativeCalendarBarrel.ts",
+        language: "typescript",
+        sourceText: 'export { default } from "./NativeCalendar";',
+        contentHash: "codegen-default-re-export"
+      },
+      {
+        absolutePath: "C:/project/src/mobile/useCalendarReExport.ts",
+        relativePath: "src/mobile/useCalendarReExport.ts",
+        language: "typescript",
+        sourceText: [
+          'import Calendar from "./NativeCalendarBarrel";',
+          "export function reExportSchedule() { Calendar.cancelCodegenEvent(); }"
+        ].join("\n"),
+        contentHash: "codegen-re-export-consumer"
+      },
+      {
+        absolutePath: "C:/project/src/mobile/NativeDuplicateOne.ts",
+        relativePath: "src/mobile/NativeDuplicateOne.ts",
+        language: "typescript",
+        sourceText: [
+          'import { TurboModuleRegistry } from "react-native";',
+          'import type { TurboModule } from "react-native";',
+          "export interface Spec extends TurboModule { duplicateEvent(): void; }",
+          'const Duplicate = TurboModuleRegistry.getEnforcing<Spec>("DuplicateModule");',
+          "export function invokeDuplicate() { Duplicate.duplicateEvent(); }"
+        ].join("\n"),
+        contentHash: "codegen-duplicate-one"
+      },
+      {
+        absolutePath: "C:/project/src/mobile/NativeDuplicateTwo.ts",
+        relativePath: "src/mobile/NativeDuplicateTwo.ts",
+        language: "typescript",
+        sourceText: [
+          'import { TurboModuleRegistry } from "react-native";',
+          'import type { TurboModule } from "react-native";',
+          "export interface Spec extends TurboModule { duplicateEvent(): void; }",
+          'const Duplicate = TurboModuleRegistry.getEnforcing<Spec>("DuplicateModule");'
+        ].join("\n"),
+        contentHash: "codegen-duplicate-two"
+      },
+      {
+        absolutePath: "C:/project/android/NativeCalendarModule.java",
+        relativePath: "android/NativeCalendarModule.java",
+        language: "java",
+        sourceText: [
+          "import com.example.NativeCalendarSpec;",
+          "public class NativeCalendarModule extends NativeCalendarSpec {",
+          '  private static final String NAME = "CalendarModule";',
+          "  @Override public String getName() { return NAME; }",
+          "  @Override public void createCodegenEvent() {}",
+          "}"
+        ].join("\n"),
+        contentHash: "codegen-java"
+      },
+      {
+        absolutePath: "C:/project/android/NativeCalendarModule.kt",
+        relativePath: "android/NativeCalendarModule.kt",
+        language: "kotlin",
+        sourceText: [
+          "import com.example.NativeCalendarSpec",
+          "class NativeCalendarModule(context: Any) : NativeCalendarSpec(context) {",
+          "  companion object {",
+          '    const val NAME: String = "CalendarModule"',
+          "  }",
+          "  override fun getName(): String = NAME",
+          "  override fun cancelCodegenEvent() {}",
+          "}"
+        ].join("\n"),
+        contentHash: "codegen-kotlin"
+      },
+      {
+        absolutePath: "C:/project/android/NativeUncontractedModule.java",
+        relativePath: "android/NativeUncontractedModule.java",
+        language: "java",
+        sourceText: [
+          "import com.example.NativeUncontractedSpec;",
+          "public class NativeUncontractedModule extends NativeUncontractedSpec {",
+          '  @Override public String getName() { return "UncontractedModule"; }',
+          "  @Override public void uncontracted() {}",
+          "}"
+        ].join("\n"),
+        contentHash: "codegen-uncontracted"
+      },
+      {
+        absolutePath: "C:/project/android/NativeDuplicateModule.java",
+        relativePath: "android/NativeDuplicateModule.java",
+        language: "java",
+        sourceText: [
+          "import com.example.NativeDuplicateSpec;",
+          "public class NativeDuplicateModule extends NativeDuplicateSpec {",
+          '  @Override public String getName() { return "DuplicateModule"; }',
+          "  @Override public void duplicateEvent() {}",
+          "}"
+        ].join("\n"),
+        contentHash: "codegen-duplicate-java"
+      }
+    ];
+    const extractedFiles = sourceDocuments.map((document) =>
+      extractFileFacts({
+        filePath: document.relativePath,
+        language: document.language,
+        sourceText: document.sourceText
+      })
+    );
+    const snapshot = resolveProjectFacts({
+      sourceDocuments,
+      extractedFiles,
+      indexedAt: "2026-08-02T00:00:00.000Z"
+    });
+    const schedule = snapshot.symbols.find(
+      (symbol) => symbol.filePath === "src/mobile/NativeCalendar.ts" && symbol.name === "schedule"
+    );
+    const createSpec = snapshot.symbols.find(
+      (symbol) => symbol.qualifiedName === "src/mobile/NativeCalendar.ts#Spec.createCodegenEvent"
+    );
+    const cancelSpec = snapshot.symbols.find(
+      (symbol) => symbol.qualifiedName === "src/mobile/NativeCalendar.ts#Spec.cancelCodegenEvent"
+    );
+    const javaTarget = snapshot.symbols.find(
+      (symbol) =>
+        symbol.filePath === "android/NativeCalendarModule.java" &&
+        symbol.name === "createCodegenEvent"
+    );
+    const kotlinTarget = snapshot.symbols.find(
+      (symbol) =>
+        symbol.filePath === "android/NativeCalendarModule.kt" &&
+        symbol.name === "cancelCodegenEvent"
+    );
+    const duplicateCall = snapshot.symbols.find(
+      (symbol) => symbol.filePath === "src/mobile/NativeDuplicateOne.ts" && symbol.name === "invokeDuplicate"
+    );
+    const defaultSchedule = snapshot.symbols.find(
+      (symbol) => symbol.filePath === "src/mobile/useCalendar.ts" && symbol.name === "defaultSchedule"
+    );
+    const reExportSchedule = snapshot.symbols.find(
+      (symbol) =>
+        symbol.filePath === "src/mobile/useCalendarReExport.ts" && symbol.name === "reExportSchedule"
+    );
+
+    expect(schedule).toBeDefined();
+    expect(createSpec).toBeDefined();
+    expect(cancelSpec).toBeDefined();
+    expect(javaTarget).toBeDefined();
+    expect(kotlinTarget).toBeDefined();
+    expect(duplicateCall).toBeDefined();
+    expect(defaultSchedule).toBeDefined();
+    expect(reExportSchedule).toBeDefined();
+    expect(
+      snapshot.edges.filter(
+        (edge) =>
+          edge.sourceId === schedule?.id &&
+          edge.referenceName === "CalendarModule.createCodegenEvent"
+      )
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          targetId: javaTarget?.id,
+          resolution: "exact",
+          evidence: expect.objectContaining({
+            ruleId:
+              "framework.react-native.codegen-spec.turbo-direct-registry.direct-spec-superclass-and-unique-typescript-contract.android.exact-target"
+          })
+        })
+      ])
+    );
+    expect(
+      snapshot.edges.filter(
+        (edge) =>
+          edge.sourceId === defaultSchedule?.id &&
+          edge.referenceName === "CalendarModule.createCodegenEvent"
+      )
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          targetId: javaTarget?.id,
+          resolution: "exact",
+          evidence: expect.objectContaining({
+            ruleId:
+              "framework.react-native.codegen-spec.turbo-default-import.direct-spec-superclass-and-unique-typescript-contract.android.exact-target"
+          })
+        })
+      ])
+    );
+    expect(
+      snapshot.edges.filter(
+        (edge) =>
+          edge.sourceId === reExportSchedule?.id &&
+          edge.referenceName === "CalendarModule.cancelCodegenEvent"
+      )
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          targetId: kotlinTarget?.id,
+          resolution: "exact",
+          evidence: expect.objectContaining({
+            ruleId:
+              "framework.react-native.codegen-spec.turbo-default-re-export.direct-spec-superclass-and-unique-typescript-contract.android.exact-target",
+            resolutionPath: [
+              "src/mobile/NativeCalendarBarrel.ts",
+              "src/mobile/NativeCalendar.ts"
+            ]
+          })
+        })
+      ])
+    );
+    expect(
+      snapshot.edges.filter(
+        (edge) =>
+          edge.sourceId === schedule?.id &&
+          edge.referenceName === "CalendarModule.cancelCodegenEvent"
+      )
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          targetId: kotlinTarget?.id,
+          resolution: "exact",
+          evidence: expect.objectContaining({
+            ruleId:
+              "framework.react-native.codegen-spec.turbo-direct-registry.direct-spec-superclass-and-unique-typescript-contract.android.exact-target"
+          })
+        })
+      ])
+    );
+    expect(
+      snapshot.edges.filter(
+        (edge) =>
+          edge.sourceId === createSpec?.id &&
+          edge.referenceName === "CalendarModule.createCodegenEvent"
+      )
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          targetId: javaTarget?.id,
+          resolution: "exact",
+          evidence: expect.objectContaining({
+            ruleId:
+              "framework.react-native.codegen-spec.turbo-spec-contract.direct-spec-superclass-and-unique-typescript-contract.android.exact-target"
+          })
+        })
+      ])
+    );
+    expect(
+      snapshot.edges.filter(
+        (edge) =>
+          edge.sourceId === cancelSpec?.id &&
+          edge.referenceName === "CalendarModule.cancelCodegenEvent"
+      )
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          targetId: kotlinTarget?.id,
+          resolution: "exact",
+          evidence: expect.objectContaining({
+            ruleId:
+              "framework.react-native.codegen-spec.turbo-spec-contract.direct-spec-superclass-and-unique-typescript-contract.android.exact-target"
+          })
+        })
+      ])
+    );
+    expect(
+      snapshot.edges.find(
+        (edge) =>
+          edge.sourceId === schedule?.id &&
+          edge.referenceName === "UncontractedModule.uncontracted" &&
+          edge.targetId === null &&
+          edge.evidence?.ruleId ===
+            "framework.react-native.codegen-spec.native-modules.direct-spec-superclass-and-unique-typescript-contract.any.unresolved-target"
+      )
+    ).toMatchObject({ resolution: "unresolved", confidence: 0 });
+    expect(
+      snapshot.edges.find(
+        (edge) =>
+          edge.sourceId === duplicateCall?.id &&
+          edge.referenceName === "DuplicateModule.duplicateEvent" &&
+          edge.targetId === null &&
+          edge.evidence?.ruleId ===
+            "framework.react-native.codegen-spec.turbo-direct-registry.direct-spec-superclass-and-unique-typescript-contract.any.unresolved-target"
+      )
+    ).toMatchObject({ resolution: "unresolved", confidence: 0 });
+  });
+
   it("keeps colliding React Native TurboModule spec implementations unresolved on one platform", () => {
     const sourceDocuments: readonly SourceDocument[] = [
       {

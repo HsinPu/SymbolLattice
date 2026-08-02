@@ -45,6 +45,13 @@ interface StaticJavaMethod {
   readonly isExported: boolean;
 }
 
+type StaticJavaReactNativeModuleKind = "direct" | "codegen-spec";
+
+interface StaticJavaReactNativeModule {
+  readonly moduleName: string;
+  readonly kind: StaticJavaReactNativeModuleKind;
+}
+
 interface StaticHttpRoute {
   readonly method: RouteMethod;
   readonly path: string;
@@ -740,6 +747,38 @@ function staticJavaDirectReactNativeModule(
 }
 
 /**
+ * Recognizes the documented Codegen implementation shape only when the direct
+ * superclass is a concrete Spec type whose simple spelling has one exact import
+ * or whose fully-qualified spelling appears in the source header.
+ */
+function staticJavaCodegenReactNativeModule(
+  input: JavaExtractFileFactsInput,
+  declaration: StaticJavaClass,
+  imports: ReadonlyMap<string, string>
+): boolean {
+  const header = input.sourceText.slice(declaration.node.from, declaration.body.from);
+  const match =
+    /\bextends\s+((?:[A-Za-z_$][A-Za-z0-9_$]*\.)*([A-Za-z_$][A-Za-z0-9_$]*Spec))\b/u.exec(
+      header
+    );
+  if (match?.[1] === undefined || match[2] === undefined) {
+    return false;
+  }
+  return match[1].includes(".") || imports.get(match[2]) !== undefined;
+}
+
+function staticJavaReactNativeModuleKind(
+  input: JavaExtractFileFactsInput,
+  declaration: StaticJavaClass,
+  imports: ReadonlyMap<string, string>
+): StaticJavaReactNativeModuleKind | null {
+  if (staticJavaDirectReactNativeModule(input, declaration, imports)) {
+    return "direct";
+  }
+  return staticJavaCodegenReactNativeModule(input, declaration, imports) ? "codegen-spec" : null;
+}
+
+/**
  * Reads one direct class-local `static final String` constant. This deliberately
  * excludes expressions, non-final fields, inherited values, and multi-variable
  * declarations so an Android bridge identity remains syntax-proven.
@@ -772,13 +811,14 @@ function staticJavaLiteralStringConstant(
 }
 
 /** Retains one literal Android bridge module name from a direct getName body or class constant. */
-function staticJavaReactNativeModuleName(
+function staticJavaReactNativeModule(
   input: JavaExtractFileFactsInput,
   declaration: StaticJavaClass,
   methods: readonly StaticJavaMethod[],
   imports: ReadonlyMap<string, string>
-): string | null {
-  if (!staticJavaDirectReactNativeModule(input, declaration, imports)) {
+): StaticJavaReactNativeModule | null {
+  const kind = staticJavaReactNativeModuleKind(input, declaration, imports);
+  if (kind === null) {
     return null;
   }
   const getNameMethods = methods.filter((method) => method.name === "getName");
@@ -793,12 +833,12 @@ function staticJavaReactNativeModuleName(
       ? null
       : staticJavaLiteralStringConstant(input, declaration, constantName));
   return moduleName !== null && REACT_NATIVE_BRIDGE_IDENTIFIER.test(moduleName)
-    ? moduleName
+    ? { moduleName, kind }
     : null;
 }
 
 /** A direct ReactMethod annotation needs exact import or fully-qualified proof. */
-function isJavaReactNativeMethod(
+function isJavaDirectReactNativeMethod(
   declaration: StaticJavaMethod,
   imports: ReadonlyMap<string, string>
 ): boolean {
@@ -812,6 +852,36 @@ function isJavaReactNativeMethod(
     annotationsNamedReactMethod.length === reactMethods.length &&
     reactMethods.length === 1
   );
+}
+
+/** Codegen methods are direct Java overrides; the resolver later proves their TypeScript contract. */
+function isJavaCodegenReactNativeMethod(
+  declaration: StaticJavaMethod,
+  imports: ReadonlyMap<string, string>
+): boolean {
+  if (declaration.name === "getName") {
+    return false;
+  }
+  const overrideAnnotations = declaration.annotations.filter(
+    (annotation) => annotation.name === "Override" || annotation.name === "java.lang.Override"
+  );
+  const exactOverrides = overrideAnnotations.filter(
+    (annotation) =>
+      annotation.name === "java.lang.Override" ||
+      (annotation.name === "Override" &&
+        (imports.get("Override") === undefined || imports.get("Override") === "java.lang.Override"))
+  );
+  return overrideAnnotations.length === exactOverrides.length && exactOverrides.length === 1;
+}
+
+function isJavaReactNativeMethod(
+  declaration: StaticJavaMethod,
+  imports: ReadonlyMap<string, string>,
+  kind: StaticJavaReactNativeModuleKind
+): boolean {
+  return kind === "direct"
+    ? isJavaDirectReactNativeMethod(declaration, imports)
+    : isJavaCodegenReactNativeMethod(declaration, imports);
 }
 
 function staticJavaClass(
@@ -1736,25 +1806,31 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
       for (const methodDeclaration of methods) {
         symbolsByMethod.set(methodDeclaration, addMethod(classSymbol, methodDeclaration));
       }
-      const reactNativeModuleName = staticJavaReactNativeModuleName(
+      const reactNativeModule = staticJavaReactNativeModule(
         input,
         classDeclaration,
         methods,
         imports
       );
-      if (reactNativeModuleName !== null) {
+      if (reactNativeModule !== null) {
         for (const methodDeclaration of methods) {
           const methodSymbol = symbolsByMethod.get(methodDeclaration);
-          if (methodSymbol === undefined || !isJavaReactNativeMethod(methodDeclaration, imports)) {
+          if (
+            methodSymbol === undefined ||
+            !isJavaReactNativeMethod(methodDeclaration, imports, reactNativeModule.kind)
+          ) {
             continue;
           }
           reactNativeNativeMethods.push({
             platform: "android",
-            moduleName: reactNativeModuleName,
+            moduleName: reactNativeModule.moduleName,
             methodName: methodDeclaration.name,
             methodId: methodSymbol.id,
             filePath: input.filePath,
-            range: rangeFor(lineStarts, methodDeclaration.node.from, methodDeclaration.node.to)
+            range: rangeFor(lineStarts, methodDeclaration.node.from, methodDeclaration.node.to),
+            ...(reactNativeModule.kind === "codegen-spec"
+              ? { implementationKind: "codegen-spec-override" }
+              : {})
           });
         }
       }

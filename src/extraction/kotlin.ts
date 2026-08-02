@@ -41,6 +41,13 @@ interface StaticKotlinFunction {
   readonly receiverName: string | null;
 }
 
+type StaticKotlinReactNativeModuleKind = "direct" | "codegen-spec";
+
+interface StaticKotlinReactNativeModule {
+  readonly moduleName: string;
+  readonly kind: StaticKotlinReactNativeModuleKind;
+}
+
 interface StaticKtorRoute {
   readonly methodName: string;
   readonly method: RouteMethod;
@@ -300,6 +307,42 @@ function staticKotlinDirectReactNativeModule(
 }
 
 /**
+ * Recognizes a direct Codegen Spec superclass. Aliased and wildcard imports
+ * are absent from staticDirectImportPaths, so a simple base spelling remains
+ * tied to one explicit source import.
+ */
+function staticKotlinCodegenReactNativeModule(
+  declaration: StaticKotlinType,
+  imports: ReadonlySet<string>
+): boolean {
+  if (declaration.kind !== "class" || declaration.isObject) {
+    return false;
+  }
+  const source = nodeText(declaration.node);
+  const bodyStart = source.indexOf("{");
+  const header = bodyStart < 0 ? source : source.slice(0, bodyStart);
+  const match =
+    /:\s*((?:[A-Za-z_][A-Za-z0-9_]*\.)*([A-Za-z_][A-Za-z0-9_]*Spec))\b/u.exec(header);
+  if (match?.[1] === undefined || match[2] === undefined) {
+    return false;
+  }
+  return (
+    match[1].includes(".") ||
+    [...imports].filter((path) => path.endsWith("." + match[2])).length === 1
+  );
+}
+
+function staticKotlinReactNativeModuleKind(
+  declaration: StaticKotlinType,
+  imports: ReadonlySet<string>
+): StaticKotlinReactNativeModuleKind | null {
+  if (staticKotlinDirectReactNativeModule(declaration, imports)) {
+    return "direct";
+  }
+  return staticKotlinCodegenReactNativeModule(declaration, imports) ? "codegen-spec" : null;
+}
+
+/**
  * Reads one direct companion `const val` string. Values on other nested objects,
  * mutable properties, expressions, and inherited constants stay out of scope so
  * a bridge module identity remains syntax-proven.
@@ -331,12 +374,13 @@ function staticKotlinCompanionLiteralStringConstant(
 }
 
 /** Retains one literal Android bridge module name from a direct getName body or companion constant. */
-function staticKotlinReactNativeModuleName(
+function staticKotlinReactNativeModule(
   declaration: StaticKotlinType,
   methods: readonly StaticKotlinFunction[],
   imports: ReadonlySet<string>
-): string | null {
-  if (!staticKotlinDirectReactNativeModule(declaration, imports)) {
+): StaticKotlinReactNativeModule | null {
+  const kind = staticKotlinReactNativeModuleKind(declaration, imports);
+  if (kind === null) {
     return null;
   }
   const getNameMethods = methods.filter((method) => method.name === "getName");
@@ -354,12 +398,12 @@ function staticKotlinReactNativeModuleName(
       ? null
       : staticKotlinCompanionLiteralStringConstant(declaration, constantName));
   return moduleName !== null && REACT_NATIVE_BRIDGE_IDENTIFIER.test(moduleName)
-    ? moduleName
+    ? { moduleName, kind }
     : null;
 }
 
 /** A direct ReactMethod annotation needs exact import or fully-qualified proof. */
-function isKotlinReactNativeMethod(
+function isKotlinDirectReactNativeMethod(
   declaration: StaticKotlinFunction,
   imports: ReadonlySet<string>
 ): boolean {
@@ -383,6 +427,25 @@ function isKotlinReactNativeMethod(
     annotationsNamedReactMethod.length === reactMethods.length &&
     reactMethods.length === 1
   );
+}
+
+/** Codegen methods are direct Kotlin overrides; the resolver later proves their TypeScript contract. */
+function isKotlinCodegenReactNativeMethod(declaration: StaticKotlinFunction): boolean {
+  return (
+    declaration.name !== "getName" &&
+    declaration.receiverName === null &&
+    /(?:^|\s)override\s+fun\s+/u.test(nodeText(declaration.node))
+  );
+}
+
+function isKotlinReactNativeMethod(
+  declaration: StaticKotlinFunction,
+  imports: ReadonlySet<string>,
+  kind: StaticKotlinReactNativeModuleKind
+): boolean {
+  return kind === "direct"
+    ? isKotlinDirectReactNativeMethod(declaration, imports)
+    : isKotlinCodegenReactNativeMethod(declaration);
 }
 
 function staticKotlinAnnotationInvocation(annotation: KotlinSyntaxNode): KotlinSyntaxNode | null {
@@ -1690,21 +1753,27 @@ export function extractKotlinFileFacts(input: KotlinExtractFileFactsInput): Arti
       const methods = directChildren(declaration.body)
         .map((node) => staticKotlinFunction(node))
         .filter((candidate): candidate is StaticKotlinFunction => candidate !== null);
-      const reactNativeModuleName = staticKotlinReactNativeModuleName(
+      const reactNativeModule = staticKotlinReactNativeModule(
         declaration,
         methods,
         imports
       );
       for (const methodDeclaration of methods) {
         const methodSymbol = addMethod(typeSymbol, methodDeclaration);
-        if (reactNativeModuleName !== null && isKotlinReactNativeMethod(methodDeclaration, imports)) {
+        if (
+          reactNativeModule !== null &&
+          isKotlinReactNativeMethod(methodDeclaration, imports, reactNativeModule.kind)
+        ) {
           reactNativeNativeMethods.push({
             platform: "android",
-            moduleName: reactNativeModuleName,
+            moduleName: reactNativeModule.moduleName,
             methodName: methodDeclaration.name,
             methodId: methodSymbol.id,
             filePath: input.filePath,
-            range: rangeForNode(methodDeclaration.node)
+            range: rangeForNode(methodDeclaration.node),
+            ...(reactNativeModule.kind === "codegen-spec"
+              ? { implementationKind: "codegen-spec-override" }
+              : {})
           });
         }
         for (const reference of staticKotlinSpringBootBeanConfigurationPropertiesPrefixReferences(

@@ -14,15 +14,15 @@
 </div>
 
 > [!IMPORTANT]
-> v0.190.0 is a developer preview and is not published to npm. Run it from source.
+> v0.191.0 is a developer preview and is not published to npm. Run it from source.
 
-SymbolLattice builds a queryable local code-symbol graph. Every relation retains its rule, resolution stage, and confidence; `exact`, `heuristic`, and `unresolved` evidence are never conflated.
+SymbolLattice builds a queryable local code-symbol graph. Every relation retains its rule, resolution stage, and confidence; exact, heuristic, and unresolved evidence are never conflated.
 
 ## Quick start
 
 Requires Node.js 22.13 or newer, below 25, and npm.
 
-```bash
+~~~bash
 git clone https://github.com/HsinPu/symbol-lattice.git
 cd symbol-lattice
 npm install
@@ -37,37 +37,36 @@ node dist/cli/main.js sync /path/to/project
 
 # Start a read-only MCP host
 node dist/cli/main.js serve --mcp --project /path/to/project
-```
+~~~
 
-On Windows PowerShell, use `npm.cmd` if `npm` is unavailable. Index data stays in the target project's `.symbol-lattice/index.sqlite`.
+On Windows PowerShell, use npm.cmd if npm is unavailable. Index data stays in the target project's .symbol-lattice/index.sqlite.
 
-## v0.190.0 highlights
+## v0.191.0 highlights
 
-- Android native-module identity can now be returned directly from getName() through a class-local Java static final String or Kotlin companion const val, alongside the existing literal form.
-- The constant must be one direct immutable literal declaration in the class. Mutable fields, expressions, inherited values, nested objects, and Codegen base classes remain excluded.
-- Both NativeModules and TurboModules resolve on module plus method name. Unique Android and iOS implementations stay as separate exact edges; same-platform collisions remain unresolved.
+- Supports the official React Native Codegen implementation shape for Java and Kotlin Spec subclasses: a directly imported or fully-qualified Spec superclass, a proven getName() module identity, and a direct override method.
+- A Codegen native method becomes a cross-language target only when exactly one project-local TypeScript TurboModule module-plus-method contract matches it.
+- Direct Registry, TypeScript spec, default-import, and static default re-export edges retain dedicated Codegen rules; zero or multiple contracts stay unresolved.
 
 ## Principles
 
 - Indexing and querying stay local; source is never silently uploaded.
-- `init` and `sync` are explicit writes. CLI and MCP queries remain read-only.
+- init and sync are explicit writes. CLI and MCP queries remain read-only.
 - A relation needs reproducible static evidence. Otherwise it remains unresolved instead of guessed.
 
 ## Static-analysis boundaries
 
-- The React Native Android native surface accepts a class-local Java static final String or Kotlin companion const val literal returned directly by getName(); it still requires direct ReactContextBaseJavaModule inheritance and a direct ReactMethod annotation before emitting bridge facts.
-- React Native currently covers strict `NativeModules`, direct TurboModule Registry and TypeScript specs, plus static re-export chains anchored at proven local default exports. Named exports, namespace spec imports, Codegen-generated native base classes, runtime registration, indirect or dynamic names, Swift, and custom macro wrappers remain out of scope.
-- Spring Web supports direct Java/Kotlin controllers, literal class prefixes, HTTP shortcuts, and provable `RequestMethod` collections; conditions, proxies, and runtime routing are not inferred.
-- Spring `@ConfigurationProperties` supports direct Java/Kotlin classes, Java `record` declarations, and Java/Kotlin `@Bean` members in direct `@Configuration` classes.
+- Codegen accepts only the intersection of a direct superclass, a literal or class-local immutable getName() value, Java @Override or Kotlin override methods, and one unique TypeScript contract.
+- It does not scan build output or infer runtime registration, dynamic names, indirect wrappers, Swift implementations, or custom macro wrappers.
+- React Native also covers strict NativeModules, direct TurboModule Registry, TypeScript specs, and static re-export chains anchored at proven local default exports.
 
 ## Verification
 
-```bash
+~~~bash
 npm run check
 npm test
 npm run build
 git diff --check
-```
+~~~
 
 ## License
 

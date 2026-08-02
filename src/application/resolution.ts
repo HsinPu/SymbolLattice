@@ -156,6 +156,13 @@ type ReactNativeBridgeRuleId = (
   suffix: "exact-target" | "unresolved-target" | "ambiguous-platform-target"
 ) => string;
 
+type ReactNativeCodegenBridgeSurface =
+  | "native-modules"
+  | "turbo-direct-registry"
+  | "turbo-spec-contract"
+  | "turbo-default-import"
+  | "turbo-default-re-export";
+
 interface ReactNativeBridgeReference {
   readonly sourceId: string;
   readonly filePath: string;
@@ -181,6 +188,21 @@ function reactNativeTurboModuleRuleId(
   return `framework.react-native.turbo-modules.${surface}.literal-module-and-method.${platform}.${suffix}`;
 }
 
+function reactNativeCodegenRuleId(
+  surface: ReactNativeCodegenBridgeSurface,
+  platform: "android" | "ios" | "any",
+  suffix: "exact-target" | "unresolved-target" | "ambiguous-platform-target"
+): string {
+  return (
+    "framework.react-native.codegen-spec." +
+    surface +
+    ".direct-spec-superclass-and-unique-typescript-contract." +
+    platform +
+    "." +
+    suffix
+  );
+}
+
 /**
  * Projects one syntax-proven React Native bridge surface to every independently
  * unique platform implementation. Android and iOS targets are both retained;
@@ -190,8 +212,10 @@ function projectReactNativeBridgeReferences(input: {
   readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
   readonly sourceFacts: (facts: ExtractedFileFacts) => readonly ReactNativeBridgeReference[];
   readonly ruleId: ReactNativeBridgeRuleId;
+  readonly codegenRuleId: ReactNativeBridgeRuleId;
 }): readonly GraphEdge[] {
   const methodsByBridgeKey = new Map<string, ReactNativeNativeMethodFact[]>();
+  const codegenContractCounts = new Map<string, number>();
   for (const [, facts] of [...input.factsByFile.entries()].sort(([left], [right]) =>
     compareStableText(left, right)
   )) {
@@ -200,6 +224,10 @@ function projectReactNativeBridgeReferences(input: {
       const candidates = methodsByBridgeKey.get(key) ?? [];
       candidates.push(method);
       methodsByBridgeKey.set(key, candidates);
+    }
+    for (const contract of facts.reactNativeFacts?.turboModuleSpecMethods ?? []) {
+      const key = reactNativeBridgeKey(contract.moduleName, contract.methodName);
+      codegenContractCounts.set(key, (codegenContractCounts.get(key) ?? 0) + 1);
     }
   }
 
@@ -214,9 +242,14 @@ function projectReactNativeBridgeReferences(input: {
       )
     );
     for (const reference of references) {
-      const candidates = [
+      const rawCandidates = [
         ...(methodsByBridgeKey.get(reactNativeBridgeKey(reference.moduleName, reference.methodName)) ?? [])
       ].sort((left, right) => compareStableText(left.methodId, right.methodId));
+      const candidates = rawCandidates.filter(
+        (method) =>
+          method.implementationKind !== "codegen-spec-override" ||
+          codegenContractCounts.get(reactNativeBridgeKey(method.moduleName, method.methodName)) === 1
+      );
       const candidatesByPlatform = new Map<"android" | "ios", ReactNativeNativeMethodFact[]>();
       for (const candidate of candidates) {
         const platformCandidates = candidatesByPlatform.get(candidate.platform) ?? [];
@@ -228,6 +261,10 @@ function projectReactNativeBridgeReferences(input: {
         const platformCandidates = candidatesByPlatform.get(platform) ?? [];
         if (platformCandidates.length === 1 && platformCandidates[0] !== undefined) {
           const target = platformCandidates[0];
+          const targetRuleId =
+            target.implementationKind === "codegen-spec-override"
+              ? input.codegenRuleId
+              : input.ruleId;
           edges.push({
             id: createEdgeId({
               sourceId: reference.sourceId,
@@ -246,7 +283,7 @@ function projectReactNativeBridgeReferences(input: {
             confidence: 1,
             referenceName: reactNativeBridgeReferenceName(reference.moduleName, reference.methodName),
             evidence: referenceEvidence(
-              input.ruleId(platform, "exact-target"),
+              targetRuleId(platform, "exact-target"),
               "module",
               [target.methodId],
               [],
@@ -258,6 +295,11 @@ function projectReactNativeBridgeReferences(input: {
         }
       }
       if (candidates.length === 0 || ambiguousCandidates.length > 0) {
+        const unresolvedRuleId =
+          rawCandidates.length > 0 &&
+          rawCandidates.every((candidate) => candidate.implementationKind === "codegen-spec-override")
+            ? input.codegenRuleId
+            : input.ruleId;
         const candidateIds = ambiguousCandidates.map((candidate) => candidate.methodId);
         edges.push({
           id: createEdgeId({
@@ -272,21 +314,21 @@ function projectReactNativeBridgeReferences(input: {
           targetId: null,
           kind: "calls",
           filePath: reference.filePath,
-          range: reference.range,
-          resolution: "unresolved",
-          confidence: 0,
-          referenceName: reactNativeBridgeReferenceName(reference.moduleName, reference.methodName),
-          evidence: referenceEvidence(
-            input.ruleId(
-              "any",
-              candidates.length === 0 ? "unresolved-target" : "ambiguous-platform-target"
-            ),
-            "module",
-            candidateIds,
-            [],
-            reference.resolutionPath ?? []
-          )
-        });
+            range: reference.range,
+            resolution: "unresolved",
+            confidence: 0,
+            referenceName: reactNativeBridgeReferenceName(reference.moduleName, reference.methodName),
+            evidence: referenceEvidence(
+              unresolvedRuleId(
+                "any",
+                candidates.length === 0 ? "unresolved-target" : "ambiguous-platform-target"
+              ),
+              "module",
+              candidateIds,
+              [],
+              reference.resolutionPath ?? []
+            )
+          });
       }
     }
   }
@@ -299,7 +341,9 @@ function projectReactNativeNativeModuleCalls(input: {
   return projectReactNativeBridgeReferences({
     ...input,
     sourceFacts: (facts) => facts.reactNativeFacts?.nativeModuleCalls ?? [],
-    ruleId: reactNativeNativeModulesRuleId
+    ruleId: reactNativeNativeModulesRuleId,
+    codegenRuleId: (platform, suffix) =>
+      reactNativeCodegenRuleId("native-modules", platform, suffix)
   });
 }
 
@@ -309,7 +353,9 @@ function projectReactNativeTurboModuleCalls(input: {
   return projectReactNativeBridgeReferences({
     ...input,
     sourceFacts: (facts) => facts.reactNativeFacts?.turboModuleCalls ?? [],
-    ruleId: (platform, suffix) => reactNativeTurboModuleRuleId("direct-registry", platform, suffix)
+    ruleId: (platform, suffix) => reactNativeTurboModuleRuleId("direct-registry", platform, suffix),
+    codegenRuleId: (platform, suffix) =>
+      reactNativeCodegenRuleId("turbo-direct-registry", platform, suffix)
   });
 }
 
@@ -319,7 +365,9 @@ function projectReactNativeTurboModuleSpecMethods(input: {
   return projectReactNativeBridgeReferences({
     ...input,
     sourceFacts: (facts) => facts.reactNativeFacts?.turboModuleSpecMethods ?? [],
-    ruleId: (platform, suffix) => reactNativeTurboModuleRuleId("spec-contract", platform, suffix)
+    ruleId: (platform, suffix) => reactNativeTurboModuleRuleId("spec-contract", platform, suffix),
+    codegenRuleId: (platform, suffix) =>
+      reactNativeCodegenRuleId("turbo-spec-contract", platform, suffix)
   });
 }
 
@@ -415,8 +463,14 @@ function projectReactNativeTurboModuleDefaultImportCalls(input: {
         (facts.reactNativeFacts?.turboModuleDefaultImportCalls ?? []).flatMap((call) => {
           const reference = referenceForCall(call);
           return reference?.surface === surface ? [reference] : [];
-        }),
-      ruleId: (platform, suffix) => reactNativeTurboModuleRuleId(surface, platform, suffix)
+      }),
+      ruleId: (platform, suffix) => reactNativeTurboModuleRuleId(surface, platform, suffix),
+      codegenRuleId: (platform, suffix) =>
+        reactNativeCodegenRuleId(
+          surface === "default-import" ? "turbo-default-import" : "turbo-default-re-export",
+          platform,
+          suffix
+        )
     })
   );
 }

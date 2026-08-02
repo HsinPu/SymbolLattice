@@ -11,13 +11,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v169";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v170";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v59";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v60";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -811,6 +811,12 @@ export interface ReactNativeNativeMethodFact {
   readonly methodId: string;
   readonly filePath: string;
   readonly range: SourceRange;
+  /**
+   * Codegen Spec overrides are candidates until the project resolver finds one
+   * matching TypeScript TurboModule contract. Omitted direct bridge facts do
+   * not need that additional project-level proof.
+   */
+  readonly implementationKind?: "codegen-spec-override";
 }
 
 /**

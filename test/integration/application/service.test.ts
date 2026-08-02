@@ -12285,6 +12285,153 @@ describe("SymbolLatticeService", () => {
     );
   });
 
+  it("persists React Native Codegen Spec bridge targets only after their TypeScript contracts are unique", async () => {
+    const projectPath = await createInlineProject({
+      "src/mobile/NativeCalendar.ts": [
+        'import { NativeModules, TurboModuleRegistry } from "react-native";',
+        'import type { TurboModule } from "react-native";',
+        "export interface Spec extends TurboModule {",
+        "  createCodegenEvent(): void;",
+        "  cancelCodegenEvent(): void;",
+        "}",
+        'const Calendar = TurboModuleRegistry.getEnforcing<Spec>("CalendarModule");',
+        "export function schedule() {",
+        "  Calendar.createCodegenEvent();",
+        "  Calendar.cancelCodegenEvent();",
+        "  NativeModules.UncontractedModule.uncontracted();",
+        "}"
+      ].join("\n"),
+      "android/NativeCalendarModule.java": [
+        "import com.example.NativeCalendarSpec;",
+        "public class NativeCalendarModule extends NativeCalendarSpec {",
+        '  private static final String NAME = "CalendarModule";',
+        "  @Override public String getName() { return NAME; }",
+        "  @Override public void createCodegenEvent() {}",
+        "}"
+      ].join("\n"),
+      "android/NativeCalendarModule.kt": [
+        "import com.example.NativeCalendarSpec",
+        "class NativeCalendarModule(context: Any) : NativeCalendarSpec(context) {",
+        "  companion object {",
+        '    const val NAME: String = "CalendarModule"',
+        "  }",
+        "  override fun getName(): String = NAME",
+        "  override fun cancelCodegenEvent() {}",
+        "}"
+      ].join("\n"),
+      "android/NativeUncontractedModule.java": [
+        "import com.example.NativeUncontractedSpec;",
+        "public class NativeUncontractedModule extends NativeUncontractedSpec {",
+        '  @Override public String getName() { return "UncontractedModule"; }',
+        "  @Override public void uncontracted() {}",
+        "}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const persistedFacts = graphStore.getArtifactFacts(projectPath);
+    const javaMethod = await service.find(
+      projectPath,
+      "android/NativeCalendarModule.java#NativeCalendarModule.createCodegenEvent"
+    );
+    const kotlinMethod = await service.find(
+      projectPath,
+      "android/NativeCalendarModule.kt#NativeCalendarModule.cancelCodegenEvent"
+    );
+    const uncontractedMethod = await service.find(
+      projectPath,
+      "android/NativeUncontractedModule.java#NativeUncontractedModule.uncontracted"
+    );
+    const javaTarget = javaMethod.symbols[0];
+    const kotlinTarget = kotlinMethod.symbols[0];
+    const uncontractedTarget = uncontractedMethod.symbols[0];
+    if (javaTarget === undefined || kotlinTarget === undefined || uncontractedTarget === undefined) {
+      throw new Error("Expected indexed React Native Codegen methods.");
+    }
+
+    expect(persistedFacts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          filePath: "android/NativeCalendarModule.java",
+          reactNativeFacts: expect.objectContaining({
+            nativeMethods: [
+              expect.objectContaining({
+                moduleName: "CalendarModule",
+                methodName: "createCodegenEvent",
+                implementationKind: "codegen-spec-override"
+              })
+            ]
+          })
+        }),
+        expect.objectContaining({
+          filePath: "android/NativeCalendarModule.kt",
+          reactNativeFacts: expect.objectContaining({
+            nativeMethods: [
+              expect.objectContaining({
+                moduleName: "CalendarModule",
+                methodName: "cancelCodegenEvent",
+                implementationKind: "codegen-spec-override"
+              })
+            ]
+          })
+        }),
+        expect.objectContaining({
+          filePath: "android/NativeUncontractedModule.java",
+          reactNativeFacts: expect.objectContaining({
+            nativeMethods: [
+              expect.objectContaining({
+                moduleName: "UncontractedModule",
+                methodName: "uncontracted",
+                implementationKind: "codegen-spec-override"
+              })
+            ]
+          })
+        })
+      ])
+    );
+    for (const target of [javaTarget, kotlinTarget]) {
+      const callers = await service.callers(projectPath, target.qualifiedName);
+      expect(callers.relations).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            symbol: expect.objectContaining({ name: "schedule" }),
+            edge: expect.objectContaining({
+              resolution: "exact",
+              evidence: expect.objectContaining({
+                ruleId:
+                  "framework.react-native.codegen-spec.turbo-direct-registry.direct-spec-superclass-and-unique-typescript-contract.android.exact-target",
+                stage: "module"
+              })
+            })
+          })
+        ])
+      );
+    }
+    const uncontractedCallers = await service.callers(projectPath, uncontractedTarget.qualifiedName);
+    expect(
+      uncontractedCallers.relations.some((relation) => relation.symbol.name === "schedule")
+    ).toBe(false);
+
+    const reopened = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+    await reopened.init({ projectPath });
+    const persistedCallers = await reopened.callers(projectPath, javaTarget.qualifiedName);
+    expect(persistedCallers.relations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          symbol: expect.objectContaining({ name: "schedule" }),
+          edge: expect.objectContaining({
+            evidence: expect.objectContaining({
+              ruleId:
+                "framework.react-native.codegen-spec.turbo-direct-registry.direct-spec-superclass-and-unique-typescript-contract.android.exact-target"
+            })
+          })
+        })
+      ])
+    );
+  });
+
   it("persists React Native TurboModule specs and direct registry calls across Android and iOS", async () => {
     const projectPath = await createInlineProject({
       "src/mobile/NativeCalendar.ts": [
