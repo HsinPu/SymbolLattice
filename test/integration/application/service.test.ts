@@ -12173,6 +12173,114 @@ describe("SymbolLatticeService", () => {
     expect(optionsRoutes.routes).toHaveLength(2);
   });
 
+  it("persists and projects exact React Native NativeModules bridge edges across Android and iOS", async () => {
+    const projectPath = await createInlineProject({
+      "src/mobile/bridge.ts": [
+        'import { NativeModules } from "react-native";',
+        "export function schedule() {",
+        "  NativeModules.CalendarModule.createEvent();",
+        "  NativeModules.CalendarModule.cancelEvent();",
+        "}"
+      ].join("\n"),
+      "android/CalendarModule.java": [
+        "import com.facebook.react.bridge.ReactContextBaseJavaModule;",
+        "import com.facebook.react.bridge.ReactMethod;",
+        "public class CalendarModule extends ReactContextBaseJavaModule {",
+        '  public String getName() { return "CalendarModule"; }',
+        "  @ReactMethod public void createEvent() {}",
+        "}"
+      ].join("\n"),
+      "android/CalendarModule.kt": [
+        "import com.facebook.react.bridge.ReactContextBaseJavaModule",
+        "import com.facebook.react.bridge.ReactMethod",
+        "class CalendarModule(context: Any) : ReactContextBaseJavaModule(context) {",
+        '  override fun getName(): String = "CalendarModule"',
+        "  @ReactMethod fun cancelEvent() {}",
+        "}"
+      ].join("\n"),
+      "ios/CalendarModule.m": [
+        "#import <React/RCTBridgeModule.h>",
+        "@implementation CalendarModule",
+        "RCT_EXPORT_MODULE(CalendarModule)",
+        "RCT_EXPORT_METHOD(createEvent)",
+        "@end"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const persistedFacts = graphStore.getArtifactFacts(projectPath);
+    const javaMethod = await service.find(
+      projectPath,
+      "android/CalendarModule.java#CalendarModule.createEvent"
+    );
+    const kotlinMethod = await service.find(
+      projectPath,
+      "android/CalendarModule.kt#CalendarModule.cancelEvent"
+    );
+    const objectiveCMethod = await service.find(
+      projectPath,
+      "ios/CalendarModule.m#CalendarModule.createEvent"
+    );
+    const javaTarget = javaMethod.symbols[0];
+    const kotlinTarget = kotlinMethod.symbols[0];
+    const objectiveCTarget = objectiveCMethod.symbols[0];
+    if (javaTarget === undefined || kotlinTarget === undefined || objectiveCTarget === undefined) {
+      throw new Error("Expected indexed React Native native methods.");
+    }
+
+    expect(persistedFacts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          filePath: "src/mobile/bridge.ts",
+          reactNativeFacts: expect.objectContaining({ nativeModuleCalls: expect.any(Array) })
+        }),
+        expect.objectContaining({
+          filePath: "android/CalendarModule.java",
+          reactNativeFacts: expect.objectContaining({ nativeMethods: expect.any(Array) })
+        }),
+        expect.objectContaining({
+          filePath: "android/CalendarModule.kt",
+          reactNativeFacts: expect.objectContaining({ nativeMethods: expect.any(Array) })
+        }),
+        expect.objectContaining({
+          filePath: "ios/CalendarModule.m",
+          reactNativeFacts: expect.objectContaining({ nativeMethods: expect.any(Array) })
+        })
+      ])
+    );
+    for (const target of [javaTarget, kotlinTarget, objectiveCTarget]) {
+      const callers = await service.callers(projectPath, target.qualifiedName);
+      expect(callers.relations).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            symbol: expect.objectContaining({ name: "schedule" }),
+            edge: expect.objectContaining({ resolution: "exact", confidence: 1 })
+          })
+        ])
+      );
+    }
+
+    const reopened = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+    await reopened.init({ projectPath });
+    const persistedCallers = await reopened.callers(projectPath, javaTarget.qualifiedName);
+    expect(persistedCallers.relations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          symbol: expect.objectContaining({ name: "schedule" }),
+          edge: expect.objectContaining({
+            evidence: expect.objectContaining({
+              ruleId:
+                "framework.react-native.native-modules.direct-module-and-method.android.exact-target",
+              stage: "module"
+            })
+          })
+        })
+      ])
+    );
+  });
+
   it("indexes NestJS decorator routes as persisted exact method evidence", async () => {
     const projectPath = await createInlineProject({
       "src/cats.controller.ts": [

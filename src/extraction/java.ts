@@ -5,6 +5,7 @@ import {
   createSymbolId,
   type ArtifactFacts,
   type GraphEdge,
+  type ReactNativeFacts,
   type RouteMethod,
   type SourcePosition,
   type SourceRange,
@@ -39,6 +40,7 @@ interface StaticJavaClass {
 interface StaticJavaMethod {
   readonly name: string;
   readonly node: JavaSyntaxNode;
+  readonly body: JavaSyntaxNode;
   readonly annotations: readonly StaticJavaAnnotation[];
   readonly isExported: boolean;
 }
@@ -69,9 +71,13 @@ const SPRING_CONFIGURATION_PROPERTIES_PATH =
   "org.springframework.boot.context.properties.ConfigurationProperties";
 const SPRING_CONFIGURATION_PATH = "org.springframework.context.annotation.Configuration";
 const SPRING_BEAN_PATH = "org.springframework.context.annotation.Bean";
+const REACT_NATIVE_REACT_METHOD_PATH = "com.facebook.react.bridge.ReactMethod";
+const REACT_NATIVE_CONTEXT_BASE_MODULE_PATH =
+  "com.facebook.react.bridge.ReactContextBaseJavaModule";
 const MICRONAUT_CONTROLLER_PATH = "io.micronaut.http.annotation.Controller";
 const JAKARTA_REST_PATH_PATHS = ["jakarta.ws.rs.Path", "javax.ws.rs.Path"] as const;
 const SPRING_BOOT_PROPERTIES_KEY = /^[A-Za-z0-9][A-Za-z0-9._-]*$/u;
+const REACT_NATIVE_BRIDGE_IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/u;
 
 const SPRING_METHOD_MAPPING_PATHS: Readonly<Record<string, RouteMethod>> = {
   "org.springframework.web.bind.annotation.GetMapping": "GET",
@@ -712,6 +718,67 @@ function annotationMatches(
   return annotation.name === expectedPath || imports.get(annotation.name) === expectedPath;
 }
 
+/**
+ * React Native Android bridge ownership is retained only for the direct base
+ * class spelling or a simple spelling backed by one exact non-wildcard import.
+ */
+function staticJavaDirectReactNativeModule(
+  input: JavaExtractFileFactsInput,
+  declaration: StaticJavaClass,
+  imports: ReadonlyMap<string, string>
+): boolean {
+  const header = input.sourceText.slice(declaration.node.from, declaration.body.from);
+  if (
+    /\bextends\s+com\.facebook\.react\.bridge\.ReactContextBaseJavaModule\b/u.test(header)
+  ) {
+    return true;
+  }
+  return (
+    imports.get("ReactContextBaseJavaModule") === REACT_NATIVE_CONTEXT_BASE_MODULE_PATH &&
+    /\bextends\s+ReactContextBaseJavaModule\b/u.test(header)
+  );
+}
+
+/** Retains one literal Android bridge module name from a direct getName body. */
+function staticJavaReactNativeModuleName(
+  input: JavaExtractFileFactsInput,
+  declaration: StaticJavaClass,
+  methods: readonly StaticJavaMethod[],
+  imports: ReadonlyMap<string, string>
+): string | null {
+  if (!staticJavaDirectReactNativeModule(input, declaration, imports)) {
+    return null;
+  }
+  const getNameMethods = methods.filter((method) => method.name === "getName");
+  if (getNameMethods.length !== 1 || getNameMethods[0] === undefined) {
+    return null;
+  }
+  const match = /^\{\s*return\s+"([^"\\\r\n]*)"\s*;\s*\}$/u.exec(
+    nodeText(input, getNameMethods[0].body)
+  );
+  const moduleName = match?.[1] ?? null;
+  return moduleName !== null && REACT_NATIVE_BRIDGE_IDENTIFIER.test(moduleName)
+    ? moduleName
+    : null;
+}
+
+/** A direct ReactMethod annotation needs exact import or fully-qualified proof. */
+function isJavaReactNativeMethod(
+  declaration: StaticJavaMethod,
+  imports: ReadonlyMap<string, string>
+): boolean {
+  const annotationsNamedReactMethod = declaration.annotations.filter(
+    (annotation) => annotation.name === "ReactMethod" || annotation.name === REACT_NATIVE_REACT_METHOD_PATH
+  );
+  const reactMethods = annotationsNamedReactMethod.filter((annotation) =>
+    annotationMatches(annotation, REACT_NATIVE_REACT_METHOD_PATH, imports)
+  );
+  return (
+    annotationsNamedReactMethod.length === reactMethods.length &&
+    reactMethods.length === 1
+  );
+}
+
 function staticJavaClass(
   input: JavaExtractFileFactsInput,
   node: JavaSyntaxNode
@@ -754,6 +821,7 @@ function staticJavaMethod(
   return {
     name,
     node,
+    body,
     annotations: staticAnnotations(input, node),
     isExported: modifiers !== undefined && directChildren(modifiers).some((child) => child.name === "public")
   };
@@ -1329,6 +1397,10 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
   if (!springBootPropertiesCapability.languages.includes(input.language)) {
     throw new Error("Spring Boot properties extraction was invoked for an unsupported source language.");
   }
+  const reactNativeCapability = frameworkCapability("react-native");
+  if (!reactNativeCapability.languages.includes(input.language)) {
+    throw new Error("React Native bridge extraction was invoked for an unsupported source language.");
+  }
 
   const root = parser.parse(input.sourceText).topNode;
   const recordInspection = inspectJavaRecords({ sourceText: input.sourceText });
@@ -1338,6 +1410,7 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
   const javaClassFacts: Array<{ symbolId: string; packageName: string }> = [];
   const springBootPropertiesValueReferences: SpringBootPropertiesValueReferenceFact[] = [];
   const springBootConfigurationPropertiesPrefixes: SpringBootConfigurationPropertiesPrefixReferenceFact[] = [];
+  const reactNativeNativeMethods: ReactNativeFacts["nativeMethods"][number][] = [];
   const declarationOrdinals = new Map<string, number>();
   const fileName = input.filePath.split(/[\\/]/u).at(-1) ?? input.filePath;
   const fileNode: SymbolNode = {
@@ -1628,6 +1701,28 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
       for (const methodDeclaration of methods) {
         symbolsByMethod.set(methodDeclaration, addMethod(classSymbol, methodDeclaration));
       }
+      const reactNativeModuleName = staticJavaReactNativeModuleName(
+        input,
+        classDeclaration,
+        methods,
+        imports
+      );
+      if (reactNativeModuleName !== null) {
+        for (const methodDeclaration of methods) {
+          const methodSymbol = symbolsByMethod.get(methodDeclaration);
+          if (methodSymbol === undefined || !isJavaReactNativeMethod(methodDeclaration, imports)) {
+            continue;
+          }
+          reactNativeNativeMethods.push({
+            platform: "android",
+            moduleName: reactNativeModuleName,
+            methodName: methodDeclaration.name,
+            methodId: methodSymbol.id,
+            filePath: input.filePath,
+            range: rangeFor(lineStarts, methodDeclaration.node.from, methodDeclaration.node.to)
+          });
+        }
+      }
       for (const methodDeclaration of methods) {
         const methodSymbol = symbolsByMethod.get(methodDeclaration);
         if (methodSymbol === undefined) {
@@ -1759,6 +1854,10 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
     springBootPropertiesFacts: {
       valueReferences: springBootPropertiesValueReferences,
       configurationPropertiesPrefixes: springBootConfigurationPropertiesPrefixes
+    },
+    reactNativeFacts: {
+      nativeModuleCalls: [],
+      nativeMethods: reactNativeNativeMethods
     }
   };
 }

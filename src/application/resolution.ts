@@ -33,6 +33,7 @@ import {
   type RustActixImportedServiceConfigMountFact,
   type RustActixServiceConfigDeclarationFact,
   type RustActixServiceConfigRouteFact,
+  type ReactNativeNativeMethodFact,
   type SourceRange,
   type SymbolNode
 } from "../domain/index.js";
@@ -139,6 +140,128 @@ function referenceEvidence(
     ...(canonicalConfigurationPaths.length === 0 ? {} : { configurationPaths: canonicalConfigurationPaths }),
     ...(canonicalResolutionPath.length === 0 ? {} : { resolutionPath: canonicalResolutionPath })
   };
+}
+
+function reactNativeBridgeKey(moduleName: string, methodName: string): string {
+  return `${moduleName}\u0000${methodName}`;
+}
+
+function reactNativeBridgeReferenceName(moduleName: string, methodName: string): string {
+  return `${moduleName}.${methodName}`;
+}
+
+function reactNativeBridgeRuleId(
+  platform: "android" | "ios" | "any",
+  suffix: "exact-target" | "unresolved-target" | "ambiguous-platform-target"
+): string {
+  return `framework.react-native.native-modules.direct-module-and-method.${platform}.${suffix}`;
+}
+
+/**
+ * Projects a proven JavaScript NativeModules call to every independently
+ * unique platform implementation. This preserves Android and iOS targets
+ * instead of choosing one by method spelling; collisions within a platform
+ * remain explicit unresolved bridge edges.
+ */
+function projectReactNativeNativeModuleCalls(input: {
+  readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
+}): readonly GraphEdge[] {
+  const methodsByBridgeKey = new Map<string, ReactNativeNativeMethodFact[]>();
+  for (const [, facts] of [...input.factsByFile.entries()].sort(([left], [right]) =>
+    compareStableText(left, right)
+  )) {
+    for (const method of facts.reactNativeFacts?.nativeMethods ?? []) {
+      const key = reactNativeBridgeKey(method.moduleName, method.methodName);
+      const candidates = methodsByBridgeKey.get(key) ?? [];
+      candidates.push(method);
+      methodsByBridgeKey.set(key, candidates);
+    }
+  }
+
+  const edges: GraphEdge[] = [];
+  for (const [, facts] of [...input.factsByFile.entries()].sort(([left], [right]) =>
+    compareStableText(left, right)
+  )) {
+    const calls = [...(facts.reactNativeFacts?.nativeModuleCalls ?? [])].sort((left, right) =>
+      compareStableText(
+        `${left.sourceId}\u0000${left.moduleName}\u0000${left.methodName}\u0000${left.range.start.line}\u0000${left.range.start.column}`,
+        `${right.sourceId}\u0000${right.moduleName}\u0000${right.methodName}\u0000${right.range.start.line}\u0000${right.range.start.column}`
+      )
+    );
+    for (const call of calls) {
+      const candidates = [
+        ...(methodsByBridgeKey.get(reactNativeBridgeKey(call.moduleName, call.methodName)) ?? [])
+      ].sort((left, right) => compareStableText(left.methodId, right.methodId));
+      const candidatesByPlatform = new Map<"android" | "ios", ReactNativeNativeMethodFact[]>();
+      for (const candidate of candidates) {
+        const platformCandidates = candidatesByPlatform.get(candidate.platform) ?? [];
+        platformCandidates.push(candidate);
+        candidatesByPlatform.set(candidate.platform, platformCandidates);
+      }
+      const ambiguousCandidates: ReactNativeNativeMethodFact[] = [];
+      for (const platform of ["android", "ios"] as const) {
+        const platformCandidates = candidatesByPlatform.get(platform) ?? [];
+        if (platformCandidates.length === 1 && platformCandidates[0] !== undefined) {
+          const target = platformCandidates[0];
+          edges.push({
+            id: createEdgeId({
+              sourceId: call.sourceId,
+              targetId: target.methodId,
+              kind: "calls",
+              line: call.range.start.line,
+              column: call.range.start.column,
+              referenceName: reactNativeBridgeReferenceName(call.moduleName, call.methodName)
+            }),
+            sourceId: call.sourceId,
+            targetId: target.methodId,
+            kind: "calls",
+            filePath: call.filePath,
+            range: call.range,
+            resolution: "exact",
+            confidence: 1,
+            referenceName: reactNativeBridgeReferenceName(call.moduleName, call.methodName),
+            evidence: referenceEvidence(
+              reactNativeBridgeRuleId(platform, "exact-target"),
+              "module",
+              [target.methodId]
+            )
+          });
+        } else if (platformCandidates.length > 1) {
+          ambiguousCandidates.push(...platformCandidates);
+        }
+      }
+      if (candidates.length === 0 || ambiguousCandidates.length > 0) {
+        const candidateIds = ambiguousCandidates.map((candidate) => candidate.methodId);
+        edges.push({
+          id: createEdgeId({
+            sourceId: call.sourceId,
+            targetId: null,
+            kind: "calls",
+            line: call.range.start.line,
+            column: call.range.start.column,
+            referenceName: reactNativeBridgeReferenceName(call.moduleName, call.methodName)
+          }),
+          sourceId: call.sourceId,
+          targetId: null,
+          kind: "calls",
+          filePath: call.filePath,
+          range: call.range,
+          resolution: "unresolved",
+          confidence: 0,
+          referenceName: reactNativeBridgeReferenceName(call.moduleName, call.methodName),
+          evidence: referenceEvidence(
+            reactNativeBridgeRuleId(
+              "any",
+              candidates.length === 0 ? "unresolved-target" : "ambiguous-platform-target"
+            ),
+            "module",
+            candidateIds
+          )
+        });
+      }
+    }
+  }
+  return edges;
 }
 
 const CICS_TRANSACTION_REFERENCE = /^cics-transid:([A-Za-z0-9$#@]{1,4})$/iu;
@@ -5466,6 +5589,11 @@ export function resolveProjectFacts(input: {
       factsByFile,
       sourceDocuments: input.sourceDocuments,
       symbolsById
+    })
+  );
+  resolvedEdges.push(
+    ...projectReactNativeNativeModuleCalls({
+      factsByFile
     })
   );
 

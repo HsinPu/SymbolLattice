@@ -64,6 +64,7 @@ export const FRAMEWORK_CAPABILITY_IDS = [
   "ktor",
   "vapor",
   "flutter",
+  "react-native",
   "play"
 ] as const;
 
@@ -706,6 +707,16 @@ export const FRAMEWORK_CAPABILITIES = [
     surfaces: [
       "direct MaterialApp literal routes maps",
       "same-file literal widget-builder classes"
+    ]
+  },
+  {
+    id: "react-native",
+    languages: ["typescript", "javascript", "java", "kotlin", "objc"],
+    routeRegistrations: [],
+    surfaces: [
+      "direct react-native NativeModules named or namespace imports with literal module and method calls",
+      "direct Android ReactContextBaseJavaModule classes with literal getName values and direct ReactMethod annotations",
+      "direct Objective-C RCTBridgeModule imports with one RCT_EXPORT_MODULE and direct RCT_EXPORT_METHOD macros"
     ]
   },
   {

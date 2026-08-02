@@ -2,7 +2,7 @@
 
 # SymbolLattice
 
-**Queryable, explainable, local-first code intelligence**
+**Queryable, explainable, evidence-first local code intelligence**
 
 [![Version](https://img.shields.io/github/v/tag/HsinPu/symbol-lattice?label=version)](https://github.com/HsinPu/symbol-lattice/tags)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D22.13-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
@@ -14,9 +14,9 @@
 </div>
 
 > [!IMPORTANT]
-> v0.185.0 is a developer preview and is not published to npm. Run it from source.
+> v0.186.0 is a developer preview and is not published to npm. Run it from source.
 
-SymbolLattice builds a queryable local code-symbol graph for a project. Every relation retains its rule, resolution stage, and confidence; `exact`, `heuristic`, and `unresolved` evidence are never conflated.
+SymbolLattice builds a queryable local code-symbol graph. Every relation retains its rule, resolution stage, and confidence; `exact`, `heuristic`, and `unresolved` evidence are never conflated.
 
 ## Quick start
 
@@ -31,7 +31,7 @@ npm run build
 # Explicitly create a local index
 node dist/cli/main.js init /path/to/project
 
-# Read-only queries; explicitly synchronize after source changes
+# Queries remain read-only; explicitly synchronize after source changes
 node dist/cli/main.js routes --project /path/to/project --method GET
 node dist/cli/main.js sync /path/to/project
 
@@ -41,11 +41,11 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 On Windows PowerShell, use `npm.cmd` if `npm` is unavailable. Index data stays in the target project's `.symbol-lattice/index.sqlite`.
 
-## v0.185.0 highlights
+## v0.186.0 highlights
 
-- Spring Web now recognizes multiple class prefixes on direct `@RequestMapping`: Java `{ "/api", "/v2" }` and Kotlin `["/api", "/v2"]`. Each unique prefix is cross-producted with every proven method route.
-- The controller annotation, `@RequestMapping`, and `RequestMethod` each require an exact direct import or fully-qualified Spring name. Class prefixes may be positional, `path =`, or `value =` static strings / literal collections; method paths remain one static string.
-- Every route links to its local handler with `exact` evidence. Empty or duplicate method collections, duplicate or conditional prefixes, dynamic paths, alias/wildcard imports, default ALL mappings, and runtime routing remain deliberately excluded.
+- New React Native `NativeModules` bridge support links direct JS/TS calls to Java, Kotlin, and Objective-C native implementations by both module and method name.
+- Java/Kotlin require exact import proof for `ReactContextBaseJavaModule`, a literal `getName()`, and `@ReactMethod`; Objective-C requires `RCTBridgeModule`, one `RCT_EXPORT_MODULE`, and direct `RCT_EXPORT_METHOD` macros.
+- Unique Android and iOS implementations become separate `exact` edges. Same-platform collisions remain `unresolved` rather than selecting an arbitrary target.
 
 ## Principles
 
@@ -55,9 +55,9 @@ On Windows PowerShell, use `npm.cmd` if `npm` is unavailable. Index data stays i
 
 ## Static-analysis boundaries
 
-- Spring Web supports direct top-level concrete Java/Kotlin controllers, one or more literal class prefixes, literal HTTP shortcut annotations, and one or more provable, unique `RequestMethod` enums on method-level `@RequestMapping`. Default ALL, empty/duplicate collections, conditions, proxies, nested declarations, and runtime routing remain out of scope.
-- Spring `@ConfigurationProperties` supports direct Java/Kotlin classes, direct top-level Java `record` declarations, and concrete Java/Kotlin `@Bean` members in direct `@Configuration` classes.
-- The factory-method path does not infer runtime bean registration or binding. Nested classes, Kotlin `object` factories, abstract/interface/top-level functions, alias or wildcard imports, `value =`, multiple attributes, dynamic prefixes, profiles, precedence, and environment overrides remain out of scope.
+- React Native currently covers the strict `NativeModules` bridge only. TurboModule/codegen, runtime registration, indirect or dynamic names, Swift, and custom macro wrappers remain out of scope.
+- Spring Web supports direct Java/Kotlin controllers, literal class prefixes, HTTP shortcuts, and provable `RequestMethod` collections; conditions, proxies, and runtime routing are not inferred.
+- Spring `@ConfigurationProperties` supports direct Java/Kotlin classes, Java `record` declarations, and Java/Kotlin `@Bean` members in direct `@Configuration` classes.
 
 ## Verification
 

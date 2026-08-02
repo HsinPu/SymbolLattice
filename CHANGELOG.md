@@ -6,6 +6,27 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.186.0] - 2026-08-02
+
+### Added
+
+- Parser-backed React Native NativeModules bridge extraction now connects direct JavaScript/TypeScript calls to native implementations by both literal module name and method name. Direct named and namespace imports from <code>react-native</code> are lexical-binding aware, so shadowed names, computed access, optional chains, and dynamic member access do not enter the bridge surface.
+- Android support accepts one direct Java or Kotlin <code>ReactContextBaseJavaModule</code> class, one literal <code>getName</code> return value, and direct imported or fully-qualified <code>ReactMethod</code> annotations. Objective-C support accepts a direct <code>RCTBridgeModule</code> header import, one direct <code>RCT_EXPORT_MODULE</code>, and unique direct <code>RCT_EXPORT_METHOD</code> macros.
+- Project resolution now emits an exact <code>calls</code> edge for every independently unique Android and iOS implementation. It retains both platform targets instead of silently preferring one; duplicate implementations on one platform remain explicit unresolved edges with their candidate ids.
+- New extractor, resolver, capability, and persisted-service coverage proves lexical shadow rejection, dynamic-access rejection, Java/Kotlin/Objective-C extraction, exact multi-platform edges, ambiguity handling, SQLite fact persistence, and re-opened-service queries.
+
+### Compatibility
+
+- The artifact-facts extractor advances to <code>multi-language-ast-v166</code> and the project resolver advances to <code>project-resolver-v56</code>. Existing graphs and SQLite schema remain readable; the next explicit <code>sync</code> or <code>index</code> re-extracts eligible React Native source and recomputes bridge projections.
+
+### Deliberate limits
+
+- This is a bounded NativeModules bridge surface, not full React Native runtime modeling. TurboModule/codegen specs, runtime registration, Java/Kotlin aliases and wildcard imports, indirect or constant-derived module names, inherited or wrapper native modules, Objective-C <code>RCT_REMAP_METHOD</code>, Swift modules, custom macro wrappers, computed/optional JavaScript access, and dynamic dispatch remain excluded.
+
+### Comparison notes
+
+- The inspected CodeGraph React Native resolver strips a JavaScript receiver to a bare method name, then chooses an Objective-C target when both iOS and Android candidates exist, at <code>0.6</code> confidence. SymbolLattice independently requires direct import proof plus module-and-method identity, records independent exact platform edges, and keeps same-platform collisions unresolved. CodeGraph covers additional conventions in its own resolver; SymbolLattice is stricter and more explainable for this bounded cross-platform bridge surface.
+
 ## [0.185.0] - 2026-08-02
 
 ### Added

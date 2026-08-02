@@ -77,6 +77,7 @@ import {
   type NestRouteFacts,
   type PendingReference,
   type ProjectFrameworkEvidence,
+  type ReactNativeFacts,
   type ReExportBinding,
   type ReferenceScope,
   type RouteRegistration,
@@ -386,6 +387,8 @@ type RouteBindingKind =
   | "react-router-route"
   | "react-router-data-router-factory"
   | "react-router-elements-factory"
+  | "react-native-native-modules"
+  | "react-native-namespace"
   | "other";
 
 interface RouteBinding {
@@ -422,6 +425,13 @@ interface StaticElysiaRoute {
   readonly method: RouteMethod;
   readonly path: string;
   readonly handler: ts.Identifier;
+}
+
+/** A direct call through one proven React Native NativeModules binding. */
+interface StaticReactNativeNativeModuleCall {
+  readonly moduleName: string;
+  readonly methodName: string;
+  readonly expression: ts.PropertyAccessExpression;
 }
 
 interface StaticFastifyRoute {
@@ -836,6 +846,14 @@ function isReactRouterImport(statement: ts.ImportDeclaration): boolean {
   );
 }
 
+function isReactNativeImport(statement: ts.ImportDeclaration): boolean {
+  return (
+    ts.isStringLiteral(statement.moduleSpecifier) &&
+    statement.moduleSpecifier.text === "react-native" &&
+    statement.importClause?.isTypeOnly !== true
+  );
+}
+
 function namedExpressImportBindingKind(
   statement: ts.ImportDeclaration,
   element: ts.ImportSpecifier
@@ -869,6 +887,18 @@ function namedReactRouterImportBindingKind(
   }
   return (REACT_ROUTER_DATA_ROUTER_FACTORIES as readonly string[]).includes(importedName)
     ? "react-router-data-router-factory"
+    : "other";
+}
+
+function namedReactNativeImportBindingKind(
+  statement: ts.ImportDeclaration,
+  element: ts.ImportSpecifier
+): RouteBindingKind {
+  if (!isReactNativeImport(statement) || element.isTypeOnly) {
+    return "other";
+  }
+  return (element.propertyName?.text ?? element.name.text) === "NativeModules"
+    ? "react-native-native-modules"
     : "other";
 }
 
@@ -909,9 +939,13 @@ function namedRouteImportBindingKind(
     return honoBinding;
   }
   const elysiaBinding = namedElysiaImportBindingKind(statement, element);
-  return elysiaBinding === "other"
-    ? namedReactRouterImportBindingKind(statement, element)
-    : elysiaBinding;
+  if (elysiaBinding !== "other") {
+    return elysiaBinding;
+  }
+  const reactRouterBinding = namedReactRouterImportBindingKind(statement, element);
+  return reactRouterBinding === "other"
+    ? namedReactNativeImportBindingKind(statement, element)
+    : reactRouterBinding;
 }
 
 function visibleRouteBinding(
@@ -936,6 +970,53 @@ function visibleRouteBindingKind(
   bindings: ScopedRouteReceiverBindings
 ): RouteBindingKind | undefined {
   return visibleRouteBinding(sourceFile, identifier, bindings)?.kind;
+}
+
+/**
+ * Recognizes `NativeModules.Module.method()` and
+ * `ReactNative.NativeModules.Module.method()` only through one exact visible
+ * import binding. Property aliases, computed access, optional chains, and
+ * dynamic module or method names stay outside this bridge surface.
+ */
+function staticReactNativeNativeModuleCall(
+  sourceFile: ts.SourceFile,
+  node: ts.CallExpression,
+  bindings: ScopedRouteReceiverBindings
+): StaticReactNativeNativeModuleCall | null {
+  const expression = node.expression;
+  if (
+    node.questionDotToken !== undefined ||
+    !ts.isPropertyAccessExpression(expression) ||
+    expression.questionDotToken !== undefined
+  ) {
+    return null;
+  }
+  const methodAccess = expression;
+  const moduleExpression = methodAccess.expression;
+  if (
+    !ts.isPropertyAccessExpression(moduleExpression) ||
+    moduleExpression.questionDotToken !== undefined
+  ) {
+    return null;
+  }
+  const moduleAccess = moduleExpression;
+  const receiver = moduleAccess.expression;
+  const directNativeModules =
+    ts.isIdentifier(receiver) &&
+    visibleRouteBindingKind(sourceFile, receiver, bindings) === "react-native-native-modules";
+  const namespaceNativeModules =
+    ts.isPropertyAccessExpression(receiver) &&
+    receiver.questionDotToken === undefined &&
+    receiver.name.text === "NativeModules" &&
+    ts.isIdentifier(receiver.expression) &&
+    visibleRouteBindingKind(sourceFile, receiver.expression, bindings) === "react-native-namespace";
+  return directNativeModules || namespaceNativeModules
+    ? {
+        moduleName: moduleAccess.name.text,
+        methodName: methodAccess.name.text,
+        expression: methodAccess
+      }
+    : null;
 }
 
 function isExpressReceiverInitializer(
@@ -1538,7 +1619,11 @@ function collectScopedRouteReceiverBindings(sourceFile: ts.SourceFile): ScopedRo
             rootScopeId,
             [importClause.namedBindings.name.text],
             importClause.namedBindings.name,
-            isExpressImport(node) ? "express-namespace" : "other"
+            isExpressImport(node)
+              ? "express-namespace"
+              : isReactNativeImport(node)
+                ? "react-native-namespace"
+                : "other"
           );
         } else {
           for (const element of importClause.namedBindings.elements) {
@@ -4378,6 +4463,7 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
   const fastifyPluginCallbacks = collectScopedFastifyPluginCallbacks(sourceFile, routeReceiverBindings);
   const nestDecoratorBindings = collectScopedNestDecoratorBindings(sourceFile);
   const symbolsByDeclaration = new Map<ts.Node, SymbolNode>();
+  const ownerByNode = new Map<ts.Node, SymbolNode>();
   const reactRouterElementsFactoryRouteDeclarations = new Set<ReactRouterJsxRouteElement>();
   const fastifyPluginFacts: {
     routes: FastifyPluginFacts["routes"][number][];
@@ -4387,6 +4473,13 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
     routes: [],
     childRegistrations: [],
     rootRegistrations: []
+  };
+  const reactNativeFacts: {
+    nativeModuleCalls: ReactNativeFacts["nativeModuleCalls"][number][];
+    nativeMethods: ReactNativeFacts["nativeMethods"][number][];
+  } = {
+    nativeModuleCalls: [],
+    nativeMethods: []
   };
   const stack: SymbolNode[] = [];
 
@@ -4794,6 +4887,7 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
   }
 
   function visit(node: ts.Node): void {
+    ownerByNode.set(node, currentOwner());
     if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {
       addPendingReference(fileNode.id, node.moduleSpecifier.text, "imports", node.moduleSpecifier);
 
@@ -5113,6 +5207,25 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
         }
       }
     }),
+    frameworkExtractionPass("react-native", {
+      visit(node) {
+        if (!ts.isCallExpression(node)) {
+          return;
+        }
+        const call = staticReactNativeNativeModuleCall(sourceFile, node, routeReceiverBindings);
+        const owner = ownerByNode.get(node);
+        if (call === null || owner === undefined) {
+          return;
+        }
+        reactNativeFacts.nativeModuleCalls.push({
+          sourceId: owner.id,
+          filePath: input.filePath,
+          moduleName: call.moduleName,
+          methodName: call.methodName,
+          range: sourceRange(sourceFile, call.expression)
+        });
+      }
+    }),
     frameworkExtractionPass("vue-router", {
       finalize() {
         for (const route of staticVueRouterRoutes(sourceFile)) {
@@ -5166,6 +5279,7 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
     reExportBindings,
     nestRouteFacts,
     nestGraphqlFacts,
-    fastifyPluginFacts
+    fastifyPluginFacts,
+    reactNativeFacts
   };
 }

@@ -3,10 +3,12 @@ import {
   createSymbolId,
   type ArtifactFacts,
   type GraphEdge,
+  type ReactNativeFacts,
   type SourcePosition,
   type SourceRange,
   type SymbolNode
 } from "../domain/index.js";
+import { frameworkCapability } from "./framework-capabilities.js";
 
 export interface ObjectiveCExtractFileFactsInput {
   readonly filePath: string;
@@ -37,6 +39,11 @@ interface StaticObjectiveCMethod {
   readonly end: number;
 }
 
+interface StaticReactNativeObjectiveCModule {
+  readonly moduleName: string;
+  readonly methods: readonly StaticObjectiveCMethod[];
+}
+
 interface SanitizedObjectiveCSource {
   readonly valid: boolean;
   readonly text: string;
@@ -57,6 +64,9 @@ const DIRECT_PROTOCOL_HEADER =
   /^[ \t]*@protocol[ \t]+([A-Za-z_][A-Za-z0-9_]*)(.*)$/u;
 const DIRECT_END_DIRECTIVE = /^[ \t]*@end[ \t]*$/u;
 const OBJECTIVE_C_CONTAINER_DIRECTIVE = /^[ \t]*@(interface|implementation|protocol)\b/u;
+const REACT_NATIVE_BRIDGE_HEADER =
+  /^[ \t]*#\s*import[ \t]+[<"]React\/RCTBridgeModule\.h[>"][ \t]*$/mu;
+const REACT_NATIVE_BRIDGE_IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/u;
 const DIRECT_PROTOCOL_LIST =
   /^<[ \t]*[A-Za-z_][A-Za-z0-9_]*(?:[ \t]*,[ \t]*[A-Za-z_][A-Za-z0-9_]*)*[ \t]*>$/u;
 const DIRECT_INTERFACE_SUFFIX =
@@ -570,6 +580,73 @@ function directMethodsInContainer(
   return braceDepth === 0 ? methods : null;
 }
 
+/** True only for a macro written directly in one implementation body. */
+function isDirectObjectiveCContainerMember(
+  sanitizedSource: string,
+  container: StaticObjectiveCContainer,
+  offset: number
+): boolean {
+  let braceDepth = 0;
+  for (let index = container.start; index < offset; index += 1) {
+    const character = sanitizedSource[index];
+    if (character === "{") {
+      braceDepth += 1;
+    } else if (character === "}") {
+      braceDepth -= 1;
+      if (braceDepth < 0) {
+        return false;
+      }
+    }
+  }
+  return braceDepth === 0;
+}
+
+/**
+ * Retains one direct Objective-C React Native module only after a bridge-header
+ * import, exactly one module macro, and one or more unique export macros.
+ */
+function staticReactNativeObjectiveCModule(
+  input: ObjectiveCExtractFileFactsInput,
+  sanitizedSource: string,
+  container: StaticObjectiveCContainer
+): StaticReactNativeObjectiveCModule | null {
+  if (container.kind !== "implementation" || !REACT_NATIVE_BRIDGE_HEADER.test(input.sourceText)) {
+    return null;
+  }
+  const body = sanitizedSource.slice(container.start, container.end);
+  const moduleMacros = [...body.matchAll(/\bRCT_EXPORT_MODULE\s*\(\s*([A-Za-z_$][A-Za-z0-9_$]*)?\s*\)/gu)].filter(
+    (match) =>
+      match.index !== undefined &&
+      isDirectObjectiveCContainerMember(sanitizedSource, container, container.start + match.index)
+  );
+  if (moduleMacros.length !== 1 || moduleMacros[0] === undefined) {
+    return null;
+  }
+  const moduleName = moduleMacros[0][1] ?? container.name;
+  if (!REACT_NATIVE_BRIDGE_IDENTIFIER.test(moduleName)) {
+    return null;
+  }
+  const methods: StaticObjectiveCMethod[] = [];
+  const seenMethodNames = new Set<string>();
+  for (const match of body.matchAll(/\bRCT_EXPORT_METHOD\s*\(\s*([A-Za-z_$][A-Za-z0-9_$]*)\b/gu)) {
+    if (match.index === undefined) {
+      return null;
+    }
+    const start = container.start + match.index;
+    const name = match[1];
+    if (
+      name === undefined ||
+      !isDirectObjectiveCContainerMember(sanitizedSource, container, start) ||
+      seenMethodNames.has(name)
+    ) {
+      return null;
+    }
+    seenMethodNames.add(name);
+    methods.push({ start, end: start + match[0].length, name });
+  }
+  return methods.length === 0 ? null : { moduleName, methods };
+}
+
 /**
  * Extracts a conservative Objective-C source subset from .m, .mm, and
  * source-proven .h files: complete direct non-category implementations,
@@ -579,6 +656,10 @@ function directMethodsInContainer(
  * inheritance edges, and Swift bridging remain deliberately out of scope.
  */
 export function extractObjectiveCFileFacts(input: ObjectiveCExtractFileFactsInput): ArtifactFacts {
+  const reactNativeCapability = frameworkCapability("react-native");
+  if (!reactNativeCapability.languages.includes(input.language)) {
+    throw new Error("React Native bridge extraction was invoked for an unsupported source language.");
+  }
   const lineStarts = lineStartsFor(input.sourceText);
   const fileName = input.filePath.split(/[\\/]/u).at(-1) ?? input.filePath;
   const fileNode: SymbolNode = {
@@ -598,6 +679,7 @@ export function extractObjectiveCFileFacts(input: ObjectiveCExtractFileFactsInpu
   };
   const symbols: SymbolNode[] = [fileNode];
   const edges: GraphEdge[] = [];
+  const reactNativeNativeMethods: ReactNativeFacts["nativeMethods"][number][] = [];
   const declarationOrdinals = new Map<string, number>();
 
   function nextOrdinal(qualifiedName: string, kind: SymbolNode["kind"]): number {
@@ -692,8 +774,11 @@ export function extractObjectiveCFileFacts(input: ObjectiveCExtractFileFactsInpu
   function addMethod(
     parent: SymbolNode,
     method: StaticObjectiveCMethod,
-    ruleId: "language.objc.method.direct-declaration" | "language.objc.method.direct-implementation"
-  ): void {
+    ruleId:
+      | "language.objc.method.direct-declaration"
+      | "language.objc.method.direct-implementation"
+      | "framework.react-native.objc.rct-export-method"
+  ): SymbolNode {
     const qualifiedName = parent.qualifiedName + "." + method.name;
     const declarationOrdinal = nextOrdinal(qualifiedName, "method");
     const range = rangeFor(lineStarts, method.start, method.end);
@@ -714,6 +799,7 @@ export function extractObjectiveCFileFacts(input: ObjectiveCExtractFileFactsInpu
     };
     symbols.push(symbol);
     addContainment(parent, symbol, range, ruleId);
+    return symbol;
   }
 
   const sanitized = sanitizeObjectiveC(input.sourceText);
@@ -847,9 +933,36 @@ export function extractObjectiveCFileFacts(input: ObjectiveCExtractFileFactsInpu
     )) {
       addMethod(parent, method, ruleId);
     }
+    const reactNativeModule =
+      owner.implementation === null
+        ? null
+        : staticReactNativeObjectiveCModule(input, sanitized.text, owner.implementation);
+    if (reactNativeModule !== null) {
+      for (const method of reactNativeModule.methods) {
+        const methodSymbol = addMethod(
+          parent,
+          method,
+          "framework.react-native.objc.rct-export-method"
+        );
+        reactNativeNativeMethods.push({
+          platform: "ios",
+          moduleName: reactNativeModule.moduleName,
+          methodName: method.name,
+          methodId: methodSymbol.id,
+          filePath: input.filePath,
+          range: rangeFor(lineStarts, method.start, method.end)
+        });
+      }
+    }
   }
 
-  return emptyFacts(symbols, edges);
+  return {
+    ...emptyFacts(symbols, edges),
+    reactNativeFacts: {
+      nativeModuleCalls: [],
+      nativeMethods: reactNativeNativeMethods
+    }
+  };
 }
 
 function emptyFacts(symbols: readonly SymbolNode[], edges: readonly GraphEdge[]): ArtifactFacts {

@@ -5,6 +5,7 @@ import {
   createSymbolId,
   type ArtifactFacts,
   type GraphEdge,
+  type ReactNativeFacts,
   type RouteMethod,
   type SourcePosition,
   type SourceRange,
@@ -95,7 +96,11 @@ const SPRING_REQUEST_MAPPING_IMPORT =
   "org.springframework.web.bind.annotation.RequestMapping";
 const SPRING_REQUEST_METHOD_IMPORT =
   "org.springframework.web.bind.annotation.RequestMethod";
+const REACT_NATIVE_REACT_METHOD_IMPORT = "com.facebook.react.bridge.ReactMethod";
+const REACT_NATIVE_CONTEXT_BASE_MODULE_IMPORT =
+  "com.facebook.react.bridge.ReactContextBaseJavaModule";
 const SPRING_BOOT_PROPERTIES_KEY = /^[A-Za-z0-9][A-Za-z0-9._-]*$/u;
+const REACT_NATIVE_BRIDGE_IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/u;
 
 const SPRING_METHOD_MAPPING_IMPORTS: Readonly<Record<string, RouteMethod>> = {
   "org.springframework.web.bind.annotation.GetMapping": "GET",
@@ -267,6 +272,80 @@ function staticDirectImportPaths(root: KotlinSyntaxNode): ReadonlySet<string> {
     }
   }
   return imports;
+}
+
+/**
+ * Restricts Android bridge ownership to a direct ReactContextBaseJavaModule
+ * supertype, either fully-qualified or backed by one exact direct import.
+ */
+function staticKotlinDirectReactNativeModule(
+  declaration: StaticKotlinType,
+  imports: ReadonlySet<string>
+): boolean {
+  if (declaration.kind !== "class" || declaration.isObject) {
+    return false;
+  }
+  const source = nodeText(declaration.node);
+  const bodyStart = source.indexOf("{");
+  const header = bodyStart < 0 ? source : source.slice(0, bodyStart);
+  if (
+    /:\s*com\.facebook\.react\.bridge\.ReactContextBaseJavaModule\s*\(/u.test(header)
+  ) {
+    return true;
+  }
+  return (
+    imports.has(REACT_NATIVE_CONTEXT_BASE_MODULE_IMPORT) &&
+    /:\s*ReactContextBaseJavaModule\s*\(/u.test(header)
+  );
+}
+
+/** Retains one literal Android bridge module name from a direct getName body. */
+function staticKotlinReactNativeModuleName(
+  declaration: StaticKotlinType,
+  methods: readonly StaticKotlinFunction[],
+  imports: ReadonlySet<string>
+): string | null {
+  if (!staticKotlinDirectReactNativeModule(declaration, imports)) {
+    return null;
+  }
+  const getNameMethods = methods.filter((method) => method.name === "getName");
+  if (getNameMethods.length !== 1 || getNameMethods[0]?.body === null || getNameMethods[0] === undefined) {
+    return null;
+  }
+  const body = nodeText(getNameMethods[0].body);
+  const expression = /^=\s*"([^"\\\r\n]*)"\s*$/u.exec(body);
+  const block = /^\{\s*return\s+"([^"\\\r\n]*)"\s*\}$/u.exec(body);
+  const moduleName = expression?.[1] ?? block?.[1] ?? null;
+  return moduleName !== null && REACT_NATIVE_BRIDGE_IDENTIFIER.test(moduleName)
+    ? moduleName
+    : null;
+}
+
+/** A direct ReactMethod annotation needs exact import or fully-qualified proof. */
+function isKotlinReactNativeMethod(
+  declaration: StaticKotlinFunction,
+  imports: ReadonlySet<string>
+): boolean {
+  const modifiers = directChildren(declaration.node).find((child) => child.kind() === "modifiers");
+  if (modifiers === undefined) {
+    return false;
+  }
+  const annotations = directChildren(modifiers).filter((child) => child.kind() === "annotation");
+  const annotationsNamedReactMethod = annotations.filter((annotation) => {
+    const name = staticKotlinAnnotationName(annotation);
+    return name === "ReactMethod" || name === REACT_NATIVE_REACT_METHOD_IMPORT;
+  });
+  const reactMethods = annotationsNamedReactMethod.filter((annotation) => {
+    const name = staticKotlinAnnotationName(annotation);
+    return (
+      name === REACT_NATIVE_REACT_METHOD_IMPORT ||
+      (name === "ReactMethod" && imports.has(REACT_NATIVE_REACT_METHOD_IMPORT))
+    );
+  });
+  return (
+    annotationsNamedReactMethod.length === reactMethods.length &&
+    reactMethods.length === 1
+  );
 }
 
 function staticKotlinAnnotationInvocation(annotation: KotlinSyntaxNode): KotlinSyntaxNode | null {
@@ -1314,6 +1393,10 @@ export function extractKotlinFileFacts(input: KotlinExtractFileFactsInput): Arti
   if (!springBootPropertiesCapability.languages.includes(input.language)) {
     throw new Error("Spring Boot properties extraction was invoked for an unsupported source language.");
   }
+  const reactNativeCapability = frameworkCapability("react-native");
+  if (!reactNativeCapability.languages.includes(input.language)) {
+    throw new Error("React Native bridge extraction was invoked for an unsupported source language.");
+  }
 
   const root = parse("kotlin", input.sourceText).root();
   const lineStarts = lineStartsFor(input.sourceText);
@@ -1321,6 +1404,7 @@ export function extractKotlinFileFacts(input: KotlinExtractFileFactsInput): Arti
   const edges: GraphEdge[] = [];
   const springBootPropertiesValueReferences: SpringBootPropertiesValueReferenceFact[] = [];
   const springBootConfigurationPropertiesPrefixes: SpringBootConfigurationPropertiesPrefixReferenceFact[] = [];
+  const reactNativeNativeMethods: ReactNativeFacts["nativeMethods"][number][] = [];
   const declarationOrdinals = new Map<string, number>();
   const fileName = input.filePath.split(/[\\/]/u).at(-1) ?? input.filePath;
   const fileNode: SymbolNode = {
@@ -1566,10 +1650,26 @@ export function extractKotlinFileFacts(input: KotlinExtractFileFactsInput): Arti
           range: rangeForNode(reference.node)
         });
       }
-      for (const methodDeclaration of directChildren(declaration.body)
+      const methods = directChildren(declaration.body)
         .map((node) => staticKotlinFunction(node))
-        .filter((candidate): candidate is StaticKotlinFunction => candidate !== null)) {
+        .filter((candidate): candidate is StaticKotlinFunction => candidate !== null);
+      const reactNativeModuleName = staticKotlinReactNativeModuleName(
+        declaration,
+        methods,
+        imports
+      );
+      for (const methodDeclaration of methods) {
         const methodSymbol = addMethod(typeSymbol, methodDeclaration);
+        if (reactNativeModuleName !== null && isKotlinReactNativeMethod(methodDeclaration, imports)) {
+          reactNativeNativeMethods.push({
+            platform: "android",
+            moduleName: reactNativeModuleName,
+            methodName: methodDeclaration.name,
+            methodId: methodSymbol.id,
+            filePath: input.filePath,
+            range: rangeForNode(methodDeclaration.node)
+          });
+        }
         for (const reference of staticKotlinSpringBootBeanConfigurationPropertiesPrefixReferences(
           declaration,
           methodDeclaration,
@@ -1659,6 +1759,10 @@ export function extractKotlinFileFacts(input: KotlinExtractFileFactsInput): Arti
       routers: [],
       routes: [],
       importedRouterInclusions: []
+    },
+    reactNativeFacts: {
+      nativeModuleCalls: [],
+      nativeMethods: reactNativeNativeMethods
     }
   };
 }

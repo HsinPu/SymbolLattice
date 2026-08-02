@@ -11,13 +11,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v165";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v166";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v55";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v56";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -760,6 +760,35 @@ export interface CobolCicsFacts {
   readonly transactionOwners: readonly CobolCicsTransactionOwnerFact[];
 }
 
+/** One direct JavaScript/TypeScript call through a proven React Native NativeModules binding. */
+export interface ReactNativeNativeModuleCallFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly moduleName: string;
+  readonly methodName: string;
+  readonly range: SourceRange;
+}
+
+/** One direct native implementation method exported by a React Native bridge. */
+export interface ReactNativeNativeMethodFact {
+  readonly platform: "android" | "ios";
+  readonly moduleName: string;
+  readonly methodName: string;
+  readonly methodId: string;
+  readonly filePath: string;
+  readonly range: SourceRange;
+}
+
+/**
+ * Syntax-only React Native bridge facts. JavaScript callsites and native
+ * implementations remain independent until project resolution proves their
+ * module-and-method identity.
+ */
+export interface ReactNativeFacts {
+  readonly nativeModuleCalls: readonly ReactNativeNativeModuleCallFact[];
+  readonly nativeMethods: readonly ReactNativeNativeMethodFact[];
+}
+
 /**
  * Syntax-proven, file-local facts. They deliberately retain unresolved source
  * references so later resolution stages can be recomputed without reparsing.
@@ -807,6 +836,8 @@ export interface ArtifactFacts {
   readonly bladeFacts?: BladeFacts;
   /** Omitted only by artifact facts persisted before v0.168. */
   readonly cobolCicsFacts?: CobolCicsFacts;
+  /** Omitted only by artifact facts persisted before v0.186. */
+  readonly reactNativeFacts?: ReactNativeFacts;
 }
 
 /**

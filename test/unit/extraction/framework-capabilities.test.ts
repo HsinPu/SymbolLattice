@@ -71,6 +71,7 @@ describe("first-party framework capabilities", () => {
       "ktor",
       "vapor",
       "flutter",
+      "react-native",
       "play"
     ]);
     expect(FRAMEWORK_CAPABILITIES.map((capability) => capability.id)).toEqual(
@@ -611,6 +612,15 @@ describe("first-party framework capabilities", () => {
       surfaces: [
         "direct MaterialApp literal routes maps",
         "same-file literal widget-builder classes"
+      ]
+    });
+    expect(frameworkCapability("react-native")).toMatchObject({
+      languages: ["typescript", "javascript", "java", "kotlin", "objc"],
+      routeRegistrations: [],
+      surfaces: [
+        "direct react-native NativeModules named or namespace imports with literal module and method calls",
+        "direct Android ReactContextBaseJavaModule classes with literal getName values and direct ReactMethod annotations",
+        "direct Objective-C RCTBridgeModule imports with one RCT_EXPORT_MODULE and direct RCT_EXPORT_METHOD macros"
       ]
     });
     expect(frameworkCapability("play")).toMatchObject({

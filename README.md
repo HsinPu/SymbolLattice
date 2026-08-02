@@ -2,7 +2,7 @@
 
 # SymbolLattice
 
-**可查詢、可解釋、本機優先的程式碼智慧**
+**可查詢、可解釋、以證據為先的本機程式碼智慧平台**
 
 [![Version](https://img.shields.io/github/v/tag/HsinPu/symbol-lattice?label=version)](https://github.com/HsinPu/symbol-lattice/tags)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D22.13-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
@@ -14,9 +14,9 @@
 </div>
 
 > [!IMPORTANT]
-> v0.185.0 是開發者預覽版，尚未發佈至 npm；請由原始碼執行。
+> v0.186.0 是開發者預覽版，尚未發佈至 npm；請由原始碼執行。
 
-SymbolLattice 會在專案本機建立可查詢的程式碼符號圖譜。每條關係都保留規則、解析階段與信心值，並明確區分 `exact`、`heuristic` 與 `unresolved`。
+SymbolLattice 在本機建立可查詢的程式碼符號圖譜。每一條關係都保留規則、解析階段與信心值，嚴格區分 `exact`、`heuristic` 與 `unresolved`。
 
 ## 快速開始
 
@@ -31,7 +31,7 @@ npm run build
 # 明確建立本機索引
 node dist/cli/main.js init /path/to/project
 
-# 查詢唯讀；原始碼變更後再明確同步
+# 查詢維持唯讀；原始碼變更後再明確同步
 node dist/cli/main.js routes --project /path/to/project --method GET
 node dist/cli/main.js sync /path/to/project
 
@@ -39,25 +39,25 @@ node dist/cli/main.js sync /path/to/project
 node dist/cli/main.js serve --mcp --project /path/to/project
 ```
 
-Windows PowerShell 若找不到 `npm`，請改用 `npm.cmd`。索引資料會留在目標專案的 `.symbol-lattice/index.sqlite`。
+Windows PowerShell 若找不到 `npm`，請改用 `npm.cmd`。索引資料保存在目標專案的 `.symbol-lattice/index.sqlite`。
 
-## v0.185.0 重點
+## v0.186.0 重點
 
-- Spring Web 現可在 Java `{ "/api", "/v2" }` 與 Kotlin `["/api", "/v2"]` 的直接類別 `@RequestMapping` 中辨識多個 prefix；每個唯一 prefix 都會與已證明的 method route 交叉展開。
-- `@RequestMapping`、`RequestMethod` 與控制器註解都必須是精確直接 import 或完整 Spring 名稱。類別 prefix 可用位置、`path =` 或 `value =` 純字串／literal collection；方法路徑仍限單一純字串。
-- 每條路由都以 `exact` 證據連到本地處理函式；空或重複 method collection、重複或條件式 prefix、動態路徑、別名／萬用字元 import、預設 ALL mapping 與執行期路由都會保守排除。
+- 新增 React Native `NativeModules` bridge：直接的 JS/TS 呼叫可依「模組名稱＋方法名稱」連到 Java、Kotlin 與 Objective-C 原生實作。
+- Java/Kotlin 只接受具精確匯入證明的 `ReactContextBaseJavaModule`、字面 `getName()` 與 `@ReactMethod`；Objective-C 只接受 `RCTBridgeModule`、單一 `RCT_EXPORT_MODULE` 與直接 `RCT_EXPORT_METHOD`。
+- Android 與 iOS 若各自唯一，會保留兩條獨立的 `exact` 邊；同一平台重名實作維持 `unresolved`，不任意選取目標。
 
 ## 設計原則
 
-- 索引與查詢都在本機；來源碼不會被靜默上傳。
-- `init` 與 `sync` 是明確寫入；CLI 與 MCP 查詢一律唯讀。
-- 沒有可重現的靜態證據時，關係會保留為 unresolved，不會猜測。
+- 索引與查詢都在本機進行；原始碼不會被靜默上傳。
+- `init` 與 `sync` 是明確寫入；CLI 與 MCP 查詢保持唯讀。
+- 關係必須有可重現的靜態證據；否則保持未解析，不靠猜測補齊。
 
-## 分析邊界
+## 靜態分析邊界
 
-- Spring Web 支援直接頂層具體 Java/Kotlin 控制器、一個或多個 literal class prefix、字面 HTTP shortcut 註解，以及一個或多個可證明且不重複的 `RequestMethod` enum 方法層級 `@RequestMapping`；不推論預設 ALL、空／重複 collection、條件、代理、巢狀宣告或執行期路由。
-- Spring `@ConfigurationProperties` 支援直接 Java/Kotlin 類別、直接頂層 Java `record`，以及直接 `@Configuration` 類別內具體 Java/Kotlin `@Bean` 成員。
-- factory-method 路徑不推論執行期 bean 註冊或綁定結果；巢狀類別、Kotlin `object` factory、抽象／介面／頂層函式、別名或萬用字元 import、`value =`、多屬性、動態前綴、profile、優先序與環境覆寫均不分析。
+- React Native 目前涵蓋嚴格的 `NativeModules` bridge；TurboModule/codegen、執行期註冊、間接或動態名稱、Swift 與自訂 macro wrapper 仍不在範圍內。
+- Spring Web 支援直接 Java/Kotlin controller、字面類別前綴、HTTP shortcut 與可證明的 `RequestMethod` 集合；條件、代理與執行期路由不推斷。
+- Spring `@ConfigurationProperties` 支援直接 Java/Kotlin 類別、Java `record` 與直接 `@Configuration` 類別中的 Java/Kotlin `@Bean` 成員。
 
 ## 驗證
 

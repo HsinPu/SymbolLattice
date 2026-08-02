@@ -2672,4 +2672,160 @@ describe("TypeScript configuration module resolution", () => {
 
     expect(mathCall).toMatchObject({ resolution: "unresolved", targetId: null });
   });
+
+  it("projects a React Native NativeModules call to each independently unique Android and iOS target", () => {
+    const sourceDocuments: readonly SourceDocument[] = [
+      {
+        absolutePath: "C:/project/src/bridge.ts",
+        relativePath: "src/bridge.ts",
+        language: "typescript",
+        sourceText: [
+          'import { NativeModules } from "react-native";',
+          "export function schedule() { NativeModules.CalendarModule.createEvent(); }"
+        ].join("\n"),
+        contentHash: "bridge"
+      },
+      {
+        absolutePath: "C:/project/android/CalendarModule.java",
+        relativePath: "android/CalendarModule.java",
+        language: "java",
+        sourceText: [
+          "import com.facebook.react.bridge.ReactContextBaseJavaModule;",
+          "import com.facebook.react.bridge.ReactMethod;",
+          "public class CalendarModule extends ReactContextBaseJavaModule {",
+          '  public String getName() { return "CalendarModule"; }',
+          "  @ReactMethod public void createEvent() {}",
+          "}"
+        ].join("\n"),
+        contentHash: "android"
+      },
+      {
+        absolutePath: "C:/project/ios/CalendarModule.m",
+        relativePath: "ios/CalendarModule.m",
+        language: "objc",
+        sourceText: [
+          "#import <React/RCTBridgeModule.h>",
+          "@implementation CalendarModule",
+          "RCT_EXPORT_MODULE(CalendarModule)",
+          "RCT_EXPORT_METHOD(createEvent)",
+          "@end"
+        ].join("\n"),
+        contentHash: "ios"
+      }
+    ];
+    const snapshot = resolveProjectFacts({
+      sourceDocuments,
+      extractedFiles: sourceDocuments.map((document) =>
+        extractFileFacts({
+          filePath: document.relativePath,
+          language: document.language,
+          sourceText: document.sourceText
+        })
+      ),
+      indexedAt: "2026-08-02T00:00:00.000Z"
+    });
+    const schedule = snapshot.symbols.find(
+      (symbol) => symbol.filePath === "src/bridge.ts" && symbol.name === "schedule"
+    );
+    const android = snapshot.symbols.find(
+      (symbol) => symbol.filePath === "android/CalendarModule.java" && symbol.name === "createEvent"
+    );
+    const ios = snapshot.symbols.find(
+      (symbol) => symbol.filePath === "ios/CalendarModule.m" && symbol.name === "createEvent"
+    );
+
+    expect(schedule).toBeDefined();
+    expect(android).toBeDefined();
+    expect(ios).toBeDefined();
+    expect(
+      snapshot.edges.filter(
+        (edge) => edge.sourceId === schedule?.id && edge.referenceName === "CalendarModule.createEvent"
+      )
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          targetId: android?.id,
+          resolution: "exact",
+          confidence: 1,
+          evidence: expect.objectContaining({
+            ruleId: "framework.react-native.native-modules.direct-module-and-method.android.exact-target",
+            stage: "module"
+          })
+        }),
+        expect.objectContaining({
+          targetId: ios?.id,
+          resolution: "exact",
+          confidence: 1,
+          evidence: expect.objectContaining({
+            ruleId: "framework.react-native.native-modules.direct-module-and-method.ios.exact-target",
+            stage: "module"
+          })
+        })
+      ])
+    );
+  });
+
+  it("keeps colliding React Native implementations on one platform unresolved", () => {
+    const sourceDocuments: readonly SourceDocument[] = [
+      {
+        absolutePath: "C:/project/src/bridge.ts",
+        relativePath: "src/bridge.ts",
+        language: "typescript",
+        sourceText: [
+          'import { NativeModules } from "react-native";',
+          "export function schedule() { NativeModules.CalendarModule.createEvent(); }"
+        ].join("\n"),
+        contentHash: "bridge"
+      },
+      {
+        absolutePath: "C:/project/android/CalendarModule.java",
+        relativePath: "android/CalendarModule.java",
+        language: "java",
+        sourceText: [
+          "import com.facebook.react.bridge.ReactContextBaseJavaModule;",
+          "import com.facebook.react.bridge.ReactMethod;",
+          "public class CalendarModule extends ReactContextBaseJavaModule {",
+          '  public String getName() { return "CalendarModule"; }',
+          "  @ReactMethod public void createEvent() {}",
+          "}"
+        ].join("\n"),
+        contentHash: "java"
+      },
+      {
+        absolutePath: "C:/project/android/CalendarModule.kt",
+        relativePath: "android/CalendarModule.kt",
+        language: "kotlin",
+        sourceText: [
+          "import com.facebook.react.bridge.ReactContextBaseJavaModule",
+          "import com.facebook.react.bridge.ReactMethod",
+          "class CalendarModule(context: Any) : ReactContextBaseJavaModule(context) {",
+          '  override fun getName(): String = "CalendarModule"',
+          "  @ReactMethod fun createEvent() {}",
+          "}"
+        ].join("\n"),
+        contentHash: "kotlin"
+      }
+    ];
+    const snapshot = resolveProjectFacts({
+      sourceDocuments,
+      extractedFiles: sourceDocuments.map((document) =>
+        extractFileFacts({
+          filePath: document.relativePath,
+          language: document.language,
+          sourceText: document.sourceText
+        })
+      ),
+      indexedAt: "2026-08-02T00:00:00.000Z"
+    });
+    const unresolved = snapshot.edges.find(
+      (edge) =>
+        edge.referenceName === "CalendarModule.createEvent" &&
+        edge.targetId === null &&
+        edge.evidence?.ruleId ===
+          "framework.react-native.native-modules.direct-module-and-method.any.ambiguous-platform-target"
+    );
+
+    expect(unresolved).toMatchObject({ resolution: "unresolved", confidence: 0 });
+    expect(unresolved?.evidence?.candidateSymbolIds).toHaveLength(2);
+  });
 });

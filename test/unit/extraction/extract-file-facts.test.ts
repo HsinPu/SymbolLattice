@@ -18296,4 +18296,92 @@ describe("source extraction", () => {
       expect(facts.edges).toEqual([]);
     }
   });
+
+  it("retains only direct evidence-backed React Native NativeModules bridge facts", () => {
+    const javascript = extractFileFacts({
+      filePath: "src/mobile/bridge.ts",
+      language: "typescript",
+      sourceText: [
+        'import { NativeModules as Modules } from "react-native";',
+        'import * as ReactNative from "react-native";',
+        "export function schedule() {",
+        "  Modules.CalendarModule.createEvent();",
+        "  ReactNative.NativeModules.CalendarModule.cancelEvent();",
+        '  Modules["CalendarModule"].dynamicCall();',
+        "}"
+      ].join("\n")
+    });
+    const java = extractFileFacts({
+      filePath: "android/CalendarModule.java",
+      language: "java",
+      sourceText: [
+        "import com.facebook.react.bridge.ReactContextBaseJavaModule;",
+        "import com.facebook.react.bridge.ReactMethod;",
+        "public class CalendarModule extends ReactContextBaseJavaModule {",
+        '  public String getName() { return "CalendarModule"; }',
+        "  @ReactMethod public void createEvent() {}",
+        "}"
+      ].join("\n")
+    });
+    const kotlin = extractFileFacts({
+      filePath: "android/CalendarModule.kt",
+      language: "kotlin",
+      sourceText: [
+        "import com.facebook.react.bridge.ReactContextBaseJavaModule",
+        "import com.facebook.react.bridge.ReactMethod",
+        "class CalendarModule(context: Any) : ReactContextBaseJavaModule(context) {",
+        '  override fun getName(): String = "CalendarModule"',
+        "  @ReactMethod fun cancelEvent() {}",
+        "}"
+      ].join("\n")
+    });
+    const objectiveC = extractFileFacts({
+      filePath: "ios/CalendarModule.m",
+      language: "objc",
+      sourceText: [
+        "#import <React/RCTBridgeModule.h>",
+        "@implementation CalendarModule",
+        "RCT_EXPORT_MODULE(CalendarModule)",
+        "RCT_EXPORT_METHOD(createEvent)",
+        "@end"
+      ].join("\n")
+    });
+    const shadowed = extractFileFacts({
+      filePath: "src/mobile/shadowed.ts",
+      language: "typescript",
+      sourceText: [
+        'import { NativeModules } from "react-native";',
+        "export function local(NativeModules: { CalendarModule: { createEvent(): void } }) {",
+        "  NativeModules.CalendarModule.createEvent();",
+        "}"
+      ].join("\n")
+    });
+
+    expect(javascript.reactNativeFacts?.nativeModuleCalls).toEqual([
+      expect.objectContaining({ moduleName: "CalendarModule", methodName: "createEvent" }),
+      expect.objectContaining({ moduleName: "CalendarModule", methodName: "cancelEvent" })
+    ]);
+    expect(java.reactNativeFacts?.nativeMethods).toEqual([
+      expect.objectContaining({
+        platform: "android",
+        moduleName: "CalendarModule",
+        methodName: "createEvent"
+      })
+    ]);
+    expect(kotlin.reactNativeFacts?.nativeMethods).toEqual([
+      expect.objectContaining({
+        platform: "android",
+        moduleName: "CalendarModule",
+        methodName: "cancelEvent"
+      })
+    ]);
+    expect(objectiveC.reactNativeFacts?.nativeMethods).toEqual([
+      expect.objectContaining({
+        platform: "ios",
+        moduleName: "CalendarModule",
+        methodName: "createEvent"
+      })
+    ]);
+    expect(shadowed.reactNativeFacts?.nativeModuleCalls).toEqual([]);
+  });
 });
