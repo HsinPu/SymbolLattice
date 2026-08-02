@@ -8,6 +8,7 @@ import {
   type RouteMethod,
   type SourcePosition,
   type SourceRange,
+  type SpringBootPropertiesValueReferenceFact,
   type SymbolNode
 } from "../domain/index.js";
 import { frameworkCapability } from "./framework-capabilities.js";
@@ -49,6 +50,11 @@ interface StaticKotlinCall {
   readonly suffix: KotlinSyntaxNode;
 }
 
+interface StaticKotlinSpringBootPropertiesReference {
+  readonly key: string;
+  readonly node: KotlinSyntaxNode;
+}
+
 const KTOR_ROUTE_METHODS: Readonly<Record<string, RouteMethod>> = {
   get: "GET",
   post: "POST",
@@ -62,6 +68,8 @@ const KTOR_ROUTE_METHODS: Readonly<Record<string, RouteMethod>> = {
 const KTOR_APPLICATION_IMPORT = "io.ktor.server.application.Application";
 const KTOR_ROUTING_IMPORT = "io.ktor.server.routing.routing";
 const KTOR_ROUTE_IMPORT_PREFIX = "io.ktor.server.routing.";
+const SPRING_VALUE_IMPORT = "org.springframework.beans.factory.annotation.Value";
+const SPRING_BOOT_PROPERTIES_KEY = /^[A-Za-z0-9][A-Za-z0-9._-]*$/u;
 
 function directChildren(node: KotlinSyntaxNode): readonly KotlinSyntaxNode[] {
   return node.children();
@@ -204,6 +212,114 @@ function staticDirectImportPaths(root: KotlinSyntaxNode): ReadonlySet<string> {
   return imports;
 }
 
+function staticKotlinAnnotationInvocation(annotation: KotlinSyntaxNode): KotlinSyntaxNode | null {
+  if (annotation.kind() !== "annotation") {
+    return null;
+  }
+  const children = directChildren(annotation);
+  const invocation = children.find((child) => child.kind() === "constructor_invocation");
+  return children.length === 2 && invocation !== undefined ? invocation : null;
+}
+
+function staticKotlinAnnotationName(annotation: KotlinSyntaxNode): string | null {
+  const invocation = staticKotlinAnnotationInvocation(annotation);
+  if (invocation === null) {
+    return null;
+  }
+  const userTypes = directChildren(invocation).filter((child) => child.kind() === "user_type");
+  if (userTypes.length !== 1 || userTypes[0] === undefined) {
+    return null;
+  }
+  const name = nodeText(userTypes[0]);
+  return /^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*$/u.test(name) ? name : null;
+}
+
+/**
+ * Reads one Kotlin regular-string Spring placeholder. Kotlin evaluates an
+ * unescaped `${...}` expression, so only the static `\${...}` spelling is
+ * accepted. Raw strings, dynamic interpolation, named arguments, escapes
+ * beyond the required dollar escape, and nested placeholders stay outside the
+ * evidence boundary.
+ */
+function staticKotlinSpringBootPropertiesKey(annotation: KotlinSyntaxNode): string | null {
+  const invocation = staticKotlinAnnotationInvocation(annotation);
+  if (invocation === null) {
+    return null;
+  }
+  const argumentLists = directChildren(invocation).filter((child) => child.kind() === "value_arguments");
+  if (argumentLists.length !== 1 || argumentLists[0] === undefined) {
+    return null;
+  }
+  const arguments_ = directChildren(argumentLists[0]).filter((child) => child.kind() === "value_argument");
+  if (arguments_.length !== 1 || arguments_[0] === undefined) {
+    return null;
+  }
+  const argumentChildren = directChildren(arguments_[0]);
+  const literal = argumentChildren[0];
+  if (literal?.kind() !== "string_literal" || argumentChildren.length !== 1) {
+    return null;
+  }
+  const literalChildren = directChildren(literal);
+  if (literalChildren.length !== 1 || literalChildren[0]?.kind() !== "string_content") {
+    return null;
+  }
+  const source = nodeText(literal);
+  const prefix = '"\\${';
+  if (!source.startsWith(prefix) || !source.endsWith('}"')) {
+    return null;
+  }
+  const placeholder = source.slice(prefix.length, -2);
+  const defaultSeparator = placeholder.indexOf(":");
+  const key = defaultSeparator < 0 ? placeholder : placeholder.slice(0, defaultSeparator);
+  const defaultValue = defaultSeparator < 0 ? "" : placeholder.slice(defaultSeparator + 1);
+  return SPRING_BOOT_PROPERTIES_KEY.test(key) && !/[{}"\\]/u.test(defaultValue) ? key : null;
+}
+
+/**
+ * Retains direct Kotlin class-property Spring `@Value` annotations only after
+ * one exact import or a fully-qualified annotation proves Spring's `Value`
+ * type. Kotlin properties do not need their own generic graph symbols here;
+ * the enclosing class owns the relation, matching the existing Java contract.
+ */
+function staticKotlinSpringBootPropertiesReferences(
+  declaration: StaticKotlinType,
+  imports: ReadonlySet<string>
+): readonly StaticKotlinSpringBootPropertiesReference[] {
+  if (declaration.kind !== "class") {
+    return [];
+  }
+  const references: StaticKotlinSpringBootPropertiesReference[] = [];
+  for (const property of directChildren(declaration.body).filter(
+    (child) => child.kind() === "property_declaration"
+  )) {
+    const modifiers = directChildren(property).find((child) => child.kind() === "modifiers");
+    if (modifiers === undefined) {
+      continue;
+    }
+    const annotations = directChildren(modifiers).filter((child) => child.kind() === "annotation");
+    const annotationsNamedValue = annotations.filter(
+      (annotation) => staticKotlinAnnotationName(annotation) === "Value" ||
+        staticKotlinAnnotationName(annotation) === SPRING_VALUE_IMPORT
+    );
+    const valueAnnotations = annotationsNamedValue.filter((annotation) => {
+      const name = staticKotlinAnnotationName(annotation);
+      return name === SPRING_VALUE_IMPORT || (name === "Value" && imports.has(SPRING_VALUE_IMPORT));
+    });
+    if (annotationsNamedValue.length !== valueAnnotations.length || valueAnnotations.length !== 1) {
+      continue;
+    }
+    const annotation = valueAnnotations[0];
+    if (annotation === undefined) {
+      continue;
+    }
+    const key = staticKotlinSpringBootPropertiesKey(annotation);
+    if (key !== null) {
+      references.push({ key, node: annotation });
+    }
+  }
+  return references;
+}
+
 function staticDirectCall(node: KotlinSyntaxNode): StaticKotlinCall | null {
   if (node.kind() !== "call_expression") {
     return null;
@@ -340,11 +456,16 @@ export function extractKotlinFileFacts(input: KotlinExtractFileFactsInput): Arti
   if (!ktorCapability.languages.includes(input.language)) {
     throw new Error("Ktor framework extraction was invoked for an unsupported source language.");
   }
+  const springBootPropertiesCapability = frameworkCapability("spring-boot-properties");
+  if (!springBootPropertiesCapability.languages.includes(input.language)) {
+    throw new Error("Spring Boot properties extraction was invoked for an unsupported source language.");
+  }
 
   const root = parse("kotlin", input.sourceText).root();
   const lineStarts = lineStartsFor(input.sourceText);
   const symbols: SymbolNode[] = [];
   const edges: GraphEdge[] = [];
+  const springBootPropertiesValueReferences: SpringBootPropertiesValueReferenceFact[] = [];
   const declarationOrdinals = new Map<string, number>();
   const fileName = input.filePath.split(/[\\/]/u).at(-1) ?? input.filePath;
   const fileNode: SymbolNode = {
@@ -517,6 +638,7 @@ export function extractKotlinFileFacts(input: KotlinExtractFileFactsInput): Arti
 
   if (!hasSyntaxError(root)) {
     const topLevel = directChildren(root);
+    const imports = staticDirectImportPaths(root);
     const topLevelFunctions = topLevel
       .map((node) => staticKotlinFunction(node))
       .filter((candidate): candidate is StaticKotlinFunction => candidate !== null);
@@ -526,6 +648,14 @@ export function extractKotlinFileFacts(input: KotlinExtractFileFactsInput): Arti
       .map((node) => staticKotlinType(node))
       .filter((candidate): candidate is StaticKotlinType => candidate !== null)) {
       const typeSymbol = addType(declaration);
+      for (const reference of staticKotlinSpringBootPropertiesReferences(declaration, imports)) {
+        springBootPropertiesValueReferences.push({
+          sourceId: typeSymbol.id,
+          filePath: input.filePath,
+          key: reference.key,
+          range: rangeForNode(reference.node)
+        });
+      }
       for (const methodDeclaration of directChildren(declaration.body)
         .map((node) => staticKotlinFunction(node))
         .filter((candidate): candidate is StaticKotlinFunction => candidate !== null)) {
@@ -540,7 +670,6 @@ export function extractKotlinFileFacts(input: KotlinExtractFileFactsInput): Arti
       functionsByName.set(functionDeclaration.name, candidates);
     }
 
-    const imports = staticDirectImportPaths(root);
     if (imports.has(KTOR_APPLICATION_IMPORT) && imports.has(KTOR_ROUTING_IMPORT)) {
       for (const functionDeclaration of topLevelFunctions) {
         for (const statement of staticKtorRouteStatements(functionDeclaration)) {
@@ -572,6 +701,9 @@ export function extractKotlinFileFacts(input: KotlinExtractFileFactsInput): Arti
     importBindings: [],
     exportBindings: [],
     reExportBindings: [],
+    springBootPropertiesFacts: {
+      valueReferences: springBootPropertiesValueReferences
+    },
     nestRouteFacts: {
       routeControllers: [],
       moduleControllers: [],

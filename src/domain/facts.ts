@@ -11,13 +11,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v150";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v151";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v52";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v53";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -624,9 +624,9 @@ export interface JavaFacts {
   readonly classes: readonly JavaClassFact[];
 }
 
-/** One direct Spring `@Value("${literal.key}")` annotation on a class field. */
+/** One direct Spring `@Value` literal-key annotation on a Java field or Kotlin property. */
 export interface SpringBootPropertiesValueReferenceFact {
-  /** Stable symbol identity of the directly enclosing Java class. */
+  /** Stable symbol identity of the directly enclosing Java or Kotlin class. */
   readonly sourceId: string;
   readonly filePath: string;
   readonly key: string;
@@ -635,7 +635,7 @@ export interface SpringBootPropertiesValueReferenceFact {
 
 /**
  * Syntax-only Spring Boot properties facts. The project resolver links them
- * only to one unique key in a conventional application/bootstrap properties file.
+ * only to one unique key in a conventional application/bootstrap properties or YAML file.
  */
 export interface SpringBootPropertiesFacts {
   readonly valueReferences: readonly SpringBootPropertiesValueReferenceFact[];

@@ -15107,6 +15107,170 @@ describe("SymbolLatticeService", () => {
     });
   });
 
+  it("projects conservative Kotlin Spring Boot @Value references across YAML and properties files", async () => {
+    const projectPath = await createInlineProject({
+      "config/application.yml": [
+        "server:",
+        "  port: 8080",
+        "feature:",
+        "  enabled: true",
+        "spring:",
+        "  datasource:",
+        "    password: kotlin-secret"
+      ].join("\n"),
+      "config/application-dev.yaml": ["feature:", "  enabled: false"].join("\n"),
+      "config/bootstrap.properties": "app.name=symbol-lattice\n",
+      "src/config/KotlinConfig.kt": [
+        "import org.springframework.beans.factory.annotation.Value",
+        "",
+        "class KotlinConfig {",
+        '  @Value("\\${server.port}")',
+        "  private val port: String = \"\"",
+        '  @Value("\\${feature.enabled:false}")',
+        "  private val enabled: Boolean = false",
+        '  @org.springframework.beans.factory.annotation.Value("\\${app.name}")',
+        "  private val appName: String = \"\"",
+        "}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    const indexed = await service.init({ projectPath });
+    const configurationClass = (
+      await service.find(projectPath, "src/config/KotlinConfig.kt#KotlinConfig")
+    ).symbols[0];
+    const serverPort = (
+      await service.find(projectPath, "config/application.yml#spring-boot-yaml-key:server.port")
+    ).symbols[0];
+    const appName = (
+      await service.find(projectPath, "config/bootstrap.properties#properties-key:app.name")
+    ).symbols[0];
+    const applicationFeature = (
+      await service.find(projectPath, "config/application.yml#spring-boot-yaml-key:feature.enabled")
+    ).symbols[0];
+    const developmentFeature = (
+      await service.find(projectPath, "config/application-dev.yaml#spring-boot-yaml-key:feature.enabled")
+    ).symbols[0];
+    if (
+      configurationClass === undefined ||
+      serverPort === undefined ||
+      appName === undefined ||
+      applicationFeature === undefined ||
+      developmentFeature === undefined
+    ) {
+      throw new Error("Expected indexed Kotlin Spring Boot configuration symbols.");
+    }
+
+    const serverPortCallers = await service.callers(projectPath, serverPort.qualifiedName);
+    const kotlinFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "src/config/KotlinConfig.kt");
+    const yamlFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "config/application.yml");
+    const snapshot = graphStore.getSnapshot(projectPath);
+    const serverPortReference = snapshot.edges.find(
+      (edge) => edge.sourceId === configurationClass.id && edge.targetId === serverPort.id
+    );
+    const appNameReference = snapshot.edges.find(
+      (edge) => edge.sourceId === configurationClass.id && edge.targetId === appName.id
+    );
+    const ambiguousFeatureReference = snapshot.edges.find(
+      (edge) =>
+        edge.sourceId === configurationClass.id &&
+        edge.kind === "references" &&
+        edge.referenceName === "feature.enabled"
+    );
+
+    expect(indexed).toMatchObject({
+      stale: false,
+      counts: { files: 4, symbols: 10, edges: 9 }
+    });
+    expect(kotlinFacts?.springBootPropertiesFacts).toMatchObject({
+      valueReferences: [
+        { sourceId: configurationClass.id, key: "server.port" },
+        { sourceId: configurationClass.id, key: "feature.enabled" },
+        { sourceId: configurationClass.id, key: "app.name" }
+      ]
+    });
+    expect(JSON.stringify(yamlFacts)).not.toContain("kotlin-secret");
+    expect(serverPortCallers.relations).toEqual([
+      expect.objectContaining({
+        symbol: expect.objectContaining({ id: configurationClass.id }),
+        edge: expect.objectContaining({
+          kind: "references",
+          resolution: "exact",
+          referenceName: "server.port",
+          evidence: expect.objectContaining({
+            ruleId: "framework.spring-boot.yaml.direct-value.literal-key.exact-key",
+            stage: "module",
+            candidateSymbolIds: [serverPort.id],
+            configurationPaths: ["config/application.yml"]
+          })
+        })
+      })
+    ]);
+    expect(serverPortReference).toMatchObject({
+      kind: "references",
+      resolution: "exact",
+      confidence: 1,
+      referenceName: "server.port"
+    });
+    expect(appNameReference).toMatchObject({
+      kind: "references",
+      resolution: "exact",
+      confidence: 1,
+      referenceName: "app.name",
+      evidence: expect.objectContaining({
+        ruleId: "framework.spring-boot.properties.direct-value.literal-key.exact-key",
+        configurationPaths: ["config/bootstrap.properties"]
+      })
+    });
+    expect(ambiguousFeatureReference).toMatchObject({
+      targetId: null,
+      resolution: "unresolved",
+      confidence: 0,
+      referenceName: "feature.enabled",
+      evidence: {
+        ruleId: "framework.spring-boot.yaml.direct-value.literal-key.ambiguous-key",
+        stage: "unresolved",
+        candidateSymbolIds: expect.arrayContaining([applicationFeature.id, developmentFeature.id]),
+        configurationPaths: expect.arrayContaining([
+          "config/application.yml",
+          "config/application-dev.yaml"
+        ])
+      }
+    });
+
+    await writeFile(
+      join(projectPath, "config", "application.yml"),
+      ["feature:", "  enabled: true"].join("\n"),
+      "utf8"
+    );
+    const synced = await service.sync({ projectPath });
+    const serverPortAfterSync = graphStore
+      .getSnapshot(projectPath)
+      .edges.find(
+        (edge) =>
+          edge.sourceId === configurationClass.id &&
+          edge.kind === "references" &&
+          edge.referenceName === "server.port"
+      );
+
+    expect(synced.lastIndexWork?.reusedArtifactFiles).toContain("src/config/KotlinConfig.kt");
+    expect(serverPortAfterSync).toMatchObject({
+      targetId: null,
+      resolution: "unresolved",
+      confidence: 0,
+      evidence: {
+        ruleId: "framework.spring-boot.config.direct-value.literal-key.unresolved-key",
+        stage: "unresolved",
+        candidateSymbolIds: []
+      }
+    });
+  });
+
   it("indexes direct Shell and Bash functions with persisted source search", async () => {
     const projectPath = await createInlineProject({
       "scripts/deploy.sh": [

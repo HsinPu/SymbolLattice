@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.169.0 是開發者預覽版，尚未發佈至 npm；請由原始碼執行。
+> v0.170.0 是開發者預覽版，尚未發佈至 npm；請由原始碼執行。
 
 SymbolLattice 為專案建立可查詢的本機程式碼符號圖譜。每條關係都保留規則、解析階段與信心值，並嚴格區分 `exact`、`heuristic` 與 `unresolved` 證據。
 
@@ -41,11 +41,11 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 Windows PowerShell 若無法使用 `npm`，請改用 `npm.cmd`。索引資料保存在目標專案的 `.symbol-lattice/index.sqlite`。
 
-## v0.169.0 重點
+## v0.170.0 重點
 
-- Java 的直接 `@Value("${key}")` 現可連到慣例 `application`／`bootstrap` YAML 的巢狀設定鍵，例如 `server.port`。
-- 只有唯一、可解析的 YAML 或 `.properties` 候選鍵會建立 `exact` 關係；跨 profile、跨格式或重複鍵都維持 `unresolved`，不猜測優先順序。
-- YAML 僅接受單一文件、無錨點／標籤／序列／別名、由純 mapping 組成的單行字面葉節點；設定值不會寫入圖譜。
+- Kotlin 類別內的直接 Spring `@Value("\${key}")` 屬性現在可連到既有 YAML 與 `.properties` 設定鍵。
+- Kotlin 會嚴格要求跳脫 `$`，避免把 Kotlin 字串插值誤當成 Spring placeholder；唯一候選才建立 `exact` 關係。
+- 未跳脫 `$`、named argument、巢狀 placeholder、use-site target、alias／wildcard import，以及跨 profile／跨格式衝突都維持 `unresolved` 或不產生事實。
 
 ## 核心原則
 
@@ -55,7 +55,7 @@ Windows PowerShell 若無法使用 `npm`，請改用 `npm.cmd`。索引資料保
 
 ## 靜態分析邊界
 
-- Spring Boot YAML 僅連結 Java 類別欄位上的直接、已證明 `@Value` 字面 placeholder；不支援 Kotlin、`@ConfigurationProperties`、relaxed binding、列表、合併鍵、動態值、設定匯入、profile 啟用或執行時優先順序。
+- Spring Boot `@Value` 僅連結 Java 類別欄位，或 Kotlin 類別內使用跳脫 `$` 的直接規則字串屬性。Kotlin constructor 參數、method／parameter annotation、raw string、use-site target、alias／wildcard import、`@ConfigurationProperties`、relaxed binding、列表、合併鍵、動態值、設定匯入、profile 啟用與執行時優先順序都不支援。
 - COBOL CICS 僅接受已由 `END-EXEC` 完整結束、含單一字面 `TRANSID` 的直接 `RETURN` 或 `START`。目標須是索引內唯一、在 `PROCEDURE DIVISION` 前宣告且名稱含 `TRAN` 的字面交易碼；CICS CSD 屬外部設定，因此關係保持 `heuristic`，而非執行時保證。
 - 動態組合、外部或 namespace 套件、父層相對匯入、複製或容器值、已裝飾或匯入的類別、WebSocket、`add_route`、版本設定與模糊目標，都不會成為 `exact` 結果。
 

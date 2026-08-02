@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.169.0 is a developer preview and is not published to npm. Run it from source.
+> v0.170.0 is a developer preview and is not published to npm. Run it from source.
 
 SymbolLattice builds a queryable local code-symbol graph for a project. Every relation retains its rule, resolution stage, and confidence; `exact`, `heuristic`, and `unresolved` evidence are never conflated.
 
@@ -41,11 +41,11 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 On Windows PowerShell, use `npm.cmd` if `npm` is unavailable. Index data stays in the target project's `.symbol-lattice/index.sqlite`.
 
-## v0.169.0 highlights
+## v0.170.0 highlights
 
-- Direct Java `@Value("${key}")` fields now link to nested configuration keys in conventional `application` and `bootstrap` YAML files, such as `server.port`.
-- Only one parser-proven YAML or `.properties` candidate creates an `exact` relation. Profile, cross-format, and duplicate keys remain `unresolved` instead of assuming precedence.
-- YAML accepts only a single document with plain mapping ancestry and single-line literal leaves; anchors, tags, sequences, aliases, and values are never retained as graph data.
+- Direct Kotlin class-property Spring `@Value("\${key}")` annotations now link to existing YAML and `.properties` configuration keys.
+- Kotlin requires the escaped dollar sign so a Kotlin string interpolation cannot be mistaken for a Spring placeholder; only one candidate creates an `exact` relation.
+- Unescaped dollars, named arguments, nested placeholders, use-site targets, alias/wildcard imports, and profile or cross-format collisions remain unresolved or produce no fact.
 
 ## Principles
 
@@ -55,7 +55,7 @@ On Windows PowerShell, use `npm.cmd` if `npm` is unavailable. Index data stays i
 
 ## Static-analysis boundaries
 
-- Spring Boot YAML supports only direct, proven literal `@Value` placeholders on Java class fields. Kotlin, `@ConfigurationProperties`, relaxed binding, lists, merge keys, dynamic values, config imports, active profiles, and runtime precedence remain outside analysis.
+- Spring Boot `@Value` supports only direct Java class fields or Kotlin class properties using an escaped-dollar regular string. Kotlin constructor parameters, method/parameter annotations, raw strings, use-site targets, alias/wildcard imports, `@ConfigurationProperties`, relaxed binding, lists, merge keys, dynamic values, config imports, active profiles, and runtime precedence remain outside analysis.
 - COBOL CICS accepts only a direct `RETURN` or `START` completed by `END-EXEC` with one literal `TRANSID`. Its target must be the unique indexed, pre-`PROCEDURE DIVISION`, `TRAN`-named literal owner; because the CICS CSD is external configuration, this remains `heuristic`, not a runtime guarantee.
 - Dynamic composition, external or namespace packages, parent-relative imports, copied or container values, decorated or imported classes, WebSockets, `add_route`, versioning, and ambiguous targets never become `exact` results.
 

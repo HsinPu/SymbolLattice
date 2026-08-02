@@ -399,10 +399,11 @@ describe("first-party framework capabilities", () => {
       ]
     });
     expect(frameworkCapability("spring-boot-properties")).toMatchObject({
-      languages: ["java", "properties", "yaml"],
+      languages: ["java", "kotlin", "properties", "yaml"],
       routeRegistrations: [],
       surfaces: [
-        "direct imported or fully-qualified @Value literal-key annotations on direct Java fields",
+        "direct imported or fully-qualified @Value literal-key annotations on direct Java fields or Kotlin class properties",
+        "Kotlin regular-string placeholders with an explicit escaped dollar sign",
         "unique literal keys in conventional application or bootstrap properties or YAML files",
         "direct nested YAML mapping leaves without anchors, tags, sequences, aliases, nulls, or multiline scalars"
       ]

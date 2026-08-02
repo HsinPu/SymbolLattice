@@ -6,6 +6,27 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.170.0] - 2026-08-02
+
+### Added
+
+- Kotlin now contributes direct class-property Spring <code>@Value</code> facts to the same project-local configuration resolver used by Java. An exact <code>org.springframework.beans.factory.annotation.Value</code> import or a fully-qualified annotation proves the framework type; unique YAML or <code>.properties</code> candidates retain the established exact configuration edge evidence.
+- Kotlin regular strings must use the source-proven escaped-dollar spelling <code>"\${literal.key}"</code>. This distinguishes a static Spring placeholder from Kotlin's runtime <code>${...}</code> string interpolation before any cross-file configuration lookup occurs.
+- New Kotlin extraction and service coverage proves imported and fully-qualified annotations, YAML/properties resolution, profile ambiguity, explicit synchronization withdrawal, and rejection of unescaped interpolation, named arguments, nested placeholders, use-site targets, alias imports, and interface properties.
+
+### Compatibility
+
+- The artifact-facts extractor advances to <code>multi-language-ast-v151</code> and the project resolver to <code>project-resolver-v53</code>. Existing graphs and SQLite schema remain readable; the next explicit <code>sync</code> refreshes Kotlin facts and projects their configuration edges.
+
+### Deliberate limits
+
+- Kotlin support is limited to direct properties inside a direct top-level class. Constructor parameters, method/parameter annotations, delegated properties, raw strings, aliases, wildcard imports, annotations with use-site targets, named arguments, expressions, escaped content beyond the one required dollar escape, and nested placeholders remain outside analysis.
+- <code>@ConfigurationProperties</code>, relaxed binding, configuration imports, active-profile selection, environment overrides, property precedence, values, and runtime Spring behavior remain outside analysis. Multiple candidates remain explicit unresolved evidence rather than a selected deployment guess.
+
+### Comparison notes
+
+- The inspected CodeGraph Spring extractor runs one shared Java/Kotlin <code>@Value("${...}")</code> text pattern and has broader <code>@ConfigurationProperties</code>, relaxed-binding, and config-candidate behavior. SymbolLattice independently adds the direct Kotlin subset with a Kotlin-language semantic guard: only an escaped-dollar regular string is static; an unescaped <code>${...}</code> interpolation cannot become a configuration relation. CodeGraph remains broader for Spring coverage, while SymbolLattice is stricter at the Kotlin static-value boundary and preserves ambiguity without choosing a candidate.
+
 ## [0.169.0] - 2026-08-02
 
 ### Added

@@ -11319,6 +11319,124 @@ describe("source extraction", () => {
     ]);
   });
 
+  it("retains direct Kotlin Spring @Value property facts only for escaped literal placeholders", () => {
+    const facts = extractFileFacts({
+      filePath: "src/config/AppConfig.kt",
+      language: "kotlin",
+      sourceText: [
+        "import org.springframework.beans.factory.annotation.Value",
+        "",
+        "class AppConfig {",
+        '  @Value("\\${server.port}")',
+        "  private val port: String = \"\"",
+        '  @Value("\\${feature.enabled:false}")',
+        "  private val enabled: Boolean = false",
+        '  @org.springframework.beans.factory.annotation.Value("\\${app.name:default-name}")',
+        "  private val appName: String = \"\"",
+        "}"
+      ].join("\n")
+    });
+    const configurationClass = facts.symbols.find(
+      (symbol) => symbol.qualifiedName === "src/config/AppConfig.kt#AppConfig"
+    );
+
+    if (configurationClass === undefined) {
+      throw new Error("Expected Kotlin configuration class symbol.");
+    }
+
+    expect(facts.springBootPropertiesFacts?.valueReferences).toEqual([
+      expect.objectContaining({
+        sourceId: configurationClass.id,
+        filePath: "src/config/AppConfig.kt",
+        key: "server.port",
+        range: expect.objectContaining({ start: { line: 4, column: 3 } })
+      }),
+      expect.objectContaining({
+        sourceId: configurationClass.id,
+        filePath: "src/config/AppConfig.kt",
+        key: "feature.enabled",
+        range: expect.objectContaining({ start: { line: 6, column: 3 } })
+      }),
+      expect.objectContaining({
+        sourceId: configurationClass.id,
+        filePath: "src/config/AppConfig.kt",
+        key: "app.name",
+        range: expect.objectContaining({ start: { line: 8, column: 3 } })
+      })
+    ]);
+    expect(JSON.stringify(facts)).not.toContain("default-name");
+
+    const unproven = extractFileFacts({
+      filePath: "src/config/Unproven.kt",
+      language: "kotlin",
+      sourceText: [
+        "import org.springframework.beans.factory.annotation.Value as SpringValue",
+        "",
+        "class Unproven {",
+        '  @Value("\\${unimported.key}")',
+        "  private val unimported: String = \"\"",
+        '  @SpringValue("\\${aliased.key}")',
+        "  private val aliased: String = \"\"",
+        "}"
+      ].join("\n")
+    });
+
+    expect(unproven.springBootPropertiesFacts?.valueReferences).toEqual([]);
+
+    const rejected = [
+      [
+        "src/config/Dynamic.kt",
+        [
+          "import org.springframework.beans.factory.annotation.Value",
+          "",
+          "class Dynamic {",
+          '  @Value("${dynamic.key}")',
+          "  private val dynamic: String = \"\"",
+          "}"
+        ].join("\n")
+      ],
+      [
+        "src/config/Named.kt",
+        [
+          "import org.springframework.beans.factory.annotation.Value",
+          "",
+          "class Named {",
+          '  @Value(value = "\\${named.key}")',
+          "  private val named: String = \"\"",
+          "}"
+        ].join("\n")
+      ],
+      [
+        "src/config/Nested.kt",
+        [
+          "import org.springframework.beans.factory.annotation.Value",
+          "",
+          "class Nested {",
+          '  @Value("\\${nested.\\${key}}")',
+          "  private val nested: String = \"\"",
+          "}"
+        ].join("\n")
+      ],
+      [
+        "src/config/Field.kt",
+        [
+          "import org.springframework.beans.factory.annotation.Value",
+          "",
+          "class Field {",
+          '  @field:Value("\\${field.key}")',
+          "  private val field: String = \"\"",
+          "}"
+        ].join("\n")
+      ]
+    ] as const;
+
+    expect(
+      rejected.map(([filePath, sourceText]) =>
+        extractFileFacts({ filePath, language: "kotlin", sourceText }).springBootPropertiesFacts?.valueReferences
+      )
+    ).toEqual([[], [], [], []]);
+  });
+
   it("requires direct Kotlin Ktor imports, Application.module shape, literal callable-reference routes, and valid syntax", () => {
     const unproven = extractFileFacts({
       filePath: "src/Application.kt",
