@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.204.0 is a developer preview. Run it from source.
+> v0.205.0 is a developer preview. Run it from source.
 
 SymbolLattice builds a queryable local code-symbol graph. Every relation retains its rule, evidence stage, and confidence; exact, heuristic, and unresolved evidence are never conflated.
 
@@ -49,7 +49,9 @@ On Windows PowerShell, use `npm.cmd` if npm is unavailable. Index data stays in 
 > [!NOTE]
 > MCP tools never create or update a graph themselves. The default `serve --mcp` auto-sync is a separate host-owned background watcher; use `--no-auto-sync` for fully manual updates.
 
-## v0.204.0 highlights
+## v0.205.0 highlights
+
+- `npm run build && npm run verify:mcp-worker-generation` uses a temporary project to prove a real compiled MCP worker: it reads generation one, the host runs `sync`, and that same worker reads generation two with zero fallback and zero worker crashes. The fixture is removed automatically.
 
 - Every valid `init`/`sync` prefers SQLite WAL. An existing graph converts in place while retaining its active generation; no reindex is required.
 - A WAL read transaction stays on one generation snapshot while the writer can commit a new one; the reader observes it only after that transaction ends.
@@ -71,6 +73,7 @@ On Windows PowerShell, use `npm.cmd` if npm is unavailable. Index data stays in 
 npm run check
 npm test
 npm run build
+npm run verify:mcp-worker-generation
 git diff --check
 ```
 

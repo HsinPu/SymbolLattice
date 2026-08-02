@@ -6,6 +6,28 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.205.0] - 2026-08-02
+
+### Added
+
+- `npm run verify:mcp-worker-generation` now runs a disposable end-to-end release verification against the compiled MCP worker. It creates one temporary TypeScript project, initializes generation one, waits for one real worker, proves a worker-backed search, changes the source, runs host-owned `sync`, and proves that same one-worker pool returns generation two.
+- The JSON receipt contains only temporary-fixture counts, generation-change truth, redacted pool status, and five assertions: worker readiness, first-generation evidence, post-sync evidence from the same worker, no fallback, and no crash. The temporary project is removed in a `finally` block.
+- The verification script is explicitly included in the npm package file list, so the documented command is present in a packed artifact as well as a source checkout.
+
+### Compatibility
+
+- Runtime graph, SQLite, WAL, CLI query, MCP request/response, pool scheduling, and indexing behavior are unchanged. The new verification command requires a prior `npm run build` because it deliberately runs the packaged worker entrypoint.
+
+### Deliberate limits
+
+- This is a deterministic two-generation handoff check, not a throughput benchmark, long-running soak test, arbitrary-project test, held-reader transaction test, manual-checkpoint test, or cross-machine/filesystem guarantee.
+- It uses one temporary source file and one worker specifically to prove the persistent-reader path without hiding it behind demand-driven pool growth or compatibility fallback.
+
+### Comparison notes
+
+- CodeGraph already uses dedicated query workers with their own WAL readers. SymbolLattice now has a first-party, reproducible proof that its independently designed compiled worker sees a host `sync` generation transition through the real MCP pool path.
+- CodeGraph remains broader in query computation, worker capacity, caching, and production maturity. This release validates a narrow correctness contract rather than claiming equivalent system scale.
+
 ## [0.204.0] - 2026-08-02
 
 ### Added
