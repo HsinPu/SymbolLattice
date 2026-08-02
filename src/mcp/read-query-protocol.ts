@@ -8,6 +8,7 @@ export const MCP_READ_TOOL_NAMES = [
   "git-hunks",
   "search",
   "investigate",
+  "impact",
   "routes",
   "entrypoints",
   "hierarchy",

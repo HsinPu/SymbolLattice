@@ -6,6 +6,7 @@ import type {
   EvidencePath,
   GraphRelation,
   ImpactPath,
+  ImpactSummary,
   ParentRelation,
   RouteMethod,
   RouteRecord,
@@ -37,7 +38,7 @@ import type {
 
 /** HTTP and client-navigation route extraction remains domain-owned; application callers consume these public records. */
 export { ROUTE_METHODS } from "../domain/graph.js";
-export type { RouteMethod, RouteRecord } from "../domain/graph.js";
+export type { ImpactSummary, RouteMethod, RouteRecord } from "../domain/graph.js";
 
 /** Non-HTTP transport inventory stays separate from the HTTP route contract. */
 export { ENTRYPOINT_OPERATIONS, ENTRYPOINT_TRANSPORTS } from "../domain/graph.js";
@@ -341,6 +342,8 @@ export interface ImpactResult {
   readonly status: IndexStatus;
   readonly symbol: SymbolNode;
   readonly paths: readonly ImpactPath[];
+  /** Deterministic grouping and endpoint coverage for exactly these returned paths. */
+  readonly summary: ImpactSummary;
   /** Present only when a caller explicitly requested a bounded result. */
   readonly truncated?: boolean;
 }

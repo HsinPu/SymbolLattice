@@ -15,6 +15,7 @@ import {
   runGitAffectedTestsTool,
   runGitHunksTool,
   runHierarchyTool,
+  runImpactTool,
   runInvestigateTool,
   runNodeTool,
   runRoutesTool,
@@ -29,6 +30,7 @@ import {
   type GitAffectedTestsToolArguments,
   type GitHunksToolArguments,
   type HierarchyToolArguments,
+  type ImpactToolArguments,
   type InvestigateToolArguments,
   type NodeToolArguments,
   type ReadOnlyToolResponse,
@@ -118,6 +120,8 @@ async function execute(
       return runSearchTool(service, defaultProjectPath, arguments_ as SearchToolArguments);
     case "investigate":
       return runInvestigateTool(service, defaultProjectPath, arguments_ as InvestigateToolArguments);
+    case "impact":
+      return runImpactTool(service, defaultProjectPath, arguments_ as ImpactToolArguments);
     case "routes":
       return runRoutesTool(service, defaultProjectPath, arguments_ as RoutesToolArguments);
     case "entrypoints":

@@ -6,6 +6,31 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.208.0] - 2026-08-03
+
+### Added
+
+- Every general `impact` response now includes `summary`: deterministic grouping of exactly the returned impact terminals by their own file, including nearest depth and the final discovery edge for each terminal.
+- `summary.entrypointCoverage` returns only persisted route or non-HTTP entrypoint records whose synthetic symbol and binding edge are the terminal step of a retained path. It does not infer coverage from another symbol in the same file or an intermediate path node.
+- Added the read-only, idempotent `symbol_lattice_impact` MCP tool. It accepts an exact reference plus a bounded 1–3 hop depth and 1–100 returned paths, uses the existing MCP read-query executor, and is dispatched by the compiled read-only worker.
+- The worker-generation verification now proves that a real worker can execute the new `impact` tool without an in-process fallback.
+
+### Compatibility
+
+- Runtime JSON from the existing CLI and service `impact` query gains the additive `summary` field. TypeScript integrations that construct `ImpactResult` values directly must provide it.
+- Existing general impact traversal semantics, direct CLI depth validation, SQLite schema, index generations, `init`/`sync`, and automatic-sync behavior are unchanged.
+
+### Deliberate limits
+
+- `summary` is a report of the returned path set, not a claim that every dependency in the graph was traversed. If `truncated` is true after an explicit path limit, callers must treat the groups and endpoint coverage as partial.
+- General impact still follows resolved static relations and is not relabeled as exact-only evidence. The separate `investigate --ranking impact` path remains the bounded exact-only ranking feature.
+- The standalone MCP tool caps depth at three and returned paths at 100 so its worker response stays bounded. It neither initializes nor refreshes an index.
+
+### Comparison notes
+
+- The inspected CodeGraph `formatImpact` presents affected symbols grouped by file. SymbolLattice independently adds the same file-oriented reading mode while retaining structured terminal evidence and route/non-HTTP entrypoint coverage for the exact returned records.
+- CodeGraph remains broader in FTS, RWR/personalized PageRank, overall impact computation, dynamic-dispatch handling, and mature query ergonomics. The new SymbolLattice summary improves explainability for one bounded static result; it does not establish broader graph-computation parity.
+
 ## [0.207.0] - 2026-08-02
 
 ### Added

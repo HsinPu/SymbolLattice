@@ -893,6 +893,17 @@ describe("SymbolLatticeService", () => {
       paths: unboundedImpact.paths.slice(0, 1),
       truncated: true
     });
+    expect(unboundedImpact.summary.returnedPathCount).toBe(unboundedImpact.paths.length);
+    expect(boundedImpact.summary).toMatchObject({
+      returnedPathCount: 1,
+      impactedFileCount: 1,
+      entrypointCoverage: { routes: [], entrypoints: [] }
+    });
+    expect(
+      boundedImpact.summary.files.flatMap((file) =>
+        file.impactedSymbols.map((terminal) => terminal.symbol.id)
+      )
+    ).toEqual(boundedImpact.paths.map((path) => path.symbols.at(-1)?.id));
   });
 
   it("investigates persisted lexical evidence into bounded active-generation graph context", async () => {

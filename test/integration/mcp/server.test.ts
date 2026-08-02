@@ -23,6 +23,8 @@ import {
   type GitHunksResult,
   type HierarchyOptions,
   type HierarchyResult,
+  type ImpactOptions,
+  type ImpactResult,
   type InvestigateOptions,
   type InvestigateResult,
   type NodeResult,
@@ -45,6 +47,7 @@ import {
   runGitAffectedTestsTool,
   runGitHunksTool,
   runHierarchyTool,
+  runImpactTool,
   runInvestigateTool,
   runNodeTool,
   runRoutesTool,
@@ -717,6 +720,127 @@ function entrypointsResult(): EntrypointsResult {
   };
 }
 
+function impactResult(): ImpactResult {
+  const target = {
+    id: "symbol:handlers:users",
+    name: "users",
+    qualifiedName: "src/handlers.ts#users",
+    kind: "function" as const,
+    filePath: "src/handlers.ts",
+    range: {
+      start: { line: 1, column: 1 },
+      end: { line: 3, column: 2 }
+    },
+    isExported: true,
+    declarationOrdinal: 0
+  };
+  const route = {
+    id: "symbol:route:get-users",
+    name: "GET /users",
+    qualifiedName: "src/routes.ts#GET /users",
+    kind: "route" as const,
+    filePath: "src/routes.ts",
+    range: {
+      start: { line: 5, column: 1 },
+      end: { line: 5, column: 25 }
+    },
+    isExported: false,
+    declarationOrdinal: 0
+  };
+  const entrypoint = {
+    id: "symbol:entrypoint:users",
+    name: "graphql query users",
+    qualifiedName: "src/resolvers.ts#entrypoint:graphql query users",
+    kind: "entrypoint" as const,
+    filePath: "src/resolvers.ts",
+    range: {
+      start: { line: 4, column: 3 },
+      end: { line: 4, column: 27 }
+    },
+    isExported: false,
+    declarationOrdinal: 0
+  };
+  const routeEdge = {
+    id: "edge:route:get-users",
+    sourceId: route.id,
+    targetId: target.id,
+    kind: "routes" as const,
+    filePath: route.filePath,
+    range: route.range,
+    resolution: "exact" as const,
+    confidence: 1,
+    referenceName: target.name
+  };
+  const entrypointEdge = {
+    id: "edge:entrypoint:users",
+    sourceId: entrypoint.id,
+    targetId: target.id,
+    kind: "handles" as const,
+    filePath: entrypoint.filePath,
+    range: entrypoint.range,
+    resolution: "exact" as const,
+    confidence: 1,
+    referenceName: target.name
+  };
+  const paths = [
+    {
+      symbols: [target, route],
+      edges: [routeEdge],
+      steps: [{ from: target, to: route, edge: routeEdge }]
+    },
+    {
+      symbols: [target, entrypoint],
+      edges: [entrypointEdge],
+      steps: [{ from: target, to: entrypoint, edge: entrypointEdge }]
+    }
+  ];
+
+  return {
+    status: exploreResult().status,
+    symbol: target,
+    paths,
+    summary: {
+      returnedPathCount: paths.length,
+      impactedFileCount: 2,
+      files: [
+        {
+          filePath: route.filePath,
+          nearestDepth: 1,
+          impactedSymbols: [{ symbol: route, depth: 1, discoveryEdge: routeEdge }]
+        },
+        {
+          filePath: entrypoint.filePath,
+          nearestDepth: 1,
+          impactedSymbols: [{ symbol: entrypoint, depth: 1, discoveryEdge: entrypointEdge }]
+        }
+      ],
+      entrypointCoverage: {
+        routes: [
+          {
+            method: "GET",
+            path: "/users",
+            domain: null,
+            route,
+            edge: routeEdge,
+            handler: target
+          }
+        ],
+        entrypoints: [
+          {
+            transport: "graphql",
+            operation: "query",
+            name: "users",
+            entrypoint,
+            edge: entrypointEdge,
+            handler: target
+          }
+        ]
+      }
+    },
+    truncated: false
+  };
+}
+
 function generationHistoryResult(): GenerationHistoryResult {
   return {
     activeStatus: exploreResult().status,
@@ -876,6 +1000,9 @@ describe("SymbolLattice MCP server", () => {
         async explore(): Promise<ExploreResult> {
           return exploreResult();
         },
+        async impact(): Promise<ImpactResult> {
+          return impactResult();
+        },
         async autoSyncStatus(): Promise<AutoSyncStatusResult> {
           autoSyncCalls += 1;
           return autoSyncStatusResult();
@@ -891,9 +1018,13 @@ describe("SymbolLattice MCP server", () => {
     closeCallbacks.push(() => client.close(), () => server.close());
 
     await client.callTool({ name: "symbol_lattice_explore", arguments: { query: "App" } });
+    await client.callTool({
+      name: "symbol_lattice_impact",
+      arguments: { reference: "src/handlers.ts#users" }
+    });
     await client.callTool({ name: "symbol_lattice_auto_sync_status", arguments: {} });
 
-    expect(dispatched).toEqual(["explore"]);
+    expect(dispatched).toEqual(["explore", "impact"]);
     expect(autoSyncCalls).toBe(1);
   });
 
@@ -1181,6 +1312,106 @@ describe("SymbolLattice MCP server", () => {
       "symbol_lattice_explore",
       "symbol_lattice_auto_sync_diagnostics"
     ]);
+  });
+
+  it("registers bounded reverse impact only when the service supports it", async () => {
+    const impactCalls: Array<{ projectPath: string; reference: string; options: ImpactOptions }> = [];
+    const service = {
+      async explore(): Promise<ExploreResult> {
+        return exploreResult();
+      },
+      async impact(
+        projectPath: string,
+        reference: string,
+        options: ImpactOptions = {}
+      ): Promise<ImpactResult> {
+        impactCalls.push({ projectPath, reference, options });
+        return impactResult();
+      }
+    };
+    const server = createMcpServer(service, "C:/default-project");
+    const client = new Client({ name: "symbol-lattice-impact-test", version: "1.0.0" });
+    const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+    closeCallbacks.push(() => client.close(), () => server.close());
+
+    const tools = await client.listTools();
+    expect(tools.tools.map((tool) => tool.name)).toEqual([
+      "symbol_lattice_explore",
+      "symbol_lattice_impact"
+    ]);
+    const impactTool = tools.tools.find((tool) => tool.name === "symbol_lattice_impact");
+    expect(impactTool?.annotations).toMatchObject({ readOnlyHint: true, idempotentHint: true });
+    expect(impactTool?.inputSchema).toMatchObject({
+      type: "object",
+      properties: {
+        reference: expect.objectContaining({ type: "string", minLength: 1 }),
+        maxDepth: expect.objectContaining({ type: "integer", minimum: 1, maximum: 3 }),
+        limit: expect.objectContaining({ type: "integer", minimum: 1, maximum: 100 })
+      }
+    });
+    expect(impactTool?.outputSchema).toMatchObject({
+      type: "object",
+      properties: {
+        status: { type: "object" },
+        symbol: { type: "object" },
+        paths: { type: "array" },
+        summary: { type: "object" },
+        truncated: { type: "boolean" }
+      }
+    });
+
+    const result = await client.callTool({
+      name: "symbol_lattice_impact",
+      arguments: {
+        projectPath: "C:/chosen-project",
+        reference: "src/handlers.ts#users",
+        maxDepth: 3,
+        limit: 7
+      }
+    });
+
+    expect(result.isError).not.toBe(true);
+    expect(result.structuredContent).toMatchObject({
+      status: { stale: false },
+      symbol: { name: "users" },
+      summary: {
+        returnedPathCount: 2,
+        impactedFileCount: 2,
+        files: [{ filePath: "src/routes.ts" }, { filePath: "src/resolvers.ts" }],
+        entrypointCoverage: {
+          routes: [{ method: "GET", path: "/users" }],
+          entrypoints: [{ transport: "graphql", operation: "query", name: "users" }]
+        }
+      },
+      truncated: false
+    });
+    expect(impactCalls).toEqual([
+      {
+        projectPath: "C:/chosen-project",
+        reference: "src/handlers.ts#users",
+        options: { maxDepth: 3, limit: 7 }
+      }
+    ]);
+
+    const defaults = await client.callTool({
+      name: "symbol_lattice_impact",
+      arguments: { reference: "src/handlers.ts#users" }
+    });
+    expect(defaults.isError).not.toBe(true);
+    expect(impactCalls[1]).toEqual({
+      projectPath: "C:/default-project",
+      reference: "src/handlers.ts#users",
+      options: { maxDepth: 1, limit: 100 }
+    });
+
+    const invalidDepth = await client.callTool({
+      name: "symbol_lattice_impact",
+      arguments: { reference: "src/handlers.ts#users", maxDepth: 4 }
+    });
+    expect(invalidDepth.isError).toBe(true);
+    expect(impactCalls).toHaveLength(2);
   });
 
   it("registers bounded route inventory only when the service supports it", async () => {
@@ -2300,6 +2531,21 @@ describe("SymbolLattice MCP server", () => {
     expect(response.content[0]?.text).toContain("MISSING_INDEX");
   });
 
+  it("returns reverse-impact errors without indexing", async () => {
+    const response = await runImpactTool(
+      {
+        async impact(): Promise<ImpactResult> {
+          throw new SymbolLatticeError("MISSING_INDEX", "Run symbol-lattice init first.");
+        }
+      },
+      "C:/project",
+      { reference: "src/handlers.ts#users", maxDepth: 2, limit: 3 }
+    );
+
+    expect(response).toMatchObject({ isError: true });
+    expect(response.content[0]?.text).toContain("MISSING_INDEX");
+  });
+
   it("returns route inventory errors without indexing", async () => {
     const response = await runRoutesTool(
       {
@@ -2423,6 +2669,9 @@ describe("SymbolLattice MCP server", () => {
       async investigate(): Promise<InvestigateResult> {
         return investigateResult();
       },
+      async impact(): Promise<ImpactResult> {
+        return impactResult();
+      },
       async routes(): Promise<RoutesResult> {
         return routesResult();
       },
@@ -2469,6 +2718,7 @@ describe("SymbolLattice MCP server", () => {
     await runGitHunksTool(service, "C:/project", { baseRef: "origin/main" });
     await runSearchTool(service, "C:/project", { query: "user" });
     await runInvestigateTool(service, "C:/project", { query: "user" });
+    await runImpactTool(service, "C:/project", { reference: "src/missing.ts#missing" });
     await runRoutesTool(service, "C:/project", { method: "GET", path: "/api" });
     await runHierarchyTool(service, "C:/project", { reference: "src/base.ts#Base" });
     await runGenerationHistoryTool(service, "C:/project", {});

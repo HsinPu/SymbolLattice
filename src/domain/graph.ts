@@ -171,6 +171,45 @@ export interface ImpactPath {
   readonly steps: readonly ImpactStep[];
 }
 
+/** One impacted terminal retained in a returned reverse-impact path. */
+export interface ImpactTerminal {
+  readonly symbol: SymbolNode;
+  /** Reverse dependency hops from the changed root to this terminal symbol. */
+  readonly depth: number;
+  /** The final persisted edge that discovered this terminal symbol. */
+  readonly discoveryEdge: GraphEdge;
+}
+
+/** Impacted terminals grouped by their own source file. */
+export interface ImpactFileGroup {
+  readonly filePath: string;
+  /** Minimum retained reverse dependency depth among this file's terminals. */
+  readonly nearestDepth: number;
+  readonly impactedSymbols: readonly ImpactTerminal[];
+}
+
+/** Route and non-HTTP entrypoint records represented by retained terminal paths. */
+export interface ImpactEntrypointCoverage {
+  readonly routes: readonly RouteRecord[];
+  readonly entrypoints: readonly EntryPointRecord[];
+}
+
+/**
+ * A deterministic summary of a caller-supplied set of returned impact paths.
+ *
+ * This is intentionally not a graph-completeness claim: it describes only the
+ * paths passed to `summarizeImpactPaths()`. Route and entrypoint coverage is
+ * retained only when that record's own synthetic symbol and binding edge form
+ * the terminal step of one of those paths; no same-file or transitive coverage
+ * is inferred.
+ */
+export interface ImpactSummary {
+  readonly returnedPathCount: number;
+  readonly impactedFileCount: number;
+  readonly files: readonly ImpactFileGroup[];
+  readonly entrypointCoverage: ImpactEntrypointCoverage;
+}
+
 /** Explicit bounds for a reverse traversal that accepts exact evidence only. */
 export interface ExactImpactTraversalOptions {
   /** Maximum reverse dependency hops from the root symbol. */
@@ -703,6 +742,80 @@ export function getEntrypoints(graph: SymbolGraph): readonly EntryPointRecord[] 
   }
 
   return entrypoints.sort(compareEntrypointRecords);
+}
+
+function finalImpactEdge(path: ImpactPath): GraphEdge {
+  const edge = path.edges.at(-1);
+  if (edge === undefined) {
+    throw new Error("Impact summaries require paths with at least one reverse-dependency edge.");
+  }
+
+  return edge;
+}
+
+function compareImpactTerminals(left: ImpactTerminal, right: ImpactTerminal): number {
+  return (
+    compareNumber(left.depth, right.depth) ||
+    compareSymbolNodes(left.symbol, right.symbol) ||
+    compareGraphEdges(left.discoveryEdge, right.discoveryEdge)
+  );
+}
+
+function compareImpactFileGroups(left: ImpactFileGroup, right: ImpactFileGroup): number {
+  return compareText(left.filePath, right.filePath) || compareNumber(left.nearestDepth, right.nearestDepth);
+}
+
+/**
+ * Summarizes only the supplied retained impact paths into deterministic file
+ * groups and terminal route/entrypoint record coverage. The helper accepts the
+ * output of `getImpactPaths()` (or a bounded prefix of it), so callers can make
+ * any truncation explicit without implying that omitted paths were considered.
+ */
+export function summarizeImpactPaths(
+  graph: SymbolGraph,
+  paths: readonly ImpactPath[]
+): ImpactSummary {
+  const terminalsByFilePath = new Map<string, ImpactTerminal[]>();
+  const terminalEdgeIdsBySymbolId = new Map<string, Set<string>>();
+
+  for (const path of paths) {
+    const symbol = terminalSymbol(path);
+    const discoveryEdge = finalImpactEdge(path);
+    const terminal: ImpactTerminal = {
+      symbol,
+      depth: path.edges.length,
+      discoveryEdge
+    };
+    const terminals = terminalsByFilePath.get(symbol.filePath) ?? [];
+    terminals.push(terminal);
+    terminalsByFilePath.set(symbol.filePath, terminals);
+
+    const edgeIds = terminalEdgeIdsBySymbolId.get(symbol.id) ?? new Set<string>();
+    edgeIds.add(discoveryEdge.id);
+    terminalEdgeIdsBySymbolId.set(symbol.id, edgeIds);
+  }
+
+  const files = [...terminalsByFilePath.entries()]
+    .map(([filePath, terminals]): ImpactFileGroup => ({
+      filePath,
+      nearestDepth: Math.min(...terminals.map((terminal) => terminal.depth)),
+      impactedSymbols: terminals.sort(compareImpactTerminals)
+    }))
+    .sort(compareImpactFileGroups);
+  const hasTerminalRecord = (symbolId: string, edgeId: string): boolean =>
+    terminalEdgeIdsBySymbolId.get(symbolId)?.has(edgeId) ?? false;
+
+  return {
+    returnedPathCount: paths.length,
+    impactedFileCount: files.length,
+    files,
+    entrypointCoverage: {
+      routes: getRoutes(graph).filter((record) => hasTerminalRecord(record.route.id, record.edge.id)),
+      entrypoints: getEntrypoints(graph).filter((record) =>
+        hasTerminalRecord(record.entrypoint.id, record.edge.id)
+      )
+    }
+  };
 }
 
 /** Returns all resolved static call, reference, route, or entrypoint-handler bindings targeting a symbol. */

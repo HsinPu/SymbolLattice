@@ -65,6 +65,15 @@ try {
     successfulResponseText(firstResponse).includes("firstWorkerGenerationNeedle"),
     "The worker did not return evidence from the first generation."
   );
+  const impactResponse = await pool.execute(
+    "impact",
+    { reference: "src/entry.ts#firstWorkerGenerationNeedle" },
+    unexpectedFallback
+  );
+  requireCondition(
+    successfulResponseText(impactResponse).includes('"returnedPathCount"'),
+    "The worker did not return a bounded reverse-impact summary."
+  );
 
   await writeFile(
     join(projectPath, "src", "entry.ts"),
@@ -106,6 +115,7 @@ try {
         assertions: {
           workerReady: true,
           firstGenerationReturned: true,
+          impactDispatchedThroughWorker: true,
           sameWorkerObservedSyncedGeneration: true,
           avoidedFallback: true,
           avoidedWorkerCrash: true

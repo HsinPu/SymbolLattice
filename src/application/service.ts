@@ -29,6 +29,7 @@ import {
   ROUTE_METHODS,
   SOURCE_SEARCH_INDEX_VERSION,
   sourceSearchTerms,
+  summarizeImpactPaths,
   type GraphSnapshot,
   type EntryPointOperation,
   type EntryPointTransport,
@@ -1355,19 +1356,14 @@ export class SymbolLatticeService {
     const context = await this.requireGraph(projectPath);
     const symbol = this.requireExactSymbol(context, reference);
     const paths = getImpactPaths(context.snapshot, symbol.id, options.maxDepth);
-    if (options.limit === undefined) {
-      return {
-        status: context.status,
-        symbol,
-        paths
-      };
-    }
+    const returnedPaths = options.limit === undefined ? paths : paths.slice(0, options.limit);
 
     return {
       status: context.status,
       symbol,
-      paths: paths.slice(0, options.limit),
-      truncated: paths.length > options.limit
+      paths: returnedPaths,
+      summary: summarizeImpactPaths(context.snapshot, returnedPaths),
+      ...(options.limit === undefined ? {} : { truncated: paths.length > options.limit })
     };
   }
 

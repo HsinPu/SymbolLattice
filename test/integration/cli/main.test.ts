@@ -322,7 +322,13 @@ function impactResult(): ImpactResult {
       isExported: true,
       declarationOrdinal: 0
     },
-    paths: []
+    paths: [],
+    summary: {
+      returnedPathCount: 0,
+      impactedFileCount: 0,
+      files: [],
+      entrypointCoverage: { routes: [], entrypoints: [] }
+    }
   };
 }
 

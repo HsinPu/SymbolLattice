@@ -24,6 +24,7 @@ import {
   MAX_CONTEXT_MAX_HOPS,
   MAX_CONTEXT_REFERENCES,
   MAX_CONTEXT_RELATION_LIMIT,
+  MAX_IMPACT_LIMIT,
   INVESTIGATE_IMPACT_RANKING_MAX_DEPTH,
   INVESTIGATE_IMPACT_RANKING_PATH_LIMIT,
   INVESTIGATE_RANKING_STRATEGIES,
@@ -57,6 +58,8 @@ import type {
   GitHunksResult,
   HierarchyOptions,
   HierarchyResult,
+  ImpactOptions,
+  ImpactResult,
   InvestigateOptions,
   InvestigateResult,
   NodeResult,
@@ -146,6 +149,11 @@ export interface InvestigateService {
   ): Promise<InvestigateResult>;
 }
 
+/** Additive bounded reverse-impact seam for existing read-only embeddings. */
+export interface ImpactService {
+  impact(projectPath: string, reference: string, options?: ImpactOptions): Promise<ImpactResult>;
+}
+
 /** Additive active-generation route inventory seam for existing read-only embeddings. */
 export interface RoutesService {
   routes(projectPath: string, options?: RoutesOptions): Promise<RoutesResult>;
@@ -206,6 +214,7 @@ export type ReadOnlyMcpService = ExploreService & ExplainEdgeService;
 export type NodeMcpService = ExploreService & NodeService;
 export type SearchMcpService = ExploreService & SearchService;
 export type InvestigateMcpService = ExploreService & InvestigateService;
+export type ImpactMcpService = ExploreService & ImpactService;
 export type RoutesMcpService = ExploreService & RoutesService;
 export type EntrypointsMcpService = ExploreService & EntrypointsService;
 export type HierarchyMcpService = ExploreService & HierarchyService;
@@ -289,6 +298,13 @@ export interface InvestigateToolArguments {
   readonly impactLimit?: number | undefined;
 }
 
+export interface ImpactToolArguments {
+  readonly reference: string;
+  readonly projectPath?: string | undefined;
+  readonly maxDepth?: number | undefined;
+  readonly limit?: number | undefined;
+}
+
 export interface RoutesToolArguments {
   readonly projectPath?: string | undefined;
   readonly method?: RouteMethod | undefined;
@@ -357,6 +373,7 @@ export type GitHunksToolResponse = ReadOnlyToolResponse;
 export type ExplainEdgeToolResponse = ReadOnlyToolResponse;
 export type SearchToolResponse = ReadOnlyToolResponse;
 export type InvestigateToolResponse = ReadOnlyToolResponse;
+export type ImpactToolResponse = ReadOnlyToolResponse;
 export type RoutesToolResponse = ReadOnlyToolResponse;
 export type EntrypointsToolResponse = ReadOnlyToolResponse;
 export type HierarchyToolResponse = ReadOnlyToolResponse;
@@ -892,6 +909,48 @@ const entrypointsOutputSchema = z
   })
   .passthrough();
 
+const impactOutputSchema = z
+  .object({
+    status: indexStatusOutputSchema,
+    symbol: z.object({}).passthrough(),
+    paths: z
+      .array(
+        z.object({
+          symbols: z.array(z.object({}).passthrough()),
+          edges: z.array(z.object({}).passthrough()),
+          steps: z.array(z.object({}).passthrough())
+        })
+      )
+      .max(MAX_IMPACT_LIMIT),
+    summary: z.object({
+      returnedPathCount: z.number().int().min(0).max(MAX_IMPACT_LIMIT),
+      impactedFileCount: z.number().int().min(0).max(MAX_IMPACT_LIMIT),
+      files: z
+        .array(
+          z.object({
+            filePath: z.string(),
+            nearestDepth: z.number().int().positive(),
+            impactedSymbols: z
+              .array(
+                z.object({
+                  symbol: z.object({}).passthrough(),
+                  depth: z.number().int().positive(),
+                  discoveryEdge: z.object({}).passthrough()
+                })
+              )
+              .max(MAX_IMPACT_LIMIT)
+          })
+        )
+        .max(MAX_IMPACT_LIMIT),
+      entrypointCoverage: z.object({
+        routes: z.array(z.object({}).passthrough()).max(MAX_IMPACT_LIMIT),
+        entrypoints: z.array(z.object({}).passthrough()).max(MAX_IMPACT_LIMIT)
+      })
+    }),
+    truncated: z.boolean()
+  })
+  .passthrough();
+
 const hierarchyOutputSchema = z
   .object({
     status: indexStatusOutputSchema,
@@ -1015,6 +1074,10 @@ function supportsSearch(service: ExploreService): service is SearchMcpService {
 
 function supportsInvestigate(service: ExploreService): service is InvestigateMcpService {
   return "investigate" in service && typeof service.investigate === "function";
+}
+
+function supportsImpact(service: ExploreService): service is ImpactMcpService {
+  return "impact" in service && typeof service.impact === "function";
 }
 
 function supportsRoutes(service: ExploreService): service is RoutesMcpService {
@@ -1342,6 +1405,30 @@ export async function runInvestigateTool(
       arguments_.projectPath ?? defaultProjectPath,
       arguments_.query,
       options
+    );
+    return {
+      content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      structuredContent: result as unknown as Record<string, unknown>
+    };
+  } catch (error) {
+    return renderToolError(error);
+  }
+}
+
+/** Returns bounded reverse-impact evidence from an existing generation without indexing. */
+export async function runImpactTool(
+  service: ImpactService,
+  defaultProjectPath: string,
+  arguments_: ImpactToolArguments
+): Promise<ImpactToolResponse> {
+  try {
+    const result = await service.impact(
+      arguments_.projectPath ?? defaultProjectPath,
+      arguments_.reference,
+      {
+        maxDepth: arguments_.maxDepth ?? 1,
+        limit: arguments_.limit ?? MAX_IMPACT_LIMIT
+      }
     );
     return {
       content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
@@ -1915,6 +2002,45 @@ export function createMcpServer(
       async (arguments_) =>
         executeReadTool(readQueryExecutor, "investigate", arguments_, () =>
           runInvestigateTool(investigateService, defaultProjectPath, arguments_)
+        )
+    );
+  }
+
+  const impactService = supportsImpact(service) ? service : null;
+  if (impactService !== null) {
+    server.registerTool(
+      "symbol_lattice_impact",
+      {
+        title: "Inspect bounded SymbolLattice reverse impact",
+        description:
+          "Returns bounded persisted reverse-impact paths, groups their terminal symbols by file, and reports route or non-HTTP entrypoint records only when a retained path ends at that same persisted record. This tool never creates or refreshes an index.",
+        inputSchema: {
+          reference: z.string().trim().min(1).describe("Exact symbol or source reference in an already indexed project."),
+          projectPath: z.string().trim().min(1).optional().describe("Optional path to an already indexed project."),
+          maxDepth: z
+            .number()
+            .int()
+            .min(1)
+            .max(MAX_CONTEXT_IMPACT_DEPTH)
+            .optional()
+            .describe(`Maximum reverse dependency depth (1-${MAX_CONTEXT_IMPACT_DEPTH}).`),
+          limit: z
+            .number()
+            .int()
+            .min(1)
+            .max(MAX_IMPACT_LIMIT)
+            .optional()
+            .describe(`Maximum returned impact paths (1-${MAX_IMPACT_LIMIT}).`)
+        },
+        outputSchema: impactOutputSchema,
+        annotations: {
+          readOnlyHint: true,
+          idempotentHint: true
+        }
+      },
+      async (arguments_) =>
+        executeReadTool(readQueryExecutor, "impact", arguments_, () =>
+          runImpactTool(impactService, defaultProjectPath, arguments_)
         )
     );
   }

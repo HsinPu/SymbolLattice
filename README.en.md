@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.207.0 is a developer preview. Run it from source.
+> v0.208.0 is a developer preview. Run it from source.
 
 SymbolLattice builds a queryable local code-symbol graph. Every relation retains its rule, evidence stage, and confidence; exact, heuristic, and unresolved evidence are never conflated.
 
@@ -37,6 +37,9 @@ node dist/cli/main.js investigate "user token" --project /path/to/project --json
 # Re-rank candidates with bounded, exact reverse-dependency evidence
 node dist/cli/main.js investigate "user token" --project /path/to/project --ranking impact --json
 
+# Inspect persisted reverse impact; the summary covers only returned paths
+node dist/cli/main.js impact "src/handlers.ts#users" --project /path/to/project --depth 3 --limit 100 --json
+
 # Explicitly synchronize after source changes
 node dist/cli/main.js sync /path/to/project
 
@@ -52,16 +55,17 @@ On Windows PowerShell, use `npm.cmd` if npm is unavailable. Index data stays in 
 > [!NOTE]
 > MCP tools never create or update a graph themselves. The default `serve --mcp` auto-sync is a separate host-owned background watcher; use `--no-auto-sync` for fully manual updates.
 
-## v0.207.0 highlights
+## v0.208.0 highlights
 
-- `investigate --ranking impact` orders candidates with `exact` reverse-dependency evidence: at most 3 hops and 24 shortest paths per candidate. Nearer dependents receive more weight, and the full score breakdown is returned in `impactSignals`.
-- `lexical` remains the default; `structure` and existing flows are unchanged. Extra graph traversal happens only for `impact`; other ranking modes return `impactSignals: null`.
-- Every valid `init`/`sync` prefers SQLite WAL. MCP workers retain a read-only database boundary, and the read pool grows on demand to at most 8 workers.
+- `impact` now returns `summary`: impacted terminals are grouped by their own file with their nearest depth, symbol, and final discovery edge.
+- `summary.entrypointCoverage` lists HTTP routes and non-HTTP entrypoint records only when that record is a retained path terminal; it never infers coverage from a shared file or an intermediate hop.
+- The new read-only `symbol_lattice_impact` MCP tool runs through the MCP query worker. It accepts 1–3 hops and returns at most 100 paths; `truncated: true` means the summary is not complete.
 
 ## Boundaries
 
 - This is a local code graph, not an RDF/SPARQL knowledge graph or ontology-reasoning system.
-- Queries read persisted generations only. The `impact` score uses no LLMs, PageRank, runtime guesses, heuristic edges, or undisclosed weights.
+- Queries read persisted generations only. The `investigate --ranking impact` score uses bounded `exact` static evidence; the general `impact` query retains its existing resolved static relations, and its summary never upgrades or conflates edge confidence.
+- `impact.summary` describes only the paths actually returned. When `--limit` or the MCP bound produces `truncated: true`, it is not a complete-graph impact claim.
 - Indexing and querying stay local. Source changes are reported as freshness state, never substituted for indexed evidence.
 - WAL is for same-machine local SQLite. Network filesystems, manual checkpoint management, and multi-writer coordination remain unsupported.
 

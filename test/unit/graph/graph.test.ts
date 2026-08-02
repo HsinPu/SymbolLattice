@@ -14,6 +14,7 @@ import {
   getParents,
   getRoutes,
   matchSymbol,
+  summarizeImpactPaths,
   type GraphEdge,
   type SymbolNode
 } from "../../../src/domain/index.js";
@@ -457,6 +458,96 @@ describe("pure graph traversal", () => {
       "graphql-query",
       "message-pattern"
     ]);
+  });
+
+  it("summarizes retained impact paths by terminal file without inferring sibling endpoints", () => {
+    const handler = symbol({ id: "handler", name: "users", filePath: "src/handlers/users.ts" });
+    const otherHandler = symbol({ id: "other-handler", name: "updateUsers", filePath: "src/handlers/users.ts" });
+    const caller = symbol({ id: "caller", name: "loadUsers", filePath: "src/callers.ts" });
+    const route = symbol({
+      id: "route",
+      name: "GET /users",
+      filePath: "src/api/users.routes.ts",
+      kind: "route"
+    });
+    const entrypoint = symbol({
+      id: "entrypoint",
+      name: "graphql query users",
+      filePath: "src/graphql/users.ts",
+      kind: "entrypoint"
+    });
+    const siblingEntrypoint = symbol({
+      id: "sibling-entrypoint",
+      name: "graphql mutation updateUsers",
+      filePath: "src/graphql/users.ts",
+      kind: "entrypoint"
+    });
+    const graph = {
+      symbols: [handler, otherHandler, caller, route, entrypoint, siblingEntrypoint],
+      edges: [
+        edge({ id: "caller-calls-users", sourceId: caller.id, targetId: handler.id }),
+        edge({ id: "route-routes-users", sourceId: route.id, targetId: handler.id, kind: "routes" }),
+        edge({ id: "graphql-handles-users", sourceId: entrypoint.id, targetId: handler.id, kind: "handles" }),
+        edge({
+          id: "graphql-handles-update-users",
+          sourceId: siblingEntrypoint.id,
+          targetId: otherHandler.id,
+          kind: "handles"
+        })
+      ]
+    };
+
+    const summary = summarizeImpactPaths(graph, [...getImpactPaths(graph, handler.id, 1)].reverse());
+
+    expect(summary).toEqual({
+      returnedPathCount: 3,
+      impactedFileCount: 3,
+      files: [
+        {
+          filePath: "src/api/users.routes.ts",
+          nearestDepth: 1,
+          impactedSymbols: [
+            { symbol: route, depth: 1, discoveryEdge: graph.edges[1] }
+          ]
+        },
+        {
+          filePath: "src/callers.ts",
+          nearestDepth: 1,
+          impactedSymbols: [
+            { symbol: caller, depth: 1, discoveryEdge: graph.edges[0] }
+          ]
+        },
+        {
+          filePath: "src/graphql/users.ts",
+          nearestDepth: 1,
+          impactedSymbols: [
+            { symbol: entrypoint, depth: 1, discoveryEdge: graph.edges[2] }
+          ]
+        }
+      ],
+      entrypointCoverage: {
+        routes: [
+          {
+            method: "GET",
+            path: "/users",
+            domain: null,
+            route,
+            edge: graph.edges[1],
+            handler
+          }
+        ],
+        entrypoints: [
+          {
+            transport: "graphql",
+            operation: "query",
+            name: "users",
+            entrypoint,
+            edge: graph.edges[2],
+            handler
+          }
+        ]
+      }
+    });
   });
 
   it("rejects malformed persisted route names that do not have slash-leading paths", () => {
