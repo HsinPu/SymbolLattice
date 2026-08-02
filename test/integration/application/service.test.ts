@@ -12005,6 +12005,107 @@ describe("SymbolLatticeService", () => {
     ]);
   });
 
+  it("indexes exact Java and Kotlin Spring RequestMapping RequestMethod routes", async () => {
+    const projectPath = await createInlineProject({
+      "src/api/JavaRequestMappingController.java": [
+        "import org.springframework.web.bind.annotation.RestController;",
+        "import org.springframework.web.bind.annotation.RequestMapping;",
+        "import org.springframework.web.bind.annotation.RequestMethod;",
+        "",
+        "@RestController",
+        '@RequestMapping("/java")',
+        "class JavaRequestMappingController {",
+        '  @RequestMapping(value = "/health", method = RequestMethod.GET)',
+        '  String health() { return "ok"; }',
+        "}"
+      ].join("\n"),
+      "src/api/KotlinRequestMappingController.kt": [
+        "import org.springframework.web.bind.annotation.RestController",
+        "import org.springframework.web.bind.annotation.RequestMapping",
+        "import org.springframework.web.bind.annotation.RequestMethod",
+        "",
+        "@RestController",
+        '@RequestMapping("/kotlin")',
+        "class KotlinRequestMappingController {",
+        '  @RequestMapping(path = "/info", method = [RequestMethod.HEAD])',
+        "  fun info() {}",
+        "}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+    const headRoutes = await service.routes(projectPath, { method: "HEAD" });
+    const javaFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "src/api/JavaRequestMappingController.java");
+    const kotlinFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "src/api/KotlinRequestMappingController.kt");
+
+    expect(javaFacts).toMatchObject({
+      language: "java",
+      extractorVersion: ARTIFACT_FACTS_EXTRACTOR_VERSION
+    });
+    expect(kotlinFacts).toMatchObject({
+      language: "kotlin",
+      extractorVersion: ARTIFACT_FACTS_EXTRACTOR_VERSION
+    });
+    expect(routes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "GET",
+          path: "/java/health",
+          handler: expect.objectContaining({
+            qualifiedName: "src/api/JavaRequestMappingController.java#JavaRequestMappingController.health"
+          }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.spring-web.direct-controller.literal-request-mapping.local-method",
+              stage: "syntax"
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "HEAD",
+          path: "/kotlin/info",
+          handler: expect.objectContaining({
+            qualifiedName:
+              "src/api/KotlinRequestMappingController.kt#KotlinRequestMappingController.info"
+          }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId:
+                "framework.spring-web.direct-kotlin-controller.literal-request-mapping.local-function",
+              stage: "syntax"
+            })
+          })
+        })
+      ])
+    );
+    expect(headRoutes.routes).toMatchObject([
+      {
+        method: "HEAD",
+        path: "/kotlin/info",
+        handler: {
+          qualifiedName: "src/api/KotlinRequestMappingController.kt#KotlinRequestMappingController.info"
+        },
+        edge: {
+          resolution: "exact",
+          evidence: {
+            ruleId:
+              "framework.spring-web.direct-kotlin-controller.literal-request-mapping.local-function",
+            stage: "syntax"
+          }
+        }
+      }
+    ]);
+  });
+
   it("indexes NestJS decorator routes as persisted exact method evidence", async () => {
     const projectPath = await createInlineProject({
       "src/cats.controller.ts": [

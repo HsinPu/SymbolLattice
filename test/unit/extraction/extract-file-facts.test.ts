@@ -7159,6 +7159,194 @@ describe("source extraction", () => {
     ]);
   });
 
+  it("extracts direct Java Spring RequestMapping RequestMethod routes with exact evidence", () => {
+    const importedFacts = extractFileFacts({
+      filePath: "src/api/RequestMethodController.java",
+      language: "java",
+      sourceText: [
+        "import org.springframework.web.bind.annotation.RestController;",
+        "import org.springframework.web.bind.annotation.RequestMapping;",
+        "import org.springframework.web.bind.annotation.RequestMethod;",
+        "",
+        "@RestController",
+        '@RequestMapping("/api")',
+        "class RequestMethodController {",
+        '  @RequestMapping(value = "/health", method = RequestMethod.GET)',
+        '  String health() { return "ok"; }',
+        "",
+        "  @RequestMapping(method = RequestMethod.POST)",
+        '  String create() { return "created"; }',
+        "",
+        '  @RequestMapping(value = "/items", method = RequestMethod.PUT)',
+        '  String replace() { return "updated"; }',
+        "",
+        '  @RequestMapping(path = "/diagnostics", method = RequestMethod.HEAD)',
+        "  void diagnostics() {}",
+        "",
+        '  @RequestMapping(path = "/items/{id}", method = RequestMethod.PATCH)',
+        '  String patch() { return "patched"; }',
+        "",
+        '  @RequestMapping(path = "/items/{id}", method = RequestMethod.DELETE)',
+        "  void remove() {}",
+        "",
+        '  @RequestMapping(path = "/capabilities", method = RequestMethod.OPTIONS)',
+        "  void options() {}",
+        "}"
+      ].join("\n")
+    });
+    const fullyQualifiedFacts = extractFileFacts({
+      filePath: "src/api/FullyQualifiedRequestMethodController.java",
+      language: "java",
+      sourceText: [
+        "@org.springframework.web.bind.annotation.RestController",
+        '@org.springframework.web.bind.annotation.RequestMapping("/system")',
+        "class FullyQualifiedRequestMethodController {",
+        '  @org.springframework.web.bind.annotation.RequestMapping(value = "/trace", method = org.springframework.web.bind.annotation.RequestMethod.TRACE)',
+        '  String trace() { return "trace"; }',
+        "}"
+      ].join("\n")
+    });
+    const symbolsById = new Map(
+      [...importedFacts.symbols, ...fullyQualifiedFacts.symbols].map((symbol) => [symbol.id, symbol])
+    );
+
+    expect(
+      [...importedFacts.edges, ...fullyQualifiedFacts.edges]
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId,
+          edge.resolution,
+          edge.confidence
+        ])
+    ).toEqual([
+      [
+        "GET /api/health",
+        "src/api/RequestMethodController.java#RequestMethodController.health",
+        "framework.spring-web.direct-controller.literal-request-mapping.local-method",
+        "exact",
+        1
+      ],
+      [
+        "POST /api",
+        "src/api/RequestMethodController.java#RequestMethodController.create",
+        "framework.spring-web.direct-controller.literal-request-mapping.local-method",
+        "exact",
+        1
+      ],
+      [
+        "PUT /api/items",
+        "src/api/RequestMethodController.java#RequestMethodController.replace",
+        "framework.spring-web.direct-controller.literal-request-mapping.local-method",
+        "exact",
+        1
+      ],
+      [
+        "HEAD /api/diagnostics",
+        "src/api/RequestMethodController.java#RequestMethodController.diagnostics",
+        "framework.spring-web.direct-controller.literal-request-mapping.local-method",
+        "exact",
+        1
+      ],
+      [
+        "PATCH /api/items/{id}",
+        "src/api/RequestMethodController.java#RequestMethodController.patch",
+        "framework.spring-web.direct-controller.literal-request-mapping.local-method",
+        "exact",
+        1
+      ],
+      [
+        "DELETE /api/items/{id}",
+        "src/api/RequestMethodController.java#RequestMethodController.remove",
+        "framework.spring-web.direct-controller.literal-request-mapping.local-method",
+        "exact",
+        1
+      ],
+      [
+        "OPTIONS /api/capabilities",
+        "src/api/RequestMethodController.java#RequestMethodController.options",
+        "framework.spring-web.direct-controller.literal-request-mapping.local-method",
+        "exact",
+        1
+      ],
+      [
+        "TRACE /system/trace",
+        "src/api/FullyQualifiedRequestMethodController.java#FullyQualifiedRequestMethodController.trace",
+        "framework.spring-web.direct-controller.literal-request-mapping.local-method",
+        "exact",
+        1
+      ]
+    ]);
+  });
+
+  it("rejects Java Spring RequestMapping routes without one exact static method", () => {
+    const rejected = [
+      [
+        "src/api/MissingRequestMethodImport.java",
+        [
+          "import org.springframework.web.bind.annotation.RestController;",
+          "import org.springframework.web.bind.annotation.RequestMapping;",
+          "",
+          "@RestController",
+          "class MissingRequestMethodImport {",
+          "  @RequestMapping(method = RequestMethod.GET)",
+          "  String health() { return \"ok\"; }",
+          "}"
+        ].join("\n")
+      ],
+      [
+        "src/api/MultipleRequestMethods.java",
+        [
+          "import org.springframework.web.bind.annotation.RestController;",
+          "import org.springframework.web.bind.annotation.RequestMapping;",
+          "import org.springframework.web.bind.annotation.RequestMethod;",
+          "",
+          "@RestController",
+          "class MultipleRequestMethods {",
+          "  @RequestMapping(method = { RequestMethod.GET, RequestMethod.POST })",
+          "  String health() { return \"ok\"; }",
+          "}"
+        ].join("\n")
+      ],
+      [
+        "src/api/ConditionalRequestMethod.java",
+        [
+          "import org.springframework.web.bind.annotation.RestController;",
+          "import org.springframework.web.bind.annotation.RequestMapping;",
+          "import org.springframework.web.bind.annotation.RequestMethod;",
+          "",
+          "@RestController",
+          "class ConditionalRequestMethod {",
+          '  @RequestMapping(value = "/health", method = RequestMethod.GET, produces = "application/json")',
+          "  String health() { return \"ok\"; }",
+          "}"
+        ].join("\n")
+      ],
+      [
+        "src/api/UnsupportedRequestMethod.java",
+        [
+          "import org.springframework.web.bind.annotation.RestController;",
+          "import org.springframework.web.bind.annotation.RequestMapping;",
+          "import org.springframework.web.bind.annotation.RequestMethod;",
+          "",
+          "@RestController",
+          "class UnsupportedRequestMethod {",
+          "  @RequestMapping(method = RequestMethod.CONNECT)",
+          "  String connect() { return \"ok\"; }",
+          "}"
+        ].join("\n")
+      ]
+    ] as const;
+
+    expect(
+      rejected.map(([filePath, sourceText]) => {
+        const facts = extractFileFacts({ filePath, language: "java", sourceText });
+        return facts.edges.filter((edge) => edge.kind === "routes");
+      })
+    ).toEqual([[], [], [], []]);
+  });
+
   it("accepts direct Spring Controller, PutMapping, and PatchMapping imports", () => {
     const facts = extractFileFacts({
       filePath: "src/api/SettingsController.java",
@@ -12068,6 +12256,195 @@ describe("source extraction", () => {
         1
       ]
     ]);
+  });
+
+  it("extracts direct Kotlin Spring RequestMapping RequestMethod routes with exact evidence", () => {
+    const importedFacts = extractFileFacts({
+      filePath: "src/api/KotlinRequestMethodController.kt",
+      language: "kotlin",
+      sourceText: [
+        "import org.springframework.web.bind.annotation.RestController",
+        "import org.springframework.web.bind.annotation.RequestMapping",
+        "import org.springframework.web.bind.annotation.RequestMethod",
+        "",
+        "@RestController",
+        '@RequestMapping("/api")',
+        "class KotlinRequestMethodController {",
+        '  @RequestMapping(value = "/health", method = [RequestMethod.GET])',
+        '  fun health(): String = "ok"',
+        "",
+        "  @RequestMapping(method = [RequestMethod.POST])",
+        '  fun create(): String = "created"',
+        "",
+        '  @RequestMapping(value = "/items", method = [RequestMethod.PUT])',
+        '  fun replace(): String = "updated"',
+        "",
+        '  @RequestMapping(path = "/diagnostics", method = [RequestMethod.HEAD])',
+        "  fun diagnostics() {}",
+        "",
+        '  @RequestMapping(path = "/items/{id}", method = [RequestMethod.PATCH])',
+        "  fun patch() {}",
+        "",
+        '  @RequestMapping(path = "/items/{id}", method = [RequestMethod.DELETE])',
+        "  fun remove() {}",
+        "",
+        '  @RequestMapping(path = "/capabilities", method = [RequestMethod.OPTIONS])',
+        "  fun options() {}",
+        "}"
+      ].join("\n")
+    });
+    const fullyQualifiedFacts = extractFileFacts({
+      filePath: "src/api/FullyQualifiedKotlinRequestMethodController.kt",
+      language: "kotlin",
+      sourceText: [
+        "@org.springframework.web.bind.annotation.RestController",
+        '@org.springframework.web.bind.annotation.RequestMapping("/system")',
+        "class FullyQualifiedKotlinRequestMethodController {",
+        '  @org.springframework.web.bind.annotation.RequestMapping(value = "/trace", method = [org.springframework.web.bind.annotation.RequestMethod.TRACE])',
+        '  fun trace(): String = "trace"',
+        "}"
+      ].join("\n")
+    });
+    const symbolsById = new Map(
+      [...importedFacts.symbols, ...fullyQualifiedFacts.symbols].map((symbol) => [symbol.id, symbol])
+    );
+
+    expect(
+      [...importedFacts.edges, ...fullyQualifiedFacts.edges]
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId,
+          edge.resolution,
+          edge.confidence
+        ])
+    ).toEqual([
+      [
+        "GET /api/health",
+        "src/api/KotlinRequestMethodController.kt#KotlinRequestMethodController.health",
+        "framework.spring-web.direct-kotlin-controller.literal-request-mapping.local-function",
+        "exact",
+        1
+      ],
+      [
+        "POST /api",
+        "src/api/KotlinRequestMethodController.kt#KotlinRequestMethodController.create",
+        "framework.spring-web.direct-kotlin-controller.literal-request-mapping.local-function",
+        "exact",
+        1
+      ],
+      [
+        "PUT /api/items",
+        "src/api/KotlinRequestMethodController.kt#KotlinRequestMethodController.replace",
+        "framework.spring-web.direct-kotlin-controller.literal-request-mapping.local-function",
+        "exact",
+        1
+      ],
+      [
+        "HEAD /api/diagnostics",
+        "src/api/KotlinRequestMethodController.kt#KotlinRequestMethodController.diagnostics",
+        "framework.spring-web.direct-kotlin-controller.literal-request-mapping.local-function",
+        "exact",
+        1
+      ],
+      [
+        "PATCH /api/items/{id}",
+        "src/api/KotlinRequestMethodController.kt#KotlinRequestMethodController.patch",
+        "framework.spring-web.direct-kotlin-controller.literal-request-mapping.local-function",
+        "exact",
+        1
+      ],
+      [
+        "DELETE /api/items/{id}",
+        "src/api/KotlinRequestMethodController.kt#KotlinRequestMethodController.remove",
+        "framework.spring-web.direct-kotlin-controller.literal-request-mapping.local-function",
+        "exact",
+        1
+      ],
+      [
+        "OPTIONS /api/capabilities",
+        "src/api/KotlinRequestMethodController.kt#KotlinRequestMethodController.options",
+        "framework.spring-web.direct-kotlin-controller.literal-request-mapping.local-function",
+        "exact",
+        1
+      ],
+      [
+        "TRACE /system/trace",
+        "src/api/FullyQualifiedKotlinRequestMethodController.kt#FullyQualifiedKotlinRequestMethodController.trace",
+        "framework.spring-web.direct-kotlin-controller.literal-request-mapping.local-function",
+        "exact",
+        1
+      ]
+    ]);
+  });
+
+  it("rejects Kotlin Spring RequestMapping routes without one exact static method", () => {
+    const rejected = [
+      [
+        "src/api/MissingKotlinRequestMethodImport.kt",
+        [
+          "import org.springframework.web.bind.annotation.RestController",
+          "import org.springframework.web.bind.annotation.RequestMapping",
+          "",
+          "@RestController",
+          "class MissingKotlinRequestMethodImport {",
+          "  @RequestMapping(method = [RequestMethod.GET])",
+          "  fun health() {}",
+          "}"
+        ].join("\n")
+      ],
+      [
+        "src/api/MultipleKotlinRequestMethods.kt",
+        [
+          "import org.springframework.web.bind.annotation.RestController",
+          "import org.springframework.web.bind.annotation.RequestMapping",
+          "import org.springframework.web.bind.annotation.RequestMethod",
+          "",
+          "@RestController",
+          "class MultipleKotlinRequestMethods {",
+          "  @RequestMapping(method = [RequestMethod.GET, RequestMethod.POST])",
+          "  fun health() {}",
+          "}"
+        ].join("\n")
+      ],
+      [
+        "src/api/ConditionalKotlinRequestMethod.kt",
+        [
+          "import org.springframework.web.bind.annotation.RestController",
+          "import org.springframework.web.bind.annotation.RequestMapping",
+          "import org.springframework.web.bind.annotation.RequestMethod",
+          "",
+          "@RestController",
+          "class ConditionalKotlinRequestMethod {",
+          '  @RequestMapping(value = "/health", method = [RequestMethod.GET], produces = "application/json")',
+          "  fun health() {}",
+          "}"
+        ].join("\n")
+      ],
+      [
+        "src/api/UnsupportedKotlinRequestMethod.kt",
+        [
+          "import org.springframework.web.bind.annotation.RestController",
+          "import org.springframework.web.bind.annotation.RequestMapping",
+          "import org.springframework.web.bind.annotation.RequestMethod",
+          "",
+          "@RestController",
+          "class UnsupportedKotlinRequestMethod {",
+          "  @RequestMapping(method = [RequestMethod.CONNECT])",
+          "  fun connect() {}",
+          "}"
+        ].join("\n")
+      ]
+    ] as const;
+
+    expect(
+      rejected.map(([filePath, sourceText]) =>
+        extractFileFacts({ filePath, language: "kotlin", sourceText }).edges.filter(
+          (edge) => edge.kind === "routes"
+        )
+      )
+    ).toEqual([[], [], [], []]);
   });
 
   it("rejects Kotlin Spring Web routes without strict controller, mapping, and literal proof", () => {

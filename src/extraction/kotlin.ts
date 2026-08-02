@@ -52,6 +52,7 @@ interface StaticKotlinSpringWebRoute {
   readonly method: RouteMethod;
   readonly path: string;
   readonly node: KotlinSyntaxNode;
+  readonly ruleId: string;
 }
 
 interface StaticKotlinCall {
@@ -92,6 +93,8 @@ const SPRING_REST_CONTROLLER_IMPORT =
 const SPRING_CONTROLLER_IMPORT = "org.springframework.stereotype.Controller";
 const SPRING_REQUEST_MAPPING_IMPORT =
   "org.springframework.web.bind.annotation.RequestMapping";
+const SPRING_REQUEST_METHOD_IMPORT =
+  "org.springframework.web.bind.annotation.RequestMethod";
 const SPRING_BOOT_PROPERTIES_KEY = /^[A-Za-z0-9][A-Za-z0-9._-]*$/u;
 
 const SPRING_METHOD_MAPPING_IMPORTS: Readonly<Record<string, RouteMethod>> = {
@@ -100,6 +103,17 @@ const SPRING_METHOD_MAPPING_IMPORTS: Readonly<Record<string, RouteMethod>> = {
   "org.springframework.web.bind.annotation.PutMapping": "PUT",
   "org.springframework.web.bind.annotation.PatchMapping": "PATCH",
   "org.springframework.web.bind.annotation.DeleteMapping": "DELETE"
+};
+
+const SPRING_REQUEST_METHODS: Readonly<Record<string, RouteMethod>> = {
+  GET: "GET",
+  POST: "POST",
+  PUT: "PUT",
+  PATCH: "PATCH",
+  DELETE: "DELETE",
+  HEAD: "HEAD",
+  OPTIONS: "OPTIONS",
+  TRACE: "TRACE"
 };
 
 function directChildren(node: KotlinSyntaxNode): readonly KotlinSyntaxNode[] {
@@ -456,6 +470,126 @@ function staticKotlinSpringPath(annotation: KotlinSyntaxNode): string | null {
   return path.length === 0 || (path.startsWith("/") && !path.includes("//")) ? path : null;
 }
 
+function staticKotlinSpringRequestMethodValue(
+  node: KotlinSyntaxNode,
+  imports: ReadonlySet<string>
+): RouteMethod | null {
+  if (node.kind() !== "navigation_expression") {
+    return null;
+  }
+  const match = /^([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)\.([A-Z]+)$/u.exec(
+    nodeText(node)
+  );
+  const owner = match?.[1];
+  const methodName = match?.[2];
+  const method = methodName === undefined ? undefined : SPRING_REQUEST_METHODS[methodName];
+  if (
+    owner === undefined ||
+    method === undefined ||
+    (owner !== SPRING_REQUEST_METHOD_IMPORT &&
+      (owner !== "RequestMethod" || !imports.has(SPRING_REQUEST_METHOD_IMPORT)))
+  ) {
+    return null;
+  }
+  return method;
+}
+
+function staticKotlinSpringRequestMethod(
+  node: KotlinSyntaxNode,
+  imports: ReadonlySet<string>
+): RouteMethod | null {
+  if (node.kind() !== "collection_literal") {
+    return null;
+  }
+  const values = directChildren(node).filter(
+    (child) => child.kind() !== "[" && child.kind() !== "]"
+  );
+  return values.length === 1 && values[0] !== undefined
+    ? staticKotlinSpringRequestMethodValue(values[0], imports)
+    : null;
+}
+
+/**
+ * Retains one direct Kotlin method-level `@RequestMapping` only when its
+ * request-method array has one exact enum value. The optional path is one
+ * positional, `path =`, or `value =` literal; conditions and multi-method
+ * mappings remain deliberately outside this static evidence boundary.
+ */
+function staticKotlinSpringWebRequestMappingRoute(
+  annotation: KotlinSyntaxNode,
+  imports: ReadonlySet<string>
+): StaticKotlinSpringWebRoute | null {
+  const invocation = staticKotlinAnnotationInvocation(annotation);
+  if (invocation === null) {
+    return null;
+  }
+  const argumentLists = directChildren(invocation).filter((child) => child.kind() === "value_arguments");
+  if (argumentLists.length !== 1 || argumentLists[0] === undefined) {
+    return null;
+  }
+  const arguments_ = directChildren(argumentLists[0]).filter(
+    (child) => child.kind() === "value_argument"
+  );
+  if (arguments_.length === 0 || arguments_.length > 2) {
+    return null;
+  }
+  let path = "";
+  let hasPath = false;
+  let method: RouteMethod | null = null;
+  for (const argument of arguments_) {
+    const argumentChildren = directChildren(argument);
+    if (argumentChildren.length === 1) {
+      if (hasPath || argumentChildren[0] === undefined) {
+        return null;
+      }
+      const literal = staticKotlinPlainStringLiteral(argumentChildren[0]);
+      if (literal === null) {
+        return null;
+      }
+      path = literal;
+      hasPath = true;
+      continue;
+    }
+    if (
+      argumentChildren.length !== 3 ||
+      argumentChildren[0]?.kind() !== "simple_identifier" ||
+      argumentChildren[1]?.kind() !== "=" ||
+      argumentChildren[2] === undefined
+    ) {
+      return null;
+    }
+    const key = nodeText(argumentChildren[0]);
+    const value = argumentChildren[2];
+    if (key === "path" || key === "value") {
+      if (hasPath) {
+        return null;
+      }
+      const literal = staticKotlinPlainStringLiteral(value);
+      if (literal === null) {
+        return null;
+      }
+      path = literal;
+      hasPath = true;
+      continue;
+    }
+    if (key !== "method" || method !== null) {
+      return null;
+    }
+    method = staticKotlinSpringRequestMethod(value, imports);
+    if (method === null) {
+      return null;
+    }
+  }
+  return method !== null && (path.length === 0 || (path.startsWith("/") && !path.includes("//")))
+    ? {
+        method,
+        path,
+        node: annotation,
+        ruleId: "framework.spring-web.direct-kotlin-controller.literal-request-mapping.local-function"
+      }
+    : null;
+}
+
 function staticKotlinAnnotations(node: KotlinSyntaxNode): readonly KotlinSyntaxNode[] {
   const modifiers = directChildren(node).find((child) => child.kind() === "modifiers");
   return modifiers === undefined
@@ -519,9 +653,9 @@ function staticKotlinSpringWebClassPrefix(
 }
 
 /**
- * Mirrors the supported Java shortcut surface while making Kotlin import proof
- * explicit. Method-level `@RequestMapping` remains intentionally deferred,
- * including its broad default-method semantics.
+ * Supports the shortcut surface and one separately proven method-level
+ * `@RequestMapping(method = [RequestMethod.X])` form. Broad default-method
+ * semantics, conditions, and multi-method arrays remain intentionally absent.
  */
 function staticKotlinSpringWebMethodRoute(
   declaration: StaticKotlinFunction,
@@ -537,11 +671,13 @@ function staticKotlinSpringWebMethodRoute(
   const requestMappings = annotationsNamedRequestMapping.filter((annotation) =>
     staticKotlinAnnotationMatches(annotation, SPRING_REQUEST_MAPPING_IMPORT, imports)
   );
-  if (
-    annotationsNamedRequestMapping.length !== requestMappings.length ||
-    requestMappings.length > 0
-  ) {
+  if (annotationsNamedRequestMapping.length !== requestMappings.length) {
     return null;
+  }
+  if (requestMappings.length > 0) {
+    return requestMappings.length === 1 && requestMappings[0] !== undefined
+      ? staticKotlinSpringWebRequestMappingRoute(requestMappings[0], imports)
+      : null;
   }
   const annotationsNamedMappings = annotations.filter((annotation) =>
     Object.keys(SPRING_METHOD_MAPPING_IMPORTS).some((mappingImport) =>
@@ -562,7 +698,14 @@ function staticKotlinSpringWebMethodRoute(
     return null;
   }
   const path = staticKotlinSpringPath(mapping.annotation);
-  return path === null ? null : { method: mapping.method, path, node: mapping.annotation };
+  return path === null
+    ? null
+    : {
+        method: mapping.method,
+        path,
+        node: mapping.annotation,
+        ruleId: "framework.spring-web.direct-kotlin-controller.literal-method-mapping.local-function"
+      };
 }
 
 function joinHttpPaths(prefix: string, path: string): string {
@@ -1361,7 +1504,7 @@ export function extractKotlinFileFacts(input: KotlinExtractFileFactsInput): Arti
               typeSymbol,
               { ...route, path: joinHttpPaths(springWebPrefix, route.path) },
               methodSymbol,
-              "framework.spring-web.direct-kotlin-controller.literal-method-mapping.local-function"
+              route.ruleId
             );
           }
         }

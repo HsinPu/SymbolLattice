@@ -47,6 +47,7 @@ interface StaticHttpRoute {
   readonly method: RouteMethod;
   readonly path: string;
   readonly node: JavaSyntaxNode;
+  readonly ruleId?: string;
 }
 
 interface StaticSpringBootPropertiesReference {
@@ -62,6 +63,7 @@ interface StaticSpringBootConfigurationPropertiesPrefixReference {
 const SPRING_REST_CONTROLLER_PATH = "org.springframework.web.bind.annotation.RestController";
 const SPRING_CONTROLLER_PATH = "org.springframework.stereotype.Controller";
 const SPRING_REQUEST_MAPPING_PATH = "org.springframework.web.bind.annotation.RequestMapping";
+const SPRING_REQUEST_METHOD_PATH = "org.springframework.web.bind.annotation.RequestMethod";
 const SPRING_VALUE_PATH = "org.springframework.beans.factory.annotation.Value";
 const SPRING_CONFIGURATION_PROPERTIES_PATH =
   "org.springframework.boot.context.properties.ConfigurationProperties";
@@ -77,6 +79,17 @@ const SPRING_METHOD_MAPPING_PATHS: Readonly<Record<string, RouteMethod>> = {
   "org.springframework.web.bind.annotation.PutMapping": "PUT",
   "org.springframework.web.bind.annotation.PatchMapping": "PATCH",
   "org.springframework.web.bind.annotation.DeleteMapping": "DELETE"
+};
+
+const SPRING_REQUEST_METHODS: Readonly<Record<string, RouteMethod>> = {
+  GET: "GET",
+  POST: "POST",
+  PUT: "PUT",
+  PATCH: "PATCH",
+  DELETE: "DELETE",
+  HEAD: "HEAD",
+  OPTIONS: "OPTIONS",
+  TRACE: "TRACE"
 };
 
 const MICRONAUT_METHOD_MAPPING_PATHS: Readonly<Record<string, RouteMethod>> = {
@@ -255,6 +268,109 @@ function staticSpringPath(
     return "";
   }
   return path.startsWith("/") && !path.includes("//") ? path : null;
+}
+
+function staticSpringRequestMethod(
+  input: JavaExtractFileFactsInput,
+  node: JavaSyntaxNode,
+  imports: ReadonlyMap<string, string>
+): RouteMethod | null {
+  const match = /^([A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)*)\.([A-Z]+)$/u.exec(
+    nodeText(input, node)
+  );
+  const owner = match?.[1];
+  const methodName = match?.[2];
+  const method = methodName === undefined ? undefined : SPRING_REQUEST_METHODS[methodName];
+  if (
+    owner === undefined ||
+    method === undefined ||
+    (owner !== SPRING_REQUEST_METHOD_PATH &&
+      (owner !== "RequestMethod" || imports.get(owner) !== SPRING_REQUEST_METHOD_PATH))
+  ) {
+    return null;
+  }
+  return method;
+}
+
+/**
+ * Retains one direct method-level Spring `@RequestMapping` when a single
+ * RequestMethod enum value is provable. The optional route path is one
+ * positional, `path =`, or `value =` literal; all other request conditions
+ * and multi-method forms remain deliberately outside this static slice.
+ */
+function staticSpringRequestMappingRoute(
+  input: JavaExtractFileFactsInput,
+  annotation: StaticJavaAnnotation,
+  imports: ReadonlyMap<string, string>
+): StaticHttpRoute | null {
+  if (annotation.node.name !== "Annotation") {
+    return null;
+  }
+  const arguments_ = directChildren(annotation.node).find(
+    (child) => child.name === "AnnotationArgumentList"
+  );
+  if (arguments_ === undefined) {
+    return null;
+  }
+  const values = directChildren(arguments_).filter(
+    (child) => !["(", ")", ","].includes(child.name)
+  );
+  if (values.length === 0 || values.length > 2) {
+    return null;
+  }
+  let path = "";
+  let hasPath = false;
+  let method: RouteMethod | null = null;
+  for (const value of values) {
+    if (value.name === "StringLiteral") {
+      if (hasPath) {
+        return null;
+      }
+      const literal = staticPlainJavaString(input, value);
+      if (literal === null) {
+        return null;
+      }
+      path = literal;
+      hasPath = true;
+      continue;
+    }
+    if (value.name !== "ElementValuePair") {
+      return null;
+    }
+    const pair = directChildren(value);
+    const key = pair[0] === undefined ? null : identifierText(input, pair[0]);
+    const argument = pair[2];
+    if (pair.length !== 3 || pair[1]?.name !== "AssignOp" || argument === undefined) {
+      return null;
+    }
+    if (key === "path" || key === "value") {
+      if (hasPath) {
+        return null;
+      }
+      const literal = staticPlainJavaString(input, argument);
+      if (literal === null) {
+        return null;
+      }
+      path = literal;
+      hasPath = true;
+      continue;
+    }
+    if (key !== "method" || method !== null) {
+      return null;
+    }
+    method = staticSpringRequestMethod(input, argument, imports);
+    if (method === null) {
+      return null;
+    }
+  }
+  return method !== null && (path.length === 0 || (path.startsWith("/") && !path.includes("//")))
+    ? {
+        method,
+        path,
+        node: annotation.node,
+        ruleId: "framework.spring-web.direct-controller.literal-request-mapping.local-method"
+      }
+    : null;
 }
 
 /**
@@ -575,13 +691,13 @@ function staticMethodRoute(
   const requestMappings = annotationsNamedRequestMapping.filter((annotation) =>
     annotationMatches(annotation, SPRING_REQUEST_MAPPING_PATH, imports)
   );
-  if (
-    annotationsNamedRequestMapping.length !== requestMappings.length ||
-    requestMappings.length > 0
-  ) {
-    // `@RequestMapping(method = RequestMethod.GET)` is intentionally a later,
-    // separately-tested surface. Never mix it with shortcut annotations here.
+  if (annotationsNamedRequestMapping.length !== requestMappings.length) {
     return null;
+  }
+  if (requestMappings.length > 0) {
+    return requestMappings.length === 1 && requestMappings[0] !== undefined
+      ? staticSpringRequestMappingRoute(input, requestMappings[0], imports)
+      : null;
   }
   const mappings = declaration.annotations.flatMap((annotation) => {
     const method = Object.entries(SPRING_METHOD_MAPPING_PATHS).find(([path]) =>
@@ -1441,7 +1557,8 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
                 classSymbol,
                 { ...route, path: joinHttpPaths(prefix, route.path) },
                 handler,
-                "framework.spring-web.direct-controller.literal-method-mapping.local-method"
+                route.ruleId ??
+                  "framework.spring-web.direct-controller.literal-method-mapping.local-method"
               );
             }
           }

@@ -6,6 +6,26 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.183.0] - 2026-08-02
+
+### Added
+
+- Parser-backed Spring Web extraction now supports one direct method-level <code>@RequestMapping</code> route on both Java methods and Kotlin functions. The mapping requires one exact imported or fully-qualified <code>RequestMethod</code> enum: <code>GET</code>, <code>POST</code>, <code>PUT</code>, <code>PATCH</code>, <code>DELETE</code>, <code>HEAD</code>, <code>OPTIONS</code>, or <code>TRACE</code>.
+- The optional method route path is one static <code>path =</code> or <code>value =</code> literal; an omitted method path inherits the parser-proven class prefix. Java and Kotlin use distinct evidence rules so a route can be traced to its declaration form as well as its exact local handler.
+- New unit and persisted-service coverage proves all supported request methods, imported and fully-qualified annotation/enum forms, inherited prefixes, exact handler relations, and Java/Kotlin persisted route queries. Missing enum proof, wildcard/alias import gaps, multi-method arrays, extra conditions, unsupported enum values, and unqualified default mappings remain non-routes.
+
+### Compatibility
+
+- The artifact-facts extractor advances to <code>multi-language-ast-v163</code>. Existing graphs and SQLite schema remain readable; the next explicit <code>sync</code> or <code>index</code> re-extracts eligible Java and Kotlin Spring controller artifacts under the <code>RequestMapping</code> method surface.
+
+### Deliberate limits
+
+- This is not full Spring request-condition evaluation. The slice excludes method-level default/ALL mappings, multiple methods, arrays with more than one method, headers, params, consumes, produces, custom/composed annotations, aliases/wildcard imports, dynamic or escaped paths, class-path conditions, profiles, security, proxy registration, and deployed routing behavior.
+
+### Comparison notes
+
+- The inspected CodeGraph Spring resolver extracts Java and Kotlin method-level <code>@RequestMapping</code> using a text pattern and assigns a default broad method when it cannot find a <code>method =</code> value. It remains broader for permissive syntax. SymbolLattice independently accepts only an AST-proven exact enum, static path shape, controller, and local concrete handler, then records containment, range, rule id, stage, and confidence. SymbolLattice is stricter and more auditable for this supported subset.
+
 ## [0.182.0] - 2026-08-02
 
 ### Added
