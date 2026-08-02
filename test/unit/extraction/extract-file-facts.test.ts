@@ -12111,6 +12111,72 @@ describe("source extraction", () => {
     ]);
   });
 
+  it("retains direct top-level Kotlin object Spring @Value facts", () => {
+    const facts = extractFileFacts({
+      filePath: "src/config/ObjectConfig.kt",
+      language: "kotlin",
+      sourceText: [
+        "import org.springframework.beans.factory.annotation.Value",
+        "import org.springframework.boot.context.properties.ConfigurationProperties",
+        "",
+        '@ConfigurationProperties("object")',
+        "object ObjectConfig {",
+        '  @Value("\\${object.port}")',
+        "  lateinit var port: String",
+        '  fun configure(@Value("\\${object.mode}") mode: String) {}',
+        '  @Value("\\${object.feature}")',
+        "  fun setFeature(feature: Boolean) {}",
+        "}",
+        "",
+        "object FullyQualifiedObjectConfig {",
+        '  @org.springframework.beans.factory.annotation.Value("\\${object.name}")',
+        "  val name: String = \"\"",
+        "}",
+        "",
+        "class Host {",
+        "  companion object {",
+        '    @Value("\\${nested.key}")',
+        "    lateinit var nested: String",
+        "  }",
+        "}"
+      ].join("\n")
+    });
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+
+    expect(
+      facts.symbols
+        .filter((symbol) =>
+          [
+            "src/config/ObjectConfig.kt#ObjectConfig",
+            "src/config/ObjectConfig.kt#ObjectConfig.configure",
+            "src/config/ObjectConfig.kt#ObjectConfig.setFeature",
+            "src/config/ObjectConfig.kt#FullyQualifiedObjectConfig"
+          ].includes(symbol.qualifiedName)
+        )
+        .map((symbol) => [symbol.name, symbol.kind])
+    ).toEqual([
+      ["ObjectConfig", "class"],
+      ["configure", "method"],
+      ["setFeature", "method"],
+      ["FullyQualifiedObjectConfig", "class"]
+    ]);
+    expect(
+      facts.springBootPropertiesFacts?.valueReferences.map((reference) => [
+        symbolsById.get(reference.sourceId)?.name,
+        reference.key
+      ])
+    ).toEqual([
+      ["ObjectConfig", "object.port"],
+      ["ObjectConfig", "object.mode"],
+      ["ObjectConfig", "object.feature"],
+      ["FullyQualifiedObjectConfig", "object.name"]
+    ]);
+    expect(facts.springBootPropertiesFacts?.configurationPropertiesPrefixes).toEqual([]);
+    expect(facts.springBootPropertiesFacts?.valueReferences.map((reference) => reference.key)).not.toContain(
+      "nested.key"
+    );
+  });
+
   it("retains direct Kotlin Spring @ConfigurationProperties literal-prefix facts", () => {
     const facts = extractFileFacts({
       filePath: "src/config/CacheProperties.kt",

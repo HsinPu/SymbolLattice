@@ -26,6 +26,8 @@ type KotlinSyntaxNode = SgNode;
 
 interface StaticKotlinType {
   readonly kind: "class" | "interface";
+  /** Kotlin objects use the class graph kind but retain their source shape. */
+  readonly isObject: boolean;
   readonly name: string;
   readonly node: KotlinSyntaxNode;
   readonly body: KotlinSyntaxNode;
@@ -154,21 +156,30 @@ function identifierText(node: KotlinSyntaxNode): string | null {
 }
 
 function staticKotlinType(node: KotlinSyntaxNode): StaticKotlinType | null {
-  if (node.kind() !== "class_declaration") {
+  const isObject = node.kind() === "object_declaration";
+  if (!isObject && node.kind() !== "class_declaration") {
     return null;
   }
   const children = directChildren(node);
-  const classOrInterface = children.find(
-    (child) => child.kind() === "class" || child.kind() === "interface"
-  );
   const nameNode = children.find((child) => child.kind() === "type_identifier");
   const body = children.find((child) => child.kind() === "class_body");
   const name = nameNode === undefined ? null : identifierText(nameNode);
   if (
-    classOrInterface === undefined ||
     name === null ||
     children.filter((child) => child.kind() === "type_identifier").length !== 1
   ) {
+    return null;
+  }
+  if (isObject) {
+    // SymbolLattice has no separate object symbol kind. A direct named Kotlin
+    // object is therefore a class-like owner, but only when its braced body
+    // proves local members that framework extraction may inspect.
+    return body === undefined ? null : { kind: "class", isObject: true, name, node, body };
+  }
+  const classOrInterface = children.find(
+    (child) => child.kind() === "class" || child.kind() === "interface"
+  );
+  if (classOrInterface === undefined) {
     return null;
   }
   // Kotlin permits a valid top-level class without a braced body. Reusing the
@@ -177,10 +188,10 @@ function staticKotlinType(node: KotlinSyntaxNode): StaticKotlinType | null {
   const memberScope = body ?? node;
   const kind = classOrInterface.kind();
   if (kind === "class") {
-    return { kind: "class", name, node, body: memberScope };
+    return { kind: "class", isObject: false, name, node, body: memberScope };
   }
   if (kind === "interface") {
-    return { kind: "interface", name, node, body: memberScope };
+    return { kind: "interface", isObject: false, name, node, body: memberScope };
   }
   return null;
 }
@@ -596,7 +607,7 @@ function staticKotlinSpringBootConfigurationPropertiesPrefixReferences(
   declaration: StaticKotlinType,
   imports: ReadonlySet<string>
 ): readonly StaticKotlinSpringBootConfigurationPropertiesPrefixReference[] {
-  if (declaration.kind !== "class") {
+  if (declaration.kind !== "class" || declaration.isObject) {
     return [];
   }
   const modifiers = directChildren(declaration.node).find((child) => child.kind() === "modifiers");
