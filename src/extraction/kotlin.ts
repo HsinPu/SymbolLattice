@@ -167,17 +167,20 @@ function staticKotlinType(node: KotlinSyntaxNode): StaticKotlinType | null {
   if (
     classOrInterface === undefined ||
     name === null ||
-    body === undefined ||
     children.filter((child) => child.kind() === "type_identifier").length !== 1
   ) {
     return null;
   }
+  // Kotlin permits a valid top-level class without a braced body. Reusing the
+  // declaration as its empty member scope preserves the direct-member contract
+  // while making its primary constructor available to framework extractors.
+  const memberScope = body ?? node;
   const kind = classOrInterface.kind();
   if (kind === "class") {
-    return { kind: "class", name, node, body };
+    return { kind: "class", name, node, body: memberScope };
   }
   if (kind === "interface") {
-    return { kind: "interface", name, node, body };
+    return { kind: "interface", name, node, body: memberScope };
   }
   return null;
 }
@@ -368,6 +371,57 @@ function staticKotlinSpringBootPropertiesReferences(
       (annotation) => staticKotlinAnnotationName(annotation) === "Value" ||
         staticKotlinAnnotationName(annotation) === SPRING_VALUE_IMPORT
     );
+    const valueAnnotations = annotationsNamedValue.filter((annotation) => {
+      const name = staticKotlinAnnotationName(annotation);
+      return name === SPRING_VALUE_IMPORT || (name === "Value" && imports.has(SPRING_VALUE_IMPORT));
+    });
+    if (annotationsNamedValue.length !== valueAnnotations.length || valueAnnotations.length !== 1) {
+      continue;
+    }
+    const annotation = valueAnnotations[0];
+    if (annotation === undefined) {
+      continue;
+    }
+    const key = staticKotlinSpringBootPropertiesKey(annotation);
+    if (key !== null) {
+      references.push({ key, node: annotation });
+    }
+  }
+  return references;
+}
+
+/**
+ * Retains direct primary-constructor parameter `@Value` annotations on a
+ * top-level Kotlin class. Secondary constructors, function parameters,
+ * use-site targets, aliases, and dynamic strings stay outside this slice.
+ */
+function staticKotlinSpringBootConstructorParameterReferences(
+  declaration: StaticKotlinType,
+  imports: ReadonlySet<string>
+): readonly StaticKotlinSpringBootPropertiesReference[] {
+  if (declaration.kind !== "class") {
+    return [];
+  }
+  const primaryConstructor = directChildren(declaration.node).find(
+    (child) => child.kind() === "primary_constructor"
+  );
+  if (primaryConstructor === undefined) {
+    return [];
+  }
+  const references: StaticKotlinSpringBootPropertiesReference[] = [];
+  for (const parameter of directChildren(primaryConstructor)) {
+    if (parameter.kind() !== "class_parameter") {
+      continue;
+    }
+    const modifiers = directChildren(parameter).find((child) => child.kind() === "modifiers");
+    if (modifiers === undefined) {
+      continue;
+    }
+    const annotations = directChildren(modifiers).filter((child) => child.kind() === "annotation");
+    const annotationsNamedValue = annotations.filter((annotation) => {
+      const name = staticKotlinAnnotationName(annotation);
+      return name === "Value" || name === SPRING_VALUE_IMPORT;
+    });
     const valueAnnotations = annotationsNamedValue.filter((annotation) => {
       const name = staticKotlinAnnotationName(annotation);
       return name === SPRING_VALUE_IMPORT || (name === "Value" && imports.has(SPRING_VALUE_IMPORT));
@@ -760,6 +814,17 @@ export function extractKotlinFileFacts(input: KotlinExtractFileFactsInput): Arti
       .filter((candidate): candidate is StaticKotlinType => candidate !== null)) {
       const typeSymbol = addType(declaration);
       for (const reference of staticKotlinSpringBootPropertiesReferences(declaration, imports)) {
+        springBootPropertiesValueReferences.push({
+          sourceId: typeSymbol.id,
+          filePath: input.filePath,
+          key: reference.key,
+          range: rangeForNode(reference.node)
+        });
+      }
+      for (const reference of staticKotlinSpringBootConstructorParameterReferences(
+        declaration,
+        imports
+      )) {
         springBootPropertiesValueReferences.push({
           sourceId: typeSymbol.id,
           filePath: input.filePath,

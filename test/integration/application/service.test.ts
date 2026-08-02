@@ -15271,6 +15271,149 @@ describe("SymbolLatticeService", () => {
     });
   });
 
+  it("projects direct Java and Kotlin Spring @Value constructor parameters through conservative configuration resolution", async () => {
+    const projectPath = await createInlineProject({
+      "config/application.properties": [
+        "constructor.java.port=java-constructor-secret",
+        "constructor.kotlin-mode=kotlin-constructor-secret"
+      ].join("\n"),
+      "src/config/JavaConstructorConfig.java": [
+        "import org.springframework.beans.factory.annotation.Value;",
+        "",
+        "class JavaConstructorConfig {",
+        '  JavaConstructorConfig(@Value("${constructor.java.port}") String port) {}',
+        "}"
+      ].join("\n"),
+      "src/config/KotlinConstructorConfig.kt": [
+        "import org.springframework.beans.factory.annotation.Value",
+        "",
+        "class KotlinConstructorConfig(",
+        '  @Value("\\${constructor.kotlinMode}") mode: String',
+        ")"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    const indexed = await service.init({ projectPath });
+    const javaConfig = (
+      await service.find(projectPath, "src/config/JavaConstructorConfig.java#JavaConstructorConfig")
+    ).symbols[0];
+    const kotlinConfig = (
+      await service.find(projectPath, "src/config/KotlinConstructorConfig.kt#KotlinConstructorConfig")
+    ).symbols[0];
+    const javaPort = (
+      await service.find(projectPath, "config/application.properties#properties-key:constructor.java.port")
+    ).symbols[0];
+    const kotlinMode = (
+      await service.find(projectPath, "config/application.properties#properties-key:constructor.kotlin-mode")
+    ).symbols[0];
+    if (
+      javaConfig === undefined ||
+      kotlinConfig === undefined ||
+      javaPort === undefined ||
+      kotlinMode === undefined
+    ) {
+      throw new Error("Expected indexed Spring constructor configuration symbols.");
+    }
+
+    const javaFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "src/config/JavaConstructorConfig.java");
+    const kotlinFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "src/config/KotlinConstructorConfig.kt");
+    const propertiesFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "config/application.properties");
+    const snapshot = graphStore.getSnapshot(projectPath);
+    const javaReference = snapshot.edges.find(
+      (edge) => edge.sourceId === javaConfig.id && edge.targetId === javaPort.id
+    );
+    const kotlinReference = snapshot.edges.find(
+      (edge) => edge.sourceId === kotlinConfig.id && edge.targetId === kotlinMode.id
+    );
+    const javaCallers = await service.callers(projectPath, javaPort.qualifiedName);
+    const kotlinCallers = await service.callers(projectPath, kotlinMode.qualifiedName);
+
+    expect(indexed).toMatchObject({
+      stale: false,
+      counts: { files: 3, symbols: 7, edges: 6 }
+    });
+    expect(javaFacts?.springBootPropertiesFacts?.valueReferences).toEqual([
+      expect.objectContaining({ sourceId: javaConfig.id, key: "constructor.java.port" })
+    ]);
+    expect(kotlinFacts?.springBootPropertiesFacts?.valueReferences).toEqual([
+      expect.objectContaining({ sourceId: kotlinConfig.id, key: "constructor.kotlinMode" })
+    ]);
+    expect(JSON.stringify(propertiesFacts)).not.toContain("constructor-secret");
+    expect(javaCallers.relations.map((relation) => relation.symbol.id)).toEqual([javaConfig.id]);
+    expect(kotlinCallers.relations.map((relation) => relation.symbol.id)).toEqual([kotlinConfig.id]);
+    expect(javaReference).toMatchObject({
+      kind: "references",
+      resolution: "exact",
+      confidence: 1,
+      referenceName: "constructor.java.port",
+      evidence: expect.objectContaining({
+        ruleId: "framework.spring-boot.properties.direct-value.literal-key.exact-key",
+        stage: "module",
+        candidateSymbolIds: [javaPort.id],
+        configurationPaths: ["config/application.properties"]
+      })
+    });
+    expect(kotlinReference).toMatchObject({
+      kind: "references",
+      resolution: "heuristic",
+      confidence: 0.75,
+      referenceName: "constructor.kotlinMode",
+      evidence: expect.objectContaining({
+        ruleId: "framework.spring-boot.properties.direct-value.relaxed-key.unique-key",
+        stage: "heuristic",
+        candidateSymbolIds: [kotlinMode.id],
+        configurationPaths: ["config/application.properties"]
+      })
+    });
+
+    await writeFile(
+      join(projectPath, "config", "application.properties"),
+      "feature.enabled=true\n",
+      "utf8"
+    );
+    const synced = await service.sync({ projectPath });
+    const afterSync = graphStore.getSnapshot(projectPath);
+    const javaAfterSync = afterSync.edges.find(
+      (edge) =>
+        edge.sourceId === javaConfig.id &&
+        edge.kind === "references" &&
+        edge.referenceName === "constructor.java.port"
+    );
+    const kotlinAfterSync = afterSync.edges.find(
+      (edge) =>
+        edge.sourceId === kotlinConfig.id &&
+        edge.kind === "references" &&
+        edge.referenceName === "constructor.kotlinMode"
+    );
+
+    expect(synced.lastIndexWork?.reusedArtifactFiles).toEqual(
+      expect.arrayContaining([
+        "src/config/JavaConstructorConfig.java",
+        "src/config/KotlinConstructorConfig.kt"
+      ])
+    );
+    expect(javaAfterSync).toMatchObject({
+      targetId: null,
+      resolution: "unresolved",
+      confidence: 0,
+      evidence: expect.objectContaining({ stage: "unresolved", candidateSymbolIds: [] })
+    });
+    expect(kotlinAfterSync).toMatchObject({
+      targetId: null,
+      resolution: "unresolved",
+      confidence: 0,
+      evidence: expect.objectContaining({ stage: "unresolved", candidateSymbolIds: [] })
+    });
+  });
+
   it("projects conservative Java @ConfigurationProperties prefixes to unique Spring Boot configuration leaves", async () => {
     const projectPath = await createInlineProject({
       "config/application.yml": [

@@ -6,6 +6,27 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.174.0] - 2026-08-02
+
+### Added
+
+- Parser-backed Spring <code>@Value</code> facts now include direct constructor parameters on direct top-level Java classes and direct primary-constructor parameters on direct top-level Kotlin classes. Exact imports or fully-qualified annotations prove the framework type; Java retains one literal <code>"${key}"</code> positional placeholder, while Kotlin retains one escaped-dollar regular-string placeholder.
+- Valid Kotlin top-level classes without a braced body now retain their class symbol and primary-constructor facts. The existing project resolver therefore applies the same literal, relaxed-key, collision, source-value non-retention, and explicit-sync behavior to every supported constructor fact.
+- New extraction, capability, and service coverage proves Java/Kotlin imported and fully-qualified constructor forms, Kotlin's brace-free declaration form, exact and relaxed resolution, collision-safe unresolved behavior, configuration-value omission, explicit-sync withdrawal, and rejection of dynamic/named/use-site/alias/wildcard/method/secondary-constructor forms.
+
+### Compatibility
+
+- The artifact-facts extractor advances to <code>multi-language-ast-v154</code>; the project resolver remains <code>project-resolver-v55</code>. Existing graphs and SQLite schema remain readable, while the next explicit <code>sync</code> or <code>index</code> re-extracts eligible Java/Kotlin artifacts under the new constructor surface.
+
+### Deliberate limits
+
+- This is not general constructor or dependency-injection analysis. Java method parameters, nested declarations, and nonliteral annotations remain excluded. Kotlin secondary constructors, function parameters, use-site targets, raw strings, interpolation, aliases, wildcard imports, named arguments, expressions, and nested placeholders remain excluded.
+- The graph records the directly enclosing class, never invents parameter symbols, and preserves exact, heuristic, or unresolved configuration evidence rather than modelling Spring's runtime binding, profiles, precedence, environment overrides, validation, collection binding, or value semantics.
+
+### Comparison notes
+
+- The inspected CodeGraph Spring path uses broader Java/Kotlin text-pattern coverage and can recognize more annotation placements. SymbolLattice independently adds the high-value constructor subset through parsed declaration ownership, exact type proof, Kotlin-specific string semantics, conservative relaxed resolution, and unresolved collision evidence. SymbolLattice is stronger for auditable syntax and ambiguity; CodeGraph remains broader for placement and runtime-like configuration coverage.
+
 ## [0.173.0] - 2026-08-02
 
 ### Added

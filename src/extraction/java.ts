@@ -816,6 +816,57 @@ function staticSpringBootPropertiesReferences(
 }
 
 /**
+ * Retains direct constructor-parameter `@Value` annotations after the same
+ * exact Spring type proof as fields. Methods, nested declarations, and any
+ * nonliteral annotation surface never enter this first constructor slice.
+ */
+function staticSpringBootConstructorParameterReferences(
+  input: JavaExtractFileFactsInput,
+  declaration: StaticJavaClass,
+  imports: ReadonlyMap<string, string>
+): readonly StaticSpringBootPropertiesReference[] {
+  const references: StaticSpringBootPropertiesReference[] = [];
+  for (const constructor of directChildren(declaration.body)) {
+    if (constructor.name !== "ConstructorDeclaration") {
+      continue;
+    }
+    const parameters = directChildren(constructor).find(
+      (child) => child.name === "FormalParameters"
+    );
+    if (parameters === undefined) {
+      continue;
+    }
+    for (const parameter of directChildren(parameters)) {
+      if (parameter.name !== "FormalParameter") {
+        continue;
+      }
+      const annotations = staticAnnotations(input, parameter);
+      const annotationsNamedValue = annotations.filter(
+        (annotation) => annotation.name === "Value" || annotation.name === SPRING_VALUE_PATH
+      );
+      const valueAnnotations = annotationsNamedValue.filter((annotation) =>
+        annotationMatches(annotation, SPRING_VALUE_PATH, imports)
+      );
+      if (
+        annotationsNamedValue.length !== valueAnnotations.length ||
+        valueAnnotations.length !== 1
+      ) {
+        continue;
+      }
+      const annotation = valueAnnotations[0];
+      if (annotation === undefined) {
+        continue;
+      }
+      const key = staticSpringBootPropertiesKey(input, annotation);
+      if (key !== null) {
+        references.push({ key, node: annotation.node });
+      }
+    }
+  }
+  return references;
+}
+
+/**
  * A direct top-level Java class may own one statically proven Spring Boot
  * configuration prefix. The project resolver later fans it out only to
  * parser-proven leaf keys, keeping profile and format ambiguity explicit.
@@ -1052,6 +1103,18 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
     for (const classDeclaration of classes) {
       const classSymbol = addClass(classDeclaration, packageName);
       for (const reference of staticSpringBootPropertiesReferences(
+        input,
+        classDeclaration,
+        imports
+      )) {
+        springBootPropertiesValueReferences.push({
+          sourceId: classSymbol.id,
+          filePath: input.filePath,
+          key: reference.key,
+          range: rangeFor(lineStarts, reference.node.from, reference.node.to)
+        });
+      }
+      for (const reference of staticSpringBootConstructorParameterReferences(
         input,
         classDeclaration,
         imports

@@ -7703,6 +7703,74 @@ describe("source extraction", () => {
     expect(facts.edges.filter((edge) => edge.kind === "references")).toEqual([]);
   });
 
+  it("retains direct Java Spring Boot @Value constructor-parameter facts with source ranges", () => {
+    const facts = extractFileFacts({
+      filePath: "src/config/ConstructorConfig.java",
+      language: "java",
+      sourceText: [
+        "import org.springframework.beans.factory.annotation.Value;",
+        "",
+        "class ConstructorConfig {",
+        "  ConstructorConfig(",
+        '    @Value("${server.port}") String port,',
+        '    @Value("${feature.enabled:false}") boolean enabled',
+        "  ) {}",
+        "}",
+        "",
+        "class FullyQualifiedConstructorConfig {",
+        "  FullyQualifiedConstructorConfig(",
+        '    @org.springframework.beans.factory.annotation.Value("${app.name}") String name',
+        "  ) {}",
+        "}"
+      ].join("\n")
+    });
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+
+    expect(
+      facts.springBootPropertiesFacts?.valueReferences.map((reference) => [
+        symbolsById.get(reference.sourceId)?.name,
+        reference.key,
+        reference.range.start
+      ])
+    ).toEqual([
+      ["ConstructorConfig", "server.port", { line: 5, column: 5 }],
+      ["ConstructorConfig", "feature.enabled", { line: 6, column: 5 }],
+      ["FullyQualifiedConstructorConfig", "app.name", { line: 12, column: 5 }]
+    ]);
+    expect(facts.edges.filter((edge) => edge.kind === "references")).toEqual([]);
+  });
+
+  it("rejects unsupported Java Spring @Value constructor-parameter forms", () => {
+    const directImportFacts = extractFileFacts({
+      filePath: "src/config/UnsupportedConstructorValues.java",
+      language: "java",
+      sourceText: [
+        "import org.springframework.beans.factory.annotation.Value;",
+        "class UnsupportedConstructorValues {",
+        "  UnsupportedConstructorValues(",
+        '    @Value(value = "${named.argument}") String named,',
+        '    @Value("${nested.${key}}") String nested,',
+        '    @Value("${dynamic}" + suffix) String dynamic',
+        "  ) {}",
+        '  void configure(@Value("${method.only}") String method) {}',
+        "}"
+      ].join("\n")
+    });
+    const wildcardImportFacts = extractFileFacts({
+      filePath: "src/config/WildcardConstructorValues.java",
+      language: "java",
+      sourceText: [
+        "import org.springframework.beans.factory.annotation.*;",
+        "class WildcardConstructorValues {",
+        '  WildcardConstructorValues(@Value("${unproven.key}") String value) {}',
+        "}"
+      ].join("\n")
+    });
+
+    expect(directImportFacts.springBootPropertiesFacts?.valueReferences).toEqual([]);
+    expect(wildcardImportFacts.springBootPropertiesFacts?.valueReferences).toEqual([]);
+  });
+
   it("rejects non-field, unproven, dynamic, named-argument, and nested Spring @Value forms", () => {
     const directImportFacts = extractFileFacts({
       filePath: "src/config/UnsupportedValues.java",
@@ -11493,6 +11561,130 @@ describe("source extraction", () => {
         extractFileFacts({ filePath, language: "kotlin", sourceText }).springBootPropertiesFacts?.valueReferences
       )
     ).toEqual([[], [], [], []]);
+  });
+
+  it("retains direct Kotlin Spring @Value primary-constructor parameter facts", () => {
+    const facts = extractFileFacts({
+      filePath: "src/config/ConstructorConfig.kt",
+      language: "kotlin",
+      sourceText: [
+        "import org.springframework.beans.factory.annotation.Value",
+        "",
+        "class ConstructorConfig(",
+        '  @Value("\\${server.port}") private val port: String,',
+        '  @Value("\\${feature.enabled:false}") enabled: Boolean',
+        ")",
+        "",
+        "class FullyQualifiedConstructorConfig(",
+        '  @org.springframework.beans.factory.annotation.Value("\\${app.name}") name: String',
+        ")"
+      ].join("\n")
+    });
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+
+    expect(
+      facts.springBootPropertiesFacts?.valueReferences.map((reference) => [
+        symbolsById.get(reference.sourceId)?.name,
+        reference.key,
+        reference.range.start
+      ])
+    ).toEqual([
+      ["ConstructorConfig", "server.port", { line: 4, column: 3 }],
+      ["ConstructorConfig", "feature.enabled", { line: 5, column: 3 }],
+      ["FullyQualifiedConstructorConfig", "app.name", { line: 9, column: 3 }]
+    ]);
+    expect(facts.edges.filter((edge) => edge.kind === "references")).toEqual([]);
+  });
+
+  it("rejects unsupported Kotlin Spring @Value constructor-parameter forms", () => {
+    const rejected = [
+      [
+        "src/config/DynamicConstructor.kt",
+        [
+          "import org.springframework.beans.factory.annotation.Value",
+          "",
+          "class DynamicConstructor(",
+          '  @Value("${dynamic.key}") value: String',
+          ")"
+        ].join("\n")
+      ],
+      [
+        "src/config/NamedConstructor.kt",
+        [
+          "import org.springframework.beans.factory.annotation.Value",
+          "",
+          "class NamedConstructor(",
+          '  @Value(value = "\\${named.key}") value: String',
+          ")"
+        ].join("\n")
+      ],
+      [
+        "src/config/UseSiteConstructor.kt",
+        [
+          "import org.springframework.beans.factory.annotation.Value",
+          "",
+          "class UseSiteConstructor(",
+          '  @param:Value("\\${use.site.key}") value: String',
+          ")"
+        ].join("\n")
+      ],
+      [
+        "src/config/RawConstructor.kt",
+        [
+          "import org.springframework.beans.factory.annotation.Value",
+          "",
+          "class RawConstructor(",
+          '  @Value("""\\${raw.key}""") value: String',
+          ")"
+        ].join("\n")
+      ],
+      [
+        "src/config/AliasedConstructor.kt",
+        [
+          "import org.springframework.beans.factory.annotation.Value as SpringValue",
+          "",
+          "class AliasedConstructor(",
+          '  @SpringValue("\\${aliased.key}") value: String',
+          ")"
+        ].join("\n")
+      ],
+      [
+        "src/config/WildcardConstructor.kt",
+        [
+          "import org.springframework.beans.factory.annotation.*",
+          "",
+          "class WildcardConstructor(",
+          '  @Value("\\${wildcard.key}") value: String',
+          ")"
+        ].join("\n")
+      ],
+      [
+        "src/config/SecondaryConstructor.kt",
+        [
+          "import org.springframework.beans.factory.annotation.Value",
+          "",
+          "class SecondaryConstructor {",
+          '  constructor(@Value("\\${secondary.key}") value: String)',
+          "}"
+        ].join("\n")
+      ],
+      [
+        "src/config/MethodConstructor.kt",
+        [
+          "import org.springframework.beans.factory.annotation.Value",
+          "",
+          "class MethodConstructor {",
+          '  fun configure(@Value("\\${method.key}") value: String) = value',
+          "}"
+        ].join("\n")
+      ]
+    ] as const;
+
+    expect(
+      rejected.map(([filePath, sourceText]) =>
+        extractFileFacts({ filePath, language: "kotlin", sourceText }).springBootPropertiesFacts?.valueReferences
+      )
+    ).toEqual([[], [], [], [], [], [], [], []]);
   });
 
   it("retains direct Kotlin Spring @ConfigurationProperties literal-prefix facts", () => {

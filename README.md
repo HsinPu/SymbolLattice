@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.173.0 是開發者預覽版，尚未發佈至 npm；請由原始碼執行。
+> v0.174.0 是開發者預覽版，尚未發佈至 npm；請由原始碼執行。
 
 SymbolLattice 為專案建立可查詢的本機程式碼符號圖譜。每條關係都保留規則、解析階段與信心值，並嚴格區分 `exact`、`heuristic` 與 `unresolved` 證據。
 
@@ -41,11 +41,10 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 Windows PowerShell 若無法使用 `npm`，請改用 `npm.cmd`。索引資料保存在目標專案的 `.symbol-lattice/index.sqlite`。
 
-## v0.173.0 重點
+## v0.174.0 重點
 
-- Spring 設定鍵現可保守處理 `cache-list`、`cache_list`、`cacheList` 與 `CACHE_LIST` 等 relaxed spelling；點號分段不會被重排。
-- 只有原始拼寫在其正規化群組中唯一時才保留 `exact`；若無原始鍵且唯一正規化候選存在，才建立 `heuristic 0.75` 關係。
-- 正規化後出現多個候選時，`@Value` 與 `@ConfigurationProperties` 的每一個相關鍵都維持 `unresolved`，不挑選設定來源。
+- Spring `@Value` 現可從 Java 直接類別建構子參數與 Kotlin primary constructor 參數建立設定關係；Kotlin 也支援省略 class body 的有效頂層類別。
+- 精確鍵維持 `exact`；唯一 relaxed spelling 建立 `heuristic 0.75` 關係；正規化後有多個候選時仍保持 `unresolved`。
 
 ## 核心原則
 
@@ -55,7 +54,7 @@ Windows PowerShell 若無法使用 `npm`，請改用 `npm.cmd`。索引資料保
 
 ## 靜態分析邊界
 
-- Spring Boot `@Value` 僅連結 Java 類別欄位，或 Kotlin 類別內使用跳脫 `$` 的直接規則字串屬性。`@ConfigurationProperties` 僅接受 Java／Kotlin 直接頂層類別、精確 import 或完整名稱，以及單一字面位置參數或 `prefix =` 參數。relaxed binding 只在相同點分段內小寫並移除 `-`／`_`，且必須只有一個候選；欄位／集合綁定、列表、合併鍵、動態值、設定匯入、profile 啟用與執行時優先順序都不支援。
+- Spring Boot `@Value` 僅連結 Java 直接頂層類別的欄位或建構子參數，或 Kotlin 直接頂層類別的屬性或 primary constructor 參數；必須是精確 import／完整名稱與單一字面 placeholder，且 Kotlin 必須使用跳脫 `$` 的規則字串。`@ConfigurationProperties` 僅接受單一字面位置參數或 `prefix =` 參數。方法參數、secondary constructor、use-site target、別名／wildcard import、欄位／集合綁定、列表、合併鍵、動態值、設定匯入、profile 啟用與執行時優先順序都不支援。
 - COBOL CICS 僅接受已由 `END-EXEC` 完整結束、含單一字面 `TRANSID` 的直接 `RETURN` 或 `START`。目標須是索引內唯一、在 `PROCEDURE DIVISION` 前宣告且名稱含 `TRAN` 的字面交易碼；CICS CSD 屬外部設定，因此關係保持 `heuristic`，而非執行時保證。
 - 動態組合、外部或 namespace 套件、父層相對匯入、複製或容器值、已裝飾或匯入的類別、WebSocket、`add_route`、版本設定與模糊目標，都不會成為 `exact` 結果。
 

@@ -475,7 +475,7 @@ export const FRAMEWORK_CAPABILITIES = [
     languages: ["java", "kotlin", "properties", "yaml"],
     routeRegistrations: [],
     surfaces: [
-      "direct imported or fully-qualified @Value literal-key annotations on direct Java fields or Kotlin class properties",
+      "direct imported or fully-qualified @Value literal-key annotations on direct Java fields or constructor parameters, or Kotlin class properties or primary-constructor parameters",
       "direct imported or fully-qualified @ConfigurationProperties literal-prefix annotations on direct Java or Kotlin classes",
       "Kotlin regular-string placeholders with an explicit escaped dollar sign",
       "unique literal keys in conventional application or bootstrap properties or YAML files",
