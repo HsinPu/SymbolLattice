@@ -2889,9 +2889,9 @@ describe("TypeScript configuration module resolution", () => {
         relativePath: "ios/CalendarModuleExport.m",
         language: "objc",
         sourceText: [
-          "#import <React/RCTBridgeModule.h>",
-          "@interface RCT_EXTERN_MODULE(CalendarModule, NSObject)",
-          "RCT_EXTERN_METHOD(createEvent:(NSString *)name)",
+        "#import <React/RCTBridgeModule.h>",
+        "@interface RCT_EXTERN_MODULE(CalendarModule, NSObject)",
+        "RCT_EXTERN_METHOD(createEvent:(NSString *)name withFoo:(NSInteger)a bar:(NSInteger)b)",
           "RCT_EXTERN__BLOCKING_SYNCHRONOUS_METHOD(currentEvent)",
           "@end"
         ].join("\n"),
@@ -2904,10 +2904,27 @@ describe("TypeScript configuration module resolution", () => {
         sourceText: [
           "#import <React/RCTBridgeModule.h>",
           "@interface RCT_EXTERN_REMAP_MODULE(CalendarJS, CalendarModule, NSObject)",
-          "_RCT_EXTERN_REMAP_METHOD(removeEvent, deleteEvent:(NSString *)eventId, NO)",
-          "@end"
+        "_RCT_EXTERN_REMAP_METHOD(removeEvent, deleteEvent:(NSString *)eventId, NO)",
+        "@end"
+      ].join("\n"),
+      contentHash: "swift-extern-remapped"
+      },
+      {
+        absolutePath: "C:/project/ios/CalendarModule.swift",
+        relativePath: "ios/CalendarModule.swift",
+        language: "swift",
+        sourceText: [
+          "@objc(CalendarModule)",
+          "final class CalendarModule: NSObject {",
+          "  @objc(createEvent:withFoo:bar:)",
+          "  func writeEvent(name: String, withFoo a: Int, bar b: Int) {}",
+          "  @objc(currentEvent)",
+          "  func readEvent() {}",
+          "  @objc(deleteEvent:)",
+          "  func removeStoredEvent(eventId: String) {}",
+          "}"
         ].join("\n"),
-        contentHash: "swift-extern-remapped"
+        contentHash: "swift-implementation"
       }
     ];
     const snapshot = resolveProjectFacts({
@@ -2934,11 +2951,24 @@ describe("TypeScript configuration module resolution", () => {
       (symbol) =>
         symbol.filePath === "ios/RemappedCalendarModuleExport.m" && symbol.name === "removeEvent"
     );
+    const writeEvent = snapshot.symbols.find(
+      (symbol) => symbol.filePath === "ios/CalendarModule.swift" && symbol.name === "writeEvent"
+    );
+    const readEvent = snapshot.symbols.find(
+      (symbol) => symbol.filePath === "ios/CalendarModule.swift" && symbol.name === "readEvent"
+    );
+    const removeStoredEvent = snapshot.symbols.find(
+      (symbol) =>
+        symbol.filePath === "ios/CalendarModule.swift" && symbol.name === "removeStoredEvent"
+    );
 
     expect(schedule).toBeDefined();
     expect(createEvent).toBeDefined();
     expect(currentEvent).toBeDefined();
     expect(removeEvent).toBeDefined();
+    expect(writeEvent).toBeDefined();
+    expect(readEvent).toBeDefined();
+    expect(removeStoredEvent).toBeDefined();
     for (const [referenceName, target] of [
       ["CalendarModule.createEvent", createEvent],
       ["CalendarModule.currentEvent", currentEvent],
@@ -2958,6 +2988,109 @@ describe("TypeScript configuration module resolution", () => {
         })
       });
     }
+    for (const [source, referenceName, target] of [
+      [createEvent, "CalendarModule.createEvent:withFoo:bar:", writeEvent],
+      [currentEvent, "CalendarModule.currentEvent", readEvent],
+      [removeEvent, "CalendarModule.deleteEvent:", removeStoredEvent]
+    ] as const) {
+      expect(
+        snapshot.edges.find(
+          (edge) => edge.sourceId === source?.id && edge.referenceName === referenceName
+        )
+      ).toMatchObject({
+        kind: "references",
+        targetId: target?.id,
+        resolution: "exact",
+        confidence: 1,
+        evidence: expect.objectContaining({
+          ruleId: "framework.react-native.swift-extern.direct-objc-class-and-selector.exact-target",
+          stage: "module"
+        })
+      });
+    }
+  });
+
+  it("keeps unmatched and colliding Swift external bridge identities unresolved", () => {
+    const sourceDocuments: readonly SourceDocument[] = [
+      {
+        absolutePath: "C:/project/ios/UnresolvedModuleExport.m",
+        relativePath: "ios/UnresolvedModuleExport.m",
+        language: "objc",
+        sourceText: [
+          "#import <React/RCTBridgeModule.h>",
+          "@interface RCT_EXTERN_MODULE(UnresolvedModule, NSObject)",
+          "RCT_EXTERN_METHOD(missing:(NSString *)value)",
+          "@end"
+        ].join("\n"),
+        contentHash: "swift-extern-unresolved"
+      },
+      {
+        absolutePath: "C:/project/ios/CollisionModuleExport.m",
+        relativePath: "ios/CollisionModuleExport.m",
+        language: "objc",
+        sourceText: [
+          "#import <React/RCTBridgeModule.h>",
+          "@interface RCT_EXTERN_MODULE(CollisionModule, NSObject)",
+          "RCT_EXTERN_METHOD(refresh)",
+          "@end"
+        ].join("\n"),
+        contentHash: "swift-extern-collision"
+      },
+      {
+        absolutePath: "C:/project/ios/FirstCollision.swift",
+        relativePath: "ios/FirstCollision.swift",
+        language: "swift",
+        sourceText: [
+          "@objc(CollisionModule)",
+          "class FirstCollision: NSObject {",
+          "  @objc(refresh)",
+          "  func firstRefresh() {}",
+          "}"
+        ].join("\n"),
+        contentHash: "swift-first-collision"
+      },
+      {
+        absolutePath: "C:/project/ios/SecondCollision.swift",
+        relativePath: "ios/SecondCollision.swift",
+        language: "swift",
+        sourceText: [
+          "@objc(CollisionModule)",
+          "class SecondCollision: NSObject {",
+          "  @objc(refresh)",
+          "  func secondRefresh() {}",
+          "}"
+        ].join("\n"),
+        contentHash: "swift-second-collision"
+      }
+    ];
+    const snapshot = resolveProjectFacts({
+      sourceDocuments,
+      extractedFiles: sourceDocuments.map((document) =>
+        extractFileFacts({
+          filePath: document.relativePath,
+          language: document.language,
+          sourceText: document.sourceText
+        })
+      ),
+      indexedAt: "2026-08-02T00:00:00.000Z"
+    });
+    const missing = snapshot.edges.find(
+      (edge) =>
+        edge.referenceName === "UnresolvedModule.missing:" &&
+        edge.evidence?.ruleId ===
+          "framework.react-native.swift-extern.direct-objc-class-and-selector.unresolved-target"
+    );
+    const collision = snapshot.edges.find(
+      (edge) =>
+        edge.referenceName === "CollisionModule.refresh" &&
+        edge.evidence?.ruleId ===
+          "framework.react-native.swift-extern.direct-objc-class-and-selector.ambiguous-target"
+    );
+
+    expect(missing).toMatchObject({ resolution: "unresolved", confidence: 0, targetId: null });
+    expect(missing?.evidence?.candidateSymbolIds).toEqual([]);
+    expect(collision).toMatchObject({ resolution: "unresolved", confidence: 0, targetId: null });
+    expect(collision?.evidence?.candidateSymbolIds).toHaveLength(2);
   });
 
   it("keeps colliding React Native implementations on one platform unresolved", () => {

@@ -14,15 +14,15 @@
 </div>
 
 > [!IMPORTANT]
-> v0.193.0 is a developer preview and is not published to npm. Run it from source.
+> v0.194.0 is a developer preview. Run it from source.
 
-SymbolLattice builds a queryable local code-symbol graph. Every relation retains its rule, resolution stage, and confidence; exact, heuristic, and unresolved evidence are never conflated.
+SymbolLattice builds a queryable local code-symbol graph. Every relation retains its rule, evidence stage, and confidence; exact, heuristic, and unresolved evidence are never conflated.
 
 ## Quick start
 
 Requires Node.js 22.13 or newer, below 25, and npm.
 
-~~~bash
+```bash
 git clone https://github.com/HsinPu/symbol-lattice.git
 cd symbol-lattice
 npm install
@@ -37,37 +37,37 @@ node dist/cli/main.js sync /path/to/project
 
 # Start a read-only MCP host
 node dist/cli/main.js serve --mcp --project /path/to/project
-~~~
+```
 
-On Windows PowerShell, use npm.cmd if npm is unavailable. Index data stays in the target project's .symbol-lattice/index.sqlite.
+On Windows PowerShell, use `npm.cmd` if npm is unavailable. Index data stays in the target project's `.symbol-lattice/index.sqlite`.
 
-## v0.193.0 highlights
+## v0.194.0 highlights
 
-- Supports the conventional Objective-C external bridge declaration used by Swift: RCT_EXTERN_MODULE and RCT_EXTERN_REMAP_MODULE.
-- Supports RCT_EXTERN_METHOD, _RCT_EXTERN_REMAP_METHOD, and the synchronous external-method macro with distinct source-rule evidence for each form.
-- NativeModules calls resolve exactly to proven iOS bridge-declaration methods, with SQLite persistence, reopen, and callers-query verification.
+- React Native `RCT_EXTERN_*` Objective-C bridge declarations retain the full selector, such as `createEvent:withFoo:bar:`.
+- A bridge declaration links to Swift source only when an explicit `@objc(Class)` and `@objc(selector)` identify one unique implementation; the edge is exact and inspectable.
+- Missing or colliding Swift candidates remain `unresolved` with candidate symbol ids. Swift names and conventions are never used as a fallback.
+- Raw bridge and Swift interop facts persist in SQLite, so a reopened index can trace a bridge declaration to its Swift implementation.
 
 ## Principles
 
 - Indexing and querying stay local; source is never silently uploaded.
-- init and sync are explicit writes. CLI and MCP queries remain read-only.
-- A relation needs reproducible static evidence. Otherwise it remains unresolved instead of guessed.
+- `init` and `sync` are explicit writes. CLI and MCP queries remain read-only.
+- JavaScript calls point first to the Objective-C bridge declaration; a separately proven bridge-to-Swift edge preserves the cross-language runtime boundary.
 
 ## Static-analysis boundaries
 
-- Objective-C implementations accept only a direct bridge header, exactly one direct RCT_EXPORT_MODULE, and direct RCT_EXPORT_METHOD or RCT_REMAP_METHOD macros. A duplicate JavaScript method name emits no native target.
-- A Swift external bridge accepts only one direct Objective-C declaration, RCT_EXTERN_MODULE or RCT_EXTERN_REMAP_MODULE, and single-line direct RCT_EXTERN method macros. It creates a verifiable bridge-declaration target; it does not guess a corresponding Swift function.
-- Android Codegen accepts only the intersection of a direct Spec superclass, a proven getName(), a direct override, and one unique TypeScript TurboModule contract.
-- It does not scan build output or infer runtime registration, dynamic names, indirect wrappers, Swift-function linkage, or custom macro wrappers.
+- Only direct, single-line `RCT_EXTERN_MODULE`, `RCT_EXTERN_REMAP_MODULE`, and matching method macros are accepted.
+- Swift support is limited to direct methods in top-level classes with explicitly named `@objc` class and selector attributes. Bare `@objc`, inferred selectors, extensions, wrappers, and dynamic registration are not guessed.
+- Build output, runtime registration, reflection, code generation, and ambiguous candidates are never presented as exact relations.
 
 ## Verification
 
-~~~bash
+```bash
 npm run check
 npm test
 npm run build
 git diff --check
-~~~
+```
 
 ## License
 

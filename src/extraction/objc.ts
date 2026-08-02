@@ -4,6 +4,7 @@ import {
   type ArtifactFacts,
   type GraphEdge,
   type ReactNativeFacts,
+  type ReactNativeSwiftExternalBridgeMethodFact,
   type SourcePosition,
   type SourceRange,
   type SymbolNode
@@ -54,6 +55,11 @@ interface StaticReactNativeObjectiveCMethod extends StaticObjectiveCMethod {
   readonly reactNativeRuleId: ReactNativeObjectiveCMethodRuleId;
 }
 
+interface StaticReactNativeObjectiveCExternMethod extends StaticReactNativeObjectiveCMethod {
+  /** Full Objective-C selector declared by the external bridge macro. */
+  readonly selector: string;
+}
+
 interface StaticReactNativeObjectiveCModule {
   readonly moduleName: string;
   readonly methods: readonly StaticReactNativeObjectiveCMethod[];
@@ -65,7 +71,7 @@ interface StaticReactNativeObjectiveCExternModule {
   readonly moduleName: string;
   readonly container: StaticObjectiveCContainer;
   readonly reactNativeRuleId: ReactNativeObjectiveCExternModuleRuleId;
-  readonly methods: readonly StaticReactNativeObjectiveCMethod[];
+  readonly methods: readonly StaticReactNativeObjectiveCExternMethod[];
 }
 
 interface SanitizedObjectiveCSource {
@@ -793,18 +799,55 @@ function directIdentifierArgument(
   return skipHorizontalWhitespace(sourceText, identifier.end, to) === to ? identifier.name : null;
 }
 
-function directExternSelectorName(
+function directExternSelector(
   sourceText: string,
   from: number,
   to: number
 ): string | null {
   const start = skipHorizontalWhitespace(sourceText, from, to);
-  const selector = identifierAt(sourceText, start, to);
-  if (selector === null) {
+  const firstLabel = identifierAt(sourceText, start, to);
+  if (firstLabel === null) {
     return null;
   }
-  const next = skipHorizontalWhitespace(sourceText, selector.end, to);
-  return next === to || sourceText.charAt(next) === ":" ? selector.name : null;
+  let cursor = skipHorizontalWhitespace(sourceText, firstLabel.end, to);
+  if (cursor === to) {
+    return firstLabel.name;
+  }
+
+  const selectorParts = [firstLabel.name];
+  while (cursor < to) {
+    if (sourceText.charAt(cursor) !== ":") {
+      return null;
+    }
+    selectorParts.push(":");
+    cursor = skipHorizontalWhitespace(sourceText, cursor + 1, to);
+    if (sourceText.charAt(cursor) !== "(") {
+      return null;
+    }
+    const typeEnd = closingParenthesisOnLine(sourceText, cursor, to);
+    if (
+      typeEnd === null ||
+      skipHorizontalWhitespace(sourceText, cursor + 1, typeEnd) === typeEnd
+    ) {
+      return null;
+    }
+    cursor = skipHorizontalWhitespace(sourceText, typeEnd + 1, to);
+    const parameter = identifierAt(sourceText, cursor, to);
+    if (parameter === null) {
+      return null;
+    }
+    cursor = skipHorizontalWhitespace(sourceText, parameter.end, to);
+    if (cursor === to) {
+      return selectorParts.join("");
+    }
+    const nextLabel = identifierAt(sourceText, cursor, to);
+    if (nextLabel === null) {
+      return null;
+    }
+    selectorParts.push(nextLabel.name);
+    cursor = skipHorizontalWhitespace(sourceText, nextLabel.end, to);
+  }
+  return null;
 }
 
 /**
@@ -815,7 +858,7 @@ function directExternSelectorName(
 function directReactNativeObjectiveCExternMethod(
   sanitizedSource: string,
   line: ObjectiveCLine
-): StaticReactNativeObjectiveCMethod | null | undefined {
+): StaticReactNativeObjectiveCExternMethod | null | undefined {
   const start = firstCodeOffset(line);
   const macro = [
     {
@@ -861,8 +904,14 @@ function directReactNativeObjectiveCExternMethod(
     if (commas.length !== 0) {
       return null;
     }
-    const name = directExternSelectorName(sanitizedSource, opening + 1, closing);
-    return name === null ? null : { start, end: closing + 1, name, reactNativeRuleId: macro.ruleId };
+    const selector = directExternSelector(sanitizedSource, opening + 1, closing);
+    if (selector === null) {
+      return null;
+    }
+    const name = selector.split(":", 1)[0];
+    return name === undefined
+      ? null
+      : { start, end: closing + 1, name, selector, reactNativeRuleId: macro.ruleId };
   }
 
   const firstComma = commas[0];
@@ -871,19 +920,19 @@ function directReactNativeObjectiveCExternMethod(
     return null;
   }
   const name = directIdentifierArgument(sanitizedSource, opening + 1, firstComma);
-  const selector = directExternSelectorName(sanitizedSource, firstComma + 1, secondComma);
+  const selector = directExternSelector(sanitizedSource, firstComma + 1, secondComma);
   const synchronous = directIdentifierArgument(sanitizedSource, secondComma + 1, closing);
   if (name === null || selector === null || (synchronous !== "NO" && synchronous !== "YES")) {
     return null;
   }
-  return { start, end: closing + 1, name, reactNativeRuleId: macro.ruleId };
+  return { start, end: closing + 1, name, selector, reactNativeRuleId: macro.ruleId };
 }
 
 /**
  * Collects direct `RCT_EXTERN_*` declarations used as an Objective-C bridge
- * for Swift or otherwise external React Native modules. This models the
- * declaration file itself; a later release may link it to Swift source only
- * when class and selector identity can be independently proven.
+ * for Swift or otherwise external React Native modules. It retains full class
+ * and selector identity so project resolution can link one unique Swift source
+ * implementation without inferring names.
  */
 function collectDirectReactNativeObjectiveCExternModules(
   sanitizedSource: string,
@@ -926,7 +975,7 @@ function collectDirectReactNativeObjectiveCExternModules(
       bodyStartLine: lineIndex + 1,
       endLine
     };
-    const methods: StaticReactNativeObjectiveCMethod[] = [];
+    const methods: StaticReactNativeObjectiveCExternMethod[] = [];
     const methodNames = new Set<string>();
     let valid = true;
     for (let bodyLine = container.bodyStartLine; bodyLine < container.endLine; bodyLine += 1) {
@@ -962,8 +1011,8 @@ function collectDirectReactNativeObjectiveCExternModules(
  * ordinary class interfaces, and protocols. Implementations contribute
  * one-line brace-bodied methods; interfaces and protocols contribute one-line
  * semicolon-terminated method declarations. Categories, properties, calls,
- * inheritance edges, and matching an external bridge declaration back to a
- * Swift implementation remain deliberately out of scope.
+ * inheritance edges remain deliberately out of scope. Direct `RCT_EXTERN_*`
+ * class-and-selector evidence is retained for a later unique Swift lookup.
  */
 export function extractObjectiveCFileFacts(input: ObjectiveCExtractFileFactsInput): ArtifactFacts {
   const reactNativeCapability = frameworkCapability("react-native");
@@ -990,6 +1039,7 @@ export function extractObjectiveCFileFacts(input: ObjectiveCExtractFileFactsInpu
   const symbols: SymbolNode[] = [fileNode];
   const edges: GraphEdge[] = [];
   const reactNativeNativeMethods: ReactNativeFacts["nativeMethods"][number][] = [];
+  const reactNativeSwiftExternalBridgeMethods: ReactNativeSwiftExternalBridgeMethodFact[] = [];
   const declarationOrdinals = new Map<string, number>();
 
   function nextOrdinal(qualifiedName: string, kind: SymbolNode["kind"]): number {
@@ -1306,13 +1356,21 @@ export function extractObjectiveCFileFacts(input: ObjectiveCExtractFileFactsInpu
     const parent = addReactNativeExternModule(externModule);
     for (const method of externModule.methods) {
       const methodSymbol = addMethod(parent, method, method.reactNativeRuleId);
+      const range = rangeFor(lineStarts, method.start, method.end);
       reactNativeNativeMethods.push({
         platform: "ios",
         moduleName: externModule.moduleName,
         methodName: method.name,
         methodId: methodSymbol.id,
         filePath: input.filePath,
-        range: rangeFor(lineStarts, method.start, method.end)
+        range
+      });
+      reactNativeSwiftExternalBridgeMethods.push({
+        objcClassName: externModule.objcClassName,
+        selector: method.selector,
+        methodId: methodSymbol.id,
+        filePath: input.filePath,
+        range
       });
     }
   }
@@ -1325,7 +1383,8 @@ export function extractObjectiveCFileFacts(input: ObjectiveCExtractFileFactsInpu
       turboModuleDefaultImportCalls: [],
       turboModuleDefaultExports: [],
       turboModuleSpecMethods: [],
-      nativeMethods: reactNativeNativeMethods
+      nativeMethods: reactNativeNativeMethods,
+      swiftExternalBridgeMethods: reactNativeSwiftExternalBridgeMethods
     }
   };
 }

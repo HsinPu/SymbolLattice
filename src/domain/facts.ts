@@ -11,13 +11,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v172";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v173";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v61";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v62";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -820,6 +820,34 @@ export interface ReactNativeNativeMethodFact {
 }
 
 /**
+ * One Objective-C `RCT_EXTERN_*` declaration whose Objective-C class and full
+ * selector are directly available for a later, evidence-backed Swift lookup.
+ */
+export interface ReactNativeSwiftExternalBridgeMethodFact {
+  readonly objcClassName: string;
+  readonly selector: string;
+  /** Stable symbol identity of the Objective-C bridge declaration. */
+  readonly methodId: string;
+  readonly filePath: string;
+  readonly range: SourceRange;
+}
+
+/** One explicitly named Swift `@objc` implementation method. */
+export interface SwiftObjectiveCMethodFact {
+  readonly objcClassName: string;
+  readonly selector: string;
+  /** Stable symbol identity of the Swift implementation method. */
+  readonly methodId: string;
+  readonly filePath: string;
+  readonly range: SourceRange;
+}
+
+/** Syntax-only Swift Objective-C interop facts. */
+export interface SwiftObjectiveCFacts {
+  readonly methods: readonly SwiftObjectiveCMethodFact[];
+}
+
+/**
  * Syntax-only React Native bridge facts. JavaScript callsites and native
  * implementations remain independent until project resolution proves their
  * module-and-method identity.
@@ -831,6 +859,8 @@ export interface ReactNativeFacts {
   readonly turboModuleDefaultExports: readonly ReactNativeTurboModuleDefaultExportFact[];
   readonly turboModuleSpecMethods: readonly ReactNativeTurboModuleSpecMethodFact[];
   readonly nativeMethods: readonly ReactNativeNativeMethodFact[];
+  /** Omitted only by artifact facts persisted before v0.194. */
+  readonly swiftExternalBridgeMethods?: readonly ReactNativeSwiftExternalBridgeMethodFact[];
 }
 
 /**
@@ -882,6 +912,8 @@ export interface ArtifactFacts {
   readonly cobolCicsFacts?: CobolCicsFacts;
   /** Omitted only by artifact facts persisted before v0.186. */
   readonly reactNativeFacts?: ReactNativeFacts;
+  /** Omitted only by artifact facts persisted before v0.194. */
+  readonly swiftObjectiveCFacts?: SwiftObjectiveCFacts;
 }
 
 /**

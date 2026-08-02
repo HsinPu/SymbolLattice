@@ -8,6 +8,7 @@ import {
   type RouteMethod,
   type SourcePosition,
   type SourceRange,
+  type SwiftObjectiveCMethodFact,
   type SymbolNode
 } from "../domain/index.js";
 import { frameworkCapability } from "./framework-capabilities.js";
@@ -27,12 +28,16 @@ interface StaticSwiftType {
   readonly name: string;
   readonly node: SwiftSyntaxNode;
   readonly body: SwiftSyntaxNode;
+  /** Explicit Objective-C runtime class name, never inferred from the Swift name. */
+  readonly objcClassName: string | null;
 }
 
 interface StaticSwiftFunction {
   readonly name: string;
   readonly node: SwiftSyntaxNode;
   readonly body: SwiftSyntaxNode | null;
+  /** Explicit Objective-C selector, never inferred from the Swift declaration. */
+  readonly objcSelector: string | null;
 }
 
 interface StaticVaporRoute {
@@ -132,6 +137,88 @@ function identifierText(node: SwiftSyntaxNode): string | null {
   return /^[A-Za-z_][A-Za-z0-9_]*$/u.test(value) ? value : null;
 }
 
+function directSwiftObjectiveCAttributes(node: SwiftSyntaxNode): readonly SwiftSyntaxNode[] {
+  return directChildren(node)
+    .filter((child) => child.kind() === "modifiers")
+    .flatMap((modifiers) => directChildren(modifiers))
+    .filter((attribute) => {
+      const children = directChildren(attribute);
+      return (
+        attribute.kind() === "attribute" &&
+        children[0]?.kind() === "@" &&
+        children[1]?.kind() === "user_type" &&
+        nodeText(children[1]) === "objc"
+      );
+    });
+}
+
+/**
+ * Returns only a syntactically explicit `@objc(...)` argument made from bare
+ * selector labels and colons. Bare `@objc` deliberately remains unproven.
+ */
+function directSwiftObjectiveCAttributeParts(attribute: SwiftSyntaxNode): readonly string[] | null {
+  const children = directChildren(attribute);
+  const opening = children[2];
+  const closing = children.at(-1);
+  if (
+    opening?.kind() !== "(" ||
+    closing?.kind() !== ")" ||
+    children.length < 5
+  ) {
+    return null;
+  }
+
+  const parts: string[] = [];
+  for (const child of children.slice(3, -1)) {
+    if (child.kind() === "simple_identifier") {
+      const identifier = identifierText(child);
+      if (identifier === null) {
+        return null;
+      }
+      parts.push(identifier);
+      continue;
+    }
+    if (nodeText(child) === ":") {
+      parts.push(":");
+      continue;
+    }
+    return null;
+  }
+  return parts.length === 0 ? null : parts;
+}
+
+function directSwiftObjectiveCClassName(node: SwiftSyntaxNode): string | null {
+  const attributes = directSwiftObjectiveCAttributes(node);
+  if (attributes.length !== 1 || attributes[0] === undefined) {
+    return null;
+  }
+  const parts = directSwiftObjectiveCAttributeParts(attributes[0]);
+  return parts?.length === 1 && parts[0] !== ":" ? parts[0] ?? null : null;
+}
+
+function directSwiftObjectiveCSelector(node: SwiftSyntaxNode): string | null {
+  const attributes = directSwiftObjectiveCAttributes(node);
+  if (attributes.length !== 1 || attributes[0] === undefined) {
+    return null;
+  }
+  const parts = directSwiftObjectiveCAttributeParts(attributes[0]);
+  if (parts === null || parts[0] === ":") {
+    return null;
+  }
+  if (parts.length === 1) {
+    return parts[0] ?? null;
+  }
+  if (parts.length % 2 !== 0) {
+    return null;
+  }
+  for (let index = 0; index < parts.length; index += 1) {
+    if ((index % 2 === 0 && parts[index] === ":") || (index % 2 === 1 && parts[index] !== ":")) {
+      return null;
+    }
+  }
+  return parts.join("");
+}
+
 function staticSwiftType(node: SwiftSyntaxNode): StaticSwiftType | null {
   if (node.kind() === "class_declaration") {
     const children = directChildren(node);
@@ -150,7 +237,13 @@ function staticSwiftType(node: SwiftSyntaxNode): StaticSwiftType | null {
     ) {
       return null;
     }
-    return { kind: "class", name, node, body };
+    return {
+      kind: "class",
+      name,
+      node,
+      body,
+      objcClassName: declarationKind.kind() === "class" ? directSwiftObjectiveCClassName(node) : null
+    };
   }
 
   if (node.kind() === "protocol_declaration") {
@@ -163,7 +256,7 @@ function staticSwiftType(node: SwiftSyntaxNode): StaticSwiftType | null {
     if (protocols.length !== 1 || name === null || body === undefined || typeIdentifiers.length !== 1) {
       return null;
     }
-    return { kind: "interface", name, node, body };
+    return { kind: "interface", name, node, body, objcClassName: null };
   }
 
   return null;
@@ -183,7 +276,13 @@ function staticSwiftFunction(node: SwiftSyntaxNode): StaticSwiftFunction | null 
     return null;
   }
   const body = directChildren(node).find((child) => child.kind() === "function_body") ?? null;
-  return { name, node, body };
+  return {
+    name,
+    node,
+    body,
+    objcSelector:
+      node.kind() === "function_declaration" ? directSwiftObjectiveCSelector(node) : null
+  };
 }
 
 function hasDirectVaporImport(root: SwiftSyntaxNode): boolean {
@@ -375,6 +474,7 @@ export function extractSwiftFileFacts(input: SwiftExtractFileFactsInput): Artifa
   const lineStarts = lineStartsFor(input.sourceText);
   const symbols: SymbolNode[] = [];
   const edges: GraphEdge[] = [];
+  const swiftObjectiveCMethods: SwiftObjectiveCMethodFact[] = [];
   const declarationOrdinals = new Map<string, number>();
   const fileName = input.filePath.split(/[\\/]/u).at(-1) ?? input.filePath;
   const fileNode: SymbolNode = {
@@ -560,7 +660,20 @@ export function extractSwiftFileFacts(input: SwiftExtractFileFactsInput): Artifa
       for (const methodDeclaration of directChildren(declaration.body)
         .map((node) => staticSwiftFunction(node))
         .filter((candidate): candidate is StaticSwiftFunction => candidate !== null)) {
-        addMethod(typeSymbol, methodDeclaration);
+        const methodSymbol = addMethod(typeSymbol, methodDeclaration);
+        if (
+          declaration.objcClassName !== null &&
+          methodDeclaration.objcSelector !== null &&
+          methodDeclaration.body !== null
+        ) {
+          swiftObjectiveCMethods.push({
+            objcClassName: declaration.objcClassName,
+            selector: methodDeclaration.objcSelector,
+            methodId: methodSymbol.id,
+            filePath: input.filePath,
+            range: methodSymbol.range
+          });
+        }
       }
     }
 
@@ -613,6 +726,9 @@ export function extractSwiftFileFacts(input: SwiftExtractFileFactsInput): Artifa
       routers: [],
       routes: [],
       importedRouterInclusions: []
-    }
+    },
+    ...(swiftObjectiveCMethods.length === 0
+      ? {}
+      : { swiftObjectiveCFacts: { methods: swiftObjectiveCMethods } })
   };
 }

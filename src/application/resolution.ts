@@ -36,6 +36,7 @@ import {
   type RustActixServiceConfigRouteFact,
   type ReactNativeNativeMethodFact,
   type SourceRange,
+  type SwiftObjectiveCMethodFact,
   type SymbolNode
 } from "../domain/index.js";
 import type { ExtractedFileFacts } from "../extraction/index.js";
@@ -149,6 +150,14 @@ function reactNativeBridgeKey(moduleName: string, methodName: string): string {
 
 function reactNativeBridgeReferenceName(moduleName: string, methodName: string): string {
   return `${moduleName}.${methodName}`;
+}
+
+function reactNativeSwiftExternalBridgeKey(objcClassName: string, selector: string): string {
+  return `${objcClassName}\u0000${selector}`;
+}
+
+function reactNativeSwiftExternalBridgeReferenceName(objcClassName: string, selector: string): string {
+  return `${objcClassName}.${selector}`;
 }
 
 type ReactNativeBridgeRuleId = (
@@ -345,6 +354,117 @@ function projectReactNativeNativeModuleCalls(input: {
     codegenRuleId: (platform, suffix) =>
       reactNativeCodegenRuleId("native-modules", platform, suffix)
   });
+}
+
+type ReactNativeSwiftExternalBridgeRuleSuffix =
+  | "exact-target"
+  | "unresolved-target"
+  | "ambiguous-target";
+
+function reactNativeSwiftExternalBridgeRuleId(
+  suffix: ReactNativeSwiftExternalBridgeRuleSuffix
+): string {
+  return `framework.react-native.swift-extern.direct-objc-class-and-selector.${suffix}`;
+}
+
+/**
+ * Links an external Objective-C React Native bridge declaration to Swift source
+ * only when both an explicit `@objc(Class)` and `@objc(selector)` match one
+ * unique implementation. The JavaScript call remains linked to the bridge
+ * declaration, preserving the distinct runtime boundary.
+ */
+function projectReactNativeSwiftExternalBridgeReferences(input: {
+  readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
+}): readonly GraphEdge[] {
+  const swiftMethodsByIdentity = new Map<string, SwiftObjectiveCMethodFact[]>();
+  for (const [, facts] of [...input.factsByFile.entries()].sort(([left], [right]) =>
+    compareStableText(left, right)
+  )) {
+    for (const method of facts.swiftObjectiveCFacts?.methods ?? []) {
+      const key = reactNativeSwiftExternalBridgeKey(method.objcClassName, method.selector);
+      const candidates = swiftMethodsByIdentity.get(key) ?? [];
+      candidates.push(method);
+      swiftMethodsByIdentity.set(key, candidates);
+    }
+  }
+
+  const edges: GraphEdge[] = [];
+  for (const [, facts] of [...input.factsByFile.entries()].sort(([left], [right]) =>
+    compareStableText(left, right)
+  )) {
+    const bridges = [...(facts.reactNativeFacts?.swiftExternalBridgeMethods ?? [])].sort(
+      (left, right) =>
+        compareStableText(
+          `${left.methodId}\u0000${left.objcClassName}\u0000${left.selector}\u0000${left.range.start.line}\u0000${left.range.start.column}`,
+          `${right.methodId}\u0000${right.objcClassName}\u0000${right.selector}\u0000${right.range.start.line}\u0000${right.range.start.column}`
+        )
+    );
+    for (const bridge of bridges) {
+      const candidates = [
+        ...(swiftMethodsByIdentity.get(
+          reactNativeSwiftExternalBridgeKey(bridge.objcClassName, bridge.selector)
+        ) ?? [])
+      ].sort((left, right) => compareStableText(left.methodId, right.methodId));
+      const referenceName = reactNativeSwiftExternalBridgeReferenceName(
+        bridge.objcClassName,
+        bridge.selector
+      );
+      if (candidates.length === 1 && candidates[0] !== undefined) {
+        const target = candidates[0];
+        edges.push({
+          id: createEdgeId({
+            sourceId: bridge.methodId,
+            targetId: target.methodId,
+            kind: "references",
+            line: bridge.range.start.line,
+            column: bridge.range.start.column,
+            referenceName
+          }),
+          sourceId: bridge.methodId,
+          targetId: target.methodId,
+          kind: "references",
+          filePath: bridge.filePath,
+          range: bridge.range,
+          resolution: "exact",
+          confidence: 1,
+          referenceName,
+          evidence: referenceEvidence(
+            reactNativeSwiftExternalBridgeRuleId("exact-target"),
+            "module",
+            [target.methodId]
+          )
+        });
+        continue;
+      }
+
+      edges.push({
+        id: createEdgeId({
+          sourceId: bridge.methodId,
+          targetId: null,
+          kind: "references",
+          line: bridge.range.start.line,
+          column: bridge.range.start.column,
+          referenceName
+        }),
+        sourceId: bridge.methodId,
+        targetId: null,
+        kind: "references",
+        filePath: bridge.filePath,
+        range: bridge.range,
+        resolution: "unresolved",
+        confidence: 0,
+        referenceName,
+        evidence: referenceEvidence(
+          reactNativeSwiftExternalBridgeRuleId(
+            candidates.length === 0 ? "unresolved-target" : "ambiguous-target"
+          ),
+          "unresolved",
+          candidates.map((candidate) => candidate.methodId)
+        )
+      });
+    }
+  }
+  return edges;
 }
 
 function projectReactNativeTurboModuleCalls(input: {
@@ -5804,6 +5924,11 @@ export function resolveProjectFacts(input: {
   );
   resolvedEdges.push(
     ...projectReactNativeNativeModuleCalls({
+      factsByFile
+    })
+  );
+  resolvedEdges.push(
+    ...projectReactNativeSwiftExternalBridgeReferences({
       factsByFile
     })
   );

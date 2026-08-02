@@ -6,6 +6,27 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.194.0] - 2026-08-02
+
+### Added
+
+- React Native external Objective-C bridge extraction now retains the complete native selector from direct <code>RCT_EXTERN_METHOD</code>, <code>_RCT_EXTERN_REMAP_METHOD</code>, and synchronous external-method macros. For example, <code>createEvent:withFoo:bar:</code> remains distinct from its JavaScript method name.
+- Swift extraction now records a source implementation only for a top-level class with one explicit <code>@objc(Class)</code> identity and a direct method with one explicit <code>@objc(selector)</code> identity. Bare attributes and inferred names do not become interop facts.
+- Project resolution now emits an exact, inspectable <code>references</code> edge from an external Objective-C bridge method to one unique Swift implementation with the same explicit Objective-C class and selector. Missing and colliding Swift candidates remain explicit unresolved edges with candidate ids.
+- SQLite artifact-fact persistence now preserves the Swift Objective-C interop facts. Unit, resolver, and SQLite-backed service coverage prove full selectors, renamed Swift methods, missing/ambiguous candidates, reopened indexes, and bridge-to-Swift callee queries.
+
+### Compatibility
+
+- The artifact-facts extractor advances to <code>multi-language-ast-v173</code> and the project resolver advances to <code>project-resolver-v62</code>. Existing graphs and SQLite schema remain readable; the next explicit <code>sync</code> or <code>index</code> refreshes eligible Objective-C and Swift facts before projecting the new relation.
+
+### Deliberate limits
+
+- This accepts only direct, single-line external bridge macros and direct methods in top-level Swift classes. It does not infer Objective-C identities from Swift names, interpret bare <code>@objc</code>, follow extensions, parse generated/preprocessed output, model runtime registration, or treat a zero/multi-candidate result as exact.
+
+### Comparison notes
+
+- The inspected CodeGraph React Native extractor has no corresponding <code>RCT_EXTERN_*</code>-to-Swift source link. SymbolLattice independently adds a bounded two-step model—JavaScript call to Objective-C bridge declaration, then uniquely proven bridge declaration to Swift implementation—with explicit unresolved evidence for every unsupported or ambiguous case. This is stronger on this narrow, directly evidenced interop surface, not a claim of broader overall React Native coverage.
+
 ## [0.193.0] - 2026-08-02
 
 ### Added

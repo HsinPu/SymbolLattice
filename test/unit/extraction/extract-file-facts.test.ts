@@ -13884,6 +13884,59 @@ describe("source extraction", () => {
     expect(broken.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
   });
 
+  it("extracts only explicit Swift @objc class-and-selector implementation identities", () => {
+    const explicit = extractFileFacts({
+      filePath: "ios/CalendarModule.swift",
+      language: "swift",
+      sourceText: [
+        "@objc(CalendarModule)",
+        "final class CalendarModule: NSObject {",
+        "  @objc(createEvent:withFoo:bar:)",
+        "  func createEvent(string: String!, withFoo a: Int, bar b: Int) {}",
+        "  @objc(currentEvent)",
+        "  func currentEvent() {}",
+        "  @objc",
+        "  func inferredName() {}",
+        "}",
+        "",
+        "@objc(ValueModule)",
+        "struct ValueModule {",
+        "  @objc(refresh)",
+        "  func refresh() {}",
+        "}"
+      ].join("\n")
+    });
+    const implicit = extractFileFacts({
+      filePath: "ios/ImplicitCalendarModule.swift",
+      language: "swift",
+      sourceText: [
+        "class CalendarModule: NSObject {",
+        "  @objc(createEvent:)",
+        "  func createEvent(name: String) {}",
+        "}",
+        "",
+        "@objc(AnotherModule)",
+        "class AnotherModule: NSObject {",
+        "  func inferredName() {}",
+        "}"
+      ].join("\n")
+    });
+
+    expect(explicit.swiftObjectiveCFacts?.methods).toEqual([
+      expect.objectContaining({
+        objcClassName: "CalendarModule",
+        selector: "createEvent:withFoo:bar:",
+        filePath: "ios/CalendarModule.swift"
+      }),
+      expect.objectContaining({
+        objcClassName: "CalendarModule",
+        selector: "currentEvent",
+        filePath: "ios/CalendarModule.swift"
+      })
+    ]);
+    expect(implicit.swiftObjectiveCFacts).toBeUndefined();
+  });
+
   it("extracts direct Dart Flutter MaterialApp literal routes maps with exact local evidence", () => {
     const facts = extractFileFacts({
       filePath: "lib/main.dart",
@@ -18468,7 +18521,7 @@ describe("source extraction", () => {
       sourceText: [
         "#import <React/RCTBridgeModule.h>",
         "@interface RCT_EXTERN_MODULE(CalendarModule, NSObject)",
-        "RCT_EXTERN_METHOD(createEvent:(NSString *)name)",
+        "RCT_EXTERN_METHOD(createEvent:(NSString *)name withFoo:(NSInteger)a bar:(NSInteger)b)",
         "RCT_EXTERN__BLOCKING_SYNCHRONOUS_METHOD(currentEvent)",
         "@end"
       ].join("\n")
@@ -18613,6 +18666,16 @@ describe("source extraction", () => {
         methodName: "currentEvent"
       })
     ]);
+    expect(objectiveCExtern.reactNativeFacts?.swiftExternalBridgeMethods).toEqual([
+      expect.objectContaining({
+        objcClassName: "CalendarModule",
+        selector: "createEvent:withFoo:bar:"
+      }),
+      expect.objectContaining({
+        objcClassName: "CalendarModule",
+        selector: "currentEvent"
+      })
+    ]);
     expect(objectiveCExtern.edges).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -18640,6 +18703,12 @@ describe("source extraction", () => {
         platform: "ios",
         moduleName: "CalendarJS",
         methodName: "removeEvent"
+      })
+    ]);
+    expect(objectiveCExternRemapped.reactNativeFacts?.swiftExternalBridgeMethods).toEqual([
+      expect.objectContaining({
+        objcClassName: "CalendarModule",
+        selector: "deleteEvent:"
       })
     ]);
     expect(objectiveCExternRemapped.edges).toEqual(

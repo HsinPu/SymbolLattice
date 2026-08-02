@@ -12390,7 +12390,7 @@ describe("SymbolLatticeService", () => {
     );
   });
 
-  it("persists React Native Swift external bridge declarations and their exact NativeModules callers", async () => {
+  it("persists React Native Swift external bridge declarations, implementations, and NativeModules callers", async () => {
     const projectPath = await createInlineProject({
       "src/mobile/bridge.ts": [
         'import { NativeModules } from "react-native";',
@@ -12410,6 +12410,15 @@ describe("SymbolLatticeService", () => {
         "@interface RCT_EXTERN_REMAP_MODULE(CalendarJS, CalendarModule, NSObject)",
         "_RCT_EXTERN_REMAP_METHOD(removeEvent, deleteEvent:(NSString *)eventId, NO)",
         "@end"
+      ].join("\n"),
+      "ios/CalendarModule.swift": [
+        "@objc(CalendarModule)",
+        "final class CalendarModule: NSObject {",
+        "  @objc(createEvent:)",
+        "  func writeEvent(name: String) {}",
+        "  @objc(deleteEvent:)",
+        "  func removeStoredEvent(eventId: String) {}",
+        "}"
       ].join("\n")
     });
     const graphStore = new SqliteGraphStore();
@@ -12425,10 +12434,25 @@ describe("SymbolLatticeService", () => {
       projectPath,
       "ios/RemappedCalendarModuleExport.m#extern:CalendarModule.removeEvent"
     );
+    const writeEvent = await service.find(
+      projectPath,
+      "ios/CalendarModule.swift#CalendarModule.writeEvent"
+    );
+    const removeStoredEvent = await service.find(
+      projectPath,
+      "ios/CalendarModule.swift#CalendarModule.removeStoredEvent"
+    );
     const createEventTarget = createEvent.symbols[0];
     const removeEventTarget = removeEvent.symbols[0];
-    if (createEventTarget === undefined || removeEventTarget === undefined) {
-      throw new Error("Expected indexed React Native Swift external bridge methods.");
+    const writeEventTarget = writeEvent.symbols[0];
+    const removeStoredEventTarget = removeStoredEvent.symbols[0];
+    if (
+      createEventTarget === undefined ||
+      removeEventTarget === undefined ||
+      writeEventTarget === undefined ||
+      removeStoredEventTarget === undefined
+    ) {
+      throw new Error("Expected indexed React Native Swift external bridge methods and implementations.");
     }
 
     expect(persistedFacts).toEqual(
@@ -12441,6 +12465,12 @@ describe("SymbolLatticeService", () => {
                 moduleName: "CalendarModule",
                 methodName: "createEvent"
               })
+            ],
+            swiftExternalBridgeMethods: [
+              expect.objectContaining({
+                objcClassName: "CalendarModule",
+                selector: "createEvent:"
+              })
             ]
           })
         }),
@@ -12451,6 +12481,27 @@ describe("SymbolLatticeService", () => {
               expect.objectContaining({
                 moduleName: "CalendarJS",
                 methodName: "removeEvent"
+              })
+            ],
+            swiftExternalBridgeMethods: [
+              expect.objectContaining({
+                objcClassName: "CalendarModule",
+                selector: "deleteEvent:"
+              })
+            ]
+          })
+        }),
+        expect.objectContaining({
+          filePath: "ios/CalendarModule.swift",
+          swiftObjectiveCFacts: expect.objectContaining({
+            methods: [
+              expect.objectContaining({
+                objcClassName: "CalendarModule",
+                selector: "createEvent:"
+              }),
+              expect.objectContaining({
+                objcClassName: "CalendarModule",
+                selector: "deleteEvent:"
               })
             ]
           })
@@ -12476,6 +12527,30 @@ describe("SymbolLatticeService", () => {
       );
     }
 
+    for (const [source, target, referenceName] of [
+      [createEventTarget, writeEventTarget, "CalendarModule.createEvent:"],
+      [removeEventTarget, removeStoredEventTarget, "CalendarModule.deleteEvent:"]
+    ] as const) {
+      const callees = await service.callees(projectPath, source.qualifiedName);
+      expect(callees.relations).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            symbol: expect.objectContaining({ id: target.id }),
+            edge: expect.objectContaining({
+              kind: "references",
+              referenceName,
+              resolution: "exact",
+              confidence: 1,
+              evidence: expect.objectContaining({
+                ruleId: "framework.react-native.swift-extern.direct-objc-class-and-selector.exact-target",
+                stage: "module"
+              })
+            })
+          })
+        ])
+      );
+    }
+
     const reopened = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
     await reopened.init({ projectPath });
     const persistedCallers = await reopened.callers(projectPath, createEventTarget.qualifiedName);
@@ -12486,6 +12561,19 @@ describe("SymbolLatticeService", () => {
           edge: expect.objectContaining({
             evidence: expect.objectContaining({
               ruleId: "framework.react-native.native-modules.direct-module-and-method.ios.exact-target"
+            })
+          })
+        })
+      ])
+    );
+    const persistedCallees = await reopened.callees(projectPath, createEventTarget.qualifiedName);
+    expect(persistedCallees.relations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          symbol: expect.objectContaining({ id: writeEventTarget.id }),
+          edge: expect.objectContaining({
+            evidence: expect.objectContaining({
+              ruleId: "framework.react-native.swift-extern.direct-objc-class-and-selector.exact-target"
             })
           })
         })
