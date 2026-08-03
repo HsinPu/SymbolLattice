@@ -2660,4 +2660,75 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
       }
     ]);
   });
+
+  it("generates a non-mutating Codex MCP configuration with explicit lifecycle controls", async () => {
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+    await createProgram({} as SymbolLatticeService).parseAsync(
+      [
+        "node",
+        "symbol-lattice",
+        "mcp-config",
+        "codex",
+        "--project",
+        "C:/chosen-project",
+        "--no-auto-sync",
+        "--no-diagnostic-journal",
+        "--sync-interval",
+        "750",
+        "--poll"
+      ],
+      { from: "node" }
+    );
+
+    const output = JSON.parse(String(write.mock.calls[0]?.[0]));
+    expect(output).toMatchObject({
+      target: "codex",
+      destination: { path: "~/.codex/config.toml", format: "toml" },
+      server: {
+        command: "symbol-lattice",
+        args: [
+          "serve",
+          "--mcp",
+          "--project",
+          resolve("C:/chosen-project"),
+          "--no-auto-sync",
+          "--no-diagnostic-journal",
+          "--sync-interval",
+          "750",
+          "--poll"
+        ]
+      },
+      lifecycle: {
+        mcpRequestHandlers: "read-only",
+        autoSync: {
+          enabled: false,
+          projectIndexMayBeWritten: false,
+          diagnosticJournalMayBeWritten: false
+        }
+      }
+    });
+    expect(output.snippet).toContain('[mcp_servers.symbol_lattice]');
+  });
+
+  it("prints only the requested copy-and-paste MCP snippet", async () => {
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+    await createProgram({} as SymbolLatticeService).parseAsync(
+      [
+        "node",
+        "symbol-lattice",
+        "mcp-config",
+        "codex",
+        "--project",
+        "C:/chosen-project",
+        "--print-snippet"
+      ],
+      { from: "node" }
+    );
+
+    expect(write).toHaveBeenCalledWith(
+      `[mcp_servers.symbol_lattice]\ncommand = "symbol-lattice"\nargs = ["serve", "--mcp", "--project", ${JSON.stringify(resolve("C:/chosen-project"))}]\n`
+    );
+  });
 });

@@ -74,6 +74,7 @@ import {
   type McpServerSession
 } from "../mcp/index.js";
 import { SYMBOL_LATTICE_VERSION } from "../version.js";
+import { createMcpConfig } from "./mcp-config.js";
 
 interface OutputOptions {
   readonly json?: boolean;
@@ -164,6 +165,15 @@ interface ServeCommandOptions extends ProjectOptions {
   readonly diagnosticJournal?: boolean;
   readonly syncInterval?: number;
   readonly poll?: boolean;
+}
+
+interface McpConfigCommandOptions extends ProjectOptions {
+  readonly autoSync?: boolean;
+  readonly diagnosticJournal?: boolean;
+  readonly syncInterval?: number;
+  readonly poll?: boolean;
+  readonly printSnippet?: boolean;
+  readonly source?: boolean;
 }
 
 interface GenerationHistoryCommandOptions extends ProjectOptions {
@@ -1107,6 +1117,43 @@ export function createProgram(
       render(await service.explainEdge(defaultProjectPath(options), edgeId), options);
     }
   );
+
+  addJsonOption(addProjectOption(program.command("mcp-config <target>")))
+    .option("--force", "Include the explicit broad-project auto-sync permission")
+    .option("--no-auto-sync", "Generate configuration with background incremental sync disabled")
+    .option(
+      "--no-diagnostic-journal",
+      "Generate configuration with persistent auto-sync diagnostic journal writes disabled"
+    )
+    .option(
+      "--sync-interval <milliseconds>",
+      `Polling fallback interval for generated MCP auto-sync (${MIN_WATCH_INTERVAL_MS}-${MAX_WATCH_INTERVAL_MS})`,
+      parseWatchInterval
+    )
+    .option("--poll", "Generate configuration that disables native filesystem-event acceleration")
+    .option("--source", "Generate configuration that invokes this built CLI through the current Node executable")
+    .option("--print-snippet", "Print only the copy-and-paste configuration snippet")
+    .action((target: string, options: McpConfigCommandOptions) => {
+      const result = createMcpConfig(target, {
+        projectPath: defaultProjectPath(options),
+        force: options.force ?? false,
+        autoSync: options.autoSync ?? true,
+        diagnosticJournal: options.diagnosticJournal ?? true,
+        ...(options.syncInterval === undefined ? {} : { syncIntervalMs: options.syncInterval }),
+        poll: options.poll ?? false,
+        ...(options.source === true
+          ? {
+              command: process.execPath,
+              commandArgs: [resolve(fileURLToPath(import.meta.url))]
+            }
+          : {})
+      });
+      if (options.printSnippet === true) {
+        process.stdout.write(`${result.snippet}\n`);
+        return;
+      }
+      render(result, options);
+    });
 
   addProjectOption(program.command("serve"))
     .requiredOption("--mcp", "Run the MCP stdio server")
