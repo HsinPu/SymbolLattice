@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.239.0 is a developer preview and runs from source. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher can update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.240.0 is a developer preview that runs from source. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher can update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## Quick start
 
@@ -29,49 +29,26 @@ npm run build
 # Create a project-local graph
 node dist/cli/main.js init /path/to/project
 
-# Query evidence-backed structural context
+# Query explainable structural context
 node dist/cli/main.js investigate "user token" --project /path/to/project --json
 ```
 
 ## MCP configuration
 
-`mcp-config` only generates a copy-and-paste fragment. It does not detect, read, or modify an Agent configuration file. Supported targets are `codex`, `claude`, `cursor`, `opencode`, `gemini`, `kiro`, `hermes`, `antigravity`, and `generic-json`.
+Supported targets: `codex`, `claude`, `cursor`, `opencode`, `gemini`, `kiro`, `hermes`, `antigravity`, and `generic-json`.
 
 ```bash
-# Claude project configuration (local by default)
-node dist/cli/main.js mcp-config claude --project /path/to/project --print-snippet
+# Preview first: no configuration, backup, or index write
+node dist/cli/main.js mcp-install claude --project /path/to/project --json
 
-# Cursor global configuration binds the currently opened workspace with ${workspaceFolder}
-node dist/cli/main.js mcp-config cursor --location global --project /path/to/project --print-snippet
+# Apply only after reviewing the plan: full backup first, then atomic update
+node dist/cli/main.js mcp-install claude --project /path/to/project --apply --yes --json
 
-# Codex uses global configuration; --source pins this checkout's Node entrypoint
-node dist/cli/main.js mcp-config codex --project /path/to/project --source --print-snippet
+# Read-only diagnosis of the existing configuration, CLI, and index
+node dist/cli/main.js mcp-doctor claude --project /path/to/project --json
 ```
 
-`claude`, `cursor`, `opencode`, `gemini`, and `kiro` generate project-local configuration by default and also accept `--location global`. `codex`, `hermes`, and `antigravity` support global configuration only. To refresh the graph manually, generate the entry with `--no-auto-sync`, then run:
-
-For OpenCode and Antigravity, omit `--print-snippet` first to receive the `destination` metadata. It lists alternate paths needed for an existing configuration file or migration state.
-
-```bash
-node dist/cli/main.js sync /path/to/project
-```
-
-`mcp-doctor` reads only the selected Agent configuration and checks the expected entry, CLI availability, and the project index. It never runs MCP, updates a configuration file, or writes an index.
-
-```bash
-# Diagnose through the Agent's conventional configuration destination
-node dist/cli/main.js mcp-doctor claude --project /path/to/project
-
-# generic JSON needs the exact configuration file to inspect
-node dist/cli/main.js mcp-doctor generic-json --config /path/to/mcp.json --project /path/to/project
-```
-
-## What it provides
-
-- Each relation retains its rule, evidence stage, resolution status, and confidence; `exact`, `heuristic`, and `unresolved` are never conflated.
-- SQLite immutable generations preserve graph history and diffs, Git hunks, bounded impact paths, and affected tests.
-- A multi-language, framework-aware capability catalog supports proven routes, entrypoints, cross-file imports, and re-exports.
-- MCP reads run through a separate worker pool; a query handler never receives the writer capability.
+`mcp-install` changes only SymbolLattice's MCP entry in the selected Agent configuration and preserves sibling entries. It refuses to overwrite an existing file it cannot safely parse. `mcp-config` remains output-only: it produces a copy-and-paste snippet and never reads or writes an Agent configuration. `generic-json` requires an explicit `--config /path/to/mcp.json`.
 
 ## Common commands
 
@@ -80,11 +57,12 @@ node dist/cli/main.js mcp-doctor generic-json --config /path/to/mcp.json --proje
 | `init <path>` | Create a graph. |
 | `sync <path>` | Explicitly synchronize or repair a graph. |
 | `watch <path>` | Watch and synchronize in the foreground. |
-| `investigate <query>` | Expand lexical evidence into explainable structural context. |
+| `investigate <query>` | Expand textual evidence into explainable structural context. |
 | `impact <symbol>` | Trace bounded impact through exact static relations. |
 | `serve --mcp` | Start the MCP stdio host. |
-| `mcp-config <target>` | Generate a target-specific, output-only MCP configuration fragment. |
+| `mcp-config <target>` | Produce an output-only MCP configuration snippet. |
 | `mcp-doctor <target>` | Read-only diagnosis of an Agent MCP configuration, CLI, and project index. |
+| `mcp-install <target>` | Preview or, with `--apply --yes`, safely write an MCP configuration. |
 
 ## Verification
 

@@ -2818,4 +2818,56 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
       overall: "action-required"
     });
   });
+
+  it("previews an MCP installation by default and exposes the explicit apply boundary", async () => {
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+    await createProgram({} as SymbolLatticeService).parseAsync(
+      [
+        "node",
+        "symbol-lattice",
+        "mcp-install",
+        "generic-json",
+        "--project",
+        "C:/chosen-project",
+        "--config",
+        "C:/symbol-lattice-test-no-write/mcp.json",
+        "--no-auto-sync",
+        "--no-diagnostic-journal",
+        "--sync-interval",
+        "750",
+        "--poll"
+      ],
+      { from: "node" }
+    );
+
+    const output = JSON.parse(String(write.mock.calls[0]?.[0]));
+    expect(output).toMatchObject({
+      schemaVersion: 1,
+      mode: "preview",
+      status: "ready",
+      confirmation: {
+        requiredFlags: ["--apply", "--yes"],
+        applyRequested: false,
+        acknowledgementReceived: false
+      },
+      configuration: {
+        action: "create",
+        source: "override",
+        atomicWrite: true,
+        backup: { state: "not-needed" }
+      },
+      lifecycle: {
+        mcpRequestHandlers: "read-only",
+        autoSync: {
+          enabled: false,
+          projectIndexMayBeWritten: false,
+          diagnosticJournalMayBeWritten: false
+        }
+      }
+    });
+    expect(output.notes).toContain(
+      "Preview only: no Agent configuration, backup, or project index has been written."
+    );
+  });
 });

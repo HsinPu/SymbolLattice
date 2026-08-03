@@ -76,6 +76,7 @@ import {
 import { SYMBOL_LATTICE_VERSION } from "../version.js";
 import { createMcpConfig, type McpConfigOptions } from "./mcp-config.js";
 import { createMcpDoctor } from "./mcp-doctor.js";
+import { createMcpInstall } from "./mcp-install.js";
 
 interface OutputOptions {
   readonly json?: boolean;
@@ -182,6 +183,12 @@ interface McpDoctorCommandOptions extends McpConfigCommandOptions {
   readonly config?: string;
 }
 
+interface McpInstallCommandOptions extends McpDoctorCommandOptions {
+  readonly apply?: boolean;
+  readonly yes?: boolean;
+  readonly backupDir?: string;
+}
+
 interface GenerationHistoryCommandOptions extends ProjectOptions {
   readonly limit?: number;
 }
@@ -258,7 +265,7 @@ function defaultProjectPath(options: ProjectOptions): string {
   return resolve(options.project ?? process.cwd());
 }
 
-/** Keeps `mcp-config` and `mcp-doctor` aligned on the exact expected serve command. */
+/** Keeps MCP configuration commands aligned on the exact expected serve command. */
 function createMcpCommandOptions(options: McpConfigCommandOptions): McpConfigOptions {
   return {
     projectPath: defaultProjectPath(options),
@@ -1188,6 +1195,36 @@ export function createProgram(
       const result = createMcpDoctor(target, {
         ...createMcpCommandOptions(options),
         ...(options.config === undefined ? {} : { configPath: options.config })
+      });
+      render(result, options);
+    });
+
+  addJsonOption(addProjectOption(program.command("mcp-install <target>")))
+    .option("--location <scope>", "Target configuration scope: global or local (default depends on target)")
+    .option("--config <path>", "Write this configuration file instead of the target's conventional destination")
+    .option("--backup-dir <path>", "Directory for a full pre-write configuration backup")
+    .option("--apply", "Apply the displayed configuration plan (requires --yes)")
+    .option("--yes", "Acknowledge that an applied plan may modify one MCP configuration file")
+    .option("--force", "Include the explicit broad-project auto-sync permission")
+    .option("--no-auto-sync", "Install configuration with background incremental sync disabled")
+    .option(
+      "--no-diagnostic-journal",
+      "Install configuration with persistent auto-sync diagnostic journal writes disabled"
+    )
+    .option(
+      "--sync-interval <milliseconds>",
+      `Polling fallback interval for installed MCP auto-sync (${MIN_WATCH_INTERVAL_MS}-${MAX_WATCH_INTERVAL_MS})`,
+      parseWatchInterval
+    )
+    .option("--poll", "Install configuration that disables native filesystem-event acceleration")
+    .option("--source", "Install configuration that invokes this built CLI through the current Node executable")
+    .action((target: string, options: McpInstallCommandOptions) => {
+      const result = createMcpInstall(target, {
+        ...createMcpCommandOptions(options),
+        ...(options.config === undefined ? {} : { configPath: options.config }),
+        ...(options.backupDir === undefined ? {} : { backupDirectory: options.backupDir }),
+        apply: options.apply ?? false,
+        yes: options.yes ?? false
       });
       render(result, options);
     });
