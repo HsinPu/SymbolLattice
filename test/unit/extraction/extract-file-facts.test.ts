@@ -3971,6 +3971,46 @@ describe("source extraction", () => {
     });
   });
 
+  it("retains final Django Ninja Router exports from a package initializer", () => {
+    const facts = extractFileFacts({
+      filePath: "api/routers/__init__.py",
+      language: "python",
+      sourceText: "from .catalog import router as public_router"
+    });
+
+    expect(facts.djangoNinjaRouterFacts).toMatchObject({
+      routers: [],
+      routes: [],
+      reExports: [
+        {
+          exportedName: "public_router",
+          importedRouterName: "router",
+          moduleSpecifier: ".catalog"
+        }
+      ],
+      importedRouterInclusions: []
+    });
+  });
+
+  it("rejects rebound and non-initializer Django Ninja Router exports", () => {
+    const reboundFacts = extractFileFacts({
+      filePath: "api/routers/__init__.py",
+      language: "python",
+      sourceText: [
+        "from .catalog import router as public_router",
+        "public_router = build_router()"
+      ].join("\n")
+    });
+    const regularModuleFacts = extractFileFacts({
+      filePath: "api/routers/exports.py",
+      language: "python",
+      sourceText: "from .catalog import router as public_router"
+    });
+
+    expect(reboundFacts.djangoNinjaRouterFacts).toMatchObject({ reExports: [] });
+    expect(regularModuleFacts.djangoNinjaRouterFacts).toMatchObject({ reExports: [] });
+  });
+
   it("rejects parent-relative, rebound, and non-final Django Ninja Router cross-file facts", () => {
     const inclusionFacts = extractFileFacts({
       filePath: "api/main.py",

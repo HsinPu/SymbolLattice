@@ -4798,7 +4798,105 @@ describe("SymbolLatticeService", () => {
     );
   });
 
-  it("does not project Django Ninja Router targets without a regular package boundary or direct binding", async () => {
+  it("projects Django Ninja Router exports through nested package initializers", async () => {
+    const projectPath = await createInlineProject({
+      "api/__init__.py": "",
+      "api/routers/__init__.py": "from .internal import public_router",
+      "api/routers/internal/__init__.py": "from .catalog import router as public_router",
+      "api/routers/internal/catalog.py": [
+        "from ninja import Router",
+        "router = Router()",
+        "",
+        "@router.get(\"/health\")",
+        "def health(request):",
+        "    return {\"ok\": True}",
+        "",
+        "@router.api_operation([\"POST\", \"PATCH\"], \"/orders\")",
+        "def upsert_order(request):",
+        "    return {\"ok\": True}"
+      ].join("\n"),
+      "api/main.py": [
+        "from ninja import NinjaAPI",
+        "from .routers import public_router as mounted_router",
+        "api = NinjaAPI()",
+        "api.add_router(\"/v1\", mounted_router)"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+    const routersFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "api/routers/__init__.py");
+    const internalFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "api/routers/internal/__init__.py");
+
+    expect(routersFacts?.djangoNinjaRouterFacts).toMatchObject({
+      reExports: [
+        {
+          exportedName: "public_router",
+          importedRouterName: "public_router",
+          moduleSpecifier: ".internal"
+        }
+      ]
+    });
+    expect(internalFacts?.djangoNinjaRouterFacts).toMatchObject({
+      reExports: [
+        {
+          exportedName: "public_router",
+          importedRouterName: "router",
+          moduleSpecifier: ".catalog"
+        }
+      ]
+    });
+    expect(routes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "GET",
+          path: "/v1/health",
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.django-ninja.reexported-router.add-router.decorator.local-function",
+              stage: "module",
+              resolutionPath: [
+                "api/main.py",
+                "api/routers/__init__.py",
+                "api/routers/internal/__init__.py",
+                "api/routers/internal/catalog.py"
+              ]
+            })
+          }),
+          handler: expect.objectContaining({ qualifiedName: "api/routers/internal/catalog.py#health" })
+        }),
+        expect.objectContaining({
+          method: "POST",
+          path: "/v1/orders",
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.django-ninja.reexported-router.add-router.api-operation.local-function",
+              stage: "module",
+              resolutionPath: [
+                "api/main.py",
+                "api/routers/__init__.py",
+                "api/routers/internal/__init__.py",
+                "api/routers/internal/catalog.py"
+              ]
+            })
+          }),
+          handler: expect.objectContaining({
+            qualifiedName: "api/routers/internal/catalog.py#upsert_order"
+          })
+        })
+      ])
+    );
+  });
+
+  it("does not project Django Ninja Router targets without a regular package boundary or final re-export", async () => {
     const missingPackagePath = await createInlineProject({
       "api/routers/catalog.py": [
         "from ninja import Router",
@@ -4817,7 +4915,10 @@ describe("SymbolLatticeService", () => {
     });
     const reExportPath = await createInlineProject({
       "api/__init__.py": "",
-      "api/routers/__init__.py": "from .catalog import router as public_router",
+      "api/routers/__init__.py": [
+        "from .catalog import router as public_router",
+        "public_router = build_router()"
+      ].join("\n"),
       "api/routers/catalog.py": [
         "from ninja import Router",
         "router = Router()",

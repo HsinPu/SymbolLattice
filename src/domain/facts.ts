@@ -11,13 +11,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v189";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v190";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v75";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v76";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -272,6 +272,14 @@ export interface DjangoNinjaRouterRouteFact {
   readonly range: SourceRange;
 }
 
+/** A final, single-name relative Django Ninja Router export from a package initializer. */
+export interface DjangoNinjaRouterReExportFact {
+  readonly exportedName: string;
+  readonly importedRouterName: string;
+  readonly moduleSpecifier: string;
+  readonly range: SourceRange;
+}
+
 /**
  * A direct, single-name, package-relative Router import mounted through a
  * direct Django Ninja application's literal `add_router` call.
@@ -292,6 +300,8 @@ export interface DjangoNinjaImportedRouterInclusionFact {
 export interface DjangoNinjaRouterFacts {
   readonly routers: readonly DjangoNinjaRouterDeclarationFact[];
   readonly routes: readonly DjangoNinjaRouterRouteFact[];
+  /** Omitted only by artifact facts persisted before v0.229. */
+  readonly reExports?: readonly DjangoNinjaRouterReExportFact[];
   readonly importedRouterInclusions: readonly DjangoNinjaImportedRouterInclusionFact[];
 }
 

@@ -7,6 +7,7 @@ import {
   type DjangoImportedUrlconfInclusionFact,
   type DjangoNinjaImportedRouterInclusionFact,
   type DjangoNinjaRouterDeclarationFact,
+  type DjangoNinjaRouterReExportFact,
   type DjangoNinjaRouterRouteFact,
   type DjangoLiteralUrlconfInclusionFact,
   type DjangoUrlconfReExportFact,
@@ -3573,10 +3574,12 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
   const djangoNinjaRouterFacts: {
     readonly routers: DjangoNinjaRouterDeclarationFact[];
     readonly routes: DjangoNinjaRouterRouteFact[];
+    readonly reExports: DjangoNinjaRouterReExportFact[];
     readonly importedRouterInclusions: DjangoNinjaImportedRouterInclusionFact[];
   } = {
     routers: [],
     routes: [],
+    reExports: [],
     importedRouterInclusions: []
   };
   const flaskBlueprintFacts: {
@@ -4183,6 +4186,25 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
           continue;
         }
         fastApiRouterFacts.reExports.push({
+          exportedName: imported.routerName,
+          importedRouterName: imported.importedRouterName,
+          moduleSpecifier: imported.moduleSpecifier,
+          range: rangeFor(lineStarts, imported.node.from, imported.node.to)
+        });
+      }
+
+      for (const imported of relativeDjangoNinjaRouterImports) {
+        const finalImport = latestProvenDjangoNinjaRelativeRouterImportBinding(
+          input,
+          topLevelNodes,
+          relativeDjangoNinjaRouterImports,
+          imported.routerName,
+          input.sourceText.length
+        );
+        if (finalImport === null || nodeKey(finalImport.node) !== nodeKey(imported.node)) {
+          continue;
+        }
+        djangoNinjaRouterFacts.reExports.push({
           exportedName: imported.routerName,
           importedRouterName: imported.importedRouterName,
           moduleSpecifier: imported.moduleSpecifier,

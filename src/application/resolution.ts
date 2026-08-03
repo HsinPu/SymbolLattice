@@ -6,6 +6,7 @@ import {
   type DjangoImportedUrlconfInclusionFact,
   type DjangoNinjaImportedRouterInclusionFact,
   type DjangoNinjaRouterDeclarationFact,
+  type DjangoNinjaRouterReExportFact,
   type DjangoNinjaRouterRouteFact,
   type DjangoLiteralUrlconfInclusionFact,
   type DjangoUrlconfInclusionFactory,
@@ -4638,20 +4639,89 @@ function projectFastApiImportedRouterRoutes(input: {
 interface ResolvedDjangoNinjaRouterTarget {
   readonly filePath: string;
   readonly router: DjangoNinjaRouterDeclarationFact;
+  readonly resolutionPath: readonly string[];
+  readonly reExported: boolean;
 }
 
-function resolveExactDjangoNinjaRouterTarget(input: {
+function directDjangoNinjaRouterTargets(input: {
   readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
   readonly filePath: string;
   readonly name: string;
+}): readonly ResolvedDjangoNinjaRouterTarget[] {
+  const facts = input.factsByFile.get(input.filePath)?.djangoNinjaRouterFacts;
+  if (facts === undefined) {
+    return [];
+  }
+  return facts.routers
+    .filter((router) => router.name === input.name)
+    .map((router) => ({
+      filePath: input.filePath,
+      router,
+      resolutionPath: [input.filePath],
+      reExported: false
+    }));
+}
+
+/**
+ * Resolves a direct Django Ninja Router or one final `__init__.py` re-export
+ * chain. Every hop is a persisted single-name relative import, and a cycle or
+ * competing local/exported binding remains unresolved.
+ */
+function resolveExactDjangoNinjaRouterTarget(input: {
+  readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
+  readonly knownFilePaths: ReadonlySet<string>;
+  readonly filePath: string;
+  readonly name: string;
+  readonly visited?: ReadonlySet<string>;
 }): ResolvedDjangoNinjaRouterTarget | null {
+  const targetKey = `${input.filePath}\u0000${input.name}`;
+  const visited = input.visited ?? new Set<string>();
+  if (visited.has(targetKey)) {
+    return null;
+  }
   const facts = input.factsByFile.get(input.filePath)?.djangoNinjaRouterFacts;
   if (facts === undefined) {
     return null;
   }
-  const routers = facts.routers.filter((router) => router.name === input.name);
-  const router = routers.length === 1 ? routers[0] : undefined;
-  return router === undefined ? null : { filePath: input.filePath, router };
+  const directTargets = directDjangoNinjaRouterTargets(input);
+  const reExports = (facts.reExports ?? []).filter((reExport) => reExport.exportedName === input.name);
+  if (directTargets.length + reExports.length !== 1) {
+    return null;
+  }
+  if (directTargets[0] !== undefined) {
+    return directTargets[0];
+  }
+  const reExport: DjangoNinjaRouterReExportFact | undefined = reExports[0];
+  if (reExport === undefined) {
+    return null;
+  }
+  const targetFilePath = resolvePythonRelativeModule(
+    input.knownFilePaths,
+    input.filePath,
+    reExport.moduleSpecifier
+  );
+  if (targetFilePath === null) {
+    return null;
+  }
+  const nestedVisited = new Set(visited);
+  nestedVisited.add(targetKey);
+  const target = resolveExactDjangoNinjaRouterTarget({
+    factsByFile: input.factsByFile,
+    knownFilePaths: input.knownFilePaths,
+    filePath: targetFilePath,
+    name: reExport.importedRouterName,
+    visited: nestedVisited
+  });
+  return target === null
+    ? null
+    : {
+        ...target,
+        resolutionPath: compactPythonModuleResolutionPath([
+          input.filePath,
+          ...target.resolutionPath
+        ]),
+        reExported: true
+      };
 }
 
 interface ProjectedDjangoNinjaImportedRouterRoute {
@@ -4661,6 +4731,8 @@ interface ProjectedDjangoNinjaImportedRouterRoute {
   readonly route: DjangoNinjaRouterRouteFact;
   readonly handler: SymbolNode;
   readonly path: string;
+  readonly resolutionPath: readonly string[];
+  readonly reExported: boolean;
 }
 
 function compareProjectedDjangoNinjaImportedRouterRoute(
@@ -4718,6 +4790,7 @@ function projectDjangoNinjaImportedRouterRoutes(input: {
       }
       const target = resolveExactDjangoNinjaRouterTarget({
         factsByFile: input.factsByFile,
+        knownFilePaths: input.knownFilePaths,
         filePath: importedRouterFilePath,
         name: inclusion.importedRouterName
       });
@@ -4747,7 +4820,9 @@ function projectDjangoNinjaImportedRouterRoutes(input: {
           inclusion,
           route,
           handler,
-          path
+          path,
+          resolutionPath: target.resolutionPath,
+          reExported: target.reExported
         });
       }
     }
@@ -4841,12 +4916,16 @@ function projectDjangoNinjaImportedRouterRoutes(input: {
       referenceName: candidate.handler.name,
       evidence: referenceEvidence(
         candidate.route.source === "api-operation"
-          ? "framework.django-ninja.imported-router.add-router.api-operation.local-function"
-          : "framework.django-ninja.imported-router.add-router.decorator.local-function",
+          ? candidate.reExported
+            ? "framework.django-ninja.reexported-router.add-router.api-operation.local-function"
+            : "framework.django-ninja.imported-router.add-router.api-operation.local-function"
+          : candidate.reExported
+            ? "framework.django-ninja.reexported-router.add-router.decorator.local-function"
+            : "framework.django-ninja.imported-router.add-router.decorator.local-function",
         "module",
         [candidate.handler.id],
         [],
-        [candidate.inclusionFilePath, candidate.routerFilePath]
+        [candidate.inclusionFilePath, ...candidate.resolutionPath]
       )
     });
   }
