@@ -11,13 +11,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v180";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v181";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v66";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v67";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -642,9 +642,11 @@ export type JvmHeritageSyntax =
   | "kotlin-supertype";
 
 /**
- * One direct, unqualified Java or Kotlin parent-type reference. An imported
- * target path is retained only for a unique, explicit, non-static/non-wildcard
- * Java import or a non-aliased/non-wildcard Kotlin import.
+ * One direct Java or Kotlin parent-type reference. A target path is retained
+ * either from an explicit, non-static/non-wildcard Java import, a
+ * non-aliased/non-wildcard Kotlin import, or a syntactically direct qualified
+ * type spelling. Generic, wildcard, alias, and nested-type semantics remain
+ * outside this syntax-only fact.
  */
 export interface JvmHeritageReferenceFact {
   readonly sourceId: string;
@@ -653,6 +655,7 @@ export interface JvmHeritageReferenceFact {
   readonly syntax: JvmHeritageSyntax;
   readonly range: SourceRange;
   readonly importedTypePath?: string;
+  readonly qualifiedTypePath?: string;
 }
 
 /** Syntax-only JVM package, import, and direct-heritage facts for project resolution. */

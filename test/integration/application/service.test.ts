@@ -1483,7 +1483,7 @@ describe("SymbolLatticeService", () => {
     ]);
   });
 
-  it("persists exact cross-file JVM import evidence through init", async () => {
+  it("persists exact cross-file JVM import and qualified-type evidence through init", async () => {
     const projectPath = await createInlineProject({
       "src/java/api/JavaContract.java": [
         "package example.java.api;",
@@ -1494,6 +1494,10 @@ describe("SymbolLatticeService", () => {
         "import example.java.api.JavaContract;",
         "public class JavaWorker implements JavaContract { @Override public void run() {} }"
       ].join("\n"),
+      "src/java/impl/JavaQualifiedWorker.java": [
+        "package example.java.impl;",
+        "public class JavaQualifiedWorker implements example.java.api.JavaContract { @Override public void run() {} }"
+      ].join("\n"),
       "src/kotlin/api/KotlinContract.kt": [
         "package example.kotlin.api",
         "interface KotlinContract { fun run() }"
@@ -1502,6 +1506,10 @@ describe("SymbolLatticeService", () => {
         "package example.kotlin.impl",
         "import example.kotlin.api.KotlinContract",
         "class KotlinWorker : KotlinContract { override fun run() {} }"
+      ].join("\n"),
+      "src/kotlin/impl/KotlinQualifiedWorker.kt": [
+        "package example.kotlin.impl",
+        "class KotlinQualifiedWorker : example.kotlin.api.KotlinContract { override fun run() {} }"
       ].join("\n")
     });
     const graphStore = new SqliteGraphStore();
@@ -1521,16 +1529,34 @@ describe("SymbolLatticeService", () => {
         (edge) => edge.sourceId === symbol(sourceQualifiedName)?.id && edge.kind === "overrides"
       );
 
-    for (const [sourceQualifiedName, targetQualifiedName] of [
-      ["src/java/impl/JavaWorker.java#JavaWorker", "src/java/api/JavaContract.java#JavaContract"],
-      ["src/kotlin/impl/KotlinWorker.kt#KotlinWorker", "src/kotlin/api/KotlinContract.kt#KotlinContract"]
+    for (const [sourceQualifiedName, targetQualifiedName, ruleId] of [
+      [
+        "src/java/impl/JavaWorker.java#JavaWorker",
+        "src/java/api/JavaContract.java#JavaContract",
+        "syntax.jvm.cross-file.explicit-import.direct-implements"
+      ],
+      [
+        "src/java/impl/JavaQualifiedWorker.java#JavaQualifiedWorker",
+        "src/java/api/JavaContract.java#JavaContract",
+        "syntax.jvm.cross-file.qualified-type.direct-implements"
+      ],
+      [
+        "src/kotlin/impl/KotlinWorker.kt#KotlinWorker",
+        "src/kotlin/api/KotlinContract.kt#KotlinContract",
+        "syntax.jvm.cross-file.explicit-import.direct-implements"
+      ],
+      [
+        "src/kotlin/impl/KotlinQualifiedWorker.kt#KotlinQualifiedWorker",
+        "src/kotlin/api/KotlinContract.kt#KotlinContract",
+        "syntax.jvm.cross-file.qualified-type.direct-implements"
+      ]
     ] as const) {
       expect(heritageEdge(sourceQualifiedName)).toMatchObject({
         targetId: symbol(targetQualifiedName)?.id,
         resolution: "exact",
         confidence: 1,
         evidence: {
-          ruleId: "syntax.jvm.cross-file.explicit-import.direct-implements",
+          ruleId,
           stage: "module"
         }
       });
@@ -1542,6 +1568,14 @@ describe("SymbolLatticeService", () => {
       ],
       [
         "src/kotlin/impl/KotlinWorker.kt#KotlinWorker.run",
+        "src/kotlin/api/KotlinContract.kt#KotlinContract.run"
+      ],
+      [
+        "src/java/impl/JavaQualifiedWorker.java#JavaQualifiedWorker.run",
+        "src/java/api/JavaContract.java#JavaContract.run"
+      ],
+      [
+        "src/kotlin/impl/KotlinQualifiedWorker.kt#KotlinQualifiedWorker.run",
         "src/kotlin/api/KotlinContract.kt#KotlinContract.run"
       ]
     ] as const) {
@@ -1576,6 +1610,32 @@ describe("SymbolLatticeService", () => {
           })
         ]
       });
+    }
+
+    for (const [filePath, sourceQualifiedName, qualifiedTypePath] of [
+      [
+        "src/java/impl/JavaQualifiedWorker.java",
+        "src/java/impl/JavaQualifiedWorker.java#JavaQualifiedWorker",
+        "example.java.api.JavaContract"
+      ],
+      [
+        "src/kotlin/impl/KotlinQualifiedWorker.kt",
+        "src/kotlin/impl/KotlinQualifiedWorker.kt#KotlinQualifiedWorker",
+        "example.kotlin.api.KotlinContract"
+      ]
+    ] as const) {
+      const facts = graphStore.getArtifactFacts(projectPath).find((candidate) => candidate.filePath === filePath);
+      expect(facts?.jvmFacts).toMatchObject({
+        types: [expect.objectContaining({ symbolId: symbol(sourceQualifiedName)?.id })],
+        heritageReferences: [
+          expect.objectContaining({
+            sourceId: symbol(sourceQualifiedName)?.id,
+            referenceName: qualifiedTypePath.split(".").at(-1),
+            qualifiedTypePath
+          })
+        ]
+      });
+      expect(facts?.jvmFacts?.heritageReferences[0]).not.toHaveProperty("importedTypePath");
     }
   });
 

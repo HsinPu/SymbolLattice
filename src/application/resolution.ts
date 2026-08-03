@@ -6233,11 +6233,10 @@ function jvmHeritageRelationKind(input: {
 
 function jvmHeritageRuleId(input: {
   readonly syntax: JvmHeritageSyntax;
-  readonly imported: boolean;
+  readonly resolutionProof: "explicit-import" | "qualified-type" | "same-package";
   readonly relationKind: JvmHeritageRelationKind;
   readonly sourceKind: SymbolNode["kind"];
 }): string {
-  const resolution = input.imported ? "explicit-import" : "same-package";
   const relationship =
     input.relationKind === "implements"
       ? "direct-implements"
@@ -6245,15 +6244,15 @@ function jvmHeritageRuleId(input: {
           (input.syntax === "kotlin-supertype" && input.sourceKind === "interface")
         ? "direct-interface-extends"
         : "direct-superclass";
-  return `syntax.jvm.cross-file.${resolution}.${relationship}`;
+  return `syntax.jvm.cross-file.${input.resolutionProof}.${relationship}`;
 }
 
 /**
  * Projects a direct JVM parent type only when the raw facts identify exactly
- * one indexed top-level type through one explicit import or a shared package.
- * The extractor deliberately omits aliases, wildcards, qualified spellings,
- * nested types, and compiler-classpath semantics, so this pass cannot invent a
- * type-checker relationship.
+ * one indexed top-level type through an explicit import, a direct qualified
+ * spelling, or a shared package. The extractor deliberately omits aliases,
+ * wildcards, generic types, nested types, and compiler-classpath semantics, so
+ * this pass cannot invent a type-checker relationship.
  */
 function projectJvmHeritageReferences(input: {
   readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
@@ -6295,11 +6294,18 @@ function projectJvmHeritageReferences(input: {
       continue;
     }
     const sourceType = sourceEntries[0];
+    const targetTypePath = reference.qualifiedTypePath ?? reference.importedTypePath;
+    const resolutionProof =
+      reference.qualifiedTypePath !== undefined
+        ? "qualified-type"
+        : reference.importedTypePath !== undefined
+          ? "explicit-import"
+          : "same-package";
     const candidates = types.filter((candidate) =>
-      reference.importedTypePath === undefined
+      targetTypePath === undefined
         ? candidate.fact.packageName === sourceType.fact.packageName &&
           candidate.symbol.name === reference.referenceName
-        : jvmTypePath(candidate) === reference.importedTypePath
+        : jvmTypePath(candidate) === targetTypePath
     );
     if (
       candidates.length !== 1 ||
@@ -6334,7 +6340,7 @@ function projectJvmHeritageReferences(input: {
       evidence: referenceEvidence(
         jvmHeritageRuleId({
           syntax: reference.syntax,
-          imported: reference.importedTypePath !== undefined,
+          resolutionProof,
           relationKind,
           sourceKind: source.kind
         }),

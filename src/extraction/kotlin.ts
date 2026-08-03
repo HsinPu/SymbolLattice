@@ -47,6 +47,8 @@ interface StaticKotlinFunction {
 interface StaticKotlinSupertypeReference {
   readonly name: string;
   readonly node: KotlinSyntaxNode;
+  /** Direct dotted spelling such as `example.api.Contract`, never an import lookup. */
+  readonly qualifiedTypePath?: string;
 }
 
 type StaticKotlinReactNativeModuleKind = "direct" | "codegen-spec";
@@ -274,9 +276,45 @@ function staticKotlinFunction(node: KotlinSyntaxNode): StaticKotlinFunction | nu
 }
 
 /**
- * Retains only simple direct supertype spellings. Qualified names, aliases,
- * and generic resolution require Kotlin semantic analysis and stay deferred.
+ * Retains one direct, non-generic Kotlin parent type spelling. A dotted spelling
+ * with a conventional lower-case package prefix remains an exact project-local
+ * candidate only when it names one indexed top-level type; aliases and
+ * compiler-classpath semantics stay deferred.
  */
+function staticKotlinQualifiedTopLevelTypePath(typePath: string): string | null {
+  const segments = typePath.split(".");
+  return segments.length > 1 &&
+    segments.slice(0, -1).every((segment) => /^[a-z_][A-Za-z0-9_]*$/u.test(segment))
+    ? typePath
+    : null;
+}
+
+function staticKotlinDirectTypeReference(
+  userType: KotlinSyntaxNode
+): StaticKotlinSupertypeReference | null {
+  const typePath = nodeText(userType);
+  if (!/^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*$/u.test(typePath)) {
+    return null;
+  }
+  const name = typePath.split(".").at(-1);
+  if (name === undefined) {
+    return null;
+  }
+  let qualifiedTypePath: string | undefined;
+  if (typePath.includes(".")) {
+    const candidate = staticKotlinQualifiedTopLevelTypePath(typePath);
+    if (candidate === null) {
+      return null;
+    }
+    qualifiedTypePath = candidate;
+  }
+  return {
+    name,
+    node: userType,
+    ...(qualifiedTypePath === undefined ? {} : { qualifiedTypePath })
+  };
+}
+
 function staticKotlinDirectSupertypeReferences(
   declaration: StaticKotlinType
 ): readonly StaticKotlinSupertypeReference[] {
@@ -293,15 +331,9 @@ function staticKotlinDirectSupertypeReferences(
     if (userTypes.length !== 1 || userTypes[0] === undefined) {
       continue;
     }
-    const typeIdentifiers = directChildren(userTypes[0]).filter(
-      (child) => child.kind() === "type_identifier"
-    );
-    if (typeIdentifiers.length !== 1 || typeIdentifiers[0] === undefined) {
-      continue;
-    }
-    const name = identifierText(typeIdentifiers[0]);
-    if (name !== null) {
-      references.push({ name, node: typeIdentifiers[0] });
+    const reference = staticKotlinDirectTypeReference(userTypes[0]);
+    if (reference !== null) {
+      references.push(reference);
     }
   }
   return references;
@@ -1735,6 +1767,9 @@ export function extractKotlinFileFacts(input: KotlinExtractFileFactsInput): Arti
     typesByName: ReadonlyMap<string, readonly SymbolNode[]>
   ): void {
     for (const reference of staticKotlinDirectSupertypeReferences(declaration)) {
+      if (reference.qualifiedTypePath !== undefined) {
+        continue;
+      }
       const candidates = (typesByName.get(reference.name) ?? []).filter(
         (symbol) =>
           symbol.id !== child.id && (symbol.kind === "class" || symbol.kind === "interface")
@@ -1788,23 +1823,28 @@ export function extractKotlinFileFacts(input: KotlinExtractFileFactsInput): Arti
   }
 
   /**
-   * Persists only a direct simple-name Kotlin supertype. The import map has
-   * already excluded aliases and wildcards, leaving the project resolver a
-   * reproducible package/import proof rather than a best-effort lookup.
+   * Persists a direct Kotlin supertype. A qualified spelling takes precedence
+   * over imports; otherwise the import map has already excluded aliases and
+   * wildcards, leaving the project resolver reproducible source evidence rather
+   * than a best-effort lookup.
    */
   function addJvmHeritageReference(
     source: SymbolNode,
     reference: StaticKotlinSupertypeReference,
     imports: ReadonlyMap<string, string>
   ): void {
-    const importedTypePath = imports.get(reference.name);
+    const importedTypePath =
+      reference.qualifiedTypePath === undefined ? imports.get(reference.name) : undefined;
     jvmHeritageReferences.push({
       sourceId: source.id,
       filePath: input.filePath,
       referenceName: reference.name,
       syntax: "kotlin-supertype",
       range: rangeForNode(reference.node),
-      ...(importedTypePath === undefined ? {} : { importedTypePath })
+      ...(importedTypePath === undefined ? {} : { importedTypePath }),
+      ...(reference.qualifiedTypePath === undefined
+        ? {}
+        : { qualifiedTypePath: reference.qualifiedTypePath })
     });
   }
 

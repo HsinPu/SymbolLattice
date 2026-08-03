@@ -14,9 +14,9 @@
 </div>
 
 > [!IMPORTANT]
-> v0.215.0 is a developer preview. Run it from source.
+> v0.216.0 is a developer preview. Run it from source.
 
-SymbolLattice builds a local, queryable code-symbol graph. Every relation retains its rule, evidence stage, and confidence; `exact`, `heuristic`, and `unresolved` evidence are never conflated.
+SymbolLattice indexes a project into a local code-symbol graph. Every relation retains its rule, evidence stage, and confidence; `exact`, `heuristic`, and `unresolved` are never conflated.
 
 ## Quick start
 
@@ -44,19 +44,19 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 Index data is stored in the target project's `.symbol-lattice/index.sqlite`. On Windows PowerShell, use `npm.cmd` when npm is unavailable.
 
 > [!NOTE]
-> Create the graph with `init`, then use `sync` after source changes. MCP queries themselves never write or rebuild a graph.
+> Create the graph with `init`, then explicitly run `sync` after source changes. MCP queries never write or rebuild a graph.
 
-## v0.215.0 highlights
+## v0.216.0 highlights
 
-- Java and Kotlin now project cross-file `extends`, `implements`, and interface-inheritance edges through one unique explicit direct import or one unique same-package top-level type.
-- A proven cross-file direct parent lets Java `@Override` and Kotlin `override fun` resolve to the unique same-named parent method.
-- Every cross-file relation retains its source range, candidate symbols, and import/package proof; `init` and later `sync` persist the raw evidence.
-- Wildcard imports, Kotlin aliases, qualified and nested types, compiler classpaths, ambiguities, and indirect ancestors remain unresolved—never guessed.
+- Java and Kotlin direct parent types can now resolve across files from an explicit qualified path with a conventional lower-case package prefix, such as `example.api.Contract`.
+- Only one matching indexed top-level type yields an `exact` `extends` or `implements` edge. A missing qualified target never falls back to a same-named type.
+- A proven direct parent lets Java `@Override` and Kotlin `override fun` resolve to the unique parent method.
+- Explicit imports, same-package names, and qualified paths each keep a reviewable evidence rule. Aliases, wildcards, generics, potentially nested types, and compiler classpaths remain unresolved rather than guessed.
 
 ## Scope and guarantees
 
 - This is a local code graph, not an RDF/SPARQL knowledge base or ontology-reasoning system.
-- `exact` relations come from persisted static evidence; this is not runtime dynamic-dispatch inference, full type checking, or whole-graph PageRank.
+- `exact` comes from persisted static evidence; it is not runtime dynamic-dispatch inference, full type checking, or whole-graph PageRank.
 - Indexing and querying stay local. Live file contents determine freshness only and never replace indexed evidence.
 
 ## Verification

@@ -54,6 +54,8 @@ type StaticJavaType = StaticJavaClass | StaticJavaInterface;
 interface StaticJavaSuperclassReference {
   readonly name: string;
   readonly node: JavaSyntaxNode;
+  /** Direct dotted spelling such as `example.api.Contract`, never an import lookup. */
+  readonly qualifiedTypePath?: string;
 }
 
 interface StaticJavaMethod {
@@ -966,10 +968,50 @@ function staticJavaType(
 }
 
 /**
- * Retains only a direct, unqualified superclass spelling. Qualified bases and
- * expressions need Java semantic resolution, so they remain outside this
- * syntax-only relation.
+ * Retains one direct, non-generic Java parent type spelling. A dotted spelling
+ * with a conventional lower-case package prefix remains an exact project-local
+ * candidate only when it names one indexed top-level type; no compiler
+ * classpath or nested-type inference is assumed.
  */
+function staticJavaQualifiedTopLevelTypePath(typePath: string): string | null {
+  const segments = typePath.split(".");
+  return segments.length > 1 &&
+    segments.slice(0, -1).every((segment) => /^[a-z_$][A-Za-z0-9_$]*$/u.test(segment))
+    ? typePath
+    : null;
+}
+
+function staticJavaDirectTypeReference(
+  input: JavaExtractFileFactsInput,
+  node: JavaSyntaxNode
+): StaticJavaSuperclassReference | null {
+  const typePath = staticDottedIdentifier(input, node);
+  if (typePath === null) {
+    return null;
+  }
+  const name = typePath.split(".").at(-1);
+  if (name === undefined) {
+    return null;
+  }
+  let qualifiedTypePath: string | undefined;
+  if (typePath.includes(".")) {
+    const candidate = staticJavaQualifiedTopLevelTypePath(typePath);
+    if (candidate === null) {
+      return null;
+    }
+    qualifiedTypePath = candidate;
+  }
+  return {
+    name,
+    node,
+    ...(qualifiedTypePath === undefined ? {} : { qualifiedTypePath })
+  };
+}
+
+function isJavaDirectTypeName(node: JavaSyntaxNode): boolean {
+  return node.name === "TypeName" || node.name === "ScopedTypeName";
+}
+
 function staticJavaDirectSuperclass(
   input: JavaExtractFileFactsInput,
   declaration: StaticJavaClass
@@ -978,16 +1020,15 @@ function staticJavaDirectSuperclass(
   if (superclasses.length !== 1 || superclasses[0] === undefined) {
     return null;
   }
-  const typeNames = directChildren(superclasses[0]).filter((child) => child.name === "TypeName");
+  const typeNames = directChildren(superclasses[0]).filter(isJavaDirectTypeName);
   if (typeNames.length !== 1 || typeNames[0] === undefined) {
     return null;
   }
-  const name = identifierText(input, typeNames[0]);
-  return name === null ? null : { name, node: typeNames[0] };
+  return staticJavaDirectTypeReference(input, typeNames[0]);
 }
 
 /**
- * Retains only direct, unqualified Java interface names. The relationship kind
+ * Retains direct, non-generic Java interface spellings. The relationship kind
  * is passed explicitly because classes use `implements`, while interfaces use
  * `extends` for their direct contracts.
  */
@@ -1005,10 +1046,10 @@ function staticJavaDirectInterfaceReferences(
     return [];
   }
   const references: StaticJavaSuperclassReference[] = [];
-  for (const typeName of directChildren(typeLists[0]).filter((child) => child.name === "TypeName")) {
-    const name = identifierText(input, typeName);
-    if (name !== null) {
-      references.push({ name, node: typeName });
+  for (const typeName of directChildren(typeLists[0]).filter(isJavaDirectTypeName)) {
+    const reference = staticJavaDirectTypeReference(input, typeName);
+    if (reference !== null) {
+      references.push(reference);
     }
   }
   return references;
@@ -1844,7 +1885,7 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
     typesByName: ReadonlyMap<string, readonly SymbolNode[]>
   ): void {
     const superclass = staticJavaDirectSuperclass(input, declaration);
-    if (superclass === null) {
+    if (superclass === null || superclass.qualifiedTypePath !== undefined) {
       return;
     }
     const candidates = (typesByName.get(superclass.name) ?? []).filter(
@@ -1893,6 +1934,9 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
     ruleId: string
   ): void {
     for (const reference of staticJavaDirectInterfaceReferences(input, declaration, headerName)) {
+      if (reference.qualifiedTypePath !== undefined) {
+        continue;
+      }
       const candidates = (typesByName.get(reference.name) ?? []).filter(
         (candidate) => candidate.id !== child.id && candidate.kind === "interface"
       );
@@ -1929,8 +1973,9 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
 
   /**
    * Retains a direct source-level JVM parent reference for the project resolver.
-   * The import map only contains unique direct Java imports, so static, wildcard,
-   * and ambiguous imports cannot acquire cross-file evidence here.
+   * A qualified spelling takes precedence over imports; otherwise the import map
+   * contains only unique direct Java imports, so static, wildcard, and ambiguous
+   * imports cannot acquire cross-file evidence here.
    */
   function addJvmHeritageReference(
     source: SymbolNode,
@@ -1938,14 +1983,18 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
     syntax: JvmHeritageSyntax,
     imports: ReadonlyMap<string, string>
   ): void {
-    const importedTypePath = imports.get(reference.name);
+    const importedTypePath =
+      reference.qualifiedTypePath === undefined ? imports.get(reference.name) : undefined;
     jvmHeritageReferences.push({
       sourceId: source.id,
       filePath: input.filePath,
       referenceName: reference.name,
       syntax,
       range: rangeFor(lineStarts, reference.node.from, reference.node.to),
-      ...(importedTypePath === undefined ? {} : { importedTypePath })
+      ...(importedTypePath === undefined ? {} : { importedTypePath }),
+      ...(reference.qualifiedTypePath === undefined
+        ? {}
+        : { qualifiedTypePath: reference.qualifiedTypePath })
     });
   }
 

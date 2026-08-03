@@ -518,6 +518,275 @@ describe("project reference resolution", () => {
       ])
     );
   });
+
+  it("projects direct qualified Java/Kotlin parents without falling back to same-name types", () => {
+    const sourceDocuments: readonly SourceDocument[] = [
+      {
+        absolutePath: "C:/project/src/java/api/JavaContract.java",
+        relativePath: "src/java/api/JavaContract.java",
+        language: "java",
+        sourceText: [
+          "package example.java.api;",
+          "public interface JavaContract { void run(); }"
+        ].join("\n"),
+        contentHash: "java-qualified-contract"
+      },
+      {
+        absolutePath: "C:/project/src/java/api/JavaBase.java",
+        relativePath: "src/java/api/JavaBase.java",
+        language: "java",
+        sourceText: [
+          "package example.java.api;",
+          "public class JavaBase { void run() {} }"
+        ].join("\n"),
+        contentHash: "java-qualified-base"
+      },
+      {
+        absolutePath: "C:/project/src/java/api/outer/JavaContract.java",
+        relativePath: "src/java/api/outer/JavaContract.java",
+        language: "java",
+        sourceText: [
+          "package example.java.api.Outer;",
+          "public interface JavaContract {}"
+        ].join("\n"),
+        contentHash: "java-potential-nested-contract"
+      },
+      {
+        absolutePath: "C:/project/src/java/impl/JavaContract.java",
+        relativePath: "src/java/impl/JavaContract.java",
+        language: "java",
+        sourceText: [
+          "package example.java.impl;",
+          "public interface JavaContract { void localOnly(); }"
+        ].join("\n"),
+        contentHash: "java-qualified-shadow-contract"
+      },
+      {
+        absolutePath: "C:/project/src/java/impl/JavaBase.java",
+        relativePath: "src/java/impl/JavaBase.java",
+        language: "java",
+        sourceText: [
+          "package example.java.impl;",
+          "public class JavaBase { void localOnly() {} }"
+        ].join("\n"),
+        contentHash: "java-qualified-shadow-base"
+      },
+      {
+        absolutePath: "C:/project/src/java/impl/JavaQualifiedInterfaceChild.java",
+        relativePath: "src/java/impl/JavaQualifiedInterfaceChild.java",
+        language: "java",
+        sourceText: [
+          "package example.java.impl;",
+          "public class JavaQualifiedInterfaceChild implements example.java.api.JavaContract { @Override public void run() {} }"
+        ].join("\n"),
+        contentHash: "java-qualified-interface-child"
+      },
+      {
+        absolutePath: "C:/project/src/java/impl/JavaQualifiedBaseChild.java",
+        relativePath: "src/java/impl/JavaQualifiedBaseChild.java",
+        language: "java",
+        sourceText: [
+          "package example.java.impl;",
+          "public class JavaQualifiedBaseChild extends example.java.api.JavaBase { @Override void run() {} }"
+        ].join("\n"),
+        contentHash: "java-qualified-base-child"
+      },
+      {
+        absolutePath: "C:/project/src/java/impl/JavaMissingQualifiedChild.java",
+        relativePath: "src/java/impl/JavaMissingQualifiedChild.java",
+        language: "java",
+        sourceText: [
+          "package example.java.impl;",
+          "public class JavaMissingQualifiedChild implements missing.java.api.JavaContract {}"
+        ].join("\n"),
+        contentHash: "java-missing-qualified-child"
+      },
+      {
+        absolutePath: "C:/project/src/java/impl/JavaPotentialNestedChild.java",
+        relativePath: "src/java/impl/JavaPotentialNestedChild.java",
+        language: "java",
+        sourceText: [
+          "package example.java.impl;",
+          "public class JavaPotentialNestedChild implements example.java.api.Outer.JavaContract {}"
+        ].join("\n"),
+        contentHash: "java-potential-nested-child"
+      },
+      {
+        absolutePath: "C:/project/src/kotlin/api/KotlinContract.kt",
+        relativePath: "src/kotlin/api/KotlinContract.kt",
+        language: "kotlin",
+        sourceText: [
+          "package example.kotlin.api",
+          "interface KotlinContract { fun run() }"
+        ].join("\n"),
+        contentHash: "kotlin-qualified-contract"
+      },
+      {
+        absolutePath: "C:/project/src/kotlin/api/KotlinBase.kt",
+        relativePath: "src/kotlin/api/KotlinBase.kt",
+        language: "kotlin",
+        sourceText: [
+          "package example.kotlin.api",
+          "abstract class KotlinBase { abstract fun run() }"
+        ].join("\n"),
+        contentHash: "kotlin-qualified-base"
+      },
+      {
+        absolutePath: "C:/project/src/kotlin/api/outer/KotlinContract.kt",
+        relativePath: "src/kotlin/api/outer/KotlinContract.kt",
+        language: "kotlin",
+        sourceText: [
+          "package example.kotlin.api.Outer",
+          "interface KotlinContract"
+        ].join("\n"),
+        contentHash: "kotlin-potential-nested-contract"
+      },
+      {
+        absolutePath: "C:/project/src/kotlin/impl/KotlinContract.kt",
+        relativePath: "src/kotlin/impl/KotlinContract.kt",
+        language: "kotlin",
+        sourceText: [
+          "package example.kotlin.impl",
+          "interface KotlinContract { fun localOnly() }"
+        ].join("\n"),
+        contentHash: "kotlin-qualified-shadow-contract"
+      },
+      {
+        absolutePath: "C:/project/src/kotlin/impl/KotlinBase.kt",
+        relativePath: "src/kotlin/impl/KotlinBase.kt",
+        language: "kotlin",
+        sourceText: [
+          "package example.kotlin.impl",
+          "open class KotlinBase { fun localOnly() {} }"
+        ].join("\n"),
+        contentHash: "kotlin-qualified-shadow-base"
+      },
+      {
+        absolutePath: "C:/project/src/kotlin/impl/KotlinQualifiedInterfaceChild.kt",
+        relativePath: "src/kotlin/impl/KotlinQualifiedInterfaceChild.kt",
+        language: "kotlin",
+        sourceText: [
+          "package example.kotlin.impl",
+          "class KotlinQualifiedInterfaceChild : example.kotlin.api.KotlinContract { override fun run() {} }"
+        ].join("\n"),
+        contentHash: "kotlin-qualified-interface-child"
+      },
+      {
+        absolutePath: "C:/project/src/kotlin/impl/KotlinQualifiedBaseChild.kt",
+        relativePath: "src/kotlin/impl/KotlinQualifiedBaseChild.kt",
+        language: "kotlin",
+        sourceText: [
+          "package example.kotlin.impl",
+          "class KotlinQualifiedBaseChild : example.kotlin.api.KotlinBase() { override fun run() {} }"
+        ].join("\n"),
+        contentHash: "kotlin-qualified-base-child"
+      },
+      {
+        absolutePath: "C:/project/src/kotlin/impl/KotlinMissingQualifiedChild.kt",
+        relativePath: "src/kotlin/impl/KotlinMissingQualifiedChild.kt",
+        language: "kotlin",
+        sourceText: [
+          "package example.kotlin.impl",
+          "class KotlinMissingQualifiedChild : missing.kotlin.api.KotlinContract"
+        ].join("\n"),
+        contentHash: "kotlin-missing-qualified-child"
+      },
+      {
+        absolutePath: "C:/project/src/kotlin/impl/KotlinPotentialNestedChild.kt",
+        relativePath: "src/kotlin/impl/KotlinPotentialNestedChild.kt",
+        language: "kotlin",
+        sourceText: [
+          "package example.kotlin.impl",
+          "class KotlinPotentialNestedChild : example.kotlin.api.Outer.KotlinContract"
+        ].join("\n"),
+        contentHash: "kotlin-potential-nested-child"
+      }
+    ];
+    const snapshot = snapshotWithResolver(sourceDocuments, undefined);
+    const symbol = (qualifiedName: string) =>
+      snapshot.symbols.find((candidate) => candidate.qualifiedName === qualifiedName);
+    const heritageEdge = (sourceQualifiedName: string, kind: "extends" | "implements") =>
+      snapshot.edges.find(
+        (edge) => edge.sourceId === symbol(sourceQualifiedName)?.id && edge.kind === kind
+      );
+    const overrideEdge = (sourceQualifiedName: string) =>
+      snapshot.edges.find(
+        (edge) => edge.sourceId === symbol(sourceQualifiedName)?.id && edge.kind === "overrides"
+      );
+
+    for (const [sourceQualifiedName, targetQualifiedName, kind, ruleId] of [
+      [
+        "src/java/impl/JavaQualifiedInterfaceChild.java#JavaQualifiedInterfaceChild",
+        "src/java/api/JavaContract.java#JavaContract",
+        "implements",
+        "syntax.jvm.cross-file.qualified-type.direct-implements"
+      ],
+      [
+        "src/java/impl/JavaQualifiedBaseChild.java#JavaQualifiedBaseChild",
+        "src/java/api/JavaBase.java#JavaBase",
+        "extends",
+        "syntax.jvm.cross-file.qualified-type.direct-superclass"
+      ],
+      [
+        "src/kotlin/impl/KotlinQualifiedInterfaceChild.kt#KotlinQualifiedInterfaceChild",
+        "src/kotlin/api/KotlinContract.kt#KotlinContract",
+        "implements",
+        "syntax.jvm.cross-file.qualified-type.direct-implements"
+      ],
+      [
+        "src/kotlin/impl/KotlinQualifiedBaseChild.kt#KotlinQualifiedBaseChild",
+        "src/kotlin/api/KotlinBase.kt#KotlinBase",
+        "extends",
+        "syntax.jvm.cross-file.qualified-type.direct-superclass"
+      ]
+    ] as const) {
+      expect(heritageEdge(sourceQualifiedName, kind)).toMatchObject({
+        targetId: symbol(targetQualifiedName)?.id,
+        resolution: "exact",
+        confidence: 1,
+        evidence: { ruleId, stage: "module" }
+      });
+    }
+
+    for (const [sourceQualifiedName, targetQualifiedName] of [
+      [
+        "src/java/impl/JavaQualifiedInterfaceChild.java#JavaQualifiedInterfaceChild.run",
+        "src/java/api/JavaContract.java#JavaContract.run"
+      ],
+      [
+        "src/java/impl/JavaQualifiedBaseChild.java#JavaQualifiedBaseChild.run",
+        "src/java/api/JavaBase.java#JavaBase.run"
+      ],
+      [
+        "src/kotlin/impl/KotlinQualifiedInterfaceChild.kt#KotlinQualifiedInterfaceChild.run",
+        "src/kotlin/api/KotlinContract.kt#KotlinContract.run"
+      ],
+      [
+        "src/kotlin/impl/KotlinQualifiedBaseChild.kt#KotlinQualifiedBaseChild.run",
+        "src/kotlin/api/KotlinBase.kt#KotlinBase.run"
+      ]
+    ] as const) {
+      expect(overrideEdge(sourceQualifiedName)).toMatchObject({
+        targetId: symbol(targetQualifiedName)?.id,
+        resolution: "exact",
+        confidence: 1,
+        evidence: { ruleId: "syntax.override.explicit-direct-base-method", stage: "syntax" }
+      });
+    }
+
+    expect(
+      heritageEdge("src/java/impl/JavaMissingQualifiedChild.java#JavaMissingQualifiedChild", "implements")
+    ).toBeUndefined();
+    expect(
+      heritageEdge("src/kotlin/impl/KotlinMissingQualifiedChild.kt#KotlinMissingQualifiedChild", "implements")
+    ).toBeUndefined();
+    expect(
+      heritageEdge("src/java/impl/JavaPotentialNestedChild.java#JavaPotentialNestedChild", "implements")
+    ).toBeUndefined();
+    expect(
+      heritageEdge("src/kotlin/impl/KotlinPotentialNestedChild.kt#KotlinPotentialNestedChild", "implements")
+    ).toBeUndefined();
+  });
 });
 
 describe("direct TypeScript heritage resolution", () => {
