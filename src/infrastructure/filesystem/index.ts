@@ -1,6 +1,7 @@
 export * from "./cargo-workspace.js";
 export * from "./discovery.js";
 export * from "./go-module.js";
+export * from "./jvm-project.js";
 export * from "./project-inputs.js";
 export * from "./source-catalog.js";
 export * from "./watch-source.js";

@@ -1592,6 +1592,120 @@ describe("exact JVM cross-file heritage resolution", () => {
   });
 });
 
+describe("JVM module-aware same-package heritage resolution", () => {
+  it("keeps same-package parents inside one visible Maven source set while preserving explicit imports", () => {
+    const sourceDocuments: readonly SourceDocument[] = [
+      {
+        absolutePath: "C:/project/api/src/main/java/example/shared/Shared.java",
+        relativePath: "api/src/main/java/example/shared/Shared.java",
+        language: "java",
+        sourceText: "package example.shared; public interface Shared { void run(); }\n",
+        contentHash: "shared"
+      },
+      {
+        absolutePath: "C:/project/app/src/main/java/example/shared/CrossModuleChild.java",
+        relativePath: "app/src/main/java/example/shared/CrossModuleChild.java",
+        language: "java",
+        sourceText: "package example.shared; public class CrossModuleChild implements Shared { public void run() {} }\n",
+        contentHash: "cross-module-child"
+      },
+      {
+        absolutePath: "C:/project/api/src/main/java/example/api/ImportedContract.java",
+        relativePath: "api/src/main/java/example/api/ImportedContract.java",
+        language: "java",
+        sourceText: "package example.api; public interface ImportedContract {}\n",
+        contentHash: "imported-contract"
+      },
+      {
+        absolutePath: "C:/project/app/src/main/java/example/app/ImportedChild.java",
+        relativePath: "app/src/main/java/example/app/ImportedChild.java",
+        language: "java",
+        sourceText: [
+          "package example.app;",
+          "import example.api.ImportedContract;",
+          "public class ImportedChild implements ImportedContract {}"
+        ].join("\n"),
+        contentHash: "imported-child"
+      },
+      {
+        absolutePath: "C:/project/api/src/main/java/example/local/MainBase.java",
+        relativePath: "api/src/main/java/example/local/MainBase.java",
+        language: "java",
+        sourceText: "package example.local; public class MainBase {}\n",
+        contentHash: "main-base"
+      },
+      {
+        absolutePath: "C:/project/api/src/test/java/example/local/TestChild.java",
+        relativePath: "api/src/test/java/example/local/TestChild.java",
+        language: "java",
+        sourceText: "package example.local; public class TestChild extends MainBase {}\n",
+        contentHash: "test-child"
+      },
+      {
+        absolutePath: "C:/project/api/src/test/java/example/local/TestBase.java",
+        relativePath: "api/src/test/java/example/local/TestBase.java",
+        language: "java",
+        sourceText: "package example.local; public class TestBase {}\n",
+        contentHash: "test-base"
+      },
+      {
+        absolutePath: "C:/project/api/src/main/java/example/local/MainChild.java",
+        relativePath: "api/src/main/java/example/local/MainChild.java",
+        language: "java",
+        sourceText: "package example.local; public class MainChild extends TestBase {}\n",
+        contentHash: "main-child"
+      }
+    ];
+    const configurationPaths = ["api/pom.xml", "pom.xml"];
+    const memberships = sourceDocuments.map((document) => ({
+      filePath: document.relativePath,
+      moduleId: document.relativePath.startsWith("api/") ? "maven:api/pom.xml" : "maven:app/pom.xml",
+      sourceSet: document.relativePath.includes("/src/test/") ? ("test" as const) : ("main" as const),
+      configurationPaths:
+        document.relativePath.startsWith("api/") ? configurationPaths : ["app/pom.xml", "pom.xml"]
+    }));
+    const snapshot = resolveProjectFacts({
+      sourceDocuments,
+      extractedFiles: sourceDocuments.map((document) =>
+        extractFileFacts({
+          filePath: document.relativePath,
+          language: document.language,
+          sourceText: document.sourceText
+        })
+      ),
+      indexedAt: "2026-08-03T00:00:00.000Z",
+      jvmProjectModuleEvidence: { memberships }
+    });
+    const symbol = (qualifiedName: string) =>
+      snapshot.symbols.find((candidate) => candidate.qualifiedName === qualifiedName);
+    const extendsEdge = (qualifiedName: string) =>
+      snapshot.edges.find((edge) => edge.sourceId === symbol(qualifiedName)?.id && edge.kind === "extends");
+    const implementsEdge = (qualifiedName: string) =>
+      snapshot.edges.find((edge) => edge.sourceId === symbol(qualifiedName)?.id && edge.kind === "implements");
+
+    expect(implementsEdge("app/src/main/java/example/shared/CrossModuleChild.java#CrossModuleChild")).toBeUndefined();
+    expect(extendsEdge("api/src/main/java/example/local/MainChild.java#MainChild")).toBeUndefined();
+    expect(implementsEdge("app/src/main/java/example/app/ImportedChild.java#ImportedChild")).toMatchObject({
+      targetId: symbol("api/src/main/java/example/api/ImportedContract.java#ImportedContract")?.id,
+      resolution: "exact",
+      evidence: {
+        ruleId: "syntax.jvm.cross-file.explicit-import.direct-implements"
+      }
+    });
+    expect(
+      implementsEdge("app/src/main/java/example/app/ImportedChild.java#ImportedChild")?.evidence
+    ).not.toHaveProperty("configurationPaths");
+    expect(extendsEdge("api/src/test/java/example/local/TestChild.java#TestChild")).toMatchObject({
+      targetId: symbol("api/src/main/java/example/local/MainBase.java#MainBase")?.id,
+      resolution: "exact",
+      evidence: {
+        ruleId: "syntax.jvm.cross-file.same-package.direct-superclass",
+        configurationPaths
+      }
+    });
+  });
+});
+
 describe("literal route handler resolution", () => {
   it("resolves local, imported, and re-exported route handlers exactly", () => {
     const sourceDocuments: readonly SourceDocument[] = [

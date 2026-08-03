@@ -18,6 +18,7 @@ import { createGoModuleProjectModuleResolver } from "./go-module.js";
 import { buildProjectIndexInputs } from "./project-inputs.js";
 import { createWorkspaceProjectModuleResolver } from "./workspace.js";
 import { detectAstroProject } from "./astro-project.js";
+import { detectJvmProjectModuleEvidence } from "./jvm-project.js";
 import { detectXcodeProjectEvidence } from "./xcode-project.js";
 
 function mergeConfigurationPaths(
@@ -60,6 +61,7 @@ export class FileSystemSourceCatalog implements SourceCatalog {
     });
     const astroProject = await detectAstroProject(normalizedProjectPath);
     const xcodeProject = await detectXcodeProjectEvidence(normalizedProjectPath, sourceDocuments);
+    const jvmProject = await detectJvmProjectModuleEvidence(normalizedProjectPath, sourceDocuments);
     const inputOptions =
       options?.scopeRoots === undefined
         ? {
@@ -69,7 +71,8 @@ export class FileSystemSourceCatalog implements SourceCatalog {
               ...cargoWorkspaceResolver.configurationInputs,
               ...goModuleResolver.configurationInputs,
               ...astroProject.configurationInputs,
-              ...xcodeProject.configurationInputs
+              ...xcodeProject.configurationInputs,
+              ...jvmProject.configurationInputs
             ]
           }
         : {
@@ -80,7 +83,8 @@ export class FileSystemSourceCatalog implements SourceCatalog {
               ...cargoWorkspaceResolver.configurationInputs,
               ...goModuleResolver.configurationInputs,
               ...astroProject.configurationInputs,
-              ...xcodeProject.configurationInputs
+              ...xcodeProject.configurationInputs,
+              ...jvmProject.configurationInputs
             ]
           };
     const indexInputs = await buildProjectIndexInputs(normalizedProjectPath, inputOptions);
@@ -90,6 +94,9 @@ export class FileSystemSourceCatalog implements SourceCatalog {
       indexInputs,
       frameworkEvidence: { astro: astroProject.enabled },
       xcodeTargetMemberships: xcodeProject.targetMemberships,
+      ...(jvmProject.projectEvidence === undefined
+        ? {}
+        : { jvmProjectModuleEvidence: jvmProject.projectEvidence }),
       moduleResolver: {
         resolve(fromFilePath, moduleSpecifier) {
           if (fromFilePath.endsWith(".go")) {

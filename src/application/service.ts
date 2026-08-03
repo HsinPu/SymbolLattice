@@ -3030,7 +3030,10 @@ export class SymbolLatticeService {
       moduleResolver: scan.moduleResolver,
       ...(scan.xcodeTargetMemberships === undefined
         ? {}
-        : { xcodeTargetMemberships: scan.xcodeTargetMemberships })
+        : { xcodeTargetMemberships: scan.xcodeTargetMemberships }),
+      ...(scan.jvmProjectModuleEvidence === undefined
+        ? {}
+        : { jvmProjectModuleEvidence: scan.jvmProjectModuleEvidence })
     });
     this.graphStore.replaceProjectFacts({
       projectPath,

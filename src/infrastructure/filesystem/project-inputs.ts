@@ -247,6 +247,12 @@ function configurationInputKindOrder(kind: ProjectConfigurationInputKind): numbe
       return 10;
     case "xcode-project":
       return 11;
+    case "maven-project":
+      return 12;
+    case "gradle-settings":
+      return 13;
+    case "gradle-build":
+      return 14;
   }
 }
 

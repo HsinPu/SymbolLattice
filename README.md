@@ -2,7 +2,7 @@
 
 # SymbolLattice
 
-**可查詢、可解釋、證據優先的本機程式碼智慧**
+**可查詢、可解釋、以證據為先的本機程式碼智慧圖譜**
 
 [![Version](https://img.shields.io/github/v/tag/HsinPu/symbol-lattice?label=version)](https://github.com/HsinPu/symbol-lattice/tags)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D22.13-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
@@ -14,13 +14,13 @@
 </div>
 
 > [!IMPORTANT]
-> v0.216.0 為開發者預覽版，請從原始碼執行。
+> v0.217.0 為開發預覽版。請由原始碼執行。
 
-SymbolLattice 將專案索引為本機程式碼符號圖譜。每一條關係都保留規則、證據階段與信心值，並嚴格區分 `exact`、`heuristic`、`unresolved`。
+SymbolLattice 將專案索引為本機的程式碼符號圖譜。每條關係都保留規則、證據階段與信心值；`exact`、`heuristic`、`unresolved` 不會混為一談。
 
 ## 快速開始
 
-需要 Node.js 22.13 以上且低於 25，以及 npm。
+需使用 Node.js 22.13 以上、25 以下及 npm。
 
 ```bash
 git clone https://github.com/HsinPu/symbol-lattice.git
@@ -34,30 +34,30 @@ node dist/cli/main.js init /path/to/project
 # 查詢已索引的程式碼證據
 node dist/cli/main.js investigate "user token" --project /path/to/project --json
 
-# 原始碼改動後，明確更新圖譜
+# 原始碼或設定變動後，明確更新圖譜
 node dist/cli/main.js sync /path/to/project
 
 # 啟動唯讀 MCP 查詢服務
 node dist/cli/main.js serve --mcp --project /path/to/project
 ```
 
-索引存於目標專案的 `.symbol-lattice/index.sqlite`。Windows PowerShell 若找不到 npm，請改用 `npm.cmd`。
+索引資料存於目標專案的 `.symbol-lattice/index.sqlite`。Windows PowerShell 若找不到 npm，請使用 `npm.cmd`。
 
 > [!NOTE]
-> `init` 建立圖譜；原始碼改動後由使用者明確執行 `sync`。MCP 查詢本身不會寫入或重建圖譜。
+> 先用 `init` 建立圖譜；原始碼或專案設定變動後，明確執行 `sync`。MCP 查詢不會寫入或重建圖譜。
 
-## v0.216.0 重點
+## v0.217.0 重點
 
-- Java 與 Kotlin 直接父型別現在可用具慣例小寫 package 前綴的完整路徑跨檔案連結，例如 `example.api.Contract`。
-- 只有唯一、已索引的頂層型別才產生 `exact` 的 `extends` 或 `implements`；完整路徑找不到目標時，不會退回連到同名型別。
-- 已證實的直接父型別可讓 Java `@Override` 與 Kotlin `override fun` 連到唯一的父方法。
-- 明確 import、同 package 與完整路徑各自保留可審查的證據規則；別名、萬用字元、泛型、可能的巢狀型別與 compiler classpath 仍不猜測。
+- 掃描慣例式 Maven `pom.xml` 模組與 Gradle 的字面 `include` 模組，將 Java／Kotlin 的 `src/main`、`src/test` 來源保留為可審查的模組證據。
+- 有 Maven／Gradle 證據時，沒有 import 或完整型別路徑的同 package 父型別只能在唯一且可見的同模組 source set 內產生 `exact` 關係；測試可引用同模組 main，main 不會連到 test。
+- 明確 import 與完整型別路徑仍各自保有語法證據；本版不宣稱已解析 Maven／Gradle 相依性、compiler classpath 或自訂 Gradle `projectDir`。
+- `pom.xml`、Gradle settings 與選定的 build 檔會納入索引輸入，設定異動可要求重新同步圖譜。
 
-## 範圍與保證
+## 設計邊界
 
-- 這是本機程式碼圖譜，不是 RDF／SPARQL 知識庫或本體推論系統。
-- `exact` 代表已保存的靜態證據，不等於執行期動態派發、完整型別檢查或全圖 PageRank。
-- 索引與查詢都在本機進行；即時檔案內容只用來判定新鮮度，不會取代已索引的證據。
+- 這是本機程式碼圖譜，不是 RDF／SPARQL 知識庫或本體推理系統。
+- `exact` 來自持久化的靜態證據，不代表執行期動態派發、完整型別檢查或全圖 PageRank。
+- 索引與查詢皆在本機進行；即時檔案內容僅用來判斷新鮮度，不會取代已索引的證據。
 
 ## 驗證
 

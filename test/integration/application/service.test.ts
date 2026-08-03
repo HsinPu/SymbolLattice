@@ -1639,6 +1639,70 @@ describe("SymbolLatticeService", () => {
     }
   });
 
+  it("uses Maven module evidence during init to block unproven same-package cross-module parents", async () => {
+    const projectPath = await createInlineProject({
+      "pom.xml": "<project><modules><module>api</module><module>app</module></modules></project>\n",
+      "api/pom.xml": "<project />\n",
+      "app/pom.xml": "<project />\n",
+      "api/src/main/java/example/shared/Shared.java": [
+        "package example.shared;",
+        "public interface Shared { void run(); }"
+      ].join("\n"),
+      "api/src/test/java/example/shared/TestChild.java": [
+        "package example.shared;",
+        "public class TestChild implements Shared { public void run() {} }"
+      ].join("\n"),
+      "app/src/main/java/example/shared/CrossModuleChild.java": [
+        "package example.shared;",
+        "public class CrossModuleChild implements Shared { public void run() {} }"
+      ].join("\n"),
+      "api/src/main/java/example/api/ImportedContract.java": [
+        "package example.api;",
+        "public interface ImportedContract {}"
+      ].join("\n"),
+      "app/src/main/java/example/app/ImportedChild.java": [
+        "package example.app;",
+        "import example.api.ImportedContract;",
+        "public class ImportedChild implements ImportedContract {}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    const indexed = await service.init({ projectPath });
+    const snapshot = graphStore.getSnapshot(projectPath);
+    const symbol = (qualifiedName: string) =>
+      snapshot.symbols.find((candidate) => candidate.qualifiedName === qualifiedName);
+    const implementsEdge = (sourceQualifiedName: string) =>
+      snapshot.edges.find(
+        (edge) => edge.sourceId === symbol(sourceQualifiedName)?.id && edge.kind === "implements"
+      );
+
+    expect(indexed).toMatchObject({ stale: false });
+    expect(
+      implementsEdge("app/src/main/java/example/shared/CrossModuleChild.java#CrossModuleChild")
+    ).toBeUndefined();
+    expect(implementsEdge("api/src/test/java/example/shared/TestChild.java#TestChild")).toMatchObject({
+      targetId: symbol("api/src/main/java/example/shared/Shared.java#Shared")?.id,
+      resolution: "exact",
+      evidence: {
+        ruleId: "syntax.jvm.cross-file.same-package.direct-implements",
+        configurationPaths: ["api/pom.xml", "pom.xml"]
+      }
+    });
+    expect(implementsEdge("app/src/main/java/example/app/ImportedChild.java#ImportedChild")).toMatchObject({
+      targetId: symbol("api/src/main/java/example/api/ImportedContract.java#ImportedContract")?.id,
+      resolution: "exact",
+      evidence: { ruleId: "syntax.jvm.cross-file.explicit-import.direct-implements" }
+    });
+
+    await writeFile(join(projectPath, "app", "pom.xml"), "<project><name>changed-app</name></project>\n", "utf8");
+    expect(await service.getStatus(projectPath)).toMatchObject({
+      stale: true,
+      staleReasons: expect.arrayContaining(["project-inputs-changed"])
+    });
+  });
+
   it("bounds selected investigation declaration source without reading live files", async () => {
     const padding = Array.from(
       { length: NODE_SOURCE_LINE_LIMIT },

@@ -49,6 +49,8 @@ import type {
   ProjectModuleResolver,
   ResolvedModule,
   SourceDocument,
+  JvmModuleMembership,
+  JvmProjectModuleEvidence,
   XcodeTargetMembership
 } from "../ports/source-catalog.js";
 
@@ -6247,6 +6249,65 @@ function jvmHeritageRuleId(input: {
   return `syntax.jvm.cross-file.${input.resolutionProof}.${relationship}`;
 }
 
+function jvmModuleMembershipsByFile(
+  projectEvidence: JvmProjectModuleEvidence | undefined
+): ReadonlyMap<string, readonly JvmModuleMembership[]> {
+  const membershipsByFile = new Map<string, Map<string, JvmModuleMembership>>();
+  for (const membership of projectEvidence?.memberships ?? []) {
+    const memberships = membershipsByFile.get(membership.filePath) ?? new Map<string, JvmModuleMembership>();
+    const key = `${membership.moduleId}\u0000${membership.sourceSet}`;
+    if (!memberships.has(key)) {
+      memberships.set(key, membership);
+    }
+    membershipsByFile.set(membership.filePath, memberships);
+  }
+  return new Map(
+    [...membershipsByFile.entries()].map(([filePath, memberships]) => [
+      filePath,
+      [...memberships.values()].sort((left, right) =>
+        compareStableText(
+          `${left.moduleId}\u0000${left.sourceSet}`,
+          `${right.moduleId}\u0000${right.sourceSet}`
+        )
+      )
+    ])
+  );
+}
+
+/**
+ * A same-package Java/Kotlin reference has no import-path proof. When a
+ * conventional Maven or Gradle layout was detected, retain it only within one
+ * unambiguous module and a source-set visibility direction. This does not
+ * model build dependencies: explicit imports and qualified types keep their
+ * independent syntax proof.
+ */
+function samePackageJvmModuleEvidence(input: {
+  readonly projectEvidence: JvmProjectModuleEvidence | undefined;
+  readonly membershipsByFile: ReadonlyMap<string, readonly JvmModuleMembership[]>;
+  readonly sourceFilePath: string;
+  readonly targetFilePath: string;
+}): readonly string[] | null {
+  if (input.projectEvidence === undefined) {
+    return [];
+  }
+  const sourceMemberships = input.membershipsByFile.get(input.sourceFilePath) ?? [];
+  const targetMemberships = input.membershipsByFile.get(input.targetFilePath) ?? [];
+  const sourceMembership = sourceMemberships.length === 1 ? sourceMemberships[0] : undefined;
+  const targetMembership = targetMemberships.length === 1 ? targetMemberships[0] : undefined;
+  if (
+    sourceMembership === undefined ||
+    targetMembership === undefined ||
+    sourceMembership.moduleId !== targetMembership.moduleId ||
+    (sourceMembership.sourceSet === "main" && targetMembership.sourceSet !== "main")
+  ) {
+    return null;
+  }
+  return uniqueConfigurationPaths([
+    sourceMembership.configurationPaths,
+    targetMembership.configurationPaths
+  ]);
+}
+
 /**
  * Projects a direct JVM parent type only when the raw facts identify exactly
  * one indexed top-level type through an explicit import, a direct qualified
@@ -6257,6 +6318,7 @@ function jvmHeritageRuleId(input: {
 function projectJvmHeritageReferences(input: {
   readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
   readonly symbolsById: ReadonlyMap<string, SymbolNode>;
+  readonly jvmProjectModuleEvidence?: JvmProjectModuleEvidence;
 }): readonly GraphEdge[] {
   const typesBySymbolId = new Map<string, JvmResolvedType[]>();
   const references: JvmHeritageReferenceFact[] = [];
@@ -6280,6 +6342,7 @@ function projectJvmHeritageReferences(input: {
     .filter((entries) => entries.length === 1 && entries[0] !== undefined)
     .map((entries) => entries[0] as JvmResolvedType)
     .sort((left, right) => compareStableText(left.symbol.id, right.symbol.id));
+  const membershipsByFile = jvmModuleMembershipsByFile(input.jvmProjectModuleEvidence);
   const edges: GraphEdge[] = [];
 
   for (const reference of [...references].sort((left, right) =>
@@ -6316,6 +6379,18 @@ function projectJvmHeritageReferences(input: {
       continue;
     }
     const target = candidates[0].symbol;
+    const samePackageConfigurationPaths =
+      resolutionProof === "same-package"
+        ? samePackageJvmModuleEvidence({
+            projectEvidence: input.jvmProjectModuleEvidence,
+            membershipsByFile,
+            sourceFilePath: source.filePath,
+            targetFilePath: target.filePath
+          })
+        : [];
+    if (samePackageConfigurationPaths === null) {
+      continue;
+    }
     const relationKind = jvmHeritageRelationKind({ syntax: reference.syntax, source, target });
     if (relationKind === null) {
       continue;
@@ -6346,7 +6421,7 @@ function projectJvmHeritageReferences(input: {
         }),
         "module",
         candidateSymbolIds(candidates.map((candidate) => candidate.symbol)),
-        [],
+        samePackageConfigurationPaths,
         [reference.filePath, target.filePath]
       )
     });
@@ -6366,6 +6441,8 @@ export function resolveProjectFacts(input: {
   readonly moduleResolver?: ProjectModuleResolver;
   /** Optional for callers predating Xcode target membership evidence. */
   readonly xcodeTargetMemberships?: readonly XcodeTargetMembership[];
+  /** Optional for callers predating JVM Maven/Gradle module evidence. */
+  readonly jvmProjectModuleEvidence?: JvmProjectModuleEvidence;
 }): GraphSnapshot {
   const symbols = input.extractedFiles.flatMap((facts) => facts.symbols);
   const structuralEdges = input.extractedFiles.flatMap((facts) => facts.edges);
@@ -6402,7 +6479,10 @@ export function resolveProjectFacts(input: {
   resolvedEdges.push(
     ...projectJvmHeritageReferences({
       factsByFile,
-      symbolsById
+      symbolsById,
+      ...(input.jvmProjectModuleEvidence === undefined
+        ? {}
+        : { jvmProjectModuleEvidence: input.jvmProjectModuleEvidence })
     })
   );
 

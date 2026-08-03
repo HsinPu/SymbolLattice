@@ -46,6 +46,32 @@ export interface XcodeTargetMembership {
   readonly configurationPath: string;
 }
 
+/** Conventional JVM source set retained from a Maven or Gradle project layout. */
+export type JvmModuleSourceSet = "main" | "test";
+
+/**
+ * One JVM source file membership recovered from a conventional Maven or Gradle
+ * module source root. It is conservative project-layout evidence only; it does
+ * not claim that dependency declarations or a compiler classpath were parsed.
+ */
+export interface JvmModuleMembership {
+  readonly filePath: string;
+  /** Stable project-local identifier derived from the selected build file. */
+  readonly moduleId: string;
+  readonly sourceSet: JvmModuleSourceSet;
+  /** Build files that established this membership, in project-relative order. */
+  readonly configurationPaths: readonly string[];
+}
+
+/**
+ * Optional JVM layout evidence. Its presence means a Maven or Gradle root was
+ * found, so same-package cross-file heritage must not cross an unproven module
+ * or source-set boundary.
+ */
+export interface JvmProjectModuleEvidence {
+  readonly memberships: readonly JvmModuleMembership[];
+}
+
 export interface ProjectScan {
   readonly sourceDocuments: readonly SourceDocument[];
   readonly indexInputs: ProjectIndexInputs;
@@ -54,6 +80,8 @@ export interface ProjectScan {
   readonly frameworkEvidence?: ProjectFrameworkEvidence;
   /** Optional for compatibility with custom source catalogs from earlier releases. */
   readonly xcodeTargetMemberships?: readonly XcodeTargetMembership[];
+  /** Optional for compatibility with custom source catalogs from earlier releases. */
+  readonly jvmProjectModuleEvidence?: JvmProjectModuleEvidence;
 }
 
 export interface SourceCatalog {

@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.216.0 is a developer preview. Run it from source.
+> v0.217.0 is a developer preview. Run it from source.
 
 SymbolLattice indexes a project into a local code-symbol graph. Every relation retains its rule, evidence stage, and confidence; `exact`, `heuristic`, and `unresolved` are never conflated.
 
@@ -34,7 +34,7 @@ node dist/cli/main.js init /path/to/project
 # Query indexed code evidence
 node dist/cli/main.js investigate "user token" --project /path/to/project --json
 
-# Explicitly update the graph after source changes
+# Explicitly update the graph after source or configuration changes
 node dist/cli/main.js sync /path/to/project
 
 # Start a read-only MCP query host
@@ -44,14 +44,14 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 Index data is stored in the target project's `.symbol-lattice/index.sqlite`. On Windows PowerShell, use `npm.cmd` when npm is unavailable.
 
 > [!NOTE]
-> Create the graph with `init`, then explicitly run `sync` after source changes. MCP queries never write or rebuild a graph.
+> Create the graph with `init`, then explicitly run `sync` after source or project-configuration changes. MCP queries never write or rebuild a graph.
 
-## v0.216.0 highlights
+## v0.217.0 highlights
 
-- Java and Kotlin direct parent types can now resolve across files from an explicit qualified path with a conventional lower-case package prefix, such as `example.api.Contract`.
-- Only one matching indexed top-level type yields an `exact` `extends` or `implements` edge. A missing qualified target never falls back to a same-named type.
-- A proven direct parent lets Java `@Override` and Kotlin `override fun` resolve to the unique parent method.
-- Explicit imports, same-package names, and qualified paths each keep a reviewable evidence rule. Aliases, wildcards, generics, potentially nested types, and compiler classpaths remain unresolved rather than guessed.
+- Scans conventional Maven `pom.xml` modules and literal Gradle `include` modules, retaining Java/Kotlin `src/main` and `src/test` membership as reviewable project evidence.
+- When Maven/Gradle evidence exists, a same-package parent without an import or qualified type can produce an `exact` relation only within one visible source set of one unambiguous module. Tests can see same-module main; main never links to test.
+- Explicit imports and qualified types retain their independent syntax proof. This release does not claim Maven/Gradle dependency parsing, compiler-classpath resolution, or custom Gradle `projectDir` support.
+- `pom.xml`, Gradle settings, and selected build files are persisted as index inputs, so configuration changes can require a graph sync.
 
 ## Scope and guarantees
 
