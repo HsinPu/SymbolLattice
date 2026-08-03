@@ -29,6 +29,15 @@ export interface FrameworkRoutePluginDecoratorRoute {
 }
 
 /**
+ * Names one receiver method that may mount a same-file child receiver below a
+ * fixed literal prefix. Projection is limited to one exact two-argument,
+ * non-root, non-nested mount; all other forms emit no child route fact.
+ */
+export interface FrameworkRoutePluginMountMethod {
+  readonly methodName: string;
+}
+
+/**
  * A narrowly declarative, syntax-proven extension for a TypeScript or JavaScript
  * router or TypeScript method decorator constructed directly from one exact ESM
  * import. SymbolLattice owns all AST inspection and graph writes; the plugin
@@ -46,6 +55,8 @@ export interface FrameworkRoutePlugin {
   readonly routeMethods?: readonly FrameworkRoutePluginMethod[];
   /** Optional TypeScript method decorators accepted by the framework. */
   readonly decoratorRoutes?: readonly FrameworkRoutePluginDecoratorRoute[];
+  /** Optional literal receiver methods that mount a child receiver below a fixed prefix. */
+  readonly mountMethods?: readonly FrameworkRoutePluginMountMethod[];
   /** Human-readable, bounded syntax surface exposed through the public registry. */
   readonly surfaces: readonly string[];
 }
@@ -76,6 +87,7 @@ const ROUTE_PLUGIN_HTTP_METHODS = new Set<FrameworkRoutePluginHttpMethod>(
 const EMPTY_FRAMEWORK_ROUTE_PLUGINS: readonly FrameworkRoutePlugin[] = Object.freeze([]);
 const EMPTY_ROUTE_METHODS: readonly FrameworkRoutePluginMethod[] = Object.freeze([]);
 const EMPTY_DECORATOR_ROUTES: readonly FrameworkRoutePluginDecoratorRoute[] = Object.freeze([]);
+const EMPTY_MOUNT_METHODS: readonly FrameworkRoutePluginMountMethod[] = Object.freeze([]);
 const VALIDATED_REGISTRIES = new WeakSet<FrameworkRoutePluginRegistry>();
 
 function compareText(left: string, right: string): number {
@@ -212,6 +224,35 @@ function normalizedOptionalDecoratorRoutes(
   return value === undefined ? EMPTY_DECORATOR_ROUTES : normalizedDecoratorRoutes(value, label);
 }
 
+function normalizedMountMethods(
+  value: unknown,
+  label: string
+): readonly FrameworkRoutePluginMountMethod[] {
+  if (!Array.isArray(value) || value.length === 0 || value.length > MAX_ROUTE_METHOD_COUNT) {
+    configurationError(`${label} must contain between 1 and ${MAX_ROUTE_METHOD_COUNT} entries.`);
+  }
+  const mountMethods = value.map((candidate, index) => {
+    const record = requireRecord(candidate, `${label}[${index}]`);
+    const methodName = requireText(record.methodName, `${label}[${index}].methodName`);
+    if (!IDENTIFIER_PATTERN.test(methodName)) {
+      configurationError(`${label}[${index}].methodName must be an identifier.`);
+    }
+    return Object.freeze({ methodName });
+  });
+  const methodNames = mountMethods.map((method) => method.methodName);
+  if (new Set(methodNames).size !== methodNames.length) {
+    configurationError(`${label} must not declare the same mount method twice.`);
+  }
+  return Object.freeze([...mountMethods].sort((left, right) => compareText(left.methodName, right.methodName)));
+}
+
+function normalizedOptionalMountMethods(
+  value: unknown,
+  label: string
+): readonly FrameworkRoutePluginMountMethod[] {
+  return value === undefined ? EMPTY_MOUNT_METHODS : normalizedMountMethods(value, label);
+}
+
 function normalizedPlugin(value: unknown, index: number): FrameworkRoutePlugin {
   const record = requireRecord(value, `framework route plugin at index ${index}`);
   const id = requireText(record.id, `framework route plugin ${index}.id`);
@@ -231,8 +272,15 @@ function normalizedPlugin(value: unknown, index: number): FrameworkRoutePlugin {
     record.decoratorRoutes,
     `framework route plugin ${id}.decoratorRoutes`
   );
+  const mountMethods = normalizedOptionalMountMethods(
+    record.mountMethods,
+    `framework route plugin ${id}.mountMethods`
+  );
   if (routeMethods.length === 0 && decoratorRoutes.length === 0) {
     configurationError(`framework route plugin ${id} must declare at least one route surface.`);
+  }
+  if (mountMethods.length > 0 && routeMethods.length === 0) {
+    configurationError(`framework route plugin ${id}.mountMethods require routeMethods.`);
   }
   if (routeMethods.length === 0 && record.factoryExport !== undefined) {
     configurationError(`framework route plugin ${id}.factoryExport requires routeMethods.`);
@@ -255,6 +303,7 @@ function normalizedPlugin(value: unknown, index: number): FrameworkRoutePlugin {
     moduleSpecifier,
     routeMethods,
     decoratorRoutes,
+    mountMethods,
     surfaces: normalizedSurfaces(record.surfaces, `framework route plugin ${id}.surfaces`)
   };
   return factoryExport === undefined

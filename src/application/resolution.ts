@@ -1588,7 +1588,11 @@ function staticRouteHandlerRuleId(
 ): string {
   if (isCustomRouteFramework(reference.routeFramework)) {
     const pluginRuleName = reference.routeFramework.slice("plugin:".length).replace("/", ".");
-    return `framework.plugin.${pluginRuleName}.literal-route.${suffix}`;
+    const routeSurface =
+      reference.routeRegistration === "plugin-literal-prefix-mount"
+        ? "literal-prefix-mount"
+        : "literal-route";
+    return `framework.plugin.${pluginRuleName}.${routeSurface}.${suffix}`;
   }
   if (reference.routeFramework === "fastify") {
     const registration =

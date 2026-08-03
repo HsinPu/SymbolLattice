@@ -20,6 +20,7 @@ const latticeRouterPlugin: FrameworkRoutePlugin = {
     { methodName: "get", routeMethod: "GET" },
     { methodName: "post", routeMethod: "POST" }
   ],
+  mountMethods: [{ methodName: "mount" }],
   surfaces: [
     "exact named Router imports",
     "const zero-argument Router receivers with literal named-handler HTTP methods"
@@ -180,6 +181,147 @@ describe("framework route plugin registry", () => {
     }
   });
 
+  it("projects one child router through one literal fixed prefix", () => {
+    const registry = createFrameworkRoutePluginRegistry([latticeRouterPlugin]);
+    const facts = extractFileFacts(
+      {
+        filePath: "src/routes.ts",
+        language: "typescript",
+        sourceText: [
+          'import { Router } from "@acme/lattice-router";',
+          "const app = new Router();",
+          "const healthRoutes = new Router();",
+          "function health() { return { ok: true }; }",
+          'healthRoutes.get("/health", health);',
+          'app.mount("/api", healthRoutes);'
+        ].join("\n")
+      },
+      { frameworkRoutePlugins: registry }
+    );
+
+    expect(facts.symbols).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: "route", name: "GET /api/health" })
+      ])
+    );
+    expect(facts.symbols).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: "route", name: "GET /health" })
+      ])
+    );
+    expect(facts.pendingReferences).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          relationKind: "routes",
+          routeRegistration: "plugin-literal-prefix-mount"
+        })
+      ])
+    );
+  });
+
+  it("projects one JavaScript child router through one literal fixed prefix", () => {
+    const registry = createFrameworkRoutePluginRegistry([latticeRouterPlugin]);
+    const facts = extractFileFacts(
+      {
+        filePath: "src/routes.js",
+        language: "javascript",
+        sourceText: [
+          'import { Router } from "@acme/lattice-router";',
+          "const app = new Router();",
+          "const healthRoutes = new Router();",
+          "function health() { return { ok: true }; }",
+          'healthRoutes.get("/health", health);',
+          'app.mount("/api", healthRoutes);'
+        ].join("\n")
+      },
+      { frameworkRoutePlugins: registry }
+    );
+
+    expect(facts.symbols).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: "route", name: "GET /api/health" })
+      ])
+    );
+    expect(facts.pendingReferences).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          relationKind: "routes",
+          routeRegistration: "plugin-literal-prefix-mount"
+        })
+      ])
+    );
+  });
+
+  it("suppresses a child route when a configured mount is dynamic, invalid, overloaded, duplicate, or nested", () => {
+    const registry = createFrameworkRoutePluginRegistry([latticeRouterPlugin]);
+    const cases = [
+      [
+        'import { Router } from "@acme/lattice-router";',
+        "const app = new Router();",
+        "const child = new Router();",
+        'const prefix = "/api";',
+        "function health() {}",
+        'child.get("/health", health);',
+        "app.mount(prefix, child);"
+      ],
+      [
+        'import { Router } from "@acme/lattice-router";',
+        "const app = new Router();",
+        "const child = new Router();",
+        "function health() {}",
+        'child.get("/health", health);',
+        'app.mount("/a", child);',
+        'app.mount("/b", child);'
+      ],
+      [
+        'import { Router } from "@acme/lattice-router";',
+        "const root = new Router();",
+        "const app = new Router();",
+        "const child = new Router();",
+        "function health() {}",
+        'child.get("/health", health);',
+        'root.mount("/root", app);',
+        'app.mount("/api", child);'
+      ],
+      [
+        'import { Router } from "@acme/lattice-router";',
+        "const app = new Router();",
+        "const child = new Router();",
+        "function health() {}",
+        'child.get("/health", health);',
+        'app.mount("/", child);'
+      ],
+      [
+        'import { Router } from "@acme/lattice-router";',
+        "const app = new Router();",
+        "const child = new Router();",
+        "function health() {}",
+        'child.get("/health", health);',
+        'app.mount("/api/", child);'
+      ],
+      [
+        'import { Router } from "@acme/lattice-router";',
+        "const app = new Router();",
+        "const child = new Router();",
+        "function health() {}",
+        'child.get("/health", health);',
+        'app.mount("/api", child, { strict: true });'
+      ]
+    ];
+
+    for (const sourceLines of cases) {
+      const facts = extractFileFacts(
+        {
+          filePath: "src/routes.ts",
+          language: "typescript",
+          sourceText: sourceLines.join("\n")
+        },
+        { frameworkRoutePlugins: registry }
+      );
+      expect(facts.pendingReferences.filter((reference) => reference.relationKind === "routes")).toEqual([]);
+    }
+  });
+
   it("fails closed for dynamic, overloaded, static, or shadowed decorator expressions", () => {
     const registry = createFrameworkRoutePluginRegistry([latticeControllerPlugin]);
     const cases = [
@@ -243,11 +385,18 @@ describe("framework route plugin registry", () => {
         surfaces: [...latticeRouterPlugin.surfaces].reverse()
       }
     ]);
+    const changedMountSemantics = createFrameworkRoutePluginRegistry([
+      {
+        ...latticeRouterPlugin,
+        mountMethods: [{ methodName: "use" }]
+      }
+    ]);
     const extractor = createFrameworkRoutePluginExtractor(registry);
 
     expect(Object.isFrozen(registry)).toBe(true);
     expect(Object.isFrozen(registry.plugins)).toBe(true);
     expect(registry.fingerprint).toBe(sameSemanticsInDifferentOrder.fingerprint);
+    expect(registry.fingerprint).not.toBe(changedMountSemantics.fingerprint);
     expect(extractor.version).toBe(frameworkRoutePluginExtractorVersion(registry));
     expect(extractor.version).toContain(ARTIFACT_FACTS_EXTRACTOR_VERSION);
     expect(() =>
@@ -280,6 +429,22 @@ describe("framework route plugin registry", () => {
         {
           ...latticeRouterPlugin,
           decoratorRoutes: [{ decoratorExport: "Router", routeMethod: "GET" }]
+        }
+      ])
+    ).toThrow(FrameworkRoutePluginConfigurationError);
+    expect(() =>
+      createFrameworkRoutePluginRegistry([
+        {
+          ...latticeControllerPlugin,
+          mountMethods: [{ methodName: "mount" }]
+        }
+      ])
+    ).toThrow(FrameworkRoutePluginConfigurationError);
+    expect(() =>
+      createFrameworkRoutePluginRegistry([
+        {
+          ...latticeRouterPlugin,
+          mountMethods: [{ methodName: "mount" }, { methodName: "mount" }]
         }
       ])
     ).toThrow(FrameworkRoutePluginConfigurationError);

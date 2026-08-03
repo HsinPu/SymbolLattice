@@ -43,6 +43,7 @@ const latticeRouterPlugin: FrameworkRoutePlugin = {
   factoryExport: "Router",
   routeMethods: [{ methodName: "get", routeMethod: "GET" }],
   decoratorRoutes: [{ decoratorExport: "Get", routeMethod: "GET" }],
+  mountMethods: [{ methodName: "mount" }],
   surfaces: [
     "exact named Router imports",
     "const literal named-handler HTTP routes",
@@ -56,8 +57,12 @@ describe("framework route plugin service integration", () => {
       "src/routes.ts": [
         'import { Get, Router } from "@acme/lattice-router";',
         "const api = new Router();",
+        "const mounted = new Router();",
         "export function health() { return { ok: true }; }",
         'api.get("/health", health);',
+        "function mountedHealth() { return { ok: true }; }",
+        'mounted.get("/mounted", mountedHealth);',
+        'api.mount("/api", mounted);',
         "class StatusController {",
         '  @Get("/status")',
         "  status() { return { ok: true }; }",
@@ -98,6 +103,16 @@ describe("framework route plugin service integration", () => {
             evidence: expect.objectContaining({
               ruleId: "framework.plugin.acme.lattice-router.decorator-route.local-method",
               stage: "syntax"
+            })
+          })
+        }),
+        expect.objectContaining({
+          path: "/api/mounted",
+          handler: expect.objectContaining({ qualifiedName: "src/routes.ts#mountedHealth" }),
+          edge: expect.objectContaining({
+            evidence: expect.objectContaining({
+              ruleId: "framework.plugin.acme.lattice-router.literal-prefix-mount.local-handler",
+              stage: "lexical"
             })
           })
         })

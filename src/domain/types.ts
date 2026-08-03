@@ -131,6 +131,7 @@ export type RouteRegistration =
   | "fastify-inline-plugin-prefix"
   | "fastify-local-plugin-prefix"
   | "fastify-imported-plugin-prefix"
+  | "plugin-literal-prefix-mount"
   | "rails-resources"
   | "rails-resource"
   | "nextjs-app-router"

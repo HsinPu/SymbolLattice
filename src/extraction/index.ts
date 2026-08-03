@@ -61,6 +61,7 @@ import {
   frameworkRoutePluginExtractorVersion,
   frameworkRoutePluginsForLanguage,
   type FrameworkRoutePluginDecoratorRoute,
+  type FrameworkRoutePluginMountMethod,
   type FrameworkRoutePlugin,
   type FrameworkRoutePluginRegistry
 } from "./framework-route-plugins.js";
@@ -123,6 +124,7 @@ export {
 } from "./framework-route-plugins.js";
 export type {
   FrameworkRoutePluginDecoratorRoute,
+  FrameworkRoutePluginMountMethod,
   FrameworkRoutePlugin,
   FrameworkRoutePluginHttpMethod,
   FrameworkRoutePluginLanguage,
@@ -456,10 +458,12 @@ interface RouteBinding {
   frameworkRoutePlugin?: FrameworkRoutePlugin;
   /** Literal registry name retained only for an immutable direct TurboModule binding. */
   reactNativeTurboModuleName?: string;
-  /** Static Fastify prefix inherited by a proven plugin callback. */
+  /** Static framework prefix inherited by a proven registration. */
   prefix?: string;
   /** Provenance for the prefix that projected this callback's routes. */
   routeRegistration?: RouteRegistration;
+  /** A configured mount was observed but could not prove one safe full route path. */
+  suppressFrameworkRoutePluginRoutes?: boolean;
 }
 
 interface StaticExpressRoute {
@@ -2376,6 +2380,112 @@ function collectScopedRouteReceiverBindings(
   return { byScopeId };
 }
 
+interface FrameworkRoutePluginMountObservation {
+  readonly parent: RouteBinding;
+  readonly child: RouteBinding;
+  /** Null means a configured mount was seen but its prefix was not safe to project. */
+  readonly prefix: string | null;
+}
+
+function literalFrameworkRoutePluginMountPrefix(expression: ts.Expression | undefined): string | null {
+  if (
+    expression === undefined ||
+    !ts.isStringLiteral(expression) ||
+    !expression.text.startsWith("/")
+  ) {
+    return null;
+  }
+  const prefix = expression.text;
+  return prefix === "/" || prefix.endsWith("/") || prefix.includes("//") ? null : prefix;
+}
+
+function staticFrameworkRoutePluginMountObservation(
+  sourceFile: ts.SourceFile,
+  node: ts.CallExpression,
+  bindings: ScopedRouteReceiverBindings
+): FrameworkRoutePluginMountObservation | null {
+  if (node.questionDotToken !== undefined || !ts.isPropertyAccessExpression(node.expression)) {
+    return null;
+  }
+  const mountAccess = node.expression;
+  const mountReceiver = mountAccess.expression;
+  if (mountAccess.questionDotToken !== undefined || !ts.isIdentifier(mountReceiver)) {
+    return null;
+  }
+  const parent = visibleRouteBinding(sourceFile, mountReceiver, bindings);
+  if (
+    parent?.kind !== "custom-framework-receiver" ||
+    parent.frameworkRoutePlugin === undefined ||
+    !(parent.frameworkRoutePlugin.mountMethods ?? []).some(
+      (mountMethod) => mountMethod.methodName === mountAccess.name.text
+    )
+  ) {
+    return null;
+  }
+  const childArgument = node.arguments[1];
+  if (childArgument === undefined || !ts.isIdentifier(childArgument)) {
+    return null;
+  }
+  const child = visibleRouteBinding(sourceFile, childArgument, bindings);
+  if (
+    child?.kind !== "custom-framework-receiver" ||
+    child.frameworkRoutePlugin !== parent.frameworkRoutePlugin
+  ) {
+    return null;
+  }
+  return {
+    parent,
+    child,
+    prefix:
+      node.arguments.length === 2
+        ? literalFrameworkRoutePluginMountPrefix(node.arguments[0])
+        : null
+  };
+}
+
+/**
+ * Projects a child receiver only when one configured mount yields one stable,
+ * non-root prefix. Nested, duplicate, or dynamic mounts suppress the child
+ * route rather than publish an incomplete endpoint path.
+ */
+function applyFrameworkRoutePluginMountPrefixes(
+  sourceFile: ts.SourceFile,
+  bindings: ScopedRouteReceiverBindings
+): void {
+  const observationsByChild = new Map<RouteBinding, FrameworkRoutePluginMountObservation[]>();
+  const observedChildren = new Set<RouteBinding>();
+
+  const visit = (node: ts.Node): void => {
+    if (ts.isCallExpression(node)) {
+      const observation = staticFrameworkRoutePluginMountObservation(sourceFile, node, bindings);
+      if (observation !== null) {
+        const observations = observationsByChild.get(observation.child) ?? [];
+        observations.push(observation);
+        observationsByChild.set(observation.child, observations);
+        observedChildren.add(observation.child);
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+
+  ts.forEachChild(sourceFile, visit);
+  for (const [child, observations] of observationsByChild) {
+    const observation = observations.length === 1 ? observations[0] : undefined;
+    if (
+      observation === undefined ||
+      observation.prefix === null ||
+      observation.parent === child ||
+      observedChildren.has(observation.parent) ||
+      child.prefix !== undefined
+    ) {
+      child.suppressFrameworkRoutePluginRoutes = true;
+      continue;
+    }
+    child.prefix = observation.prefix;
+    child.routeRegistration = "plugin-literal-prefix-mount";
+  }
+}
+
 function isExpressRouteReceiver(
   sourceFile: ts.SourceFile,
   receiver: ts.Identifier,
@@ -2468,6 +2578,7 @@ function staticExpressRoute(
 interface StaticFrameworkRoutePluginRoute {
   readonly plugin: FrameworkRoutePlugin;
   readonly route: StaticExpressRoute;
+  readonly routeRegistration?: RouteRegistration;
 }
 
 /**
@@ -2489,7 +2600,11 @@ function staticFrameworkRoutePluginRoute(
     return null;
   }
   const binding = visibleRouteBinding(sourceFile, node.expression.expression, bindings);
-  if (binding?.kind !== "custom-framework-receiver" || binding.frameworkRoutePlugin === undefined) {
+  if (
+    binding?.kind !== "custom-framework-receiver" ||
+    binding.frameworkRoutePlugin === undefined ||
+    binding.suppressFrameworkRoutePluginRoutes === true
+  ) {
     return null;
   }
   const routeMethodName = node.expression.name.text;
@@ -2509,9 +2624,21 @@ function staticFrameworkRoutePluginRoute(
   ) {
     return null;
   }
+  const routePath =
+    binding.prefix === undefined
+      ? pathArgument.text
+      : pathArgument.text === "/"
+        ? null
+        : `${binding.prefix}${pathArgument.text}`;
+  if (routePath === null) {
+    return null;
+  }
   return {
     plugin: binding.frameworkRoutePlugin,
-    route: { method: routeMethod.routeMethod, path: pathArgument.text, handler }
+    route: { method: routeMethod.routeMethod, path: routePath, handler },
+    ...(binding.routeRegistration === undefined
+      ? {}
+      : { routeRegistration: binding.routeRegistration })
   };
 }
 
@@ -5327,6 +5454,9 @@ export function extractFileFacts(
     input.language === "typescript"
       ? frameworkRoutePlugins.filter((plugin) => (plugin.decoratorRoutes?.length ?? 0) > 0)
       : [];
+  const frameworkRoutePluginsWithMounts = frameworkRoutePlugins.filter(
+    (plugin) => (plugin.mountMethods?.length ?? 0) > 0
+  );
   const frameworkRoutePluginDecoratorBindings =
     frameworkRoutePluginsWithDecorators.length === 0
       ? EMPTY_SCOPED_FRAMEWORK_ROUTE_PLUGIN_DECORATOR_BINDINGS
@@ -5335,6 +5465,9 @@ export function extractFileFacts(
           frameworkRoutePluginsWithDecorators
         );
   const routeReceiverBindings = collectScopedRouteReceiverBindings(sourceFile, frameworkRoutePlugins);
+  if (frameworkRoutePluginsWithMounts.length > 0) {
+    applyFrameworkRoutePluginMountPrefixes(sourceFile, routeReceiverBindings);
+  }
   const fastifyPluginCallbacks = collectScopedFastifyPluginCallbacks(sourceFile, routeReceiverBindings);
   const nestDecoratorBindings = collectScopedNestDecoratorBindings(sourceFile);
   const symbolsByDeclaration = new Map<ts.Node, SymbolNode>();
@@ -5535,7 +5668,12 @@ export function extractFileFacts(
     node: ts.CallExpression,
     candidate: StaticFrameworkRoutePluginRoute
   ): void {
-    addStaticRoute(node, candidate.route, customRouteFramework(candidate.plugin.id));
+    addStaticRoute(
+      node,
+      candidate.route,
+      customRouteFramework(candidate.plugin.id),
+      candidate.routeRegistration
+    );
   }
 
   function addStaticFrameworkRoutePluginDecoratorRoute(

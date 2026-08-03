@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.243.0 is a developer preview that runs from source. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher can update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.244.0 is a developer preview that runs from source. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher can update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## Quick start
 
@@ -35,7 +35,7 @@ node dist/cli/main.js investigate "user token" --project /path/to/project --json
 
 ## Framework route extensions
 
-Extend static framework routes with a scoped, validated descriptor. The core—not the extension—parses source and writes graph facts. TypeScript or JavaScript receiver routes require an exact ESM import, a `const` zero-argument constructor, a literal path, and a named handler. TypeScript decorator routes require an exact import, a non-static method with a body, and one literal absolute path. Unsupported composition produces no route fact. The registry is never auto-loaded from a project and its fingerprint is part of the extractor version, so a descriptor change makes persisted facts stale.
+Extend static framework routes with a scoped, validated descriptor. The core—not the extension—parses source and writes graph facts. TypeScript or JavaScript receiver routes require an exact ESM import, a `const` zero-argument constructor, a literal path, and a named handler. TypeScript decorator routes require an exact import, a non-static method with a body, and one literal absolute path. `mountMethods` project only a same-file, same-descriptor, unique fixed non-root prefix in `parent.mount("/prefix", child)`; dynamic, duplicate, nested, trailing-slash, or overloaded mounts emit no child route. Unsupported composition produces no route fact. The registry is never auto-loaded from a project and its fingerprint is part of the extractor version, so a descriptor change makes persisted facts stale.
 
 ```ts
 import {
@@ -51,7 +51,8 @@ const registry = createFrameworkRoutePluginRegistry([
     factoryExport: "Router",
     routeMethods: [{ methodName: "get", routeMethod: "GET" }],
     decoratorRoutes: [{ decoratorExport: "Get", routeMethod: "GET" }],
-    surfaces: ["exact named Router imports", "const HTTP routes", "TypeScript decorator routes"]
+    mountMethods: [{ methodName: "mount" }],
+    surfaces: ["exact named Router imports", "const HTTP routes", "TypeScript decorator routes", "same-file fixed prefix mounts"]
   }
 ]);
 
