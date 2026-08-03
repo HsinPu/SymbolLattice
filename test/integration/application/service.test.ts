@@ -1703,6 +1703,80 @@ describe("SymbolLatticeService", () => {
     });
   });
 
+  it("persists direct Maven module dependency evidence for syntax-proven JVM parents", async () => {
+    const projectPath = await createInlineProject({
+      "pom.xml": [
+        "<project>",
+        "  <groupId>example</groupId>",
+        "  <artifactId>root</artifactId>",
+        "  <modules><module>api</module><module>app</module></modules>",
+        "</project>"
+      ].join("\n"),
+      "api/pom.xml": [
+        "<project>",
+        "  <parent><groupId>example</groupId><artifactId>root</artifactId></parent>",
+        "  <artifactId>api</artifactId>",
+        "</project>"
+      ].join("\n"),
+      "app/pom.xml": [
+        "<project>",
+        "  <parent><groupId>example</groupId><artifactId>root</artifactId></parent>",
+        "  <artifactId>app</artifactId>",
+        "  <dependencies>",
+        "    <dependency><groupId>example</groupId><artifactId>api</artifactId></dependency>",
+        "  </dependencies>",
+        "</project>"
+      ].join("\n"),
+      "api/src/main/java/example/api/Contract.java": [
+        "package example.api;",
+        "public interface Contract {}"
+      ].join("\n"),
+      "app/src/main/java/example/app/ImportedChild.java": [
+        "package example.app;",
+        "import example.api.Contract;",
+        "public class ImportedChild implements Contract {}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    expect(await service.init({ projectPath })).toMatchObject({ stale: false });
+    const snapshot = graphStore.getSnapshot(projectPath);
+    const symbol = (qualifiedName: string) =>
+      snapshot.symbols.find((candidate) => candidate.qualifiedName === qualifiedName);
+    const implementsEdge = snapshot.edges.find(
+      (edge) =>
+        edge.sourceId === symbol("app/src/main/java/example/app/ImportedChild.java#ImportedChild")?.id &&
+        edge.kind === "implements"
+    );
+    const configurationPaths = ["api/pom.xml", "app/pom.xml", "pom.xml"];
+
+    expect(implementsEdge).toMatchObject({
+      targetId: symbol("api/src/main/java/example/api/Contract.java#Contract")?.id,
+      resolution: "exact",
+      evidence: {
+        ruleId: "syntax.jvm.cross-file.explicit-import.declared-maven-module.direct-implements",
+        configurationPaths
+      }
+    });
+
+    await writeFile(
+      join(projectPath, "app", "pom.xml"),
+      [
+        "<project>",
+        "  <parent><groupId>example</groupId><artifactId>root</artifactId></parent>",
+        "  <artifactId>app</artifactId>",
+        "  <!-- changed -->",
+        "</project>"
+      ].join("\n"),
+      "utf8"
+    );
+    expect(await service.getStatus(projectPath)).toMatchObject({
+      stale: true,
+      staleReasons: expect.arrayContaining(["project-inputs-changed"])
+    });
+  });
+
   it("persists direct Gradle project dependency evidence for syntax-proven JVM parents", async () => {
     const projectPath = await createInlineProject({
       "settings.gradle.kts": 'include(":api", ":app")\n',

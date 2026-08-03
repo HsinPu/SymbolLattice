@@ -74,6 +74,80 @@ describe("JVM project module evidence", () => {
     });
   });
 
+  it("tracks direct local Maven module dependencies by literal coordinates and scope", async () => {
+    const projectPath = await createProject({
+      "pom.xml": [
+        "<project>",
+        "  <groupId>example</groupId>",
+        "  <artifactId>root</artifactId>",
+        "  <modules><module>api</module><module>app</module><module>provided-api</module><module>runtime-api</module></modules>",
+        "  <dependencyManagement><dependencies>",
+        "    <dependency><groupId>example</groupId><artifactId>api</artifactId></dependency>",
+        "  </dependencies></dependencyManagement>",
+        "</project>"
+      ].join("\n"),
+      "api/pom.xml": [
+        "<project>",
+        "  <parent><groupId>example</groupId><artifactId>root</artifactId></parent>",
+        "  <artifactId>api</artifactId>",
+        "</project>"
+      ].join("\n"),
+      "provided-api/pom.xml": [
+        "<project>",
+        "  <parent><groupId>example</groupId><artifactId>root</artifactId></parent>",
+        "  <artifactId>provided-api</artifactId>",
+        "</project>"
+      ].join("\n"),
+      "runtime-api/pom.xml": [
+        "<project>",
+        "  <parent><groupId>example</groupId><artifactId>root</artifactId></parent>",
+        "  <artifactId>runtime-api</artifactId>",
+        "</project>"
+      ].join("\n"),
+      "app/pom.xml": [
+        "<project>",
+        "  <parent><groupId>example</groupId><artifactId>root</artifactId></parent>",
+        "  <artifactId>app</artifactId>",
+        "  <dependencies>",
+        "    <dependency><groupId>example</groupId><artifactId>api</artifactId></dependency>",
+        "    <dependency><groupId>example</groupId><artifactId>api</artifactId><scope>test</scope></dependency>",
+        "    <dependency><groupId>example</groupId><artifactId>provided-api</artifactId><scope>provided</scope></dependency>",
+        "    <dependency><groupId>example</groupId><artifactId>runtime-api</artifactId><scope>runtime</scope></dependency>",
+        "  </dependencies>",
+        "</project>"
+      ].join("\n"),
+      "api/src/main/java/example/Contract.java": "package example; interface Contract {}\n",
+      "app/src/main/java/example/Consumer.java": "package example; class Consumer {}\n",
+      "app/src/test/java/example/ConsumerTest.java": "package example; class ConsumerTest {}\n"
+    });
+
+    const scan = await new FileSystemSourceCatalog().scan(projectPath);
+
+    expect(scan.jvmProjectModuleEvidence?.dependencies).toEqual([
+      {
+        sourceModuleId: "maven:app/pom.xml",
+        targetModuleId: "maven:api/pom.xml",
+        consumerSourceSet: "main",
+        kind: "maven-module",
+        configurationPaths: ["api/pom.xml", "app/pom.xml", "pom.xml"]
+      },
+      {
+        sourceModuleId: "maven:app/pom.xml",
+        targetModuleId: "maven:api/pom.xml",
+        consumerSourceSet: "test",
+        kind: "maven-module",
+        configurationPaths: ["api/pom.xml", "app/pom.xml", "pom.xml"]
+      },
+      {
+        sourceModuleId: "maven:app/pom.xml",
+        targetModuleId: "maven:provided-api/pom.xml",
+        consumerSourceSet: "main",
+        kind: "maven-module",
+        configurationPaths: ["app/pom.xml", "pom.xml", "provided-api/pom.xml"]
+      }
+    ]);
+  });
+
   it("tracks literal Gradle includes and conventional module source roots", async () => {
     const projectPath = await createProject({
       "settings.gradle.kts": ['include(":api")', 'include("app")'].join("\n"),

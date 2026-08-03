@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { SaxesParser } from "saxes";
 
 import type { ProjectConfigurationInput } from "../../domain/index-inputs.js";
 import type {
@@ -24,10 +25,40 @@ const CONVENTIONAL_JVM_SOURCE_ROOTS: readonly {
 
 const SAFE_PATH_SEGMENT = /^[A-Za-z0-9._-]+$/u;
 const GRADLE_PROJECT_SEGMENT = /^[A-Za-z0-9_.-]+$/u;
+const MAVEN_COORDINATE_PART = /^[A-Za-z0-9_.-]+$/u;
 
 interface MavenProjectModule {
   readonly manifestPath: string;
   readonly configurationPaths: readonly string[];
+}
+
+interface MavenModuleCoordinate {
+  readonly groupId: string;
+  readonly artifactId: string;
+}
+
+interface MavenModuleDependencyRequest {
+  readonly groupId: string;
+  readonly artifactId: string;
+  readonly consumerSourceSet: JvmModuleSourceSet;
+}
+
+interface MavenPomMetadata {
+  readonly coordinate: MavenModuleCoordinate | null;
+  readonly dependencies: readonly MavenModuleDependencyRequest[];
+}
+
+interface OpenMavenPomElement {
+  readonly name: string;
+  text: string;
+}
+
+interface MutableMavenDependencyDeclaration {
+  groupId: string | null | undefined;
+  artifactId: string | null | undefined;
+  scope: string | null | undefined;
+  type: string | null | undefined;
+  classifier: string | null | undefined;
 }
 
 interface GradleProjectModule {
@@ -40,6 +71,7 @@ interface GradleProjectModule {
 interface MavenProjectDetection {
   readonly configurationInputs: readonly ProjectConfigurationInput[];
   readonly modules: readonly MavenProjectModule[];
+  readonly dependencies: readonly JvmModuleDependency[];
   readonly detected: boolean;
 }
 
@@ -119,6 +151,242 @@ function mavenModuleDirectories(sourceText: string): readonly string[] {
     }
   }
   return [...directories].sort(compareProjectPaths);
+}
+
+function staticMavenCoordinatePart(value: string): string | null {
+  const normalized = value.trim();
+  return normalized.length > 0 && MAVEN_COORDINATE_PART.test(normalized) ? normalized : null;
+}
+
+function staticMavenScalar(value: string): string | null {
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized : null;
+}
+
+function uniqueMavenValue(
+  existing: string | null | undefined,
+  next: string | null
+): string | null {
+  return existing === undefined ? next : null;
+}
+
+function mavenDependencySourceSet(
+  dependency: MutableMavenDependencyDeclaration
+): JvmModuleSourceSet | null {
+  if (
+    typeof dependency.groupId !== "string" ||
+    typeof dependency.artifactId !== "string" ||
+    (dependency.type !== undefined && dependency.type !== "jar") ||
+    dependency.classifier !== undefined
+  ) {
+    return null;
+  }
+  switch (dependency.scope ?? "compile") {
+    case "compile":
+    case "provided":
+      return "main";
+    case "test":
+      return "test";
+    default:
+      return null;
+  }
+}
+
+/**
+ * Parses only literal coordinates and root-level Maven dependencies from a
+ * well-formed POM. Property interpolation, dependency management, plugins,
+ * profiles, classifiers, and non-jar types remain intentionally unmodeled.
+ */
+function staticMavenPomMetadata(sourceText: string): MavenPomMetadata {
+  const parser = new SaxesParser();
+  const openElements: OpenMavenPomElement[] = [];
+  const dependencyRequests = new Map<string, MavenModuleDependencyRequest>();
+  let rootSeen = false;
+  let valid = true;
+  let projectGroupId: string | null | undefined;
+  let projectArtifactId: string | null | undefined;
+  let parentGroupId: string | null | undefined;
+  let activeDependency: MutableMavenDependencyDeclaration | null = null;
+
+  parser.on("error", () => {
+    valid = false;
+  });
+  parser.on("doctype", () => {
+    valid = false;
+  });
+  parser.on("opentag", (tag) => {
+    if (openElements.length === 0) {
+      rootSeen = true;
+      if (tag.name !== "project") {
+        valid = false;
+      }
+    }
+    const parentPath = openElements.map((element) => element.name).join("/");
+    if (tag.name === "dependency" && parentPath === "project/dependencies") {
+      if (activeDependency !== null) {
+        valid = false;
+      }
+      activeDependency = {
+        groupId: undefined,
+        artifactId: undefined,
+        scope: undefined,
+        type: undefined,
+        classifier: undefined
+      };
+    }
+    openElements.push({ name: tag.name, text: "" });
+  });
+  parser.on("text", (text) => {
+    const element = openElements.at(-1);
+    if (element !== undefined) {
+      element.text += text;
+    }
+  });
+  parser.on("cdata", (text) => {
+    const element = openElements.at(-1);
+    if (element !== undefined) {
+      element.text += text;
+    }
+  });
+  parser.on("closetag", () => {
+    const element = openElements.pop();
+    if (element === undefined) {
+      valid = false;
+      return;
+    }
+    const parentPath = openElements.map((parent) => parent.name).join("/");
+    if (parentPath === "project" && element.name === "groupId") {
+      projectGroupId = uniqueMavenValue(projectGroupId, staticMavenCoordinatePart(element.text));
+    } else if (parentPath === "project" && element.name === "artifactId") {
+      projectArtifactId = uniqueMavenValue(projectArtifactId, staticMavenCoordinatePart(element.text));
+    } else if (parentPath === "project/parent" && element.name === "groupId") {
+      parentGroupId = uniqueMavenValue(parentGroupId, staticMavenCoordinatePart(element.text));
+    } else if (activeDependency !== null && parentPath === "project/dependencies/dependency") {
+      if (element.name === "groupId") {
+        activeDependency.groupId = uniqueMavenValue(
+          activeDependency.groupId,
+          staticMavenCoordinatePart(element.text)
+        );
+      } else if (element.name === "artifactId") {
+        activeDependency.artifactId = uniqueMavenValue(
+          activeDependency.artifactId,
+          staticMavenCoordinatePart(element.text)
+        );
+      } else if (element.name === "scope") {
+        activeDependency.scope = uniqueMavenValue(activeDependency.scope, staticMavenScalar(element.text));
+      } else if (element.name === "type") {
+        activeDependency.type = uniqueMavenValue(activeDependency.type, staticMavenScalar(element.text));
+      } else if (element.name === "classifier") {
+        activeDependency.classifier = uniqueMavenValue(
+          activeDependency.classifier,
+          staticMavenScalar(element.text)
+        );
+      }
+    }
+    if (parentPath === "project/dependencies" && element.name === "dependency") {
+      const dependency = activeDependency;
+      activeDependency = null;
+      const consumerSourceSet = dependency === null ? null : mavenDependencySourceSet(dependency);
+      if (
+        consumerSourceSet !== null &&
+        typeof dependency?.groupId === "string" &&
+        typeof dependency.artifactId === "string"
+      ) {
+        const request: MavenModuleDependencyRequest = {
+          groupId: dependency.groupId,
+          artifactId: dependency.artifactId,
+          consumerSourceSet
+        };
+        dependencyRequests.set(
+          `${request.groupId}\u0000${request.artifactId}\u0000${request.consumerSourceSet}`,
+          request
+        );
+      }
+    }
+  });
+
+  try {
+    parser.write(sourceText).close();
+  } catch {
+    valid = false;
+  }
+
+  const groupId = projectGroupId === undefined ? parentGroupId : projectGroupId;
+  const coordinate =
+    valid &&
+    rootSeen &&
+    openElements.length === 0 &&
+    typeof groupId === "string" &&
+    typeof projectArtifactId === "string"
+      ? { groupId, artifactId: projectArtifactId }
+      : null;
+  return {
+    coordinate,
+    dependencies:
+      valid && rootSeen && openElements.length === 0
+        ? [...dependencyRequests.values()].sort((left, right) =>
+            compareProjectPaths(
+              `${left.groupId}\u0000${left.artifactId}\u0000${left.consumerSourceSet}`,
+              `${right.groupId}\u0000${right.artifactId}\u0000${right.consumerSourceSet}`
+            )
+          )
+        : []
+  };
+}
+
+function staticMavenModuleDependencyEvidence(input: {
+  readonly modules: readonly MavenProjectModule[];
+  readonly metadataByManifestPath: ReadonlyMap<string, MavenPomMetadata>;
+}): readonly JvmModuleDependency[] {
+  const modulesByCoordinate = new Map<string, MavenProjectModule[]>();
+  for (const module of input.modules) {
+    const coordinate = input.metadataByManifestPath.get(module.manifestPath)?.coordinate;
+    if (coordinate === null || coordinate === undefined) {
+      continue;
+    }
+    const key = `${coordinate.groupId}\u0000${coordinate.artifactId}`;
+    const candidates = modulesByCoordinate.get(key) ?? [];
+    candidates.push(module);
+    modulesByCoordinate.set(key, candidates);
+  }
+
+  const dependenciesByKey = new Map<string, JvmModuleDependency>();
+  for (const sourceModule of input.modules) {
+    const metadata = input.metadataByManifestPath.get(sourceModule.manifestPath);
+    if (metadata === undefined) {
+      continue;
+    }
+    for (const request of metadata.dependencies) {
+      const targetModules = modulesByCoordinate.get(`${request.groupId}\u0000${request.artifactId}`) ?? [];
+      if (targetModules.length !== 1 || targetModules[0] === undefined) {
+        continue;
+      }
+      const targetModule = targetModules[0];
+      if (sourceModule.manifestPath === targetModule.manifestPath) {
+        continue;
+      }
+      const dependency: JvmModuleDependency = {
+        sourceModuleId: `maven:${sourceModule.manifestPath}`,
+        targetModuleId: `maven:${targetModule.manifestPath}`,
+        consumerSourceSet: request.consumerSourceSet,
+        kind: "maven-module",
+        configurationPaths: uniqueConfigurationPaths([
+          ...sourceModule.configurationPaths,
+          ...targetModule.configurationPaths
+        ])
+      };
+      dependenciesByKey.set(
+        `${dependency.sourceModuleId}\u0000${dependency.targetModuleId}\u0000${dependency.consumerSourceSet}`,
+        dependency
+      );
+    }
+  }
+  return [...dependenciesByKey.values()].sort((left, right) =>
+    compareProjectPaths(
+      `${left.sourceModuleId}\u0000${left.targetModuleId}\u0000${left.consumerSourceSet}`,
+      `${right.sourceModuleId}\u0000${right.targetModuleId}\u0000${right.consumerSourceSet}`
+    )
+  );
 }
 
 type GradleStringDelimiter = '"' | "'" | '"""' | "'''";
@@ -328,11 +596,12 @@ async function readPresentProjectInput(
 async function detectMavenProjectModules(projectPath: string): Promise<MavenProjectDetection> {
   const rootInput = await readProjectConfigurationInput(projectPath, "maven-project", "pom.xml");
   if (rootInput.state === "absent") {
-    return { configurationInputs: [rootInput], modules: [], detected: false };
+    return { configurationInputs: [rootInput], modules: [], dependencies: [], detected: false };
   }
 
   const configurationInputs = new Map<string, ProjectConfigurationInput>([[rootInput.path, rootInput]]);
   const modules = new Map<string, MavenProjectModule>();
+  const metadataByManifestPath = new Map<string, MavenPomMetadata>();
   const rootModule: MavenProjectModule = {
     manifestPath: rootInput.path,
     configurationPaths: [rootInput.path]
@@ -346,6 +615,7 @@ async function detectMavenProjectModules(projectPath: string): Promise<MavenProj
       continue;
     }
     const sourceText = await readPresentProjectInput(projectPath, configurationInputs.get(module.manifestPath)!);
+    metadataByManifestPath.set(module.manifestPath, staticMavenPomMetadata(sourceText));
     for (const directory of mavenModuleDirectories(sourceText)) {
       const manifestPath = projectPathInDirectory(
         projectPathInDirectory(directoryForProjectPath(module.manifestPath), directory),
@@ -368,13 +638,18 @@ async function detectMavenProjectModules(projectPath: string): Promise<MavenProj
     }
   }
 
+  const orderedModules = [...modules.values()].sort((left, right) =>
+    compareProjectPaths(left.manifestPath, right.manifestPath)
+  );
   return {
     configurationInputs: [...configurationInputs.values()].sort((left, right) =>
       compareProjectPaths(left.path, right.path)
     ),
-    modules: [...modules.values()].sort((left, right) =>
-      compareProjectPaths(left.manifestPath, right.manifestPath)
-    ),
+    modules: orderedModules,
+    dependencies: staticMavenModuleDependencyEvidence({
+      modules: orderedModules,
+      metadataByManifestPath
+    }),
     detected: true
   };
 }
@@ -698,7 +973,12 @@ export async function detectJvmProjectModuleEvidence(
         ...membershipsForMavenModules(maven.modules, sourceDocuments),
         ...membershipsForGradleModules(gradle.modules, sourceDocuments)
       ]),
-      dependencies: gradle.dependencies
+      dependencies: [...maven.dependencies, ...gradle.dependencies].sort((left, right) =>
+        compareProjectPaths(
+          `${left.sourceModuleId}\u0000${left.targetModuleId}\u0000${left.consumerSourceSet}`,
+          `${right.sourceModuleId}\u0000${right.targetModuleId}\u0000${right.consumerSourceSet}`
+        )
+      )
     }
   };
 }

@@ -1808,6 +1808,82 @@ describe("JVM module-aware same-package heritage resolution", () => {
       }
     });
   });
+
+  it("adds direct Maven module dependency evidence to an imported parent", () => {
+    const sourceDocuments: readonly SourceDocument[] = [
+      {
+        absolutePath: "C:/project/api/src/main/java/example/api/Contract.java",
+        relativePath: "api/src/main/java/example/api/Contract.java",
+        language: "java",
+        sourceText: "package example.api; public interface Contract {}\n",
+        contentHash: "contract"
+      },
+      {
+        absolutePath: "C:/project/app/src/main/java/example/app/ImportedChild.java",
+        relativePath: "app/src/main/java/example/app/ImportedChild.java",
+        language: "java",
+        sourceText: [
+          "package example.app;",
+          "import example.api.Contract;",
+          "public class ImportedChild implements Contract {}"
+        ].join("\n"),
+        contentHash: "imported-child"
+      }
+    ];
+    const configurationPaths = ["api/pom.xml", "app/pom.xml", "pom.xml"];
+    const snapshot = resolveProjectFacts({
+      sourceDocuments,
+      extractedFiles: sourceDocuments.map((document) =>
+        extractFileFacts({
+          filePath: document.relativePath,
+          language: document.language,
+          sourceText: document.sourceText
+        })
+      ),
+      indexedAt: "2026-08-03T00:00:00.000Z",
+      jvmProjectModuleEvidence: {
+        memberships: [
+          {
+            filePath: "api/src/main/java/example/api/Contract.java",
+            moduleId: "maven:api/pom.xml",
+            sourceSet: "main",
+            configurationPaths
+          },
+          {
+            filePath: "app/src/main/java/example/app/ImportedChild.java",
+            moduleId: "maven:app/pom.xml",
+            sourceSet: "main",
+            configurationPaths
+          }
+        ],
+        dependencies: [
+          {
+            sourceModuleId: "maven:app/pom.xml",
+            targetModuleId: "maven:api/pom.xml",
+            consumerSourceSet: "main",
+            kind: "maven-module",
+            configurationPaths
+          }
+        ]
+      }
+    });
+    const symbol = (qualifiedName: string) =>
+      snapshot.symbols.find((candidate) => candidate.qualifiedName === qualifiedName);
+    const implementsEdge = snapshot.edges.find(
+      (edge) =>
+        edge.sourceId === symbol("app/src/main/java/example/app/ImportedChild.java#ImportedChild")?.id &&
+        edge.kind === "implements"
+    );
+
+    expect(implementsEdge).toMatchObject({
+      targetId: symbol("api/src/main/java/example/api/Contract.java#Contract")?.id,
+      resolution: "exact",
+      evidence: {
+        ruleId: "syntax.jvm.cross-file.explicit-import.declared-maven-module.direct-implements",
+        configurationPaths
+      }
+    });
+  });
 });
 
 describe("literal route handler resolution", () => {

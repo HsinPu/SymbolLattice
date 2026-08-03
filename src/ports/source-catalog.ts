@@ -67,10 +67,10 @@ export interface JvmModuleMembership {
 export interface JvmModuleDependency {
   readonly sourceModuleId: string;
   readonly targetModuleId: string;
-  /** The Gradle source-set configuration that makes the target available. */
+  /** The declared source-set visibility that makes the target available. */
   readonly consumerSourceSet: JvmModuleSourceSet;
   /** The build-system syntax that supplied this bounded evidence. */
-  readonly kind: "gradle-project";
+  readonly kind: "gradle-project" | "maven-module";
   /** Build files that established this declaration, in project-relative order. */
   readonly configurationPaths: readonly string[];
 }
