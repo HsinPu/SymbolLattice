@@ -11,13 +11,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v183";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v184";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v72";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v73";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",

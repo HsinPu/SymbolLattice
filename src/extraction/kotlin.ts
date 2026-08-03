@@ -746,29 +746,45 @@ function staticKotlinDirectInjectionTypeReference(
     : null;
 }
 
-function staticKotlinSingleParameterInjectionReference(
+function staticKotlinMethodInjectionReferences(
   method: StaticKotlinFunction
-): StaticKotlinSupertypeReference | null {
+): readonly StaticKotlinSupertypeReference[] {
   const parameterLists = directChildren(method.node).filter(
     (child) => child.kind() === "function_value_parameters"
   );
   if (parameterLists.length !== 1 || parameterLists[0] === undefined) {
-    return null;
+    return [];
   }
-  const parameters = directChildren(parameterLists[0]).filter(
-    (child) => child.kind() === "parameter"
-  );
-  return parameters.length === 1 && parameters[0] !== undefined
-    ? staticKotlinDirectInjectionTypeReference(parameters[0])
-    : null;
+  const parameterChildren = directChildren(parameterLists[0]);
+  const references: StaticKotlinSupertypeReference[] = [];
+  for (const [index, parameter] of parameterChildren.entries()) {
+    if (parameter.kind() !== "parameter") {
+      continue;
+    }
+    const modifiers = parameterChildren[index - 1];
+    const isVararg =
+      modifiers?.kind() === "parameter_modifiers" &&
+      directChildren(modifiers).some(
+        (modifier) => modifier.kind() === "parameter_modifier" && nodeText(modifier) === "vararg"
+      );
+    if (isVararg) {
+      continue;
+    }
+    const reference = staticKotlinDirectInjectionTypeReference(parameter);
+    if (reference !== null) {
+      references.push(reference);
+    }
+  }
+  return references;
 }
 
 /**
- * Retains direct primary-constructor, class-property, and single-parameter
- * concrete-method injection point types. It records only declared static type
- * dependencies; collection/generic types, secondary constructors, use-site
- * targets, extension functions, and runtime provider selection are deliberately
- * outside this first JVM DI projection.
+ * Retains direct primary-constructor, class-property, and concrete-method
+ * injection point types. Every individually proven method parameter becomes
+ * its own fact. It records only declared static type dependencies;
+ * collection/generic types, secondary constructors, use-site targets,
+ * extension functions, and runtime provider selection are deliberately outside
+ * this first JVM DI projection.
  */
 function staticKotlinDependencyInjectionReferences(
   declaration: StaticKotlinType,
@@ -839,8 +855,7 @@ function staticKotlinDependencyInjectionReferences(
     if (syntax === null) {
       continue;
     }
-    const reference = staticKotlinSingleParameterInjectionReference(method);
-    if (reference !== null) {
+    for (const reference of staticKotlinMethodInjectionReferences(method)) {
       references.push({ syntax, reference });
     }
   }

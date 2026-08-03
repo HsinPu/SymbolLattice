@@ -420,8 +420,8 @@ describe("first-party framework capabilities", () => {
       languages: ["java", "kotlin"],
       routeRegistrations: [],
       surfaces: [
-        "direct imported or fully-qualified Spring @Autowired constructor, field, and single-parameter concrete method injection points",
-        "direct imported or fully-qualified Jakarta/Javax @Inject constructor, field, and single-parameter concrete method injection points",
+        "direct imported or fully-qualified Spring @Autowired constructor, field, and concrete-method parameter injection points",
+        "direct imported or fully-qualified Jakarta/Javax @Inject constructor, field, and concrete-method parameter injection points",
         "unique project-local declared injection types without runtime provider or qualifier inference"
       ]
     });

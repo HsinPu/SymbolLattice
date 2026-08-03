@@ -1166,32 +1166,37 @@ function staticJavaDependencyInjectionSyntax(
 }
 
 /**
- * Retains direct, non-generic constructor, field, and single-parameter
- * concrete-method injection point types. The fact describes a declared DI
- * type dependency, not a runtime bean or provider selection; qualifier,
- * optional, and collection semantics remain intentionally outside this
- * source-only slice.
+ * Retains direct, non-generic constructor, field, and concrete-method
+ * injection point types. Every individually proven method parameter becomes
+ * its own fact; the fact describes a declared DI type dependency, not a
+ * runtime bean or provider selection. Qualifier, optional, and collection
+ * semantics remain intentionally outside this source-only slice.
  */
-function staticJavaSingleParameterInjectionReference(
+function staticJavaMethodInjectionReferences(
   input: JavaExtractFileFactsInput,
   method: StaticJavaMethod
-): StaticJavaSuperclassReference | null {
+): readonly StaticJavaSuperclassReference[] {
   const parameterLists = directChildren(method.node).filter(
     (child) => child.name === "FormalParameters"
   );
   if (parameterLists.length !== 1 || parameterLists[0] === undefined) {
-    return null;
+    return [];
   }
   const parameters = directChildren(parameterLists[0]).filter(
     (child) => child.name === "FormalParameter"
   );
-  if (parameters.length !== 1 || parameters[0] === undefined) {
-    return null;
+  const references: StaticJavaSuperclassReference[] = [];
+  for (const parameter of parameters) {
+    const typeNodes = directChildren(parameter).filter(isJavaDirectTypeName);
+    if (typeNodes.length !== 1 || typeNodes[0] === undefined) {
+      continue;
+    }
+    const reference = staticJavaDirectTypeReference(input, typeNodes[0]);
+    if (reference !== null) {
+      references.push(reference);
+    }
   }
-  const typeNodes = directChildren(parameters[0]).filter(isJavaDirectTypeName);
-  return typeNodes.length === 1 && typeNodes[0] !== undefined
-    ? staticJavaDirectTypeReference(input, typeNodes[0])
-    : null;
+  return references;
 }
 
 function staticJavaDependencyInjectionReferences(
@@ -1265,8 +1270,7 @@ function staticJavaDependencyInjectionReferences(
     if (syntax === null) {
       continue;
     }
-    const reference = staticJavaSingleParameterInjectionReference(input, method);
-    if (reference !== null) {
+    for (const reference of staticJavaMethodInjectionReferences(input, method)) {
       references.push({ syntax, reference });
     }
   }

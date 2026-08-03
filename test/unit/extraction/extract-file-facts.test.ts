@@ -19334,31 +19334,38 @@ describe("source extraction", () => {
         "class Generic @Autowired constructor(val pets: List<PetService>)"
       ].join("\n")
     });
-    const javaMethodRejected = extractFileFacts({
-      filePath: "src/java/app/web/MethodRejected.java",
+    const javaMultiParameter = extractFileFacts({
+      filePath: "src/java/app/web/MethodInjection.java",
       language: "java",
       sourceText: [
         "package app.web;",
         "import org.springframework.beans.factory.annotation.Autowired;",
         "import app.services.PetService;",
+        "import app.services.AuditService;",
         "import java.util.List;",
-        "class MethodRejected {",
+        "class MethodInjection {",
         "  @Autowired static void staticWire(PetService pets) {}",
-        "  @Autowired void two(PetService first, PetService second) {}",
+        "  @Autowired void two(PetService first, AuditService second) {}",
         "  @Autowired void generic(List<PetService> pets) {}",
+        "  @Autowired void mixed(PetService pet, List<PetService> ignored) {}",
+        "  @Autowired void varargs(PetService... pets) {}",
         "}"
       ].join("\n")
     });
-    const kotlinMethodRejected = extractFileFacts({
-      filePath: "src/kotlin/app/web/MethodRejected.kt",
+    const kotlinMultiParameter = extractFileFacts({
+      filePath: "src/kotlin/app/web/MethodInjection.kt",
       language: "kotlin",
       sourceText: [
         "package app.web",
         "import org.springframework.beans.factory.annotation.Autowired",
-        "class MethodRejected {",
+        "import app.services.PetService",
+        "import app.services.AuditService",
+        "class MethodInjection {",
         "  @Autowired fun PetService.extension(pets: PetService): Unit {}",
-        "  @Autowired fun two(first: PetService, second: PetService) {}",
+        "  @Autowired fun two(first: PetService, second: AuditService): Unit {}",
         "  @Autowired fun generic(pets: List<PetService>) {}",
+        "  @Autowired fun mixed(pet: PetService, ignored: List<PetService>) {}",
+        "  @Autowired fun varargs(vararg pets: PetService) {}",
         "}"
       ].join("\n")
     });
@@ -19399,7 +19406,27 @@ describe("source extraction", () => {
     expect(kotlinRejected.jvmFacts?.dependencyInjectionReferences).toEqual([]);
     expect(javaGeneric.jvmFacts?.dependencyInjectionReferences).toEqual([]);
     expect(kotlinGeneric.jvmFacts?.dependencyInjectionReferences).toEqual([]);
-    expect(javaMethodRejected.jvmFacts?.dependencyInjectionReferences).toEqual([]);
-    expect(kotlinMethodRejected.jvmFacts?.dependencyInjectionReferences).toEqual([]);
+    expect(
+      javaMultiParameter.jvmFacts?.dependencyInjectionReferences?.map((reference) => [
+        reference.referenceName,
+        reference.syntax,
+        reference.importedTypePath ?? reference.qualifiedTypePath
+      ])
+    ).toEqual([
+      ["PetService", "spring-autowired-method", "app.services.PetService"],
+      ["AuditService", "spring-autowired-method", "app.services.AuditService"],
+      ["PetService", "spring-autowired-method", "app.services.PetService"]
+    ]);
+    expect(
+      kotlinMultiParameter.jvmFacts?.dependencyInjectionReferences?.map((reference) => [
+        reference.referenceName,
+        reference.syntax,
+        reference.importedTypePath ?? reference.qualifiedTypePath
+      ])
+    ).toEqual([
+      ["PetService", "spring-autowired-method", "app.services.PetService"],
+      ["AuditService", "spring-autowired-method", "app.services.AuditService"],
+      ["PetService", "spring-autowired-method", "app.services.PetService"]
+    ]);
   });
 });

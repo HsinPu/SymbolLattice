@@ -1661,8 +1661,9 @@ describe("SymbolLatticeService", () => {
         "package app.web;",
         "import org.springframework.beans.factory.annotation.Autowired;",
         "import app.services.LegacyService;",
+        "import app.services.PetService;",
         "public class SetterController {",
-        "  @Autowired void setLegacyService(LegacyService legacy) {}",
+        "  @Autowired void setServices(LegacyService legacy, PetService pets) {}",
         "}"
       ].join("\n"),
       "src/java/app/web/QualifiedController.java": [
@@ -1675,6 +1676,10 @@ describe("SymbolLatticeService", () => {
         "package app.services",
         "class AuditService"
       ].join("\n"),
+      "src/kotlin/app/services/EventService.kt": [
+        "package app.services",
+        "class EventService"
+      ].join("\n"),
       "src/kotlin/app/web/AuditController.kt": [
         "package app.web",
         "import jakarta.inject.Inject",
@@ -1685,8 +1690,9 @@ describe("SymbolLatticeService", () => {
         "package app.web",
         "import jakarta.inject.Inject",
         "import app.services.AuditService",
+        "import app.services.EventService",
         "class MethodController {",
-        "  @Inject fun setAuditService(audit: AuditService) {}",
+        "  @Inject fun setServices(audit: AuditService, events: EventService): Unit {}",
         "}"
       ].join("\n")
     });
@@ -1699,6 +1705,10 @@ describe("SymbolLatticeService", () => {
       snapshot.symbols.find((candidate) => candidate.qualifiedName === qualifiedName);
     const injectionEdge = (sourceQualifiedName: string) =>
       snapshot.edges.find(
+        (edge) => edge.sourceId === symbol(sourceQualifiedName)?.id && edge.kind === "references"
+      );
+    const injectionEdges = (sourceQualifiedName: string) =>
+      snapshot.edges.filter(
         (edge) => edge.sourceId === symbol(sourceQualifiedName)?.id && edge.kind === "references"
       );
 
@@ -1720,15 +1730,29 @@ describe("SymbolLatticeService", () => {
         stage: "module"
       }
     });
-    expect(injectionEdge("src/java/app/web/SetterController.java#SetterController")).toMatchObject({
-      targetId: symbol("src/java/app/services/LegacyService.java#LegacyService")?.id,
-      resolution: "exact",
-      confidence: 1,
-      evidence: {
-        ruleId: "framework.jvm-di.spring-autowired-method.explicit-import.local-type",
-        stage: "module"
-      }
-    });
+    expect(injectionEdges("src/java/app/web/SetterController.java#SetterController")).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          targetId: symbol("src/java/app/services/LegacyService.java#LegacyService")?.id,
+          resolution: "exact",
+          confidence: 1,
+          evidence: expect.objectContaining({
+            ruleId: "framework.jvm-di.spring-autowired-method.explicit-import.local-type",
+            stage: "module"
+          })
+        }),
+        expect.objectContaining({
+          targetId: symbol("src/java/app/services/PetService.java#PetService")?.id,
+          resolution: "exact",
+          confidence: 1,
+          evidence: expect.objectContaining({
+            ruleId: "framework.jvm-di.spring-autowired-method.explicit-import.local-type",
+            stage: "module"
+          })
+        })
+      ])
+    );
+    expect(injectionEdges("src/java/app/web/SetterController.java#SetterController")).toHaveLength(2);
     expect(injectionEdge("src/kotlin/app/web/AuditController.kt#AuditController")).toMatchObject({
       targetId: symbol("src/kotlin/app/services/AuditService.kt#AuditService")?.id,
       resolution: "exact",
@@ -1738,15 +1762,29 @@ describe("SymbolLatticeService", () => {
         stage: "module"
       }
     });
-    expect(injectionEdge("src/kotlin/app/web/MethodController.kt#MethodController")).toMatchObject({
-      targetId: symbol("src/kotlin/app/services/AuditService.kt#AuditService")?.id,
-      resolution: "exact",
-      confidence: 1,
-      evidence: {
-        ruleId: "framework.jvm-di.jakarta-inject-method.explicit-import.local-type",
-        stage: "module"
-      }
-    });
+    expect(injectionEdges("src/kotlin/app/web/MethodController.kt#MethodController")).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          targetId: symbol("src/kotlin/app/services/AuditService.kt#AuditService")?.id,
+          resolution: "exact",
+          confidence: 1,
+          evidence: expect.objectContaining({
+            ruleId: "framework.jvm-di.jakarta-inject-method.explicit-import.local-type",
+            stage: "module"
+          })
+        }),
+        expect.objectContaining({
+          targetId: symbol("src/kotlin/app/services/EventService.kt#EventService")?.id,
+          resolution: "exact",
+          confidence: 1,
+          evidence: expect.objectContaining({
+            ruleId: "framework.jvm-di.jakarta-inject-method.explicit-import.local-type",
+            stage: "module"
+          })
+        })
+      ])
+    );
+    expect(injectionEdges("src/kotlin/app/web/MethodController.kt#MethodController")).toHaveLength(2);
 
     const javaFacts = graphStore
       .getArtifactFacts(projectPath)
@@ -1799,8 +1837,9 @@ describe("SymbolLatticeService", () => {
       [
         "package app.web;",
         "import app.services.LegacyService;",
+        "import app.services.PetService;",
         "public class SetterController {",
-        "  void setLegacyService(LegacyService legacy) {}",
+        "  void setServices(LegacyService legacy, PetService pets) {}",
         "}"
       ].join("\n"),
       "utf8"
