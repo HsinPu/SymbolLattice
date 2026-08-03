@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.217.0 is a developer preview. Run it from source.
+> v0.218.0 is a developer preview. Run it from source.
 
 SymbolLattice indexes a project into a local code-symbol graph. Every relation retains its rule, evidence stage, and confidence; `exact`, `heuristic`, and `unresolved` are never conflated.
 
@@ -46,12 +46,12 @@ Index data is stored in the target project's `.symbol-lattice/index.sqlite`. On 
 > [!NOTE]
 > Create the graph with `init`, then explicitly run `sync` after source or project-configuration changes. MCP queries never write or rebuild a graph.
 
-## v0.217.0 highlights
+## v0.218.0 highlights
 
-- Scans conventional Maven `pom.xml` modules and literal Gradle `include` modules, retaining Java/Kotlin `src/main` and `src/test` membership as reviewable project evidence.
-- When Maven/Gradle evidence exists, a same-package parent without an import or qualified type can produce an `exact` relation only within one visible source set of one unambiguous module. Tests can see same-module main; main never links to test.
-- Explicit imports and qualified types retain their independent syntax proof. This release does not claim Maven/Gradle dependency parsing, compiler-classpath resolution, or custom Gradle `projectDir` support.
-- `pom.xml`, Gradle settings, and selected build files are persisted as index inputs, so configuration changes can require a graph sync.
+- Scans conventional Maven/Gradle modules and Java/Kotlin `src/main` and `src/test`; same-package parents still require one visible source set in one unambiguous module.
+- Adds **direct, literal** Gradle `project(...)` dependency evidence. Cross-module parents already proven by an explicit import or qualified type now retain their Gradle build-file evidence and rule.
+- Recognizes only standard `api`, `implementation`, `compileOnly`, and corresponding test configurations. Maven dependencies, dynamic Gradle, transitive dependencies, compiler classpaths, and custom Gradle `projectDir` remain unverified.
+- `pom.xml`, Gradle settings, and selected build files are persisted as index inputs, so configuration changes require an explicit `sync`.
 
 ## Scope and guarantees
 

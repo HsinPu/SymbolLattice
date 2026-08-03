@@ -1703,6 +1703,74 @@ describe("SymbolLatticeService", () => {
     });
   });
 
+  it("persists direct Gradle project dependency evidence for syntax-proven JVM parents", async () => {
+    const projectPath = await createInlineProject({
+      "settings.gradle.kts": 'include(":api", ":app")\n',
+      "api/build.gradle.kts": "plugins {}\n",
+      "app/build.gradle.kts": [
+        "plugins {}",
+        "dependencies {",
+        '  implementation(project(":api"))',
+        "  testImplementation project(':api')",
+        "}"
+      ].join("\n"),
+      "api/src/main/java/example/api/Contract.java": [
+        "package example.api;",
+        "public interface Contract {}"
+      ].join("\n"),
+      "app/src/main/java/example/app/ImportedChild.java": [
+        "package example.app;",
+        "import example.api.Contract;",
+        "public class ImportedChild implements Contract {}"
+      ].join("\n"),
+      "app/src/test/java/example/app/QualifiedTestChild.java": [
+        "package example.app;",
+        "public class QualifiedTestChild implements example.api.Contract {}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    expect(await service.init({ projectPath })).toMatchObject({ stale: false });
+    const snapshot = graphStore.getSnapshot(projectPath);
+    const symbol = (qualifiedName: string) =>
+      snapshot.symbols.find((candidate) => candidate.qualifiedName === qualifiedName);
+    const implementsEdge = (sourceQualifiedName: string) =>
+      snapshot.edges.find(
+        (edge) => edge.sourceId === symbol(sourceQualifiedName)?.id && edge.kind === "implements"
+      );
+    const configurationPaths = ["api/build.gradle.kts", "app/build.gradle.kts", "settings.gradle.kts"];
+
+    expect(implementsEdge("app/src/main/java/example/app/ImportedChild.java#ImportedChild")).toMatchObject({
+      targetId: symbol("api/src/main/java/example/api/Contract.java#Contract")?.id,
+      resolution: "exact",
+      evidence: {
+        ruleId: "syntax.jvm.cross-file.explicit-import.declared-gradle-project.direct-implements",
+        configurationPaths
+      }
+    });
+    expect(
+      implementsEdge("app/src/test/java/example/app/QualifiedTestChild.java#QualifiedTestChild")
+    ).toMatchObject({
+      targetId: symbol("api/src/main/java/example/api/Contract.java#Contract")?.id,
+      resolution: "exact",
+      evidence: {
+        ruleId: "syntax.jvm.cross-file.qualified-type.declared-gradle-project.direct-implements",
+        configurationPaths
+      }
+    });
+
+    await writeFile(
+      join(projectPath, "app", "build.gradle.kts"),
+      ["plugins {}", "dependencies {", '  implementation(project(":api"))', "  // changed", "}"].join("\n"),
+      "utf8"
+    );
+    expect(await service.getStatus(projectPath)).toMatchObject({
+      stale: true,
+      staleReasons: expect.arrayContaining(["project-inputs-changed"])
+    });
+  });
+
   it("bounds selected investigation declaration source without reading live files", async () => {
     const padding = Array.from(
       { length: NODE_SOURCE_LINE_LIMIT },

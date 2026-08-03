@@ -1704,6 +1704,110 @@ describe("JVM module-aware same-package heritage resolution", () => {
       }
     });
   });
+
+  it("adds direct Gradle project dependency evidence to imported and qualified parents", () => {
+    const sourceDocuments: readonly SourceDocument[] = [
+      {
+        absolutePath: "C:/project/api/src/main/java/example/api/Contract.java",
+        relativePath: "api/src/main/java/example/api/Contract.java",
+        language: "java",
+        sourceText: "package example.api; public interface Contract {}\n",
+        contentHash: "contract"
+      },
+      {
+        absolutePath: "C:/project/app/src/main/java/example/app/ImportedChild.java",
+        relativePath: "app/src/main/java/example/app/ImportedChild.java",
+        language: "java",
+        sourceText: [
+          "package example.app;",
+          "import example.api.Contract;",
+          "public class ImportedChild implements Contract {}"
+        ].join("\n"),
+        contentHash: "imported-child"
+      },
+      {
+        absolutePath: "C:/project/app/src/test/java/example/app/QualifiedTestChild.java",
+        relativePath: "app/src/test/java/example/app/QualifiedTestChild.java",
+        language: "java",
+        sourceText:
+          "package example.app; public class QualifiedTestChild implements example.api.Contract {}\n",
+        contentHash: "qualified-test-child"
+      }
+    ];
+    const configurationPaths = ["api/build.gradle.kts", "app/build.gradle.kts", "settings.gradle.kts"];
+    const snapshot = resolveProjectFacts({
+      sourceDocuments,
+      extractedFiles: sourceDocuments.map((document) =>
+        extractFileFacts({
+          filePath: document.relativePath,
+          language: document.language,
+          sourceText: document.sourceText
+        })
+      ),
+      indexedAt: "2026-08-03T00:00:00.000Z",
+      jvmProjectModuleEvidence: {
+        memberships: [
+          {
+            filePath: "api/src/main/java/example/api/Contract.java",
+            moduleId: "gradle:api/build.gradle.kts",
+            sourceSet: "main",
+            configurationPaths
+          },
+          {
+            filePath: "app/src/main/java/example/app/ImportedChild.java",
+            moduleId: "gradle:app/build.gradle.kts",
+            sourceSet: "main",
+            configurationPaths
+          },
+          {
+            filePath: "app/src/test/java/example/app/QualifiedTestChild.java",
+            moduleId: "gradle:app/build.gradle.kts",
+            sourceSet: "test",
+            configurationPaths
+          }
+        ],
+        dependencies: [
+          {
+            sourceModuleId: "gradle:app/build.gradle.kts",
+            targetModuleId: "gradle:api/build.gradle.kts",
+            consumerSourceSet: "main",
+            kind: "gradle-project",
+            configurationPaths
+          },
+          {
+            sourceModuleId: "gradle:app/build.gradle.kts",
+            targetModuleId: "gradle:api/build.gradle.kts",
+            consumerSourceSet: "test",
+            kind: "gradle-project",
+            configurationPaths
+          }
+        ]
+      }
+    });
+    const symbol = (qualifiedName: string) =>
+      snapshot.symbols.find((candidate) => candidate.qualifiedName === qualifiedName);
+    const implementsEdge = (qualifiedName: string) =>
+      snapshot.edges.find((edge) => edge.sourceId === symbol(qualifiedName)?.id && edge.kind === "implements");
+
+    expect(implementsEdge("app/src/main/java/example/app/ImportedChild.java#ImportedChild")).toMatchObject({
+      targetId: symbol("api/src/main/java/example/api/Contract.java#Contract")?.id,
+      resolution: "exact",
+      evidence: {
+        ruleId: "syntax.jvm.cross-file.explicit-import.declared-gradle-project.direct-implements",
+        configurationPaths
+      }
+    });
+    expect(
+      implementsEdge("app/src/test/java/example/app/QualifiedTestChild.java#QualifiedTestChild")
+    ).toMatchObject({
+      targetId: symbol("api/src/main/java/example/api/Contract.java#Contract")?.id,
+      resolution: "exact",
+      evidence: {
+        ruleId: "syntax.jvm.cross-file.qualified-type.declared-gradle-project.direct-implements",
+        configurationPaths
+      }
+    });
+  });
 });
 
 describe("literal route handler resolution", () => {

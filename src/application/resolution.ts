@@ -49,6 +49,7 @@ import type {
   ProjectModuleResolver,
   ResolvedModule,
   SourceDocument,
+  JvmModuleDependency,
   JvmModuleMembership,
   JvmProjectModuleEvidence,
   XcodeTargetMembership
@@ -6236,6 +6237,7 @@ function jvmHeritageRelationKind(input: {
 function jvmHeritageRuleId(input: {
   readonly syntax: JvmHeritageSyntax;
   readonly resolutionProof: "explicit-import" | "qualified-type" | "same-package";
+  readonly declaredProjectDependency?: JvmModuleDependency["kind"];
   readonly relationKind: JvmHeritageRelationKind;
   readonly sourceKind: SymbolNode["kind"];
 }): string {
@@ -6246,7 +6248,11 @@ function jvmHeritageRuleId(input: {
           (input.syntax === "kotlin-supertype" && input.sourceKind === "interface")
         ? "direct-interface-extends"
         : "direct-superclass";
-  return `syntax.jvm.cross-file.${input.resolutionProof}.${relationship}`;
+  const proof =
+    input.declaredProjectDependency === undefined
+      ? input.resolutionProof
+      : `${input.resolutionProof}.declared-${input.declaredProjectDependency}`;
+  return `syntax.jvm.cross-file.${proof}.${relationship}`;
 }
 
 function jvmModuleMembershipsByFile(
@@ -6306,6 +6312,57 @@ function samePackageJvmModuleEvidence(input: {
     sourceMembership.configurationPaths,
     targetMembership.configurationPaths
   ]);
+}
+
+interface DeclaredJvmProjectDependencyEvidence {
+  readonly kind: JvmModuleDependency["kind"];
+  readonly configurationPaths: readonly string[];
+}
+
+/**
+ * Records a direct Gradle project dependency only as additional evidence for a
+ * relationship already proven by import or qualified-type syntax. Absence of a
+ * declaration does not fabricate a negative result: Maven, dynamic Gradle,
+ * transitive dependencies, and compiler classpaths remain outside this pass.
+ */
+function declaredJvmProjectDependencyEvidence(input: {
+  readonly projectEvidence: JvmProjectModuleEvidence | undefined;
+  readonly membershipsByFile: ReadonlyMap<string, readonly JvmModuleMembership[]>;
+  readonly sourceFilePath: string;
+  readonly targetFilePath: string;
+}): DeclaredJvmProjectDependencyEvidence | null {
+  if (input.projectEvidence === undefined) {
+    return null;
+  }
+  const sourceMemberships = input.membershipsByFile.get(input.sourceFilePath) ?? [];
+  const targetMemberships = input.membershipsByFile.get(input.targetFilePath) ?? [];
+  const sourceMembership = sourceMemberships.length === 1 ? sourceMemberships[0] : undefined;
+  const targetMembership = targetMemberships.length === 1 ? targetMemberships[0] : undefined;
+  if (
+    sourceMembership === undefined ||
+    targetMembership === undefined ||
+    sourceMembership.moduleId === targetMembership.moduleId ||
+    targetMembership.sourceSet !== "main"
+  ) {
+    return null;
+  }
+  const matches = (input.projectEvidence.dependencies ?? []).filter(
+    (dependency) =>
+      dependency.sourceModuleId === sourceMembership.moduleId &&
+      dependency.targetModuleId === targetMembership.moduleId &&
+      (sourceMembership.sourceSet === "test" || dependency.consumerSourceSet === "main")
+  );
+  if (matches.length === 0) {
+    return null;
+  }
+  const kinds = [...new Set(matches.map((dependency) => dependency.kind))];
+  if (kinds.length !== 1 || kinds[0] === undefined) {
+    return null;
+  }
+  return {
+    kind: kinds[0],
+    configurationPaths: uniqueConfigurationPaths(matches.map((dependency) => dependency.configurationPaths))
+  };
 }
 
 /**
@@ -6391,6 +6448,19 @@ function projectJvmHeritageReferences(input: {
     if (samePackageConfigurationPaths === null) {
       continue;
     }
+    const declaredProjectDependency =
+      resolutionProof === "same-package"
+        ? null
+        : declaredJvmProjectDependencyEvidence({
+            projectEvidence: input.jvmProjectModuleEvidence,
+            membershipsByFile,
+            sourceFilePath: source.filePath,
+            targetFilePath: target.filePath
+          });
+    const configurationPaths =
+      resolutionProof === "same-package"
+        ? samePackageConfigurationPaths
+        : declaredProjectDependency?.configurationPaths ?? [];
     const relationKind = jvmHeritageRelationKind({ syntax: reference.syntax, source, target });
     if (relationKind === null) {
       continue;
@@ -6416,12 +6486,15 @@ function projectJvmHeritageReferences(input: {
         jvmHeritageRuleId({
           syntax: reference.syntax,
           resolutionProof,
+          ...(declaredProjectDependency === null
+            ? {}
+            : { declaredProjectDependency: declaredProjectDependency.kind }),
           relationKind,
           sourceKind: source.kind
         }),
         "module",
         candidateSymbolIds(candidates.map((candidate) => candidate.symbol)),
-        samePackageConfigurationPaths,
+        configurationPaths,
         [reference.filePath, target.filePath]
       )
     });

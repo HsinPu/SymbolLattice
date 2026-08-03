@@ -69,7 +69,8 @@ describe("JVM project module evidence", () => {
           sourceSet: "test",
           configurationPaths: ["platform/api/pom.xml", "platform/pom.xml", "pom.xml"]
         }
-      ]
+      ],
+      dependencies: []
     });
   });
 
@@ -77,7 +78,14 @@ describe("JVM project module evidence", () => {
     const projectPath = await createProject({
       "settings.gradle.kts": ['include(":api")', 'include("app")'].join("\n"),
       "api/build.gradle.kts": "plugins {}\n",
-      "app/build.gradle": "plugins {}\n",
+      "app/build.gradle": [
+        "plugins {}",
+        "dependencies {",
+        "  implementation project(':api')",
+        "  testImplementation(project(\"api\"))",
+        "  runtimeOnly(project(':api'))",
+        "}"
+      ].join("\n"),
       "api/src/main/java/example/Contract.java": "package example; interface Contract {}\n",
       "api/src/test/kotlin/example/ContractTest.kt": "package example\nclass ContractTest\n",
       "app/src/main/kotlin/example/Consumer.kt": "package example\nclass Consumer\n"
@@ -112,8 +120,67 @@ describe("JVM project module evidence", () => {
           sourceSet: "main",
           configurationPaths: ["app/build.gradle", "settings.gradle.kts"]
         }
+      ],
+      dependencies: [
+        {
+          sourceModuleId: "gradle:app/build.gradle",
+          targetModuleId: "gradle:api/build.gradle.kts",
+          consumerSourceSet: "main",
+          kind: "gradle-project",
+          configurationPaths: ["api/build.gradle.kts", "app/build.gradle", "settings.gradle.kts"]
+        },
+        {
+          sourceModuleId: "gradle:app/build.gradle",
+          targetModuleId: "gradle:api/build.gradle.kts",
+          consumerSourceSet: "test",
+          kind: "gradle-project",
+          configurationPaths: ["api/build.gradle.kts", "app/build.gradle", "settings.gradle.kts"]
+        }
       ]
     });
+  });
+
+  it("ignores Gradle include and dependency text inside multiline strings", async () => {
+    const projectPath = await createProject({
+      "settings.gradle.kts": [
+        'val ignored = """',
+        'include(":phantom")',
+        '"""',
+        'include(":api", ":app")'
+      ].join("\n"),
+      "api/build.gradle.kts": "plugins {}\n",
+      "app/build.gradle.kts": [
+        "plugins {}",
+        'val ignored = """',
+        "dependencies {",
+        '  implementation(project(":phantom"))',
+        "}",
+        '"""',
+        "dependencies {",
+        '  implementation(project(":api"))',
+        "}"
+      ].join("\n"),
+      "phantom/build.gradle.kts": "plugins {}\n",
+      "api/src/main/java/example/Contract.java": "package example; interface Contract {}\n",
+      "app/src/main/java/example/Consumer.java": "package example; class Consumer {}\n"
+    });
+
+    const scan = await new FileSystemSourceCatalog().scan(projectPath);
+
+    expect(scan.jvmProjectModuleEvidence?.dependencies).toEqual([
+      {
+        sourceModuleId: "gradle:app/build.gradle.kts",
+        targetModuleId: "gradle:api/build.gradle.kts",
+        consumerSourceSet: "main",
+        kind: "gradle-project",
+        configurationPaths: ["api/build.gradle.kts", "app/build.gradle.kts", "settings.gradle.kts"]
+      }
+    ]);
+    expect(scan.indexInputs.configurationInputs).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: "gradle-build", path: "phantom/build.gradle.kts" })
+      ])
+    );
   });
 
   it("does not guess a Gradle projectDir mapping or access an unsafe module directory", async () => {
@@ -128,7 +195,7 @@ describe("JVM project module evidence", () => {
 
     const scan = await new FileSystemSourceCatalog().scan(projectPath);
 
-    expect(scan.jvmProjectModuleEvidence).toEqual({ memberships: [] });
+    expect(scan.jvmProjectModuleEvidence).toEqual({ memberships: [], dependencies: [] });
     expect(scan.indexInputs.configurationInputs).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ kind: "gradle-build", path: "api/build.gradle", state: "absent" }),

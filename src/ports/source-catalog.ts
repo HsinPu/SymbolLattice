@@ -63,6 +63,18 @@ export interface JvmModuleMembership {
   readonly configurationPaths: readonly string[];
 }
 
+/** One direct, statically declared dependency between indexed JVM modules. */
+export interface JvmModuleDependency {
+  readonly sourceModuleId: string;
+  readonly targetModuleId: string;
+  /** The Gradle source-set configuration that makes the target available. */
+  readonly consumerSourceSet: JvmModuleSourceSet;
+  /** The build-system syntax that supplied this bounded evidence. */
+  readonly kind: "gradle-project";
+  /** Build files that established this declaration, in project-relative order. */
+  readonly configurationPaths: readonly string[];
+}
+
 /**
  * Optional JVM layout evidence. Its presence means a Maven or Gradle root was
  * found, so same-package cross-file heritage must not cross an unproven module
@@ -70,6 +82,8 @@ export interface JvmModuleMembership {
  */
 export interface JvmProjectModuleEvidence {
   readonly memberships: readonly JvmModuleMembership[];
+  /** Optional so pre-v0.218 custom catalogs remain compatible. */
+  readonly dependencies?: readonly JvmModuleDependency[];
 }
 
 export interface ProjectScan {
