@@ -50,6 +50,7 @@ type FrameworkImportedConstructor =
   | "NinjaAPI"
   | "Router"
   | "Flask"
+  | "Api"
   | "Blueprint"
   | "Starlette"
   | "Sanic";
@@ -82,8 +83,27 @@ interface FastApiRouter extends FrameworkDirectInstance {
 
 interface FlaskApplication extends FrameworkDirectInstance {}
 
+/** A direct `flask_restful.Api(app)` binding tied to one proven Flask application. */
+interface FlaskRestfulApi extends FrameworkDirectInstance {
+  readonly applicationName: string;
+}
+
 interface FlaskBlueprint extends FrameworkDirectInstance {
   readonly prefix: string;
+}
+
+/** A direct, undecorated top-level `Resource` subclass with a stable class binding. */
+interface FlaskRestfulResourceClass {
+  readonly name: string;
+  readonly resourceBaseName: string;
+  readonly node: PythonSyntaxNode;
+  readonly symbol: SymbolNode;
+}
+
+/** One unique direct HTTP method on a proven Flask-RESTful Resource subclass. */
+interface FlaskRestfulResourceMethod {
+  readonly method: RouteMethod;
+  readonly handler: SymbolNode;
 }
 
 interface StarletteApplication extends FrameworkDirectInstance {
@@ -193,6 +213,14 @@ interface StaticFlaskBlueprintRegistration {
   readonly applicationName: string;
   readonly blueprintName: string;
   readonly prefix: string;
+  readonly node: PythonSyntaxNode;
+}
+
+/** One direct literal `api.add_resource(Resource, "/path", ...)` registration. */
+interface StaticFlaskRestfulResourceRegistration {
+  readonly apiName: string;
+  readonly resourceClassName: string;
+  readonly paths: readonly string[];
   readonly node: PythonSyntaxNode;
 }
 
@@ -412,6 +440,17 @@ const FLASK_ROUTE_METHODS = new Set<RouteMethod>([
   "TRACE"
 ]);
 
+const FLASK_RESTFUL_RESOURCE_METHODS: Readonly<Record<string, RouteMethod>> = {
+  get: "GET",
+  post: "POST",
+  put: "PUT",
+  patch: "PATCH",
+  delete: "DELETE",
+  head: "HEAD",
+  options: "OPTIONS",
+  trace: "TRACE"
+};
+
 const STARLETTE_ROUTE_METHODS = new Set<RouteMethod>([
   "GET",
   "POST",
@@ -628,6 +667,13 @@ function staticFlaskImports(
   node: PythonSyntaxNode
 ): readonly FrameworkNamedImport[] {
   return staticNamedFrameworkImports(input, node, "flask");
+}
+
+function staticFlaskRestfulImports(
+  input: PythonExtractFileFactsInput,
+  node: PythonSyntaxNode
+): readonly FrameworkNamedImport[] {
+  return staticNamedFrameworkImports(input, node, "flask_restful");
 }
 
 function staticDjangoUrlImports(
@@ -1332,6 +1378,31 @@ function staticFlaskApplication(
     : { name: assignment.name, constructorName: assignment.constructorName, node: assignment.node };
 }
 
+function staticFlaskRestfulApi(
+  input: PythonExtractFileFactsInput,
+  node: PythonSyntaxNode,
+  constructorNames: ReadonlySet<string>
+): FlaskRestfulApi | null {
+  const assignment = staticFrameworkConstructorAssignment(input, node, constructorNames);
+  if (assignment === null) {
+    return null;
+  }
+  const entries = staticArgumentEntries(assignment.arguments_);
+  const applicationNode = entries[0];
+  if (entries.length !== 1 || applicationNode?.name !== "VariableName") {
+    return null;
+  }
+  const applicationName = declarationName(input, applicationNode);
+  return applicationName === null
+    ? null
+    : {
+        name: assignment.name,
+        constructorName: assignment.constructorName,
+        applicationName,
+        node: assignment.node
+      };
+}
+
 function staticFlaskBlueprint(
   input: PythonExtractFileFactsInput,
   node: PythonSyntaxNode,
@@ -1394,6 +1465,44 @@ function targetBindsName(
   return directChildren(node).some((child) => targetBindsName(input, child, name));
 }
 
+function directMemberTargetMatches(
+  input: PythonExtractFileFactsInput,
+  node: PythonSyntaxNode,
+  receiverName: string,
+  propertyName: string
+): boolean {
+  if (node.name !== "MemberExpression") {
+    return false;
+  }
+  const children = directChildren(node);
+  const receiver = children[0];
+  const property = children[2];
+  return (
+    children.length === 3 &&
+    receiver?.name === "VariableName" &&
+    property?.name === "PropertyName" &&
+    declarationName(input, receiver) === receiverName &&
+    nodeText(input, property) === propertyName
+  );
+}
+
+function targetBindsMember(
+  input: PythonExtractFileFactsInput,
+  node: PythonSyntaxNode,
+  receiverName: string,
+  propertyName: string
+): boolean {
+  if (directMemberTargetMatches(input, node, receiverName, propertyName)) {
+    return true;
+  }
+  if (!["TupleExpression", "ListExpression", "ParenthesizedExpression", "StarExpression"].includes(node.name)) {
+    return false;
+  }
+  return directChildren(node).some((child) =>
+    targetBindsMember(input, child, receiverName, propertyName)
+  );
+}
+
 function assignmentBindsName(
   input: PythonExtractFileFactsInput,
   node: PythonSyntaxNode,
@@ -1402,6 +1511,27 @@ function assignmentBindsName(
   const children = directChildren(node);
   return children.some(
     (child, index) => children[index + 1]?.name === "AssignOp" && targetBindsName(input, child, name)
+  );
+}
+
+function assignmentBindsMember(
+  input: PythonExtractFileFactsInput,
+  node: PythonSyntaxNode,
+  receiverName: string,
+  propertyName: string
+): boolean {
+  const children = directChildren(node);
+  const firstAssignIndex = children.findIndex((child) => child.name === "AssignOp");
+  return (
+    children.some(
+      (child, index) =>
+        children[index + 1]?.name === "AssignOp" &&
+        targetBindsMember(input, child, receiverName, propertyName)
+    ) ||
+    (firstAssignIndex > 0 &&
+      children
+        .slice(0, firstAssignIndex)
+        .some((child) => targetBindsMember(input, child, receiverName, propertyName)))
   );
 }
 
@@ -1468,6 +1598,39 @@ function hasTopLevelRebinding(
       candidate.from >= after &&
       candidate.to <= before &&
       topLevelNodeBindsName(input, candidate, name)
+  );
+}
+
+function topLevelNodeBindsMember(
+  input: PythonExtractFileFactsInput,
+  node: PythonSyntaxNode,
+  receiverName: string,
+  propertyName: string
+): boolean {
+  if (node.name === "AssignStatement" || node.name === "NamedExpression") {
+    return assignmentBindsMember(input, node, receiverName, propertyName);
+  }
+  if (node.name === "UpdateStatement" || node.name === "DeleteStatement") {
+    return directChildren(node).some((child) =>
+      targetBindsMember(input, child, receiverName, propertyName)
+    );
+  }
+  return false;
+}
+
+function hasTopLevelMemberRebinding(
+  input: PythonExtractFileFactsInput,
+  topLevelNodes: readonly PythonSyntaxNode[],
+  receiverName: string,
+  propertyName: string,
+  after: number,
+  before: number
+): boolean {
+  return topLevelNodes.some(
+    (candidate) =>
+      candidate.from >= after &&
+      candidate.to <= before &&
+      topLevelNodeBindsMember(input, candidate, receiverName, propertyName)
   );
 }
 
@@ -2907,6 +3070,100 @@ function staticFlaskBlueprintRegistration(
     : { applicationName, blueprintName, prefix, node };
 }
 
+function staticFlaskRestfulResourceRegistration(
+  input: PythonExtractFileFactsInput,
+  node: PythonSyntaxNode
+): StaticFlaskRestfulResourceRegistration | null {
+  if (node.name !== "ExpressionStatement") {
+    return null;
+  }
+  const expression = directChildren(node)[0];
+  if (expression?.name !== "CallExpression") {
+    return null;
+  }
+  const callChildren = directChildren(expression);
+  const member = callChildren[0];
+  const argumentList = callChildren[1];
+  if (callChildren.length !== 2 || member?.name !== "MemberExpression" || argumentList?.name !== "ArgList") {
+    return null;
+  }
+  const memberChildren = directChildren(member);
+  const apiNode = memberChildren[0];
+  const methodNode = memberChildren[2];
+  if (
+    memberChildren.length !== 3 ||
+    apiNode?.name !== "VariableName" ||
+    methodNode?.name !== "PropertyName" ||
+    nodeText(input, methodNode) !== "add_resource"
+  ) {
+    return null;
+  }
+  const apiName = declarationName(input, apiNode);
+  const entries = staticArgumentEntries(argumentList);
+  const resourceNode = entries[0];
+  if (apiName === null || resourceNode?.name !== "VariableName" || entries.length < 2) {
+    return null;
+  }
+  const resourceClassName = declarationName(input, resourceNode);
+  const paths = entries.slice(1).map((entry) => {
+    const rawPath = entry.name === "String" ? staticPlainPythonString(input, entry) : null;
+    return rawPath === null ? null : staticStarletteRoutePath(rawPath);
+  });
+  if (
+    resourceClassName === null ||
+    paths.some((path) => path === null) ||
+    new Set(paths).size !== paths.length
+  ) {
+    return null;
+  }
+  return { apiName, resourceClassName, paths: paths as readonly string[], node };
+}
+
+function staticFlaskRestfulResourceClass(
+  input: PythonExtractFileFactsInput,
+  node: PythonSyntaxNode,
+  symbol: SymbolNode
+): FlaskRestfulResourceClass | null {
+  if (node.name !== "ClassDefinition" || !isTopLevelClass(node)) {
+    return null;
+  }
+  const name = declarationName(input, node);
+  const bases = directChildren(node).find((child) => child.name === "ArgList");
+  if (name === null || bases === undefined) {
+    return null;
+  }
+  const entries = staticArgumentEntries(bases);
+  const resourceBaseNode = entries[0];
+  if (entries.length !== 1 || resourceBaseNode?.name !== "VariableName") {
+    return null;
+  }
+  const resourceBaseName = declarationName(input, resourceBaseNode);
+  return resourceBaseName === null ? null : { name, resourceBaseName, node, symbol };
+}
+
+function directFlaskRestfulResourceMethods(
+  input: PythonExtractFileFactsInput,
+  resource: FlaskRestfulResourceClass,
+  symbolsByNodeKey: ReadonlyMap<string, SymbolNode>
+): readonly FlaskRestfulResourceMethod[] {
+  const body = directChildren(resource.node).find((child) => child.name === "Body");
+  if (body === undefined) {
+    return [];
+  }
+  const candidates = directChildren(body).flatMap((member) => {
+    if (member.name !== "FunctionDefinition" || !isDirectClassMethod(member)) {
+      return [];
+    }
+    const name = declarationName(input, member);
+    const method = name === null ? undefined : FLASK_RESTFUL_RESOURCE_METHODS[name];
+    const handler = symbolsByNodeKey.get(nodeKey(member));
+    return method === undefined || handler?.kind !== "method" ? [] : [{ method, handler }];
+  });
+  return candidates.filter(
+    (candidate) => candidates.filter((other) => other.method === candidate.method).length === 1
+  );
+}
+
 function hasUnambiguousFrameworkImportAlias(
   imports: readonly FrameworkNamedImport[],
   candidate: FrameworkNamedImport
@@ -2916,6 +3173,27 @@ function hasUnambiguousFrameworkImportAlias(
       (other) => other.alias === candidate.alias && nodeKey(other.node) === nodeKey(candidate.node)
     ).length === 1
   );
+}
+
+function latestProvenFrameworkNamedImport(
+  input: PythonExtractFileFactsInput,
+  topLevelNodes: readonly PythonSyntaxNode[],
+  imports: readonly FrameworkNamedImport[],
+  importedName: string,
+  alias: string,
+  before: number
+): FrameworkNamedImport | null {
+  const candidates = imports
+    .filter(
+      (candidate) =>
+        candidate.importedName === importedName &&
+        candidate.alias === alias &&
+        candidate.node.to <= before &&
+        hasUnambiguousFrameworkImportAlias(imports, candidate) &&
+        !hasTopLevelRebinding(input, topLevelNodes, candidate.alias, candidate.node.to, before)
+    )
+    .sort((left, right) => right.node.from - left.node.from);
+  return candidates[0] ?? null;
 }
 
 function latestProvenFrameworkInstance<T extends FrameworkDirectInstance>(
@@ -3177,6 +3455,73 @@ function latestProvenFlaskApplication(
     before,
     "Flask"
   );
+}
+
+function latestProvenFlaskRestfulApi(
+  input: PythonExtractFileFactsInput,
+  topLevelNodes: readonly PythonSyntaxNode[],
+  flaskImports: readonly FrameworkNamedImport[],
+  flaskApplications: readonly FlaskApplication[],
+  flaskRestfulImports: readonly FrameworkNamedImport[],
+  flaskRestfulApis: readonly FlaskRestfulApi[],
+  apiName: string,
+  before: number
+): FlaskRestfulApi | null {
+  const api = latestProvenFrameworkInstance(
+    input,
+    topLevelNodes,
+    flaskRestfulImports,
+    flaskRestfulApis,
+    apiName,
+    before,
+    "Api"
+  );
+  if (api === null) {
+    return null;
+  }
+  return latestProvenFlaskApplication(
+    input,
+    topLevelNodes,
+    flaskImports,
+    flaskApplications,
+    api.applicationName,
+    api.node.from
+  ) === null
+    ? null
+    : api;
+}
+
+function latestProvenFlaskRestfulResourceClass(
+  input: PythonExtractFileFactsInput,
+  topLevelNodes: readonly PythonSyntaxNode[],
+  flaskRestfulImports: readonly FrameworkNamedImport[],
+  resources: readonly FlaskRestfulResourceClass[],
+  resourceClassName: string,
+  before: number
+): FlaskRestfulResourceClass | null {
+  const candidates = resources
+    .filter(
+      (resource) =>
+        resource.name === resourceClassName &&
+        resource.node.to <= before &&
+        !hasTopLevelRebinding(input, topLevelNodes, resource.name, resource.node.to, before)
+    )
+    .sort((left, right) => right.node.from - left.node.from);
+  for (const resource of candidates) {
+    if (
+      latestProvenFrameworkNamedImport(
+        input,
+        topLevelNodes,
+        flaskRestfulImports,
+        "Resource",
+        resource.resourceBaseName,
+        resource.node.from
+      ) !== null
+    ) {
+      return resource;
+    }
+  }
+  return null;
 }
 
 function latestProvenAioHttpApplication(
@@ -4004,6 +4349,20 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
     const flaskBlueprintRegistrations = topLevelNodes
       .map((node) => staticFlaskBlueprintRegistration(input, node))
       .filter((candidate): candidate is StaticFlaskBlueprintRegistration => candidate !== null);
+    const flaskRestfulImports = topLevelNodes.flatMap((node) => staticFlaskRestfulImports(input, node));
+    const flaskRestfulApiConstructorNames = new Set(
+      flaskRestfulImports
+        .filter((candidate) => candidate.importedName === "Api")
+        .map((candidate) => candidate.alias)
+    );
+    const flaskRestfulApis = topLevelNodes
+      .map((node) => staticFlaskRestfulApi(input, node, flaskRestfulApiConstructorNames))
+      .filter((candidate): candidate is FlaskRestfulApi => candidate !== null);
+    const flaskRestfulResourceRegistrations = topLevelNodes
+      .map((node) => staticFlaskRestfulResourceRegistration(input, node))
+      .filter(
+        (candidate): candidate is StaticFlaskRestfulResourceRegistration => candidate !== null
+      );
     const djangoUrlImports = topLevelNodes.flatMap((node) => staticDjangoUrlImports(input, node));
     const relativeDjangoUrlconfImports = topLevelNodes
       .map((node) => staticDjangoRelativeUrlconfImport(input, node))
@@ -4129,6 +4488,9 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
       const symbol = symbolsByNodeKey.get(nodeKey(classNode));
       return name === null || symbol?.kind !== "class" ? [] : [{ name, node: classNode, symbol }];
     });
+    const flaskRestfulResourceClasses = topLevelClasses
+      .map((candidate) => staticFlaskRestfulResourceClass(input, candidate.node, candidate.symbol))
+      .filter((candidate): candidate is FlaskRestfulResourceClass => candidate !== null);
     const finalRouters = routers.filter((router) => {
       const finalRouter = latestProvenFrameworkInstance(
         input,
@@ -5363,6 +5725,57 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
               "framework.flask.direct-blueprint.register-blueprint.decorator.local-function"
             );
           }
+        }
+      }
+    }
+
+    for (const registration of flaskRestfulResourceRegistrations) {
+      if (
+        latestProvenFlaskRestfulApi(
+          input,
+          topLevelNodes,
+          flaskImports,
+          flaskApplications,
+          flaskRestfulImports,
+          flaskRestfulApis,
+          registration.apiName,
+          registration.node.from
+        ) === null
+      ) {
+        continue;
+      }
+      const resource = latestProvenFlaskRestfulResourceClass(
+        input,
+        topLevelNodes,
+        flaskRestfulImports,
+        flaskRestfulResourceClasses,
+        registration.resourceClassName,
+        registration.node.from
+      );
+      if (resource === null) {
+        continue;
+      }
+      for (const resourceMethod of directFlaskRestfulResourceMethods(input, resource, symbolsByNodeKey)) {
+        if (
+          hasTopLevelMemberRebinding(
+            input,
+            topLevelNodes,
+            resource.name,
+            resourceMethod.handler.name,
+            resource.node.to,
+            registration.node.from
+          )
+        ) {
+          continue;
+        }
+        for (const path of registration.paths) {
+          addPythonRoute(
+            resourceMethod.method,
+            registration.node,
+            resourceMethod.handler,
+            path,
+            "framework.flask-restful.direct-api.add-resource.resource-method"
+          );
         }
       }
     }

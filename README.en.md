@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.235.0 is a developer preview. Run it from source.
+> v0.236.0 is a developer preview. Run it from source.
 
 SymbolLattice indexes a project into a local code-symbol graph. Every relation retains its rule, evidence stage, and confidence; `exact`, `heuristic`, and `unresolved` are never conflated.
 
@@ -43,15 +43,15 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 Index data is stored in the target project's `.symbol-lattice/index.sqlite`. On Windows PowerShell, use `npm.cmd` when npm is unavailable.
 
-## v0.235.0 highlights
+## v0.236.0 highlights
 
-- Flask now follows project-root absolute `Blueprint` re-exports from final `__init__.py` files, such as `from app.routes.catalog import catalog as public_blueprint`, with full module paths and `exact` evidence.
-- Cross-file Flask, FastAPI, and Django Ninja routes require one local target and a complete `__init__.py` package boundary; direct absolute imports and absolute re-exports are traceable, while dynamic, external, and incomplete-package imports are never projected as routes.
-- Provides multi-language static symbols, calls, imports, routes, and cross-file relationship queries while keeping graph and query data local.
+- Supports same-file Flask-RESTful: a proven `Api(app)`, `Resource` subclass, and literal `add_resource(...)` registration project exact HTTP routes to their concrete class methods.
+- A registration with multiple literal endpoints creates independent, explainable relations for each supported `get`, `post`, `put`, `patch`, `delete`, `head`, `options`, and `trace` method.
+- Flask, FastAPI, and Django Ninja cross-file resolution still requires a complete package boundary and one static target; dynamic or rebound route shapes are never promoted to exact results.
 
 ## Current limits
 
-- Does not infer parent-relative, string-based, or dynamic imports; dynamic paths; conditional construction; rebound API/Router/Blueprint instances; or runtime dynamic dispatch.
+- Does not infer dynamic paths, conditional construction, rebound App/Api/Router/Blueprint/Resource class or method bindings, or runtime dynamic dispatch.
 - This is a code graph, not an RDF/SPARQL knowledge base. It does not perform full type checking or dependency-injection selection.
 - After `init`, source or configuration changes require an explicit `sync`; MCP queries never write or rebuild a graph.
 

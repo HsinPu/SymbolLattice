@@ -4501,6 +4501,126 @@ describe("source extraction", () => {
     ]);
   });
 
+  it("extracts direct Flask-RESTful Resource methods through literal Api registrations", () => {
+    const facts = extractFileFacts({
+      filePath: "app/flask_restful.py",
+      language: "python",
+      sourceText: [
+        "from flask import Flask as App",
+        "from flask_restful import Api as RestApi, Resource as BaseResource",
+        "app = App(__name__)",
+        "api = RestApi(app)",
+        "",
+        "class CatalogResource(BaseResource):",
+        "    def get(self):",
+        "        return []",
+        "",
+        "    def post(self):",
+        "        return {}",
+        "",
+        "api.add_resource(CatalogResource, \"/catalog\", \"/catalog/<int:item_id>\")"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId,
+          edge.evidence?.stage,
+          edge.resolution,
+          edge.confidence
+        ])
+    ).toEqual([
+      [
+        "GET /catalog",
+        "app/flask_restful.py#CatalogResource.get",
+        "framework.flask-restful.direct-api.add-resource.resource-method",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "GET /catalog/<int:item_id>",
+        "app/flask_restful.py#CatalogResource.get",
+        "framework.flask-restful.direct-api.add-resource.resource-method",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "POST /catalog",
+        "app/flask_restful.py#CatalogResource.post",
+        "framework.flask-restful.direct-api.add-resource.resource-method",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "POST /catalog/<int:item_id>",
+        "app/flask_restful.py#CatalogResource.post",
+        "framework.flask-restful.direct-api.add-resource.resource-method",
+        "syntax",
+        "exact",
+        1
+      ]
+    ]);
+  });
+
+  it("rejects dynamic, decorated, and rebound Flask-RESTful resource shapes", () => {
+    const facts = extractFileFacts({
+      filePath: "app/unproven_flask_restful.py",
+      language: "python",
+      sourceText: [
+        "from flask import Flask",
+        "from flask_restful import Api, Resource",
+        "app = Flask(__name__)",
+        "api = Api(app)",
+        "dynamic_path = \"/dynamic\"",
+        "",
+        "class DynamicPath(Resource):",
+        "    def get(self):",
+        "        return {}",
+        "",
+        "api.add_resource(DynamicPath, dynamic_path)",
+        "api.add_resource(DynamicPath, \"/keyword\", endpoint=\"keyword\")",
+        "",
+        "class Decorated(Resource):",
+        "    @wraps",
+        "    def get(self):",
+        "        return {}",
+        "",
+        "api.add_resource(Decorated, \"/decorated\")",
+        "",
+        "class Rebound(Resource):",
+        "    def get(self):",
+        "        return {}",
+        "",
+        "Rebound = make_resource()",
+        "api.add_resource(Rebound, \"/rebound\")",
+        "",
+        "class ReboundMethod(Resource):",
+        "    def get(self):",
+        "        return {}",
+        "",
+        "ReboundMethod.get = override",
+        "api.add_resource(ReboundMethod, \"/rebound-method\")",
+        "",
+        "class WrongBase:",
+        "    def get(self):",
+        "        return {}",
+        "",
+        "api.add_resource(WrongBase, \"/wrong\")"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+  });
+
   it("extracts same-file Flask Blueprint routes through literal registration prefixes", () => {
     const facts = extractFileFacts({
       filePath: "app/catalog.py",

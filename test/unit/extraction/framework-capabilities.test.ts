@@ -229,6 +229,7 @@ describe("first-party framework capabilities", () => {
       surfaces: [
         "direct Flask application decorators",
         "same-file Blueprint decorators through direct register_blueprint",
+        "same-file Flask-RESTful Resource methods through direct Api add_resource literal paths",
         "package-relative imported Blueprint decorators through direct register_blueprint",
         "project-root absolute imported Blueprint decorators through direct register_blueprint",
         "final package-initializer Blueprint re-export chains through package-relative or project-root absolute imports"

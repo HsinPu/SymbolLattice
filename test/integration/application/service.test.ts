@@ -6973,6 +6973,62 @@ describe("SymbolLatticeService", () => {
     );
   });
 
+  it("indexes direct Flask-RESTful Resource methods with exact syntax evidence", async () => {
+    const projectPath = await createInlineProject({
+      "app/main.py": [
+        "from flask import Flask as App",
+        "from flask_restful import Api as RestApi, Resource as BaseResource",
+        "app = App(__name__)",
+        "api = RestApi(app)",
+        "",
+        "class CatalogResource(BaseResource):",
+        "    def get(self):",
+        "        return []",
+        "",
+        "    def post(self):",
+        "        return {}",
+        "",
+        "api.add_resource(CatalogResource, \"/catalog\", \"/catalog/<int:item_id>\")"
+      ].join("\n")
+    });
+    const service = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+
+    expect(routes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "GET",
+          path: "/catalog",
+          handler: expect.objectContaining({ qualifiedName: "app/main.py#CatalogResource.get" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.flask-restful.direct-api.add-resource.resource-method",
+              stage: "syntax"
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "GET",
+          path: "/catalog/<int:item_id>",
+          handler: expect.objectContaining({ qualifiedName: "app/main.py#CatalogResource.get" })
+        }),
+        expect.objectContaining({
+          method: "POST",
+          path: "/catalog",
+          handler: expect.objectContaining({ qualifiedName: "app/main.py#CatalogResource.post" })
+        }),
+        expect.objectContaining({
+          method: "POST",
+          path: "/catalog/<int:item_id>",
+          handler: expect.objectContaining({ qualifiedName: "app/main.py#CatalogResource.post" })
+        })
+      ])
+    );
+  });
+
   it("projects package-relative Flask Blueprint modules through literal prefixes", async () => {
     const projectPath = await createInlineProject({
       "app/__init__.py": "",
