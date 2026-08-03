@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.227.0 為開發者預覽版；請從原始碼執行。
+> v0.228.0 為開發者預覽版；請從原始碼執行。
 
 SymbolLattice 將專案索引為本機程式碼符號圖譜。每條關係都保留規則、證據階段與信心值，並明確區分 `exact`、`heuristic`、`unresolved`。
 
@@ -43,15 +43,15 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 索引資料存放在目標專案的 `.symbol-lattice/index.sqlite`。Windows PowerShell 若無法使用 `npm`，請改用 `npm.cmd`。
 
-## v0.227.0 重點
+## v0.228.0 重點
 
-- Django Ninja 現可辨識固定 `api_operation(["POST", "PATCH"], "/path")` 多方法路由，包括直接 `NinjaAPI` 與已掛載的同檔 `Router`。
-- 僅接受非空、唯一、固定的大寫 `GET`、`POST`、`PUT`、`PATCH`、`DELETE`、`HEAD`、`OPTIONS` 方法陣列與字串路徑；每一個方法均保留獨立的 `exact` 路由證據。
+- Django Ninja 現可追蹤套件內相對匯入的 `Router`，例如 `from .routers.catalog import router as catalog_router`，並經 `api.add_router("/api", catalog_router)` 投影為跨檔精確路由。
+- 外部 Router 的一般裝飾器與固定 `api_operation` 方法陣列都會各自保留 `module` 階段的來源路徑與 `exact` 證據。
 - 持續提供多語言靜態符號、呼叫、匯入、路由與跨檔案關係查詢，且圖譜與查詢資料皆留在本機。
 
 ## 已知邊界
 
-- 本版尚不推論跨檔或字串匯入的 Django Ninja Router、巢狀 Router、動態或非固定方法 `api_operation`、動態路徑、條件式或重綁定的 API/Router 實例。
+- 本版尚不推論絕對、父層或字串匯入的 Django Ninja Router、套件初始化檔 re-export、巢狀 Router、動態或非固定方法 `api_operation`、動態路徑、條件式或重綁定的 API/Router 實例。
 - 此專案是程式碼圖譜，不是 RDF/SPARQL 知識庫，也不推論執行期動態派發、完整型別檢查或依賴注入選擇結果。
 - `init` 建圖後，原始碼或設定變更需由使用者明確執行 `sync`；MCP 查詢不會寫入或重建圖譜。
 

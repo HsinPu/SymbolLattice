@@ -4694,6 +4694,156 @@ describe("SymbolLatticeService", () => {
     );
   });
 
+  it("indexes package-relative Django Ninja Router modules through direct add_router prefixes", async () => {
+    const projectPath = await createInlineProject({
+      "api/__init__.py": "",
+      "api/routers/__init__.py": "",
+      "api/routers/catalog.py": [
+        "from ninja import Router",
+        "router = Router()",
+        "",
+        "@router.get(\"/health\")",
+        "def health(request):",
+        "    return {\"ok\": True}",
+        "",
+        "@router.api_operation([\"POST\", \"PATCH\"], \"/orders\")",
+        "def upsert_order(request):",
+        "    return {\"ok\": True}"
+      ].join("\n"),
+      "api/main.py": [
+        "from ninja import NinjaAPI as Api",
+        "from .routers.catalog import router as catalog_router",
+        "api = Api()",
+        "api.add_router(\"/api\", catalog_router)"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+    const mainFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "api/main.py");
+    const routerFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "api/routers/catalog.py");
+
+    expect(mainFacts).toMatchObject({ extractorVersion: ARTIFACT_FACTS_EXTRACTOR_VERSION });
+    expect(mainFacts?.djangoNinjaRouterFacts).toMatchObject({
+      importedRouterInclusions: [
+        {
+          moduleSpecifier: ".routers.catalog",
+          importedRouterName: "router",
+          routerName: "catalog_router",
+          prefix: "/api"
+        }
+      ]
+    });
+    expect(routerFacts?.djangoNinjaRouterFacts).toMatchObject({
+      routers: [{ name: "router" }],
+      routes: [
+        { routerName: "router", method: "GET", path: "/health", source: "decorator" },
+        { routerName: "router", method: "POST", path: "/orders", source: "api-operation" },
+        { routerName: "router", method: "PATCH", path: "/orders", source: "api-operation" }
+      ]
+    });
+    expect(routes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "GET",
+          path: "/api/health",
+          route: expect.objectContaining({
+            kind: "route",
+            name: "GET /api/health",
+            filePath: "api/routers/catalog.py"
+          }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.django-ninja.imported-router.add-router.decorator.local-function",
+              stage: "module",
+              resolutionPath: ["api/main.py", "api/routers/catalog.py"]
+            })
+          }),
+          handler: expect.objectContaining({ qualifiedName: "api/routers/catalog.py#health" })
+        }),
+        expect.objectContaining({
+          method: "POST",
+          path: "/api/orders",
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.django-ninja.imported-router.add-router.api-operation.local-function",
+              stage: "module",
+              resolutionPath: ["api/main.py", "api/routers/catalog.py"]
+            })
+          }),
+          handler: expect.objectContaining({ qualifiedName: "api/routers/catalog.py#upsert_order" })
+        }),
+        expect.objectContaining({
+          method: "PATCH",
+          path: "/api/orders",
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.django-ninja.imported-router.add-router.api-operation.local-function",
+              stage: "module",
+              resolutionPath: ["api/main.py", "api/routers/catalog.py"]
+            })
+          }),
+          handler: expect.objectContaining({ qualifiedName: "api/routers/catalog.py#upsert_order" })
+        })
+      ])
+    );
+  });
+
+  it("does not project Django Ninja Router targets without a regular package boundary or direct binding", async () => {
+    const missingPackagePath = await createInlineProject({
+      "api/routers/catalog.py": [
+        "from ninja import Router",
+        "router = Router()",
+        "",
+        "@router.get(\"/health\")",
+        "def health(request):",
+        "    return {\"ok\": True}"
+      ].join("\n"),
+      "api/main.py": [
+        "from ninja import NinjaAPI",
+        "from .routers.catalog import router",
+        "api = NinjaAPI()",
+        "api.add_router(\"/api\", router)"
+      ].join("\n")
+    });
+    const reExportPath = await createInlineProject({
+      "api/__init__.py": "",
+      "api/routers/__init__.py": "from .catalog import router as public_router",
+      "api/routers/catalog.py": [
+        "from ninja import Router",
+        "router = Router()",
+        "",
+        "@router.get(\"/health\")",
+        "def health(request):",
+        "    return {\"ok\": True}"
+      ].join("\n"),
+      "api/main.py": [
+        "from ninja import NinjaAPI",
+        "from .routers import public_router",
+        "api = NinjaAPI()",
+        "api.add_router(\"/api\", public_router)"
+      ].join("\n")
+    });
+    const service = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+
+    await service.init({ projectPath: missingPackagePath });
+    await service.init({ projectPath: reExportPath });
+
+    await expect(service.routes(missingPackagePath, { method: "GET" })).resolves.toMatchObject({
+      routes: []
+    });
+    await expect(service.routes(reExportPath, { method: "GET" })).resolves.toMatchObject({ routes: [] });
+  });
+
   it("indexes direct Starlette Route-list routes with exact local handler proof", async () => {
     const projectPath = await createInlineProject({
       "api/main.py": [

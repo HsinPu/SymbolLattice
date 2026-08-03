@@ -681,6 +681,9 @@ function artifactFactsPayload(facts: PersistedArtifactFacts): ArtifactFacts {
     ...(facts.fastApiRouterFacts === undefined
       ? {}
       : { fastApiRouterFacts: facts.fastApiRouterFacts }),
+    ...(facts.djangoNinjaRouterFacts === undefined
+      ? {}
+      : { djangoNinjaRouterFacts: facts.djangoNinjaRouterFacts }),
     ...(facts.flaskBlueprintFacts === undefined
       ? {}
       : { flaskBlueprintFacts: facts.flaskBlueprintFacts }),

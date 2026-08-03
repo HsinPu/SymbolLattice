@@ -4,6 +4,9 @@ import {
   createSymbolId,
   type BindingSpace,
   type DjangoImportedUrlconfInclusionFact,
+  type DjangoNinjaImportedRouterInclusionFact,
+  type DjangoNinjaRouterDeclarationFact,
+  type DjangoNinjaRouterRouteFact,
   type DjangoLiteralUrlconfInclusionFact,
   type DjangoUrlconfInclusionFactory,
   type DjangoUrlPatternHandlerKind,
@@ -4632,6 +4635,225 @@ function projectFastApiImportedRouterRoutes(input: {
   return { symbols, structuralEdges };
 }
 
+interface ResolvedDjangoNinjaRouterTarget {
+  readonly filePath: string;
+  readonly router: DjangoNinjaRouterDeclarationFact;
+}
+
+function resolveExactDjangoNinjaRouterTarget(input: {
+  readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
+  readonly filePath: string;
+  readonly name: string;
+}): ResolvedDjangoNinjaRouterTarget | null {
+  const facts = input.factsByFile.get(input.filePath)?.djangoNinjaRouterFacts;
+  if (facts === undefined) {
+    return null;
+  }
+  const routers = facts.routers.filter((router) => router.name === input.name);
+  const router = routers.length === 1 ? routers[0] : undefined;
+  return router === undefined ? null : { filePath: input.filePath, router };
+}
+
+interface ProjectedDjangoNinjaImportedRouterRoute {
+  readonly inclusionFilePath: string;
+  readonly routerFilePath: string;
+  readonly inclusion: DjangoNinjaImportedRouterInclusionFact;
+  readonly route: DjangoNinjaRouterRouteFact;
+  readonly handler: SymbolNode;
+  readonly path: string;
+}
+
+function compareProjectedDjangoNinjaImportedRouterRoute(
+  left: ProjectedDjangoNinjaImportedRouterRoute,
+  right: ProjectedDjangoNinjaImportedRouterRoute
+): number {
+  return (
+    compareStableText(left.inclusionFilePath, right.inclusionFilePath) ||
+    left.inclusion.range.start.line - right.inclusion.range.start.line ||
+    left.inclusion.range.start.column - right.inclusion.range.start.column ||
+    compareStableText(left.routerFilePath, right.routerFilePath) ||
+    left.route.range.start.line - right.route.range.start.line ||
+    left.route.range.start.column - right.route.range.start.column ||
+    compareStableText(left.route.source, right.route.source) ||
+    compareStableText(left.route.method, right.route.method) ||
+    compareStableText(left.path, right.path) ||
+    compareStableText(left.handler.id, right.handler.id)
+  );
+}
+
+interface DjangoNinjaImportedRouterRouteProjection {
+  readonly symbols: readonly SymbolNode[];
+  readonly structuralEdges: readonly GraphEdge[];
+}
+
+/**
+ * Projects literal handler routes declared on a directly imported Django Ninja
+ * Router. The resolver accepts only a unique, final Router declaration inside
+ * a regular package, so every projected path has an auditable module hop.
+ */
+function projectDjangoNinjaImportedRouterRoutes(input: {
+  readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
+  readonly knownFilePaths: ReadonlySet<string>;
+  readonly fileSymbols: ReadonlyMap<string, SymbolNode>;
+  readonly symbolsById: ReadonlyMap<string, SymbolNode>;
+}): DjangoNinjaImportedRouterRouteProjection {
+  const candidates: ProjectedDjangoNinjaImportedRouterRoute[] = [];
+
+  for (const [inclusionFilePath, facts] of [...input.factsByFile.entries()].sort(([left], [right]) =>
+    compareStableText(left, right)
+  )) {
+    const inclusionFacts = facts.djangoNinjaRouterFacts;
+    if (inclusionFacts === undefined) {
+      continue;
+    }
+
+    for (const inclusion of inclusionFacts.importedRouterInclusions) {
+      const importedRouterFilePath = resolvePythonRelativeModule(
+        input.knownFilePaths,
+        inclusionFilePath,
+        inclusion.moduleSpecifier
+      );
+      if (importedRouterFilePath === null) {
+        continue;
+      }
+      const target = resolveExactDjangoNinjaRouterTarget({
+        factsByFile: input.factsByFile,
+        filePath: importedRouterFilePath,
+        name: inclusion.importedRouterName
+      });
+      if (target === null) {
+        continue;
+      }
+      const routerFacts = input.factsByFile.get(target.filePath)?.djangoNinjaRouterFacts;
+      if (routerFacts === undefined) {
+        continue;
+      }
+
+      for (const route of routerFacts.routes) {
+        if (route.routerName !== target.router.name) {
+          continue;
+        }
+        const handler = input.symbolsById.get(route.handlerId);
+        if (handler?.kind !== "function" || handler.filePath !== target.filePath) {
+          continue;
+        }
+        const path = mountedPythonRoutePathParts([inclusion.prefix, route.path]);
+        if (path === null) {
+          continue;
+        }
+        candidates.push({
+          inclusionFilePath,
+          routerFilePath: target.filePath,
+          inclusion,
+          route,
+          handler,
+          path
+        });
+      }
+    }
+  }
+
+  const symbols: SymbolNode[] = [];
+  const structuralEdges: GraphEdge[] = [];
+  const declarationOrdinals = new Map<string, number>();
+  const seen = new Set<string>();
+  for (const candidate of [...candidates].sort(compareProjectedDjangoNinjaImportedRouterRoute)) {
+    const dedupeKey = [
+      candidate.inclusionFilePath,
+      candidate.inclusion.range.start.line,
+      candidate.inclusion.range.start.column,
+      candidate.routerFilePath,
+      candidate.route.range.start.line,
+      candidate.route.range.start.column,
+      candidate.route.source,
+      candidate.route.method,
+      candidate.path,
+      candidate.handler.id
+    ].join("\u0000");
+    if (seen.has(dedupeKey)) {
+      continue;
+    }
+    seen.add(dedupeKey);
+
+    const file = input.fileSymbols.get(candidate.routerFilePath);
+    if (file === undefined) {
+      continue;
+    }
+    const name = `${candidate.route.method} ${candidate.path}`;
+    const qualifiedName = `${candidate.routerFilePath}#route:${name}`;
+    const declarationOrdinal = declarationOrdinals.get(qualifiedName) ?? 0;
+    declarationOrdinals.set(qualifiedName, declarationOrdinal + 1);
+    const route: SymbolNode = {
+      id: createSymbolId({
+        filePath: candidate.routerFilePath,
+        qualifiedName,
+        kind: "route",
+        declarationOrdinal
+      }),
+      name,
+      qualifiedName,
+      kind: "route",
+      filePath: candidate.routerFilePath,
+      range: candidate.route.range,
+      isExported: false,
+      declarationOrdinal
+    };
+    symbols.push(route);
+    structuralEdges.push({
+      id: createEdgeId({
+        sourceId: file.id,
+        targetId: route.id,
+        kind: "contains",
+        line: candidate.route.range.start.line,
+        column: candidate.route.range.start.column,
+        referenceName: route.name
+      }),
+      sourceId: file.id,
+      targetId: route.id,
+      kind: "contains",
+      filePath: candidate.routerFilePath,
+      range: candidate.route.range,
+      resolution: "exact",
+      confidence: 1,
+      referenceName: route.name,
+      evidence: {
+        ruleId: "syntax.containment",
+        stage: "syntax",
+        candidateSymbolIds: [route.id]
+      }
+    });
+    structuralEdges.push({
+      id: createEdgeId({
+        sourceId: route.id,
+        targetId: candidate.handler.id,
+        kind: "routes",
+        line: candidate.route.range.start.line,
+        column: candidate.route.range.start.column,
+        referenceName: candidate.handler.name
+      }),
+      sourceId: route.id,
+      targetId: candidate.handler.id,
+      kind: "routes",
+      filePath: candidate.routerFilePath,
+      range: candidate.route.range,
+      resolution: "exact",
+      confidence: 1,
+      referenceName: candidate.handler.name,
+      evidence: referenceEvidence(
+        candidate.route.source === "api-operation"
+          ? "framework.django-ninja.imported-router.add-router.api-operation.local-function"
+          : "framework.django-ninja.imported-router.add-router.decorator.local-function",
+        "module",
+        [candidate.handler.id],
+        [],
+        [candidate.inclusionFilePath, candidate.routerFilePath]
+      )
+    });
+  }
+
+  return { symbols, structuralEdges };
+}
+
 interface ResolvedFlaskBlueprintTarget {
   readonly filePath: string;
   readonly blueprint: FlaskBlueprintDeclarationFact;
@@ -6934,6 +7156,18 @@ export function resolveProjectFacts(input: {
   symbols.push(...fastApiImportedRouterRouteProjection.symbols);
   structuralEdges.push(...fastApiImportedRouterRouteProjection.structuralEdges);
   for (const symbol of fastApiImportedRouterRouteProjection.symbols) {
+    symbolsById.set(symbol.id, symbol);
+  }
+
+  const djangoNinjaImportedRouterRouteProjection = projectDjangoNinjaImportedRouterRoutes({
+    factsByFile,
+    knownFilePaths,
+    fileSymbols,
+    symbolsById
+  });
+  symbols.push(...djangoNinjaImportedRouterRouteProjection.symbols);
+  structuralEdges.push(...djangoNinjaImportedRouterRouteProjection.structuralEdges);
+  for (const symbol of djangoNinjaImportedRouterRouteProjection.symbols) {
     symbolsById.set(symbol.id, symbol);
   }
 

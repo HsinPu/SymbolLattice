@@ -3901,6 +3901,113 @@ describe("source extraction", () => {
     });
   });
 
+  it("retains proven cross-file Django Ninja Router and package-relative inclusion facts", () => {
+    const routerFacts = extractFileFacts({
+      filePath: "api/routers/catalog.py",
+      language: "python",
+      sourceText: [
+        "from ninja import Router",
+        "router = Router()",
+        "",
+        "@router.get(\"/health\")",
+        "def health(request):",
+        "    return {\"ok\": True}",
+        "",
+        "@router.api_operation([\"POST\", \"PATCH\"], \"/orders\", tags=[\"orders\"])",
+        "def upsert_order(request):",
+        "    return {\"ok\": True}"
+      ].join("\n")
+    });
+    const mainFacts = extractFileFacts({
+      filePath: "api/main.py",
+      language: "python",
+      sourceText: [
+        "from ninja import NinjaAPI as Api",
+        "from .routers.catalog import router as catalog_router",
+        "api = Api()",
+        "api.add_router(\"/api\", catalog_router)"
+      ].join("\n")
+    });
+
+    expect(routerFacts.djangoNinjaRouterFacts).toMatchObject({
+      routers: [{ name: "router" }],
+      routes: [
+        {
+          routerName: "router",
+          method: "GET",
+          path: "/health",
+          source: "decorator",
+          handlerId: expect.any(String)
+        },
+        {
+          routerName: "router",
+          method: "POST",
+          path: "/orders",
+          source: "api-operation",
+          handlerId: expect.any(String)
+        },
+        {
+          routerName: "router",
+          method: "PATCH",
+          path: "/orders",
+          source: "api-operation",
+          handlerId: expect.any(String)
+        }
+      ],
+      importedRouterInclusions: []
+    });
+    expect(mainFacts.djangoNinjaRouterFacts).toMatchObject({
+      routers: [],
+      routes: [],
+      importedRouterInclusions: [
+        {
+          applicationName: "api",
+          routerName: "catalog_router",
+          importedRouterName: "router",
+          moduleSpecifier: ".routers.catalog",
+          prefix: "/api"
+        }
+      ]
+    });
+  });
+
+  it("rejects parent-relative, rebound, and non-final Django Ninja Router cross-file facts", () => {
+    const inclusionFacts = extractFileFacts({
+      filePath: "api/main.py",
+      language: "python",
+      sourceText: [
+        "from ninja import NinjaAPI",
+        "from ..routers.catalog import router",
+        "api = NinjaAPI()",
+        "api.add_router(\"/parent\", router)",
+        "",
+        "from .routers.catalog import router as catalog_router",
+        "catalog_router = build_router()",
+        "api.add_router(\"/rebound\", catalog_router)"
+      ].join("\n")
+    });
+    const routerFacts = extractFileFacts({
+      filePath: "api/routers/catalog.py",
+      language: "python",
+      sourceText: [
+        "from ninja import Router",
+        "router = Router()",
+        "",
+        "@router.get(\"/health\")",
+        "def health(request):",
+        "    return {\"ok\": True}",
+        "",
+        "router = build_router()"
+      ].join("\n")
+    });
+
+    expect(inclusionFacts.djangoNinjaRouterFacts?.importedRouterInclusions).toEqual([]);
+    expect(routerFacts.djangoNinjaRouterFacts).toMatchObject({
+      routers: [],
+      routes: []
+    });
+  });
+
   it("retains final FastAPI APIRouter exports from a package initializer", () => {
     const facts = extractFileFacts({
       filePath: "api/routers/__init__.py",

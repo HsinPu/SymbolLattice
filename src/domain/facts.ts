@@ -11,13 +11,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v188";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v189";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v74";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v75";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -250,6 +250,49 @@ export interface FastApiRouterFacts {
   /** Omitted only by artifact facts persisted before v0.158. */
   readonly reExports?: readonly FastApiRouterReExportFact[];
   readonly importedRouterInclusions: readonly FastApiImportedRouterInclusionFact[];
+}
+
+/** A direct, top-level Django Ninja `Router` binding. */
+export interface DjangoNinjaRouterDeclarationFact {
+  readonly name: string;
+  readonly range: SourceRange;
+}
+
+/** The syntax surface that declared a route on a Django Ninja Router. */
+export type DjangoNinjaRouterRouteSource = "decorator" | "api-operation";
+
+/** A literal route declared directly on a syntax-proven Django Ninja Router. */
+export interface DjangoNinjaRouterRouteFact {
+  readonly routerName: string;
+  readonly method: RouteMethod;
+  readonly path: string;
+  readonly source: DjangoNinjaRouterRouteSource;
+  /** Stable symbol identity of the directly decorated local handler. */
+  readonly handlerId: string;
+  readonly range: SourceRange;
+}
+
+/**
+ * A direct, single-name, package-relative Router import mounted through a
+ * direct Django Ninja application's literal `add_router` call.
+ */
+export interface DjangoNinjaImportedRouterInclusionFact {
+  readonly applicationName: string;
+  readonly routerName: string;
+  readonly importedRouterName: string;
+  readonly moduleSpecifier: string;
+  readonly prefix: string;
+  readonly range: SourceRange;
+}
+
+/**
+ * Syntax-only facts used to project literal routes through a directly imported
+ * Django Ninja `Router` in another module of the same proven Python package.
+ */
+export interface DjangoNinjaRouterFacts {
+  readonly routers: readonly DjangoNinjaRouterDeclarationFact[];
+  readonly routes: readonly DjangoNinjaRouterRouteFact[];
+  readonly importedRouterInclusions: readonly DjangoNinjaImportedRouterInclusionFact[];
 }
 
 /** A direct, top-level Flask `Blueprint` binding with a literal URL prefix. */
@@ -998,6 +1041,8 @@ export interface ArtifactFacts {
   readonly fastifyPluginFacts?: FastifyPluginFacts;
   /** Omitted only by artifact facts persisted before v0.31. */
   readonly fastApiRouterFacts?: FastApiRouterFacts;
+  /** Omitted only by artifact facts persisted before v0.228. */
+  readonly djangoNinjaRouterFacts?: DjangoNinjaRouterFacts;
   /** Omitted only by artifact facts persisted before v0.111. */
   readonly flaskBlueprintFacts?: FlaskBlueprintFacts;
   /** Omitted only by artifact facts persisted before v0.151. */

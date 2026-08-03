@@ -264,6 +264,7 @@ export const FRAMEWORK_CAPABILITIES = [
       "direct NinjaAPI application decorators with literal paths",
       "same-file direct Router decorators through literal NinjaAPI add_router prefixes",
       "literal api_operation method arrays on direct applications and mounted same-file Routers",
+      "package-relative imported Router decorators and api_operation arrays through direct add_router prefixes",
       "top-level named local function handlers"
     ]
   },

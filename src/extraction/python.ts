@@ -5,6 +5,9 @@ import {
   createSymbolId,
   type ArtifactFacts,
   type DjangoImportedUrlconfInclusionFact,
+  type DjangoNinjaImportedRouterInclusionFact,
+  type DjangoNinjaRouterDeclarationFact,
+  type DjangoNinjaRouterRouteFact,
   type DjangoLiteralUrlconfInclusionFact,
   type DjangoUrlconfReExportFact,
   type DjangoUrlPatternHandlerKind,
@@ -289,6 +292,14 @@ interface StaticDjangoUrlPatternList {
 
 /** A one-dot, single-name Python relative import that can carry an APIRouter. */
 interface StaticFastApiRelativeRouterImport {
+  readonly moduleSpecifier: string;
+  readonly importedRouterName: string;
+  readonly routerName: string;
+  readonly node: PythonSyntaxNode;
+}
+
+/** A one-dot, single-name Python relative import that can carry a Django Ninja Router. */
+interface StaticDjangoNinjaRelativeRouterImport {
   readonly moduleSpecifier: string;
   readonly importedRouterName: string;
   readonly routerName: string;
@@ -641,6 +652,36 @@ function staticFastApiRelativeRouterImport(
   input: PythonExtractFileFactsInput,
   node: PythonSyntaxNode
 ): StaticFastApiRelativeRouterImport | null {
+  if (node.name !== "ImportStatement") {
+    return null;
+  }
+  const match = /^from[ \t]+(\.[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)[ \t]+import[ \t]+([A-Za-z_][A-Za-z0-9_]*)(?:[ \t]+as[ \t]+([A-Za-z_][A-Za-z0-9_]*))?[ \t]*$/u.exec(
+    nodeText(input, node)
+  );
+  if (match?.[1] === undefined || match[2] === undefined) {
+    return null;
+  }
+
+  return {
+    moduleSpecifier: match[1],
+    importedRouterName: match[2],
+    routerName: match[3] ?? match[2],
+    node
+  };
+}
+
+/**
+ * Retains only the deliberately narrow import form supported by the project
+ * resolver: `from .package.module import router [as local_router]`.
+ *
+ * A single leading dot keeps the package calculation local and testable. Parent
+ * imports, wildcard imports, import lists, and package-only imports remain
+ * unsupported until they can be modeled with equally strong evidence.
+ */
+function staticDjangoNinjaRelativeRouterImport(
+  input: PythonExtractFileFactsInput,
+  node: PythonSyntaxNode
+): StaticDjangoNinjaRelativeRouterImport | null {
   if (node.name !== "ImportStatement") {
     return null;
   }
@@ -3273,6 +3314,54 @@ function latestProvenFastApiRelativeRouterImport(
 }
 
 /**
+ * Finds the one direct relative import still bound to a Django Ninja Router
+ * name. A later assignment or import shadows an earlier import and therefore
+ * removes it from consideration.
+ */
+function latestProvenDjangoNinjaRelativeRouterImportBinding(
+  input: PythonExtractFileFactsInput,
+  topLevelNodes: readonly PythonSyntaxNode[],
+  imports: readonly StaticDjangoNinjaRelativeRouterImport[],
+  routerName: string,
+  before: number
+): StaticDjangoNinjaRelativeRouterImport | null {
+  const candidates = imports
+    .filter(
+      (candidate) =>
+        candidate.routerName === routerName &&
+        candidate.node.to <= before &&
+        !hasTopLevelRebinding(
+          input,
+          topLevelNodes,
+          candidate.routerName,
+          candidate.node.to,
+          before
+        )
+    )
+    .sort((left, right) => right.node.from - left.node.from);
+  return candidates.length === 1 ? candidates[0] ?? null : null;
+}
+
+/**
+ * Finds the one direct relative import still bound to the Router argument at a
+ * literal Django Ninja `add_router` call.
+ */
+function latestProvenDjangoNinjaRelativeRouterImport(
+  input: PythonExtractFileFactsInput,
+  topLevelNodes: readonly PythonSyntaxNode[],
+  imports: readonly StaticDjangoNinjaRelativeRouterImport[],
+  inclusion: StaticDjangoNinjaRouterInclusion
+): StaticDjangoNinjaRelativeRouterImport | null {
+  return latestProvenDjangoNinjaRelativeRouterImportBinding(
+    input,
+    topLevelNodes,
+    imports,
+    inclusion.routerName,
+    inclusion.node.from
+  );
+}
+
+/**
  * Finds the one direct relative import still bound to a Flask Blueprint name.
  * A later assignment or import shadows an earlier import and therefore removes
  * it from consideration.
@@ -3440,9 +3529,9 @@ function isPythonPackageInitializer(filePath: string): boolean {
 
 /**
  * Extracts conservative Python file facts. The Python surface records
- * declarations, containment, direct FastAPI/Flask/Sanic decorators, direct
- * Django URL patterns, and direct same-file or package-relative router, Blueprint,
- * and URLConf composition only when every binding and path is syntax-proven.
+ * declarations, containment, direct FastAPI/Django Ninja/Flask/Sanic decorators,
+ * direct Django URL patterns, and direct same-file or package-relative router,
+ * Blueprint, and URLConf composition only when every binding and path is syntax-proven.
  */
 export function extractPythonFileFacts(input: PythonExtractFileFactsInput): ArtifactFacts {
   const fastApiCapability = frameworkCapability("fastapi");
@@ -3479,6 +3568,15 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
     routers: [],
     routes: [],
     reExports: [],
+    importedRouterInclusions: []
+  };
+  const djangoNinjaRouterFacts: {
+    readonly routers: DjangoNinjaRouterDeclarationFact[];
+    readonly routes: DjangoNinjaRouterRouteFact[];
+    readonly importedRouterInclusions: DjangoNinjaImportedRouterInclusionFact[];
+  } = {
+    routers: [],
+    routes: [],
     importedRouterInclusions: []
   };
   const flaskBlueprintFacts: {
@@ -3684,6 +3782,11 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
     const relativeRouterImports = topLevelNodes
       .map((node) => staticFastApiRelativeRouterImport(input, node))
       .filter((candidate): candidate is StaticFastApiRelativeRouterImport => candidate !== null);
+    const relativeDjangoNinjaRouterImports = topLevelNodes
+      .map((node) => staticDjangoNinjaRelativeRouterImport(input, node))
+      .filter(
+        (candidate): candidate is StaticDjangoNinjaRelativeRouterImport => candidate !== null
+      );
     const relativeBlueprintImports = topLevelNodes
       .map((node) => staticFlaskRelativeBlueprintImport(input, node))
       .filter((candidate): candidate is StaticFlaskRelativeBlueprintImport => candidate !== null);
@@ -3889,6 +3992,18 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
       );
       return finalRouter !== null && nodeKey(finalRouter.node) === nodeKey(router.node);
     });
+    const finalDjangoNinjaRouters = djangoNinjaRouters.filter((router) => {
+      const finalRouter = latestProvenFrameworkInstance(
+        input,
+        topLevelNodes,
+        djangoNinjaImports,
+        djangoNinjaRouters,
+        router.name,
+        input.sourceText.length,
+        "Router"
+      );
+      return finalRouter !== null && nodeKey(finalRouter.node) === nodeKey(router.node);
+    });
     const finalFlaskBlueprints = flaskBlueprints.filter((blueprint) => {
       const finalBlueprint = latestProvenFrameworkInstance(
         input,
@@ -3992,6 +4107,12 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
       fastApiRouterFacts.routers.push({
         name: router.name,
         prefix: router.prefix,
+        range: rangeFor(lineStarts, router.node.from, router.node.to)
+      });
+    }
+    for (const router of finalDjangoNinjaRouters) {
+      djangoNinjaRouterFacts.routers.push({
+        name: router.name,
         range: rangeFor(lineStarts, router.node.from, router.node.to)
       });
     }
@@ -4439,6 +4560,39 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
       }
     }
 
+    for (const inclusion of djangoNinjaRouterInclusions) {
+      if (
+        latestProvenFrameworkInstance(
+          input,
+          topLevelNodes,
+          djangoNinjaImports,
+          djangoNinjaApplications,
+          inclusion.applicationName,
+          inclusion.node.from,
+          "NinjaAPI"
+        ) === null
+      ) {
+        continue;
+      }
+      const importedRouter = latestProvenDjangoNinjaRelativeRouterImport(
+        input,
+        topLevelNodes,
+        relativeDjangoNinjaRouterImports,
+        inclusion
+      );
+      if (importedRouter === null) {
+        continue;
+      }
+      djangoNinjaRouterFacts.importedRouterInclusions.push({
+        applicationName: inclusion.applicationName,
+        routerName: importedRouter.routerName,
+        importedRouterName: importedRouter.importedRouterName,
+        moduleSpecifier: importedRouter.moduleSpecifier,
+        prefix: inclusion.prefix,
+        range: rangeFor(lineStarts, inclusion.node.from, inclusion.node.to)
+      });
+    }
+
     for (const inclusion of inclusions) {
       if (
         latestProvenFrameworkInstance(
@@ -4666,6 +4820,19 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
             djangoNinjaDecorator.node.from,
             "Router"
           );
+          const finalRouter = finalDjangoNinjaRouters.find(
+            (router) => routerAtDecorator !== null && nodeKey(router.node) === nodeKey(routerAtDecorator.node)
+          );
+          if (finalRouter !== undefined) {
+            djangoNinjaRouterFacts.routes.push({
+              routerName: finalRouter.name,
+              method: djangoNinjaDecorator.method,
+              path: djangoNinjaDecorator.path,
+              source: "decorator",
+              handlerId: handler.id,
+              range: rangeFor(lineStarts, djangoNinjaDecorator.node.from, djangoNinjaDecorator.node.to)
+            });
+          }
           for (const inclusion of djangoNinjaRouterInclusions) {
             if (routerAtDecorator === null || djangoNinjaDecorator.receiver !== inclusion.routerName) {
               continue;
@@ -4738,6 +4905,21 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
             djangoNinjaApiOperation.node.from,
             "Router"
           );
+          const finalRouter = finalDjangoNinjaRouters.find(
+            (router) => routerAtDecorator !== null && nodeKey(router.node) === nodeKey(routerAtDecorator.node)
+          );
+          if (finalRouter !== undefined) {
+            for (const method of djangoNinjaApiOperation.methods) {
+              djangoNinjaRouterFacts.routes.push({
+                routerName: finalRouter.name,
+                method,
+                path: djangoNinjaApiOperation.path,
+                source: "api-operation",
+                handlerId: handler.id,
+                range: rangeFor(lineStarts, djangoNinjaApiOperation.node.from, djangoNinjaApiOperation.node.to)
+              });
+            }
+          }
           for (const inclusion of djangoNinjaRouterInclusions) {
             if (routerAtDecorator === null || djangoNinjaApiOperation.receiver !== inclusion.routerName) {
               continue;
@@ -5032,6 +5214,7 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
       rootRegistrations: []
     },
     fastApiRouterFacts,
+    djangoNinjaRouterFacts,
     flaskBlueprintFacts,
     sanicBlueprintFacts,
     djangoUrlFacts
