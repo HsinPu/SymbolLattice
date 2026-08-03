@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.242.0 is a developer preview that runs from source. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher can update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.243.0 is a developer preview that runs from source. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher can update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## Quick start
 
@@ -35,7 +35,7 @@ node dist/cli/main.js investigate "user token" --project /path/to/project --json
 
 ## Framework route extensions
 
-Extend TypeScript or JavaScript router support with a scoped, validated descriptor. The core—not the extension—parses source and writes graph facts. It accepts only an exact ESM import, a `const` zero-argument receiver, a literal path, and a named handler; unsupported composition produces no route fact. The registry is never auto-loaded from a project and its fingerprint is part of the extractor version, so a descriptor change makes persisted facts stale.
+Extend static framework routes with a scoped, validated descriptor. The core—not the extension—parses source and writes graph facts. TypeScript or JavaScript receiver routes require an exact ESM import, a `const` zero-argument constructor, a literal path, and a named handler. TypeScript decorator routes require an exact import, a non-static method with a body, and one literal absolute path. Unsupported composition produces no route fact. The registry is never auto-loaded from a project and its fingerprint is part of the extractor version, so a descriptor change makes persisted facts stale.
 
 ```ts
 import {
@@ -50,7 +50,8 @@ const registry = createFrameworkRoutePluginRegistry([
     moduleSpecifier: "@acme/lattice-router",
     factoryExport: "Router",
     routeMethods: [{ methodName: "get", routeMethod: "GET" }],
-    surfaces: ["exact named Router imports", "const literal named-handler HTTP routes"]
+    decoratorRoutes: [{ decoratorExport: "Get", routeMethod: "GET" }],
+    surfaces: ["exact named Router imports", "const HTTP routes", "TypeScript decorator routes"]
   }
 ]);
 

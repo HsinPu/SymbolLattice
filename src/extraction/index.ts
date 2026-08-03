@@ -60,6 +60,7 @@ import {
 import {
   frameworkRoutePluginExtractorVersion,
   frameworkRoutePluginsForLanguage,
+  type FrameworkRoutePluginDecoratorRoute,
   type FrameworkRoutePlugin,
   type FrameworkRoutePluginRegistry
 } from "./framework-route-plugins.js";
@@ -121,6 +122,7 @@ export {
   FrameworkRoutePluginConfigurationError
 } from "./framework-route-plugins.js";
 export type {
+  FrameworkRoutePluginDecoratorRoute,
   FrameworkRoutePlugin,
   FrameworkRoutePluginHttpMethod,
   FrameworkRoutePluginLanguage,
@@ -623,6 +625,18 @@ interface ScopedNestDecoratorBindings {
   readonly byScopeId: ReadonlyMap<string, ReadonlyMap<string, readonly NestDecoratorBinding[]>>;
 }
 
+/** Lexical value bindings that can prove one configured public route decorator import. */
+interface ScopedFrameworkRoutePluginDecoratorBindings {
+  readonly byScopeId: ReadonlyMap<
+    string,
+    ReadonlyMap<string, readonly FrameworkRoutePluginDecoratorBinding[]>
+  >;
+}
+
+const EMPTY_SCOPED_FRAMEWORK_ROUTE_PLUGIN_DECORATOR_BINDINGS: ScopedFrameworkRoutePluginDecoratorBindings = {
+  byScopeId: new Map()
+};
+
 type NestDecoratorBindingKind =
   | "nest-controller"
   | "nest-route"
@@ -645,11 +659,33 @@ interface NestDecoratorBinding {
   readonly method: RouteMethod | null;
 }
 
+interface FrameworkRoutePluginDecoratorBinding {
+  readonly declaration: ts.Node;
+  /** Present only for one exact configured decorator import. */
+  readonly plugin?: FrameworkRoutePlugin;
+  /** Present together with `plugin` for a configured literal method decorator. */
+  readonly decoratorRoute?: FrameworkRoutePluginDecoratorRoute;
+}
+
+type FrameworkRoutePluginDecoratorImport = Pick<
+  FrameworkRoutePluginDecoratorBinding,
+  "plugin" | "decoratorRoute"
+>;
+
 interface StaticNestRoute {
   readonly method: RouteMethod;
   readonly path: string;
   readonly decorator: ts.Decorator;
   readonly controller: ts.ClassDeclaration;
+  readonly handler: ts.MethodDeclaration;
+}
+
+/** One exact configured TypeScript method decorator with a literal absolute path. */
+interface StaticFrameworkRoutePluginDecoratorRoute {
+  readonly plugin: FrameworkRoutePlugin;
+  readonly routeMethod: FrameworkRoutePluginDecoratorRoute;
+  readonly path: string;
+  readonly decorator: ts.Decorator;
   readonly handler: ts.MethodDeclaration;
 }
 
@@ -1504,6 +1540,53 @@ function frameworkRoutePluginForNamedImport(
     return undefined;
   }
   return frameworkRoutePluginForImport(
+    declaration,
+    element.propertyName?.text ?? element.name.text,
+    plugins
+  );
+}
+
+function frameworkRoutePluginDecoratorForImport(
+  declaration: ts.ImportDeclaration,
+  decoratorExport: string,
+  plugins: readonly FrameworkRoutePlugin[]
+): FrameworkRoutePluginDecoratorImport | undefined {
+  const moduleSpecifier = declaration.moduleSpecifier;
+  if (
+    declaration.importClause?.isTypeOnly === true ||
+    !ts.isStringLiteral(moduleSpecifier) ||
+    plugins.length === 0
+  ) {
+    return undefined;
+  }
+  const candidates = plugins.flatMap((plugin) =>
+    (plugin.decoratorRoutes ?? [])
+      .filter(
+        (decoratorRoute) =>
+          plugin.moduleSpecifier === moduleSpecifier.text &&
+          decoratorRoute.decoratorExport === decoratorExport
+      )
+      .map((decoratorRoute) => ({ plugin, decoratorRoute }))
+  );
+  return candidates.length === 1 ? candidates[0] : undefined;
+}
+
+function frameworkRoutePluginDecoratorForDefaultImport(
+  declaration: ts.ImportDeclaration,
+  plugins: readonly FrameworkRoutePlugin[]
+): FrameworkRoutePluginDecoratorImport | undefined {
+  return frameworkRoutePluginDecoratorForImport(declaration, "default", plugins);
+}
+
+function frameworkRoutePluginDecoratorForNamedImport(
+  declaration: ts.ImportDeclaration,
+  element: ts.ImportSpecifier,
+  plugins: readonly FrameworkRoutePlugin[]
+): FrameworkRoutePluginDecoratorImport | undefined {
+  if (element.isTypeOnly) {
+    return undefined;
+  }
+  return frameworkRoutePluginDecoratorForImport(
     declaration,
     element.propertyName?.text ?? element.name.text,
     plugins
@@ -2410,7 +2493,7 @@ function staticFrameworkRoutePluginRoute(
     return null;
   }
   const routeMethodName = node.expression.name.text;
-  const routeMethod = binding.frameworkRoutePlugin.routeMethods.find(
+  const routeMethod = (binding.frameworkRoutePlugin.routeMethods ?? []).find(
     (candidate) => candidate.methodName === routeMethodName
   );
   const pathArgument = node.arguments[0];
@@ -3900,6 +3983,155 @@ function collectScopedNestDecoratorBindings(sourceFile: ts.SourceFile): ScopedNe
   return { byScopeId };
 }
 
+function addScopedFrameworkRoutePluginDecoratorBinding(
+  byScopeId: Map<string, Map<string, FrameworkRoutePluginDecoratorBinding[]>>,
+  scopeId: string | undefined,
+  names: readonly string[],
+  declaration: ts.Node,
+  configured?: FrameworkRoutePluginDecoratorImport
+): void {
+  if (scopeId === undefined) {
+    return;
+  }
+
+  const bindings = byScopeId.get(scopeId) ?? new Map<string, FrameworkRoutePluginDecoratorBinding[]>();
+  for (const name of names) {
+    const candidates = bindings.get(name) ?? [];
+    candidates.push({
+      declaration,
+      ...(configured === undefined ? {} : configured)
+    });
+    bindings.set(name, candidates);
+  }
+  byScopeId.set(scopeId, bindings);
+}
+
+/**
+ * Collects only lexical value bindings for configured public route decorators.
+ * Any shadow, duplicate import, namespace import, or dynamic binding blocks
+ * route extraction instead of guessing by decorator spelling.
+ */
+function collectScopedFrameworkRoutePluginDecoratorBindings(
+  sourceFile: ts.SourceFile,
+  plugins: readonly FrameworkRoutePlugin[]
+): ScopedFrameworkRoutePluginDecoratorBindings {
+  const byScopeId = new Map<string, Map<string, FrameworkRoutePluginDecoratorBinding[]>>();
+  const rootScopeId = sourceScopeId(sourceFile);
+
+  function collectBindings(node: ts.Node): void {
+    if (ts.isImportDeclaration(node)) {
+      const importClause = node.importClause;
+      if (importClause?.name !== undefined) {
+        addScopedFrameworkRoutePluginDecoratorBinding(
+          byScopeId,
+          rootScopeId,
+          [importClause.name.text],
+          importClause.name,
+          frameworkRoutePluginDecoratorForDefaultImport(node, plugins)
+        );
+      }
+      if (importClause?.namedBindings !== undefined) {
+        if (ts.isNamespaceImport(importClause.namedBindings)) {
+          addScopedFrameworkRoutePluginDecoratorBinding(
+            byScopeId,
+            rootScopeId,
+            [importClause.namedBindings.name.text],
+            importClause.namedBindings.name
+          );
+        } else {
+          for (const element of importClause.namedBindings.elements) {
+            addScopedFrameworkRoutePluginDecoratorBinding(
+              byScopeId,
+              rootScopeId,
+              [element.name.text],
+              element,
+              frameworkRoutePluginDecoratorForNamedImport(node, element, plugins)
+            );
+          }
+        }
+      }
+    }
+
+    if (ts.isVariableDeclaration(node)) {
+      addScopedFrameworkRoutePluginDecoratorBinding(
+        byScopeId,
+        variableBindingScopeId(sourceFile, node),
+        bindingNames(node.name),
+        node
+      );
+    }
+
+    if (
+      ts.isFunctionDeclaration(node) ||
+      ts.isClassDeclaration(node) ||
+      ts.isEnumDeclaration(node) ||
+      ts.isModuleDeclaration(node) ||
+      ts.isImportEqualsDeclaration(node)
+    ) {
+      if (node.name !== undefined) {
+        const scopeId = declarationScopeId(sourceFile, node, {
+          name: node.name.text,
+          kind: ts.isFunctionDeclaration(node) || ts.isClassDeclaration(node) ? "class" : "variable",
+          isExported: false
+        });
+        addScopedFrameworkRoutePluginDecoratorBinding(byScopeId, scopeId, [node.name.text], node);
+      }
+    }
+
+    if (
+      (ts.isFunctionExpression(node) || ts.isClassExpression(node)) &&
+      node.name !== undefined
+    ) {
+      addScopedFrameworkRoutePluginDecoratorBinding(
+        byScopeId,
+        scopeIdFor(sourceFile, node),
+        [node.name.text],
+        node
+      );
+    }
+
+    if (ts.isFunctionLike(node)) {
+      const scopeId = scopeIdFor(sourceFile, node);
+      for (const parameter of node.parameters) {
+        addScopedFrameworkRoutePluginDecoratorBinding(
+          byScopeId,
+          scopeId,
+          bindingNames(parameter.name),
+          parameter
+        );
+      }
+    }
+
+    if (ts.isCatchClause(node) && node.variableDeclaration !== undefined) {
+      addScopedFrameworkRoutePluginDecoratorBinding(
+        byScopeId,
+        scopeIdFor(sourceFile, node),
+        bindingNames(node.variableDeclaration.name),
+        node.variableDeclaration
+      );
+    }
+
+    ts.forEachChild(node, collectBindings);
+  }
+
+  ts.forEachChild(sourceFile, collectBindings);
+  return { byScopeId };
+}
+
+function visibleFrameworkRoutePluginDecoratorBinding(
+  sourceFile: ts.SourceFile,
+  identifier: ts.Identifier,
+  bindings: ScopedFrameworkRoutePluginDecoratorBindings
+): FrameworkRoutePluginDecoratorBinding | null {
+  for (const scopeId of enclosingScopeIds(sourceFile, identifier)) {
+    const candidates = bindings.byScopeId.get(scopeId)?.get(identifier.text);
+    if (candidates !== undefined) {
+      return candidates.length === 1 ? candidates[0] ?? null : null;
+    }
+  }
+  return null;
+}
+
 function visibleNestDecoratorBinding(
   sourceFile: ts.SourceFile,
   identifier: ts.Identifier,
@@ -4000,6 +4232,72 @@ function isStaticMethod(method: ts.MethodDeclaration): boolean {
   return (method as ModifierCarrier).modifiers?.some(
     (modifier) => modifier.kind === ts.SyntaxKind.StaticKeyword
   ) ?? false;
+}
+
+function staticFrameworkRoutePluginDecoratorRoute(
+  sourceFile: ts.SourceFile,
+  decorator: ts.Decorator,
+  handler: ts.MethodDeclaration,
+  bindings: ScopedFrameworkRoutePluginDecoratorBindings
+): StaticFrameworkRoutePluginDecoratorRoute | null {
+  const expression = decorator.expression;
+  if (
+    !ts.isCallExpression(expression) ||
+    expression.questionDotToken !== undefined ||
+    !ts.isIdentifier(expression.expression) ||
+    expression.arguments.length !== 1
+  ) {
+    return null;
+  }
+  const path = expression.arguments[0];
+  if (path === undefined || !ts.isStringLiteral(path) || !path.text.startsWith("/")) {
+    return null;
+  }
+  const binding = visibleFrameworkRoutePluginDecoratorBinding(
+    sourceFile,
+    expression.expression,
+    bindings
+  );
+  if (binding?.plugin === undefined || binding.decoratorRoute === undefined) {
+    return null;
+  }
+  return {
+    plugin: binding.plugin,
+    routeMethod: binding.decoratorRoute,
+    path: path.text,
+    decorator,
+    handler
+  };
+}
+
+function staticFrameworkRoutePluginDecoratorRoutes(
+  sourceFile: ts.SourceFile,
+  declaration: ts.ClassDeclaration,
+  bindings: ScopedFrameworkRoutePluginDecoratorBindings
+): readonly StaticFrameworkRoutePluginDecoratorRoute[] {
+  const routes: StaticFrameworkRoutePluginDecoratorRoute[] = [];
+  for (const member of declaration.members) {
+    if (
+      !ts.isMethodDeclaration(member) ||
+      member.body === undefined ||
+      isStaticMethod(member) ||
+      !ts.isIdentifier(member.name)
+    ) {
+      continue;
+    }
+    for (const decorator of decoratorsFor(member)) {
+      const route = staticFrameworkRoutePluginDecoratorRoute(
+        sourceFile,
+        decorator,
+        member,
+        bindings
+      );
+      if (route !== null) {
+        routes.push(route);
+      }
+    }
+  }
+  return routes;
 }
 
 function staticNestRoutes(
@@ -5025,6 +5323,17 @@ export function extractFileFacts(
     options.frameworkRoutePlugins,
     input.language
   );
+  const frameworkRoutePluginsWithDecorators =
+    input.language === "typescript"
+      ? frameworkRoutePlugins.filter((plugin) => (plugin.decoratorRoutes?.length ?? 0) > 0)
+      : [];
+  const frameworkRoutePluginDecoratorBindings =
+    frameworkRoutePluginsWithDecorators.length === 0
+      ? EMPTY_SCOPED_FRAMEWORK_ROUTE_PLUGIN_DECORATOR_BINDINGS
+      : collectScopedFrameworkRoutePluginDecoratorBindings(
+          sourceFile,
+          frameworkRoutePluginsWithDecorators
+        );
   const routeReceiverBindings = collectScopedRouteReceiverBindings(sourceFile, frameworkRoutePlugins);
   const fastifyPluginCallbacks = collectScopedFastifyPluginCallbacks(sourceFile, routeReceiverBindings);
   const nestDecoratorBindings = collectScopedNestDecoratorBindings(sourceFile);
@@ -5227,6 +5536,44 @@ export function extractFileFacts(
     candidate: StaticFrameworkRoutePluginRoute
   ): void {
     addStaticRoute(node, candidate.route, customRouteFramework(candidate.plugin.id));
+  }
+
+  function addStaticFrameworkRoutePluginDecoratorRoute(
+    candidate: StaticFrameworkRoutePluginDecoratorRoute
+  ): void {
+    const handler = symbolsByDeclaration.get(candidate.handler);
+    if (handler?.kind !== "method") {
+      return;
+    }
+    const symbol = addRouteSymbol(
+      candidate.decorator,
+      candidate.routeMethod.routeMethod,
+      candidate.path
+    );
+    const range = sourceRange(sourceFile, candidate.decorator);
+    edges.push({
+      id: createEdgeId({
+        sourceId: symbol.id,
+        targetId: handler.id,
+        kind: "routes",
+        line: range.start.line,
+        column: range.start.column,
+        referenceName: handler.name
+      }),
+      sourceId: symbol.id,
+      targetId: handler.id,
+      kind: "routes",
+      filePath: input.filePath,
+      range,
+      resolution: "exact",
+      confidence: 1,
+      referenceName: handler.name,
+      evidence: {
+        ruleId: `framework.plugin.${candidate.plugin.id.replace("/", ".")}.decorator-route.local-method`,
+        stage: "syntax",
+        candidateSymbolIds: [handler.id]
+      }
+    });
   }
 
   function addStaticKoaRoute(node: ts.CallExpression, route: StaticKoaRoute): void {
@@ -5972,8 +6319,24 @@ export function extractFileFacts(
     ts.forEachChild(node, extractFrameworkRoutePluginFacts);
   }
 
+  function extractFrameworkRoutePluginDecoratorFacts(node: ts.Node): void {
+    if (ts.isClassDeclaration(node)) {
+      for (const candidate of staticFrameworkRoutePluginDecoratorRoutes(
+        sourceFile,
+        node,
+        frameworkRoutePluginDecoratorBindings
+      )) {
+        addStaticFrameworkRoutePluginDecoratorRoute(candidate);
+      }
+    }
+    ts.forEachChild(node, extractFrameworkRoutePluginDecoratorFacts);
+  }
+
   if (frameworkRoutePlugins.length > 0) {
     ts.forEachChild(sourceFile, extractFrameworkRoutePluginFacts);
+  }
+  if (frameworkRoutePluginsWithDecorators.length > 0) {
+    ts.forEachChild(sourceFile, extractFrameworkRoutePluginDecoratorFacts);
   }
 
   return {

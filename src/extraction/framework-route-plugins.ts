@@ -21,21 +21,31 @@ export interface FrameworkRoutePluginMethod {
   readonly routeMethod: FrameworkRoutePluginHttpMethod;
 }
 
+/** Maps one exact imported method decorator to the HTTP method represented in the graph. */
+export interface FrameworkRoutePluginDecoratorRoute {
+  /** One named export, or "default" for a default decorator import. */
+  readonly decoratorExport: string;
+  readonly routeMethod: FrameworkRoutePluginHttpMethod;
+}
+
 /**
  * A narrowly declarative, syntax-proven extension for a TypeScript or JavaScript
- * router constructed directly from one exact ESM import. SymbolLattice owns all
- * AST inspection and graph writes; the plugin never emits raw graph facts.
+ * router or TypeScript method decorator constructed directly from one exact ESM
+ * import. SymbolLattice owns all AST inspection and graph writes; the plugin
+ * never emits raw graph facts.
  */
 export interface FrameworkRoutePlugin {
   /** Lowercase vendor/framework namespace, for example "acme/lattice-router". */
   readonly id: string;
   readonly languages: readonly FrameworkRoutePluginLanguage[];
-  /** Exact ESM module specifier that exports the receiver constructor. */
+  /** Exact ESM module specifier that exports the receiver constructor or method decorator. */
   readonly moduleSpecifier: string;
-  /** One named export, or "default" for a default import. */
-  readonly factoryExport: string;
-  /** Literal receiver methods accepted by the framework. */
-  readonly routeMethods: readonly FrameworkRoutePluginMethod[];
+  /** Required when `routeMethods` is declared: one named export, or "default" for a default import. */
+  readonly factoryExport?: string;
+  /** Optional literal receiver methods accepted by the framework. */
+  readonly routeMethods?: readonly FrameworkRoutePluginMethod[];
+  /** Optional TypeScript method decorators accepted by the framework. */
+  readonly decoratorRoutes?: readonly FrameworkRoutePluginDecoratorRoute[];
   /** Human-readable, bounded syntax surface exposed through the public registry. */
   readonly surfaces: readonly string[];
 }
@@ -64,6 +74,8 @@ const ROUTE_PLUGIN_HTTP_METHODS = new Set<FrameworkRoutePluginHttpMethod>(
   ROUTE_METHODS.filter((method): method is FrameworkRoutePluginHttpMethod => method !== "NAVIGATE")
 );
 const EMPTY_FRAMEWORK_ROUTE_PLUGINS: readonly FrameworkRoutePlugin[] = Object.freeze([]);
+const EMPTY_ROUTE_METHODS: readonly FrameworkRoutePluginMethod[] = Object.freeze([]);
+const EMPTY_DECORATOR_ROUTES: readonly FrameworkRoutePluginDecoratorRoute[] = Object.freeze([]);
 const VALIDATED_REGISTRIES = new WeakSet<FrameworkRoutePluginRegistry>();
 
 function compareText(left: string, right: string): number {
@@ -155,6 +167,51 @@ function normalizedRouteMethods(value: unknown, label: string): readonly Framewo
   return Object.freeze([...routeMethods].sort((left, right) => compareText(left.methodName, right.methodName)));
 }
 
+function normalizedOptionalRouteMethods(
+  value: unknown,
+  label: string
+): readonly FrameworkRoutePluginMethod[] {
+  return value === undefined ? EMPTY_ROUTE_METHODS : normalizedRouteMethods(value, label);
+}
+
+function normalizedDecoratorRoutes(
+  value: unknown,
+  label: string
+): readonly FrameworkRoutePluginDecoratorRoute[] {
+  if (!Array.isArray(value) || value.length === 0 || value.length > MAX_ROUTE_METHOD_COUNT) {
+    configurationError(`${label} must contain between 1 and ${MAX_ROUTE_METHOD_COUNT} entries.`);
+  }
+  const decoratorRoutes = value.map((candidate, index) => {
+    const record = requireRecord(candidate, `${label}[${index}]`);
+    const decoratorExport = requireText(record.decoratorExport, `${label}[${index}].decoratorExport`);
+    if (decoratorExport !== "default" && !IDENTIFIER_PATTERN.test(decoratorExport)) {
+      configurationError(`${label}[${index}].decoratorExport must be "default" or an identifier.`);
+    }
+    const routeMethod = record.routeMethod;
+    if (typeof routeMethod !== "string" || !ROUTE_PLUGIN_HTTP_METHODS.has(routeMethod as FrameworkRoutePluginHttpMethod)) {
+      configurationError(`${label}[${index}].routeMethod must be a supported HTTP method.`);
+    }
+    return Object.freeze({
+      decoratorExport,
+      routeMethod: routeMethod as FrameworkRoutePluginHttpMethod
+    });
+  });
+  const decoratorExports = decoratorRoutes.map((route) => route.decoratorExport);
+  if (new Set(decoratorExports).size !== decoratorExports.length) {
+    configurationError(`${label} must not declare the same decorator export twice.`);
+  }
+  return Object.freeze(
+    [...decoratorRoutes].sort((left, right) => compareText(left.decoratorExport, right.decoratorExport))
+  );
+}
+
+function normalizedOptionalDecoratorRoutes(
+  value: unknown,
+  label: string
+): readonly FrameworkRoutePluginDecoratorRoute[] {
+  return value === undefined ? EMPTY_DECORATOR_ROUTES : normalizedDecoratorRoutes(value, label);
+}
+
 function normalizedPlugin(value: unknown, index: number): FrameworkRoutePlugin {
   const record = requireRecord(value, `framework route plugin at index ${index}`);
   const id = requireText(record.id, `framework route plugin ${index}.id`);
@@ -165,18 +222,44 @@ function normalizedPlugin(value: unknown, index: number): FrameworkRoutePlugin {
     record.moduleSpecifier,
     `framework route plugin ${id}.moduleSpecifier`
   );
-  const factoryExport = requireText(record.factoryExport, `framework route plugin ${id}.factoryExport`);
-  if (factoryExport !== "default" && !IDENTIFIER_PATTERN.test(factoryExport)) {
-    configurationError(`framework route plugin ${id}.factoryExport must be "default" or an identifier.`);
+  const languages = normalizedLanguages(record.languages, `framework route plugin ${id}.languages`);
+  const routeMethods = normalizedOptionalRouteMethods(
+    record.routeMethods,
+    `framework route plugin ${id}.routeMethods`
+  );
+  const decoratorRoutes = normalizedOptionalDecoratorRoutes(
+    record.decoratorRoutes,
+    `framework route plugin ${id}.decoratorRoutes`
+  );
+  if (routeMethods.length === 0 && decoratorRoutes.length === 0) {
+    configurationError(`framework route plugin ${id} must declare at least one route surface.`);
   }
-  return Object.freeze({
+  if (routeMethods.length === 0 && record.factoryExport !== undefined) {
+    configurationError(`framework route plugin ${id}.factoryExport requires routeMethods.`);
+  }
+  const factoryExport =
+    routeMethods.length === 0
+      ? undefined
+      : requireText(record.factoryExport, `framework route plugin ${id}.factoryExport`);
+  if (factoryExport !== undefined) {
+    if (factoryExport !== "default" && !IDENTIFIER_PATTERN.test(factoryExport)) {
+      configurationError(`framework route plugin ${id}.factoryExport must be "default" or an identifier.`);
+    }
+  }
+  if (decoratorRoutes.length > 0 && !languages.includes("typescript")) {
+    configurationError(`framework route plugin ${id}.decoratorRoutes require TypeScript support.`);
+  }
+  const normalized = {
     id,
-    languages: normalizedLanguages(record.languages, `framework route plugin ${id}.languages`),
+    languages,
     moduleSpecifier,
-    factoryExport,
-    routeMethods: normalizedRouteMethods(record.routeMethods, `framework route plugin ${id}.routeMethods`),
+    routeMethods,
+    decoratorRoutes,
     surfaces: normalizedSurfaces(record.surfaces, `framework route plugin ${id}.surfaces`)
-  });
+  };
+  return factoryExport === undefined
+    ? Object.freeze(normalized)
+    : Object.freeze({ ...normalized, factoryExport });
 }
 
 /**
@@ -197,9 +280,14 @@ export function createFrameworkRoutePluginRegistry(
   if (new Set(ids).size !== ids.length) {
     configurationError("Framework route plugin ids must be unique.");
   }
-  const factories = normalized.map((plugin) => `${plugin.moduleSpecifier}\u0000${plugin.factoryExport}`);
-  if (new Set(factories).size !== factories.length) {
-    configurationError("Framework route plugins must not claim the same module export twice.");
+  const claimedExports = normalized.flatMap((plugin) => [
+    ...(plugin.factoryExport === undefined ? [] : [`${plugin.moduleSpecifier}\u0000${plugin.factoryExport}`]),
+    ...(plugin.decoratorRoutes ?? []).map(
+      (decoratorRoute) => `${plugin.moduleSpecifier}\u0000${decoratorRoute.decoratorExport}`
+    )
+  ]);
+  if (new Set(claimedExports).size !== claimedExports.length) {
+    configurationError("Framework route plugins must not claim the same module export twice across route surfaces.");
   }
   const frozenPlugins = Object.freeze([...normalized]);
   const fingerprint = createHash("sha256").update(JSON.stringify(frozenPlugins)).digest("hex").slice(0, 16);

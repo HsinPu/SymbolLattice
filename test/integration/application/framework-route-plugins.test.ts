@@ -42,17 +42,26 @@ const latticeRouterPlugin: FrameworkRoutePlugin = {
   moduleSpecifier: "@acme/lattice-router",
   factoryExport: "Router",
   routeMethods: [{ methodName: "get", routeMethod: "GET" }],
-  surfaces: ["exact named Router imports", "const literal named-handler HTTP routes"]
+  decoratorRoutes: [{ decoratorExport: "Get", routeMethod: "GET" }],
+  surfaces: [
+    "exact named Router imports",
+    "const literal named-handler HTTP routes",
+    "TypeScript literal method decorator routes"
+  ]
 };
 
 describe("framework route plugin service integration", () => {
   it("resolves routes and invalidates persisted facts when the scoped descriptor changes", async () => {
     const projectPath = await createInlineProject({
       "src/routes.ts": [
-        'import { Router } from "@acme/lattice-router";',
+        'import { Get, Router } from "@acme/lattice-router";',
         "const api = new Router();",
         "export function health() { return { ok: true }; }",
-        'api.get("/health", health);'
+        'api.get("/health", health);',
+        "class StatusController {",
+        '  @Get("/status")',
+        "  status() { return { ok: true }; }",
+        "}"
       ].join("\n")
     });
     const graphStore = new SqliteGraphStore();
@@ -68,26 +77,40 @@ describe("framework route plugin service integration", () => {
     const firstRoutes = await firstService.routes(projectPath, { method: "GET" });
     const firstFacts = graphStore.getArtifactFacts(projectPath)[0];
 
-    expect(firstRoutes.routes).toMatchObject([
-      {
-        path: "/health",
-        handler: { qualifiedName: "src/routes.ts#health" },
-        edge: {
-          evidence: {
-            ruleId: "framework.plugin.acme.lattice-router.literal-route.local-handler",
-            stage: "lexical"
-          }
-        }
-      }
-    ]);
+    expect(firstRoutes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: "/health",
+          handler: expect.objectContaining({ qualifiedName: "src/routes.ts#health" }),
+          edge: expect.objectContaining({
+            evidence: expect.objectContaining({
+              ruleId: "framework.plugin.acme.lattice-router.literal-route.local-handler",
+              stage: "lexical"
+            })
+          })
+        }),
+        expect.objectContaining({
+          path: "/status",
+          handler: expect.objectContaining({
+            qualifiedName: "src/routes.ts#StatusController.status"
+          }),
+          edge: expect.objectContaining({
+            evidence: expect.objectContaining({
+              ruleId: "framework.plugin.acme.lattice-router.decorator-route.local-method",
+              stage: "syntax"
+            })
+          })
+        })
+      ])
+    );
     expect(firstFacts?.extractorVersion).toBe(firstExtractor.version);
 
     const changedRegistry = createFrameworkRoutePluginRegistry([
       {
         ...latticeRouterPlugin,
-        routeMethods: [
-          { methodName: "get", routeMethod: "GET" },
-          { methodName: "post", routeMethod: "POST" }
+        decoratorRoutes: [
+          ...(latticeRouterPlugin.decoratorRoutes ?? []),
+          { decoratorExport: "Post", routeMethod: "POST" }
         ]
       }
     ]);

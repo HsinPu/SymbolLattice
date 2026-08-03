@@ -26,6 +26,14 @@ const latticeRouterPlugin: FrameworkRoutePlugin = {
   ]
 };
 
+const latticeControllerPlugin: FrameworkRoutePlugin = {
+  id: "acme/lattice-controller",
+  languages: ["typescript"],
+  moduleSpecifier: "@acme/lattice-controller",
+  decoratorRoutes: [{ decoratorExport: "Get", routeMethod: "GET" }],
+  surfaces: ["exact named Get imports", "TypeScript instance methods with literal decorator paths"]
+};
+
 describe("framework route plugin registry", () => {
   it("adds only a syntax-proven route through an exact named import and immutable receiver", () => {
     const registry = createFrameworkRoutePluginRegistry([latticeRouterPlugin]);
@@ -54,6 +62,76 @@ describe("framework route plugin registry", () => {
           relationKind: "routes",
           referenceName: "health",
           routeFramework: "plugin:acme/lattice-router"
+        })
+      ])
+    );
+  });
+
+  it("adds an exact TypeScript method decorator route with direct method evidence", () => {
+    const registry = createFrameworkRoutePluginRegistry([latticeControllerPlugin]);
+    const facts = extractFileFacts(
+      {
+        filePath: "src/controller.ts",
+        language: "typescript",
+        sourceText: [
+          'import { Get as Route } from "@acme/lattice-controller";',
+          "class HealthController {",
+          '  @Route("/health")',
+          "  health() { return { ok: true }; }",
+          "}"
+        ].join("\n")
+      },
+      { frameworkRoutePlugins: registry }
+    );
+
+    expect(facts.symbols).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: "route", name: "GET /health" })
+      ])
+    );
+    expect(facts.edges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "routes",
+          resolution: "exact",
+          evidence: expect.objectContaining({
+            ruleId: "framework.plugin.acme.lattice-controller.decorator-route.local-method",
+            stage: "syntax"
+          })
+        })
+      ])
+    );
+  });
+
+  it("supports a configured default method decorator import", () => {
+    const registry = createFrameworkRoutePluginRegistry([
+      {
+        ...latticeControllerPlugin,
+        decoratorRoutes: [{ decoratorExport: "default", routeMethod: "POST" }]
+      }
+    ]);
+    const facts = extractFileFacts(
+      {
+        filePath: "src/controller.ts",
+        language: "typescript",
+        sourceText: [
+          'import Post from "@acme/lattice-controller";',
+          "class HealthController {",
+          '  @Post("/health")',
+          "  health() { return { ok: true }; }",
+          "}"
+        ].join("\n")
+      },
+      { frameworkRoutePlugins: registry }
+    );
+
+    expect(facts.edges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "routes",
+          evidence: expect.objectContaining({
+            ruleId: "framework.plugin.acme.lattice-controller.decorator-route.local-method"
+          })
         })
       ])
     );
@@ -102,6 +180,59 @@ describe("framework route plugin registry", () => {
     }
   });
 
+  it("fails closed for dynamic, overloaded, static, or shadowed decorator expressions", () => {
+    const registry = createFrameworkRoutePluginRegistry([latticeControllerPlugin]);
+    const cases = [
+      [
+        'import { Get } from "@acme/lattice-controller";',
+        'const path = "/health";',
+        "class HealthController {",
+        "  @Get(path)",
+        "  health() {}",
+        "}"
+      ],
+      [
+        'import { Get } from "@acme/lattice-controller";',
+        "class HealthController {",
+        '  @Get("/health", "extra")',
+        "  health() {}",
+        "}"
+      ],
+      [
+        'import { Get } from "@acme/lattice-controller";',
+        "class HealthController {",
+        '  @Get("/health")',
+        "  static health() {}",
+        "}"
+      ],
+      [
+        'import { Get } from "@acme/lattice-controller";',
+        "function build(Get: unknown) {",
+        "  class HealthController {",
+        '    @Get("/health")',
+        "    health() {}",
+        "  }",
+        "}"
+      ]
+    ];
+
+    for (const sourceLines of cases) {
+      const facts = extractFileFacts(
+        {
+          filePath: "src/controller.ts",
+          language: "typescript",
+          sourceText: sourceLines.join("\n")
+        },
+        { frameworkRoutePlugins: registry }
+      );
+      expect(
+        facts.edges.filter(
+          (edge) => edge.evidence.ruleId === "framework.plugin.acme.lattice-controller.decorator-route.local-method"
+        )
+      ).toEqual([]);
+    }
+  });
+
   it("freezes canonical descriptors, fingerprints their semantics, and rejects ambiguous declarations", () => {
     const registry = createFrameworkRoutePluginRegistry([latticeRouterPlugin]);
     const sameSemanticsInDifferentOrder = createFrameworkRoutePluginRegistry([
@@ -137,6 +268,19 @@ describe("framework route plugin registry", () => {
           ...latticeRouterPlugin,
           routeMethods: [{ methodName: "go", routeMethod: "NAVIGATE" }]
         } as unknown as FrameworkRoutePlugin
+      ])
+    ).toThrow(FrameworkRoutePluginConfigurationError);
+    expect(() =>
+      createFrameworkRoutePluginRegistry([
+        { ...latticeControllerPlugin, languages: ["javascript"] }
+      ])
+    ).toThrow(FrameworkRoutePluginConfigurationError);
+    expect(() =>
+      createFrameworkRoutePluginRegistry([
+        {
+          ...latticeRouterPlugin,
+          decoratorRoutes: [{ decoratorExport: "Router", routeMethod: "GET" }]
+        }
       ])
     ).toThrow(FrameworkRoutePluginConfigurationError);
   });

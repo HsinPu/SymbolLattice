@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.242.0 是從原始碼執行的開發者預覽版。MCP 查詢工具唯讀；但 `serve --mcp` 預設會啟動獨立的本機自動同步 watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用它。
+> v0.243.0 是從原始碼執行的開發者預覽版。MCP 查詢工具唯讀；但 `serve --mcp` 預設會啟動獨立的本機自動同步 watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用它。
 
 ## 快速開始
 
@@ -35,7 +35,7 @@ node dist/cli/main.js investigate "user token" --project /path/to/project --json
 
 ## 框架路由擴充
 
-可用受限、已驗證的描述支援尚未內建的 TypeScript 或 JavaScript router。核心負責解析原始碼與寫入圖譜；描述只能證明精確 ESM 匯入、`const` 零參數 receiver、字面路徑與命名處理函式，其他組合不會產生路由事實。registry 不會從專案自動載入，其指紋會納入 extractor version；描述變更後既有事實會顯示為過期。
+可用受限、已驗證的描述支援尚未內建的框架路由。核心負責解析原始碼與寫入圖譜：TypeScript／JavaScript receiver 僅接受精確 ESM 匯入、`const` 零參數建構、字面路徑與命名處理函式；TypeScript decorator 僅接受精確匯入、具實作的非 static method 與單一字面絕對路徑。其他組合不會產生路由事實。registry 不會從專案自動載入，其指紋會納入 extractor version；描述變更後既有事實會顯示為過期。
 
 ```ts
 import {
@@ -50,7 +50,8 @@ const registry = createFrameworkRoutePluginRegistry([
     moduleSpecifier: "@acme/lattice-router",
     factoryExport: "Router",
     routeMethods: [{ methodName: "get", routeMethod: "GET" }],
-    surfaces: ["精確 named Router 匯入", "const 字面路徑與命名處理函式 HTTP 路由"]
+    decoratorRoutes: [{ decoratorExport: "Get", routeMethod: "GET" }],
+    surfaces: ["精確 named Router 匯入", "const HTTP 路由", "TypeScript decorator 路由"]
   }
 ]);
 
