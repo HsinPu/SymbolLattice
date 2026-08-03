@@ -44,6 +44,7 @@ type FrameworkImportedConstructor =
   | "FastAPI"
   | "APIRouter"
   | "NinjaAPI"
+  | "Router"
   | "Flask"
   | "Blueprint"
   | "Starlette"
@@ -68,6 +69,8 @@ interface FrameworkDirectInstance {
 interface FastApiApplication extends FrameworkDirectInstance {}
 
 interface DjangoNinjaApplication extends FrameworkDirectInstance {}
+
+interface DjangoNinjaRouter extends FrameworkDirectInstance {}
 
 interface FastApiRouter extends FrameworkDirectInstance {
   readonly prefix: string;
@@ -123,6 +126,13 @@ interface StaticFastApiDecorator {
 }
 
 interface StaticFastApiRouterInclusion {
+  readonly applicationName: string;
+  readonly routerName: string;
+  readonly prefix: string;
+  readonly node: PythonSyntaxNode;
+}
+
+interface StaticDjangoNinjaRouterInclusion {
   readonly applicationName: string;
   readonly routerName: string;
   readonly prefix: string;
@@ -798,6 +808,17 @@ function staticDjangoNinjaApplication(
     : { name: assignment.name, constructorName: assignment.constructorName, node: assignment.node };
 }
 
+function staticDjangoNinjaRouter(
+  input: PythonExtractFileFactsInput,
+  node: PythonSyntaxNode,
+  constructorNames: ReadonlySet<string>
+): DjangoNinjaRouter | null {
+  const assignment = staticFrameworkConstructorAssignment(input, node, constructorNames);
+  return assignment === null
+    ? null
+    : { name: assignment.name, constructorName: assignment.constructorName, node: assignment.node };
+}
+
 function staticSanicApplication(
   input: PythonExtractFileFactsInput,
   node: PythonSyntaxNode,
@@ -1027,6 +1048,24 @@ function staticFastApiPrefix(
   return prefix === null || (prefix !== "" && (!prefix.startsWith("/") || prefix.endsWith("/")))
     ? null
     : prefix;
+}
+
+function staticDjangoNinjaMountPrefix(
+  input: PythonExtractFileFactsInput,
+  prefixNode: PythonSyntaxNode
+): string | null {
+  if (prefixNode.name !== "String") {
+    return null;
+  }
+  const prefix = staticPlainPythonString(input, prefixNode);
+  if (prefix === null || prefix.startsWith("//")) {
+    return null;
+  }
+  if (prefix === "" || prefix === "/") {
+    return "";
+  }
+  const withLeadingSlash = prefix.startsWith("/") ? prefix : `/${prefix}`;
+  return withLeadingSlash.endsWith("/") ? withLeadingSlash.slice(0, -1) : withLeadingSlash;
 }
 
 function staticFlaskPrefix(
@@ -2305,6 +2344,51 @@ function staticFastApiRouterInclusion(
   return prefix === null ? null : { applicationName, routerName, prefix, node };
 }
 
+function staticDjangoNinjaRouterInclusion(
+  input: PythonExtractFileFactsInput,
+  node: PythonSyntaxNode
+): StaticDjangoNinjaRouterInclusion | null {
+  if (node.name !== "ExpressionStatement") {
+    return null;
+  }
+  const expression = directChildren(node)[0];
+  if (expression?.name !== "CallExpression") {
+    return null;
+  }
+  const callChildren = directChildren(expression);
+  const member = callChildren[0];
+  const argumentList = callChildren[1];
+  if (callChildren.length !== 2 || member?.name !== "MemberExpression" || argumentList?.name !== "ArgList") {
+    return null;
+  }
+  const memberChildren = directChildren(member);
+  const applicationNode = memberChildren[0];
+  const methodNode = memberChildren[2];
+  if (
+    memberChildren.length !== 3 ||
+    applicationNode?.name !== "VariableName" ||
+    methodNode?.name !== "PropertyName" ||
+    nodeText(input, methodNode) !== "add_router"
+  ) {
+    return null;
+  }
+  const applicationName = declarationName(input, applicationNode);
+  const entries = staticArgumentEntries(argumentList);
+  const prefixNode = entries[0];
+  const routerNode = entries[1];
+  const keywordArguments = staticKeywordArgumentsAfterPositions(input, entries, 2);
+  if (
+    applicationName === null ||
+    routerNode?.name !== "VariableName" ||
+    keywordArguments === null
+  ) {
+    return null;
+  }
+  const routerName = declarationName(input, routerNode);
+  const prefix = prefixNode === undefined ? null : staticDjangoNinjaMountPrefix(input, prefixNode);
+  return routerName === null || prefix === null ? null : { applicationName, routerName, prefix, node };
+}
+
 function staticFlaskRouteMethods(
   input: PythonExtractFileFactsInput,
   node: PythonSyntaxNode
@@ -3546,6 +3630,19 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
         staticDjangoNinjaApplication(input, node, djangoNinjaApplicationConstructorNames)
       )
       .filter((candidate): candidate is DjangoNinjaApplication => candidate !== null);
+    const djangoNinjaRouterConstructorNames = new Set(
+      djangoNinjaImports
+        .filter((candidate) => candidate.importedName === "Router")
+        .map((candidate) => candidate.alias)
+    );
+    const djangoNinjaRouters = topLevelNodes
+      .map((node) => staticDjangoNinjaRouter(input, node, djangoNinjaRouterConstructorNames))
+      .filter((candidate): candidate is DjangoNinjaRouter => candidate !== null);
+    const djangoNinjaRouterInclusions = topLevelNodes
+      .map((node) => staticDjangoNinjaRouterInclusion(input, node))
+      .filter(
+        (candidate): candidate is StaticDjangoNinjaRouterInclusion => candidate !== null
+      );
     const routers = topLevelNodes
       .map((node) => staticFastApiRouter(input, node, routerConstructorNames))
       .filter((candidate): candidate is FastApiRouter => candidate !== null);
@@ -4475,6 +4572,54 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
             djangoNinjaDecorator.path,
             "framework.django-ninja.direct-app.decorator.local-function"
           );
+        }
+        if (djangoNinjaDecorator !== null) {
+          const routerAtDecorator = latestProvenFrameworkInstance(
+            input,
+            topLevelNodes,
+            djangoNinjaImports,
+            djangoNinjaRouters,
+            djangoNinjaDecorator.receiver,
+            djangoNinjaDecorator.node.from,
+            "Router"
+          );
+          for (const inclusion of djangoNinjaRouterInclusions) {
+            if (routerAtDecorator === null || djangoNinjaDecorator.receiver !== inclusion.routerName) {
+              continue;
+            }
+            const routerAtInclusion = latestProvenFrameworkInstance(
+              input,
+              topLevelNodes,
+              djangoNinjaImports,
+              djangoNinjaRouters,
+              inclusion.routerName,
+              inclusion.node.from,
+              "Router"
+            );
+            const applicationAtInclusion = latestProvenFrameworkInstance(
+              input,
+              topLevelNodes,
+              djangoNinjaImports,
+              djangoNinjaApplications,
+              inclusion.applicationName,
+              inclusion.node.from,
+              "NinjaAPI"
+            );
+            if (
+              routerAtInclusion === null ||
+              applicationAtInclusion === null ||
+              nodeKey(routerAtDecorator.node) !== nodeKey(routerAtInclusion.node)
+            ) {
+              continue;
+            }
+            addPythonRoute(
+              djangoNinjaDecorator.method,
+              djangoNinjaDecorator.node,
+              handler,
+              combinedRoutePath(inclusion.prefix, djangoNinjaDecorator.path),
+              "framework.django-ninja.direct-router.add-router.decorator.local-function"
+            );
+          }
         }
 
         const sanicDecorator = staticSanicDecorator(input, decoratorNode);

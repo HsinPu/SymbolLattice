@@ -4564,6 +4564,51 @@ describe("SymbolLatticeService", () => {
     );
   });
 
+  it("indexes same-file Django Ninja Router routes through literal API prefixes", async () => {
+    const projectPath = await createInlineProject({
+      "api/events.py": [
+        "from ninja import NinjaAPI, Router",
+        "api = NinjaAPI()",
+        "events = Router()",
+        "",
+        "@events.get(\"/health\")",
+        "def health(request):",
+        "    return {\"ok\": True}",
+        "",
+        "api.add_router(\"v1/events/\", events)"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath, { method: "GET" });
+    const persistedFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "api/events.py");
+
+    expect(persistedFacts).toMatchObject({
+      language: "python",
+      extractorVersion: ARTIFACT_FACTS_EXTRACTOR_VERSION
+    });
+    expect(routes.routes).toMatchObject([
+      {
+        method: "GET",
+        path: "/v1/events/health",
+        route: { kind: "route", name: "GET /v1/events/health" },
+        edge: {
+          kind: "routes",
+          resolution: "exact",
+          evidence: {
+            ruleId: "framework.django-ninja.direct-router.add-router.decorator.local-function",
+            stage: "syntax"
+          }
+        },
+        handler: { qualifiedName: "api/events.py#health" }
+      }
+    ]);
+  });
+
   it("indexes direct Starlette Route-list routes with exact local handler proof", async () => {
     const projectPath = await createInlineProject({
       "api/main.py": [

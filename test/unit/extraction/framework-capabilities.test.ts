@@ -210,6 +210,7 @@ describe("first-party framework capabilities", () => {
       routeRegistrations: [],
       surfaces: [
         "direct NinjaAPI application decorators with literal paths",
+        "same-file direct Router decorators through literal NinjaAPI add_router prefixes",
         "top-level named local function handlers"
       ]
     });

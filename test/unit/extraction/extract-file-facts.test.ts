@@ -2579,6 +2579,59 @@ describe("source extraction", () => {
     ]);
   });
 
+  it("extracts same-file Django Ninja Router decorators through a literal API mount", () => {
+    const facts = extractFileFacts({
+      filePath: "api/events.py",
+      language: "python",
+      sourceText: [
+        "from ninja import NinjaAPI as Api, Router as ApiRouter",
+        "api = Api()",
+        "events = ApiRouter(tags=[\"events\"])",
+        "",
+        "@events.get(\"/health\")",
+        "def health(request):",
+        "    return {\"ok\": True}",
+        "",
+        "@events.patch(\"/jobs/{job_id}\")",
+        "def update_job(request, job_id: int):",
+        "    return {\"updated\": job_id}",
+        "",
+        "api.add_router(\"/v1/events/\", events, tags=[\"public\"])"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId,
+          edge.evidence?.stage,
+          edge.resolution,
+          edge.confidence
+        ])
+    ).toEqual([
+      [
+        "GET /v1/events/health",
+        "api/events.py#health",
+        "framework.django-ninja.direct-router.add-router.decorator.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "PATCH /v1/events/jobs/{job_id}",
+        "api/events.py#update_job",
+        "framework.django-ninja.direct-router.add-router.decorator.local-function",
+        "syntax",
+        "exact",
+        1
+      ]
+    ]);
+  });
+
   it("extracts same-file FastAPI APIRouter routes through direct literal inclusion", () => {
     const facts = extractFileFacts({
       filePath: "app/catalog.py",
@@ -15967,6 +16020,39 @@ describe("source extraction", () => {
         "@head_only.api_operation([\"HEAD\"], \"/head\")",
         "def head_handler(request):",
         "    return {}"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+  });
+
+  it("rejects unmounted, dynamic-prefix, and rebound Django Ninja Router shapes", () => {
+    const facts = extractFileFacts({
+      filePath: "api/unproven_ninja_router.py",
+      language: "python",
+      sourceText: [
+        "from ninja import NinjaAPI, Router",
+        "api = NinjaAPI()",
+        "",
+        "unmounted = Router()",
+        "@unmounted.get(\"/unmounted\")",
+        "def unmounted_handler(request):",
+        "    return {}",
+        "",
+        "prefix = \"/dynamic\"",
+        "dynamic = Router()",
+        "@dynamic.get(\"/dynamic\")",
+        "def dynamic_handler(request):",
+        "    return {}",
+        "api.add_router(prefix, dynamic)",
+        "",
+        "rebound = Router()",
+        "@rebound.get(\"/rebound\")",
+        "def rebound_handler(request):",
+        "    return {}",
+        "rebound = Router()",
+        "api.add_router(\"/v1\", rebound)"
       ].join("\n")
     });
 
