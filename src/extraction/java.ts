@@ -68,6 +68,7 @@ interface StaticJavaDependencyInjectionAnnotation {
   readonly path: string;
   readonly constructorSyntax: JvmDependencyInjectionReferenceFact["syntax"];
   readonly fieldSyntax: JvmDependencyInjectionReferenceFact["syntax"];
+  readonly methodSyntax: JvmDependencyInjectionReferenceFact["syntax"];
 }
 
 interface StaticJavaMethod {
@@ -77,6 +78,7 @@ interface StaticJavaMethod {
   /** Null for an abstract interface declaration such as `void run();`. */
   readonly body: JavaSyntaxNode | null;
   readonly annotations: readonly StaticJavaAnnotation[];
+  readonly isStatic: boolean;
   readonly isExported: boolean;
 }
 
@@ -128,17 +130,20 @@ const JAVA_DEPENDENCY_INJECTION_ANNOTATIONS: readonly StaticJavaDependencyInject
   {
     path: SPRING_AUTOWIRED_PATH,
     constructorSyntax: "spring-autowired-constructor",
-    fieldSyntax: "spring-autowired-field"
+    fieldSyntax: "spring-autowired-field",
+    methodSyntax: "spring-autowired-method"
   },
   {
     path: JAKARTA_INJECT_PATH,
     constructorSyntax: "jakarta-inject-constructor",
-    fieldSyntax: "jakarta-inject-field"
+    fieldSyntax: "jakarta-inject-field",
+    methodSyntax: "jakarta-inject-method"
   },
   {
     path: JAVAX_INJECT_PATH,
     constructorSyntax: "javax-inject-constructor",
-    fieldSyntax: "javax-inject-field"
+    fieldSyntax: "javax-inject-field",
+    methodSyntax: "javax-inject-method"
   }
 ];
 
@@ -1120,6 +1125,7 @@ function staticJavaMethod(
     node,
     body,
     annotations: staticAnnotations(input, node),
+    isStatic: modifiers !== undefined && directChildren(modifiers).some((child) => child.name === "static"),
     isExported: modifiers !== undefined && directChildren(modifiers).some((child) => child.name === "public")
   };
 }
@@ -1132,7 +1138,7 @@ function staticJavaMethod(
 function staticJavaDependencyInjectionSyntax(
   annotations: readonly StaticJavaAnnotation[],
   imports: ReadonlyMap<string, string>,
-  member: "constructor" | "field"
+  member: "constructor" | "field" | "method"
 ): JvmDependencyInjectionReferenceFact["syntax"] | null {
   const annotationsNamedDependencyInjection = annotations.filter((annotation) =>
     JAVA_DEPENDENCY_INJECTION_ANNOTATIONS.some((candidate) => {
@@ -1143,7 +1149,13 @@ function staticJavaDependencyInjectionSyntax(
   const provenAnnotations = annotationsNamedDependencyInjection.flatMap((annotation) =>
     JAVA_DEPENDENCY_INJECTION_ANNOTATIONS.flatMap((candidate) =>
       annotationMatches(annotation, candidate.path, imports)
-        ? [member === "constructor" ? candidate.constructorSyntax : candidate.fieldSyntax]
+        ? [
+            member === "constructor"
+              ? candidate.constructorSyntax
+              : member === "field"
+                ? candidate.fieldSyntax
+                : candidate.methodSyntax
+          ]
         : []
     )
   );
@@ -1154,11 +1166,34 @@ function staticJavaDependencyInjectionSyntax(
 }
 
 /**
- * Retains direct, non-generic constructor and field injection point types.
- * The fact describes a declared DI type dependency, not a runtime bean or
- * provider selection; qualifier, optional, and collection semantics remain
- * intentionally outside this source-only slice.
+ * Retains direct, non-generic constructor, field, and single-parameter
+ * concrete-method injection point types. The fact describes a declared DI
+ * type dependency, not a runtime bean or provider selection; qualifier,
+ * optional, and collection semantics remain intentionally outside this
+ * source-only slice.
  */
+function staticJavaSingleParameterInjectionReference(
+  input: JavaExtractFileFactsInput,
+  method: StaticJavaMethod
+): StaticJavaSuperclassReference | null {
+  const parameterLists = directChildren(method.node).filter(
+    (child) => child.name === "FormalParameters"
+  );
+  if (parameterLists.length !== 1 || parameterLists[0] === undefined) {
+    return null;
+  }
+  const parameters = directChildren(parameterLists[0]).filter(
+    (child) => child.name === "FormalParameter"
+  );
+  if (parameters.length !== 1 || parameters[0] === undefined) {
+    return null;
+  }
+  const typeNodes = directChildren(parameters[0]).filter(isJavaDirectTypeName);
+  return typeNodes.length === 1 && typeNodes[0] !== undefined
+    ? staticJavaDirectTypeReference(input, typeNodes[0])
+    : null;
+}
+
 function staticJavaDependencyInjectionReferences(
   input: JavaExtractFileFactsInput,
   declaration: StaticJavaClass,
@@ -1215,6 +1250,22 @@ function staticJavaDependencyInjectionReferences(
       continue;
     }
     const reference = staticJavaDirectTypeReference(input, typeNodes[0]);
+    if (reference !== null) {
+      references.push({ syntax, reference });
+    }
+  }
+
+  for (const method of directChildren(declaration.body)
+    .map((node) => staticJavaMethod(input, node))
+    .filter((candidate): candidate is StaticJavaMethod => candidate !== null)) {
+    if (method.body === null || method.isStatic) {
+      continue;
+    }
+    const syntax = staticJavaDependencyInjectionSyntax(method.annotations, imports, "method");
+    if (syntax === null) {
+      continue;
+    }
+    const reference = staticJavaSingleParameterInjectionReference(input, method);
     if (reference !== null) {
       references.push({ syntax, reference });
     }

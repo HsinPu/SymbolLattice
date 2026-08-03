@@ -11,13 +11,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v182";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v183";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v71";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v72";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -666,10 +666,13 @@ export interface JvmHeritageReferenceFact {
 export type JvmDependencyInjectionSyntax =
   | "spring-autowired-constructor"
   | "spring-autowired-field"
+  | "spring-autowired-method"
   | "jakarta-inject-constructor"
   | "jakarta-inject-field"
+  | "jakarta-inject-method"
   | "javax-inject-constructor"
-  | "javax-inject-field";
+  | "javax-inject-field"
+  | "javax-inject-method";
 
 /**
  * One direct Java/Kotlin DI-point type reference. A target path is retained

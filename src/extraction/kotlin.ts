@@ -61,6 +61,7 @@ interface StaticKotlinDependencyInjectionAnnotation {
   readonly importPath: string;
   readonly constructorSyntax: JvmDependencyInjectionReferenceFact["syntax"];
   readonly fieldSyntax: JvmDependencyInjectionReferenceFact["syntax"];
+  readonly methodSyntax: JvmDependencyInjectionReferenceFact["syntax"];
 }
 
 type StaticKotlinReactNativeModuleKind = "direct" | "codegen-spec";
@@ -138,17 +139,20 @@ const KOTLIN_DEPENDENCY_INJECTION_ANNOTATIONS: readonly StaticKotlinDependencyIn
   {
     importPath: SPRING_AUTOWIRED_IMPORT,
     constructorSyntax: "spring-autowired-constructor",
-    fieldSyntax: "spring-autowired-field"
+    fieldSyntax: "spring-autowired-field",
+    methodSyntax: "spring-autowired-method"
   },
   {
     importPath: JAKARTA_INJECT_IMPORT,
     constructorSyntax: "jakarta-inject-constructor",
-    fieldSyntax: "jakarta-inject-field"
+    fieldSyntax: "jakarta-inject-field",
+    methodSyntax: "jakarta-inject-method"
   },
   {
     importPath: JAVAX_INJECT_IMPORT,
     constructorSyntax: "javax-inject-constructor",
-    fieldSyntax: "javax-inject-field"
+    fieldSyntax: "javax-inject-field",
+    methodSyntax: "javax-inject-method"
   }
 ];
 
@@ -297,7 +301,14 @@ function staticKotlinFunction(node: KotlinSyntaxNode): StaticKotlinFunction | nu
   if (nameNode === undefined || name === null) {
     return null;
   }
-  const receiver = children.find((child) => child.kind() === "user_type");
+  const nameIndex = children.indexOf(nameNode);
+  const receiver =
+    nameIndex > 0 && children[nameIndex - 1]?.kind() === "."
+      ? children
+          .slice(0, nameIndex)
+          .filter((child) => child.kind() === "user_type")
+          .at(-1)
+      : undefined;
   const body = children.find((child) => child.kind() === "function_body") ?? null;
   return {
     name,
@@ -700,7 +711,7 @@ function staticKotlinExactlyOneProvenAnnotation(
 function staticKotlinDependencyInjectionSyntax(
   annotations: readonly KotlinSyntaxNode[],
   imports: ReadonlySet<string>,
-  member: "constructor" | "field"
+  member: "constructor" | "field" | "method"
 ): JvmDependencyInjectionReferenceFact["syntax"] | null {
   const annotationsNamedDependencyInjection = annotations.filter((annotation) =>
     KOTLIN_DEPENDENCY_INJECTION_ANNOTATIONS.some((candidate) =>
@@ -710,7 +721,13 @@ function staticKotlinDependencyInjectionSyntax(
   const provenAnnotations = annotationsNamedDependencyInjection.flatMap((annotation) =>
     KOTLIN_DEPENDENCY_INJECTION_ANNOTATIONS.flatMap((candidate) =>
       staticKotlinAnnotationMatches(annotation, candidate.importPath, imports)
-        ? [member === "constructor" ? candidate.constructorSyntax : candidate.fieldSyntax]
+        ? [
+            member === "constructor"
+              ? candidate.constructorSyntax
+              : member === "field"
+                ? candidate.fieldSyntax
+                : candidate.methodSyntax
+          ]
         : []
     )
   );
@@ -729,11 +746,29 @@ function staticKotlinDirectInjectionTypeReference(
     : null;
 }
 
+function staticKotlinSingleParameterInjectionReference(
+  method: StaticKotlinFunction
+): StaticKotlinSupertypeReference | null {
+  const parameterLists = directChildren(method.node).filter(
+    (child) => child.kind() === "function_value_parameters"
+  );
+  if (parameterLists.length !== 1 || parameterLists[0] === undefined) {
+    return null;
+  }
+  const parameters = directChildren(parameterLists[0]).filter(
+    (child) => child.kind() === "parameter"
+  );
+  return parameters.length === 1 && parameters[0] !== undefined
+    ? staticKotlinDirectInjectionTypeReference(parameters[0])
+    : null;
+}
+
 /**
- * Retains direct primary-constructor and class-property injection point types.
- * It records only declared static type dependencies; collection/generic types,
- * secondary constructors, use-site targets, and runtime provider selection are
- * deliberately outside this first JVM DI projection.
+ * Retains direct primary-constructor, class-property, and single-parameter
+ * concrete-method injection point types. It records only declared static type
+ * dependencies; collection/generic types, secondary constructors, use-site
+ * targets, extension functions, and runtime provider selection are deliberately
+ * outside this first JVM DI projection.
  */
 function staticKotlinDependencyInjectionReferences(
   declaration: StaticKotlinType,
@@ -789,6 +824,27 @@ function staticKotlinDependencyInjectionReferences(
       references.push({ syntax, reference });
     }
   }
+
+  for (const method of directChildren(declaration.body)
+    .map((node) => staticKotlinFunction(node))
+    .filter((candidate): candidate is StaticKotlinFunction => candidate !== null)) {
+    if (method.body === null || method.receiverName !== null) {
+      continue;
+    }
+    const syntax = staticKotlinDependencyInjectionSyntax(
+      staticKotlinAnnotations(method.node),
+      imports,
+      "method"
+    );
+    if (syntax === null) {
+      continue;
+    }
+    const reference = staticKotlinSingleParameterInjectionReference(method);
+    if (reference !== null) {
+      references.push({ syntax, reference });
+    }
+  }
+
   return references;
 }
 

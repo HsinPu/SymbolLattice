@@ -19267,6 +19267,9 @@ describe("source extraction", () => {
         "  @Autowired PetController(PetService pets) {}",
         "  @Inject AuditService auditService;",
         "  @javax.inject.Inject app.services.LegacyService legacyService;",
+        "  @Autowired void setPetService(PetService pets) {}",
+        "  @Inject void setAuditService(AuditService audit) {}",
+        "  @javax.inject.Inject void setLegacyService(app.services.LegacyService legacy) {}",
         "}"
       ].join("\n")
     });
@@ -19281,6 +19284,9 @@ describe("source extraction", () => {
         "import app.services.AuditService",
         "class PetController @Autowired constructor(private val pets: PetService) {",
         "  @Inject lateinit var auditService: AuditService",
+        "  @Autowired fun setPetService(pets: PetService): Unit {}",
+        "  @Inject fun setAuditService(audit: AuditService) {}",
+        "  @javax.inject.Inject fun setLegacyService(legacy: app.services.LegacyService) {}",
         "}",
         "class LegacyController @javax.inject.Inject constructor(val legacy: app.services.LegacyService)"
       ].join("\n")
@@ -19328,6 +19334,34 @@ describe("source extraction", () => {
         "class Generic @Autowired constructor(val pets: List<PetService>)"
       ].join("\n")
     });
+    const javaMethodRejected = extractFileFacts({
+      filePath: "src/java/app/web/MethodRejected.java",
+      language: "java",
+      sourceText: [
+        "package app.web;",
+        "import org.springframework.beans.factory.annotation.Autowired;",
+        "import app.services.PetService;",
+        "import java.util.List;",
+        "class MethodRejected {",
+        "  @Autowired static void staticWire(PetService pets) {}",
+        "  @Autowired void two(PetService first, PetService second) {}",
+        "  @Autowired void generic(List<PetService> pets) {}",
+        "}"
+      ].join("\n")
+    });
+    const kotlinMethodRejected = extractFileFacts({
+      filePath: "src/kotlin/app/web/MethodRejected.kt",
+      language: "kotlin",
+      sourceText: [
+        "package app.web",
+        "import org.springframework.beans.factory.annotation.Autowired",
+        "class MethodRejected {",
+        "  @Autowired fun PetService.extension(pets: PetService): Unit {}",
+        "  @Autowired fun two(first: PetService, second: PetService) {}",
+        "  @Autowired fun generic(pets: List<PetService>) {}",
+        "}"
+      ].join("\n")
+    });
     const javaSymbols = new Map(java.symbols.map((symbol) => [symbol.id, symbol]));
     const kotlinSymbols = new Map(kotlin.symbols.map((symbol) => [symbol.id, symbol]));
 
@@ -19341,7 +19375,10 @@ describe("source extraction", () => {
     ).toEqual([
       ["PetController", "PetService", "spring-autowired-constructor", "app.services.PetService"],
       ["PetController", "AuditService", "jakarta-inject-field", "app.services.AuditService"],
-      ["PetController", "LegacyService", "javax-inject-field", "app.services.LegacyService"]
+      ["PetController", "LegacyService", "javax-inject-field", "app.services.LegacyService"],
+      ["PetController", "PetService", "spring-autowired-method", "app.services.PetService"],
+      ["PetController", "AuditService", "jakarta-inject-method", "app.services.AuditService"],
+      ["PetController", "LegacyService", "javax-inject-method", "app.services.LegacyService"]
     ]);
     expect(
       kotlin.jvmFacts?.dependencyInjectionReferences?.map((reference) => [
@@ -19353,11 +19390,16 @@ describe("source extraction", () => {
     ).toEqual([
       ["PetController", "PetService", "spring-autowired-constructor", "app.services.PetService"],
       ["PetController", "AuditService", "jakarta-inject-field", "app.services.AuditService"],
+      ["PetController", "PetService", "spring-autowired-method", "app.services.PetService"],
+      ["PetController", "AuditService", "jakarta-inject-method", "app.services.AuditService"],
+      ["PetController", "LegacyService", "javax-inject-method", "app.services.LegacyService"],
       ["LegacyController", "LegacyService", "javax-inject-constructor", "app.services.LegacyService"]
     ]);
     expect(javaRejected.jvmFacts?.dependencyInjectionReferences).toEqual([]);
     expect(kotlinRejected.jvmFacts?.dependencyInjectionReferences).toEqual([]);
     expect(javaGeneric.jvmFacts?.dependencyInjectionReferences).toEqual([]);
     expect(kotlinGeneric.jvmFacts?.dependencyInjectionReferences).toEqual([]);
+    expect(javaMethodRejected.jvmFacts?.dependencyInjectionReferences).toEqual([]);
+    expect(kotlinMethodRejected.jvmFacts?.dependencyInjectionReferences).toEqual([]);
   });
 });

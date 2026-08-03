@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.220.0 is a developer preview. Run it from source.
+> v0.221.0 is a developer preview. Run it from source.
 
 SymbolLattice indexes a project into a local code-symbol graph. Every relation retains its rule, evidence stage, and confidence; `exact`, `heuristic`, and `unresolved` are never conflated.
 
@@ -46,11 +46,11 @@ Index data is stored in the target project's `.symbol-lattice/index.sqlite`. On 
 > [!NOTE]
 > Create the graph with `init`, then explicitly run `sync` after source or project-configuration changes. MCP queries never write or rebuild a graph.
 
-## v0.220.0 highlights
+## v0.221.0 highlights
 
-- Direct Java and Kotlin `@Autowired`, `jakarta.inject.Inject`, and `javax.inject.Inject` constructor/field points project cross-file `references` edges to uniquely identified project-local top-level types.
+- Direct Java and Kotlin `@Autowired`, `jakarta.inject.Inject`, and `javax.inject.Inject` constructor, field, and single-parameter concrete-method points (including setters) project cross-file `references` edges to uniquely identified project-local top-level types.
 - Every DI edge retains its annotation family, explicit import or qualified type spelling, and local Maven/Gradle module-dependency evidence when available.
-- The graph does not infer runtime bean/provider selection, qualifier outcomes, collection or generic injection, alias/wildcard imports, secondary constructors, or compiler classpaths.
+- The graph does not infer runtime bean/provider selection, qualifier outcomes, static or multi-parameter methods, collection or generic injection, alias/wildcard imports, secondary constructors, or compiler classpaths.
 
 ## Scope and guarantees
 

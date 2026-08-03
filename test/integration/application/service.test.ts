@@ -1657,6 +1657,14 @@ describe("SymbolLatticeService", () => {
         "  @Autowired PetController(PetService pets) {}",
         "}"
       ].join("\n"),
+      "src/java/app/web/SetterController.java": [
+        "package app.web;",
+        "import org.springframework.beans.factory.annotation.Autowired;",
+        "import app.services.LegacyService;",
+        "public class SetterController {",
+        "  @Autowired void setLegacyService(LegacyService legacy) {}",
+        "}"
+      ].join("\n"),
       "src/java/app/web/QualifiedController.java": [
         "package app.web;",
         "public class QualifiedController {",
@@ -1672,6 +1680,14 @@ describe("SymbolLatticeService", () => {
         "import jakarta.inject.Inject",
         "import app.services.AuditService",
         "class AuditController @Inject constructor(private val audit: AuditService)"
+      ].join("\n"),
+      "src/kotlin/app/web/MethodController.kt": [
+        "package app.web",
+        "import jakarta.inject.Inject",
+        "import app.services.AuditService",
+        "class MethodController {",
+        "  @Inject fun setAuditService(audit: AuditService) {}",
+        "}"
       ].join("\n")
     });
     const graphStore = new SqliteGraphStore();
@@ -1704,12 +1720,30 @@ describe("SymbolLatticeService", () => {
         stage: "module"
       }
     });
+    expect(injectionEdge("src/java/app/web/SetterController.java#SetterController")).toMatchObject({
+      targetId: symbol("src/java/app/services/LegacyService.java#LegacyService")?.id,
+      resolution: "exact",
+      confidence: 1,
+      evidence: {
+        ruleId: "framework.jvm-di.spring-autowired-method.explicit-import.local-type",
+        stage: "module"
+      }
+    });
     expect(injectionEdge("src/kotlin/app/web/AuditController.kt#AuditController")).toMatchObject({
       targetId: symbol("src/kotlin/app/services/AuditService.kt#AuditService")?.id,
       resolution: "exact",
       confidence: 1,
       evidence: {
         ruleId: "framework.jvm-di.jakarta-inject-constructor.explicit-import.local-type",
+        stage: "module"
+      }
+    });
+    expect(injectionEdge("src/kotlin/app/web/MethodController.kt#MethodController")).toMatchObject({
+      targetId: symbol("src/kotlin/app/services/AuditService.kt#AuditService")?.id,
+      resolution: "exact",
+      confidence: 1,
+      evidence: {
+        ruleId: "framework.jvm-di.jakarta-inject-method.explicit-import.local-type",
         stage: "module"
       }
     });
@@ -1758,6 +1792,30 @@ describe("SymbolLatticeService", () => {
       refreshed.edges.find(
         (edge) => edge.sourceId === refreshedController?.id && edge.kind === "references"
       )
+    ).toBeUndefined();
+
+    await writeFile(
+      join(projectPath, "src", "java", "app", "web", "SetterController.java"),
+      [
+        "package app.web;",
+        "import app.services.LegacyService;",
+        "public class SetterController {",
+        "  void setLegacyService(LegacyService legacy) {}",
+        "}"
+      ].join("\n"),
+      "utf8"
+    );
+    expect(await service.getStatus(projectPath)).toMatchObject({ stale: true });
+    expect(await service.sync({ projectPath })).toMatchObject({ stale: false });
+    const refreshedSetter = graphStore
+      .getSnapshot(projectPath)
+      .symbols.find(
+        (candidate) => candidate.qualifiedName === "src/java/app/web/SetterController.java#SetterController"
+      );
+    expect(
+      graphStore
+        .getSnapshot(projectPath)
+        .edges.find((edge) => edge.sourceId === refreshedSetter?.id && edge.kind === "references")
     ).toBeUndefined();
   });
 
@@ -1863,7 +1921,7 @@ describe("SymbolLatticeService", () => {
         "import org.springframework.beans.factory.annotation.Autowired;",
         "import example.api.Contract;",
         "public class InjectedClient {",
-        "  @Autowired InjectedClient(Contract contract) {}",
+        "  @Autowired void setContract(Contract contract) {}",
         "}"
       ].join("\n")
     });
@@ -1898,7 +1956,7 @@ describe("SymbolLatticeService", () => {
       targetId: symbol("api/src/main/java/example/api/Contract.java#Contract")?.id,
       resolution: "exact",
       evidence: {
-        ruleId: "framework.jvm-di.spring-autowired-constructor.explicit-import.declared-maven-module.local-type",
+        ruleId: "framework.jvm-di.spring-autowired-method.explicit-import.declared-maven-module.local-type",
         configurationPaths
       }
     });
@@ -1945,7 +2003,7 @@ describe("SymbolLatticeService", () => {
         "import org.springframework.beans.factory.annotation.Autowired;",
         "import example.api.Contract;",
         "public class InjectedClient {",
-        "  @Autowired InjectedClient(Contract contract) {}",
+        "  @Autowired void setContract(Contract contract) {}",
         "}"
       ].join("\n"),
       "app/src/test/java/example/app/QualifiedTestChild.java": [
@@ -1993,7 +2051,7 @@ describe("SymbolLatticeService", () => {
       targetId: symbol("api/src/main/java/example/api/Contract.java#Contract")?.id,
       resolution: "exact",
       evidence: {
-        ruleId: "framework.jvm-di.spring-autowired-constructor.explicit-import.declared-gradle-project.local-type",
+        ruleId: "framework.jvm-di.spring-autowired-method.explicit-import.declared-gradle-project.local-type",
         configurationPaths
       }
     });
