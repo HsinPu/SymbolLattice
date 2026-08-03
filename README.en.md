@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.234.0 is a developer preview. Run it from source.
+> v0.235.0 is a developer preview. Run it from source.
 
 SymbolLattice indexes a project into a local code-symbol graph. Every relation retains its rule, evidence stage, and confidence; `exact`, `heuristic`, and `unresolved` are never conflated.
 
@@ -43,10 +43,10 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 Index data is stored in the target project's `.symbol-lattice/index.sqlite`. On Windows PowerShell, use `npm.cmd` when npm is unavailable.
 
-## v0.234.0 highlights
+## v0.235.0 highlights
 
-- Flask now follows project-root absolute `Blueprint` imports, such as `from app.routes.catalog import catalog as catalog_blueprint`, with full module paths and `exact` evidence.
-- Cross-file Flask, FastAPI, and Django Ninja routes require one local target and a complete `__init__.py` package boundary; dynamic, external, and incomplete-package imports are never projected as routes.
+- Flask now follows project-root absolute `Blueprint` re-exports from final `__init__.py` files, such as `from app.routes.catalog import catalog as public_blueprint`, with full module paths and `exact` evidence.
+- Cross-file Flask, FastAPI, and Django Ninja routes require one local target and a complete `__init__.py` package boundary; direct absolute imports and absolute re-exports are traceable, while dynamic, external, and incomplete-package imports are never projected as routes.
 - Provides multi-language static symbols, calls, imports, routes, and cross-file relationship queries while keeping graph and query data local.
 
 ## Current limits

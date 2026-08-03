@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.234.0 為開發者預覽版，請從原始碼執行。
+> v0.235.0 為開發者預覽版，請從原始碼執行。
 
 SymbolLattice 將專案建立為本機程式碼符號圖譜。每一條關係都保留規則、證據階段與信心值，並明確區分 `exact`、`heuristic` 與 `unresolved`。
 
@@ -43,10 +43,10 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 索引資料存放在目標專案的 `.symbol-lattice/index.sqlite`。Windows PowerShell 若無法執行 `npm`，請改用 `npm.cmd`。
 
-## v0.234.0 重點
+## v0.235.0 重點
 
-- Flask 現可精確追蹤專案根目錄的絕對 `Blueprint` 匯入，例如 `from app.routes.catalog import catalog as catalog_blueprint`，並保留完整模組路徑與 `exact` 證據。
-- 跨檔 Flask、FastAPI 與 Django Ninja 路由都必須有唯一的本機目標與完整的 `__init__.py` 套件邊界；動態、外部與不完整套件匯入不會被投影為路由。
+- Flask 現可追蹤最終 `__init__.py` 中的專案根目錄絕對 `Blueprint` 轉匯，例如 `from app.routes.catalog import catalog as public_blueprint`，並保留完整模組路徑與 `exact` 證據。
+- 跨檔 Flask、FastAPI 與 Django Ninja 路由都必須有唯一的本機目標與完整的 `__init__.py` 套件邊界；直接絕對匯入與絕對轉匯可追溯，動態、外部與不完整套件匯入不會被投影為路由。
 - 提供多語言靜態符號、呼叫、匯入、路由與跨檔關係查詢，所有圖譜與查詢資料維持在本機。
 
 ## 目前限制

@@ -11,13 +11,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v195";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v196";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v81";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v82";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -330,11 +330,13 @@ export interface FlaskBlueprintRouteFact {
   readonly range: SourceRange;
 }
 
-/** A final, single-name relative Blueprint export from a package initializer. */
+/** A final, single-name relative or project-root absolute Blueprint export from a package initializer. */
 export interface FlaskBlueprintReExportFact {
   readonly exportedName: string;
   readonly importedBlueprintName: string;
   readonly moduleSpecifier: string;
+  /** Omitted only by artifact facts persisted before v0.235; absence means relative. */
+  readonly moduleSpecifierKind?: "relative" | "absolute";
   readonly range: SourceRange;
 }
 

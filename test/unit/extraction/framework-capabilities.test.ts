@@ -230,7 +230,8 @@ describe("first-party framework capabilities", () => {
         "direct Flask application decorators",
         "same-file Blueprint decorators through direct register_blueprint",
         "package-relative imported Blueprint decorators through direct register_blueprint",
-        "project-root absolute imported Blueprint decorators through direct register_blueprint"
+        "project-root absolute imported Blueprint decorators through direct register_blueprint",
+        "final package-initializer Blueprint re-export chains through package-relative or project-root absolute imports"
       ]
     });
     expect(frameworkCapability("django")).toMatchObject({

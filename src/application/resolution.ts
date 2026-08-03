@@ -5048,6 +5048,7 @@ interface ResolvedFlaskBlueprintTarget {
   readonly blueprint: FlaskBlueprintDeclarationFact;
   readonly resolutionPath: readonly string[];
   readonly reExported: boolean;
+  readonly absoluteReExported: boolean;
 }
 
 function directFlaskBlueprintTargets(input: {
@@ -5065,14 +5066,15 @@ function directFlaskBlueprintTargets(input: {
       filePath: input.filePath,
       blueprint,
       resolutionPath: [input.filePath],
-      reExported: false
+      reExported: false,
+      absoluteReExported: false
     }));
 }
 
 /**
  * Resolves a direct Flask Blueprint or one final `__init__.py` re-export chain.
- * Every hop is a persisted single-name relative import, and a cycle or any
- * competing local/exported binding remains unresolved.
+ * Every hop is a persisted single-name relative or project-root absolute
+ * import, and a cycle or any competing local/exported binding remains unresolved.
  */
 function resolveExactFlaskBlueprintTarget(input: {
   readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
@@ -5102,11 +5104,12 @@ function resolveExactFlaskBlueprintTarget(input: {
   if (reExport === undefined) {
     return null;
   }
-  const targetFilePath = resolvePythonRelativeModule(
-    input.knownFilePaths,
-    input.filePath,
-    reExport.moduleSpecifier
-  );
+  const targetFilePath = resolveFlaskBlueprintModule({
+    knownFilePaths: input.knownFilePaths,
+    fromFilePath: input.filePath,
+    moduleSpecifier: reExport.moduleSpecifier,
+    moduleSpecifierKind: reExport.moduleSpecifierKind
+  });
   if (targetFilePath === null) {
     return null;
   }
@@ -5127,7 +5130,9 @@ function resolveExactFlaskBlueprintTarget(input: {
           input.filePath,
           ...target.resolutionPath
         ]),
-        reExported: true
+        reExported: true,
+        absoluteReExported:
+          target.absoluteReExported || reExport.moduleSpecifierKind === "absolute"
       };
 }
 
@@ -5140,6 +5145,7 @@ interface ProjectedFlaskImportedBlueprintRoute {
   readonly path: string;
   readonly resolutionPath: readonly string[];
   readonly reExported: boolean;
+  readonly absoluteReExported: boolean;
 }
 
 function compareProjectedFlaskImportedBlueprintRoute(
@@ -5197,15 +5203,19 @@ function resolveFlaskBlueprintModule(input: {
 function flaskImportedBlueprintRulePrefix(input: {
   readonly registration: FlaskImportedBlueprintRegistrationFact;
   readonly reExported: boolean;
+  readonly absoluteReExported: boolean;
 }): string {
   if (input.registration.moduleSpecifierKind === "absolute") {
     return input.reExported
       ? "framework.flask.project-absolute-reexported-blueprint"
       : "framework.flask.project-absolute-blueprint";
   }
-  return input.reExported
-    ? "framework.flask.reexported-blueprint"
-    : "framework.flask.imported-blueprint";
+  if (input.reExported) {
+    return input.absoluteReExported
+      ? "framework.flask.reexported-absolute-blueprint"
+      : "framework.flask.reexported-blueprint";
+  }
+  return "framework.flask.imported-blueprint";
 }
 
 /**
@@ -5276,7 +5286,8 @@ function projectFlaskImportedBlueprintRoutes(input: {
           handler,
           path,
           resolutionPath: target.resolutionPath,
-          reExported: target.reExported
+          reExported: target.reExported,
+          absoluteReExported: target.absoluteReExported
         });
       }
     }
@@ -5370,7 +5381,8 @@ function projectFlaskImportedBlueprintRoutes(input: {
       evidence: referenceEvidence(
         `${flaskImportedBlueprintRulePrefix({
           registration: candidate.registration,
-          reExported: candidate.reExported
+          reExported: candidate.reExported,
+          absoluteReExported: candidate.absoluteReExported
         })}.register-blueprint.decorator.local-function`,
         "module",
         [candidate.handler.id],

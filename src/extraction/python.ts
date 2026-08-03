@@ -4360,11 +4360,11 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
         });
       }
 
-      for (const imported of relativeBlueprintImports) {
+      for (const imported of flaskBlueprintImports) {
         const finalImport = latestProvenFlaskBlueprintImportBinding(
           input,
           topLevelNodes,
-          relativeBlueprintImports,
+          flaskBlueprintImports,
           imported.blueprintName,
           input.sourceText.length
         );
@@ -4375,6 +4375,7 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
           exportedName: imported.blueprintName,
           importedBlueprintName: imported.importedBlueprintName,
           moduleSpecifier: imported.moduleSpecifier,
+          moduleSpecifierKind: imported.moduleSpecifierKind,
           range: rangeFor(lineStarts, imported.node.from, imported.node.to)
         });
       }

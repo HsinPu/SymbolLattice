@@ -7209,10 +7209,135 @@ describe("SymbolLatticeService", () => {
     ]);
   });
 
+  it("projects project-root absolute Flask Blueprint exports through final package initializers", async () => {
+    const projectPath = await createInlineProject({
+      "app/__init__.py": "",
+      "app/routes/__init__.py": "from app.routes.catalog import catalog as public_blueprint",
+      "app/routes/catalog.py": [
+        "from flask import Blueprint",
+        "catalog = Blueprint(\"catalog\", __name__, url_prefix=\"/catalog\")",
+        "",
+        "@catalog.get(\"/health\")",
+        "def health():",
+        "    return {\"ok\": True}"
+      ].join("\n"),
+      "app/main.py": [
+        "from flask import Flask",
+        "from .routes import public_blueprint as relative_blueprint",
+        "from app.routes import public_blueprint as absolute_blueprint",
+        "app = Flask(__name__)",
+        "app.register_blueprint(relative_blueprint, url_prefix=\"/relative\")",
+        "app.register_blueprint(absolute_blueprint, url_prefix=\"/absolute\")"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath, { method: "GET" });
+    const routesFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "app/routes/__init__.py");
+    const mainFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "app/main.py");
+
+    expect(routesFacts?.flaskBlueprintFacts).toMatchObject({
+      reExports: [
+        {
+          exportedName: "public_blueprint",
+          importedBlueprintName: "catalog",
+          moduleSpecifier: "app.routes.catalog",
+          moduleSpecifierKind: "absolute"
+        }
+      ]
+    });
+    expect(mainFacts?.flaskBlueprintFacts).toMatchObject({
+      importedBlueprintRegistrations: [
+        {
+          moduleSpecifier: ".routes",
+          moduleSpecifierKind: "relative",
+          importedBlueprintName: "public_blueprint",
+          blueprintName: "relative_blueprint",
+          prefix: "/relative"
+        },
+        {
+          moduleSpecifier: "app.routes",
+          moduleSpecifierKind: "absolute",
+          importedBlueprintName: "public_blueprint",
+          blueprintName: "absolute_blueprint",
+          prefix: "/absolute"
+        }
+      ]
+    });
+    expect(routes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "GET",
+          path: "/relative/catalog/health",
+          route: expect.objectContaining({
+            kind: "route",
+            name: "GET /relative/catalog/health",
+            filePath: "app/routes/catalog.py"
+          }),
+          edge: expect.objectContaining({
+            kind: "routes",
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.flask.reexported-absolute-blueprint.register-blueprint.decorator.local-function",
+              stage: "module",
+              resolutionPath: ["app/main.py", "app/routes/__init__.py", "app/routes/catalog.py"]
+            })
+          }),
+          handler: expect.objectContaining({ qualifiedName: "app/routes/catalog.py#health" })
+        }),
+        expect.objectContaining({
+          method: "GET",
+          path: "/absolute/catalog/health",
+          route: expect.objectContaining({
+            kind: "route",
+            name: "GET /absolute/catalog/health",
+            filePath: "app/routes/catalog.py"
+          }),
+          edge: expect.objectContaining({
+            kind: "routes",
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.flask.project-absolute-reexported-blueprint.register-blueprint.decorator.local-function",
+              stage: "module",
+              resolutionPath: ["app/main.py", "app/routes/__init__.py", "app/routes/catalog.py"]
+            })
+          }),
+          handler: expect.objectContaining({ qualifiedName: "app/routes/catalog.py#health" })
+        })
+      ])
+    );
+  });
+
   it("rejects unresolved Flask Blueprint package initializer exports", async () => {
     const projectPath = await createInlineProject({
       "app/__init__.py": "",
       "app/routes/__init__.py": "from .missing import catalog as public_blueprint",
+      "app/main.py": [
+        "from flask import Flask",
+        "from .routes import public_blueprint",
+        "app = Flask(__name__)",
+        "app.register_blueprint(public_blueprint, url_prefix=\"/v1\")"
+      ].join("\n")
+    });
+    const service = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+
+    await expect(service.routes(projectPath, { method: "GET" })).resolves.toMatchObject({
+      routes: []
+    });
+  });
+
+  it("rejects unresolved project-root absolute Flask Blueprint package initializer exports", async () => {
+    const projectPath = await createInlineProject({
+      "app/__init__.py": "",
+      "app/routes/__init__.py": "from app.routes.missing import catalog as public_blueprint",
       "app/main.py": [
         "from flask import Flask",
         "from .routes import public_blueprint",
