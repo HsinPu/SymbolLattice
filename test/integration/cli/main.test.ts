@@ -2870,4 +2870,58 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
       "Preview only: no Agent configuration, backup, or project index has been written."
     );
   });
+
+  it("previews an MCP removal by default and exposes the same explicit apply boundary", async () => {
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+    await createProgram({} as SymbolLatticeService).parseAsync(
+      [
+        "node",
+        "symbol-lattice",
+        "mcp-uninstall",
+        "generic-json",
+        "--project",
+        "C:/chosen-project",
+        "--config",
+        "C:/symbol-lattice-test-no-write/mcp.json",
+        "--no-auto-sync",
+        "--no-diagnostic-journal",
+        "--sync-interval",
+        "750",
+        "--poll"
+      ],
+      { from: "node" }
+    );
+
+    const output = JSON.parse(String(write.mock.calls[0]?.[0]));
+    expect(output).toMatchObject({
+      schemaVersion: 1,
+      mode: "preview",
+      status: "unchanged",
+      confirmation: {
+        requiredFlags: ["--apply", "--yes"],
+        applyRequested: false,
+        acknowledgementReceived: false
+      },
+      configuration: {
+        action: "unchanged",
+        source: "override",
+        atomicWrite: false,
+        preservesConfigurationFile: true,
+        backup: { state: "not-needed" }
+      },
+      lifecycle: {
+        mcpRequestHandlers: "read-only",
+        autoSync: {
+          enabled: false,
+          projectIndexMayBeWritten: false,
+          diagnosticJournalMayBeWritten: false
+        }
+      }
+    });
+    expect(output.notes).toContain(
+      "Preview only: no Agent configuration, backup, or project index has been written."
+    );
+    expect(output.notes).toContain("This command never deletes the selected configuration file.");
+  });
 });

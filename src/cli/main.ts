@@ -77,6 +77,7 @@ import { SYMBOL_LATTICE_VERSION } from "../version.js";
 import { createMcpConfig, type McpConfigOptions } from "./mcp-config.js";
 import { createMcpDoctor } from "./mcp-doctor.js";
 import { createMcpInstall } from "./mcp-install.js";
+import { createMcpUninstall } from "./mcp-uninstall.js";
 
 interface OutputOptions {
   readonly json?: boolean;
@@ -184,6 +185,12 @@ interface McpDoctorCommandOptions extends McpConfigCommandOptions {
 }
 
 interface McpInstallCommandOptions extends McpDoctorCommandOptions {
+  readonly apply?: boolean;
+  readonly yes?: boolean;
+  readonly backupDir?: string;
+}
+
+interface McpUninstallCommandOptions extends McpDoctorCommandOptions {
   readonly apply?: boolean;
   readonly yes?: boolean;
   readonly backupDir?: string;
@@ -1220,6 +1227,36 @@ export function createProgram(
     .option("--source", "Install configuration that invokes this built CLI through the current Node executable")
     .action((target: string, options: McpInstallCommandOptions) => {
       const result = createMcpInstall(target, {
+        ...createMcpCommandOptions(options),
+        ...(options.config === undefined ? {} : { configPath: options.config }),
+        ...(options.backupDir === undefined ? {} : { backupDirectory: options.backupDir }),
+        apply: options.apply ?? false,
+        yes: options.yes ?? false
+      });
+      render(result, options);
+    });
+
+  addJsonOption(addProjectOption(program.command("mcp-uninstall <target>")))
+    .option("--location <scope>", "Target configuration scope: global or local (default depends on target)")
+    .option("--config <path>", "Update this configuration file instead of the target's conventional destination")
+    .option("--backup-dir <path>", "Directory for a full pre-write configuration backup")
+    .option("--apply", "Apply the displayed removal plan (requires --yes)")
+    .option("--yes", "Acknowledge that an applied plan may modify one MCP configuration file")
+    .option("--force", "Match a configuration with the explicit broad-project auto-sync permission")
+    .option("--no-auto-sync", "Match a configuration with background incremental sync disabled")
+    .option(
+      "--no-diagnostic-journal",
+      "Match a configuration with persistent auto-sync diagnostic journal writes disabled"
+    )
+    .option(
+      "--sync-interval <milliseconds>",
+      `Match a generated MCP polling fallback interval (${MIN_WATCH_INTERVAL_MS}-${MAX_WATCH_INTERVAL_MS})`,
+      parseWatchInterval
+    )
+    .option("--poll", "Match a configuration that disables native filesystem-event acceleration")
+    .option("--source", "Match a configuration that invokes this built CLI through the current Node executable")
+    .action((target: string, options: McpUninstallCommandOptions) => {
+      const result = createMcpUninstall(target, {
         ...createMcpCommandOptions(options),
         ...(options.config === undefined ? {} : { configPath: options.config }),
         ...(options.backupDir === undefined ? {} : { backupDirectory: options.backupDir }),

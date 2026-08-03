@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.240.0 is a developer preview that runs from source. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher can update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.241.0 is a developer preview that runs from source. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher can update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## Quick start
 
@@ -44,11 +44,17 @@ node dist/cli/main.js mcp-install claude --project /path/to/project --json
 # Apply only after reviewing the plan: full backup first, then atomic update
 node dist/cli/main.js mcp-install claude --project /path/to/project --apply --yes --json
 
+# Preview a removal first; neither the file nor sibling MCP entries are deleted
+node dist/cli/main.js mcp-uninstall claude --project /path/to/project --json
+
+# Remove only SymbolLattice's owned MCP entry after explicit confirmation
+node dist/cli/main.js mcp-uninstall claude --project /path/to/project --apply --yes --json
+
 # Read-only diagnosis of the existing configuration, CLI, and index
 node dist/cli/main.js mcp-doctor claude --project /path/to/project --json
 ```
 
-`mcp-install` changes only SymbolLattice's MCP entry in the selected Agent configuration and preserves sibling entries. It refuses to overwrite an existing file it cannot safely parse. `mcp-config` remains output-only: it produces a copy-and-paste snippet and never reads or writes an Agent configuration. `generic-json` requires an explicit `--config /path/to/mcp.json`.
+`mcp-install` and `mcp-uninstall` both preview by default; an applied plan creates a full backup before an atomic update. They change only SymbolLattice's MCP entry in the selected Agent configuration and preserve sibling entries; the uninstaller never deletes the selected configuration file. They refuse to write an existing file they cannot safely parse. `mcp-config` remains output-only: it produces a copy-and-paste snippet and never reads or writes an Agent configuration. `generic-json` requires an explicit `--config /path/to/mcp.json`.
 
 ## Common commands
 
@@ -63,6 +69,7 @@ node dist/cli/main.js mcp-doctor claude --project /path/to/project --json
 | `mcp-config <target>` | Produce an output-only MCP configuration snippet. |
 | `mcp-doctor <target>` | Read-only diagnosis of an Agent MCP configuration, CLI, and project index. |
 | `mcp-install <target>` | Preview or, with `--apply --yes`, safely write an MCP configuration. |
+| `mcp-uninstall <target>` | Preview or, with `--apply --yes`, safely remove its owned MCP entry. |
 
 ## Verification
 

@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.240.0 是從原始碼執行的開發者預覽版。MCP 查詢工具唯讀；但 `serve --mcp` 預設會啟動獨立的本機自動同步 watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用它。
+> v0.241.0 是從原始碼執行的開發者預覽版。MCP 查詢工具唯讀；但 `serve --mcp` 預設會啟動獨立的本機自動同步 watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用它。
 
 ## 快速開始
 
@@ -44,11 +44,17 @@ node dist/cli/main.js mcp-install claude --project /path/to/project --json
 # 確認計畫後才套用：既有檔案先完整備份，再原子更新
 node dist/cli/main.js mcp-install claude --project /path/to/project --apply --yes --json
 
+# 移除前先預覽；設定檔與其他 MCP 項目不會被刪除
+node dist/cli/main.js mcp-uninstall claude --project /path/to/project --json
+
+# 確認後才移除 SymbolLattice 自己的 MCP 項目
+node dist/cli/main.js mcp-uninstall claude --project /path/to/project --apply --yes --json
+
 # 唯讀檢查既有設定、CLI 與索引
 node dist/cli/main.js mcp-doctor claude --project /path/to/project --json
 ```
 
-`mcp-install` 只會改動選定 Agent 的 SymbolLattice MCP 項目，保留同檔其他項目；無法安全解析的既有設定會被拒絕寫入。`mcp-config` 仍可只產生可複製的設定片段，不讀寫 Agent 設定。`generic-json` 必須明確提供 `--config /path/to/mcp.json`。
+`mcp-install` 與 `mcp-uninstall` 都預設只預覽；套用時會先完整備份、再原子更新。兩者只會變更選定 Agent 的 SymbolLattice MCP 項目，保留同檔其他項目，且移除器絕不刪除設定檔。無法安全解析的既有設定會被拒絕寫入。`mcp-config` 仍可只產生可複製的設定片段，不讀寫 Agent 設定。`generic-json` 必須明確提供 `--config /path/to/mcp.json`。
 
 ## 常用指令
 
@@ -63,6 +69,7 @@ node dist/cli/main.js mcp-doctor claude --project /path/to/project --json
 | `mcp-config <target>` | 產生不讀寫設定檔的 MCP 片段。 |
 | `mcp-doctor <target>` | 唯讀診斷 Agent MCP 設定、CLI 與專案索引。 |
 | `mcp-install <target>` | 預覽或在 `--apply --yes` 後安全寫入 MCP 設定。 |
+| `mcp-uninstall <target>` | 預覽或在 `--apply --yes` 後安全移除自己的 MCP 項目。 |
 
 ## 驗證
 
