@@ -291,12 +291,23 @@ interface StaticDjangoUrlPatternList {
   readonly literalUrlconfInclusions: readonly StaticDjangoLiteralUrlconfInclusion[];
 }
 
-/** A one-dot, single-name Python relative import that can carry an APIRouter. */
-interface StaticFastApiRelativeRouterImport {
+/** One static, single-name Python import that can carry an APIRouter. */
+interface StaticFastApiRouterImport {
   readonly moduleSpecifier: string;
+  readonly moduleSpecifierKind: "relative" | "absolute";
   readonly importedRouterName: string;
   readonly routerName: string;
   readonly node: PythonSyntaxNode;
+}
+
+/** A one-dot, single-name Python relative import that can carry an APIRouter. */
+interface StaticFastApiRelativeRouterImport extends StaticFastApiRouterImport {
+  readonly moduleSpecifierKind: "relative";
+}
+
+/** A direct, dotted Python import that can carry an APIRouter. */
+interface StaticFastApiAbsoluteRouterImport extends StaticFastApiRouterImport {
+  readonly moduleSpecifierKind: "absolute";
 }
 
 /** One static, single-name Python import that can carry a Django Ninja Router. */
@@ -676,6 +687,36 @@ function staticFastApiRelativeRouterImport(
 
   return {
     moduleSpecifier: match[1],
+    moduleSpecifierKind: "relative",
+    importedRouterName: match[2],
+    routerName: match[3] ?? match[2],
+    node
+  };
+}
+
+/**
+ * Retains one static absolute import candidate: `from package.module import
+ * router [as local_router]`. Project resolution later requires an exact local
+ * module target and regular package markers, so external and ambiguous imports
+ * cannot project a route.
+ */
+function staticFastApiAbsoluteRouterImport(
+  input: PythonExtractFileFactsInput,
+  node: PythonSyntaxNode
+): StaticFastApiAbsoluteRouterImport | null {
+  if (node.name !== "ImportStatement") {
+    return null;
+  }
+  const match = /^from[ \t]+([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)[ \t]+import[ \t]+([A-Za-z_][A-Za-z0-9_]*)(?:[ \t]+as[ \t]+([A-Za-z_][A-Za-z0-9_]*))?[ \t]*$/u.exec(
+    nodeText(input, node)
+  );
+  if (match?.[1] === undefined || match[2] === undefined) {
+    return null;
+  }
+
+  return {
+    moduleSpecifier: match[1],
+    moduleSpecifierKind: "absolute",
     importedRouterName: match[2],
     routerName: match[3] ?? match[2],
     node
@@ -3308,17 +3349,17 @@ function latestProvenDjangoRelativeUrlconfImport(
 }
 
 /**
- * Finds the one direct relative import still bound to a FastAPI router name.
+ * Finds the one direct static import still bound to a FastAPI router name.
  * A later assignment or import shadows an earlier import and therefore removes
  * it from consideration.
  */
-function latestProvenFastApiRelativeRouterImportBinding(
+function latestProvenFastApiRouterImportBinding(
   input: PythonExtractFileFactsInput,
   topLevelNodes: readonly PythonSyntaxNode[],
-  imports: readonly StaticFastApiRelativeRouterImport[],
+  imports: readonly StaticFastApiRouterImport[],
   routerName: string,
   before: number
-): StaticFastApiRelativeRouterImport | null {
+): StaticFastApiRouterImport | null {
   const candidates = imports
     .filter(
       (candidate) =>
@@ -3337,16 +3378,16 @@ function latestProvenFastApiRelativeRouterImportBinding(
 }
 
 /**
- * Finds the one direct relative import still bound to the router argument at a
+ * Finds the one direct static import still bound to the router argument at a
  * literal `include_router` call.
  */
-function latestProvenFastApiRelativeRouterImport(
+function latestProvenFastApiRouterImport(
   input: PythonExtractFileFactsInput,
   topLevelNodes: readonly PythonSyntaxNode[],
-  imports: readonly StaticFastApiRelativeRouterImport[],
+  imports: readonly StaticFastApiRouterImport[],
   inclusion: StaticFastApiRouterInclusion
-): StaticFastApiRelativeRouterImport | null {
-  return latestProvenFastApiRelativeRouterImportBinding(
+): StaticFastApiRouterImport | null {
+  return latestProvenFastApiRouterImportBinding(
     input,
     topLevelNodes,
     imports,
@@ -3826,6 +3867,13 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
     const relativeRouterImports = topLevelNodes
       .map((node) => staticFastApiRelativeRouterImport(input, node))
       .filter((candidate): candidate is StaticFastApiRelativeRouterImport => candidate !== null);
+    const absoluteRouterImports = topLevelNodes
+      .map((node) => staticFastApiAbsoluteRouterImport(input, node))
+      .filter((candidate): candidate is StaticFastApiAbsoluteRouterImport => candidate !== null);
+    const fastApiRouterImports: readonly StaticFastApiRouterImport[] = [
+      ...relativeRouterImports,
+      ...absoluteRouterImports
+    ];
     const relativeDjangoNinjaRouterImports = topLevelNodes
       .map((node) => staticDjangoNinjaRelativeRouterImport(input, node))
       .filter(
@@ -4225,7 +4273,7 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
       }
 
       for (const imported of relativeRouterImports) {
-        const finalImport = latestProvenFastApiRelativeRouterImportBinding(
+        const finalImport = latestProvenFastApiRouterImportBinding(
           input,
           topLevelNodes,
           relativeRouterImports,
@@ -4681,10 +4729,10 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
       ) {
         continue;
       }
-      const importedRouter = latestProvenFastApiRelativeRouterImport(
+      const importedRouter = latestProvenFastApiRouterImport(
         input,
         topLevelNodes,
-        relativeRouterImports,
+        fastApiRouterImports,
         inclusion
       );
       if (importedRouter === null) {
@@ -4695,6 +4743,7 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
         routerName: importedRouter.routerName,
         importedRouterName: importedRouter.importedRouterName,
         moduleSpecifier: importedRouter.moduleSpecifier,
+        moduleSpecifierKind: importedRouter.moduleSpecifierKind,
         prefix: inclusion.prefix,
         range: rangeFor(lineStarts, inclusion.node.from, inclusion.node.to)
       });

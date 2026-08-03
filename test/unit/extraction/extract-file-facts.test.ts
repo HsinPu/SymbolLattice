@@ -3901,6 +3901,32 @@ describe("source extraction", () => {
     });
   });
 
+  it("retains direct project-root absolute FastAPI APIRouter inclusion facts", () => {
+    const facts = extractFileFacts({
+      filePath: "api/main.py",
+      language: "python",
+      sourceText: [
+        "from fastapi import FastAPI",
+        "from api.routers.catalog import router as catalog_router",
+        "app = FastAPI()",
+        "app.include_router(catalog_router, prefix=\"/api\")"
+      ].join("\n")
+    });
+
+    expect(facts.fastApiRouterFacts).toMatchObject({
+      importedRouterInclusions: [
+        {
+          applicationName: "app",
+          routerName: "catalog_router",
+          importedRouterName: "router",
+          moduleSpecifier: "api.routers.catalog",
+          moduleSpecifierKind: "absolute",
+          prefix: "/api"
+        }
+      ]
+    });
+  });
+
   it("retains proven cross-file Django Ninja Router and package-relative inclusion facts", () => {
     const routerFacts = extractFileFacts({
       filePath: "api/routers/catalog.py",

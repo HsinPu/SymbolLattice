@@ -252,7 +252,11 @@ export const FRAMEWORK_CAPABILITIES = [
     routeRegistrations: [],
     surfaces: [
       "direct FastAPI application decorators",
-      "same-file APIRouter decorators through direct include_router"
+      "same-file APIRouter decorators through direct include_router",
+      "package-relative imported APIRouter decorators through direct include_router prefixes",
+      "project-root absolute imported APIRouter decorators through direct include_router prefixes",
+      "final package-initializer APIRouter re-export chains through package-relative imports",
+      "top-level named local function handlers"
     ]
   },
   {

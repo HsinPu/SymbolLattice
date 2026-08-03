@@ -14,9 +14,9 @@
 </div>
 
 > [!IMPORTANT]
-> v0.231.0 為開發者預覽版；請從原始碼執行。
+> v0.232.0 為開發者預覽版；請從原始碼執行。
 
-SymbolLattice 將專案索引為本機程式碼符號圖譜。每條關係都保留規則、證據階段與信心值，並明確區分 `exact`、`heuristic`、`unresolved`。
+SymbolLattice 將專案索引為本機程式碼符號圖譜。每條關係都保留規則、證據階段與信心值，並明確區分 `exact`、`heuristic` 與 `unresolved`。
 
 ## 快速開始
 
@@ -34,7 +34,7 @@ node dist/cli/main.js init /path/to/project
 # 查詢已索引的程式碼證據
 node dist/cli/main.js investigate "user token" --project /path/to/project --json
 
-# 原始碼或專案設定變動後，明確更新圖譜
+# 原始碼或設定變更後，明確更新圖譜
 node dist/cli/main.js sync /path/to/project
 
 # 啟動唯讀 MCP 查詢主機
@@ -43,16 +43,16 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 索引資料存放在目標專案的 `.symbol-lattice/index.sqlite`。Windows PowerShell 若無法使用 `npm`，請改用 `npm.cmd`。
 
-## v0.231.0 重點
+## v0.232.0 重點
 
-- Django Ninja 現可追蹤最終 `__init__.py` 的專案根目錄絕對 Router re-export，例如 `from api.routers.catalog import router as public_router`。
-- 直接匯入及 re-export 皆要求唯一的本機目標與完整 `__init__.py` 套件邊界；一般裝飾器與固定 `api_operation` 方法陣列保留完整模組路徑及 `exact` 證據。
-- 持續提供多語言靜態符號、呼叫、匯入、路由與跨檔案關係查詢，且圖譜與查詢資料皆留在本機。
+- FastAPI 可追蹤專案根目錄絕對匯入的 `APIRouter`，例如 `from api.routers.catalog import router as catalog_router`，並保留完整模組路徑與 `exact` 證據。
+- FastAPI 與 Django Ninja 的跨檔案路由皆要求唯一的本機目標與完整 `__init__.py` 套件邊界；動態、外部或不完整套件不會被投影為路由。
+- 支援多語言靜態符號、呼叫、匯入、路由與跨檔案關係查詢，且圖譜與查詢資料皆留在本機。
 
 ## 已知邊界
 
-- 本版尚不推論父層、字串或不具完整套件邊界的 Django Ninja Router 匯入、巢狀 Router、動態或非固定方法 `api_operation`、動態路徑、條件式或重綁定的 API/Router 實例。
-- 此專案是程式碼圖譜，不是 RDF/SPARQL 知識庫，也不推論執行期動態派發、完整型別檢查或依賴注入選擇結果。
+- 不推論父層、字串或動態匯入；不推論動態路徑、條件式建構、重綁定的 API/Router 實例或執行期動態派發。
+- 這是程式碼圖譜，不是 RDF/SPARQL 知識庫；不進行完整型別檢查或依賴注入選擇。
 - `init` 建圖後，原始碼或設定變更需由使用者明確執行 `sync`；MCP 查詢不會寫入或重建圖譜。
 
 ## 驗證

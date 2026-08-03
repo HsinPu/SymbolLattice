@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.231.0 is a developer preview. Run it from source.
+> v0.232.0 is a developer preview. Run it from source.
 
 SymbolLattice indexes a project into a local code-symbol graph. Every relation retains its rule, evidence stage, and confidence; `exact`, `heuristic`, and `unresolved` are never conflated.
 
@@ -43,16 +43,16 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 Index data is stored in the target project's `.symbol-lattice/index.sqlite`. On Windows PowerShell, use `npm.cmd` when npm is unavailable.
 
-## v0.231.0 highlights
+## v0.232.0 highlights
 
-- Django Ninja now follows project-root absolute Router re-exports from final `__init__.py` files, such as `from api.routers.catalog import router as public_router`.
-- Direct imports and re-exports both require one local target and a complete `__init__.py` package boundary; decorators and fixed `api_operation` method arrays retain full module paths and `exact` evidence.
-- Continues to provide multi-language static symbols, calls, imports, routes, and cross-file relationship queries while keeping graph and query data local.
+- FastAPI now follows project-root absolute `APIRouter` imports, such as `from api.routers.catalog import router as catalog_router`, with full module paths and `exact` evidence.
+- Cross-file FastAPI and Django Ninja routes require one local target and a complete `__init__.py` package boundary; dynamic, external, and incomplete-package imports are never projected as routes.
+- Provides multi-language static symbols, calls, imports, routes, and cross-file relationship queries while keeping graph and query data local.
 
 ## Current limits
 
-- This release deliberately does not infer parent-relative, string-imported, or incomplete-package Django Ninja Router imports; nested Routers; dynamic or non-literal-method `api_operation`; dynamic paths; conditional construction; or rebound API/Router instances.
-- This is a code graph, not an RDF/SPARQL knowledge base. It does not infer runtime dynamic dispatch, full type checking, or dependency-injection selection.
+- Does not infer parent-relative, string-based, or dynamic imports; dynamic paths; conditional construction; rebound API/Router instances; or runtime dynamic dispatch.
+- This is a code graph, not an RDF/SPARQL knowledge base. It does not perform full type checking or dependency-injection selection.
 - After `init`, source or configuration changes require an explicit `sync`; MCP queries never write or rebuild a graph.
 
 ## Verification

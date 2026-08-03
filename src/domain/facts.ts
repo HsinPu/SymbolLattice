@@ -11,13 +11,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v192";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v193";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v78";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v79";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -228,14 +228,16 @@ export interface FastApiRouterReExportFact {
 }
 
 /**
- * A direct, single-name, package-relative import mounted through a direct
- * FastAPI application's literal `include_router` call.
+ * A direct, single-name, package-relative or project-root absolute import
+ * mounted through a direct FastAPI application's literal `include_router` call.
  */
 export interface FastApiImportedRouterInclusionFact {
   readonly applicationName: string;
   readonly routerName: string;
   readonly importedRouterName: string;
   readonly moduleSpecifier: string;
+  /** Omitted only by artifact facts persisted before v0.232; absence means relative. */
+  readonly moduleSpecifierKind?: "relative" | "absolute";
   readonly prefix: string;
   readonly range: SourceRange;
 }

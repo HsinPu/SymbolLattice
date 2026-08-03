@@ -4430,6 +4430,50 @@ function resolveExactFastApiRouterTarget(input: {
       };
 }
 
+/**
+ * Resolves the deliberately narrow FastAPI APIRouter module-reference forms.
+ * Earlier persisted facts predate `moduleSpecifierKind`, and therefore retain
+ * their original package-relative meaning.
+ */
+function resolveFastApiRouterModule(input: {
+  readonly knownFilePaths: ReadonlySet<string>;
+  readonly fromFilePath: string;
+  readonly moduleSpecifier: string;
+  readonly moduleSpecifierKind: "relative" | "absolute" | undefined;
+}): string | null {
+  switch (input.moduleSpecifierKind) {
+    case undefined:
+    case "relative":
+      return resolvePythonRelativeModule(
+        input.knownFilePaths,
+        input.fromFilePath,
+        input.moduleSpecifier
+      );
+    case "absolute":
+      return resolvePythonAbsoluteModule(
+        input.knownFilePaths,
+        input.fromFilePath,
+        input.moduleSpecifier
+      );
+    default:
+      return null;
+  }
+}
+
+function fastApiImportedRouterRulePrefix(input: {
+  readonly inclusion: FastApiImportedRouterInclusionFact;
+  readonly reExported: boolean;
+}): string {
+  if (input.inclusion.moduleSpecifierKind === "absolute") {
+    return input.reExported
+      ? "framework.fastapi.project-absolute-reexported-router"
+      : "framework.fastapi.project-absolute-router";
+  }
+  return input.reExported
+    ? "framework.fastapi.reexported-router"
+    : "framework.fastapi.imported-router";
+}
+
 interface ProjectedFastApiImportedRouterRoute {
   readonly inclusionFilePath: string;
   readonly routerFilePath: string;
@@ -4486,11 +4530,12 @@ function projectFastApiImportedRouterRoutes(input: {
     }
 
     for (const inclusion of inclusionFacts.importedRouterInclusions) {
-      const importedRouterFilePath = resolvePythonRelativeModule(
-        input.knownFilePaths,
-        inclusionFilePath,
-        inclusion.moduleSpecifier
-      );
+      const importedRouterFilePath = resolveFastApiRouterModule({
+        knownFilePaths: input.knownFilePaths,
+        fromFilePath: inclusionFilePath,
+        moduleSpecifier: inclusion.moduleSpecifier,
+        moduleSpecifierKind: inclusion.moduleSpecifierKind
+      });
       if (importedRouterFilePath === null) {
         continue;
       }
@@ -4622,9 +4667,10 @@ function projectFastApiImportedRouterRoutes(input: {
       confidence: 1,
       referenceName: candidate.handler.name,
       evidence: referenceEvidence(
-        candidate.reExported
-          ? "framework.fastapi.reexported-router.include-router.decorator.local-function"
-          : "framework.fastapi.imported-router.include-router.decorator.local-function",
+        `${fastApiImportedRouterRulePrefix({
+          inclusion: candidate.inclusion,
+          reExported: candidate.reExported
+        })}.include-router.decorator.local-function`,
         "module",
         [candidate.handler.id],
         [],
