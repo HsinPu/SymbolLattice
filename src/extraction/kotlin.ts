@@ -61,7 +61,14 @@ interface StaticKotlinDependencyInjectionAnnotation {
   readonly importPath: string;
   readonly constructorSyntax: JvmDependencyInjectionReferenceFact["syntax"];
   readonly fieldSyntax: JvmDependencyInjectionReferenceFact["syntax"];
+  readonly setterSyntax: JvmDependencyInjectionReferenceFact["syntax"];
   readonly methodSyntax: JvmDependencyInjectionReferenceFact["syntax"];
+}
+
+interface StaticKotlinAnnotationIdentity {
+  readonly name: string;
+  /** Null means the annotation uses Kotlin's ordinary, target-unspecified form. */
+  readonly useSiteTarget: string | null;
 }
 
 type StaticKotlinReactNativeModuleKind = "direct" | "codegen-spec";
@@ -140,18 +147,21 @@ const KOTLIN_DEPENDENCY_INJECTION_ANNOTATIONS: readonly StaticKotlinDependencyIn
     importPath: SPRING_AUTOWIRED_IMPORT,
     constructorSyntax: "spring-autowired-constructor",
     fieldSyntax: "spring-autowired-field",
+    setterSyntax: "spring-autowired-setter",
     methodSyntax: "spring-autowired-method"
   },
   {
     importPath: JAKARTA_INJECT_IMPORT,
     constructorSyntax: "jakarta-inject-constructor",
     fieldSyntax: "jakarta-inject-field",
+    setterSyntax: "jakarta-inject-setter",
     methodSyntax: "jakarta-inject-method"
   },
   {
     importPath: JAVAX_INJECT_IMPORT,
     constructorSyntax: "javax-inject-constructor",
     fieldSyntax: "javax-inject-field",
+    setterSyntax: "javax-inject-setter",
     methodSyntax: "javax-inject-method"
   }
 ];
@@ -629,15 +639,25 @@ function staticKotlinAnnotationInvocation(annotation: KotlinSyntaxNode): KotlinS
   return children.length === 2 && invocation !== undefined ? invocation : null;
 }
 
-function staticKotlinAnnotationName(annotation: KotlinSyntaxNode): string | null {
+function staticKotlinAnnotationIdentity(
+  annotation: KotlinSyntaxNode
+): StaticKotlinAnnotationIdentity | null {
   if (annotation.kind() !== "annotation") {
     return null;
   }
   const children = directChildren(annotation);
-  if (children.length !== 2) {
+  const useSiteTargets = children.filter((child) => child.kind() === "use_site_target");
+  if (useSiteTargets.length > 1) {
     return null;
   }
-  const subject = children[1];
+  const useSiteTargetNode = useSiteTargets[0];
+  if (
+    (useSiteTargetNode === undefined && children.length !== 2) ||
+    (useSiteTargetNode !== undefined && children.length !== 3)
+  ) {
+    return null;
+  }
+  const subject = children.at(-1);
   let userType: KotlinSyntaxNode | undefined;
   if (subject?.kind() === "user_type") {
     userType = subject;
@@ -652,7 +672,19 @@ function staticKotlinAnnotationName(annotation: KotlinSyntaxNode): string | null
     return null;
   }
   const name = nodeText(userType);
-  return /^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*$/u.test(name) ? name : null;
+  if (!/^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*$/u.test(name)) {
+    return null;
+  }
+  if (useSiteTargetNode === undefined) {
+    return { name, useSiteTarget: null };
+  }
+  const useSiteTarget = /^([a-z]+):$/u.exec(nodeText(useSiteTargetNode))?.[1];
+  return useSiteTarget === undefined ? null : { name, useSiteTarget };
+}
+
+function staticKotlinAnnotationName(annotation: KotlinSyntaxNode): string | null {
+  const identity = staticKotlinAnnotationIdentity(annotation);
+  return identity?.useSiteTarget === null ? identity.name : null;
 }
 
 function staticKotlinAnnotationHasExpectedName(
@@ -703,30 +735,88 @@ function staticKotlinExactlyOneProvenAnnotation(
   return provenAnnotations[0] ?? null;
 }
 
+type StaticKotlinDependencyInjectionMember = "constructor" | "field" | "setter" | "method";
+
+function staticKotlinDependencyInjectionUseSiteTargetMatches(
+  member: StaticKotlinDependencyInjectionMember,
+  useSiteTarget: string | null
+): boolean {
+  if (member === "field") {
+    return useSiteTarget === null || useSiteTarget === "field";
+  }
+  if (member === "setter") {
+    return useSiteTarget === "set";
+  }
+  return useSiteTarget === null;
+}
+
+function staticKotlinDependencyInjectionAnnotationHasExpectedName(
+  annotation: KotlinSyntaxNode,
+  expectedImport: string,
+  member: StaticKotlinDependencyInjectionMember
+): boolean {
+  const expectedName = expectedImport.split(".").at(-1);
+  const identity = staticKotlinAnnotationIdentity(annotation);
+  return (
+    identity !== null &&
+    expectedName !== undefined &&
+    staticKotlinDependencyInjectionUseSiteTargetMatches(member, identity.useSiteTarget) &&
+    (identity.name === expectedName || identity.name === expectedImport)
+  );
+}
+
+function staticKotlinDependencyInjectionAnnotationMatches(
+  annotation: KotlinSyntaxNode,
+  expectedImport: string,
+  imports: ReadonlySet<string>,
+  member: StaticKotlinDependencyInjectionMember
+): boolean {
+  const expectedName = expectedImport.split(".").at(-1);
+  const identity = staticKotlinAnnotationIdentity(annotation);
+  return (
+    identity !== null &&
+    expectedName !== undefined &&
+    staticKotlinDependencyInjectionUseSiteTargetMatches(member, identity.useSiteTarget) &&
+    (identity.name === expectedImport ||
+      (identity.name === expectedName && imports.has(expectedImport)))
+  );
+}
+
 /**
- * Accepts one direct, fully-qualified or explicitly imported JVM DI
- * annotation. Anything with an alias, use-site target, or competing DI
- * annotation fails closed before a relation fact is emitted.
+ * Accepts one fully-qualified or explicitly imported JVM DI annotation. Kotlin
+ * `@field:` is accepted only as a field point, `@set:` only as a setter point,
+ * and all other use-site targets fail closed before a relation fact is emitted.
  */
 function staticKotlinDependencyInjectionSyntax(
   annotations: readonly KotlinSyntaxNode[],
   imports: ReadonlySet<string>,
-  member: "constructor" | "field" | "method"
+  member: StaticKotlinDependencyInjectionMember
 ): JvmDependencyInjectionReferenceFact["syntax"] | null {
   const annotationsNamedDependencyInjection = annotations.filter((annotation) =>
     KOTLIN_DEPENDENCY_INJECTION_ANNOTATIONS.some((candidate) =>
-      staticKotlinAnnotationHasExpectedName(annotation, candidate.importPath)
+      staticKotlinDependencyInjectionAnnotationHasExpectedName(
+        annotation,
+        candidate.importPath,
+        member
+      )
     )
   );
   const provenAnnotations = annotationsNamedDependencyInjection.flatMap((annotation) =>
     KOTLIN_DEPENDENCY_INJECTION_ANNOTATIONS.flatMap((candidate) =>
-      staticKotlinAnnotationMatches(annotation, candidate.importPath, imports)
+      staticKotlinDependencyInjectionAnnotationMatches(
+        annotation,
+        candidate.importPath,
+        imports,
+        member
+      )
         ? [
             member === "constructor"
               ? candidate.constructorSyntax
               : member === "field"
                 ? candidate.fieldSyntax
-                : candidate.methodSyntax
+                : member === "setter"
+                  ? candidate.setterSyntax
+                  : candidate.methodSyntax
           ]
         : []
     )
@@ -778,13 +868,25 @@ function staticKotlinMethodInjectionReferences(
   return references;
 }
 
+function staticKotlinPropertyHasSetter(property: KotlinSyntaxNode): boolean {
+  const bindingKinds = directChildren(property).filter(
+    (child) => child.kind() === "binding_pattern_kind"
+  );
+  return (
+    bindingKinds.length === 1 &&
+    bindingKinds[0] !== undefined &&
+    directChildren(bindingKinds[0]).some((child) => child.kind() === "var")
+  );
+}
+
 /**
  * Retains direct primary-constructor, class-property, and concrete-method
  * injection point types. Every individually proven method parameter becomes
- * its own fact. It records only declared static type dependencies;
- * collection/generic types, secondary constructors, use-site targets,
- * extension functions, and runtime provider selection are deliberately outside
- * this first JVM DI projection.
+ * its own fact. It records only declared static type dependencies; direct
+ * `@field:` and mutable-property `@set:` targets are accepted, while
+ * collection/generic types, secondary constructors, other use-site targets,
+ * extension functions, and runtime provider selection stay outside this first
+ * JVM DI projection.
  */
 function staticKotlinDependencyInjectionReferences(
   declaration: StaticKotlinType,
@@ -821,14 +923,7 @@ function staticKotlinDependencyInjectionReferences(
     if (property.kind() !== "property_declaration") {
       continue;
     }
-    const syntax = staticKotlinDependencyInjectionSyntax(
-      staticKotlinAnnotations(property),
-      imports,
-      "field"
-    );
-    if (syntax === null) {
-      continue;
-    }
+    const annotations = staticKotlinAnnotations(property);
     const variableDeclaration = directChildren(property).find(
       (child) => child.kind() === "variable_declaration"
     );
@@ -836,8 +931,16 @@ function staticKotlinDependencyInjectionReferences(
       continue;
     }
     const reference = staticKotlinDirectInjectionTypeReference(variableDeclaration);
-    if (reference !== null) {
-      references.push({ syntax, reference });
+    if (reference === null) {
+      continue;
+    }
+    const fieldSyntax = staticKotlinDependencyInjectionSyntax(annotations, imports, "field");
+    if (fieldSyntax !== null) {
+      references.push({ syntax: fieldSyntax, reference });
+    }
+    const setterSyntax = staticKotlinDependencyInjectionSyntax(annotations, imports, "setter");
+    if (setterSyntax !== null && staticKotlinPropertyHasSetter(property)) {
+      references.push({ syntax: setterSyntax, reference });
     }
   }
 

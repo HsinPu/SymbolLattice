@@ -1694,6 +1694,18 @@ describe("SymbolLatticeService", () => {
         "class MethodController {",
         "  @Inject fun setServices(audit: AuditService, events: EventService): Unit {}",
         "}"
+      ].join("\n"),
+      "src/kotlin/app/web/UseSiteController.kt": [
+        "package app.web",
+        "import org.springframework.beans.factory.annotation.Autowired",
+        "import jakarta.inject.Inject",
+        "import app.services.AuditService",
+        "import app.services.EventService",
+        "class UseSiteController {",
+        "  @field:Autowired lateinit var audit: AuditService",
+        "  @set:Inject lateinit var events: EventService",
+        "  @get:Autowired val ignored: EventService = TODO()",
+        "}"
       ].join("\n")
     });
     const graphStore = new SqliteGraphStore();
@@ -1785,6 +1797,29 @@ describe("SymbolLatticeService", () => {
       ])
     );
     expect(injectionEdges("src/kotlin/app/web/MethodController.kt#MethodController")).toHaveLength(2);
+    expect(injectionEdges("src/kotlin/app/web/UseSiteController.kt#UseSiteController")).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          targetId: symbol("src/kotlin/app/services/AuditService.kt#AuditService")?.id,
+          resolution: "exact",
+          confidence: 1,
+          evidence: expect.objectContaining({
+            ruleId: "framework.jvm-di.spring-autowired-field.explicit-import.local-type",
+            stage: "module"
+          })
+        }),
+        expect.objectContaining({
+          targetId: symbol("src/kotlin/app/services/EventService.kt#EventService")?.id,
+          resolution: "exact",
+          confidence: 1,
+          evidence: expect.objectContaining({
+            ruleId: "framework.jvm-di.jakarta-inject-setter.explicit-import.local-type",
+            stage: "module"
+          })
+        })
+      ])
+    );
+    expect(injectionEdges("src/kotlin/app/web/UseSiteController.kt#UseSiteController")).toHaveLength(2);
 
     const javaFacts = graphStore
       .getArtifactFacts(projectPath)
