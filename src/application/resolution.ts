@@ -2479,8 +2479,8 @@ interface ExactOverrideResolution {
 /**
  * An explicit language-level override marker alone does not expose semantic
  * type-checker data. Retain an exact edge only when the persisted graph
- * independently proves one direct parent class and one same-named method
- * contained by that parent.
+ * independently proves exactly one same-named method across its direct parent
+ * class and interface types.
  */
 function resolveExactOverrideTarget(input: {
   readonly reference: PendingReference & { readonly relationKind: "overrides" };
@@ -2503,11 +2503,11 @@ function resolveExactOverrideTarget(input: {
     return { target: null, candidates: [] };
   }
 
-  const baseClasses = [...new Set(
+  const directParentTypes = [...new Set(
     input.resolvedEdges
       .filter(
         (edge) =>
-          edge.kind === "extends" &&
+          (edge.kind === "extends" || edge.kind === "implements") &&
           edge.sourceId === owner.id &&
           edge.resolution === "exact" &&
           edge.targetId !== null
@@ -2515,14 +2515,14 @@ function resolveExactOverrideTarget(input: {
       .map((edge) => edge.targetId)
   )]
     .map((id) => (id === null ? undefined : input.symbolsById.get(id)))
-    .filter((candidate): candidate is SymbolNode => candidate?.kind === "class")
+    .filter(
+      (candidate): candidate is SymbolNode =>
+        candidate?.kind === "class" || candidate?.kind === "interface"
+    )
     .sort((left, right) => compareStableText(left.id, right.id));
-  const baseClass = baseClasses[0];
-  if (baseClasses.length !== 1 || baseClass === undefined) {
-    return { target: null, candidates: [] };
-  }
 
-  const candidates = [...(input.containedIdsByContainerId.get(baseClass.id) ?? [])]
+  const candidates = directParentTypes
+    .flatMap((parent) => [...(input.containedIdsByContainerId.get(parent.id) ?? [])])
     .map((id) => input.symbolsById.get(id))
     .filter(
       (candidate): candidate is SymbolNode =>

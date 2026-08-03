@@ -279,9 +279,6 @@ function staticKotlinFunction(node: KotlinSyntaxNode): StaticKotlinFunction | nu
 function staticKotlinDirectSupertypeReferences(
   declaration: StaticKotlinType
 ): readonly StaticKotlinSupertypeReference[] {
-  if (declaration.kind !== "class") {
-    return [];
-  }
   const references: StaticKotlinSupertypeReference[] = [];
   for (const specifier of directChildren(declaration.node).filter(
     (child) => child.kind() === "delegation_specifier"
@@ -1685,48 +1682,65 @@ export function extractKotlinFileFacts(input: KotlinExtractFileFactsInput): Arti
   }
 
   /**
-   * Retain a hierarchy edge only when one direct simple-name Kotlin supertype
-   * resolves to exactly one other class in the same file. Interfaces remain out
-   * of scope for this class-only override projection.
+   * Each direct simple-name Kotlin supertype can become an exact edge only
+   * when it identifies one compatible type declared in this same file.
    */
-  function addExactSameFileSuperclass(
+  function addExactSameFileSupertypeRelations(
     child: SymbolNode,
     declaration: StaticKotlinType,
     typesByName: ReadonlyMap<string, readonly SymbolNode[]>
   ): void {
-    const candidates = staticKotlinDirectSupertypeReferences(declaration)
-      .flatMap((reference) =>
-        (typesByName.get(reference.name) ?? []).map((symbol) => ({ reference, symbol }))
-      )
-      .filter(({ symbol }) => symbol.id !== child.id && symbol.kind === "class");
-    if (candidates.length !== 1 || candidates[0] === undefined) {
-      return;
-    }
-    const { reference, symbol: target } = candidates[0];
-    const range = rangeForNode(reference.node);
-    edges.push({
-      id: createEdgeId({
+    for (const reference of staticKotlinDirectSupertypeReferences(declaration)) {
+      const candidates = (typesByName.get(reference.name) ?? []).filter(
+        (symbol) =>
+          symbol.id !== child.id && (symbol.kind === "class" || symbol.kind === "interface")
+      );
+      if (candidates.length !== 1 || candidates[0] === undefined) {
+        continue;
+      }
+      const target = candidates[0];
+      const relationKind =
+        declaration.kind === "class" && target.kind === "class"
+          ? "extends"
+          : declaration.kind === "class" && target.kind === "interface"
+            ? "implements"
+            : declaration.kind === "interface" && target.kind === "interface"
+              ? "extends"
+              : null;
+      if (relationKind === null) {
+        continue;
+      }
+      const ruleId =
+        relationKind === "implements"
+          ? "syntax.kotlin.same-file.direct-implements"
+          : declaration.kind === "interface"
+            ? "syntax.kotlin.same-file.direct-interface-extends"
+            : "syntax.kotlin.same-file.direct-superclass";
+      const range = rangeForNode(reference.node);
+      edges.push({
+        id: createEdgeId({
+          sourceId: child.id,
+          targetId: target.id,
+          kind: relationKind,
+          line: range.start.line,
+          column: range.start.column,
+          referenceName: reference.name
+        }),
         sourceId: child.id,
         targetId: target.id,
-        kind: "extends",
-        line: range.start.line,
-        column: range.start.column,
-        referenceName: reference.name
-      }),
-      sourceId: child.id,
-      targetId: target.id,
-      kind: "extends",
-      filePath: input.filePath,
-      range,
-      resolution: "exact",
-      confidence: 1,
-      referenceName: reference.name,
-      evidence: {
-        ruleId: "syntax.kotlin.same-file.direct-superclass",
-        stage: "syntax",
-        candidateSymbolIds: [target.id]
-      }
-    });
+        kind: relationKind,
+        filePath: input.filePath,
+        range,
+        resolution: "exact",
+        confidence: 1,
+        referenceName: reference.name,
+        evidence: {
+          ruleId,
+          stage: "syntax",
+          candidateSymbolIds: [target.id]
+        }
+      });
+    }
   }
 
   function addFunction(declaration: StaticKotlinFunction): SymbolNode {
@@ -1939,7 +1953,7 @@ export function extractKotlinFileFacts(input: KotlinExtractFileFactsInput): Arti
     }
 
     for (const { declaration, symbol } of declaredTypes) {
-      addExactSameFileSuperclass(symbol, declaration, typesByName);
+      addExactSameFileSupertypeRelations(symbol, declaration, typesByName);
     }
 
     for (const functionDeclaration of topLevelFunctions) {

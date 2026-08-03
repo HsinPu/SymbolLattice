@@ -1399,7 +1399,7 @@ describe("SymbolLatticeService", () => {
     expect(childMethodCandidate?.topologySignals?.score).toBeGreaterThan(0);
   });
 
-  it("persists exact same-file Java and Kotlin override evidence through init", async () => {
+  it("persists exact same-file Java and Kotlin class and interface override evidence through init", async () => {
     const projectPath = await createInlineProject({
       "src/JavaOverrides.java": [
         "class JavaBase { void run() {} }",
@@ -1408,6 +1408,14 @@ describe("SymbolLatticeService", () => {
       "src/KotlinOverrides.kt": [
         "abstract class KotlinBase { abstract fun run() }",
         "class KotlinChild : KotlinBase() { override fun run() {} }"
+      ].join("\n"),
+      "src/JavaInterfaces.java": [
+        "interface JavaContract { void run(); }",
+        "class JavaInterfaceChild implements JavaContract { @Override public void run() {} }"
+      ].join("\n"),
+      "src/KotlinInterfaces.kt": [
+        "interface KotlinContract { fun run() }",
+        "class KotlinInterfaceChild : KotlinContract { override fun run() {} }"
       ].join("\n")
     });
     const graphStore = new SqliteGraphStore();
@@ -1422,15 +1430,42 @@ describe("SymbolLatticeService", () => {
       snapshot.edges.find(
         (edge) => edge.sourceId === symbol(sourceQualifiedName)?.id && edge.kind === "overrides"
       );
+    const implementsEdge = (sourceQualifiedName: string, targetQualifiedName: string) =>
+      snapshot.edges.find(
+        (edge) =>
+          edge.sourceId === symbol(sourceQualifiedName)?.id &&
+          edge.targetId === symbol(targetQualifiedName)?.id &&
+          edge.kind === "implements"
+      );
     for (const [sourceQualifiedName, targetQualifiedName] of [
       ["src/JavaOverrides.java#JavaChild.run", "src/JavaOverrides.java#JavaBase.run"],
-      ["src/KotlinOverrides.kt#KotlinChild.run", "src/KotlinOverrides.kt#KotlinBase.run"]
+      ["src/KotlinOverrides.kt#KotlinChild.run", "src/KotlinOverrides.kt#KotlinBase.run"],
+      ["src/JavaInterfaces.java#JavaInterfaceChild.run", "src/JavaInterfaces.java#JavaContract.run"],
+      ["src/KotlinInterfaces.kt#KotlinInterfaceChild.run", "src/KotlinInterfaces.kt#KotlinContract.run"]
     ] as const) {
       expect(overrideEdge(sourceQualifiedName)).toMatchObject({
         targetId: symbol(targetQualifiedName)?.id,
         resolution: "exact",
         confidence: 1,
         evidence: { ruleId: "syntax.override.explicit-direct-base-method", stage: "syntax" }
+      });
+    }
+    for (const [sourceQualifiedName, targetQualifiedName, ruleId] of [
+      [
+        "src/JavaInterfaces.java#JavaInterfaceChild",
+        "src/JavaInterfaces.java#JavaContract",
+        "syntax.java.same-file.direct-implements"
+      ],
+      [
+        "src/KotlinInterfaces.kt#KotlinInterfaceChild",
+        "src/KotlinInterfaces.kt#KotlinContract",
+        "syntax.kotlin.same-file.direct-implements"
+      ]
+    ] as const) {
+      expect(implementsEdge(sourceQualifiedName, targetQualifiedName)).toMatchObject({
+        resolution: "exact",
+        confidence: 1,
+        evidence: { ruleId, stage: "syntax" }
       });
     }
     expect(
@@ -1440,7 +1475,12 @@ describe("SymbolLatticeService", () => {
         .filter((reference) => reference.relationKind === "overrides")
         .map((reference) => reference.filePath)
         .sort()
-    ).toEqual(["src/JavaOverrides.java", "src/KotlinOverrides.kt"]);
+    ).toEqual([
+      "src/JavaInterfaces.java",
+      "src/JavaOverrides.java",
+      "src/KotlinInterfaces.kt",
+      "src/KotlinOverrides.kt"
+    ]);
   });
 
   it("bounds selected investigation declaration source without reading live files", async () => {

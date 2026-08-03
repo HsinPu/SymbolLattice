@@ -959,7 +959,7 @@ describe("explicit TypeScript override resolution", () => {
 });
 
 describe("explicit Java and Kotlin override resolution", () => {
-  it("resolves only same-file direct superclass methods and leaves external bases unresolved", () => {
+  it("resolves only same-file direct class or interface methods and leaves external or ambiguous bases unresolved", () => {
     const sourceDocuments: readonly SourceDocument[] = [
       {
         absolutePath: "C:/project/src/JavaOverrides.java",
@@ -1014,6 +1014,28 @@ describe("explicit Java and Kotlin override resolution", () => {
           "class KotlinInterfaceChild : KotlinContract { override fun run() {} }"
         ].join("\n"),
         contentHash: "kotlin-interface"
+      },
+      {
+        absolutePath: "C:/project/src/AmbiguousInterfaceOverrides.java",
+        relativePath: "src/AmbiguousInterfaceOverrides.java",
+        language: "java",
+        sourceText: [
+          "interface FirstJavaContract { void run(); }",
+          "interface SecondJavaContract { void run(); }",
+          "class JavaAmbiguous implements FirstJavaContract, SecondJavaContract { @Override public void run() {} }"
+        ].join("\n"),
+        contentHash: "java-ambiguous-interface"
+      },
+      {
+        absolutePath: "C:/project/src/AmbiguousInterfaceOverrides.kt",
+        relativePath: "src/AmbiguousInterfaceOverrides.kt",
+        language: "kotlin",
+        sourceText: [
+          "interface FirstKotlinContract { fun run() }",
+          "interface SecondKotlinContract { fun run() }",
+          "class KotlinAmbiguous : FirstKotlinContract, SecondKotlinContract { override fun run() {} }"
+        ].join("\n"),
+        contentHash: "kotlin-ambiguous-interface"
       }
     ];
     const snapshot = snapshotWithResolver(sourceDocuments, undefined);
@@ -1026,7 +1048,9 @@ describe("explicit Java and Kotlin override resolution", () => {
 
     for (const [sourceQualifiedName, targetQualifiedName] of [
       ["src/JavaOverrides.java#JavaChild.run", "src/JavaOverrides.java#JavaBase.run"],
-      ["src/KotlinOverrides.kt#KotlinChild.run", "src/KotlinOverrides.kt#KotlinBase.run"]
+      ["src/KotlinOverrides.kt#KotlinChild.run", "src/KotlinOverrides.kt#KotlinBase.run"],
+      ["src/InterfaceOverrides.java#JavaInterfaceChild.run", "src/InterfaceOverrides.java#JavaContract.run"],
+      ["src/InterfaceOverrides.kt#KotlinInterfaceChild.run", "src/InterfaceOverrides.kt#KotlinContract.run"]
     ] as const) {
       expect(overrideEdge(sourceQualifiedName)).toMatchObject({
         targetId: symbol(targetQualifiedName)?.id,
@@ -1039,8 +1063,8 @@ describe("explicit Java and Kotlin override resolution", () => {
     for (const sourceQualifiedName of [
       "src/ExternalOverrides.java#JavaExternal.run",
       "src/ExternalOverrides.kt#KotlinExternal.run",
-      "src/InterfaceOverrides.java#JavaInterfaceChild.run",
-      "src/InterfaceOverrides.kt#KotlinInterfaceChild.run"
+      "src/AmbiguousInterfaceOverrides.java#JavaAmbiguous.run",
+      "src/AmbiguousInterfaceOverrides.kt#KotlinAmbiguous.run"
     ]) {
       expect(overrideEdge(sourceQualifiedName)).toMatchObject({
         targetId: null,
@@ -1054,10 +1078,10 @@ describe("explicit Java and Kotlin override resolution", () => {
         .filter((reference) => reference.relationKind === "overrides")
         .map((reference) => reference.filePath)
     ).toEqual([
+      "src/AmbiguousInterfaceOverrides.java",
+      "src/AmbiguousInterfaceOverrides.kt",
       "src/ExternalOverrides.java",
-      "src/ExternalOverrides.kt",
-      "src/InterfaceOverrides.java",
-      "src/InterfaceOverrides.kt"
+      "src/ExternalOverrides.kt"
     ]);
   });
 });

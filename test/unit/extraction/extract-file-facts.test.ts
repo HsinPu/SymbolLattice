@@ -336,6 +336,104 @@ describe("source extraction", () => {
     ).toEqual([[kotlinSymbol("src/kotlin-overrides.kt#KotlinChild.run")?.id, "run"]]);
   });
 
+  it("extracts exact same-file Java and Kotlin interface hierarchy evidence", () => {
+    const java = extractFileFacts({
+      filePath: "src/java-interfaces.java",
+      language: "java",
+      sourceText: [
+        "interface JavaRootContract { void parent(); private void local() {} }",
+        "interface JavaContract extends JavaRootContract { void run(); }",
+        "class JavaInterfaceChild implements JavaContract { @Override public void run() {} }"
+      ].join("\n")
+    });
+    const kotlin = extractFileFacts({
+      filePath: "src/kotlin-interfaces.kt",
+      language: "kotlin",
+      sourceText: [
+        "interface KotlinRootContract { fun parent() }",
+        "interface KotlinContract : KotlinRootContract { fun run() }",
+        "class KotlinInterfaceChild : KotlinContract { override fun run() {} }"
+      ].join("\n")
+    });
+    const javaSymbol = (qualifiedName: string) =>
+      java.symbols.find((symbol) => symbol.qualifiedName === qualifiedName);
+    const kotlinSymbol = (qualifiedName: string) =>
+      kotlin.symbols.find((symbol) => symbol.qualifiedName === qualifiedName);
+
+    expect(javaSymbol("src/java-interfaces.java#JavaContract")).toMatchObject({ kind: "interface" });
+    expect(javaSymbol("src/java-interfaces.java#JavaContract.run")).toMatchObject({
+      kind: "method",
+      isExported: true
+    });
+    expect(javaSymbol("src/java-interfaces.java#JavaRootContract.local")).toMatchObject({
+      kind: "method",
+      isExported: false
+    });
+    expect(kotlinSymbol("src/kotlin-interfaces.kt#KotlinContract")).toMatchObject({ kind: "interface" });
+    expect(kotlinSymbol("src/kotlin-interfaces.kt#KotlinContract.run")).toMatchObject({ kind: "method" });
+
+    expect(java.edges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sourceId: javaSymbol("src/java-interfaces.java#JavaContract")?.id,
+          targetId: javaSymbol("src/java-interfaces.java#JavaRootContract")?.id,
+          kind: "extends",
+          resolution: "exact",
+          confidence: 1,
+          referenceName: "JavaRootContract",
+          evidence: {
+            ruleId: "syntax.java.same-file.direct-interface-extends",
+            stage: "syntax",
+            candidateSymbolIds: [javaSymbol("src/java-interfaces.java#JavaRootContract")?.id]
+          }
+        }),
+        expect.objectContaining({
+          sourceId: javaSymbol("src/java-interfaces.java#JavaInterfaceChild")?.id,
+          targetId: javaSymbol("src/java-interfaces.java#JavaContract")?.id,
+          kind: "implements",
+          resolution: "exact",
+          confidence: 1,
+          referenceName: "JavaContract",
+          evidence: {
+            ruleId: "syntax.java.same-file.direct-implements",
+            stage: "syntax",
+            candidateSymbolIds: [javaSymbol("src/java-interfaces.java#JavaContract")?.id]
+          }
+        })
+      ])
+    );
+    expect(kotlin.edges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sourceId: kotlinSymbol("src/kotlin-interfaces.kt#KotlinContract")?.id,
+          targetId: kotlinSymbol("src/kotlin-interfaces.kt#KotlinRootContract")?.id,
+          kind: "extends",
+          resolution: "exact",
+          confidence: 1,
+          referenceName: "KotlinRootContract",
+          evidence: {
+            ruleId: "syntax.kotlin.same-file.direct-interface-extends",
+            stage: "syntax",
+            candidateSymbolIds: [kotlinSymbol("src/kotlin-interfaces.kt#KotlinRootContract")?.id]
+          }
+        }),
+        expect.objectContaining({
+          sourceId: kotlinSymbol("src/kotlin-interfaces.kt#KotlinInterfaceChild")?.id,
+          targetId: kotlinSymbol("src/kotlin-interfaces.kt#KotlinContract")?.id,
+          kind: "implements",
+          resolution: "exact",
+          confidence: 1,
+          referenceName: "KotlinContract",
+          evidence: {
+            ruleId: "syntax.kotlin.same-file.direct-implements",
+            stage: "syntax",
+            candidateSymbolIds: [kotlinSymbol("src/kotlin-interfaces.kt#KotlinContract")?.id]
+          }
+        })
+      ])
+    );
+  });
+
   it("extracts direct TypeScript heritage identifiers with exact ranges and lexical scopes", () => {
     const facts = extractFileFacts({
       filePath: "src/heritage.ts",

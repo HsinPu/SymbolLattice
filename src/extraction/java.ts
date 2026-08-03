@@ -31,12 +31,23 @@ interface StaticJavaAnnotation {
 }
 
 interface StaticJavaClass {
+  readonly kind: "class";
   readonly name: string;
   readonly node: JavaSyntaxNode;
   readonly body: JavaSyntaxNode;
   readonly annotations: readonly StaticJavaAnnotation[];
   readonly isExported: boolean;
 }
+
+interface StaticJavaInterface {
+  readonly kind: "interface";
+  readonly name: string;
+  readonly node: JavaSyntaxNode;
+  readonly body: JavaSyntaxNode;
+  readonly isExported: boolean;
+}
+
+type StaticJavaType = StaticJavaClass | StaticJavaInterface;
 
 interface StaticJavaSuperclassReference {
   readonly name: string;
@@ -47,7 +58,8 @@ interface StaticJavaMethod {
   readonly name: string;
   readonly nameNode: JavaSyntaxNode;
   readonly node: JavaSyntaxNode;
-  readonly body: JavaSyntaxNode;
+  /** Null for an abstract interface declaration such as `void run();`. */
+  readonly body: JavaSyntaxNode | null;
   readonly annotations: readonly StaticJavaAnnotation[];
   readonly isExported: boolean;
 }
@@ -832,7 +844,11 @@ function staticJavaReactNativeModule(
   if (getNameMethods.length !== 1 || getNameMethods[0] === undefined) {
     return null;
   }
-  const body = nodeText(input, getNameMethods[0].body);
+  const bodyNode = getNameMethods[0].body;
+  if (bodyNode === null) {
+    return null;
+  }
+  const body = nodeText(input, bodyNode);
   const literal = /^\{\s*return\s+"([^"\\\r\n]*)"\s*;\s*\}$/u.exec(body)?.[1] ?? null;
   const constantName = /^\{\s*return\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*;\s*\}$/u.exec(body)?.[1] ?? null;
   const moduleName = literal ??
@@ -907,12 +923,44 @@ function staticJavaClass(
   }
   const modifiers = children.find((child) => child.name === "Modifiers");
   return {
+    kind: "class",
     name,
     node,
     body,
     annotations: staticAnnotations(input, node),
     isExported: modifiers !== undefined && directChildren(modifiers).some((child) => child.name === "public")
   };
+}
+
+function staticJavaInterface(
+  input: JavaExtractFileFactsInput,
+  node: JavaSyntaxNode
+): StaticJavaInterface | null {
+  if (node.name !== "InterfaceDeclaration") {
+    return null;
+  }
+  const children = directChildren(node);
+  const nameNode = children.find((child) => child.name === "Definition");
+  const body = children.find((child) => child.name === "InterfaceBody");
+  const name = nameNode === undefined ? null : identifierText(input, nameNode);
+  if (nameNode === undefined || name === null || body === undefined) {
+    return null;
+  }
+  const modifiers = children.find((child) => child.name === "Modifiers");
+  return {
+    kind: "interface",
+    name,
+    node,
+    body,
+    isExported: modifiers !== undefined && directChildren(modifiers).some((child) => child.name === "public")
+  };
+}
+
+function staticJavaType(
+  input: JavaExtractFileFactsInput,
+  node: JavaSyntaxNode
+): StaticJavaType | null {
+  return staticJavaClass(input, node) ?? staticJavaInterface(input, node);
 }
 
 /**
@@ -936,6 +984,34 @@ function staticJavaDirectSuperclass(
   return name === null ? null : { name, node: typeNames[0] };
 }
 
+/**
+ * Retains only direct, unqualified Java interface names. The relationship kind
+ * is passed explicitly because classes use `implements`, while interfaces use
+ * `extends` for their direct contracts.
+ */
+function staticJavaDirectInterfaceReferences(
+  input: JavaExtractFileFactsInput,
+  declaration: StaticJavaClass | StaticJavaInterface,
+  headerName: "SuperInterfaces" | "ExtendsInterfaces"
+): readonly StaticJavaSuperclassReference[] {
+  const headers = directChildren(declaration.node).filter((child) => child.name === headerName);
+  if (headers.length !== 1 || headers[0] === undefined) {
+    return [];
+  }
+  const typeLists = directChildren(headers[0]).filter((child) => child.name === "InterfaceTypeList");
+  if (typeLists.length !== 1 || typeLists[0] === undefined) {
+    return [];
+  }
+  const references: StaticJavaSuperclassReference[] = [];
+  for (const typeName of directChildren(typeLists[0]).filter((child) => child.name === "TypeName")) {
+    const name = identifierText(input, typeName);
+    if (name !== null) {
+      references.push({ name, node: typeName });
+    }
+  }
+  return references;
+}
+
 /** Java's standard override declaration is a marker annotation. */
 function hasJavaOverrideAnnotation(declaration: StaticJavaMethod): boolean {
   return (
@@ -956,9 +1032,9 @@ function staticJavaMethod(
   }
   const children = directChildren(node);
   const nameNode = children.find((child) => child.name === "Definition");
-  const body = children.find((child) => child.name === "Block");
+  const body = children.find((child) => child.name === "Block") ?? null;
   const name = nameNode === undefined ? null : identifierText(input, nameNode);
-  if (nameNode === undefined || name === null || body === undefined) {
+  if (nameNode === undefined || name === null) {
     return null;
   }
   const modifiers = children.find((child) => child.name === "Modifiers");
@@ -970,6 +1046,12 @@ function staticJavaMethod(
     annotations: staticAnnotations(input, node),
     isExported: modifiers !== undefined && directChildren(modifiers).some((child) => child.name === "public")
   };
+}
+
+/** Java interface methods are public unless they explicitly opt into `private`. */
+function isJavaInterfaceMethodExported(declaration: StaticJavaMethod): boolean {
+  const modifiers = directChildren(declaration.node).find((child) => child.name === "Modifiers");
+  return modifiers === undefined || !directChildren(modifiers).some((child) => child.name === "private");
 }
 
 function staticClassPrefixes(
@@ -1643,6 +1725,29 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
     return symbol;
   }
 
+  function addInterface(declaration: StaticJavaInterface): SymbolNode {
+    const qualifiedName = `${input.filePath}#${declaration.name}`;
+    const declarationOrdinal = nextOrdinal(qualifiedName, "interface");
+    const symbol: SymbolNode = {
+      id: createSymbolId({
+        filePath: input.filePath,
+        qualifiedName,
+        kind: "interface",
+        declarationOrdinal
+      }),
+      name: declaration.name,
+      qualifiedName,
+      kind: "interface",
+      filePath: input.filePath,
+      range: rangeFor(lineStarts, declaration.node.from, declaration.node.to),
+      isExported: declaration.isExported,
+      declarationOrdinal
+    };
+    symbols.push(symbol);
+    addContainment(fileNode, symbol, declaration.node);
+    return symbol;
+  }
+
   function addRecord(declaration: StaticJavaRecord, packageName: string | null): SymbolNode {
     const qualifiedName = `${input.filePath}#${declaration.name}`;
     const declarationOrdinal = nextOrdinal(qualifiedName, "class");
@@ -1671,7 +1776,11 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
     return symbol;
   }
 
-  function addMethod(parent: SymbolNode, declaration: StaticJavaMethod): SymbolNode {
+  function addMethod(
+    parent: SymbolNode,
+    declaration: StaticJavaMethod,
+    isExported: boolean = declaration.isExported
+  ): SymbolNode {
     const qualifiedName = `${parent.qualifiedName}.${declaration.name}`;
     const declarationOrdinal = nextOrdinal(qualifiedName, "method");
     const symbol: SymbolNode = {
@@ -1686,7 +1795,7 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
       kind: "method",
       filePath: input.filePath,
       range: rangeFor(lineStarts, declaration.node.from, declaration.node.to),
-      isExported: declaration.isExported,
+      isExported,
       declarationOrdinal
     };
     symbols.push(symbol);
@@ -1721,13 +1830,13 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
   function addExactSameFileSuperclass(
     child: SymbolNode,
     declaration: StaticJavaClass,
-    classesByName: ReadonlyMap<string, readonly SymbolNode[]>
+    typesByName: ReadonlyMap<string, readonly SymbolNode[]>
   ): void {
     const superclass = staticJavaDirectSuperclass(input, declaration);
     if (superclass === null) {
       return;
     }
-    const candidates = (classesByName.get(superclass.name) ?? []).filter(
+    const candidates = (typesByName.get(superclass.name) ?? []).filter(
       (candidate) => candidate.id !== child.id && candidate.kind === "class"
     );
     if (candidates.length !== 1 || candidates[0] === undefined) {
@@ -1758,6 +1867,53 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
         candidateSymbolIds: [target.id]
       }
     });
+  }
+
+  /**
+   * Direct interface hierarchy facts need no classpath when an unqualified
+   * contract name identifies exactly one interface declared in this file.
+   */
+  function addExactSameFileInterfaceRelations(
+    child: SymbolNode,
+    declaration: StaticJavaClass | StaticJavaInterface,
+    typesByName: ReadonlyMap<string, readonly SymbolNode[]>,
+    headerName: "SuperInterfaces" | "ExtendsInterfaces",
+    relationKind: "extends" | "implements",
+    ruleId: string
+  ): void {
+    for (const reference of staticJavaDirectInterfaceReferences(input, declaration, headerName)) {
+      const candidates = (typesByName.get(reference.name) ?? []).filter(
+        (candidate) => candidate.id !== child.id && candidate.kind === "interface"
+      );
+      if (candidates.length !== 1 || candidates[0] === undefined) {
+        continue;
+      }
+      const target = candidates[0];
+      const range = rangeFor(lineStarts, reference.node.from, reference.node.to);
+      edges.push({
+        id: createEdgeId({
+          sourceId: child.id,
+          targetId: target.id,
+          kind: relationKind,
+          line: range.start.line,
+          column: range.start.column,
+          referenceName: reference.name
+        }),
+        sourceId: child.id,
+        targetId: target.id,
+        kind: relationKind,
+        filePath: input.filePath,
+        range,
+        resolution: "exact",
+        confidence: 1,
+        referenceName: reference.name,
+        evidence: {
+          ruleId,
+          stage: "syntax",
+          candidateSymbolIds: [target.id]
+        }
+      });
+    }
   }
 
   function addFrameworkRoute(
@@ -1823,18 +1979,37 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
 
   if (canUseLegacyJavaRoot) {
     const imports = staticJavaImports(input, root);
-    const classes = directChildren(root)
-      .map((node) => staticJavaClass(input, node))
-      .filter((candidate): candidate is StaticJavaClass => candidate !== null)
+    const types = directChildren(root)
+      .map((node) => staticJavaType(input, node))
+      .filter((candidate): candidate is StaticJavaType => candidate !== null)
       .filter((candidate) => !hasSyntaxError(candidate.node));
-    const classesByName = new Map<string, SymbolNode[]>();
+    const typesByName = new Map<string, SymbolNode[]>();
     const declaredClasses: Array<{ declaration: StaticJavaClass; symbol: SymbolNode }> = [];
+    const declaredInterfaces: Array<{ declaration: StaticJavaInterface; symbol: SymbolNode }> = [];
 
-    for (const classDeclaration of classes) {
-      const classSymbol = addClass(classDeclaration, packageName);
-      const classCandidates = classesByName.get(classDeclaration.name) ?? [];
-      classCandidates.push(classSymbol);
-      classesByName.set(classDeclaration.name, classCandidates);
+    for (const typeDeclaration of types) {
+      const typeSymbol =
+        typeDeclaration.kind === "class"
+          ? addClass(typeDeclaration, packageName)
+          : addInterface(typeDeclaration);
+      const typeCandidates = typesByName.get(typeDeclaration.name) ?? [];
+      typeCandidates.push(typeSymbol);
+      typesByName.set(typeDeclaration.name, typeCandidates);
+
+      if (typeDeclaration.kind === "interface") {
+        declaredInterfaces.push({ declaration: typeDeclaration, symbol: typeSymbol });
+        const methods = directChildren(typeDeclaration.body)
+          .map((node) => staticJavaMethod(input, node))
+          .filter((candidate): candidate is StaticJavaMethod => candidate !== null)
+          .filter((candidate) => !overlapsRecord(candidate.node));
+        for (const methodDeclaration of methods) {
+          addMethod(typeSymbol, methodDeclaration, isJavaInterfaceMethodExported(methodDeclaration));
+        }
+        continue;
+      }
+
+      const classDeclaration = typeDeclaration;
+      const classSymbol = typeSymbol;
       declaredClasses.push({ declaration: classDeclaration, symbol: classSymbol });
       for (const reference of staticSpringBootPropertiesReferences(
         input,
@@ -2028,7 +2203,25 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
     }
 
     for (const { declaration, symbol } of declaredClasses) {
-      addExactSameFileSuperclass(symbol, declaration, classesByName);
+      addExactSameFileSuperclass(symbol, declaration, typesByName);
+      addExactSameFileInterfaceRelations(
+        symbol,
+        declaration,
+        typesByName,
+        "SuperInterfaces",
+        "implements",
+        "syntax.java.same-file.direct-implements"
+      );
+    }
+    for (const { declaration, symbol } of declaredInterfaces) {
+      addExactSameFileInterfaceRelations(
+        symbol,
+        declaration,
+        typesByName,
+        "ExtendsInterfaces",
+        "extends",
+        "syntax.java.same-file.direct-interface-extends"
+      );
     }
   }
 
