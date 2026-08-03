@@ -7069,6 +7069,68 @@ describe("SymbolLatticeService", () => {
     ]);
   });
 
+  it("projects direct project-root absolute Flask Blueprint modules through literal prefixes", async () => {
+    const projectPath = await createInlineProject({
+      "app/__init__.py": "",
+      "app/routes/__init__.py": "",
+      "app/routes/catalog.py": [
+        "from flask import Blueprint as BP",
+        "catalog = BP(\"catalog\", __name__, url_prefix=\"/catalog\")",
+        "",
+        "@catalog.get(\"/items\")",
+        "def items():",
+        "    return []"
+      ].join("\n"),
+      "app/main.py": [
+        "from flask import Flask as App",
+        "from app.routes.catalog import catalog as catalog_blueprint",
+        "app = App(__name__)",
+        "app.register_blueprint(catalog_blueprint, url_prefix=\"/api\")"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath, { method: "GET" });
+    const mainFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "app/main.py");
+
+    expect(mainFacts?.flaskBlueprintFacts).toMatchObject({
+      importedBlueprintRegistrations: [
+        {
+          moduleSpecifier: "app.routes.catalog",
+          moduleSpecifierKind: "absolute",
+          importedBlueprintName: "catalog",
+          blueprintName: "catalog_blueprint",
+          prefix: "/api"
+        }
+      ]
+    });
+    expect(routes.routes).toMatchObject([
+      {
+        method: "GET",
+        path: "/api/catalog/items",
+        route: {
+          kind: "route",
+          name: "GET /api/catalog/items",
+          filePath: "app/routes/catalog.py"
+        },
+        edge: {
+          kind: "routes",
+          resolution: "exact",
+          evidence: {
+            ruleId: "framework.flask.project-absolute-blueprint.register-blueprint.decorator.local-function",
+            stage: "module",
+            resolutionPath: ["app/main.py", "app/routes/catalog.py"]
+          }
+        },
+        handler: { qualifiedName: "app/routes/catalog.py#items" }
+      }
+    ]);
+  });
+
   it("projects Flask Blueprint exports through nested package initializers", async () => {
     const projectPath = await createInlineProject({
       "app/__init__.py": "",
@@ -7180,6 +7242,32 @@ describe("SymbolLatticeService", () => {
       "app/main.py": [
         "from flask import Flask",
         "from .routes.catalog import catalog",
+        "app = Flask(__name__)",
+        "app.register_blueprint(catalog, url_prefix=\"/api\")"
+      ].join("\n")
+    });
+    const service = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+
+    await expect(service.routes(projectPath, { method: "GET" })).resolves.toMatchObject({
+      routes: []
+    });
+  });
+
+  it("does not project project-root absolute Flask Blueprint imports without a proven package boundary", async () => {
+    const projectPath = await createInlineProject({
+      "app/routes/catalog.py": [
+        "from flask import Blueprint",
+        "catalog = Blueprint(\"catalog\", __name__)",
+        "",
+        "@catalog.get(\"/items\")",
+        "def items():",
+        "    return []"
+      ].join("\n"),
+      "app/main.py": [
+        "from flask import Flask",
+        "from app.routes.catalog import catalog",
         "app = Flask(__name__)",
         "app.register_blueprint(catalog, url_prefix=\"/api\")"
       ].join("\n")

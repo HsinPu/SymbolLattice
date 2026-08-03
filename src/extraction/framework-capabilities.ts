@@ -282,7 +282,8 @@ export const FRAMEWORK_CAPABILITIES = [
     surfaces: [
       "direct Flask application decorators",
       "same-file Blueprint decorators through direct register_blueprint",
-      "package-relative imported Blueprint decorators through direct register_blueprint"
+      "package-relative imported Blueprint decorators through direct register_blueprint",
+      "project-root absolute imported Blueprint decorators through direct register_blueprint"
     ]
   },
   {

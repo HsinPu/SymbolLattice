@@ -5165,6 +5165,50 @@ interface FlaskImportedBlueprintRouteProjection {
 }
 
 /**
+ * Resolves the deliberately narrow Flask Blueprint module-reference forms.
+ * Earlier persisted facts predate `moduleSpecifierKind`, and therefore retain
+ * their original package-relative meaning.
+ */
+function resolveFlaskBlueprintModule(input: {
+  readonly knownFilePaths: ReadonlySet<string>;
+  readonly fromFilePath: string;
+  readonly moduleSpecifier: string;
+  readonly moduleSpecifierKind: "relative" | "absolute" | undefined;
+}): string | null {
+  switch (input.moduleSpecifierKind) {
+    case undefined:
+    case "relative":
+      return resolvePythonRelativeModule(
+        input.knownFilePaths,
+        input.fromFilePath,
+        input.moduleSpecifier
+      );
+    case "absolute":
+      return resolvePythonAbsoluteModule(
+        input.knownFilePaths,
+        input.fromFilePath,
+        input.moduleSpecifier
+      );
+    default:
+      return null;
+  }
+}
+
+function flaskImportedBlueprintRulePrefix(input: {
+  readonly registration: FlaskImportedBlueprintRegistrationFact;
+  readonly reExported: boolean;
+}): string {
+  if (input.registration.moduleSpecifierKind === "absolute") {
+    return input.reExported
+      ? "framework.flask.project-absolute-reexported-blueprint"
+      : "framework.flask.project-absolute-blueprint";
+  }
+  return input.reExported
+    ? "framework.flask.reexported-blueprint"
+    : "framework.flask.imported-blueprint";
+}
+
+/**
  * Projects literal handler routes declared on an imported Flask Blueprint.
  * A final package initializer re-export chain is accepted only when every hop
  * has exact persisted evidence. Stored route evidence names every resolved
@@ -5187,11 +5231,12 @@ function projectFlaskImportedBlueprintRoutes(input: {
     }
 
     for (const registration of registrationFacts.importedBlueprintRegistrations) {
-      const importedBlueprintFilePath = resolvePythonRelativeModule(
-        input.knownFilePaths,
-        registrationFilePath,
-        registration.moduleSpecifier
-      );
+      const importedBlueprintFilePath = resolveFlaskBlueprintModule({
+        knownFilePaths: input.knownFilePaths,
+        fromFilePath: registrationFilePath,
+        moduleSpecifier: registration.moduleSpecifier,
+        moduleSpecifierKind: registration.moduleSpecifierKind
+      });
       if (importedBlueprintFilePath === null) {
         continue;
       }
@@ -5323,9 +5368,10 @@ function projectFlaskImportedBlueprintRoutes(input: {
       confidence: 1,
       referenceName: candidate.handler.name,
       evidence: referenceEvidence(
-        candidate.reExported
-          ? "framework.flask.reexported-blueprint.register-blueprint.decorator.local-function"
-          : "framework.flask.imported-blueprint.register-blueprint.decorator.local-function",
+        `${flaskImportedBlueprintRulePrefix({
+          registration: candidate.registration,
+          reExported: candidate.reExported
+        })}.register-blueprint.decorator.local-function`,
         "module",
         [candidate.handler.id],
         [],

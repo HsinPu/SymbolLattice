@@ -4291,6 +4291,35 @@ describe("source extraction", () => {
           blueprintName: "catalog_blueprint",
           importedBlueprintName: "catalog",
           moduleSpecifier: ".routes.catalog",
+          moduleSpecifierKind: "relative",
+          prefix: "/api"
+        }
+      ]
+    });
+  });
+
+  it("retains direct project-root absolute Flask Blueprint registration facts", () => {
+    const facts = extractFileFacts({
+      filePath: "app/main.py",
+      language: "python",
+      sourceText: [
+        "from flask import Flask as App",
+        "from app.routes.catalog import catalog as catalog_blueprint",
+        "app = App(__name__)",
+        "app.register_blueprint(catalog_blueprint, url_prefix=\"/api\")"
+      ].join("\n")
+    });
+
+    expect(facts.flaskBlueprintFacts).toMatchObject({
+      blueprints: [],
+      routes: [],
+      importedBlueprintRegistrations: [
+        {
+          applicationName: "app",
+          blueprintName: "catalog_blueprint",
+          importedBlueprintName: "catalog",
+          moduleSpecifier: "app.routes.catalog",
+          moduleSpecifierKind: "absolute",
           prefix: "/api"
         }
       ]
@@ -4349,7 +4378,11 @@ describe("source extraction", () => {
         "",
         "from .routes.catalog import catalog as catalog_blueprint",
         "catalog_blueprint = build_blueprint()",
-        "app.register_blueprint(catalog_blueprint)"
+        "app.register_blueprint(catalog_blueprint)",
+        "",
+        "from app.routes.metrics import metrics as absolute_blueprint",
+        "absolute_blueprint = build_blueprint()",
+        "app.register_blueprint(absolute_blueprint)"
       ].join("\n")
     });
 

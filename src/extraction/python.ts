@@ -329,12 +329,23 @@ interface StaticDjangoNinjaAbsoluteRouterImport extends StaticDjangoNinjaRouterI
   readonly moduleSpecifierKind: "absolute";
 }
 
-/** A one-dot, single-name Python relative import that can carry a Flask Blueprint. */
-interface StaticFlaskRelativeBlueprintImport {
+/** One static, single-name Python import that can carry a Flask Blueprint. */
+interface StaticFlaskBlueprintImport {
   readonly moduleSpecifier: string;
+  readonly moduleSpecifierKind: "relative" | "absolute";
   readonly importedBlueprintName: string;
   readonly blueprintName: string;
   readonly node: PythonSyntaxNode;
+}
+
+/** A one-dot, single-name Python relative import that can carry a Flask Blueprint. */
+interface StaticFlaskRelativeBlueprintImport extends StaticFlaskBlueprintImport {
+  readonly moduleSpecifierKind: "relative";
+}
+
+/** A direct, dotted Python import that can carry a Flask Blueprint. */
+interface StaticFlaskAbsoluteBlueprintImport extends StaticFlaskBlueprintImport {
+  readonly moduleSpecifierKind: "absolute";
 }
 
 /** A one-dot, single-name Python relative import that can carry a Sanic Blueprint or group. */
@@ -806,6 +817,36 @@ function staticFlaskRelativeBlueprintImport(
 
   return {
     moduleSpecifier: match[1],
+    moduleSpecifierKind: "relative",
+    importedBlueprintName: match[2],
+    blueprintName: match[3] ?? match[2],
+    node
+  };
+}
+
+/**
+ * Retains one static absolute import candidate: `from package.module import
+ * blueprint [as local_blueprint]`. Project resolution later requires an exact
+ * local module target and regular package markers, so external and ambiguous
+ * imports cannot project a route.
+ */
+function staticFlaskAbsoluteBlueprintImport(
+  input: PythonExtractFileFactsInput,
+  node: PythonSyntaxNode
+): StaticFlaskAbsoluteBlueprintImport | null {
+  if (node.name !== "ImportStatement") {
+    return null;
+  }
+  const match = /^from[ \t]+([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)[ \t]+import[ \t]+([A-Za-z_][A-Za-z0-9_]*)(?:[ \t]+as[ \t]+([A-Za-z_][A-Za-z0-9_]*))?[ \t]*$/u.exec(
+    nodeText(input, node)
+  );
+  if (match?.[1] === undefined || match[2] === undefined) {
+    return null;
+  }
+
+  return {
+    moduleSpecifier: match[1],
+    moduleSpecifierKind: "absolute",
     importedBlueprintName: match[2],
     blueprintName: match[3] ?? match[2],
     node
@@ -3445,17 +3486,17 @@ function latestProvenDjangoNinjaRouterImport(
 }
 
 /**
- * Finds the one direct relative import still bound to a Flask Blueprint name.
+ * Finds the one direct static import still bound to a Flask Blueprint name.
  * A later assignment or import shadows an earlier import and therefore removes
  * it from consideration.
  */
-function latestProvenFlaskRelativeBlueprintImportBinding(
+function latestProvenFlaskBlueprintImportBinding(
   input: PythonExtractFileFactsInput,
   topLevelNodes: readonly PythonSyntaxNode[],
-  imports: readonly StaticFlaskRelativeBlueprintImport[],
+  imports: readonly StaticFlaskBlueprintImport[],
   blueprintName: string,
   before: number
-): StaticFlaskRelativeBlueprintImport | null {
+): StaticFlaskBlueprintImport | null {
   const candidates = imports
     .filter(
       (candidate) =>
@@ -3474,16 +3515,16 @@ function latestProvenFlaskRelativeBlueprintImportBinding(
 }
 
 /**
- * Finds the one direct relative import still bound to the Blueprint argument
+ * Finds the one direct static import still bound to the Blueprint argument
  * at a literal `register_blueprint` call.
  */
-function latestProvenFlaskRelativeBlueprintImport(
+function latestProvenFlaskBlueprintImport(
   input: PythonExtractFileFactsInput,
   topLevelNodes: readonly PythonSyntaxNode[],
-  imports: readonly StaticFlaskRelativeBlueprintImport[],
+  imports: readonly StaticFlaskBlueprintImport[],
   registration: StaticFlaskBlueprintRegistration
-): StaticFlaskRelativeBlueprintImport | null {
-  return latestProvenFlaskRelativeBlueprintImportBinding(
+): StaticFlaskBlueprintImport | null {
+  return latestProvenFlaskBlueprintImportBinding(
     input,
     topLevelNodes,
     imports,
@@ -3891,6 +3932,13 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
     const relativeBlueprintImports = topLevelNodes
       .map((node) => staticFlaskRelativeBlueprintImport(input, node))
       .filter((candidate): candidate is StaticFlaskRelativeBlueprintImport => candidate !== null);
+    const absoluteBlueprintImports = topLevelNodes
+      .map((node) => staticFlaskAbsoluteBlueprintImport(input, node))
+      .filter((candidate): candidate is StaticFlaskAbsoluteBlueprintImport => candidate !== null);
+    const flaskBlueprintImports: readonly StaticFlaskBlueprintImport[] = [
+      ...relativeBlueprintImports,
+      ...absoluteBlueprintImports
+    ];
     const relativeSanicBlueprintImports = topLevelNodes
       .map((node) => staticSanicRelativeBlueprintImport(input, node))
       .filter((candidate): candidate is StaticSanicRelativeBlueprintImport => candidate !== null);
@@ -4313,7 +4361,7 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
       }
 
       for (const imported of relativeBlueprintImports) {
-        const finalImport = latestProvenFlaskRelativeBlueprintImportBinding(
+        const finalImport = latestProvenFlaskBlueprintImportBinding(
           input,
           topLevelNodes,
           relativeBlueprintImports,
@@ -4763,10 +4811,10 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
       ) {
         continue;
       }
-      const importedBlueprint = latestProvenFlaskRelativeBlueprintImport(
+      const importedBlueprint = latestProvenFlaskBlueprintImport(
         input,
         topLevelNodes,
-        relativeBlueprintImports,
+        flaskBlueprintImports,
         registration
       );
       if (importedBlueprint === null) {
@@ -4777,6 +4825,7 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
         blueprintName: importedBlueprint.blueprintName,
         importedBlueprintName: importedBlueprint.importedBlueprintName,
         moduleSpecifier: importedBlueprint.moduleSpecifier,
+        moduleSpecifierKind: importedBlueprint.moduleSpecifierKind,
         prefix: registration.prefix,
         range: rangeFor(lineStarts, registration.node.from, registration.node.to)
       });
