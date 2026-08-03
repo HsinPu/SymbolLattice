@@ -4609,6 +4609,91 @@ describe("SymbolLatticeService", () => {
     ]);
   });
 
+  it("indexes fixed Django Ninja api_operation methods for direct APIs and mounted Routers", async () => {
+    const projectPath = await createInlineProject({
+      "api/multi_method.py": [
+        "from ninja import NinjaAPI, Router",
+        "api = NinjaAPI()",
+        "health = Router()",
+        "",
+        "@api.api_operation([\"POST\", \"PATCH\"], \"/orders\")",
+        "def upsert_order(request):",
+        "    return {\"ok\": True}",
+        "",
+        "@health.api_operation([\"HEAD\", \"OPTIONS\"], \"/status\")",
+        "def status(request):",
+        "    return None",
+        "",
+        "api.add_router(\"/v1\", health)"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+    const persistedFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "api/multi_method.py");
+
+    expect(persistedFacts).toMatchObject({
+      language: "python",
+      extractorVersion: ARTIFACT_FACTS_EXTRACTOR_VERSION
+    });
+    expect(routes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "POST",
+          path: "/orders",
+          handler: expect.objectContaining({ qualifiedName: "api/multi_method.py#upsert_order" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.django-ninja.direct-app.api-operation.local-function",
+              stage: "syntax"
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "PATCH",
+          path: "/orders",
+          handler: expect.objectContaining({ qualifiedName: "api/multi_method.py#upsert_order" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.django-ninja.direct-app.api-operation.local-function",
+              stage: "syntax"
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "HEAD",
+          path: "/v1/status",
+          handler: expect.objectContaining({ qualifiedName: "api/multi_method.py#status" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.django-ninja.direct-router.add-router.api-operation.local-function",
+              stage: "syntax"
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "OPTIONS",
+          path: "/v1/status",
+          handler: expect.objectContaining({ qualifiedName: "api/multi_method.py#status" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.django-ninja.direct-router.add-router.api-operation.local-function",
+              stage: "syntax"
+            })
+          })
+        })
+      ])
+    );
+  });
+
   it("indexes direct Starlette Route-list routes with exact local handler proof", async () => {
     const projectPath = await createInlineProject({
       "api/main.py": [

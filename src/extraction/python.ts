@@ -125,6 +125,13 @@ interface StaticFastApiDecorator {
   readonly node: PythonSyntaxNode;
 }
 
+interface StaticDjangoNinjaApiOperationDecorator {
+  readonly receiver: string;
+  readonly methods: readonly RouteMethod[];
+  readonly path: string;
+  readonly node: PythonSyntaxNode;
+}
+
 interface StaticFastApiRouterInclusion {
   readonly applicationName: string;
   readonly routerName: string;
@@ -330,6 +337,16 @@ const DJANGO_NINJA_DECORATOR_METHODS: Readonly<Record<string, RouteMethod>> = {
   patch: "PATCH",
   delete: "DELETE"
 };
+
+const DJANGO_NINJA_API_OPERATION_METHODS = new Set<RouteMethod>([
+  "GET",
+  "POST",
+  "PUT",
+  "PATCH",
+  "DELETE",
+  "HEAD",
+  "OPTIONS"
+]);
 
 const FLASK_SHORTCUT_DECORATOR_METHODS: Readonly<Record<string, RouteMethod>> = {
   get: "GET",
@@ -2299,6 +2316,72 @@ function staticDjangoNinjaDecorator(
 
   const path = staticPlainPythonString(input, firstArgument);
   return path === null || !path.startsWith("/") ? null : { receiver, method, path, node };
+}
+
+function staticDjangoNinjaApiOperationMethods(
+  input: PythonExtractFileFactsInput,
+  node: PythonSyntaxNode
+): readonly RouteMethod[] | null {
+  if (node.name !== "ArrayExpression") {
+    return null;
+  }
+  const methods: RouteMethod[] = [];
+  for (const entry of directChildren(node)) {
+    if (["[", "]", ","].includes(entry.name)) {
+      continue;
+    }
+    if (entry.name !== "String") {
+      return null;
+    }
+    const method = staticPlainPythonString(input, entry);
+    if (
+      method === null ||
+      !DJANGO_NINJA_API_OPERATION_METHODS.has(method as RouteMethod) ||
+      methods.includes(method as RouteMethod)
+    ) {
+      return null;
+    }
+    methods.push(method as RouteMethod);
+  }
+  return methods.length === 0 ? null : methods;
+}
+
+function staticDjangoNinjaApiOperationDecorator(
+  input: PythonExtractFileFactsInput,
+  node: PythonSyntaxNode
+): StaticDjangoNinjaApiOperationDecorator | null {
+  if (node.name !== "Decorator") {
+    return null;
+  }
+  const children = directChildren(node);
+  const members = children.filter(
+    (child) => child.name === "VariableName" || child.name === "PropertyName"
+  );
+  const arguments_ = children.filter((child) => child.name === "ArgList");
+  if (members.length !== 2 || arguments_.length !== 1) {
+    return null;
+  }
+  const receiver = declarationName(input, members[0] ?? node);
+  const methodName = nodeText(input, members[1] ?? node);
+  const argumentList = arguments_[0];
+  const entries = argumentList === undefined ? [] : staticArgumentEntries(argumentList);
+  const methodsNode = entries[0];
+  const pathNode = entries[1];
+  const keywordArguments = staticKeywordArgumentsAfterPositions(input, entries, 2);
+  if (
+    receiver === null ||
+    methodName !== "api_operation" ||
+    methodsNode === undefined ||
+    pathNode?.name !== "String" ||
+    keywordArguments === null
+  ) {
+    return null;
+  }
+  const methods = staticDjangoNinjaApiOperationMethods(input, methodsNode);
+  const path = staticPlainPythonString(input, pathNode);
+  return methods === null || path === null || !path.startsWith("/")
+    ? null
+    : { receiver, methods, path, node };
 }
 
 function staticFastApiRouterInclusion(
@@ -4619,6 +4702,80 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
               combinedRoutePath(inclusion.prefix, djangoNinjaDecorator.path),
               "framework.django-ninja.direct-router.add-router.decorator.local-function"
             );
+          }
+        }
+
+        const djangoNinjaApiOperation = staticDjangoNinjaApiOperationDecorator(input, decoratorNode);
+        if (
+          djangoNinjaApiOperation !== null &&
+          latestProvenFrameworkInstance(
+            input,
+            topLevelNodes,
+            djangoNinjaImports,
+            djangoNinjaApplications,
+            djangoNinjaApiOperation.receiver,
+            djangoNinjaApiOperation.node.from,
+            "NinjaAPI"
+          ) !== null
+        ) {
+          for (const method of djangoNinjaApiOperation.methods) {
+            addPythonRoute(
+              method,
+              djangoNinjaApiOperation.node,
+              handler,
+              djangoNinjaApiOperation.path,
+              "framework.django-ninja.direct-app.api-operation.local-function"
+            );
+          }
+        }
+        if (djangoNinjaApiOperation !== null) {
+          const routerAtDecorator = latestProvenFrameworkInstance(
+            input,
+            topLevelNodes,
+            djangoNinjaImports,
+            djangoNinjaRouters,
+            djangoNinjaApiOperation.receiver,
+            djangoNinjaApiOperation.node.from,
+            "Router"
+          );
+          for (const inclusion of djangoNinjaRouterInclusions) {
+            if (routerAtDecorator === null || djangoNinjaApiOperation.receiver !== inclusion.routerName) {
+              continue;
+            }
+            const routerAtInclusion = latestProvenFrameworkInstance(
+              input,
+              topLevelNodes,
+              djangoNinjaImports,
+              djangoNinjaRouters,
+              inclusion.routerName,
+              inclusion.node.from,
+              "Router"
+            );
+            const applicationAtInclusion = latestProvenFrameworkInstance(
+              input,
+              topLevelNodes,
+              djangoNinjaImports,
+              djangoNinjaApplications,
+              inclusion.applicationName,
+              inclusion.node.from,
+              "NinjaAPI"
+            );
+            if (
+              routerAtInclusion === null ||
+              applicationAtInclusion === null ||
+              nodeKey(routerAtDecorator.node) !== nodeKey(routerAtInclusion.node)
+            ) {
+              continue;
+            }
+            for (const method of djangoNinjaApiOperation.methods) {
+              addPythonRoute(
+                method,
+                djangoNinjaApiOperation.node,
+                handler,
+                combinedRoutePath(inclusion.prefix, djangoNinjaApiOperation.path),
+                "framework.django-ninja.direct-router.add-router.api-operation.local-function"
+              );
+            }
           }
         }
 

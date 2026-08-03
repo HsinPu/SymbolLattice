@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.226.0 is a developer preview. Run it from source.
+> v0.227.0 is a developer preview. Run it from source.
 
 SymbolLattice indexes a project into a local code-symbol graph. Every relation retains its rule, evidence stage, and confidence; `exact`, `heuristic`, and `unresolved` are never conflated.
 
@@ -43,15 +43,15 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 Index data is stored in the target project's `.symbol-lattice/index.sqlite`. On Windows PowerShell, use `npm.cmd` when npm is unavailable.
 
-## v0.226.0 highlights
+## v0.227.0 highlights
 
-- Django Ninja now follows same-file `Router()` literal-path operations through direct `api.add_router(...)` literal prefixes, including named-import aliases and prefix normalisation for missing or trailing slashes.
-- Direct `NinjaAPI` and same-file Router routes are linked to local handlers with `exact` syntax evidence and retained rule identifiers.
+- Django Ninja now recognises fixed `api_operation(["POST", "PATCH"], "/path")` multi-method routes on direct `NinjaAPI` instances and mounted same-file `Router`s.
+- It accepts only non-empty, unique, literal uppercase `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD`, and `OPTIONS` method arrays with literal paths; each method retains an independent `exact` route edge.
 - Continues to provide multi-language static symbols, calls, imports, routes, and cross-file relationship queries while keeping graph and query data local.
 
 ## Current limits
 
-- This release deliberately does not infer cross-file or string-imported Django Ninja Routers, nested Routers, multi-method `api_operation`, dynamic paths, conditional construction, or rebound API/Router instances.
+- This release deliberately does not infer cross-file or string-imported Django Ninja Routers, nested Routers, dynamic or non-literal-method `api_operation`, dynamic paths, conditional construction, or rebound API/Router instances.
 - This is a code graph, not an RDF/SPARQL knowledge base. It does not infer runtime dynamic dispatch, full type checking, or dependency-injection selection.
 - After `init`, source or configuration changes require an explicit `sync`; MCP queries never write or rebuild a graph.
 

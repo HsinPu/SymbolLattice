@@ -2632,6 +2632,75 @@ describe("source extraction", () => {
     ]);
   });
 
+  it("extracts fixed Django Ninja api_operation methods for direct APIs and mounted Routers", () => {
+    const facts = extractFileFacts({
+      filePath: "api/multi_method.py",
+      language: "python",
+      sourceText: [
+        "from ninja import NinjaAPI, Router",
+        "api = NinjaAPI()",
+        "health = Router()",
+        "",
+        "@api.api_operation([\"POST\", \"PATCH\"], \"/orders\", tags=[\"orders\"])",
+        "def upsert_order(request):",
+        "    return {\"ok\": True}",
+        "",
+        "@health.api_operation([\"HEAD\", \"OPTIONS\"], \"/status\")",
+        "def status(request):",
+        "    return None",
+        "",
+        "api.add_router(\"/v1\", health)"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId,
+          edge.evidence?.stage,
+          edge.resolution,
+          edge.confidence
+        ])
+    ).toEqual([
+      [
+        "POST /orders",
+        "api/multi_method.py#upsert_order",
+        "framework.django-ninja.direct-app.api-operation.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "PATCH /orders",
+        "api/multi_method.py#upsert_order",
+        "framework.django-ninja.direct-app.api-operation.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "HEAD /v1/status",
+        "api/multi_method.py#status",
+        "framework.django-ninja.direct-router.add-router.api-operation.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "OPTIONS /v1/status",
+        "api/multi_method.py#status",
+        "framework.django-ninja.direct-router.add-router.api-operation.local-function",
+        "syntax",
+        "exact",
+        1
+      ]
+    ]);
+  });
+
   it("extracts same-file FastAPI APIRouter routes through direct literal inclusion", () => {
     const facts = extractFileFacts({
       filePath: "app/catalog.py",
@@ -16014,11 +16083,6 @@ describe("source extraction", () => {
         "rebound = build_api()",
         "@rebound.post(\"/rebound\")",
         "def rebound_handler(request):",
-        "    return {}",
-        "",
-        "head_only = NinjaAPI()",
-        "@head_only.api_operation([\"HEAD\"], \"/head\")",
-        "def head_handler(request):",
         "    return {}"
       ].join("\n")
     });
@@ -16053,6 +16117,46 @@ describe("source extraction", () => {
         "    return {}",
         "rebound = Router()",
         "api.add_router(\"/v1\", rebound)"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+  });
+
+  it("rejects dynamic, duplicate, empty, and unsupported Django Ninja api_operation methods", () => {
+    const facts = extractFileFacts({
+      filePath: "api/unproven_ninja_operations.py",
+      language: "python",
+      sourceText: [
+        "from ninja import NinjaAPI",
+        "api = NinjaAPI()",
+        "methods = [\"POST\"]",
+        "path = \"/dynamic\"",
+        "",
+        "@api.api_operation(methods, \"/methods\")",
+        "def dynamic_methods(request):",
+        "    return {}",
+        "",
+        "@api.api_operation([], \"/empty\")",
+        "def empty_methods(request):",
+        "    return {}",
+        "",
+        "@api.api_operation([\"post\"], \"/lowercase\")",
+        "def lowercase_methods(request):",
+        "    return {}",
+        "",
+        "@api.api_operation([\"POST\", \"POST\"], \"/duplicate\")",
+        "def duplicate_methods(request):",
+        "    return {}",
+        "",
+        "@api.api_operation([\"TRACE\"], \"/unsupported\")",
+        "def unsupported_methods(request):",
+        "    return {}",
+        "",
+        "@api.api_operation([\"POST\"], path)",
+        "def dynamic_path(request):",
+        "    return {}"
       ].join("\n")
     });
 
