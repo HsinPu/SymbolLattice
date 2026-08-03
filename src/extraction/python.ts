@@ -299,12 +299,23 @@ interface StaticFastApiRelativeRouterImport {
   readonly node: PythonSyntaxNode;
 }
 
-/** A one-dot, single-name Python relative import that can carry a Django Ninja Router. */
-interface StaticDjangoNinjaRelativeRouterImport {
+/** One static, single-name Python import that can carry a Django Ninja Router. */
+interface StaticDjangoNinjaRouterImport {
   readonly moduleSpecifier: string;
+  readonly moduleSpecifierKind: "relative" | "absolute";
   readonly importedRouterName: string;
   readonly routerName: string;
   readonly node: PythonSyntaxNode;
+}
+
+/** A one-dot, single-name Python relative import that can carry a Django Ninja Router. */
+interface StaticDjangoNinjaRelativeRouterImport extends StaticDjangoNinjaRouterImport {
+  readonly moduleSpecifierKind: "relative";
+}
+
+/** A direct, dotted Python import that can carry a Django Ninja Router. */
+interface StaticDjangoNinjaAbsoluteRouterImport extends StaticDjangoNinjaRouterImport {
+  readonly moduleSpecifierKind: "absolute";
 }
 
 /** A one-dot, single-name Python relative import that can carry a Flask Blueprint. */
@@ -672,6 +683,35 @@ function staticFastApiRelativeRouterImport(
 }
 
 /**
+ * Retains one static absolute import candidate: `from package.module import
+ * router [as local_router]`. Project resolution later requires an exact local
+ * module target and regular package markers, so external and ambiguous imports
+ * cannot project a route.
+ */
+function staticDjangoNinjaAbsoluteRouterImport(
+  input: PythonExtractFileFactsInput,
+  node: PythonSyntaxNode
+): StaticDjangoNinjaAbsoluteRouterImport | null {
+  if (node.name !== "ImportStatement") {
+    return null;
+  }
+  const match = /^from[ \t]+([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)[ \t]+import[ \t]+([A-Za-z_][A-Za-z0-9_]*)(?:[ \t]+as[ \t]+([A-Za-z_][A-Za-z0-9_]*))?[ \t]*$/u.exec(
+    nodeText(input, node)
+  );
+  if (match?.[1] === undefined || match[2] === undefined) {
+    return null;
+  }
+
+  return {
+    moduleSpecifier: match[1],
+    moduleSpecifierKind: "absolute",
+    importedRouterName: match[2],
+    routerName: match[3] ?? match[2],
+    node
+  };
+}
+
+/**
  * Retains only the deliberately narrow import form supported by the project
  * resolver: `from .package.module import router [as local_router]`.
  *
@@ -695,6 +735,7 @@ function staticDjangoNinjaRelativeRouterImport(
 
   return {
     moduleSpecifier: match[1],
+    moduleSpecifierKind: "relative",
     importedRouterName: match[2],
     routerName: match[3] ?? match[2],
     node
@@ -3315,17 +3356,17 @@ function latestProvenFastApiRelativeRouterImport(
 }
 
 /**
- * Finds the one direct relative import still bound to a Django Ninja Router
- * name. A later assignment or import shadows an earlier import and therefore
- * removes it from consideration.
+ * Finds the one direct static import still bound to a Django Ninja Router name.
+ * A later assignment or import shadows an earlier import and therefore removes
+ * it from consideration.
  */
-function latestProvenDjangoNinjaRelativeRouterImportBinding(
+function latestProvenDjangoNinjaRouterImportBinding(
   input: PythonExtractFileFactsInput,
   topLevelNodes: readonly PythonSyntaxNode[],
-  imports: readonly StaticDjangoNinjaRelativeRouterImport[],
+  imports: readonly StaticDjangoNinjaRouterImport[],
   routerName: string,
   before: number
-): StaticDjangoNinjaRelativeRouterImport | null {
+): StaticDjangoNinjaRouterImport | null {
   const candidates = imports
     .filter(
       (candidate) =>
@@ -3344,16 +3385,16 @@ function latestProvenDjangoNinjaRelativeRouterImportBinding(
 }
 
 /**
- * Finds the one direct relative import still bound to the Router argument at a
+ * Finds the one direct static import still bound to the Router argument at a
  * literal Django Ninja `add_router` call.
  */
-function latestProvenDjangoNinjaRelativeRouterImport(
+function latestProvenDjangoNinjaRouterImport(
   input: PythonExtractFileFactsInput,
   topLevelNodes: readonly PythonSyntaxNode[],
-  imports: readonly StaticDjangoNinjaRelativeRouterImport[],
+  imports: readonly StaticDjangoNinjaRouterImport[],
   inclusion: StaticDjangoNinjaRouterInclusion
-): StaticDjangoNinjaRelativeRouterImport | null {
-  return latestProvenDjangoNinjaRelativeRouterImportBinding(
+): StaticDjangoNinjaRouterImport | null {
+  return latestProvenDjangoNinjaRouterImportBinding(
     input,
     topLevelNodes,
     imports,
@@ -3790,6 +3831,15 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
       .filter(
         (candidate): candidate is StaticDjangoNinjaRelativeRouterImport => candidate !== null
       );
+    const absoluteDjangoNinjaRouterImports = topLevelNodes
+      .map((node) => staticDjangoNinjaAbsoluteRouterImport(input, node))
+      .filter(
+        (candidate): candidate is StaticDjangoNinjaAbsoluteRouterImport => candidate !== null
+      );
+    const djangoNinjaRouterImports: readonly StaticDjangoNinjaRouterImport[] = [
+      ...relativeDjangoNinjaRouterImports,
+      ...absoluteDjangoNinjaRouterImports
+    ];
     const relativeBlueprintImports = topLevelNodes
       .map((node) => staticFlaskRelativeBlueprintImport(input, node))
       .filter((candidate): candidate is StaticFlaskRelativeBlueprintImport => candidate !== null);
@@ -4194,7 +4244,7 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
       }
 
       for (const imported of relativeDjangoNinjaRouterImports) {
-        const finalImport = latestProvenDjangoNinjaRelativeRouterImportBinding(
+        const finalImport = latestProvenDjangoNinjaRouterImportBinding(
           input,
           topLevelNodes,
           relativeDjangoNinjaRouterImports,
@@ -4596,10 +4646,10 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
       ) {
         continue;
       }
-      const importedRouter = latestProvenDjangoNinjaRelativeRouterImport(
+      const importedRouter = latestProvenDjangoNinjaRouterImport(
         input,
         topLevelNodes,
-        relativeDjangoNinjaRouterImports,
+        djangoNinjaRouterImports,
         inclusion
       );
       if (importedRouter === null) {
@@ -4610,6 +4660,7 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
         routerName: importedRouter.routerName,
         importedRouterName: importedRouter.importedRouterName,
         moduleSpecifier: importedRouter.moduleSpecifier,
+        moduleSpecifierKind: importedRouter.moduleSpecifierKind,
         prefix: inclusion.prefix,
         range: rangeFor(lineStarts, inclusion.node.from, inclusion.node.to)
       });

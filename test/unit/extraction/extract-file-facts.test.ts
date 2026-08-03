@@ -3971,6 +3971,34 @@ describe("source extraction", () => {
     });
   });
 
+  it("retains direct project-absolute Django Ninja Router inclusion facts", () => {
+    const facts = extractFileFacts({
+      filePath: "api/main.py",
+      language: "python",
+      sourceText: [
+        "from ninja import NinjaAPI as Api",
+        "from api.routers.catalog import router as catalog_router",
+        "api = Api()",
+        "api.add_router(\"/api\", catalog_router)"
+      ].join("\n")
+    });
+
+    expect(facts.djangoNinjaRouterFacts).toMatchObject({
+      routers: [],
+      routes: [],
+      importedRouterInclusions: [
+        {
+          applicationName: "api",
+          routerName: "catalog_router",
+          importedRouterName: "router",
+          moduleSpecifier: "api.routers.catalog",
+          moduleSpecifierKind: "absolute",
+          prefix: "/api"
+        }
+      ]
+    });
+  });
+
   it("retains final Django Ninja Router exports from a package initializer", () => {
     const facts = extractFileFacts({
       filePath: "api/routers/__init__.py",

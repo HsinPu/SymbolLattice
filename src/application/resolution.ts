@@ -4759,9 +4759,50 @@ interface DjangoNinjaImportedRouterRouteProjection {
 }
 
 /**
- * Projects literal handler routes declared on a directly imported Django Ninja
- * Router. The resolver accepts only a unique, final Router declaration inside
- * a regular package, so every projected path has an auditable module hop.
+ * Resolves the deliberately narrow Django Ninja Router import forms. Earlier
+ * persisted facts predate `moduleSpecifierKind`, and therefore retain their
+ * original package-relative meaning.
+ */
+function resolveDjangoNinjaImportedRouterModule(input: {
+  readonly knownFilePaths: ReadonlySet<string>;
+  readonly inclusionFilePath: string;
+  readonly inclusion: DjangoNinjaImportedRouterInclusionFact;
+}): string | null {
+  switch (input.inclusion.moduleSpecifierKind) {
+    case undefined:
+    case "relative":
+      return resolvePythonRelativeModule(
+        input.knownFilePaths,
+        input.inclusionFilePath,
+        input.inclusion.moduleSpecifier
+      );
+    case "absolute":
+      return resolvePythonAbsoluteModule(
+        input.knownFilePaths,
+        input.inclusionFilePath,
+        input.inclusion.moduleSpecifier
+      );
+    default:
+      return null;
+  }
+}
+
+function djangoNinjaImportedRouterRulePrefix(input: {
+  readonly inclusion: DjangoNinjaImportedRouterInclusionFact;
+  readonly reExported: boolean;
+}): string {
+  if (input.inclusion.moduleSpecifierKind === "absolute") {
+    return "framework.django-ninja.project-absolute-router";
+  }
+  return input.reExported
+    ? "framework.django-ninja.reexported-router"
+    : "framework.django-ninja.imported-router";
+}
+
+/**
+ * Projects literal handler routes declared on a statically imported Django
+ * Ninja Router. The resolver accepts only a unique, final Router declaration
+ * inside a regular package, so every projected path has an auditable module hop.
  */
 function projectDjangoNinjaImportedRouterRoutes(input: {
   readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
@@ -4780,11 +4821,11 @@ function projectDjangoNinjaImportedRouterRoutes(input: {
     }
 
     for (const inclusion of inclusionFacts.importedRouterInclusions) {
-      const importedRouterFilePath = resolvePythonRelativeModule(
-        input.knownFilePaths,
+      const importedRouterFilePath = resolveDjangoNinjaImportedRouterModule({
+        knownFilePaths: input.knownFilePaths,
         inclusionFilePath,
-        inclusion.moduleSpecifier
-      );
+        inclusion
+      });
       if (importedRouterFilePath === null) {
         continue;
       }
@@ -4915,13 +4956,9 @@ function projectDjangoNinjaImportedRouterRoutes(input: {
       confidence: 1,
       referenceName: candidate.handler.name,
       evidence: referenceEvidence(
-        candidate.route.source === "api-operation"
-          ? candidate.reExported
-            ? "framework.django-ninja.reexported-router.add-router.api-operation.local-function"
-            : "framework.django-ninja.imported-router.add-router.api-operation.local-function"
-          : candidate.reExported
-            ? "framework.django-ninja.reexported-router.add-router.decorator.local-function"
-            : "framework.django-ninja.imported-router.add-router.decorator.local-function",
+        `${djangoNinjaImportedRouterRulePrefix(candidate)}.add-router.${
+          candidate.route.source === "api-operation" ? "api-operation" : "decorator"
+        }.local-function`,
         "module",
         [candidate.handler.id],
         [],
