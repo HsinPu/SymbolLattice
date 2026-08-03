@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.246.0 is a developer preview that runs from source. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher can update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.247.0 is a developer preview that runs from source. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher can update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## Quick start
 
@@ -36,36 +36,10 @@ node dist/cli/main.js investigate "user token" --project /path/to/project --json
 ## What it does
 
 - Scans multiple languages and common frameworks into a project-local code graph.
-- Queries symbols, calls, routes, entry points, impact, retained generations, and diffs.
+- Queries symbols, indexed files, calls, routes, entry points, impact, retained generations, and diffs.
+- `files` lists only files persisted in the active generation, with language, index time, and per-file declaration/edge/pending-reference counts; `status.stale` reports whether the live project has diverged from that generation.
 - Preserves the rule, stage, candidate targets, confidence, and resolution path behind every relation.
 - For extension-framework routes projected through a fixed prefix chain, `explain-edge` returns each ordered mount segment with its receiver, method, prefix, and source location.
-
-## Framework route extensions
-
-Use a validated, project-scoped descriptor to extend static route recognition. Supported receiver routes require an exact ESM import, a `const` zero-argument constructor, a literal path, and a named handler. `mountMethods` project only a same-file, same-descriptor, unique fixed non-root prefix chain of up to 16 segments; dynamic, duplicate, cyclic, trailing-slash, overloaded, or deeper chains emit no child route fact.
-
-```ts
-import {
-  createFrameworkRoutePluginExtractor,
-  createFrameworkRoutePluginRegistry
-} from "@hsinpu/symbol-lattice";
-
-const registry = createFrameworkRoutePluginRegistry([
-  {
-    id: "acme/lattice-router",
-    languages: ["typescript", "javascript"],
-    moduleSpecifier: "@acme/lattice-router",
-    factoryExport: "Router",
-    routeMethods: [{ methodName: "get", routeMethod: "GET" }],
-    mountMethods: [{ methodName: "mount" }],
-    surfaces: ["exact named imports", "const literal routes", "fixed prefix mounts"]
-  }
-]);
-
-const extractor = createFrameworkRoutePluginExtractor(registry);
-```
-
-Pass `extractor` as the third `SymbolLatticeService` constructor argument.
 
 ## Common commands
 
@@ -74,6 +48,7 @@ Pass `extractor` as the third `SymbolLatticeService` constructor argument.
 | `init <path>` | Create a graph. |
 | `sync <path>` | Explicitly synchronize or repair a graph. |
 | `watch <path>` | Watch and synchronize in the foreground. |
+| `files [path]` | List persisted indexed files and per-file graph counts. |
 | `investigate <query>` | Expand textual evidence into structural context. |
 | `impact <symbol>` | Trace bounded impact through exact static relations. |
 | `explain-edge <edge-id>` | Inspect the complete evidence for one relation. |

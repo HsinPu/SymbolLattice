@@ -33,6 +33,7 @@ import {
   sourceSearchTerms,
   summarizeImpactPaths,
   type GraphSnapshot,
+  type ArtifactLanguage,
   type EntryPointOperation,
   type EntryPointTransport,
   type GitLineRange,
@@ -103,6 +104,7 @@ import {
   DEFAULT_INVESTIGATE_SEARCH_LIMIT,
   DEFAULT_INVESTIGATE_SYMBOL_LIMIT,
   DEFAULT_ENTRYPOINT_LIMIT,
+  DEFAULT_FILE_LIMIT,
   DEFAULT_GENERATION_DIFF_LIMIT,
   DEFAULT_GENERATION_HISTORY_LIMIT,
   DEFAULT_HIERARCHY_LIMIT,
@@ -115,6 +117,7 @@ import {
   MAX_CONTEXT_RELATION_LIMIT,
   MAX_INVESTIGATE_SYMBOL_LIMIT,
   MAX_ENTRYPOINT_LIMIT,
+  MAX_FILE_LIMIT,
   MAX_GENERATION_DIFF_LIMIT,
   MAX_GENERATION_HISTORY_LIMIT,
   MAX_HIERARCHY_LIMIT,
@@ -151,6 +154,8 @@ import type {
   EntrypointsOptions,
   EntrypointsResult,
   ExploreResult,
+  FilesOptions,
+  FilesResult,
   FindResult,
   GenerationDiffOptions,
   GenerationDiffResult,
@@ -162,6 +167,7 @@ import type {
   HierarchyResult,
   ImpactOptions,
   ImpactResult,
+  IndexedFileSummary,
   InvestigationDeclaration,
   InvestigationImpactSignals,
   InvestigateOptions,
@@ -273,6 +279,12 @@ interface NormalizedRoutesRequest {
   readonly method?: RouteMethod;
   readonly pathPrefix?: string;
   readonly domain?: string;
+  readonly limit: number;
+}
+
+interface NormalizedFilesRequest {
+  readonly pathPrefix?: string;
+  readonly language?: ArtifactLanguage;
   readonly limit: number;
 }
 
@@ -1260,6 +1272,67 @@ export class SymbolLatticeService {
       declarations,
       contexts,
       evidencePaths: this.contextEvidencePaths(read.matches, bundle, request.contextBounds)
+    };
+  }
+
+  /**
+   * Lists deterministic file records from the active persisted graph generation.
+   * This is deliberately a query-only surface: it uses `requireGraph` and never
+   * initializes, indexes, or synchronizes a project.
+   */
+  public async files(
+    projectPath: string,
+    options: FilesOptions = {}
+  ): Promise<FilesResult> {
+    const request = this.filesRequest(options);
+    const context = await this.requireGraph(projectPath);
+    const declarationCounts = new Map<string, number>();
+    const edgeCounts = new Map<string, number>();
+    const pendingReferenceCounts = new Map<string, number>();
+
+    for (const symbol of context.snapshot.symbols) {
+      if (symbol.kind === "file") {
+        continue;
+      }
+      declarationCounts.set(
+        symbol.filePath,
+        (declarationCounts.get(symbol.filePath) ?? 0) + 1
+      );
+    }
+    for (const edge of context.snapshot.edges) {
+      edgeCounts.set(edge.filePath, (edgeCounts.get(edge.filePath) ?? 0) + 1);
+    }
+    for (const reference of context.snapshot.pendingReferences) {
+      pendingReferenceCounts.set(
+        reference.filePath,
+        (pendingReferenceCounts.get(reference.filePath) ?? 0) + 1
+      );
+    }
+
+    const matchingFiles: readonly IndexedFileSummary[] = context.snapshot.files
+      .filter(
+        (file) =>
+          (request.pathPrefix === undefined || file.path.startsWith(request.pathPrefix)) &&
+          (request.language === undefined || file.language === request.language)
+      )
+      .map((file) => ({
+        filePath: file.path,
+        language: file.language,
+        indexedAt: file.indexedAt,
+        declarationCount: declarationCounts.get(file.path) ?? 0,
+        edgeCount: edgeCounts.get(file.path) ?? 0,
+        pendingReferenceCount: pendingReferenceCounts.get(file.path) ?? 0
+      }))
+      .sort((left, right) => compareText(left.filePath, right.filePath));
+
+    return {
+      status: context.status,
+      bounds: {
+        limit: request.limit,
+        maximumLimit: MAX_FILE_LIMIT
+      },
+      files: matchingFiles.slice(0, request.limit),
+      truncated: matchingFiles.length > request.limit
     };
   }
 
@@ -2540,6 +2613,38 @@ export class SymbolLatticeService {
     };
   }
 
+  private filesRequest(options: FilesOptions): NormalizedFilesRequest {
+    const limit = options.limit ?? DEFAULT_FILE_LIMIT;
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > MAX_FILE_LIMIT) {
+      throw new SymbolLatticeError(
+        "INVALID_FILE_LIMIT",
+        `File limit must be a whole number from 1 to ${MAX_FILE_LIMIT}.`
+      );
+    }
+
+    const language = options.language;
+    if (language !== undefined && !ARTIFACT_LANGUAGES.includes(language)) {
+      throw new SymbolLatticeError(
+        "INVALID_FILE_LANGUAGE",
+        `File language must be one of: ${ARTIFACT_LANGUAGES.join(", ")}.`
+      );
+    }
+
+    const pathPrefix =
+      options.pathPrefix === undefined
+        ? undefined
+        : this.normalizedProjectRelativePathPrefix(
+            options.pathPrefix,
+            "INVALID_FILE_PATH_PREFIX",
+            "File"
+          );
+    return {
+      limit,
+      ...(pathPrefix === undefined ? {} : { pathPrefix }),
+      ...(language === undefined ? {} : { language })
+    };
+  }
+
   private routesRequest(options: RoutesOptions): NormalizedRoutesRequest {
     const limit = options.limit ?? DEFAULT_ROUTE_LIMIT;
     if (!Number.isSafeInteger(limit) || limit < 1 || limit > MAX_ROUTE_LIMIT) {
@@ -2653,10 +2758,22 @@ export class SymbolLatticeService {
   }
 
   private normalizedSearchPathPrefix(pathPrefix: string): string | undefined {
+    return this.normalizedProjectRelativePathPrefix(
+      pathPrefix,
+      "INVALID_SEARCH_PATH_PREFIX",
+      "Search"
+    );
+  }
+
+  private normalizedProjectRelativePathPrefix(
+    pathPrefix: string,
+    code: "INVALID_SEARCH_PATH_PREFIX" | "INVALID_FILE_PATH_PREFIX",
+    label: "Search" | "File"
+  ): string | undefined {
     if (typeof pathPrefix !== "string") {
       throw new SymbolLatticeError(
-        "INVALID_SEARCH_PATH_PREFIX",
-        "Search path prefix must be a project-relative path."
+        code,
+        `${label} path prefix must be a project-relative path.`
       );
     }
 
@@ -2672,8 +2789,8 @@ export class SymbolLatticeService {
       /^[A-Za-z]:/.test(normalized)
     ) {
       throw new SymbolLatticeError(
-        "INVALID_SEARCH_PATH_PREFIX",
-        `Search path prefix must stay project-relative: ${pathPrefix}`
+        code,
+        `${label} path prefix must stay project-relative: ${pathPrefix}`
       );
     }
 
@@ -2684,8 +2801,8 @@ export class SymbolLatticeService {
       }
       if (part === "..") {
         throw new SymbolLatticeError(
-          "INVALID_SEARCH_PATH_PREFIX",
-          `Search path prefix must not traverse outside the project: ${pathPrefix}`
+          code,
+          `${label} path prefix must not traverse outside the project: ${pathPrefix}`
         );
       }
       parts.push(part);

@@ -19,6 +19,7 @@ import {
   MAX_GIT_HUNK_LIMIT,
   MAX_HIERARCHY_LIMIT,
   MAX_ENTRYPOINT_LIMIT,
+  MAX_FILE_LIMIT,
   MAX_ROUTE_LIMIT,
   ENTRYPOINT_OPERATIONS,
   ENTRYPOINT_TRANSPORTS,
@@ -43,6 +44,7 @@ import {
   type AutoSyncDiagnosticsResult,
   type AutoSyncStatusResult,
   type EntrypointsOptions,
+  type FilesOptions,
   type GenerationDiffOptions,
   type GenerationHistoryOptions,
   type ForegroundWatchOptions,
@@ -101,6 +103,12 @@ interface SearchCommandOptions extends ProjectOptions {
   readonly limit?: number;
   readonly path?: string;
   readonly language?: NonNullable<SearchOptions["language"]>;
+}
+
+interface FilesCommandOptions extends ProjectOptions {
+  readonly limit?: number;
+  readonly path?: string;
+  readonly language?: NonNullable<FilesOptions["language"]>;
 }
 
 interface InvestigateCommandOptions extends ProjectOptions {
@@ -923,6 +931,34 @@ export function createProgram(
           normalizeSearchQuery(query),
           investigateOptions
         ),
+        options
+      );
+    });
+
+  addJsonOption(addProjectOption(program.command("files [path]")))
+    .option(
+      "--path <project-relative-prefix>",
+      "Restrict persisted file records to a project-relative prefix",
+      parseSearchPath
+    )
+    .option(
+      "--language <language>",
+      "Restrict persisted file records to one supported indexed language",
+      parseSearchLanguage
+    )
+    .option(
+      "--limit <count>",
+      `Maximum indexed file records to return (1-${MAX_FILE_LIMIT})`,
+      (value: string) => parseBoundedPositiveInteger(value, MAX_FILE_LIMIT)
+    )
+    .action(async (projectPath: string | undefined, options: FilesCommandOptions) => {
+      const fileOptions: FilesOptions = {
+        ...(options.path === undefined ? {} : { pathPrefix: options.path }),
+        ...(options.language === undefined ? {} : { language: options.language }),
+        ...(options.limit === undefined ? {} : { limit: options.limit })
+      };
+      render(
+        await service.files(resolve(projectPath ?? defaultProjectPath(options)), fileOptions),
         options
       );
     });

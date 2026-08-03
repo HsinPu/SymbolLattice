@@ -232,6 +232,52 @@ export interface SearchResult {
   readonly results: readonly SourceSearchHitResult[];
 }
 
+/** Public persisted file listing remains intentionally bounded independently of graph size. */
+export const DEFAULT_FILE_LIMIT = 50;
+export const MAX_FILE_LIMIT = 100;
+
+/** Optional project-relative path-prefix and exact language filters for indexed files. */
+export interface FilesOptions {
+  /** Project-relative directory or file prefix, normalized to forward slashes. */
+  readonly pathPrefix?: string;
+  /** Restricts results to one source language stored in the active generation. */
+  readonly language?: ArtifactLanguage;
+  /** Maximum indexed file records returned from the active generation. */
+  readonly limit?: number;
+}
+
+/** One active-generation file plus deterministic graph-record counts for that file. */
+export interface IndexedFileSummary {
+  readonly filePath: string;
+  readonly language: ArtifactLanguage;
+  readonly indexedAt: string;
+  /** Non-file declaration symbols stored for this file. */
+  readonly declarationCount: number;
+  /** Resolved and unresolved graph edges whose evidence location is this file. */
+  readonly edgeCount: number;
+  /** Raw pending-reference facts retained for this file before graph resolution. */
+  readonly pendingReferenceCount: number;
+}
+
+/** Fixed disclosure bounds reported with every active-generation file listing. */
+export interface FilesBounds {
+  readonly limit: number;
+  readonly maximumLimit: number;
+}
+
+/**
+ * A read-only active-generation file inventory. File records and counts are
+ * derived only from the persisted graph; `status` reports live freshness
+ * without initializing, indexing, or synchronizing the project.
+ */
+export interface FilesResult {
+  readonly status: IndexStatus;
+  readonly bounds: FilesBounds;
+  readonly files: readonly IndexedFileSummary[];
+  /** True only when matching persisted files were omitted by `bounds.limit`. */
+  readonly truncated: boolean;
+}
+
 /** Public route listing remains intentionally bounded independently of graph size. */
 export const DEFAULT_ROUTE_LIMIT = 50;
 export const MAX_ROUTE_LIMIT = 100;

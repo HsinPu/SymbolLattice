@@ -39,6 +39,7 @@ import {
   MAX_GIT_HUNK_LIMIT,
   MAX_HIERARCHY_LIMIT,
   MAX_ENTRYPOINT_LIMIT,
+  MAX_FILE_LIMIT,
   MAX_ROUTE_LIMIT,
   ENTRYPOINT_OPERATIONS,
   ENTRYPOINT_TRANSPORTS,
@@ -53,6 +54,8 @@ import type {
   EntrypointsResult,
   ExplainEdgeResult,
   ExploreResult,
+  FilesOptions,
+  FilesResult,
   GenerationDiffOptions,
   GenerationDiffResult,
   GenerationHistoryOptions,
@@ -160,6 +163,11 @@ export interface ImpactService {
   impact(projectPath: string, reference: string, options?: ImpactOptions): Promise<ImpactResult>;
 }
 
+/** Additive active-generation file inventory seam for existing read-only embeddings. */
+export interface FilesService {
+  files(projectPath: string, options?: FilesOptions): Promise<FilesResult>;
+}
+
 /** Additive active-generation route inventory seam for existing read-only embeddings. */
 export interface RoutesService {
   routes(projectPath: string, options?: RoutesOptions): Promise<RoutesResult>;
@@ -221,6 +229,7 @@ export type NodeMcpService = ExploreService & NodeService;
 export type SearchMcpService = ExploreService & SearchService;
 export type InvestigateMcpService = ExploreService & InvestigateService;
 export type ImpactMcpService = ExploreService & ImpactService;
+export type FilesMcpService = ExploreService & FilesService;
 export type RoutesMcpService = ExploreService & RoutesService;
 export type EntrypointsMcpService = ExploreService & EntrypointsService;
 export type HierarchyMcpService = ExploreService & HierarchyService;
@@ -311,6 +320,14 @@ export interface ImpactToolArguments {
   readonly limit?: number | undefined;
 }
 
+export interface FilesToolArguments {
+  readonly projectPath?: string | undefined;
+  /** Project-relative source-path prefix. */
+  readonly path?: string | undefined;
+  readonly language?: FilesOptions["language"];
+  readonly limit?: number | undefined;
+}
+
 export interface RoutesToolArguments {
   readonly projectPath?: string | undefined;
   readonly method?: RouteMethod | undefined;
@@ -380,6 +397,7 @@ export type ExplainEdgeToolResponse = ReadOnlyToolResponse;
 export type SearchToolResponse = ReadOnlyToolResponse;
 export type InvestigateToolResponse = ReadOnlyToolResponse;
 export type ImpactToolResponse = ReadOnlyToolResponse;
+export type FilesToolResponse = ReadOnlyToolResponse;
 export type RoutesToolResponse = ReadOnlyToolResponse;
 export type EntrypointsToolResponse = ReadOnlyToolResponse;
 export type HierarchyToolResponse = ReadOnlyToolResponse;
@@ -930,6 +948,29 @@ const investigateOutputSchema = z
   })
   .passthrough();
 
+const filesOutputSchema = z
+  .object({
+    status: indexStatusOutputSchema,
+    bounds: z.object({
+      limit: z.number().int().min(1).max(MAX_FILE_LIMIT),
+      maximumLimit: z.literal(MAX_FILE_LIMIT)
+    }),
+    files: z
+      .array(
+        z.object({
+          filePath: z.string().min(1),
+          language: z.enum(ARTIFACT_LANGUAGES),
+          indexedAt: z.string().min(1),
+          declarationCount: z.number().int().nonnegative(),
+          edgeCount: z.number().int().nonnegative(),
+          pendingReferenceCount: z.number().int().nonnegative()
+        })
+      )
+      .max(MAX_FILE_LIMIT),
+    truncated: z.boolean()
+  })
+  .passthrough();
+
 const routesOutputSchema = z
   .object({
     status: indexStatusOutputSchema,
@@ -1150,6 +1191,10 @@ function supportsInvestigate(service: ExploreService): service is InvestigateMcp
 
 function supportsImpact(service: ExploreService): service is ImpactMcpService {
   return "impact" in service && typeof service.impact === "function";
+}
+
+function supportsFiles(service: ExploreService): service is FilesMcpService {
+  return "files" in service && typeof service.files === "function";
 }
 
 function supportsRoutes(service: ExploreService): service is RoutesMcpService {
@@ -1502,6 +1547,28 @@ export async function runImpactTool(
         limit: arguments_.limit ?? MAX_IMPACT_LIMIT
       }
     );
+    return {
+      content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      structuredContent: result as unknown as Record<string, unknown>
+    };
+  } catch (error) {
+    return renderToolError(error);
+  }
+}
+
+/** Lists bounded persisted file records without ever triggering an index operation. */
+export async function runFilesTool(
+  service: FilesService,
+  defaultProjectPath: string,
+  arguments_: FilesToolArguments
+): Promise<FilesToolResponse> {
+  try {
+    const options: FilesOptions = {
+      ...(arguments_.path === undefined ? {} : { pathPrefix: arguments_.path }),
+      ...(arguments_.language === undefined ? {} : { language: arguments_.language }),
+      ...(arguments_.limit === undefined ? {} : { limit: arguments_.limit })
+    };
+    const result = await service.files(arguments_.projectPath ?? defaultProjectPath, options);
     return {
       content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       structuredContent: result as unknown as Record<string, unknown>
@@ -2113,6 +2180,39 @@ export function createMcpServer(
       async (arguments_) =>
         executeReadTool(readQueryExecutor, "impact", arguments_, () =>
           runImpactTool(impactService, defaultProjectPath, arguments_)
+        )
+    );
+  }
+
+  const filesService = supportsFiles(service) ? service : null;
+  if (filesService !== null) {
+    server.registerTool(
+      "symbol_lattice_files",
+      {
+        title: "List indexed files from a SymbolLattice generation",
+        description:
+          "Lists bounded file records and per-file graph counts from an existing SymbolLattice generation. File results are persisted evidence; the reported status may check freshness but this tool never creates or refreshes an index.",
+        inputSchema: {
+          projectPath: z.string().trim().min(1).optional().describe("Optional path to an already indexed project."),
+          path: z.string().trim().min(1).optional().describe("Optional project-relative indexed-file prefix."),
+          language: z.enum(ARTIFACT_LANGUAGES).optional().describe("Optional indexed source language filter."),
+          limit: z
+            .number()
+            .int()
+            .min(1)
+            .max(MAX_FILE_LIMIT)
+            .optional()
+            .describe(`Maximum indexed file records to return (1-${MAX_FILE_LIMIT}).`)
+        },
+        outputSchema: filesOutputSchema,
+        annotations: {
+          readOnlyHint: true,
+          idempotentHint: true
+        }
+      },
+      async (arguments_) =>
+        executeReadTool(readQueryExecutor, "files", arguments_, () =>
+          runFilesTool(filesService, defaultProjectPath, arguments_)
         )
     );
   }

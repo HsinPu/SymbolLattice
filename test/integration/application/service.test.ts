@@ -10,12 +10,14 @@ import {
   DEFAULT_GIT_HUNK_LIMIT,
   DEFAULT_HIERARCHY_LIMIT,
   DEFAULT_ENTRYPOINT_LIMIT,
+  DEFAULT_FILE_LIMIT,
   DEFAULT_ROUTE_LIMIT,
   MAX_GIT_HUNK_DECLARATION_ANCHORS,
   MAX_GIT_HUNK_LIMIT,
   MAX_GIT_HUNK_SOURCE_FILES,
   MAX_HIERARCHY_LIMIT,
   MAX_ENTRYPOINT_LIMIT,
+  MAX_FILE_LIMIT,
   MAX_ROUTE_LIMIT,
   MAX_GENERATION_DIFF_LIMIT,
   MAX_GENERATION_HISTORY_LIMIT,
@@ -21249,5 +21251,71 @@ describe("SymbolLatticeService", () => {
     expect(search.results).toMatchObject([
       { filePath: "src/main/resources/UserMapper.xml", language: "xml" }
     ]);
+  });
+
+  it("lists bounded persisted file inventory without admitting files added after the generation", async () => {
+    const projectPath = await createInlineProject({
+      "src/api.ts": [
+        'import { makeToken } from "./token.js";',
+        "export function getToken(): string {",
+        "  return makeToken();",
+        "}"
+      ].join("\n"),
+      "src/token.ts": 'export function makeToken(): string { return "token"; }',
+      "scripts/task.py": "def run():\n    return 1\n"
+    });
+    const service = createService();
+    const indexed = await service.init({ projectPath });
+
+    const files = await service.files(projectPath, {
+      pathPrefix: "src\\",
+      language: "typescript"
+    });
+
+    expect(files).toMatchObject({
+      status: { stale: false, generationId: indexed.generationId },
+      bounds: { limit: DEFAULT_FILE_LIMIT, maximumLimit: MAX_FILE_LIMIT },
+      files: [
+        {
+          filePath: "src/api.ts",
+          language: "typescript",
+          declarationCount: 1,
+          edgeCount: expect.any(Number),
+          pendingReferenceCount: expect.any(Number)
+        },
+        {
+          filePath: "src/token.ts",
+          language: "typescript",
+          declarationCount: 1,
+          edgeCount: expect.any(Number),
+          pendingReferenceCount: expect.any(Number)
+        }
+      ],
+      truncated: false
+    });
+    expect(files.files.map((file) => file.filePath)).toEqual(["src/api.ts", "src/token.ts"]);
+    expect(files.files.every((file) => file.indexedAt === indexed.indexedAt)).toBe(true);
+
+    const bounded = await service.files(projectPath, { limit: 1 });
+    expect(bounded).toMatchObject({
+      bounds: { limit: 1, maximumLimit: MAX_FILE_LIMIT },
+      truncated: true
+    });
+    expect(bounded.files).toHaveLength(1);
+
+    await writeFile(join(projectPath, "src", "added-after-index.ts"), "export const late = 1;\n", "utf8");
+    const afterWrite = await service.files(projectPath, { pathPrefix: "src" });
+    expect(afterWrite.status).toMatchObject({ stale: true, generationId: indexed.generationId });
+    expect(afterWrite.files.map((file) => file.filePath)).toEqual(["src/api.ts", "src/token.ts"]);
+
+    await expect(service.files(projectPath, { pathPrefix: "../outside" })).rejects.toMatchObject({
+      code: "INVALID_FILE_PATH_PREFIX"
+    });
+    await expect(
+      service.files(projectPath, { language: "not-a-language" as never })
+    ).rejects.toMatchObject({ code: "INVALID_FILE_LANGUAGE" });
+    await expect(service.files(projectPath, { limit: 0 })).rejects.toMatchObject({
+      code: "INVALID_FILE_LIMIT"
+    });
   });
 });

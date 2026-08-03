@@ -9,6 +9,7 @@ export const MCP_READ_TOOL_NAMES = [
   "search",
   "investigate",
   "impact",
+  "files",
   "routes",
   "entrypoints",
   "hierarchy",

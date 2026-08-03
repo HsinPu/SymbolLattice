@@ -15,6 +15,8 @@ import {
   type ContextResult,
   type EntrypointsOptions,
   type EntrypointsResult,
+  type FilesOptions,
+  type FilesResult,
   type ForegroundWatchOptions,
   type ForegroundWatchSession,
   type GenerationDiffOptions,
@@ -204,6 +206,24 @@ function routesResult(): RoutesResult {
           referenceName: handler.name
         },
         handler
+      }
+    ],
+    truncated: false
+  };
+}
+
+function filesResult(): FilesResult {
+  return {
+    status: resultStatus(),
+    bounds: { limit: 7, maximumLimit: 100 },
+    files: [
+      {
+        filePath: "src/routes.ts",
+        language: "typescript",
+        indexedAt: "2026-08-03T00:00:00.000Z",
+        declarationCount: 2,
+        edgeCount: 3,
+        pendingReferenceCount: 1
       }
     ],
     truncated: false
@@ -1162,6 +1182,75 @@ describe("symbol-lattice investigate CLI", () => {
         { from: "node" }
       )
     ).rejects.toThrow("Expected one of: lexical, structure, impact, topology");
+  });
+});
+
+describe("symbol-lattice v0.247 files CLI", () => {
+  it("forwards persisted file filters, positional project selection, and stable JSON without mutating", async () => {
+    const calls: Array<{ projectPath: string; options: FilesOptions }> = [];
+    const mutationCalls: string[] = [];
+    const result = filesResult();
+    const service = {
+      async files(projectPath: string, options: FilesOptions = {}): Promise<FilesResult> {
+        calls.push({ projectPath, options });
+        return result;
+      },
+      async init(): Promise<void> {
+        mutationCalls.push("init");
+      },
+      async index(): Promise<void> {
+        mutationCalls.push("index");
+      },
+      async sync(): Promise<void> {
+        mutationCalls.push("sync");
+      }
+    } as unknown as SymbolLatticeService;
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+    await createProgram(service).parseAsync(
+      [
+        "node",
+        "symbol-lattice",
+        "files",
+        "C:/positional-project",
+        "--project",
+        "C:/ignored-project",
+        "--path",
+        "src",
+        "--language",
+        "typescript",
+        "--limit",
+        "7",
+        "--json"
+      ],
+      { from: "node" }
+    );
+
+    expect(calls).toEqual([
+      {
+        projectPath: resolve("C:/positional-project"),
+        options: { pathPrefix: "src", language: "typescript", limit: 7 }
+      }
+    ]);
+    expect(mutationCalls).toEqual([]);
+    expect(write).toHaveBeenCalledWith(`${JSON.stringify(result, null, 2)}\n`);
+  });
+
+  it.each([
+    [["--path", " "], "Expected a non-empty project-relative path prefix"],
+    [["--language", "not-a-language"], "Expected one of:"],
+    [["--limit", "101"], "Expected an integer between 1 and 100"]
+  ])("rejects invalid file filter %j before invoking the service", async (arguments_, message) => {
+    const files = vi.fn();
+    const program = createProgram({ files } as unknown as SymbolLatticeService);
+    program.exitOverride();
+
+    await expect(
+      program.parseAsync(["node", "symbol-lattice", "files", ...arguments_], {
+        from: "node"
+      })
+    ).rejects.toThrow(message);
+    expect(files).not.toHaveBeenCalled();
   });
 });
 

@@ -13,6 +13,8 @@ import {
   type EntrypointsResult,
   type ExplainEdgeResult,
   type ExploreResult,
+  type FilesOptions,
+  type FilesResult,
   type GenerationDiffOptions,
   type GenerationDiffResult,
   type GenerationHistoryOptions,
@@ -42,6 +44,7 @@ import {
   runEntrypointsTool,
   runExplainEdgeTool,
   runExploreTool,
+  runFilesTool,
   runGenerationDiffTool,
   runGenerationHistoryTool,
   runGitAffectedTestsTool,
@@ -667,6 +670,24 @@ function routesResult(): RoutesResult {
           referenceName: "missingHandler"
         },
         handler: null
+      }
+    ],
+    truncated: false
+  };
+}
+
+function filesResult(): FilesResult {
+  return {
+    status: exploreResult().status,
+    bounds: { limit: 7, maximumLimit: 100 },
+    files: [
+      {
+        filePath: "src/routes.ts",
+        language: "typescript",
+        indexedAt: "2026-08-03T00:00:00.000Z",
+        declarationCount: 2,
+        edgeCount: 3,
+        pendingReferenceCount: 1
       }
     ],
     truncated: false
@@ -1419,6 +1440,97 @@ describe("SymbolLattice MCP server", () => {
     });
     expect(invalidDepth.isError).toBe(true);
     expect(impactCalls).toHaveLength(2);
+  });
+
+  it("registers bounded persisted file inventory only when the service supports it", async () => {
+    const fileCalls: Array<{ projectPath: string; options: FilesOptions }> = [];
+    const service = {
+      async explore(): Promise<ExploreResult> {
+        return exploreResult();
+      },
+      async files(projectPath: string, options: FilesOptions = {}): Promise<FilesResult> {
+        fileCalls.push({ projectPath, options });
+        return filesResult();
+      }
+    };
+    const server = createMcpServer(service, "C:/default-project");
+    const client = new Client({ name: "symbol-lattice-files-test", version: "1.0.0" });
+    const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+    closeCallbacks.push(() => client.close(), () => server.close());
+
+    const tools = await client.listTools();
+    expect(tools.tools.map((tool) => tool.name)).toEqual([
+      "symbol_lattice_explore",
+      "symbol_lattice_files"
+    ]);
+    const filesTool = tools.tools.find((tool) => tool.name === "symbol_lattice_files");
+    expect(filesTool?.annotations).toMatchObject({ readOnlyHint: true, idempotentHint: true });
+    expect(filesTool?.inputSchema).toMatchObject({
+      type: "object",
+      properties: {
+        path: expect.objectContaining({ type: "string" }),
+        language: expect.objectContaining({ type: "string" }),
+        limit: expect.objectContaining({ type: "integer", minimum: 1, maximum: 100 })
+      }
+    });
+    expect(JSON.stringify(filesTool?.inputSchema)).toContain("typescript");
+    expect(filesTool?.outputSchema).toMatchObject({
+      type: "object",
+      properties: {
+        status: { type: "object" },
+        bounds: { type: "object" },
+        files: { type: "array" },
+        truncated: { type: "boolean" }
+      }
+    });
+
+    const result = await client.callTool({
+      name: "symbol_lattice_files",
+      arguments: {
+        projectPath: "C:/chosen-project",
+        path: "src",
+        language: "typescript",
+        limit: 7
+      }
+    });
+
+    expect(result.isError).not.toBe(true);
+    expect(result.structuredContent).toMatchObject({
+      status: { stale: false },
+      bounds: { limit: 7, maximumLimit: 100 },
+      files: [
+        {
+          filePath: "src/routes.ts",
+          language: "typescript",
+          declarationCount: 2,
+          edgeCount: 3,
+          pendingReferenceCount: 1
+        }
+      ],
+      truncated: false
+    });
+    expect(fileCalls).toEqual([
+      {
+        projectPath: "C:/chosen-project",
+        options: { pathPrefix: "src", language: "typescript", limit: 7 }
+      }
+    ]);
+
+    const invalidLanguage = await client.callTool({
+      name: "symbol_lattice_files",
+      arguments: { language: "not-a-language" }
+    });
+    expect(invalidLanguage.isError).toBe(true);
+    expect(fileCalls).toHaveLength(1);
+
+    const invalidLimit = await client.callTool({
+      name: "symbol_lattice_files",
+      arguments: { limit: 101 }
+    });
+    expect(invalidLimit.isError).toBe(true);
+    expect(fileCalls).toHaveLength(1);
   });
 
   it("registers bounded route inventory only when the service supports it", async () => {
@@ -2554,6 +2666,21 @@ describe("SymbolLattice MCP server", () => {
     expect(response.content[0]?.text).toContain("MISSING_INDEX");
   });
 
+  it("returns file inventory errors without indexing", async () => {
+    const response = await runFilesTool(
+      {
+        async files(): Promise<FilesResult> {
+          throw new SymbolLatticeError("MISSING_INDEX", "Run symbol-lattice init first.");
+        }
+      },
+      "C:/project",
+      { path: "src", language: "typescript", limit: 3 }
+    );
+
+    expect(response).toMatchObject({ isError: true });
+    expect(response.content[0]?.text).toContain("MISSING_INDEX");
+  });
+
   it("returns route inventory errors without indexing", async () => {
     const response = await runRoutesTool(
       {
@@ -2680,6 +2807,9 @@ describe("SymbolLattice MCP server", () => {
       async impact(): Promise<ImpactResult> {
         return impactResult();
       },
+      async files(): Promise<FilesResult> {
+        return filesResult();
+      },
       async routes(): Promise<RoutesResult> {
         return routesResult();
       },
@@ -2727,6 +2857,7 @@ describe("SymbolLattice MCP server", () => {
     await runSearchTool(service, "C:/project", { query: "user" });
     await runInvestigateTool(service, "C:/project", { query: "user" });
     await runImpactTool(service, "C:/project", { reference: "src/missing.ts#missing" });
+    await runFilesTool(service, "C:/project", { path: "src", language: "typescript" });
     await runRoutesTool(service, "C:/project", { method: "GET", path: "/api" });
     await runHierarchyTool(service, "C:/project", { reference: "src/base.ts#Base" });
     await runGenerationHistoryTool(service, "C:/project", {});
