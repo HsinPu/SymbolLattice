@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.219.0 is a developer preview. Run it from source.
+> v0.220.0 is a developer preview. Run it from source.
 
 SymbolLattice indexes a project into a local code-symbol graph. Every relation retains its rule, evidence stage, and confidence; `exact`, `heuristic`, and `unresolved` are never conflated.
 
@@ -46,12 +46,11 @@ Index data is stored in the target project's `.symbol-lattice/index.sqlite`. On 
 > [!NOTE]
 > Create the graph with `init`, then explicitly run `sync` after source or project-configuration changes. MCP queries never write or rebuild a graph.
 
-## v0.219.0 highlights
+## v0.220.0 highlights
 
-- Scans conventional Maven/Gradle modules and Java/Kotlin `src/main` and `src/test`; same-package parents still require one visible source set in one unambiguous module.
-- Adds **direct, literal local Maven-module** dependency evidence: `groupId` and `artifactId` in a well-formed POM's top-level `<dependencies>` only strengthen cross-module parents already proven by an explicit import or qualified type.
-- Maven default/`compile`/`provided` map to main and `test` maps to test. `dependencyManagement`, plugins, profiles, property interpolation, runtime/transitive dependencies, classifiers, non-jar types, and compiler classpaths remain unverified.
-- `pom.xml`, Gradle settings, and selected build files are persisted as index inputs, so configuration changes require an explicit `sync`.
+- Direct Java and Kotlin `@Autowired`, `jakarta.inject.Inject`, and `javax.inject.Inject` constructor/field points project cross-file `references` edges to uniquely identified project-local top-level types.
+- Every DI edge retains its annotation family, explicit import or qualified type spelling, and local Maven/Gradle module-dependency evidence when available.
+- The graph does not infer runtime bean/provider selection, qualifier outcomes, collection or generic injection, alias/wildcard imports, secondary constructors, or compiler classpaths.
 
 ## Scope and guarantees
 

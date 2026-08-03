@@ -1639,6 +1639,128 @@ describe("SymbolLatticeService", () => {
     }
   });
 
+  it("projects unique cross-file JVM DI types without claiming runtime provider selection", async () => {
+    const projectPath = await createInlineProject({
+      "src/java/app/services/PetService.java": [
+        "package app.services;",
+        "public class PetService {}"
+      ].join("\n"),
+      "src/java/app/services/LegacyService.java": [
+        "package app.services;",
+        "public class LegacyService {}"
+      ].join("\n"),
+      "src/java/app/web/PetController.java": [
+        "package app.web;",
+        "import org.springframework.beans.factory.annotation.Autowired;",
+        "import app.services.PetService;",
+        "public class PetController {",
+        "  @Autowired PetController(PetService pets) {}",
+        "}"
+      ].join("\n"),
+      "src/java/app/web/QualifiedController.java": [
+        "package app.web;",
+        "public class QualifiedController {",
+        "  @javax.inject.Inject QualifiedController(app.services.LegacyService legacy) {}",
+        "}"
+      ].join("\n"),
+      "src/kotlin/app/services/AuditService.kt": [
+        "package app.services",
+        "class AuditService"
+      ].join("\n"),
+      "src/kotlin/app/web/AuditController.kt": [
+        "package app.web",
+        "import jakarta.inject.Inject",
+        "import app.services.AuditService",
+        "class AuditController @Inject constructor(private val audit: AuditService)"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    expect(await service.init({ projectPath })).toMatchObject({ stale: false });
+    const snapshot = graphStore.getSnapshot(projectPath);
+    const symbol = (qualifiedName: string) =>
+      snapshot.symbols.find((candidate) => candidate.qualifiedName === qualifiedName);
+    const injectionEdge = (sourceQualifiedName: string) =>
+      snapshot.edges.find(
+        (edge) => edge.sourceId === symbol(sourceQualifiedName)?.id && edge.kind === "references"
+      );
+
+    expect(injectionEdge("src/java/app/web/PetController.java#PetController")).toMatchObject({
+      targetId: symbol("src/java/app/services/PetService.java#PetService")?.id,
+      resolution: "exact",
+      confidence: 1,
+      evidence: {
+        ruleId: "framework.jvm-di.spring-autowired-constructor.explicit-import.local-type",
+        stage: "module"
+      }
+    });
+    expect(injectionEdge("src/java/app/web/QualifiedController.java#QualifiedController")).toMatchObject({
+      targetId: symbol("src/java/app/services/LegacyService.java#LegacyService")?.id,
+      resolution: "exact",
+      confidence: 1,
+      evidence: {
+        ruleId: "framework.jvm-di.javax-inject-constructor.qualified-type.local-type",
+        stage: "module"
+      }
+    });
+    expect(injectionEdge("src/kotlin/app/web/AuditController.kt#AuditController")).toMatchObject({
+      targetId: symbol("src/kotlin/app/services/AuditService.kt#AuditService")?.id,
+      resolution: "exact",
+      confidence: 1,
+      evidence: {
+        ruleId: "framework.jvm-di.jakarta-inject-constructor.explicit-import.local-type",
+        stage: "module"
+      }
+    });
+
+    const javaFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "src/java/app/web/PetController.java");
+    const kotlinFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "src/kotlin/app/web/AuditController.kt");
+    expect(javaFacts?.jvmFacts?.dependencyInjectionReferences).toEqual([
+      expect.objectContaining({
+        sourceId: symbol("src/java/app/web/PetController.java#PetController")?.id,
+        referenceName: "PetService",
+        importedTypePath: "app.services.PetService",
+        syntax: "spring-autowired-constructor"
+      })
+    ]);
+    expect(kotlinFacts?.jvmFacts?.dependencyInjectionReferences).toEqual([
+      expect.objectContaining({
+        sourceId: symbol("src/kotlin/app/web/AuditController.kt#AuditController")?.id,
+        referenceName: "AuditService",
+        importedTypePath: "app.services.AuditService",
+        syntax: "jakarta-inject-constructor"
+      })
+    ]);
+
+    await writeFile(
+      join(projectPath, "src", "java", "app", "web", "PetController.java"),
+      [
+        "package app.web;",
+        "import app.services.PetService;",
+        "public class PetController {",
+        "  PetController(PetService pets) {}",
+        "}"
+      ].join("\n"),
+      "utf8"
+    );
+    expect(await service.getStatus(projectPath)).toMatchObject({ stale: true });
+    expect(await service.sync({ projectPath })).toMatchObject({ stale: false });
+    const refreshed = graphStore.getSnapshot(projectPath);
+    const refreshedController = refreshed.symbols.find(
+      (candidate) => candidate.qualifiedName === "src/java/app/web/PetController.java#PetController"
+    );
+    expect(
+      refreshed.edges.find(
+        (edge) => edge.sourceId === refreshedController?.id && edge.kind === "references"
+      )
+    ).toBeUndefined();
+  });
+
   it("uses Maven module evidence during init to block unproven same-package cross-module parents", async () => {
     const projectPath = await createInlineProject({
       "pom.xml": "<project><modules><module>api</module><module>app</module></modules></project>\n",
@@ -1735,6 +1857,14 @@ describe("SymbolLatticeService", () => {
         "package example.app;",
         "import example.api.Contract;",
         "public class ImportedChild implements Contract {}"
+      ].join("\n"),
+      "app/src/main/java/example/app/InjectedClient.java": [
+        "package example.app;",
+        "import org.springframework.beans.factory.annotation.Autowired;",
+        "import example.api.Contract;",
+        "public class InjectedClient {",
+        "  @Autowired InjectedClient(Contract contract) {}",
+        "}"
       ].join("\n")
     });
     const graphStore = new SqliteGraphStore();
@@ -1749,6 +1879,11 @@ describe("SymbolLatticeService", () => {
         edge.sourceId === symbol("app/src/main/java/example/app/ImportedChild.java#ImportedChild")?.id &&
         edge.kind === "implements"
     );
+    const injectionEdge = snapshot.edges.find(
+      (edge) =>
+        edge.sourceId === symbol("app/src/main/java/example/app/InjectedClient.java#InjectedClient")?.id &&
+        edge.kind === "references"
+    );
     const configurationPaths = ["api/pom.xml", "app/pom.xml", "pom.xml"];
 
     expect(implementsEdge).toMatchObject({
@@ -1756,6 +1891,14 @@ describe("SymbolLatticeService", () => {
       resolution: "exact",
       evidence: {
         ruleId: "syntax.jvm.cross-file.explicit-import.declared-maven-module.direct-implements",
+        configurationPaths
+      }
+    });
+    expect(injectionEdge).toMatchObject({
+      targetId: symbol("api/src/main/java/example/api/Contract.java#Contract")?.id,
+      resolution: "exact",
+      evidence: {
+        ruleId: "framework.jvm-di.spring-autowired-constructor.explicit-import.declared-maven-module.local-type",
         configurationPaths
       }
     });
@@ -1797,6 +1940,14 @@ describe("SymbolLatticeService", () => {
         "import example.api.Contract;",
         "public class ImportedChild implements Contract {}"
       ].join("\n"),
+      "app/src/main/java/example/app/InjectedClient.java": [
+        "package example.app;",
+        "import org.springframework.beans.factory.annotation.Autowired;",
+        "import example.api.Contract;",
+        "public class InjectedClient {",
+        "  @Autowired InjectedClient(Contract contract) {}",
+        "}"
+      ].join("\n"),
       "app/src/test/java/example/app/QualifiedTestChild.java": [
         "package example.app;",
         "public class QualifiedTestChild implements example.api.Contract {}"
@@ -1813,6 +1964,11 @@ describe("SymbolLatticeService", () => {
       snapshot.edges.find(
         (edge) => edge.sourceId === symbol(sourceQualifiedName)?.id && edge.kind === "implements"
       );
+    const injectionEdge = snapshot.edges.find(
+      (edge) =>
+        edge.sourceId === symbol("app/src/main/java/example/app/InjectedClient.java#InjectedClient")?.id &&
+        edge.kind === "references"
+    );
     const configurationPaths = ["api/build.gradle.kts", "app/build.gradle.kts", "settings.gradle.kts"];
 
     expect(implementsEdge("app/src/main/java/example/app/ImportedChild.java#ImportedChild")).toMatchObject({
@@ -1830,6 +1986,14 @@ describe("SymbolLatticeService", () => {
       resolution: "exact",
       evidence: {
         ruleId: "syntax.jvm.cross-file.qualified-type.declared-gradle-project.direct-implements",
+        configurationPaths
+      }
+    });
+    expect(injectionEdge).toMatchObject({
+      targetId: symbol("api/src/main/java/example/api/Contract.java#Contract")?.id,
+      resolution: "exact",
+      evidence: {
+        ruleId: "framework.jvm-di.spring-autowired-constructor.explicit-import.declared-gradle-project.local-type",
         configurationPaths
       }
     });

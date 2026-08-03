@@ -27,6 +27,7 @@ import {
   type GoFrameStandardRouterRequestFact,
   type GraphEdge,
   type GraphSnapshot,
+  type JvmDependencyInjectionReferenceFact,
   type JvmHeritageReferenceFact,
   type JvmHeritageSyntax,
   type JvmTypeFact,
@@ -6502,6 +6503,153 @@ function projectJvmHeritageReferences(input: {
   return edges;
 }
 
+function jvmDependencyInjectionRuleId(input: {
+  readonly syntax: JvmDependencyInjectionReferenceFact["syntax"];
+  readonly resolutionProof: "explicit-import" | "qualified-type" | "same-package";
+  readonly declaredProjectDependency?: JvmModuleDependency["kind"];
+}): string {
+  const proof =
+    input.declaredProjectDependency === undefined
+      ? input.resolutionProof
+      : `${input.resolutionProof}.declared-${input.declaredProjectDependency}`;
+  return `framework.jvm-di.${input.syntax}.${proof}.local-type`;
+}
+
+/**
+ * Projects a direct Java/Kotlin DI point only when its extracted annotation
+ * and declared type identify one project-local top-level type. This is a
+ * source-level dependency edge, not a claim that a framework selected a
+ * particular runtime bean, provider, qualifier, or compiler classpath entry.
+ */
+function projectJvmDependencyInjectionReferences(input: {
+  readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
+  readonly symbolsById: ReadonlyMap<string, SymbolNode>;
+  readonly jvmProjectModuleEvidence?: JvmProjectModuleEvidence;
+}): readonly GraphEdge[] {
+  const typesBySymbolId = new Map<string, JvmResolvedType[]>();
+  const references: JvmDependencyInjectionReferenceFact[] = [];
+
+  for (const [, facts] of [...input.factsByFile.entries()].sort(([left], [right]) =>
+    compareStableText(left, right)
+  )) {
+    for (const fact of facts.jvmFacts?.types ?? []) {
+      const symbol = input.symbolsById.get(fact.symbolId);
+      if (symbol?.kind !== "class" && symbol?.kind !== "interface") {
+        continue;
+      }
+      const entries = typesBySymbolId.get(symbol.id) ?? [];
+      entries.push({ fact, symbol });
+      typesBySymbolId.set(symbol.id, entries);
+    }
+    references.push(...(facts.jvmFacts?.dependencyInjectionReferences ?? []));
+  }
+
+  const types = [...typesBySymbolId.values()]
+    .filter((entries) => entries.length === 1 && entries[0] !== undefined)
+    .map((entries) => entries[0] as JvmResolvedType)
+    .sort((left, right) => compareStableText(left.symbol.id, right.symbol.id));
+  const membershipsByFile = jvmModuleMembershipsByFile(input.jvmProjectModuleEvidence);
+  const edges: GraphEdge[] = [];
+
+  for (const reference of [...references].sort((left, right) =>
+    compareStableText(
+      `${left.sourceId}\u0000${left.syntax}\u0000${left.referenceName}\u0000${left.range.start.line}\u0000${left.range.start.column}`,
+      `${right.sourceId}\u0000${right.syntax}\u0000${right.referenceName}\u0000${right.range.start.line}\u0000${right.range.start.column}`
+    )
+  )) {
+    const sourceEntries = typesBySymbolId.get(reference.sourceId) ?? [];
+    const source = input.symbolsById.get(reference.sourceId);
+    if (
+      sourceEntries.length !== 1 ||
+      sourceEntries[0] === undefined ||
+      source === undefined ||
+      source.kind !== "class"
+    ) {
+      continue;
+    }
+    const sourceType = sourceEntries[0];
+    const targetTypePath = reference.qualifiedTypePath ?? reference.importedTypePath;
+    const resolutionProof =
+      reference.qualifiedTypePath !== undefined
+        ? "qualified-type"
+        : reference.importedTypePath !== undefined
+          ? "explicit-import"
+          : "same-package";
+    const candidates = types.filter((candidate) =>
+      targetTypePath === undefined
+        ? candidate.fact.packageName === sourceType.fact.packageName &&
+          candidate.symbol.name === reference.referenceName
+        : jvmTypePath(candidate) === targetTypePath
+    );
+    if (
+      candidates.length !== 1 ||
+      candidates[0] === undefined ||
+      candidates[0].symbol.id === source.id ||
+      candidates[0].symbol.filePath === source.filePath
+    ) {
+      continue;
+    }
+    const target = candidates[0].symbol;
+    const samePackageConfigurationPaths =
+      resolutionProof === "same-package"
+        ? samePackageJvmModuleEvidence({
+            projectEvidence: input.jvmProjectModuleEvidence,
+            membershipsByFile,
+            sourceFilePath: source.filePath,
+            targetFilePath: target.filePath
+          })
+        : [];
+    if (samePackageConfigurationPaths === null) {
+      continue;
+    }
+    const declaredProjectDependency =
+      resolutionProof === "same-package"
+        ? null
+        : declaredJvmProjectDependencyEvidence({
+            projectEvidence: input.jvmProjectModuleEvidence,
+            membershipsByFile,
+            sourceFilePath: source.filePath,
+            targetFilePath: target.filePath
+          });
+    const configurationPaths =
+      resolutionProof === "same-package"
+        ? samePackageConfigurationPaths
+        : declaredProjectDependency?.configurationPaths ?? [];
+    edges.push({
+      id: createEdgeId({
+        sourceId: source.id,
+        targetId: target.id,
+        kind: "references",
+        line: reference.range.start.line,
+        column: reference.range.start.column,
+        referenceName: reference.referenceName
+      }),
+      sourceId: source.id,
+      targetId: target.id,
+      kind: "references",
+      filePath: reference.filePath,
+      range: reference.range,
+      resolution: "exact",
+      confidence: 1,
+      referenceName: reference.referenceName,
+      evidence: referenceEvidence(
+        jvmDependencyInjectionRuleId({
+          syntax: reference.syntax,
+          resolutionProof,
+          ...(declaredProjectDependency === null
+            ? {}
+            : { declaredProjectDependency: declaredProjectDependency.kind })
+        }),
+        "module",
+        candidateSymbolIds(candidates.map((candidate) => candidate.symbol)),
+        configurationPaths,
+        [reference.filePath, target.filePath]
+      )
+    });
+  }
+  return edges;
+}
+
 /**
  * Resolves local declarations and explicit named import/export bindings exactly. Any
  * remaining unique-name inference stays heuristic so the graph never overstates proof.
@@ -6551,6 +6699,15 @@ export function resolveProjectFacts(input: {
 
   resolvedEdges.push(
     ...projectJvmHeritageReferences({
+      factsByFile,
+      symbolsById,
+      ...(input.jvmProjectModuleEvidence === undefined
+        ? {}
+        : { jvmProjectModuleEvidence: input.jvmProjectModuleEvidence })
+    })
+  );
+  resolvedEdges.push(
+    ...projectJvmDependencyInjectionReferences({
       factsByFile,
       symbolsById,
       ...(input.jvmProjectModuleEvidence === undefined

@@ -5,6 +5,7 @@ import {
   createSymbolId,
   type ArtifactFacts,
   type GraphEdge,
+  type JvmDependencyInjectionReferenceFact,
   type JvmFacts,
   type PendingReference,
   type ReactNativeFacts,
@@ -49,6 +50,17 @@ interface StaticKotlinSupertypeReference {
   readonly node: KotlinSyntaxNode;
   /** Direct dotted spelling such as `example.api.Contract`, never an import lookup. */
   readonly qualifiedTypePath?: string;
+}
+
+interface StaticKotlinDependencyInjectionReference {
+  readonly syntax: JvmDependencyInjectionReferenceFact["syntax"];
+  readonly reference: StaticKotlinSupertypeReference;
+}
+
+interface StaticKotlinDependencyInjectionAnnotation {
+  readonly importPath: string;
+  readonly constructorSyntax: JvmDependencyInjectionReferenceFact["syntax"];
+  readonly fieldSyntax: JvmDependencyInjectionReferenceFact["syntax"];
 }
 
 type StaticKotlinReactNativeModuleKind = "direct" | "codegen-spec";
@@ -106,6 +118,9 @@ const SPRING_CONFIGURATION_PROPERTIES_IMPORT =
   "org.springframework.boot.context.properties.ConfigurationProperties";
 const SPRING_CONFIGURATION_IMPORT = "org.springframework.context.annotation.Configuration";
 const SPRING_BEAN_IMPORT = "org.springframework.context.annotation.Bean";
+const SPRING_AUTOWIRED_IMPORT = "org.springframework.beans.factory.annotation.Autowired";
+const JAKARTA_INJECT_IMPORT = "jakarta.inject.Inject";
+const JAVAX_INJECT_IMPORT = "javax.inject.Inject";
 const SPRING_REST_CONTROLLER_IMPORT =
   "org.springframework.web.bind.annotation.RestController";
 const SPRING_CONTROLLER_IMPORT = "org.springframework.stereotype.Controller";
@@ -118,6 +133,24 @@ const REACT_NATIVE_CONTEXT_BASE_MODULE_IMPORT =
   "com.facebook.react.bridge.ReactContextBaseJavaModule";
 const SPRING_BOOT_PROPERTIES_KEY = /^[A-Za-z0-9][A-Za-z0-9._-]*$/u;
 const REACT_NATIVE_BRIDGE_IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/u;
+
+const KOTLIN_DEPENDENCY_INJECTION_ANNOTATIONS: readonly StaticKotlinDependencyInjectionAnnotation[] = [
+  {
+    importPath: SPRING_AUTOWIRED_IMPORT,
+    constructorSyntax: "spring-autowired-constructor",
+    fieldSyntax: "spring-autowired-field"
+  },
+  {
+    importPath: JAKARTA_INJECT_IMPORT,
+    constructorSyntax: "jakarta-inject-constructor",
+    fieldSyntax: "jakarta-inject-field"
+  },
+  {
+    importPath: JAVAX_INJECT_IMPORT,
+    constructorSyntax: "javax-inject-constructor",
+    fieldSyntax: "javax-inject-field"
+  }
+];
 
 const SPRING_METHOD_MAPPING_IMPORTS: Readonly<Record<string, RouteMethod>> = {
   "org.springframework.web.bind.annotation.GetMapping": "GET",
@@ -657,6 +690,106 @@ function staticKotlinExactlyOneProvenAnnotation(
     return null;
   }
   return provenAnnotations[0] ?? null;
+}
+
+/**
+ * Accepts one direct, fully-qualified or explicitly imported JVM DI
+ * annotation. Anything with an alias, use-site target, or competing DI
+ * annotation fails closed before a relation fact is emitted.
+ */
+function staticKotlinDependencyInjectionSyntax(
+  annotations: readonly KotlinSyntaxNode[],
+  imports: ReadonlySet<string>,
+  member: "constructor" | "field"
+): JvmDependencyInjectionReferenceFact["syntax"] | null {
+  const annotationsNamedDependencyInjection = annotations.filter((annotation) =>
+    KOTLIN_DEPENDENCY_INJECTION_ANNOTATIONS.some((candidate) =>
+      staticKotlinAnnotationHasExpectedName(annotation, candidate.importPath)
+    )
+  );
+  const provenAnnotations = annotationsNamedDependencyInjection.flatMap((annotation) =>
+    KOTLIN_DEPENDENCY_INJECTION_ANNOTATIONS.flatMap((candidate) =>
+      staticKotlinAnnotationMatches(annotation, candidate.importPath, imports)
+        ? [member === "constructor" ? candidate.constructorSyntax : candidate.fieldSyntax]
+        : []
+    )
+  );
+  return annotationsNamedDependencyInjection.length === provenAnnotations.length &&
+    provenAnnotations.length === 1
+    ? provenAnnotations[0] ?? null
+    : null;
+}
+
+function staticKotlinDirectInjectionTypeReference(
+  node: KotlinSyntaxNode
+): StaticKotlinSupertypeReference | null {
+  const userTypes = directChildren(node).filter((child) => child.kind() === "user_type");
+  return userTypes.length === 1 && userTypes[0] !== undefined
+    ? staticKotlinDirectTypeReference(userTypes[0])
+    : null;
+}
+
+/**
+ * Retains direct primary-constructor and class-property injection point types.
+ * It records only declared static type dependencies; collection/generic types,
+ * secondary constructors, use-site targets, and runtime provider selection are
+ * deliberately outside this first JVM DI projection.
+ */
+function staticKotlinDependencyInjectionReferences(
+  declaration: StaticKotlinType,
+  imports: ReadonlySet<string>
+): readonly StaticKotlinDependencyInjectionReference[] {
+  if (declaration.kind !== "class" || declaration.isObject) {
+    return [];
+  }
+  const references: StaticKotlinDependencyInjectionReference[] = [];
+  const primaryConstructors = directChildren(declaration.node).filter(
+    (child) => child.kind() === "primary_constructor"
+  );
+  if (primaryConstructors.length === 1 && primaryConstructors[0] !== undefined) {
+    const primaryConstructor = primaryConstructors[0];
+    const syntax = staticKotlinDependencyInjectionSyntax(
+      staticKotlinAnnotations(primaryConstructor),
+      imports,
+      "constructor"
+    );
+    if (syntax !== null) {
+      for (const parameter of directChildren(primaryConstructor)) {
+        if (parameter.kind() !== "class_parameter") {
+          continue;
+        }
+        const reference = staticKotlinDirectInjectionTypeReference(parameter);
+        if (reference !== null) {
+          references.push({ syntax, reference });
+        }
+      }
+    }
+  }
+
+  for (const property of directChildren(declaration.body)) {
+    if (property.kind() !== "property_declaration") {
+      continue;
+    }
+    const syntax = staticKotlinDependencyInjectionSyntax(
+      staticKotlinAnnotations(property),
+      imports,
+      "field"
+    );
+    if (syntax === null) {
+      continue;
+    }
+    const variableDeclaration = directChildren(property).find(
+      (child) => child.kind() === "variable_declaration"
+    );
+    if (variableDeclaration === undefined) {
+      continue;
+    }
+    const reference = staticKotlinDirectInjectionTypeReference(variableDeclaration);
+    if (reference !== null) {
+      references.push({ syntax, reference });
+    }
+  }
+  return references;
 }
 
 /**
@@ -1621,6 +1754,10 @@ export function extractKotlinFileFacts(input: KotlinExtractFileFactsInput): Arti
   if (!springBootPropertiesCapability.languages.includes(input.language)) {
     throw new Error("Spring Boot properties extraction was invoked for an unsupported source language.");
   }
+  const jvmDependencyInjectionCapability = frameworkCapability("jvm-di");
+  if (!jvmDependencyInjectionCapability.languages.includes(input.language)) {
+    throw new Error("JVM dependency-injection extraction was invoked for an unsupported source language.");
+  }
   const reactNativeCapability = frameworkCapability("react-native");
   if (!reactNativeCapability.languages.includes(input.language)) {
     throw new Error("React Native bridge extraction was invoked for an unsupported source language.");
@@ -1633,6 +1770,7 @@ export function extractKotlinFileFacts(input: KotlinExtractFileFactsInput): Arti
   const pendingReferences: PendingReference[] = [];
   const jvmTypeFacts: JvmFacts["types"][number][] = [];
   const jvmHeritageReferences: JvmFacts["heritageReferences"][number][] = [];
+  const jvmDependencyInjectionReferences: JvmDependencyInjectionReferenceFact[] = [];
   const springBootPropertiesValueReferences: SpringBootPropertiesValueReferenceFact[] = [];
   const springBootConfigurationPropertiesPrefixes: SpringBootConfigurationPropertiesPrefixReferenceFact[] = [];
   const reactNativeNativeMethods: ReactNativeFacts["nativeMethods"][number][] = [];
@@ -1848,6 +1986,27 @@ export function extractKotlinFileFacts(input: KotlinExtractFileFactsInput): Arti
     });
   }
 
+  function addJvmDependencyInjectionReference(
+    source: SymbolNode,
+    injectionReference: StaticKotlinDependencyInjectionReference,
+    imports: ReadonlyMap<string, string>
+  ): void {
+    const { reference, syntax } = injectionReference;
+    const importedTypePath =
+      reference.qualifiedTypePath === undefined ? imports.get(reference.name) : undefined;
+    jvmDependencyInjectionReferences.push({
+      sourceId: source.id,
+      filePath: input.filePath,
+      referenceName: reference.name,
+      syntax,
+      range: rangeForNode(reference.node),
+      ...(importedTypePath === undefined ? {} : { importedTypePath }),
+      ...(reference.qualifiedTypePath === undefined
+        ? {}
+        : { qualifiedTypePath: reference.qualifiedTypePath })
+    });
+  }
+
   function addFunction(declaration: StaticKotlinFunction): SymbolNode {
     const qualifiedName = input.filePath + "#" + declaration.name;
     const declarationOrdinal = nextOrdinal(qualifiedName, "function");
@@ -2002,6 +2161,9 @@ export function extractKotlinFileFacts(input: KotlinExtractFileFactsInput): Arti
           range: rangeForNode(reference.node)
         });
       }
+      for (const reference of staticKotlinDependencyInjectionReferences(declaration, imports)) {
+        addJvmDependencyInjectionReference(typeSymbol, reference, directImports);
+      }
       const methods = directChildren(declaration.body)
         .map((node) => staticKotlinFunction(node))
         .filter((candidate): candidate is StaticKotlinFunction => candidate !== null);
@@ -2111,7 +2273,8 @@ export function extractKotlinFileFacts(input: KotlinExtractFileFactsInput): Arti
     reExportBindings: [],
     jvmFacts: {
       types: jvmTypeFacts,
-      heritageReferences: jvmHeritageReferences
+      heritageReferences: jvmHeritageReferences,
+      dependencyInjectionReferences: jvmDependencyInjectionReferences
     },
     springBootPropertiesFacts: {
       valueReferences: springBootPropertiesValueReferences,

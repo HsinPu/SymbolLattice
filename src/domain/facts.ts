@@ -11,13 +11,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v181";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v182";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v70";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v71";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -658,10 +658,42 @@ export interface JvmHeritageReferenceFact {
   readonly qualifiedTypePath?: string;
 }
 
-/** Syntax-only JVM package, import, and direct-heritage facts for project resolution. */
+/**
+ * The source-only form of a JVM dependency-injection point. It proves the
+ * annotation and declared type only; it never claims a runtime bean/provider
+ * selection, qualifier outcome, or compiler classpath result.
+ */
+export type JvmDependencyInjectionSyntax =
+  | "spring-autowired-constructor"
+  | "spring-autowired-field"
+  | "jakarta-inject-constructor"
+  | "jakarta-inject-field"
+  | "javax-inject-constructor"
+  | "javax-inject-field";
+
+/**
+ * One direct Java/Kotlin DI-point type reference. A target path is retained
+ * only from an explicit, non-static/non-wildcard import or a syntactically
+ * direct qualified type spelling. Generic, alias, wildcard, nested-type, and
+ * runtime-provider semantics remain outside this syntax-only fact.
+ */
+export interface JvmDependencyInjectionReferenceFact {
+  /** Stable symbol identity of the directly declaring Java/Kotlin class. */
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly referenceName: string;
+  readonly syntax: JvmDependencyInjectionSyntax;
+  readonly range: SourceRange;
+  readonly importedTypePath?: string;
+  readonly qualifiedTypePath?: string;
+}
+
+/** Syntax-only JVM package, import, heritage, and DI-point facts for project resolution. */
 export interface JvmFacts {
   readonly types: readonly JvmTypeFact[];
   readonly heritageReferences: readonly JvmHeritageReferenceFact[];
+  /** Omitted only by artifact facts persisted before v0.220. */
+  readonly dependencyInjectionReferences?: readonly JvmDependencyInjectionReferenceFact[];
 }
 
 /**

@@ -19252,4 +19252,112 @@ describe("source extraction", () => {
     ]);
     expect(shadowedDefaultImport.reactNativeFacts?.turboModuleDefaultImportCalls).toEqual([]);
   });
+
+  it("retains only direct Java and Kotlin JVM dependency-injection type facts", () => {
+    const java = extractFileFacts({
+      filePath: "src/java/app/web/PetController.java",
+      language: "java",
+      sourceText: [
+        "package app.web;",
+        "import org.springframework.beans.factory.annotation.Autowired;",
+        "import jakarta.inject.Inject;",
+        "import app.services.PetService;",
+        "import app.services.AuditService;",
+        "public class PetController {",
+        "  @Autowired PetController(PetService pets) {}",
+        "  @Inject AuditService auditService;",
+        "  @javax.inject.Inject app.services.LegacyService legacyService;",
+        "}"
+      ].join("\n")
+    });
+    const kotlin = extractFileFacts({
+      filePath: "src/kotlin/app/web/PetController.kt",
+      language: "kotlin",
+      sourceText: [
+        "package app.web",
+        "import org.springframework.beans.factory.annotation.Autowired",
+        "import jakarta.inject.Inject",
+        "import app.services.PetService",
+        "import app.services.AuditService",
+        "class PetController @Autowired constructor(private val pets: PetService) {",
+        "  @Inject lateinit var auditService: AuditService",
+        "}",
+        "class LegacyController @javax.inject.Inject constructor(val legacy: app.services.LegacyService)"
+      ].join("\n")
+    });
+    const javaRejected = extractFileFacts({
+      filePath: "src/java/app/web/Rejected.java",
+      language: "java",
+      sourceText: [
+        "package app.web;",
+        "import org.springframework.beans.factory.annotation.*;",
+        "import app.services.PetService;",
+        "import java.util.List;",
+        "class Rejected {",
+        "  @Autowired Rejected(PetService pets) {}",
+        "  @Autowired Rejected(List<PetService> pets) {}",
+        "}"
+      ].join("\n")
+    });
+    const kotlinRejected = extractFileFacts({
+      filePath: "src/kotlin/app/web/Rejected.kt",
+      language: "kotlin",
+      sourceText: [
+        "package app.web",
+        "import org.springframework.beans.factory.annotation.Autowired as Wire",
+        "import app.services.PetService",
+        "class Rejected @Wire constructor(val pets: PetService)"
+      ].join("\n")
+    });
+    const javaGeneric = extractFileFacts({
+      filePath: "src/java/app/web/Generic.java",
+      language: "java",
+      sourceText: [
+        "package app.web;",
+        "import org.springframework.beans.factory.annotation.Autowired;",
+        "import java.util.List;",
+        "class Generic { @Autowired Generic(List<PetService> pets) {} }"
+      ].join("\n")
+    });
+    const kotlinGeneric = extractFileFacts({
+      filePath: "src/kotlin/app/web/Generic.kt",
+      language: "kotlin",
+      sourceText: [
+        "package app.web",
+        "import org.springframework.beans.factory.annotation.Autowired",
+        "class Generic @Autowired constructor(val pets: List<PetService>)"
+      ].join("\n")
+    });
+    const javaSymbols = new Map(java.symbols.map((symbol) => [symbol.id, symbol]));
+    const kotlinSymbols = new Map(kotlin.symbols.map((symbol) => [symbol.id, symbol]));
+
+    expect(
+      java.jvmFacts?.dependencyInjectionReferences?.map((reference) => [
+        javaSymbols.get(reference.sourceId)?.name,
+        reference.referenceName,
+        reference.syntax,
+        reference.importedTypePath ?? reference.qualifiedTypePath
+      ])
+    ).toEqual([
+      ["PetController", "PetService", "spring-autowired-constructor", "app.services.PetService"],
+      ["PetController", "AuditService", "jakarta-inject-field", "app.services.AuditService"],
+      ["PetController", "LegacyService", "javax-inject-field", "app.services.LegacyService"]
+    ]);
+    expect(
+      kotlin.jvmFacts?.dependencyInjectionReferences?.map((reference) => [
+        kotlinSymbols.get(reference.sourceId)?.name,
+        reference.referenceName,
+        reference.syntax,
+        reference.importedTypePath ?? reference.qualifiedTypePath
+      ])
+    ).toEqual([
+      ["PetController", "PetService", "spring-autowired-constructor", "app.services.PetService"],
+      ["PetController", "AuditService", "jakarta-inject-field", "app.services.AuditService"],
+      ["LegacyController", "LegacyService", "javax-inject-constructor", "app.services.LegacyService"]
+    ]);
+    expect(javaRejected.jvmFacts?.dependencyInjectionReferences).toEqual([]);
+    expect(kotlinRejected.jvmFacts?.dependencyInjectionReferences).toEqual([]);
+    expect(javaGeneric.jvmFacts?.dependencyInjectionReferences).toEqual([]);
+    expect(kotlinGeneric.jvmFacts?.dependencyInjectionReferences).toEqual([]);
+  });
 });

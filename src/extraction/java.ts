@@ -5,6 +5,7 @@ import {
   createSymbolId,
   type ArtifactFacts,
   type GraphEdge,
+  type JvmDependencyInjectionReferenceFact,
   type JvmFacts,
   type JvmHeritageSyntax,
   type PendingReference,
@@ -58,6 +59,17 @@ interface StaticJavaSuperclassReference {
   readonly qualifiedTypePath?: string;
 }
 
+interface StaticJavaDependencyInjectionReference {
+  readonly syntax: JvmDependencyInjectionReferenceFact["syntax"];
+  readonly reference: StaticJavaSuperclassReference;
+}
+
+interface StaticJavaDependencyInjectionAnnotation {
+  readonly path: string;
+  readonly constructorSyntax: JvmDependencyInjectionReferenceFact["syntax"];
+  readonly fieldSyntax: JvmDependencyInjectionReferenceFact["syntax"];
+}
+
 interface StaticJavaMethod {
   readonly name: string;
   readonly nameNode: JavaSyntaxNode;
@@ -101,6 +113,9 @@ const SPRING_CONFIGURATION_PROPERTIES_PATH =
   "org.springframework.boot.context.properties.ConfigurationProperties";
 const SPRING_CONFIGURATION_PATH = "org.springframework.context.annotation.Configuration";
 const SPRING_BEAN_PATH = "org.springframework.context.annotation.Bean";
+const SPRING_AUTOWIRED_PATH = "org.springframework.beans.factory.annotation.Autowired";
+const JAKARTA_INJECT_PATH = "jakarta.inject.Inject";
+const JAVAX_INJECT_PATH = "javax.inject.Inject";
 const REACT_NATIVE_REACT_METHOD_PATH = "com.facebook.react.bridge.ReactMethod";
 const REACT_NATIVE_CONTEXT_BASE_MODULE_PATH =
   "com.facebook.react.bridge.ReactContextBaseJavaModule";
@@ -108,6 +123,24 @@ const MICRONAUT_CONTROLLER_PATH = "io.micronaut.http.annotation.Controller";
 const JAKARTA_REST_PATH_PATHS = ["jakarta.ws.rs.Path", "javax.ws.rs.Path"] as const;
 const SPRING_BOOT_PROPERTIES_KEY = /^[A-Za-z0-9][A-Za-z0-9._-]*$/u;
 const REACT_NATIVE_BRIDGE_IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/u;
+
+const JAVA_DEPENDENCY_INJECTION_ANNOTATIONS: readonly StaticJavaDependencyInjectionAnnotation[] = [
+  {
+    path: SPRING_AUTOWIRED_PATH,
+    constructorSyntax: "spring-autowired-constructor",
+    fieldSyntax: "spring-autowired-field"
+  },
+  {
+    path: JAKARTA_INJECT_PATH,
+    constructorSyntax: "jakarta-inject-constructor",
+    fieldSyntax: "jakarta-inject-field"
+  },
+  {
+    path: JAVAX_INJECT_PATH,
+    constructorSyntax: "javax-inject-constructor",
+    fieldSyntax: "javax-inject-field"
+  }
+];
 
 const SPRING_METHOD_MAPPING_PATHS: Readonly<Record<string, RouteMethod>> = {
   "org.springframework.web.bind.annotation.GetMapping": "GET",
@@ -1091,6 +1124,105 @@ function staticJavaMethod(
   };
 }
 
+/**
+ * A direct injection annotation is retained only when its source spelling is
+ * fully qualified or a unique direct import proves one of the supported JVM
+ * DI APIs. Multiple or unproven DI annotations fail closed.
+ */
+function staticJavaDependencyInjectionSyntax(
+  annotations: readonly StaticJavaAnnotation[],
+  imports: ReadonlyMap<string, string>,
+  member: "constructor" | "field"
+): JvmDependencyInjectionReferenceFact["syntax"] | null {
+  const annotationsNamedDependencyInjection = annotations.filter((annotation) =>
+    JAVA_DEPENDENCY_INJECTION_ANNOTATIONS.some((candidate) => {
+      const simpleName = candidate.path.split(".").at(-1);
+      return annotation.name === candidate.path || annotation.name === simpleName;
+    })
+  );
+  const provenAnnotations = annotationsNamedDependencyInjection.flatMap((annotation) =>
+    JAVA_DEPENDENCY_INJECTION_ANNOTATIONS.flatMap((candidate) =>
+      annotationMatches(annotation, candidate.path, imports)
+        ? [member === "constructor" ? candidate.constructorSyntax : candidate.fieldSyntax]
+        : []
+    )
+  );
+  return annotationsNamedDependencyInjection.length === provenAnnotations.length &&
+    provenAnnotations.length === 1
+    ? provenAnnotations[0] ?? null
+    : null;
+}
+
+/**
+ * Retains direct, non-generic constructor and field injection point types.
+ * The fact describes a declared DI type dependency, not a runtime bean or
+ * provider selection; qualifier, optional, and collection semantics remain
+ * intentionally outside this source-only slice.
+ */
+function staticJavaDependencyInjectionReferences(
+  input: JavaExtractFileFactsInput,
+  declaration: StaticJavaClass,
+  imports: ReadonlyMap<string, string>
+): readonly StaticJavaDependencyInjectionReference[] {
+  const references: StaticJavaDependencyInjectionReference[] = [];
+  const constructors = directChildren(declaration.body).filter(
+    (child) => child.name === "ConstructorDeclaration"
+  );
+  const annotatedConstructors = constructors.flatMap((constructor) => {
+    const syntax = staticJavaDependencyInjectionSyntax(
+      staticAnnotations(input, constructor),
+      imports,
+      "constructor"
+    );
+    return syntax === null ? [] : [{ constructor, syntax }];
+  });
+  if (annotatedConstructors.length === 1 && annotatedConstructors[0] !== undefined) {
+    const { constructor, syntax } = annotatedConstructors[0];
+    const parameters = directChildren(constructor).find(
+      (child) => child.name === "FormalParameters"
+    );
+    if (parameters !== undefined) {
+      for (const parameter of directChildren(parameters)) {
+        if (parameter.name !== "FormalParameter") {
+          continue;
+        }
+        const typeNodes = directChildren(parameter).filter(isJavaDirectTypeName);
+        if (typeNodes.length !== 1 || typeNodes[0] === undefined) {
+          continue;
+        }
+        const reference = staticJavaDirectTypeReference(input, typeNodes[0]);
+        if (reference !== null) {
+          references.push({ syntax, reference });
+        }
+      }
+    }
+  }
+
+  for (const field of directChildren(declaration.body)) {
+    if (field.name !== "FieldDeclaration") {
+      continue;
+    }
+    const syntax = staticJavaDependencyInjectionSyntax(
+      staticAnnotations(input, field),
+      imports,
+      "field"
+    );
+    if (syntax === null) {
+      continue;
+    }
+    const typeNodes = directChildren(field).filter(isJavaDirectTypeName);
+    if (typeNodes.length !== 1 || typeNodes[0] === undefined) {
+      continue;
+    }
+    const reference = staticJavaDirectTypeReference(input, typeNodes[0]);
+    if (reference !== null) {
+      references.push({ syntax, reference });
+    }
+  }
+
+  return references;
+}
+
 /** Java interface methods are public unless they explicitly opt into `private`. */
 function isJavaInterfaceMethodExported(declaration: StaticJavaMethod): boolean {
   const modifiers = directChildren(declaration.node).find((child) => child.name === "Modifiers");
@@ -1667,6 +1799,10 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
   if (!springBootPropertiesCapability.languages.includes(input.language)) {
     throw new Error("Spring Boot properties extraction was invoked for an unsupported source language.");
   }
+  const jvmDependencyInjectionCapability = frameworkCapability("jvm-di");
+  if (!jvmDependencyInjectionCapability.languages.includes(input.language)) {
+    throw new Error("JVM dependency-injection extraction was invoked for an unsupported source language.");
+  }
   const reactNativeCapability = frameworkCapability("react-native");
   if (!reactNativeCapability.languages.includes(input.language)) {
     throw new Error("React Native bridge extraction was invoked for an unsupported source language.");
@@ -1681,6 +1817,7 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
   const javaClassFacts: Array<{ symbolId: string; packageName: string }> = [];
   const jvmTypeFacts: JvmFacts["types"][number][] = [];
   const jvmHeritageReferences: JvmFacts["heritageReferences"][number][] = [];
+  const jvmDependencyInjectionReferences: JvmDependencyInjectionReferenceFact[] = [];
   const springBootPropertiesValueReferences: SpringBootPropertiesValueReferenceFact[] = [];
   const springBootConfigurationPropertiesPrefixes: SpringBootConfigurationPropertiesPrefixReferenceFact[] = [];
   const reactNativeNativeMethods: ReactNativeFacts["nativeMethods"][number][] = [];
@@ -1998,6 +2135,27 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
     });
   }
 
+  function addJvmDependencyInjectionReference(
+    source: SymbolNode,
+    injectionReference: StaticJavaDependencyInjectionReference,
+    imports: ReadonlyMap<string, string>
+  ): void {
+    const { reference, syntax } = injectionReference;
+    const importedTypePath =
+      reference.qualifiedTypePath === undefined ? imports.get(reference.name) : undefined;
+    jvmDependencyInjectionReferences.push({
+      sourceId: source.id,
+      filePath: input.filePath,
+      referenceName: reference.name,
+      syntax,
+      range: rangeFor(lineStarts, reference.node.from, reference.node.to),
+      ...(importedTypePath === undefined ? {} : { importedTypePath }),
+      ...(reference.qualifiedTypePath === undefined
+        ? {}
+        : { qualifiedTypePath: reference.qualifiedTypePath })
+    });
+  }
+
   function addFrameworkRoute(
     parent: SymbolNode,
     routeFact: StaticHttpRoute,
@@ -2167,6 +2325,15 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
           prefix: reference.prefix,
           range: rangeFor(lineStarts, reference.node.from, reference.node.to)
         });
+      }
+      for (const reference of staticJavaDependencyInjectionReferences(
+        input,
+        classDeclaration,
+        imports
+      )) {
+        if (!overlapsRecord(reference.reference.node)) {
+          addJvmDependencyInjectionReference(classSymbol, reference, imports);
+        }
       }
       const methods = directChildren(classDeclaration.body)
         .map((node) => staticJavaMethod(input, node))
@@ -2378,7 +2545,8 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
     },
     jvmFacts: {
       types: jvmTypeFacts,
-      heritageReferences: jvmHeritageReferences
+      heritageReferences: jvmHeritageReferences,
+      dependencyInjectionReferences: jvmDependencyInjectionReferences
     },
     springBootPropertiesFacts: {
       valueReferences: springBootPropertiesValueReferences,

@@ -49,6 +49,7 @@ describe("first-party framework capabilities", () => {
       "micronaut",
       "jakarta-rest",
       "spring-boot-properties",
+      "jvm-di",
       "laravel",
       "drupal",
       "laravel-blade",
@@ -413,6 +414,15 @@ describe("first-party framework capabilities", () => {
         "unique literal keys in conventional application or bootstrap properties or YAML files",
         "case/dash/underscore relaxed-key fallback only when one canonical configuration candidate exists",
         "direct nested YAML mapping leaves without anchors, tags, sequences, aliases, nulls, or multiline scalars"
+      ]
+    });
+    expect(frameworkCapability("jvm-di")).toMatchObject({
+      languages: ["java", "kotlin"],
+      routeRegistrations: [],
+      surfaces: [
+        "direct imported or fully-qualified Spring @Autowired constructor and field injection points",
+        "direct imported or fully-qualified Jakarta/Javax @Inject constructor and field injection points",
+        "unique project-local declared injection types without runtime provider or qualifier inference"
       ]
     });
     expect(frameworkCapability("laravel")).toMatchObject({
