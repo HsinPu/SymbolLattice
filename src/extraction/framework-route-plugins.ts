@@ -30,8 +30,9 @@ export interface FrameworkRoutePluginDecoratorRoute {
 
 /**
  * Names one receiver method that may mount a same-file child receiver below a
- * fixed literal prefix. Projection is limited to one exact two-argument,
- * non-root, non-nested mount; all other forms emit no child route fact.
+ * fixed literal prefix. Projection is limited to one exact, acyclic, bounded
+ * chain of two-argument non-root mounts; all other forms emit no child route
+ * fact.
  */
 export interface FrameworkRoutePluginMountMethod {
   readonly methodName: string;

@@ -2387,6 +2387,14 @@ interface FrameworkRoutePluginMountObservation {
   readonly prefix: string | null;
 }
 
+interface FrameworkRoutePluginResolvedMountPrefix {
+  readonly prefix: string;
+  readonly depth: number;
+}
+
+/** Keeps adversarial or generated router nesting from growing an unbounded static traversal. */
+const MAX_FRAMEWORK_ROUTE_PLUGIN_MOUNT_DEPTH = 16;
+
 function literalFrameworkRoutePluginMountPrefix(expression: ts.Expression | undefined): string | null {
   if (
     expression === undefined ||
@@ -2444,16 +2452,15 @@ function staticFrameworkRoutePluginMountObservation(
 }
 
 /**
- * Projects a child receiver only when one configured mount yields one stable,
- * non-root prefix. Nested, duplicate, or dynamic mounts suppress the child
- * route rather than publish an incomplete endpoint path.
+ * Projects a child receiver only when one configured mount chain yields a
+ * stable, non-root prefix. Duplicate, cyclic, dynamic, or over-deep chains
+ * suppress the child route rather than publish an incomplete endpoint path.
  */
 function applyFrameworkRoutePluginMountPrefixes(
   sourceFile: ts.SourceFile,
   bindings: ScopedRouteReceiverBindings
 ): void {
   const observationsByChild = new Map<RouteBinding, FrameworkRoutePluginMountObservation[]>();
-  const observedChildren = new Set<RouteBinding>();
 
   const visit = (node: ts.Node): void => {
     if (ts.isCallExpression(node)) {
@@ -2462,27 +2469,83 @@ function applyFrameworkRoutePluginMountPrefixes(
         const observations = observationsByChild.get(observation.child) ?? [];
         observations.push(observation);
         observationsByChild.set(observation.child, observations);
-        observedChildren.add(observation.child);
       }
     }
     ts.forEachChild(node, visit);
   };
 
   ts.forEachChild(sourceFile, visit);
-  for (const [child, observations] of observationsByChild) {
-    const observation = observations.length === 1 ? observations[0] : undefined;
-    if (
-      observation === undefined ||
-      observation.prefix === null ||
-      observation.parent === child ||
-      observedChildren.has(observation.parent) ||
-      child.prefix !== undefined
-    ) {
+  const resolvedPrefixes = new Map<RouteBinding, FrameworkRoutePluginResolvedMountPrefix | null>();
+
+  const resolvedPrefixFor = (
+    binding: RouteBinding
+  ): FrameworkRoutePluginResolvedMountPrefix | null => {
+    if (resolvedPrefixes.has(binding)) {
+      return resolvedPrefixes.get(binding) ?? null;
+    }
+    const chain: FrameworkRoutePluginMountObservation[] = [];
+    const seen = new Set<RouteBinding>();
+    let cursor = binding;
+    let resolved: FrameworkRoutePluginResolvedMountPrefix | null;
+
+    while (true) {
+      if (resolvedPrefixes.has(cursor)) {
+        resolved = resolvedPrefixes.get(cursor) ?? null;
+        break;
+      }
+      if (seen.has(cursor)) {
+        resolved = null;
+        break;
+      }
+      const observations = observationsByChild.get(cursor);
+      if (observations === undefined) {
+        resolved = { prefix: "", depth: 0 };
+        break;
+      }
+      const observation = observations.length === 1 ? observations[0] : undefined;
+      if (
+        observation === undefined ||
+        observation.prefix === null ||
+        observation.parent === cursor
+      ) {
+        resolved = null;
+        break;
+      }
+      if (chain.length >= MAX_FRAMEWORK_ROUTE_PLUGIN_MOUNT_DEPTH) {
+        return null;
+      }
+      seen.add(cursor);
+      chain.push(observation);
+      cursor = observation.parent;
+    }
+
+    for (let index = chain.length - 1; index >= 0; index -= 1) {
+      const observation = chain[index];
+      if (
+        observation === undefined ||
+        resolved === null ||
+        resolved.depth >= MAX_FRAMEWORK_ROUTE_PLUGIN_MOUNT_DEPTH
+      ) {
+        return null;
+      }
+      resolved = {
+        prefix: `${resolved.prefix}${observation.prefix}`,
+        depth: resolved.depth + 1
+      };
+      resolvedPrefixes.set(observation.child, resolved);
+    }
+    return resolved;
+  };
+
+  for (const [child] of observationsByChild) {
+    const resolved = resolvedPrefixFor(child);
+    if (resolved === null || resolved.depth === 0 || child.prefix !== undefined) {
       child.suppressFrameworkRoutePluginRoutes = true;
       continue;
     }
-    child.prefix = observation.prefix;
-    child.routeRegistration = "plugin-literal-prefix-mount";
+    child.prefix = resolved.prefix;
+    child.routeRegistration =
+      resolved.depth === 1 ? "plugin-literal-prefix-mount" : "plugin-literal-prefix-chain";
   }
 }
 

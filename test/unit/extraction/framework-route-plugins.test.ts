@@ -252,7 +252,95 @@ describe("framework route plugin registry", () => {
     );
   });
 
-  it("suppresses a child route when a configured mount is dynamic, invalid, overloaded, duplicate, or nested", () => {
+  it("projects a unique nested literal prefix chain with distinct route evidence", () => {
+    const registry = createFrameworkRoutePluginRegistry([latticeRouterPlugin]);
+    const facts = extractFileFacts(
+      {
+        filePath: "src/routes.ts",
+        language: "typescript",
+        sourceText: [
+          'import { Router } from "@acme/lattice-router";',
+          "const root = new Router();",
+          "const api = new Router();",
+          "const healthRoutes = new Router();",
+          "function info() { return { ok: true }; }",
+          'api.get("/info", info);',
+          "function health() { return { ok: true }; }",
+          'healthRoutes.get("/health", health);',
+          'root.mount("/api", api);',
+          'api.mount("/v1", healthRoutes);'
+        ].join("\n")
+      },
+      { frameworkRoutePlugins: registry }
+    );
+
+    expect(facts.symbols).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: "route", name: "GET /api/info" }),
+        expect.objectContaining({ kind: "route", name: "GET /api/v1/health" })
+      ])
+    );
+    expect(facts.pendingReferences).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          relationKind: "routes",
+          routeRegistration: "plugin-literal-prefix-mount"
+        }),
+        expect.objectContaining({
+          relationKind: "routes",
+          routeRegistration: "plugin-literal-prefix-chain"
+        })
+      ])
+    );
+  });
+
+  it("keeps the supported literal prefix-chain depth and suppresses a deeper route", () => {
+    const registry = createFrameworkRoutePluginRegistry([latticeRouterPlugin]);
+    const sourceForMountCount = (mountCount: number): string =>
+      [
+        'import { Router } from "@acme/lattice-router";',
+        ...Array.from(
+          { length: mountCount + 1 },
+          (_, index) => `const router${index} = new Router();`
+        ),
+        "function health() {}",
+        `router${mountCount}.get("/health", health);`,
+        ...Array.from(
+          { length: mountCount },
+          (_, index) => `router${index}.mount("/p${index}", router${index + 1});`
+        )
+      ].join("\n");
+    const supportedFacts = extractFileFacts(
+      {
+        filePath: "src/routes.ts",
+        language: "typescript",
+        sourceText: sourceForMountCount(16)
+      },
+      { frameworkRoutePlugins: registry }
+    );
+    expect(supportedFacts.pendingReferences).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          relationKind: "routes",
+          routeRegistration: "plugin-literal-prefix-chain"
+        })
+      ])
+    );
+
+    const overDeepFacts = extractFileFacts(
+      {
+        filePath: "src/routes.ts",
+        language: "typescript",
+        sourceText: sourceForMountCount(17)
+      },
+      { frameworkRoutePlugins: registry }
+    );
+    expect(
+      overDeepFacts.pendingReferences.filter((reference) => reference.relationKind === "routes")
+    ).toEqual([]);
+  });
+
+  it("suppresses a child route when a configured mount is dynamic, invalid, overloaded, duplicate, cyclic, or has an unresolved ancestor", () => {
     const registry = createFrameworkRoutePluginRegistry([latticeRouterPlugin]);
     const cases = [
       [
@@ -272,16 +360,6 @@ describe("framework route plugin registry", () => {
         'child.get("/health", health);',
         'app.mount("/a", child);',
         'app.mount("/b", child);'
-      ],
-      [
-        'import { Router } from "@acme/lattice-router";',
-        "const root = new Router();",
-        "const app = new Router();",
-        "const child = new Router();",
-        "function health() {}",
-        'child.get("/health", health);',
-        'root.mount("/root", app);',
-        'app.mount("/api", child);'
       ],
       [
         'import { Router } from "@acme/lattice-router";',
@@ -306,6 +384,26 @@ describe("framework route plugin registry", () => {
         "function health() {}",
         'child.get("/health", health);',
         'app.mount("/api", child, { strict: true });'
+      ],
+      [
+        'import { Router } from "@acme/lattice-router";',
+        "const root = new Router();",
+        "const app = new Router();",
+        "const child = new Router();",
+        'const rootPrefix = "/root";',
+        "function health() {}",
+        'child.get("/health", health);',
+        "root.mount(rootPrefix, app);",
+        'app.mount("/api", child);'
+      ],
+      [
+        'import { Router } from "@acme/lattice-router";',
+        "const root = new Router();",
+        "const child = new Router();",
+        "function health() {}",
+        'child.get("/health", health);',
+        'root.mount("/root", child);',
+        'child.mount("/child", root);'
       ]
     ];
 

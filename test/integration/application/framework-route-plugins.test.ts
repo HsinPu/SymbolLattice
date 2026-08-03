@@ -58,11 +58,17 @@ describe("framework route plugin service integration", () => {
         'import { Get, Router } from "@acme/lattice-router";',
         "const api = new Router();",
         "const mounted = new Router();",
+        "const versioned = new Router();",
+        "const nested = new Router();",
         "export function health() { return { ok: true }; }",
         'api.get("/health", health);',
         "function mountedHealth() { return { ok: true }; }",
         'mounted.get("/mounted", mountedHealth);',
         'api.mount("/api", mounted);',
+        "function nestedHealth() { return { ok: true }; }",
+        'nested.get("/nested", nestedHealth);',
+        'versioned.mount("/v1", nested);',
+        'api.mount("/versioned", versioned);',
         "class StatusController {",
         '  @Get("/status")',
         "  status() { return { ok: true }; }",
@@ -115,6 +121,16 @@ describe("framework route plugin service integration", () => {
               stage: "lexical"
             })
           })
+        }),
+        expect.objectContaining({
+          path: "/versioned/v1/nested",
+          handler: expect.objectContaining({ qualifiedName: "src/routes.ts#nestedHealth" }),
+          edge: expect.objectContaining({
+            evidence: expect.objectContaining({
+              ruleId: "framework.plugin.acme.lattice-router.literal-prefix-chain.local-handler",
+              stage: "lexical"
+            })
+          })
         })
       ])
     );
@@ -123,10 +139,7 @@ describe("framework route plugin service integration", () => {
     const changedRegistry = createFrameworkRoutePluginRegistry([
       {
         ...latticeRouterPlugin,
-        decoratorRoutes: [
-          ...(latticeRouterPlugin.decoratorRoutes ?? []),
-          { decoratorExport: "Post", routeMethod: "POST" }
-        ]
+        mountMethods: [{ methodName: "use" }]
       }
     ]);
     const changedExtractor = createFrameworkRoutePluginExtractor(changedRegistry);
