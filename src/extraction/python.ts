@@ -4272,11 +4272,11 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
         });
       }
 
-      for (const imported of relativeRouterImports) {
+      for (const imported of fastApiRouterImports) {
         const finalImport = latestProvenFastApiRouterImportBinding(
           input,
           topLevelNodes,
-          relativeRouterImports,
+          fastApiRouterImports,
           imported.routerName,
           input.sourceText.length
         );
@@ -4287,6 +4287,7 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
           exportedName: imported.routerName,
           importedRouterName: imported.importedRouterName,
           moduleSpecifier: imported.moduleSpecifier,
+          moduleSpecifierKind: imported.moduleSpecifierKind,
           range: rangeFor(lineStarts, imported.node.from, imported.node.to)
         });
       }

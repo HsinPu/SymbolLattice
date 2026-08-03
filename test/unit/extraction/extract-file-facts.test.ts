@@ -4039,7 +4039,8 @@ describe("source extraction", () => {
         {
           exportedName: "public_router",
           importedRouterName: "router",
-          moduleSpecifier: ".catalog"
+          moduleSpecifier: ".catalog",
+          moduleSpecifierKind: "relative"
         }
       ],
       importedRouterInclusions: []
@@ -4154,6 +4155,28 @@ describe("source extraction", () => {
     });
   });
 
+  it("retains final project-root absolute FastAPI APIRouter exports from a package initializer", () => {
+    const facts = extractFileFacts({
+      filePath: "api/routers/__init__.py",
+      language: "python",
+      sourceText: "from api.routers.catalog import router as public_router"
+    });
+
+    expect(facts.fastApiRouterFacts).toMatchObject({
+      routers: [],
+      routes: [],
+      reExports: [
+        {
+          exportedName: "public_router",
+          importedRouterName: "router",
+          moduleSpecifier: "api.routers.catalog",
+          moduleSpecifierKind: "absolute"
+        }
+      ],
+      importedRouterInclusions: []
+    });
+  });
+
   it("rejects rebounded and non-initializer FastAPI APIRouter exports", () => {
     const reboundFacts = extractFileFacts({
       filePath: "api/routers/__init__.py",
@@ -4168,9 +4191,18 @@ describe("source extraction", () => {
       language: "python",
       sourceText: "from .catalog import router as public_router"
     });
+    const reboundAbsoluteFacts = extractFileFacts({
+      filePath: "api/routers/__init__.py",
+      language: "python",
+      sourceText: [
+        "from api.routers.catalog import router as public_router",
+        "public_router = build_router()"
+      ].join("\n")
+    });
 
     expect(reboundFacts.fastApiRouterFacts).toMatchObject({ reExports: [] });
     expect(regularModuleFacts.fastApiRouterFacts).toMatchObject({ reExports: [] });
+    expect(reboundAbsoluteFacts.fastApiRouterFacts).toMatchObject({ reExports: [] });
   });
 
   it("rejects parent-relative and rebound FastAPI router import inclusions", () => {

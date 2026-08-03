@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.232.0 為開發者預覽版；請從原始碼執行。
+> v0.233.0 為開發者預覽版；請從原始碼執行。
 
 SymbolLattice 將專案索引為本機程式碼符號圖譜。每條關係都保留規則、證據階段與信心值，並明確區分 `exact`、`heuristic` 與 `unresolved`。
 
@@ -43,10 +43,10 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 索引資料存放在目標專案的 `.symbol-lattice/index.sqlite`。Windows PowerShell 若無法使用 `npm`，請改用 `npm.cmd`。
 
-## v0.232.0 重點
+## v0.233.0 重點
 
-- FastAPI 可追蹤專案根目錄絕對匯入的 `APIRouter`，例如 `from api.routers.catalog import router as catalog_router`，並保留完整模組路徑與 `exact` 證據。
-- FastAPI 與 Django Ninja 的跨檔案路由皆要求唯一的本機目標與完整 `__init__.py` 套件邊界；動態、外部或不完整套件不會被投影為路由。
+- FastAPI 現可追蹤最終 `__init__.py` 中的專案根目錄絕對 `APIRouter` 轉匯，例如 `from api.routers.catalog import router as public_router`，並保留完整模組路徑與 `exact` 證據。
+- FastAPI 與 Django Ninja 的跨檔案路由皆要求唯一的本機目標與完整 `__init__.py` 套件邊界；直接絕對匯入與絕對轉匯都可追溯，動態、外部或不完整套件不會被投影為路由。
 - 支援多語言靜態符號、呼叫、匯入、路由與跨檔案關係查詢，且圖譜與查詢資料皆留在本機。
 
 ## 已知邊界

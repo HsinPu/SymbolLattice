@@ -4347,6 +4347,7 @@ interface ResolvedFastApiRouterTarget {
   readonly router: FastApiRouterDeclarationFact;
   readonly resolutionPath: readonly string[];
   readonly reExported: boolean;
+  readonly absoluteReExported: boolean;
 }
 
 function directFastApiRouterTargets(input: {
@@ -4364,14 +4365,15 @@ function directFastApiRouterTargets(input: {
       filePath: input.filePath,
       router,
       resolutionPath: [input.filePath],
-      reExported: false
+      reExported: false,
+      absoluteReExported: false
     }));
 }
 
 /**
  * Resolves a direct FastAPI router or one final `__init__.py` re-export chain.
- * Every hop is a persisted single-name relative import, and a cycle or any
- * competing local/exported binding remains unresolved.
+ * Every hop is a persisted single-name relative or project-absolute import,
+ * and a cycle or any competing local/exported binding remains unresolved.
  */
 function resolveExactFastApiRouterTarget(input: {
   readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
@@ -4401,11 +4403,12 @@ function resolveExactFastApiRouterTarget(input: {
   if (reExport === undefined) {
     return null;
   }
-  const targetFilePath = resolvePythonRelativeModule(
-    input.knownFilePaths,
-    input.filePath,
-    reExport.moduleSpecifier
-  );
+  const targetFilePath = resolveFastApiRouterModule({
+    knownFilePaths: input.knownFilePaths,
+    fromFilePath: input.filePath,
+    moduleSpecifier: reExport.moduleSpecifier,
+    moduleSpecifierKind: reExport.moduleSpecifierKind
+  });
   if (targetFilePath === null) {
     return null;
   }
@@ -4426,7 +4429,9 @@ function resolveExactFastApiRouterTarget(input: {
           input.filePath,
           ...target.resolutionPath
         ]),
-        reExported: true
+        reExported: true,
+        absoluteReExported:
+          target.absoluteReExported || reExport.moduleSpecifierKind === "absolute"
       };
 }
 
@@ -4463,15 +4468,19 @@ function resolveFastApiRouterModule(input: {
 function fastApiImportedRouterRulePrefix(input: {
   readonly inclusion: FastApiImportedRouterInclusionFact;
   readonly reExported: boolean;
+  readonly absoluteReExported: boolean;
 }): string {
   if (input.inclusion.moduleSpecifierKind === "absolute") {
     return input.reExported
       ? "framework.fastapi.project-absolute-reexported-router"
       : "framework.fastapi.project-absolute-router";
   }
-  return input.reExported
-    ? "framework.fastapi.reexported-router"
-    : "framework.fastapi.imported-router";
+  if (input.reExported) {
+    return input.absoluteReExported
+      ? "framework.fastapi.reexported-absolute-router"
+      : "framework.fastapi.reexported-router";
+  }
+  return "framework.fastapi.imported-router";
 }
 
 interface ProjectedFastApiImportedRouterRoute {
@@ -4483,6 +4492,7 @@ interface ProjectedFastApiImportedRouterRoute {
   readonly path: string;
   readonly resolutionPath: readonly string[];
   readonly reExported: boolean;
+  readonly absoluteReExported: boolean;
 }
 
 function compareProjectedFastApiImportedRouterRoute(
@@ -4575,7 +4585,8 @@ function projectFastApiImportedRouterRoutes(input: {
           handler,
           path,
           resolutionPath: target.resolutionPath,
-          reExported: target.reExported
+          reExported: target.reExported,
+          absoluteReExported: target.absoluteReExported
         });
       }
     }
@@ -4669,7 +4680,8 @@ function projectFastApiImportedRouterRoutes(input: {
       evidence: referenceEvidence(
         `${fastApiImportedRouterRulePrefix({
           inclusion: candidate.inclusion,
-          reExported: candidate.reExported
+          reExported: candidate.reExported,
+          absoluteReExported: candidate.absoluteReExported
         })}.include-router.decorator.local-function`,
         "module",
         [candidate.handler.id],
