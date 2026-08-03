@@ -675,13 +675,19 @@ export type JvmDependencyInjectionSyntax =
   | "javax-inject-constructor"
   | "javax-inject-field"
   | "javax-inject-setter"
-  | "javax-inject-method";
+  | "javax-inject-method"
+  | "jakarta-resource-field"
+  | "jakarta-resource-setter"
+  | "javax-resource-field"
+  | "javax-resource-setter";
 
 /**
  * One direct Java/Kotlin DI-point type reference. A target path is retained
  * only from an explicit, non-static/non-wildcard import or a syntactically
  * direct qualified type spelling. Generic, alias, wildcard, nested-type, and
- * runtime-provider semantics remain outside this syntax-only fact.
+ * runtime-provider semantics remain outside this syntax-only fact. `@Resource`
+ * facts are retained only for bare or empty annotations, so explicit name,
+ * lookup, and type overrides never masquerade as type-based resolution.
  */
 export interface JvmDependencyInjectionReferenceFact {
   /** Stable symbol identity of the directly declaring Java/Kotlin class. */

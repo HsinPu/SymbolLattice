@@ -71,6 +71,12 @@ interface StaticJavaDependencyInjectionAnnotation {
   readonly methodSyntax: JvmDependencyInjectionReferenceFact["syntax"];
 }
 
+interface StaticJavaResourceInjectionAnnotation {
+  readonly path: string;
+  readonly fieldSyntax: JvmDependencyInjectionReferenceFact["syntax"];
+  readonly setterSyntax: JvmDependencyInjectionReferenceFact["syntax"];
+}
+
 interface StaticJavaMethod {
   readonly name: string;
   readonly nameNode: JavaSyntaxNode;
@@ -118,6 +124,8 @@ const SPRING_BEAN_PATH = "org.springframework.context.annotation.Bean";
 const SPRING_AUTOWIRED_PATH = "org.springframework.beans.factory.annotation.Autowired";
 const JAKARTA_INJECT_PATH = "jakarta.inject.Inject";
 const JAVAX_INJECT_PATH = "javax.inject.Inject";
+const JAKARTA_RESOURCE_PATH = "jakarta.annotation.Resource";
+const JAVAX_RESOURCE_PATH = "javax.annotation.Resource";
 const REACT_NATIVE_REACT_METHOD_PATH = "com.facebook.react.bridge.ReactMethod";
 const REACT_NATIVE_CONTEXT_BASE_MODULE_PATH =
   "com.facebook.react.bridge.ReactContextBaseJavaModule";
@@ -144,6 +152,19 @@ const JAVA_DEPENDENCY_INJECTION_ANNOTATIONS: readonly StaticJavaDependencyInject
     constructorSyntax: "javax-inject-constructor",
     fieldSyntax: "javax-inject-field",
     methodSyntax: "javax-inject-method"
+  }
+];
+
+const JAVA_RESOURCE_INJECTION_ANNOTATIONS: readonly StaticJavaResourceInjectionAnnotation[] = [
+  {
+    path: JAKARTA_RESOURCE_PATH,
+    fieldSyntax: "jakarta-resource-field",
+    setterSyntax: "jakarta-resource-setter"
+  },
+  {
+    path: JAVAX_RESOURCE_PATH,
+    fieldSyntax: "javax-resource-field",
+    setterSyntax: "javax-resource-setter"
   }
 ];
 
@@ -1141,10 +1162,12 @@ function staticJavaDependencyInjectionSyntax(
   member: "constructor" | "field" | "method"
 ): JvmDependencyInjectionReferenceFact["syntax"] | null {
   const annotationsNamedDependencyInjection = annotations.filter((annotation) =>
-    JAVA_DEPENDENCY_INJECTION_ANNOTATIONS.some((candidate) => {
+    [...JAVA_DEPENDENCY_INJECTION_ANNOTATIONS, ...JAVA_RESOURCE_INJECTION_ANNOTATIONS].some(
+      (candidate) => {
       const simpleName = candidate.path.split(".").at(-1);
       return annotation.name === candidate.path || annotation.name === simpleName;
-    })
+      }
+    )
   );
   const provenAnnotations = annotationsNamedDependencyInjection.flatMap((annotation) =>
     JAVA_DEPENDENCY_INJECTION_ANNOTATIONS.flatMap((candidate) =>
@@ -1166,11 +1189,61 @@ function staticJavaDependencyInjectionSyntax(
 }
 
 /**
+ * `@Resource` derives its requested type from the field or JavaBeans setter
+ * only when its arguments are absent. Explicit name, lookup, and type values
+ * change the resource contract, so they remain outside this static type rule.
+ */
+function staticJavaBareResourceAnnotation(annotation: StaticJavaAnnotation): boolean {
+  if (annotation.node.name === "MarkerAnnotation") {
+    return true;
+  }
+  if (annotation.node.name !== "Annotation") {
+    return false;
+  }
+  const argumentLists = directChildren(annotation.node).filter(
+    (child) => child.name === "AnnotationArgumentList"
+  );
+  return (
+    argumentLists.length === 1 &&
+    argumentLists[0] !== undefined &&
+    directChildren(argumentLists[0]).every((child) => child.name === "(" || child.name === ")")
+  );
+}
+
+function staticJavaResourceInjectionSyntax(
+  annotations: readonly StaticJavaAnnotation[],
+  imports: ReadonlyMap<string, string>,
+  member: "field" | "setter"
+): JvmDependencyInjectionReferenceFact["syntax"] | null {
+  const annotationsNamedDependencyInjection = annotations.filter((annotation) =>
+    [...JAVA_DEPENDENCY_INJECTION_ANNOTATIONS, ...JAVA_RESOURCE_INJECTION_ANNOTATIONS].some(
+      (candidate) => {
+        const simpleName = candidate.path.split(".").at(-1);
+        return annotation.name === candidate.path || annotation.name === simpleName;
+      }
+    )
+  );
+  const provenAnnotations = annotationsNamedDependencyInjection.flatMap((annotation) =>
+    JAVA_RESOURCE_INJECTION_ANNOTATIONS.flatMap((candidate) =>
+      staticJavaBareResourceAnnotation(annotation) && annotationMatches(annotation, candidate.path, imports)
+        ? [member === "field" ? candidate.fieldSyntax : candidate.setterSyntax]
+        : []
+    )
+  );
+  return annotationsNamedDependencyInjection.length === provenAnnotations.length &&
+    provenAnnotations.length === 1
+    ? provenAnnotations[0] ?? null
+    : null;
+}
+
+/**
  * Retains direct, non-generic constructor, field, and concrete-method
- * injection point types. Every individually proven method parameter becomes
- * its own fact; the fact describes a declared DI type dependency, not a
- * runtime bean or provider selection. Qualifier, optional, and collection
- * semantics remain intentionally outside this source-only slice.
+ * injection point types. `@Autowired` and `@Inject` retain every individually
+ * proven method parameter; bare `@Resource` additionally retains only a void
+ * JavaBeans setter's one direct parameter. Every fact describes a declared DI
+ * type dependency, not a runtime bean or provider selection. Qualifier,
+ * optional, collection, and JNDI-resource semantics remain outside this
+ * source-only slice.
  */
 function staticJavaMethodInjectionReferences(
   input: JavaExtractFileFactsInput,
@@ -1197,6 +1270,35 @@ function staticJavaMethodInjectionReferences(
     }
   }
   return references;
+}
+
+/**
+ * Standard `@Resource` method injection is restricted to one non-vararg,
+ * void JavaBeans setter. Other method targets can carry a resource declaration
+ * but do not prove a property type for this graph relationship.
+ */
+function staticJavaResourceSetterInjectionReferences(
+  input: JavaExtractFileFactsInput,
+  method: StaticJavaMethod
+): readonly StaticJavaSuperclassReference[] {
+  if (
+    !/^set[A-Z][A-Za-z0-9_$]*$/u.test(method.name) ||
+    !directChildren(method.node).some((child) => child.name === "void")
+  ) {
+    return [];
+  }
+  const parameterLists = directChildren(method.node).filter(
+    (child) => child.name === "FormalParameters"
+  );
+  if (parameterLists.length !== 1 || parameterLists[0] === undefined) {
+    return [];
+  }
+  const parameters = directChildren(parameterLists[0]).filter(
+    (child) => child.name === "FormalParameter" || child.name === "SpreadParameter"
+  );
+  return parameters.length === 1 && parameters[0]?.name === "FormalParameter"
+    ? staticJavaMethodInjectionReferences(input, method)
+    : [];
 }
 
 function staticJavaDependencyInjectionReferences(
@@ -1247,7 +1349,12 @@ function staticJavaDependencyInjectionReferences(
       imports,
       "field"
     );
-    if (syntax === null) {
+    const resourceSyntax = staticJavaResourceInjectionSyntax(
+      staticAnnotations(input, field),
+      imports,
+      "field"
+    );
+    if (syntax === null && resourceSyntax === null) {
       continue;
     }
     const typeNodes = directChildren(field).filter(isJavaDirectTypeName);
@@ -1256,7 +1363,12 @@ function staticJavaDependencyInjectionReferences(
     }
     const reference = staticJavaDirectTypeReference(input, typeNodes[0]);
     if (reference !== null) {
-      references.push({ syntax, reference });
+      if (syntax !== null) {
+        references.push({ syntax, reference });
+      }
+      if (resourceSyntax !== null) {
+        references.push({ syntax: resourceSyntax, reference });
+      }
     }
   }
 
@@ -1267,11 +1379,16 @@ function staticJavaDependencyInjectionReferences(
       continue;
     }
     const syntax = staticJavaDependencyInjectionSyntax(method.annotations, imports, "method");
-    if (syntax === null) {
-      continue;
+    if (syntax !== null) {
+      for (const reference of staticJavaMethodInjectionReferences(input, method)) {
+        references.push({ syntax, reference });
+      }
     }
-    for (const reference of staticJavaMethodInjectionReferences(input, method)) {
-      references.push({ syntax, reference });
+    const resourceSyntax = staticJavaResourceInjectionSyntax(method.annotations, imports, "setter");
+    if (resourceSyntax !== null) {
+      for (const reference of staticJavaResourceSetterInjectionReferences(input, method)) {
+        references.push({ syntax: resourceSyntax, reference });
+      }
     }
   }
 

@@ -422,7 +422,8 @@ describe("first-party framework capabilities", () => {
       surfaces: [
         "direct imported or fully-qualified Spring @Autowired constructor, field, mutable Kotlin @set: setter, and concrete-method parameter injection points",
         "direct imported or fully-qualified Jakarta/Javax @Inject constructor, field, mutable Kotlin @set: setter, and concrete-method parameter injection points",
-        "unique project-local declared injection types without runtime provider or qualifier inference"
+        "direct imported or fully-qualified bare or empty Jakarta/Javax @Resource fields, JavaBean setters, and mutable Kotlin @set: setters",
+        "unique project-local declared injection types without runtime provider, qualifier, or JNDI name/lookup/type inference"
       ]
     });
     expect(frameworkCapability("laravel")).toMatchObject({

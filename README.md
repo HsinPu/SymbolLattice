@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.223.0 為開發預覽版。請由原始碼執行。
+> v0.224.0 為開發預覽版。請由原始碼執行。
 
 SymbolLattice 將專案索引為本機的程式碼符號圖譜。每條關係都保留規則、證據階段與信心值；`exact`、`heuristic`、`unresolved` 不會混為一談。
 
@@ -46,12 +46,13 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 > [!NOTE]
 > 先用 `init` 建立圖譜；原始碼或專案設定變動後，明確執行 `sync`。MCP 查詢不會寫入或重建圖譜。
 
-## v0.223.0 重點
+## v0.224.0 重點
 
 - Java 與 Kotlin 的直接 `@Autowired`、`jakarta.inject.Inject`、`javax.inject.Inject` 建構子、欄位與具實作方法中的每個直接非泛型參數（含 setter 與多參數方法），會各自投影為到唯一專案內頂層型別的跨檔 `references` 關係。
 - Kotlin 的直接 `@field:` 與可生成 setter 的 `@set:` 注入註解也會建立精確關係；`@set:` 僅接受可變的 `var` 屬性。
+- 新增 `jakarta.annotation.Resource` 與 `javax.annotation.Resource`：Java 支援直接欄位及 `void setX(T)`，Kotlin 支援直接／`@field:` 欄位與可變的 `@set:` 屬性；無參數與空括號寫法皆可驗證。
 - 每條 DI 關係保留註解家族、明確 import 或完整型別路徑，以及 Maven／Gradle 本地模組相依證據（如有）。
-- 不推測 runtime bean／provider 選擇、qualifier 結果、Java 靜態方法、集合／泛型／vararg 參數、`@get:` 等其他 Kotlin use-site target、別名／萬用字元 import、次要建構子或 compiler classpath。
+- 不推測 runtime bean／provider 選擇、qualifier 結果、`@Resource` 的 `name`／`lookup`／`type`、Java 靜態方法、集合／泛型／vararg 參數、`@get:` 等其他 Kotlin use-site target、別名／萬用字元 import、次要建構子或 compiler classpath。
 
 ## 設計邊界
 

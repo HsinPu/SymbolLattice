@@ -65,6 +65,12 @@ interface StaticKotlinDependencyInjectionAnnotation {
   readonly methodSyntax: JvmDependencyInjectionReferenceFact["syntax"];
 }
 
+interface StaticKotlinResourceInjectionAnnotation {
+  readonly importPath: string;
+  readonly fieldSyntax: JvmDependencyInjectionReferenceFact["syntax"];
+  readonly setterSyntax: JvmDependencyInjectionReferenceFact["syntax"];
+}
+
 interface StaticKotlinAnnotationIdentity {
   readonly name: string;
   /** Null means the annotation uses Kotlin's ordinary, target-unspecified form. */
@@ -129,6 +135,8 @@ const SPRING_BEAN_IMPORT = "org.springframework.context.annotation.Bean";
 const SPRING_AUTOWIRED_IMPORT = "org.springframework.beans.factory.annotation.Autowired";
 const JAKARTA_INJECT_IMPORT = "jakarta.inject.Inject";
 const JAVAX_INJECT_IMPORT = "javax.inject.Inject";
+const JAKARTA_RESOURCE_IMPORT = "jakarta.annotation.Resource";
+const JAVAX_RESOURCE_IMPORT = "javax.annotation.Resource";
 const SPRING_REST_CONTROLLER_IMPORT =
   "org.springframework.web.bind.annotation.RestController";
 const SPRING_CONTROLLER_IMPORT = "org.springframework.stereotype.Controller";
@@ -163,6 +171,19 @@ const KOTLIN_DEPENDENCY_INJECTION_ANNOTATIONS: readonly StaticKotlinDependencyIn
     fieldSyntax: "javax-inject-field",
     setterSyntax: "javax-inject-setter",
     methodSyntax: "javax-inject-method"
+  }
+];
+
+const KOTLIN_RESOURCE_INJECTION_ANNOTATIONS: readonly StaticKotlinResourceInjectionAnnotation[] = [
+  {
+    importPath: JAKARTA_RESOURCE_IMPORT,
+    fieldSyntax: "jakarta-resource-field",
+    setterSyntax: "jakarta-resource-setter"
+  },
+  {
+    importPath: JAVAX_RESOURCE_IMPORT,
+    fieldSyntax: "javax-resource-field",
+    setterSyntax: "javax-resource-setter"
   }
 ];
 
@@ -782,6 +803,20 @@ function staticKotlinDependencyInjectionAnnotationMatches(
   );
 }
 
+function staticKotlinKnownDependencyInjectionAnnotationHasExpectedName(
+  annotation: KotlinSyntaxNode,
+  member: StaticKotlinDependencyInjectionMember
+): boolean {
+  return [...KOTLIN_DEPENDENCY_INJECTION_ANNOTATIONS, ...KOTLIN_RESOURCE_INJECTION_ANNOTATIONS].some(
+    (candidate) =>
+      staticKotlinDependencyInjectionAnnotationHasExpectedName(
+        annotation,
+        candidate.importPath,
+        member
+      )
+  );
+}
+
 /**
  * Accepts one fully-qualified or explicitly imported JVM DI annotation. Kotlin
  * `@field:` is accepted only as a field point, `@set:` only as a setter point,
@@ -793,13 +828,7 @@ function staticKotlinDependencyInjectionSyntax(
   member: StaticKotlinDependencyInjectionMember
 ): JvmDependencyInjectionReferenceFact["syntax"] | null {
   const annotationsNamedDependencyInjection = annotations.filter((annotation) =>
-    KOTLIN_DEPENDENCY_INJECTION_ANNOTATIONS.some((candidate) =>
-      staticKotlinDependencyInjectionAnnotationHasExpectedName(
-        annotation,
-        candidate.importPath,
-        member
-      )
-    )
+    staticKotlinKnownDependencyInjectionAnnotationHasExpectedName(annotation, member)
   );
   const provenAnnotations = annotationsNamedDependencyInjection.flatMap((annotation) =>
     KOTLIN_DEPENDENCY_INJECTION_ANNOTATIONS.flatMap((candidate) =>
@@ -818,6 +847,52 @@ function staticKotlinDependencyInjectionSyntax(
                   ? candidate.setterSyntax
                   : candidate.methodSyntax
           ]
+        : []
+    )
+  );
+  return annotationsNamedDependencyInjection.length === provenAnnotations.length &&
+    provenAnnotations.length === 1
+    ? provenAnnotations[0] ?? null
+    : null;
+}
+
+/**
+ * `@Resource` has a member-derived type only when its annotation has no
+ * arguments. Name, lookup, and type overrides stay outside static type
+ * projection rather than being treated as type-based injection evidence.
+ */
+function staticKotlinBareResourceAnnotation(annotation: KotlinSyntaxNode): boolean {
+  if (staticKotlinAnnotationIdentity(annotation) === null) {
+    return false;
+  }
+  const subject = directChildren(annotation).at(-1);
+  if (subject?.kind() === "user_type") {
+    return true;
+  }
+  if (subject?.kind() !== "constructor_invocation") {
+    return false;
+  }
+  const argumentLists = directChildren(subject).filter((child) => child.kind() === "value_arguments");
+  return (
+    argumentLists.length === 1 &&
+    argumentLists[0] !== undefined &&
+    directChildren(argumentLists[0]).every((child) => child.kind() === "(" || child.kind() === ")")
+  );
+}
+
+function staticKotlinResourceInjectionSyntax(
+  annotations: readonly KotlinSyntaxNode[],
+  imports: ReadonlySet<string>,
+  member: "field" | "setter"
+): JvmDependencyInjectionReferenceFact["syntax"] | null {
+  const annotationsNamedDependencyInjection = annotations.filter((annotation) =>
+    staticKotlinKnownDependencyInjectionAnnotationHasExpectedName(annotation, member)
+  );
+  const provenAnnotations = annotationsNamedDependencyInjection.flatMap((annotation) =>
+    KOTLIN_RESOURCE_INJECTION_ANNOTATIONS.flatMap((candidate) =>
+      staticKotlinBareResourceAnnotation(annotation) &&
+      staticKotlinDependencyInjectionAnnotationMatches(annotation, candidate.importPath, imports, member)
+        ? [member === "field" ? candidate.fieldSyntax : candidate.setterSyntax]
         : []
     )
   );
@@ -881,12 +956,12 @@ function staticKotlinPropertyHasSetter(property: KotlinSyntaxNode): boolean {
 
 /**
  * Retains direct primary-constructor, class-property, and concrete-method
- * injection point types. Every individually proven method parameter becomes
- * its own fact. It records only declared static type dependencies; direct
- * `@field:` and mutable-property `@set:` targets are accepted, while
- * collection/generic types, secondary constructors, other use-site targets,
- * extension functions, and runtime provider selection stay outside this first
- * JVM DI projection.
+ * injection point types. `@Autowired` and `@Inject` retain every individually
+ * proven method parameter; bare `@Resource` retains only direct fields and
+ * mutable-property `@set:` targets. It records only declared static type
+ * dependencies; collection/generic types, secondary constructors, direct
+ * `@Resource` methods, other use-site targets, extension functions, and
+ * runtime provider selection stay outside this JVM DI projection.
  */
 function staticKotlinDependencyInjectionReferences(
   declaration: StaticKotlinType,
@@ -938,9 +1013,17 @@ function staticKotlinDependencyInjectionReferences(
     if (fieldSyntax !== null) {
       references.push({ syntax: fieldSyntax, reference });
     }
+    const resourceFieldSyntax = staticKotlinResourceInjectionSyntax(annotations, imports, "field");
+    if (resourceFieldSyntax !== null) {
+      references.push({ syntax: resourceFieldSyntax, reference });
+    }
     const setterSyntax = staticKotlinDependencyInjectionSyntax(annotations, imports, "setter");
     if (setterSyntax !== null && staticKotlinPropertyHasSetter(property)) {
       references.push({ syntax: setterSyntax, reference });
+    }
+    const resourceSetterSyntax = staticKotlinResourceInjectionSyntax(annotations, imports, "setter");
+    if (resourceSetterSyntax !== null && staticKotlinPropertyHasSetter(property)) {
+      references.push({ syntax: resourceSetterSyntax, reference });
     }
   }
 

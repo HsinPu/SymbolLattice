@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.223.0 is a developer preview. Run it from source.
+> v0.224.0 is a developer preview. Run it from source.
 
 SymbolLattice indexes a project into a local code-symbol graph. Every relation retains its rule, evidence stage, and confidence; `exact`, `heuristic`, and `unresolved` are never conflated.
 
@@ -46,12 +46,13 @@ Index data is stored in the target project's `.symbol-lattice/index.sqlite`. On 
 > [!NOTE]
 > Create the graph with `init`, then explicitly run `sync` after source or project-configuration changes. MCP queries never write or rebuild a graph.
 
-## v0.223.0 highlights
+## v0.224.0 highlights
 
 - Direct Java and Kotlin `@Autowired`, `jakarta.inject.Inject`, and `javax.inject.Inject` constructor, field, and each direct non-generic parameter of a concrete method (including setters and multi-parameter methods) project independent cross-file `references` edges to uniquely identified project-local top-level types.
 - Direct Kotlin `@field:` and setter-generating `@set:` injection annotations also project exact edges; `@set:` is accepted only on mutable `var` properties.
+- Direct `jakarta.annotation.Resource` and `javax.annotation.Resource` now cover Java fields and `void setX(T)` methods, plus Kotlin direct/`@field:` fields and mutable `@set:` properties. Bare and empty-parentheses forms are both verified.
 - Every DI edge retains its annotation family, explicit import or qualified type spelling, and local Maven/Gradle module-dependency evidence when available.
-- The graph does not infer runtime bean/provider selection, qualifier outcomes, Java static methods, collection, generic, or vararg parameters, other Kotlin use-site targets such as `@get:`, alias/wildcard imports, secondary constructors, or compiler classpaths.
+- The graph does not infer runtime bean/provider selection, qualifier outcomes, `@Resource` `name`/`lookup`/`type` overrides, Java static methods, collection, generic, or vararg parameters, other Kotlin use-site targets such as `@get:`, alias/wildcard imports, secondary constructors, or compiler classpaths.
 
 ## Scope and guarantees
 

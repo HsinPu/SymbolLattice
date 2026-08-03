@@ -1672,6 +1672,18 @@ describe("SymbolLatticeService", () => {
         "  @javax.inject.Inject QualifiedController(app.services.LegacyService legacy) {}",
         "}"
       ].join("\n"),
+      "src/java/app/web/ResourceController.java": [
+        "package app.web;",
+        "import jakarta.annotation.Resource;",
+        "import app.services.PetService;",
+        "import app.services.LegacyService;",
+        "public class ResourceController {",
+        "  @Resource PetService pets;",
+        "  @Resource() void setLegacy(LegacyService legacy) {}",
+        "  @Resource void update(PetService ignored) {}",
+        "  @Resource(name = \"named\") PetService named;",
+        "}"
+      ].join("\n"),
       "src/kotlin/app/services/AuditService.kt": [
         "package app.services",
         "class AuditService"
@@ -1705,6 +1717,18 @@ describe("SymbolLatticeService", () => {
         "  @field:Autowired lateinit var audit: AuditService",
         "  @set:Inject lateinit var events: EventService",
         "  @get:Autowired val ignored: EventService = TODO()",
+        "}"
+      ].join("\n"),
+      "src/kotlin/app/web/ResourceController.kt": [
+        "package app.web",
+        "import jakarta.annotation.Resource",
+        "import app.services.AuditService",
+        "import app.services.EventService",
+        "class ResourceController {",
+        "  @field:Resource() lateinit var audit: AuditService",
+        "  @set:Resource lateinit var events: EventService",
+        "  @get:Resource val ignored: EventService = TODO()",
+        "  @Resource(name = \"named\") lateinit var named: AuditService",
         "}"
       ].join("\n")
     });
@@ -1820,6 +1844,52 @@ describe("SymbolLatticeService", () => {
       ])
     );
     expect(injectionEdges("src/kotlin/app/web/UseSiteController.kt#UseSiteController")).toHaveLength(2);
+    expect(injectionEdges("src/java/app/web/ResourceController.java#ResourceController")).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          targetId: symbol("src/java/app/services/PetService.java#PetService")?.id,
+          resolution: "exact",
+          confidence: 1,
+          evidence: expect.objectContaining({
+            ruleId: "framework.jvm-di.jakarta-resource-field.explicit-import.local-type",
+            stage: "module"
+          })
+        }),
+        expect.objectContaining({
+          targetId: symbol("src/java/app/services/LegacyService.java#LegacyService")?.id,
+          resolution: "exact",
+          confidence: 1,
+          evidence: expect.objectContaining({
+            ruleId: "framework.jvm-di.jakarta-resource-setter.explicit-import.local-type",
+            stage: "module"
+          })
+        })
+      ])
+    );
+    expect(injectionEdges("src/java/app/web/ResourceController.java#ResourceController")).toHaveLength(2);
+    expect(injectionEdges("src/kotlin/app/web/ResourceController.kt#ResourceController")).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          targetId: symbol("src/kotlin/app/services/AuditService.kt#AuditService")?.id,
+          resolution: "exact",
+          confidence: 1,
+          evidence: expect.objectContaining({
+            ruleId: "framework.jvm-di.jakarta-resource-field.explicit-import.local-type",
+            stage: "module"
+          })
+        }),
+        expect.objectContaining({
+          targetId: symbol("src/kotlin/app/services/EventService.kt#EventService")?.id,
+          resolution: "exact",
+          confidence: 1,
+          evidence: expect.objectContaining({
+            ruleId: "framework.jvm-di.jakarta-resource-setter.explicit-import.local-type",
+            stage: "module"
+          })
+        })
+      ])
+    );
+    expect(injectionEdges("src/kotlin/app/web/ResourceController.kt#ResourceController")).toHaveLength(2);
 
     const javaFacts = graphStore
       .getArtifactFacts(projectPath)

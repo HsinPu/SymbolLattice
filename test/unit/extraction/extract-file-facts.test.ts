@@ -19261,15 +19261,20 @@ describe("source extraction", () => {
         "package app.web;",
         "import org.springframework.beans.factory.annotation.Autowired;",
         "import jakarta.inject.Inject;",
+        "import jakarta.annotation.Resource;",
         "import app.services.PetService;",
         "import app.services.AuditService;",
         "public class PetController {",
         "  @Autowired PetController(PetService pets) {}",
         "  @Inject AuditService auditService;",
         "  @javax.inject.Inject app.services.LegacyService legacyService;",
+        "  @Resource PetService resourcePetService;",
+        "  @javax.annotation.Resource() app.services.LegacyService resourceLegacyService;",
         "  @Autowired void setPetService(PetService pets) {}",
         "  @Inject void setAuditService(AuditService audit) {}",
         "  @javax.inject.Inject void setLegacyService(app.services.LegacyService legacy) {}",
+        "  @Resource void setResourceAuditService(AuditService audit) {}",
+        "  @javax.annotation.Resource() void setResourceLegacyService(app.services.LegacyService legacy) {}",
         "}"
       ].join("\n")
     });
@@ -19280,6 +19285,7 @@ describe("source extraction", () => {
         "package app.web",
         "import org.springframework.beans.factory.annotation.Autowired",
         "import jakarta.inject.Inject",
+        "import jakarta.annotation.Resource",
         "import app.services.PetService",
         "import app.services.AuditService",
         "class PetController @Autowired constructor(private val pets: PetService) {",
@@ -19287,7 +19293,13 @@ describe("source extraction", () => {
         "  @field:Autowired lateinit var fieldPetService: PetService",
         "  @set:Inject lateinit var setterAuditService: AuditService",
         "  @set:javax.inject.Inject lateinit var setterLegacyService: app.services.LegacyService",
+        "  @Resource lateinit var resourcePetService: PetService",
+        "  @field:Resource() lateinit var resourceFieldPetService: PetService",
+        "  @set:Resource lateinit var resourceAuditService: AuditService",
+        "  @set:javax.annotation.Resource() lateinit var resourceLegacyService: app.services.LegacyService",
         "  @get:Autowired val ignored: PetService = TODO()",
+        "  @get:Resource val ignoredResource: PetService = TODO()",
+        "  @Resource(name = \"named\") lateinit var namedResource: PetService",
         "  @Autowired fun setPetService(pets: PetService): Unit {}",
         "  @Inject fun setAuditService(audit: AuditService) {}",
         "  @javax.inject.Inject fun setLegacyService(legacy: app.services.LegacyService) {}",
@@ -19336,6 +19348,40 @@ describe("source extraction", () => {
         "package app.web",
         "import org.springframework.beans.factory.annotation.Autowired",
         "class Generic @Autowired constructor(val pets: List<PetService>)"
+      ].join("\n")
+    });
+    const javaResourceRejected = extractFileFacts({
+      filePath: "src/java/app/web/RejectedResource.java",
+      language: "java",
+      sourceText: [
+        "package app.web;",
+        "import jakarta.annotation.Resource;",
+        "import jakarta.inject.Inject;",
+        "class RejectedResource {",
+        "  @Resource(name = \"named\") PetService named;",
+        "  @Resource(type = PetService.class) PetService typed;",
+        "  @Resource @Inject PetService conflicting;",
+        "  @Resource void update(PetService pet) {}",
+        "  @Resource void setBoth(PetService pet, AuditService audit) {}",
+        "  @Resource void setVarargs(PetService... pets) {}",
+        "  @Resource String setReturned(PetService pet) { return \"\"; }",
+        "}"
+      ].join("\n")
+    });
+    const kotlinResourceRejected = extractFileFacts({
+      filePath: "src/kotlin/app/web/RejectedResource.kt",
+      language: "kotlin",
+      sourceText: [
+        "package app.web",
+        "import jakarta.annotation.Resource",
+        "import jakarta.inject.Inject",
+        "class RejectedResource {",
+        "  @Resource(name = \"named\") lateinit var named: PetService",
+        "  @Resource @Inject lateinit var conflicting: PetService",
+        "  @get:Resource val getter: PetService = TODO()",
+        "  @set:Resource val immutable: PetService = TODO()",
+        "  @Resource fun setPet(pet: PetService) {}",
+        "}"
       ].join("\n")
     });
     const javaMultiParameter = extractFileFacts({
@@ -19387,9 +19433,13 @@ describe("source extraction", () => {
       ["PetController", "PetService", "spring-autowired-constructor", "app.services.PetService"],
       ["PetController", "AuditService", "jakarta-inject-field", "app.services.AuditService"],
       ["PetController", "LegacyService", "javax-inject-field", "app.services.LegacyService"],
+      ["PetController", "PetService", "jakarta-resource-field", "app.services.PetService"],
+      ["PetController", "LegacyService", "javax-resource-field", "app.services.LegacyService"],
       ["PetController", "PetService", "spring-autowired-method", "app.services.PetService"],
       ["PetController", "AuditService", "jakarta-inject-method", "app.services.AuditService"],
-      ["PetController", "LegacyService", "javax-inject-method", "app.services.LegacyService"]
+      ["PetController", "LegacyService", "javax-inject-method", "app.services.LegacyService"],
+      ["PetController", "AuditService", "jakarta-resource-setter", "app.services.AuditService"],
+      ["PetController", "LegacyService", "javax-resource-setter", "app.services.LegacyService"]
     ]);
     expect(
       kotlin.jvmFacts?.dependencyInjectionReferences?.map((reference) => [
@@ -19404,6 +19454,10 @@ describe("source extraction", () => {
       ["PetController", "PetService", "spring-autowired-field", "app.services.PetService"],
       ["PetController", "AuditService", "jakarta-inject-setter", "app.services.AuditService"],
       ["PetController", "LegacyService", "javax-inject-setter", "app.services.LegacyService"],
+      ["PetController", "PetService", "jakarta-resource-field", "app.services.PetService"],
+      ["PetController", "PetService", "jakarta-resource-field", "app.services.PetService"],
+      ["PetController", "AuditService", "jakarta-resource-setter", "app.services.AuditService"],
+      ["PetController", "LegacyService", "javax-resource-setter", "app.services.LegacyService"],
       ["PetController", "PetService", "spring-autowired-method", "app.services.PetService"],
       ["PetController", "AuditService", "jakarta-inject-method", "app.services.AuditService"],
       ["PetController", "LegacyService", "javax-inject-method", "app.services.LegacyService"],
@@ -19413,6 +19467,8 @@ describe("source extraction", () => {
     expect(kotlinRejected.jvmFacts?.dependencyInjectionReferences).toEqual([]);
     expect(javaGeneric.jvmFacts?.dependencyInjectionReferences).toEqual([]);
     expect(kotlinGeneric.jvmFacts?.dependencyInjectionReferences).toEqual([]);
+    expect(javaResourceRejected.jvmFacts?.dependencyInjectionReferences).toEqual([]);
+    expect(kotlinResourceRejected.jvmFacts?.dependencyInjectionReferences).toEqual([]);
     expect(
       javaMultiParameter.jvmFacts?.dependencyInjectionReferences?.map((reference) => [
         reference.referenceName,
