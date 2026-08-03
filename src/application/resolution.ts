@@ -27,6 +27,9 @@ import {
   type GoFrameStandardRouterRequestFact,
   type GraphEdge,
   type GraphSnapshot,
+  type JvmHeritageReferenceFact,
+  type JvmHeritageSyntax,
+  type JvmTypeFact,
   type NestSymbolReference,
   type PendingReference,
   type ResolutionKind,
@@ -6186,6 +6189,165 @@ function heritageRuleId(
   return `heritage.${relationKind}.${suffix}`;
 }
 
+type JvmHeritageRelationKind = "extends" | "implements";
+
+interface JvmResolvedType {
+  readonly fact: JvmTypeFact;
+  readonly symbol: SymbolNode;
+}
+
+function jvmTypePath(type: JvmResolvedType): string {
+  return type.fact.packageName.length === 0
+    ? type.symbol.name
+    : `${type.fact.packageName}.${type.symbol.name}`;
+}
+
+function jvmHeritageRelationKind(input: {
+  readonly syntax: JvmHeritageSyntax;
+  readonly source: SymbolNode;
+  readonly target: SymbolNode;
+}): JvmHeritageRelationKind | null {
+  switch (input.syntax) {
+    case "java-class-superclass":
+      return input.source.kind === "class" && input.target.kind === "class" ? "extends" : null;
+    case "java-class-interface":
+      return input.source.kind === "class" && input.target.kind === "interface"
+        ? "implements"
+        : null;
+    case "java-interface-superinterface":
+      return input.source.kind === "interface" && input.target.kind === "interface"
+        ? "extends"
+        : null;
+    case "kotlin-supertype":
+      if (input.source.kind === "class" && input.target.kind === "class") {
+        return "extends";
+      }
+      if (input.source.kind === "class" && input.target.kind === "interface") {
+        return "implements";
+      }
+      return input.source.kind === "interface" && input.target.kind === "interface"
+        ? "extends"
+        : null;
+  }
+}
+
+function jvmHeritageRuleId(input: {
+  readonly syntax: JvmHeritageSyntax;
+  readonly imported: boolean;
+  readonly relationKind: JvmHeritageRelationKind;
+  readonly sourceKind: SymbolNode["kind"];
+}): string {
+  const resolution = input.imported ? "explicit-import" : "same-package";
+  const relationship =
+    input.relationKind === "implements"
+      ? "direct-implements"
+      : input.syntax === "java-interface-superinterface" ||
+          (input.syntax === "kotlin-supertype" && input.sourceKind === "interface")
+        ? "direct-interface-extends"
+        : "direct-superclass";
+  return `syntax.jvm.cross-file.${resolution}.${relationship}`;
+}
+
+/**
+ * Projects a direct JVM parent type only when the raw facts identify exactly
+ * one indexed top-level type through one explicit import or a shared package.
+ * The extractor deliberately omits aliases, wildcards, qualified spellings,
+ * nested types, and compiler-classpath semantics, so this pass cannot invent a
+ * type-checker relationship.
+ */
+function projectJvmHeritageReferences(input: {
+  readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
+  readonly symbolsById: ReadonlyMap<string, SymbolNode>;
+}): readonly GraphEdge[] {
+  const typesBySymbolId = new Map<string, JvmResolvedType[]>();
+  const references: JvmHeritageReferenceFact[] = [];
+
+  for (const [, facts] of [...input.factsByFile.entries()].sort(([left], [right]) =>
+    compareStableText(left, right)
+  )) {
+    for (const fact of facts.jvmFacts?.types ?? []) {
+      const symbol = input.symbolsById.get(fact.symbolId);
+      if (symbol?.kind !== "class" && symbol?.kind !== "interface") {
+        continue;
+      }
+      const entries = typesBySymbolId.get(symbol.id) ?? [];
+      entries.push({ fact, symbol });
+      typesBySymbolId.set(symbol.id, entries);
+    }
+    references.push(...(facts.jvmFacts?.heritageReferences ?? []));
+  }
+
+  const types = [...typesBySymbolId.values()]
+    .filter((entries) => entries.length === 1 && entries[0] !== undefined)
+    .map((entries) => entries[0] as JvmResolvedType)
+    .sort((left, right) => compareStableText(left.symbol.id, right.symbol.id));
+  const edges: GraphEdge[] = [];
+
+  for (const reference of [...references].sort((left, right) =>
+    compareStableText(
+      `${left.sourceId}\u0000${left.referenceName}\u0000${left.range.start.line}\u0000${left.range.start.column}`,
+      `${right.sourceId}\u0000${right.referenceName}\u0000${right.range.start.line}\u0000${right.range.start.column}`
+    )
+  )) {
+    const sourceEntries = typesBySymbolId.get(reference.sourceId) ?? [];
+    const source = input.symbolsById.get(reference.sourceId);
+    if (sourceEntries.length !== 1 || sourceEntries[0] === undefined || source === undefined) {
+      continue;
+    }
+    const sourceType = sourceEntries[0];
+    const candidates = types.filter((candidate) =>
+      reference.importedTypePath === undefined
+        ? candidate.fact.packageName === sourceType.fact.packageName &&
+          candidate.symbol.name === reference.referenceName
+        : jvmTypePath(candidate) === reference.importedTypePath
+    );
+    if (
+      candidates.length !== 1 ||
+      candidates[0] === undefined ||
+      candidates[0].symbol.id === source.id ||
+      candidates[0].symbol.filePath === source.filePath
+    ) {
+      continue;
+    }
+    const target = candidates[0].symbol;
+    const relationKind = jvmHeritageRelationKind({ syntax: reference.syntax, source, target });
+    if (relationKind === null) {
+      continue;
+    }
+    edges.push({
+      id: createEdgeId({
+        sourceId: source.id,
+        targetId: target.id,
+        kind: relationKind,
+        line: reference.range.start.line,
+        column: reference.range.start.column,
+        referenceName: reference.referenceName
+      }),
+      sourceId: source.id,
+      targetId: target.id,
+      kind: relationKind,
+      filePath: reference.filePath,
+      range: reference.range,
+      resolution: "exact",
+      confidence: 1,
+      referenceName: reference.referenceName,
+      evidence: referenceEvidence(
+        jvmHeritageRuleId({
+          syntax: reference.syntax,
+          imported: reference.importedTypePath !== undefined,
+          relationKind,
+          sourceKind: source.kind
+        }),
+        "module",
+        candidateSymbolIds(candidates.map((candidate) => candidate.symbol)),
+        [],
+        [reference.filePath, target.filePath]
+      )
+    });
+  }
+  return edges;
+}
+
 /**
  * Resolves local declarations and explicit named import/export bindings exactly. Any
  * remaining unique-name inference stays heuristic so the graph never overstates proof.
@@ -6230,6 +6392,13 @@ export function resolveProjectFacts(input: {
       referenceScopeIdsByReferenceId.set(referenceScope.referenceId, referenceScope.scopeIds);
     }
   }
+
+  resolvedEdges.push(
+    ...projectJvmHeritageReferences({
+      factsByFile,
+      symbolsById
+    })
+  );
 
   resolvedEdges.push(
     ...projectLiquidTemplateReferences({

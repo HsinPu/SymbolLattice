@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.214.0 is a developer preview. Run it from source.
+> v0.215.0 is a developer preview. Run it from source.
 
 SymbolLattice builds a local, queryable code-symbol graph. Every relation retains its rule, evidence stage, and confidence; `exact`, `heuristic`, and `unresolved` evidence are never conflated.
 
@@ -46,12 +46,12 @@ Index data is stored in the target project's `.symbol-lattice/index.sqlite`. On 
 > [!NOTE]
 > Create the graph with `init`, then use `sync` after source changes. MCP queries themselves never write or rebuild a graph.
 
-## v0.214.0 highlights
+## v0.215.0 highlights
 
-- Java now creates interface and abstract interface-method symbols, with exact same-file `implements` and interface `extends` relations when an unqualified name is uniquely proven.
-- Kotlin projects each exact same-file direct supertype as `extends` or `implements` according to its target type, including interface inheritance.
-- Java `@Override` and Kotlin `override fun` can now resolve to the unique same-named method on a direct parent class or interface.
-- Multiple direct parents with the same method name, cross-file or qualified references, indirect ancestors, and overloads remain `unresolved`; targets are never guessed.
+- Java and Kotlin now project cross-file `extends`, `implements`, and interface-inheritance edges through one unique explicit direct import or one unique same-package top-level type.
+- A proven cross-file direct parent lets Java `@Override` and Kotlin `override fun` resolve to the unique same-named parent method.
+- Every cross-file relation retains its source range, candidate symbols, and import/package proof; `init` and later `sync` persist the raw evidence.
+- Wildcard imports, Kotlin aliases, qualified and nested types, compiler classpaths, ambiguities, and indirect ancestors remain unresolved—never guessed.
 
 ## Scope and guarantees
 

@@ -11,13 +11,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v179";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v180";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v65";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v66";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -625,6 +625,43 @@ export interface JavaFacts {
 }
 
 /**
+ * A top-level Java or Kotlin type whose package declaration was parsed without
+ * recovery. The project resolver uses this identity only for direct JVM
+ * inheritance facts; it does not model a compiler classpath or nested types.
+ */
+export interface JvmTypeFact {
+  readonly symbolId: string;
+  readonly packageName: string;
+}
+
+/** The parsed direct JVM heritage shape before its target type is resolved. */
+export type JvmHeritageSyntax =
+  | "java-class-superclass"
+  | "java-class-interface"
+  | "java-interface-superinterface"
+  | "kotlin-supertype";
+
+/**
+ * One direct, unqualified Java or Kotlin parent-type reference. An imported
+ * target path is retained only for a unique, explicit, non-static/non-wildcard
+ * Java import or a non-aliased/non-wildcard Kotlin import.
+ */
+export interface JvmHeritageReferenceFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly referenceName: string;
+  readonly syntax: JvmHeritageSyntax;
+  readonly range: SourceRange;
+  readonly importedTypePath?: string;
+}
+
+/** Syntax-only JVM package, import, and direct-heritage facts for project resolution. */
+export interface JvmFacts {
+  readonly types: readonly JvmTypeFact[];
+  readonly heritageReferences: readonly JvmHeritageReferenceFact[];
+}
+
+/**
  * One direct Spring `@Value` literal-key annotation on a Java field or
  * constructor or concrete-method parameter, or a one-parameter concrete
  * method, or a Kotlin class property, primary-constructor parameter,
@@ -928,6 +965,8 @@ export interface ArtifactFacts {
   readonly scalaFacts?: ScalaFacts;
   /** Omitted only by artifact facts persisted before v0.47. */
   readonly javaFacts?: JavaFacts;
+  /** Omitted only by artifact facts persisted before v0.215. */
+  readonly jvmFacts?: JvmFacts;
   /** Omitted only by artifact facts persisted before v0.92. */
   readonly springBootPropertiesFacts?: SpringBootPropertiesFacts;
   /** Omitted only by artifact facts persisted before v0.66. */

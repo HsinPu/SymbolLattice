@@ -696,6 +696,7 @@ function artifactFactsPayload(facts: PersistedArtifactFacts): ArtifactFacts {
       : { rustActixServiceConfigFacts: facts.rustActixServiceConfigFacts }),
     ...(facts.scalaFacts === undefined ? {} : { scalaFacts: facts.scalaFacts }),
     ...(facts.javaFacts === undefined ? {} : { javaFacts: facts.javaFacts }),
+    ...(facts.jvmFacts === undefined ? {} : { jvmFacts: facts.jvmFacts }),
     ...(facts.springBootPropertiesFacts === undefined
       ? {}
       : { springBootPropertiesFacts: facts.springBootPropertiesFacts }),

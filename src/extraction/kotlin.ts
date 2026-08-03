@@ -5,6 +5,7 @@ import {
   createSymbolId,
   type ArtifactFacts,
   type GraphEdge,
+  type JvmFacts,
   type PendingReference,
   type ReactNativeFacts,
   type RouteMethod,
@@ -322,20 +323,58 @@ function hasKotlinOverrideModifier(declaration: StaticKotlinFunction): boolean {
 }
 
 function staticDirectImportPaths(root: KotlinSyntaxNode): ReadonlySet<string> {
+  return new Set(staticKotlinDirectImports(root).values());
+}
+
+/**
+ * Kotlin import aliases and wildcard imports need compiler-level binding
+ * resolution. Retain only one explicit, unaliased path per local type name.
+ */
+function staticKotlinDirectImports(root: KotlinSyntaxNode): ReadonlyMap<string, string> {
   const importList = directChildren(root).find((child) => child.kind() === "import_list");
   if (importList === undefined) {
-    return new Set();
+    return new Map();
   }
-  const imports = new Set<string>();
+  const pathsByLocalName = new Map<string, Set<string>>();
   for (const header of directChildren(importList).filter(
     (child) => child.kind() === "import_header"
   )) {
     const match = /^import\s+([A-Za-z_][A-Za-z0-9_.]*)$/u.exec(nodeText(header));
     if (match?.[1] !== undefined) {
-      imports.add(match[1]);
+      const localName = match[1].split(".").at(-1);
+      if (localName === undefined) {
+        continue;
+      }
+      const paths = pathsByLocalName.get(localName) ?? new Set<string>();
+      paths.add(match[1]);
+      pathsByLocalName.set(localName, paths);
+    }
+  }
+  const imports = new Map<string, string>();
+  for (const [localName, paths] of pathsByLocalName) {
+    if (paths.size === 1) {
+      const path = [...paths][0];
+      if (path !== undefined) {
+        imports.set(localName, path);
+      }
     }
   }
   return imports;
+}
+
+/** One direct package header is the minimum proof for JVM same-package resolution. */
+function staticKotlinPackage(root: KotlinSyntaxNode): string | null {
+  const packageHeaders = directChildren(root).filter((child) => child.kind() === "package_header");
+  if (packageHeaders.length === 0) {
+    return "";
+  }
+  if (packageHeaders.length !== 1 || packageHeaders[0] === undefined) {
+    return null;
+  }
+  const match = /^package\s+([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)$/u.exec(
+    nodeText(packageHeaders[0])
+  );
+  return match?.[1] ?? null;
 }
 
 /**
@@ -1560,6 +1599,8 @@ export function extractKotlinFileFacts(input: KotlinExtractFileFactsInput): Arti
   const symbols: SymbolNode[] = [];
   const edges: GraphEdge[] = [];
   const pendingReferences: PendingReference[] = [];
+  const jvmTypeFacts: JvmFacts["types"][number][] = [];
+  const jvmHeritageReferences: JvmFacts["heritageReferences"][number][] = [];
   const springBootPropertiesValueReferences: SpringBootPropertiesValueReferenceFact[] = [];
   const springBootConfigurationPropertiesPrefixes: SpringBootConfigurationPropertiesPrefixReferenceFact[] = [];
   const reactNativeNativeMethods: ReactNativeFacts["nativeMethods"][number][] = [];
@@ -1616,7 +1657,7 @@ export function extractKotlinFileFacts(input: KotlinExtractFileFactsInput): Arti
     });
   }
 
-  function addType(declaration: StaticKotlinType): SymbolNode {
+  function addType(declaration: StaticKotlinType, packageName: string | null): SymbolNode {
     const qualifiedName = input.filePath + "#" + declaration.name;
     const declarationOrdinal = nextOrdinal(qualifiedName, declaration.kind);
     const symbol: SymbolNode = {
@@ -1636,6 +1677,9 @@ export function extractKotlinFileFacts(input: KotlinExtractFileFactsInput): Arti
     };
     symbols.push(symbol);
     addContainment(fileNode, symbol, declaration.node);
+    if (packageName !== null) {
+      jvmTypeFacts.push({ symbolId: symbol.id, packageName });
+    }
     return symbol;
   }
 
@@ -1743,6 +1787,27 @@ export function extractKotlinFileFacts(input: KotlinExtractFileFactsInput): Arti
     }
   }
 
+  /**
+   * Persists only a direct simple-name Kotlin supertype. The import map has
+   * already excluded aliases and wildcards, leaving the project resolver a
+   * reproducible package/import proof rather than a best-effort lookup.
+   */
+  function addJvmHeritageReference(
+    source: SymbolNode,
+    reference: StaticKotlinSupertypeReference,
+    imports: ReadonlyMap<string, string>
+  ): void {
+    const importedTypePath = imports.get(reference.name);
+    jvmHeritageReferences.push({
+      sourceId: source.id,
+      filePath: input.filePath,
+      referenceName: reference.name,
+      syntax: "kotlin-supertype",
+      range: rangeForNode(reference.node),
+      ...(importedTypePath === undefined ? {} : { importedTypePath })
+    });
+  }
+
   function addFunction(declaration: StaticKotlinFunction): SymbolNode {
     const qualifiedName = input.filePath + "#" + declaration.name;
     const declarationOrdinal = nextOrdinal(qualifiedName, "function");
@@ -1825,6 +1890,8 @@ export function extractKotlinFileFacts(input: KotlinExtractFileFactsInput): Arti
   if (!hasSyntaxError(root)) {
     const topLevel = directChildren(root);
     const imports = staticDirectImportPaths(root);
+    const directImports = staticKotlinDirectImports(root);
+    const packageName = staticKotlinPackage(root);
     const topLevelFunctions = topLevel
       .map((node) => staticKotlinFunction(node))
       .filter((candidate): candidate is StaticKotlinFunction => candidate !== null);
@@ -1835,7 +1902,7 @@ export function extractKotlinFileFacts(input: KotlinExtractFileFactsInput): Arti
     for (const declaration of topLevel
       .map((node) => staticKotlinType(node))
       .filter((candidate): candidate is StaticKotlinType => candidate !== null)) {
-      const typeSymbol = addType(declaration);
+      const typeSymbol = addType(declaration, packageName);
       const typeCandidates = typesByName.get(declaration.name) ?? [];
       typeCandidates.push(typeSymbol);
       typesByName.set(declaration.name, typeCandidates);
@@ -1954,6 +2021,9 @@ export function extractKotlinFileFacts(input: KotlinExtractFileFactsInput): Arti
 
     for (const { declaration, symbol } of declaredTypes) {
       addExactSameFileSupertypeRelations(symbol, declaration, typesByName);
+      for (const reference of staticKotlinDirectSupertypeReferences(declaration)) {
+        addJvmHeritageReference(symbol, reference, directImports);
+      }
     }
 
     for (const functionDeclaration of topLevelFunctions) {
@@ -1999,6 +2069,10 @@ export function extractKotlinFileFacts(input: KotlinExtractFileFactsInput): Arti
     importBindings: [],
     exportBindings: [],
     reExportBindings: [],
+    jvmFacts: {
+      types: jvmTypeFacts,
+      heritageReferences: jvmHeritageReferences
+    },
     springBootPropertiesFacts: {
       valueReferences: springBootPropertiesValueReferences,
       configurationPropertiesPrefixes: springBootConfigurationPropertiesPrefixes

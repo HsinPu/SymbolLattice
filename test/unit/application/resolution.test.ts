@@ -1086,6 +1086,243 @@ describe("explicit Java and Kotlin override resolution", () => {
   });
 });
 
+describe("exact JVM cross-file heritage resolution", () => {
+  it("projects direct imported and same-package Java/Kotlin parents, but rejects wildcard and aliased imports", () => {
+    const sourceDocuments: readonly SourceDocument[] = [
+      {
+        absolutePath: "C:/project/src/java/api/JavaContract.java",
+        relativePath: "src/java/api/JavaContract.java",
+        language: "java",
+        sourceText: [
+          "package example.java.api;",
+          "public interface JavaContract { void run(); }"
+        ].join("\n"),
+        contentHash: "java-contract"
+      },
+      {
+        absolutePath: "C:/project/src/java/impl/JavaImportedChild.java",
+        relativePath: "src/java/impl/JavaImportedChild.java",
+        language: "java",
+        sourceText: [
+          "package example.java.impl;",
+          "import example.java.api.JavaContract;",
+          "public class JavaImportedChild implements JavaContract { @Override public void run() {} }"
+        ].join("\n"),
+        contentHash: "java-imported-child"
+      },
+      {
+        absolutePath: "C:/project/src/java/impl/JavaImportedInterface.java",
+        relativePath: "src/java/impl/JavaImportedInterface.java",
+        language: "java",
+        sourceText: [
+          "package example.java.impl;",
+          "import example.java.api.JavaContract;",
+          "public interface JavaImportedInterface extends JavaContract {}"
+        ].join("\n"),
+        contentHash: "java-imported-interface"
+      },
+      {
+        absolutePath: "C:/project/src/java/shared/JavaBase.java",
+        relativePath: "src/java/shared/JavaBase.java",
+        language: "java",
+        sourceText: [
+          "package example.java.shared;",
+          "public class JavaBase { void run() {} }"
+        ].join("\n"),
+        contentHash: "java-same-package-base"
+      },
+      {
+        absolutePath: "C:/project/src/java/shared/JavaSamePackageChild.java",
+        relativePath: "src/java/shared/JavaSamePackageChild.java",
+        language: "java",
+        sourceText: [
+          "package example.java.shared;",
+          "public class JavaSamePackageChild extends JavaBase { @Override void run() {} }"
+        ].join("\n"),
+        contentHash: "java-same-package-child"
+      },
+      {
+        absolutePath: "C:/project/src/java/impl/JavaWildcardChild.java",
+        relativePath: "src/java/impl/JavaWildcardChild.java",
+        language: "java",
+        sourceText: [
+          "package example.java.impl;",
+          "import example.java.api.*;",
+          "public class JavaWildcardChild implements JavaContract { @Override public void run() {} }"
+        ].join("\n"),
+        contentHash: "java-wildcard-child"
+      },
+      {
+        absolutePath: "C:/project/src/kotlin/api/KotlinContract.kt",
+        relativePath: "src/kotlin/api/KotlinContract.kt",
+        language: "kotlin",
+        sourceText: [
+          "package example.kotlin.api",
+          "interface KotlinContract { fun run() }"
+        ].join("\n"),
+        contentHash: "kotlin-contract"
+      },
+      {
+        absolutePath: "C:/project/src/kotlin/impl/KotlinImportedChild.kt",
+        relativePath: "src/kotlin/impl/KotlinImportedChild.kt",
+        language: "kotlin",
+        sourceText: [
+          "package example.kotlin.impl",
+          "import example.kotlin.api.KotlinContract",
+          "class KotlinImportedChild : KotlinContract { override fun run() {} }"
+        ].join("\n"),
+        contentHash: "kotlin-imported-child"
+      },
+      {
+        absolutePath: "C:/project/src/kotlin/impl/KotlinImportedInterface.kt",
+        relativePath: "src/kotlin/impl/KotlinImportedInterface.kt",
+        language: "kotlin",
+        sourceText: [
+          "package example.kotlin.impl",
+          "import example.kotlin.api.KotlinContract",
+          "interface KotlinImportedInterface : KotlinContract"
+        ].join("\n"),
+        contentHash: "kotlin-imported-interface"
+      },
+      {
+        absolutePath: "C:/project/src/kotlin/shared/KotlinBase.kt",
+        relativePath: "src/kotlin/shared/KotlinBase.kt",
+        language: "kotlin",
+        sourceText: [
+          "package example.kotlin.shared",
+          "abstract class KotlinBase { abstract fun run() }"
+        ].join("\n"),
+        contentHash: "kotlin-same-package-base"
+      },
+      {
+        absolutePath: "C:/project/src/kotlin/shared/KotlinSamePackageChild.kt",
+        relativePath: "src/kotlin/shared/KotlinSamePackageChild.kt",
+        language: "kotlin",
+        sourceText: [
+          "package example.kotlin.shared",
+          "class KotlinSamePackageChild : KotlinBase() { override fun run() {} }"
+        ].join("\n"),
+        contentHash: "kotlin-same-package-child"
+      },
+      {
+        absolutePath: "C:/project/src/kotlin/impl/KotlinAliasChild.kt",
+        relativePath: "src/kotlin/impl/KotlinAliasChild.kt",
+        language: "kotlin",
+        sourceText: [
+          "package example.kotlin.impl",
+          "import example.kotlin.api.KotlinContract as ImportedContract",
+          "class KotlinAliasChild : ImportedContract { override fun run() {} }"
+        ].join("\n"),
+        contentHash: "kotlin-alias-child"
+      }
+    ];
+    const snapshot = snapshotWithResolver(sourceDocuments, undefined);
+    const symbol = (qualifiedName: string) =>
+      snapshot.symbols.find((candidate) => candidate.qualifiedName === qualifiedName);
+    const heritageEdge = (sourceQualifiedName: string, kind: "extends" | "implements") =>
+      snapshot.edges.find(
+        (edge) => edge.sourceId === symbol(sourceQualifiedName)?.id && edge.kind === kind
+      );
+    const overrideEdge = (sourceQualifiedName: string) =>
+      snapshot.edges.find(
+        (edge) => edge.sourceId === symbol(sourceQualifiedName)?.id && edge.kind === "overrides"
+      );
+
+    for (const [
+      sourceQualifiedName,
+      targetQualifiedName,
+      kind,
+      ruleId
+    ] of [
+      [
+        "src/java/impl/JavaImportedChild.java#JavaImportedChild",
+        "src/java/api/JavaContract.java#JavaContract",
+        "implements",
+        "syntax.jvm.cross-file.explicit-import.direct-implements"
+      ],
+      [
+        "src/java/impl/JavaImportedInterface.java#JavaImportedInterface",
+        "src/java/api/JavaContract.java#JavaContract",
+        "extends",
+        "syntax.jvm.cross-file.explicit-import.direct-interface-extends"
+      ],
+      [
+        "src/java/shared/JavaSamePackageChild.java#JavaSamePackageChild",
+        "src/java/shared/JavaBase.java#JavaBase",
+        "extends",
+        "syntax.jvm.cross-file.same-package.direct-superclass"
+      ],
+      [
+        "src/kotlin/impl/KotlinImportedChild.kt#KotlinImportedChild",
+        "src/kotlin/api/KotlinContract.kt#KotlinContract",
+        "implements",
+        "syntax.jvm.cross-file.explicit-import.direct-implements"
+      ],
+      [
+        "src/kotlin/impl/KotlinImportedInterface.kt#KotlinImportedInterface",
+        "src/kotlin/api/KotlinContract.kt#KotlinContract",
+        "extends",
+        "syntax.jvm.cross-file.explicit-import.direct-interface-extends"
+      ],
+      [
+        "src/kotlin/shared/KotlinSamePackageChild.kt#KotlinSamePackageChild",
+        "src/kotlin/shared/KotlinBase.kt#KotlinBase",
+        "extends",
+        "syntax.jvm.cross-file.same-package.direct-superclass"
+      ]
+    ] as const) {
+      expect(heritageEdge(sourceQualifiedName, kind)).toMatchObject({
+        targetId: symbol(targetQualifiedName)?.id,
+        resolution: "exact",
+        confidence: 1,
+        evidence: { ruleId, stage: "module" }
+      });
+    }
+
+    for (const [sourceQualifiedName, targetQualifiedName] of [
+      [
+        "src/java/impl/JavaImportedChild.java#JavaImportedChild.run",
+        "src/java/api/JavaContract.java#JavaContract.run"
+      ],
+      [
+        "src/java/shared/JavaSamePackageChild.java#JavaSamePackageChild.run",
+        "src/java/shared/JavaBase.java#JavaBase.run"
+      ],
+      [
+        "src/kotlin/impl/KotlinImportedChild.kt#KotlinImportedChild.run",
+        "src/kotlin/api/KotlinContract.kt#KotlinContract.run"
+      ],
+      [
+        "src/kotlin/shared/KotlinSamePackageChild.kt#KotlinSamePackageChild.run",
+        "src/kotlin/shared/KotlinBase.kt#KotlinBase.run"
+      ]
+    ] as const) {
+      expect(overrideEdge(sourceQualifiedName)).toMatchObject({
+        targetId: symbol(targetQualifiedName)?.id,
+        resolution: "exact",
+        confidence: 1,
+        evidence: { ruleId: "syntax.override.explicit-direct-base-method", stage: "syntax" }
+      });
+    }
+
+    expect(
+      heritageEdge("src/java/impl/JavaWildcardChild.java#JavaWildcardChild", "implements")
+    ).toBeUndefined();
+    expect(heritageEdge("src/kotlin/impl/KotlinAliasChild.kt#KotlinAliasChild", "implements")).toBeUndefined();
+    for (const sourceQualifiedName of [
+      "src/java/impl/JavaWildcardChild.java#JavaWildcardChild.run",
+      "src/kotlin/impl/KotlinAliasChild.kt#KotlinAliasChild.run"
+    ]) {
+      expect(overrideEdge(sourceQualifiedName)).toMatchObject({
+        targetId: null,
+        resolution: "unresolved",
+        confidence: 0,
+        evidence: { ruleId: "syntax.override.unresolved-direct-base-method", stage: "unresolved" }
+      });
+    }
+  });
+});
+
 describe("literal route handler resolution", () => {
   it("resolves local, imported, and re-exported route handlers exactly", () => {
     const sourceDocuments: readonly SourceDocument[] = [

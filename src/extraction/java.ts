@@ -5,6 +5,8 @@ import {
   createSymbolId,
   type ArtifactFacts,
   type GraphEdge,
+  type JvmFacts,
+  type JvmHeritageSyntax,
   type PendingReference,
   type ReactNativeFacts,
   type RouteMethod,
@@ -1636,6 +1638,8 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
   const edges: GraphEdge[] = [];
   const pendingReferences: PendingReference[] = [];
   const javaClassFacts: Array<{ symbolId: string; packageName: string }> = [];
+  const jvmTypeFacts: JvmFacts["types"][number][] = [];
+  const jvmHeritageReferences: JvmFacts["heritageReferences"][number][] = [];
   const springBootPropertiesValueReferences: SpringBootPropertiesValueReferenceFact[] = [];
   const springBootConfigurationPropertiesPrefixes: SpringBootConfigurationPropertiesPrefixReferenceFact[] = [];
   const reactNativeNativeMethods: ReactNativeFacts["nativeMethods"][number][] = [];
@@ -1721,11 +1725,15 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
     addContainment(fileNode, symbol, declaration.node);
     if (packageName !== null) {
       javaClassFacts.push({ symbolId: symbol.id, packageName });
+      jvmTypeFacts.push({ symbolId: symbol.id, packageName });
     }
     return symbol;
   }
 
-  function addInterface(declaration: StaticJavaInterface): SymbolNode {
+  function addInterface(
+    declaration: StaticJavaInterface,
+    packageName: string | null
+  ): SymbolNode {
     const qualifiedName = `${input.filePath}#${declaration.name}`;
     const declarationOrdinal = nextOrdinal(qualifiedName, "interface");
     const symbol: SymbolNode = {
@@ -1745,6 +1753,9 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
     };
     symbols.push(symbol);
     addContainment(fileNode, symbol, declaration.node);
+    if (packageName !== null) {
+      jvmTypeFacts.push({ symbolId: symbol.id, packageName });
+    }
     return symbol;
   }
 
@@ -1916,6 +1927,28 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
     }
   }
 
+  /**
+   * Retains a direct source-level JVM parent reference for the project resolver.
+   * The import map only contains unique direct Java imports, so static, wildcard,
+   * and ambiguous imports cannot acquire cross-file evidence here.
+   */
+  function addJvmHeritageReference(
+    source: SymbolNode,
+    reference: StaticJavaSuperclassReference,
+    syntax: JvmHeritageSyntax,
+    imports: ReadonlyMap<string, string>
+  ): void {
+    const importedTypePath = imports.get(reference.name);
+    jvmHeritageReferences.push({
+      sourceId: source.id,
+      filePath: input.filePath,
+      referenceName: reference.name,
+      syntax,
+      range: rangeFor(lineStarts, reference.node.from, reference.node.to),
+      ...(importedTypePath === undefined ? {} : { importedTypePath })
+    });
+  }
+
   function addFrameworkRoute(
     parent: SymbolNode,
     routeFact: StaticHttpRoute,
@@ -1991,7 +2024,7 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
       const typeSymbol =
         typeDeclaration.kind === "class"
           ? addClass(typeDeclaration, packageName)
-          : addInterface(typeDeclaration);
+          : addInterface(typeDeclaration, packageName);
       const typeCandidates = typesByName.get(typeDeclaration.name) ?? [];
       typeCandidates.push(typeSymbol);
       typesByName.set(typeDeclaration.name, typeCandidates);
@@ -2212,6 +2245,17 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
         "implements",
         "syntax.java.same-file.direct-implements"
       );
+      const superclass = staticJavaDirectSuperclass(input, declaration);
+      if (superclass !== null) {
+        addJvmHeritageReference(symbol, superclass, "java-class-superclass", imports);
+      }
+      for (const reference of staticJavaDirectInterfaceReferences(
+        input,
+        declaration,
+        "SuperInterfaces"
+      )) {
+        addJvmHeritageReference(symbol, reference, "java-class-interface", imports);
+      }
     }
     for (const { declaration, symbol } of declaredInterfaces) {
       addExactSameFileInterfaceRelations(
@@ -2222,6 +2266,13 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
         "extends",
         "syntax.java.same-file.direct-interface-extends"
       );
+      for (const reference of staticJavaDirectInterfaceReferences(
+        input,
+        declaration,
+        "ExtendsInterfaces"
+      )) {
+        addJvmHeritageReference(symbol, reference, "java-interface-superinterface", imports);
+      }
     }
   }
 
@@ -2275,6 +2326,10 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
     },
     javaFacts: {
       classes: javaClassFacts
+    },
+    jvmFacts: {
+      types: jvmTypeFacts,
+      heritageReferences: jvmHeritageReferences
     },
     springBootPropertiesFacts: {
       valueReferences: springBootPropertiesValueReferences,

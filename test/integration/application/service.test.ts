@@ -1483,6 +1483,102 @@ describe("SymbolLatticeService", () => {
     ]);
   });
 
+  it("persists exact cross-file JVM import evidence through init", async () => {
+    const projectPath = await createInlineProject({
+      "src/java/api/JavaContract.java": [
+        "package example.java.api;",
+        "public interface JavaContract { void run(); }"
+      ].join("\n"),
+      "src/java/impl/JavaWorker.java": [
+        "package example.java.impl;",
+        "import example.java.api.JavaContract;",
+        "public class JavaWorker implements JavaContract { @Override public void run() {} }"
+      ].join("\n"),
+      "src/kotlin/api/KotlinContract.kt": [
+        "package example.kotlin.api",
+        "interface KotlinContract { fun run() }"
+      ].join("\n"),
+      "src/kotlin/impl/KotlinWorker.kt": [
+        "package example.kotlin.impl",
+        "import example.kotlin.api.KotlinContract",
+        "class KotlinWorker : KotlinContract { override fun run() {} }"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+
+    const snapshot = graphStore.getSnapshot(projectPath);
+    const symbol = (qualifiedName: string) =>
+      snapshot.symbols.find((candidate) => candidate.qualifiedName === qualifiedName);
+    const heritageEdge = (sourceQualifiedName: string) =>
+      snapshot.edges.find(
+        (edge) => edge.sourceId === symbol(sourceQualifiedName)?.id && edge.kind === "implements"
+      );
+    const overrideEdge = (sourceQualifiedName: string) =>
+      snapshot.edges.find(
+        (edge) => edge.sourceId === symbol(sourceQualifiedName)?.id && edge.kind === "overrides"
+      );
+
+    for (const [sourceQualifiedName, targetQualifiedName] of [
+      ["src/java/impl/JavaWorker.java#JavaWorker", "src/java/api/JavaContract.java#JavaContract"],
+      ["src/kotlin/impl/KotlinWorker.kt#KotlinWorker", "src/kotlin/api/KotlinContract.kt#KotlinContract"]
+    ] as const) {
+      expect(heritageEdge(sourceQualifiedName)).toMatchObject({
+        targetId: symbol(targetQualifiedName)?.id,
+        resolution: "exact",
+        confidence: 1,
+        evidence: {
+          ruleId: "syntax.jvm.cross-file.explicit-import.direct-implements",
+          stage: "module"
+        }
+      });
+    }
+    for (const [sourceQualifiedName, targetQualifiedName] of [
+      [
+        "src/java/impl/JavaWorker.java#JavaWorker.run",
+        "src/java/api/JavaContract.java#JavaContract.run"
+      ],
+      [
+        "src/kotlin/impl/KotlinWorker.kt#KotlinWorker.run",
+        "src/kotlin/api/KotlinContract.kt#KotlinContract.run"
+      ]
+    ] as const) {
+      expect(overrideEdge(sourceQualifiedName)).toMatchObject({
+        targetId: symbol(targetQualifiedName)?.id,
+        resolution: "exact",
+        confidence: 1,
+        evidence: { ruleId: "syntax.override.explicit-direct-base-method", stage: "syntax" }
+      });
+    }
+
+    for (const [filePath, sourceQualifiedName, importedTypePath] of [
+      [
+        "src/java/impl/JavaWorker.java",
+        "src/java/impl/JavaWorker.java#JavaWorker",
+        "example.java.api.JavaContract"
+      ],
+      [
+        "src/kotlin/impl/KotlinWorker.kt",
+        "src/kotlin/impl/KotlinWorker.kt#KotlinWorker",
+        "example.kotlin.api.KotlinContract"
+      ]
+    ] as const) {
+      const facts = graphStore.getArtifactFacts(projectPath).find((candidate) => candidate.filePath === filePath);
+      expect(facts?.jvmFacts).toMatchObject({
+        types: [expect.objectContaining({ symbolId: symbol(sourceQualifiedName)?.id })],
+        heritageReferences: [
+          expect.objectContaining({
+            sourceId: symbol(sourceQualifiedName)?.id,
+            referenceName: importedTypePath.split(".").at(-1),
+            importedTypePath
+          })
+        ]
+      });
+    }
+  });
+
   it("bounds selected investigation declaration source without reading live files", async () => {
     const padding = Array.from(
       { length: NODE_SOURCE_LINE_LIMIT },
