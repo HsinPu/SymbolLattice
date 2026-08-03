@@ -74,7 +74,8 @@ import {
   type McpServerSession
 } from "../mcp/index.js";
 import { SYMBOL_LATTICE_VERSION } from "../version.js";
-import { createMcpConfig } from "./mcp-config.js";
+import { createMcpConfig, type McpConfigOptions } from "./mcp-config.js";
+import { createMcpDoctor } from "./mcp-doctor.js";
 
 interface OutputOptions {
   readonly json?: boolean;
@@ -177,6 +178,10 @@ interface McpConfigCommandOptions extends ProjectOptions {
   readonly source?: boolean;
 }
 
+interface McpDoctorCommandOptions extends McpConfigCommandOptions {
+  readonly config?: string;
+}
+
 interface GenerationHistoryCommandOptions extends ProjectOptions {
   readonly limit?: number;
 }
@@ -251,6 +256,25 @@ function createService(): SymbolLatticeService {
 
 function defaultProjectPath(options: ProjectOptions): string {
   return resolve(options.project ?? process.cwd());
+}
+
+/** Keeps `mcp-config` and `mcp-doctor` aligned on the exact expected serve command. */
+function createMcpCommandOptions(options: McpConfigCommandOptions): McpConfigOptions {
+  return {
+    projectPath: defaultProjectPath(options),
+    ...(options.location === undefined ? {} : { location: options.location }),
+    force: options.force ?? false,
+    autoSync: options.autoSync ?? true,
+    diagnosticJournal: options.diagnosticJournal ?? true,
+    ...(options.syncInterval === undefined ? {} : { syncIntervalMs: options.syncInterval }),
+    poll: options.poll ?? false,
+    ...(options.source === true
+      ? {
+          command: process.execPath,
+          commandArgs: [resolve(fileURLToPath(import.meta.url))]
+        }
+      : {})
+  };
 }
 
 function parsePositiveInteger(value: string): number {
@@ -1136,25 +1160,35 @@ export function createProgram(
     .option("--source", "Generate configuration that invokes this built CLI through the current Node executable")
     .option("--print-snippet", "Print only the copy-and-paste configuration snippet")
     .action((target: string, options: McpConfigCommandOptions) => {
-      const result = createMcpConfig(target, {
-        projectPath: defaultProjectPath(options),
-        ...(options.location === undefined ? {} : { location: options.location }),
-        force: options.force ?? false,
-        autoSync: options.autoSync ?? true,
-        diagnosticJournal: options.diagnosticJournal ?? true,
-        ...(options.syncInterval === undefined ? {} : { syncIntervalMs: options.syncInterval }),
-        poll: options.poll ?? false,
-        ...(options.source === true
-          ? {
-              command: process.execPath,
-              commandArgs: [resolve(fileURLToPath(import.meta.url))]
-            }
-          : {})
-      });
+      const result = createMcpConfig(target, createMcpCommandOptions(options));
       if (options.printSnippet === true) {
         process.stdout.write(`${result.snippet}\n`);
         return;
       }
+      render(result, options);
+    });
+
+  addJsonOption(addProjectOption(program.command("mcp-doctor <target>")))
+    .option("--location <scope>", "Target configuration scope: global or local (default depends on target)")
+    .option("--config <path>", "Read this configuration file instead of the target's conventional destination")
+    .option("--force", "Match a configuration generated with the explicit broad-project auto-sync permission")
+    .option("--no-auto-sync", "Match a configuration with background incremental sync disabled")
+    .option(
+      "--no-diagnostic-journal",
+      "Match a configuration with persistent auto-sync diagnostic journal writes disabled"
+    )
+    .option(
+      "--sync-interval <milliseconds>",
+      `Match a generated MCP polling fallback interval (${MIN_WATCH_INTERVAL_MS}-${MAX_WATCH_INTERVAL_MS})`,
+      parseWatchInterval
+    )
+    .option("--poll", "Match a configuration that disables native filesystem-event acceleration")
+    .option("--source", "Check a configuration that invokes this built CLI through the current Node executable")
+    .action((target: string, options: McpDoctorCommandOptions) => {
+      const result = createMcpDoctor(target, {
+        ...createMcpCommandOptions(options),
+        ...(options.config === undefined ? {} : { configPath: options.config })
+      });
       render(result, options);
     });
 

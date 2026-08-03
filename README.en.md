@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.238.0 is a developer preview and runs from source. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher can update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.239.0 is a developer preview and runs from source. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher can update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## Quick start
 
@@ -56,6 +56,16 @@ For OpenCode and Antigravity, omit `--print-snippet` first to receive the `desti
 node dist/cli/main.js sync /path/to/project
 ```
 
+`mcp-doctor` reads only the selected Agent configuration and checks the expected entry, CLI availability, and the project index. It never runs MCP, updates a configuration file, or writes an index.
+
+```bash
+# Diagnose through the Agent's conventional configuration destination
+node dist/cli/main.js mcp-doctor claude --project /path/to/project
+
+# generic JSON needs the exact configuration file to inspect
+node dist/cli/main.js mcp-doctor generic-json --config /path/to/mcp.json --project /path/to/project
+```
+
 ## What it provides
 
 - Each relation retains its rule, evidence stage, resolution status, and confidence; `exact`, `heuristic`, and `unresolved` are never conflated.
@@ -74,6 +84,7 @@ node dist/cli/main.js sync /path/to/project
 | `impact <symbol>` | Trace bounded impact through exact static relations. |
 | `serve --mcp` | Start the MCP stdio host. |
 | `mcp-config <target>` | Generate a target-specific, output-only MCP configuration fragment. |
+| `mcp-doctor <target>` | Read-only diagnosis of an Agent MCP configuration, CLI, and project index. |
 
 ## Verification
 

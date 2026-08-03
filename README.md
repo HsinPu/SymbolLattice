@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.238.0 為開發者預覽版，從原始碼執行。MCP 查詢工具是唯讀的；但 `serve --mcp` 預設會啟動獨立的自動同步 watcher，可能更新專案的 `.symbol-lattice` 索引。加上 `--no-auto-sync` 即可停用。
+> v0.239.0 為開發者預覽版，從原始碼執行。MCP 查詢工具是唯讀的；但 `serve --mcp` 預設會啟動獨立的自動同步 watcher，可能更新專案的 `.symbol-lattice` 索引。加上 `--no-auto-sync` 即可停用。
 
 ## 快速開始
 
@@ -56,6 +56,16 @@ node dist/cli/main.js mcp-config codex --project /path/to/project --source --pri
 node dist/cli/main.js sync /path/to/project
 ```
 
+`mcp-doctor` 只讀取所選的 Agent 設定，檢查預期項目、CLI 可執行性與專案索引；不會執行 MCP、更新設定檔或寫入索引。
+
+```bash
+# 使用 Agent 的預設設定路徑診斷
+node dist/cli/main.js mcp-doctor claude --project /path/to/project
+
+# generic JSON 必須明確指定要讀取的設定檔
+node dist/cli/main.js mcp-doctor generic-json --config /path/to/mcp.json --project /path/to/project
+```
+
 ## 提供的能力
 
 - 每條關係都保留規則、證據階段、解析狀態與信心度；不混淆 `exact`、`heuristic` 與 `unresolved`。
@@ -74,6 +84,7 @@ node dist/cli/main.js sync /path/to/project
 | `impact <symbol>` | 透過精確靜態關係追蹤有限範圍影響。 |
 | `serve --mcp` | 啟動 MCP stdio host。 |
 | `mcp-config <target>` | 產生指定 Agent 的純輸出 MCP 設定片段。 |
+| `mcp-doctor <target>` | 唯讀診斷 Agent MCP 設定、CLI 與專案索引。 |
 
 ## 驗證
 
