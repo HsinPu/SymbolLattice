@@ -2,6 +2,7 @@ import {
   compareStableText,
   createEdgeId,
   createSymbolId,
+  isCustomRouteFramework,
   type BindingSpace,
   type DjangoImportedUrlconfInclusionFact,
   type DjangoNinjaImportedRouterInclusionFact,
@@ -1585,6 +1586,10 @@ function staticRouteHandlerRuleId(
   reference: PendingReference,
   suffix: "local-handler" | "imported-handler" | "reexported-handler" | "unresolved-handler"
 ): string {
+  if (isCustomRouteFramework(reference.routeFramework)) {
+    const pluginRuleName = reference.routeFramework.slice("plugin:".length).replace("/", ".");
+    return `framework.plugin.${pluginRuleName}.literal-route.${suffix}`;
+  }
   if (reference.routeFramework === "fastify") {
     const registration =
       reference.routeRegistration === "fastify-inline-plugin-prefix"

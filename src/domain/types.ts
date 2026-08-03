@@ -40,6 +40,11 @@ export type EdgeKind = (typeof EDGE_KINDS)[number];
 
 export type ResolutionKind = "exact" | "heuristic" | "unresolved";
 
+/** Reserved provenance namespace for validated, user-supplied framework route descriptors. */
+export const CUSTOM_ROUTE_FRAMEWORK_PREFIX = "plugin:" as const;
+
+export type CustomRouteFramework = `${typeof CUSTOM_ROUTE_FRAMEWORK_PREFIX}${string}`;
+
 /** Framework provenance retained for syntax-proven static HTTP or client-navigation routes. */
 export type RouteFramework =
   | "express"
@@ -97,7 +102,29 @@ export type RouteFramework =
   | "ktor"
   | "vapor"
   | "flutter"
-  | "play";
+  | "play"
+  | CustomRouteFramework;
+
+const CUSTOM_ROUTE_FRAMEWORK_ID_PATTERN = /^[a-z][a-z0-9-]*\/[a-z][a-z0-9-]*$/u;
+
+/** Creates provenance for a public framework route descriptor after strict namespace validation. */
+export function customRouteFramework(pluginId: string): CustomRouteFramework {
+  if (!CUSTOM_ROUTE_FRAMEWORK_ID_PATTERN.test(pluginId)) {
+    throw new Error(`Invalid custom route framework id: ${pluginId}`);
+  }
+  return `${CUSTOM_ROUTE_FRAMEWORK_PREFIX}${pluginId}`;
+}
+
+/** Distinguishes persisted public-extension provenance from first-party framework names. */
+export function isCustomRouteFramework(
+  framework: RouteFramework | undefined
+): framework is CustomRouteFramework {
+  return (
+    typeof framework === "string" &&
+    framework.startsWith(CUSTOM_ROUTE_FRAMEWORK_PREFIX) &&
+    CUSTOM_ROUTE_FRAMEWORK_ID_PATTERN.test(framework.slice(CUSTOM_ROUTE_FRAMEWORK_PREFIX.length))
+  );
+}
 
 /** Additional static registration context retained when it changes route provenance or path. */
 export type RouteRegistration =

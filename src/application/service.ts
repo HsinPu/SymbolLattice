@@ -198,7 +198,28 @@ export interface FindOptions {
 }
 
 /** Injectable seam used to prove that sync does not reparse unchanged artifacts. */
-export type ArtifactFactsExtractor = (input: ExtractFileFactsInput) => ExtractedFileFacts;
+export interface ArtifactFactsExtractor {
+  (input: ExtractFileFactsInput): ExtractedFileFacts;
+  /**
+   * Optional identity for custom extraction semantics. When supplied, it is
+   * persisted and makes stale fact reuse impossible after the extractor changes.
+   */
+  readonly version?: string;
+}
+
+function artifactFactsExtractorVersion(extractor: ArtifactFactsExtractor): string {
+  const version = extractor.version;
+  if (version === undefined) {
+    return ARTIFACT_FACTS_EXTRACTOR_VERSION;
+  }
+  if (
+    typeof version !== "string" ||
+    !/^[A-Za-z0-9][A-Za-z0-9._:+-]{0,239}$/u.test(version)
+  ) {
+    throw new Error("Custom artifact facts extractor version must be stable, non-empty ASCII text.");
+  }
+  return version;
+}
 
 interface SourceChangeSet {
   readonly addedFiles: readonly string[];
@@ -751,13 +772,14 @@ function sourceChangeSet(
 
 function reusedArtifactFacts(
   document: SourceDocument,
-  persisted: PersistedArtifactFacts | undefined
+  persisted: PersistedArtifactFacts | undefined,
+  extractorVersion: string
 ): boolean {
   return (
     persisted !== undefined &&
     persisted.contentHash === document.contentHash &&
     persisted.language === document.language &&
-    persisted.extractorVersion === ARTIFACT_FACTS_EXTRACTOR_VERSION
+    persisted.extractorVersion === extractorVersion
   );
 }
 
@@ -838,13 +860,19 @@ function fullIndexWork(sourceDocuments: readonly SourceDocument[]): IndexWork {
 }
 
 export class SymbolLatticeService {
+  private readonly activeArtifactFactsExtractorVersion: string;
+
   public constructor(
     private readonly graphStore: GraphStore,
     private readonly sourceCatalog: SourceCatalog,
     private readonly artifactFactsExtractor: ArtifactFactsExtractor = extractFileFacts,
     private readonly gitChangeSetProvider?: GitChangeSetProvider,
     private readonly gitRevisionHunkProvider?: GitRevisionHunkProvider
-  ) {}
+  ) {
+    this.activeArtifactFactsExtractorVersion = artifactFactsExtractorVersion(
+      this.artifactFactsExtractor
+    );
+  }
 
   /** True when this service can select changed source paths through its Git port. */
   public gitAffectedTestsAvailable(): boolean {
@@ -912,7 +940,7 @@ export class SymbolLatticeService {
       if (
         !requiresAstroEndpointReextraction &&
         persisted !== undefined &&
-        reusedArtifactFacts(document, persisted)
+        reusedArtifactFacts(document, persisted, this.activeArtifactFactsExtractorVersion)
       ) {
         artifactFacts.push(persisted);
         reusedArtifactFiles.push(document.relativePath);
@@ -921,7 +949,7 @@ export class SymbolLatticeService {
       if (persisted === undefined) {
         reuseInvalidationReasons.add("missing-persisted-facts");
       } else {
-        if (persisted.extractorVersion !== ARTIFACT_FACTS_EXTRACTOR_VERSION) {
+        if (persisted.extractorVersion !== this.activeArtifactFactsExtractorVersion) {
           reuseInvalidationReasons.add("extractor-version-changed");
         }
         if (requiresAstroEndpointReextraction) {
@@ -3012,7 +3040,7 @@ export class SymbolLatticeService {
       filePath: document.relativePath,
       language: document.language,
       contentHash: document.contentHash,
-      extractorVersion: ARTIFACT_FACTS_EXTRACTOR_VERSION
+      extractorVersion: this.activeArtifactFactsExtractorVersion
     };
   }
 
@@ -3063,7 +3091,7 @@ export class SymbolLatticeService {
 
     const versionChanged =
       bundle.snapshot.files.length > 0 &&
-      (bundle.extractorVersion !== ARTIFACT_FACTS_EXTRACTOR_VERSION ||
+      (bundle.extractorVersion !== this.activeArtifactFactsExtractorVersion ||
         bundle.resolverVersion !== PROJECT_RESOLVER_VERSION ||
         this.sourceSearchProjectionChanged(bundle.sourceSearchVersion));
     const persistedInputs = bundle.indexInputs;

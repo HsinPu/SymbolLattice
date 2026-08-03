@@ -57,8 +57,15 @@ import {
   type FrameworkCapability,
   type FrameworkCapabilityId
 } from "./framework-capabilities.js";
+import {
+  frameworkRoutePluginExtractorVersion,
+  frameworkRoutePluginsForLanguage,
+  type FrameworkRoutePlugin,
+  type FrameworkRoutePluginRegistry
+} from "./framework-route-plugins.js";
 
 import {
+  customRouteFramework,
   createEdgeId,
   createSymbolId,
   type ArtifactFacts,
@@ -108,6 +115,18 @@ export {
   frameworkCapability
 } from "./framework-capabilities.js";
 export type { FrameworkCapability, FrameworkCapabilityId } from "./framework-capabilities.js";
+export {
+  createFrameworkRoutePluginRegistry,
+  frameworkRoutePluginExtractorVersion,
+  FrameworkRoutePluginConfigurationError
+} from "./framework-route-plugins.js";
+export type {
+  FrameworkRoutePlugin,
+  FrameworkRoutePluginHttpMethod,
+  FrameworkRoutePluginLanguage,
+  FrameworkRoutePluginMethod,
+  FrameworkRoutePluginRegistry
+} from "./framework-route-plugins.js";
 
 /** @deprecated Use ArtifactLanguage from the domain package. */
 export type ExtractionLanguage = ArtifactLanguage;
@@ -120,8 +139,35 @@ export interface ExtractFileFactsInput {
   readonly frameworkEvidence?: ProjectFrameworkEvidence;
 }
 
+/** Explicit extensions for one extractor instance; no plugin is loaded implicitly from project files. */
+export interface ExtractFileFactsOptions {
+  readonly frameworkRoutePlugins?: FrameworkRoutePluginRegistry;
+}
+
 /** @deprecated Use ArtifactFacts from the domain package. */
 export type ExtractedFileFacts = ArtifactFacts;
+
+/** A configured extractor whose version includes the immutable route-plugin descriptor fingerprint. */
+export type FrameworkRoutePluginExtractor = ((
+  input: ExtractFileFactsInput
+) => ExtractedFileFacts) & {
+  readonly version: string;
+};
+
+/**
+ * Creates an extractor bound to one validated registry. Pass it to
+ * `SymbolLatticeService` to make the descriptor part of persisted fact reuse.
+ */
+export function createFrameworkRoutePluginExtractor(
+  registry: FrameworkRoutePluginRegistry
+): FrameworkRoutePluginExtractor {
+  const version = frameworkRoutePluginExtractorVersion(registry);
+  return Object.assign(
+    (input: ExtractFileFactsInput): ExtractedFileFacts =>
+      extractFileFacts(input, { frameworkRoutePlugins: registry }),
+    { version }
+  );
+}
 
 interface DeclarationInfo {
   readonly name: string;
@@ -381,6 +427,8 @@ type RouteBindingKind =
   | "express-default-factory"
   | "express-namespace"
   | "express-router-factory"
+  | "custom-framework-constructor"
+  | "custom-framework-receiver"
   | "koa-router-constructor"
   | "koa-router-receiver"
   | "hono-constructor"
@@ -402,6 +450,8 @@ type RouteBindingKind =
 interface RouteBinding {
   readonly declaration: ts.Node;
   kind: RouteBindingKind;
+  /** Validated descriptor retained only for one exact imported route constructor and receiver. */
+  frameworkRoutePlugin?: FrameworkRoutePlugin;
   /** Literal registry name retained only for an immutable direct TurboModule binding. */
   reactNativeTurboModuleName?: string;
   /** Static Fastify prefix inherited by a proven plugin callback. */
@@ -1418,12 +1468,72 @@ function isElysiaRouteReceiverInitializer(
   );
 }
 
+function frameworkRoutePluginForImport(
+  declaration: ts.ImportDeclaration,
+  factoryExport: string,
+  plugins: readonly FrameworkRoutePlugin[]
+): FrameworkRoutePlugin | undefined {
+  const moduleSpecifier = declaration.moduleSpecifier;
+  if (
+    declaration.importClause?.isTypeOnly === true ||
+    !ts.isStringLiteral(moduleSpecifier) ||
+    plugins.length === 0
+  ) {
+    return undefined;
+  }
+  const candidates = plugins.filter(
+    (plugin) =>
+      plugin.moduleSpecifier === moduleSpecifier.text && plugin.factoryExport === factoryExport
+  );
+  return candidates.length === 1 ? candidates[0] : undefined;
+}
+
+function frameworkRoutePluginForDefaultImport(
+  declaration: ts.ImportDeclaration,
+  plugins: readonly FrameworkRoutePlugin[]
+): FrameworkRoutePlugin | undefined {
+  return frameworkRoutePluginForImport(declaration, "default", plugins);
+}
+
+function frameworkRoutePluginForNamedImport(
+  declaration: ts.ImportDeclaration,
+  element: ts.ImportSpecifier,
+  plugins: readonly FrameworkRoutePlugin[]
+): FrameworkRoutePlugin | undefined {
+  if (element.isTypeOnly) {
+    return undefined;
+  }
+  return frameworkRoutePluginForImport(
+    declaration,
+    element.propertyName?.text ?? element.name.text,
+    plugins
+  );
+}
+
+/** Retains only immutable direct `const router = new ImportedRouter()` receivers. */
+function customFrameworkRoutePluginForReceiverInitializer(
+  sourceFile: ts.SourceFile,
+  initializer: ts.Expression,
+  bindings: ScopedRouteReceiverBindings
+): FrameworkRoutePlugin | undefined {
+  if (
+    !ts.isNewExpression(initializer) ||
+    (initializer.arguments?.length ?? 0) !== 0 ||
+    !ts.isIdentifier(initializer.expression)
+  ) {
+    return undefined;
+  }
+  const binding = visibleRouteBinding(sourceFile, initializer.expression, bindings);
+  return binding?.kind === "custom-framework-constructor" ? binding.frameworkRoutePlugin : undefined;
+}
+
 function addScopedValueBinding(
   byScopeId: Map<string, Map<string, RouteBinding[]>>,
   scopeId: string | undefined,
   names: readonly string[],
   declaration: ts.Node,
-  bindingKind: RouteBindingKind = "other"
+  bindingKind: RouteBindingKind = "other",
+  frameworkRoutePlugin?: FrameworkRoutePlugin
 ): void {
   if (scopeId === undefined) {
     return;
@@ -1432,7 +1542,11 @@ function addScopedValueBinding(
   const bindings = byScopeId.get(scopeId) ?? new Map<string, RouteBinding[]>();
   for (const name of names) {
     const candidates = bindings.get(name) ?? [];
-    candidates.push({ declaration, kind: bindingKind });
+    candidates.push({
+      declaration,
+      kind: bindingKind,
+      ...(frameworkRoutePlugin === undefined ? {} : { frameworkRoutePlugin })
+    });
     bindings.set(name, candidates);
   }
   byScopeId.set(scopeId, bindings);
@@ -1444,10 +1558,12 @@ function markRouteReceiver(
   declaration: ts.VariableDeclaration,
   bindingKind:
     | "express-receiver"
+    | "custom-framework-receiver"
     | "koa-router-receiver"
     | "hono-receiver"
     | "elysia-receiver"
-    | "fastify-receiver"
+    | "fastify-receiver",
+  frameworkRoutePlugin?: FrameworkRoutePlugin
 ): void {
   if (scopeId === undefined || !ts.isIdentifier(declaration.name)) {
     return;
@@ -1459,6 +1575,9 @@ function markRouteReceiver(
     ?.find((candidate) => candidate.declaration === declaration);
   if (binding !== undefined) {
     binding.kind = bindingKind;
+    if (frameworkRoutePlugin !== undefined) {
+      binding.frameworkRoutePlugin = frameworkRoutePlugin;
+    }
   }
 }
 
@@ -1927,7 +2046,10 @@ function markFastifyPluginReceiver(
  * Finds value bindings before route extraction so a receiver cannot be inferred
  * from its spelling. A lexical shadow always wins over an outer framework receiver.
  */
-function collectScopedRouteReceiverBindings(sourceFile: ts.SourceFile): ScopedRouteReceiverBindings {
+function collectScopedRouteReceiverBindings(
+  sourceFile: ts.SourceFile,
+  frameworkRoutePlugins: readonly FrameworkRoutePlugin[]
+): ScopedRouteReceiverBindings {
   const byScopeId = new Map<string, Map<string, RouteBinding[]>>();
   const rootScopeId = sourceScopeId(sourceFile);
 
@@ -1935,18 +2057,23 @@ function collectScopedRouteReceiverBindings(sourceFile: ts.SourceFile): ScopedRo
     if (ts.isImportDeclaration(node)) {
       const importClause = node.importClause;
       if (importClause?.name !== undefined) {
+        const customPlugin = frameworkRoutePluginForDefaultImport(node, frameworkRoutePlugins);
+        const bindingKind = isExpressImport(node)
+          ? "express-default-factory"
+          : isKoaRouterImport(node)
+            ? "koa-router-constructor"
+            : isFastifyImport(node)
+              ? "fastify-default-factory"
+              : customPlugin === undefined
+                ? "other"
+                : "custom-framework-constructor";
         addScopedValueBinding(
           byScopeId,
           rootScopeId,
           [importClause.name.text],
           importClause.name,
-          isExpressImport(node)
-            ? "express-default-factory"
-            : isKoaRouterImport(node)
-              ? "koa-router-constructor"
-              : isFastifyImport(node)
-                ? "fastify-default-factory"
-                : "other"
+          bindingKind,
+          bindingKind === "custom-framework-constructor" ? customPlugin : undefined
         );
       }
       if (importClause?.namedBindings !== undefined) {
@@ -1964,12 +2091,18 @@ function collectScopedRouteReceiverBindings(sourceFile: ts.SourceFile): ScopedRo
           );
         } else {
           for (const element of importClause.namedBindings.elements) {
+            const builtInKind = namedRouteImportBindingKind(node, element);
+            const customPlugin =
+              builtInKind === "other"
+                ? frameworkRoutePluginForNamedImport(node, element, frameworkRoutePlugins)
+                : undefined;
             addScopedValueBinding(
               byScopeId,
               rootScopeId,
               [element.name.text],
               element.name,
-              namedRouteImportBindingKind(node, element)
+              customPlugin === undefined ? builtInKind : "custom-framework-constructor",
+              customPlugin
             );
           }
         }
@@ -2035,6 +2168,13 @@ function collectScopedRouteReceiverBindings(sourceFile: ts.SourceFile): ScopedRo
       isConstVariableDeclaration(node)
         ? staticReactNativeTurboModuleRegistryResult(sourceFile, node.initializer, { byScopeId })
         : null;
+    const customRoutePlugin =
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.initializer !== undefined &&
+      isConstVariableDeclaration(node)
+        ? customFrameworkRoutePluginForReceiverInitializer(sourceFile, node.initializer, { byScopeId })
+        : undefined;
     if (
       turboModuleRegistration !== null &&
       ts.isVariableDeclaration(node) &&
@@ -2097,6 +2237,18 @@ function collectScopedRouteReceiverBindings(sourceFile: ts.SourceFile): ScopedRo
         variableBindingScopeId(sourceFile, node),
         node,
         "elysia-receiver"
+      );
+    } else if (
+      customRoutePlugin !== undefined &&
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name)
+    ) {
+      markRouteReceiver(
+        byScopeId,
+        variableBindingScopeId(sourceFile, node),
+        node,
+        "custom-framework-receiver",
+        customRoutePlugin
       );
     } else if (
       ts.isVariableDeclaration(node) &&
@@ -2228,6 +2380,56 @@ function staticExpressRoute(
   }
 
   return { method, path: pathArgument.text, handler };
+}
+
+interface StaticFrameworkRoutePluginRoute {
+  readonly plugin: FrameworkRoutePlugin;
+  readonly route: StaticExpressRoute;
+}
+
+/**
+ * The public extension surface deliberately proves only one exact import,
+ * immutable zero-argument receiver, literal path, and named terminal handler.
+ * Unsupported composition falls through without emitting a graph fact.
+ */
+function staticFrameworkRoutePluginRoute(
+  sourceFile: ts.SourceFile,
+  node: ts.CallExpression,
+  bindings: ScopedRouteReceiverBindings
+): StaticFrameworkRoutePluginRoute | null {
+  if (
+    node.questionDotToken !== undefined ||
+    !ts.isPropertyAccessExpression(node.expression) ||
+    node.expression.questionDotToken !== undefined ||
+    !ts.isIdentifier(node.expression.expression)
+  ) {
+    return null;
+  }
+  const binding = visibleRouteBinding(sourceFile, node.expression.expression, bindings);
+  if (binding?.kind !== "custom-framework-receiver" || binding.frameworkRoutePlugin === undefined) {
+    return null;
+  }
+  const routeMethodName = node.expression.name.text;
+  const routeMethod = binding.frameworkRoutePlugin.routeMethods.find(
+    (candidate) => candidate.methodName === routeMethodName
+  );
+  const pathArgument = node.arguments[0];
+  const handler = node.arguments[1];
+  if (
+    routeMethod === undefined ||
+    node.arguments.length !== 2 ||
+    pathArgument === undefined ||
+    !ts.isStringLiteral(pathArgument) ||
+    !pathArgument.text.startsWith("/") ||
+    handler === undefined ||
+    !ts.isIdentifier(handler)
+  ) {
+    return null;
+  }
+  return {
+    plugin: binding.frameworkRoutePlugin,
+    route: { method: routeMethod.routeMethod, path: pathArgument.text, handler }
+  };
 }
 
 function staticKoaRoute(
@@ -4628,7 +4830,10 @@ function fileNodeFor(sourceFile: ts.SourceFile, input: ExtractFileFactsInput): S
  * Extracts only file-local, syntax-proven facts. Cross-file resolution is deliberately
  * left to the application layer so an unresolved reference cannot become a false edge.
  */
-export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFacts {
+export function extractFileFacts(
+  input: ExtractFileFactsInput,
+  options: ExtractFileFactsOptions = {}
+): ExtractedFileFacts {
   if (input.language === "python") {
     return extractPythonFileFacts({ ...input, language: "python" });
   }
@@ -4816,7 +5021,11 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
     resolverReferences: []
   };
   const declarationOrdinals = new Map<string, number>();
-  const routeReceiverBindings = collectScopedRouteReceiverBindings(sourceFile);
+  const frameworkRoutePlugins = frameworkRoutePluginsForLanguage(
+    options.frameworkRoutePlugins,
+    input.language
+  );
+  const routeReceiverBindings = collectScopedRouteReceiverBindings(sourceFile, frameworkRoutePlugins);
   const fastifyPluginCallbacks = collectScopedFastifyPluginCallbacks(sourceFile, routeReceiverBindings);
   const nestDecoratorBindings = collectScopedNestDecoratorBindings(sourceFile);
   const symbolsByDeclaration = new Map<ts.Node, SymbolNode>();
@@ -5011,6 +5220,13 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
 
   function addStaticExpressRoute(node: ts.CallExpression, route: StaticExpressRoute): void {
     addStaticRoute(node, route, "express");
+  }
+
+  function addStaticFrameworkRoutePluginRoute(
+    node: ts.CallExpression,
+    candidate: StaticFrameworkRoutePluginRoute
+  ): void {
+    addStaticRoute(node, candidate.route, customRouteFramework(candidate.plugin.id));
   }
 
   function addStaticKoaRoute(node: ts.CallExpression, route: StaticKoaRoute): void {
@@ -5744,6 +5960,20 @@ export function extractFileFacts(input: ExtractFileFactsInput): ExtractedFileFac
   ts.forEachChild(sourceFile, extractFrameworkFacts);
   for (const pass of applicableFrameworkExtractionPasses) {
     pass.finalize?.();
+  }
+
+  function extractFrameworkRoutePluginFacts(node: ts.Node): void {
+    if (ts.isCallExpression(node)) {
+      const candidate = staticFrameworkRoutePluginRoute(sourceFile, node, routeReceiverBindings);
+      if (candidate !== null) {
+        addStaticFrameworkRoutePluginRoute(node, candidate);
+      }
+    }
+    ts.forEachChild(node, extractFrameworkRoutePluginFacts);
+  }
+
+  if (frameworkRoutePlugins.length > 0) {
+    ts.forEachChild(sourceFile, extractFrameworkRoutePluginFacts);
   }
 
   return {
