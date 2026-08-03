@@ -4020,6 +4020,28 @@ describe("source extraction", () => {
     });
   });
 
+  it("retains final project-absolute Django Ninja Router exports from a package initializer", () => {
+    const facts = extractFileFacts({
+      filePath: "api/routers/__init__.py",
+      language: "python",
+      sourceText: "from api.routers.catalog import router as public_router"
+    });
+
+    expect(facts.djangoNinjaRouterFacts).toMatchObject({
+      routers: [],
+      routes: [],
+      reExports: [
+        {
+          exportedName: "public_router",
+          importedRouterName: "router",
+          moduleSpecifier: "api.routers.catalog",
+          moduleSpecifierKind: "absolute"
+        }
+      ],
+      importedRouterInclusions: []
+    });
+  });
+
   it("rejects rebound and non-initializer Django Ninja Router exports", () => {
     const reboundFacts = extractFileFacts({
       filePath: "api/routers/__init__.py",
@@ -4034,9 +4056,18 @@ describe("source extraction", () => {
       language: "python",
       sourceText: "from .catalog import router as public_router"
     });
+    const absoluteReboundFacts = extractFileFacts({
+      filePath: "api/routers/__init__.py",
+      language: "python",
+      sourceText: [
+        "from api.routers.catalog import router as public_router",
+        "public_router = build_router()"
+      ].join("\n")
+    });
 
     expect(reboundFacts.djangoNinjaRouterFacts).toMatchObject({ reExports: [] });
     expect(regularModuleFacts.djangoNinjaRouterFacts).toMatchObject({ reExports: [] });
+    expect(absoluteReboundFacts.djangoNinjaRouterFacts).toMatchObject({ reExports: [] });
   });
 
   it("rejects parent-relative, rebound, and non-final Django Ninja Router cross-file facts", () => {

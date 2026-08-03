@@ -266,7 +266,7 @@ export const FRAMEWORK_CAPABILITIES = [
       "literal api_operation method arrays on direct applications and mounted same-file Routers",
       "package-relative imported Router decorators and api_operation arrays through direct add_router prefixes",
       "project-root absolute imported Router decorators and api_operation arrays through direct add_router prefixes",
-      "final package-initializer Router re-export chains through direct add_router prefixes",
+      "final package-initializer Router re-export chains through package-relative or project-root absolute imports",
       "top-level named local function handlers"
     ]
   },

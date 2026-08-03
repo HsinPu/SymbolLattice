@@ -4869,6 +4869,86 @@ describe("SymbolLatticeService", () => {
     });
   });
 
+  it("projects project-absolute Django Ninja Router re-exports through package initializers", async () => {
+    const projectPath = await createInlineProject({
+      "api/__init__.py": "",
+      "api/routers/__init__.py": "from api.routers.catalog import router as public_router",
+      "api/routers/catalog.py": [
+        "from ninja import Router",
+        "router = Router()",
+        "",
+        "@router.get(\"/health\")",
+        "def health(request):",
+        "    return {\"ok\": True}",
+        "",
+        "@router.api_operation([\"POST\", \"PATCH\"], \"/orders\")",
+        "def upsert_order(request):",
+        "    return {\"ok\": True}"
+      ].join("\n"),
+      "api/main.py": [
+        "from ninja import NinjaAPI",
+        "from .routers import public_router",
+        "api = NinjaAPI()",
+        "api.add_router(\"/v3\", public_router)"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const routerFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "api/routers/__init__.py");
+
+    expect(routerFacts?.djangoNinjaRouterFacts).toMatchObject({
+      reExports: [
+        {
+          exportedName: "public_router",
+          moduleSpecifier: "api.routers.catalog",
+          moduleSpecifierKind: "absolute"
+        }
+      ]
+    });
+    await expect(service.routes(projectPath, { pathPrefix: "/v3" })).resolves.toMatchObject({
+      routes: expect.arrayContaining([
+        expect.objectContaining({
+          method: "GET",
+          path: "/v3/health",
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.django-ninja.reexported-absolute-router.add-router.decorator.local-function",
+              stage: "module",
+              resolutionPath: [
+                "api/main.py",
+                "api/routers/__init__.py",
+                "api/routers/catalog.py"
+              ]
+            })
+          }),
+          handler: expect.objectContaining({ qualifiedName: "api/routers/catalog.py#health" })
+        }),
+        expect.objectContaining({
+          method: "POST",
+          path: "/v3/orders",
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.django-ninja.reexported-absolute-router.add-router.api-operation.local-function",
+              stage: "module",
+              resolutionPath: [
+                "api/main.py",
+                "api/routers/__init__.py",
+                "api/routers/catalog.py"
+              ]
+            })
+          }),
+          handler: expect.objectContaining({ qualifiedName: "api/routers/catalog.py#upsert_order" })
+        })
+      ])
+    });
+  });
+
   it("projects Django Ninja Router exports through nested package initializers", async () => {
     const projectPath = await createInlineProject({
       "api/__init__.py": "",
