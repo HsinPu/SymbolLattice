@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.237.0 is a developer preview and runs from source. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher can update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.238.0 is a developer preview and runs from source. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher can update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## Quick start
 
@@ -29,26 +29,28 @@ npm run build
 # Create a project-local graph
 node dist/cli/main.js init /path/to/project
 
-# Query indexed code evidence
+# Query evidence-backed structural context
 node dist/cli/main.js investigate "user token" --project /path/to/project --json
 ```
 
 ## MCP configuration
 
-`mcp-config` generates a copy-and-paste entry only. It never changes an agent configuration file.
+`mcp-config` only generates a copy-and-paste fragment. It does not detect, read, or modify an Agent configuration file. Supported targets are `codex`, `claude`, `cursor`, `opencode`, `gemini`, `kiro`, `hermes`, `antigravity`, and `generic-json`.
 
 ```bash
-# Paste the output into ~/.codex/config.toml. The default assumes symbol-lattice is on PATH.
-node dist/cli/main.js mcp-config codex --project /path/to/project --print-snippet
+# Claude project configuration (local by default)
+node dist/cli/main.js mcp-config claude --project /path/to/project --print-snippet
 
-# Invoke this built source checkout through Node instead of relying on PATH.
+# Cursor global configuration binds the currently opened workspace with ${workspaceFolder}
+node dist/cli/main.js mcp-config cursor --location global --project /path/to/project --print-snippet
+
+# Codex uses global configuration; --source pins this checkout's Node entrypoint
 node dist/cli/main.js mcp-config codex --project /path/to/project --source --print-snippet
-
-# Produce a generic MCP JSON fragment.
-node dist/cli/main.js mcp-config generic-json --project /path/to/project --print-snippet
 ```
 
-Generated configuration pins an explicit absolute `--project` path. With the default auto-sync mode, the background watcher performs startup catch-up and incremental updates. To make refreshing fully manual, generate the entry with `--no-auto-sync` and run:
+`claude`, `cursor`, `opencode`, `gemini`, and `kiro` generate project-local configuration by default and also accept `--location global`. `codex`, `hermes`, and `antigravity` support global configuration only. To refresh the graph manually, generate the entry with `--no-auto-sync`, then run:
+
+For OpenCode and Antigravity, omit `--print-snippet` first to receive the `destination` metadata. It lists alternate paths needed for an existing configuration file or migration state.
 
 ```bash
 node dist/cli/main.js sync /path/to/project
@@ -71,7 +73,7 @@ node dist/cli/main.js sync /path/to/project
 | `investigate <query>` | Expand lexical evidence into explainable structural context. |
 | `impact <symbol>` | Trace bounded impact through exact static relations. |
 | `serve --mcp` | Start the MCP stdio host. |
-| `mcp-config <target>` | Generate a safe Codex or generic JSON configuration fragment. |
+| `mcp-config <target>` | Generate a target-specific, output-only MCP configuration fragment. |
 
 ## Verification
 

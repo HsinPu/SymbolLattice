@@ -168,6 +168,7 @@ interface ServeCommandOptions extends ProjectOptions {
 }
 
 interface McpConfigCommandOptions extends ProjectOptions {
+  readonly location?: string;
   readonly autoSync?: boolean;
   readonly diagnosticJournal?: boolean;
   readonly syncInterval?: number;
@@ -1119,6 +1120,7 @@ export function createProgram(
   );
 
   addJsonOption(addProjectOption(program.command("mcp-config <target>")))
+    .option("--location <scope>", "Target configuration scope: global or local (default depends on target)")
     .option("--force", "Include the explicit broad-project auto-sync permission")
     .option("--no-auto-sync", "Generate configuration with background incremental sync disabled")
     .option(
@@ -1136,6 +1138,7 @@ export function createProgram(
     .action((target: string, options: McpConfigCommandOptions) => {
       const result = createMcpConfig(target, {
         projectPath: defaultProjectPath(options),
+        ...(options.location === undefined ? {} : { location: options.location }),
         force: options.force ?? false,
         autoSync: options.autoSync ?? true,
         diagnosticJournal: options.diagnosticJournal ?? true,

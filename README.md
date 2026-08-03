@@ -2,7 +2,7 @@
 
 # SymbolLattice
 
-**可查詢、可解釋、以證據為核心的本機程式碼智慧圖譜**
+**可查詢、可解釋、以證據為核心的本機程式碼情報**
 
 [![Version](https://img.shields.io/github/v/tag/HsinPu/symbol-lattice?label=version)](https://github.com/HsinPu/symbol-lattice/tags)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D22.13-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.237.0 是開發者預覽版，請由原始碼執行。MCP 查詢工具本身唯讀；但 `serve --mcp` 預設會啟動獨立的本機自動同步 watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可關閉它。
+> v0.238.0 為開發者預覽版，從原始碼執行。MCP 查詢工具是唯讀的；但 `serve --mcp` 預設會啟動獨立的自動同步 watcher，可能更新專案的 `.symbol-lattice` 索引。加上 `--no-auto-sync` 即可停用。
 
 ## 快速開始
 
@@ -26,40 +26,42 @@ cd symbol-lattice
 npm install
 npm run build
 
-# 建立專案的本機圖譜
+# 建立專案本機圖譜
 node dist/cli/main.js init /path/to/project
 
-# 查詢已索引的程式碼證據
+# 查詢有證據支撐的結構化脈絡
 node dist/cli/main.js investigate "user token" --project /path/to/project --json
 ```
 
 ## MCP 設定
 
-`mcp-config` 只產生可複製的設定，絕不修改任何 Agent 設定檔。
+`mcp-config` 只產生可貼上的設定片段：不偵測、不讀取，也不改寫任何 Agent 設定檔。支援 `codex`、`claude`、`cursor`、`opencode`、`gemini`、`kiro`、`hermes`、`antigravity` 與 `generic-json`。
 
 ```bash
-# 將輸出貼到 ~/.codex/config.toml；預設假設 symbol-lattice 已在 PATH 中
-node dist/cli/main.js mcp-config codex --project /path/to/project --print-snippet
+# Claude 的專案設定（預設為 local）
+node dist/cli/main.js mcp-config claude --project /path/to/project --print-snippet
 
-# 直接從目前的原始碼 checkout 啟動，不依賴 PATH
+# Cursor 的全域設定會使用 ${workspaceFolder} 綁定目前開啟的工作區
+node dist/cli/main.js mcp-config cursor --location global --project /path/to/project --print-snippet
+
+# Codex 是全域設定；--source 會固定使用這個 checkout 的 Node 入口點
 node dist/cli/main.js mcp-config codex --project /path/to/project --source --print-snippet
-
-# 產生通用 MCP JSON 片段
-node dist/cli/main.js mcp-config generic-json --project /path/to/project --print-snippet
 ```
 
-設定輸出的 `--project` 是明確的絕對路徑。若保留預設自動同步，背景 watcher 會做啟動時補齊與增量更新；要改成完全手動更新，產生設定時加入 `--no-auto-sync`，之後執行：
+`claude`、`cursor`、`opencode`、`gemini` 與 `kiro` 預設產生專案設定，也可加 `--location global`。`codex`、`hermes`、`antigravity` 僅支援全域設定。若要完全手動更新圖譜，產生設定時加上 `--no-auto-sync`，之後執行：
+
+對 OpenCode 與 Antigravity，先省略 `--print-snippet` 取得包含 `destination` 的輸出；其中會列出既有設定檔或 migration 狀態所需的替代路徑。
 
 ```bash
 node dist/cli/main.js sync /path/to/project
 ```
 
-## 重點能力
+## 提供的能力
 
-- 每一條關係保留規則、證據階段、解析狀態與信心度，不混淆 `exact`、`heuristic`、`unresolved`。
-- 以 SQLite immutable generation 保存圖譜與差異，可查詢歷史、diff、Git hunk、影響範圍與受影響測試。
-- 支援多語言與框架能力目錄，以及可驗證的路由、入口點、跨檔案匯入與 re-export 關係。
-- MCP 讀取工作由獨立 worker pool 執行；寫入 watcher 不會交給查詢 handler。
+- 每條關係都保留規則、證據階段、解析狀態與信心度；不混淆 `exact`、`heuristic` 與 `unresolved`。
+- SQLite immutable generation 保存圖譜歷史、diff、Git hunk、受影響範圍與測試建議。
+- 多語言、框架感知的 capability catalog，可證明路由、入口點、跨檔案匯入與 re-export。
+- MCP 讀取查詢使用獨立 worker pool；查詢 handler 不取得索引寫入能力。
 
 ## 常用命令
 
@@ -68,10 +70,10 @@ node dist/cli/main.js sync /path/to/project
 | `init <path>` | 建立圖譜。 |
 | `sync <path>` | 明確同步或修復圖譜。 |
 | `watch <path>` | 在前景監看並同步。 |
-| `investigate <query>` | 從文字證據延伸至可解釋的結構化上下文。 |
-| `impact <symbol>` | 以有界的精確靜態關係追蹤影響。 |
-| `serve --mcp` | 啟動 MCP stdio 主機。 |
-| `mcp-config <target>` | 產生 Codex 或通用 JSON 的安全設定片段。 |
+| `investigate <query>` | 將文字線索展開為可解釋的結構脈絡。 |
+| `impact <symbol>` | 透過精確靜態關係追蹤有限範圍影響。 |
+| `serve --mcp` | 啟動 MCP stdio host。 |
+| `mcp-config <target>` | 產生指定 Agent 的純輸出 MCP 設定片段。 |
 
 ## 驗證
 

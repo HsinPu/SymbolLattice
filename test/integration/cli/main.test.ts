@@ -2731,4 +2731,31 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
       `[mcp_servers.symbol_lattice]\ncommand = "symbol-lattice"\nargs = ["serve", "--mcp", "--project", ${JSON.stringify(resolve("C:/chosen-project"))}]\n`
     );
   });
+
+  it("accepts a target-specific configuration location and preserves its workspace binding", async () => {
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+    await createProgram({} as SymbolLatticeService).parseAsync(
+      [
+        "node",
+        "symbol-lattice",
+        "mcp-config",
+        "cursor",
+        "--project",
+        "C:/chosen-project",
+        "--location",
+        "global"
+      ],
+      { from: "node" }
+    );
+
+    const output = JSON.parse(String(write.mock.calls[0]?.[0]));
+    expect(output).toMatchObject({
+      target: "cursor",
+      location: "global",
+      destination: { path: "~/.cursor/mcp.json", format: "json", scope: "global" },
+      server: { args: ["serve", "--mcp", "--project", "${workspaceFolder}"] }
+    });
+    expect(JSON.parse(output.snippet).mcpServers["symbol-lattice"]).toMatchObject({ type: "stdio" });
+  });
 });
