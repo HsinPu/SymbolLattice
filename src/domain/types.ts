@@ -54,6 +54,7 @@ export type RouteFramework =
   | "react-router"
   | "vue-router"
   | "fastapi"
+  | "django-ninja"
   | "flask"
   | "django"
   | "starlette"

@@ -43,6 +43,7 @@ type PythonSyntaxNode = ReturnType<typeof parser.parse>["topNode"];
 type FrameworkImportedConstructor =
   | "FastAPI"
   | "APIRouter"
+  | "NinjaAPI"
   | "Flask"
   | "Blueprint"
   | "Starlette"
@@ -65,6 +66,8 @@ interface FrameworkDirectInstance {
 }
 
 interface FastApiApplication extends FrameworkDirectInstance {}
+
+interface DjangoNinjaApplication extends FrameworkDirectInstance {}
 
 interface FastApiRouter extends FrameworkDirectInstance {
   readonly prefix: string;
@@ -310,6 +313,14 @@ const FASTAPI_DECORATOR_METHODS: Readonly<Record<string, RouteMethod>> = {
   trace: "TRACE"
 };
 
+const DJANGO_NINJA_DECORATOR_METHODS: Readonly<Record<string, RouteMethod>> = {
+  get: "GET",
+  post: "POST",
+  put: "PUT",
+  patch: "PATCH",
+  delete: "DELETE"
+};
+
 const FLASK_SHORTCUT_DECORATOR_METHODS: Readonly<Record<string, RouteMethod>> = {
   get: "GET",
   post: "POST",
@@ -531,6 +542,13 @@ function staticFastApiImports(
   node: PythonSyntaxNode
 ): readonly FrameworkNamedImport[] {
   return staticNamedFrameworkImports(input, node, "fastapi");
+}
+
+function staticDjangoNinjaImports(
+  input: PythonExtractFileFactsInput,
+  node: PythonSyntaxNode
+): readonly FrameworkNamedImport[] {
+  return staticNamedFrameworkImports(input, node, "ninja");
 }
 
 function staticFlaskImports(
@@ -763,6 +781,17 @@ function staticFastApiApplication(
   node: PythonSyntaxNode,
   constructorNames: ReadonlySet<string>
 ): FastApiApplication | null {
+  const assignment = staticFrameworkConstructorAssignment(input, node, constructorNames);
+  return assignment === null
+    ? null
+    : { name: assignment.name, constructorName: assignment.constructorName, node: assignment.node };
+}
+
+function staticDjangoNinjaApplication(
+  input: PythonExtractFileFactsInput,
+  node: PythonSyntaxNode,
+  constructorNames: ReadonlySet<string>
+): DjangoNinjaApplication | null {
   const assignment = staticFrameworkConstructorAssignment(input, node, constructorNames);
   return assignment === null
     ? null
@@ -2200,6 +2229,39 @@ function staticFastApiDecorator(
   return path === null || !path.startsWith("/") ? null : { receiver, method, path, node };
 }
 
+function staticDjangoNinjaDecorator(
+  input: PythonExtractFileFactsInput,
+  node: PythonSyntaxNode
+): StaticFastApiDecorator | null {
+  if (node.name !== "Decorator") {
+    return null;
+  }
+  const children = directChildren(node);
+  const members = children.filter(
+    (child) => child.name === "VariableName" || child.name === "PropertyName"
+  );
+  const arguments_ = children.filter((child) => child.name === "ArgList");
+  if (members.length !== 2 || arguments_.length !== 1) {
+    return null;
+  }
+
+  const receiver = declarationName(input, members[0] ?? node);
+  const methodName = nodeText(input, members[1] ?? node);
+  const method = DJANGO_NINJA_DECORATOR_METHODS[methodName];
+  const argumentList = arguments_[0];
+  const firstArgument = argumentList === undefined
+    ? undefined
+    : directChildren(argumentList).find(
+        (child) => child.name !== "(" && child.name !== ")"
+      );
+  if (receiver === null || method === undefined || firstArgument?.name !== "String") {
+    return null;
+  }
+
+  const path = staticPlainPythonString(input, firstArgument);
+  return path === null || !path.startsWith("/") ? null : { receiver, method, path, node };
+}
+
 function staticFastApiRouterInclusion(
   input: PythonExtractFileFactsInput,
   node: PythonSyntaxNode
@@ -3217,6 +3279,7 @@ function isPythonPackageInitializer(filePath: string): boolean {
  */
 export function extractPythonFileFacts(input: PythonExtractFileFactsInput): ArtifactFacts {
   const fastApiCapability = frameworkCapability("fastapi");
+  const djangoNinjaCapability = frameworkCapability("django-ninja");
   const flaskCapability = frameworkCapability("flask");
   const djangoCapability = frameworkCapability("django");
   const starletteCapability = frameworkCapability("starlette");
@@ -3224,6 +3287,7 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
   const sanicCapability = frameworkCapability("sanic");
   if (
     !fastApiCapability.languages.includes(input.language) ||
+    !djangoNinjaCapability.languages.includes(input.language) ||
     !flaskCapability.languages.includes(input.language) ||
     !djangoCapability.languages.includes(input.language) ||
     !starletteCapability.languages.includes(input.language) ||
@@ -3449,6 +3513,7 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
     }
 
     const imports = topLevelNodes.flatMap((node) => staticFastApiImports(input, node));
+    const djangoNinjaImports = topLevelNodes.flatMap((node) => staticDjangoNinjaImports(input, node));
     const relativeRouterImports = topLevelNodes
       .map((node) => staticFastApiRelativeRouterImport(input, node))
       .filter((candidate): candidate is StaticFastApiRelativeRouterImport => candidate !== null);
@@ -3471,6 +3536,16 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
     const applications = topLevelNodes
       .map((node) => staticFastApiApplication(input, node, applicationConstructorNames))
       .filter((candidate): candidate is FastApiApplication => candidate !== null);
+    const djangoNinjaApplicationConstructorNames = new Set(
+      djangoNinjaImports
+        .filter((candidate) => candidate.importedName === "NinjaAPI")
+        .map((candidate) => candidate.alias)
+    );
+    const djangoNinjaApplications = topLevelNodes
+      .map((node) =>
+        staticDjangoNinjaApplication(input, node, djangoNinjaApplicationConstructorNames)
+      )
+      .filter((candidate): candidate is DjangoNinjaApplication => candidate !== null);
     const routers = topLevelNodes
       .map((node) => staticFastApiRouter(input, node, routerConstructorNames))
       .filter((candidate): candidate is FastApiRouter => candidate !== null);
@@ -4378,6 +4453,28 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
               "framework.fastapi.direct-router.include-router.decorator.local-function"
             );
           }
+        }
+
+        const djangoNinjaDecorator = staticDjangoNinjaDecorator(input, decoratorNode);
+        if (
+          djangoNinjaDecorator !== null &&
+          latestProvenFrameworkInstance(
+            input,
+            topLevelNodes,
+            djangoNinjaImports,
+            djangoNinjaApplications,
+            djangoNinjaDecorator.receiver,
+            djangoNinjaDecorator.node.from,
+            "NinjaAPI"
+          ) !== null
+        ) {
+          addPythonRoute(
+            djangoNinjaDecorator.method,
+            djangoNinjaDecorator.node,
+            handler,
+            djangoNinjaDecorator.path,
+            "framework.django-ninja.direct-app.decorator.local-function"
+          );
         }
 
         const sanicDecorator = staticSanicDecorator(input, decoratorNode);

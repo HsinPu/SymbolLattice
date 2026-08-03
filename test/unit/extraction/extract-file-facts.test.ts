@@ -2493,6 +2493,92 @@ describe("source extraction", () => {
 
   });
 
+  it("extracts direct Django Ninja decorators with literal paths and exact local handlers", () => {
+    const facts = extractFileFacts({
+      filePath: "api/ninja.py",
+      language: "python",
+      sourceText: [
+        "from ninja import NinjaAPI as Api",
+        "api = Api(title=\"Example\")",
+        "",
+        "@api.get(\"/health\", tags=[\"system\"])",
+        "def health(request):",
+        "    return {\"ok\": True}",
+        "",
+        "@api.post(\"/orders\")",
+        "async def create_order(request):",
+        "    return {\"created\": True}",
+        "",
+        "@api.put(\"/orders/{order_id}\")",
+        "def replace_order(request, order_id: int):",
+        "    return {\"replaced\": order_id}",
+        "",
+        "@api.patch(\"/orders/{order_id}\")",
+        "def update_order(request, order_id: int):",
+        "    return {\"updated\": order_id}",
+        "",
+        "@api.delete(\"/orders/{order_id}\")",
+        "def delete_order(request, order_id: int):",
+        "    return {\"deleted\": order_id}"
+      ].join("\n")
+    });
+
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+    expect(
+      facts.edges
+        .filter((edge) => edge.kind === "routes")
+        .map((edge) => [
+          symbolsById.get(edge.sourceId)?.name,
+          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          edge.evidence?.ruleId,
+          edge.evidence?.stage,
+          edge.resolution,
+          edge.confidence
+        ])
+    ).toEqual([
+      [
+        "GET /health",
+        "api/ninja.py#health",
+        "framework.django-ninja.direct-app.decorator.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "POST /orders",
+        "api/ninja.py#create_order",
+        "framework.django-ninja.direct-app.decorator.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "PUT /orders/{order_id}",
+        "api/ninja.py#replace_order",
+        "framework.django-ninja.direct-app.decorator.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "PATCH /orders/{order_id}",
+        "api/ninja.py#update_order",
+        "framework.django-ninja.direct-app.decorator.local-function",
+        "syntax",
+        "exact",
+        1
+      ],
+      [
+        "DELETE /orders/{order_id}",
+        "api/ninja.py#delete_order",
+        "framework.django-ninja.direct-app.decorator.local-function",
+        "syntax",
+        "exact",
+        1
+      ]
+    ]);
+  });
+
   it("extracts same-file FastAPI APIRouter routes through direct literal inclusion", () => {
     const facts = extractFileFacts({
       filePath: "app/catalog.py",
@@ -15846,6 +15932,40 @@ describe("source extraction", () => {
         "    conditional = build_application()",
         "@conditional.get(\"/conditional\")",
         "async def conditional_handler():",
+        "    return {}"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+  });
+
+  it("rejects dynamic, rebound, and unsupported Django Ninja route shapes", () => {
+    const facts = extractFileFacts({
+      filePath: "api/unproven_ninja.py",
+      language: "python",
+      sourceText: [
+        "from ninja import NinjaAPI",
+        "path = \"/dynamic\"",
+        "api = build_api(NinjaAPI)",
+        "@api.get(\"/not-proven\")",
+        "def not_proven(request):",
+        "    return {}",
+        "",
+        "other = NinjaAPI()",
+        "@other.get(path)",
+        "def dynamic_path(request):",
+        "    return {}",
+        "",
+        "rebound = NinjaAPI()",
+        "rebound = build_api()",
+        "@rebound.post(\"/rebound\")",
+        "def rebound_handler(request):",
+        "    return {}",
+        "",
+        "head_only = NinjaAPI()",
+        "@head_only.api_operation([\"HEAD\"], \"/head\")",
+        "def head_handler(request):",
         "    return {}"
       ].join("\n")
     });

@@ -20,6 +20,7 @@ export const FRAMEWORK_CAPABILITY_IDS = [
   "twig",
   "nextjs",
   "fastapi",
+  "django-ninja",
   "flask",
   "django",
   "starlette",
@@ -252,6 +253,16 @@ export const FRAMEWORK_CAPABILITIES = [
     surfaces: [
       "direct FastAPI application decorators",
       "same-file APIRouter decorators through direct include_router"
+    ]
+  },
+  {
+    id: "django-ninja",
+    languages: ["python"],
+    routeFramework: "django-ninja",
+    routeRegistrations: [],
+    surfaces: [
+      "direct NinjaAPI application decorators with literal paths",
+      "top-level named local function handlers"
     ]
   },
   {

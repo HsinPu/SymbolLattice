@@ -4504,6 +4504,66 @@ describe("SymbolLatticeService", () => {
     ]);
   });
 
+  it("indexes direct Django Ninja decorator routes with exact local handler proof", async () => {
+    const projectPath = await createInlineProject({
+      "api/ninja.py": [
+        "from ninja import NinjaAPI as Api",
+        "api = Api(title=\"Example\")",
+        "",
+        "@api.get(\"/health\")",
+        "def health(request):",
+        "    return {\"ok\": True}",
+        "",
+        "@api.delete(\"/orders/{order_id}\")",
+        "async def delete_order(request, order_id: int):",
+        "    return {\"deleted\": order_id}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath);
+    const persistedFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "api/ninja.py");
+
+    expect(persistedFacts).toMatchObject({
+      language: "python",
+      extractorVersion: ARTIFACT_FACTS_EXTRACTOR_VERSION
+    });
+    expect(routes.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "GET",
+          path: "/health",
+          route: expect.objectContaining({ name: "GET /health" }),
+          handler: expect.objectContaining({ qualifiedName: "api/ninja.py#health" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.django-ninja.direct-app.decorator.local-function",
+              stage: "syntax"
+            })
+          })
+        }),
+        expect.objectContaining({
+          method: "DELETE",
+          path: "/orders/{order_id}",
+          route: expect.objectContaining({ name: "DELETE /orders/{order_id}" }),
+          handler: expect.objectContaining({ qualifiedName: "api/ninja.py#delete_order" }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "framework.django-ninja.direct-app.decorator.local-function",
+              stage: "syntax"
+            })
+          })
+        })
+      ])
+    );
+  });
+
   it("indexes direct Starlette Route-list routes with exact local handler proof", async () => {
     const projectPath = await createInlineProject({
       "api/main.py": [

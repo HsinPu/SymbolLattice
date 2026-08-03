@@ -27,6 +27,7 @@ describe("first-party framework capabilities", () => {
       "twig",
       "nextjs",
       "fastapi",
+      "django-ninja",
       "flask",
       "django",
       "starlette",
@@ -201,6 +202,15 @@ describe("first-party framework capabilities", () => {
       surfaces: [
         "direct FastAPI application decorators",
         "same-file APIRouter decorators through direct include_router"
+      ]
+    });
+    expect(frameworkCapability("django-ninja")).toMatchObject({
+      languages: ["python"],
+      routeFramework: "django-ninja",
+      routeRegistrations: [],
+      surfaces: [
+        "direct NinjaAPI application decorators with literal paths",
+        "top-level named local function handlers"
       ]
     });
     expect(frameworkCapability("flask")).toMatchObject({

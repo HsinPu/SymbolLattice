@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.224.0 is a developer preview. Run it from source.
+> v0.225.0 is a developer preview. Run it from source.
 
 SymbolLattice indexes a project into a local code-symbol graph. Every relation retains its rule, evidence stage, and confidence; `exact`, `heuristic`, and `unresolved` are never conflated.
 
@@ -43,22 +43,17 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 
 Index data is stored in the target project's `.symbol-lattice/index.sqlite`. On Windows PowerShell, use `npm.cmd` when npm is unavailable.
 
-> [!NOTE]
-> Create the graph with `init`, then explicitly run `sync` after source or project-configuration changes. MCP queries never write or rebuild a graph.
+## v0.225.0 highlights
 
-## v0.224.0 highlights
+- Adds direct Django Ninja `NinjaAPI` routes: named imports (including aliases), one unrebound `NinjaAPI()` instance, and literal-path `get`, `post`, `put`, `delete`, and `patch` decorators on top-level named functions.
+- Every recognised Django Ninja route is linked to its local handler with `exact` syntax evidence.
+- Continues to provide multi-language static symbols, calls, imports, routes, and cross-file relationship queries while keeping graph and query data local.
 
-- Direct Java and Kotlin `@Autowired`, `jakarta.inject.Inject`, and `javax.inject.Inject` constructor, field, and each direct non-generic parameter of a concrete method (including setters and multi-parameter methods) project independent cross-file `references` edges to uniquely identified project-local top-level types.
-- Direct Kotlin `@field:` and setter-generating `@set:` injection annotations also project exact edges; `@set:` is accepted only on mutable `var` properties.
-- Direct `jakarta.annotation.Resource` and `javax.annotation.Resource` now cover Java fields and `void setX(T)` methods, plus Kotlin direct/`@field:` fields and mutable `@set:` properties. Bare and empty-parentheses forms are both verified.
-- Every DI edge retains its annotation family, explicit import or qualified type spelling, and local Maven/Gradle module-dependency evidence when available.
-- The graph does not infer runtime bean/provider selection, qualifier outcomes, `@Resource` `name`/`lookup`/`type` overrides, Java static methods, collection, generic, or vararg parameters, other Kotlin use-site targets such as `@get:`, alias/wildcard imports, secondary constructors, or compiler classpaths.
+## Current limits
 
-## Scope and guarantees
-
-- This is a local code graph, not an RDF/SPARQL knowledge base or ontology-reasoning system.
-- `exact` comes from persisted static evidence; it is not runtime dynamic-dispatch inference, full type checking, or whole-graph PageRank.
-- Indexing and querying stay local. Live file contents determine freshness only and never replace indexed evidence.
+- This release deliberately does not infer Django Ninja `Router` mounts, multi-method `api_operation`, dynamic paths, conditional construction, or rebound API instances.
+- This is a code graph, not an RDF/SPARQL knowledge base. It does not infer runtime dynamic dispatch, full type checking, or dependency-injection selection.
+- After `init`, source or configuration changes require an explicit `sync`; MCP queries never write or rebuild a graph.
 
 ## Verification
 
