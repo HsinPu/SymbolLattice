@@ -2,7 +2,7 @@
 
 # SymbolLattice
 
-**可查詢、可解釋、證據優先的本機程式碼智慧工具**
+**可查詢、可解釋、以證據為核心的本機程式碼智慧工具**
 
 [![Version](https://img.shields.io/github/v/tag/HsinPu/symbol-lattice?label=version)](https://github.com/HsinPu/symbol-lattice/tags)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D22.13-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.245.0 是從原始碼執行的開發者預覽版。MCP 查詢工具唯讀；但 `serve --mcp` 預設會啟動獨立的本機自動同步 watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用它。
+> v0.246.0 是從原始碼執行的開發預覽版。MCP 查詢工具本身唯讀；但 `serve --mcp` 預設會啟動獨立的本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可關閉它。
 
 ## 快速開始
 
@@ -29,13 +29,20 @@ npm run build
 # 建立專案本機圖譜
 node dist/cli/main.js init /path/to/project
 
-# 查詢可追溯的結構化脈絡
+# 查詢可解釋的結構脈絡
 node dist/cli/main.js investigate "user token" --project /path/to/project --json
 ```
 
-## 框架路由擴充
+## 核心能力
 
-可用受限、已驗證的描述支援尚未內建的框架路由。核心負責解析原始碼與寫入圖譜：TypeScript／JavaScript receiver 僅接受精確 ESM 匯入、`const` 零參數建構、字面路徑與命名處理函式；TypeScript decorator 僅接受精確匯入、具實作的非 static method 與單一字面絕對路徑。`mountMethods` 只會投影同檔、同一 descriptor、每個 child 唯一且固定非根 prefix 的線性掛載鏈（最多 16 段）；動態、重複、循環、尾斜線、多參數或過深掛載都不產生 child 路由。其他組合不會產生路由事實。registry 不會從專案自動載入，其指紋會納入 extractor version；描述變更後既有事實會顯示為過期。
+- 掃描多種語言與常見框架，建立專案本機的程式碼圖譜。
+- 查詢 symbol、呼叫關係、路由、入口點、影響範圍、歷史 generation 與差異。
+- 每個關係保留規則、階段、候選目標、信心度與解析路徑等證據。
+- 對擴充框架的固定 prefix route chain，`explain-edge` 會依順序列出每一段 mount 的 receiver、方法、prefix 與原始碼位置。
+
+## 擴充框架路由
+
+以受驗證、專案作用域的 descriptor 擴充靜態路由辨識。支援的 receiver route 需要精確 ESM import、`const` 零參數建構、literal path 與具名 handler。`mountMethods` 僅投影同檔案、同 descriptor、唯一且固定的非根 prefix chain（最多 16 段）；動態、重複、循環、尾端斜線、overload 或過深 chain 都不會產生 child route fact。
 
 ```ts
 import {
@@ -50,38 +57,15 @@ const registry = createFrameworkRoutePluginRegistry([
     moduleSpecifier: "@acme/lattice-router",
     factoryExport: "Router",
     routeMethods: [{ methodName: "get", routeMethod: "GET" }],
-    decoratorRoutes: [{ decoratorExport: "Get", routeMethod: "GET" }],
     mountMethods: [{ methodName: "mount" }],
-    surfaces: ["精確 named Router 匯入", "const HTTP 路由", "TypeScript decorator 路由", "同檔固定 prefix 掛載"]
+    surfaces: ["exact named imports", "const literal routes", "fixed prefix mounts"]
   }
 ]);
 
 const extractor = createFrameworkRoutePluginExtractor(registry);
-// 將 `extractor` 作為 SymbolLatticeService 的第三個建構子參數。
 ```
 
-## MCP 設定
-
-支援 `codex`、`claude`、`cursor`、`opencode`、`gemini`、`kiro`、`hermes`、`antigravity` 與 `generic-json`。
-
-```bash
-# 先預覽：不會寫入設定、備份或索引
-node dist/cli/main.js mcp-install claude --project /path/to/project --json
-
-# 確認計畫後才套用：既有檔案先完整備份，再原子更新
-node dist/cli/main.js mcp-install claude --project /path/to/project --apply --yes --json
-
-# 移除前先預覽；設定檔與其他 MCP 項目不會被刪除
-node dist/cli/main.js mcp-uninstall claude --project /path/to/project --json
-
-# 確認後才移除 SymbolLattice 自己的 MCP 項目
-node dist/cli/main.js mcp-uninstall claude --project /path/to/project --apply --yes --json
-
-# 唯讀檢查既有設定、CLI 與索引
-node dist/cli/main.js mcp-doctor claude --project /path/to/project --json
-```
-
-`mcp-install` 與 `mcp-uninstall` 都預設只預覽；套用時會先完整備份、再原子更新。兩者只會變更選定 Agent 的 SymbolLattice MCP 項目，保留同檔其他項目，且移除器絕不刪除設定檔。無法安全解析的既有設定會被拒絕寫入。`mcp-config` 仍可只產生可複製的設定片段，不讀寫 Agent 設定。`generic-json` 必須明確提供 `--config /path/to/mcp.json`。
+將 `extractor` 傳入 `SymbolLatticeService` 建構子的第三個參數。
 
 ## 常用指令
 
@@ -89,14 +73,13 @@ node dist/cli/main.js mcp-doctor claude --project /path/to/project --json
 | --- | --- |
 | `init <path>` | 建立圖譜。 |
 | `sync <path>` | 明確同步或修復圖譜。 |
-| `watch <path>` | 在前景監看並同步。 |
-| `investigate <query>` | 將文字證據展開為可解釋的結構化脈絡。 |
-| `impact <symbol>` | 沿著精確靜態關係追蹤有界影響範圍。 |
-| `serve --mcp` | 啟動 MCP stdio 主機。 |
-| `mcp-config <target>` | 產生不讀寫設定檔的 MCP 片段。 |
-| `mcp-doctor <target>` | 唯讀診斷 Agent MCP 設定、CLI 與專案索引。 |
-| `mcp-install <target>` | 預覽或在 `--apply --yes` 後安全寫入 MCP 設定。 |
-| `mcp-uninstall <target>` | 預覽或在 `--apply --yes` 後安全移除自己的 MCP 項目。 |
+| `watch <path>` | 前景監看並同步。 |
+| `investigate <query>` | 從文字證據展開結構脈絡。 |
+| `impact <symbol>` | 沿著精確靜態關係分析影響。 |
+| `explain-edge <edge-id>` | 查看一條關係的完整證據。 |
+| `serve --mcp` | 啟動 MCP stdio host。 |
+| `mcp-doctor <target>` | 唯讀檢查 Agent MCP 設定、CLI 與索引。 |
+| `mcp-install <target>` | 預覽或以 `--apply --yes` 安全寫入 MCP 設定。 |
 
 ## 驗證
 

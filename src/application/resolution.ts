@@ -39,6 +39,7 @@ import {
   type NestSymbolReference,
   type PendingReference,
   type ResolutionKind,
+  type RoutePrefixSegment,
   type ReactNativeTurboModuleDefaultImportCallFact,
   type RustActixImportedServiceConfigMountFact,
   type RustActixServiceConfigDeclarationFact,
@@ -142,7 +143,8 @@ function referenceEvidence(
   stage: EdgeEvidence["stage"],
   candidateIds: readonly string[],
   configurationPaths: readonly string[] = [],
-  resolutionPath: readonly string[] = []
+  resolutionPath: readonly string[] = [],
+  routePrefixChain: readonly RoutePrefixSegment[] = []
 ): EdgeEvidence {
   const evidence: EdgeEvidence = {
     ruleId,
@@ -151,11 +153,13 @@ function referenceEvidence(
   };
   const canonicalConfigurationPaths = uniqueConfigurationPaths([configurationPaths]);
   const canonicalResolutionPath = [...new Set(resolutionPath)];
+  const capturedRoutePrefixChain = [...routePrefixChain];
 
   return {
     ...evidence,
     ...(canonicalConfigurationPaths.length === 0 ? {} : { configurationPaths: canonicalConfigurationPaths }),
-    ...(canonicalResolutionPath.length === 0 ? {} : { resolutionPath: canonicalResolutionPath })
+    ...(canonicalResolutionPath.length === 0 ? {} : { resolutionPath: canonicalResolutionPath }),
+    ...(capturedRoutePrefixChain.length === 0 ? {} : { routePrefixChain: capturedRoutePrefixChain })
   };
 }
 
@@ -7718,7 +7722,10 @@ export function resolveProjectFacts(input: {
                   ? staticRouteHandlerRuleId(reference, "local-handler")
                   : "lexical.local-binding",
               "lexical",
-              candidateSymbolIds(scopedLocal.candidates)
+              candidateSymbolIds(scopedLocal.candidates),
+              [],
+              [],
+              reference.routePrefixChain ?? []
             )
           )
         );
@@ -7739,7 +7746,10 @@ export function resolveProjectFacts(input: {
                   ? staticRouteHandlerRuleId(reference, "unresolved-handler")
                   : "reference.unresolved",
               "unresolved",
-              candidateSymbolIds(scopedLocal.candidates)
+              candidateSymbolIds(scopedLocal.candidates),
+              [],
+              [],
+              reference.routePrefixChain ?? []
             )
           )
         );
@@ -7785,7 +7795,8 @@ export function resolveProjectFacts(input: {
             "module",
             candidateSymbolIds(exactImportedSymbols),
             exactImportedConfigurationPaths,
-            resolutionPath
+            resolutionPath,
+            reference.routePrefixChain ?? []
           )
         )
       );
@@ -7816,7 +7827,9 @@ export function resolveProjectFacts(input: {
             candidateSymbolIds(
               isInstantiation || heritage !== null ? allExactImportedSymbols : exactImportedSymbols
             ),
-            exactImportedConfigurationPaths
+            exactImportedConfigurationPaths,
+            [],
+            reference.routePrefixChain ?? []
           )
         )
       );
@@ -7871,7 +7884,9 @@ export function resolveProjectFacts(input: {
               importedCandidates.map((candidate) => candidate.symbol),
               exportedCandidates.map((candidate) => candidate.symbol)
             ),
-            exactImportedConfigurationPaths
+            exactImportedConfigurationPaths,
+            [],
+            reference.routePrefixChain ?? []
           )
         )
       );

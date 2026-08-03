@@ -1,4 +1,4 @@
-import type { EdgeEvidence } from "./facts.js";
+import type { EdgeEvidence, RoutePrefixSegment } from "./facts.js";
 import type { IndexStalenessReason } from "./index-inputs.js";
 import type { IndexWork } from "./index-work.js";
 
@@ -273,6 +273,8 @@ export interface PendingReference {
   readonly routeFramework?: RouteFramework;
   /** Present when a statically proven registration projects route provenance or a framework route path. */
   readonly routeRegistration?: RouteRegistration;
+  /** Ordered static mount evidence when a framework route uses a projected prefix. */
+  readonly routePrefixChain?: readonly RoutePrefixSegment[];
   readonly range: SourceRange;
 }
 

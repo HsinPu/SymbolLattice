@@ -90,6 +90,7 @@ import {
   type ReExportBinding,
   type ReferenceScope,
   type RouteRegistration,
+  type RoutePrefixSegment,
   type RouteMethod,
   type SourceRange,
   type SymbolKind,
@@ -462,6 +463,8 @@ interface RouteBinding {
   prefix?: string;
   /** Provenance for the prefix that projected this callback's routes. */
   routeRegistration?: RouteRegistration;
+  /** Ordered syntax evidence for the prefix that projected this callback's routes. */
+  routePrefixChain?: readonly RoutePrefixSegment[];
   /** A configured mount was observed but could not prove one safe full route path. */
   suppressFrameworkRoutePluginRoutes?: boolean;
 }
@@ -2384,12 +2387,13 @@ interface FrameworkRoutePluginMountObservation {
   readonly parent: RouteBinding;
   readonly child: RouteBinding;
   /** Null means a configured mount was seen but its prefix was not safe to project. */
-  readonly prefix: string | null;
+  readonly segment: RoutePrefixSegment | null;
 }
 
 interface FrameworkRoutePluginResolvedMountPrefix {
   readonly prefix: string;
   readonly depth: number;
+  readonly segments: readonly RoutePrefixSegment[];
 }
 
 /** Keeps adversarial or generated router nesting from growing an unbounded static traversal. */
@@ -2409,6 +2413,7 @@ function literalFrameworkRoutePluginMountPrefix(expression: ts.Expression | unde
 
 function staticFrameworkRoutePluginMountObservation(
   sourceFile: ts.SourceFile,
+  filePath: string,
   node: ts.CallExpression,
   bindings: ScopedRouteReceiverBindings
 ): FrameworkRoutePluginMountObservation | null {
@@ -2441,13 +2446,24 @@ function staticFrameworkRoutePluginMountObservation(
   ) {
     return null;
   }
+  const prefix =
+    node.arguments.length === 2
+      ? literalFrameworkRoutePluginMountPrefix(node.arguments[0])
+      : null;
   return {
     parent,
     child,
-    prefix:
-      node.arguments.length === 2
-        ? literalFrameworkRoutePluginMountPrefix(node.arguments[0])
-        : null
+    segment:
+      prefix === null
+        ? null
+        : {
+            filePath,
+            range: sourceRange(sourceFile, node),
+            parentReceiver: mountReceiver.text,
+            childReceiver: childArgument.text,
+            mountMethod: mountAccess.name.text,
+            prefix
+          }
   };
 }
 
@@ -2458,13 +2474,19 @@ function staticFrameworkRoutePluginMountObservation(
  */
 function applyFrameworkRoutePluginMountPrefixes(
   sourceFile: ts.SourceFile,
+  filePath: string,
   bindings: ScopedRouteReceiverBindings
 ): void {
   const observationsByChild = new Map<RouteBinding, FrameworkRoutePluginMountObservation[]>();
 
   const visit = (node: ts.Node): void => {
     if (ts.isCallExpression(node)) {
-      const observation = staticFrameworkRoutePluginMountObservation(sourceFile, node, bindings);
+      const observation = staticFrameworkRoutePluginMountObservation(
+        sourceFile,
+        filePath,
+        node,
+        bindings
+      );
       if (observation !== null) {
         const observations = observationsByChild.get(observation.child) ?? [];
         observations.push(observation);
@@ -2499,13 +2521,15 @@ function applyFrameworkRoutePluginMountPrefixes(
       }
       const observations = observationsByChild.get(cursor);
       if (observations === undefined) {
-        resolved = { prefix: "", depth: 0 };
+        resolved = { prefix: "", depth: 0, segments: [] };
         break;
       }
       const observation = observations.length === 1 ? observations[0] : undefined;
+      const segment = observation?.segment;
       if (
         observation === undefined ||
-        observation.prefix === null ||
+        segment === null ||
+        segment === undefined ||
         observation.parent === cursor
       ) {
         resolved = null;
@@ -2521,16 +2545,20 @@ function applyFrameworkRoutePluginMountPrefixes(
 
     for (let index = chain.length - 1; index >= 0; index -= 1) {
       const observation = chain[index];
+      const segment = observation?.segment;
       if (
         observation === undefined ||
+        segment === null ||
+        segment === undefined ||
         resolved === null ||
         resolved.depth >= MAX_FRAMEWORK_ROUTE_PLUGIN_MOUNT_DEPTH
       ) {
         return null;
       }
       resolved = {
-        prefix: `${resolved.prefix}${observation.prefix}`,
-        depth: resolved.depth + 1
+        prefix: `${resolved.prefix}${segment.prefix}`,
+        depth: resolved.depth + 1,
+        segments: [...resolved.segments, segment]
       };
       resolvedPrefixes.set(observation.child, resolved);
     }
@@ -2544,6 +2572,7 @@ function applyFrameworkRoutePluginMountPrefixes(
       continue;
     }
     child.prefix = resolved.prefix;
+    child.routePrefixChain = resolved.segments;
     child.routeRegistration =
       resolved.depth === 1 ? "plugin-literal-prefix-mount" : "plugin-literal-prefix-chain";
   }
@@ -2642,6 +2671,7 @@ interface StaticFrameworkRoutePluginRoute {
   readonly plugin: FrameworkRoutePlugin;
   readonly route: StaticExpressRoute;
   readonly routeRegistration?: RouteRegistration;
+  readonly routePrefixChain?: readonly RoutePrefixSegment[];
 }
 
 /**
@@ -2701,7 +2731,10 @@ function staticFrameworkRoutePluginRoute(
     route: { method: routeMethod.routeMethod, path: routePath, handler },
     ...(binding.routeRegistration === undefined
       ? {}
-      : { routeRegistration: binding.routeRegistration })
+      : { routeRegistration: binding.routeRegistration }),
+    ...(binding.routePrefixChain === undefined
+      ? {}
+      : { routePrefixChain: binding.routePrefixChain })
   };
 }
 
@@ -5529,7 +5562,7 @@ export function extractFileFacts(
         );
   const routeReceiverBindings = collectScopedRouteReceiverBindings(sourceFile, frameworkRoutePlugins);
   if (frameworkRoutePluginsWithMounts.length > 0) {
-    applyFrameworkRoutePluginMountPrefixes(sourceFile, routeReceiverBindings);
+    applyFrameworkRoutePluginMountPrefixes(sourceFile, input.filePath, routeReceiverBindings);
   }
   const fastifyPluginCallbacks = collectScopedFastifyPluginCallbacks(sourceFile, routeReceiverBindings);
   const nestDecoratorBindings = collectScopedNestDecoratorBindings(sourceFile);
@@ -5613,7 +5646,8 @@ export function extractFileFacts(
     relationKind: PendingReference["relationKind"],
     node: ts.Node,
     routeFramework?: PendingReference["routeFramework"],
-    routeRegistration?: PendingReference["routeRegistration"]
+    routeRegistration?: PendingReference["routeRegistration"],
+    routePrefixChain?: PendingReference["routePrefixChain"]
   ): void {
     const range = sourceRange(sourceFile, node);
     const reference: PendingReference = {
@@ -5631,7 +5665,8 @@ export function extractFileFacts(
       relationKind,
       range,
       ...(routeFramework === undefined ? {} : { routeFramework }),
-      ...(routeRegistration === undefined ? {} : { routeRegistration })
+      ...(routeRegistration === undefined ? {} : { routeRegistration }),
+      ...(routePrefixChain === undefined ? {} : { routePrefixChain })
     };
     pendingReferences.push(reference);
     referenceScopes.push({
@@ -5710,7 +5745,8 @@ export function extractFileFacts(
       | StaticReactRouterRoute
       | StaticVueRouterRoute,
     routeFramework: NonNullable<PendingReference["routeFramework"]>,
-    routeRegistration?: PendingReference["routeRegistration"]
+    routeRegistration?: PendingReference["routeRegistration"],
+    routePrefixChain?: PendingReference["routePrefixChain"]
   ): void {
     const symbol = addRouteSymbol(node, route.method, route.path);
     addPendingReference(
@@ -5719,7 +5755,8 @@ export function extractFileFacts(
       "routes",
       route.handler,
       routeFramework,
-      routeRegistration
+      routeRegistration,
+      routePrefixChain
     );
   }
 
@@ -5735,7 +5772,8 @@ export function extractFileFacts(
       node,
       candidate.route,
       customRouteFramework(candidate.plugin.id),
-      candidate.routeRegistration
+      candidate.routeRegistration,
+      candidate.routePrefixChain
     );
   }
 

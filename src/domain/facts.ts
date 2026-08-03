@@ -11,7 +11,7 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v201";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v202";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
@@ -30,6 +30,18 @@ export const EDGE_EVIDENCE_STAGES = [
 
 export type EdgeEvidenceStage = (typeof EDGE_EVIDENCE_STAGES)[number];
 
+/** One ordered, syntax-proven segment that projected a framework route prefix. */
+export interface RoutePrefixSegment {
+  /** Project-relative source file containing the direct mount call. */
+  readonly filePath: string;
+  /** Exact source range of the direct mount call that supplied this segment. */
+  readonly range: SourceRange;
+  readonly parentReceiver: string;
+  readonly childReceiver: string;
+  readonly mountMethod: string;
+  readonly prefix: string;
+}
+
 /**
  * The deterministic explanation for one graph edge.
  *
@@ -46,6 +58,8 @@ export interface EdgeEvidence {
   readonly configurationPaths?: readonly string[];
   /** Project-relative file hops used to reach an exact re-export target. */
   readonly resolutionPath?: readonly string[];
+  /** Ordered static mount evidence used to project a framework route prefix. */
+  readonly routePrefixChain?: readonly RoutePrefixSegment[];
 }
 
 /** A named import binding retained from syntax extraction for module resolution. */

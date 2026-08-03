@@ -284,11 +284,45 @@ describe("framework route plugin registry", () => {
       expect.arrayContaining([
         expect.objectContaining({
           relationKind: "routes",
-          routeRegistration: "plugin-literal-prefix-mount"
+          routeRegistration: "plugin-literal-prefix-mount",
+          routePrefixChain: [
+            expect.objectContaining({
+              filePath: "src/routes.ts",
+              parentReceiver: "root",
+              childReceiver: "api",
+              mountMethod: "mount",
+              prefix: "/api",
+              range: expect.objectContaining({
+                start: expect.objectContaining({ line: 9, column: 1 })
+              })
+            })
+          ]
         }),
         expect.objectContaining({
           relationKind: "routes",
-          routeRegistration: "plugin-literal-prefix-chain"
+          routeRegistration: "plugin-literal-prefix-chain",
+          routePrefixChain: [
+            expect.objectContaining({
+              filePath: "src/routes.ts",
+              parentReceiver: "root",
+              childReceiver: "api",
+              mountMethod: "mount",
+              prefix: "/api",
+              range: expect.objectContaining({
+                start: expect.objectContaining({ line: 9, column: 1 })
+              })
+            }),
+            expect.objectContaining({
+              filePath: "src/routes.ts",
+              parentReceiver: "api",
+              childReceiver: "healthRoutes",
+              mountMethod: "mount",
+              prefix: "/v1",
+              range: expect.objectContaining({
+                start: expect.objectContaining({ line: 10, column: 1 })
+              })
+            })
+          ]
         })
       ])
     );

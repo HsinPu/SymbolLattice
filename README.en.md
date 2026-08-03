@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.245.0 is a developer preview that runs from source. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher can update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.246.0 is a developer preview that runs from source. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher can update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## Quick start
 
@@ -33,9 +33,16 @@ node dist/cli/main.js init /path/to/project
 node dist/cli/main.js investigate "user token" --project /path/to/project --json
 ```
 
+## What it does
+
+- Scans multiple languages and common frameworks into a project-local code graph.
+- Queries symbols, calls, routes, entry points, impact, retained generations, and diffs.
+- Preserves the rule, stage, candidate targets, confidence, and resolution path behind every relation.
+- For extension-framework routes projected through a fixed prefix chain, `explain-edge` returns each ordered mount segment with its receiver, method, prefix, and source location.
+
 ## Framework route extensions
 
-Extend static framework routes with a scoped, validated descriptor. The core—not the extension—parses source and writes graph facts. TypeScript or JavaScript receiver routes require an exact ESM import, a `const` zero-argument constructor, a literal path, and a named handler. TypeScript decorator routes require an exact import, a non-static method with a body, and one literal absolute path. `mountMethods` project only a same-file, same-descriptor linear mount chain in which every child has one fixed non-root prefix, up to 16 segments; dynamic, duplicate, cyclic, trailing-slash, overloaded, or deeper mounts emit no child route. Unsupported composition produces no route fact. The registry is never auto-loaded from a project and its fingerprint is part of the extractor version, so a descriptor change makes persisted facts stale.
+Use a validated, project-scoped descriptor to extend static route recognition. Supported receiver routes require an exact ESM import, a `const` zero-argument constructor, a literal path, and a named handler. `mountMethods` project only a same-file, same-descriptor, unique fixed non-root prefix chain of up to 16 segments; dynamic, duplicate, cyclic, trailing-slash, overloaded, or deeper chains emit no child route fact.
 
 ```ts
 import {
@@ -50,38 +57,15 @@ const registry = createFrameworkRoutePluginRegistry([
     moduleSpecifier: "@acme/lattice-router",
     factoryExport: "Router",
     routeMethods: [{ methodName: "get", routeMethod: "GET" }],
-    decoratorRoutes: [{ decoratorExport: "Get", routeMethod: "GET" }],
     mountMethods: [{ methodName: "mount" }],
-    surfaces: ["exact named Router imports", "const HTTP routes", "TypeScript decorator routes", "same-file fixed prefix mounts"]
+    surfaces: ["exact named imports", "const literal routes", "fixed prefix mounts"]
   }
 ]);
 
 const extractor = createFrameworkRoutePluginExtractor(registry);
-// Pass `extractor` as the third SymbolLatticeService constructor argument.
 ```
 
-## MCP configuration
-
-Supported targets: `codex`, `claude`, `cursor`, `opencode`, `gemini`, `kiro`, `hermes`, `antigravity`, and `generic-json`.
-
-```bash
-# Preview first: no configuration, backup, or index write
-node dist/cli/main.js mcp-install claude --project /path/to/project --json
-
-# Apply only after reviewing the plan: full backup first, then atomic update
-node dist/cli/main.js mcp-install claude --project /path/to/project --apply --yes --json
-
-# Preview a removal first; neither the file nor sibling MCP entries are deleted
-node dist/cli/main.js mcp-uninstall claude --project /path/to/project --json
-
-# Remove only SymbolLattice's owned MCP entry after explicit confirmation
-node dist/cli/main.js mcp-uninstall claude --project /path/to/project --apply --yes --json
-
-# Read-only diagnosis of the existing configuration, CLI, and index
-node dist/cli/main.js mcp-doctor claude --project /path/to/project --json
-```
-
-`mcp-install` and `mcp-uninstall` both preview by default; an applied plan creates a full backup before an atomic update. They change only SymbolLattice's MCP entry in the selected Agent configuration and preserve sibling entries; the uninstaller never deletes the selected configuration file. They refuse to write an existing file they cannot safely parse. `mcp-config` remains output-only: it produces a copy-and-paste snippet and never reads or writes an Agent configuration. `generic-json` requires an explicit `--config /path/to/mcp.json`.
+Pass `extractor` as the third `SymbolLatticeService` constructor argument.
 
 ## Common commands
 
@@ -90,13 +74,12 @@ node dist/cli/main.js mcp-doctor claude --project /path/to/project --json
 | `init <path>` | Create a graph. |
 | `sync <path>` | Explicitly synchronize or repair a graph. |
 | `watch <path>` | Watch and synchronize in the foreground. |
-| `investigate <query>` | Expand textual evidence into explainable structural context. |
+| `investigate <query>` | Expand textual evidence into structural context. |
 | `impact <symbol>` | Trace bounded impact through exact static relations. |
+| `explain-edge <edge-id>` | Inspect the complete evidence for one relation. |
 | `serve --mcp` | Start the MCP stdio host. |
-| `mcp-config <target>` | Produce an output-only MCP configuration snippet. |
-| `mcp-doctor <target>` | Read-only diagnosis of an Agent MCP configuration, CLI, and project index. |
+| `mcp-doctor <target>` | Read-only diagnosis of an Agent MCP configuration, CLI, and index. |
 | `mcp-install <target>` | Preview or, with `--apply --yes`, safely write an MCP configuration. |
-| `mcp-uninstall <target>` | Preview or, with `--apply --yes`, safely remove its owned MCP entry. |
 
 ## Verification
 

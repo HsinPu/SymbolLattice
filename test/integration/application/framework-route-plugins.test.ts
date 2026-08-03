@@ -128,12 +128,61 @@ describe("framework route plugin service integration", () => {
           edge: expect.objectContaining({
             evidence: expect.objectContaining({
               ruleId: "framework.plugin.acme.lattice-router.literal-prefix-chain.local-handler",
-              stage: "lexical"
+              stage: "lexical",
+              routePrefixChain: [
+                expect.objectContaining({
+                  filePath: "src/routes.ts",
+                  parentReceiver: "api",
+                  childReceiver: "versioned",
+                  mountMethod: "mount",
+                  prefix: "/versioned",
+                  range: expect.objectContaining({
+                    start: expect.objectContaining({ line: 14, column: 1 })
+                  })
+                }),
+                expect.objectContaining({
+                  filePath: "src/routes.ts",
+                  parentReceiver: "versioned",
+                  childReceiver: "nested",
+                  mountMethod: "mount",
+                  prefix: "/v1",
+                  range: expect.objectContaining({
+                    start: expect.objectContaining({ line: 13, column: 1 })
+                  })
+                })
+              ]
             })
           })
         })
       ])
     );
+    const nestedRoute = firstRoutes.routes.find((route) => route.path === "/versioned/v1/nested");
+    if (nestedRoute === undefined) {
+      throw new Error("Expected the nested framework-plugin route to be indexed.");
+    }
+    const explainedRoute = await firstService.explainEdge(projectPath, nestedRoute.edge.id);
+    expect(explainedRoute.edge.evidence?.routePrefixChain).toEqual([
+      expect.objectContaining({
+        filePath: "src/routes.ts",
+        parentReceiver: "api",
+        childReceiver: "versioned",
+        mountMethod: "mount",
+        prefix: "/versioned",
+        range: expect.objectContaining({
+          start: expect.objectContaining({ line: 14, column: 1 })
+        })
+      }),
+      expect.objectContaining({
+        filePath: "src/routes.ts",
+        parentReceiver: "versioned",
+        childReceiver: "nested",
+        mountMethod: "mount",
+        prefix: "/v1",
+        range: expect.objectContaining({
+          start: expect.objectContaining({ line: 13, column: 1 })
+        })
+      })
+    ]);
     expect(firstFacts?.extractorVersion).toBe(firstExtractor.version);
 
     const changedRegistry = createFrameworkRoutePluginRegistry([
