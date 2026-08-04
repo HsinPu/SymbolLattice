@@ -172,6 +172,7 @@ interface AffectedCommandOptions extends ProjectOptions {
   readonly stdin?: boolean;
   readonly workingTree?: boolean;
   readonly base?: string;
+  readonly pathPrefix?: string;
 }
 
 interface GitHunksCommandOptions extends ProjectOptions {
@@ -1265,6 +1266,10 @@ export function createProgram(
       "Select source files changed from the local merge-base of <ref> and HEAD through local Git"
     )
     .option(
+      "--path-prefix <project-relative-path>",
+      "Restrict Git-selected changes to an exact file or directory on either rename/copy path side"
+    )
+    .option(
       "--depth <count>",
       `Maximum reverse import/export depth per changed file (1-${MAX_AFFECTED_MAX_DEPTH})`,
       (value: string) => parseBoundedPositiveInteger(value, MAX_AFFECTED_MAX_DEPTH)
@@ -1288,10 +1293,14 @@ export function createProgram(
           'Git selection cannot be combined with explicit affected file paths or "--stdin".'
         );
       }
+      if (!hasGitSelection && options.pathPrefix !== undefined) {
+        throw new Error('"--path-prefix" requires "--working-tree" or "--base <ref>".');
+      }
       if (hasGitSelection) {
         const gitOptions: GitAffectedTestsOptions = {
           ...affectedOptions,
-          ...(options.base === undefined ? {} : { baseRef: options.base })
+          ...(options.base === undefined ? {} : { baseRef: options.base }),
+          ...(options.pathPrefix === undefined ? {} : { pathPrefix: options.pathPrefix })
         };
         render(
           await coreService.affectedTestsFromGit(defaultProjectPath(options), gitOptions),

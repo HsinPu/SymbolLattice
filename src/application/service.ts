@@ -1621,28 +1621,66 @@ export class SymbolLatticeService {
     options: GitAffectedTestsOptions = {}
   ): Promise<GitAffectedTestsResult> {
     const normalizedProjectPath = resolve(projectPath);
+    const pathPrefix =
+      options.pathPrefix === undefined
+        ? undefined
+        : this.normalizedProjectRelativePathPrefix(
+            options.pathPrefix,
+            "INVALID_GIT_AFFECTED_PATH_PREFIX",
+            "Git affected"
+          );
     const request = this.gitChangeSetRequest(options);
     const changeSet = await this.readGitChangeSet(normalizedProjectPath, request);
+    const sourcePathSet = new Set(changeSet.sourcePaths);
+    const selectedChanges = changeSet.changes.filter(
+      (change) =>
+        pathPrefix === undefined ||
+        [change.previousPath, change.currentPath].some(
+          (filePath) => filePath !== null && matchesProjectPathPrefix(filePath, pathPrefix)
+        )
+    );
+    const selectedSourceChanges = selectedChanges.filter((change) =>
+      [change.previousPath, change.currentPath].some(
+        (filePath) => filePath !== null && sourcePathSet.has(filePath)
+      )
+    );
+    const selectedSourcePaths = [
+      ...new Set(
+        selectedSourceChanges.flatMap((change) =>
+          [change.previousPath, change.currentPath].filter(
+            (filePath): filePath is string => filePath !== null && sourcePathSet.has(filePath)
+          )
+        )
+      )
+    ].sort(compareText);
+    const selection = {
+      pathPrefix: pathPrefix ?? null,
+      totalChanges: changeSet.changes.length,
+      matchedSourceChanges: selectedSourceChanges.length,
+      sourcePaths: selectedSourcePaths
+    };
 
-    if (changeSet.sourcePaths.length === 0) {
+    if (selectedSourcePaths.length === 0) {
       return {
         status: await this.getStatus(normalizedProjectPath),
         changeSet,
+        selection,
         affected: null
       };
     }
 
-    if (changeSet.sourcePaths.length > MAX_AFFECTED_CHANGED_FILES) {
+    if (selectedSourcePaths.length > MAX_AFFECTED_CHANGED_FILES) {
       throw new SymbolLatticeError(
         "INVALID_AFFECTED_FILES",
-        `Git source selection is capped at ${MAX_AFFECTED_CHANGED_FILES} paths. Refine the base ref or working-tree changes.`
+        `Git source selection is capped at ${MAX_AFFECTED_CHANGED_FILES} paths. Refine the path prefix, base ref, or working-tree changes.`
       );
     }
 
-    const affected = await this.affectedTests(normalizedProjectPath, changeSet.sourcePaths, options);
+    const affected = await this.affectedTests(normalizedProjectPath, selectedSourcePaths, options);
     return {
       status: affected.status,
       changeSet,
+      selection,
       affected
     };
   }
@@ -2982,8 +3020,9 @@ export class SymbolLatticeService {
     code:
       | "INVALID_SEARCH_PATH_PREFIX"
       | "INVALID_FILE_PATH_PREFIX"
+      | "INVALID_GIT_AFFECTED_PATH_PREFIX"
       | "INVALID_GIT_HUNK_PATH_PREFIX",
-    label: "Search" | "File" | "Git hunk"
+    label: "Search" | "File" | "Git affected" | "Git hunk"
   ): string | undefined {
     if (typeof pathPrefix !== "string") {
       throw new SymbolLatticeError(

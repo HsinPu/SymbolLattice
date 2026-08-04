@@ -469,6 +469,8 @@ export interface AffectedTestsOptions {
 export interface GitAffectedTestsOptions extends AffectedTestsOptions {
   /** Omit for working-tree changes; otherwise compare the requested Git base. */
   readonly baseRef?: string;
+  /** Optional project-relative file or directory matched on either Git path side. */
+  readonly pathPrefix?: string;
 }
 
 export type AffectedTestReason = "changed-test" | "exact-dependent";
@@ -539,6 +541,12 @@ export interface GitAffectedTestsResult {
   readonly status: IndexStatus;
   /** Immutable provenance returned by the injected Git change-set provider. */
   readonly changeSet: GitChangeSet;
+  readonly selection: {
+    readonly pathPrefix: string | null;
+    readonly totalChanges: number;
+    readonly matchedSourceChanges: number;
+    readonly sourcePaths: readonly string[];
+  };
   /** Exact test evidence for selected supported source paths, when any exist. */
   readonly affected: AffectedTestsResult | null;
 }

@@ -2409,7 +2409,8 @@ describe("SymbolLatticeService", () => {
 
     const workingTree = await service.affectedTestsFromGit(projectPath, {
       maxDepth: 2,
-      limit: 10
+      limit: 10,
+      pathPrefix: "src/"
     });
     const fromBase = await service.affectedTestsFromGit(projectPath, { baseRef: "origin/main" });
     const after = await service.getStatus(projectPath);
@@ -2422,6 +2423,12 @@ describe("SymbolLatticeService", () => {
     expect(workingTree).toMatchObject({
       status: { generationId: before.generationId, stale: false },
       changeSet: { sourcePaths: ["src/math.ts"], includesUntracked: true },
+      selection: {
+        pathPrefix: "src",
+        totalChanges: 1,
+        matchedSourceChanges: 1,
+        sourcePaths: ["src/math.ts"]
+      },
       affected: {
         inputs: { requested: ["src/math.ts"], indexed: ["src/math.ts"], notIndexed: [] },
         tests: {
@@ -2534,6 +2541,9 @@ describe("SymbolLatticeService", () => {
     await expect(service.affectedTestsFromGit(projectPath, { baseRef: " origin/main" })).rejects.toEqual(
       expect.objectContaining<Partial<SymbolLatticeError>>({ code: "INVALID_GIT_BASE_REF" })
     );
+    await expect(
+      service.affectedTestsFromGit(projectPath, { pathPrefix: "../outside" })
+    ).rejects.toMatchObject({ code: "INVALID_GIT_AFFECTED_PATH_PREFIX" });
     await expect(service.affectedTestsFromGit(projectPath)).rejects.toEqual(
       expect.objectContaining<Partial<SymbolLatticeError>>({ code: "GIT_CHANGE_SET_UNAVAILABLE" })
     );
@@ -2553,6 +2563,47 @@ describe("SymbolLatticeService", () => {
     );
     await expect(oversizedService.affectedTestsFromGit(projectPath)).rejects.toMatchObject({
       code: "INVALID_AFFECTED_FILES"
+    });
+
+    const scopedChanges = [
+      ...Array.from({ length: 51 }, (_value, index) => ({
+        kind: "modified" as const,
+        previousPath: `vendor/changed-${index}.ts`,
+        currentPath: `vendor/changed-${index}.ts`,
+        score: null
+      })),
+      {
+        kind: "renamed" as const,
+        previousPath: "src/math.ts",
+        currentPath: "legacy/math.ts",
+        score: 100
+      }
+    ];
+    const scopedProvider: GitChangeSetProvider = {
+      async getChangeSet() {
+        return gitChangeSet(
+          scopedChanges.flatMap((change) => [change.previousPath, change.currentPath]),
+          scopedChanges
+        );
+      }
+    };
+    const scopedService = new SymbolLatticeService(
+      new SqliteGraphStore(),
+      new FileSystemSourceCatalog(),
+      undefined,
+      scopedProvider
+    );
+    await scopedService.init({ projectPath });
+    await expect(
+      scopedService.affectedTestsFromGit(projectPath, { pathPrefix: "src" })
+    ).resolves.toMatchObject({
+      selection: {
+        pathPrefix: "src",
+        totalChanges: 52,
+        matchedSourceChanges: 1,
+        sourcePaths: ["legacy/math.ts", "src/math.ts"]
+      },
+      affected: { inputs: { requested: ["legacy/math.ts", "src/math.ts"] } }
     });
   });
 

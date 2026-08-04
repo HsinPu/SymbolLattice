@@ -436,6 +436,12 @@ function gitAffectedTestsResult(): GitAffectedTestsResult {
       ],
       sourcePaths: ["src/math.ts"]
     },
+    selection: {
+      pathPrefix: null,
+      totalChanges: 1,
+      matchedSourceChanges: 1,
+      sourcePaths: ["src/math.ts"]
+    },
     affected: affectedTestsResult()
   };
 }
@@ -1907,6 +1913,8 @@ describe("symbol-lattice v0.6 affected-test CLI", () => {
         "symbol-lattice",
         "affected",
         "--working-tree",
+        "--path-prefix",
+        "src/",
         "--project",
         "C:/chosen-project",
         "--depth",
@@ -1921,7 +1929,7 @@ describe("symbol-lattice v0.6 affected-test CLI", () => {
     expect(calls).toEqual([
       {
         projectPath: resolve("C:/chosen-project"),
-        options: { maxDepth: 4, limit: 7 }
+        options: { maxDepth: 4, limit: 7, pathPrefix: "src/" }
       }
     ]);
     expect(write).toHaveBeenCalledWith(`${JSON.stringify(result, null, 2)}\n`);
@@ -1955,6 +1963,7 @@ describe("symbol-lattice v0.6 affected-test CLI", () => {
 
   for (const conflictCase of [
     ["src/math.ts", "--working-tree"],
+    ["src/math.ts", "--path-prefix", "src"],
     ["--base", "HEAD", "--working-tree"],
     ["--base", "HEAD", "--stdin"]
   ] as const) {
@@ -1966,7 +1975,7 @@ describe("symbol-lattice v0.6 affected-test CLI", () => {
         program.parseAsync(["node", "symbol-lattice", "affected", ...conflictCase], {
           from: "node"
         })
-      ).rejects.toThrow(/Git selection|either "--working-tree"/u);
+      ).rejects.toThrow(/Git selection|either "--working-tree"|"--path-prefix" requires/u);
     });
   }
 

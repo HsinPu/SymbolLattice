@@ -279,6 +279,7 @@ export interface GitAffectedTestsToolArguments {
   readonly baseRef?: string | undefined;
   readonly maxDepth?: number | undefined;
   readonly limit?: number | undefined;
+  readonly path?: string | undefined;
 }
 
 export interface GitHunksToolArguments {
@@ -767,6 +768,12 @@ const gitAffectedTestsOutputSchema = z
   .object({
     status: indexStatusOutputSchema,
     changeSet: z.object({}).passthrough(),
+    selection: z.object({
+      pathPrefix: z.string().nullable(),
+      totalChanges: z.number().int().nonnegative(),
+      matchedSourceChanges: z.number().int().nonnegative(),
+      sourcePaths: z.array(z.string())
+    }),
     affected: affectedTestsOutputSchema.nullable()
   })
   .passthrough();
@@ -1483,7 +1490,8 @@ export async function runGitAffectedTestsTool(
     const options: GitAffectedTestsOptions = {
       ...(arguments_.baseRef === undefined ? {} : { baseRef: arguments_.baseRef }),
       ...(arguments_.maxDepth === undefined ? {} : { maxDepth: arguments_.maxDepth }),
-      ...(arguments_.limit === undefined ? {} : { limit: arguments_.limit })
+      ...(arguments_.limit === undefined ? {} : { limit: arguments_.limit }),
+      ...(arguments_.path === undefined ? {} : { pathPrefix: arguments_.path })
     };
     const result = await service.affectedTestsFromGit(
       arguments_.projectPath ?? defaultProjectPath,
@@ -2033,6 +2041,11 @@ export function createMcpServer(
             .max(256)
             .optional()
             .describe("Optional local Git ref; compares its merge-base with HEAD. Omit for working-tree selection."),
+          path: z
+            .string()
+            .min(1)
+            .optional()
+            .describe("Optional project-relative file or directory matched on either rename/copy path side."),
           maxDepth: z
             .number()
             .int()

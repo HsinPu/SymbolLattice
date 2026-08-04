@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.260.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher can update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.261.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher can update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## Quick start
 
@@ -34,6 +34,9 @@ node dist/cli/main.js investigate "user token" --project /path/to/project --json
 
 # Restrict immutable Git hunk attribution to one exact file or directory
 node dist/cli/main.js git-hunks /path/to/project --base origin/main --path-prefix src/domain --json
+
+# Scope Git changes before analyzing affected tests
+node dist/cli/main.js affected --working-tree --project /path/to/project --path-prefix src/domain --json
 ```
 
 Alternatively, download the version-pinned `.tgz`, SHA-256 checksum, and manifest from [GitHub Releases](https://github.com/HsinPu/symbol-lattice/releases), then install the `.tgz` with npm. Every tagged release verifies the full suite, a clean installation, and build provenance first.
@@ -79,6 +82,7 @@ One manifest may provide `frameworkFactPlugins`, `frameworkProjectPlugins`, and 
 | `watch <path>` | Watch and synchronize in the foreground. |
 | `files [path]` | Page persisted files by glob, projection, and generation-bound cursor. |
 | `git-hunks [path] --base <ref>` | Filter immutable Git hunk attribution with optional `--path-prefix`. |
+| `affected --working-tree` | Scope Git changes with optional `--path-prefix` before affected-test analysis. |
 | `investigate <query>` | Expand textual evidence into structural context. |
 | `impact <symbol>` | Trace bounded impact through exact static relations. |
 | `explain-edge <edge-id>` | Inspect the complete evidence for one relation. |
@@ -92,8 +96,8 @@ One manifest may provide `frameworkFactPlugins`, `frameworkProjectPlugins`, and 
 
 ```bash
 symbol-lattice upgrade --check
-symbol-lattice upgrade 0.260.0 --verify
-symbol-lattice upgrade 0.260.0 --apply --yes
+symbol-lattice upgrade 0.261.0 --verify
+symbol-lattice upgrade 0.261.0 --apply --yes
 ```
 
 ## Verification

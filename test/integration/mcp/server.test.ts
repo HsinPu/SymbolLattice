@@ -440,6 +440,12 @@ function gitAffectedTestsResult(): GitAffectedTestsResult {
       ],
       sourcePaths: ["src/math.ts"]
     },
+    selection: {
+      pathPrefix: null,
+      totalChanges: 1,
+      matchedSourceChanges: 1,
+      sourcePaths: ["src/math.ts"]
+    },
     affected: affectedTestsResult()
   };
 }
@@ -2319,7 +2325,8 @@ describe("SymbolLattice MCP server", () => {
         projectPath: "C:/chosen-project",
         baseRef: "origin/main",
         maxDepth: 4,
-        limit: 7
+        limit: 7,
+        path: "src/"
       }
     });
     expect(result.isError).not.toBe(true);
@@ -2330,7 +2337,7 @@ describe("SymbolLattice MCP server", () => {
     expect(gitCalls).toEqual([
       {
         projectPath: "C:/chosen-project",
-        options: { baseRef: "origin/main", maxDepth: 4, limit: 7 }
+        options: { baseRef: "origin/main", maxDepth: 4, limit: 7, pathPrefix: "src/" }
       }
     ]);
 
