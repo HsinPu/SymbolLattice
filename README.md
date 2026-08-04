@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.253.0 是從原始碼執行的開發預覽版。MCP 查詢工具唯讀；但 `serve --mcp` 預設會啟動獨立的本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用它。
+> v0.254.0 是從原始碼執行的開發預覽版。MCP 查詢工具唯讀；但 `serve --mcp` 預設會啟動獨立的本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用它。
 
 ## 快速開始
 
@@ -76,10 +76,13 @@ node dist/cli/main.js init /path/to/project --plugin ./plugins/acme.mjs
 | `investigate <query>` | 將文字線索展開為結構脈絡。 |
 | `impact <symbol>` | 沿精確靜態關係進行有限影響分析。 |
 | `explain-edge <edge-id>` | 查看一條關係的完整證據。 |
+| `upgrade [version]` | 唯讀檢查或預覽版本升級；不指定版本時才查詢 GitHub Release／tag。 |
 | `serve --mcp` | 啟動 MCP stdio host。 |
 | `mcp-doctor <target>` | 唯讀診斷 Agent MCP 設定、CLI 與索引。 |
 | `mcp-install <target>` | 預覽；加上 `--apply --yes` 後安全寫入 MCP 設定。 |
 | `mcp-uninstall <target>` | 預覽；加上 `--apply --yes` 後移除相符的 MCP 設定。 |
+
+`upgrade` 不會修改套件、原始碼、索引或 Agent 設定。明確指定版本可完全離線產生計畫；目前套件仍是 private，因此不提供自動套用。
 
 ## 驗證
 

@@ -51,8 +51,10 @@ import {
   type McpAutoSyncJournalFactory,
   type McpAutoSyncOwnerLeaseFactory,
   type PluginServiceFactoryOptions,
+  type UpgradePlanner,
   type WatchSignalSource
 } from "../../../src/cli/main.js";
+import type { UpgradePreviewResult } from "../../../src/cli/upgrade.js";
 import type { McpServerSession } from "../../../src/mcp/index.js";
 
 function resultStatus(): SearchResult["status"] {
@@ -2176,6 +2178,54 @@ describe("symbol-lattice v0.253 explicit plugin module CLI", () => {
         { from: "node" }
       )
     ).rejects.toMatchObject<Partial<SymbolLatticeError>>({ code: "INVALID_PLUGIN_MODULE" });
+  });
+});
+
+describe("symbol-lattice v0.254 preview-only upgrade CLI", () => {
+  it("forwards an explicit target and check mode to the planner", async () => {
+    const result: UpgradePreviewResult = {
+      schemaVersion: 1,
+      mode: "check",
+      status: "update-available",
+      currentVersion: "0.253.0",
+      targetVersion: "0.254.0",
+      release: {
+        source: "explicit-version",
+        repository: "HsinPu/symbol-lattice",
+        endpoints: [
+          "https://api.github.com/repos/HsinPu/symbol-lattice/releases/latest",
+          "https://api.github.com/repos/HsinPu/symbol-lattice/tags?per_page=100"
+        ],
+        networkRequested: false
+      },
+      installation: {
+        kind: "source-checkout",
+        root: "C:/repo",
+        steps: [],
+        diagnostics: []
+      },
+      mutation: {
+        performed: false,
+        automaticApplySupported: false
+      },
+      notes: []
+    };
+    const planner = vi.fn<UpgradePlanner>(async () => result);
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+    await createProgram(
+      {} as SymbolLatticeService,
+      undefined,
+      undefined,
+      undefined,
+      planner
+    ).parseAsync(
+      ["node", "symbol-lattice", "upgrade", "v0.254.0", "--check", "--json"],
+      { from: "node" }
+    );
+
+    expect(planner).toHaveBeenCalledWith({ version: "v0.254.0", check: true });
+    expect(write).toHaveBeenCalledWith(`${JSON.stringify(result, null, 2)}\n`);
   });
 });
 

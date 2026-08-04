@@ -82,6 +82,11 @@ import { createMcpConfig, type McpConfigOptions } from "./mcp-config.js";
 import { createMcpDoctor } from "./mcp-doctor.js";
 import { createMcpInstall } from "./mcp-install.js";
 import { createMcpUninstall } from "./mcp-uninstall.js";
+import {
+  createUpgradePreview,
+  type UpgradePreviewOptions,
+  type UpgradePreviewResult
+} from "./upgrade.js";
 
 interface OutputOptions {
   readonly json?: boolean;
@@ -211,6 +216,10 @@ interface McpUninstallCommandOptions extends McpDoctorCommandOptions {
   readonly backupDir?: string;
 }
 
+interface UpgradeCommandOptions extends OutputOptions {
+  readonly check?: boolean;
+}
+
 interface GenerationHistoryCommandOptions extends ProjectOptions {
   readonly limit?: number;
 }
@@ -276,6 +285,10 @@ export interface PluginServiceFactoryOptions {
 export type PluginServiceFactory = (
   options: PluginServiceFactoryOptions
 ) => Promise<SymbolLatticeService>;
+
+export type UpgradePlanner = (
+  options: UpgradePreviewOptions
+) => Promise<UpgradePreviewResult>;
 
 /** Minimal process-signal contract for the foreground watch lifecycle. */
 export interface WatchSignalSource {
@@ -765,7 +778,8 @@ export function createProgram(
   service?: SymbolLatticeService,
   watchRunner: WatchCommandRunner = runForegroundWatch,
   mcpRunner: McpCommandRunner = runMcpWithAutoSync,
-  pluginServiceFactory: PluginServiceFactory = createPluginService
+  pluginServiceFactory: PluginServiceFactory = createPluginService,
+  upgradePlanner: UpgradePlanner = createUpgradePreview
 ): Command {
   const coreService = service ?? createService();
   const indexingService = async (
@@ -793,6 +807,19 @@ export function createProgram(
     .name("symbol-lattice")
     .description("Evidence-first local code intelligence across a multi-language, framework-aware catalog.")
     .version(SYMBOL_LATTICE_VERSION);
+
+  addJsonOption(program.command("upgrade [version]"))
+    .description("Check or preview an upgrade without changing this installation")
+    .option("--check", "Report the current and selected release without producing a mutation")
+    .action(async (version: string | undefined, options: UpgradeCommandOptions) => {
+      render(
+        await upgradePlanner({
+          ...(version === undefined ? {} : { version }),
+          check: options.check ?? false
+        }),
+        options
+      );
+    });
 
   addJsonOption(addPluginOptions(addIndexOptions(addProjectOption(program.command("init [path]")))))
     .action(async (path: string | undefined, options: IndexCommandOptions) => {
