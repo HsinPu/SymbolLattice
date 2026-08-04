@@ -1,4 +1,4 @@
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
 import { parse as parseYaml } from "yaml";
@@ -255,6 +255,63 @@ describe("MCP configuration generator", () => {
     expect(result.notes).toContain(
       "This configuration invokes a fixed local entrypoint; regenerate it after moving the checkout or changing the Node runtime."
     );
+  });
+
+  it("forwards bounded absolute plugin paths and reports whether the host will execute them", () => {
+    const pluginPath = resolve("C:/projects/example/plugins/framework.mjs");
+    const result = createMcpConfig("codex", {
+      projectPath: "C:/projects/example",
+      autoSync: false,
+      pluginModulePaths: [pluginPath],
+      allowExternalPluginModules: true
+    });
+
+    expect(result.server.args).toEqual([
+      "serve",
+      "--mcp",
+      "--project",
+      "C:/projects/example",
+      "--no-auto-sync",
+      "--plugin",
+      pluginPath,
+      "--allow-external-plugin"
+    ]);
+    expect(result.lifecycle.plugins).toEqual({
+      modulePaths: [pluginPath],
+      executesTrustedCode: false,
+      externalModulesAllowed: true
+    });
+    expect(result.notes).toContain(
+      "Plugin modules are configured but are not executed while MCP auto-sync is disabled."
+    );
+  });
+
+  it("rejects unsafe or ambiguous generated plugin arguments", () => {
+    const pluginPath = resolve("C:/projects/example/plugins/framework.mjs");
+    expect(() =>
+      createMcpConfig("codex", {
+        projectPath: "C:/projects/example",
+        pluginModulePaths: ["plugins/framework.mjs"]
+      })
+    ).toThrow("must be non-empty absolute paths");
+    expect(() =>
+      createMcpConfig("codex", {
+        projectPath: "C:/projects/example",
+        pluginModulePaths: [pluginPath, pluginPath]
+      })
+    ).toThrow("must not contain duplicates");
+    expect(() =>
+      createMcpConfig("codex", {
+        projectPath: "C:/projects/example",
+        allowExternalPluginModules: true
+      })
+    ).toThrow("requires at least one explicit plugin module path");
+    expect(() =>
+      createMcpConfig("codex", {
+        projectPath: "C:/projects/example",
+        pluginModulePaths: Array.from({ length: 17 }, (_, index) => resolve(`C:/p${index}.mjs`))
+      })
+    ).toThrow("at most 16 explicit plugin module paths");
   });
 
   it("rejects unknown targets, invalid locations, unsupported target scopes, and blank command inputs", () => {

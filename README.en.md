@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.252.0 is a developer preview that runs from source. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher can update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.253.0 is a developer preview that runs from source. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher can update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## Quick start
 
@@ -44,23 +44,26 @@ node dist/cli/main.js investigate "user token" --project /path/to/project --json
 - Framework fact plugins can add validated symbols, routes, entry points, and pending references from framework syntax. Stable IDs, containment edges, output bounds, source ranges, and provenance remain host-owned.
 - Framework project plugins can inspect frozen project-wide facts after per-file extraction and add cross-file pending references or bounded route-prefix projections. The host creates route identities, moves relations, and retains plugin provenance plus each mount segment.
 
-## Framework fact extensions
+## Plugin extensions
 
-```ts
-const plugins = createFrameworkFactPluginRegistry([{
-  id: "acme/framework-facts",
-  version: "1.0.0",
-  languages: ["typescript"],
-  extract: ({ filePath, sourceText, coreFacts }) => ({
-    symbols: [],
-    references: []
-  })
-}]);
-
-const service = new SymbolLatticeService(store, catalog, { frameworkFactPlugins: plugins });
+```js
+// plugins/acme.mjs
+export const symbolLatticePlugin = {
+  schemaVersion: 1,
+  frameworkFactPlugins: [{
+    id: "acme/framework-facts",
+    version: "1.0.0",
+    languages: ["typescript"],
+    extract: () => ({ symbols: [], references: [] })
+  }]
+};
 ```
 
-Cross-file finalizers use `createFrameworkProjectPluginRegistry` and `frameworkProjectPlugins`; they read extracted facts and return bounded reference or source-ranged route-prefix descriptors. Plugins cannot write raw graph identities. Per-file plugin changes re-extract facts, while project-finalizer changes only reproject them. A `ReferenceResolverPlugin` can be composed for targets that remain unresolved.
+```bash
+node dist/cli/main.js init /path/to/project --plugin ./plugins/acme.mjs
+```
+
+One manifest may provide `frameworkFactPlugins`, `frameworkProjectPlugins`, and `referenceResolverPlugins`. Repeat `--plugin` as needed; the same arguments flow through watch, MCP configuration, install, doctor, and uninstall. Plugins are trusted in-process JavaScript, not a sandbox. SymbolLattice never discovers or executes project modules implicitly. By default, only `.js`, `.mjs`, and `.cjs` files whose real paths stay inside the project are accepted; add `--allow-external-plugin` to trust an explicit external path.
 
 ## Common commands
 
@@ -76,6 +79,7 @@ Cross-file finalizers use `createFrameworkProjectPluginRegistry` and `frameworkP
 | `serve --mcp` | Start the MCP stdio host. |
 | `mcp-doctor <target>` | Read-only diagnosis of an Agent MCP configuration, CLI, and index. |
 | `mcp-install <target>` | Preview or, with `--apply --yes`, safely write an MCP configuration. |
+| `mcp-uninstall <target>` | Preview or, with `--apply --yes`, remove the matching MCP entry. |
 
 ## Verification
 

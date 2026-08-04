@@ -29,6 +29,7 @@ import {
   MIN_WATCH_INTERVAL_MS,
   MAX_IMPACT_LIMIT,
   AutoSyncStatusTracker,
+  loadSymbolLatticePluginModules,
   SymbolLatticeError,
   SymbolLatticeService,
   startForegroundWatch,
@@ -55,6 +56,7 @@ import {
   type HierarchyOptions,
   type SearchOptions,
   type RoutesOptions,
+  type SymbolLatticeServiceExtensions,
   type WatchReceipt
 } from "../application/index.js";
 import { ARTIFACT_LANGUAGES, MAX_SOURCE_SEARCH_LIMIT } from "../domain/index.js";
@@ -90,7 +92,12 @@ interface ProjectOptions extends OutputOptions {
   readonly force?: boolean;
 }
 
-interface IndexCommandOptions extends ProjectOptions {
+interface PluginCommandOptions {
+  readonly plugin?: readonly string[];
+  readonly allowExternalPlugin?: boolean;
+}
+
+interface IndexCommandOptions extends ProjectOptions, PluginCommandOptions {
   readonly scope?: readonly string[];
 }
 
@@ -166,19 +173,19 @@ interface ContextCommandOptions extends ProjectOptions {
   readonly impactLimit?: number;
 }
 
-interface WatchCommandOptions extends ProjectOptions {
+interface WatchCommandOptions extends ProjectOptions, PluginCommandOptions {
   readonly interval?: number;
   readonly poll?: boolean;
 }
 
-interface ServeCommandOptions extends ProjectOptions {
+interface ServeCommandOptions extends ProjectOptions, PluginCommandOptions {
   readonly autoSync?: boolean;
   readonly diagnosticJournal?: boolean;
   readonly syncInterval?: number;
   readonly poll?: boolean;
 }
 
-interface McpConfigCommandOptions extends ProjectOptions {
+interface McpConfigCommandOptions extends ProjectOptions, PluginCommandOptions {
   readonly location?: string;
   readonly autoSync?: boolean;
   readonly diagnosticJournal?: boolean;
@@ -259,21 +266,43 @@ export type McpCommandRunner = (
   options: McpAutoSyncOptions
 ) => Promise<void>;
 
+export interface PluginServiceFactoryOptions {
+  readonly projectPath: string;
+  readonly modulePaths: readonly string[];
+  readonly allowExternalModules: boolean;
+}
+
+/** Injectable seam proving that only index-writing commands load trusted modules. */
+export type PluginServiceFactory = (
+  options: PluginServiceFactoryOptions
+) => Promise<SymbolLatticeService>;
+
 /** Minimal process-signal contract for the foreground watch lifecycle. */
 export interface WatchSignalSource {
   once(signal: NodeJS.Signals, listener: () => void): unknown;
   off(signal: NodeJS.Signals, listener: () => void): unknown;
 }
 
-function createService(): SymbolLatticeService {
+function createService(extensions?: SymbolLatticeServiceExtensions): SymbolLatticeService {
   const gitChangeSetProvider = new FileSystemGitChangeSetProvider();
   return new SymbolLatticeService(
     new SqliteGraphStore(),
     new FileSystemSourceCatalog(),
-    undefined,
+    extensions ?? {},
     gitChangeSetProvider,
     gitChangeSetProvider
   );
+}
+
+async function createPluginService(
+  options: PluginServiceFactoryOptions
+): Promise<SymbolLatticeService> {
+  const loaded = await loadSymbolLatticePluginModules({
+    projectPath: options.projectPath,
+    modulePaths: options.modulePaths,
+    allowExternalModules: options.allowExternalModules
+  });
+  return createService(loaded.extensions);
 }
 
 function defaultProjectPath(options: ProjectOptions): string {
@@ -282,14 +311,24 @@ function defaultProjectPath(options: ProjectOptions): string {
 
 /** Keeps MCP configuration commands aligned on the exact expected serve command. */
 function createMcpCommandOptions(options: McpConfigCommandOptions): McpConfigOptions {
+  const projectPath = defaultProjectPath(options);
+  const pluginModulePaths = (options.plugin ?? []).map((modulePath) => resolve(projectPath, modulePath));
+  if (options.allowExternalPlugin === true && pluginModulePaths.length === 0) {
+    throw new SymbolLatticeError(
+      "INVALID_PLUGIN_MODULE",
+      '"--allow-external-plugin" requires at least one explicit "--plugin <path>".'
+    );
+  }
   return {
-    projectPath: defaultProjectPath(options),
+    projectPath,
     ...(options.location === undefined ? {} : { location: options.location }),
     force: options.force ?? false,
     autoSync: options.autoSync ?? true,
     diagnosticJournal: options.diagnosticJournal ?? true,
     ...(options.syncInterval === undefined ? {} : { syncIntervalMs: options.syncInterval }),
     poll: options.poll ?? false,
+    ...(pluginModulePaths.length === 0 ? {} : { pluginModulePaths }),
+    allowExternalPluginModules: options.allowExternalPlugin ?? false,
     ...(options.source === true
       ? {
           command: process.execPath,
@@ -690,6 +729,23 @@ function collectScope(value: string, previous: readonly string[] = []): string[]
   return [...previous, value];
 }
 
+function collectPlugin(value: string, previous: readonly string[] = []): string[] {
+  return [...previous, value];
+}
+
+function addPluginOptions(command: Command): Command {
+  return command
+    .option(
+      "--plugin <path>",
+      "Load an explicit local .js/.mjs/.cjs plugin module for indexing (repeatable)",
+      collectPlugin
+    )
+    .option(
+      "--allow-external-plugin",
+      "Trust explicitly named plugin modules whose real paths are outside the project root"
+    );
+}
+
 function addIndexOptions(command: Command): Command {
   return command
     .option("--force", "Allow indexing a filesystem root or the home directory")
@@ -706,44 +762,69 @@ function toIndexOptions(projectPath: string, options: IndexCommandOptions) {
 }
 
 export function createProgram(
-  service = createService(),
+  service?: SymbolLatticeService,
   watchRunner: WatchCommandRunner = runForegroundWatch,
-  mcpRunner: McpCommandRunner = runMcpWithAutoSync
+  mcpRunner: McpCommandRunner = runMcpWithAutoSync,
+  pluginServiceFactory: PluginServiceFactory = createPluginService
 ): Command {
+  const coreService = service ?? createService();
+  const indexingService = async (
+    projectPath: string,
+    options: PluginCommandOptions
+  ): Promise<SymbolLatticeService> => {
+    const modulePaths = options.plugin ?? [];
+    if (options.allowExternalPlugin === true && modulePaths.length === 0) {
+      throw new SymbolLatticeError(
+        "INVALID_PLUGIN_MODULE",
+        '"--allow-external-plugin" requires at least one explicit "--plugin <path>".'
+      );
+    }
+    if (service !== undefined || modulePaths.length === 0) {
+      return coreService;
+    }
+    return pluginServiceFactory({
+      projectPath,
+      modulePaths,
+      allowExternalModules: options.allowExternalPlugin ?? false
+    });
+  };
   const program = new Command();
   program
     .name("symbol-lattice")
     .description("Evidence-first local code intelligence across a multi-language, framework-aware catalog.")
     .version(SYMBOL_LATTICE_VERSION);
 
-  addJsonOption(addIndexOptions(addProjectOption(program.command("init [path]"))))
+  addJsonOption(addPluginOptions(addIndexOptions(addProjectOption(program.command("init [path]")))))
     .action(async (path: string | undefined, options: IndexCommandOptions) => {
       const projectPath = resolve(path ?? defaultProjectPath(options));
+      const commandService = await indexingService(projectPath, options);
       render(
-        await service.init(toIndexOptions(projectPath, options)),
+        await commandService.init(toIndexOptions(projectPath, options)),
         options
       );
     });
 
-  addJsonOption(addIndexOptions(addProjectOption(program.command("index [path]"))))
+  addJsonOption(addPluginOptions(addIndexOptions(addProjectOption(program.command("index [path]")))))
     .action(async (path: string | undefined, options: IndexCommandOptions) => {
       const projectPath = resolve(path ?? defaultProjectPath(options));
+      const commandService = await indexingService(projectPath, options);
       render(
-        await service.index(toIndexOptions(projectPath, options)),
+        await commandService.index(toIndexOptions(projectPath, options)),
         options
       );
     });
 
-  addJsonOption(addIndexOptions(addProjectOption(program.command("sync [path]"))))
+  addJsonOption(addPluginOptions(addIndexOptions(addProjectOption(program.command("sync [path]")))))
     .action(async (path: string | undefined, options: IndexCommandOptions) => {
       const projectPath = resolve(path ?? defaultProjectPath(options));
+      const commandService = await indexingService(projectPath, options);
       render(
-        await service.sync(toIndexOptions(projectPath, options)),
+        await commandService.sync(toIndexOptions(projectPath, options)),
         options
       );
     });
 
-  addProjectOption(program.command("watch [path]"))
+  addPluginOptions(addProjectOption(program.command("watch [path]")))
     .option("--force", "Allow automatic sync of a filesystem root or the home directory")
     .option(
       "--interval <milliseconds>",
@@ -754,7 +835,8 @@ export function createProgram(
     .option("--json", "Emit newline-delimited JSON watch receipts (the default)")
     .action(async (path: string | undefined, options: WatchCommandOptions) => {
       const projectPath = resolve(path ?? defaultProjectPath(options));
-      await watchRunner(service, {
+      const commandService = await indexingService(projectPath, options);
+      await watchRunner(commandService, {
         projectPath,
         force: options.force ?? false,
         intervalMs: options.interval ?? DEFAULT_WATCH_INTERVAL_MS,
@@ -766,7 +848,7 @@ export function createProgram(
   addJsonOption(addProjectOption(program.command("status [path]"))).action(
     async (path: string | undefined, options: ProjectOptions) => {
       const projectPath = resolve(path ?? defaultProjectPath(options));
-      render(await service.getStatus(projectPath), options);
+      render(await coreService.getStatus(projectPath), options);
     }
   );
 
@@ -780,7 +862,7 @@ export function createProgram(
       const historyOptions: GenerationHistoryOptions =
         options.limit === undefined ? {} : { limit: options.limit };
       render(
-        await service.history(resolve(path ?? defaultProjectPath(options)), historyOptions),
+        await coreService.history(resolve(path ?? defaultProjectPath(options)), historyOptions),
         options
       );
     });
@@ -803,7 +885,7 @@ export function createProgram(
           ...(options.limit === undefined ? {} : { limit: options.limit })
         };
         render(
-          await service.diff(
+          await coreService.diff(
             resolve(path ?? defaultProjectPath(options)),
             fromGenerationId,
             diffOptions
@@ -824,7 +906,7 @@ export function createProgram(
       if (options.limit !== undefined) {
         findOptions.limit = options.limit;
       }
-      render(await service.find(defaultProjectPath(options), query, findOptions), options);
+      render(await coreService.find(defaultProjectPath(options), query, findOptions), options);
     });
 
   addJsonOption(addProjectOption(program.command("query <query>")))
@@ -838,12 +920,12 @@ export function createProgram(
       if (options.limit !== undefined) {
         findOptions.limit = options.limit;
       }
-      render(await service.find(defaultProjectPath(options), query, findOptions), options);
+      render(await coreService.find(defaultProjectPath(options), query, findOptions), options);
     });
 
   addJsonOption(addProjectOption(program.command("node <reference>"))).action(
     async (reference: string, options: ProjectOptions) => {
-      render(await service.node(defaultProjectPath(options), reference), options);
+      render(await coreService.node(defaultProjectPath(options), reference), options);
     }
   );
 
@@ -866,7 +948,7 @@ export function createProgram(
         ...(options.language === undefined ? {} : { language: options.language })
       };
       render(
-        await service.search(defaultProjectPath(options), normalizeSearchQuery(query), searchOptions),
+        await coreService.search(defaultProjectPath(options), normalizeSearchQuery(query), searchOptions),
         options
       );
     });
@@ -926,7 +1008,7 @@ export function createProgram(
         ...(options.impactLimit === undefined ? {} : { impactLimit: options.impactLimit })
       };
       render(
-        await service.investigate(
+        await coreService.investigate(
           defaultProjectPath(options),
           normalizeSearchQuery(query),
           investigateOptions
@@ -958,7 +1040,7 @@ export function createProgram(
         ...(options.limit === undefined ? {} : { limit: options.limit })
       };
       render(
-        await service.files(resolve(projectPath ?? defaultProjectPath(options)), fileOptions),
+        await coreService.files(resolve(projectPath ?? defaultProjectPath(options)), fileOptions),
         options
       );
     });
@@ -992,7 +1074,7 @@ export function createProgram(
         ...(options.limit === undefined ? {} : { limit: options.limit })
       };
       render(
-        await service.routes(resolve(path ?? defaultProjectPath(options)), routeOptions),
+        await coreService.routes(resolve(path ?? defaultProjectPath(options)), routeOptions),
         options
       );
     });
@@ -1026,7 +1108,7 @@ export function createProgram(
         ...(options.limit === undefined ? {} : { limit: options.limit })
       };
       render(
-        await service.entrypoints(resolve(path ?? defaultProjectPath(options)), entrypointOptions),
+        await coreService.entrypoints(resolve(path ?? defaultProjectPath(options)), entrypointOptions),
         options
       );
     });
@@ -1041,7 +1123,7 @@ export function createProgram(
       const hierarchyOptions: HierarchyOptions = {
         ...(options.limit === undefined ? {} : { limit: options.limit })
       };
-      render(await service.hierarchy(defaultProjectPath(options), reference, hierarchyOptions), options);
+      render(await coreService.hierarchy(defaultProjectPath(options), reference, hierarchyOptions), options);
     });
 
   for (const commandName of ["callers", "callees"] as const) {
@@ -1050,8 +1132,8 @@ export function createProgram(
         const projectPath = defaultProjectPath(options);
         const result =
           commandName === "callers"
-            ? await service.callers(projectPath, reference)
-            : await service.callees(projectPath, reference);
+            ? await coreService.callers(projectPath, reference)
+            : await coreService.callees(projectPath, reference);
         render(result, options);
       }
     );
@@ -1070,7 +1152,7 @@ export function createProgram(
         ...(options.limit === undefined ? {} : { limit: options.limit })
       };
       render(
-        await service.impact(defaultProjectPath(options), reference, impactOptions),
+        await coreService.impact(defaultProjectPath(options), reference, impactOptions),
         options
       );
     });
@@ -1115,14 +1197,14 @@ export function createProgram(
           ...(options.base === undefined ? {} : { baseRef: options.base })
         };
         render(
-          await service.affectedTestsFromGit(defaultProjectPath(options), gitOptions),
+          await coreService.affectedTestsFromGit(defaultProjectPath(options), gitOptions),
           options
         );
         return;
       }
       const stdinPaths = options.stdin ? parseAffectedStdin(readFileSync(0, "utf8")) : [];
       render(
-        await service.affectedTests(defaultProjectPath(options), [...filePaths, ...stdinPaths], affectedOptions),
+        await coreService.affectedTests(defaultProjectPath(options), [...filePaths, ...stdinPaths], affectedOptions),
         options
       );
     });
@@ -1141,7 +1223,7 @@ export function createProgram(
       const gitHunksOptions: GitHunksOptions =
         options.limit === undefined ? {} : { limit: options.limit };
       render(
-        await service.gitHunks(
+        await coreService.gitHunks(
           resolve(path ?? defaultProjectPath(options)),
           options.base ?? "",
           gitHunksOptions
@@ -1178,22 +1260,22 @@ export function createProgram(
         ...(options.impactDepth === undefined ? {} : { impactDepth: options.impactDepth }),
         ...(options.impactLimit === undefined ? {} : { impactLimit: options.impactLimit })
       };
-      render(await service.context(defaultProjectPath(options), references, contextOptions), options);
+      render(await coreService.context(defaultProjectPath(options), references, contextOptions), options);
     });
 
   addJsonOption(addProjectOption(program.command("explore <query>"))).action(
     async (query: string, options: ProjectOptions) => {
-      render(await service.explore(defaultProjectPath(options), query), options);
+      render(await coreService.explore(defaultProjectPath(options), query), options);
     }
   );
 
   addJsonOption(addProjectOption(program.command("explain-edge <edge-id>"))).action(
     async (edgeId: string, options: ProjectOptions) => {
-      render(await service.explainEdge(defaultProjectPath(options), edgeId), options);
+      render(await coreService.explainEdge(defaultProjectPath(options), edgeId), options);
     }
   );
 
-  addJsonOption(addProjectOption(program.command("mcp-config <target>")))
+  addJsonOption(addPluginOptions(addProjectOption(program.command("mcp-config <target>"))))
     .option("--location <scope>", "Target configuration scope: global or local (default depends on target)")
     .option("--force", "Include the explicit broad-project auto-sync permission")
     .option("--no-auto-sync", "Generate configuration with background incremental sync disabled")
@@ -1218,7 +1300,7 @@ export function createProgram(
       render(result, options);
     });
 
-  addJsonOption(addProjectOption(program.command("mcp-doctor <target>")))
+  addJsonOption(addPluginOptions(addProjectOption(program.command("mcp-doctor <target>"))))
     .option("--location <scope>", "Target configuration scope: global or local (default depends on target)")
     .option("--config <path>", "Read this configuration file instead of the target's conventional destination")
     .option("--force", "Match a configuration generated with the explicit broad-project auto-sync permission")
@@ -1242,7 +1324,7 @@ export function createProgram(
       render(result, options);
     });
 
-  addJsonOption(addProjectOption(program.command("mcp-install <target>")))
+  addJsonOption(addPluginOptions(addProjectOption(program.command("mcp-install <target>"))))
     .option("--location <scope>", "Target configuration scope: global or local (default depends on target)")
     .option("--config <path>", "Write this configuration file instead of the target's conventional destination")
     .option("--backup-dir <path>", "Directory for a full pre-write configuration backup")
@@ -1272,7 +1354,7 @@ export function createProgram(
       render(result, options);
     });
 
-  addJsonOption(addProjectOption(program.command("mcp-uninstall <target>")))
+  addJsonOption(addPluginOptions(addProjectOption(program.command("mcp-uninstall <target>"))))
     .option("--location <scope>", "Target configuration scope: global or local (default depends on target)")
     .option("--config <path>", "Update this configuration file instead of the target's conventional destination")
     .option("--backup-dir <path>", "Directory for a full pre-write configuration backup")
@@ -1302,7 +1384,7 @@ export function createProgram(
       render(result, options);
     });
 
-  addProjectOption(program.command("serve"))
+  addPluginOptions(addProjectOption(program.command("serve")))
     .requiredOption("--mcp", "Run the MCP stdio server")
     .option("--force", "Allow background sync of a filesystem root or the home directory")
     .option("--no-auto-sync", "Disable background incremental sync while serving MCP")
@@ -1317,10 +1399,13 @@ export function createProgram(
     )
     .option("--poll", "Disable native filesystem-event acceleration for MCP auto-sync")
     .action(async (options: ServeCommandOptions) => {
-      await mcpRunner(service, {
-        projectPath: defaultProjectPath(options),
+      const projectPath = defaultProjectPath(options);
+      const autoSync = options.autoSync ?? true;
+      const commandService = autoSync ? await indexingService(projectPath, options) : coreService;
+      await mcpRunner(commandService, {
+        projectPath,
         force: options.force ?? false,
-        autoSync: options.autoSync ?? true,
+        autoSync,
         diagnosticJournal: options.diagnosticJournal ?? true,
         intervalMs: options.syncInterval ?? DEFAULT_WATCH_INTERVAL_MS,
         poll: options.poll ?? false

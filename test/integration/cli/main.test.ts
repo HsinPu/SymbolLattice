@@ -50,6 +50,7 @@ import {
   type McpAutoSyncOptions,
   type McpAutoSyncJournalFactory,
   type McpAutoSyncOwnerLeaseFactory,
+  type PluginServiceFactoryOptions,
   type WatchSignalSource
 } from "../../../src/cli/main.js";
 import type { McpServerSession } from "../../../src/mcp/index.js";
@@ -2047,6 +2048,134 @@ describe("symbol-lattice v0.12 immutable Git hunk CLI", () => {
         { from: "node" }
       )
     ).rejects.toThrow("Expected an integer between 1 and 100");
+  });
+});
+
+describe("symbol-lattice v0.253 explicit plugin module CLI", () => {
+  it("creates a plugin-bound service only for an explicit indexing command", async () => {
+    const factoryCalls: PluginServiceFactoryOptions[] = [];
+    const init = vi.fn(async () => resultStatus());
+    const pluginServiceFactory = async (
+      options: PluginServiceFactoryOptions
+    ): Promise<SymbolLatticeService> => {
+      factoryCalls.push(options);
+      return { init } as unknown as SymbolLatticeService;
+    };
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+    await createProgram(
+      undefined,
+      async () => undefined,
+      async () => undefined,
+      pluginServiceFactory
+    ).parseAsync(
+      [
+        "node",
+        "symbol-lattice",
+        "init",
+        "C:/chosen-project",
+        "--plugin",
+        "plugins/framework.mjs",
+        "--allow-external-plugin",
+        "--json"
+      ],
+      { from: "node" }
+    );
+
+    expect(factoryCalls).toEqual([
+      {
+        projectPath: resolve("C:/chosen-project"),
+        modulePaths: ["plugins/framework.mjs"],
+        allowExternalModules: true
+      }
+    ]);
+    expect(init).toHaveBeenCalledWith({ projectPath: resolve("C:/chosen-project"), force: false });
+    expect(write).toHaveBeenCalledWith(`${JSON.stringify(resultStatus(), null, 2)}\n`);
+  });
+
+  it("does not execute a configured plugin when MCP auto-sync is disabled", async () => {
+    const pluginServiceFactory = vi.fn(async () => {
+      throw new Error("plugin modules must not execute without an index writer");
+    });
+    const mcpRunner = vi.fn(async () => undefined);
+
+    await createProgram(undefined, async () => undefined, mcpRunner, pluginServiceFactory).parseAsync(
+      [
+        "node",
+        "symbol-lattice",
+        "serve",
+        "--mcp",
+        "--project",
+        "C:/chosen-project",
+        "--plugin",
+        "plugins/framework.mjs",
+        "--no-auto-sync"
+      ],
+      { from: "node" }
+    );
+
+    expect(pluginServiceFactory).not.toHaveBeenCalled();
+    expect(mcpRunner).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        projectPath: resolve("C:/chosen-project"),
+        autoSync: false
+      })
+    );
+  });
+
+  it("renders absolute plugin paths into MCP configuration without importing them", async () => {
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+    await createProgram({} as SymbolLatticeService).parseAsync(
+      [
+        "node",
+        "symbol-lattice",
+        "mcp-config",
+        "codex",
+        "--project",
+        "C:/chosen-project",
+        "--plugin",
+        "plugins/framework.mjs",
+        "--plugin",
+        "C:/shared/resolver.cjs",
+        "--allow-external-plugin"
+      ],
+      { from: "node" }
+    );
+
+    const output = JSON.parse(String(write.mock.calls[0]?.[0]));
+    expect(output.server.args).toEqual([
+      "serve",
+      "--mcp",
+      "--project",
+      resolve("C:/chosen-project"),
+      "--plugin",
+      resolve("C:/chosen-project/plugins/framework.mjs"),
+      "--plugin",
+      resolve("C:/shared/resolver.cjs"),
+      "--allow-external-plugin"
+    ]);
+    expect(output.lifecycle.plugins).toEqual({
+      modulePaths: [
+        resolve("C:/chosen-project/plugins/framework.mjs"),
+        resolve("C:/shared/resolver.cjs")
+      ],
+      executesTrustedCode: true,
+      externalModulesAllowed: true
+    });
+  });
+
+  it("rejects external trust permission when no module was named", async () => {
+    const program = createProgram({} as SymbolLatticeService);
+    program.exitOverride();
+
+    await expect(
+      program.parseAsync(
+        ["node", "symbol-lattice", "mcp-config", "codex", "--allow-external-plugin"],
+        { from: "node" }
+      )
+    ).rejects.toMatchObject<Partial<SymbolLatticeError>>({ code: "INVALID_PLUGIN_MODULE" });
   });
 });
 

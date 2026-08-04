@@ -1,4 +1,4 @@
-import { join } from "node:path";
+import { isAbsolute, join } from "node:path";
 
 /** Agent-specific MCP configuration formats that SymbolLattice can render without writing a file. */
 export const MCP_CONFIG_TARGETS = [
@@ -34,6 +34,9 @@ export interface McpConfigOptions {
   readonly diagnosticJournal?: boolean;
   readonly syncIntervalMs?: number;
   readonly poll?: boolean;
+  /** Explicit absolute module paths forwarded to `serve --mcp`; no discovery occurs. */
+  readonly pluginModulePaths?: readonly string[];
+  readonly allowExternalPluginModules?: boolean;
 }
 
 export interface McpConfigResult {
@@ -62,6 +65,11 @@ export interface McpConfigResult {
       readonly diagnosticJournalMayBeWritten: boolean;
       readonly disableFlag: "--no-auto-sync";
     };
+    readonly plugins: {
+      readonly modulePaths: readonly string[];
+      readonly executesTrustedCode: boolean;
+      readonly externalModulesAllowed: boolean;
+    };
   };
   readonly snippet: string;
   readonly notes: readonly string[];
@@ -89,6 +97,7 @@ interface McpConfigTargetDefinition {
 const JSON_SERVER_KEY = "symbol-lattice";
 const TOML_SERVER_KEY = "symbol_lattice";
 const YAML_SERVER_KEY = "symbol_lattice";
+const MAX_PLUGIN_MODULES = 16;
 
 /**
  * Data-only target registry. Adding a target is confined to one entry: supported
@@ -244,13 +253,20 @@ export function createMcpConfig(targetInput: string, options: McpConfigOptions):
   const diagnosticJournal = options.diagnosticJournal ?? true;
   const command = requireCommand(options.command ?? "symbol-lattice");
   const commandArgs = options.commandArgs ?? [];
+  const pluginModulePaths = normalizePluginModulePaths(options);
   const projectArgument = definition.projectArgument?.(location, projectPath) ?? projectPath;
   const server = {
     name: "symbol-lattice" as const,
     command,
     args: [
       ...commandArgs,
-      ...buildServeArgs({ ...options, projectPath: projectArgument, autoSync, diagnosticJournal })
+      ...buildServeArgs({
+        ...options,
+        projectPath: projectArgument,
+        autoSync,
+        diagnosticJournal,
+        pluginModulePaths
+      })
     ]
   };
   const context: McpConfigRenderContext = {
@@ -273,11 +289,22 @@ export function createMcpConfig(targetInput: string, options: McpConfigOptions):
         projectIndexMayBeWritten: autoSync,
         diagnosticJournalMayBeWritten: autoSync && diagnosticJournal,
         disableFlag: "--no-auto-sync"
+      },
+      plugins: {
+        modulePaths: pluginModulePaths,
+        executesTrustedCode: autoSync && pluginModulePaths.length > 0,
+        externalModulesAllowed: options.allowExternalPluginModules ?? false
       }
     },
     snippet: definition.render(context),
     notes: [
-      ...configurationNotes(autoSync, diagnosticJournal, options.force ?? false, commandArgs.length > 0),
+      ...configurationNotes(
+        autoSync,
+        diagnosticJournal,
+        options.force ?? false,
+        commandArgs.length > 0,
+        pluginModulePaths.length
+      ),
       ...(definition.notes?.(context) ?? [])
     ]
   };
@@ -327,6 +354,26 @@ function requireCommand(value: string): string {
   return value;
 }
 
+function normalizePluginModulePaths(options: McpConfigOptions): readonly string[] {
+  const modulePaths = options.pluginModulePaths ?? [];
+  if (!Array.isArray(modulePaths) || modulePaths.length > MAX_PLUGIN_MODULES) {
+    throw new Error(`Expected at most ${MAX_PLUGIN_MODULES} explicit plugin module paths.`);
+  }
+  const normalized = modulePaths.map((modulePath) => {
+    if (typeof modulePath !== "string" || modulePath.trim().length === 0 || !isAbsolute(modulePath)) {
+      throw new Error("Generated MCP plugin module paths must be non-empty absolute paths.");
+    }
+    return modulePath;
+  });
+  if (new Set(normalized).size !== normalized.length) {
+    throw new Error("Generated MCP plugin module paths must not contain duplicates.");
+  }
+  if (options.allowExternalPluginModules === true && normalized.length === 0) {
+    throw new Error("External plugin permission requires at least one explicit plugin module path.");
+  }
+  return Object.freeze(normalized);
+}
+
 function buildServeArgs(options: Required<Pick<McpConfigOptions, "projectPath">> & McpConfigOptions): string[] {
   const args = ["serve", "--mcp", "--project", options.projectPath];
   if (options.force === true) {
@@ -343,6 +390,12 @@ function buildServeArgs(options: Required<Pick<McpConfigOptions, "projectPath">>
   }
   if (options.poll === true) {
     args.push("--poll");
+  }
+  for (const modulePath of options.pluginModulePaths ?? []) {
+    args.push("--plugin", modulePath);
+  }
+  if (options.allowExternalPluginModules === true) {
+    args.push("--allow-external-plugin");
   }
   return args;
 }
@@ -447,7 +500,8 @@ function configurationNotes(
   autoSync: boolean,
   diagnosticJournal: boolean,
   force: boolean,
-  sourceEntrypointIncluded: boolean
+  sourceEntrypointIncluded: boolean,
+  pluginModuleCount: number
 ): readonly string[] {
   const notes = [
     "This command only generates configuration; it does not modify an Agent configuration file.",
@@ -468,6 +522,13 @@ function configurationNotes(
   }
   if (sourceEntrypointIncluded) {
     notes.push("This configuration invokes a fixed local entrypoint; regenerate it after moving the checkout or changing the Node runtime.");
+  }
+  if (pluginModuleCount > 0) {
+    notes.push(
+      autoSync
+        ? "Explicit plugin modules execute trusted JavaScript in the MCP host for indexing; inspect every path before installing."
+        : "Plugin modules are configured but are not executed while MCP auto-sync is disabled."
+    );
   }
   return notes;
 }

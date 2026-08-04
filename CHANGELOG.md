@@ -6,6 +6,26 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.253.0] - 2026-08-04
+
+### Added
+
+- Added explicit local JavaScript module loading for the existing `FrameworkFactPlugin`, `FrameworkProjectPlugin`, and `ReferenceResolverPlugin` registries. `init`, `index`, `sync`, `watch`, and MCP auto-sync accept repeatable `--plugin <path>` arguments.
+- One schema-versioned manifest may export all three plugin kinds. The host merges modules, then applies the existing registry validation, canonical ordering, semantic fingerprints, output bounds, provenance, and generation-freshness rules.
+- `mcp-config`, `mcp-doctor`, `mcp-install`, and `mcp-uninstall` preserve absolute plugin paths in the generated `serve --mcp` arguments and disclose whether the resulting host will execute trusted plugin code.
+
+### Safety and compatibility
+
+- No plugin is discovered from repository contents. A process loads at most 16 explicitly named `.js`, `.mjs`, or `.cjs` files; raw TypeScript is not executed. Real paths must remain inside the project unless `--allow-external-plugin` is also supplied, so path traversal and symlink escape do not bypass the trust boundary.
+- Duplicate real paths, unsupported extensions, missing files, unknown manifest fields, unsupported schema versions, empty manifests, malformed registry entries, and plugin-id collisions fail with `INVALID_PLUGIN_MODULE` before indexing begins.
+- Importing a plugin executes trusted JavaScript in-process and is not a sandbox. Read-only query commands never load plugins, and `serve --no-auto-sync` does not execute configured plugin modules because it owns no index writer.
+- Existing programmatic registry APIs remain available. Stored graph and SQLite schemas are unchanged; plugin versions continue to drive the already-defined extractor or project-resolver freshness boundaries.
+
+### Comparison boundary
+
+- At CodeGraph commit `49c11fc2e0c02170742be8411e66a31af611f4b7`, `registerFrameworkResolver` exposes an in-process mutable resolver registry, but the inspected CLI has no explicit plugin-module argument. SymbolLattice is now better for auditable CLI-to-MCP plugin activation and module-path safety; CodeGraph remains broader in first-party resolver coverage and has richer full-agent install, uninstall, and upgrade workflows.
+- SymbolLattice already had preview-first `mcp-uninstall`; this release corrects the prior comparison record that treated uninstall as absent. Its uninstaller remains narrower than CodeGraph because it removes the matching MCP configuration entry only, not Agent instructions, permissions, or legacy hooks.
+
 ## [0.252.0] - 2026-08-04
 
 ### Added
