@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.256.0 是開發預覽版。MCP 查詢工具唯讀；但 `serve --mcp` 預設會啟動獨立的本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用它。
+> v0.257.0 是開發預覽版。MCP 查詢工具唯讀；但 `serve --mcp` 預設會啟動獨立的本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用它。
 
 ## 快速開始
 
@@ -40,7 +40,7 @@ node dist/cli/main.js investigate "user token" --project /path/to/project --json
 - 將多種語言與常見框架掃描成專案本機程式碼圖譜。
 - 查詢 symbols、files、calls、routes、entrypoints、impact、history 與 diff。
 - 每條關係保留規則、階段、候選目標、信心度、解析路徑與來源範圍。
-- `files` 僅列出 active generation 已保存的檔案，並顯示語言、索引時間、圖譜計數與 freshness。
+- `files` 僅查詢 active generation 已保存的檔案，支援 anchored glob、flat/tree/grouped 投影，並明示結果截斷、樹深限制、圖譜計數與 freshness。
 - 擴充框架的 route plugin 可精確解析同檔案與跨檔案固定 prefix mount；`explain-edge` 會顯示每段 mount 與 ESM import／re-export 路徑。動態或模糊組合不會被猜測成路由。
 - 專案可註冊有版本的 reference resolver plugin，僅處理內建解析器留下的未解析關係；宿主會限制候選、驗證結果，並將衝突、例外或不安全選擇保留為可解釋的 unresolved 證據。
 - framework fact plugin 可從框架語法新增受驗證的 symbols、routes、entrypoints 與 pending references。穩定 ID、containment edge、輸出上限、來源範圍與 provenance 都由宿主控制。
@@ -74,7 +74,7 @@ node dist/cli/main.js init /path/to/project --plugin ./plugins/acme.mjs
 | `init <path>` | 建立圖譜。 |
 | `sync <path>` | 明確同步或修復圖譜。 |
 | `watch <path>` | 在前景監看並同步。 |
-| `files [path]` | 列出已保存檔案與逐檔圖譜計數。 |
+| `files [path]` | 以 glob、平面、樹狀或語言分組列出已保存檔案。 |
 | `investigate <query>` | 將文字線索展開為結構脈絡。 |
 | `impact <symbol>` | 沿精確靜態關係進行有限影響分析。 |
 | `explain-edge <edge-id>` | 查看一條關係的完整證據。 |
@@ -88,8 +88,8 @@ node dist/cli/main.js init /path/to/project --plugin ./plugins/acme.mjs
 
 ```bash
 symbol-lattice upgrade --check
-symbol-lattice upgrade 0.256.0 --verify
-symbol-lattice upgrade 0.256.0 --apply --yes
+symbol-lattice upgrade 0.257.0 --verify
+symbol-lattice upgrade 0.257.0 --apply --yes
 ```
 
 ## 驗證

@@ -235,6 +235,10 @@ export interface SearchResult {
 /** Public persisted file listing remains intentionally bounded independently of graph size. */
 export const DEFAULT_FILE_LIMIT = 50;
 export const MAX_FILE_LIMIT = 100;
+export const MAX_FILE_PATTERN_LENGTH = 256;
+export const MAX_FILE_TREE_DEPTH = 20;
+export const FILE_FORMATS = ["flat", "tree", "grouped"] as const;
+export type FileFormat = (typeof FILE_FORMATS)[number];
 
 /** Optional project-relative path-prefix and exact language filters for indexed files. */
 export interface FilesOptions {
@@ -242,6 +246,12 @@ export interface FilesOptions {
   readonly pathPrefix?: string;
   /** Restricts results to one source language stored in the active generation. */
   readonly language?: ArtifactLanguage;
+  /** Anchored project-relative glob. `*` excludes `/`; `**` may cross directories. */
+  readonly pattern?: string;
+  /** Optional projection; flat preserves the original file-list contract. */
+  readonly format?: FileFormat;
+  /** Tree-only maximum visible path depth. Top-level entries have depth 1. */
+  readonly maxDepth?: number;
   /** Maximum indexed file records returned from the active generation. */
   readonly limit?: number;
 }
@@ -265,6 +275,37 @@ export interface FilesBounds {
   readonly maximumLimit: number;
 }
 
+export interface FileTreeFileNode {
+  readonly kind: "file";
+  readonly name: string;
+  readonly path: string;
+  readonly file: IndexedFileSummary;
+}
+
+export interface FileTreeDirectoryNode {
+  readonly kind: "directory";
+  readonly name: string;
+  readonly path: string;
+  /** Number of returned file records represented below this directory. */
+  readonly returnedFileCount: number;
+  /** True when descendants exist but were intentionally hidden by maxDepth. */
+  readonly depthLimited: boolean;
+  readonly children: readonly FileTreeNode[];
+}
+
+export type FileTreeNode = FileTreeFileNode | FileTreeDirectoryNode;
+
+export interface FileTreeProjection {
+  readonly returnedFileCount: number;
+  readonly children: readonly FileTreeNode[];
+}
+
+export interface FileLanguageGroup {
+  readonly language: ArtifactLanguage;
+  readonly fileCount: number;
+  readonly files: readonly IndexedFileSummary[];
+}
+
 /**
  * A read-only active-generation file inventory. File records and counts are
  * derived only from the persisted graph; `status` reports live freshness
@@ -273,7 +314,12 @@ export interface FilesBounds {
 export interface FilesResult {
   readonly status: IndexStatus;
   readonly bounds: FilesBounds;
+  readonly format: FileFormat;
+  /** Count after path, language, and glob filters but before `bounds.limit`. */
+  readonly matchedFileCount: number;
   readonly files: readonly IndexedFileSummary[];
+  readonly tree?: FileTreeProjection;
+  readonly groups?: readonly FileLanguageGroup[];
   /** True only when matching persisted files were omitted by `bounds.limit`. */
   readonly truncated: boolean;
 }

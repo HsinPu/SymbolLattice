@@ -21489,6 +21489,40 @@ describe("SymbolLatticeService", () => {
     expect(files.files.map((file) => file.filePath)).toEqual(["src/api.ts", "src/token.ts"]);
     expect(files.files.every((file) => file.indexedAt === indexed.indexedAt)).toBe(true);
 
+    const tree = await service.files(projectPath, {
+      format: "tree",
+      pattern: "**/*.ts",
+      maxDepth: 1
+    });
+    expect(tree).toMatchObject({
+      format: "tree",
+      matchedFileCount: 2,
+      tree: {
+        returnedFileCount: 2,
+        children: [{
+          kind: "directory",
+          name: "src",
+          path: "src",
+          returnedFileCount: 2,
+          depthLimited: true,
+          children: []
+        }]
+      },
+      truncated: false
+    });
+    expect(tree).not.toHaveProperty("groups");
+
+    const grouped = await service.files(projectPath, { format: "grouped" });
+    expect(grouped).toMatchObject({
+      format: "grouped",
+      matchedFileCount: 3,
+      groups: [
+        { language: "typescript", fileCount: 2 },
+        { language: "python", fileCount: 1 }
+      ]
+    });
+    expect(grouped).not.toHaveProperty("tree");
+
     const bounded = await service.files(projectPath, { limit: 1 });
     expect(bounded).toMatchObject({
       bounds: { limit: 1, maximumLimit: MAX_FILE_LIMIT },
@@ -21509,6 +21543,21 @@ describe("SymbolLatticeService", () => {
     ).rejects.toMatchObject({ code: "INVALID_FILE_LANGUAGE" });
     await expect(service.files(projectPath, { limit: 0 })).rejects.toMatchObject({
       code: "INVALID_FILE_LIMIT"
+    });
+    await expect(service.files(projectPath, { pattern: "../**/*.ts" })).rejects.toMatchObject({
+      code: "INVALID_FILE_PATTERN"
+    });
+    await expect(service.files(projectPath, { pattern: "./" })).rejects.toMatchObject({
+      code: "INVALID_FILE_PATTERN"
+    });
+    await expect(service.files(projectPath, { format: "yaml" as never })).rejects.toMatchObject({
+      code: "INVALID_FILE_FORMAT"
+    });
+    await expect(service.files(projectPath, { format: "tree", maxDepth: 0 })).rejects.toMatchObject({
+      code: "INVALID_FILE_MAX_DEPTH"
+    });
+    await expect(service.files(projectPath, { format: "flat", maxDepth: 2 })).rejects.toMatchObject({
+      code: "INVALID_FILE_MAX_DEPTH"
     });
   });
 });

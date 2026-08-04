@@ -19,6 +19,9 @@ import {
   MAX_GIT_HUNK_LIMIT,
   MAX_HIERARCHY_LIMIT,
   MAX_ENTRYPOINT_LIMIT,
+  FILE_FORMATS,
+  MAX_FILE_PATTERN_LENGTH,
+  MAX_FILE_TREE_DEPTH,
   MAX_FILE_LIMIT,
   MAX_ROUTE_LIMIT,
   ENTRYPOINT_OPERATIONS,
@@ -121,6 +124,9 @@ interface FilesCommandOptions extends ProjectOptions {
   readonly limit?: number;
   readonly path?: string;
   readonly language?: NonNullable<FilesOptions["language"]>;
+  readonly pattern?: string;
+  readonly format?: NonNullable<FilesOptions["format"]>;
+  readonly maxDepth?: number;
 }
 
 interface InvestigateCommandOptions extends ProjectOptions {
@@ -394,6 +400,21 @@ function parseSearchPath(value: string): string {
     throw new Error("Expected a non-empty project-relative path prefix.");
   }
   return pathPrefix;
+}
+
+function parseFilePattern(value: string): string {
+  const pattern = value.trim();
+  if (pattern.length === 0 || pattern.length > MAX_FILE_PATTERN_LENGTH) {
+    throw new Error(`Expected a non-empty file glob of at most ${MAX_FILE_PATTERN_LENGTH} characters.`);
+  }
+  return pattern;
+}
+
+function parseFileFormat(value: string): NonNullable<FilesOptions["format"]> {
+  if (!FILE_FORMATS.includes(value as NonNullable<FilesOptions["format"]>)) {
+    throw new Error(`Expected one of: ${FILE_FORMATS.join(", ")}; received "${value}".`);
+  }
+  return value as NonNullable<FilesOptions["format"]>;
 }
 
 function parseSearchLanguage(value: string): NonNullable<SearchOptions["language"]> {
@@ -1071,6 +1092,21 @@ export function createProgram(
       parseSearchLanguage
     )
     .option(
+      "--pattern <project-relative-glob>",
+      "Restrict persisted file records with anchored *, ?, and ** glob semantics",
+      parseFilePattern
+    )
+    .option(
+      "--format <format>",
+      `Project returned files as ${FILE_FORMATS.join(", ")}`,
+      parseFileFormat
+    )
+    .option(
+      "--max-depth <count>",
+      `Maximum rendered tree depth (1-${MAX_FILE_TREE_DEPTH}; tree format only)`,
+      (value: string) => parseBoundedPositiveInteger(value, MAX_FILE_TREE_DEPTH)
+    )
+    .option(
       "--limit <count>",
       `Maximum indexed file records to return (1-${MAX_FILE_LIMIT})`,
       (value: string) => parseBoundedPositiveInteger(value, MAX_FILE_LIMIT)
@@ -1079,6 +1115,9 @@ export function createProgram(
       const fileOptions: FilesOptions = {
         ...(options.path === undefined ? {} : { pathPrefix: options.path }),
         ...(options.language === undefined ? {} : { language: options.language }),
+        ...(options.pattern === undefined ? {} : { pattern: options.pattern }),
+        ...(options.format === undefined ? {} : { format: options.format }),
+        ...(options.maxDepth === undefined ? {} : { maxDepth: options.maxDepth }),
         ...(options.limit === undefined ? {} : { limit: options.limit })
       };
       render(

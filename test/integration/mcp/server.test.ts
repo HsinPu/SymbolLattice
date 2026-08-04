@@ -680,6 +680,8 @@ function filesResult(): FilesResult {
   return {
     status: exploreResult().status,
     bounds: { limit: 7, maximumLimit: 100 },
+    format: "tree",
+    matchedFileCount: 1,
     files: [
       {
         filePath: "src/routes.ts",
@@ -1472,6 +1474,9 @@ describe("SymbolLattice MCP server", () => {
       properties: {
         path: expect.objectContaining({ type: "string" }),
         language: expect.objectContaining({ type: "string" }),
+        pattern: expect.objectContaining({ type: "string", maxLength: 256 }),
+        format: expect.objectContaining({ type: "string" }),
+        maxDepth: expect.objectContaining({ type: "integer", minimum: 1, maximum: 20 }),
         limit: expect.objectContaining({ type: "integer", minimum: 1, maximum: 100 })
       }
     });
@@ -1481,7 +1486,11 @@ describe("SymbolLattice MCP server", () => {
       properties: {
         status: { type: "object" },
         bounds: { type: "object" },
+        format: { type: "string" },
+        matchedFileCount: { type: "integer" },
         files: { type: "array" },
+        tree: { type: "object" },
+        groups: { type: "array" },
         truncated: { type: "boolean" }
       }
     });
@@ -1492,6 +1501,9 @@ describe("SymbolLattice MCP server", () => {
         projectPath: "C:/chosen-project",
         path: "src",
         language: "typescript",
+        pattern: "**/*.ts",
+        format: "tree",
+        maxDepth: 3,
         limit: 7
       }
     });
@@ -1500,6 +1512,8 @@ describe("SymbolLattice MCP server", () => {
     expect(result.structuredContent).toMatchObject({
       status: { stale: false },
       bounds: { limit: 7, maximumLimit: 100 },
+      format: "tree",
+      matchedFileCount: 1,
       files: [
         {
           filePath: "src/routes.ts",
@@ -1514,7 +1528,14 @@ describe("SymbolLattice MCP server", () => {
     expect(fileCalls).toEqual([
       {
         projectPath: "C:/chosen-project",
-        options: { pathPrefix: "src", language: "typescript", limit: 7 }
+        options: {
+          pathPrefix: "src",
+          language: "typescript",
+          pattern: "**/*.ts",
+          format: "tree",
+          maxDepth: 3,
+          limit: 7
+        }
       }
     ]);
 
@@ -1530,6 +1551,23 @@ describe("SymbolLattice MCP server", () => {
       arguments: { limit: 101 }
     });
     expect(invalidLimit.isError).toBe(true);
+    expect(fileCalls).toHaveLength(1);
+
+    const invalidPattern = await client.callTool({
+      name: "symbol_lattice_files",
+      arguments: { pattern: "x".repeat(257) }
+    });
+    expect(invalidPattern.isError).toBe(true);
+    const invalidFormat = await client.callTool({
+      name: "symbol_lattice_files",
+      arguments: { format: "yaml" }
+    });
+    expect(invalidFormat.isError).toBe(true);
+    const invalidMaxDepth = await client.callTool({
+      name: "symbol_lattice_files",
+      arguments: { maxDepth: 21 }
+    });
+    expect(invalidMaxDepth.isError).toBe(true);
     expect(fileCalls).toHaveLength(1);
   });
 

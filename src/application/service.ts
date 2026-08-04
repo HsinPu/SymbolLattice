@@ -83,6 +83,11 @@ import type {
 import { ProjectConfigurationError } from "../domain/configuration.js";
 import { SymbolLatticeError } from "./errors.js";
 import {
+  buildFileLanguageGroups,
+  buildFileTree,
+  createProjectFileGlobMatcher
+} from "./file-inventory.js";
+import {
   frameworkProjectPluginProjectVersion,
   type FrameworkProjectPluginRegistry
 } from "./framework-project-plugins.js";
@@ -114,6 +119,7 @@ import {
   DEFAULT_INVESTIGATE_SYMBOL_LIMIT,
   DEFAULT_ENTRYPOINT_LIMIT,
   DEFAULT_FILE_LIMIT,
+  FILE_FORMATS,
   DEFAULT_GENERATION_DIFF_LIMIT,
   DEFAULT_GENERATION_HISTORY_LIMIT,
   DEFAULT_HIERARCHY_LIMIT,
@@ -127,6 +133,8 @@ import {
   MAX_INVESTIGATE_SYMBOL_LIMIT,
   MAX_ENTRYPOINT_LIMIT,
   MAX_FILE_LIMIT,
+  MAX_FILE_PATTERN_LENGTH,
+  MAX_FILE_TREE_DEPTH,
   MAX_GENERATION_DIFF_LIMIT,
   MAX_GENERATION_HISTORY_LIMIT,
   MAX_HIERARCHY_LIMIT,
@@ -302,6 +310,9 @@ interface NormalizedRoutesRequest {
 interface NormalizedFilesRequest {
   readonly pathPrefix?: string;
   readonly language?: ArtifactLanguage;
+  readonly pattern?: string;
+  readonly format: NonNullable<FilesOptions["format"]>;
+  readonly maxDepth?: number;
   readonly limit: number;
 }
 
@@ -1360,11 +1371,15 @@ export class SymbolLatticeService {
       );
     }
 
+    const matchesPattern = request.pattern === undefined
+      ? undefined
+      : createProjectFileGlobMatcher(request.pattern);
     const matchingFiles: readonly IndexedFileSummary[] = context.snapshot.files
       .filter(
         (file) =>
           (request.pathPrefix === undefined || file.path.startsWith(request.pathPrefix)) &&
-          (request.language === undefined || file.language === request.language)
+          (request.language === undefined || file.language === request.language) &&
+          (matchesPattern === undefined || matchesPattern(file.path))
       )
       .map((file) => ({
         filePath: file.path,
@@ -1376,13 +1391,22 @@ export class SymbolLatticeService {
       }))
       .sort((left, right) => compareText(left.filePath, right.filePath));
 
+    const returnedFiles = matchingFiles.slice(0, request.limit);
     return {
       status: context.status,
       bounds: {
         limit: request.limit,
         maximumLimit: MAX_FILE_LIMIT
       },
-      files: matchingFiles.slice(0, request.limit),
+      format: request.format,
+      matchedFileCount: matchingFiles.length,
+      files: returnedFiles,
+      ...(request.format === "tree"
+        ? { tree: buildFileTree(returnedFiles, request.maxDepth) }
+        : {}),
+      ...(request.format === "grouped"
+        ? { groups: buildFileLanguageGroups(returnedFiles) }
+        : {}),
       truncated: matchingFiles.length > request.limit
     };
   }
@@ -2689,11 +2713,64 @@ export class SymbolLatticeService {
             "INVALID_FILE_PATH_PREFIX",
             "File"
           );
+    const format = options.format ?? "flat";
+    if (!FILE_FORMATS.includes(format)) {
+      throw new SymbolLatticeError(
+        "INVALID_FILE_FORMAT",
+        `File format must be one of: ${FILE_FORMATS.join(", ")}.`
+      );
+    }
+
+    const pattern = options.pattern === undefined
+      ? undefined
+      : this.normalizedFilePattern(options.pattern);
+    const maxDepth = options.maxDepth;
+    if (
+      maxDepth !== undefined &&
+      (!Number.isSafeInteger(maxDepth) || maxDepth < 1 || maxDepth > MAX_FILE_TREE_DEPTH)
+    ) {
+      throw new SymbolLatticeError(
+        "INVALID_FILE_MAX_DEPTH",
+        `File tree max depth must be a whole number from 1 to ${MAX_FILE_TREE_DEPTH}.`
+      );
+    }
+    if (maxDepth !== undefined && format !== "tree") {
+      throw new SymbolLatticeError(
+        "INVALID_FILE_MAX_DEPTH",
+        "File max depth is accepted only when format is tree."
+      );
+    }
     return {
       limit,
+      format,
       ...(pathPrefix === undefined ? {} : { pathPrefix }),
-      ...(language === undefined ? {} : { language })
+      ...(language === undefined ? {} : { language }),
+      ...(pattern === undefined ? {} : { pattern }),
+      ...(maxDepth === undefined ? {} : { maxDepth })
     };
+  }
+
+  private normalizedFilePattern(pattern: string): string {
+    if (typeof pattern !== "string") {
+      throw new SymbolLatticeError("INVALID_FILE_PATTERN", "File pattern must be a project-relative glob.");
+    }
+    const normalized = pattern.trim().replaceAll("\\", "/");
+    const projectPattern = normalized.replace(/^(?:\.\/)+/, "");
+    if (
+      projectPattern.length === 0 ||
+      projectPattern.length > MAX_FILE_PATTERN_LENGTH ||
+      projectPattern.includes("\0") ||
+      isAbsolute(pattern) ||
+      projectPattern.startsWith("/") ||
+      /^[A-Za-z]:/.test(projectPattern) ||
+      projectPattern.split("/").includes("..")
+    ) {
+      throw new SymbolLatticeError(
+        "INVALID_FILE_PATTERN",
+        `File pattern must be a bounded project-relative glob: ${pattern}`
+      );
+    }
+    return projectPattern;
   }
 
   private routesRequest(options: RoutesOptions): NormalizedRoutesRequest {

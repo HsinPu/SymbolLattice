@@ -39,6 +39,9 @@ import {
   MAX_GIT_HUNK_LIMIT,
   MAX_HIERARCHY_LIMIT,
   MAX_ENTRYPOINT_LIMIT,
+  FILE_FORMATS,
+  MAX_FILE_PATTERN_LENGTH,
+  MAX_FILE_TREE_DEPTH,
   MAX_FILE_LIMIT,
   MAX_ROUTE_LIMIT,
   ENTRYPOINT_OPERATIONS,
@@ -325,6 +328,9 @@ export interface FilesToolArguments {
   /** Project-relative source-path prefix. */
   readonly path?: string | undefined;
   readonly language?: FilesOptions["language"];
+  readonly pattern?: string | undefined;
+  readonly format?: FilesOptions["format"];
+  readonly maxDepth?: number | undefined;
   readonly limit?: number | undefined;
 }
 
@@ -948,6 +954,34 @@ const investigateOutputSchema = z
   })
   .passthrough();
 
+const indexedFileSummaryOutputSchema = z.object({
+  filePath: z.string().min(1),
+  language: z.enum(ARTIFACT_LANGUAGES),
+  indexedAt: z.string().min(1),
+  declarationCount: z.number().int().nonnegative(),
+  edgeCount: z.number().int().nonnegative(),
+  pendingReferenceCount: z.number().int().nonnegative()
+});
+
+const fileTreeNodeOutputSchema: z.ZodType = z.lazy(() =>
+  z.discriminatedUnion("kind", [
+    z.object({
+      kind: z.literal("file"),
+      name: z.string().min(1),
+      path: z.string().min(1),
+      file: indexedFileSummaryOutputSchema
+    }),
+    z.object({
+      kind: z.literal("directory"),
+      name: z.string().min(1),
+      path: z.string().min(1),
+      returnedFileCount: z.number().int().nonnegative(),
+      depthLimited: z.boolean(),
+      children: z.array(fileTreeNodeOutputSchema)
+    })
+  ])
+);
+
 const filesOutputSchema = z
   .object({
     status: indexStatusOutputSchema,
@@ -955,18 +989,18 @@ const filesOutputSchema = z
       limit: z.number().int().min(1).max(MAX_FILE_LIMIT),
       maximumLimit: z.literal(MAX_FILE_LIMIT)
     }),
-    files: z
-      .array(
-        z.object({
-          filePath: z.string().min(1),
-          language: z.enum(ARTIFACT_LANGUAGES),
-          indexedAt: z.string().min(1),
-          declarationCount: z.number().int().nonnegative(),
-          edgeCount: z.number().int().nonnegative(),
-          pendingReferenceCount: z.number().int().nonnegative()
-        })
-      )
-      .max(MAX_FILE_LIMIT),
+    format: z.enum(FILE_FORMATS),
+    matchedFileCount: z.number().int().nonnegative(),
+    files: z.array(indexedFileSummaryOutputSchema).max(MAX_FILE_LIMIT),
+    tree: z.object({
+      returnedFileCount: z.number().int().nonnegative(),
+      children: z.array(fileTreeNodeOutputSchema)
+    }).optional(),
+    groups: z.array(z.object({
+      language: z.enum(ARTIFACT_LANGUAGES),
+      fileCount: z.number().int().nonnegative(),
+      files: z.array(indexedFileSummaryOutputSchema).max(MAX_FILE_LIMIT)
+    })).optional(),
     truncated: z.boolean()
   })
   .passthrough();
@@ -1566,6 +1600,9 @@ export async function runFilesTool(
     const options: FilesOptions = {
       ...(arguments_.path === undefined ? {} : { pathPrefix: arguments_.path }),
       ...(arguments_.language === undefined ? {} : { language: arguments_.language }),
+      ...(arguments_.pattern === undefined ? {} : { pattern: arguments_.pattern }),
+      ...(arguments_.format === undefined ? {} : { format: arguments_.format }),
+      ...(arguments_.maxDepth === undefined ? {} : { maxDepth: arguments_.maxDepth }),
       ...(arguments_.limit === undefined ? {} : { limit: arguments_.limit })
     };
     const result = await service.files(arguments_.projectPath ?? defaultProjectPath, options);
@@ -2196,6 +2233,12 @@ export function createMcpServer(
           projectPath: z.string().trim().min(1).optional().describe("Optional path to an already indexed project."),
           path: z.string().trim().min(1).optional().describe("Optional project-relative indexed-file prefix."),
           language: z.enum(ARTIFACT_LANGUAGES).optional().describe("Optional indexed source language filter."),
+          pattern: z.string().trim().min(1).max(MAX_FILE_PATTERN_LENGTH).optional()
+            .describe("Optional anchored project-relative glob using *, ?, and **."),
+          format: z.enum(FILE_FORMATS).optional()
+            .describe("Optional flat, tree, or language-grouped projection."),
+          maxDepth: z.number().int().min(1).max(MAX_FILE_TREE_DEPTH).optional()
+            .describe(`Maximum tree depth (1-${MAX_FILE_TREE_DEPTH}; tree format only).`),
           limit: z
             .number()
             .int()

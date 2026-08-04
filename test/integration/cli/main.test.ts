@@ -248,6 +248,8 @@ function filesResult(): FilesResult {
   return {
     status: resultStatus(),
     bounds: { limit: 7, maximumLimit: 100 },
+    format: "tree",
+    matchedFileCount: 1,
     files: [
       {
         filePath: "src/routes.ts",
@@ -1217,7 +1219,7 @@ describe("symbol-lattice investigate CLI", () => {
   });
 });
 
-describe("symbol-lattice v0.247 files CLI", () => {
+describe("symbol-lattice v0.257 files CLI", () => {
   it("forwards persisted file filters, positional project selection, and stable JSON without mutating", async () => {
     const calls: Array<{ projectPath: string; options: FilesOptions }> = [];
     const mutationCalls: string[] = [];
@@ -1251,6 +1253,12 @@ describe("symbol-lattice v0.247 files CLI", () => {
         "src",
         "--language",
         "typescript",
+        "--pattern",
+        "**/*.ts",
+        "--format",
+        "tree",
+        "--max-depth",
+        "3",
         "--limit",
         "7",
         "--json"
@@ -1261,7 +1269,14 @@ describe("symbol-lattice v0.247 files CLI", () => {
     expect(calls).toEqual([
       {
         projectPath: resolve("C:/positional-project"),
-        options: { pathPrefix: "src", language: "typescript", limit: 7 }
+        options: {
+          pathPrefix: "src",
+          language: "typescript",
+          pattern: "**/*.ts",
+          format: "tree",
+          maxDepth: 3,
+          limit: 7
+        }
       }
     ]);
     expect(mutationCalls).toEqual([]);
@@ -1271,6 +1286,9 @@ describe("symbol-lattice v0.247 files CLI", () => {
   it.each([
     [["--path", " "], "Expected a non-empty project-relative path prefix"],
     [["--language", "not-a-language"], "Expected one of:"],
+    [["--pattern", " "], "Expected a non-empty file glob"],
+    [["--format", "yaml"], "Expected one of: flat, tree, grouped"],
+    [["--max-depth", "21"], "Expected an integer between 1 and 20"],
     [["--limit", "101"], "Expected an integer between 1 and 100"]
   ])("rejects invalid file filter %j before invoking the service", async (arguments_, message) => {
     const files = vi.fn();
