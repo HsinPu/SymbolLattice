@@ -25,6 +25,7 @@ import {
   NODE_RELATION_LIMIT,
   NODE_SOURCE_CHARACTER_LIMIT,
   NODE_SOURCE_LINE_LIMIT,
+  createReferenceResolverPluginRegistry,
   SymbolLatticeError,
   SymbolLatticeService
 } from "../../../src/application/index.js";
@@ -3554,6 +3555,62 @@ describe("SymbolLatticeService", () => {
     expect((await service.search(projectPath, "backfillNeedle")).results).toMatchObject([
       { filePath: "src/search.ts" }
     ]);
+  });
+
+  it("reprojects reused facts when a reference resolver plugin version changes", async () => {
+    const projectPath = await createInlineProject({
+      "src/caller.ts": "export function caller() { return execute(); }\n",
+      "src/first.ts": "export function execute() { return 1; }\n",
+      "src/second.ts": "export function execute() { return 2; }\n"
+    });
+    const graphStore = new SqliteGraphStore();
+    let extractionCount = 0;
+    const artifactFactsExtractor = (input: Parameters<typeof extractFileFacts>[0]) => {
+      extractionCount += 1;
+      return extractFileFacts(input);
+    };
+    const plugin = (version: string) =>
+      createReferenceResolverPluginRegistry([
+        {
+          id: "acme/service-convention",
+          version,
+          languages: ["typescript"],
+          relations: ["calls"],
+          resolve: () => null
+        }
+      ]);
+    const initialService = new SymbolLatticeService(
+      graphStore,
+      new FileSystemSourceCatalog(),
+      {
+        artifactFactsExtractor,
+        referenceResolverPlugins: plugin("1.0.0")
+      }
+    );
+    await initialService.init({ projectPath });
+    expect(extractionCount).toBe(3);
+
+    const upgradedService = new SymbolLatticeService(
+      graphStore,
+      new FileSystemSourceCatalog(),
+      {
+        artifactFactsExtractor,
+        referenceResolverPlugins: plugin("1.0.1")
+      }
+    );
+    expect(await upgradedService.getStatus(projectPath)).toMatchObject({
+      stale: true,
+      staleReasons: ["indexer-version-changed"]
+    });
+    const synced = await upgradedService.sync({ projectPath });
+
+    expect(synced).toMatchObject({ stale: false, staleReasons: [] });
+    expect(extractionCount).toBe(3);
+    expect(synced.lastIndexWork).toMatchObject({
+      mode: "incremental",
+      reExtractedFiles: [],
+      reusedArtifactFiles: ["src/caller.ts", "src/first.ts", "src/second.ts"]
+    });
   });
 
   it("removes deleted source facts and invalidates their existing importers", async () => {

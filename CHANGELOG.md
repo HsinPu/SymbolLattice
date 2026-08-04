@@ -6,6 +6,25 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.249.0] - 2026-08-04
+
+### Added
+
+- Added a public, project-scoped `ReferenceResolverPlugin` registry for calls, instantiations, overrides, routes, and direct heritage references that remain unresolved after built-in resolution.
+- Plugins receive bounded lexical, exact module/re-export, and same-name project candidates. The host derives exact versus heuristic evidence from the selected candidate class instead of trusting a plugin-supplied confidence claim.
+- Plugin descriptors are validated, canonicalized, frozen, and fingerprinted. Their versions participate in generation freshness, so `sync` can reproject a changed resolver set while reusing unchanged artifact facts.
+
+### Safety and compatibility
+
+- Built-in exact or heuristic results cannot be overridden. Relation-incompatible or unknown targets, malformed results, callback errors, multiple claims, and project candidate sets beyond the 128-symbol cap fail closed with explicit unresolved evidence.
+- Existing constructor calls that pass an artifact extractor remain compatible; extension users may pass `SymbolLatticeServiceExtensions` as the third argument.
+- Existing SQLite data remains readable. The project resolver advances to `project-resolver-v84`; run `sync` or `index` once to refresh an existing graph. No extraction or schema migration is required.
+
+### Deliberate limits
+
+- This first public resolver API operates on pending references already produced by SymbolLattice. It does not yet let third parties extract new symbols, relations, post-extraction facts, or framework syntax.
+- Plugins are synchronous, in-process, project-scoped extensions. They are not a sandbox or a remote plugin protocol.
+
 ## [0.248.0] - 2026-08-04
 
 ### Added

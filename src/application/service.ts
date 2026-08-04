@@ -27,7 +27,6 @@ import {
   MAX_SOURCE_SEARCH_LIMIT,
   matchSymbol,
   normalizeSourceSearchLexicalText,
-  PROJECT_RESOLVER_VERSION,
   ROUTE_METHODS,
   SOURCE_SEARCH_INDEX_VERSION,
   sourceSearchTerms,
@@ -81,6 +80,10 @@ import type {
 } from "../ports/index.js";
 import { ProjectConfigurationError } from "../domain/configuration.js";
 import { SymbolLatticeError } from "./errors.js";
+import {
+  referenceResolverPluginProjectVersion,
+  type ReferenceResolverPluginRegistry
+} from "./reference-resolver-plugins.js";
 import { resolveProjectFacts } from "./resolution.js";
 import {
   AFFECTED_MAX_VISITED_FILES_PER_INPUT,
@@ -211,6 +214,12 @@ export interface ArtifactFactsExtractor {
    * persisted and makes stale fact reuse impossible after the extractor changes.
    */
   readonly version?: string;
+}
+
+/** Optional project-scoped extension seams applied by the indexing service. */
+export interface SymbolLatticeServiceExtensions {
+  readonly artifactFactsExtractor?: ArtifactFactsExtractor;
+  readonly referenceResolverPlugins?: ReferenceResolverPluginRegistry;
 }
 
 function artifactFactsExtractorVersion(extractor: ArtifactFactsExtractor): string {
@@ -872,17 +881,41 @@ function fullIndexWork(sourceDocuments: readonly SourceDocument[]): IndexWork {
 }
 
 export class SymbolLatticeService {
+  private readonly graphStore: GraphStore;
+  private readonly sourceCatalog: SourceCatalog;
+  private readonly artifactFactsExtractor: ArtifactFactsExtractor;
+  private readonly gitChangeSetProvider: GitChangeSetProvider | undefined;
+  private readonly gitRevisionHunkProvider: GitRevisionHunkProvider | undefined;
+  private readonly referenceResolverPlugins: ReferenceResolverPluginRegistry | undefined;
   private readonly activeArtifactFactsExtractorVersion: string;
+  private readonly activeProjectResolverVersion: string;
 
   public constructor(
-    private readonly graphStore: GraphStore,
-    private readonly sourceCatalog: SourceCatalog,
-    private readonly artifactFactsExtractor: ArtifactFactsExtractor = extractFileFacts,
-    private readonly gitChangeSetProvider?: GitChangeSetProvider,
-    private readonly gitRevisionHunkProvider?: GitRevisionHunkProvider
+    graphStore: GraphStore,
+    sourceCatalog: SourceCatalog,
+    artifactFactsExtractorOrExtensions: ArtifactFactsExtractor | SymbolLatticeServiceExtensions =
+      extractFileFacts,
+    gitChangeSetProvider?: GitChangeSetProvider,
+    gitRevisionHunkProvider?: GitRevisionHunkProvider
   ) {
+    const extensions =
+      typeof artifactFactsExtractorOrExtensions === "function"
+        ? undefined
+        : artifactFactsExtractorOrExtensions;
+    this.graphStore = graphStore;
+    this.sourceCatalog = sourceCatalog;
+    this.artifactFactsExtractor =
+      typeof artifactFactsExtractorOrExtensions === "function"
+        ? artifactFactsExtractorOrExtensions
+        : extensions?.artifactFactsExtractor ?? extractFileFacts;
+    this.gitChangeSetProvider = gitChangeSetProvider;
+    this.gitRevisionHunkProvider = gitRevisionHunkProvider;
+    this.referenceResolverPlugins = extensions?.referenceResolverPlugins;
     this.activeArtifactFactsExtractorVersion = artifactFactsExtractorVersion(
       this.artifactFactsExtractor
+    );
+    this.activeProjectResolverVersion = referenceResolverPluginProjectVersion(
+      this.referenceResolverPlugins
     );
   }
 
@@ -934,7 +967,7 @@ export class SymbolLatticeService {
     const changes = sourceChangeSet(scan.sourceDocuments, bundle.snapshot);
     const configurationChanged =
       bundle.indexInputs === null || bundle.indexInputs.fingerprint !== scan.indexInputs.fingerprint;
-    const resolverChanged = bundle.resolverVersion !== PROJECT_RESOLVER_VERSION;
+    const resolverChanged = bundle.resolverVersion !== this.activeProjectResolverVersion;
     const astroFrameworkEvidenceChanged =
       (scan.frameworkEvidence?.astro ?? false) !== astroProjectEnabled(bundle.indexInputs);
     const persistedFactsByPath = new Map(
@@ -3178,7 +3211,10 @@ export class SymbolLatticeService {
         : { xcodeTargetMemberships: scan.xcodeTargetMemberships }),
       ...(scan.jvmProjectModuleEvidence === undefined
         ? {}
-        : { jvmProjectModuleEvidence: scan.jvmProjectModuleEvidence })
+        : { jvmProjectModuleEvidence: scan.jvmProjectModuleEvidence }),
+      ...(this.referenceResolverPlugins === undefined
+        ? {}
+        : { referenceResolverPlugins: this.referenceResolverPlugins })
     });
     this.graphStore.replaceProjectFacts({
       projectPath,
@@ -3186,7 +3222,7 @@ export class SymbolLatticeService {
       indexedAt,
       artifactFacts,
       indexInputs: scan.indexInputs,
-      resolverVersion: PROJECT_RESOLVER_VERSION,
+      resolverVersion: this.activeProjectResolverVersion,
       sourceDocuments: scan.sourceDocuments.map((document) => ({
         filePath: document.relativePath,
         language: document.language,
@@ -3209,7 +3245,7 @@ export class SymbolLatticeService {
     const versionChanged =
       bundle.snapshot.files.length > 0 &&
       (bundle.extractorVersion !== this.activeArtifactFactsExtractorVersion ||
-        bundle.resolverVersion !== PROJECT_RESOLVER_VERSION ||
+        bundle.resolverVersion !== this.activeProjectResolverVersion ||
         this.sourceSearchProjectionChanged(bundle.sourceSearchVersion));
     const persistedInputs = bundle.indexInputs;
     if (persistedInputs === null) {

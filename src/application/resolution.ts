@@ -53,6 +53,13 @@ import {
   type SymbolNode
 } from "../domain/index.js";
 import type { ExtractedFileFacts } from "../extraction/index.js";
+import {
+  REFERENCE_RESOLVER_PLUGIN_RULE_NAME_PATTERN,
+  requireReferenceResolverPluginRegistry,
+  type ReferenceResolverPluginCandidate,
+  type ReferenceResolverPluginRegistry,
+  type ReferenceResolverPluginResult
+} from "./reference-resolver-plugins.js";
 import type {
   ProjectModuleResolver,
   ResolvedModule,
@@ -161,6 +168,72 @@ function referenceEvidence(
     ...(canonicalConfigurationPaths.length === 0 ? {} : { configurationPaths: canonicalConfigurationPaths }),
     ...(canonicalResolutionPath.length === 0 ? {} : { resolutionPath: canonicalResolutionPath }),
     ...(capturedRoutePrefixChain.length === 0 ? {} : { routePrefixChain: capturedRoutePrefixChain })
+  };
+}
+
+const MAX_REFERENCE_RESOLVER_PROJECT_CANDIDATES = 128;
+
+interface ReferenceResolverPluginProjection {
+  readonly edge: GraphEdge;
+  readonly resolved: boolean;
+}
+
+function pluginCandidate(
+  symbol: SymbolNode,
+  resolutionPath: readonly string[] = [],
+  configurationPaths: readonly string[] = []
+): ReferenceResolverPluginCandidate {
+  return Object.freeze({
+    symbol,
+    resolutionPath: Object.freeze([...resolutionPath]),
+    configurationPaths: Object.freeze([...configurationPaths])
+  });
+}
+
+function validateReferenceResolverPluginResult(input: {
+  readonly pluginId: string;
+  readonly result: unknown;
+  readonly candidatesById: ReadonlyMap<string, ReferenceResolverPluginCandidate>;
+}): ReferenceResolverPluginResult {
+  if (input.result === null || typeof input.result !== "object" || Array.isArray(input.result)) {
+    throw new TypeError(`Reference resolver plugin ${input.pluginId} returned a non-object result.`);
+  }
+  const result = input.result as Record<string, unknown>;
+  if (
+    result.targetSymbolId !== null &&
+    typeof result.targetSymbolId !== "string"
+  ) {
+    throw new TypeError(`Reference resolver plugin ${input.pluginId} returned an invalid targetSymbolId.`);
+  }
+  if (
+    typeof result.ruleName !== "string" ||
+    !REFERENCE_RESOLVER_PLUGIN_RULE_NAME_PATTERN.test(result.ruleName)
+  ) {
+    throw new TypeError(`Reference resolver plugin ${input.pluginId} returned an invalid ruleName.`);
+  }
+  if (
+    !Array.isArray(result.candidateSymbolIds) ||
+    result.candidateSymbolIds.some((candidateId) => typeof candidateId !== "string")
+  ) {
+    throw new TypeError(`Reference resolver plugin ${input.pluginId} returned invalid candidateSymbolIds.`);
+  }
+  const candidateSymbolIds = result.candidateSymbolIds as string[];
+  if (new Set(candidateSymbolIds).size !== candidateSymbolIds.length) {
+    throw new TypeError(`Reference resolver plugin ${input.pluginId} returned duplicate candidateSymbolIds.`);
+  }
+  if (candidateSymbolIds.some((candidateId) => !input.candidatesById.has(candidateId))) {
+    throw new TypeError(`Reference resolver plugin ${input.pluginId} selected an unknown candidate.`);
+  }
+  if (
+    typeof result.targetSymbolId === "string" &&
+    !candidateSymbolIds.includes(result.targetSymbolId)
+  ) {
+    throw new TypeError(`Reference resolver plugin ${input.pluginId} omitted its target from candidateSymbolIds.`);
+  }
+  return {
+    targetSymbolId: result.targetSymbolId as string | null,
+    candidateSymbolIds: [...candidateSymbolIds].sort(compareStableText),
+    ruleName: result.ruleName
   };
 }
 
@@ -7384,6 +7457,260 @@ function projectJvmDependencyInjectionReferences(input: {
   return edges;
 }
 
+function projectUnresolvedReferenceWithPlugins(input: {
+  readonly reference: PendingReference;
+  readonly sourceDocumentsByPath: ReadonlyMap<string, SourceDocument>;
+  readonly symbols: readonly SymbolNode[];
+  readonly symbolsById: ReadonlyMap<string, SymbolNode>;
+  readonly localBindingsByFile: ReadonlyMap<string, ExtractedFileFacts["localBindings"]>;
+  readonly importBindingsByFile: ReadonlyMap<string, ExtractedFileFacts["importBindings"]>;
+  readonly referenceScopeIdsByReferenceId: ReadonlyMap<string, readonly string[]>;
+  readonly moduleTargetPathByKey: ReadonlyMap<string, string>;
+  readonly moduleResolutionByKey: ReadonlyMap<string, ResolvedModule>;
+  readonly exportSurfaces: ReadonlyMap<string, ExportSurface>;
+  readonly registry: ReferenceResolverPluginRegistry | undefined;
+}): ReferenceResolverPluginProjection | null {
+  const plugins = requireReferenceResolverPluginRegistry(input.registry);
+  const sourceDocument = input.sourceDocumentsByPath.get(input.reference.filePath);
+  const source = input.symbolsById.get(input.reference.sourceId);
+  if (plugins.length === 0 || sourceDocument === undefined || source === undefined) {
+    return null;
+  }
+  const eligiblePlugins = plugins.filter(
+    (plugin) =>
+      plugin.languages.includes(sourceDocument.language) &&
+      plugin.relations.includes(input.reference.relationKind)
+  );
+  if (eligiblePlugins.length === 0) {
+    return null;
+  }
+
+  const lexicalResolution = resolveScopedBinding(
+    input.reference.referenceName,
+    input.referenceScopeIdsByReferenceId.get(input.reference.id) ?? [],
+    input.localBindingsByFile.get(input.reference.filePath) ?? [],
+    input.symbolsById,
+    isHeritageReference(input.reference)
+      ? heritageReferenceContext(input.reference, input.symbolsById)?.expectedSpace ?? "value"
+      : "value"
+  );
+  const candidateSupportsRelation = (symbol: SymbolNode): boolean => {
+    if (isHeritageReference(input.reference)) {
+      const heritage = heritageReferenceContext(input.reference, input.symbolsById);
+      return heritage !== null && isHeritageTarget(symbol, heritage);
+    }
+    if (input.reference.relationKind === "instantiates") {
+      return isInstantiationTarget(symbol);
+    }
+    if (input.reference.relationKind === "overrides") {
+      return symbol.kind === "method";
+    }
+    return symbol.kind !== "file";
+  };
+  const lexicalCandidates = lexicalResolution.candidates
+    .filter(candidateSupportsRelation)
+    .map((symbol) => pluginCandidate(symbol));
+  const moduleCandidates = canonicalExportCandidates(
+    (input.importBindingsByFile.get(input.reference.filePath) ?? [])
+      .filter((binding) => binding.localName === input.reference.referenceName)
+      .flatMap((binding) => {
+        const key = moduleKey(input.reference.filePath, binding.moduleSpecifier);
+        const targetPath = input.moduleTargetPathByKey.get(key);
+        return targetPath === undefined
+          ? []
+          : candidatesForExport(input.exportSurfaces, targetPath, binding.importedName);
+      })
+  )
+  .filter(
+    (candidate) =>
+      candidateSupportsRelation(candidate.symbol) &&
+      (isHeritageReference(input.reference) || candidate.isTypeOnly !== true)
+  )
+  .map((candidate) =>
+    pluginCandidate(
+      candidate.symbol,
+      [input.reference.filePath, ...candidate.path],
+      uniqueConfigurationPaths([
+        candidate.configurationPaths,
+        ...(input.importBindingsByFile.get(input.reference.filePath) ?? [])
+          .filter((binding) => binding.localName === input.reference.referenceName)
+          .map((binding) =>
+            input.moduleResolutionByKey.get(moduleKey(input.reference.filePath, binding.moduleSpecifier))
+              ?.configurationPaths ?? []
+          )
+      ])
+    )
+  );
+  const allProjectCandidates = input.symbols
+    .filter(
+      (symbol) => symbol.name === input.reference.referenceName && candidateSupportsRelation(symbol)
+    )
+    .sort((left, right) => compareStableText(left.id, right.id));
+  const projectCandidatesTruncated =
+    allProjectCandidates.length > MAX_REFERENCE_RESOLVER_PROJECT_CANDIDATES;
+  const projectCandidates = allProjectCandidates
+    .slice(0, MAX_REFERENCE_RESOLVER_PROJECT_CANDIDATES)
+    .map((symbol) => pluginCandidate(symbol));
+  const candidatesById = new Map<string, ReferenceResolverPluginCandidate>();
+  for (const candidate of [...lexicalCandidates, ...moduleCandidates, ...projectCandidates]) {
+    candidatesById.set(candidate.symbol.id, candidate);
+  }
+  const pluginInput = Object.freeze({
+    reference: input.reference,
+    source,
+    language: sourceDocument.language,
+    lexicalCandidates: Object.freeze(lexicalCandidates),
+    moduleCandidates: Object.freeze(moduleCandidates),
+    projectCandidates: Object.freeze(projectCandidates),
+    projectCandidatesTruncated
+  });
+  const claims: { readonly pluginId: string; readonly result: ReferenceResolverPluginResult }[] = [];
+
+  for (const plugin of eligiblePlugins) {
+    let rawResult: ReferenceResolverPluginResult | null;
+    try {
+      rawResult = plugin.resolve(pluginInput);
+    } catch {
+      return {
+        resolved: false,
+        edge: referenceEdge(
+          input.reference,
+          null,
+          "unresolved",
+          0,
+          referenceEvidence(
+            `plugin.reference-resolver.${plugin.id.replace("/", ".")}.runtime-error`,
+            "unresolved",
+            [...candidatesById.keys()]
+          )
+        )
+      };
+    }
+    if (rawResult === null) {
+      continue;
+    }
+    try {
+      claims.push({
+        pluginId: plugin.id,
+        result: validateReferenceResolverPluginResult({
+          pluginId: plugin.id,
+          result: rawResult,
+          candidatesById
+        })
+      });
+    } catch {
+      return {
+        resolved: false,
+        edge: referenceEdge(
+          input.reference,
+          null,
+          "unresolved",
+          0,
+          referenceEvidence(
+            `plugin.reference-resolver.${plugin.id.replace("/", ".")}.invalid-result`,
+            "unresolved",
+            [...candidatesById.keys()]
+          )
+        )
+      };
+    }
+  }
+
+  if (claims.length === 0) {
+    return null;
+  }
+  if (claims.length > 1) {
+    return {
+      resolved: false,
+      edge: referenceEdge(
+        input.reference,
+        null,
+        "unresolved",
+        0,
+        referenceEvidence(
+          "plugin.reference-resolver.collision",
+          "unresolved",
+          claims.flatMap((claim) => claim.result.candidateSymbolIds)
+        )
+      )
+    };
+  }
+
+  const claim = claims[0];
+  if (claim === undefined) {
+    return null;
+  }
+  const rulePrefix = `plugin.reference-resolver.${claim.pluginId.replace("/", ".")}.${claim.result.ruleName}`;
+  if (claim.result.targetSymbolId === null) {
+    return {
+      resolved: false,
+      edge: referenceEdge(
+        input.reference,
+        null,
+        "unresolved",
+        0,
+        referenceEvidence(`${rulePrefix}.unresolved-target`, "unresolved", claim.result.candidateSymbolIds)
+      )
+    };
+  }
+  const targetId = claim.result.targetSymbolId;
+  const lexicalCandidate = lexicalCandidates.find((candidate) => candidate.symbol.id === targetId);
+  const moduleCandidate = moduleCandidates.find((candidate) => candidate.symbol.id === targetId);
+  const projectCandidate = projectCandidates.find((candidate) => candidate.symbol.id === targetId);
+  if (lexicalCandidate !== undefined) {
+    return {
+      resolved: true,
+      edge: referenceEdge(
+        input.reference,
+        targetId,
+        "exact",
+        1,
+        referenceEvidence(`${rulePrefix}.lexical-target`, "lexical", claim.result.candidateSymbolIds)
+      )
+    };
+  }
+  if (moduleCandidate !== undefined) {
+    return {
+      resolved: true,
+      edge: referenceEdge(
+        input.reference,
+        targetId,
+        "exact",
+        1,
+        referenceEvidence(
+          `${rulePrefix}.module-target`,
+          "module",
+          claim.result.candidateSymbolIds,
+          moduleCandidate.configurationPaths,
+          moduleCandidate.resolutionPath
+        )
+      )
+    };
+  }
+  if (projectCandidate === undefined || projectCandidatesTruncated) {
+    return {
+      resolved: false,
+      edge: referenceEdge(
+        input.reference,
+        null,
+        "unresolved",
+        0,
+        referenceEvidence(`${rulePrefix}.unsafe-project-target`, "unresolved", claim.result.candidateSymbolIds)
+      )
+    };
+  }
+  return {
+    resolved: true,
+    edge: referenceEdge(
+      input.reference,
+      targetId,
+      "heuristic",
+      0.7,
+      referenceEvidence(`${rulePrefix}.project-target`, "heuristic", claim.result.candidateSymbolIds)
+    )
+  };
+}
+
 /**
  * Resolves local declarations and explicit named import/export bindings exactly. Any
  * remaining unique-name inference stays heuristic so the graph never overstates proof.
@@ -7398,6 +7725,8 @@ export function resolveProjectFacts(input: {
   readonly xcodeTargetMemberships?: readonly XcodeTargetMembership[];
   /** Optional for callers predating JVM Maven/Gradle module evidence. */
   readonly jvmProjectModuleEvidence?: JvmProjectModuleEvidence;
+  /** Validated, project-scoped extensions invoked only for still-unresolved references. */
+  readonly referenceResolverPlugins?: ReferenceResolverPluginRegistry;
 }): GraphSnapshot {
   const symbols = input.extractedFiles.flatMap((facts) => facts.symbols);
   const structuralEdges = input.extractedFiles.flatMap((facts) => facts.edges);
@@ -7417,6 +7746,9 @@ export function resolveProjectFacts(input: {
   const resolvedEdges: GraphEdge[] = [];
   const unresolvedReferences: PendingReference[] = [];
   const replacedStructuralEdgeIds = new Set<string>();
+  const sourceDocumentsByPath = new Map(
+    input.sourceDocuments.map((document) => [document.relativePath, document])
+  );
 
   for (const facts of input.extractedFiles) {
     const sourceFile = facts.symbols.find((symbol) => symbol.kind === "file");
@@ -8299,6 +8631,49 @@ export function resolveProjectFacts(input: {
       )
     );
   }
+
+  const unresolvedById = new Map(
+    unresolvedReferences.map((reference) => [reference.id, reference])
+  );
+  for (const reference of [...unresolvedById.values()].sort((left, right) =>
+    compareStableText(left.id, right.id)
+  )) {
+    const projection = projectUnresolvedReferenceWithPlugins({
+      reference,
+      sourceDocumentsByPath,
+      symbols,
+      symbolsById,
+      localBindingsByFile,
+      importBindingsByFile,
+      referenceScopeIdsByReferenceId,
+      moduleTargetPathByKey,
+      moduleResolutionByKey,
+      exportSurfaces,
+      registry: input.referenceResolverPlugins
+    });
+    if (projection === null) {
+      continue;
+    }
+    const existingEdgeIndex = resolvedEdges.findIndex(
+      (edge) =>
+        edge.sourceId === reference.sourceId &&
+        edge.targetId === null &&
+        edge.kind === reference.relationKind &&
+        edge.filePath === reference.filePath &&
+        edge.range.start.line === reference.range.start.line &&
+        edge.range.start.column === reference.range.start.column &&
+        edge.referenceName === reference.referenceName
+    );
+    if (existingEdgeIndex >= 0) {
+      resolvedEdges.splice(existingEdgeIndex, 1, projection.edge);
+    } else {
+      resolvedEdges.push(projection.edge);
+    }
+    if (projection.resolved) {
+      unresolvedById.delete(reference.id);
+    }
+  }
+  unresolvedReferences.splice(0, unresolvedReferences.length, ...unresolvedById.values());
 
   const nestRouteProjection = projectNestRouterRoutes({
     symbols,

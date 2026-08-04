@@ -1,4 +1,5 @@
 export * from "./errors.js";
+export * from "./reference-resolver-plugins.js";
 export * from "./auto-sync-journal.js";
 export * from "./auto-sync-owner.js";
 export * from "./service.js";

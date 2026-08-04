@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.248.0 是從原始碼執行的開發預覽版。MCP 查詢工具唯讀；但 `serve --mcp` 預設會啟動獨立的本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用它。
+> v0.249.0 是從原始碼執行的開發預覽版。MCP 查詢工具唯讀；但 `serve --mcp` 預設會啟動獨立的本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用它。
 
 ## 快速開始
 
@@ -40,6 +40,30 @@ node dist/cli/main.js investigate "user token" --project /path/to/project --json
 - 每條關係保留規則、階段、候選目標、信心度、解析路徑與來源範圍。
 - `files` 僅列出 active generation 已保存的檔案，並顯示語言、索引時間、圖譜計數與 freshness。
 - 擴充框架的 route plugin 可精確解析同檔案與跨檔案固定 prefix mount；`explain-edge` 會顯示每段 mount 與 ESM import／re-export 路徑。動態或模糊組合不會被猜測成路由。
+- 專案可註冊有版本的 reference resolver plugin，僅處理內建解析器留下的未解析關係；宿主會限制候選、驗證結果，並將衝突、例外或不安全選擇保留為可解釋的 unresolved 證據。
+
+## 解析器擴充
+
+```ts
+const plugins = createReferenceResolverPluginRegistry([{
+  id: "acme/service-convention",
+  version: "1.0.0",
+  languages: ["typescript"],
+  relations: ["calls"],
+  resolve: ({ projectCandidates }) => {
+    const target = projectCandidates.find(({ symbol }) => symbol.filePath.endsWith(".service.ts"));
+    return target ? {
+      targetSymbolId: target.symbol.id,
+      candidateSymbolIds: projectCandidates.map(({ symbol }) => symbol.id),
+      ruleName: "service-file"
+    } : null;
+  }
+}]);
+
+const service = new SymbolLatticeService(store, catalog, { referenceResolverPlugins: plugins });
+```
+
+外掛版本會納入索引 freshness；版本變更後執行 `sync`，可重用未改變的原始解析 facts。
 
 ## 常用指令
 
