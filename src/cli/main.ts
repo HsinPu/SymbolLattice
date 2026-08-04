@@ -8,6 +8,7 @@ import { resolve } from "node:path";
 import {
   MAX_AFFECTED_LIMIT,
   MAX_AFFECTED_MAX_DEPTH,
+  MAX_AUTO_SYNC_DIAGNOSTIC_JOURNAL_EVENTS,
   MAX_CONTEXT_IMPACT_DEPTH,
   MAX_CONTEXT_IMPACT_LIMIT,
   MAX_CONTEXT_MAX_HOPS,
@@ -45,6 +46,8 @@ import {
   type AffectedTestsOptions,
   type AutoSyncDiagnosticJournal,
   type AutoSyncDiagnosticJournalOptions,
+  type AutoSyncDiagnosticJournalResult,
+  type AutoSyncDiagnosticEvent,
   type AutoSyncDiagnosticsOptions,
   type AutoSyncOwnerLease,
   type AutoSyncDiagnosticsResult,
@@ -203,6 +206,10 @@ interface WatchCommandOptions extends ProjectOptions, PluginCommandOptions {
   readonly poll?: boolean;
 }
 
+interface WatchStatusCommandOptions extends ProjectOptions {
+  readonly limit?: number;
+}
+
 interface ServeCommandOptions extends ProjectOptions, PluginCommandOptions {
   readonly autoSync?: boolean;
   readonly diagnosticJournal?: boolean;
@@ -314,6 +321,23 @@ export type PluginServiceFactory = (
 export type UpgradePlanner = (
   options: UpgradeExecutionOptions
 ) => Promise<UpgradeCommandResult>;
+
+export interface WatchStatusResult {
+  readonly schemaVersion: 1;
+  readonly mode: "read-only";
+  readonly projectPath: string;
+  readonly index: AutoSyncDiagnosticsResult["index"];
+  readonly journal: AutoSyncDiagnosticJournalResult;
+  readonly observedHosts: {
+    readonly scope: "bounded-journal-window";
+    readonly processLiveness: "not-observed";
+    readonly hosts: readonly {
+      readonly hostId: string;
+      readonly latestEvent: AutoSyncDiagnosticEvent;
+    }[];
+  };
+  readonly notes: readonly string[];
+}
 
 /** Minimal process-signal contract for the foreground watch lifecycle. */
 export interface WatchSignalSource {
@@ -690,6 +714,70 @@ function toAutoSyncDiagnosticError(
   };
 }
 
+/**
+ * Reads operational watcher evidence without acquiring the owner lease or
+ * starting, stopping, or synchronizing any host. Journal events describe the
+ * latest state visible inside the bounded result window; they do not prove that
+ * a host process is still alive.
+ */
+export async function readWatchStatus(
+  service: SymbolLatticeService,
+  projectPath: string,
+  journal: AutoSyncDiagnosticJournal,
+  options: AutoSyncDiagnosticJournalOptions = {}
+): Promise<WatchStatusResult> {
+  const durableJournal = journal.diagnostics(options);
+  let index: AutoSyncDiagnosticsResult["index"];
+  try {
+    index = { status: await service.getStatus(projectPath), error: null };
+  } catch (error) {
+    index = { status: null, error: toAutoSyncDiagnosticError(error) };
+  }
+
+  const latestByHost = new Map<string, AutoSyncDiagnosticEvent>();
+  for (const event of durableJournal.events) {
+    const current = latestByHost.get(event.hostId);
+    if (
+      current === undefined ||
+      event.sequence > current.sequence ||
+      (event.sequence === current.sequence && event.observedAt > current.observedAt)
+    ) {
+      latestByHost.set(event.hostId, event);
+    }
+  }
+  const hosts = [...latestByHost.entries()]
+    .map(([hostId, latestEvent]) => ({
+      hostId,
+      latestEvent: {
+        ...latestEvent,
+        error: latestEvent.error === null ? null : { ...latestEvent.error },
+        pendingFiles: [...latestEvent.pendingFiles]
+      }
+    }))
+    .sort(
+      (left, right) =>
+        right.latestEvent.observedAt.localeCompare(left.latestEvent.observedAt) ||
+        left.hostId.localeCompare(right.hostId)
+    );
+
+  return {
+    schemaVersion: 1,
+    mode: "read-only",
+    projectPath,
+    index,
+    journal: durableJournal,
+    observedHosts: {
+      scope: "bounded-journal-window",
+      processLiveness: "not-observed",
+      hosts
+    },
+    notes: [
+      "Recorded host state is bounded journal evidence, not a live-process check.",
+      "This command does not init, index, sync, start, stop, or acquire the auto-sync owner lease."
+    ]
+  };
+}
+
 /** Creates one bounded local lifecycle receipt when a second host loses the owner race. */
 function ownerLeaseUnavailableReceipt(
   projectPath: string,
@@ -915,7 +1003,9 @@ export function createProgram(
   watchRunner: WatchCommandRunner = runForegroundWatch,
   mcpRunner: McpCommandRunner = runMcpWithAutoSync,
   pluginServiceFactory: PluginServiceFactory = createPluginService,
-  upgradePlanner: UpgradePlanner = runUpgradeCommand
+  upgradePlanner: UpgradePlanner = runUpgradeCommand,
+  autoSyncJournalFactory: McpAutoSyncJournalFactory = (projectPath, writable) =>
+    new SqliteAutoSyncDiagnosticJournal(projectPath, { writable })
 ): Command {
   const coreService = service ?? createService();
   const indexingService = async (
@@ -1024,6 +1114,28 @@ export function createProgram(
       render(await coreService.getStatus(projectPath), options);
     }
   );
+
+  addJsonOption(addProjectOption(program.command("watch-status [path]")))
+    .description("Inspect index freshness and durable auto-sync evidence without changing lifecycle state")
+    .option(
+      "--limit <count>",
+      `Maximum latest durable watcher events to inspect (1-${MAX_AUTO_SYNC_DIAGNOSTIC_JOURNAL_EVENTS})`,
+      (value: string) =>
+        parseBoundedPositiveInteger(value, MAX_AUTO_SYNC_DIAGNOSTIC_JOURNAL_EVENTS)
+    )
+    .action(async (path: string | undefined, options: WatchStatusCommandOptions) => {
+      const projectPath = resolve(path ?? defaultProjectPath(options));
+      const journal = autoSyncJournalFactory(projectPath, false);
+      render(
+        await readWatchStatus(
+          coreService,
+          projectPath,
+          journal,
+          options.limit === undefined ? {} : { limit: options.limit }
+        ),
+        options
+      );
+    });
 
   addJsonOption(addProjectOption(program.command("history [path]")))
     .option(

@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.266.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher can update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.267.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher can update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## Quick start
 
@@ -84,6 +84,7 @@ One manifest may provide `frameworkFactPlugins`, `frameworkProjectPlugins`, and 
 | `init <path>` | Create a graph. |
 | `sync <path>` | Explicitly synchronize or repair a graph. |
 | `watch <path>` | Watch and synchronize in the foreground. |
+| `watch-status [path]` | Read index freshness, durable watcher events, and each visible host's latest recorded state. |
 | `files [path]` | Page persisted files by glob, projection, and generation-bound cursor. |
 | `file <path>` | Read a numbered human view; add `--json` for the stable contract. |
 | `git-hunks [path] --base <ref>` | Filter immutable Git hunk attribution with optional `--path-prefix`. |
@@ -97,12 +98,14 @@ One manifest may provide `frameworkFactPlugins`, `frameworkProjectPlugins`, and 
 | `mcp-install <target>` | Preview or, with `--apply --yes`, safely write an MCP configuration. |
 | `mcp-uninstall <target>` | Preview or, with `--apply --yes`, remove the matching MCP entry. |
 
+`watch-status` does not probe PIDs or start, stop, or synchronize a watcher; host state is only the latest evidence in the bounded journal window.
+
 `upgrade` produces a read-only plan by default. `--verify` downloads and checks the `.tgz`, SHA-256 checksum, manifest, and GitHub Artifact Attestations API evidence without installing. `--apply --yes` supports only local or global npm layouts, installs the verified local bytes, and then proves the CLI version. Source checkouts and `npx` are never changed automatically; downgrades also require `--allow-downgrade`.
 
 ```bash
 symbol-lattice upgrade --check
-symbol-lattice upgrade 0.266.0 --verify
-symbol-lattice upgrade 0.266.0 --apply --yes
+symbol-lattice upgrade 0.267.0 --verify
+symbol-lattice upgrade 0.267.0 --apply --yes
 ```
 
 ## Verification

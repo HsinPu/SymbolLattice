@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.266.0 是開發預覽版。MCP 查詢工具唯讀；但 `serve --mcp` 預設會啟動獨立的本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用它。
+> v0.267.0 是開發預覽版。MCP 查詢工具唯讀；但 `serve --mcp` 預設會啟動獨立的本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用它。
 
 ## 快速開始
 
@@ -84,6 +84,7 @@ node dist/cli/main.js init /path/to/project --plugin ./plugins/acme.mjs
 | `init <path>` | 建立圖譜。 |
 | `sync <path>` | 明確同步或修復圖譜。 |
 | `watch <path>` | 在前景監看並同步。 |
+| `watch-status [path]` | 唯讀檢視索引 freshness、持久化 watcher 事件與可見 host 最後狀態。 |
 | `files [path]` | 以 glob、投影與 generation-bound 游標分頁列出已保存檔案。 |
 | `file <path>` | 預設逐行閱讀；加上 `--json` 取得穩定契約。 |
 | `git-hunks [path] --base <ref>` | 以可選的 `--path-prefix` 篩選不可變 Git hunk 與宣告歸因。 |
@@ -97,12 +98,14 @@ node dist/cli/main.js init /path/to/project --plugin ./plugins/acme.mjs
 | `mcp-install <target>` | 預覽；加上 `--apply --yes` 後安全寫入 MCP 設定。 |
 | `mcp-uninstall <target>` | 預覽；加上 `--apply --yes` 後移除相符的 MCP 設定。 |
 
+`watch-status` 不探測 PID，也不啟動、停止或同步 watcher；host 狀態只代表有界 journal 視窗中的最新證據。
+
 `upgrade` 預設只產生唯讀計畫。`--verify` 會下載並核對 `.tgz`、SHA-256、manifest 與 GitHub Artifact Attestations API 證據，但不安裝；`--apply --yes` 僅支援 npm 本機或全域安裝，且只安裝已驗證的本機位元組，再確認 CLI 版本。原始碼 checkout 與 `npx` 不會自動修改；降版還需要 `--allow-downgrade`。
 
 ```bash
 symbol-lattice upgrade --check
-symbol-lattice upgrade 0.266.0 --verify
-symbol-lattice upgrade 0.266.0 --apply --yes
+symbol-lattice upgrade 0.267.0 --verify
+symbol-lattice upgrade 0.267.0 --apply --yes
 ```
 
 ## 驗證

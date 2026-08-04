@@ -2564,6 +2564,120 @@ describe("symbol-lattice v0.256 verified upgrade CLI", () => {
   });
 });
 
+describe("symbol-lattice read-only watch status CLI", () => {
+  it("combines live index freshness with bounded durable watcher evidence without mutating the index", async () => {
+    const getStatus = vi.fn(async (): Promise<SearchResult["status"]> => resultStatus());
+    const init = vi.fn();
+    const index = vi.fn();
+    const sync = vi.fn();
+    const diagnostics = vi.fn(() => ({
+      ...autoSyncJournalResult(),
+      state: "read-only" as const
+    }));
+    const journalFactory = vi.fn((): AutoSyncDiagnosticJournal => ({
+      append: vi.fn(),
+      diagnostics
+    }));
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+    await createProgram(
+      { getStatus, init, index, sync } as unknown as SymbolLatticeService,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      journalFactory
+    ).parseAsync(
+      [
+        "node",
+        "symbol-lattice",
+        "watch-status",
+        "C:/chosen-project",
+        "--limit",
+        "7",
+        "--json"
+      ],
+      { from: "node" }
+    );
+
+    expect(getStatus).toHaveBeenCalledWith(resolve("C:/chosen-project"));
+    expect(journalFactory).toHaveBeenCalledWith(resolve("C:/chosen-project"), false);
+    expect(diagnostics).toHaveBeenCalledWith({ limit: 7 });
+    expect(init).not.toHaveBeenCalled();
+    expect(index).not.toHaveBeenCalled();
+    expect(sync).not.toHaveBeenCalled();
+    const output = JSON.parse(String(write.mock.calls.at(-1)?.[0]));
+    expect(output).toMatchObject({
+      schemaVersion: 1,
+      mode: "read-only",
+      projectPath: resolve("C:/chosen-project"),
+      index: { status: { generationId: "generation:test" }, error: null },
+      journal: { state: "read-only", returned: 1 },
+      observedHosts: {
+        scope: "bounded-journal-window",
+        processLiveness: "not-observed",
+        hosts: [
+          {
+            hostId: "host:cli-test",
+            latestEvent: { event: "event-pending", sequence: 1 }
+          }
+        ]
+      }
+    });
+  });
+
+  it("preserves durable watcher evidence when the live index status read fails", async () => {
+    const diagnostics = vi.fn(() => ({
+      ...autoSyncJournalResult(),
+      state: "read-only" as const
+    }));
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    const service = {
+      async getStatus(): Promise<SearchResult["status"]> {
+        throw new SymbolLatticeError("INVALID_PROJECT_CONFIGURATION", "Broken tsconfig.");
+      }
+    } as unknown as SymbolLatticeService;
+
+    await createProgram(
+      service,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      () => ({ append: vi.fn(), diagnostics })
+    ).parseAsync(["node", "symbol-lattice", "watch-status", "--limit", "1"], {
+      from: "node"
+    });
+
+    const output = JSON.parse(String(write.mock.calls.at(-1)?.[0]));
+    expect(output.index).toEqual({
+      status: null,
+      error: { code: "INVALID_PROJECT_CONFIGURATION", message: "Broken tsconfig." }
+    });
+    expect(output.journal.events).toHaveLength(1);
+  });
+
+  it("rejects an out-of-range watcher history limit before reading the journal", async () => {
+    const journalFactory = vi.fn();
+    const program = createProgram(
+      {} as SymbolLatticeService,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      journalFactory
+    );
+    program.exitOverride();
+
+    await expect(
+      program.parseAsync(["node", "symbol-lattice", "watch-status", "--limit", "129"], {
+        from: "node"
+      })
+    ).rejects.toThrow("Expected an integer between 1 and 128");
+    expect(journalFactory).not.toHaveBeenCalled();
+  });
+});
+
 describe("symbol-lattice v0.10 foreground watch CLI", () => {
   it("forwards the bounded interval and force flag, enables native events, and renders compact NDJSON receipts", async () => {
     const calls: ForegroundWatchOptions[] = [];
