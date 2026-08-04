@@ -21530,6 +21530,42 @@ describe("SymbolLatticeService", () => {
     });
     expect(bounded.files).toHaveLength(1);
 
+    const firstPage = await service.files(projectPath, { pathPrefix: "src", limit: 1 });
+    expect(firstPage).toMatchObject({
+      matchedFileCount: 2,
+      files: [{ filePath: "src/api.ts" }],
+      pagination: {
+        returnedFileCount: 1,
+        remainingFileCount: 1,
+        nextCursor: expect.any(String)
+      },
+      truncated: true
+    });
+    const secondPage = await service.files(projectPath, {
+      pathPrefix: "src",
+      cursor: firstPage.pagination.nextCursor ?? undefined,
+      limit: 2,
+      format: "grouped"
+    });
+    expect(secondPage).toMatchObject({
+      format: "grouped",
+      matchedFileCount: 2,
+      files: [{ filePath: "src/token.ts" }],
+      pagination: {
+        returnedFileCount: 1,
+        remainingFileCount: 0,
+        nextCursor: null
+      },
+      truncated: false
+    });
+    await expect(service.files(projectPath, {
+      pathPrefix: "src",
+      language: "typescript",
+      cursor: firstPage.pagination.nextCursor ?? undefined
+    })).rejects.toMatchObject({ code: "FILE_CURSOR_FILTER_MISMATCH" });
+    await expect(service.files(projectPath, { cursor: "not+a+canonical+cursor" }))
+      .rejects.toMatchObject({ code: "INVALID_FILE_CURSOR" });
+
     await writeFile(join(projectPath, "src", "added-after-index.ts"), "export const late = 1;\n", "utf8");
     const afterWrite = await service.files(projectPath, { pathPrefix: "src" });
     expect(afterWrite.status).toMatchObject({ stale: true, generationId: indexed.generationId });
@@ -21559,5 +21595,10 @@ describe("SymbolLatticeService", () => {
     await expect(service.files(projectPath, { format: "flat", maxDepth: 2 })).rejects.toMatchObject({
       code: "INVALID_FILE_MAX_DEPTH"
     });
+    await service.sync({ projectPath });
+    await expect(service.files(projectPath, {
+      pathPrefix: "src",
+      cursor: firstPage.pagination.nextCursor ?? undefined
+    })).rejects.toMatchObject({ code: "FILE_CURSOR_GENERATION_MISMATCH" });
   });
 });

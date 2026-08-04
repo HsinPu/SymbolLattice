@@ -85,7 +85,11 @@ import { SymbolLatticeError } from "./errors.js";
 import {
   buildFileLanguageGroups,
   buildFileTree,
-  createProjectFileGlobMatcher
+  createProjectFileGlobMatcher,
+  decodeFilePageCursor,
+  encodeFilePageCursor,
+  fileSelectionFingerprint,
+  InvalidFilePageCursorError
 } from "./file-inventory.js";
 import {
   frameworkProjectPluginProjectVersion,
@@ -133,6 +137,7 @@ import {
   MAX_INVESTIGATE_SYMBOL_LIMIT,
   MAX_ENTRYPOINT_LIMIT,
   MAX_FILE_LIMIT,
+  MAX_FILE_CURSOR_LENGTH,
   MAX_FILE_PATTERN_LENGTH,
   MAX_FILE_TREE_DEPTH,
   MAX_GENERATION_DIFF_LIMIT,
@@ -314,6 +319,7 @@ interface NormalizedFilesRequest {
   readonly format: NonNullable<FilesOptions["format"]>;
   readonly maxDepth?: number;
   readonly limit: number;
+  readonly cursor?: string;
 }
 
 interface NormalizedEntrypointsRequest {
@@ -1391,7 +1397,53 @@ export class SymbolLatticeService {
       }))
       .sort((left, right) => compareText(left.filePath, right.filePath));
 
-    const returnedFiles = matchingFiles.slice(0, request.limit);
+    const selectionFingerprint = fileSelectionFingerprint(request);
+    let startIndex = 0;
+    if (request.cursor !== undefined) {
+      let cursor;
+      try {
+        cursor = decodeFilePageCursor(request.cursor);
+      } catch (error) {
+        if (error instanceof InvalidFilePageCursorError) {
+          throw new SymbolLatticeError("INVALID_FILE_CURSOR", error.message);
+        }
+        throw error;
+      }
+      if (cursor.generationId !== context.status.generationId) {
+        throw new SymbolLatticeError(
+          "FILE_CURSOR_GENERATION_MISMATCH",
+          "File cursor belongs to a different active generation."
+        );
+      }
+      if (cursor.selectionFingerprint !== selectionFingerprint) {
+        throw new SymbolLatticeError(
+          "FILE_CURSOR_FILTER_MISMATCH",
+          "File cursor does not match the current file-selection filters."
+        );
+      }
+      const cursorIndex = matchingFiles.findIndex((file) => file.filePath === cursor.afterFilePath);
+      if (cursorIndex < 0) {
+        throw new SymbolLatticeError(
+          "INVALID_FILE_CURSOR",
+          "File cursor does not identify a record in the selected generation."
+        );
+      }
+      startIndex = cursorIndex + 1;
+    }
+
+    const returnedFiles = matchingFiles.slice(startIndex, startIndex + request.limit);
+    const remainingFileCount = Math.max(0, matchingFiles.length - startIndex - returnedFiles.length);
+    const generationId = context.status.generationId;
+    if (generationId === null) {
+      throw new SymbolLatticeError("MISSING_INDEX", "The active file generation is unavailable.");
+    }
+    const nextCursor = remainingFileCount > 0 && returnedFiles.length > 0
+      ? encodeFilePageCursor({
+          generationId,
+          selectionFingerprint,
+          afterFilePath: returnedFiles.at(-1)!.filePath
+        })
+      : null;
     return {
       status: context.status,
       bounds: {
@@ -1400,6 +1452,11 @@ export class SymbolLatticeService {
       },
       format: request.format,
       matchedFileCount: matchingFiles.length,
+      pagination: {
+        returnedFileCount: returnedFiles.length,
+        remainingFileCount,
+        nextCursor
+      },
       files: returnedFiles,
       ...(request.format === "tree"
         ? { tree: buildFileTree(returnedFiles, request.maxDepth) }
@@ -1407,7 +1464,7 @@ export class SymbolLatticeService {
       ...(request.format === "grouped"
         ? { groups: buildFileLanguageGroups(returnedFiles) }
         : {}),
-      truncated: matchingFiles.length > request.limit
+      truncated: remainingFileCount > 0
     };
   }
 
@@ -2740,13 +2797,24 @@ export class SymbolLatticeService {
         "File max depth is accepted only when format is tree."
       );
     }
+    const cursor = options.cursor;
+    if (
+      cursor !== undefined &&
+      (typeof cursor !== "string" || cursor.length === 0 || cursor.length > MAX_FILE_CURSOR_LENGTH || cursor !== cursor.trim())
+    ) {
+      throw new SymbolLatticeError(
+        "INVALID_FILE_CURSOR",
+        `File cursor must be a non-empty opaque token of at most ${MAX_FILE_CURSOR_LENGTH} characters.`
+      );
+    }
     return {
       limit,
       format,
       ...(pathPrefix === undefined ? {} : { pathPrefix }),
       ...(language === undefined ? {} : { language }),
       ...(pattern === undefined ? {} : { pattern }),
-      ...(maxDepth === undefined ? {} : { maxDepth })
+      ...(maxDepth === undefined ? {} : { maxDepth }),
+      ...(cursor === undefined ? {} : { cursor })
     };
   }
 

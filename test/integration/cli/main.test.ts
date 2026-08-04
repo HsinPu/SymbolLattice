@@ -250,6 +250,7 @@ function filesResult(): FilesResult {
     bounds: { limit: 7, maximumLimit: 100 },
     format: "tree",
     matchedFileCount: 1,
+    pagination: { returnedFileCount: 1, remainingFileCount: 0, nextCursor: null },
     files: [
       {
         filePath: "src/routes.ts",
@@ -1219,7 +1220,7 @@ describe("symbol-lattice investigate CLI", () => {
   });
 });
 
-describe("symbol-lattice v0.257 files CLI", () => {
+describe("symbol-lattice v0.258 files CLI", () => {
   it("forwards persisted file filters, positional project selection, and stable JSON without mutating", async () => {
     const calls: Array<{ projectPath: string; options: FilesOptions }> = [];
     const mutationCalls: string[] = [];
@@ -1259,6 +1260,8 @@ describe("symbol-lattice v0.257 files CLI", () => {
         "tree",
         "--max-depth",
         "3",
+        "--cursor",
+        "opaque-cursor",
         "--limit",
         "7",
         "--json"
@@ -1275,6 +1278,7 @@ describe("symbol-lattice v0.257 files CLI", () => {
           pattern: "**/*.ts",
           format: "tree",
           maxDepth: 3,
+          cursor: "opaque-cursor",
           limit: 7
         }
       }
@@ -1289,6 +1293,7 @@ describe("symbol-lattice v0.257 files CLI", () => {
     [["--pattern", " "], "Expected a non-empty file glob"],
     [["--format", "yaml"], "Expected one of: flat, tree, grouped"],
     [["--max-depth", "21"], "Expected an integer between 1 and 20"],
+    [["--cursor", " "], "Expected a non-empty file cursor"],
     [["--limit", "101"], "Expected an integer between 1 and 100"]
   ])("rejects invalid file filter %j before invoking the service", async (arguments_, message) => {
     const files = vi.fn();

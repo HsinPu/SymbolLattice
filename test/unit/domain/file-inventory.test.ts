@@ -3,6 +3,9 @@ import { describe, expect, it } from "vitest";
 import {
   buildFileLanguageGroups,
   buildFileTree,
+  decodeFilePageCursor,
+  encodeFilePageCursor,
+  fileSelectionFingerprint,
   matchesProjectFileGlob
 } from "../../../src/application/file-inventory.js";
 import type { IndexedFileSummary } from "../../../src/application/types.js";
@@ -63,6 +66,37 @@ describe("persisted file inventory projections", () => {
       { language: "python", fileCount: 1, files: [file("scripts/task.py", "python")] },
       { language: "ruby", fileCount: 1, files: [file("app.rb", "ruby")] }
     ]);
+  });
+
+  it("round-trips a canonical opaque cursor bound to one generation and selection", () => {
+    const selectionFingerprint = fileSelectionFingerprint({
+      pathPrefix: "src",
+      language: "typescript",
+      pattern: "**/*.ts"
+    });
+    const cursor = encodeFilePageCursor({
+      generationId: "generation:one",
+      selectionFingerprint,
+      afterFilePath: "src/api.ts"
+    });
+
+    expect(cursor).toMatch(/^[A-Za-z0-9_-]+$/);
+    expect(decodeFilePageCursor(cursor)).toEqual({
+      schemaVersion: 1,
+      generationId: "generation:one",
+      selectionFingerprint,
+      afterFilePath: "src/api.ts"
+    });
+    expect(() => decodeFilePageCursor("not+a+canonical+cursor")).toThrow();
+    expect(() => decodeFilePageCursor(`${cursor}x`)).toThrow();
+    expect(() => decodeFilePageCursor("a".repeat(2049))).toThrow();
+
+    const invalidUtf8Cursor = Buffer.concat([
+      Buffer.from(`{"schemaVersion":1,"generationId":"generation:one","selectionFingerprint":"${selectionFingerprint}","afterFilePath":"`, "utf8"),
+      Buffer.from([0xff]),
+      Buffer.from('"}', "utf8")
+    ]).toString("base64url");
+    expect(() => decodeFilePageCursor(invalidUtf8Cursor)).toThrow();
   });
 });
 

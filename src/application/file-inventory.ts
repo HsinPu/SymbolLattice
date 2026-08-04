@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import { compareStableText } from "../domain/index.js";
 import type {
   FileLanguageGroup,
@@ -6,6 +8,90 @@ import type {
   FileTreeProjection,
   IndexedFileSummary
 } from "./types.js";
+import { MAX_FILE_CURSOR_LENGTH } from "./types.js";
+
+export interface FileSelection {
+  readonly pathPrefix?: string;
+  readonly language?: IndexedFileSummary["language"];
+  readonly pattern?: string;
+}
+
+export interface FilePageCursorPayload {
+  readonly schemaVersion: 1;
+  readonly generationId: string;
+  readonly selectionFingerprint: string;
+  readonly afterFilePath: string;
+}
+
+export class InvalidFilePageCursorError extends Error {
+  public constructor(message: string) {
+    super(message);
+    this.name = "InvalidFilePageCursorError";
+  }
+}
+
+/** Hashes only record-selection filters so presentation and page size may change between pages. */
+export function fileSelectionFingerprint(selection: FileSelection): string {
+  return createHash("sha256").update(JSON.stringify({
+    pathPrefix: selection.pathPrefix ?? null,
+    language: selection.language ?? null,
+    pattern: selection.pattern ?? null
+  }), "utf8").digest("hex");
+}
+
+export function encodeFilePageCursor(
+  payload: Omit<FilePageCursorPayload, "schemaVersion">
+): string {
+  return Buffer.from(JSON.stringify({ schemaVersion: 1, ...payload }), "utf8").toString("base64url");
+}
+
+export function decodeFilePageCursor(cursor: string): FilePageCursorPayload {
+  try {
+    if (cursor.length === 0 || cursor.length > MAX_FILE_CURSOR_LENGTH || !/^[A-Za-z0-9_-]+$/.test(cursor)) {
+      throw new Error("Cursor encoding is not canonical base64url.");
+    }
+    const bytes = Buffer.from(cursor, "base64url");
+    if (bytes.toString("base64url") !== cursor) {
+      throw new Error("Cursor encoding is not canonical base64url.");
+    }
+    const json = bytes.toString("utf8");
+    if (!Buffer.from(json, "utf8").equals(bytes)) {
+      throw new Error("Cursor payload is not canonical UTF-8.");
+    }
+    const value: unknown = JSON.parse(json);
+    if (typeof value !== "object" || value === null || Array.isArray(value)) {
+      throw new Error("Cursor payload must be an object.");
+    }
+    const record = value as Record<string, unknown>;
+    if (Object.keys(record).sort().join("|") !== "afterFilePath|generationId|schemaVersion|selectionFingerprint") {
+      throw new Error("Cursor payload has an unexpected shape.");
+    }
+    if (
+      record.schemaVersion !== 1 ||
+      typeof record.generationId !== "string" || record.generationId.length === 0 || record.generationId.length > 256 ||
+      typeof record.selectionFingerprint !== "string" || !/^[0-9a-f]{64}$/.test(record.selectionFingerprint) ||
+      typeof record.afterFilePath !== "string" || !isProjectRelativeCursorPath(record.afterFilePath)
+    ) {
+      throw new Error("Cursor payload values are invalid.");
+    }
+    return {
+      schemaVersion: 1,
+      generationId: record.generationId,
+      selectionFingerprint: record.selectionFingerprint,
+      afterFilePath: record.afterFilePath
+    };
+  } catch (error) {
+    throw new InvalidFilePageCursorError(
+      error instanceof Error ? error.message : "File cursor is invalid."
+    );
+  }
+}
+
+function isProjectRelativeCursorPath(filePath: string): boolean {
+  return filePath.length > 0 && filePath.length <= 1024 && filePath === filePath.trim() &&
+    !filePath.includes("\0") && !filePath.includes("\\") && !filePath.startsWith("/") &&
+    !/^[A-Za-z]:/.test(filePath) && !filePath.split("/").includes("..");
+}
 
 interface MutableTreeNode {
   readonly name: string;

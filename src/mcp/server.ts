@@ -43,6 +43,7 @@ import {
   MAX_FILE_PATTERN_LENGTH,
   MAX_FILE_TREE_DEPTH,
   MAX_FILE_LIMIT,
+  MAX_FILE_CURSOR_LENGTH,
   MAX_ROUTE_LIMIT,
   ENTRYPOINT_OPERATIONS,
   ENTRYPOINT_TRANSPORTS,
@@ -332,6 +333,7 @@ export interface FilesToolArguments {
   readonly format?: FilesOptions["format"];
   readonly maxDepth?: number | undefined;
   readonly limit?: number | undefined;
+  readonly cursor?: string | undefined;
 }
 
 export interface RoutesToolArguments {
@@ -991,6 +993,11 @@ const filesOutputSchema = z
     }),
     format: z.enum(FILE_FORMATS),
     matchedFileCount: z.number().int().nonnegative(),
+    pagination: z.object({
+      returnedFileCount: z.number().int().nonnegative(),
+      remainingFileCount: z.number().int().nonnegative(),
+      nextCursor: z.string().min(1).max(MAX_FILE_CURSOR_LENGTH).nullable()
+    }),
     files: z.array(indexedFileSummaryOutputSchema).max(MAX_FILE_LIMIT),
     tree: z.object({
       returnedFileCount: z.number().int().nonnegative(),
@@ -1603,7 +1610,8 @@ export async function runFilesTool(
       ...(arguments_.pattern === undefined ? {} : { pattern: arguments_.pattern }),
       ...(arguments_.format === undefined ? {} : { format: arguments_.format }),
       ...(arguments_.maxDepth === undefined ? {} : { maxDepth: arguments_.maxDepth }),
-      ...(arguments_.limit === undefined ? {} : { limit: arguments_.limit })
+      ...(arguments_.limit === undefined ? {} : { limit: arguments_.limit }),
+      ...(arguments_.cursor === undefined ? {} : { cursor: arguments_.cursor })
     };
     const result = await service.files(arguments_.projectPath ?? defaultProjectPath, options);
     return {
@@ -2239,6 +2247,9 @@ export function createMcpServer(
             .describe("Optional flat, tree, or language-grouped projection."),
           maxDepth: z.number().int().min(1).max(MAX_FILE_TREE_DEPTH).optional()
             .describe(`Maximum tree depth (1-${MAX_FILE_TREE_DEPTH}; tree format only).`),
+          cursor: z.string().min(1).max(MAX_FILE_CURSOR_LENGTH).refine((value) => value === value.trim(), {
+            message: "File cursor must not have surrounding whitespace."
+          }).optional().describe("Opaque continuation token from a previous files result."),
           limit: z
             .number()
             .int()

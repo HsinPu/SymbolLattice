@@ -23,6 +23,7 @@ import {
   MAX_FILE_PATTERN_LENGTH,
   MAX_FILE_TREE_DEPTH,
   MAX_FILE_LIMIT,
+  MAX_FILE_CURSOR_LENGTH,
   MAX_ROUTE_LIMIT,
   ENTRYPOINT_OPERATIONS,
   ENTRYPOINT_TRANSPORTS,
@@ -127,6 +128,7 @@ interface FilesCommandOptions extends ProjectOptions {
   readonly pattern?: string;
   readonly format?: NonNullable<FilesOptions["format"]>;
   readonly maxDepth?: number;
+  readonly cursor?: string;
 }
 
 interface InvestigateCommandOptions extends ProjectOptions {
@@ -415,6 +417,13 @@ function parseFileFormat(value: string): NonNullable<FilesOptions["format"]> {
     throw new Error(`Expected one of: ${FILE_FORMATS.join(", ")}; received "${value}".`);
   }
   return value as NonNullable<FilesOptions["format"]>;
+}
+
+function parseFileCursor(value: string): string {
+  if (value.length === 0 || value.length > MAX_FILE_CURSOR_LENGTH || value !== value.trim()) {
+    throw new Error(`Expected a non-empty file cursor of at most ${MAX_FILE_CURSOR_LENGTH} characters.`);
+  }
+  return value;
 }
 
 function parseSearchLanguage(value: string): NonNullable<SearchOptions["language"]> {
@@ -1107,6 +1116,11 @@ export function createProgram(
       (value: string) => parseBoundedPositiveInteger(value, MAX_FILE_TREE_DEPTH)
     )
     .option(
+      "--cursor <opaque-cursor>",
+      "Continue a generation-bound persisted file listing",
+      parseFileCursor
+    )
+    .option(
       "--limit <count>",
       `Maximum indexed file records to return (1-${MAX_FILE_LIMIT})`,
       (value: string) => parseBoundedPositiveInteger(value, MAX_FILE_LIMIT)
@@ -1118,7 +1132,8 @@ export function createProgram(
         ...(options.pattern === undefined ? {} : { pattern: options.pattern }),
         ...(options.format === undefined ? {} : { format: options.format }),
         ...(options.maxDepth === undefined ? {} : { maxDepth: options.maxDepth }),
-        ...(options.limit === undefined ? {} : { limit: options.limit })
+        ...(options.limit === undefined ? {} : { limit: options.limit }),
+        ...(options.cursor === undefined ? {} : { cursor: options.cursor })
       };
       render(
         await coreService.files(resolve(projectPath ?? defaultProjectPath(options)), fileOptions),

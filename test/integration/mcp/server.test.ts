@@ -682,6 +682,7 @@ function filesResult(): FilesResult {
     bounds: { limit: 7, maximumLimit: 100 },
     format: "tree",
     matchedFileCount: 1,
+    pagination: { returnedFileCount: 1, remainingFileCount: 0, nextCursor: null },
     files: [
       {
         filePath: "src/routes.ts",
@@ -1477,6 +1478,7 @@ describe("SymbolLattice MCP server", () => {
         pattern: expect.objectContaining({ type: "string", maxLength: 256 }),
         format: expect.objectContaining({ type: "string" }),
         maxDepth: expect.objectContaining({ type: "integer", minimum: 1, maximum: 20 }),
+        cursor: expect.objectContaining({ type: "string", maxLength: 2048 }),
         limit: expect.objectContaining({ type: "integer", minimum: 1, maximum: 100 })
       }
     });
@@ -1491,6 +1493,7 @@ describe("SymbolLattice MCP server", () => {
         files: { type: "array" },
         tree: { type: "object" },
         groups: { type: "array" },
+        pagination: { type: "object" },
         truncated: { type: "boolean" }
       }
     });
@@ -1504,6 +1507,7 @@ describe("SymbolLattice MCP server", () => {
         pattern: "**/*.ts",
         format: "tree",
         maxDepth: 3,
+        cursor: "opaque-cursor",
         limit: 7
       }
     });
@@ -1534,6 +1538,7 @@ describe("SymbolLattice MCP server", () => {
           pattern: "**/*.ts",
           format: "tree",
           maxDepth: 3,
+          cursor: "opaque-cursor",
           limit: 7
         }
       }
@@ -1568,6 +1573,16 @@ describe("SymbolLattice MCP server", () => {
       arguments: { maxDepth: 21 }
     });
     expect(invalidMaxDepth.isError).toBe(true);
+    const invalidCursor = await client.callTool({
+      name: "symbol_lattice_files",
+      arguments: { cursor: " " }
+    });
+    expect(invalidCursor.isError).toBe(true);
+    const oversizedCursor = await client.callTool({
+      name: "symbol_lattice_files",
+      arguments: { cursor: "a".repeat(2049) }
+    });
+    expect(oversizedCursor.isError).toBe(true);
     expect(fileCalls).toHaveLength(1);
   });
 

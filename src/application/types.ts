@@ -237,6 +237,7 @@ export const DEFAULT_FILE_LIMIT = 50;
 export const MAX_FILE_LIMIT = 100;
 export const MAX_FILE_PATTERN_LENGTH = 256;
 export const MAX_FILE_TREE_DEPTH = 20;
+export const MAX_FILE_CURSOR_LENGTH = 2048;
 export const FILE_FORMATS = ["flat", "tree", "grouped"] as const;
 export type FileFormat = (typeof FILE_FORMATS)[number];
 
@@ -254,6 +255,8 @@ export interface FilesOptions {
   readonly maxDepth?: number;
   /** Maximum indexed file records returned from the active generation. */
   readonly limit?: number;
+  /** Opaque continuation token from a previous files result. */
+  readonly cursor?: string;
 }
 
 /** One active-generation file plus deterministic graph-record counts for that file. */
@@ -306,6 +309,12 @@ export interface FileLanguageGroup {
   readonly files: readonly IndexedFileSummary[];
 }
 
+export interface FilePagination {
+  readonly returnedFileCount: number;
+  readonly remainingFileCount: number;
+  readonly nextCursor: string | null;
+}
+
 /**
  * A read-only active-generation file inventory. File records and counts are
  * derived only from the persisted graph; `status` reports live freshness
@@ -317,6 +326,8 @@ export interface FilesResult {
   readonly format: FileFormat;
   /** Count after path, language, and glob filters but before `bounds.limit`. */
   readonly matchedFileCount: number;
+  /** Continuation evidence bound to this generation and file-selection filters. */
+  readonly pagination: FilePagination;
   readonly files: readonly IndexedFileSummary[];
   readonly tree?: FileTreeProjection;
   readonly groups?: readonly FileLanguageGroup[];
