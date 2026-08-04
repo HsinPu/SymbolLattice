@@ -40,7 +40,12 @@ describe("preview-only release upgrade planning", () => {
       targetVersion: "0.254.0",
       release: {
         source: "explicit-version",
-        networkRequested: false
+        networkRequested: false,
+        artifacts: {
+          tarball: "https://github.com/HsinPu/symbol-lattice/releases/download/v0.254.0/hsinpu-symbol-lattice-0.254.0.tgz",
+          checksum: "https://github.com/HsinPu/symbol-lattice/releases/download/v0.254.0/hsinpu-symbol-lattice-0.254.0.tgz.sha256",
+          manifest: "https://github.com/HsinPu/symbol-lattice/releases/download/v0.254.0/hsinpu-symbol-lattice-0.254.0.tgz.manifest.json"
+        }
       },
       mutation: {
         performed: false,
@@ -75,9 +80,18 @@ describe("preview-only release upgrade planning", () => {
       networkRequested: true,
       repository: "HsinPu/symbol-lattice"
     });
-    expect(result.installation.steps).toEqual([]);
+    expect(result.installation.steps).toEqual([
+      {
+        command: "npm",
+        args: [
+          "install",
+          "--global",
+          "https://github.com/HsinPu/symbol-lattice/releases/download/v0.255.0/hsinpu-symbol-lattice-0.255.0.tgz"
+        ]
+      }
+    ]);
     expect(result.installation.diagnostics).toContain(
-      "The npm package is private in this release, so no npm upgrade command is advertised."
+      "The command installs the immutable GitHub Release tarball globally and is not executed automatically."
     );
     expect(result.mutation.performed).toBe(false);
   });

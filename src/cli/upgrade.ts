@@ -11,6 +11,7 @@ const RELEASE_ENDPOINTS = [RELEASE_ENDPOINT, TAGS_ENDPOINT] as const;
 const RELEASE_TIMEOUT_MS = 5_000;
 const MAX_RELEASE_RESPONSE_BYTES = 64 * 1024;
 const PACKAGE_NAME = "@hsinpu/symbol-lattice";
+const RELEASE_DOWNLOAD_BASE = `https://github.com/${RELEASE_REPOSITORY}/releases/download`;
 
 interface ParsedVersion {
   readonly canonical: string;
@@ -63,6 +64,11 @@ export interface UpgradePreviewResult {
     readonly repository: typeof RELEASE_REPOSITORY;
     readonly endpoints: typeof RELEASE_ENDPOINTS;
     readonly networkRequested: boolean;
+    readonly artifacts: {
+      readonly tarball: string;
+      readonly checksum: string;
+      readonly manifest: string;
+    };
   };
   readonly installation: UpgradeInstallation & {
     readonly steps: readonly UpgradeCommandStep[];
@@ -211,7 +217,8 @@ export async function createUpgradePreview(
     cwd: process.cwd(),
     platform: process.platform
   });
-  const plan = buildInstallationPlan(installation);
+  const artifacts = releaseArtifacts(target.canonical);
+  const plan = buildInstallationPlan(installation, artifacts.tarball);
 
   return {
     schemaVersion: 1,
@@ -227,7 +234,8 @@ export async function createUpgradePreview(
       source: networkRequested ? "github-catalog" : "explicit-version",
       repository: RELEASE_REPOSITORY,
       endpoints: RELEASE_ENDPOINTS,
-      networkRequested
+      networkRequested,
+      artifacts
     },
     installation: { ...installation, ...plan },
     mutation: {
@@ -239,7 +247,7 @@ export async function createUpgradePreview(
       networkRequested
         ? "Network access occurred only because the upgrade command was explicitly invoked without a pinned version."
         : "The explicit target was validated locally; no release network request was made.",
-      "Automatic apply remains unavailable until a supported public distribution channel is released."
+      "Automatic apply remains unavailable; the selected GitHub Release tarball can be installed manually after reviewing its checksum, manifest, and attestation."
     ]
   };
 }
@@ -287,7 +295,17 @@ async function readBoundedResponseText(response: Response): Promise<string> {
   return Buffer.concat(chunks.map((chunk) => Buffer.from(chunk)), totalBytes).toString("utf8");
 }
 
-function buildInstallationPlan(installation: UpgradeInstallation): {
+function releaseArtifacts(version: string): UpgradePreviewResult["release"]["artifacts"] {
+  const filename = `hsinpu-symbol-lattice-${version}.tgz`;
+  const base = `${RELEASE_DOWNLOAD_BASE}/v${version}/${filename}`;
+  return {
+    tarball: base,
+    checksum: `${base}.sha256`,
+    manifest: `${base}.manifest.json`
+  };
+}
+
+function buildInstallationPlan(installation: UpgradeInstallation, tarballUrl: string): {
   readonly steps: readonly UpgradeCommandStep[];
   readonly diagnostics: readonly string[];
 } {
@@ -306,18 +324,30 @@ function buildInstallationPlan(installation: UpgradeInstallation): {
         ]
       };
     case "npm-local":
+      return {
+        steps: [
+          { command: "npm", args: ["--prefix", installation.root, "install", tarballUrl] }
+        ],
+        diagnostics: [
+          "The command installs the immutable GitHub Release tarball into the selected local project and is not executed automatically."
+        ]
+      };
     case "npm-global":
       return {
-        steps: [],
+        steps: [
+          { command: "npm", args: ["install", "--global", tarballUrl] }
+        ],
         diagnostics: [
-          "The npm package is private in this release, so no npm upgrade command is advertised."
+          "The command installs the immutable GitHub Release tarball globally and is not executed automatically."
         ]
       };
     case "npx":
       return {
-        steps: [],
+        steps: [
+          { command: "npx", args: ["--yes", "--package", tarballUrl, "symbol-lattice", "--version"] }
+        ],
         diagnostics: [
-          `The ${PACKAGE_NAME} npm package is private in this release; an npx refresh is not advertised.`
+          `The ${PACKAGE_NAME} registry package remains private; this command runs the immutable GitHub Release tarball without changing the current installation.`
         ]
       };
     case "unknown":

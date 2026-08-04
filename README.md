@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.254.0 是從原始碼執行的開發預覽版。MCP 查詢工具唯讀；但 `serve --mcp` 預設會啟動獨立的本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用它。
+> v0.255.0 是開發預覽版。MCP 查詢工具唯讀；但 `serve --mcp` 預設會啟動獨立的本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用它。
 
 ## 快速開始
 
@@ -32,6 +32,8 @@ node dist/cli/main.js init /path/to/project
 # 查詢含證據的結構脈絡
 node dist/cli/main.js investigate "user token" --project /path/to/project --json
 ```
+
+也可從 [GitHub Releases](https://github.com/HsinPu/symbol-lattice/releases) 下載版本固定的 `.tgz`、SHA-256 與 manifest，再用 npm 安裝 `.tgz`。每個標籤發行都會先驗證完整測試、乾淨安裝與產物證明。
 
 ## 核心能力
 
@@ -82,7 +84,7 @@ node dist/cli/main.js init /path/to/project --plugin ./plugins/acme.mjs
 | `mcp-install <target>` | 預覽；加上 `--apply --yes` 後安全寫入 MCP 設定。 |
 | `mcp-uninstall <target>` | 預覽；加上 `--apply --yes` 後移除相符的 MCP 設定。 |
 
-`upgrade` 不會修改套件、原始碼、索引或 Agent 設定。明確指定版本可完全離線產生計畫；目前套件仍是 private，因此不提供自動套用。
+`upgrade` 不會修改套件、原始碼、索引或 Agent 設定。明確指定版本可完全離線產生計畫，並回傳對應 GitHub Release 的 `.tgz`、SHA-256 與 manifest；自動套用仍未開放。
 
 ## 驗證
 

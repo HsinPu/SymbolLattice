@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.254.0 is a developer preview that runs from source. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher can update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.255.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher can update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## Quick start
 
@@ -32,6 +32,8 @@ node dist/cli/main.js init /path/to/project
 # Query explainable structural context
 node dist/cli/main.js investigate "user token" --project /path/to/project --json
 ```
+
+Alternatively, download the version-pinned `.tgz`, SHA-256 checksum, and manifest from [GitHub Releases](https://github.com/HsinPu/symbol-lattice/releases), then install the `.tgz` with npm. Every tagged release verifies the full suite, a clean installation, and build provenance first.
 
 ## What it does
 
@@ -82,7 +84,7 @@ One manifest may provide `frameworkFactPlugins`, `frameworkProjectPlugins`, and 
 | `mcp-install <target>` | Preview or, with `--apply --yes`, safely write an MCP configuration. |
 | `mcp-uninstall <target>` | Preview or, with `--apply --yes`, remove the matching MCP entry. |
 
-`upgrade` never changes the package, source checkout, index, or Agent configuration. A pinned version produces a fully offline plan. The package is still private, so automatic apply is not advertised yet.
+`upgrade` never changes the package, source checkout, index, or Agent configuration. A pinned version produces a fully offline plan with the matching GitHub Release `.tgz`, SHA-256 checksum, and manifest URLs. Automatic apply remains unavailable.
 
 ## Verification
 

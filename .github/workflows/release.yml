@@ -1,0 +1,99 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out the tagged commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Verify the annotated tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git cat-file -t "$GITHUB_REF_NAME")" = "tag"
+          test "$(git rev-list -n 1 "$GITHUB_REF_NAME")" = "$GITHUB_SHA"
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Verify source and runtime
+        run: |
+          npm run check
+          npm test
+          npm run build
+          npm run verify:mcp-worker-generation
+
+      - name: Pack the release artifact
+        id: pack
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir release
+          npm pack --json --silent --pack-destination release > "$RUNNER_TEMP/pack.json"
+          node --input-type=module - "$RUNNER_TEMP/pack.json" >> "$GITHUB_OUTPUT" <<'NODE'
+          import { readFileSync } from "node:fs";
+          const result = JSON.parse(readFileSync(process.argv[2], "utf8"));
+          if (!Array.isArray(result) || result.length !== 1 || typeof result[0]?.filename !== "string") {
+            throw new Error("npm pack did not return exactly one artifact filename.");
+          }
+          process.stdout.write(`filename=${result[0].filename}\n`);
+          NODE
+
+      - name: Create checksum and release manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run release:contract -- \
+            --tag "$GITHUB_REF_NAME" \
+            --commit "$GITHUB_SHA" \
+            --tarball "release/${{ steps.pack.outputs.filename }}" \
+            --output-dir release
+
+      - name: Verify a clean tarball installation
+        shell: bash
+        run: |
+          set -euo pipefail
+          install_prefix="$RUNNER_TEMP/symbol-lattice-install"
+          npm install --prefix "$install_prefix" "./release/${{ steps.pack.outputs.filename }}"
+          installed_version="$($install_prefix/node_modules/.bin/symbol-lattice --version)"
+          test "$installed_version" = "${GITHUB_REF_NAME#v}"
+
+      - name: Attest release artifacts
+        uses: actions/attest-build-provenance@78e6cbd37d0ac1a40113c04f2037dacf1ea3f12e # v4
+        with:
+          subject-path: release/*
+
+      - name: Publish the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release create "$GITHUB_REF_NAME" release/* \
+            --verify-tag \
+            --generate-notes \
+            --title "$GITHUB_REF_NAME"
