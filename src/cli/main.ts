@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { Command } from "commander";
-import { readFileSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
 
@@ -1453,7 +1453,24 @@ export async function run(argv = process.argv): Promise<void> {
   }
 }
 
-const invokedPath = process.argv[1];
-if (invokedPath !== undefined && resolve(fileURLToPath(import.meta.url)) === resolve(invokedPath)) {
+/** Recognizes direct execution and npm's Unix `.bin` symlink without importing side effects. */
+export function isCliEntrypoint(
+  invokedPath: string | undefined,
+  modulePath: string,
+  resolveRealPath: (path: string) => string = realpathSync.native
+): boolean {
+  if (invokedPath === undefined) return false;
+  const invoked = resolve(invokedPath);
+  const module = resolve(modulePath);
+  const comparable = (path: string): string => process.platform === "win32" ? path.toLowerCase() : path;
+  if (comparable(invoked) === comparable(module)) return true;
+  try {
+    return comparable(resolveRealPath(invoked)) === comparable(resolveRealPath(module));
+  } catch {
+    return false;
+  }
+}
+
+if (isCliEntrypoint(process.argv[1], fileURLToPath(import.meta.url))) {
   void run();
 }

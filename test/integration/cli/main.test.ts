@@ -44,6 +44,7 @@ import {
 } from "../../../src/application/index.js";
 import {
   createProgram,
+  isCliEntrypoint,
   parseAffectedStdin,
   runMcpWithAutoSync,
   runForegroundWatch,
@@ -56,6 +57,34 @@ import {
 } from "../../../src/cli/main.js";
 import type { UpgradePreviewResult } from "../../../src/cli/upgrade.js";
 import type { McpServerSession } from "../../../src/mcp/index.js";
+
+describe("CLI entrypoint detection", () => {
+  it("recognizes npm's Unix bin symlink through its real target", () => {
+    const binPath = resolve(".test-cli-install", "node_modules", ".bin", "symbol-lattice");
+    const modulePath = resolve(
+      ".test-cli-install",
+      "node_modules",
+      "@hsinpu",
+      "symbol-lattice",
+      "dist",
+      "cli",
+      "main.js"
+    );
+    const realpath = vi.fn((path: string) => path === binPath ? modulePath : path);
+
+    expect(isCliEntrypoint(binPath, modulePath, realpath)).toBe(true);
+    expect(realpath).toHaveBeenCalledWith(binPath);
+  });
+
+  it("recognizes direct execution and fails closed for an unrelated or missing path", () => {
+    const modulePath = resolve("dist", "cli", "main.js");
+    expect(isCliEntrypoint(modulePath, modulePath, vi.fn())).toBe(true);
+    expect(isCliEntrypoint(undefined, modulePath, vi.fn())).toBe(false);
+    expect(isCliEntrypoint(resolve("other.js"), modulePath, () => {
+      throw new Error("missing");
+    })).toBe(false);
+  });
+});
 
 function resultStatus(): SearchResult["status"] {
   return {
