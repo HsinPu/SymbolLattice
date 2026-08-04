@@ -1300,6 +1300,160 @@ describe("symbol-lattice persisted file-view CLI", () => {
     ]);
     expect(write).toHaveBeenCalledWith(`${JSON.stringify(result, null, 2)}\n`);
   });
+
+  it("renders generation-bound source as a compact numbered human view by default", async () => {
+    const result: FileViewResult = {
+      ...fileViewResult(),
+      selection: {
+        requestedPath: "routes.ts",
+        filePath: "src/routes.ts",
+        source: "active-generation",
+        resolution: "unique-suffix"
+      },
+      bounds: {
+        offset: 2,
+        limit: 2,
+        maximumLimit: 2_000,
+        totalLines: 8,
+        returnedLines: 2,
+        truncatedBefore: true,
+        truncatedAfter: true
+      },
+      contentAvailability: "active-generation",
+      lines: [
+        { line: 2, text: "export function route() {" },
+        { line: 3, text: "  return '/health';" }
+      ],
+      symbols: [
+        {
+          id: "symbol:route",
+          name: "route",
+          qualifiedName: "src/routes.ts#route",
+          kind: "function",
+          range: {
+            start: { line: 2, column: 1 },
+            end: { line: 4, column: 2 }
+          },
+          isExported: true
+        }
+      ],
+      dependents: [{ filePath: "src/app.ts", edgeKinds: ["imports"], edgeCount: 1 }]
+    };
+    const service = {
+      async fileView(): Promise<FileViewResult> {
+        return result;
+      }
+    } as unknown as SymbolLatticeService;
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+    await createProgram(service).parseAsync(
+      ["node", "symbol-lattice", "file", "routes.ts", "--offset", "2", "--limit", "2"],
+      { from: "node" }
+    );
+
+    expect(write).toHaveBeenCalledWith(
+      [
+        "src/routes.ts — 8 lines, 1 symbol · used by 1 file: src/app.ts",
+        "selection: unique-suffix · generation: generation:test · freshness: fresh",
+        "",
+        "2\texport function route() {",
+        "3\t  return '/health';",
+        "",
+        "(lines 2–3 of 8 — pass --offset/--limit for another range)",
+        ""
+      ].join("\n")
+    );
+  });
+
+  it("keeps sensitive file values out of the human renderer", async () => {
+    const result: FileViewResult = {
+      ...fileViewResult(),
+      selection: {
+        requestedPath: "application.yaml",
+        filePath: "config/application.yaml",
+        source: "active-generation",
+        resolution: "unique-suffix"
+      },
+      file: { language: "yaml", indexedAt: "2026-08-04T00:00:00.000Z" },
+      bounds: {
+        offset: 1,
+        limit: 200,
+        maximumLimit: 2_000,
+        totalLines: 1,
+        returnedLines: 0,
+        truncatedBefore: false,
+        truncatedAfter: false
+      },
+      contentAvailability: "withheld-sensitive-format",
+      lines: [{ line: 1, text: "token: SUPERSECRET123" }],
+      symbols: [
+        {
+          id: "symbol:yaml:token",
+          name: "token",
+          qualifiedName: "config/application.yaml#token",
+          kind: "property",
+          range: {
+            start: { line: 1, column: 1 },
+            end: { line: 1, column: 24 }
+          },
+          isExported: false
+        }
+      ],
+      dependents: []
+    };
+    const service = {
+      async fileView(): Promise<FileViewResult> {
+        return result;
+      }
+    } as unknown as SymbolLatticeService;
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+    await createProgram(service).parseAsync(
+      ["node", "symbol-lattice", "file", "application.yaml"],
+      { from: "node" }
+    );
+
+    const output = write.mock.calls.map(([value]) => String(value)).join("");
+    expect(output).toContain("Symbols (content values withheld for safety)");
+    expect(output).toContain("- token (property) — :1");
+    expect(output).not.toContain("SUPERSECRET123");
+  });
+
+  it("bounds the human renderer even when one persisted source line is extremely long", async () => {
+    const result: FileViewResult = {
+      ...fileViewResult(),
+      bounds: {
+        offset: 1,
+        limit: 2,
+        maximumLimit: 2_000,
+        totalLines: 2,
+        returnedLines: 2,
+        truncatedBefore: false,
+        truncatedAfter: false
+      },
+      contentAvailability: "active-generation",
+      lines: [
+        { line: 1, text: "x".repeat(50_000) },
+        { line: 2, text: "SECOND_LINE_MUST_NOT_LEAK_PAST_BUDGET" }
+      ]
+    };
+    const service = {
+      async fileView(): Promise<FileViewResult> {
+        return result;
+      }
+    } as unknown as SymbolLatticeService;
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+    await createProgram(service).parseAsync(
+      ["node", "symbol-lattice", "file", "src/routes.ts"],
+      { from: "node" }
+    );
+
+    const output = write.mock.calls.map(([value]) => String(value)).join("");
+    expect(output.length).toBeLessThanOrEqual(38_000);
+    expect(output).toContain("human output reached the 38000-character limit");
+    expect(output).not.toContain("SECOND_LINE_MUST_NOT_LEAK_PAST_BUDGET");
+  });
 });
 
 describe("symbol-lattice v0.258 files CLI", () => {

@@ -52,6 +52,7 @@ import {
   type EntrypointsOptions,
   type FilesOptions,
   type FileViewOptions,
+  type FileViewResult,
   type GenerationDiffOptions,
   type GenerationHistoryOptions,
   type ForegroundWatchOptions,
@@ -517,6 +518,95 @@ function render(value: unknown, _options: OutputOptions): void {
   // JSON is deliberately the single stable public contract in this release. The flag is
   // retained so callers can depend on it before a future human renderer lands.
   process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
+}
+
+function plural(count: number, singular: string): string {
+  return `${count} ${singular}${count === 1 ? "" : "s"}`;
+}
+
+const MAX_HUMAN_FILE_VIEW_CHARACTERS = 38_000;
+
+/** Human-first file view; --json remains the stable machine contract. */
+function renderFileView(value: FileViewResult, options: OutputOptions): void {
+  if (options.json === true) {
+    render(value, options);
+    return;
+  }
+
+  const shownDependents = value.dependents.slice(0, 8);
+  const dependentSummary =
+    value.dependents.length === 0
+      ? "no indexed file depends on it"
+      : `used by ${plural(value.dependents.length, "file")}: ${shownDependents
+          .map((dependent) => dependent.filePath)
+          .join(", ")}${value.dependents.length > shownDependents.length ? `, +${value.dependents.length - shownDependents.length} more` : ""}`;
+  const freshness = value.status.stale
+    ? `stale (${value.status.staleReasons.join(", ") || "reason unavailable"})`
+    : "fresh";
+  const out: string[] = [
+    `${value.selection.filePath} — ${plural(value.bounds.totalLines, "line")}, ${plural(value.symbols.length, "symbol")} · ${dependentSummary}`,
+    `selection: ${value.selection.resolution} · generation: ${value.status.generationId ?? "none"} · freshness: ${freshness}`,
+    ""
+  ];
+
+  if (value.contentAvailability === "active-generation") {
+    const metadataCharacters = out.join("\n").length + 1;
+    const noteReserve = 320;
+    let usedCharacters = metadataCharacters;
+    let humanOutputTruncated = false;
+    let endLine = value.bounds.offset - 1;
+    for (const line of value.lines) {
+      const prefix = `${line.line}\t`;
+      const renderedLine = `${prefix}${line.text}`;
+      const available =
+        MAX_HUMAN_FILE_VIEW_CHARACTERS - usedCharacters - noteReserve - 1;
+      if (renderedLine.length <= available) {
+        out.push(renderedLine);
+        usedCharacters += renderedLine.length + 1;
+        endLine = line.line;
+        continue;
+      }
+      if (available > prefix.length + 1) {
+        out.push(`${prefix}${line.text.slice(0, available - prefix.length - 1)}…`);
+        endLine = line.line;
+      }
+      humanOutputTruncated = true;
+      break;
+    }
+    if (value.bounds.truncatedBefore || value.bounds.truncatedAfter || humanOutputTruncated) {
+      out.push(
+        "",
+        `(lines ${value.bounds.offset}–${endLine} of ${value.bounds.totalLines} — pass --offset/--limit for another range)`
+      );
+    }
+    if (humanOutputTruncated) {
+      out.push(
+        `(human output reached the ${MAX_HUMAN_FILE_VIEW_CHARACTERS}-character limit; use a smaller range or --json)`
+      );
+    }
+  } else {
+    out.push(
+      value.contentAvailability === "withheld-sensitive-format"
+        ? "Symbols (content values withheld for safety)"
+        : "Symbols"
+    );
+    const shownSymbols = value.symbols.slice(0, 200);
+    if (shownSymbols.length === 0) {
+      out.push("- none");
+    } else {
+      out.push(
+        ...shownSymbols.map(
+          (symbol) =>
+            `- ${symbol.name} (${symbol.kind})${symbol.isExported ? " [exported]" : ""} — :${symbol.range.start.line}`
+        )
+      );
+    }
+    if (value.symbols.length > shownSymbols.length) {
+      out.push(`- … +${value.symbols.length - shownSymbols.length} more`);
+    }
+  }
+
+  process.stdout.write(`${out.join("\n")}\n`);
 }
 
 /** Watch uses compact NDJSON so every lifecycle receipt is independently parseable. */
@@ -1029,7 +1119,10 @@ export function createProgram(
         ...(options.limit === undefined ? {} : { limit: options.limit }),
         ...(options.symbolsOnly === undefined ? {} : { symbolsOnly: options.symbolsOnly })
       };
-      render(await coreService.fileView(defaultProjectPath(options), filePath, fileViewOptions), options);
+      renderFileView(
+        await coreService.fileView(defaultProjectPath(options), filePath, fileViewOptions),
+        options
+      );
     });
 
   addJsonOption(addProjectOption(program.command("search <query>")))
