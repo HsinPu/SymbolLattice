@@ -79,6 +79,7 @@ import {
   type ExportBinding,
   type FastifyPluginFacts,
   type FastifyPluginSymbolReference,
+  type FrameworkRoutePluginFacts,
   type GraphEdge,
   type ImportBinding,
   type LocalBinding,
@@ -1877,6 +1878,7 @@ function hasStableFastifyLocalPluginBinding(
   };
 
   ts.forEachChild(sourceFile, visit);
+
   return stable;
 }
 
@@ -2578,6 +2580,64 @@ function applyFrameworkRoutePluginMountPrefixes(
   }
 }
 
+function staticFrameworkRoutePluginImportedMountFact(
+  sourceFile: ts.SourceFile,
+  filePath: string,
+  node: ts.CallExpression,
+  bindings: ScopedRouteReceiverBindings,
+  symbolsByDeclaration: ReadonlyMap<ts.Node, SymbolNode>
+): FrameworkRoutePluginFacts["importedMounts"][number] | null {
+  if (node.questionDotToken !== undefined || !ts.isPropertyAccessExpression(node.expression)) {
+    return null;
+  }
+  const access = node.expression;
+  if (access.questionDotToken !== undefined || !ts.isIdentifier(access.expression)) {
+    return null;
+  }
+  const parent = visibleRouteBinding(sourceFile, access.expression, bindings);
+  if (
+    parent?.kind !== "custom-framework-receiver" ||
+    parent.frameworkRoutePlugin === undefined ||
+    !(parent.frameworkRoutePlugin.mountMethods ?? []).some(
+      (candidate) => candidate.methodName === access.name.text
+    )
+  ) {
+    return null;
+  }
+  const child = node.arguments[1];
+  if (child === undefined || !ts.isIdentifier(child)) {
+    return null;
+  }
+  const localChild = visibleRouteBinding(sourceFile, child, bindings);
+  if (localChild?.kind === "custom-framework-receiver") {
+    return null;
+  }
+  const parentReceiver = symbolsByDeclaration.get(parent.declaration);
+  if (parentReceiver === undefined) {
+    return null;
+  }
+  const prefix =
+    node.arguments.length === 2
+      ? literalFrameworkRoutePluginMountPrefix(node.arguments[0])
+      : null;
+  return {
+    frameworkId: parent.frameworkRoutePlugin.id,
+    parentReceiverId: parentReceiver.id,
+    child: fastifyPluginSymbolReference(sourceFile, child),
+    segment:
+      prefix === null
+        ? null
+        : {
+            filePath,
+            range: sourceRange(sourceFile, node),
+            parentReceiver: access.expression.text,
+            childReceiver: child.text,
+            mountMethod: access.name.text,
+            prefix
+          }
+  };
+}
+
 function isExpressRouteReceiver(
   sourceFile: ts.SourceFile,
   receiver: ts.Identifier,
@@ -2669,6 +2729,7 @@ function staticExpressRoute(
 
 interface StaticFrameworkRoutePluginRoute {
   readonly plugin: FrameworkRoutePlugin;
+  readonly receiver: RouteBinding;
   readonly route: StaticExpressRoute;
   readonly routeRegistration?: RouteRegistration;
   readonly routePrefixChain?: readonly RoutePrefixSegment[];
@@ -2728,6 +2789,7 @@ function staticFrameworkRoutePluginRoute(
   }
   return {
     plugin: binding.frameworkRoutePlugin,
+    receiver: binding,
     route: { method: routeMethod.routeMethod, path: routePath, handler },
     ...(binding.routeRegistration === undefined
       ? {}
@@ -5578,6 +5640,11 @@ export function extractFileFacts(
     childRegistrations: [],
     rootRegistrations: []
   };
+  const frameworkRoutePluginFacts: {
+    receivers: FrameworkRoutePluginFacts["receivers"][number][];
+    routes: FrameworkRoutePluginFacts["routes"][number][];
+    importedMounts: FrameworkRoutePluginFacts["importedMounts"][number][];
+  } = { receivers: [], routes: [], importedMounts: [] };
   const reactNativeFacts: {
     nativeModuleCalls: ReactNativeFacts["nativeModuleCalls"][number][];
     turboModuleCalls: ReactNativeFacts["turboModuleCalls"][number][];
@@ -5648,7 +5715,7 @@ export function extractFileFacts(
     routeFramework?: PendingReference["routeFramework"],
     routeRegistration?: PendingReference["routeRegistration"],
     routePrefixChain?: PendingReference["routePrefixChain"]
-  ): void {
+  ): PendingReference {
     const range = sourceRange(sourceFile, node);
     const reference: PendingReference = {
       id: createEdgeId({
@@ -5673,6 +5740,7 @@ export function extractFileFacts(
       referenceId: reference.id,
       scopeIds: enclosingScopeIds(sourceFile, node)
     });
+    return reference;
   }
 
   function addRouteSymbol(node: ts.Node, method: RouteMethod, path: string): SymbolNode {
@@ -5747,9 +5815,9 @@ export function extractFileFacts(
     routeFramework: NonNullable<PendingReference["routeFramework"]>,
     routeRegistration?: PendingReference["routeRegistration"],
     routePrefixChain?: PendingReference["routePrefixChain"]
-  ): void {
+  ): { readonly symbol: SymbolNode; readonly reference: PendingReference } {
     const symbol = addRouteSymbol(node, route.method, route.path);
-    addPendingReference(
+    const reference = addPendingReference(
       symbol.id,
       route.handler.text,
       "routes",
@@ -5758,6 +5826,7 @@ export function extractFileFacts(
       routeRegistration,
       routePrefixChain
     );
+    return { symbol, reference };
   }
 
   function addStaticExpressRoute(node: ts.CallExpression, route: StaticExpressRoute): void {
@@ -5768,13 +5837,26 @@ export function extractFileFacts(
     node: ts.CallExpression,
     candidate: StaticFrameworkRoutePluginRoute
   ): void {
-    addStaticRoute(
+    const added = addStaticRoute(
       node,
       candidate.route,
       customRouteFramework(candidate.plugin.id),
       candidate.routeRegistration,
       candidate.routePrefixChain
     );
+    const receiver = symbolsByDeclaration.get(candidate.receiver.declaration);
+    if (receiver !== undefined) {
+      frameworkRoutePluginFacts.routes.push({
+        receiverId: receiver.id,
+        frameworkId: candidate.plugin.id,
+        routeId: added.symbol.id,
+        referenceId: added.reference.id,
+        method: candidate.route.method,
+        path: candidate.route.path,
+        range: added.symbol.range,
+        routePrefixChain: candidate.routePrefixChain ?? []
+      });
+    }
   }
 
   function addStaticFrameworkRoutePluginDecoratorRoute(
@@ -6307,6 +6389,28 @@ export function extractFileFacts(
 
   ts.forEachChild(sourceFile, visit);
 
+  const seenFrameworkRoutePluginReceivers = new Set<string>();
+  for (const bindingsByName of routeReceiverBindings.byScopeId.values()) {
+    for (const bindingsForName of bindingsByName.values()) {
+      for (const binding of bindingsForName) {
+        const receiver = symbolsByDeclaration.get(binding.declaration);
+        if (
+          binding.kind !== "custom-framework-receiver" ||
+          binding.frameworkRoutePlugin === undefined ||
+          receiver === undefined ||
+          seenFrameworkRoutePluginReceivers.has(receiver.id)
+        ) {
+          continue;
+        }
+        seenFrameworkRoutePluginReceivers.add(receiver.id);
+        frameworkRoutePluginFacts.receivers.push({
+          receiverId: receiver.id,
+          frameworkId: binding.frameworkRoutePlugin.id
+        });
+      }
+    }
+  }
+
   const frameworkExtractionPasses: readonly FrameworkExtractionPass[] = [
     frameworkExtractionPass("nestjs", {
       visit(node) {
@@ -6550,6 +6654,16 @@ export function extractFileFacts(
 
   function extractFrameworkRoutePluginFacts(node: ts.Node): void {
     if (ts.isCallExpression(node)) {
+      const importedMount = staticFrameworkRoutePluginImportedMountFact(
+        sourceFile,
+        input.filePath,
+        node,
+        routeReceiverBindings,
+        symbolsByDeclaration
+      );
+      if (importedMount !== null) {
+        frameworkRoutePluginFacts.importedMounts.push(importedMount);
+      }
       const candidate = staticFrameworkRoutePluginRoute(sourceFile, node, routeReceiverBindings);
       if (candidate !== null) {
         addStaticFrameworkRoutePluginRoute(node, candidate);
@@ -6590,6 +6704,7 @@ export function extractFileFacts(
     nestRouteFacts,
     nestGraphqlFacts,
     fastifyPluginFacts,
+    frameworkRoutePluginFacts,
     reactNativeFacts
   };
 }

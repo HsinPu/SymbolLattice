@@ -6,6 +6,19 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.248.0] - 2026-08-04
+
+### Added
+
+- Public framework-route plugins can now project a child receiver mounted from one exact value-space ESM named import, including uniquely resolved named re-export chains and import aliases.
+- Projected route evidence retains the ordered cross-file mount segments and the module-resolution path. The raw unprefixed route is replaced only after the complete proof succeeds.
+- Persisted receiver, route, and imported-mount facts allow incremental sync to recompute the project projection without inventing runtime behavior.
+
+### Safety and compatibility
+
+- Dynamic or root prefixes, duplicate mounts, type-only imports, ambiguous exports, plugin mismatches, cycles, and chains beyond 16 segments fail closed. A proven but unsafe mount suppresses the incomplete unprefixed endpoint.
+- Existing SQLite data remains readable. The artifact extractor advances to `multi-language-ast-v203` and the project resolver to `project-resolver-v83`; run `sync` or `index` once to refresh an existing graph. No schema migration is required.
+
 ## [0.213.0] - 2026-08-03
 
 ### Added

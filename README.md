@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.247.0 是從原始碼執行的開發預覽版。MCP 查詢工具唯讀；但 `serve --mcp` 預設會啟動獨立的本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用它。
+> v0.248.0 是從原始碼執行的開發預覽版。MCP 查詢工具唯讀；但 `serve --mcp` 預設會啟動獨立的本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用它。
 
 ## 快速開始
 
@@ -29,32 +29,32 @@ npm run build
 # 建立專案本機圖譜
 node dist/cli/main.js init /path/to/project
 
-# 查詢可解釋的結構化脈絡
+# 查詢含證據的結構脈絡
 node dist/cli/main.js investigate "user token" --project /path/to/project --json
 ```
 
 ## 核心能力
 
 - 將多種語言與常見框架掃描成專案本機程式碼圖譜。
-- 查詢 symbols、索引檔案、呼叫、路由、入口點、影響範圍、歷史 generation 與差異。
-- `files` 只列出 active generation 中已保存的檔案，並提供語言、索引時間與每檔 declaration／edge／pending-reference 統計；`status.stale` 會顯示目前專案是否已與該 generation 脫節。
-- 保留每條關係的規則、階段、候選目標、信心度與解析路徑。
-- 對固定 prefix chain 的擴充框架路由，`explain-edge` 可顯示每個 mount segment 的 receiver、方法、prefix 與來源位置。
+- 查詢 symbols、files、calls、routes、entrypoints、impact、history 與 diff。
+- 每條關係保留規則、階段、候選目標、信心度、解析路徑與來源範圍。
+- `files` 僅列出 active generation 已保存的檔案，並顯示語言、索引時間、圖譜計數與 freshness。
+- 擴充框架的 route plugin 可精確解析同檔案與跨檔案固定 prefix mount；`explain-edge` 會顯示每段 mount 與 ESM import／re-export 路徑。動態或模糊組合不會被猜測成路由。
 
-## 常用命令
+## 常用指令
 
-| 命令 | 用途 |
+| 指令 | 用途 |
 | --- | --- |
 | `init <path>` | 建立圖譜。 |
 | `sync <path>` | 明確同步或修復圖譜。 |
 | `watch <path>` | 在前景監看並同步。 |
-| `files [path]` | 列出已保存的索引檔案與每檔圖譜統計。 |
-| `investigate <query>` | 將文字證據擴展為結構化脈絡。 |
-| `impact <symbol>` | 沿精確靜態關係追蹤有界影響。 |
-| `explain-edge <edge-id>` | 檢視單一關係的完整證據。 |
+| `files [path]` | 列出已保存檔案與逐檔圖譜計數。 |
+| `investigate <query>` | 將文字線索展開為結構脈絡。 |
+| `impact <symbol>` | 沿精確靜態關係進行有限影響分析。 |
+| `explain-edge <edge-id>` | 查看一條關係的完整證據。 |
 | `serve --mcp` | 啟動 MCP stdio host。 |
-| `mcp-doctor <target>` | 唯讀檢查 Agent MCP 設定、CLI 與索引。 |
-| `mcp-install <target>` | 預覽，或用 `--apply --yes` 安全寫入 MCP 設定。 |
+| `mcp-doctor <target>` | 唯讀診斷 Agent MCP 設定、CLI 與索引。 |
+| `mcp-install <target>` | 預覽；加上 `--apply --yes` 後安全寫入 MCP 設定。 |
 
 ## 驗證
 

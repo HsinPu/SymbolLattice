@@ -52,6 +52,129 @@ const latticeRouterPlugin: FrameworkRoutePlugin = {
 };
 
 describe("framework route plugin service integration", () => {
+  it("projects an exactly imported receiver through a re-exported cross-file mount", async () => {
+    const projectPath = await createInlineProject({
+      "src/child.ts": [
+        'import { Router } from "@acme/lattice-router";',
+        "export const child = new Router();",
+        "export function health() { return { ok: true }; }",
+        'child.get("/health", health);'
+      ].join("\n"),
+      "src/mid.ts": [
+        'import { Router } from "@acme/lattice-router";',
+        'import { child } from "./child.js";',
+        "export const versioned = new Router();",
+        'versioned.mount("/v1", child);'
+      ].join("\n"),
+      "src/routes.ts": 'export { versioned as apiRoutes } from "./mid.js";',
+      "src/app.ts": [
+        'import { Router } from "@acme/lattice-router";',
+        'import { apiRoutes as mountedRoutes } from "./routes.js";',
+        "const app = new Router();",
+        'app.mount("/api", mountedRoutes);'
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const extractor = createFrameworkRoutePluginExtractor(
+      createFrameworkRoutePluginRegistry([latticeRouterPlugin])
+    );
+    const service = new SymbolLatticeService(
+      graphStore,
+      new FileSystemSourceCatalog(),
+      extractor
+    );
+
+    await service.init({ projectPath });
+    const routes = await service.routes(projectPath, { method: "GET" });
+    const persistedFacts = graphStore.getArtifactFacts(projectPath);
+
+    expect(routes.routes.map((route) => route.path)).toEqual(["/api/v1/health"]);
+    expect(
+      persistedFacts.find((facts) => facts.filePath === "src/child.ts")
+        ?.frameworkRoutePluginFacts
+    ).toMatchObject({ receivers: [expect.any(Object)], routes: [expect.any(Object)] });
+    expect(
+      persistedFacts.find((facts) => facts.filePath === "src/app.ts")
+        ?.frameworkRoutePluginFacts?.importedMounts
+    ).toEqual([
+      expect.objectContaining({
+        frameworkId: "acme/lattice-router",
+        segment: expect.objectContaining({ prefix: "/api" })
+      })
+    ]);
+    expect(routes.routes[0]).toMatchObject({
+      handler: { qualifiedName: "src/child.ts#health" },
+      edge: {
+        evidence: {
+          ruleId:
+            "framework.plugin.acme.lattice-router.imported-literal-prefix-chain.local-handler",
+          stage: "lexical",
+          resolutionPath: [
+            "src/app.ts",
+            "src/routes.ts",
+            "src/mid.ts",
+            "src/child.ts"
+          ],
+          routePrefixChain: [
+            expect.objectContaining({
+              filePath: "src/app.ts",
+              parentReceiver: "app",
+              childReceiver: "mountedRoutes",
+              mountMethod: "mount",
+              prefix: "/api"
+            }),
+            expect.objectContaining({
+              filePath: "src/mid.ts",
+              parentReceiver: "versioned",
+              childReceiver: "child",
+              mountMethod: "mount",
+              prefix: "/v1"
+            })
+          ]
+        }
+      }
+    });
+  });
+
+  it("fails closed for dynamic and duplicate imported mounts", async () => {
+    const projectPath = await createInlineProject({
+      "src/child.ts": [
+        'import { Router } from "@acme/lattice-router";',
+        "export const child = new Router();",
+        "function health() { return { ok: true }; }",
+        'child.get("/health", health);'
+      ].join("\n"),
+      "src/dynamic-child.ts": [
+        'import { Router } from "@acme/lattice-router";',
+        "export const dynamicChild = new Router();",
+        "function status() { return { ok: true }; }",
+        'dynamicChild.get("/status", status);'
+      ].join("\n"),
+      "src/app.ts": [
+        'import { Router } from "@acme/lattice-router";',
+        'import { child } from "./child.js";',
+        'import { dynamicChild } from "./dynamic-child.js";',
+        "const app = new Router();",
+        'const prefix = "/dynamic";',
+        'app.mount("/api", child);',
+        'app.mount("/internal", child);',
+        "app.mount(prefix, dynamicChild);"
+      ].join("\n")
+    });
+    const service = new SymbolLatticeService(
+      new SqliteGraphStore(),
+      new FileSystemSourceCatalog(),
+      createFrameworkRoutePluginExtractor(
+        createFrameworkRoutePluginRegistry([latticeRouterPlugin])
+      )
+    );
+
+    await service.init({ projectPath });
+    await expect(service.routes(projectPath, { method: "GET" })).resolves.toMatchObject({
+      routes: []
+    });
+  });
+
   it("resolves routes and invalidates persisted facts when the scoped descriptor changes", async () => {
     const projectPath = await createInlineProject({
       "src/routes.ts": [

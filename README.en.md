@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.247.0 is a developer preview that runs from source. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher can update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.248.0 is a developer preview that runs from source. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher can update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## Quick start
 
@@ -39,7 +39,7 @@ node dist/cli/main.js investigate "user token" --project /path/to/project --json
 - Queries symbols, indexed files, calls, routes, entry points, impact, retained generations, and diffs.
 - `files` lists only files persisted in the active generation, with language, index time, and per-file declaration/edge/pending-reference counts; `status.stale` reports whether the live project has diverged from that generation.
 - Preserves the rule, stage, candidate targets, confidence, and resolution path behind every relation.
-- For extension-framework routes projected through a fixed prefix chain, `explain-edge` returns each ordered mount segment with its receiver, method, prefix, and source location.
+- Extension-framework route plugins resolve exact same-file and cross-file fixed-prefix mounts. `explain-edge` returns each mount segment and the ESM import/re-export path; dynamic or ambiguous composition is never guessed into a route.
 
 ## Common commands
 

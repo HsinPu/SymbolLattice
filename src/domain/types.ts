@@ -133,6 +133,8 @@ export type RouteRegistration =
   | "fastify-imported-plugin-prefix"
   | "plugin-literal-prefix-mount"
   | "plugin-literal-prefix-chain"
+  | "plugin-imported-literal-prefix-mount"
+  | "plugin-imported-literal-prefix-chain"
   | "rails-resources"
   | "rails-resource"
   | "nextjs-app-router"
@@ -275,6 +277,8 @@ export interface PendingReference {
   readonly routeRegistration?: RouteRegistration;
   /** Ordered static mount evidence when a framework route uses a projected prefix. */
   readonly routePrefixChain?: readonly RoutePrefixSegment[];
+  /** Module hops that proved a cross-file framework route mount. */
+  readonly routeResolutionPath?: readonly string[];
   readonly range: SourceRange;
 }
 

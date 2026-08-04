@@ -11,13 +11,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v202";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v203";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v82";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v83";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -214,6 +214,40 @@ export interface FastifyPluginFacts {
   readonly routes: readonly FastifyPluginRouteFact[];
   readonly childRegistrations: readonly FastifyPluginChildRegistrationFact[];
   readonly rootRegistrations: readonly FastifyPluginRootRegistrationFact[];
+}
+
+/** A syntax-proven receiver created by one configured framework route plugin. */
+export interface FrameworkRoutePluginReceiverFact {
+  readonly receiverId: string;
+  readonly frameworkId: string;
+}
+
+/** A raw plugin route retained so project resolution can replace its mounted path. */
+export interface FrameworkRoutePluginRouteFact {
+  readonly receiverId: string;
+  readonly frameworkId: string;
+  readonly routeId: string;
+  readonly referenceId: string;
+  readonly method: RouteMethod;
+  readonly path: string;
+  readonly range: SourceRange;
+  readonly routePrefixChain: readonly RoutePrefixSegment[];
+}
+
+/** An imported child receiver passed to a literal mount on a proven local receiver. */
+export interface FrameworkRoutePluginImportedMountFact {
+  readonly frameworkId: string;
+  readonly parentReceiverId: string;
+  readonly child: FastifyPluginSymbolReference;
+  /** Null records an observed mount whose prefix or arity was not safe to project. */
+  readonly segment: RoutePrefixSegment | null;
+}
+
+/** File-local extension facts resolved only through exact project module exports. */
+export interface FrameworkRoutePluginFacts {
+  readonly receivers: readonly FrameworkRoutePluginReceiverFact[];
+  readonly routes: readonly FrameworkRoutePluginRouteFact[];
+  readonly importedMounts: readonly FrameworkRoutePluginImportedMountFact[];
 }
 
 /** A direct, top-level FastAPI `APIRouter` binding with a literal prefix. */
@@ -1075,6 +1109,8 @@ export interface ArtifactFacts {
   readonly nestGraphqlFacts?: NestGraphqlFacts;
   /** Omitted only by artifact facts persisted before v0.22. */
   readonly fastifyPluginFacts?: FastifyPluginFacts;
+  /** Omitted only by artifact facts persisted before v0.248. */
+  readonly frameworkRoutePluginFacts?: FrameworkRoutePluginFacts;
   /** Omitted only by artifact facts persisted before v0.31. */
   readonly fastApiRouterFacts?: FastApiRouterFacts;
   /** Omitted only by artifact facts persisted before v0.228. */

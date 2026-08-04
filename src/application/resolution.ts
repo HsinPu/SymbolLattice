@@ -27,6 +27,7 @@ import {
   type SanicImportedBlueprintRegistrationFact,
   type FastifyPluginRouteFact,
   type FastifyPluginSymbolReference,
+  type FrameworkRoutePluginFacts,
   type GoFrameStandardRouterBindingFact,
   type GoFrameStandardRouterControllerMethodFact,
   type GoFrameStandardRouterRequestFact,
@@ -1593,7 +1594,11 @@ function staticRouteHandlerRuleId(
   if (isCustomRouteFramework(reference.routeFramework)) {
     const pluginRuleName = reference.routeFramework.slice("plugin:".length).replace("/", ".");
     const routeSurface =
-      reference.routeRegistration === "plugin-literal-prefix-chain"
+      reference.routeRegistration === "plugin-imported-literal-prefix-chain"
+        ? "imported-literal-prefix-chain"
+        : reference.routeRegistration === "plugin-imported-literal-prefix-mount"
+          ? "imported-literal-prefix-mount"
+      : reference.routeRegistration === "plugin-literal-prefix-chain"
         ? "literal-prefix-chain"
         : reference.routeRegistration === "plugin-literal-prefix-mount"
           ? "literal-prefix-mount"
@@ -2680,6 +2685,251 @@ function resolveExactFastifyPluginReference(input: {
     )
   );
   return candidates.length === 1 ? candidates[0]?.symbol ?? null : null;
+}
+
+interface ResolvedFrameworkRoutePluginReceiver {
+  readonly symbol: SymbolNode;
+  readonly resolutionPath: readonly string[];
+  readonly configurationPaths: readonly string[];
+}
+
+function resolveExactFrameworkRoutePluginReceiver(input: {
+  readonly filePath: string;
+  readonly reference: FastifyPluginSymbolReference;
+  readonly frameworkId: string;
+  readonly facts: ExtractedFileFacts;
+  readonly receiverFrameworkById: ReadonlyMap<string, string>;
+  readonly moduleTargetPathByKey: ReadonlyMap<string, string>;
+  readonly exportSurfaces: ReadonlyMap<string, ExportSurface>;
+}): ResolvedFrameworkRoutePluginReceiver | null {
+  const imports = input.facts.importBindings.filter(
+    (binding) => binding.localName === input.reference.name && binding.isTypeOnly !== true
+  );
+  if (imports.length !== 1 || imports[0] === undefined) {
+    return null;
+  }
+  const binding = imports[0];
+  const targetPath = input.moduleTargetPathByKey.get(
+    moduleKey(input.filePath, binding.moduleSpecifier)
+  );
+  if (
+    targetPath === undefined ||
+    input.exportSurfaces.get(targetPath)?.get(binding.importedName)?.ambiguous === true
+  ) {
+    return null;
+  }
+  const candidates = canonicalExportCandidates(
+    candidatesForExport(input.exportSurfaces, targetPath, binding.importedName).filter(
+      (candidate) =>
+        !candidate.isTypeOnly &&
+        input.receiverFrameworkById.get(candidate.symbol.id) === input.frameworkId
+    )
+  );
+  const candidate = candidates.length === 1 ? candidates[0] : undefined;
+  return candidate === undefined
+    ? null
+    : {
+        symbol: candidate.symbol,
+        resolutionPath: [input.filePath, ...candidate.path],
+        configurationPaths: candidate.configurationPaths
+      };
+}
+
+interface FrameworkRoutePluginMountObservation {
+  readonly fact: FrameworkRoutePluginFacts["importedMounts"][number];
+  readonly resolutionPath: readonly string[];
+  readonly configurationPaths: readonly string[];
+}
+
+interface FrameworkRoutePluginProjection {
+  readonly symbols: readonly SymbolNode[];
+  readonly structuralEdges: readonly GraphEdge[];
+  readonly references: readonly PendingReference[];
+  readonly referenceScopes: ReadonlyMap<string, readonly string[]>;
+  readonly suppressedRawRouteIds: readonly string[];
+  readonly suppressedRawReferenceIds: readonly string[];
+}
+
+function projectFrameworkRoutePluginImportedMounts(input: {
+  readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
+  readonly fileSymbols: ReadonlyMap<string, SymbolNode>;
+  readonly symbolsById: ReadonlyMap<string, SymbolNode>;
+  readonly referencesById: ReadonlyMap<string, PendingReference>;
+  readonly referenceScopeIdsByReferenceId: ReadonlyMap<string, readonly string[]>;
+  readonly moduleTargetPathByKey: ReadonlyMap<string, string>;
+  readonly exportSurfaces: ReadonlyMap<string, ExportSurface>;
+}): FrameworkRoutePluginProjection {
+  const receiverFrameworkById = new Map<string, string>();
+  for (const facts of input.factsByFile.values()) {
+    for (const receiver of facts.frameworkRoutePluginFacts?.receivers ?? []) {
+      receiverFrameworkById.set(receiver.receiverId, receiver.frameworkId);
+    }
+  }
+
+  const mountsByChildReceiverId = new Map<string, FrameworkRoutePluginMountObservation[]>();
+  for (const [filePath, facts] of [...input.factsByFile.entries()].sort(([left], [right]) =>
+    compareStableText(left, right)
+  )) {
+    for (const mount of facts.frameworkRoutePluginFacts?.importedMounts ?? []) {
+      const target = resolveExactFrameworkRoutePluginReceiver({
+        filePath,
+        reference: mount.child,
+        frameworkId: mount.frameworkId,
+        facts,
+        receiverFrameworkById,
+        moduleTargetPathByKey: input.moduleTargetPathByKey,
+        exportSurfaces: input.exportSurfaces
+      });
+      if (target === null) {
+        continue;
+      }
+      const observations = mountsByChildReceiverId.get(target.symbol.id) ?? [];
+      observations.push({
+        fact: mount,
+        resolutionPath: target.resolutionPath,
+        configurationPaths: target.configurationPaths
+      });
+      mountsByChildReceiverId.set(target.symbol.id, observations);
+    }
+  }
+
+  interface ResolvedMountChain {
+    readonly segments: readonly RoutePrefixSegment[];
+    readonly resolutionPath: readonly string[];
+  }
+  const chainByReceiverId = new Map<string, ResolvedMountChain | null>();
+  const resolveChain = (receiverId: string, seen = new Set<string>()): ResolvedMountChain | null => {
+    if (chainByReceiverId.has(receiverId)) {
+      return chainByReceiverId.get(receiverId) ?? null;
+    }
+    if (seen.has(receiverId)) {
+      chainByReceiverId.set(receiverId, null);
+      return null;
+    }
+    const observations = mountsByChildReceiverId.get(receiverId);
+    if (observations === undefined) {
+      return { segments: [], resolutionPath: [] };
+    }
+    const observation = observations.length === 1 ? observations[0] : undefined;
+    if (observation === undefined || observation.fact.segment === null) {
+      chainByReceiverId.set(receiverId, null);
+      return null;
+    }
+    // An imported mount's local parent is a root for this project-level chain.
+    // A receiver may itself be mounted elsewhere; that outer proof is followed first.
+    const outer =
+      receiverFrameworkById.get(observation.fact.parentReceiverId) !== observation.fact.frameworkId
+        ? null
+        : resolveChain(observation.fact.parentReceiverId, new Set([...seen, receiverId]));
+    if (outer === null || outer.segments.length >= 16) {
+      chainByReceiverId.set(receiverId, null);
+      return null;
+    }
+    const resolved = {
+      segments: [...outer.segments, observation.fact.segment],
+      resolutionPath: [...outer.resolutionPath, ...observation.resolutionPath]
+    };
+    chainByReceiverId.set(receiverId, resolved);
+    return resolved;
+  };
+
+  const symbols: SymbolNode[] = [];
+  const structuralEdges: GraphEdge[] = [];
+  const references: PendingReference[] = [];
+  const referenceScopes = new Map<string, readonly string[]>();
+  const suppressedRawRouteIds = new Set<string>();
+  const suppressedRawReferenceIds = new Set<string>();
+
+  for (const facts of input.factsByFile.values()) {
+    for (const route of facts.frameworkRoutePluginFacts?.routes ?? []) {
+      if (!mountsByChildReceiverId.has(route.receiverId)) {
+        continue;
+      }
+      suppressedRawRouteIds.add(route.routeId);
+      suppressedRawReferenceIds.add(route.referenceId);
+      const chain = resolveChain(route.receiverId);
+      if (
+        chain === null ||
+        chain.segments.length + route.routePrefixChain.length > 16 ||
+        route.path === "/"
+      ) {
+        continue;
+      }
+      const rawRoute = input.symbolsById.get(route.routeId);
+      const rawReference = input.referencesById.get(route.referenceId);
+      const file = rawRoute === undefined ? undefined : input.fileSymbols.get(rawRoute.filePath);
+      if (rawRoute === undefined || rawReference === undefined || file === undefined) {
+        continue;
+      }
+      const segments = [...chain.segments, ...route.routePrefixChain];
+      const path = `${chain.segments.map((segment) => segment.prefix).join("")}${route.path}`;
+      const name = `${route.method} ${path}`;
+      const qualifiedName = `${rawRoute.filePath}#route:${name}`;
+      const projected: SymbolNode = {
+        ...rawRoute,
+        id: createSymbolId({
+          filePath: rawRoute.filePath,
+          qualifiedName,
+          kind: "route",
+          declarationOrdinal: rawRoute.declarationOrdinal
+        }),
+        name,
+        qualifiedName
+      };
+      symbols.push(projected);
+      structuralEdges.push({
+        id: createEdgeId({
+          sourceId: file.id,
+          targetId: projected.id,
+          kind: "contains",
+          line: projected.range.start.line,
+          column: projected.range.start.column,
+          referenceName: projected.name
+        }),
+        sourceId: file.id,
+        targetId: projected.id,
+        kind: "contains",
+        filePath: projected.filePath,
+        range: projected.range,
+        resolution: "exact",
+        confidence: 1,
+        referenceName: projected.name,
+        evidence: { ruleId: "syntax.containment", stage: "syntax", candidateSymbolIds: [projected.id] }
+      });
+      const reference: PendingReference = {
+        ...rawReference,
+        id: createEdgeId({
+          sourceId: projected.id,
+          targetId: null,
+          kind: rawReference.relationKind,
+          line: rawReference.range.start.line,
+          column: rawReference.range.start.column,
+          referenceName: rawReference.referenceName
+        }),
+        sourceId: projected.id,
+        routeRegistration:
+          segments.length === 1
+            ? "plugin-imported-literal-prefix-mount"
+            : "plugin-imported-literal-prefix-chain",
+        routePrefixChain: segments,
+        routeResolutionPath: chain.resolutionPath
+      };
+      references.push(reference);
+      referenceScopes.set(
+        reference.id,
+        input.referenceScopeIdsByReferenceId.get(rawReference.id) ?? []
+      );
+    }
+  }
+
+  return {
+    symbols,
+    structuralEdges,
+    references,
+    referenceScopes,
+    suppressedRawRouteIds: [...suppressedRawRouteIds],
+    suppressedRawReferenceIds: [...suppressedRawReferenceIds]
+  };
 }
 
 function fastifyImportedPluginPath(prefix: string, routePath: string): string | null {
@@ -7335,6 +7585,45 @@ export function resolveProjectFacts(input: {
     moduleTargetPathByKey
   });
 
+  const frameworkRoutePluginProjection = projectFrameworkRoutePluginImportedMounts({
+    factsByFile,
+    fileSymbols,
+    symbolsById,
+    referencesById: new Map(references.map((reference) => [reference.id, reference])),
+    referenceScopeIdsByReferenceId,
+    moduleTargetPathByKey,
+    exportSurfaces
+  });
+  if (frameworkRoutePluginProjection.suppressedRawRouteIds.length > 0) {
+    const suppressedRoutes = new Set(frameworkRoutePluginProjection.suppressedRawRouteIds);
+    const suppressedReferences = new Set(frameworkRoutePluginProjection.suppressedRawReferenceIds);
+    symbols.splice(0, symbols.length, ...symbols.filter((symbol) => !suppressedRoutes.has(symbol.id)));
+    structuralEdges.splice(
+      0,
+      structuralEdges.length,
+      ...structuralEdges.filter(
+        (edge) => !suppressedRoutes.has(edge.sourceId) && !suppressedRoutes.has(edge.targetId ?? "")
+      )
+    );
+    references.splice(
+      0,
+      references.length,
+      ...references.filter((reference) => !suppressedReferences.has(reference.id))
+    );
+    for (const routeId of suppressedRoutes) {
+      symbolsById.delete(routeId);
+    }
+  }
+  symbols.push(...frameworkRoutePluginProjection.symbols);
+  structuralEdges.push(...frameworkRoutePluginProjection.structuralEdges);
+  references.push(...frameworkRoutePluginProjection.references);
+  for (const symbol of frameworkRoutePluginProjection.symbols) {
+    symbolsById.set(symbol.id, symbol);
+  }
+  for (const [referenceId, scopeIds] of frameworkRoutePluginProjection.referenceScopes) {
+    referenceScopeIdsByReferenceId.set(referenceId, scopeIds);
+  }
+
   resolvedEdges.push(
     ...projectReactNativeTurboModuleDefaultImportCalls({
       factsByFile,
@@ -7724,7 +8013,7 @@ export function resolveProjectFacts(input: {
               "lexical",
               candidateSymbolIds(scopedLocal.candidates),
               [],
-              [],
+              reference.routeResolutionPath ?? [],
               reference.routePrefixChain ?? []
             )
           )
@@ -7748,7 +8037,7 @@ export function resolveProjectFacts(input: {
               "unresolved",
               candidateSymbolIds(scopedLocal.candidates),
               [],
-              [],
+              reference.routeResolutionPath ?? [],
               reference.routePrefixChain ?? []
             )
           )
@@ -7795,7 +8084,7 @@ export function resolveProjectFacts(input: {
             "module",
             candidateSymbolIds(exactImportedSymbols),
             exactImportedConfigurationPaths,
-            resolutionPath,
+            [...(reference.routeResolutionPath ?? []), ...resolutionPath],
             reference.routePrefixChain ?? []
           )
         )
@@ -7828,7 +8117,7 @@ export function resolveProjectFacts(input: {
               isInstantiation || heritage !== null ? allExactImportedSymbols : exactImportedSymbols
             ),
             exactImportedConfigurationPaths,
-            [],
+            reference.routeResolutionPath ?? [],
             reference.routePrefixChain ?? []
           )
         )
@@ -7885,7 +8174,7 @@ export function resolveProjectFacts(input: {
               exportedCandidates.map((candidate) => candidate.symbol)
             ),
             exactImportedConfigurationPaths,
-            [],
+            reference.routeResolutionPath ?? [],
             reference.routePrefixChain ?? []
           )
         )
