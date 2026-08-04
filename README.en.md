@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.255.4 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher can update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.256.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher can update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## Quick start
 
@@ -78,13 +78,19 @@ One manifest may provide `frameworkFactPlugins`, `frameworkProjectPlugins`, and 
 | `investigate <query>` | Expand textual evidence into structural context. |
 | `impact <symbol>` | Trace bounded impact through exact static relations. |
 | `explain-edge <edge-id>` | Inspect the complete evidence for one relation. |
-| `upgrade [version]` | Read-only upgrade preview; GitHub releases/tags are queried only when no version is pinned. |
+| `upgrade [version]` | Preview, verify, or explicitly apply a GitHub Release upgrade. |
 | `serve --mcp` | Start the MCP stdio host. |
 | `mcp-doctor <target>` | Read-only diagnosis of an Agent MCP configuration, CLI, and index. |
 | `mcp-install <target>` | Preview or, with `--apply --yes`, safely write an MCP configuration. |
 | `mcp-uninstall <target>` | Preview or, with `--apply --yes`, remove the matching MCP entry. |
 
-`upgrade` never changes the package, source checkout, index, or Agent configuration. A pinned version produces a fully offline plan with the matching GitHub Release `.tgz`, SHA-256 checksum, and manifest URLs. Automatic apply remains unavailable.
+`upgrade` produces a read-only plan by default. `--verify` downloads and checks the `.tgz`, SHA-256 checksum, manifest, and GitHub Artifact Attestations API evidence without installing. `--apply --yes` supports only local or global npm layouts, installs the verified local bytes, and then proves the CLI version. Source checkouts and `npx` are never changed automatically; downgrades also require `--allow-downgrade`.
+
+```bash
+symbol-lattice upgrade --check
+symbol-lattice upgrade 0.256.0 --verify
+symbol-lattice upgrade 0.256.0 --apply --yes
+```
 
 ## Verification
 

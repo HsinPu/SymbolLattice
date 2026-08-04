@@ -52,6 +52,8 @@ describe("GitHub release workflow", () => {
     expect(commands).toContain("npm install --prefix");
     expect(commands).toContain('"$install_prefix/node_modules/.bin/symbol-lattice" --version');
     expect(commands).toContain("gh release create");
+    expect(commands).toContain('upgrade "${GITHUB_REF_NAME#v}" --verify --json');
+    expect(commands).toContain("for attempt in 1 2 3 4 5 6");
     expect(workflowText).toContain("subject-path: release/*");
   });
 });

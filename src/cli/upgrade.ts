@@ -76,7 +76,7 @@ export interface UpgradePreviewResult {
   };
   readonly mutation: {
     readonly performed: false;
-    readonly automaticApplySupported: false;
+    readonly automaticApplySupported: boolean;
   };
   readonly notes: readonly string[];
 }
@@ -219,6 +219,7 @@ export async function createUpgradePreview(
   });
   const artifacts = releaseArtifacts(target.canonical);
   const plan = buildInstallationPlan(installation, artifacts.tarball);
+  const automaticApplySupported = installation.kind === "npm-local" || installation.kind === "npm-global";
 
   return {
     schemaVersion: 1,
@@ -240,14 +241,16 @@ export async function createUpgradePreview(
     installation: { ...installation, ...plan },
     mutation: {
       performed: false,
-      automaticApplySupported: false
+      automaticApplySupported
     },
     notes: [
-      "This command never changes the package, source checkout, project index, Agent configuration, or global state.",
+      "Preview and check modes never change the package, source checkout, project index, Agent configuration, or global state.",
       networkRequested
         ? "Network access occurred only because the upgrade command was explicitly invoked without a pinned version."
         : "The explicit target was validated locally; no release network request was made.",
-      "Automatic apply remains unavailable; the selected GitHub Release tarball can be installed manually after reviewing its checksum, manifest, and attestation."
+      automaticApplySupported
+        ? "Use --verify for a non-mutating evidence check, or --apply --yes to verify every release artifact and then install the verified local bytes."
+        : "Automatic apply is unavailable for this installation layout; use --verify before reviewing the advisory steps."
     ]
   };
 }
@@ -329,7 +332,7 @@ function buildInstallationPlan(installation: UpgradeInstallation, tarballUrl: st
           { command: "npm", args: ["--prefix", installation.root, "install", tarballUrl] }
         ],
         diagnostics: [
-          "The command installs the immutable GitHub Release tarball into the selected local project and is not executed automatically."
+          "The previewed command is executed only after --apply --yes verifies the tarball, checksum, manifest, and GitHub attestation."
         ]
       };
     case "npm-global":
@@ -338,7 +341,7 @@ function buildInstallationPlan(installation: UpgradeInstallation, tarballUrl: st
           { command: "npm", args: ["install", "--global", tarballUrl] }
         ],
         diagnostics: [
-          "The command installs the immutable GitHub Release tarball globally and is not executed automatically."
+          "The previewed command is executed only after --apply --yes verifies the tarball, checksum, manifest, and GitHub attestation."
         ]
       };
     case "npx":

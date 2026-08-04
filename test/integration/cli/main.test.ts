@@ -2212,7 +2212,7 @@ describe("symbol-lattice v0.253 explicit plugin module CLI", () => {
   });
 });
 
-describe("symbol-lattice v0.254 preview-only upgrade CLI", () => {
+describe("symbol-lattice v0.256 verified upgrade CLI", () => {
   it("forwards an explicit target and check mode to the planner", async () => {
     const result: UpgradePreviewResult = {
       schemaVersion: 1,
@@ -2257,6 +2257,42 @@ describe("symbol-lattice v0.254 preview-only upgrade CLI", () => {
 
     expect(planner).toHaveBeenCalledWith({ version: "v0.254.0", check: true });
     expect(write).toHaveBeenCalledWith(`${JSON.stringify(result, null, 2)}\n`);
+  });
+
+  it("forwards explicit verification and confirmed apply controls", async () => {
+    const result = {} as UpgradePreviewResult;
+    const planner = vi.fn<UpgradePlanner>(async () => result);
+    vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+    await createProgram(
+      {} as SymbolLatticeService,
+      undefined,
+      undefined,
+      undefined,
+      planner
+    ).parseAsync(
+      [
+        "node",
+        "symbol-lattice",
+        "upgrade",
+        "0.255.4",
+        "--apply",
+        "--yes",
+        "--force",
+        "--allow-downgrade",
+        "--json"
+      ],
+      { from: "node" }
+    );
+
+    expect(planner).toHaveBeenCalledWith({
+      version: "0.255.4",
+      check: false,
+      apply: true,
+      yes: true,
+      force: true,
+      allowDowngrade: true
+    });
   });
 });
 

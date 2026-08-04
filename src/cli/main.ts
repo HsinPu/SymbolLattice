@@ -83,10 +83,10 @@ import { createMcpDoctor } from "./mcp-doctor.js";
 import { createMcpInstall } from "./mcp-install.js";
 import { createMcpUninstall } from "./mcp-uninstall.js";
 import {
-  createUpgradePreview,
-  type UpgradePreviewOptions,
-  type UpgradePreviewResult
-} from "./upgrade.js";
+  runUpgradeCommand,
+  type UpgradeCommandOptions as UpgradeExecutionOptions,
+  type UpgradeCommandResult
+} from "./upgrade-apply.js";
 
 interface OutputOptions {
   readonly json?: boolean;
@@ -216,8 +216,13 @@ interface McpUninstallCommandOptions extends McpDoctorCommandOptions {
   readonly backupDir?: string;
 }
 
-interface UpgradeCommandOptions extends OutputOptions {
+interface UpgradeCliOptions extends OutputOptions {
   readonly check?: boolean;
+  readonly verify?: boolean;
+  readonly apply?: boolean;
+  readonly yes?: boolean;
+  readonly force?: boolean;
+  readonly allowDowngrade?: boolean;
 }
 
 interface GenerationHistoryCommandOptions extends ProjectOptions {
@@ -287,8 +292,8 @@ export type PluginServiceFactory = (
 ) => Promise<SymbolLatticeService>;
 
 export type UpgradePlanner = (
-  options: UpgradePreviewOptions
-) => Promise<UpgradePreviewResult>;
+  options: UpgradeExecutionOptions
+) => Promise<UpgradeCommandResult>;
 
 /** Minimal process-signal contract for the foreground watch lifecycle. */
 export interface WatchSignalSource {
@@ -779,7 +784,7 @@ export function createProgram(
   watchRunner: WatchCommandRunner = runForegroundWatch,
   mcpRunner: McpCommandRunner = runMcpWithAutoSync,
   pluginServiceFactory: PluginServiceFactory = createPluginService,
-  upgradePlanner: UpgradePlanner = createUpgradePreview
+  upgradePlanner: UpgradePlanner = runUpgradeCommand
 ): Command {
   const coreService = service ?? createService();
   const indexingService = async (
@@ -809,13 +814,23 @@ export function createProgram(
     .version(SYMBOL_LATTICE_VERSION);
 
   addJsonOption(program.command("upgrade [version]"))
-    .description("Check or preview an upgrade without changing this installation")
+    .description("Preview, verify, or explicitly apply a release upgrade")
     .option("--check", "Report the current and selected release without producing a mutation")
-    .action(async (version: string | undefined, options: UpgradeCommandOptions) => {
+    .option("--verify", "Download and verify the tarball, checksum, manifest, and GitHub attestation")
+    .option("--apply", "Install the verified release into a proven npm local or global installation")
+    .option("--yes", "Explicitly confirm the mutation requested by --apply")
+    .option("--force", "Reinstall even when the selected release matches the current version")
+    .option("--allow-downgrade", "Permit an explicitly pinned older version together with --apply")
+    .action(async (version: string | undefined, options: UpgradeCliOptions) => {
       render(
         await upgradePlanner({
           ...(version === undefined ? {} : { version }),
-          check: options.check ?? false
+          check: options.check ?? false,
+          ...(options.verify === true ? { verify: true } : {}),
+          ...(options.apply === true ? { apply: true } : {}),
+          ...(options.yes === true ? { yes: true } : {}),
+          ...(options.force === true ? { force: true } : {}),
+          ...(options.allowDowngrade === true ? { allowDowngrade: true } : {})
         }),
         options
       );

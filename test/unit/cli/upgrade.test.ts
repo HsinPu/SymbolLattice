@@ -91,9 +91,10 @@ describe("preview-only release upgrade planning", () => {
       }
     ]);
     expect(result.installation.diagnostics).toContain(
-      "The command installs the immutable GitHub Release tarball globally and is not executed automatically."
+      "The previewed command is executed only after --apply --yes verifies the tarball, checksum, manifest, and GitHub attestation."
     );
     expect(result.mutation.performed).toBe(false);
+    expect(result.mutation.automaticApplySupported).toBe(true);
   });
 
   it("distinguishes selected downgrade and current targets", async () => {
