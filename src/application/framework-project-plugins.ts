@@ -5,7 +5,9 @@ import {
   createEdgeId,
   type ArtifactFacts,
   type ArtifactLanguage,
+  type FrameworkPluginProvenance,
   type PendingReference,
+  type RoutePrefixSegment,
   type SourceRange,
   type SymbolNode
 } from "../domain/index.js";
@@ -38,8 +40,29 @@ export interface FrameworkProjectPluginReference {
   readonly range: SourceRange;
 }
 
+export interface FrameworkProjectPluginRouteProjection {
+  /** Stable diagnostic identity within this plugin result. */
+  readonly key: string;
+  /** Existing host-owned route whose path receives this ordered prefix chain. */
+  readonly sourceRouteSymbolId: string;
+  /** Exact, ordered mount evidence; graph identities remain host-owned. */
+  readonly prefixChain: readonly RoutePrefixSegment[];
+}
+
 export interface FrameworkProjectPluginResult {
   readonly references?: readonly FrameworkProjectPluginReference[];
+  readonly routeProjections?: readonly FrameworkProjectPluginRouteProjection[];
+}
+
+export interface ValidatedFrameworkProjectRouteProjection {
+  readonly sourceRouteSymbolId: string;
+  readonly prefixChain: readonly RoutePrefixSegment[];
+  readonly projectPlugin: FrameworkPluginProvenance;
+}
+
+export interface FrameworkProjectPluginOutputs {
+  readonly references: readonly PendingReference[];
+  readonly routeProjections: readonly ValidatedFrameworkProjectRouteProjection[];
 }
 
 export interface FrameworkProjectPlugin {
@@ -78,6 +101,8 @@ const MAX_PROJECT_FILES = 20_000;
 const MAX_PROJECT_SYMBOLS = 250_000;
 const MAX_PROJECT_REFERENCES = 500_000;
 const MAX_REFERENCES_PER_PLUGIN = 4_096;
+const MAX_ROUTE_PROJECTIONS_PER_PLUGIN = 1_024;
+const MAX_ROUTE_PREFIX_SEGMENTS = 16;
 const MAX_TEXT_LENGTH = 512;
 const VALIDATED_REGISTRIES = new WeakSet<FrameworkProjectPluginRegistry>();
 const SUPPORTED_RELATIONS = new Set<FrameworkProjectPluginRelation>([
@@ -262,14 +287,14 @@ function validateSourceRelation(
  * Executes validated project finalizers and turns their descriptors into
  * host-owned pending references. Plugins cannot mutate symbols or claim exact targets.
  */
-export function projectFrameworkPluginReferences(input: {
+export function projectFrameworkPluginOutputs(input: {
   readonly sourceDocuments: readonly SourceDocument[];
   readonly extractedFiles: readonly ArtifactFacts[];
   readonly registry?: FrameworkProjectPluginRegistry;
-}): readonly PendingReference[] {
+}): FrameworkProjectPluginOutputs {
   const plugins = requireFrameworkProjectPluginRegistry(input.registry);
   if (plugins.length === 0) {
-    return [];
+    return { references: [], routeProjections: [] };
   }
   const symbolCount = input.extractedFiles.reduce((count, facts) => count + facts.symbols.length, 0);
   const referenceCount = input.extractedFiles.reduce(
@@ -316,6 +341,8 @@ export function projectFrameworkPluginReferences(input: {
   deepFreeze(files);
   const projectLanguages = new Set(files.map((file) => file.language));
   const references: PendingReference[] = [];
+  const routeProjections: ValidatedFrameworkProjectRouteProjection[] = [];
+  const occupiedRouteProjections = new Set<string>();
 
   for (const plugin of plugins) {
     if (!plugin.languages.some((language) => projectLanguages.has(language))) {
@@ -336,9 +363,19 @@ export function projectFrameworkPluginReferences(input: {
     if (!Array.isArray(result.references) && result.references !== undefined) {
       outputError(plugin, "references must be an array.");
     }
+    if (!Array.isArray(result.routeProjections) && result.routeProjections !== undefined) {
+      outputError(plugin, "routeProjections must be an array.");
+    }
     const descriptors = result.references ?? [];
+    const routeProjectionDescriptors = result.routeProjections ?? [];
     if (descriptors.length > MAX_REFERENCES_PER_PLUGIN) {
       outputError(plugin, `references must contain at most ${MAX_REFERENCES_PER_PLUGIN} entries.`);
+    }
+    if (routeProjectionDescriptors.length > MAX_ROUTE_PROJECTIONS_PER_PLUGIN) {
+      outputError(
+        plugin,
+        `routeProjections must contain at most ${MAX_ROUTE_PROJECTIONS_PER_PLUGIN} entries.`
+      );
     }
     const keys = new Set<string>();
     for (const [index, descriptor] of descriptors.entries()) {
@@ -406,6 +443,118 @@ export function projectFrameworkPluginReferences(input: {
         projectPlugin: { pluginId: plugin.id, pluginVersion: plugin.version }
       });
     }
+    for (const [index, descriptor] of routeProjectionDescriptors.entries()) {
+      if (descriptor === null || typeof descriptor !== "object" || Array.isArray(descriptor)) {
+        outputError(plugin, `routeProjections[${index}] must be an object.`);
+      }
+      const routeDescriptor = descriptor as FrameworkProjectPluginRouteProjection;
+      if (typeof routeDescriptor.key !== "string" || !KEY_PATTERN.test(routeDescriptor.key)) {
+        outputError(plugin, `routeProjections[${index}].key must be stable ASCII text.`);
+      }
+      if (keys.has(routeDescriptor.key)) {
+        outputError(plugin, "output keys must be unique within one project result.");
+      }
+      keys.add(routeDescriptor.key);
+      const sourceRoute = symbolsById.get(routeDescriptor.sourceRouteSymbolId);
+      if (sourceRoute?.kind !== "route") {
+        outputError(
+          plugin,
+          `route projection ${routeDescriptor.key}.sourceRouteSymbolId must identify an existing route symbol.`
+        );
+      }
+      if (
+        !Array.isArray(routeDescriptor.prefixChain) ||
+        routeDescriptor.prefixChain.length === 0 ||
+        routeDescriptor.prefixChain.length > MAX_ROUTE_PREFIX_SEGMENTS
+      ) {
+        outputError(
+          plugin,
+          `route projection ${routeDescriptor.key}.prefixChain must contain 1 to ${MAX_ROUTE_PREFIX_SEGMENTS} segments.`
+        );
+      }
+      const prefixChain = routeDescriptor.prefixChain.map((segment, segmentIndex) => {
+        if (segment === null || typeof segment !== "object" || Array.isArray(segment)) {
+          outputError(plugin, `route projection ${routeDescriptor.key}.prefixChain[${segmentIndex}] must be an object.`);
+        }
+        const document = documentsByPath.get(segment.filePath);
+        if (document === undefined) {
+          outputError(
+            plugin,
+            `route projection ${routeDescriptor.key}.prefixChain[${segmentIndex}].filePath must identify an indexed file.`
+          );
+        }
+        const range = requireRange(
+          segment.range,
+          document.sourceText.split(/\r?\n/u),
+          plugin,
+          `route projection ${routeDescriptor.key}.prefixChain[${segmentIndex}].range`
+        );
+        const prefix = requireText(
+          segment.prefix,
+          plugin,
+          `route projection ${routeDescriptor.key}.prefixChain[${segmentIndex}].prefix`
+        );
+        if (
+          !prefix.startsWith("/") ||
+          (prefix.length > 1 && prefix.endsWith("/")) ||
+          /[\\?#\s]/u.test(prefix)
+        ) {
+          outputError(
+            plugin,
+            `route projection ${routeDescriptor.key}.prefixChain[${segmentIndex}].prefix must be a canonical absolute route prefix.`
+          );
+        }
+        return {
+          filePath: segment.filePath,
+          range,
+          parentReceiver: requireText(
+            segment.parentReceiver,
+            plugin,
+            `route projection ${routeDescriptor.key}.prefixChain[${segmentIndex}].parentReceiver`
+          ),
+          childReceiver: requireText(
+            segment.childReceiver,
+            plugin,
+            `route projection ${routeDescriptor.key}.prefixChain[${segmentIndex}].childReceiver`
+          ),
+          mountMethod: requireText(
+            segment.mountMethod,
+            plugin,
+            `route projection ${routeDescriptor.key}.prefixChain[${segmentIndex}].mountMethod`
+          ),
+          prefix
+        } satisfies RoutePrefixSegment;
+      });
+      const identity = `${sourceRoute.id}\u0000${prefixChain.map((segment) => segment.prefix).join("\u0001")}`;
+      if (occupiedRouteProjections.has(identity)) {
+        outputError(plugin, `route projection ${routeDescriptor.key} duplicates an existing projected route.`);
+      }
+      occupiedRouteProjections.add(identity);
+      routeProjections.push({
+        sourceRouteSymbolId: sourceRoute.id,
+        prefixChain,
+        projectPlugin: { pluginId: plugin.id, pluginVersion: plugin.version }
+      });
+    }
   }
-  return references.sort((left, right) => compareText(left.id, right.id));
+  return {
+    references: references.sort((left, right) => compareText(left.id, right.id)),
+    routeProjections: routeProjections.sort(
+      (left, right) =>
+        compareText(left.sourceRouteSymbolId, right.sourceRouteSymbolId) ||
+        compareText(
+          left.prefixChain.map((segment) => segment.prefix).join("\u0001"),
+          right.prefixChain.map((segment) => segment.prefix).join("\u0001")
+        )
+    )
+  };
+}
+
+/** Backward-compatible reference-only view of validated project-finalizer output. */
+export function projectFrameworkPluginReferences(input: {
+  readonly sourceDocuments: readonly SourceDocument[];
+  readonly extractedFiles: readonly ArtifactFacts[];
+  readonly registry?: FrameworkProjectPluginRegistry;
+}): readonly PendingReference[] {
+  return projectFrameworkPluginOutputs(input).references;
 }

@@ -149,6 +149,74 @@ describe("framework project plugins", () => {
     );
   });
 
+  it("projects a route prefix chain while keeping identities and evidence host-owned", () => {
+    const finalize = vi.fn<FrameworkProjectPlugin["finalize"]>((input) => {
+      const route = input.files
+        .flatMap((file) => file.facts.symbols)
+        .find((symbol) => symbol.kind === "route" && symbol.name === "GET /health");
+      if (route === undefined) return null;
+      return {
+        routeProjections: [
+          {
+            key: "health-api-v1",
+            sourceRouteSymbolId: route.id,
+            prefixChain: [
+              {
+                filePath: "src/mounts.ts",
+                range: { start: { line: 1, column: 1 }, end: { line: 1, column: 21 } },
+                parentReceiver: "app",
+                childReceiver: "apiRouter",
+                mountMethod: "use",
+                prefix: "/api"
+              },
+              {
+                filePath: "src/mounts.ts",
+                range: { start: { line: 2, column: 1 }, end: { line: 2, column: 24 } },
+                parentReceiver: "apiRouter",
+                childReceiver: "v1Router",
+                mountMethod: "use",
+                prefix: "/v1"
+              }
+            ]
+          }
+        ]
+      };
+    });
+    const snapshot = fixture(
+      {
+        "src/routes.ts": [
+          'import express from "express";',
+          "const app = express();",
+          "function health() { return 1; }",
+          'app.get("/health", health);'
+        ].join("\n"),
+        "src/mounts.ts": ['app.use("/api", api);', 'api.use("/v1", routes);'].join("\n")
+      },
+      createFrameworkProjectPluginRegistry([{ ...noopPlugin, finalize }])
+    );
+    const route = snapshot.symbols.find(
+      (symbol) => symbol.kind === "route" && symbol.name === "GET /api/v1/health"
+    );
+    const routeEdge = snapshot.edges.find(
+      (edge) => edge.kind === "routes" && edge.sourceId === route?.id
+    );
+
+    expect(finalize).toHaveBeenCalledOnce();
+    expect(route).toBeDefined();
+    expect(snapshot.symbols.some((symbol) => symbol.name === "GET /health")).toBe(false);
+    expect(routeEdge).toMatchObject({
+      evidence: {
+        ruleId: "framework.project-plugin.acme/project-composition.exact-route-prefix",
+        stage: "module",
+        projectPlugin: { pluginId: "acme/project-composition", pluginVersion: "1.0.0" },
+        routePrefixChain: [
+          { filePath: "src/mounts.ts", prefix: "/api" },
+          { filePath: "src/mounts.ts", prefix: "/v1" }
+        ]
+      }
+    });
+  });
+
   it("fails before projection on mutation, unknown identities, invalid relations, or collisions", () => {
     const baseSources = {
       "src/caller.ts": "export function caller() { return 1; }",
@@ -207,6 +275,83 @@ describe("framework project plugins", () => {
                 range: caller.range
               };
               return { references: [descriptor, descriptor] };
+            }
+          }
+        ])
+      )
+    ).toThrow(FrameworkProjectPluginOutputError);
+  });
+
+  it("rejects unsafe route projections before publishing a graph", () => {
+    const routeSource = [
+      'import express from "express";',
+      "const app = express();",
+      "function health() { return 1; }",
+      'app.get("/health", health);'
+    ].join("\n");
+    expect(() =>
+      fixture(
+        {
+          "src/routes.ts": routeSource
+        },
+        createFrameworkProjectPluginRegistry([
+          {
+            ...noopPlugin,
+            finalize: (input) => {
+              const route = input.files
+                .flatMap((file) => file.facts.symbols)
+                .find((symbol) => symbol.kind === "route")!;
+              return {
+                routeProjections: [
+                  {
+                    key: "unsafe-prefix",
+                    sourceRouteSymbolId: route.id,
+                    prefixChain: [
+                      {
+                        filePath: "src/routes.ts",
+                        range: route.range,
+                        parentReceiver: "app",
+                        childReceiver: "router",
+                        mountMethod: "use",
+                        prefix: "/api/"
+                      }
+                    ]
+                  }
+                ]
+              };
+            }
+          }
+        ])
+      )
+    ).toThrow(FrameworkProjectPluginOutputError);
+    expect(() =>
+      fixture(
+        { "src/routes.ts": routeSource },
+        createFrameworkProjectPluginRegistry([
+          {
+            ...noopPlugin,
+            finalize: (input) => {
+              const route = input.files
+                .flatMap((file) => file.facts.symbols)
+                .find((symbol) => symbol.kind === "route")!;
+              return {
+                routeProjections: [
+                  {
+                    key: "no-op-prefix",
+                    sourceRouteSymbolId: route.id,
+                    prefixChain: [
+                      {
+                        filePath: "src/routes.ts",
+                        range: route.range,
+                        parentReceiver: "app",
+                        childReceiver: "router",
+                        mountMethod: "use",
+                        prefix: "/"
+                      }
+                    ]
+                  }
+                ]
+              };
             }
           }
         ])

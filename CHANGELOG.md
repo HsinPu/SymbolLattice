@@ -6,6 +6,24 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.252.0] - 2026-08-04
+
+### Added
+
+- `FrameworkProjectPlugin` finalizers may now emit bounded `routeProjections` for existing host-owned route symbols. Each descriptor carries an ordered, source-ranged prefix chain; the host computes the final path, creates stable route and edge identities, and moves containment, handler, resolved, and unresolved relationships to the projected route.
+- Projected route edges retain the finalizer id and version plus every mount segment for `explain-edge`, SQLite generations, history, and diff queries.
+
+### Safety and compatibility
+
+- Each finalizer may emit at most 1,024 route projections with 1 to 16 segments. Route ids must exist, prefixes must be canonical absolute paths, source files and ranges must be indexed and valid, keys and projected identities must be unique, and malformed output fails before graph publication.
+- A public finalizer cannot stack onto a route already projected by the built-in NestJS `RouterModule` resolver. This explicit conflict rule prevents duplicate or order-dependent paths while preserving the existing first-party NestJS behavior.
+- `projectFrameworkPluginReferences` remains available as a reference-only compatibility view. New integrations can use `projectFrameworkPluginOutputs` to receive validated references and route projections together.
+- The project resolver advances to `project-resolver-v87`; run `sync` or `index` once to refresh an existing graph. Finalizer-only version changes still reproject persisted facts without source re-extraction.
+
+### Comparison boundary
+
+- Compared with CodeGraph framework `postExtract`, SymbolLattice now supports the route-name projection use case without exposing arbitrary node mutation. CodeGraph remains ahead in the breadth of first-party framework resolvers and general mutable post-extraction hooks; SymbolLattice is stricter about output limits, source evidence, deterministic identity ownership, provenance, and conflict rejection.
+
 ## [0.251.0] - 2026-08-04
 
 ### Added

@@ -54,8 +54,10 @@ import {
 } from "../domain/index.js";
 import type { ExtractedFileFacts } from "../extraction/index.js";
 import {
-  projectFrameworkPluginReferences,
-  type FrameworkProjectPluginRegistry
+  FrameworkProjectPluginOutputError,
+  projectFrameworkPluginOutputs,
+  type FrameworkProjectPluginRegistry,
+  type ValidatedFrameworkProjectRouteProjection
 } from "./framework-project-plugins.js";
 import {
   REFERENCE_RESOLVER_PLUGIN_RULE_NAME_PATTERN,
@@ -6718,6 +6720,8 @@ interface ProjectedNestRoute {
   readonly controllerIds: readonly string[];
   readonly moduleIds: readonly string[];
   readonly prefixApplied: boolean;
+  readonly projectPlugin?: ValidatedFrameworkProjectRouteProjection["projectPlugin"];
+  readonly routePrefixChain?: readonly RoutePrefixSegment[];
 }
 
 interface NestRouteProjection {
@@ -6779,7 +6783,10 @@ function projectedRouteEdge(
         }
       : edge.kind === "routes" && source?.prefixApplied === true
       ? {
-          ruleId: "framework.nestjs.router-module.exact-prefix",
+          ruleId:
+            source.projectPlugin === undefined
+              ? "framework.nestjs.router-module.exact-prefix"
+              : `framework.project-plugin.${source.projectPlugin.pluginId}.exact-route-prefix`,
           stage: "module" as const,
           candidateSymbolIds: [
             ...(edge.targetId === null ? [] : [edge.targetId]),
@@ -6788,7 +6795,11 @@ function projectedRouteEdge(
           ].sort(compareStableText),
           ...(edge.evidence?.routeDomain === undefined
             ? {}
-            : { routeDomain: edge.evidence.routeDomain })
+            : { routeDomain: edge.evidence.routeDomain }),
+          ...(source.projectPlugin === undefined ? {} : { projectPlugin: source.projectPlugin }),
+          ...(source.routePrefixChain === undefined
+            ? {}
+            : { routePrefixChain: source.routePrefixChain })
         }
       : edge.evidence;
 
@@ -6861,6 +6872,7 @@ function projectNestRouterRoutes(input: {
   readonly symbolsById: ReadonlyMap<string, SymbolNode>;
   readonly moduleTargetPathByKey: ReadonlyMap<string, string>;
   readonly exportSurfaces: ReadonlyMap<string, ExportSurface>;
+  readonly frameworkRouteProjections: readonly ValidatedFrameworkProjectRouteProjection[];
 }): NestRouteProjection {
   const routeControllerIds = new Map<string, Set<string>>();
   const controllerModuleIds = new Map<string, Set<string>>();
@@ -6875,6 +6887,12 @@ function projectNestRouterRoutes(input: {
       moduleTargetPathByKey: input.moduleTargetPathByKey,
       exportSurfaces: input.exportSurfaces
     });
+  const frameworkProjectionsByRouteId = new Map<string, ValidatedFrameworkProjectRouteProjection[]>();
+  for (const projection of input.frameworkRouteProjections) {
+    const entries = frameworkProjectionsByRouteId.get(projection.sourceRouteSymbolId) ?? [];
+    entries.push(projection);
+    frameworkProjectionsByRouteId.set(projection.sourceRouteSymbolId, entries);
+  }
 
   for (const [filePath, facts] of input.factsByFile) {
     const nestFacts = facts.nestRouteFacts;
@@ -6918,6 +6936,49 @@ function projectNestRouterRoutes(input: {
   for (const sourceRoute of input.symbols.filter((symbol) => symbol.kind === "route")) {
     const localPath = routePathFromSymbol(sourceRoute);
     const controllerIds = [...(routeControllerIds.get(sourceRoute.id) ?? [])].sort(compareStableText);
+    const frameworkProjections = frameworkProjectionsByRouteId.get(sourceRoute.id) ?? [];
+    if (frameworkProjections.length > 0) {
+      const hasNestProjection = controllerIds.some((controllerId) =>
+        [...(controllerModuleIds.get(controllerId) ?? [])].some(
+          (moduleId) => (modulePrefixes.get(moduleId)?.size ?? 0) > 0
+        )
+      );
+      if (hasNestProjection) {
+        const owner = frameworkProjections[0]?.projectPlugin;
+        throw new FrameworkProjectPluginOutputError(
+          `Framework project plugin ${owner?.pluginId}@${owner?.pluginVersion}: route projection conflicts with the built-in NestJS RouterModule projection for ${sourceRoute.id}.`
+        );
+      }
+      if (localPath === null) {
+        const owner = frameworkProjections[0]?.projectPlugin;
+        throw new FrameworkProjectPluginOutputError(
+          `Framework project plugin ${owner?.pluginId}@${owner?.pluginVersion}: route projection source ${sourceRoute.id} has no canonical route path.`
+        );
+      }
+      const projectedPaths = new Set<string>();
+      for (const frameworkProjection of frameworkProjections) {
+        const path: string = frameworkProjection.prefixChain.reduceRight<string>(
+          (projectedPath, segment) => joinNestRouterPath(segment.prefix, projectedPath),
+          localPath
+        );
+        if (path === localPath || projectedPaths.has(path)) {
+          throw new FrameworkProjectPluginOutputError(
+            `Framework project plugin ${frameworkProjection.projectPlugin.pluginId}@${frameworkProjection.projectPlugin.pluginVersion}: route projection for ${sourceRoute.id} must produce a unique changed path.`
+          );
+        }
+        projectedPaths.add(path);
+        projections.push({
+          sourceRoute,
+          route: projectedRouteSymbol(sourceRoute, path, sourceRoute.declarationOrdinal),
+          controllerIds: [],
+          moduleIds: [],
+          prefixApplied: true,
+          projectPlugin: frameworkProjection.projectPlugin,
+          routePrefixChain: frameworkProjection.prefixChain
+        });
+      }
+      continue;
+    }
     if (localPath === null || controllerIds.length === 0) {
       projections.push({
         sourceRoute,
@@ -7742,15 +7803,16 @@ export function resolveProjectFacts(input: {
 }): GraphSnapshot {
   const symbols = input.extractedFiles.flatMap((facts) => facts.symbols);
   const structuralEdges = input.extractedFiles.flatMap((facts) => facts.edges);
+  const frameworkPluginOutputs = projectFrameworkPluginOutputs({
+    sourceDocuments: input.sourceDocuments,
+    extractedFiles: input.extractedFiles,
+    ...(input.frameworkProjectPlugins === undefined
+      ? {}
+      : { registry: input.frameworkProjectPlugins })
+  });
   const references = [
     ...input.extractedFiles.flatMap((facts) => facts.pendingReferences),
-    ...projectFrameworkPluginReferences({
-      sourceDocuments: input.sourceDocuments,
-      extractedFiles: input.extractedFiles,
-      ...(input.frameworkProjectPlugins === undefined
-        ? {}
-        : { registry: input.frameworkProjectPlugins })
-    })
+    ...frameworkPluginOutputs.references
   ];
   const knownFilePaths = new Set(input.sourceDocuments.map((document) => document.relativePath));
   const fileSymbols = new Map(
@@ -8709,7 +8771,8 @@ export function resolveProjectFacts(input: {
     importBindingsByFile,
     symbolsById,
     moduleTargetPathByKey,
-    exportSurfaces
+    exportSurfaces,
+    frameworkRouteProjections: frameworkPluginOutputs.routeProjections
   });
   const projectedResolvedEdges = projectEdgesThroughRoutes(
     resolvedEdges,
