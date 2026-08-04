@@ -79,8 +79,9 @@ jobs:
         run: |
           set -euo pipefail
           install_prefix="$RUNNER_TEMP/symbol-lattice-install"
-          npm install --prefix "$install_prefix" "./release/${{ steps.pack.outputs.filename }}"
-          installed_version="$($install_prefix/node_modules/.bin/symbol-lattice --version)"
+          tarball_path="$GITHUB_WORKSPACE/release/${{ steps.pack.outputs.filename }}"
+          npm install --prefix "$install_prefix" "$tarball_path"
+          installed_version="$("$install_prefix/node_modules/.bin/symbol-lattice" --version)"
           test "$installed_version" = "${GITHUB_REF_NAME#v}"
 
       - name: Attest release artifacts

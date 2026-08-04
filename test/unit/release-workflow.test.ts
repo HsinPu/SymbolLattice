@@ -48,8 +48,9 @@ describe("GitHub release workflow", () => {
     expect(commands).toContain('git fetch --force --no-tags origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"');
     expect(commands).toContain('git cat-file -t "$GITHUB_REF_NAME"');
     expect(commands).toContain("npm run release:contract");
+    expect(commands).toContain('tarball_path="$GITHUB_WORKSPACE/release/${{ steps.pack.outputs.filename }}"');
     expect(commands).toContain("npm install --prefix");
-    expect(commands).toContain("symbol-lattice --version");
+    expect(commands).toContain('"$install_prefix/node_modules/.bin/symbol-lattice" --version');
     expect(commands).toContain("gh release create");
     expect(workflowText).toContain("subject-path: release/*");
   });
