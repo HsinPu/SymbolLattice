@@ -1,6 +1,6 @@
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join as pathJoin, resolve } from "node:path";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { parse as parseYaml } from "yaml";
@@ -11,6 +11,12 @@ import {
   type McpInstallFileSystem
 } from "../../../src/cli/mcp-install.js";
 import { createMcpDoctor } from "../../../src/cli/mcp-doctor.js";
+
+const VIRTUAL_ROOT = resolve(".test-virtual-mcp-install");
+
+function join(first: string, ...rest: string[]): string {
+  return pathJoin(first === "C:" ? VIRTUAL_ROOT : first, ...rest);
+}
 
 interface VirtualFiles {
   readonly files: Record<string, string>;

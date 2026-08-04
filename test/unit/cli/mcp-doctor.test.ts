@@ -1,4 +1,4 @@
-import { join } from "node:path";
+import { join as pathJoin, resolve } from "node:path";
 
 import { describe, expect, it, vi } from "vitest";
 
@@ -7,6 +7,12 @@ import {
   type McpDoctorDependencies,
   type McpDoctorFileSystem
 } from "../../../src/cli/mcp-doctor.js";
+
+const VIRTUAL_ROOT = resolve(".test-virtual-mcp-doctor");
+
+function join(first: string, ...rest: string[]): string {
+  return pathJoin(first === "C:" ? VIRTUAL_ROOT : first, ...rest);
+}
 
 interface VirtualFiles {
   readonly files: Record<string, string>;

@@ -2284,7 +2284,7 @@ describe("SymbolLatticeService", () => {
 
     const result = await service.affectedTests(
       projectPath,
-      ["src\\math.ts", "src/missing.ts", "test/changed.test.ts"],
+      [join("src", "math.ts"), "src/missing.ts", "test/changed.test.ts"],
       { maxDepth: 2, limit: 10 }
     );
 

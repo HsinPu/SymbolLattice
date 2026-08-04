@@ -2128,6 +2128,8 @@ describe("symbol-lattice v0.253 explicit plugin module CLI", () => {
 
   it("renders absolute plugin paths into MCP configuration without importing them", async () => {
     const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    const projectPath = resolve("chosen-project");
+    const externalPluginPath = resolve("shared", "resolver.cjs");
 
     await createProgram({} as SymbolLatticeService).parseAsync(
       [
@@ -2136,11 +2138,11 @@ describe("symbol-lattice v0.253 explicit plugin module CLI", () => {
         "mcp-config",
         "codex",
         "--project",
-        "C:/chosen-project",
+        projectPath,
         "--plugin",
         "plugins/framework.mjs",
         "--plugin",
-        "C:/shared/resolver.cjs",
+        externalPluginPath,
         "--allow-external-plugin"
       ],
       { from: "node" }
@@ -2151,17 +2153,17 @@ describe("symbol-lattice v0.253 explicit plugin module CLI", () => {
       "serve",
       "--mcp",
       "--project",
-      resolve("C:/chosen-project"),
+      projectPath,
       "--plugin",
-      resolve("C:/chosen-project/plugins/framework.mjs"),
+      resolve(projectPath, "plugins", "framework.mjs"),
       "--plugin",
-      resolve("C:/shared/resolver.cjs"),
+      externalPluginPath,
       "--allow-external-plugin"
     ]);
     expect(output.lifecycle.plugins).toEqual({
       modulePaths: [
-        resolve("C:/chosen-project/plugins/framework.mjs"),
-        resolve("C:/shared/resolver.cjs")
+        resolve(projectPath, "plugins", "framework.mjs"),
+        externalPluginPath
       ],
       executesTrustedCode: true,
       externalModulesAllowed: true
