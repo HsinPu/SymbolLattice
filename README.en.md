@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.265.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher can update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.266.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher can update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## Quick start
 
@@ -49,7 +49,7 @@ Alternatively, download the version-pinned `.tgz`, SHA-256 checksum, and manifes
 - Scans multiple languages and common frameworks into a project-local code graph.
 - Queries symbols, indexed files, calls, routes, entry points, impact, retained generations, and diffs.
 - `files` queries only files persisted in the active generation, with path-segment-safe filtering, anchored globs, flat/tree/grouped projections, and safe cursor pagination. `src` never includes `src2`, and cursors bind to the generation and selection filters.
-- `file` defaults to a compact numbered human view with dependency, selection, generation, and freshness context; `--json` keeps the stable machine contract. Exact paths are preferred, unique suffixes are accepted, and ambiguity is never guessed. YAML and properties files expose structure without content values.
+- `file` defaults to a compact numbered human view with dependency, selection, generation, and freshness context; `--json` keeps the stable machine contract. Exact paths are preferred, unique suffixes are accepted, ambiguity is never guessed, and an offset past EOF fails clearly. YAML and properties files expose structure without content values.
 - Preserves the rule, stage, candidate targets, confidence, and resolution path behind every relation.
 - Extension-framework route plugins resolve exact same-file and cross-file fixed-prefix mounts. `explain-edge` returns each mount segment and the ESM import/re-export path; dynamic or ambiguous composition is never guessed into a route.
 - Projects can register versioned reference resolver plugins that only see relations left unresolved by built-in resolvers. The host bounds candidates, validates results, and preserves collisions, exceptions, or unsafe choices as explainable unresolved evidence.
@@ -101,8 +101,8 @@ One manifest may provide `frameworkFactPlugins`, `frameworkProjectPlugins`, and 
 
 ```bash
 symbol-lattice upgrade --check
-symbol-lattice upgrade 0.265.0 --verify
-symbol-lattice upgrade 0.265.0 --apply --yes
+symbol-lattice upgrade 0.266.0 --verify
+symbol-lattice upgrade 0.266.0 --apply --yes
 ```
 
 ## Verification

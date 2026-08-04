@@ -1815,13 +1815,19 @@ export class SymbolLatticeService {
       .sort((left, right) => compareText(left.filePath, right.filePath));
 
     const sourceLines = document.sourceText.split(/\r\n|\r|\n/u);
-    const startIndex = Math.min(offset - 1, sourceLines.length);
-    const returnedSourceLines = sourceLines.slice(startIndex, startIndex + limit);
     const contentAvailability = options.symbolsOnly === true
       ? "symbols-only" as const
       : document.language === "yaml" || document.language === "properties"
         ? "withheld-sensitive-format" as const
         : "active-generation" as const;
+    if (contentAvailability === "active-generation" && offset > sourceLines.length) {
+      throw new SymbolLatticeError(
+        "FILE_VIEW_OFFSET_PAST_END",
+        `File view offset ${offset} is past the end of ${resolvedFilePath} (${sourceLines.length} lines).`
+      );
+    }
+    const startIndex = Math.min(offset - 1, sourceLines.length);
+    const returnedSourceLines = sourceLines.slice(startIndex, startIndex + limit);
     const lines = contentAvailability === "active-generation"
       ? returnedSourceLines.map((text, index) => ({ line: startIndex + index + 1, text }))
       : [];

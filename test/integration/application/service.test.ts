@@ -2313,6 +2313,16 @@ describe("SymbolLatticeService", () => {
     ]);
     expect(JSON.stringify(result)).not.toContain("liveReplacement");
 
+    await expect(
+      service.fileView(projectPath, "src/target.ts", { offset: 99 })
+    ).rejects.toMatchObject({
+      code: "FILE_VIEW_OFFSET_PAST_END",
+      message: expect.stringMatching(/offset 99.*4 lines/u)
+    });
+    await expect(
+      service.fileView(projectPath, "src/target.ts", { offset: 99, symbolsOnly: true })
+    ).resolves.toMatchObject({ contentAvailability: "symbols-only", lines: [] });
+
     const hidden = await service.fileView(projectPath, "config/application.yaml");
     expect(hidden).toMatchObject({
       contentAvailability: "withheld-sensitive-format",

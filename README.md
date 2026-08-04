@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.265.0 是開發預覽版。MCP 查詢工具唯讀；但 `serve --mcp` 預設會啟動獨立的本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用它。
+> v0.266.0 是開發預覽版。MCP 查詢工具唯讀；但 `serve --mcp` 預設會啟動獨立的本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用它。
 
 ## 快速開始
 
@@ -50,7 +50,7 @@ node dist/cli/main.js file service.ts --project /path/to/project --offset 1600 -
 - 查詢 symbols、files、calls、routes、entrypoints、impact、history 與 diff。
 - 每條關係保留規則、階段、候選目標、信心度、解析路徑與來源範圍。
 - `files` 僅查詢 active generation 已保存的檔案，支援目錄邊界正確的路徑篩選、anchored glob、flat/tree/grouped 投影與安全游標分頁；`src` 不會誤含 `src2`，游標會綁定 generation 與篩選條件。
-- `file` 預設提供精簡的逐行閱讀畫面，附依賴、選取方式、generation 與 freshness；`--json` 保留穩定機器契約。精確路徑優先、接受唯一後綴，遇到歧義不猜測；YAML 與 properties 只顯示結構，不洩漏內容值。
+- `file` 預設提供精簡的逐行閱讀畫面，附依賴、選取方式、generation 與 freshness；`--json` 保留穩定機器契約。精確路徑優先、接受唯一後綴，遇到歧義不猜測，offset 超過 EOF 會明確失敗；YAML 與 properties 只顯示結構，不洩漏內容值。
 - 擴充框架的 route plugin 可精確解析同檔案與跨檔案固定 prefix mount；`explain-edge` 會顯示每段 mount 與 ESM import／re-export 路徑。動態或模糊組合不會被猜測成路由。
 - 專案可註冊有版本的 reference resolver plugin，僅處理內建解析器留下的未解析關係；宿主會限制候選、驗證結果，並將衝突、例外或不安全選擇保留為可解釋的 unresolved 證據。
 - framework fact plugin 可從框架語法新增受驗證的 symbols、routes、entrypoints 與 pending references。穩定 ID、containment edge、輸出上限、來源範圍與 provenance 都由宿主控制。
@@ -101,8 +101,8 @@ node dist/cli/main.js init /path/to/project --plugin ./plugins/acme.mjs
 
 ```bash
 symbol-lattice upgrade --check
-symbol-lattice upgrade 0.265.0 --verify
-symbol-lattice upgrade 0.265.0 --apply --yes
+symbol-lattice upgrade 0.266.0 --verify
+symbol-lattice upgrade 0.266.0 --apply --yes
 ```
 
 ## 驗證
