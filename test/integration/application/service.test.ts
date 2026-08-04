@@ -2629,13 +2629,17 @@ describe("SymbolLatticeService", () => {
       provider
     );
 
-    const result = await service.gitHunks(projectPath, "origin/main");
+    const result = await service.gitHunks(projectPath, "origin/main", { pathPrefix: "src/" });
 
     expect(service.gitHunksAvailable()).toBe(true);
     expect(providerCalls).toEqual([
       {
         projectPath,
-        request: { baseRef: "origin/main", maxSourceFiles: MAX_GIT_HUNK_SOURCE_FILES }
+        request: {
+          baseRef: "origin/main",
+          maxSourceFiles: MAX_GIT_HUNK_SOURCE_FILES,
+          pathPrefix: "src"
+        }
       }
     ]);
     expect(extractorInputs).toEqual([
@@ -2649,6 +2653,11 @@ describe("SymbolLatticeService", () => {
         requestedBaseRef: "origin/main",
         mergeBaseCommit: "b".repeat(40),
         headCommit: "h".repeat(40)
+      },
+      selection: {
+        pathPrefix: "src",
+        totalChanges: 1,
+        matchedSourceChanges: 1
       },
       bounds: {
         maxSourceFiles: MAX_GIT_HUNK_SOURCE_FILES,
@@ -2731,6 +2740,9 @@ describe("SymbolLatticeService", () => {
     await expect(service.gitHunks(projectPath, "origin/main", { limit: 0 })).rejects.toMatchObject({
       code: "INVALID_GIT_HUNK_LIMIT"
     });
+    await expect(
+      service.gitHunks(projectPath, "origin/main", { pathPrefix: "../outside" })
+    ).rejects.toMatchObject({ code: "INVALID_GIT_HUNK_PATH_PREFIX" });
     await expect(
       service.gitHunks(projectPath, "origin/main", { limit: MAX_GIT_HUNK_LIMIT + 1 })
     ).rejects.toMatchObject({ code: "INVALID_GIT_HUNK_LIMIT" });

@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.259.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher can update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.260.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher can update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## Quick start
 
@@ -31,6 +31,9 @@ node dist/cli/main.js init /path/to/project
 
 # Query explainable structural context
 node dist/cli/main.js investigate "user token" --project /path/to/project --json
+
+# Restrict immutable Git hunk attribution to one exact file or directory
+node dist/cli/main.js git-hunks /path/to/project --base origin/main --path-prefix src/domain --json
 ```
 
 Alternatively, download the version-pinned `.tgz`, SHA-256 checksum, and manifest from [GitHub Releases](https://github.com/HsinPu/symbol-lattice/releases), then install the `.tgz` with npm. Every tagged release verifies the full suite, a clean installation, and build provenance first.
@@ -75,6 +78,7 @@ One manifest may provide `frameworkFactPlugins`, `frameworkProjectPlugins`, and 
 | `sync <path>` | Explicitly synchronize or repair a graph. |
 | `watch <path>` | Watch and synchronize in the foreground. |
 | `files [path]` | Page persisted files by glob, projection, and generation-bound cursor. |
+| `git-hunks [path] --base <ref>` | Filter immutable Git hunk attribution with optional `--path-prefix`. |
 | `investigate <query>` | Expand textual evidence into structural context. |
 | `impact <symbol>` | Trace bounded impact through exact static relations. |
 | `explain-edge <edge-id>` | Inspect the complete evidence for one relation. |
@@ -88,8 +92,8 @@ One manifest may provide `frameworkFactPlugins`, `frameworkProjectPlugins`, and 
 
 ```bash
 symbol-lattice upgrade --check
-symbol-lattice upgrade 0.259.0 --verify
-symbol-lattice upgrade 0.259.0 --apply --yes
+symbol-lattice upgrade 0.260.0 --verify
+symbol-lattice upgrade 0.260.0 --apply --yes
 ```
 
 ## Verification

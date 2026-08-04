@@ -177,6 +177,7 @@ interface AffectedCommandOptions extends ProjectOptions {
 interface GitHunksCommandOptions extends ProjectOptions {
   readonly base?: string;
   readonly limit?: number;
+  readonly pathPrefix?: string;
 }
 
 interface ContextCommandOptions extends ProjectOptions {
@@ -1315,9 +1316,15 @@ export function createProgram(
       `Maximum hunk records to return (1-${MAX_GIT_HUNK_LIMIT})`,
       (value: string) => parseBoundedPositiveInteger(value, MAX_GIT_HUNK_LIMIT)
     )
+    .option(
+      "--path-prefix <project-relative-path>",
+      "Restrict hunks to an exact file or directory on either rename/copy path side"
+    )
     .action(async (path: string | undefined, options: GitHunksCommandOptions) => {
-      const gitHunksOptions: GitHunksOptions =
-        options.limit === undefined ? {} : { limit: options.limit };
+      const gitHunksOptions: GitHunksOptions = {
+        ...(options.limit === undefined ? {} : { limit: options.limit }),
+        ...(options.pathPrefix === undefined ? {} : { pathPrefix: options.pathPrefix })
+      };
       render(
         await coreService.gitHunks(
           resolve(path ?? defaultProjectPath(options)),

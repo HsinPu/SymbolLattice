@@ -545,6 +545,8 @@ export interface GitAffectedTestsResult {
 
 /** Options for one immutable Git base-to-HEAD hunk attribution query. */
 export interface GitHunksOptions {
+  /** Optional project-relative file or directory selector, matched on either Git path side. */
+  readonly pathPrefix?: string;
   /** Maximum hunk records returned across every changed source file. */
   readonly limit?: number;
 }
@@ -598,6 +600,14 @@ export interface GitHunkResultItem {
 export interface GitHunksResult {
   /** Immutable Git provenance from the injected revision-hunk provider. */
   readonly changeSet: GitChangeSet;
+  readonly selection: {
+    /** Normalized selector, or null when every changed source path is eligible. */
+    readonly pathPrefix: string | null;
+    /** Complete count from the immutable Git change set before source/path selection. */
+    readonly totalChanges: number;
+    /** Source-relevant change records retained after path selection. */
+    readonly matchedSourceChanges: number;
+  };
   readonly bounds: GitHunksBounds;
   readonly hunks: {
     readonly items: readonly GitHunkResultItem[];

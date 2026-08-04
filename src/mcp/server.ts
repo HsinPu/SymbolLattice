@@ -286,6 +286,7 @@ export interface GitHunksToolArguments {
   /** Required local Git baseline; the service resolves its merge-base with HEAD. */
   readonly baseRef: string;
   readonly limit?: number | undefined;
+  readonly path?: string | undefined;
 }
 
 export interface ExplainEdgeToolArguments {
@@ -773,6 +774,11 @@ const gitAffectedTestsOutputSchema = z
 const gitHunksOutputSchema = z
   .object({
     changeSet: z.object({}).passthrough(),
+    selection: z.object({
+      pathPrefix: z.string().nullable(),
+      totalChanges: z.number().int().nonnegative(),
+      matchedSourceChanges: z.number().int().nonnegative()
+    }),
     bounds: z.object({
       maxSourceFiles: z.number().int().positive(),
       maxDeclarationAnchorsPerSide: z.number().int().positive(),
@@ -1499,8 +1505,10 @@ export async function runGitHunksTool(
   arguments_: GitHunksToolArguments
 ): Promise<GitHunksToolResponse> {
   try {
-    const options: GitHunksOptions =
-      arguments_.limit === undefined ? {} : { limit: arguments_.limit };
+    const options: GitHunksOptions = {
+      ...(arguments_.limit === undefined ? {} : { limit: arguments_.limit }),
+      ...(arguments_.path === undefined ? {} : { pathPrefix: arguments_.path })
+    };
     const result = await service.gitHunks(
       arguments_.projectPath ?? defaultProjectPath,
       arguments_.baseRef,
@@ -2068,6 +2076,11 @@ export function createMcpServer(
             .min(1)
             .max(256)
             .describe("Required local Git ref; compares its resolved merge-base with HEAD."),
+          path: z
+            .string()
+            .min(1)
+            .optional()
+            .describe("Optional project-relative file or directory matched on either rename/copy path side."),
           limit: z
             .number()
             .int()

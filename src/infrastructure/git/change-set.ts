@@ -4,6 +4,7 @@ import {
   GitHunkParseError,
   parseGitUnifiedHunks
 } from "../../domain/git-hunk-attribution.js";
+import { matchesProjectPathPrefix } from "../../domain/project-path.js";
 import {
   GitChangeSetError,
   type GitChangeKind,
@@ -308,6 +309,15 @@ function hasSupportedSourceSide(change: GitChangeRecord): boolean {
   );
 }
 
+function matchesRevisionPathPrefix(change: GitChangeRecord, pathPrefix: string | undefined): boolean {
+  return (
+    pathPrefix === undefined ||
+    [change.previousPath, change.currentPath].some(
+      (filePath) => filePath !== null && matchesProjectPathPrefix(filePath, pathPrefix)
+    )
+  );
+}
+
 function literalPathspecs(change: GitChangeRecord): readonly string[] {
   return [
     ...new Set(
@@ -373,10 +383,14 @@ export class FileSystemGitChangeSetProvider
       mode: "base",
       baseRef: request.baseRef
     });
-    if (changeSet.sourcePaths.length > request.maxSourceFiles) {
+    const selectedChanges = changeSet.changes.filter((change) =>
+      matchesRevisionPathPrefix(change, request.pathPrefix)
+    );
+    const selectedSourcePaths = gitSourcePaths(selectedChanges);
+    if (selectedSourcePaths.length > request.maxSourceFiles) {
       throw new GitChangeSetError(
         "GIT_CHANGE_SET_TOO_LARGE",
-        `Git revision hunk selection has ${changeSet.sourcePaths.length} source paths, exceeding maxSourceFiles ${request.maxSourceFiles}.`
+        `Git revision hunk selection has ${selectedSourcePaths.length} source paths, exceeding maxSourceFiles ${request.maxSourceFiles}.`
       );
     }
 
@@ -387,7 +401,7 @@ export class FileSystemGitChangeSetProvider
     const repositoryPathPrefix = await this.readRepositoryPathPrefix(projectPath);
 
     const files: GitRevisionHunkFile[] = [];
-    for (const change of changeSet.changes) {
+    for (const change of selectedChanges) {
       if (!hasSupportedSourceSide(change)) {
         continue;
       }

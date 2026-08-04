@@ -81,6 +81,8 @@ export interface GitChangeSetProvider {
  */
 export interface GitRevisionHunkRequest {
   readonly baseRef: string;
+  /** Optional normalized project-relative file or directory selector. */
+  readonly pathPrefix?: string;
   /** Maximum number of supported old/current source paths to read. */
   readonly maxSourceFiles: number;
 }

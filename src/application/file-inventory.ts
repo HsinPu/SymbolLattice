@@ -10,6 +10,8 @@ import type {
 } from "./types.js";
 import { MAX_FILE_CURSOR_LENGTH } from "./types.js";
 
+export { matchesProjectPathPrefix } from "../domain/project-path.js";
+
 export interface FileSelection {
   readonly pathPrefix?: string;
   readonly language?: IndexedFileSummary["language"];
@@ -129,11 +131,6 @@ export function createProjectFileGlobMatcher(pattern: string): (filePath: string
 
 export function matchesProjectFileGlob(filePath: string, pattern: string): boolean {
   return createProjectFileGlobMatcher(pattern)(filePath);
-}
-
-/** Matches one normalized project-relative file or directory without crossing a segment boundary. */
-export function matchesProjectPathPrefix(filePath: string, pathPrefix: string): boolean {
-  return filePath === pathPrefix || filePath.startsWith(`${pathPrefix}/`);
 }
 
 /** Builds a directory-first tree from the already bounded, deterministically sorted records. */

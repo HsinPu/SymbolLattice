@@ -454,6 +454,7 @@ function gitHunksResult(): GitHunksResult {
       changes: [],
       sourcePaths: []
     },
+    selection: { pathPrefix: null, totalChanges: 0, matchedSourceChanges: 0 },
     bounds: {
       maxSourceFiles: 50,
       maxDeclarationAnchorsPerSide: 25,
@@ -2415,7 +2416,8 @@ describe("SymbolLattice MCP server", () => {
       arguments: {
         projectPath: "C:/chosen-project",
         baseRef: "origin/main",
-        limit: 7
+        limit: 7,
+        path: "src/domain/"
       }
     });
     expect(result.isError).not.toBe(true);
@@ -2427,7 +2429,7 @@ describe("SymbolLattice MCP server", () => {
       {
         projectPath: "C:/chosen-project",
         baseRef: "origin/main",
-        options: { limit: 7 }
+        options: { limit: 7, pathPrefix: "src/domain/" }
       }
     ]);
 

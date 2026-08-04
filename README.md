@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.259.0 是開發預覽版。MCP 查詢工具唯讀；但 `serve --mcp` 預設會啟動獨立的本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用它。
+> v0.260.0 是開發預覽版。MCP 查詢工具唯讀；但 `serve --mcp` 預設會啟動獨立的本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用它。
 
 ## 快速開始
 
@@ -31,6 +31,9 @@ node dist/cli/main.js init /path/to/project
 
 # 查詢含證據的結構脈絡
 node dist/cli/main.js investigate "user token" --project /path/to/project --json
+
+# 將不可變 Git hunk 歸因限縮到一個精確檔案或目錄
+node dist/cli/main.js git-hunks /path/to/project --base origin/main --path-prefix src/domain --json
 ```
 
 也可從 [GitHub Releases](https://github.com/HsinPu/symbol-lattice/releases) 下載版本固定的 `.tgz`、SHA-256 與 manifest，再用 npm 安裝 `.tgz`。每個標籤發行都會先驗證完整測試、乾淨安裝與產物證明。
@@ -75,6 +78,7 @@ node dist/cli/main.js init /path/to/project --plugin ./plugins/acme.mjs
 | `sync <path>` | 明確同步或修復圖譜。 |
 | `watch <path>` | 在前景監看並同步。 |
 | `files [path]` | 以 glob、投影與 generation-bound 游標分頁列出已保存檔案。 |
+| `git-hunks [path] --base <ref>` | 以可選的 `--path-prefix` 篩選不可變 Git hunk 與宣告歸因。 |
 | `investigate <query>` | 將文字線索展開為結構脈絡。 |
 | `impact <symbol>` | 沿精確靜態關係進行有限影響分析。 |
 | `explain-edge <edge-id>` | 查看一條關係的完整證據。 |
@@ -88,8 +92,8 @@ node dist/cli/main.js init /path/to/project --plugin ./plugins/acme.mjs
 
 ```bash
 symbol-lattice upgrade --check
-symbol-lattice upgrade 0.259.0 --verify
-symbol-lattice upgrade 0.259.0 --apply --yes
+symbol-lattice upgrade 0.260.0 --verify
+symbol-lattice upgrade 0.260.0 --apply --yes
 ```
 
 ## 驗證

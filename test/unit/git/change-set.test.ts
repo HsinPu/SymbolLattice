@@ -614,6 +614,73 @@ describe("FileSystemGitChangeSetProvider immutable revision hunks", () => {
     ).toBe(false);
   });
 
+  it("filters before the source-path cap and retains renames matched on either path side", async () => {
+    const runner = {
+      run: vi.fn(async (_projectPath: string, arguments_: readonly string[]) => {
+        if (arguments_[0] === "rev-parse" && arguments_.at(-1) === "HEAD^{commit}") {
+          return `${HEAD}\n`;
+        }
+        if (arguments_[0] === "rev-parse" && arguments_.at(-1) === "origin/main^{commit}") {
+          return `${BASE}\n`;
+        }
+        if (arguments_[0] === "merge-base") {
+          return `${MERGE_BASE}\n`;
+        }
+        if (arguments_[0] === "rev-parse" && arguments_.includes("--show-prefix")) {
+          return "";
+        }
+        if (arguments_[0] === "diff" && arguments_.includes("--name-status")) {
+          return (
+            "M\u0000src2/too-many.ts\u0000" +
+            "M\u0000src/kept.ts\u0000" +
+            "R100\u0000legacy/renamed.ts\u0000src/moved.ts\u0000" +
+            "R100\u0000src/old-side.ts\u0000legacy/moved-away.ts\u0000"
+          );
+        }
+        if (arguments_[0] === "diff" && arguments_.includes("--unified=0")) {
+          const pathspecs = arguments_.slice(arguments_.indexOf("--") + 1);
+          expect(pathspecs).not.toContain(":(literal)src2/too-many.ts");
+          return "@@ -1 +1 @@\n-export const before = 1;\n+export const after = 2;\n";
+        }
+        if (arguments_[0] === "show") {
+          return "export const value = 1;\n";
+        }
+        throw new Error(`Unexpected Git command: ${arguments_.join(" ")}`);
+      })
+    } satisfies GitCommandRunner;
+
+    const result = await new FileSystemGitChangeSetProvider(runner).getRevisionHunks("C:/project", {
+      baseRef: "origin/main",
+      maxSourceFiles: 5,
+      pathPrefix: "src"
+    });
+
+    expect(result.changeSet.sourcePaths).toEqual([
+      "legacy/moved-away.ts",
+      "legacy/renamed.ts",
+      "src/kept.ts",
+      "src/moved.ts",
+      "src/old-side.ts",
+      "src2/too-many.ts"
+    ]);
+    expect(result.files.map((file) => file.change)).toEqual(expect.arrayContaining([
+      { kind: "modified", previousPath: "src/kept.ts", currentPath: "src/kept.ts", score: null },
+      {
+        kind: "renamed",
+        previousPath: "legacy/renamed.ts",
+        currentPath: "src/moved.ts",
+        score: 100
+      },
+      {
+        kind: "renamed",
+        previousPath: "src/old-side.ts",
+        currentPath: "legacy/moved-away.ts",
+        score: 100
+      }
+    ]));
+    expect(result.files).toHaveLength(3);
+  });
+
   it("maps unavailable Git reads and malformed hunk output to typed errors", async () => {
     const baseRunner = (patchOutput: string | Error) =>
       ({

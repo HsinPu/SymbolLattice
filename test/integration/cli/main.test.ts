@@ -450,6 +450,7 @@ function gitHunksResult(): GitHunksResult {
       changes: [],
       sourcePaths: []
     },
+    selection: { pathPrefix: null, totalChanges: 0, matchedSourceChanges: 0 },
     bounds: {
       maxSourceFiles: 50,
       maxDeclarationAnchorsPerSide: 25,
@@ -2077,6 +2078,8 @@ describe("symbol-lattice v0.12 immutable Git hunk CLI", () => {
         "origin/main",
         "--limit",
         "7",
+        "--path-prefix",
+        "src/domain/",
         "--json"
       ],
       { from: "node" }
@@ -2086,7 +2089,7 @@ describe("symbol-lattice v0.12 immutable Git hunk CLI", () => {
       {
         projectPath: resolve("C:/chosen-project"),
         baseRef: "origin/main",
-        options: { limit: 7 }
+        options: { limit: 7, pathPrefix: "src/domain/" }
       }
     ]);
     expect(write).toHaveBeenCalledWith(`${JSON.stringify(result, null, 2)}\n`);

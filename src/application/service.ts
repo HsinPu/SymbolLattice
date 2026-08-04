@@ -297,6 +297,7 @@ interface NormalizedAffectedTestsRequest {
 
 interface NormalizedGitHunksRequest {
   readonly baseRef: string;
+  readonly pathPrefix: string | undefined;
   readonly limit: number;
 }
 
@@ -1659,7 +1660,8 @@ export class SymbolLatticeService {
     const request = this.gitHunksRequest(baseRef, options);
     const hunkSet = await this.readGitRevisionHunks(resolve(projectPath), {
       baseRef: request.baseRef,
-      maxSourceFiles: MAX_GIT_HUNK_SOURCE_FILES
+      maxSourceFiles: MAX_GIT_HUNK_SOURCE_FILES,
+      ...(request.pathPrefix === undefined ? {} : { pathPrefix: request.pathPrefix })
     });
     this.requireGitHunkSetWithinBounds(hunkSet);
 
@@ -1676,6 +1678,11 @@ export class SymbolLatticeService {
     const orderedItems = items.sort(compareGitHunkResultItem);
     return {
       changeSet: hunkSet.changeSet,
+      selection: {
+        pathPrefix: request.pathPrefix ?? null,
+        totalChanges: hunkSet.changeSet.changes.length,
+        matchedSourceChanges: files.length
+      },
       bounds: {
         maxSourceFiles: MAX_GIT_HUNK_SOURCE_FILES,
         maxDeclarationAnchorsPerSide: MAX_GIT_HUNK_DECLARATION_ANCHORS,
@@ -2073,6 +2080,14 @@ export class SymbolLatticeService {
 
     return {
       baseRef: this.requireGitBaseRef(baseRef),
+      pathPrefix:
+        options.pathPrefix === undefined
+          ? undefined
+          : this.normalizedProjectRelativePathPrefix(
+              options.pathPrefix,
+              "INVALID_GIT_HUNK_PATH_PREFIX",
+              "Git hunk"
+            ),
       limit
     };
   }
@@ -2964,8 +2979,11 @@ export class SymbolLatticeService {
 
   private normalizedProjectRelativePathPrefix(
     pathPrefix: string,
-    code: "INVALID_SEARCH_PATH_PREFIX" | "INVALID_FILE_PATH_PREFIX",
-    label: "Search" | "File"
+    code:
+      | "INVALID_SEARCH_PATH_PREFIX"
+      | "INVALID_FILE_PATH_PREFIX"
+      | "INVALID_GIT_HUNK_PATH_PREFIX",
+    label: "Search" | "File" | "Git hunk"
   ): string | undefined {
     if (typeof pathPrefix !== "string") {
       throw new SymbolLatticeError(

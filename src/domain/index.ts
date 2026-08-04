@@ -7,5 +7,6 @@ export * from "./graph.js";
 export * from "./index-inputs.js";
 export * from "./index-work.js";
 export * from "./order.js";
+export * from "./project-path.js";
 export * from "./source-search.js";
 export * from "./types.js";
