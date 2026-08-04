@@ -6,6 +6,26 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.250.0] - 2026-08-04
+
+### Added
+
+- Added a public, project-scoped `FrameworkFactPlugin` registry. A plugin may emit bounded descriptors for non-file symbols, static routes, non-HTTP entry points, and pending `references`, `calls`, `instantiates`, `overrides`, `routes`, `handles`, `extends`, or `implements` relations.
+- SymbolLattice, not the plugin, creates stable symbol and edge identities, exact containment edges, confidence, and evidence. Emitted pending references compose with built-in import/re-export resolution and the existing `ReferenceResolverPlugin` stage.
+- Plugin id and version provenance now survives raw artifact facts, unresolved SQLite projection rows, resolved edge evidence, retained generation snapshots, and generation diffs.
+
+### Safety and compatibility
+
+- Registries are validated, canonicalized, frozen, project-scoped, and fingerprinted. Per-plugin output is capped at 256 symbols and 512 references per file; malformed ranges, duplicate keys or graph identities, unknown same-file sources, cyclic parents, and relation-incompatible route or entrypoint sources fail closed before publication.
+- Plugins receive a defensive deeply frozen copy of accepted core facts. They are trusted in-process code, not a sandbox or remote plugin protocol.
+- Plugin versions participate in artifact freshness, so a changed extraction plugin forces affected files to be re-extracted. Existing custom artifact extractors and framework-route extractors can be used as the base extractor.
+- Existing v1-v4 SQLite indexes remain readable. A nullable `pending_refs.extension_json` column is installed additively on the next write; old snapshots without that column remain readable. The artifact extractor advances to `multi-language-ast-v204` and the project resolver to `project-resolver-v85`; run `sync` or `index` once to refresh an existing graph.
+
+### Deliberate limits
+
+- This release supports bounded per-file extraction only. It does not expose CodeGraph-style project-wide `postExtract` mutation, global registry mutation, arbitrary raw graph writes, compiler plugins, or out-of-process isolation.
+- Plugins must derive their own framework syntax evidence from the supplied source text and frozen core facts. SymbolLattice validates structure and provenance but cannot prove that arbitrary third-party callback logic is semantically correct.
+
 ## [0.249.0] - 2026-08-04
 
 ### Added

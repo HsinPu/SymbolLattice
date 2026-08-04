@@ -97,11 +97,11 @@ describe("reference resolver plugin registry", () => {
         { ...serviceConventionPlugin, relations: ["contains"] as never }
       ])
     ).toThrow(ReferenceResolverPluginConfigurationError);
-    expect(() =>
+    expect(
       createReferenceResolverPluginRegistry([
-        { ...serviceConventionPlugin, relations: ["references"] as never }
-      ])
-    ).toThrow(ReferenceResolverPluginConfigurationError);
+        { ...serviceConventionPlugin, relations: ["references", "handles"] }
+      ]).plugins[0]?.relations
+    ).toEqual(["handles", "references"]);
     expect(() =>
       createReferenceResolverPluginRegistry([
         { ...serviceConventionPlugin, relations: ["imports"] }

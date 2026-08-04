@@ -61,10 +61,12 @@ export const REFERENCE_RESOLVER_PLUGIN_RULE_NAME_PATTERN = /^[a-z][a-z0-9-]{0,79
 const MAX_PLUGIN_COUNT = 32;
 const VALIDATED_REGISTRIES = new WeakSet<ReferenceResolverPluginRegistry>();
 const SUPPORTED_RELATIONS = new Set<ReferenceResolverPluginRelation>([
+  "references",
   "calls",
   "instantiates",
   "overrides",
   "routes",
+  "handles",
   "extends",
   "implements"
 ]);

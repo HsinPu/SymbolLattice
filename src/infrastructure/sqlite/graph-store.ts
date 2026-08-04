@@ -129,7 +129,8 @@ const SNAPSHOT_SCHEMA = `
     start_line INTEGER NOT NULL,
     start_column INTEGER NOT NULL,
     end_line INTEGER NOT NULL,
-    end_column INTEGER NOT NULL
+    end_column INTEGER NOT NULL,
+    extension_json TEXT
   ) STRICT;
 
   CREATE INDEX IF NOT EXISTS pending_refs_by_name ON pending_refs(reference_name);
@@ -327,6 +328,7 @@ interface PendingReferenceRow {
   readonly start_column: number;
   readonly end_line: number;
   readonly end_column: number;
+  readonly extension_json?: string | null;
 }
 
 interface ArtifactFactsRow {
@@ -409,6 +411,19 @@ function tableExists(database: DatabaseSync, tableName: string): boolean {
       .prepare("SELECT 1 AS present FROM sqlite_master WHERE type = 'table' AND name = ?")
       .get(tableName) !== undefined
   );
+}
+
+function columnExists(database: DatabaseSync, tableName: string, columnName: string): boolean {
+  const rows = database.prepare(`PRAGMA table_info(${tableName})`).all() as unknown as readonly {
+    readonly name: string;
+  }[];
+  return rows.some((row) => row.name === columnName);
+}
+
+function ensurePendingReferenceExtensionColumn(database: DatabaseSync): void {
+  if (!columnExists(database, "pending_refs", "extension_json")) {
+    database.exec("ALTER TABLE pending_refs ADD COLUMN extension_json TEXT");
+  }
 }
 
 function readCount(database: DatabaseSync, tableName: string): number {
@@ -527,6 +542,7 @@ function migrateDatabaseToCurrent(database: DatabaseSync): void {
     // additions are independent side tables, so this is a strictly additive
     // upgrade that preserves the active graph and any raw facts already there.
     installCurrentAdditiveSchema(database);
+    ensurePendingReferenceExtensionColumn(database);
     cleanOrphanedSourceSearchRows(database);
     backfillActiveGenerationSnapshot(database);
     pruneRetainedGenerations(database, getActiveGenerationId(database));
@@ -543,6 +559,7 @@ function initializeNewDatabase(database: DatabaseSync): void {
   try {
     database.exec(SNAPSHOT_SCHEMA);
     installCurrentAdditiveSchema(database);
+    ensurePendingReferenceExtensionColumn(database);
     backfillActiveGenerationSnapshot(database);
     pruneRetainedGenerations(database, getActiveGenerationId(database));
     setMeta(database, SCHEMA_VERSION_META_KEY, SCHEMA_VERSION);
@@ -571,6 +588,7 @@ function ensureSchema(database: DatabaseSync, databaseExisted: boolean): void {
   database.exec("BEGIN IMMEDIATE");
   try {
     installCurrentAdditiveSchema(database);
+    ensurePendingReferenceExtensionColumn(database);
     cleanOrphanedSourceSearchRows(database);
     backfillActiveGenerationSnapshot(database);
     pruneRetainedGenerations(database, getActiveGenerationId(database));
@@ -779,8 +797,8 @@ function insertPendingReference(database: DatabaseSync, reference: PendingRefere
     .prepare(
       `INSERT INTO pending_refs(
         id, source_id, file_path, reference_name, relation_kind,
-        start_line, start_column, end_line, end_column
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        start_line, start_column, end_line, end_column, extension_json
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .run(
       reference.id,
@@ -791,7 +809,8 @@ function insertPendingReference(database: DatabaseSync, reference: PendingRefere
       reference.range.start.line,
       reference.range.start.column,
       reference.range.end.line,
-      reference.range.end.column
+      reference.range.end.column,
+      reference.extractionPlugin === undefined ? null : JSON.stringify(reference.extractionPlugin)
     );
 }
 
@@ -1192,10 +1211,17 @@ function readSnapshotProjection(
              ORDER BY e.file_path, e.start_line, e.start_column, e.kind, e.id`
           )
           .all(activeGenerationId) as unknown as EdgeRow[]);
+  const pendingReferenceExtensionSelect = columnExists(
+    database,
+    "pending_refs",
+    "extension_json"
+  )
+    ? "extension_json"
+    : "NULL AS extension_json";
   const pendingReferences = database
     .prepare(
       `SELECT id, source_id, file_path, reference_name, relation_kind,
-        start_line, start_column, end_line, end_column
+        start_line, start_column, end_line, end_column, ${pendingReferenceExtensionSelect}
        FROM pending_refs
        ORDER BY file_path, start_line, start_column, relation_kind, id`
     )
@@ -1225,7 +1251,14 @@ function readSnapshotProjection(
       filePath: reference.file_path,
       referenceName: reference.reference_name,
       relationKind: reference.relation_kind,
-      range: toRange(reference)
+      range: toRange(reference),
+      ...(reference.extension_json === null || reference.extension_json === undefined
+        ? {}
+        : {
+            extractionPlugin: JSON.parse(reference.extension_json) as NonNullable<
+              PendingReference["extractionPlugin"]
+            >
+          })
     }))
   };
 }

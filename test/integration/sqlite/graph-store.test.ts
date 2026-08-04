@@ -597,6 +597,48 @@ describe("SqliteGraphStore", () => {
     expect(store.isInitialized(projectPath)).toBe(false);
   });
 
+  it("round-trips extraction plugin provenance for active pending references", async () => {
+    const projectPath = await temporaryProject();
+    const store = new SqliteGraphStore();
+    const source = symbol("extension-source", "extensionSource");
+    const graphSnapshot: GraphSnapshot = {
+      ...snapshot([source]),
+      pendingReferences: [
+        {
+          id: "edge:extension-pending",
+          sourceId: source.id,
+          filePath: source.filePath,
+          referenceName: "targetHandler",
+          relationKind: "handles",
+          range: {
+            start: { line: 1, column: 1 },
+            end: { line: 1, column: 8 }
+          },
+          extractionPlugin: {
+            pluginId: "acme/framework-facts",
+            pluginVersion: "1.0.0"
+          }
+        }
+      ]
+    };
+
+    store.replaceProjectFacts({
+      projectPath,
+      snapshot: graphSnapshot,
+      indexedAt: "2026-08-04T00:00:00.000Z",
+      artifactFacts: persistedFacts(graphSnapshot),
+      indexInputs: indexInputs("extension-provenance"),
+      resolverVersion: "test-resolver-extension-provenance"
+    });
+
+    expect(store.getSnapshot(projectPath).pendingReferences).toEqual(
+      graphSnapshot.pendingReferences
+    );
+    expect(store.getArtifactFacts(projectPath)[0]?.pendingReferences).toEqual(
+      graphSnapshot.pendingReferences
+    );
+  });
+
   it("keeps a default-project reader open across committed generations and reopens it after close", async () => {
     const projectPath = await temporaryProject();
     const writer = new SqliteGraphStore();

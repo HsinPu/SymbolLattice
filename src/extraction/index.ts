@@ -124,6 +124,27 @@ export {
   frameworkRoutePluginExtractorVersion,
   FrameworkRoutePluginConfigurationError
 } from "./framework-route-plugins.js";
+export {
+  createFrameworkFactPluginExtractor,
+  createFrameworkFactPluginRegistry,
+  FrameworkFactPluginConfigurationError,
+  FrameworkFactPluginOutputError
+} from "./framework-fact-plugins.js";
+export type {
+  FrameworkFactPlugin,
+  FrameworkFactPluginBaseExtractor,
+  FrameworkFactPluginEntrypointSymbol,
+  FrameworkFactPluginExtractor,
+  FrameworkFactPluginInput,
+  FrameworkFactPluginNamedSymbol,
+  FrameworkFactPluginReference,
+  FrameworkFactPluginRegistry,
+  FrameworkFactPluginRelation,
+  FrameworkFactPluginResult,
+  FrameworkFactPluginRouteSymbol,
+  FrameworkFactPluginSymbol,
+  FrameworkFactPluginSymbolSource
+} from "./framework-fact-plugins.js";
 export type {
   FrameworkRoutePluginDecoratorRoute,
   FrameworkRoutePluginMountMethod,

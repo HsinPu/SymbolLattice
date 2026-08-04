@@ -1,5 +1,6 @@
 import { compareStableText } from "./order.js";
 import type {
+  ExtractionPluginProvenance,
   GraphEdge,
   GraphSnapshot,
   IndexedFile,
@@ -166,6 +167,19 @@ function sameStringArray(left: readonly string[] | undefined, right: readonly st
   );
 }
 
+function sameExtractionPlugin(
+  left: ExtractionPluginProvenance | undefined,
+  right: ExtractionPluginProvenance | undefined
+): boolean {
+  return (
+    left === right ||
+    (left !== undefined &&
+      right !== undefined &&
+      left.pluginId === right.pluginId &&
+      left.pluginVersion === right.pluginVersion)
+  );
+}
+
 function sameEdge(left: GraphEdge, right: GraphEdge): boolean {
   const leftEvidence = left.evidence;
   const rightEvidence = right.evidence;
@@ -175,6 +189,7 @@ function sameEdge(left: GraphEdge, right: GraphEdge): boolean {
       rightEvidence !== undefined &&
       leftEvidence.ruleId === rightEvidence.ruleId &&
       leftEvidence.stage === rightEvidence.stage &&
+      sameExtractionPlugin(leftEvidence.extractionPlugin, rightEvidence.extractionPlugin) &&
       sameStringArray(leftEvidence.candidateSymbolIds, rightEvidence.candidateSymbolIds) &&
       sameStringArray(leftEvidence.configurationPaths, rightEvidence.configurationPaths) &&
       sameStringArray(leftEvidence.resolutionPath, rightEvidence.resolutionPath));
@@ -201,6 +216,7 @@ function samePendingReference(left: PendingReference, right: PendingReference): 
     left.filePath === right.filePath &&
     left.referenceName === right.referenceName &&
     left.relationKind === right.relationKind &&
+    sameExtractionPlugin(left.extractionPlugin, right.extractionPlugin) &&
     samePosition(left.range.start, right.range.start) &&
     samePosition(left.range.end, right.range.end)
   );

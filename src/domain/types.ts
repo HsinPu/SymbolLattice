@@ -256,6 +256,12 @@ export interface GraphEdge {
   readonly evidence?: EdgeEvidence;
 }
 
+/** Provenance retained for facts emitted by one validated extraction plugin. */
+export interface ExtractionPluginProvenance {
+  readonly pluginId: string;
+  readonly pluginVersion: string;
+}
+
 export interface PendingReference {
   readonly id: string;
   readonly sourceId: string;
@@ -268,9 +274,13 @@ export interface PendingReference {
     | "overrides"
     | "imports"
     | "exports"
+    | "references"
     | "routes"
+    | "handles"
     | HierarchyRelationKind
   >;
+  /** Present only when a validated extraction plugin emitted this reference. */
+  readonly extractionPlugin?: ExtractionPluginProvenance;
   /** Present only for syntax-proven framework route or client-navigation handlers. */
   readonly routeFramework?: RouteFramework;
   /** Present when a statically proven registration projects route provenance or a framework route path. */

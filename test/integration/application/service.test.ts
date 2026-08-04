@@ -37,7 +37,10 @@ import {
   type IndexedSourceDocument,
   type IndexStatus
 } from "../../../src/domain/index.js";
-import { extractFileFacts } from "../../../src/extraction/index.js";
+import {
+  createFrameworkFactPluginRegistry,
+  extractFileFacts
+} from "../../../src/extraction/index.js";
 import { FileSystemSourceCatalog } from "../../../src/infrastructure/filesystem/index.js";
 import { SqliteGraphStore } from "../../../src/infrastructure/sqlite/index.js";
 import type {
@@ -3611,6 +3614,84 @@ describe("SymbolLatticeService", () => {
       reExtractedFiles: [],
       reusedArtifactFiles: ["src/caller.ts", "src/first.ts", "src/second.ts"]
     });
+  });
+
+  it("re-extracts persisted facts when a framework fact plugin version changes", async () => {
+    const projectPath = await createInlineProject({
+      "src/extension.ts": "export const extensionMarker = true;\n"
+    });
+    const graphStore = new SqliteGraphStore();
+    let extractionCount = 0;
+    const artifactFactsExtractor = (input: Parameters<typeof extractFileFacts>[0]) => {
+      extractionCount += 1;
+      return extractFileFacts(input);
+    };
+    const plugin = (version: string) =>
+      createFrameworkFactPluginRegistry([
+        {
+          id: "acme/framework-facts",
+          version,
+          languages: ["typescript"],
+          extract: () => ({
+            symbols: [
+              {
+                key: "framework-resource",
+                kind: "resource",
+                name: "framework-resource",
+                range: {
+                  start: { line: 1, column: 1 },
+                  end: { line: 1, column: 7 }
+                }
+              }
+            ]
+          })
+        }
+      ]);
+    const initialService = new SymbolLatticeService(
+      graphStore,
+      new FileSystemSourceCatalog(),
+      {
+        artifactFactsExtractor,
+        frameworkFactPlugins: plugin("1.0.0")
+      }
+    );
+    await initialService.init({ projectPath });
+    expect(extractionCount).toBe(1);
+    expect(graphStore.getSnapshot(projectPath).symbols).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "resource",
+          qualifiedName: expect.stringContaining(
+            "#extension:acme/framework-facts:framework-resource"
+          )
+        })
+      ])
+    );
+
+    const upgradedService = new SymbolLatticeService(
+      graphStore,
+      new FileSystemSourceCatalog(),
+      {
+        artifactFactsExtractor,
+        frameworkFactPlugins: plugin("1.0.1")
+      }
+    );
+    expect(await upgradedService.getStatus(projectPath)).toMatchObject({
+      stale: true,
+      staleReasons: ["indexer-version-changed"]
+    });
+    const synced = await upgradedService.sync({ projectPath });
+
+    expect(synced).toMatchObject({ stale: false, staleReasons: [] });
+    expect(extractionCount).toBe(2);
+    expect(synced.lastIndexWork).toMatchObject({
+      mode: "incremental",
+      reExtractedFiles: ["src/extension.ts"],
+      reusedArtifactFiles: []
+    });
+    expect(graphStore.getArtifactFacts(projectPath)[0]?.extractorVersion).toContain(
+      "framework-facts-"
+    );
   });
 
   it("removes deleted source facts and invalidates their existing importers", async () => {

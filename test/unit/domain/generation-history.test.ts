@@ -208,4 +208,57 @@ describe("retained generation snapshot diff", () => {
       truncated: false
     });
   });
+
+  it("reports extraction plugin provenance changes on edges and pending references", () => {
+    const before = snapshot({
+      edges: [
+        edge("edge:extension", {
+          evidence: {
+            ruleId: "extension.reference",
+            stage: "module",
+            candidateSymbolIds: ["symbol:target"],
+            extractionPlugin: {
+              pluginId: "acme/framework-facts",
+              pluginVersion: "1.0.0"
+            }
+          }
+        })
+      ],
+      pendingReferences: [
+        pendingReference("pending:extension", {
+          extractionPlugin: {
+            pluginId: "acme/framework-facts",
+            pluginVersion: "1.0.0"
+          }
+        })
+      ]
+    });
+    const after = snapshot({
+      edges: [
+        edge("edge:extension", {
+          evidence: {
+            ruleId: "extension.reference",
+            stage: "module",
+            candidateSymbolIds: ["symbol:target"],
+            extractionPlugin: {
+              pluginId: "acme/framework-facts",
+              pluginVersion: "1.0.1"
+            }
+          }
+        })
+      ],
+      pendingReferences: [
+        pendingReference("pending:extension", {
+          extractionPlugin: {
+            pluginId: "acme/framework-facts",
+            pluginVersion: "1.0.1"
+          }
+        })
+      ]
+    });
+
+    const result = diffGenerationSnapshots(before, after, { limit: 2 });
+    expect(result.edges.modified.items).toHaveLength(1);
+    expect(result.pendingReferences.modified.items).toHaveLength(1);
+  });
 });

@@ -52,9 +52,11 @@ import {
   type SymbolNode
 } from "../domain/index.js";
 import {
+  createFrameworkFactPluginExtractor,
   extractFileFacts,
   type ExtractFileFactsInput,
-  type ExtractedFileFacts
+  type ExtractedFileFacts,
+  type FrameworkFactPluginRegistry
 } from "../extraction/index.js";
 import {
   GitChangeSetError,
@@ -219,6 +221,7 @@ export interface ArtifactFactsExtractor {
 /** Optional project-scoped extension seams applied by the indexing service. */
 export interface SymbolLatticeServiceExtensions {
   readonly artifactFactsExtractor?: ArtifactFactsExtractor;
+  readonly frameworkFactPlugins?: FrameworkFactPluginRegistry;
   readonly referenceResolverPlugins?: ReferenceResolverPluginRegistry;
 }
 
@@ -904,10 +907,17 @@ export class SymbolLatticeService {
         : artifactFactsExtractorOrExtensions;
     this.graphStore = graphStore;
     this.sourceCatalog = sourceCatalog;
-    this.artifactFactsExtractor =
+    const baseArtifactFactsExtractor =
       typeof artifactFactsExtractorOrExtensions === "function"
         ? artifactFactsExtractorOrExtensions
         : extensions?.artifactFactsExtractor ?? extractFileFacts;
+    this.artifactFactsExtractor =
+      extensions?.frameworkFactPlugins === undefined
+        ? baseArtifactFactsExtractor
+        : createFrameworkFactPluginExtractor(
+            baseArtifactFactsExtractor,
+            extensions.frameworkFactPlugins
+          );
     this.gitChangeSetProvider = gitChangeSetProvider;
     this.gitRevisionHunkProvider = gitRevisionHunkProvider;
     this.referenceResolverPlugins = extensions?.referenceResolverPlugins;

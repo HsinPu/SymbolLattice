@@ -136,7 +136,10 @@ function referenceEdge(
     resolution,
     confidence,
     referenceName: reference.referenceName,
-    evidence
+    evidence:
+      reference.extractionPlugin === undefined
+        ? evidence
+        : { ...evidence, extractionPlugin: reference.extractionPlugin }
   };
 }
 
@@ -8102,13 +8105,16 @@ export function resolveProjectFacts(input: {
     const isInstantiation = reference.relationKind === "instantiates";
     if (
       reference.relationKind !== "calls" &&
+      reference.relationKind !== "references" &&
       reference.relationKind !== "routes" &&
+      reference.relationKind !== "handles" &&
       !isHeritage &&
       !isInstantiation
     ) {
       continue;
     }
     const isRouteHandler = reference.relationKind === "routes";
+    const isEntrypointHandler = reference.relationKind === "handles";
     const heritage = isHeritage ? heritageReferenceContext(reference, symbolsById) : null;
     if (isHeritage && heritage === null) {
       unresolvedReferences.push(reference);
@@ -8274,7 +8280,7 @@ export function resolveProjectFacts(input: {
     const exactImportedBindings = matchingImportedBindings.filter(({ binding }) =>
       heritage !== null
         ? importBindingSupportsSpace(binding, heritage.expectedSpace)
-        : isRouteHandler || isInstantiation
+        : isRouteHandler || isEntrypointHandler || isInstantiation
           ? binding.isTypeOnly !== true
           : true
     );
@@ -8300,7 +8306,7 @@ export function resolveProjectFacts(input: {
         if (isInstantiation) {
           return candidate.isTypeOnly !== true && isInstantiationTarget(candidate.symbol);
         }
-        return !isRouteHandler || !candidate.isTypeOnly;
+        return (!isRouteHandler && !isEntrypointHandler) || !candidate.isTypeOnly;
       })
     );
     const exactImportedSymbols = exactImportedCandidates.map((candidate) => candidate.symbol);
@@ -8486,10 +8492,10 @@ export function resolveProjectFacts(input: {
       continue;
     }
 
-    // Route handler bindings require an explicit lexical, import, or re-export
-    // proof. Unlike ordinary call expressions, a unique name elsewhere in the
-    // project is not sufficient evidence to bind a framework route.
-    if (isRouteHandler) {
+    // Route and entrypoint handler bindings require an explicit lexical,
+    // import, or re-export proof. A unique name elsewhere in the project is
+    // insufficient evidence for a framework-owned dispatch edge.
+    if (isRouteHandler || isEntrypointHandler) {
       unresolvedReferences.push(reference);
       resolvedEdges.push(
         referenceEdge(
@@ -8498,7 +8504,9 @@ export function resolveProjectFacts(input: {
           "unresolved",
           0,
           referenceEvidence(
-            staticRouteHandlerRuleId(reference, "unresolved-handler"),
+            isEntrypointHandler
+              ? "entrypoint.unresolved-handler"
+              : staticRouteHandlerRuleId(reference, "unresolved-handler"),
             "unresolved",
             candidateSymbolIds(
               exactImportedSymbols,

@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.249.0 is a developer preview that runs from source. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher can update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.250.0 is a developer preview that runs from source. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher can update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## Quick start
 
@@ -41,29 +41,25 @@ node dist/cli/main.js investigate "user token" --project /path/to/project --json
 - Preserves the rule, stage, candidate targets, confidence, and resolution path behind every relation.
 - Extension-framework route plugins resolve exact same-file and cross-file fixed-prefix mounts. `explain-edge` returns each mount segment and the ESM import/re-export path; dynamic or ambiguous composition is never guessed into a route.
 - Projects can register versioned reference resolver plugins that only see relations left unresolved by built-in resolvers. The host bounds candidates, validates results, and preserves collisions, exceptions, or unsafe choices as explainable unresolved evidence.
+- Framework fact plugins can add validated symbols, routes, entry points, and pending references from framework syntax. Stable IDs, containment edges, output bounds, source ranges, and provenance remain host-owned.
 
-## Resolver extensions
+## Framework fact extensions
 
 ```ts
-const plugins = createReferenceResolverPluginRegistry([{
-  id: "acme/service-convention",
+const plugins = createFrameworkFactPluginRegistry([{
+  id: "acme/framework-facts",
   version: "1.0.0",
   languages: ["typescript"],
-  relations: ["calls"],
-  resolve: ({ projectCandidates }) => {
-    const target = projectCandidates.find(({ symbol }) => symbol.filePath.endsWith(".service.ts"));
-    return target ? {
-      targetSymbolId: target.symbol.id,
-      candidateSymbolIds: projectCandidates.map(({ symbol }) => symbol.id),
-      ruleName: "service-file"
-    } : null;
-  }
+  extract: ({ filePath, sourceText, coreFacts }) => ({
+    symbols: [],
+    references: []
+  })
 }]);
 
-const service = new SymbolLatticeService(store, catalog, { referenceResolverPlugins: plugins });
+const service = new SymbolLatticeService(store, catalog, { frameworkFactPlugins: plugins });
 ```
 
-Plugin versions participate in index freshness. After a version change, `sync` reuses unchanged raw artifact facts while reprojecting the graph.
+Plugins return bounded descriptors rather than raw graph identities. Their versions participate in index freshness; after a version change, `sync` re-extracts affected facts. A `ReferenceResolverPlugin` can be composed for targets that remain unresolved.
 
 ## Common commands
 
