@@ -45,6 +45,7 @@ describe("GitHub release workflow", () => {
 
   it("verifies the tag, release contract, clean install, and published release", () => {
     const commands = workflow.jobs?.release?.steps?.flatMap((step) => step.run ?? []).join("\n") ?? "";
+    expect(commands).toContain('git fetch --force --no-tags origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"');
     expect(commands).toContain('git cat-file -t "$GITHUB_REF_NAME"');
     expect(commands).toContain("npm run release:contract");
     expect(commands).toContain("npm install --prefix");
