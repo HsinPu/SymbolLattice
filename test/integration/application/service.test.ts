@@ -21455,6 +21455,7 @@ describe("SymbolLatticeService", () => {
         "}"
       ].join("\n"),
       "src/token.ts": 'export function makeToken(): string { return "token"; }',
+      "src2/not-under-src.py": "def unrelated():\n    return 2\n",
       "scripts/task.py": "def run():\n    return 1\n"
     });
     const service = createService();
@@ -21515,10 +21516,10 @@ describe("SymbolLatticeService", () => {
     const grouped = await service.files(projectPath, { format: "grouped" });
     expect(grouped).toMatchObject({
       format: "grouped",
-      matchedFileCount: 3,
+      matchedFileCount: 4,
       groups: [
-        { language: "typescript", fileCount: 2 },
-        { language: "python", fileCount: 1 }
+        { language: "python", fileCount: 2 },
+        { language: "typescript", fileCount: 2 }
       ]
     });
     expect(grouped).not.toHaveProperty("tree");

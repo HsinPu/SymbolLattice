@@ -89,7 +89,8 @@ import {
   decodeFilePageCursor,
   encodeFilePageCursor,
   fileSelectionFingerprint,
-  InvalidFilePageCursorError
+  InvalidFilePageCursorError,
+  matchesProjectPathPrefix
 } from "./file-inventory.js";
 import {
   frameworkProjectPluginProjectVersion,
@@ -1383,7 +1384,7 @@ export class SymbolLatticeService {
     const matchingFiles: readonly IndexedFileSummary[] = context.snapshot.files
       .filter(
         (file) =>
-          (request.pathPrefix === undefined || file.path.startsWith(request.pathPrefix)) &&
+          (request.pathPrefix === undefined || matchesProjectPathPrefix(file.path, request.pathPrefix)) &&
           (request.language === undefined || file.language === request.language) &&
           (matchesPattern === undefined || matchesPattern(file.path))
       )

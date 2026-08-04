@@ -6,7 +6,8 @@ import {
   decodeFilePageCursor,
   encodeFilePageCursor,
   fileSelectionFingerprint,
-  matchesProjectFileGlob
+  matchesProjectFileGlob,
+  matchesProjectPathPrefix
 } from "../../../src/application/file-inventory.js";
 import type { IndexedFileSummary } from "../../../src/application/types.js";
 
@@ -21,6 +22,14 @@ describe("persisted file inventory projections", () => {
     expect(matchesProjectFileGlob("file.name.ts", "file.name.ts")).toBe(true);
     expect(matchesProjectFileGlob("fileXname.ts", "file.name.ts")).toBe(false);
     expect(matchesProjectFileGlob("src/[draft]+.ts", "src/[draft]+.ts")).toBe(true);
+  });
+
+  it("matches exact files and directory descendants without crossing path segments", () => {
+    expect(matchesProjectPathPrefix("src", "src")).toBe(true);
+    expect(matchesProjectPathPrefix("src/api.ts", "src")).toBe(true);
+    expect(matchesProjectPathPrefix("src/api/user.ts", "src/api")).toBe(true);
+    expect(matchesProjectPathPrefix("src2/not-under-src.ts", "src")).toBe(false);
+    expect(matchesProjectPathPrefix("src/apiary.ts", "src/api")).toBe(false);
   });
 
   it("builds a deterministic directory-first tree and discloses depth-limited descendants", () => {

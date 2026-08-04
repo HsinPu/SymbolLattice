@@ -131,6 +131,11 @@ export function matchesProjectFileGlob(filePath: string, pattern: string): boole
   return createProjectFileGlobMatcher(pattern)(filePath);
 }
 
+/** Matches one normalized project-relative file or directory without crossing a segment boundary. */
+export function matchesProjectPathPrefix(filePath: string, pathPrefix: string): boolean {
+  return filePath === pathPrefix || filePath.startsWith(`${pathPrefix}/`);
+}
+
 /** Builds a directory-first tree from the already bounded, deterministically sorted records. */
 export function buildFileTree(
   files: readonly IndexedFileSummary[],
