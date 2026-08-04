@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.250.0 is a developer preview that runs from source. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher can update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.251.0 is a developer preview that runs from source. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher can update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## Quick start
 
@@ -42,6 +42,7 @@ node dist/cli/main.js investigate "user token" --project /path/to/project --json
 - Extension-framework route plugins resolve exact same-file and cross-file fixed-prefix mounts. `explain-edge` returns each mount segment and the ESM import/re-export path; dynamic or ambiguous composition is never guessed into a route.
 - Projects can register versioned reference resolver plugins that only see relations left unresolved by built-in resolvers. The host bounds candidates, validates results, and preserves collisions, exceptions, or unsafe choices as explainable unresolved evidence.
 - Framework fact plugins can add validated symbols, routes, entry points, and pending references from framework syntax. Stable IDs, containment edges, output bounds, source ranges, and provenance remain host-owned.
+- Framework project plugins can inspect frozen project-wide facts after per-file extraction and add cross-file pending references. They receive no source text, raw graph mutation, or confidence control; built-in resolution still determines the evidence level.
 
 ## Framework fact extensions
 
@@ -59,7 +60,7 @@ const plugins = createFrameworkFactPluginRegistry([{
 const service = new SymbolLatticeService(store, catalog, { frameworkFactPlugins: plugins });
 ```
 
-Plugins return bounded descriptors rather than raw graph identities. Their versions participate in index freshness; after a version change, `sync` re-extracts affected facts. A `ReferenceResolverPlugin` can be composed for targets that remain unresolved.
+Cross-file finalizers use `createFrameworkProjectPluginRegistry` and `frameworkProjectPlugins`; they read extracted facts and return bounded reference descriptors. Neither extension type can write raw graph identities. Per-file plugin changes re-extract facts, while project-finalizer changes only reproject them. A `ReferenceResolverPlugin` can be composed for targets that remain unresolved.
 
 ## Common commands
 

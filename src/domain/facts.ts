@@ -1,6 +1,7 @@
 import type {
   ArtifactLanguage,
   ExtractionPluginProvenance,
+  FrameworkPluginProvenance,
   GraphEdge,
   PendingReference,
   SourceRange,
@@ -18,7 +19,7 @@ export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v204";
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v85";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v86";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -55,6 +56,8 @@ export interface EdgeEvidence {
   readonly candidateSymbolIds: readonly string[];
   /** Extraction extension that emitted the source reference, when applicable. */
   readonly extractionPlugin?: ExtractionPluginProvenance;
+  /** Project finalizer that emitted the source reference, when applicable. */
+  readonly projectPlugin?: FrameworkPluginProvenance;
   /** Exact host condition of a literal HTTP route registration, when one exists. */
   readonly routeDomain?: string;
   /** Project-relative config files that participated in module resolution. */

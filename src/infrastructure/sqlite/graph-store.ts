@@ -793,6 +793,12 @@ function insertEdge(database: DatabaseSync, edge: GraphEdge): void {
 }
 
 function insertPendingReference(database: DatabaseSync, reference: PendingReference): void {
+  const extension = {
+    ...(reference.extractionPlugin === undefined
+      ? {}
+      : { extractionPlugin: reference.extractionPlugin }),
+    ...(reference.projectPlugin === undefined ? {} : { projectPlugin: reference.projectPlugin })
+  };
   database
     .prepare(
       `INSERT INTO pending_refs(
@@ -810,7 +816,7 @@ function insertPendingReference(database: DatabaseSync, reference: PendingRefere
       reference.range.start.column,
       reference.range.end.line,
       reference.range.end.column,
-      reference.extractionPlugin === undefined ? null : JSON.stringify(reference.extractionPlugin)
+      Object.keys(extension).length === 0 ? null : JSON.stringify(extension)
     );
 }
 
@@ -1252,14 +1258,37 @@ function readSnapshotProjection(
       referenceName: reference.reference_name,
       relationKind: reference.relation_kind,
       range: toRange(reference),
-      ...(reference.extension_json === null || reference.extension_json === undefined
-        ? {}
-        : {
-            extractionPlugin: JSON.parse(reference.extension_json) as NonNullable<
-              PendingReference["extractionPlugin"]
-            >
-          })
+      ...pendingReferenceExtension(reference.extension_json)
     }))
+  };
+}
+
+function pendingReferenceExtension(
+  value: string | null | undefined
+): Pick<PendingReference, "extractionPlugin" | "projectPlugin"> {
+  if (value === null || value === undefined) {
+    return {};
+  }
+  const parsed = JSON.parse(value) as Record<string, unknown>;
+  // v0.250 and older stored extraction provenance directly in extension_json.
+  if (typeof parsed.pluginId === "string" && typeof parsed.pluginVersion === "string") {
+    return {
+      extractionPlugin: { pluginId: parsed.pluginId, pluginVersion: parsed.pluginVersion }
+    };
+  }
+  return {
+    ...(parsed.extractionPlugin === undefined
+      ? {}
+      : {
+          extractionPlugin: parsed.extractionPlugin as NonNullable<
+            PendingReference["extractionPlugin"]
+          >
+        }),
+    ...(parsed.projectPlugin === undefined
+      ? {}
+      : {
+          projectPlugin: parsed.projectPlugin as NonNullable<PendingReference["projectPlugin"]>
+        })
   };
 }
 

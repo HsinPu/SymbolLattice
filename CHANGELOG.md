@@ -6,6 +6,25 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.251.0] - 2026-08-04
+
+### Added
+
+- Added a public, project-scoped `FrameworkProjectPlugin` finalizer for framework composition that becomes visible only after every per-file fact set has been extracted. Plugins receive stable-path, deeply frozen fact views and may emit bounded cross-file pending-reference descriptors from existing non-file symbols.
+- Project-finalizer references compose with built-in lexical, import, re-export, and module resolution, then with the existing unresolved-reference plugin stage. The host owns graph identities, exact versus heuristic classification, confidence, collision detection, and edge evidence.
+- Project plugin id and version provenance survives unresolved SQLite rows, resolved edge evidence, retained generations, and generation diffs.
+
+### Safety and compatibility
+
+- Registries are validated, canonicalized, frozen, project-scoped, and fingerprinted. The input is capped at 20,000 files, 250,000 symbols, and 500,000 existing references; each plugin may emit at most 4,096 references. Unknown or file-symbol sources, ranges outside the source symbol, duplicate identities, unsupported relations, mutation attempts, and callback failures fail before graph publication.
+- Finalizers do not receive source text and cannot add or rewrite symbols, choose target ids, write raw edges, or declare confidence. Route and entry-point relations must start from compatible host symbols.
+- Finalizer versions participate only in project resolver freshness. Changing a finalizer reprojects unchanged persisted facts without reparsing source files. The project resolver advances to `project-resolver-v86`; run `sync` or `index` once to refresh an existing graph.
+- Existing pending-reference provenance rows remain readable. New SQLite writes use an additive envelope that distinguishes per-file extraction from project-finalizer provenance without a schema-version break.
+
+### Comparison boundary
+
+- This closes the public cross-file finalization seam represented by CodeGraph framework `postExtract`, but intentionally exposes additive relations instead of arbitrary node mutation. CodeGraph can rewrite project nodes such as NestJS route names; SymbolLattice is stricter about identity, evidence, limits, freshness, and fail-closed publication. Node rewriting and a first-party NestJS project plugin remain future work.
+
 ## [0.250.0] - 2026-08-04
 
 ### Added

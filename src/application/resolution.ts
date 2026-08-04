@@ -54,6 +54,10 @@ import {
 } from "../domain/index.js";
 import type { ExtractedFileFacts } from "../extraction/index.js";
 import {
+  projectFrameworkPluginReferences,
+  type FrameworkProjectPluginRegistry
+} from "./framework-project-plugins.js";
+import {
   REFERENCE_RESOLVER_PLUGIN_RULE_NAME_PATTERN,
   requireReferenceResolverPluginRegistry,
   type ReferenceResolverPluginCandidate,
@@ -136,10 +140,13 @@ function referenceEdge(
     resolution,
     confidence,
     referenceName: reference.referenceName,
-    evidence:
-      reference.extractionPlugin === undefined
-        ? evidence
-        : { ...evidence, extractionPlugin: reference.extractionPlugin }
+    evidence: {
+      ...evidence,
+      ...(reference.extractionPlugin === undefined
+        ? {}
+        : { extractionPlugin: reference.extractionPlugin }),
+      ...(reference.projectPlugin === undefined ? {} : { projectPlugin: reference.projectPlugin })
+    }
   };
 }
 
@@ -7730,10 +7737,21 @@ export function resolveProjectFacts(input: {
   readonly jvmProjectModuleEvidence?: JvmProjectModuleEvidence;
   /** Validated, project-scoped extensions invoked only for still-unresolved references. */
   readonly referenceResolverPlugins?: ReferenceResolverPluginRegistry;
+  /** Validated cross-file extensions invoked before built-in project resolution. */
+  readonly frameworkProjectPlugins?: FrameworkProjectPluginRegistry;
 }): GraphSnapshot {
   const symbols = input.extractedFiles.flatMap((facts) => facts.symbols);
   const structuralEdges = input.extractedFiles.flatMap((facts) => facts.edges);
-  const references = input.extractedFiles.flatMap((facts) => facts.pendingReferences);
+  const references = [
+    ...input.extractedFiles.flatMap((facts) => facts.pendingReferences),
+    ...projectFrameworkPluginReferences({
+      sourceDocuments: input.sourceDocuments,
+      extractedFiles: input.extractedFiles,
+      ...(input.frameworkProjectPlugins === undefined
+        ? {}
+        : { registry: input.frameworkProjectPlugins })
+    })
+  ];
   const knownFilePaths = new Set(input.sourceDocuments.map((document) => document.relativePath));
   const fileSymbols = new Map(
     symbols.filter((symbol) => symbol.kind === "file").map((symbol) => [symbol.filePath, symbol])

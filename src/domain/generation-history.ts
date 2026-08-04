@@ -1,6 +1,6 @@
 import { compareStableText } from "./order.js";
 import type {
-  ExtractionPluginProvenance,
+  FrameworkPluginProvenance,
   GraphEdge,
   GraphSnapshot,
   IndexedFile,
@@ -168,8 +168,8 @@ function sameStringArray(left: readonly string[] | undefined, right: readonly st
 }
 
 function sameExtractionPlugin(
-  left: ExtractionPluginProvenance | undefined,
-  right: ExtractionPluginProvenance | undefined
+  left: FrameworkPluginProvenance | undefined,
+  right: FrameworkPluginProvenance | undefined
 ): boolean {
   return (
     left === right ||
@@ -190,6 +190,7 @@ function sameEdge(left: GraphEdge, right: GraphEdge): boolean {
       leftEvidence.ruleId === rightEvidence.ruleId &&
       leftEvidence.stage === rightEvidence.stage &&
       sameExtractionPlugin(leftEvidence.extractionPlugin, rightEvidence.extractionPlugin) &&
+      sameExtractionPlugin(leftEvidence.projectPlugin, rightEvidence.projectPlugin) &&
       sameStringArray(leftEvidence.candidateSymbolIds, rightEvidence.candidateSymbolIds) &&
       sameStringArray(leftEvidence.configurationPaths, rightEvidence.configurationPaths) &&
       sameStringArray(leftEvidence.resolutionPath, rightEvidence.resolutionPath));
@@ -217,6 +218,7 @@ function samePendingReference(left: PendingReference, right: PendingReference): 
     left.referenceName === right.referenceName &&
     left.relationKind === right.relationKind &&
     sameExtractionPlugin(left.extractionPlugin, right.extractionPlugin) &&
+    sameExtractionPlugin(left.projectPlugin, right.projectPlugin) &&
     samePosition(left.range.start, right.range.start) &&
     samePosition(left.range.end, right.range.end)
   );

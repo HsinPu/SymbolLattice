@@ -25,6 +25,7 @@ import {
   NODE_RELATION_LIMIT,
   NODE_SOURCE_CHARACTER_LIMIT,
   NODE_SOURCE_LINE_LIMIT,
+  createFrameworkProjectPluginRegistry,
   createReferenceResolverPluginRegistry,
   SymbolLatticeError,
   SymbolLatticeService
@@ -3613,6 +3614,60 @@ describe("SymbolLatticeService", () => {
       mode: "incremental",
       reExtractedFiles: [],
       reusedArtifactFiles: ["src/caller.ts", "src/first.ts", "src/second.ts"]
+    });
+  });
+
+  it("reprojects reused facts when a framework project plugin version changes", async () => {
+    const projectPath = await createInlineProject({
+      "src/caller.ts": "export function caller() { return 1; }\n",
+      "src/target.ts": "export function target() { return 2; }\n"
+    });
+    const graphStore = new SqliteGraphStore();
+    let extractionCount = 0;
+    const artifactFactsExtractor = (input: Parameters<typeof extractFileFacts>[0]) => {
+      extractionCount += 1;
+      return extractFileFacts(input);
+    };
+    const plugin = (version: string) =>
+      createFrameworkProjectPluginRegistry([
+        {
+          id: "acme/project-composition",
+          version,
+          languages: ["typescript"],
+          finalize: () => null
+        }
+      ]);
+    const initialService = new SymbolLatticeService(
+      graphStore,
+      new FileSystemSourceCatalog(),
+      {
+        artifactFactsExtractor,
+        frameworkProjectPlugins: plugin("1.0.0")
+      }
+    );
+    await initialService.init({ projectPath });
+    expect(extractionCount).toBe(2);
+
+    const upgradedService = new SymbolLatticeService(
+      graphStore,
+      new FileSystemSourceCatalog(),
+      {
+        artifactFactsExtractor,
+        frameworkProjectPlugins: plugin("1.0.1")
+      }
+    );
+    expect(await upgradedService.getStatus(projectPath)).toMatchObject({
+      stale: true,
+      staleReasons: ["indexer-version-changed"]
+    });
+    const synced = await upgradedService.sync({ projectPath });
+
+    expect(synced).toMatchObject({ stale: false, staleReasons: [] });
+    expect(extractionCount).toBe(2);
+    expect(synced.lastIndexWork).toMatchObject({
+      mode: "incremental",
+      reExtractedFiles: [],
+      reusedArtifactFiles: ["src/caller.ts", "src/target.ts"]
     });
   });
 

@@ -256,11 +256,14 @@ export interface GraphEdge {
   readonly evidence?: EdgeEvidence;
 }
 
-/** Provenance retained for facts emitted by one validated extraction plugin. */
-export interface ExtractionPluginProvenance {
+/** Provenance retained for facts emitted by one validated framework extension. */
+export interface FrameworkPluginProvenance {
   readonly pluginId: string;
   readonly pluginVersion: string;
 }
+
+/** Backward-compatible name for per-file extraction extension provenance. */
+export type ExtractionPluginProvenance = FrameworkPluginProvenance;
 
 export interface PendingReference {
   readonly id: string;
@@ -281,6 +284,8 @@ export interface PendingReference {
   >;
   /** Present only when a validated extraction plugin emitted this reference. */
   readonly extractionPlugin?: ExtractionPluginProvenance;
+  /** Present only when a validated project finalizer emitted this reference. */
+  readonly projectPlugin?: FrameworkPluginProvenance;
   /** Present only for syntax-proven framework route or client-navigation handlers. */
   readonly routeFramework?: RouteFramework;
   /** Present when a statically proven registration projects route provenance or a framework route path. */

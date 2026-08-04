@@ -83,6 +83,10 @@ import type {
 import { ProjectConfigurationError } from "../domain/configuration.js";
 import { SymbolLatticeError } from "./errors.js";
 import {
+  frameworkProjectPluginProjectVersion,
+  type FrameworkProjectPluginRegistry
+} from "./framework-project-plugins.js";
+import {
   referenceResolverPluginProjectVersion,
   type ReferenceResolverPluginRegistry
 } from "./reference-resolver-plugins.js";
@@ -222,6 +226,7 @@ export interface ArtifactFactsExtractor {
 export interface SymbolLatticeServiceExtensions {
   readonly artifactFactsExtractor?: ArtifactFactsExtractor;
   readonly frameworkFactPlugins?: FrameworkFactPluginRegistry;
+  readonly frameworkProjectPlugins?: FrameworkProjectPluginRegistry;
   readonly referenceResolverPlugins?: ReferenceResolverPluginRegistry;
 }
 
@@ -890,6 +895,7 @@ export class SymbolLatticeService {
   private readonly gitChangeSetProvider: GitChangeSetProvider | undefined;
   private readonly gitRevisionHunkProvider: GitRevisionHunkProvider | undefined;
   private readonly referenceResolverPlugins: ReferenceResolverPluginRegistry | undefined;
+  private readonly frameworkProjectPlugins: FrameworkProjectPluginRegistry | undefined;
   private readonly activeArtifactFactsExtractorVersion: string;
   private readonly activeProjectResolverVersion: string;
 
@@ -921,11 +927,13 @@ export class SymbolLatticeService {
     this.gitChangeSetProvider = gitChangeSetProvider;
     this.gitRevisionHunkProvider = gitRevisionHunkProvider;
     this.referenceResolverPlugins = extensions?.referenceResolverPlugins;
+    this.frameworkProjectPlugins = extensions?.frameworkProjectPlugins;
     this.activeArtifactFactsExtractorVersion = artifactFactsExtractorVersion(
       this.artifactFactsExtractor
     );
-    this.activeProjectResolverVersion = referenceResolverPluginProjectVersion(
-      this.referenceResolverPlugins
+    this.activeProjectResolverVersion = frameworkProjectPluginProjectVersion(
+      referenceResolverPluginProjectVersion(this.referenceResolverPlugins),
+      this.frameworkProjectPlugins
     );
   }
 
@@ -3224,7 +3232,10 @@ export class SymbolLatticeService {
         : { jvmProjectModuleEvidence: scan.jvmProjectModuleEvidence }),
       ...(this.referenceResolverPlugins === undefined
         ? {}
-        : { referenceResolverPlugins: this.referenceResolverPlugins })
+        : { referenceResolverPlugins: this.referenceResolverPlugins }),
+      ...(this.frameworkProjectPlugins === undefined
+        ? {}
+        : { frameworkProjectPlugins: this.frameworkProjectPlugins })
     });
     this.graphStore.replaceProjectFacts({
       projectPath,

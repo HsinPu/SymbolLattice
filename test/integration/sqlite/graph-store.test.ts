@@ -597,7 +597,7 @@ describe("SqliteGraphStore", () => {
     expect(store.isInitialized(projectPath)).toBe(false);
   });
 
-  it("round-trips extraction plugin provenance for active pending references", async () => {
+  it("round-trips extraction and project plugin provenance for active pending references", async () => {
     const projectPath = await temporaryProject();
     const store = new SqliteGraphStore();
     const source = symbol("extension-source", "extensionSource");
@@ -618,6 +618,21 @@ describe("SqliteGraphStore", () => {
             pluginId: "acme/framework-facts",
             pluginVersion: "1.0.0"
           }
+        },
+        {
+          id: "edge:project-pending",
+          sourceId: source.id,
+          filePath: source.filePath,
+          referenceName: "crossFileTarget",
+          relationKind: "references",
+          range: {
+            start: { line: 1, column: 2 },
+            end: { line: 1, column: 9 }
+          },
+          projectPlugin: {
+            pluginId: "acme/project-composition",
+            pluginVersion: "2.0.0"
+          }
         }
       ]
     };
@@ -635,6 +650,18 @@ describe("SqliteGraphStore", () => {
       graphSnapshot.pendingReferences
     );
     expect(store.getArtifactFacts(projectPath)[0]?.pendingReferences).toEqual(
+      graphSnapshot.pendingReferences
+    );
+
+    const legacyConnection = new DatabaseSync(databasePathFor(projectPath));
+    legacyConnection
+      .prepare("UPDATE pending_refs SET extension_json = ? WHERE id = ?")
+      .run(
+        JSON.stringify({ pluginId: "acme/framework-facts", pluginVersion: "1.0.0" }),
+        "edge:extension-pending"
+      );
+    legacyConnection.close();
+    expect(store.getSnapshot(projectPath).pendingReferences).toEqual(
       graphSnapshot.pendingReferences
     );
   });
