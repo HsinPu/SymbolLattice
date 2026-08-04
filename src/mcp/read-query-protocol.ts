@@ -10,6 +10,7 @@ export const MCP_READ_TOOL_NAMES = [
   "investigate",
   "impact",
   "files",
+  "file-view",
   "routes",
   "entrypoints",
   "hierarchy",

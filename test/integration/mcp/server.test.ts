@@ -15,6 +15,8 @@ import {
   type ExploreResult,
   type FilesOptions,
   type FilesResult,
+  type FileViewOptions,
+  type FileViewResult,
   type GenerationDiffOptions,
   type GenerationDiffResult,
   type GenerationHistoryOptions,
@@ -45,6 +47,7 @@ import {
   runExplainEdgeTool,
   runExploreTool,
   runFilesTool,
+  runFileViewTool,
   runGenerationDiffTool,
   runGenerationHistoryTool,
   runGitAffectedTestsTool,
@@ -703,6 +706,31 @@ function filesResult(): FilesResult {
       }
     ],
     truncated: false
+  };
+}
+
+function fileViewResult(): FileViewResult {
+  return {
+    status: exploreResult().status,
+    selection: {
+      requestedPath: "src/routes.ts",
+      filePath: "src/routes.ts",
+      source: "active-generation"
+    },
+    file: { language: "typescript", indexedAt: "2026-08-04T00:00:00.000Z" },
+    bounds: {
+      offset: 2,
+      limit: 3,
+      maximumLimit: 2_000,
+      totalLines: 8,
+      returnedLines: 0,
+      truncatedBefore: true,
+      truncatedAfter: true
+    },
+    contentAvailability: "symbols-only",
+    lines: [],
+    symbols: [],
+    dependents: []
   };
 }
 
@@ -1901,6 +1929,57 @@ describe("SymbolLattice MCP server", () => {
     });
     expect(invalidLimit.isError).toBe(true);
     expect(hierarchyCalls).toHaveLength(1);
+  });
+
+  it("registers a bounded active-generation file view only when supported", async () => {
+    const calls: Array<{ projectPath: string; filePath: string; options: FileViewOptions }> = [];
+    const service = {
+      async explore(): Promise<ExploreResult> {
+        return exploreResult();
+      },
+      async fileView(
+        projectPath: string,
+        filePath: string,
+        options: FileViewOptions = {}
+      ): Promise<FileViewResult> {
+        calls.push({ projectPath, filePath, options });
+        return fileViewResult();
+      }
+    };
+    const server = createMcpServer(service, "C:/default-project");
+    const client = new Client({ name: "symbol-lattice-file-test", version: "1.0.0" });
+    const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+    closeCallbacks.push(() => client.close(), () => server.close());
+
+    expect((await client.listTools()).tools.map((tool) => tool.name)).toEqual([
+      "symbol_lattice_explore",
+      "symbol_lattice_file"
+    ]);
+    const result = await client.callTool({
+      name: "symbol_lattice_file",
+      arguments: {
+        filePath: "src/routes.ts",
+        projectPath: "C:/chosen-project",
+        offset: 2,
+        limit: 3,
+        symbolsOnly: true
+      }
+    });
+
+    expect(result.isError).not.toBe(true);
+    expect(result.structuredContent).toMatchObject({
+      selection: { filePath: "src/routes.ts", source: "active-generation" },
+      contentAvailability: "symbols-only"
+    });
+    expect(calls).toEqual([
+      {
+        projectPath: "C:/chosen-project",
+        filePath: "src/routes.ts",
+        options: { offset: 2, limit: 3, symbolsOnly: true }
+      }
+    ]);
   });
 
   it("registers exact node retrieval only when the service supports it", async () => {

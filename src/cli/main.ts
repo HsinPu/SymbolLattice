@@ -24,6 +24,7 @@ import {
   MAX_FILE_TREE_DEPTH,
   MAX_FILE_LIMIT,
   MAX_FILE_CURSOR_LENGTH,
+  MAX_FILE_VIEW_LINE_LIMIT,
   MAX_ROUTE_LIMIT,
   ENTRYPOINT_OPERATIONS,
   ENTRYPOINT_TRANSPORTS,
@@ -50,6 +51,7 @@ import {
   type AutoSyncStatusResult,
   type EntrypointsOptions,
   type FilesOptions,
+  type FileViewOptions,
   type GenerationDiffOptions,
   type GenerationHistoryOptions,
   type ForegroundWatchOptions,
@@ -129,6 +131,12 @@ interface FilesCommandOptions extends ProjectOptions {
   readonly format?: NonNullable<FilesOptions["format"]>;
   readonly maxDepth?: number;
   readonly cursor?: string;
+}
+
+interface FileViewCommandOptions extends ProjectOptions {
+  readonly offset?: number;
+  readonly limit?: number;
+  readonly symbolsOnly?: boolean;
 }
 
 interface InvestigateCommandOptions extends ProjectOptions {
@@ -1003,6 +1011,24 @@ export function createProgram(
       render(await coreService.node(defaultProjectPath(options), reference), options);
     }
   );
+
+  addJsonOption(addProjectOption(program.command("file <path>")))
+    .description("Read one persisted active-generation source file with symbols and exact dependents")
+    .option("--offset <line>", "One-based first persisted source line", parsePositiveInteger)
+    .option(
+      "--limit <count>",
+      `Maximum persisted source lines (1-${MAX_FILE_VIEW_LINE_LIMIT})`,
+      parsePositiveInteger
+    )
+    .option("--symbols-only", "Return structural evidence without source lines")
+    .action(async (filePath: string, options: FileViewCommandOptions) => {
+      const fileViewOptions: FileViewOptions = {
+        ...(options.offset === undefined ? {} : { offset: options.offset }),
+        ...(options.limit === undefined ? {} : { limit: options.limit }),
+        ...(options.symbolsOnly === undefined ? {} : { symbolsOnly: options.symbolsOnly })
+      };
+      render(await coreService.fileView(defaultProjectPath(options), filePath, fileViewOptions), options);
+    });
 
   addJsonOption(addProjectOption(program.command("search <query>")))
     .option(

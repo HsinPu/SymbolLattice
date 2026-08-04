@@ -2255,6 +2255,74 @@ describe("SymbolLatticeService", () => {
     expect(source.text).not.toContain("return 1;");
   });
 
+  it("reads a bounded persisted file view with symbols, exact dependents, and secret-safe formats", async () => {
+    const projectPath = await createInlineProject({
+      "src/target.ts": [
+        "export function persistedTarget(): string {",
+        '  return "indexed evidence";',
+        "}",
+        ""
+      ].join("\n"),
+      "src/consumer.ts": [
+        'import { persistedTarget } from "./target.js";',
+        "export const consumed = persistedTarget();",
+        ""
+      ].join("\n"),
+      "config/application.yaml": "token: SUPERSECRET123\n"
+    });
+    const service = createService();
+    await service.init({ projectPath });
+    await writeFile(
+      join(projectPath, "src", "target.ts"),
+      'export function liveReplacement(): string { return "live only"; }\n',
+      "utf8"
+    );
+
+    const result = await service.fileView(projectPath, ".\\src\\target.ts", {
+      offset: 2,
+      limit: 2
+    });
+
+    expect(result).toMatchObject({
+      status: { stale: true, staleReasons: ["source-files-changed"] },
+      selection: {
+        requestedPath: ".\\src\\target.ts",
+        filePath: "src/target.ts",
+        source: "active-generation"
+      },
+      bounds: {
+        offset: 2,
+        limit: 2,
+        totalLines: 4,
+        returnedLines: 2,
+        truncatedBefore: true,
+        truncatedAfter: true
+      },
+      contentAvailability: "active-generation",
+      lines: [
+        { line: 2, text: '  return "indexed evidence";' },
+        { line: 3, text: "}" }
+      ]
+    });
+    expect(result.symbols).toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: "persistedTarget", kind: "function" })])
+    );
+    expect(result.dependents).toEqual([
+      { filePath: "src/consumer.ts", edgeKinds: ["imports"], edgeCount: 1 }
+    ]);
+    expect(JSON.stringify(result)).not.toContain("liveReplacement");
+
+    const hidden = await service.fileView(projectPath, "config/application.yaml");
+    expect(hidden).toMatchObject({
+      contentAvailability: "withheld-sensitive-format",
+      lines: []
+    });
+    expect(JSON.stringify(hidden)).not.toContain("SUPERSECRET123");
+    await expect(service.fileView(projectPath, "../outside.ts")).rejects.toMatchObject({
+      code: "INVALID_FILE_VIEW_PATH"
+    });
+  });
+
   it("selects affected conventionally named test files from exact active-generation file evidence", async () => {
     const projectPath = await createInlineProject({
       "src/math.ts": [

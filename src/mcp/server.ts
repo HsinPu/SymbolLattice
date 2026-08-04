@@ -44,6 +44,7 @@ import {
   MAX_FILE_TREE_DEPTH,
   MAX_FILE_LIMIT,
   MAX_FILE_CURSOR_LENGTH,
+  MAX_FILE_VIEW_LINE_LIMIT,
   MAX_ROUTE_LIMIT,
   ENTRYPOINT_OPERATIONS,
   ENTRYPOINT_TRANSPORTS,
@@ -60,6 +61,8 @@ import type {
   ExploreResult,
   FilesOptions,
   FilesResult,
+  FileViewOptions,
+  FileViewResult,
   GenerationDiffOptions,
   GenerationDiffResult,
   GenerationHistoryOptions,
@@ -105,6 +108,11 @@ export interface ExploreService {
 /** Additive exact-node retrieval seam; older explore-only embeddings remain valid. */
 export interface NodeService {
   node(projectPath: string, reference: string): Promise<NodeResult>;
+}
+
+/** Additive immutable file-view seam; older embeddings remain valid. */
+export interface FileViewService {
+  fileView(projectPath: string, filePath: string, options?: FileViewOptions): Promise<FileViewResult>;
 }
 
 /** Additive multi-symbol context seam; older explore embeddings remain valid. */
@@ -234,6 +242,7 @@ export type SearchMcpService = ExploreService & SearchService;
 export type InvestigateMcpService = ExploreService & InvestigateService;
 export type ImpactMcpService = ExploreService & ImpactService;
 export type FilesMcpService = ExploreService & FilesService;
+export type FileViewMcpService = ExploreService & FileViewService;
 export type RoutesMcpService = ExploreService & RoutesService;
 export type EntrypointsMcpService = ExploreService & EntrypointsService;
 export type HierarchyMcpService = ExploreService & HierarchyService;
@@ -340,6 +349,14 @@ export interface FilesToolArguments {
   readonly cursor?: string | undefined;
 }
 
+export interface FileViewToolArguments {
+  readonly filePath: string;
+  readonly projectPath?: string | undefined;
+  readonly offset?: number | undefined;
+  readonly limit?: number | undefined;
+  readonly symbolsOnly?: boolean | undefined;
+}
+
 export interface RoutesToolArguments {
   readonly projectPath?: string | undefined;
   readonly method?: RouteMethod | undefined;
@@ -410,6 +427,7 @@ export type SearchToolResponse = ReadOnlyToolResponse;
 export type InvestigateToolResponse = ReadOnlyToolResponse;
 export type ImpactToolResponse = ReadOnlyToolResponse;
 export type FilesToolResponse = ReadOnlyToolResponse;
+export type FileViewToolResponse = ReadOnlyToolResponse;
 export type RoutesToolResponse = ReadOnlyToolResponse;
 export type EntrypointsToolResponse = ReadOnlyToolResponse;
 export type HierarchyToolResponse = ReadOnlyToolResponse;
@@ -1035,6 +1053,39 @@ const filesOutputSchema = z
   })
   .passthrough();
 
+const fileViewOutputSchema = z
+  .object({
+    status: indexStatusOutputSchema,
+    selection: z.object({
+      requestedPath: z.string().min(1),
+      filePath: z.string().min(1),
+      source: z.literal("active-generation")
+    }),
+    file: z.object({ language: z.enum(ARTIFACT_LANGUAGES), indexedAt: z.string().min(1) }),
+    bounds: z.object({
+      offset: z.number().int().positive(),
+      limit: z.number().int().positive().max(MAX_FILE_VIEW_LINE_LIMIT),
+      maximumLimit: z.literal(MAX_FILE_VIEW_LINE_LIMIT),
+      totalLines: z.number().int().nonnegative(),
+      returnedLines: z.number().int().nonnegative(),
+      truncatedBefore: z.boolean(),
+      truncatedAfter: z.boolean()
+    }),
+    contentAvailability: z.enum([
+      "active-generation",
+      "withheld-sensitive-format",
+      "symbols-only"
+    ]),
+    lines: z.array(z.object({ line: z.number().int().positive(), text: z.string() })),
+    symbols: z.array(z.object({}).passthrough()),
+    dependents: z.array(z.object({
+      filePath: z.string().min(1),
+      edgeKinds: z.array(z.enum(["imports", "exports"])),
+      edgeCount: z.number().int().positive()
+    }))
+  })
+  .passthrough();
+
 const routesOutputSchema = z
   .object({
     status: indexStatusOutputSchema,
@@ -1259,6 +1310,10 @@ function supportsImpact(service: ExploreService): service is ImpactMcpService {
 
 function supportsFiles(service: ExploreService): service is FilesMcpService {
   return "files" in service && typeof service.files === "function";
+}
+
+function supportsFileView(service: ExploreService): service is FileViewMcpService {
+  return "fileView" in service && typeof service.fileView === "function";
 }
 
 function supportsRoutes(service: ExploreService): service is RoutesMcpService {
@@ -1642,6 +1697,32 @@ export async function runFilesTool(
       ...(arguments_.cursor === undefined ? {} : { cursor: arguments_.cursor })
     };
     const result = await service.files(arguments_.projectPath ?? defaultProjectPath, options);
+    return {
+      content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      structuredContent: result as unknown as Record<string, unknown>
+    };
+  } catch (error) {
+    return renderToolError(error);
+  }
+}
+
+/** Reads one immutable active-generation file view without touching the live source. */
+export async function runFileViewTool(
+  service: FileViewService,
+  defaultProjectPath: string,
+  arguments_: FileViewToolArguments
+): Promise<FileViewToolResponse> {
+  try {
+    const options: FileViewOptions = {
+      ...(arguments_.offset === undefined ? {} : { offset: arguments_.offset }),
+      ...(arguments_.limit === undefined ? {} : { limit: arguments_.limit }),
+      ...(arguments_.symbolsOnly === undefined ? {} : { symbolsOnly: arguments_.symbolsOnly })
+    };
+    const result = await service.fileView(
+      arguments_.projectPath ?? defaultProjectPath,
+      arguments_.filePath,
+      options
+    );
     return {
       content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       structuredContent: result as unknown as Record<string, unknown>
@@ -2319,6 +2400,34 @@ export function createMcpServer(
       async (arguments_) =>
         executeReadTool(readQueryExecutor, "files", arguments_, () =>
           runFilesTool(filesService, defaultProjectPath, arguments_)
+        )
+    );
+  }
+
+  const fileViewService = supportsFileView(service) ? service : null;
+  if (fileViewService !== null) {
+    server.registerTool(
+      "symbol_lattice_file",
+      {
+        title: "Read one persisted SymbolLattice source file",
+        description:
+          "Returns a bounded active-generation source window, symbol map, exact file dependents, and live freshness. YAML and properties values are withheld. This query never reads live source content and never creates or refreshes an index.",
+        inputSchema: {
+          filePath: z.string().trim().min(1).describe("Exact project-relative indexed file path."),
+          projectPath: z.string().trim().min(1).optional().describe("Optional path to an already indexed project."),
+          offset: z.number().int().min(1).optional().describe("One-based first persisted source line."),
+          limit: z.number().int().min(1).max(MAX_FILE_VIEW_LINE_LIMIT).optional().describe("Maximum persisted source lines."),
+          symbolsOnly: z.boolean().optional().describe("Return symbols and dependents without source lines.")
+        },
+        outputSchema: fileViewOutputSchema,
+        annotations: {
+          readOnlyHint: true,
+          idempotentHint: true
+        }
+      },
+      async (arguments_) =>
+        executeReadTool(readQueryExecutor, "file-view", arguments_, () =>
+          runFileViewTool(fileViewService, defaultProjectPath, arguments_)
         )
     );
   }

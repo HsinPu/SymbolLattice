@@ -17,6 +17,8 @@ import {
   type EntrypointsResult,
   type FilesOptions,
   type FilesResult,
+  type FileViewOptions,
+  type FileViewResult,
   type ForegroundWatchOptions,
   type ForegroundWatchSession,
   type GenerationDiffOptions,
@@ -262,6 +264,31 @@ function filesResult(): FilesResult {
       }
     ],
     truncated: false
+  };
+}
+
+function fileViewResult(): FileViewResult {
+  return {
+    status: resultStatus(),
+    selection: {
+      requestedPath: "src/routes.ts",
+      filePath: "src/routes.ts",
+      source: "active-generation"
+    },
+    file: { language: "typescript", indexedAt: "2026-08-04T00:00:00.000Z" },
+    bounds: {
+      offset: 2,
+      limit: 3,
+      maximumLimit: 2_000,
+      totalLines: 8,
+      returnedLines: 0,
+      truncatedBefore: true,
+      truncatedAfter: true
+    },
+    contentAvailability: "symbols-only",
+    lines: [],
+    symbols: [],
+    dependents: []
   };
 }
 
@@ -1226,6 +1253,51 @@ describe("symbol-lattice investigate CLI", () => {
         { from: "node" }
       )
     ).rejects.toThrow("Expected one of: lexical, structure, impact, topology");
+  });
+});
+
+describe("symbol-lattice persisted file-view CLI", () => {
+  it("forwards the bounded source window and structural-only selection", async () => {
+    const calls: Array<{ projectPath: string; filePath: string; options: FileViewOptions }> = [];
+    const result = fileViewResult();
+    const service = {
+      async fileView(
+        projectPath: string,
+        filePath: string,
+        options: FileViewOptions = {}
+      ): Promise<FileViewResult> {
+        calls.push({ projectPath, filePath, options });
+        return result;
+      }
+    } as unknown as SymbolLatticeService;
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+    await createProgram(service).parseAsync(
+      [
+        "node",
+        "symbol-lattice",
+        "file",
+        "src/routes.ts",
+        "--project",
+        "C:/chosen-project",
+        "--offset",
+        "2",
+        "--limit",
+        "3",
+        "--symbols-only",
+        "--json"
+      ],
+      { from: "node" }
+    );
+
+    expect(calls).toEqual([
+      {
+        projectPath: resolve("C:/chosen-project"),
+        filePath: "src/routes.ts",
+        options: { offset: 2, limit: 3, symbolsOnly: true }
+      }
+    ]);
+    expect(write).toHaveBeenCalledWith(`${JSON.stringify(result, null, 2)}\n`);
   });
 });
 

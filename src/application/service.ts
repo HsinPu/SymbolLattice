@@ -125,6 +125,7 @@ import {
   DEFAULT_INVESTIGATE_SYMBOL_LIMIT,
   DEFAULT_ENTRYPOINT_LIMIT,
   DEFAULT_FILE_LIMIT,
+  DEFAULT_FILE_VIEW_LINE_LIMIT,
   FILE_FORMATS,
   DEFAULT_GENERATION_DIFF_LIMIT,
   DEFAULT_GENERATION_HISTORY_LIMIT,
@@ -139,6 +140,7 @@ import {
   MAX_INVESTIGATE_SYMBOL_LIMIT,
   MAX_ENTRYPOINT_LIMIT,
   MAX_FILE_LIMIT,
+  MAX_FILE_VIEW_LINE_LIMIT,
   MAX_FILE_CURSOR_LENGTH,
   MAX_FILE_PATTERN_LENGTH,
   MAX_FILE_TREE_DEPTH,
@@ -180,6 +182,8 @@ import type {
   ExploreResult,
   FilesOptions,
   FilesResult,
+  FileViewOptions,
+  FileViewResult,
   FindResult,
   GenerationDiffOptions,
   GenerationDiffResult,
@@ -1616,6 +1620,159 @@ export class SymbolLatticeService {
       paths: returnedPaths,
       summary: summarizeImpactPaths(context.snapshot, returnedPaths),
       ...(options.limit === undefined ? {} : { truncated: paths.length > options.limit })
+    };
+  }
+
+  /**
+   * Reads one exact indexed file from the immutable active-generation source
+   * projection. Freshness may inspect the worktree, but source, symbols, and
+   * dependents always come from the same persisted generation.
+   */
+  public async fileView(
+    projectPath: string,
+    filePath: string,
+    options: FileViewOptions = {}
+  ): Promise<FileViewResult> {
+    const offset = options.offset ?? 1;
+    if (!Number.isSafeInteger(offset) || offset < 1) {
+      throw new SymbolLatticeError(
+        "INVALID_FILE_VIEW_OFFSET",
+        "File-view offset must be a positive whole number."
+      );
+    }
+    const limit = options.limit ?? DEFAULT_FILE_VIEW_LINE_LIMIT;
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > MAX_FILE_VIEW_LINE_LIMIT) {
+      throw new SymbolLatticeError(
+        "INVALID_FILE_VIEW_LIMIT",
+        `File-view limit must be a whole number from 1 to ${MAX_FILE_VIEW_LINE_LIMIT}.`
+      );
+    }
+    const normalizedFilePath = this.normalizedProjectRelativePathPrefix(
+      filePath,
+      "INVALID_FILE_VIEW_PATH",
+      "File view"
+    );
+    if (normalizedFilePath === undefined) {
+      throw new SymbolLatticeError(
+        "INVALID_FILE_VIEW_PATH",
+        "File view requires one exact project-relative indexed file path."
+      );
+    }
+
+    const normalizedProjectPath = resolve(projectPath);
+    const getActiveSourceDocumentsBundle = this.graphStore.getActiveSourceDocumentsBundle;
+    if (typeof getActiveSourceDocumentsBundle !== "function") {
+      throw new SymbolLatticeError(
+        "SOURCE_SEARCH_UNAVAILABLE",
+        `The configured SymbolLattice graph store for ${normalizedProjectPath} does not expose persisted source documents.`
+      );
+    }
+    const bundle = getActiveSourceDocumentsBundle.call(this.graphStore, normalizedProjectPath, [
+      normalizedFilePath
+    ]);
+    if (!bundle.status.initialized) {
+      throw new SymbolLatticeError(
+        "MISSING_INDEX",
+        `No SymbolLattice index exists for ${normalizedProjectPath}. Run "symbol-lattice init ${normalizedProjectPath}" first.`
+      );
+    }
+    const indexedFile = bundle.snapshot.files.find((file) => file.path === normalizedFilePath);
+    if (indexedFile === undefined) {
+      throw new SymbolLatticeError(
+        "FILE_NOT_INDEXED",
+        `No active-generation file is indexed at ${normalizedFilePath}.`
+      );
+    }
+    const document = bundle.documents.find((item) => item.filePath === normalizedFilePath);
+    if (bundle.sourceSearchVersion !== SOURCE_SEARCH_INDEX_VERSION || document === undefined) {
+      throw new SymbolLatticeError(
+        "SOURCE_SEARCH_UNAVAILABLE",
+        `The active generation has no compatible persisted source for ${normalizedFilePath}. Run "symbol-lattice sync ${normalizedProjectPath}" to backfill it.`
+      );
+    }
+
+    const symbols = bundle.snapshot.symbols
+      .filter((symbol) => symbol.kind !== "file" && symbol.filePath === normalizedFilePath)
+      .sort(compareSymbolCandidates)
+      .map((symbol) => ({
+        id: symbol.id,
+        name: symbol.name,
+        qualifiedName: symbol.qualifiedName,
+        kind: symbol.kind,
+        range: symbol.range,
+        isExported: symbol.isExported
+      }));
+    const symbolsById = new Map(bundle.snapshot.symbols.map((symbol) => [symbol.id, symbol]));
+    const targetFileSymbol = bundle.snapshot.symbols.find(
+      (symbol) => symbol.kind === "file" && symbol.filePath === normalizedFilePath
+    );
+    const dependentEvidence = new Map<
+      string,
+      { edgeKinds: Set<"imports" | "exports">; edgeCount: number }
+    >();
+    if (targetFileSymbol !== undefined) {
+      for (const edge of bundle.snapshot.edges) {
+        if (
+          edge.resolution !== "exact" ||
+          edge.targetId !== targetFileSymbol.id ||
+          (edge.kind !== "imports" && edge.kind !== "exports")
+        ) {
+          continue;
+        }
+        const source = symbolsById.get(edge.sourceId);
+        if (source?.kind !== "file") {
+          continue;
+        }
+        const evidence = dependentEvidence.get(source.filePath) ?? {
+          edgeKinds: new Set<"imports" | "exports">(),
+          edgeCount: 0
+        };
+        evidence.edgeKinds.add(edge.kind);
+        evidence.edgeCount += 1;
+        dependentEvidence.set(source.filePath, evidence);
+      }
+    }
+    const dependents = [...dependentEvidence.entries()]
+      .map(([dependentPath, evidence]) => ({
+        filePath: dependentPath,
+        edgeKinds: [...evidence.edgeKinds].sort(compareText),
+        edgeCount: evidence.edgeCount
+      }))
+      .sort((left, right) => compareText(left.filePath, right.filePath));
+
+    const sourceLines = document.sourceText.split(/\r\n|\r|\n/u);
+    const startIndex = Math.min(offset - 1, sourceLines.length);
+    const returnedSourceLines = sourceLines.slice(startIndex, startIndex + limit);
+    const contentAvailability = options.symbolsOnly === true
+      ? "symbols-only" as const
+      : document.language === "yaml" || document.language === "properties"
+        ? "withheld-sensitive-format" as const
+        : "active-generation" as const;
+    const lines = contentAvailability === "active-generation"
+      ? returnedSourceLines.map((text, index) => ({ line: startIndex + index + 1, text }))
+      : [];
+
+    return {
+      status: await this.getStatusForBundle(normalizedProjectPath, bundle),
+      selection: {
+        requestedPath: filePath,
+        filePath: normalizedFilePath,
+        source: "active-generation"
+      },
+      file: { language: indexedFile.language, indexedAt: indexedFile.indexedAt },
+      bounds: {
+        offset,
+        limit,
+        maximumLimit: MAX_FILE_VIEW_LINE_LIMIT,
+        totalLines: sourceLines.length,
+        returnedLines: lines.length,
+        truncatedBefore: offset > 1,
+        truncatedAfter: startIndex + returnedSourceLines.length < sourceLines.length
+      },
+      contentAvailability,
+      lines,
+      symbols,
+      dependents
     };
   }
 
@@ -3062,9 +3219,10 @@ export class SymbolLatticeService {
     code:
       | "INVALID_SEARCH_PATH_PREFIX"
       | "INVALID_FILE_PATH_PREFIX"
+      | "INVALID_FILE_VIEW_PATH"
       | "INVALID_GIT_AFFECTED_PATH_PREFIX"
       | "INVALID_GIT_HUNK_PATH_PREFIX",
-    label: "Search" | "File" | "Git affected" | "Git hunk"
+    label: "Search" | "File" | "File view" | "Git affected" | "Git hunk"
   ): string | undefined {
     if (typeof pathPrefix !== "string") {
       throw new SymbolLatticeError(

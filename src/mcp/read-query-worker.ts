@@ -11,6 +11,7 @@ import {
   runExplainEdgeTool,
   runExploreTool,
   runFilesTool,
+  runFileViewTool,
   runGenerationDiffTool,
   runGenerationHistoryTool,
   runGitAffectedTestsTool,
@@ -27,6 +28,7 @@ import {
   type ExplainEdgeToolArguments,
   type ExploreToolArguments,
   type FilesToolArguments,
+  type FileViewToolArguments,
   type GenerationDiffToolArguments,
   type GenerationHistoryToolArguments,
   type GitAffectedTestsToolArguments,
@@ -126,6 +128,8 @@ async function execute(
       return runImpactTool(service, defaultProjectPath, arguments_ as ImpactToolArguments);
     case "files":
       return runFilesTool(service, defaultProjectPath, arguments_ as FilesToolArguments);
+    case "file-view":
+      return runFileViewTool(service, defaultProjectPath, arguments_ as FileViewToolArguments);
     case "routes":
       return runRoutesTool(service, defaultProjectPath, arguments_ as RoutesToolArguments);
     case "entrypoints":

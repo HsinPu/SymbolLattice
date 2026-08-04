@@ -70,6 +70,10 @@ export const NODE_SOURCE_CHARACTER_LIMIT = 16_000;
 export const NODE_RELATION_LIMIT = 25;
 export const NODE_MATCH_CANDIDATE_LIMIT = 25;
 
+/** Persisted file views are deliberately windowed for Agent context safety. */
+export const DEFAULT_FILE_VIEW_LINE_LIMIT = 200;
+export const MAX_FILE_VIEW_LINE_LIMIT = 2_000;
+
 /** Bounded context packs intentionally keep a small, explicit request surface. */
 export const MAX_CONTEXT_REFERENCES = 8;
 export const CONTEXT_MATCH_CANDIDATE_LIMIT = 25;
@@ -730,6 +734,57 @@ export interface NodeResult {
   readonly source: NodeSource | null;
   readonly callers: BoundedRelations;
   readonly callees: BoundedRelations;
+}
+
+export interface FileViewOptions {
+  /** One-based first persisted source line. Defaults to 1. */
+  readonly offset?: number;
+  /** Maximum persisted source lines returned. */
+  readonly limit?: number;
+  /** Return structural evidence without source lines. */
+  readonly symbolsOnly?: boolean;
+}
+
+export interface FileViewSymbol {
+  readonly id: string;
+  readonly name: string;
+  readonly qualifiedName: string;
+  readonly kind: SymbolNode["kind"];
+  readonly range: SourceRange;
+  readonly isExported: boolean;
+}
+
+export interface FileViewDependent {
+  readonly filePath: string;
+  readonly edgeKinds: readonly Extract<EdgeKind, "imports" | "exports">[];
+  readonly edgeCount: number;
+}
+
+/** One immutable active-generation file view; never reconstructed from the live worktree. */
+export interface FileViewResult {
+  readonly status: IndexStatus;
+  readonly selection: {
+    readonly requestedPath: string;
+    readonly filePath: string;
+    readonly source: "active-generation";
+  };
+  readonly file: {
+    readonly language: ArtifactLanguage;
+    readonly indexedAt: string;
+  };
+  readonly bounds: {
+    readonly offset: number;
+    readonly limit: number;
+    readonly maximumLimit: number;
+    readonly totalLines: number;
+    readonly returnedLines: number;
+    readonly truncatedBefore: boolean;
+    readonly truncatedAfter: boolean;
+  };
+  readonly contentAvailability: "active-generation" | "withheld-sensitive-format" | "symbols-only";
+  readonly lines: readonly SourceExcerptLine[];
+  readonly symbols: readonly FileViewSymbol[];
+  readonly dependents: readonly FileViewDependent[];
 }
 
 export interface BoundedImpactPaths {
