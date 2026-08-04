@@ -1013,7 +1013,9 @@ export function createProgram(
   );
 
   addJsonOption(addProjectOption(program.command("file <path>")))
-    .description("Read one persisted active-generation source file with symbols and exact dependents")
+    .description(
+      "Read one persisted active-generation source file by exact path or unique suffix"
+    )
     .option("--offset <line>", "One-based first persisted source line", parsePositiveInteger)
     .option(
       "--limit <count>",

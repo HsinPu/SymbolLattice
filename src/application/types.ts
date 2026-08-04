@@ -767,6 +767,7 @@ export interface FileViewResult {
     readonly requestedPath: string;
     readonly filePath: string;
     readonly source: "active-generation";
+    readonly resolution: "exact-path" | "case-insensitive-path" | "unique-suffix";
   };
   readonly file: {
     readonly language: ArtifactLanguage;

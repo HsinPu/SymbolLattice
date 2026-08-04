@@ -39,6 +39,7 @@ import {
   type GitUnifiedHunk,
   GenerationSnapshotComparisonError,
   type ImpactPath,
+  type IndexedFile,
   type IndexedSourceDocument,
   type IndexedSourceSearchHit,
   type IndexWork,
@@ -307,6 +308,11 @@ interface NormalizedAffectedTestSelection {
   readonly testClassifier: TestFileClassifier;
 }
 
+interface ResolvedFileViewSelection {
+  readonly file: IndexedFile;
+  readonly resolution: "exact-path" | "case-insensitive-path" | "unique-suffix";
+}
+
 interface NormalizedGitHunksRequest {
   readonly baseRef: string;
   readonly pathPrefix: string | undefined;
@@ -369,6 +375,48 @@ function compareText(left: string, right: string): number {
     return 1;
   }
   return 0;
+}
+
+function resolveFileViewSelection(
+  files: readonly IndexedFile[],
+  requestedPath: string
+): ResolvedFileViewSelection {
+  const exact = files.find((file) => file.path === requestedPath);
+  if (exact !== undefined) {
+    return { file: exact, resolution: "exact-path" };
+  }
+
+  const requestedLower = requestedPath.toLocaleLowerCase("en-US");
+  const caseInsensitiveExact = files.filter(
+    (file) => file.path.toLocaleLowerCase("en-US") === requestedLower
+  );
+  if (caseInsensitiveExact.length === 1) {
+    return { file: caseInsensitiveExact[0]!, resolution: "case-insensitive-path" };
+  }
+
+  const suffix = `/${requestedLower}`;
+  const suffixMatches = files.filter((file) =>
+    file.path.toLocaleLowerCase("en-US").endsWith(suffix)
+  );
+  if (suffixMatches.length === 1) {
+    return { file: suffixMatches[0]!, resolution: "unique-suffix" };
+  }
+
+  const ambiguous = caseInsensitiveExact.length > 1 ? caseInsensitiveExact : suffixMatches;
+  if (ambiguous.length > 1) {
+    const candidates = ambiguous.map((file) => file.path).sort(compareText);
+    const shown = candidates.slice(0, 25);
+    const remaining = candidates.length - shown.length;
+    throw new SymbolLatticeError(
+      "FILE_VIEW_AMBIGUOUS",
+      `File view path "${requestedPath}" matches ${candidates.length} indexed files: ${shown.join(", ")}${remaining > 0 ? `, and ${remaining} more` : ""}. Pass a longer project-relative path.`
+    );
+  }
+
+  throw new SymbolLatticeError(
+    "FILE_NOT_INDEXED",
+    `No active-generation file is indexed at or uniquely ends with ${requestedPath}.`
+  );
 }
 
 function compareGenerationHistorySummaries(
@@ -1624,9 +1672,9 @@ export class SymbolLatticeService {
   }
 
   /**
-   * Reads one exact indexed file from the immutable active-generation source
-   * projection. Freshness may inspect the worktree, but source, symbols, and
-   * dependents always come from the same persisted generation.
+   * Reads one exact or uniquely suffixed indexed file from the immutable
+   * active-generation source projection. Freshness may inspect the worktree,
+   * but source, symbols, and dependents come from the same persisted generation.
    */
   public async fileView(
     projectPath: string,
@@ -1655,7 +1703,7 @@ export class SymbolLatticeService {
     if (normalizedFilePath === undefined) {
       throw new SymbolLatticeError(
         "INVALID_FILE_VIEW_PATH",
-        "File view requires one exact project-relative indexed file path."
+        "File view requires one project-relative indexed file path or path suffix."
       );
     }
 
@@ -1667,32 +1715,58 @@ export class SymbolLatticeService {
         `The configured SymbolLattice graph store for ${normalizedProjectPath} does not expose persisted source documents.`
       );
     }
-    const bundle = getActiveSourceDocumentsBundle.call(this.graphStore, normalizedProjectPath, [
-      normalizedFilePath
-    ]);
-    if (!bundle.status.initialized) {
-      throw new SymbolLatticeError(
-        "MISSING_INDEX",
-        `No SymbolLattice index exists for ${normalizedProjectPath}. Run "symbol-lattice init ${normalizedProjectPath}" first.`
+    let requestedDocumentPath = normalizedFilePath;
+    let read:
+      | {
+          readonly bundle: ActiveSourceDocumentsBundle;
+          readonly indexedFile: IndexedFile;
+          readonly document: IndexedSourceDocument;
+          readonly resolution: ResolvedFileViewSelection["resolution"];
+        }
+      | undefined;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const currentBundle = getActiveSourceDocumentsBundle.call(this.graphStore, normalizedProjectPath, [
+        requestedDocumentPath
+      ]);
+      if (!currentBundle.status.initialized) {
+        throw new SymbolLatticeError(
+          "MISSING_INDEX",
+          `No SymbolLattice index exists for ${normalizedProjectPath}. Run "symbol-lattice init ${normalizedProjectPath}" first.`
+        );
+      }
+      const selection = resolveFileViewSelection(currentBundle.snapshot.files, normalizedFilePath);
+      const currentDocument = currentBundle.documents.find(
+        (item) => item.filePath === selection.file.path
       );
-    }
-    const indexedFile = bundle.snapshot.files.find((file) => file.path === normalizedFilePath);
-    if (indexedFile === undefined) {
-      throw new SymbolLatticeError(
-        "FILE_NOT_INDEXED",
-        `No active-generation file is indexed at ${normalizedFilePath}.`
-      );
-    }
-    const document = bundle.documents.find((item) => item.filePath === normalizedFilePath);
-    if (bundle.sourceSearchVersion !== SOURCE_SEARCH_INDEX_VERSION || document === undefined) {
+      if (
+        currentBundle.sourceSearchVersion === SOURCE_SEARCH_INDEX_VERSION &&
+        currentDocument !== undefined
+      ) {
+        read = {
+          bundle: currentBundle,
+          indexedFile: selection.file,
+          document: currentDocument,
+          resolution: selection.resolution
+        };
+        break;
+      }
+      if (attempt === 0 && selection.file.path !== requestedDocumentPath) {
+        requestedDocumentPath = selection.file.path;
+        continue;
+      }
       throw new SymbolLatticeError(
         "SOURCE_SEARCH_UNAVAILABLE",
-        `The active generation has no compatible persisted source for ${normalizedFilePath}. Run "symbol-lattice sync ${normalizedProjectPath}" to backfill it.`
+        `The active generation has no compatible persisted source for ${selection.file.path}. Run "symbol-lattice sync ${normalizedProjectPath}" to backfill it.`
       );
     }
+    if (read === undefined) {
+      throw new Error("File-view source-document retry loop must return an active-generation read.");
+    }
+    const { bundle, indexedFile, document, resolution } = read;
+    const resolvedFilePath = indexedFile.path;
 
     const symbols = bundle.snapshot.symbols
-      .filter((symbol) => symbol.kind !== "file" && symbol.filePath === normalizedFilePath)
+      .filter((symbol) => symbol.kind !== "file" && symbol.filePath === resolvedFilePath)
       .sort(compareSymbolCandidates)
       .map((symbol) => ({
         id: symbol.id,
@@ -1704,7 +1778,7 @@ export class SymbolLatticeService {
       }));
     const symbolsById = new Map(bundle.snapshot.symbols.map((symbol) => [symbol.id, symbol]));
     const targetFileSymbol = bundle.snapshot.symbols.find(
-      (symbol) => symbol.kind === "file" && symbol.filePath === normalizedFilePath
+      (symbol) => symbol.kind === "file" && symbol.filePath === resolvedFilePath
     );
     const dependentEvidence = new Map<
       string,
@@ -1756,8 +1830,9 @@ export class SymbolLatticeService {
       status: await this.getStatusForBundle(normalizedProjectPath, bundle),
       selection: {
         requestedPath: filePath,
-        filePath: normalizedFilePath,
-        source: "active-generation"
+        filePath: resolvedFilePath,
+        source: "active-generation",
+        resolution
       },
       file: { language: indexedFile.language, indexedAt: indexedFile.indexedAt },
       bounds: {

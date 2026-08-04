@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.263.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher can update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.264.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher can update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## Quick start
 
@@ -38,8 +38,8 @@ node dist/cli/main.js git-hunks /path/to/project --base origin/main --path-prefi
 # Scope Git changes and select affected tests with a custom pattern
 node dist/cli/main.js affected --working-tree --project /path/to/project --path-prefix src/domain --test-pattern "scenarios/**/*.scenario.ts" --json
 
-# Read a file, its symbols, and exact dependents from the active generation
-node dist/cli/main.js file src/application/service.ts --project /path/to/project --offset 1600 --limit 120 --json
+# Resolve one unique path suffix and read its generation-bound evidence
+node dist/cli/main.js file service.ts --project /path/to/project --offset 1600 --limit 120 --json
 ```
 
 Alternatively, download the version-pinned `.tgz`, SHA-256 checksum, and manifest from [GitHub Releases](https://github.com/HsinPu/symbol-lattice/releases), then install the `.tgz` with npm. Every tagged release verifies the full suite, a clean installation, and build provenance first.
@@ -49,7 +49,7 @@ Alternatively, download the version-pinned `.tgz`, SHA-256 checksum, and manifes
 - Scans multiple languages and common frameworks into a project-local code graph.
 - Queries symbols, indexed files, calls, routes, entry points, impact, retained generations, and diffs.
 - `files` queries only files persisted in the active generation, with path-segment-safe filtering, anchored globs, flat/tree/grouped projections, and safe cursor pagination. `src` never includes `src2`, and cursors bind to the generation and selection filters.
-- `file` returns bounded source, symbols, and exact dependents from that same active generation while reporting live worktree freshness separately. YAML and properties files expose structure without content values.
+- `file` prefers an exact path, then accepts a unique case-insensitive full path or complete path suffix. Ambiguous names return sorted candidates instead of guessing. Source, symbols, and exact dependents remain bound to one active generation; YAML and properties files expose structure without content values.
 - Preserves the rule, stage, candidate targets, confidence, and resolution path behind every relation.
 - Extension-framework route plugins resolve exact same-file and cross-file fixed-prefix mounts. `explain-edge` returns each mount segment and the ESM import/re-export path; dynamic or ambiguous composition is never guessed into a route.
 - Projects can register versioned reference resolver plugins that only see relations left unresolved by built-in resolvers. The host bounds candidates, validates results, and preserves collisions, exceptions, or unsafe choices as explainable unresolved evidence.
@@ -85,7 +85,7 @@ One manifest may provide `frameworkFactPlugins`, `frameworkProjectPlugins`, and 
 | `sync <path>` | Explicitly synchronize or repair a graph. |
 | `watch <path>` | Watch and synchronize in the foreground. |
 | `files [path]` | Page persisted files by glob, projection, and generation-bound cursor. |
-| `file <path>` | Read active-generation source lines, symbols, and exact dependents. |
+| `file <path>` | Read one exact path or unique suffix from the active generation. |
 | `git-hunks [path] --base <ref>` | Filter immutable Git hunk attribution with optional `--path-prefix`. |
 | `affected --working-tree` | Scope Git changes with `--path-prefix`, then optionally replace conventional test naming with `--test-pattern`. |
 | `investigate <query>` | Expand textual evidence into structural context. |
@@ -101,8 +101,8 @@ One manifest may provide `frameworkFactPlugins`, `frameworkProjectPlugins`, and 
 
 ```bash
 symbol-lattice upgrade --check
-symbol-lattice upgrade 0.263.0 --verify
-symbol-lattice upgrade 0.263.0 --apply --yes
+symbol-lattice upgrade 0.264.0 --verify
+symbol-lattice upgrade 0.264.0 --apply --yes
 ```
 
 ## Verification

@@ -2288,7 +2288,8 @@ describe("SymbolLatticeService", () => {
       selection: {
         requestedPath: ".\\src\\target.ts",
         filePath: "src/target.ts",
-        source: "active-generation"
+        source: "active-generation",
+        resolution: "exact-path"
       },
       bounds: {
         offset: 2,
@@ -2320,6 +2321,42 @@ describe("SymbolLatticeService", () => {
     expect(JSON.stringify(hidden)).not.toContain("SUPERSECRET123");
     await expect(service.fileView(projectPath, "../outside.ts")).rejects.toMatchObject({
       code: "INVALID_FILE_VIEW_PATH"
+    });
+  });
+
+  it("resolves one unique indexed path suffix and rejects ambiguous basenames", async () => {
+    const projectPath = await createInlineProject({
+      "src/unique.ts": "export const uniqueSource = true;\n",
+      "src/target.ts": "export const sourceTarget = true;\n",
+      "test/target.ts": "export const testTarget = true;\n"
+    });
+    const service = createService();
+    await service.init({ projectPath });
+
+    const unique = await service.fileView(projectPath, "unique.ts", { symbolsOnly: true });
+    expect(unique.selection).toEqual({
+      requestedPath: "unique.ts",
+      filePath: "src/unique.ts",
+      source: "active-generation",
+      resolution: "unique-suffix"
+    });
+
+    const exact = await service.fileView(projectPath, "src/target.ts", { symbolsOnly: true });
+    expect(exact.selection.resolution).toBe("exact-path");
+
+    const caseInsensitive = await service.fileView(projectPath, "SRC/TARGET.TS", {
+      symbolsOnly: true
+    });
+    expect(caseInsensitive.selection).toEqual({
+      requestedPath: "SRC/TARGET.TS",
+      filePath: "src/target.ts",
+      source: "active-generation",
+      resolution: "case-insensitive-path"
+    });
+
+    await expect(service.fileView(projectPath, "target.ts")).rejects.toMatchObject({
+      code: "FILE_VIEW_AMBIGUOUS",
+      message: expect.stringMatching(/src\/target\.ts.*test\/target\.ts/u)
     });
   });
 

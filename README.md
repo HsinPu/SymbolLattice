@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.263.0 是開發預覽版。MCP 查詢工具唯讀；但 `serve --mcp` 預設會啟動獨立的本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用它。
+> v0.264.0 是開發預覽版。MCP 查詢工具唯讀；但 `serve --mcp` 預設會啟動獨立的本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用它。
 
 ## 快速開始
 
@@ -38,8 +38,8 @@ node dist/cli/main.js git-hunks /path/to/project --base origin/main --path-prefi
 # 限縮 Git 變更，並只選指定模式的受影響測試
 node dist/cli/main.js affected --working-tree --project /path/to/project --path-prefix src/domain --test-pattern "scenarios/**/*.scenario.ts" --json
 
-# 從 active generation 讀取檔案、符號與精確依賴者
-node dist/cli/main.js file src/application/service.ts --project /path/to/project --offset 1600 --limit 120 --json
+# 以唯一檔名後綴定位，讀取同一 generation 的檔案證據
+node dist/cli/main.js file service.ts --project /path/to/project --offset 1600 --limit 120 --json
 ```
 
 也可從 [GitHub Releases](https://github.com/HsinPu/symbol-lattice/releases) 下載版本固定的 `.tgz`、SHA-256 與 manifest，再用 npm 安裝 `.tgz`。每個標籤發行都會先驗證完整測試、乾淨安裝與產物證明。
@@ -50,7 +50,7 @@ node dist/cli/main.js file src/application/service.ts --project /path/to/project
 - 查詢 symbols、files、calls、routes、entrypoints、impact、history 與 diff。
 - 每條關係保留規則、階段、候選目標、信心度、解析路徑與來源範圍。
 - `files` 僅查詢 active generation 已保存的檔案，支援目錄邊界正確的路徑篩選、anchored glob、flat/tree/grouped 投影與安全游標分頁；`src` 不會誤含 `src2`，游標會綁定 generation 與篩選條件。
-- `file` 從同一個 active generation 回傳有界的原始碼、符號與精確依賴者，並另行揭露工作樹 freshness；YAML 與 properties 只回傳結構，不顯示內容值。
+- `file` 優先使用精確路徑，再接受唯一、不分大小寫的完整路徑或完整路徑後綴；同名衝突會列出排序候選，不會猜測。原始碼、符號與精確依賴者都綁定同一個 active generation；YAML 與 properties 只顯示結構，不洩漏內容值。
 - 擴充框架的 route plugin 可精確解析同檔案與跨檔案固定 prefix mount；`explain-edge` 會顯示每段 mount 與 ESM import／re-export 路徑。動態或模糊組合不會被猜測成路由。
 - 專案可註冊有版本的 reference resolver plugin，僅處理內建解析器留下的未解析關係；宿主會限制候選、驗證結果，並將衝突、例外或不安全選擇保留為可解釋的 unresolved 證據。
 - framework fact plugin 可從框架語法新增受驗證的 symbols、routes、entrypoints 與 pending references。穩定 ID、containment edge、輸出上限、來源範圍與 provenance 都由宿主控制。
@@ -85,7 +85,7 @@ node dist/cli/main.js init /path/to/project --plugin ./plugins/acme.mjs
 | `sync <path>` | 明確同步或修復圖譜。 |
 | `watch <path>` | 在前景監看並同步。 |
 | `files [path]` | 以 glob、投影與 generation-bound 游標分頁列出已保存檔案。 |
-| `file <path>` | 讀取 active-generation 原始碼範圍、符號與精確依賴者。 |
+| `file <path>` | 從 active generation 讀取精確路徑或唯一後綴。 |
 | `git-hunks [path] --base <ref>` | 以可選的 `--path-prefix` 篩選不可變 Git hunk 與宣告歸因。 |
 | `affected --working-tree` | 以 `--path-prefix` 限縮 Git 變更，並可用 `--test-pattern` 取代預設測試命名規則。 |
 | `investigate <query>` | 將文字線索展開為結構脈絡。 |
@@ -101,8 +101,8 @@ node dist/cli/main.js init /path/to/project --plugin ./plugins/acme.mjs
 
 ```bash
 symbol-lattice upgrade --check
-symbol-lattice upgrade 0.263.0 --verify
-symbol-lattice upgrade 0.263.0 --apply --yes
+symbol-lattice upgrade 0.264.0 --verify
+symbol-lattice upgrade 0.264.0 --apply --yes
 ```
 
 ## 驗證

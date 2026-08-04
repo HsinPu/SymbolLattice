@@ -1059,7 +1059,8 @@ const fileViewOutputSchema = z
     selection: z.object({
       requestedPath: z.string().min(1),
       filePath: z.string().min(1),
-      source: z.literal("active-generation")
+      source: z.literal("active-generation"),
+      resolution: z.enum(["exact-path", "case-insensitive-path", "unique-suffix"])
     }),
     file: z.object({ language: z.enum(ARTIFACT_LANGUAGES), indexedAt: z.string().min(1) }),
     bounds: z.object({
@@ -2413,7 +2414,7 @@ export function createMcpServer(
         description:
           "Returns a bounded active-generation source window, symbol map, exact file dependents, and live freshness. YAML and properties values are withheld. This query never reads live source content and never creates or refreshes an index.",
         inputSchema: {
-          filePath: z.string().trim().min(1).describe("Exact project-relative indexed file path."),
+          filePath: z.string().trim().min(1).describe("Exact project-relative path or unique path suffix. Ambiguous suffixes are rejected."),
           projectPath: z.string().trim().min(1).optional().describe("Optional path to an already indexed project."),
           offset: z.number().int().min(1).optional().describe("One-based first persisted source line."),
           limit: z.number().int().min(1).max(MAX_FILE_VIEW_LINE_LIMIT).optional().describe("Maximum persisted source lines."),

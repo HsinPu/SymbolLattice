@@ -715,7 +715,8 @@ function fileViewResult(): FileViewResult {
     selection: {
       requestedPath: "src/routes.ts",
       filePath: "src/routes.ts",
-      source: "active-generation"
+      source: "active-generation",
+      resolution: "exact-path"
     },
     file: { language: "typescript", indexedAt: "2026-08-04T00:00:00.000Z" },
     bounds: {
@@ -1970,7 +1971,7 @@ describe("SymbolLattice MCP server", () => {
 
     expect(result.isError).not.toBe(true);
     expect(result.structuredContent).toMatchObject({
-      selection: { filePath: "src/routes.ts", source: "active-generation" },
+      selection: { filePath: "src/routes.ts", source: "active-generation", resolution: "exact-path" },
       contentAvailability: "symbols-only"
     });
     expect(calls).toEqual([
