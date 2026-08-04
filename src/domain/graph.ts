@@ -71,10 +71,12 @@ const ENTRYPOINT_OPERATION_SET = new Set<string>(ENTRYPOINT_OPERATIONS);
 /** Exact file-level edges trusted for affected-test selection. */
 export const AFFECTED_TEST_EDGE_KINDS = ["imports", "exports"] as const;
 
-export type TestFileClassification = "test-file-name" | "test-directory";
+export type ConventionalTestFileClassification = "test-file-name" | "test-directory";
+export type TestFileClassification = ConventionalTestFileClassification | "custom-pattern";
+export type TestFileClassifier = (filePath: string) => TestFileClassification | null;
 
 /** Conservative conventional test-file identification for indexed source paths. */
-export function classifyTestFile(filePath: string): TestFileClassification | null {
+export function classifyTestFile(filePath: string): ConventionalTestFileClassification | null {
   const normalizedPath = filePath.replaceAll("\\", "/");
   if (/(?:^|\/)(?:__tests__|tests?|spec|e2e)(?:\/|$)/iu.test(normalizedPath)) {
     return "test-directory";
@@ -313,10 +315,12 @@ export interface EvidencePathResult {
 export interface AffectedTestTraversalOptions {
   /** Maximum reverse exact import/export hops from the changed file. */
   readonly maxDepth: number;
-  /** Maximum conventionally classified test paths retained for this changed file. */
+  /** Maximum selected test paths retained for this changed file. */
   readonly maxResults: number;
   /** Maximum distinct indexed file symbols visited while following dependents. */
   readonly maxVisitedFiles: number;
+  /** Optional explicit terminal classifier; defaults to conservative conventions. */
+  readonly testClassifier?: TestFileClassifier;
 }
 
 /** A bounded, exact-only reverse file-dependency traversal result. */
@@ -1461,8 +1465,9 @@ export function getBoundedExactTopologyRelevance(
 }
 
 /**
- * Finds conventionally named test files that have an exact import/export
- * dependency on one changed indexed file. The traversal is reverse-directed,
+ * Finds test files selected by the supplied classifier, or by conservative
+ * naming conventions by default, that have an exact import/export dependency
+ * on one changed indexed file. The traversal is reverse-directed,
  * deterministic, and only uses persisted file-level graph edges. It does not
  * infer runtime test discovery or use heuristic resolution as evidence.
  */
@@ -1474,6 +1479,7 @@ export function findAffectedTestPaths(
   assertPositiveDepth(options.maxDepth);
   assertPositiveBound(options.maxResults, "maxResults");
   assertPositiveBound(options.maxVisitedFiles, "maxVisitedFiles");
+  const testClassifier = options.testClassifier ?? classifyTestFile;
 
   const symbolsById = createSymbolIndex(graph.symbols);
   const root = symbolsById.get(changedFileSymbolId);
@@ -1488,7 +1494,7 @@ export function findAffectedTestPaths(
 
   const rootPath = createRootPath(root);
   const seenFileSymbolIds = new Set<string>([root.id]);
-  const paths: ImpactPath[] = classifyTestFile(root.filePath) === null ? [] : [rootPath];
+  const paths: ImpactPath[] = testClassifier(root.filePath) === null ? [] : [rootPath];
   let frontier: TraversalState[] = [{ terminal: root, path: rootPath }];
   let resultLimitReached = false;
   let traversalTruncated = false;
@@ -1516,7 +1522,7 @@ export function findAffectedTestPaths(
 
         seenFileSymbolIds.add(relation.symbol.id);
         const path = extendImpactPath(state.path, state.terminal, relation.symbol, relation.edge);
-        if (classifyTestFile(relation.symbol.filePath) !== null) {
+        if (testClassifier(relation.symbol.filePath) !== null) {
           if (paths.length < options.maxResults) {
             paths.push(path);
           } else {
@@ -1524,8 +1530,8 @@ export function findAffectedTestPaths(
           }
         }
 
-        // A test-directory file can be a shared helper. Keep following its
-        // exact dependents so a later conventional test is not hidden behind it.
+        // A selected test can also be a shared helper. Keep following its exact
+        // dependents so another selected test is not hidden behind it.
         nextFrontier.push({ terminal: relation.symbol, path });
       }
     }

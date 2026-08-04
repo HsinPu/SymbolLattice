@@ -463,6 +463,8 @@ export interface AffectedTestsOptions {
   readonly maxDepth?: number;
   /** Maximum proof-bearing affected-test records returned across all inputs. */
   readonly limit?: number;
+  /** Optional anchored project-relative glob that replaces conventional test classification. */
+  readonly testPattern?: string;
 }
 
 /** Optional Git baseline combined with the existing affected-test bounds. */
@@ -515,7 +517,11 @@ export interface AffectedTestsResult {
   readonly bounds: AffectedTestsBounds;
   /** `null` means an older compatible adapter did not persist index inputs. */
   readonly indexScope: readonly string[] | null;
-  /** Conventional test files available in the active generation before filtering. */
+  readonly testSelection: {
+    readonly mode: "conventional" | "glob";
+    readonly pattern: string | null;
+  };
+  /** Test files selected by the disclosed classifier in the active generation. */
   readonly indexedTestFiles: number;
   readonly inputs: AffectedTestsInputs;
   readonly tests: {
@@ -547,6 +553,8 @@ export interface GitAffectedTestsResult {
     readonly matchedSourceChanges: number;
     readonly sourcePaths: readonly string[];
   };
+  /** Test classifier selected even when the Git change set contains no supported source path. */
+  readonly testSelection: AffectedTestsResult["testSelection"];
   /** Exact test evidence for selected supported source paths, when any exist. */
   readonly affected: AffectedTestsResult | null;
 }

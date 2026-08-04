@@ -271,6 +271,7 @@ export interface AffectedTestsToolArguments {
   readonly projectPath?: string | undefined;
   readonly maxDepth?: number | undefined;
   readonly limit?: number | undefined;
+  readonly testPattern?: string | undefined;
 }
 
 export interface GitAffectedTestsToolArguments {
@@ -280,6 +281,7 @@ export interface GitAffectedTestsToolArguments {
   readonly maxDepth?: number | undefined;
   readonly limit?: number | undefined;
   readonly path?: string | undefined;
+  readonly testPattern?: string | undefined;
 }
 
 export interface GitHunksToolArguments {
@@ -729,6 +731,10 @@ const affectedTestsOutputSchema = z
       resolution: z.literal("exact")
     }),
     indexScope: z.array(z.string()).nullable(),
+    testSelection: z.object({
+      mode: z.enum(["conventional", "glob"]),
+      pattern: z.string().nullable()
+    }),
     indexedTestFiles: z.number().int().nonnegative(),
     inputs: z.object({
       requested: z.array(z.string()),
@@ -741,7 +747,7 @@ const affectedTestsOutputSchema = z
           triggerFilePath: z.string(),
           filePath: z.string(),
           reason: z.enum(["changed-test", "exact-dependent"]),
-          classification: z.enum(["test-file-name", "test-directory"]),
+          classification: z.enum(["test-file-name", "test-directory", "custom-pattern"]),
           path: z.object({}).passthrough()
         })
       ),
@@ -773,6 +779,10 @@ const gitAffectedTestsOutputSchema = z
       totalChanges: z.number().int().nonnegative(),
       matchedSourceChanges: z.number().int().nonnegative(),
       sourcePaths: z.array(z.string())
+    }),
+    testSelection: z.object({
+      mode: z.enum(["conventional", "glob"]),
+      pattern: z.string().nullable()
     }),
     affected: affectedTestsOutputSchema.nullable()
   })
@@ -1464,7 +1474,8 @@ export async function runAffectedTestsTool(
   try {
     const options: AffectedTestsOptions = {
       ...(arguments_.maxDepth === undefined ? {} : { maxDepth: arguments_.maxDepth }),
-      ...(arguments_.limit === undefined ? {} : { limit: arguments_.limit })
+      ...(arguments_.limit === undefined ? {} : { limit: arguments_.limit }),
+      ...(arguments_.testPattern === undefined ? {} : { testPattern: arguments_.testPattern })
     };
     const result = await service.affectedTests(
       arguments_.projectPath ?? defaultProjectPath,
@@ -1491,7 +1502,8 @@ export async function runGitAffectedTestsTool(
       ...(arguments_.baseRef === undefined ? {} : { baseRef: arguments_.baseRef }),
       ...(arguments_.maxDepth === undefined ? {} : { maxDepth: arguments_.maxDepth }),
       ...(arguments_.limit === undefined ? {} : { limit: arguments_.limit }),
-      ...(arguments_.path === undefined ? {} : { pathPrefix: arguments_.path })
+      ...(arguments_.path === undefined ? {} : { pathPrefix: arguments_.path }),
+      ...(arguments_.testPattern === undefined ? {} : { testPattern: arguments_.testPattern })
     };
     const result = await service.affectedTestsFromGit(
       arguments_.projectPath ?? defaultProjectPath,
@@ -1989,7 +2001,7 @@ export function createMcpServer(
       {
         title: "Select affected tests from a SymbolLattice generation",
         description:
-          "Accepts changed project files and returns conventionally named tests reached through exact persisted import/export evidence, with bounded proof paths and explicit completeness limitations. This tool never runs Git, creates, or refreshes an index.",
+          "Accepts changed project files and returns conventionally named tests, or tests selected by one optional project-relative glob, reached through exact persisted import/export evidence with bounded proof paths and explicit completeness limitations. This tool never runs Git, creates, or refreshes an index.",
         inputSchema: {
           filePaths: z
             .array(z.string().trim().min(1))
@@ -2010,7 +2022,14 @@ export function createMcpServer(
             .min(1)
             .max(MAX_AFFECTED_LIMIT)
             .optional()
-            .describe("Maximum proof-bearing affected-test records returned.")
+            .describe("Maximum proof-bearing affected-test records returned."),
+          testPattern: z
+            .string()
+            .trim()
+            .min(1)
+            .max(MAX_FILE_PATTERN_LENGTH)
+            .optional()
+            .describe("Optional anchored project-relative glob that replaces conventional test classification.")
         },
         outputSchema: affectedTestsOutputSchema,
         annotations: {
@@ -2032,7 +2051,7 @@ export function createMcpServer(
       {
         title: "Select affected tests from a local Git change set",
         description:
-          "Uses local read-only Git commands to select TypeScript/JavaScript changes, then returns exact persisted import/export test proofs and completeness limits. Omit baseRef for HEAD-to-working-tree plus untracked files; provide baseRef for local merge-base-to-HEAD selection. This tool never fetches, creates, refreshes, or synchronizes an index.",
+          "Uses local read-only Git commands to select TypeScript/JavaScript changes, then returns conventionally named tests, or tests selected by one optional project-relative glob, with exact persisted import/export proofs and completeness limits. Omit baseRef for HEAD-to-working-tree plus untracked files; provide baseRef for local merge-base-to-HEAD selection. This tool never fetches, creates, refreshes, or synchronizes an index.",
         inputSchema: {
           projectPath: z.string().trim().min(1).optional().describe("Optional path to an already indexed Git project."),
           baseRef: z
@@ -2059,7 +2078,14 @@ export function createMcpServer(
             .min(1)
             .max(MAX_AFFECTED_LIMIT)
             .optional()
-            .describe("Maximum proof-bearing affected-test records returned.")
+            .describe("Maximum proof-bearing affected-test records returned."),
+          testPattern: z
+            .string()
+            .trim()
+            .min(1)
+            .max(MAX_FILE_PATTERN_LENGTH)
+            .optional()
+            .describe("Optional anchored project-relative glob that replaces conventional test classification.")
         },
         outputSchema: gitAffectedTestsOutputSchema,
         annotations: {

@@ -49,7 +49,8 @@ import {
   type SourceRange,
   type SymbolMatch,
   type SymbolKind,
-  type SymbolNode
+  type SymbolNode,
+  type TestFileClassifier
 } from "../domain/index.js";
 import {
   createFrameworkFactPluginExtractor,
@@ -293,6 +294,13 @@ interface InvestigationCandidate {
 interface NormalizedAffectedTestsRequest {
   readonly filePaths: readonly string[];
   readonly bounds: AffectedTestsBounds;
+  readonly testSelection: AffectedTestsResult["testSelection"];
+  readonly testClassifier: TestFileClassifier;
+}
+
+interface NormalizedAffectedTestSelection {
+  readonly testSelection: AffectedTestsResult["testSelection"];
+  readonly testClassifier: TestFileClassifier;
 }
 
 interface NormalizedGitHunksRequest {
@@ -1621,6 +1629,7 @@ export class SymbolLatticeService {
     options: GitAffectedTestsOptions = {}
   ): Promise<GitAffectedTestsResult> {
     const normalizedProjectPath = resolve(projectPath);
+    const affectedTestSelection = this.affectedTestSelection(options.testPattern);
     const pathPrefix =
       options.pathPrefix === undefined
         ? undefined
@@ -1665,6 +1674,7 @@ export class SymbolLatticeService {
         status: await this.getStatus(normalizedProjectPath),
         changeSet,
         selection,
+        testSelection: affectedTestSelection.testSelection,
         affected: null
       };
     }
@@ -1681,6 +1691,7 @@ export class SymbolLatticeService {
       status: affected.status,
       changeSet,
       selection,
+      testSelection: affectedTestSelection.testSelection,
       affected
     };
   }
@@ -1777,7 +1788,8 @@ export class SymbolLatticeService {
       const traversal = findAffectedTestPaths(bundle.snapshot, symbol.id, {
         maxDepth: request.bounds.maxDepth,
         maxResults: request.bounds.limit + 1,
-        maxVisitedFiles: request.bounds.maxVisitedFilesPerInput
+        maxVisitedFiles: request.bounds.maxVisitedFilesPerInput,
+        testClassifier: request.testClassifier
       });
       resultLimitTruncated ||= traversal.resultLimitReached;
       traversalTruncated ||= traversal.traversalTruncated;
@@ -1785,7 +1797,7 @@ export class SymbolLatticeService {
 
       for (const path of traversal.paths) {
         const terminal = path.symbols.at(-1);
-        const classification = terminal === undefined ? null : classifyTestFile(terminal.filePath);
+        const classification = terminal === undefined ? null : request.testClassifier(terminal.filePath);
         if (terminal === undefined || classification === null) {
           throw new Error("Affected-test traversal must terminate at a classified test file.");
         }
@@ -1813,7 +1825,8 @@ export class SymbolLatticeService {
       status,
       bounds: request.bounds,
       indexScope: bundle.indexInputs?.scopeRoots ?? null,
-      indexedTestFiles: bundle.snapshot.files.filter((file) => classifyTestFile(file.path) !== null)
+      testSelection: request.testSelection,
+      indexedTestFiles: bundle.snapshot.files.filter((file) => request.testClassifier(file.path) !== null)
         .length,
       inputs: {
         requested: request.filePaths,
@@ -2379,8 +2392,11 @@ export class SymbolLatticeService {
       );
     }
 
+    const testSelection = this.affectedTestSelection(options.testPattern);
+
     return {
       filePaths: normalizedPaths,
+      ...testSelection,
       bounds: {
         maxChangedFiles: MAX_AFFECTED_CHANGED_FILES,
         maxDepth,
@@ -2389,6 +2405,28 @@ export class SymbolLatticeService {
         edgeKinds: AFFECTED_TEST_EDGE_KINDS,
         resolution: "exact"
       }
+    };
+  }
+
+  private affectedTestSelection(testPattern: string | undefined): NormalizedAffectedTestSelection {
+    const normalizedPattern = testPattern === undefined
+      ? undefined
+      : this.normalizedProjectFilePattern(
+          testPattern,
+          "INVALID_AFFECTED_TEST_PATTERN",
+          "Affected-test"
+        );
+    if (normalizedPattern === undefined) {
+      return {
+        testSelection: { mode: "conventional", pattern: null },
+        testClassifier: classifyTestFile
+      };
+    }
+
+    const matchesPattern = createProjectFileGlobMatcher(normalizedPattern);
+    return {
+      testSelection: { mode: "glob", pattern: normalizedPattern },
+      testClassifier: (filePath) => matchesPattern(filePath) ? "custom-pattern" : null
     };
   }
 
@@ -2834,7 +2872,7 @@ export class SymbolLatticeService {
 
     const pattern = options.pattern === undefined
       ? undefined
-      : this.normalizedFilePattern(options.pattern);
+      : this.normalizedProjectFilePattern(options.pattern, "INVALID_FILE_PATTERN", "File");
     const maxDepth = options.maxDepth;
     if (
       maxDepth !== undefined &&
@@ -2872,9 +2910,13 @@ export class SymbolLatticeService {
     };
   }
 
-  private normalizedFilePattern(pattern: string): string {
+  private normalizedProjectFilePattern(
+    pattern: string,
+    code: "INVALID_FILE_PATTERN" | "INVALID_AFFECTED_TEST_PATTERN",
+    label: "File" | "Affected-test"
+  ): string {
     if (typeof pattern !== "string") {
-      throw new SymbolLatticeError("INVALID_FILE_PATTERN", "File pattern must be a project-relative glob.");
+      throw new SymbolLatticeError(code, `${label} pattern must be a project-relative glob.`);
     }
     const normalized = pattern.trim().replaceAll("\\", "/");
     const projectPattern = normalized.replace(/^(?:\.\/)+/, "");
@@ -2888,8 +2930,8 @@ export class SymbolLatticeService {
       projectPattern.split("/").includes("..")
     ) {
       throw new SymbolLatticeError(
-        "INVALID_FILE_PATTERN",
-        `File pattern must be a bounded project-relative glob: ${pattern}`
+        code,
+        `${label} pattern must be a bounded project-relative glob: ${pattern}`
       );
     }
     return projectPattern;

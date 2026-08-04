@@ -403,6 +403,7 @@ function affectedTestsResult(): AffectedTestsResult {
       resolution: "exact"
     },
     indexScope: [],
+    testSelection: { mode: "conventional", pattern: null },
     indexedTestFiles: 0,
     inputs: {
       requested: ["src/math.ts"],
@@ -446,6 +447,7 @@ function gitAffectedTestsResult(): GitAffectedTestsResult {
       matchedSourceChanges: 1,
       sourcePaths: ["src/math.ts"]
     },
+    testSelection: { mode: "conventional", pattern: null },
     affected: affectedTestsResult()
   };
 }
@@ -2260,7 +2262,8 @@ describe("SymbolLattice MCP server", () => {
         projectPath: "C:/chosen-project",
         filePaths: ["src/math.ts", "tests/math.spec.ts"],
         maxDepth: 4,
-        limit: 7
+        limit: 7,
+        testPattern: "scenarios/**/*.scenario.ts"
       }
     });
 
@@ -2273,7 +2276,7 @@ describe("SymbolLattice MCP server", () => {
       {
         projectPath: "C:/chosen-project",
         filePaths: ["src/math.ts", "tests/math.spec.ts"],
-        options: { maxDepth: 4, limit: 7 }
+        options: { maxDepth: 4, limit: 7, testPattern: "scenarios/**/*.scenario.ts" }
       }
     ]);
   });
@@ -2326,7 +2329,8 @@ describe("SymbolLattice MCP server", () => {
         baseRef: "origin/main",
         maxDepth: 4,
         limit: 7,
-        path: "src/"
+        path: "src/",
+        testPattern: "scenarios/**/*.scenario.ts"
       }
     });
     expect(result.isError).not.toBe(true);
@@ -2337,7 +2341,13 @@ describe("SymbolLattice MCP server", () => {
     expect(gitCalls).toEqual([
       {
         projectPath: "C:/chosen-project",
-        options: { baseRef: "origin/main", maxDepth: 4, limit: 7, pathPrefix: "src/" }
+        options: {
+          baseRef: "origin/main",
+          maxDepth: 4,
+          limit: 7,
+          pathPrefix: "src/",
+          testPattern: "scenarios/**/*.scenario.ts"
+        }
       }
     ]);
 

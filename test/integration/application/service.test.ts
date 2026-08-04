@@ -2277,6 +2277,16 @@ describe("SymbolLatticeService", () => {
       "test/changed.test.ts": [
         "export const changedTest = true;",
         ""
+      ].join("\n"),
+      "scenarios/checkout.scenario.ts": [
+        'import { add } from "../src/math.js";',
+        "export const checkout = add(3, 4);",
+        ""
+      ].join("\n"),
+      "archive/scenarios/decoy.scenario.ts": [
+        'import { add } from "../../src/math.js";',
+        "export const decoy = add(4, 5);",
+        ""
       ].join("\n")
     });
     const service = createService();
@@ -2299,6 +2309,7 @@ describe("SymbolLatticeService", () => {
         resolution: "exact"
       },
       indexScope: ["."],
+      testSelection: { mode: "conventional", pattern: null },
       indexedTestFiles: 3,
       inputs: {
         requested: ["src/math.ts", "src/missing.ts", "test/changed.test.ts"],
@@ -2339,6 +2350,25 @@ describe("SymbolLatticeService", () => {
       }
     });
 
+    const customPattern = await service.affectedTests(projectPath, ["src/math.ts"], {
+      maxDepth: 2,
+      limit: 1,
+      testPattern: "./scenarios/**/*.scenario.ts"
+    });
+    expect(customPattern).toMatchObject({
+      testSelection: { mode: "glob", pattern: "scenarios/**/*.scenario.ts" },
+      indexedTestFiles: 1,
+      tests: {
+        resultLimitTruncated: false,
+        items: [
+          expect.objectContaining({
+            filePath: "scenarios/checkout.scenario.ts",
+            classification: "custom-pattern"
+          })
+        ]
+      }
+    });
+
     const depthBounded = await service.affectedTests(projectPath, ["src/math.ts"], {
       maxDepth: 1,
       limit: 10
@@ -2366,6 +2396,9 @@ describe("SymbolLatticeService", () => {
     await expect(
       service.affectedTests(projectPath, ["src/math.ts"], { limit: 101 })
     ).rejects.toMatchObject({ code: "INVALID_AFFECTED_LIMIT" });
+    await expect(
+      service.affectedTests(projectPath, ["src/math.ts"], { testPattern: "../**/*.test.ts" })
+    ).rejects.toMatchObject({ code: "INVALID_AFFECTED_TEST_PATTERN" });
   });
 
   it("delegates Git change-set selection to the injected port, then retains exact affected-test evidence", async () => {
@@ -2410,7 +2443,8 @@ describe("SymbolLatticeService", () => {
     const workingTree = await service.affectedTestsFromGit(projectPath, {
       maxDepth: 2,
       limit: 10,
-      pathPrefix: "src/"
+      pathPrefix: "src/",
+      testPattern: "./test/**/*.test.ts"
     });
     const fromBase = await service.affectedTestsFromGit(projectPath, { baseRef: "origin/main" });
     const after = await service.getStatus(projectPath);
@@ -2429,6 +2463,7 @@ describe("SymbolLatticeService", () => {
         matchedSourceChanges: 1,
         sourcePaths: ["src/math.ts"]
       },
+      testSelection: { mode: "glob", pattern: "test/**/*.test.ts" },
       affected: {
         inputs: { requested: ["src/math.ts"], indexed: ["src/math.ts"], notIndexed: [] },
         tests: {
@@ -2459,8 +2494,10 @@ describe("SymbolLatticeService", () => {
     const projectPath = await createInlineProject({
       "src/math.ts": "export const add = (left: number, right: number) => left + right;\n"
     });
+    let providerCalls = 0;
     const provider: GitChangeSetProvider = {
       async getChangeSet() {
+        providerCalls += 1;
         return gitChangeSet([], [
           { kind: "modified", previousPath: "README.md", currentPath: "README.md", score: null }
         ]);
@@ -2474,11 +2511,18 @@ describe("SymbolLatticeService", () => {
     );
     await service.init({ projectPath });
 
-    await expect(service.affectedTestsFromGit(projectPath)).resolves.toMatchObject({
+    await expect(
+      service.affectedTestsFromGit(projectPath, { testPattern: "scenarios/**/*.scenario.ts" })
+    ).resolves.toMatchObject({
       status: { stale: false },
       changeSet: { changes: [{ currentPath: "README.md" }], sourcePaths: [] },
+      testSelection: { mode: "glob", pattern: "scenarios/**/*.scenario.ts" },
       affected: null
     });
+    await expect(
+      service.affectedTestsFromGit(projectPath, { testPattern: "../**/*.test.ts" })
+    ).rejects.toMatchObject({ code: "INVALID_AFFECTED_TEST_PATTERN" });
+    expect(providerCalls).toBe(1);
   });
 
   it("preserves whitespace-bearing Git paths before exact graph lookup", async () => {

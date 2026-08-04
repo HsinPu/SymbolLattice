@@ -399,6 +399,7 @@ function affectedTestsResult(): AffectedTestsResult {
       resolution: "exact"
     },
     indexScope: [],
+    testSelection: { mode: "conventional", pattern: null },
     indexedTestFiles: 0,
     inputs: {
       requested: ["src/math.ts"],
@@ -442,6 +443,7 @@ function gitAffectedTestsResult(): GitAffectedTestsResult {
       matchedSourceChanges: 1,
       sourcePaths: ["src/math.ts"]
     },
+    testSelection: { mode: "conventional", pattern: null },
     affected: affectedTestsResult()
   };
 }
@@ -1878,6 +1880,8 @@ describe("symbol-lattice v0.6 affected-test CLI", () => {
         "4",
         "--limit",
         "7",
+        "--test-pattern",
+        "scenarios/**/*.scenario.ts",
         "--json"
       ],
       { from: "node" }
@@ -1887,7 +1891,7 @@ describe("symbol-lattice v0.6 affected-test CLI", () => {
       {
         projectPath: resolve("C:/chosen-project"),
         filePaths: ["src/math.ts", "tests/math.spec.ts"],
-        options: { maxDepth: 4, limit: 7 }
+        options: { maxDepth: 4, limit: 7, testPattern: "scenarios/**/*.scenario.ts" }
       }
     ]);
     expect(write).toHaveBeenCalledWith(`${JSON.stringify(result, null, 2)}\n`);
@@ -1915,6 +1919,8 @@ describe("symbol-lattice v0.6 affected-test CLI", () => {
         "--working-tree",
         "--path-prefix",
         "src/",
+        "--test-pattern",
+        "scenarios/**/*.scenario.ts",
         "--project",
         "C:/chosen-project",
         "--depth",
@@ -1929,7 +1935,7 @@ describe("symbol-lattice v0.6 affected-test CLI", () => {
     expect(calls).toEqual([
       {
         projectPath: resolve("C:/chosen-project"),
-        options: { maxDepth: 4, limit: 7, pathPrefix: "src/" }
+        options: { maxDepth: 4, limit: 7, pathPrefix: "src/", testPattern: "scenarios/**/*.scenario.ts" }
       }
     ]);
     expect(write).toHaveBeenCalledWith(`${JSON.stringify(result, null, 2)}\n`);

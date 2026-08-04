@@ -173,6 +173,7 @@ interface AffectedCommandOptions extends ProjectOptions {
   readonly workingTree?: boolean;
   readonly base?: string;
   readonly pathPrefix?: string;
+  readonly testPattern?: string;
 }
 
 interface GitHunksCommandOptions extends ProjectOptions {
@@ -1270,6 +1271,11 @@ export function createProgram(
       "Restrict Git-selected changes to an exact file or directory on either rename/copy path side"
     )
     .option(
+      "-f, --test-pattern <project-relative-glob>",
+      "Replace conventional test discovery with one anchored project-relative glob",
+      parseFilePattern
+    )
+    .option(
       "--depth <count>",
       `Maximum reverse import/export depth per changed file (1-${MAX_AFFECTED_MAX_DEPTH})`,
       (value: string) => parseBoundedPositiveInteger(value, MAX_AFFECTED_MAX_DEPTH)
@@ -1282,7 +1288,8 @@ export function createProgram(
     .action(async (filePaths: string[], options: AffectedCommandOptions) => {
       const affectedOptions: AffectedTestsOptions = {
         ...(options.depth === undefined ? {} : { maxDepth: options.depth }),
-        ...(options.limit === undefined ? {} : { limit: options.limit })
+        ...(options.limit === undefined ? {} : { limit: options.limit }),
+        ...(options.testPattern === undefined ? {} : { testPattern: options.testPattern })
       };
       const hasGitSelection = options.workingTree === true || options.base !== undefined;
       if (options.workingTree === true && options.base !== undefined) {

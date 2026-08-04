@@ -892,12 +892,19 @@ describe("pure graph traversal", () => {
       filePath: "test/route-only.test.ts",
       kind: "file"
     });
+    const customScenario = symbol({
+      id: "custom-scenario",
+      name: "checkout.scenario.ts",
+      filePath: "scenarios/checkout.scenario.ts",
+      kind: "file"
+    });
     const affectedGraph = {
-      symbols: [routeOnlyTest, heuristicTest, reexportTest, directTest, barrelFile, changedFile],
+      symbols: [customScenario, routeOnlyTest, heuristicTest, reexportTest, directTest, barrelFile, changedFile],
       edges: [
         edge({ id: "barrel-exports-math", sourceId: "barrel-file", targetId: "changed-file", kind: "exports" }),
         edge({ id: "direct-imports-math", sourceId: "direct-test", targetId: "changed-file", kind: "imports" }),
         edge({ id: "test-imports-barrel", sourceId: "reexport-test", targetId: "barrel-file", kind: "imports" }),
+        edge({ id: "scenario-imports-math", sourceId: "custom-scenario", targetId: "changed-file", kind: "imports" }),
         edge({ id: "route-only-binding", sourceId: "route-only-test", targetId: "changed-file", kind: "routes" }),
         edge({
           id: "heuristic-import",
@@ -925,6 +932,17 @@ describe("pure graph traversal", () => {
       "tests/math.spec.ts"
     ]);
     expect(result.paths[1]?.edges.map((item) => item.kind)).toEqual(["exports", "imports"]);
+
+    const customResult = findAffectedTestPaths(affectedGraph, "changed-file", {
+      maxDepth: 2,
+      maxResults: 1,
+      maxVisitedFiles: 20,
+      testClassifier: (filePath) => filePath.endsWith(".scenario.ts") ? "custom-pattern" : null
+    });
+    expect(customResult).toMatchObject({ resultLimitReached: false });
+    expect(customResult.paths.map((path) => path.symbols.at(-1)?.filePath)).toEqual([
+      "scenarios/checkout.scenario.ts"
+    ]);
     expect(classifyTestFile("test/math.test.ts")).toBe("test-directory");
     expect(classifyTestFile("src/math.test.ts")).toBe("test-file-name");
     expect(classifyTestFile("src/math.ts")).toBeNull();
