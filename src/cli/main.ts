@@ -15,6 +15,8 @@ import {
   MAX_CONTEXT_MAX_HOPS,
   MAX_CONTEXT_RELATION_LIMIT,
   INVESTIGATE_RANKING_STRATEGIES,
+  MAX_INVESTIGATION_SOURCE_CHARACTER_BUDGET,
+  MIN_INVESTIGATION_SOURCE_CHARACTER_BUDGET,
   MAX_INVESTIGATE_SYMBOL_LIMIT,
   MAX_GENERATION_DIFF_LIMIT,
   MAX_GENERATION_HISTORY_LIMIT,
@@ -161,6 +163,7 @@ interface FileViewCommandOptions extends ProjectOptions {
 interface InvestigateCommandOptions extends ProjectOptions {
   readonly searchLimit?: number;
   readonly symbolLimit?: number;
+  readonly sourceCharacterBudget?: number;
   readonly ranking?: NonNullable<InvestigateOptions["ranking"]>;
   readonly path?: string;
   readonly language?: NonNullable<InvestigateOptions["language"]>;
@@ -470,6 +473,16 @@ function parseBoundedPositiveInteger(value: string, maximum: number): number {
   const parsed = parsePositiveInteger(value);
   if (parsed > maximum) {
     throw new Error(`Expected an integer between 1 and ${maximum}, received \"${value}\".`);
+  }
+  return parsed;
+}
+
+function parseBoundedInteger(value: string, minimum: number, maximum: number): number {
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < minimum || parsed > maximum) {
+    throw new Error(
+      `Expected an integer between ${minimum} and ${maximum}, received \"${value}\".`
+    );
   }
   return parsed;
 }
@@ -1590,6 +1603,15 @@ export function createProgram(
       (value: string) => parseBoundedPositiveInteger(value, MAX_INVESTIGATE_SYMBOL_LIMIT)
     )
     .option(
+      "--source-character-budget <count>",
+      `Shared declaration-source character budget (${MIN_INVESTIGATION_SOURCE_CHARACTER_BUDGET}-${MAX_INVESTIGATION_SOURCE_CHARACTER_BUDGET})`,
+      (value: string) => parseBoundedInteger(
+        value,
+        MIN_INVESTIGATION_SOURCE_CHARACTER_BUDGET,
+        MAX_INVESTIGATION_SOURCE_CHARACTER_BUDGET
+      )
+    )
+    .option(
       "--ranking <lexical|structure|impact|topology>",
       "Select persisted FTS order, direct static structure, bounded exact reverse impact, or bounded exact-static topology ranking",
       parseInvestigateRanking
@@ -1624,6 +1646,9 @@ export function createProgram(
       const investigateOptions: InvestigateOptions = {
         ...(options.searchLimit === undefined ? {} : { searchLimit: options.searchLimit }),
         ...(options.symbolLimit === undefined ? {} : { symbolLimit: options.symbolLimit }),
+        ...(options.sourceCharacterBudget === undefined
+          ? {}
+          : { sourceCharacterBudget: options.sourceCharacterBudget }),
         ...(options.ranking === undefined ? {} : { ranking: options.ranking }),
         ...(options.path === undefined ? {} : { pathPrefix: options.path }),
         ...(options.language === undefined ? {} : { language: options.language }),

@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.272.0 是開發預覽版。MCP 查詢工具唯讀；但 `serve --mcp` 預設會啟動獨立的本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用它。
+> v0.273.0 是開發預覽版。MCP 查詢工具唯讀；但 `serve --mcp` 預設會啟動獨立的本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用它。
 
 ## 快速開始
 
@@ -46,6 +46,7 @@ node dist/cli/main.js file service.ts --project /path/to/project --offset 1600 -
 
 ## 核心能力
 
+- `investigate` 以 2,048–64,000 字元的共享 declaration-source 預算，按入選順位在檔案間比例配置；短檔未用容量會重新分配，生成檔只降低權重而不隱藏，並回傳逐檔與逐 declaration 的配置、截斷收據。
 - 將多種語言與常見框架掃描成專案本機程式碼圖譜。
 - 查詢 symbols、files、calls、routes、entrypoints、impact、history 與 diff。
 - 每條關係保留規則、階段、候選目標、信心度、解析路徑與來源範圍。

@@ -218,13 +218,35 @@ function investigateResult(): InvestigateResult {
       ranking: "lexical",
       declarationSource: {
         sourceLineLimit: 200,
-        sourceCharacterLimit: 16_000
+        sourceCharacterLimit: 16_000,
+        totalCharacterBudget: 24_000,
+        minimumTotalCharacterBudget: 2_048,
+        maximumTotalCharacterBudget: 64_000,
+        allocationPolicy: "proportional-source-v1"
       },
       context: context.bounds
     },
     search: { results: [] },
     selection: { items: [], total: 0, truncated: false },
     declarations: [],
+    sourceAllocation: {
+      policy: "proportional-source-v1",
+      budget: {
+        characterBudget: 24_000,
+        minimumCharacterBudget: 2_048,
+        maximumCharacterBudget: 64_000,
+        minimumPerFile: 256
+      },
+      summary: {
+        candidateFileCount: 0,
+        requestedCharacters: 0,
+        allocatedCharacters: 0,
+        emittedCharacters: 0,
+        unusedCharacters: 24_000,
+        truncated: false
+      },
+      files: []
+    },
     contexts: context.contexts,
     evidencePaths: context.evidencePaths
   };
@@ -1231,6 +1253,8 @@ describe("symbol-lattice investigate CLI", () => {
         "7",
         "--symbol-limit",
         "2",
+        "--source-character-budget",
+        "4096",
         "--ranking",
         "topology",
         "--path",
@@ -1257,6 +1281,7 @@ describe("symbol-lattice investigate CLI", () => {
         options: {
           searchLimit: 7,
           symbolLimit: 2,
+          sourceCharacterBudget: 4096,
           ranking: "topology",
           pathPrefix: "src/",
           language: "python",
@@ -1292,6 +1317,18 @@ describe("symbol-lattice investigate CLI", () => {
         { from: "node" }
       )
     ).rejects.toThrow("Expected one of: lexical, structure, impact, topology");
+  });
+
+  it("rejects a shared source budget outside the public investigation bound", async () => {
+    const program = createProgram({} as SymbolLatticeService);
+    program.exitOverride();
+
+    await expect(
+      program.parseAsync(
+        ["node", "symbol-lattice", "investigate", "user", "--source-character-budget", "2047"],
+        { from: "node" }
+      )
+    ).rejects.toThrow("Expected an integer between 2048 and 64000");
   });
 });
 

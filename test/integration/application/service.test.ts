@@ -2243,7 +2243,11 @@ describe("SymbolLatticeService", () => {
 
     expect(result.bounds.declarationSource).toEqual({
       sourceLineLimit: NODE_SOURCE_LINE_LIMIT,
-      sourceCharacterLimit: NODE_SOURCE_CHARACTER_LIMIT
+      sourceCharacterLimit: NODE_SOURCE_CHARACTER_LIMIT,
+      totalCharacterBudget: 24_000,
+      minimumTotalCharacterBudget: 2_048,
+      maximumTotalCharacterBudget: 64_000,
+      allocationPolicy: "proportional-source-v1"
     });
     expect(result.declarations[0]).toMatchObject({
       reference: "src/bounded-investigation.ts#boundedInvestigationTarget",

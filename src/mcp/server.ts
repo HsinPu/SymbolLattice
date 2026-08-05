@@ -5,6 +5,12 @@ import { z } from "zod";
 
 import { SymbolLatticeError } from "../application/errors.js";
 import {
+  INVESTIGATION_SOURCE_ALLOCATION_POLICY,
+  INVESTIGATION_SOURCE_MINIMUM_PER_FILE,
+  MAX_INVESTIGATION_SOURCE_CHARACTER_BUDGET,
+  MIN_INVESTIGATION_SOURCE_CHARACTER_BUDGET
+} from "../application/context-allocation.js";
+import {
   MAX_AUTO_SYNC_DIAGNOSTIC_JOURNAL_EVENTS,
   type AutoSyncDiagnosticJournalOptions,
   type AutoSyncDiagnosticJournalResult
@@ -320,6 +326,7 @@ export interface InvestigateToolArguments {
   readonly projectPath?: string | undefined;
   readonly searchLimit?: number | undefined;
   readonly symbolLimit?: number | undefined;
+  readonly sourceCharacterBudget?: number | undefined;
   readonly ranking?: InvestigateOptions["ranking"];
   /** Project-relative source-path prefix. */
   readonly path?: string | undefined;
@@ -860,7 +867,11 @@ const investigateOutputSchema = z
       ranking: z.enum(INVESTIGATE_RANKING_STRATEGIES),
       declarationSource: z.object({
         sourceLineLimit: z.number().int().positive(),
-        sourceCharacterLimit: z.number().int().positive()
+        sourceCharacterLimit: z.number().int().positive(),
+        totalCharacterBudget: z.number().int().min(MIN_INVESTIGATION_SOURCE_CHARACTER_BUDGET).max(MAX_INVESTIGATION_SOURCE_CHARACTER_BUDGET),
+        minimumTotalCharacterBudget: z.literal(MIN_INVESTIGATION_SOURCE_CHARACTER_BUDGET),
+        maximumTotalCharacterBudget: z.literal(MAX_INVESTIGATION_SOURCE_CHARACTER_BUDGET),
+        allocationPolicy: z.literal(INVESTIGATION_SOURCE_ALLOCATION_POLICY)
       }),
       context: z.object({
         maxReferences: z.number().int().positive(),
@@ -989,9 +1000,46 @@ const investigateOutputSchema = z
       z.object({
         reference: z.string(),
         sourceAvailability: z.enum(["active-generation", "unavailable", "not-applicable"]),
-        source: nodeSourceOutputSchema.nullable()
+        source: nodeSourceOutputSchema.nullable(),
+        allocation: z.object({
+          selectionRank: z.number().int().positive(),
+          requestedCharacters: z.number().int().nonnegative(),
+          allocatedCharacters: z.number().int().nonnegative(),
+          emittedCharacters: z.number().int().nonnegative(),
+          truncated: z.boolean()
+        }).nullable()
       })
     ),
+    sourceAllocation: z.object({
+      policy: z.literal(INVESTIGATION_SOURCE_ALLOCATION_POLICY),
+      budget: z.object({
+        characterBudget: z.number().int().min(MIN_INVESTIGATION_SOURCE_CHARACTER_BUDGET).max(MAX_INVESTIGATION_SOURCE_CHARACTER_BUDGET),
+        minimumCharacterBudget: z.literal(MIN_INVESTIGATION_SOURCE_CHARACTER_BUDGET),
+        maximumCharacterBudget: z.literal(MAX_INVESTIGATION_SOURCE_CHARACTER_BUDGET),
+        minimumPerFile: z.literal(INVESTIGATION_SOURCE_MINIMUM_PER_FILE)
+      }),
+      summary: z.object({
+        candidateFileCount: z.number().int().nonnegative(),
+        requestedCharacters: z.number().int().nonnegative(),
+        allocatedCharacters: z.number().int().nonnegative(),
+        emittedCharacters: z.number().int().nonnegative(),
+        unusedCharacters: z.number().int().nonnegative(),
+        truncated: z.boolean()
+      }),
+      files: z.array(z.object({
+        filePath: z.string().min(1),
+        selectionRanks: z.array(z.number().int().positive()).min(1),
+        declarationReferences: z.array(z.string().min(1)).min(1),
+        requestedCharacters: z.number().int().nonnegative(),
+        rankWeight: z.number().positive(),
+        generatedMultiplier: z.number().positive().max(1),
+        effectiveWeight: z.number().positive(),
+        allocatedCharacters: z.number().int().nonnegative(),
+        emittedCharacters: z.number().int().nonnegative(),
+        truncated: z.boolean(),
+        reason: z.enum(["selection-rank-weight", "generated-file-worth-penalty"])
+      }))
+    }),
     contexts: z.array(z.object({}).passthrough()),
     evidencePaths: z.array(z.object({}).passthrough())
   })
@@ -1635,6 +1683,9 @@ export async function runInvestigateTool(
     const options: InvestigateOptions = {
       ...(arguments_.searchLimit === undefined ? {} : { searchLimit: arguments_.searchLimit }),
       ...(arguments_.symbolLimit === undefined ? {} : { symbolLimit: arguments_.symbolLimit }),
+      ...(arguments_.sourceCharacterBudget === undefined
+        ? {}
+        : { sourceCharacterBudget: arguments_.sourceCharacterBudget }),
       ...(arguments_.ranking === undefined ? {} : { ranking: arguments_.ranking }),
       ...(arguments_.path === undefined ? {} : { pathPrefix: arguments_.path }),
       ...(arguments_.language === undefined ? {} : { language: arguments_.language }),
@@ -2276,6 +2327,13 @@ export function createMcpServer(
             .max(MAX_INVESTIGATE_SYMBOL_LIMIT)
             .optional()
             .describe(`Maximum distinct declaration contexts returned (1-${MAX_INVESTIGATE_SYMBOL_LIMIT}).`),
+          sourceCharacterBudget: z
+            .number()
+            .int()
+            .min(MIN_INVESTIGATION_SOURCE_CHARACTER_BUDGET)
+            .max(MAX_INVESTIGATION_SOURCE_CHARACTER_BUDGET)
+            .optional()
+            .describe(`Shared emitted declaration-source budget (${MIN_INVESTIGATION_SOURCE_CHARACTER_BUDGET}-${MAX_INVESTIGATION_SOURCE_CHARACTER_BUDGET} characters).`),
           ranking: z
             .enum(INVESTIGATE_RANKING_STRATEGIES)
             .optional()

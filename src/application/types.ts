@@ -688,6 +688,8 @@ export interface InvestigateOptions extends ContextOptions {
   readonly searchLimit?: number;
   /** Maximum distinct exact symbol candidates expanded into graph context. */
   readonly symbolLimit?: number;
+  /** Shared emitted declaration-source envelope across all selected files. */
+  readonly sourceCharacterBudget?: number;
   /** `lexical` preserves persisted FTS order; `structure` and `impact` use disclosed static signals. */
   readonly ranking?: InvestigateRankingStrategy;
   /** Project-relative directory or file prefix for the persisted source search. */
@@ -966,7 +968,31 @@ export interface InvestigationDeclaration {
   readonly sourceAvailability: SourceAvailability;
   /** Exact persisted declaration text, subject to the declared response bounds. */
   readonly source: NodeSource | null;
+  /** Null only when persisted declaration source is unavailable. */
+  readonly allocation: InvestigationDeclarationAllocation | null;
 }
+
+export interface InvestigationDeclarationAllocation {
+  readonly selectionRank: number;
+  readonly requestedCharacters: number;
+  readonly allocatedCharacters: number;
+  readonly emittedCharacters: number;
+  readonly truncated: boolean;
+}
+
+export type InvestigationSourceFileAllocationReceipt =
+  import("./context-allocation.js").InvestigationSourceFileAllocation & {
+  readonly declarationReferences: readonly string[];
+  readonly emittedCharacters: number;
+};
+
+export type InvestigationSourceAllocationResult =
+  Omit<import("./context-allocation.js").InvestigationSourceAllocation, "files" | "summary"> & {
+  readonly summary: import("./context-allocation.js").InvestigationSourceAllocation["summary"] & {
+    readonly emittedCharacters: number;
+  };
+  readonly files: readonly InvestigationSourceFileAllocationReceipt[];
+};
 
 /** Actual bounds used for one persisted-source investigation. */
 export interface InvestigateBounds {
@@ -976,10 +1002,14 @@ export interface InvestigateBounds {
   readonly maximumSymbolLimit: number;
   /** Actual selection strategy; `lexical` is the backwards-compatible default. */
   readonly ranking: InvestigateRankingStrategy;
-  /** Fixed bounds applied independently to every selected declaration source. */
+  /** Per-declaration safety caps plus one shared emitted-source envelope. */
   readonly declarationSource: {
     readonly sourceLineLimit: number;
     readonly sourceCharacterLimit: number;
+    readonly totalCharacterBudget: number;
+    readonly minimumTotalCharacterBudget: number;
+    readonly maximumTotalCharacterBudget: number;
+    readonly allocationPolicy: typeof import("./context-allocation.js").INVESTIGATION_SOURCE_ALLOCATION_POLICY;
   };
   readonly context: ContextBounds;
 }
@@ -999,6 +1029,7 @@ export interface InvestigateResult {
   readonly selection: InvestigationSelectionResult;
   /** Bounded exact declaration source for every selected symbol, in selection order. */
   readonly declarations: readonly InvestigationDeclaration[];
+  readonly sourceAllocation: InvestigationSourceAllocationResult;
   readonly contexts: readonly SymbolContext[];
   readonly evidencePaths: readonly ContextEvidencePath[];
 }

@@ -97,6 +97,13 @@ import {
 } from "./file-inventory.js";
 import { rankGeneratedValues, type GeneratedRankingItem } from "./generated-ranking.js";
 import {
+  allocateInvestigationSource,
+  DEFAULT_INVESTIGATION_SOURCE_CHARACTER_BUDGET,
+  INVESTIGATION_SOURCE_ALLOCATION_POLICY,
+  MAX_INVESTIGATION_SOURCE_CHARACTER_BUDGET,
+  MIN_INVESTIGATION_SOURCE_CHARACTER_BUDGET
+} from "./context-allocation.js";
+import {
   frameworkProjectPluginProjectVersion,
   type FrameworkProjectPluginRegistry
 } from "./framework-project-plugins.js";
@@ -200,12 +207,14 @@ import type {
   ImpactResult,
   IndexedFileSummary,
   InvestigationDeclaration,
+  InvestigationDeclarationAllocation,
   InvestigationImpactSignals,
   InvestigateOptions,
   InvestigateRankingStrategy,
   InvestigateResult,
   InvestigationSelection,
   InvestigationSelectionResult,
+  InvestigationSourceAllocationResult,
   InvestigationStructuralSignals,
   InvestigationTopologySignals,
   NodeBounds,
@@ -286,6 +295,7 @@ interface InvestigateRequest {
   readonly search: NormalizedSourceSearchRequest;
   readonly symbolLimit: number;
   readonly ranking: InvestigateRankingStrategy;
+  readonly sourceCharacterBudget: number;
   readonly contextBounds: ContextBounds;
 }
 
@@ -368,6 +378,11 @@ interface ContextRead {
   readonly bundle: ActiveGraphBundle;
   readonly matches: readonly SymbolMatch[];
   readonly documentsByFilePath: ReadonlyMap<string, IndexedSourceDocument>;
+}
+
+interface InvestigationDeclarationDraft {
+  readonly selection: InvestigationSelection;
+  readonly source: NodeSource | null;
 }
 
 const NODE_BOUNDS: NodeBounds = {
@@ -762,6 +777,60 @@ function nodeSourceFromPersistedText(
     totalCharacters: endOffset - startOffset,
     truncated: boundedEnd < endOffset
   };
+}
+
+function allocateDeclarationCharacterShares(
+  drafts: readonly InvestigationDeclarationDraft[],
+  characterBudget: number,
+  selectionCount: number
+): ReadonlyMap<string, number> {
+  const shares = new Map<string, number>();
+  const candidates = drafts.flatMap((draft) => {
+    if (draft.source === null) {
+      return [];
+    }
+    const reference = draft.selection.symbol.qualifiedName;
+    if (shares.has(reference)) {
+      throw new Error(`Duplicate investigation declaration allocation identity: ${reference}.`);
+    }
+    shares.set(reference, 0);
+    return [{
+      reference,
+      requestedCharacters: draft.source.text.length,
+      weight: selectionCount - draft.selection.selectionRank + 1
+    }];
+  });
+  let remaining = characterBudget;
+  while (remaining > 0) {
+    const active = candidates.filter(
+      (candidate) => (shares.get(candidate.reference) ?? 0) < candidate.requestedCharacters
+    );
+    if (active.length === 0) {
+      break;
+    }
+    const totalWeight = active.reduce((total, candidate) => total + candidate.weight, 0);
+    const availableAtRoundStart = remaining;
+    let distributed = 0;
+    for (const candidate of active) {
+      if (remaining === 0) {
+        break;
+      }
+      const current = shares.get(candidate.reference) ?? 0;
+      const unmet = candidate.requestedCharacters - current;
+      const proposal = Math.max(
+        1,
+        Math.floor(availableAtRoundStart * candidate.weight / totalWeight)
+      );
+      const addition = Math.min(unmet, proposal, remaining);
+      shares.set(candidate.reference, current + addition);
+      remaining -= addition;
+      distributed += addition;
+    }
+    if (distributed === 0) {
+      break;
+    }
+  }
+  return shares;
 }
 
 interface PersistedLexicalMatch {
@@ -1426,7 +1495,11 @@ export class SymbolLatticeService {
     const contexts = read.matches.map((match) =>
       this.toSymbolContext(match.reference, match, read, request.contextBounds)
     );
-    const declarations = this.investigationDeclarations(selection, read.documentsByFilePath);
+    const declarationPack = this.investigationDeclarations(
+      selection,
+      read.documentsByFilePath,
+      request.sourceCharacterBudget
+    );
 
     return {
       status: await this.getStatusForBundle(normalizedProjectPath, bundle),
@@ -1439,13 +1512,18 @@ export class SymbolLatticeService {
         ranking: request.ranking,
         declarationSource: {
           sourceLineLimit: NODE_SOURCE_LINE_LIMIT,
-          sourceCharacterLimit: NODE_SOURCE_CHARACTER_LIMIT
+          sourceCharacterLimit: NODE_SOURCE_CHARACTER_LIMIT,
+          totalCharacterBudget: request.sourceCharacterBudget,
+          minimumTotalCharacterBudget: MIN_INVESTIGATION_SOURCE_CHARACTER_BUDGET,
+          maximumTotalCharacterBudget: MAX_INVESTIGATION_SOURCE_CHARACTER_BUDGET,
+          allocationPolicy: INVESTIGATION_SOURCE_ALLOCATION_POLICY
         },
         context: request.contextBounds
       },
       search: { results: searchResults },
       selection,
-      declarations,
+      declarations: declarationPack.declarations,
+      sourceAllocation: declarationPack.allocation,
       contexts,
       evidencePaths: this.contextEvidencePaths(read.matches, bundle, request.contextBounds)
     };
@@ -2844,7 +2922,26 @@ export class SymbolLatticeService {
       );
     }
 
-    return { search, symbolLimit, ranking, contextBounds: this.contextBounds(options) };
+    const sourceCharacterBudget =
+      options.sourceCharacterBudget ?? DEFAULT_INVESTIGATION_SOURCE_CHARACTER_BUDGET;
+    if (
+      !Number.isSafeInteger(sourceCharacterBudget) ||
+      sourceCharacterBudget < MIN_INVESTIGATION_SOURCE_CHARACTER_BUDGET ||
+      sourceCharacterBudget > MAX_INVESTIGATION_SOURCE_CHARACTER_BUDGET
+    ) {
+      throw new SymbolLatticeError(
+        "INVALID_INVESTIGATE_SOURCE_CHARACTER_BUDGET",
+        `Investigate source character budget must be a whole number from ${MIN_INVESTIGATION_SOURCE_CHARACTER_BUDGET} to ${MAX_INVESTIGATION_SOURCE_CHARACTER_BUDGET}.`
+      );
+    }
+
+    return {
+      search,
+      symbolLimit,
+      ranking,
+      sourceCharacterBudget,
+      contextBounds: this.contextBounds(options)
+    };
   }
 
   private contextBounds(options: ContextOptions): ContextBounds {
@@ -3770,21 +3867,136 @@ export class SymbolLatticeService {
    */
   private investigationDeclarations(
     selection: InvestigationSelectionResult,
-    documentsByFilePath: ReadonlyMap<string, IndexedSourceDocument>
-  ): readonly InvestigationDeclaration[] {
-    return selection.items.map(({ symbol }) => {
+    documentsByFilePath: ReadonlyMap<string, IndexedSourceDocument>,
+    sourceCharacterBudget: number
+  ): {
+    readonly declarations: readonly InvestigationDeclaration[];
+    readonly allocation: InvestigationSourceAllocationResult;
+  } {
+    const drafts: readonly InvestigationDeclarationDraft[] = selection.items.map((item) => {
+      const { symbol } = item;
       const sourceDocument = documentsByFilePath.get(symbol.filePath);
       const source =
         sourceDocument === undefined
           ? null
           : nodeSourceFromPersistedText(sourceDocument.filePath, sourceDocument.sourceText, symbol.range);
+      return { selection: item, source };
+    });
+    const grouped = new Map<string, {
+      readonly filePath: string;
+      readonly selectionRanks: number[];
+      readonly declarationReferences: string[];
+      requestedCharacters: number;
+      generatedPenalty: 0 | 1;
+      readonly drafts: InvestigationDeclarationDraft[];
+    }>();
+    for (const draft of drafts) {
+      if (draft.source === null) {
+        continue;
+      }
+      const filePath = draft.selection.symbol.filePath;
+      const group = grouped.get(filePath) ?? {
+        filePath,
+        selectionRanks: [],
+        declarationReferences: [],
+        requestedCharacters: 0,
+        generatedPenalty: draft.selection.generatedRanking.generatedPenalty,
+        drafts: []
+      };
+      group.selectionRanks.push(draft.selection.selectionRank);
+      group.declarationReferences.push(draft.selection.symbol.qualifiedName);
+      group.requestedCharacters += draft.source.text.length;
+      group.generatedPenalty = Math.max(
+        group.generatedPenalty,
+        draft.selection.generatedRanking.generatedPenalty
+      ) as 0 | 1;
+      group.drafts.push(draft);
+      grouped.set(filePath, group);
+    }
 
+    const reservation = allocateInvestigationSource({
+      candidates: [...grouped.values()].map((group) => ({
+        filePath: group.filePath,
+        requestedCharacters: group.requestedCharacters,
+        selectionRanks: group.selectionRanks,
+        generatedPenalty: group.generatedPenalty
+      })),
+      characterBudget: sourceCharacterBudget,
+      selectionCount: selection.items.length
+    });
+    const declarationAllocations = new Map<string, InvestigationDeclarationAllocation>();
+    for (const file of reservation.files) {
+      const group = grouped.get(file.filePath);
+      if (group === undefined) {
+        throw new Error(`Missing investigation source allocation group for ${file.filePath}.`);
+      }
+      const shares = allocateDeclarationCharacterShares(
+        group.drafts,
+        file.allocatedCharacters,
+        selection.items.length
+      );
+      for (const draft of group.drafts) {
+        const reference = draft.selection.symbol.qualifiedName;
+        const source = draft.source;
+        if (source === null) {
+          continue;
+        }
+        const allocatedCharacters = shares.get(reference) ?? 0;
+        declarationAllocations.set(reference, {
+          selectionRank: draft.selection.selectionRank,
+          requestedCharacters: source.text.length,
+          allocatedCharacters,
+          emittedCharacters: allocatedCharacters,
+          truncated: source.truncated || allocatedCharacters < source.text.length
+        });
+      }
+    }
+
+    const declarations = drafts.map((draft): InvestigationDeclaration => {
+      const reference = draft.selection.symbol.qualifiedName;
+      const allocation = declarationAllocations.get(reference) ?? null;
+      const source = draft.source === null || allocation === null
+        ? null
+        : {
+            ...draft.source,
+            text: draft.source.text.slice(0, allocation.emittedCharacters),
+            truncated: allocation.truncated
+          };
       return {
-        reference: symbol.qualifiedName,
+        reference,
         sourceAvailability: source === null ? "unavailable" : "active-generation",
-        source
+        source,
+        allocation
       };
     });
+    const files = reservation.files.map((file) => {
+      const group = grouped.get(file.filePath);
+      if (group === undefined) {
+        throw new Error(`Missing investigation allocation receipt group for ${file.filePath}.`);
+      }
+      const emittedCharacters = group.declarationReferences.reduce(
+        (total, reference) =>
+          total + (declarationAllocations.get(reference)?.emittedCharacters ?? 0),
+        0
+      );
+      return {
+        ...file,
+        declarationReferences: [...group.declarationReferences],
+        emittedCharacters
+      };
+    });
+    const emittedCharacters = files.reduce(
+      (total, file) => total + file.emittedCharacters,
+      0
+    );
+    return {
+      declarations,
+      allocation: {
+        ...reservation,
+        summary: { ...reservation.summary, emittedCharacters },
+        files
+      }
+    };
   }
 
   private extractPersistedFacts(

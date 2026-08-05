@@ -535,7 +535,11 @@ function investigateResult(): InvestigateResult {
       ranking: "topology",
       declarationSource: {
         sourceLineLimit: 200,
-        sourceCharacterLimit: 16_000
+        sourceCharacterLimit: 16_000,
+        totalCharacterBudget: 24_000,
+        minimumTotalCharacterBudget: 2_048,
+        maximumTotalCharacterBudget: 64_000,
+        allocationPolicy: "proportional-source-v1"
       },
       context: context.bounds
     },
@@ -597,9 +601,48 @@ function investigateResult(): InvestigateResult {
           totalLines: 1,
           totalCharacters: 35,
           truncated: false
+        },
+        allocation: {
+          selectionRank: 1,
+          requestedCharacters: 35,
+          allocatedCharacters: 35,
+          emittedCharacters: 35,
+          truncated: false
         }
       }
     ],
+    sourceAllocation: {
+      policy: "proportional-source-v1",
+      budget: {
+        characterBudget: 24_000,
+        minimumCharacterBudget: 2_048,
+        maximumCharacterBudget: 64_000,
+        minimumPerFile: 256
+      },
+      summary: {
+        candidateFileCount: 1,
+        requestedCharacters: 35,
+        allocatedCharacters: 35,
+        emittedCharacters: 35,
+        unusedCharacters: 23_965,
+        truncated: false
+      },
+      files: [
+        {
+          filePath: candidate.filePath,
+          selectionRanks: [1],
+          declarationReferences: [candidate.qualifiedName],
+          requestedCharacters: 35,
+          rankWeight: 1,
+          generatedMultiplier: 1,
+          effectiveWeight: 1,
+          allocatedCharacters: 35,
+          emittedCharacters: 35,
+          truncated: false,
+          reason: "selection-rank-weight"
+        }
+      ]
+    },
     contexts: context.contexts,
     evidencePaths: context.evidencePaths
   };
@@ -2245,6 +2288,7 @@ describe("SymbolLattice MCP server", () => {
         query: "user",
         searchLimit: 4,
         symbolLimit: 2,
+        sourceCharacterBudget: 4096,
         ranking: "topology",
         path: "src/",
         language: "typescript",
@@ -2290,6 +2334,7 @@ describe("SymbolLattice MCP server", () => {
         options: {
           searchLimit: 4,
           symbolLimit: 2,
+          sourceCharacterBudget: 4096,
           ranking: "topology",
           pathPrefix: "src/",
           language: "typescript",

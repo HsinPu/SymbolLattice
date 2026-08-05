@@ -2,6 +2,7 @@ export * from "./errors.js";
 export * from "./file-inventory.js";
 export * from "./framework-project-plugins.js";
 export * from "./generated-ranking.js";
+export * from "./context-allocation.js";
 export * from "./plugin-modules.js";
 export * from "./reference-resolver-plugins.js";
 export * from "./auto-sync-journal.js";
