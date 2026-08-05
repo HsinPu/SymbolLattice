@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.271.0 是開發預覽版。MCP 查詢工具唯讀；但 `serve --mcp` 預設會啟動獨立的本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用它。
+> v0.272.0 是開發預覽版。MCP 查詢工具唯讀；但 `serve --mcp` 預設會啟動獨立的本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用它。
 
 ## 快速開始
 
@@ -49,6 +49,7 @@ node dist/cli/main.js file service.ts --project /path/to/project --offset 1600 -
 - 將多種語言與常見框架掃描成專案本機程式碼圖譜。
 - 查詢 symbols、files、calls、routes、entrypoints、impact、history 與 diff。
 - 每條關係保留規則、階段、候選目標、信心度、解析路徑與來源範圍。
+- 索引時以有界的路徑與檔頭規則辨識生成檔，保存規則 ID 與檔頭範圍；`files`、`search`、`find`、`investigate`、`callers`、`callees` 只做可解釋的 soft-rank，不會隱藏生成檔。
 - `files` 僅查詢 active generation 已保存的檔案，支援目錄邊界正確的路徑篩選、anchored glob、flat/tree/grouped 投影與安全游標分頁；`src` 不會誤含 `src2`，游標會綁定 generation 與篩選條件。
 - `file` 預設提供精簡的逐行閱讀畫面，附依賴、選取方式、generation 與 freshness；`--json` 保留穩定機器契約。精確路徑優先、接受唯一後綴，遇到歧義不猜測，offset 超過 EOF 會明確失敗；YAML 與 properties 只顯示結構，不洩漏內容值。
 - 擴充框架的 route plugin 可精確解析同檔案與跨檔案固定 prefix mount；`explain-edge` 會顯示每段 mount 與 ESM import／re-export 路徑。動態或模糊組合不會被猜測成路由。

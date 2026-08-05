@@ -3070,7 +3070,7 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
         hostId: "123e4567-e89b-42d3-a456-426614174000",
         kind: "foreground-watch",
         pid: process.pid,
-        version: "0.271.0"
+        version: "0.272.0"
       })
     ]);
   });
@@ -3252,7 +3252,7 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
     expect(monitor).toHaveBeenCalledWith(hostRecords[0], expect.any(Function));
     expect(closeStopMonitor).toHaveBeenCalledTimes(1);
     expect(hostRecords).toEqual([
-      expect.objectContaining({ kind: "mcp-auto-sync", pid: process.pid, version: "0.271.0" })
+      expect.objectContaining({ kind: "mcp-auto-sync", pid: process.pid, version: "0.272.0" })
     ]);
   });
 

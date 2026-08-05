@@ -23,6 +23,7 @@ import type {
   SymbolKind,
   SymbolNode
 } from "../../domain/types.js";
+import type { GeneratedFileClassification } from "../../domain/generated-files.js";
 import {
   MAX_SOURCE_SEARCH_LIMIT,
   sourceSearchCorpus,
@@ -81,7 +82,9 @@ const SNAPSHOT_SCHEMA = `
     path TEXT PRIMARY KEY,
     content_hash TEXT NOT NULL,
     language TEXT NOT NULL,
-    indexed_at TEXT NOT NULL
+    indexed_at TEXT NOT NULL,
+    generated INTEGER NOT NULL DEFAULT 0,
+    generated_evidence_json TEXT
   ) STRICT;
 
   CREATE TABLE IF NOT EXISTS symbols (
@@ -286,6 +289,8 @@ interface FileRow {
   readonly content_hash: string;
   readonly language: IndexedFile["language"];
   readonly indexed_at: string;
+  readonly generated: number;
+  readonly generated_evidence_json: string | null;
 }
 
 interface SymbolRow {
@@ -426,6 +431,18 @@ function ensurePendingReferenceExtensionColumn(database: DatabaseSync): void {
   }
 }
 
+function ensureGeneratedFileColumns(database: DatabaseSync): void {
+  if (!columnExists(database, "files", "generated")) {
+    database.exec("ALTER TABLE files ADD COLUMN generated INTEGER NOT NULL DEFAULT 0");
+  }
+  if (!columnExists(database, "files", "generated_evidence_json")) {
+    database.exec("ALTER TABLE files ADD COLUMN generated_evidence_json TEXT");
+  }
+  database.exec(
+    "CREATE INDEX IF NOT EXISTS files_generated_path ON files(path) WHERE generated = 1"
+  );
+}
+
 function readCount(database: DatabaseSync, tableName: string): number {
   const row = database.prepare(`SELECT COUNT(*) AS count FROM ${tableName}`).get() as unknown as CountRow;
   return row.count;
@@ -543,6 +560,7 @@ function migrateDatabaseToCurrent(database: DatabaseSync): void {
     // upgrade that preserves the active graph and any raw facts already there.
     installCurrentAdditiveSchema(database);
     ensurePendingReferenceExtensionColumn(database);
+    ensureGeneratedFileColumns(database);
     cleanOrphanedSourceSearchRows(database);
     backfillActiveGenerationSnapshot(database);
     pruneRetainedGenerations(database, getActiveGenerationId(database));
@@ -560,6 +578,7 @@ function initializeNewDatabase(database: DatabaseSync): void {
     database.exec(SNAPSHOT_SCHEMA);
     installCurrentAdditiveSchema(database);
     ensurePendingReferenceExtensionColumn(database);
+    ensureGeneratedFileColumns(database);
     backfillActiveGenerationSnapshot(database);
     pruneRetainedGenerations(database, getActiveGenerationId(database));
     setMeta(database, SCHEMA_VERSION_META_KEY, SCHEMA_VERSION);
@@ -589,6 +608,7 @@ function ensureSchema(database: DatabaseSync, databaseExisted: boolean): void {
   try {
     installCurrentAdditiveSchema(database);
     ensurePendingReferenceExtensionColumn(database);
+    ensureGeneratedFileColumns(database);
     cleanOrphanedSourceSearchRows(database);
     backfillActiveGenerationSnapshot(database);
     pruneRetainedGenerations(database, getActiveGenerationId(database));
@@ -648,6 +668,25 @@ function parseJson<T>(json: string, description: string): T {
     const reason = error instanceof Error ? ` ${error.message}` : "";
     throw new Error(`SymbolLattice index contains invalid ${description} JSON.${reason}`);
   }
+}
+
+function generatedFileClassification(row: FileRow): GeneratedFileClassification | null {
+  if (row.generated_evidence_json !== null) {
+    const parsed = parseJson<GeneratedFileClassification>(
+      row.generated_evidence_json,
+      `generated-file evidence for ${row.path}`
+    );
+    if (
+      typeof parsed.classifierVersion === "string" &&
+      parsed.classifierVersion.length > 0 &&
+      typeof parsed.generated === "boolean" &&
+      Array.isArray(parsed.evidence)
+    ) {
+      return parsed;
+    }
+    throw new Error(`Generated-file evidence for ${row.path} has an invalid shape.`);
+  }
+  return null;
 }
 
 function toGraphEdge(row: EdgeRow): GraphEdge {
@@ -736,11 +775,21 @@ function artifactFactsPayload(facts: PersistedArtifactFacts): ArtifactFacts {
 }
 
 function insertFile(database: DatabaseSync, file: IndexedFile): void {
+  const generated = file.generated;
   database
     .prepare(
-      "INSERT INTO files(path, content_hash, language, indexed_at) VALUES (?, ?, ?, ?)"
+      `INSERT INTO files(
+        path, content_hash, language, indexed_at, generated, generated_evidence_json
+      ) VALUES (?, ?, ?, ?, ?, ?)`
     )
-    .run(file.path, file.contentHash, file.language, file.indexedAt);
+    .run(
+      file.path,
+      file.contentHash,
+      file.language,
+      file.indexedAt,
+      Number(generated?.generated ?? false),
+      generated === undefined ? null : JSON.stringify(generated)
+    );
 }
 
 function insertSymbol(database: DatabaseSync, symbol: SymbolNode): void {
@@ -1182,8 +1231,18 @@ function readSnapshotProjection(
   database: DatabaseSync,
   activeGenerationId: string | null
 ): GraphSnapshot {
+  const generatedSelect = columnExists(database, "files", "generated")
+    ? "generated"
+    : "0 AS generated";
+  const generatedEvidenceSelect = columnExists(database, "files", "generated_evidence_json")
+    ? "generated_evidence_json"
+    : "NULL AS generated_evidence_json";
   const files = database
-    .prepare("SELECT path, content_hash, language, indexed_at FROM files ORDER BY path")
+    .prepare(
+      `SELECT path, content_hash, language, indexed_at,
+        ${generatedSelect}, ${generatedEvidenceSelect}
+       FROM files ORDER BY path`
+    )
     .all() as unknown as FileRow[];
   const symbols = database
     .prepare(
@@ -1234,12 +1293,16 @@ function readSnapshotProjection(
     .all() as unknown as PendingReferenceRow[];
 
   return {
-    files: files.map((file) => ({
-      path: file.path,
-      contentHash: file.content_hash,
-      language: file.language,
-      indexedAt: file.indexed_at
-    })),
+    files: files.map((file) => {
+      const generated = generatedFileClassification(file);
+      return {
+        path: file.path,
+        contentHash: file.content_hash,
+        language: file.language,
+        indexedAt: file.indexed_at,
+        ...(generated === null ? {} : { generated })
+      };
+    }),
     symbols: symbols.map((symbol) => ({
       id: symbol.id,
       name: symbol.name,

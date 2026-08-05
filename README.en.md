@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.271.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher can update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.272.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher can update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## Quick start
 
@@ -48,6 +48,7 @@ Alternatively, download the version-pinned `.tgz`, SHA-256 checksum, and manifes
 
 - Scans multiple languages and common frameworks into a project-local code graph.
 - Queries symbols, indexed files, calls, routes, entry points, impact, retained generations, and diffs.
+- Classifies generated files during indexing with bounded path and header rules, preserving rule IDs and exact header ranges. `files`, `search`, `find`, `investigate`, `callers`, and `callees` apply explainable soft ranking only; generated results are never hidden.
 - `files` queries only files persisted in the active generation, with path-segment-safe filtering, anchored globs, flat/tree/grouped projections, and safe cursor pagination. `src` never includes `src2`, and cursors bind to the generation and selection filters.
 - `file` defaults to a compact numbered human view with dependency, selection, generation, and freshness context; `--json` keeps the stable machine contract. Exact paths are preferred, unique suffixes are accepted, ambiguity is never guessed, and an offset past EOF fails clearly. YAML and properties files expose structure without content values.
 - Preserves the rule, stage, candidate targets, confidence, and resolution path behind every relation.

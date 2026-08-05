@@ -229,6 +229,8 @@ export interface IndexedFile {
   readonly contentHash: string;
   readonly language: ArtifactLanguage;
   readonly indexedAt: string;
+  /** Missing only in snapshots created before v0.272.0. */
+  readonly generated?: import("./generated-files.js").GeneratedFileClassification;
 }
 
 export interface SymbolNode {

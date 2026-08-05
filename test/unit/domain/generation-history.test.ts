@@ -130,6 +130,50 @@ describe("retained generation snapshot diff", () => {
     ]);
   });
 
+  it("reports generation-bound generated evidence changes without treating indexedAt as content", () => {
+    const legacy = file("src/generated.ts", "same-hash");
+    const classified: IndexedFile = {
+      ...legacy,
+      indexedAt: "2026-07-31T00:00:00.000Z",
+      generated: {
+        classifierVersion: "generated-evidence-v1",
+        generated: true,
+        evidence: [
+          {
+            kind: "header",
+            ruleId: "header.code-generated-do-not-edit",
+            range: {
+              start: { line: 1, column: 4 },
+              end: { line: 1, column: 31 }
+            }
+          }
+        ]
+      }
+    };
+
+    const evidenceChange = diffGenerationSnapshots(
+      snapshot({ files: [legacy] }),
+      snapshot({ files: [classified] }),
+      { limit: 10 }
+    );
+    const publicationOnly = diffGenerationSnapshots(
+      snapshot({ files: [classified] }),
+      snapshot({ files: [{ ...classified, indexedAt: "2026-08-01T00:00:00.000Z" }] }),
+      { limit: 10 }
+    );
+
+    expect(evidenceChange.files.modified.items).toEqual([
+      expect.objectContaining({
+        path: "src/generated.ts",
+        before: expect.not.objectContaining({ generated: expect.anything() }),
+        after: expect.objectContaining({
+          generated: expect.objectContaining({ generated: true })
+        })
+      })
+    ]);
+    expect(publicationOnly.files.modified.total).toBe(0);
+  });
+
   it("sorts every category before applying independent deterministic bounds", () => {
     const result = diffGenerationSnapshots(
       snapshot(),

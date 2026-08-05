@@ -1,5 +1,6 @@
 import {
   compareStableText,
+  classifyGeneratedFile,
   createEdgeId,
   createSymbolId,
   isCustomRouteFramework,
@@ -2107,7 +2108,8 @@ function buildFiles(
       path: document.relativePath,
       contentHash: document.contentHash,
       language: document.language,
-      indexedAt
+      indexedAt,
+      generated: classifyGeneratedFile(document.relativePath, document.sourceText)
     }))
     .sort((left, right) => compareStableText(left.path, right.path));
 }

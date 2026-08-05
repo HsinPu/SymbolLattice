@@ -15,6 +15,7 @@ import {
   findEvidencePath,
   findAffectedTestPaths,
   findSymbols,
+  generatedClassificationFor,
   getCallees,
   getChildren,
   getCallers,
@@ -94,6 +95,7 @@ import {
   InvalidFilePageCursorError,
   matchesProjectPathPrefix
 } from "./file-inventory.js";
+import { rankGeneratedValues, type GeneratedRankingItem } from "./generated-ranking.js";
 import {
   frameworkProjectPluginProjectVersion,
   type FrameworkProjectPluginRegistry
@@ -281,7 +283,7 @@ interface ContextRequest {
 }
 
 interface InvestigateRequest {
-  readonly search: SourceSearchRequest;
+  readonly search: NormalizedSourceSearchRequest;
   readonly symbolLimit: number;
   readonly ranking: InvestigateRankingStrategy;
   readonly contextBounds: ContextBounds;
@@ -291,10 +293,18 @@ interface InvestigationCandidate {
   readonly sourceRank: number;
   readonly candidateRank: number;
   readonly symbol: SymbolNode;
+  readonly generatedRanking: GeneratedRankingItem;
   readonly structuralSignals: InvestigationStructuralSignals;
   readonly topologySignals: InvestigationTopologySignals | null;
   readonly impactSignals: InvestigationImpactSignals | null;
 }
+
+interface NormalizedSourceSearchRequest extends SourceSearchRequest {
+  readonly requestedLimit: number;
+  readonly candidateLimit: number;
+}
+
+const SOURCE_SEARCH_GENERATED_CANDIDATE_MULTIPLIER = 4;
 
 interface NormalizedAffectedTestsRequest {
   readonly filePaths: readonly string[];
@@ -1299,11 +1309,32 @@ export class SymbolLatticeService {
       );
     }
 
+    const ranked = rankGeneratedValues({
+      values: bundle.hits,
+      files: bundle.snapshot.files,
+      filePath: (hit) => hit.filePath,
+      itemId: (hit) => hit.filePath,
+      limit: request.requestedLimit
+    });
     return {
       status: await this.getStatusForBundle(normalizedProjectPath, bundle),
-      results: bundle.hits.map((hit, index) =>
-        this.toSourceSearchHitResult(hit, index + 1, request.terms, bundle.snapshot)
-      )
+      results: ranked.values.map((item) =>
+        this.toSourceSearchHitResult(
+          item.value,
+          item.ranking.baseRank,
+          item.ranking.finalRank,
+          item.generated,
+          item.ranking,
+          request.terms,
+          bundle.snapshot
+        )
+      ),
+      ranking: {
+        ...ranked.diagnostics,
+        requestedLimit: request.requestedLimit,
+        candidateLimit: request.candidateLimit,
+        candidatePoolAtLimit: bundle.hits.length === request.candidateLimit
+      }
     };
   }
 
@@ -1346,8 +1377,23 @@ export class SymbolLatticeService {
       );
     }
 
-    const searchResults = bundle.hits.map((hit, index) =>
-      this.toSourceSearchHitResult(hit, index + 1, request.search.terms, bundle.snapshot)
+    const rankedSearch = rankGeneratedValues({
+      values: bundle.hits,
+      files: bundle.snapshot.files,
+      filePath: (hit) => hit.filePath,
+      itemId: (hit) => hit.filePath,
+      limit: request.search.requestedLimit
+    });
+    const searchResults = rankedSearch.values.map((item) =>
+      this.toSourceSearchHitResult(
+        item.value,
+        item.ranking.baseRank,
+        item.ranking.finalRank,
+        item.generated,
+        item.ranking,
+        request.search.terms,
+        bundle.snapshot
+      )
     );
     const selection = this.investigationSelection(
       searchResults,
@@ -1386,7 +1432,7 @@ export class SymbolLatticeService {
       status: await this.getStatusForBundle(normalizedProjectPath, bundle),
       query: request.search.query,
       bounds: {
-        searchLimit: request.search.limit,
+        searchLimit: request.search.requestedLimit,
         maximumSearchLimit: MAX_SOURCE_SEARCH_LIMIT,
         symbolLimit: request.symbolLimit,
         maximumSymbolLimit: MAX_INVESTIGATE_SYMBOL_LIMIT,
@@ -1453,6 +1499,7 @@ export class SymbolLatticeService {
         filePath: file.path,
         language: file.language,
         indexedAt: file.indexedAt,
+        generated: generatedClassificationFor(file),
         declarationCount: declarationCounts.get(file.path) ?? 0,
         edgeCount: edgeCounts.get(file.path) ?? 0,
         pendingReferenceCount: pendingReferenceCounts.get(file.path) ?? 0
@@ -1623,29 +1670,59 @@ export class SymbolLatticeService {
     options: FindOptions = {}
   ): Promise<FindResult> {
     const context = await this.requireGraph(projectPath);
+    const limit = options.limit ?? 50;
+    if (!Number.isSafeInteger(limit) || limit < 1) {
+      throw new RangeError("limit must be a positive integer.");
+    }
+    const candidates = findSymbols(context.snapshot, query, {
+      ...(options.kind === undefined ? {} : { kind: options.kind }),
+      limit: Number.MAX_SAFE_INTEGER
+    });
+    const ranked = rankGeneratedValues({
+      values: candidates,
+      files: context.snapshot.files,
+      filePath: (symbol) => symbol.filePath,
+      itemId: (symbol) => symbol.id,
+      limit
+    });
     return {
       status: context.status,
-      symbols: findSymbols(context.snapshot, query, options)
+      symbols: ranked.values.map((item) => item.value),
+      ranking: ranked.diagnostics
     };
   }
 
   public async callers(projectPath: string, reference: string): Promise<RelationResult> {
     const context = await this.requireGraph(projectPath);
     const symbol = this.requireExactSymbol(context, reference);
+    const ranked = rankGeneratedValues({
+      values: getCallers(context.snapshot, symbol.id),
+      files: context.snapshot.files,
+      filePath: (relation) => relation.symbol.filePath,
+      itemId: (relation) => relation.edge.id
+    });
     return {
       status: context.status,
       symbol,
-      relations: getCallers(context.snapshot, symbol.id)
+      relations: ranked.values.map((item) => item.value),
+      ranking: ranked.diagnostics
     };
   }
 
   public async callees(projectPath: string, reference: string): Promise<RelationResult> {
     const context = await this.requireGraph(projectPath);
     const symbol = this.requireExactSymbol(context, reference);
+    const ranked = rankGeneratedValues({
+      values: getCallees(context.snapshot, symbol.id),
+      files: context.snapshot.files,
+      filePath: (relation) => relation.symbol.filePath,
+      itemId: (relation) => relation.edge.id
+    });
     return {
       status: context.status,
       symbol,
-      relations: getCallees(context.snapshot, symbol.id)
+      relations: ranked.values.map((item) => item.value),
+      ranking: ranked.diagnostics
     };
   }
 
@@ -3031,7 +3108,7 @@ export class SymbolLatticeService {
     return paths;
   }
 
-  private sourceSearchRequest(query: string, options: SearchOptions): SourceSearchRequest {
+  private sourceSearchRequest(query: string, options: SearchOptions): NormalizedSourceSearchRequest {
     if (typeof query !== "string") {
       throw new SymbolLatticeError(
         "INVALID_SEARCH_QUERY",
@@ -3066,10 +3143,16 @@ export class SymbolLatticeService {
       options.pathPrefix === undefined
         ? undefined
         : this.normalizedSearchPathPrefix(options.pathPrefix);
+    const candidateLimit = Math.min(
+      MAX_SOURCE_SEARCH_LIMIT,
+      limit * SOURCE_SEARCH_GENERATED_CANDIDATE_MULTIPLIER
+    );
     return {
       query,
       terms,
-      limit,
+      limit: candidateLimit,
+      requestedLimit: limit,
+      candidateLimit,
       ...(pathPrefix === undefined ? {} : { pathPrefix }),
       ...(language === undefined ? {} : { language })
     };
@@ -3350,7 +3433,10 @@ export class SymbolLatticeService {
 
   private toSourceSearchHitResult(
     hit: IndexedSourceSearchHit,
-    rank: number,
+    retrievalRank: number,
+    finalRank: number,
+    generated: SourceSearchHitResult["generated"],
+    ranking: import("./generated-ranking.js").GeneratedRankSignal,
     terms: readonly string[],
     snapshot: GraphSnapshot
   ): SourceSearchHitResult {
@@ -3365,14 +3451,21 @@ export class SymbolLatticeService {
       .sort(compareSymbolCandidates);
 
     return {
-      rank,
+      rank: finalRank,
       filePath: hit.filePath,
       language: hit.language,
       range: lexicalMatch.range,
       excerpt: lexicalMatch.excerpt,
       matchingTerms: lexicalMatch.matchingTerms,
       lexicalReason: lexicalReason(terms, lexicalMatch.matchingTerms),
-      symbolCandidates
+      symbolCandidates,
+      generated,
+      ranking: {
+        retrievalRank,
+        finalRank,
+        generatedPenalty: ranking.generatedPenalty,
+        reason: ranking.reason
+      }
     };
   }
 
@@ -3393,10 +3486,20 @@ export class SymbolLatticeService {
           continue;
         }
         selectedSymbolIds.add(symbol.id);
+        const baseRank = candidates.length + 1;
         candidates.push({
           sourceRank: sourceResult.rank,
           candidateRank: candidateIndex + 1,
-          symbol
+          symbol,
+          generatedRanking: {
+            itemId: symbol.id,
+            filePath: symbol.filePath,
+            generated: sourceResult.generated,
+            baseRank,
+            finalRank: baseRank,
+            generatedPenalty: sourceResult.ranking.generatedPenalty,
+            reason: sourceResult.ranking.reason
+          }
         });
       }
     }
@@ -3430,6 +3533,7 @@ export class SymbolLatticeService {
       structuralSignals: candidate.structuralSignals,
       topologySignals: candidate.topologySignals,
       impactSignals: candidate.impactSignals,
+      generatedRanking: { ...candidate.generatedRanking, finalRank: index + 1 },
       symbol: candidate.symbol
     }));
 
@@ -3624,6 +3728,11 @@ export class SymbolLatticeService {
     right: InvestigationCandidate,
     ranking: InvestigateRankingStrategy
   ): number {
+    const generatedDifference =
+      left.generatedRanking.generatedPenalty - right.generatedRanking.generatedPenalty;
+    if (generatedDifference !== 0) {
+      return generatedDifference;
+    }
     if (ranking === "structure") {
       const structuralDifference = right.structuralSignals.score - left.structuralSignals.score;
       if (structuralDifference !== 0) {

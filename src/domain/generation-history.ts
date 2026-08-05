@@ -50,8 +50,8 @@ export interface ModifiedGenerationPendingReference {
 
 /**
  * A structural comparison of two persisted graph snapshots. File changes use
- * project path plus content hash and language; all graph facts use their stable
- * IDs. A stable ID with changed persisted fields is an explicit modification,
+ * project path plus content hash, language, and generation-bound classification;
+ * all graph facts use their stable IDs. A stable ID with changed persisted fields is an explicit modification,
  * not a claim that the underlying code moved or maps to a Git hunk.
  */
 export interface GenerationSnapshotDiff {
@@ -132,7 +132,46 @@ function sameFile(left: IndexedFile, right: IndexedFile): boolean {
   return (
     left.path === right.path &&
     left.contentHash === right.contentHash &&
-    left.language === right.language
+    left.language === right.language &&
+    sameGeneratedClassification(left.generated, right.generated)
+  );
+}
+
+function sameGeneratedClassification(
+  left: IndexedFile["generated"],
+  right: IndexedFile["generated"]
+): boolean {
+  if (left === undefined || right === undefined) {
+    return left === right;
+  }
+  return (
+    left.classifierVersion === right.classifierVersion &&
+    left.generated === right.generated &&
+    left.evidence.length === right.evidence.length &&
+    left.evidence.every((evidence, index) => {
+      const other = right.evidence[index];
+      return (
+        other !== undefined &&
+        evidence.kind === other.kind &&
+        evidence.ruleId === other.ruleId &&
+        sameRange(evidence.range, other.range)
+      );
+    })
+  );
+}
+
+function sameRange(
+  left: import("./types.js").SourceRange | null,
+  right: import("./types.js").SourceRange | null
+): boolean {
+  return (
+    left === right ||
+    (left !== null &&
+      right !== null &&
+      left.start.line === right.start.line &&
+      left.start.column === right.start.column &&
+      left.end.line === right.end.line &&
+      left.end.column === right.end.column)
   );
 }
 

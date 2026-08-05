@@ -200,6 +200,7 @@ export interface GenerationDiffResult extends GenerationSnapshotDiff {
 export interface FindResult {
   readonly status: IndexStatus;
   readonly symbols: readonly SymbolNode[];
+  readonly ranking: import("./generated-ranking.js").GeneratedRankingDiagnostics;
 }
 
 /** Optional filters for persisted-source lexical retrieval. */
@@ -228,12 +229,25 @@ export interface SourceSearchHitResult {
   readonly lexicalReason: string;
   /** All non-file declarations whose persisted ranges overlap the lexical span. */
   readonly symbolCandidates: readonly SymbolNode[];
+  readonly generated: import("../domain/generated-files.js").GeneratedFileClassification;
+  readonly ranking: {
+    readonly retrievalRank: number;
+    readonly finalRank: number;
+    readonly generatedPenalty: 0 | 1;
+    readonly reason: import("./generated-ranking.js").GeneratedRankReason;
+  };
 }
 
 export interface SearchResult {
   /** Freshness is evaluated against the current project without changing these persisted hits. */
   readonly status: IndexStatus;
   readonly results: readonly SourceSearchHitResult[];
+  readonly ranking: import("./generated-ranking.js").GeneratedRankingDiagnostics & {
+    readonly requestedLimit: number;
+    readonly candidateLimit: number;
+    /** True means the bounded retrieval pool was full; more lexical matches may exist. */
+    readonly candidatePoolAtLimit: boolean;
+  };
 }
 
 /** Public persisted file listing remains intentionally bounded independently of graph size. */
@@ -268,6 +282,8 @@ export interface IndexedFileSummary {
   readonly filePath: string;
   readonly language: ArtifactLanguage;
   readonly indexedAt: string;
+  /** Generation-bound verdict with the exact path/header rules that caused it. */
+  readonly generated: import("../domain/generated-files.js").GeneratedFileClassification;
   /** Non-file declaration symbols stored for this file. */
   readonly declarationCount: number;
   /** Resolved and unresolved graph edges whose evidence location is this file. */
@@ -443,6 +459,7 @@ export interface RelationResult {
   readonly status: IndexStatus;
   readonly symbol: SymbolNode;
   readonly relations: readonly GraphRelation[];
+  readonly ranking: import("./generated-ranking.js").GeneratedRankingDiagnostics;
 }
 
 /** Optional output bound for the existing reverse-impact query. */
@@ -921,6 +938,7 @@ export interface InvestigationSelection {
   readonly sourceRank: number;
   /** One-based rank in that source result's `symbolCandidates`. */
   readonly candidateRank: number;
+  readonly generatedRanking: import("./generated-ranking.js").GeneratedRankingItem;
   readonly structuralSignals: InvestigationStructuralSignals;
   /** Present only when `bounds.ranking` is `topology`; otherwise null to avoid extra traversal work. */
   readonly topologySignals: InvestigationTopologySignals | null;
