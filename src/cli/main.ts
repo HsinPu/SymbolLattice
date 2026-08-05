@@ -56,6 +56,8 @@ import {
   type AutoSyncHostRegistration,
   type AutoSyncHostRegistry,
   type AutoSyncHostRegistryResult,
+  type AutoSyncStopControl,
+  type AutoSyncStopMonitor,
   type AutoSyncStatusResult,
   type EntrypointsOptions,
   type FilesOptions,
@@ -77,6 +79,7 @@ import {
 import { ARTIFACT_LANGUAGES, MAX_SOURCE_SEARCH_LIMIT } from "../domain/index.js";
 import {
   FileSystemAutoSyncHostRegistry,
+  FileSystemAutoSyncStopControl,
   FileSystemSourceCatalog,
   NodeFileSystemWatchSource
 } from "../infrastructure/filesystem/index.js";
@@ -267,6 +270,12 @@ interface GenerationDiffCommandOptions extends ProjectOptions {
   readonly limit?: number;
 }
 
+interface WatchStopCommandOptions extends ProjectOptions {
+  readonly apply?: boolean;
+  readonly yes?: boolean;
+  readonly approval?: string;
+}
+
 /** Injectable CLI seam for a long-lived foreground watch command. */
 export type WatchCommandRunner = (
   service: SymbolLatticeService,
@@ -306,6 +315,12 @@ export type AutoSyncOwnerLeaseFactory = (projectPath: string) => AutoSyncOwnerLe
 
 /** Injectable project-local writer-host discovery seam. */
 export type AutoSyncHostRegistryFactory = (projectPath: string) => AutoSyncHostRegistry;
+
+/** Injectable cooperative stop seam; it never receives a process-signalling capability. */
+export type AutoSyncStopControlFactory = (
+  projectPath: string,
+  registry: AutoSyncHostRegistry
+) => AutoSyncStopControl;
 
 /** Backward-compatible alias for the MCP composition seam. */
 export type McpAutoSyncOwnerLeaseFactory = AutoSyncOwnerLeaseFactory;
@@ -841,7 +856,9 @@ export async function runForegroundWatch(
   ownerLeaseFactory: AutoSyncOwnerLeaseFactory = (projectPath) =>
     new SqliteAutoSyncOwnerLease(projectPath),
   hostRegistryFactory: AutoSyncHostRegistryFactory = (projectPath) =>
-    new FileSystemAutoSyncHostRegistry(projectPath)
+    new FileSystemAutoSyncHostRegistry(projectPath),
+  stopControlFactory: AutoSyncStopControlFactory = (projectPath, registry) =>
+    new FileSystemAutoSyncStopControl(projectPath, registry, { version: SYMBOL_LATTICE_VERSION })
 ): Promise<void> {
   // Guard the project boundary before creating the separate owner database.
   service.assertSafeProjectPath({
@@ -852,11 +869,12 @@ export async function runForegroundWatch(
   if (acquired.state === "unavailable") {
     throw new SymbolLatticeError("AUTO_SYNC_OWNER_UNAVAILABLE", acquired.error.message);
   }
-  const hostRegistration = hostRegistryFactory(options.projectPath).register(
-    autoSyncHostRecord("foreground-watch")
-  );
+  const hostRegistry = hostRegistryFactory(options.projectPath);
+  const hostRecord = autoSyncHostRecord("foreground-watch");
+  const hostRegistration = hostRegistry.register(hostRecord);
 
   let session: Awaited<ReturnType<typeof startForegroundWatch>> | null = null;
+  let stopMonitor: AutoSyncStopMonitor | null = null;
   let stopping = false;
   let stopRequestedBeforeStart = false;
   const stop = () => {
@@ -876,6 +894,9 @@ export async function runForegroundWatch(
   try {
     signals.once("SIGINT", stop);
     signals.once("SIGTERM", stop);
+    if (hostRegistration.state === "registered") {
+      stopMonitor = stopControlFactory(options.projectPath, hostRegistry).monitor(hostRecord, stop);
+    }
     session = await startForegroundWatch(service, options);
     if (stopRequestedBeforeStart) {
       await session.stop();
@@ -890,9 +911,13 @@ export async function runForegroundWatch(
         signals.off("SIGTERM", stop);
       } finally {
         try {
-          unregisterHost(hostRegistration);
+          stopMonitor?.close();
         } finally {
-          acquired.release();
+          try {
+            unregisterHost(hostRegistration);
+          } finally {
+            acquired.release();
+          }
         }
       }
     }
@@ -916,7 +941,9 @@ export async function runMcpWithAutoSync(
   ownerLeaseFactory: McpAutoSyncOwnerLeaseFactory = (projectPath) =>
     new SqliteAutoSyncOwnerLease(projectPath),
   hostRegistryFactory: AutoSyncHostRegistryFactory = (projectPath) =>
-    new FileSystemAutoSyncHostRegistry(projectPath)
+    new FileSystemAutoSyncHostRegistry(projectPath),
+  stopControlFactory: AutoSyncStopControlFactory = (projectPath, registry) =>
+    new FileSystemAutoSyncStopControl(projectPath, registry, { version: SYMBOL_LATTICE_VERSION })
 ): Promise<void> {
   const autoSyncEnabled = options.autoSync ?? true;
   const journalWritable = autoSyncEnabled && (options.diagnosticJournal ?? true);
@@ -931,6 +958,26 @@ export async function runMcpWithAutoSync(
   let watchSession: ForegroundWatchSession | null = null;
   let ownerLease: AcquiredAutoSyncOwnerLease | null = null;
   let hostRegistration: AutoSyncHostRegistration | null = null;
+  let stopMonitor: AutoSyncStopMonitor | null = null;
+  let mcpSession: McpServerSession | null = null;
+  let cooperativeStopRequested = false;
+  let watchStopPromise: Promise<void> | null = null;
+  let mcpClosePromise: Promise<void> | null = null;
+  const stopWatchOnce = (): Promise<void> => {
+    if (watchSession === null) return Promise.resolve();
+    watchStopPromise ??= watchSession.stop();
+    return watchStopPromise;
+  };
+  const closeMcpOnce = (): Promise<void> => {
+    if (mcpSession === null) return Promise.resolve();
+    mcpClosePromise ??= mcpSession.close();
+    return mcpClosePromise;
+  };
+  const cooperativeStop = (): void => {
+    cooperativeStopRequested = true;
+    void stopWatchOnce();
+    void closeMcpOnce();
+  };
   const recordReceipt = (receipt: WatchReceipt): void => {
     const event = tracker.record(receipt);
     if (event !== null && journalWritable) {
@@ -955,29 +1002,42 @@ export async function runMcpWithAutoSync(
       const acquired = ownerLeaseFactory(options.projectPath).acquire();
       if (acquired.state === "owned") {
         ownerLease = acquired;
-        hostRegistration = hostRegistryFactory(options.projectPath).register(
-          autoSyncHostRecord("mcp-auto-sync", hostId)
-        );
+        const hostRegistry = hostRegistryFactory(options.projectPath);
+        const hostRecord = autoSyncHostRecord("mcp-auto-sync", hostId);
+        hostRegistration = hostRegistry.register(hostRecord);
         tracker.markOwnerLeaseOwned(new Date().toISOString());
         watchSession = await watchStarter(service, watchOptions);
+        if (hostRegistration.state === "registered") {
+          stopMonitor = stopControlFactory(options.projectPath, hostRegistry).monitor(
+            hostRecord,
+            cooperativeStop
+          );
+        }
       } else {
         recordReceipt(ownerLeaseUnavailableReceipt(options.projectPath, acquired.error));
       }
     }
-    const mcpSession = await serverRunner(mcpService, options.projectPath);
+    mcpSession = await serverRunner(mcpService, options.projectPath);
+    if (cooperativeStopRequested) {
+      await closeMcpOnce();
+    }
     await mcpSession.closed;
   } finally {
     try {
-      if (watchSession !== null) {
-        await watchSession.stop();
-      }
+      stopMonitor?.close();
     } finally {
       try {
-        if (hostRegistration !== null) {
-          unregisterHost(hostRegistration);
+        if (watchSession !== null) {
+          await stopWatchOnce();
         }
       } finally {
-        ownerLease?.release();
+        try {
+          if (hostRegistration !== null) {
+            unregisterHost(hostRegistration);
+          }
+        } finally {
+          ownerLease?.release();
+        }
       }
     }
   }
@@ -1064,7 +1124,9 @@ export function createProgram(
   autoSyncJournalFactory: McpAutoSyncJournalFactory = (projectPath, writable) =>
     new SqliteAutoSyncDiagnosticJournal(projectPath, { writable }),
   autoSyncHostRegistryFactory: AutoSyncHostRegistryFactory = (projectPath) =>
-    new FileSystemAutoSyncHostRegistry(projectPath)
+    new FileSystemAutoSyncHostRegistry(projectPath),
+  autoSyncStopControlFactory: AutoSyncStopControlFactory = (projectPath, registry) =>
+    new FileSystemAutoSyncStopControl(projectPath, registry, { version: SYMBOL_LATTICE_VERSION })
 ): Command {
   const coreService = service ?? createService();
   const indexingService = async (
@@ -1194,6 +1256,25 @@ export function createProgram(
           hostRegistry,
           options.limit === undefined ? {} : { limit: options.limit }
         ),
+        options
+      );
+    });
+
+  addJsonOption(addProjectOption(program.command("watch-stop <host-id> [path]")))
+    .description("Preview or explicitly request a cooperative stop from one registered auto-sync host")
+    .option("--apply", "Write the bounded cooperative stop request")
+    .option("--yes", "Explicitly confirm the mutation requested by --apply")
+    .option("--approval <fingerprint>", "Exact approval fingerprint returned by the current preview")
+    .action(async (hostId: string, path: string | undefined, options: WatchStopCommandOptions) => {
+      const projectPath = resolve(path ?? defaultProjectPath(options));
+      const registry = autoSyncHostRegistryFactory(projectPath);
+      const control = autoSyncStopControlFactory(projectPath, registry);
+      render(
+        await control.execute(hostId, {
+          ...(options.apply === true ? { apply: true } : {}),
+          ...(options.yes === true ? { yes: true } : {}),
+          ...(options.approval === undefined ? {} : { approval: options.approval })
+        }),
         options
       );
     });

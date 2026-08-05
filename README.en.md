@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.268.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher can update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.269.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher can update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## Quick start
 
@@ -85,6 +85,7 @@ One manifest may provide `frameworkFactPlugins`, `frameworkProjectPlugins`, and 
 | `sync <path>` | Explicitly synchronize or repair a graph. |
 | `watch <path>` | Watch and synchronize in the foreground. |
 | `watch-status [path]` | Read index freshness, durable events, and local host live/stale/unverifiable state. |
+| `watch-stop <host-id> [path]` | Preview or explicitly ask one registered host to stop itself safely. |
 | `files [path]` | Page persisted files by glob, projection, and generation-bound cursor. |
 | `file <path>` | Read a numbered human view; add `--json` for the stable contract. |
 | `git-hunks [path] --base <ref>` | Filter immutable Git hunk attribution with optional `--path-prefix`. |
@@ -99,6 +100,8 @@ One manifest may provide `frameworkFactPlugins`, `frameworkProjectPlugins`, and 
 | `mcp-uninstall <target>` | Preview or, with `--apply --yes`, remove the matching MCP entry. |
 
 `watch-status` only uses a PID signal-0 probe to observe process existence; it does not start, stop, or synchronize a watcher. PID reuse cannot prove process identity, and journal state is only the latest evidence in the bounded window.
+
+`watch-stop` only creates an approval bound to the project's real path and the complete host record by default. Applying it requires `--apply --yes --approval <fingerprint>`. It writes a short-lived local request that the target host validates before shutting itself down; it never sends TERM, KILL, or another signal to a PID.
 
 `upgrade` produces a read-only plan by default. `--verify` downloads and checks the `.tgz`, SHA-256 checksum, manifest, and GitHub Artifact Attestations API evidence without installing. `--apply --yes` supports only local or global npm layouts, installs the verified local bytes, and then proves the CLI version. Source checkouts and `npx` are never changed automatically; downgrades also require `--allow-downgrade`.
 

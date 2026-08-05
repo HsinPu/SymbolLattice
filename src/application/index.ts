@@ -6,6 +6,7 @@ export * from "./reference-resolver-plugins.js";
 export * from "./auto-sync-journal.js";
 export * from "./auto-sync-host-registry.js";
 export * from "./auto-sync-owner.js";
+export * from "./auto-sync-stop.js";
 export * from "./service.js";
 export * from "./types.js";
 export * from "./watch.js";

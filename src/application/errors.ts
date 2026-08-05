@@ -66,6 +66,10 @@ export class SymbolLatticeError extends Error {
       | "INVALID_WATCH_INTERVAL"
       | "MISSING_INDEX"
       | "SOURCE_SEARCH_UNAVAILABLE"
+      | "STOP_APPROVAL_INVALID"
+      | "STOP_CONFIRMATION_REQUIRED"
+      | "STOP_REQUEST_WRITE_FAILED"
+      | "STOP_TARGET_NOT_READY"
       | "SYMBOL_NOT_FOUND"
       | "UNSUPPORTED_NODE_VERSION",
     message: string

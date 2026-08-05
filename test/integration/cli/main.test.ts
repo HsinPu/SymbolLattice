@@ -56,6 +56,7 @@ import {
   type McpAutoSyncJournalFactory,
   type McpAutoSyncOwnerLeaseFactory,
   type AutoSyncHostRegistryFactory,
+  type AutoSyncStopControlFactory,
   type PluginServiceFactoryOptions,
   type UpgradePlanner,
   type WatchSignalSource
@@ -2718,6 +2719,52 @@ describe("symbol-lattice read-only watch status CLI", () => {
     ).rejects.toThrow("Expected an integer between 1 and 128");
     expect(journalFactory).not.toHaveBeenCalled();
   });
+
+  it("keeps watch-stop in preview mode unless apply, confirmation, and approval are explicit", async () => {
+    const execute = vi.fn(async () => ({ schemaVersion: 1, mode: "preview" }));
+    const registryFactory = observedHostRegistryFactory([]);
+    const stopControlFactory = vi.fn(() => ({ execute })) as unknown as AutoSyncStopControlFactory;
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+    await createProgram(
+      {} as SymbolLatticeService,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      registryFactory,
+      stopControlFactory
+    ).parseAsync(
+      [
+        "node",
+        "symbol-lattice",
+        "watch-stop",
+        "123e4567-e89b-42d3-a456-426614174000",
+        "C:/chosen-project",
+        "--apply",
+        "--yes",
+        "--approval",
+        "watch-stop:approved",
+        "--json"
+      ],
+      { from: "node" }
+    );
+
+    expect(stopControlFactory).toHaveBeenCalledWith(
+      resolve("C:/chosen-project"),
+      expect.any(Object)
+    );
+    expect(execute).toHaveBeenCalledWith("123e4567-e89b-42d3-a456-426614174000", {
+      apply: true,
+      yes: true,
+      approval: "watch-stop:approved"
+    });
+    expect(JSON.parse(String(write.mock.calls.at(-1)?.[0]))).toEqual({
+      schemaVersion: 1,
+      mode: "preview"
+    });
+  });
 });
 
 describe("symbol-lattice v0.10 foreground watch CLI", () => {
@@ -2832,6 +2879,8 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
     const receipts: WatchReceipt[] = [];
     const releaseOwnerLease = vi.fn();
     const unregisterHost = vi.fn();
+    const closeStopMonitor = vi.fn();
+    const monitor = vi.fn(() => ({ close: closeStopMonitor }));
     const hostRecords: AutoSyncHostRecord[] = [];
     const service = {
       assertSafeProjectPath(): void {},
@@ -2852,7 +2901,8 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
       },
       signals,
       ownedOwnerLeaseFactory(releaseOwnerLease),
-      observedHostRegistryFactory(hostRecords, unregisterHost)
+      observedHostRegistryFactory(hostRecords, unregisterHost),
+      (() => ({ monitor })) as unknown as AutoSyncStopControlFactory
     );
 
     expect(signals.listenerCount("SIGINT")).toBe(1);
@@ -2865,8 +2915,10 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
     expect(signals.listenerCount("SIGTERM")).toBe(0);
     expect(releaseOwnerLease).toHaveBeenCalledTimes(1);
     expect(unregisterHost).toHaveBeenCalledTimes(1);
+    expect(monitor).toHaveBeenCalledWith(hostRecords[0], expect.any(Function));
+    expect(closeStopMonitor).toHaveBeenCalledTimes(1);
     expect(hostRecords).toEqual([
-      expect.objectContaining({ kind: "foreground-watch", pid: process.pid, version: "0.268.0" })
+      expect.objectContaining({ kind: "foreground-watch", pid: process.pid, version: "0.269.0" })
     ]);
   });
 
@@ -2937,6 +2989,12 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
     });
     const releaseOwnerLease = vi.fn();
     const unregisterHost = vi.fn();
+    const closeStopMonitor = vi.fn();
+    let requestCooperativeStop: (() => void) | null = null;
+    const monitor = vi.fn((_record: AutoSyncHostRecord, onStop: () => void) => {
+      requestCooperativeStop = onStop;
+      return { close: closeStopMonitor };
+    });
     const hostRecords: AutoSyncHostRecord[] = [];
     const watchSession: ForegroundWatchSession = {
       done: Promise.resolve(),
@@ -2978,7 +3036,8 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
       },
       undefined,
       ownedOwnerLeaseFactory(releaseOwnerLease),
-      observedHostRegistryFactory(hostRecords, unregisterHost)
+      observedHostRegistryFactory(hostRecords, unregisterHost),
+      (() => ({ monitor })) as unknown as AutoSyncStopControlFactory
     );
 
     await serverStarted;
@@ -2991,15 +3050,17 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
     });
     expect(capturedWatchOptions?.eventSource).toBeDefined();
 
-    resolveClosed?.();
+    requestCooperativeStop?.();
     await running;
 
     expect(calls).toEqual(["watch-start", "mcp-start", "watch-stop"]);
     expect(stopped).toHaveBeenCalledTimes(1);
     expect(releaseOwnerLease).toHaveBeenCalledTimes(1);
     expect(unregisterHost).toHaveBeenCalledTimes(1);
+    expect(monitor).toHaveBeenCalledWith(hostRecords[0], expect.any(Function));
+    expect(closeStopMonitor).toHaveBeenCalledTimes(1);
     expect(hostRecords).toEqual([
-      expect.objectContaining({ kind: "mcp-auto-sync", pid: process.pid, version: "0.268.0" })
+      expect.objectContaining({ kind: "mcp-auto-sync", pid: process.pid, version: "0.269.0" })
     ]);
   });
 

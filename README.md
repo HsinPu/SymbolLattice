@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.268.0 是開發預覽版。MCP 查詢工具唯讀；但 `serve --mcp` 預設會啟動獨立的本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用它。
+> v0.269.0 是開發預覽版。MCP 查詢工具唯讀；但 `serve --mcp` 預設會啟動獨立的本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用它。
 
 ## 快速開始
 
@@ -85,6 +85,7 @@ node dist/cli/main.js init /path/to/project --plugin ./plugins/acme.mjs
 | `sync <path>` | 明確同步或修復圖譜。 |
 | `watch <path>` | 在前景監看並同步。 |
 | `watch-status [path]` | 唯讀檢視索引 freshness、持久化事件與本機 host 的 live／stale／unverifiable 狀態。 |
+| `watch-stop <host-id> [path]` | 預覽或明確要求一個已登錄 host 自行安全停止。 |
 | `files [path]` | 以 glob、投影與 generation-bound 游標分頁列出已保存檔案。 |
 | `file <path>` | 預設逐行閱讀；加上 `--json` 取得穩定契約。 |
 | `git-hunks [path] --base <ref>` | 以可選的 `--path-prefix` 篩選不可變 Git hunk 與宣告歸因。 |
@@ -99,6 +100,8 @@ node dist/cli/main.js init /path/to/project --plugin ./plugins/acme.mjs
 | `mcp-uninstall <target>` | 預覽；加上 `--apply --yes` 後移除相符的 MCP 設定。 |
 
 `watch-status` 只以 PID signal-0 探測程序是否存在，不會啟動、停止或同步 watcher。PID 重用無法證明程序身分；journal 狀態也只代表有界視窗中的最新證據。
+
+`watch-stop` 預設只產生綁定專案真實路徑與完整 host 紀錄的 approval。套用時必須同時提供 `--apply --yes --approval <fingerprint>`；它只寫入短效本機請求，由目標 host 驗證後自行關閉，不會對 PID 發送 TERM、KILL 或其他訊號。
 
 `upgrade` 預設只產生唯讀計畫。`--verify` 會下載並核對 `.tgz`、SHA-256、manifest 與 GitHub Artifact Attestations API 證據，但不安裝；`--apply --yes` 僅支援 npm 本機或全域安裝，且只安裝已驗證的本機位元組，再確認 CLI 版本。原始碼 checkout 與 `npx` 不會自動修改；降版還需要 `--allow-downgrade`。
 
