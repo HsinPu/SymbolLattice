@@ -144,7 +144,12 @@ function manifestFromNamespace(namespace: unknown, modulePath: string): SymbolLa
   };
 }
 
-async function resolvePluginModulePaths(
+/**
+ * Canonicalizes and validates explicitly named trusted plugin module files
+ * without importing or executing them. Lifecycle previews use this boundary so
+ * an approval can bind the exact files that a later writer host will load.
+ */
+export async function resolveSymbolLatticePluginModulePaths(
   options: LoadSymbolLatticePluginModulesOptions
 ): Promise<readonly string[]> {
   if (!Array.isArray(options.modulePaths) || options.modulePaths.length === 0) {
@@ -206,7 +211,7 @@ async function resolvePluginModulePaths(
 export async function loadSymbolLatticePluginModules(
   options: LoadSymbolLatticePluginModulesOptions
 ): Promise<LoadedSymbolLatticePluginModules> {
-  const modulePaths = await resolvePluginModulePaths(options);
+  const modulePaths = await resolveSymbolLatticePluginModulePaths(options);
   const frameworkFactPlugins: FrameworkFactPlugin[] = [];
   const frameworkProjectPlugins: FrameworkProjectPlugin[] = [];
   const referenceResolverPlugins: ReferenceResolverPlugin[] = [];

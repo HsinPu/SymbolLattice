@@ -2765,6 +2765,73 @@ describe("symbol-lattice read-only watch status CLI", () => {
       mode: "preview"
     });
   });
+
+  it("keeps watch-start preview-first and forwards the exact approved launch options", async () => {
+    const execute = vi.fn(async () => ({ schemaVersion: 1, mode: "preview" }));
+    const startControlFactory = vi.fn(() => ({ execute }));
+    const registryFactory = observedHostRegistryFactory([]);
+    const service = {
+      assertSafeProjectPath: vi.fn(),
+      getStatus: vi.fn(async () => resultStatus())
+    } as unknown as SymbolLatticeService;
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+    await createProgram(
+      service,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      registryFactory,
+      undefined,
+      startControlFactory
+    ).parseAsync(
+      [
+        "node",
+        "symbol-lattice",
+        "watch-start",
+        "C:/chosen-project",
+        "--interval",
+        "750",
+        "--poll",
+        "--force",
+        "--plugin",
+        "plugins/routes.mjs",
+        "--apply",
+        "--yes",
+        "--approval",
+        "watch-start:approved",
+        "--json"
+      ],
+      { from: "node" }
+    );
+
+    expect(service.assertSafeProjectPath).toHaveBeenCalledWith({
+      projectPath: resolve("C:/chosen-project"),
+      force: true
+    });
+    expect(startControlFactory).toHaveBeenCalledWith(
+      resolve("C:/chosen-project"),
+      expect.any(Object),
+      {
+        force: true,
+        intervalMs: 750,
+        poll: true,
+        pluginModulePaths: ["plugins/routes.mjs"],
+        allowExternalPlugin: false
+      }
+    );
+    expect(execute).toHaveBeenCalledWith({
+      apply: true,
+      yes: true,
+      approval: "watch-start:approved"
+    });
+    expect(JSON.parse(String(write.mock.calls.at(-1)?.[0]))).toEqual({
+      schemaVersion: 1,
+      mode: "preview"
+    });
+  });
 });
 
 describe("symbol-lattice v0.10 foreground watch CLI", () => {
@@ -2896,6 +2963,7 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
       service,
       {
         projectPath: "C:/chosen-project",
+        hostId: "123e4567-e89b-42d3-a456-426614174000",
         intervalMs: 250,
         onReceipt: (receipt) => receipts.push(receipt)
       },
@@ -2918,7 +2986,12 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
     expect(monitor).toHaveBeenCalledWith(hostRecords[0], expect.any(Function));
     expect(closeStopMonitor).toHaveBeenCalledTimes(1);
     expect(hostRecords).toEqual([
-      expect.objectContaining({ kind: "foreground-watch", pid: process.pid, version: "0.269.0" })
+      expect.objectContaining({
+        hostId: "123e4567-e89b-42d3-a456-426614174000",
+        kind: "foreground-watch",
+        pid: process.pid,
+        version: "0.270.0"
+      })
     ]);
   });
 
@@ -2952,6 +3025,45 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
       force: false
     });
     expect(ownerLeaseFactory).toHaveBeenCalledWith("C:/chosen-project");
+    expect(signals.once).not.toHaveBeenCalled();
+  });
+
+  it("fails closed when a managed detached watcher cannot publish its host record", async () => {
+    const releaseOwnerLease = vi.fn();
+    const signals: WatchSignalSource = {
+      once: vi.fn(),
+      off: vi.fn()
+    };
+    const registryFactory: AutoSyncHostRegistryFactory = () => ({
+      register: () => ({
+        state: "failed",
+        error: { code: "AUTO_SYNC_HOST_REGISTRY_FAILED", message: "registry is read-only" }
+      }),
+      inspect: () => ({
+        state: "failed",
+        capacity: 128,
+        retained: 0,
+        returned: 0,
+        truncated: false,
+        error: { code: "AUTO_SYNC_HOST_REGISTRY_FAILED", message: "registry is read-only" },
+        hosts: []
+      })
+    });
+
+    await expect(
+      runForegroundWatch(
+        { assertSafeProjectPath(): void {} } as unknown as SymbolLatticeService,
+        {
+          projectPath: "C:/chosen-project",
+          hostId: "123e4567-e89b-42d3-a456-426614174000"
+        },
+        signals,
+        ownedOwnerLeaseFactory(releaseOwnerLease),
+        registryFactory
+      )
+    ).rejects.toMatchObject({ code: "START_HOST_REGISTRATION_FAILED" });
+
+    expect(releaseOwnerLease).toHaveBeenCalledTimes(1);
     expect(signals.once).not.toHaveBeenCalled();
   });
 
@@ -3060,7 +3172,7 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
     expect(monitor).toHaveBeenCalledWith(hostRecords[0], expect.any(Function));
     expect(closeStopMonitor).toHaveBeenCalledTimes(1);
     expect(hostRecords).toEqual([
-      expect.objectContaining({ kind: "mcp-auto-sync", pid: process.pid, version: "0.269.0" })
+      expect.objectContaining({ kind: "mcp-auto-sync", pid: process.pid, version: "0.270.0" })
     ]);
   });
 

@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.269.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher can update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.270.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher can update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## Quick start
 
@@ -75,7 +75,7 @@ export const symbolLatticePlugin = {
 node dist/cli/main.js init /path/to/project --plugin ./plugins/acme.mjs
 ```
 
-One manifest may provide `frameworkFactPlugins`, `frameworkProjectPlugins`, and `referenceResolverPlugins`. Repeat `--plugin` as needed; the same arguments flow through watch, MCP configuration, install, doctor, and uninstall. Plugins are trusted in-process JavaScript, not a sandbox. SymbolLattice never discovers or executes project modules implicitly. By default, only `.js`, `.mjs`, and `.cjs` files whose real paths stay inside the project are accepted; add `--allow-external-plugin` to trust an explicit external path.
+One manifest may provide `frameworkFactPlugins`, `frameworkProjectPlugins`, and `referenceResolverPlugins`. Repeat `--plugin` as needed; the same arguments flow through watch, watch-start, MCP configuration, install, doctor, and uninstall. Plugins are trusted in-process JavaScript, not a sandbox. SymbolLattice never discovers or executes project modules implicitly. By default, only `.js`, `.mjs`, and `.cjs` files whose real paths stay inside the project are accepted; add `--allow-external-plugin` to trust an explicit external path.
 
 ## Common commands
 
@@ -84,6 +84,7 @@ One manifest may provide `frameworkFactPlugins`, `frameworkProjectPlugins`, and 
 | `init <path>` | Create a graph. |
 | `sync <path>` | Explicitly synchronize or repair a graph. |
 | `watch <path>` | Watch and synchronize in the foreground. |
+| `watch-start [path]` | Preview or explicitly start one manageable background auto-sync host. |
 | `watch-status [path]` | Read index freshness, durable events, and local host live/stale/unverifiable state. |
 | `watch-stop <host-id> [path]` | Preview or explicitly ask one registered host to stop itself safely. |
 | `files [path]` | Page persisted files by glob, projection, and generation-bound cursor. |
@@ -100,6 +101,8 @@ One manifest may provide `frameworkFactPlugins`, `frameworkProjectPlugins`, and 
 | `mcp-uninstall <target>` | Preview or, with `--apply --yes`, remove the matching MCP entry. |
 
 `watch-status` only uses a PID signal-0 probe to observe process existence; it does not start, stop, or synchronize a watcher. PID reuse cannot prove process identity, and journal state is only the latest evidence in the bounded window.
+
+`watch-start` produces a read-only plan by default. Applying it requires `--apply --yes --approval <fingerprint>`; the approval binds the project, Node/CLI paths, launch arguments, and SHA-256 of executable JavaScript inputs. It starts the background `watch` without a shell and verifies host ID, PID, version, and registration before reporting success. A registration timeout never sends a signal to an unknown process.
 
 `watch-stop` only creates an approval bound to the project's real path and the complete host record by default. Applying it requires `--apply --yes --approval <fingerprint>`. It writes a short-lived local request that the target host validates before shutting itself down; it never sends TERM, KILL, or another signal to a PID.
 

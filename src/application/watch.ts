@@ -385,6 +385,8 @@ export interface WatchEventSource {
 
 export interface ForegroundWatchOptions {
   readonly projectPath: string;
+  /** Exact lifecycle correlation supplied only by a managed detached launcher. */
+  readonly hostId?: string;
   /** Reasserts deliberate broad-scope indexing on every automatic sync. */
   readonly force?: boolean;
   readonly intervalMs?: number;

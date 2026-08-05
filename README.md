@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.269.0 是開發預覽版。MCP 查詢工具唯讀；但 `serve --mcp` 預設會啟動獨立的本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用它。
+> v0.270.0 是開發預覽版。MCP 查詢工具唯讀；但 `serve --mcp` 預設會啟動獨立的本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用它。
 
 ## 快速開始
 
@@ -75,7 +75,7 @@ export const symbolLatticePlugin = {
 node dist/cli/main.js init /path/to/project --plugin ./plugins/acme.mjs
 ```
 
-同一份 manifest 可提供 `frameworkFactPlugins`、`frameworkProjectPlugins` 與 `referenceResolverPlugins`。`--plugin` 可重複使用，且會沿用至 `watch`、MCP 設定、安裝、診斷與卸載。外掛是受信任的同程序 JavaScript，不是 sandbox；SymbolLattice 不會自動探索或執行專案內的模組。預設只接受 real path 位於專案內的 `.js`、`.mjs`、`.cjs`，外部路徑必須明確加上 `--allow-external-plugin`。
+同一份 manifest 可提供 `frameworkFactPlugins`、`frameworkProjectPlugins` 與 `referenceResolverPlugins`。`--plugin` 可重複使用，且會沿用至 `watch`、`watch-start`、MCP 設定、安裝、診斷與卸載。外掛是受信任的同程序 JavaScript，不是 sandbox；SymbolLattice 不會自動探索或執行專案內的模組。預設只接受 real path 位於專案內的 `.js`、`.mjs`、`.cjs`，外部路徑必須明確加上 `--allow-external-plugin`。
 
 ## 常用指令
 
@@ -84,6 +84,7 @@ node dist/cli/main.js init /path/to/project --plugin ./plugins/acme.mjs
 | `init <path>` | 建立圖譜。 |
 | `sync <path>` | 明確同步或修復圖譜。 |
 | `watch <path>` | 在前景監看並同步。 |
+| `watch-start [path]` | 預覽或明確啟動一個可管理的背景自動同步 host。 |
 | `watch-status [path]` | 唯讀檢視索引 freshness、持久化事件與本機 host 的 live／stale／unverifiable 狀態。 |
 | `watch-stop <host-id> [path]` | 預覽或明確要求一個已登錄 host 自行安全停止。 |
 | `files [path]` | 以 glob、投影與 generation-bound 游標分頁列出已保存檔案。 |
@@ -100,6 +101,8 @@ node dist/cli/main.js init /path/to/project --plugin ./plugins/acme.mjs
 | `mcp-uninstall <target>` | 預覽；加上 `--apply --yes` 後移除相符的 MCP 設定。 |
 
 `watch-status` 只以 PID signal-0 探測程序是否存在，不會啟動、停止或同步 watcher。PID 重用無法證明程序身分；journal 狀態也只代表有界視窗中的最新證據。
+
+`watch-start` 預設只產生唯讀計畫。套用時必須同時提供 `--apply --yes --approval <fingerprint>`；approval 綁定專案、Node／CLI 路徑、啟動參數與可執行 JavaScript 的 SHA-256。它不經 shell 啟動背景 `watch`，並在回傳成功前核對 host ID、PID、版本與登錄狀態；若登錄逾時，不會對未知程序發送訊號。
 
 `watch-stop` 預設只產生綁定專案真實路徑與完整 host 紀錄的 approval。套用時必須同時提供 `--apply --yes --approval <fingerprint>`；它只寫入短效本機請求，由目標 host 驗證後自行關閉，不會對 PID 發送 TERM、KILL 或其他訊號。
 

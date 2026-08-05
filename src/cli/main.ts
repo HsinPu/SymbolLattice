@@ -56,6 +56,8 @@ import {
   type AutoSyncHostRegistration,
   type AutoSyncHostRegistry,
   type AutoSyncHostRegistryResult,
+  type AutoSyncStartControl,
+  type AutoSyncStartLaunchOptions,
   type AutoSyncStopControl,
   type AutoSyncStopMonitor,
   type AutoSyncStatusResult,
@@ -79,7 +81,9 @@ import {
 import { ARTIFACT_LANGUAGES, MAX_SOURCE_SEARCH_LIMIT } from "../domain/index.js";
 import {
   FileSystemAutoSyncHostRegistry,
+  FileSystemAutoSyncStartControl,
   FileSystemAutoSyncStopControl,
+  MANAGED_AUTO_SYNC_HOST_ID_ENV,
   FileSystemSourceCatalog,
   NodeFileSystemWatchSource
 } from "../infrastructure/filesystem/index.js";
@@ -276,6 +280,12 @@ interface WatchStopCommandOptions extends ProjectOptions {
   readonly approval?: string;
 }
 
+interface WatchStartCommandOptions extends WatchCommandOptions {
+  readonly apply?: boolean;
+  readonly yes?: boolean;
+  readonly approval?: string;
+}
+
 /** Injectable CLI seam for a long-lived foreground watch command. */
 export type WatchCommandRunner = (
   service: SymbolLatticeService,
@@ -315,6 +325,13 @@ export type AutoSyncOwnerLeaseFactory = (projectPath: string) => AutoSyncOwnerLe
 
 /** Injectable project-local writer-host discovery seam. */
 export type AutoSyncHostRegistryFactory = (projectPath: string) => AutoSyncHostRegistry;
+
+/** Injectable detached-start seam; command previews never receive process mutation directly. */
+export type AutoSyncStartControlFactory = (
+  projectPath: string,
+  registry: AutoSyncHostRegistry,
+  launch: AutoSyncStartLaunchOptions
+) => AutoSyncStartControl;
 
 /** Injectable cooperative stop seam; it never receives a process-signalling capability. */
 export type AutoSyncStopControlFactory = (
@@ -741,7 +758,7 @@ function toAutoSyncDiagnosticError(
 
 function autoSyncHostRecord(
   kind: AutoSyncHostRecord["kind"],
-  hostId = randomUUID()
+  hostId: string = randomUUID()
 ): AutoSyncHostRecord {
   return {
     schemaVersion: 1,
@@ -751,6 +768,18 @@ function autoSyncHostRecord(
     version: SYMBOL_LATTICE_VERSION,
     startedAt: new Date().toISOString()
   };
+}
+
+function managedAutoSyncHostId(): string | undefined {
+  const hostId = process.env[MANAGED_AUTO_SYNC_HOST_ID_ENV];
+  if (hostId === undefined) return undefined;
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(hostId)) {
+    throw new SymbolLatticeError(
+      "START_TARGET_NOT_READY",
+      `The managed auto-sync host ID in ${MANAGED_AUTO_SYNC_HOST_ID_ENV} is invalid.`
+    );
+  }
+  return hostId;
 }
 
 function unregisterHost(registration: AutoSyncHostRegistration): void {
@@ -870,8 +899,15 @@ export async function runForegroundWatch(
     throw new SymbolLatticeError("AUTO_SYNC_OWNER_UNAVAILABLE", acquired.error.message);
   }
   const hostRegistry = hostRegistryFactory(options.projectPath);
-  const hostRecord = autoSyncHostRecord("foreground-watch");
+  const hostRecord = autoSyncHostRecord("foreground-watch", options.hostId ?? randomUUID());
   const hostRegistration = hostRegistry.register(hostRecord);
+  if (options.hostId !== undefined && hostRegistration.state === "failed") {
+    acquired.release();
+    throw new SymbolLatticeError(
+      "START_HOST_REGISTRATION_FAILED",
+      `The managed auto-sync host could not publish its lifecycle record: ${hostRegistration.error.message}`
+    );
+  }
 
   let session: Awaited<ReturnType<typeof startForegroundWatch>> | null = null;
   let stopMonitor: AutoSyncStopMonitor | null = null;
@@ -1126,7 +1162,14 @@ export function createProgram(
   autoSyncHostRegistryFactory: AutoSyncHostRegistryFactory = (projectPath) =>
     new FileSystemAutoSyncHostRegistry(projectPath),
   autoSyncStopControlFactory: AutoSyncStopControlFactory = (projectPath, registry) =>
-    new FileSystemAutoSyncStopControl(projectPath, registry, { version: SYMBOL_LATTICE_VERSION })
+    new FileSystemAutoSyncStopControl(projectPath, registry, { version: SYMBOL_LATTICE_VERSION }),
+  autoSyncStartControlFactory: AutoSyncStartControlFactory = (projectPath, registry, launch) =>
+    new FileSystemAutoSyncStartControl(projectPath, registry, {
+      version: SYMBOL_LATTICE_VERSION,
+      executablePath: process.execPath,
+      entryPath: fileURLToPath(import.meta.url),
+      launch
+    })
 ): Command {
   const coreService = service ?? createService();
   const indexingService = async (
@@ -1220,13 +1263,61 @@ export function createProgram(
     .action(async (path: string | undefined, options: WatchCommandOptions) => {
       const projectPath = resolve(path ?? defaultProjectPath(options));
       const commandService = await indexingService(projectPath, options);
+      const managedHostId = managedAutoSyncHostId();
       await watchRunner(commandService, {
         projectPath,
+        ...(managedHostId === undefined ? {} : { hostId: managedHostId }),
         force: options.force ?? false,
         intervalMs: options.interval ?? DEFAULT_WATCH_INTERVAL_MS,
         ...(options.poll === true ? {} : { eventSource: new NodeFileSystemWatchSource() }),
         onReceipt: renderWatchReceipt
       });
+    });
+
+  addJsonOption(addPluginOptions(addProjectOption(program.command("watch-start [path]"))))
+    .description("Preview or explicitly start one detached automatic-sync watch host")
+    .option("--force", "Allow automatic sync of a filesystem root or the home directory")
+    .option(
+      "--interval <milliseconds>",
+      `Polling fallback interval in milliseconds (${MIN_WATCH_INTERVAL_MS}-${MAX_WATCH_INTERVAL_MS}; default ${DEFAULT_WATCH_INTERVAL_MS})`,
+      parseWatchInterval
+    )
+    .option("--poll", "Disable native filesystem-event acceleration and use polling only")
+    .option("--apply", "Start the exact detached watch process described by the preview")
+    .option("--yes", "Explicitly confirm the mutation requested by --apply")
+    .option("--approval <fingerprint>", "Exact approval fingerprint returned by the current preview")
+    .action(async (path: string | undefined, options: WatchStartCommandOptions) => {
+      const projectPath = resolve(path ?? defaultProjectPath(options));
+      coreService.assertSafeProjectPath({ projectPath, force: options.force ?? false });
+      const status = await coreService.getStatus(projectPath);
+      if (!status.initialized) {
+        throw new SymbolLatticeError(
+          "MISSING_INDEX",
+          `No SymbolLattice index exists for ${projectPath}. Run "symbol-lattice init ${projectPath}" first.`
+        );
+      }
+      if (options.allowExternalPlugin === true && (options.plugin ?? []).length === 0) {
+        throw new SymbolLatticeError(
+          "INVALID_PLUGIN_MODULE",
+          '"--allow-external-plugin" requires at least one explicit "--plugin <path>".'
+        );
+      }
+      const registry = autoSyncHostRegistryFactory(projectPath);
+      const control = autoSyncStartControlFactory(projectPath, registry, {
+        force: options.force ?? false,
+        intervalMs: options.interval ?? DEFAULT_WATCH_INTERVAL_MS,
+        poll: options.poll ?? false,
+        pluginModulePaths: options.plugin ?? [],
+        allowExternalPlugin: options.allowExternalPlugin ?? false
+      });
+      render(
+        await control.execute({
+          ...(options.apply === true ? { apply: true } : {}),
+          ...(options.yes === true ? { yes: true } : {}),
+          ...(options.approval === undefined ? {} : { approval: options.approval })
+        }),
+        options
+      );
     });
 
   addJsonOption(addProjectOption(program.command("status [path]"))).action(
