@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.270.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher can update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.271.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher can update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## Quick start
 
@@ -75,7 +75,7 @@ export const symbolLatticePlugin = {
 node dist/cli/main.js init /path/to/project --plugin ./plugins/acme.mjs
 ```
 
-One manifest may provide `frameworkFactPlugins`, `frameworkProjectPlugins`, and `referenceResolverPlugins`. Repeat `--plugin` as needed; the same arguments flow through watch, watch-start, MCP configuration, install, doctor, and uninstall. Plugins are trusted in-process JavaScript, not a sandbox. SymbolLattice never discovers or executes project modules implicitly. By default, only `.js`, `.mjs`, and `.cjs` files whose real paths stay inside the project are accepted; add `--allow-external-plugin` to trust an explicit external path.
+One manifest may provide `frameworkFactPlugins`, `frameworkProjectPlugins`, and `referenceResolverPlugins`. Repeat `--plugin` as needed; the same arguments flow through watch, watch-start, watch-restart, MCP configuration, install, doctor, and uninstall. Plugins are trusted in-process JavaScript, not a sandbox. SymbolLattice never discovers or executes project modules implicitly. By default, only `.js`, `.mjs`, and `.cjs` files whose real paths stay inside the project are accepted; add `--allow-external-plugin` to trust an explicit external path.
 
 ## Common commands
 
@@ -85,6 +85,7 @@ One manifest may provide `frameworkFactPlugins`, `frameworkProjectPlugins`, and 
 | `sync <path>` | Explicitly synchronize or repair a graph. |
 | `watch <path>` | Watch and synchronize in the foreground. |
 | `watch-start [path]` | Preview or explicitly start one manageable background auto-sync host. |
+| `watch-restart <host-id> [path]` | Safely replace one foreground watch host in a single approved transaction. |
 | `watch-status [path]` | Read index freshness, durable events, and local host live/stale/unverifiable state. |
 | `watch-stop <host-id> [path]` | Preview or explicitly ask one registered host to stop itself safely. |
 | `files [path]` | Page persisted files by glob, projection, and generation-bound cursor. |
@@ -105,6 +106,8 @@ One manifest may provide `frameworkFactPlugins`, `frameworkProjectPlugins`, and 
 `watch-start` produces a read-only plan by default. Applying it requires `--apply --yes --approval <fingerprint>`; the approval binds the project, Node/CLI paths, launch arguments, and SHA-256 of executable JavaScript inputs. It starts the background `watch` without a shell and verifies host ID, PID, version, and registration before reporting success. A registration timeout never sends a signal to an unknown process.
 
 `watch-stop` only creates an approval bound to the project's real path and the complete host record by default. Applying it requires `--apply --yes --approval <fingerprint>`. It writes a short-lived local request that the target host validates before shutting itself down; it never sends TERM, KILL, or another signal to a PID.
+
+`watch-restart` binds the complete current foreground-host identity and the next launch command, plugins, and executable JavaScript SHA-256 values into one approval. Apply requests a cooperative stop first; a replacement starts only after the old host is proven absent, the launch plan is unchanged, and no competing host exists. Stop timeouts and partial failures return attributable receipts without signalling a PID directly.
 
 `upgrade` produces a read-only plan by default. `--verify` downloads and checks the `.tgz`, SHA-256 checksum, manifest, and GitHub Artifact Attestations API evidence without installing. `--apply --yes` supports only local or global npm layouts, installs the verified local bytes, and then proves the CLI version. Source checkouts and `npx` are never changed automatically; downgrades also require `--allow-downgrade`.
 

@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.270.0 是開發預覽版。MCP 查詢工具唯讀；但 `serve --mcp` 預設會啟動獨立的本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用它。
+> v0.271.0 是開發預覽版。MCP 查詢工具唯讀；但 `serve --mcp` 預設會啟動獨立的本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用它。
 
 ## 快速開始
 
@@ -75,7 +75,7 @@ export const symbolLatticePlugin = {
 node dist/cli/main.js init /path/to/project --plugin ./plugins/acme.mjs
 ```
 
-同一份 manifest 可提供 `frameworkFactPlugins`、`frameworkProjectPlugins` 與 `referenceResolverPlugins`。`--plugin` 可重複使用，且會沿用至 `watch`、`watch-start`、MCP 設定、安裝、診斷與卸載。外掛是受信任的同程序 JavaScript，不是 sandbox；SymbolLattice 不會自動探索或執行專案內的模組。預設只接受 real path 位於專案內的 `.js`、`.mjs`、`.cjs`，外部路徑必須明確加上 `--allow-external-plugin`。
+同一份 manifest 可提供 `frameworkFactPlugins`、`frameworkProjectPlugins` 與 `referenceResolverPlugins`。`--plugin` 可重複使用，且會沿用至 `watch`、`watch-start`、`watch-restart`、MCP 設定、安裝、診斷與卸載。外掛是受信任的同程序 JavaScript，不是 sandbox；SymbolLattice 不會自動探索或執行專案內的模組。預設只接受 real path 位於專案內的 `.js`、`.mjs`、`.cjs`，外部路徑必須明確加上 `--allow-external-plugin`。
 
 ## 常用指令
 
@@ -85,6 +85,7 @@ node dist/cli/main.js init /path/to/project --plugin ./plugins/acme.mjs
 | `sync <path>` | 明確同步或修復圖譜。 |
 | `watch <path>` | 在前景監看並同步。 |
 | `watch-start [path]` | 預覽或明確啟動一個可管理的背景自動同步 host。 |
+| `watch-restart <host-id> [path]` | 以單一核准交易安全替換一個 foreground watch host。 |
 | `watch-status [path]` | 唯讀檢視索引 freshness、持久化事件與本機 host 的 live／stale／unverifiable 狀態。 |
 | `watch-stop <host-id> [path]` | 預覽或明確要求一個已登錄 host 自行安全停止。 |
 | `files [path]` | 以 glob、投影與 generation-bound 游標分頁列出已保存檔案。 |
@@ -105,6 +106,8 @@ node dist/cli/main.js init /path/to/project --plugin ./plugins/acme.mjs
 `watch-start` 預設只產生唯讀計畫。套用時必須同時提供 `--apply --yes --approval <fingerprint>`；approval 綁定專案、Node／CLI 路徑、啟動參數與可執行 JavaScript 的 SHA-256。它不經 shell 啟動背景 `watch`，並在回傳成功前核對 host ID、PID、版本與登錄狀態；若登錄逾時，不會對未知程序發送訊號。
 
 `watch-stop` 預設只產生綁定專案真實路徑與完整 host 紀錄的 approval。套用時必須同時提供 `--apply --yes --approval <fingerprint>`；它只寫入短效本機請求，由目標 host 驗證後自行關閉，不會對 PID 發送 TERM、KILL 或其他訊號。
+
+`watch-restart` 將目前 foreground host 的完整身分與下一個啟動命令、外掛及可執行 JavaScript SHA-256 綁入同一份 approval。套用後先 cooperative stop；只有舊 host 確認消失、啟動計畫仍完全相同且沒有競爭 host，才會啟動替代者。停止逾時或部分失敗會回傳可歸因的 receipt，不會直接對 PID 發訊號。
 
 `upgrade` 預設只產生唯讀計畫。`--verify` 會下載並核對 `.tgz`、SHA-256、manifest 與 GitHub Artifact Attestations API 證據，但不安裝；`--apply --yes` 僅支援 npm 本機或全域安裝，且只安裝已驗證的本機位元組，再確認 CLI 版本。原始碼 checkout 與 `npx` 不會自動修改；降版還需要 `--allow-downgrade`。
 

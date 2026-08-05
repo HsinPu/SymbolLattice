@@ -72,6 +72,8 @@ export interface AutoSyncStartOptions {
 
 /** Preview-first lifecycle seam for launching one independently managed writer host. */
 export interface AutoSyncStartControl {
+  /** Resolve and hash the exact shell-free launch command without inspecting or changing host state. */
+  describeCommand(): Promise<AutoSyncStartCommand>;
   preview(): Promise<AutoSyncStartPlan>;
   execute(options?: AutoSyncStartOptions): Promise<AutoSyncStartResult>;
 }

@@ -56,6 +56,7 @@ import {
   type McpAutoSyncJournalFactory,
   type McpAutoSyncOwnerLeaseFactory,
   type AutoSyncHostRegistryFactory,
+  type AutoSyncRestartControlFactory,
   type AutoSyncStopControlFactory,
   type PluginServiceFactoryOptions,
   type UpgradePlanner,
@@ -2832,6 +2833,85 @@ describe("symbol-lattice read-only watch status CLI", () => {
       mode: "preview"
     });
   });
+
+  it("keeps watch-restart preview-first and forwards one approval-bound replacement transaction", async () => {
+    const execute = vi.fn(async () => ({ schemaVersion: 1, mode: "preview" }));
+    const restartControlFactory = vi.fn(() => ({ execute })) as unknown as AutoSyncRestartControlFactory;
+    const startControl = { describeCommand: vi.fn(), preview: vi.fn(), execute: vi.fn() };
+    const stopControl = { preview: vi.fn(), execute: vi.fn(), monitor: vi.fn() };
+    const startControlFactory = vi.fn(() => startControl);
+    const stopControlFactory = vi.fn(() => stopControl) as unknown as AutoSyncStopControlFactory;
+    const registryFactory = observedHostRegistryFactory([]);
+    const service = {
+      assertSafeProjectPath: vi.fn(),
+      getStatus: vi.fn(async () => resultStatus())
+    } as unknown as SymbolLatticeService;
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+    await createProgram(
+      service,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      registryFactory,
+      stopControlFactory,
+      startControlFactory,
+      restartControlFactory
+    ).parseAsync(
+      [
+        "node",
+        "symbol-lattice",
+        "watch-restart",
+        "123e4567-e89b-42d3-a456-426614174000",
+        "C:/chosen-project",
+        "--interval",
+        "750",
+        "--poll",
+        "--force",
+        "--plugin",
+        "plugins/routes.mjs",
+        "--apply",
+        "--yes",
+        "--approval",
+        "watch-restart:approved",
+        "--json"
+      ],
+      { from: "node" }
+    );
+
+    expect(service.assertSafeProjectPath).toHaveBeenCalledWith({
+      projectPath: resolve("C:/chosen-project"),
+      force: true
+    });
+    expect(startControlFactory).toHaveBeenCalledWith(
+      resolve("C:/chosen-project"),
+      expect.any(Object),
+      {
+        force: true,
+        intervalMs: 750,
+        poll: true,
+        pluginModulePaths: ["plugins/routes.mjs"],
+        allowExternalPlugin: false
+      }
+    );
+    expect(restartControlFactory).toHaveBeenCalledWith(
+      resolve("C:/chosen-project"),
+      expect.any(Object),
+      stopControl,
+      startControl
+    );
+    expect(execute).toHaveBeenCalledWith("123e4567-e89b-42d3-a456-426614174000", {
+      apply: true,
+      yes: true,
+      approval: "watch-restart:approved"
+    });
+    expect(JSON.parse(String(write.mock.calls.at(-1)?.[0]))).toEqual({
+      schemaVersion: 1,
+      mode: "preview"
+    });
+  });
 });
 
 describe("symbol-lattice v0.10 foreground watch CLI", () => {
@@ -2990,7 +3070,7 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
         hostId: "123e4567-e89b-42d3-a456-426614174000",
         kind: "foreground-watch",
         pid: process.pid,
-        version: "0.270.0"
+        version: "0.271.0"
       })
     ]);
   });
@@ -3172,7 +3252,7 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
     expect(monitor).toHaveBeenCalledWith(hostRecords[0], expect.any(Function));
     expect(closeStopMonitor).toHaveBeenCalledTimes(1);
     expect(hostRecords).toEqual([
-      expect.objectContaining({ kind: "mcp-auto-sync", pid: process.pid, version: "0.270.0" })
+      expect.objectContaining({ kind: "mcp-auto-sync", pid: process.pid, version: "0.271.0" })
     ]);
   });
 

@@ -90,7 +90,7 @@ export class FileSystemAutoSyncStartControl implements AutoSyncStartControl {
   }
 
   public async preview(): Promise<AutoSyncStartPlan> {
-    const command = await this.command();
+    const command = await this.describeCommand();
     const registry = this.registry.inspect();
     const conflictingHosts = registry.hosts
       .filter((host) => host.liveness !== "stale")
@@ -163,7 +163,7 @@ export class FileSystemAutoSyncStartControl implements AutoSyncStartControl {
     return result;
   }
 
-  private async command(): Promise<AutoSyncStartCommand> {
+  public async describeCommand(): Promise<AutoSyncStartCommand> {
     const canonicalProject = realpathSync.native(this.projectPath);
     const canonicalEntry = realpathSync.native(resolve(this.options.entryPath));
     const canonicalExecutable = realpathSync.native(resolve(this.options.executablePath));

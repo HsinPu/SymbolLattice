@@ -56,6 +56,7 @@ import {
   type AutoSyncHostRegistration,
   type AutoSyncHostRegistry,
   type AutoSyncHostRegistryResult,
+  type AutoSyncRestartControl,
   type AutoSyncStartControl,
   type AutoSyncStartLaunchOptions,
   type AutoSyncStopControl,
@@ -81,6 +82,7 @@ import {
 import { ARTIFACT_LANGUAGES, MAX_SOURCE_SEARCH_LIMIT } from "../domain/index.js";
 import {
   FileSystemAutoSyncHostRegistry,
+  FileSystemAutoSyncRestartControl,
   FileSystemAutoSyncStartControl,
   FileSystemAutoSyncStopControl,
   MANAGED_AUTO_SYNC_HOST_ID_ENV,
@@ -286,6 +288,8 @@ interface WatchStartCommandOptions extends WatchCommandOptions {
   readonly approval?: string;
 }
 
+interface WatchRestartCommandOptions extends WatchStartCommandOptions {}
+
 /** Injectable CLI seam for a long-lived foreground watch command. */
 export type WatchCommandRunner = (
   service: SymbolLatticeService,
@@ -338,6 +342,14 @@ export type AutoSyncStopControlFactory = (
   projectPath: string,
   registry: AutoSyncHostRegistry
 ) => AutoSyncStopControl;
+
+/** Injectable stop-then-start transaction seam; it never receives a process-signalling capability. */
+export type AutoSyncRestartControlFactory = (
+  projectPath: string,
+  registry: AutoSyncHostRegistry,
+  stopControl: AutoSyncStopControl,
+  startControl: AutoSyncStartControl
+) => AutoSyncRestartControl;
 
 /** Backward-compatible alias for the MCP composition seam. */
 export type McpAutoSyncOwnerLeaseFactory = AutoSyncOwnerLeaseFactory;
@@ -1169,7 +1181,20 @@ export function createProgram(
       executablePath: process.execPath,
       entryPath: fileURLToPath(import.meta.url),
       launch
-    })
+    }),
+  autoSyncRestartControlFactory: AutoSyncRestartControlFactory = (
+    projectPath,
+    registry,
+    stopControl,
+    startControl
+  ) =>
+    new FileSystemAutoSyncRestartControl(
+      projectPath,
+      registry,
+      stopControl,
+      startControl,
+      { version: SYMBOL_LATTICE_VERSION }
+    )
 ): Command {
   const coreService = service ?? createService();
   const indexingService = async (
@@ -1312,6 +1337,65 @@ export function createProgram(
       });
       render(
         await control.execute({
+          ...(options.apply === true ? { apply: true } : {}),
+          ...(options.yes === true ? { yes: true } : {}),
+          ...(options.approval === undefined ? {} : { approval: options.approval })
+        }),
+        options
+      );
+    });
+
+  addJsonOption(
+    addPluginOptions(addProjectOption(program.command("watch-restart <host-id> [path]")))
+  )
+    .description("Preview or explicitly replace one registered foreground auto-sync watch host")
+    .option("--force", "Allow automatic sync of a filesystem root or the home directory")
+    .option(
+      "--interval <milliseconds>",
+      `Polling fallback interval in milliseconds (${MIN_WATCH_INTERVAL_MS}-${MAX_WATCH_INTERVAL_MS}; default ${DEFAULT_WATCH_INTERVAL_MS})`,
+      parseWatchInterval
+    )
+    .option("--poll", "Disable native filesystem-event acceleration and use polling only")
+    .option("--apply", "Cooperatively stop the approved host, then start the exact replacement")
+    .option("--yes", "Explicitly confirm the mutation requested by --apply")
+    .option("--approval <fingerprint>", "Exact approval fingerprint returned by the current preview")
+    .action(async (
+      hostId: string,
+      path: string | undefined,
+      options: WatchRestartCommandOptions
+    ) => {
+      const projectPath = resolve(path ?? defaultProjectPath(options));
+      coreService.assertSafeProjectPath({ projectPath, force: options.force ?? false });
+      const status = await coreService.getStatus(projectPath);
+      if (!status.initialized) {
+        throw new SymbolLatticeError(
+          "MISSING_INDEX",
+          `No SymbolLattice index exists for ${projectPath}. Run "symbol-lattice init ${projectPath}" first.`
+        );
+      }
+      if (options.allowExternalPlugin === true && (options.plugin ?? []).length === 0) {
+        throw new SymbolLatticeError(
+          "INVALID_PLUGIN_MODULE",
+          '"--allow-external-plugin" requires at least one explicit "--plugin <path>".'
+        );
+      }
+      const registry = autoSyncHostRegistryFactory(projectPath);
+      const stopControl = autoSyncStopControlFactory(projectPath, registry);
+      const startControl = autoSyncStartControlFactory(projectPath, registry, {
+        force: options.force ?? false,
+        intervalMs: options.interval ?? DEFAULT_WATCH_INTERVAL_MS,
+        poll: options.poll ?? false,
+        pluginModulePaths: options.plugin ?? [],
+        allowExternalPlugin: options.allowExternalPlugin ?? false
+      });
+      const control = autoSyncRestartControlFactory(
+        projectPath,
+        registry,
+        stopControl,
+        startControl
+      );
+      render(
+        await control.execute(hostId, {
           ...(options.apply === true ? { apply: true } : {}),
           ...(options.yes === true ? { yes: true } : {}),
           ...(options.approval === undefined ? {} : { approval: options.approval })
