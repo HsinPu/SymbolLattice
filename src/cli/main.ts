@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { Command } from "commander";
+import { randomUUID } from "node:crypto";
 import { readFileSync, realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
@@ -51,6 +52,10 @@ import {
   type AutoSyncDiagnosticsOptions,
   type AutoSyncOwnerLease,
   type AutoSyncDiagnosticsResult,
+  type AutoSyncHostRecord,
+  type AutoSyncHostRegistration,
+  type AutoSyncHostRegistry,
+  type AutoSyncHostRegistryResult,
   type AutoSyncStatusResult,
   type EntrypointsOptions,
   type FilesOptions,
@@ -71,6 +76,7 @@ import {
 } from "../application/index.js";
 import { ARTIFACT_LANGUAGES, MAX_SOURCE_SEARCH_LIMIT } from "../domain/index.js";
 import {
+  FileSystemAutoSyncHostRegistry,
   FileSystemSourceCatalog,
   NodeFileSystemWatchSource
 } from "../infrastructure/filesystem/index.js";
@@ -298,6 +304,9 @@ export type McpAutoSyncJournalFactory = (
 /** Injectable project-ownership seam; MCP request handlers never receive this capability. */
 export type AutoSyncOwnerLeaseFactory = (projectPath: string) => AutoSyncOwnerLease;
 
+/** Injectable project-local writer-host discovery seam. */
+export type AutoSyncHostRegistryFactory = (projectPath: string) => AutoSyncHostRegistry;
+
 /** Backward-compatible alias for the MCP composition seam. */
 export type McpAutoSyncOwnerLeaseFactory = AutoSyncOwnerLeaseFactory;
 
@@ -328,6 +337,7 @@ export interface WatchStatusResult {
   readonly projectPath: string;
   readonly index: AutoSyncDiagnosticsResult["index"];
   readonly journal: AutoSyncDiagnosticJournalResult;
+  readonly hostRegistry: AutoSyncHostRegistryResult;
   readonly observedHosts: {
     readonly scope: "bounded-journal-window";
     readonly processLiveness: "not-observed";
@@ -714,6 +724,26 @@ function toAutoSyncDiagnosticError(
   };
 }
 
+function autoSyncHostRecord(
+  kind: AutoSyncHostRecord["kind"],
+  hostId = randomUUID()
+): AutoSyncHostRecord {
+  return {
+    schemaVersion: 1,
+    hostId,
+    kind,
+    pid: process.pid,
+    version: SYMBOL_LATTICE_VERSION,
+    startedAt: new Date().toISOString()
+  };
+}
+
+function unregisterHost(registration: AutoSyncHostRegistration): void {
+  if (registration.state === "registered") {
+    registration.unregister();
+  }
+}
+
 /**
  * Reads operational watcher evidence without acquiring the owner lease or
  * starting, stopping, or synchronizing any host. Journal events describe the
@@ -724,9 +754,11 @@ export async function readWatchStatus(
   service: SymbolLatticeService,
   projectPath: string,
   journal: AutoSyncDiagnosticJournal,
+  hostRegistry: AutoSyncHostRegistry,
   options: AutoSyncDiagnosticJournalOptions = {}
 ): Promise<WatchStatusResult> {
   const durableJournal = journal.diagnostics(options);
+  const registry = hostRegistry.inspect();
   let index: AutoSyncDiagnosticsResult["index"];
   try {
     index = { status: await service.getStatus(projectPath), error: null };
@@ -766,6 +798,7 @@ export async function readWatchStatus(
     projectPath,
     index,
     journal: durableJournal,
+    hostRegistry: registry,
     observedHosts: {
       scope: "bounded-journal-window",
       processLiveness: "not-observed",
@@ -773,6 +806,7 @@ export async function readWatchStatus(
     },
     notes: [
       "Recorded host state is bounded journal evidence, not a live-process check.",
+      "Registry liveness uses a signal-0 PID probe; PID reuse cannot prove process identity.",
       "This command does not init, index, sync, start, stop, or acquire the auto-sync owner lease."
     ]
   };
@@ -805,7 +839,9 @@ export async function runForegroundWatch(
   options: ForegroundWatchOptions,
   signals: WatchSignalSource = process,
   ownerLeaseFactory: AutoSyncOwnerLeaseFactory = (projectPath) =>
-    new SqliteAutoSyncOwnerLease(projectPath)
+    new SqliteAutoSyncOwnerLease(projectPath),
+  hostRegistryFactory: AutoSyncHostRegistryFactory = (projectPath) =>
+    new FileSystemAutoSyncHostRegistry(projectPath)
 ): Promise<void> {
   // Guard the project boundary before creating the separate owner database.
   service.assertSafeProjectPath({
@@ -816,6 +852,9 @@ export async function runForegroundWatch(
   if (acquired.state === "unavailable") {
     throw new SymbolLatticeError("AUTO_SYNC_OWNER_UNAVAILABLE", acquired.error.message);
   }
+  const hostRegistration = hostRegistryFactory(options.projectPath).register(
+    autoSyncHostRecord("foreground-watch")
+  );
 
   let session: Awaited<ReturnType<typeof startForegroundWatch>> | null = null;
   let stopping = false;
@@ -850,7 +889,11 @@ export async function runForegroundWatch(
       try {
         signals.off("SIGTERM", stop);
       } finally {
-        acquired.release();
+        try {
+          unregisterHost(hostRegistration);
+        } finally {
+          acquired.release();
+        }
       }
     }
   }
@@ -871,18 +914,23 @@ export async function runMcpWithAutoSync(
   journalFactory: McpAutoSyncJournalFactory = (projectPath, writable) =>
     new SqliteAutoSyncDiagnosticJournal(projectPath, { writable }),
   ownerLeaseFactory: McpAutoSyncOwnerLeaseFactory = (projectPath) =>
-    new SqliteAutoSyncOwnerLease(projectPath)
+    new SqliteAutoSyncOwnerLease(projectPath),
+  hostRegistryFactory: AutoSyncHostRegistryFactory = (projectPath) =>
+    new FileSystemAutoSyncHostRegistry(projectPath)
 ): Promise<void> {
   const autoSyncEnabled = options.autoSync ?? true;
   const journalWritable = autoSyncEnabled && (options.diagnosticJournal ?? true);
   const journal = journalFactory(options.projectPath, journalWritable);
+  const hostId = randomUUID();
   const tracker = new AutoSyncStatusTracker({
     enabled: autoSyncEnabled,
-    nativeEventsRequested: options.poll !== true
+    nativeEventsRequested: options.poll !== true,
+    hostId
   });
   const mcpService = withAutoSyncObservability(service, options.projectPath, tracker, journal);
   let watchSession: ForegroundWatchSession | null = null;
   let ownerLease: AcquiredAutoSyncOwnerLease | null = null;
+  let hostRegistration: AutoSyncHostRegistration | null = null;
   const recordReceipt = (receipt: WatchReceipt): void => {
     const event = tracker.record(receipt);
     if (event !== null && journalWritable) {
@@ -907,6 +955,9 @@ export async function runMcpWithAutoSync(
       const acquired = ownerLeaseFactory(options.projectPath).acquire();
       if (acquired.state === "owned") {
         ownerLease = acquired;
+        hostRegistration = hostRegistryFactory(options.projectPath).register(
+          autoSyncHostRecord("mcp-auto-sync", hostId)
+        );
         tracker.markOwnerLeaseOwned(new Date().toISOString());
         watchSession = await watchStarter(service, watchOptions);
       } else {
@@ -921,7 +972,13 @@ export async function runMcpWithAutoSync(
         await watchSession.stop();
       }
     } finally {
-      ownerLease?.release();
+      try {
+        if (hostRegistration !== null) {
+          unregisterHost(hostRegistration);
+        }
+      } finally {
+        ownerLease?.release();
+      }
     }
   }
 }
@@ -1005,7 +1062,9 @@ export function createProgram(
   pluginServiceFactory: PluginServiceFactory = createPluginService,
   upgradePlanner: UpgradePlanner = runUpgradeCommand,
   autoSyncJournalFactory: McpAutoSyncJournalFactory = (projectPath, writable) =>
-    new SqliteAutoSyncDiagnosticJournal(projectPath, { writable })
+    new SqliteAutoSyncDiagnosticJournal(projectPath, { writable }),
+  autoSyncHostRegistryFactory: AutoSyncHostRegistryFactory = (projectPath) =>
+    new FileSystemAutoSyncHostRegistry(projectPath)
 ): Command {
   const coreService = service ?? createService();
   const indexingService = async (
@@ -1126,11 +1185,13 @@ export function createProgram(
     .action(async (path: string | undefined, options: WatchStatusCommandOptions) => {
       const projectPath = resolve(path ?? defaultProjectPath(options));
       const journal = autoSyncJournalFactory(projectPath, false);
+      const hostRegistry = autoSyncHostRegistryFactory(projectPath);
       render(
         await readWatchStatus(
           coreService,
           projectPath,
           journal,
+          hostRegistry,
           options.limit === undefined ? {} : { limit: options.limit }
         ),
         options

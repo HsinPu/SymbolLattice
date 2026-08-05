@@ -1,4 +1,5 @@
 export * from "./cargo-workspace.js";
+export * from "./auto-sync-host-registry.js";
 export * from "./discovery.js";
 export * from "./go-module.js";
 export * from "./jvm-project.js";

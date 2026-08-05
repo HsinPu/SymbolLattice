@@ -10,6 +10,8 @@ import {
   type AutoSyncDiagnosticJournal,
   type AutoSyncDiagnosticJournalResult,
   type AutoSyncDiagnosticsResult,
+  type AutoSyncHostRecord,
+  type AutoSyncHostRegistry,
   type AutoSyncStatusResult,
   type ContextOptions,
   type ContextResult,
@@ -53,6 +55,7 @@ import {
   type McpAutoSyncOptions,
   type McpAutoSyncJournalFactory,
   type McpAutoSyncOwnerLeaseFactory,
+  type AutoSyncHostRegistryFactory,
   type PluginServiceFactoryOptions,
   type UpgradePlanner,
   type WatchSignalSource
@@ -158,6 +161,39 @@ function ownedOwnerLeaseFactory(
   return () => ({
     acquire: () => ({ state: "owned", release })
   });
+}
+
+function observedHostRegistryFactory(
+  records: AutoSyncHostRecord[],
+  unregister: () => void = () => undefined
+): AutoSyncHostRegistryFactory {
+  return () => ({
+    register(record) {
+      records.push(record);
+      return { state: "registered", unregister };
+    },
+    inspect() {
+      return {
+        state: "available",
+        capacity: 128,
+        retained: 1,
+        returned: 1,
+        truncated: false,
+        error: null,
+        hosts: [{
+          schemaVersion: 1,
+          hostId: "123e4567-e89b-42d3-a456-426614174000",
+          kind: "mcp-auto-sync",
+          pid: 4312,
+          version: "0.268.0",
+          startedAt: "2026-08-05T01:00:00.000Z",
+          liveness: "live",
+          observedAt: "2026-08-05T01:00:01.000Z",
+          probeError: null
+        }]
+      };
+    }
+  } satisfies AutoSyncHostRegistry);
 }
 
 function searchResult(): SearchResult {
@@ -2579,6 +2615,7 @@ describe("symbol-lattice read-only watch status CLI", () => {
       diagnostics
     }));
     const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    const hostRegistryFactory = observedHostRegistryFactory([]);
 
     await createProgram(
       { getStatus, init, index, sync } as unknown as SymbolLatticeService,
@@ -2586,7 +2623,8 @@ describe("symbol-lattice read-only watch status CLI", () => {
       undefined,
       undefined,
       undefined,
-      journalFactory
+      journalFactory,
+      hostRegistryFactory
     ).parseAsync(
       [
         "node",
@@ -2613,6 +2651,10 @@ describe("symbol-lattice read-only watch status CLI", () => {
       projectPath: resolve("C:/chosen-project"),
       index: { status: { generationId: "generation:test" }, error: null },
       journal: { state: "read-only", returned: 1 },
+      hostRegistry: {
+        state: "available",
+        hosts: [{ kind: "mcp-auto-sync", liveness: "live" }]
+      },
       observedHosts: {
         scope: "bounded-journal-window",
         processLiveness: "not-observed",
@@ -2789,6 +2831,8 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
     };
     const receipts: WatchReceipt[] = [];
     const releaseOwnerLease = vi.fn();
+    const unregisterHost = vi.fn();
+    const hostRecords: AutoSyncHostRecord[] = [];
     const service = {
       assertSafeProjectPath(): void {},
       async getStatus(): Promise<SearchResult["status"]> {
@@ -2807,7 +2851,8 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
         onReceipt: (receipt) => receipts.push(receipt)
       },
       signals,
-      ownedOwnerLeaseFactory(releaseOwnerLease)
+      ownedOwnerLeaseFactory(releaseOwnerLease),
+      observedHostRegistryFactory(hostRecords, unregisterHost)
     );
 
     expect(signals.listenerCount("SIGINT")).toBe(1);
@@ -2819,6 +2864,10 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
     expect(signals.listenerCount("SIGINT")).toBe(0);
     expect(signals.listenerCount("SIGTERM")).toBe(0);
     expect(releaseOwnerLease).toHaveBeenCalledTimes(1);
+    expect(unregisterHost).toHaveBeenCalledTimes(1);
+    expect(hostRecords).toEqual([
+      expect.objectContaining({ kind: "foreground-watch", pid: process.pid, version: "0.268.0" })
+    ]);
   });
 
   it("rejects a standalone watcher when another host owns the project lease", async () => {
@@ -2856,6 +2905,8 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
 
   it("releases a standalone watcher lease when signal registration fails", async () => {
     const releaseOwnerLease = vi.fn();
+    const unregisterHost = vi.fn();
+    const hostRecords: AutoSyncHostRecord[] = [];
     const signals: WatchSignalSource = {
       once: vi.fn(() => {
         throw new Error("signal source is unavailable");
@@ -2868,13 +2919,15 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
         { assertSafeProjectPath(): void {} } as unknown as SymbolLatticeService,
         { projectPath: "C:/chosen-project" },
         signals,
-        ownedOwnerLeaseFactory(releaseOwnerLease)
+        ownedOwnerLeaseFactory(releaseOwnerLease),
+        observedHostRegistryFactory(hostRecords, unregisterHost)
       )
     ).rejects.toThrow("signal source is unavailable");
 
     expect(releaseOwnerLease).toHaveBeenCalledTimes(1);
     expect(signals.off).toHaveBeenCalledWith("SIGINT", expect.any(Function));
     expect(signals.off).toHaveBeenCalledWith("SIGTERM", expect.any(Function));
+    expect(unregisterHost).toHaveBeenCalledTimes(1);
   });
 
   it("starts an event-backed auto-sync watcher before MCP and stops it after the MCP session closes", async () => {
@@ -2883,6 +2936,8 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
       calls.push("watch-stop");
     });
     const releaseOwnerLease = vi.fn();
+    const unregisterHost = vi.fn();
+    const hostRecords: AutoSyncHostRecord[] = [];
     const watchSession: ForegroundWatchSession = {
       done: Promise.resolve(),
       stop: stopped
@@ -2922,7 +2977,8 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
         return watchSession;
       },
       undefined,
-      ownedOwnerLeaseFactory(releaseOwnerLease)
+      ownedOwnerLeaseFactory(releaseOwnerLease),
+      observedHostRegistryFactory(hostRecords, unregisterHost)
     );
 
     await serverStarted;
@@ -2941,6 +2997,10 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
     expect(calls).toEqual(["watch-start", "mcp-start", "watch-stop"]);
     expect(stopped).toHaveBeenCalledTimes(1);
     expect(releaseOwnerLease).toHaveBeenCalledTimes(1);
+    expect(unregisterHost).toHaveBeenCalledTimes(1);
+    expect(hostRecords).toEqual([
+      expect.objectContaining({ kind: "mcp-auto-sync", pid: process.pid, version: "0.268.0" })
+    ]);
   });
 
   it("feeds watcher receipts into the MCP host's read-only auto-sync status", async () => {
