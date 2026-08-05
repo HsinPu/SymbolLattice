@@ -690,6 +690,8 @@ export interface InvestigateOptions extends ContextOptions {
   readonly symbolLimit?: number;
   /** Shared emitted declaration-source envelope across all selected files. */
   readonly sourceCharacterBudget?: number;
+  /** Controls how each allocated persisted declaration is rendered. */
+  readonly sourceRenderMode?: import("./context-rendering.js").InvestigateSourceRenderMode;
   /** `lexical` preserves persisted FTS order; `structure` and `impact` use disclosed static signals. */
   readonly ranking?: InvestigateRankingStrategy;
   /** Project-relative directory or file prefix for the persisted source search. */
@@ -946,6 +948,12 @@ export interface InvestigationSelection {
   readonly topologySignals: InvestigationTopologySignals | null;
   /** Present only when `bounds.ranking` is `impact`; otherwise null to avoid extra traversal work. */
   readonly impactSignals: InvestigationImpactSignals | null;
+  /** Persisted lexical evidence used to focus an evidence-preserving source slice. */
+  readonly lexicalFocus: {
+    readonly language: ArtifactLanguage;
+    readonly range: SourceRange;
+    readonly matchingTerms: readonly string[];
+  };
   readonly symbol: SymbolNode;
 }
 
@@ -967,10 +975,22 @@ export interface InvestigationDeclaration {
   readonly reference: string;
   readonly sourceAvailability: SourceAvailability;
   /** Exact persisted declaration text, subject to the declared response bounds. */
-  readonly source: NodeSource | null;
+  readonly source: InvestigationRenderedNodeSource | null;
   /** Null only when persisted declaration source is unavailable. */
   readonly allocation: InvestigationDeclarationAllocation | null;
+  /** Null only when persisted declaration source is unavailable. */
+  readonly render: import("./context-rendering.js").InvestigationSourceRenderReceipt | null;
 }
+
+/** Exact contiguous slice and generation-bound coordinates rendered for an investigation. */
+export type InvestigationRenderedNodeSource = NodeSource & {
+  readonly renderedRange: SourceRange;
+  /** UTF-16 offsets inside the bounded persisted declaration text. */
+  readonly renderedCharacterOffsets: {
+    readonly start: number;
+    readonly end: number;
+  };
+};
 
 export interface InvestigationDeclarationAllocation {
   readonly selectionRank: number;
@@ -984,12 +1004,14 @@ export type InvestigationSourceFileAllocationReceipt =
   import("./context-allocation.js").InvestigationSourceFileAllocation & {
   readonly declarationReferences: readonly string[];
   readonly emittedCharacters: number;
+  readonly reservedButNotEmittedCharacters: number;
 };
 
 export type InvestigationSourceAllocationResult =
   Omit<import("./context-allocation.js").InvestigationSourceAllocation, "files" | "summary"> & {
   readonly summary: import("./context-allocation.js").InvestigationSourceAllocation["summary"] & {
     readonly emittedCharacters: number;
+    readonly reservedButNotEmittedCharacters: number;
   };
   readonly files: readonly InvestigationSourceFileAllocationReceipt[];
 };
@@ -1010,6 +1032,8 @@ export interface InvestigateBounds {
     readonly minimumTotalCharacterBudget: number;
     readonly maximumTotalCharacterBudget: number;
     readonly allocationPolicy: typeof import("./context-allocation.js").INVESTIGATION_SOURCE_ALLOCATION_POLICY;
+    readonly renderPolicy: typeof import("./context-rendering.js").INVESTIGATION_SOURCE_RENDER_POLICY;
+    readonly requestedRenderMode: import("./context-rendering.js").InvestigateSourceRenderMode;
   };
   readonly context: ContextBounds;
 }

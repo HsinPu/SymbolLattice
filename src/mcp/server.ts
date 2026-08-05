@@ -10,6 +10,7 @@ import {
   MAX_INVESTIGATION_SOURCE_CHARACTER_BUDGET,
   MIN_INVESTIGATION_SOURCE_CHARACTER_BUDGET
 } from "../application/context-allocation.js";
+import { INVESTIGATE_SOURCE_RENDER_MODES } from "../application/context-rendering.js";
 import {
   MAX_AUTO_SYNC_DIAGNOSTIC_JOURNAL_EVENTS,
   type AutoSyncDiagnosticJournalOptions,
@@ -327,6 +328,7 @@ export interface InvestigateToolArguments {
   readonly searchLimit?: number | undefined;
   readonly symbolLimit?: number | undefined;
   readonly sourceCharacterBudget?: number | undefined;
+  readonly sourceRenderMode?: InvestigateOptions["sourceRenderMode"];
   readonly ranking?: InvestigateOptions["ranking"];
   /** Project-relative source-path prefix. */
   readonly path?: string | undefined;
@@ -1686,6 +1688,9 @@ export async function runInvestigateTool(
       ...(arguments_.sourceCharacterBudget === undefined
         ? {}
         : { sourceCharacterBudget: arguments_.sourceCharacterBudget }),
+      ...(arguments_.sourceRenderMode === undefined
+        ? {}
+        : { sourceRenderMode: arguments_.sourceRenderMode }),
       ...(arguments_.ranking === undefined ? {} : { ranking: arguments_.ranking }),
       ...(arguments_.path === undefined ? {} : { pathPrefix: arguments_.path }),
       ...(arguments_.language === undefined ? {} : { language: arguments_.language }),
@@ -2334,6 +2339,10 @@ export function createMcpServer(
             .max(MAX_INVESTIGATION_SOURCE_CHARACTER_BUDGET)
             .optional()
             .describe(`Shared emitted declaration-source budget (${MIN_INVESTIGATION_SOURCE_CHARACTER_BUDGET}-${MAX_INVESTIGATION_SOURCE_CHARACTER_BUDGET} characters).`),
+          sourceRenderMode: z
+            .enum(INVESTIGATE_SOURCE_RENDER_MODES)
+            .optional()
+            .describe("`adaptive` returns full source when it fits, then a persisted lexical-focus slice; `prefix`, `focused`, and `signature` request one explicit evidence-preserving strategy."),
           ranking: z
             .enum(INVESTIGATE_RANKING_STRATEGIES)
             .optional()

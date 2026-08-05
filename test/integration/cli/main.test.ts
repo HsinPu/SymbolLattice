@@ -64,6 +64,7 @@ import {
 } from "../../../src/cli/main.js";
 import type { UpgradePreviewResult } from "../../../src/cli/upgrade.js";
 import type { McpServerSession } from "../../../src/mcp/index.js";
+import { SYMBOL_LATTICE_VERSION } from "../../../src/version.js";
 
 describe("CLI entrypoint detection", () => {
   it("recognizes npm's Unix bin symlink through its real target", () => {
@@ -1255,6 +1256,8 @@ describe("symbol-lattice investigate CLI", () => {
         "2",
         "--source-character-budget",
         "4096",
+        "--source-render-mode",
+        "focused",
         "--ranking",
         "topology",
         "--path",
@@ -1282,6 +1285,7 @@ describe("symbol-lattice investigate CLI", () => {
           searchLimit: 7,
           symbolLimit: 2,
           sourceCharacterBudget: 4096,
+          sourceRenderMode: "focused",
           ranking: "topology",
           pathPrefix: "src/",
           language: "python",
@@ -1329,6 +1333,18 @@ describe("symbol-lattice investigate CLI", () => {
         { from: "node" }
       )
     ).rejects.toThrow("Expected an integer between 2048 and 64000");
+  });
+
+  it("rejects an unsupported source render mode before invoking the service", async () => {
+    const program = createProgram({} as SymbolLatticeService);
+    program.exitOverride();
+
+    await expect(
+      program.parseAsync(
+        ["node", "symbol-lattice", "investigate", "user", "--source-render-mode", "summary"],
+        { from: "node" }
+      )
+    ).rejects.toThrow("Expected one of: adaptive, prefix, focused, signature");
   });
 });
 
@@ -3107,7 +3123,7 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
         hostId: "123e4567-e89b-42d3-a456-426614174000",
         kind: "foreground-watch",
         pid: process.pid,
-        version: "0.273.1"
+        version: SYMBOL_LATTICE_VERSION
       })
     ]);
   });
@@ -3289,7 +3305,7 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
     expect(monitor).toHaveBeenCalledWith(hostRecords[0], expect.any(Function));
     expect(closeStopMonitor).toHaveBeenCalledTimes(1);
     expect(hostRecords).toEqual([
-      expect.objectContaining({ kind: "mcp-auto-sync", pid: process.pid, version: "0.273.1" })
+      expect.objectContaining({ kind: "mcp-auto-sync", pid: process.pid, version: SYMBOL_LATTICE_VERSION })
     ]);
   });
 

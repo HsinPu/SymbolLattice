@@ -104,6 +104,12 @@ import {
   MIN_INVESTIGATION_SOURCE_CHARACTER_BUDGET
 } from "./context-allocation.js";
 import {
+  INVESTIGATE_SOURCE_RENDER_MODES,
+  INVESTIGATION_SOURCE_RENDER_POLICY,
+  renderInvestigationDeclaration,
+  type InvestigateSourceRenderMode
+} from "./context-rendering.js";
+import {
   frameworkProjectPluginProjectVersion,
   type FrameworkProjectPluginRegistry
 } from "./framework-project-plugins.js";
@@ -296,6 +302,7 @@ interface InvestigateRequest {
   readonly symbolLimit: number;
   readonly ranking: InvestigateRankingStrategy;
   readonly sourceCharacterBudget: number;
+  readonly sourceRenderMode: InvestigateSourceRenderMode;
   readonly contextBounds: ContextBounds;
 }
 
@@ -307,6 +314,7 @@ interface InvestigationCandidate {
   readonly structuralSignals: InvestigationStructuralSignals;
   readonly topologySignals: InvestigationTopologySignals | null;
   readonly impactSignals: InvestigationImpactSignals | null;
+  readonly lexicalFocus: InvestigationSelection["lexicalFocus"];
 }
 
 interface NormalizedSourceSearchRequest extends SourceSearchRequest {
@@ -1498,7 +1506,8 @@ export class SymbolLatticeService {
     const declarationPack = this.investigationDeclarations(
       selection,
       read.documentsByFilePath,
-      request.sourceCharacterBudget
+      request.sourceCharacterBudget,
+      request.sourceRenderMode
     );
 
     return {
@@ -1516,7 +1525,9 @@ export class SymbolLatticeService {
           totalCharacterBudget: request.sourceCharacterBudget,
           minimumTotalCharacterBudget: MIN_INVESTIGATION_SOURCE_CHARACTER_BUDGET,
           maximumTotalCharacterBudget: MAX_INVESTIGATION_SOURCE_CHARACTER_BUDGET,
-          allocationPolicy: INVESTIGATION_SOURCE_ALLOCATION_POLICY
+          allocationPolicy: INVESTIGATION_SOURCE_ALLOCATION_POLICY,
+          renderPolicy: INVESTIGATION_SOURCE_RENDER_POLICY,
+          requestedRenderMode: request.sourceRenderMode
         },
         context: request.contextBounds
       },
@@ -2935,11 +2946,23 @@ export class SymbolLatticeService {
       );
     }
 
+    const sourceRenderMode = options.sourceRenderMode ?? "adaptive";
+    if (
+      typeof sourceRenderMode !== "string" ||
+      !INVESTIGATE_SOURCE_RENDER_MODES.includes(sourceRenderMode as InvestigateSourceRenderMode)
+    ) {
+      throw new SymbolLatticeError(
+        "INVALID_INVESTIGATE_SOURCE_RENDER_MODE",
+        `Investigate source render mode must be one of: ${INVESTIGATE_SOURCE_RENDER_MODES.join(", ")}.`
+      );
+    }
+
     return {
       search,
       symbolLimit,
       ranking,
       sourceCharacterBudget,
+      sourceRenderMode: sourceRenderMode as InvestigateSourceRenderMode,
       contextBounds: this.contextBounds(options)
     };
   }
@@ -3587,6 +3610,11 @@ export class SymbolLatticeService {
         candidates.push({
           sourceRank: sourceResult.rank,
           candidateRank: candidateIndex + 1,
+          lexicalFocus: {
+            language: sourceResult.language,
+            range: sourceResult.range,
+            matchingTerms: [...sourceResult.matchingTerms]
+          },
           symbol,
           generatedRanking: {
             itemId: symbol.id,
@@ -3630,6 +3658,7 @@ export class SymbolLatticeService {
       structuralSignals: candidate.structuralSignals,
       topologySignals: candidate.topologySignals,
       impactSignals: candidate.impactSignals,
+      lexicalFocus: candidate.lexicalFocus,
       generatedRanking: { ...candidate.generatedRanking, finalRank: index + 1 },
       symbol: candidate.symbol
     }));
@@ -3868,7 +3897,8 @@ export class SymbolLatticeService {
   private investigationDeclarations(
     selection: InvestigationSelectionResult,
     documentsByFilePath: ReadonlyMap<string, IndexedSourceDocument>,
-    sourceCharacterBudget: number
+    sourceCharacterBudget: number,
+    sourceRenderMode: InvestigateSourceRenderMode
   ): {
     readonly declarations: readonly InvestigationDeclaration[];
     readonly allocation: InvestigationSourceAllocationResult;
@@ -3925,6 +3955,10 @@ export class SymbolLatticeService {
       selectionCount: selection.items.length
     });
     const declarationAllocations = new Map<string, InvestigationDeclarationAllocation>();
+    const renderedSources = new Map<string, {
+      readonly source: NonNullable<InvestigationDeclaration["source"]>;
+      readonly render: NonNullable<InvestigationDeclaration["render"]>;
+    }>();
     for (const file of reservation.files) {
       const group = grouped.get(file.filePath);
       if (group === undefined) {
@@ -3942,12 +3976,30 @@ export class SymbolLatticeService {
           continue;
         }
         const allocatedCharacters = shares.get(reference) ?? 0;
+        const rendered = renderInvestigationDeclaration({
+          sourceText: source.text,
+          allocatedCharacters,
+          declarationRange: source.range,
+          lexicalFocusRange: draft.selection.lexicalFocus.range,
+          language: draft.selection.lexicalFocus.language,
+          requestedMode: sourceRenderMode
+        });
         declarationAllocations.set(reference, {
           selectionRank: draft.selection.selectionRank,
           requestedCharacters: source.text.length,
           allocatedCharacters,
-          emittedCharacters: allocatedCharacters,
-          truncated: source.truncated || allocatedCharacters < source.text.length
+          emittedCharacters: rendered.text.length,
+          truncated: source.truncated || !rendered.receipt.complete
+        });
+        renderedSources.set(reference, {
+          source: {
+            ...source,
+            text: rendered.text,
+            renderedRange: rendered.renderedRange,
+            renderedCharacterOffsets: rendered.receipt.sourceCharacterOffsets,
+            truncated: source.truncated || !rendered.receipt.complete
+          },
+          render: rendered.receipt
         });
       }
     }
@@ -3955,18 +4007,16 @@ export class SymbolLatticeService {
     const declarations = drafts.map((draft): InvestigationDeclaration => {
       const reference = draft.selection.symbol.qualifiedName;
       const allocation = declarationAllocations.get(reference) ?? null;
-      const source = draft.source === null || allocation === null
+      const rendered = renderedSources.get(reference) ?? null;
+      const source = draft.source === null || allocation === null || rendered === null
         ? null
-        : {
-            ...draft.source,
-            text: draft.source.text.slice(0, allocation.emittedCharacters),
-            truncated: allocation.truncated
-          };
+        : rendered.source;
       return {
         reference,
         sourceAvailability: source === null ? "unavailable" : "active-generation",
         source,
-        allocation
+        allocation,
+        render: rendered?.render ?? null
       };
     });
     const files = reservation.files.map((file) => {
@@ -3981,19 +4031,31 @@ export class SymbolLatticeService {
       );
       return {
         ...file,
+        truncated: file.truncated || emittedCharacters < file.requestedCharacters,
         declarationReferences: [...group.declarationReferences],
-        emittedCharacters
+        emittedCharacters,
+        reservedButNotEmittedCharacters: file.allocatedCharacters - emittedCharacters
       };
     });
     const emittedCharacters = files.reduce(
       (total, file) => total + file.emittedCharacters,
       0
     );
+    const reservedButNotEmittedCharacters = files.reduce(
+      (total, file) => total + file.reservedButNotEmittedCharacters,
+      0
+    );
     return {
       declarations,
       allocation: {
         ...reservation,
-        summary: { ...reservation.summary, emittedCharacters },
+        summary: {
+          ...reservation.summary,
+          emittedCharacters,
+          unusedCharacters: sourceCharacterBudget - emittedCharacters,
+          reservedButNotEmittedCharacters,
+          truncated: reservation.summary.truncated || emittedCharacters < reservation.summary.requestedCharacters
+        },
         files
       }
     };

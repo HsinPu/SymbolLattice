@@ -2247,7 +2247,9 @@ describe("SymbolLatticeService", () => {
       totalCharacterBudget: 24_000,
       minimumTotalCharacterBudget: 2_048,
       maximumTotalCharacterBudget: 64_000,
-      allocationPolicy: "proportional-source-v1"
+      allocationPolicy: "proportional-source-v1",
+      renderPolicy: "evidence-slice-v1",
+      requestedRenderMode: "adaptive"
     });
     expect(result.declarations[0]).toMatchObject({
       reference: "src/bounded-investigation.ts#boundedInvestigationTarget",

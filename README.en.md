@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.273.1 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher can update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.274.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher can update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## Quick start
 
@@ -32,6 +32,9 @@ node dist/cli/main.js init /path/to/project
 # Query explainable structural context
 node dist/cli/main.js investigate "user token" --project /path/to/project --json
 
+# Center a small-budget, contiguous source slice on an active-generation lexical hit
+node dist/cli/main.js investigate "user token" --project /path/to/project --source-render-mode focused --json
+
 # Restrict immutable Git hunk attribution to one exact file or directory
 node dist/cli/main.js git-hunks /path/to/project --base origin/main --path-prefix src/domain --json
 
@@ -46,7 +49,7 @@ Alternatively, download the version-pinned `.tgz`, SHA-256 checksum, and manifes
 
 ## What it does
 
-- `investigate` shares a 2,048–64,000-character declaration-source budget across selected files by selection rank. Unused short-file capacity is redistributed, generated files are downweighted but never hidden, and every file and declaration returns allocation and truncation receipts.
+- `investigate` shares a 2,048–64,000-character declaration-source budget by selection rank. `adaptive` returns a complete declaration when it fits, then centers a contiguous slice on the lexical hit from the same active generation. Callers may explicitly request `prefix`, `focused`, or a boundary-proven `signature`; every result discloses its exact range, omissions, focus/signature evidence, and reserved-but-not-emitted capacity.
 - Scans multiple languages and common frameworks into a project-local code graph.
 - Queries symbols, indexed files, calls, routes, entry points, impact, retained generations, and diffs.
 - Classifies generated files during indexing with bounded path and header rules, preserving rule IDs and exact header ranges. `files`, `search`, `find`, `investigate`, `callers`, and `callees` apply explainable soft ranking only; generated results are never hidden.

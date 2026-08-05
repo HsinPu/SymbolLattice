@@ -15,6 +15,7 @@ import {
   MAX_CONTEXT_MAX_HOPS,
   MAX_CONTEXT_RELATION_LIMIT,
   INVESTIGATE_RANKING_STRATEGIES,
+  INVESTIGATE_SOURCE_RENDER_MODES,
   MAX_INVESTIGATION_SOURCE_CHARACTER_BUDGET,
   MIN_INVESTIGATION_SOURCE_CHARACTER_BUDGET,
   MAX_INVESTIGATE_SYMBOL_LIMIT,
@@ -164,6 +165,7 @@ interface InvestigateCommandOptions extends ProjectOptions {
   readonly searchLimit?: number;
   readonly symbolLimit?: number;
   readonly sourceCharacterBudget?: number;
+  readonly sourceRenderMode?: NonNullable<InvestigateOptions["sourceRenderMode"]>;
   readonly ranking?: NonNullable<InvestigateOptions["ranking"]>;
   readonly path?: string;
   readonly language?: NonNullable<InvestigateOptions["language"]>;
@@ -545,6 +547,20 @@ function parseInvestigateRanking(value: string): NonNullable<InvestigateOptions[
     );
   }
   return ranking as NonNullable<InvestigateOptions["ranking"]>;
+}
+
+function parseInvestigateSourceRenderMode(
+  value: string
+): NonNullable<InvestigateOptions["sourceRenderMode"]> {
+  const mode = value.trim();
+  if (!INVESTIGATE_SOURCE_RENDER_MODES.includes(
+    mode as NonNullable<InvestigateOptions["sourceRenderMode"]>
+  )) {
+    throw new Error(
+      `Expected one of: ${INVESTIGATE_SOURCE_RENDER_MODES.join(", ")}; received "${value}".`
+    );
+  }
+  return mode as NonNullable<InvestigateOptions["sourceRenderMode"]>;
 }
 
 function parseRouteMethod(value: string): NonNullable<RoutesOptions["method"]> {
@@ -1612,6 +1628,11 @@ export function createProgram(
       )
     )
     .option(
+      "--source-render-mode <adaptive|prefix|focused|signature>",
+      "Render full declarations when possible, or use exact persisted prefix, lexical-focus, or proven signature slices",
+      parseInvestigateSourceRenderMode
+    )
+    .option(
       "--ranking <lexical|structure|impact|topology>",
       "Select persisted FTS order, direct static structure, bounded exact reverse impact, or bounded exact-static topology ranking",
       parseInvestigateRanking
@@ -1649,6 +1670,9 @@ export function createProgram(
         ...(options.sourceCharacterBudget === undefined
           ? {}
           : { sourceCharacterBudget: options.sourceCharacterBudget }),
+        ...(options.sourceRenderMode === undefined
+          ? {}
+          : { sourceRenderMode: options.sourceRenderMode }),
         ...(options.ranking === undefined ? {} : { ranking: options.ranking }),
         ...(options.path === undefined ? {} : { pathPrefix: options.path }),
         ...(options.language === undefined ? {} : { language: options.language }),

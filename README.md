@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.273.1 是開發預覽版。MCP 查詢工具唯讀；但 `serve --mcp` 預設會啟動獨立的本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用它。
+> v0.274.0 是開發預覽版。MCP 查詢工具唯讀；但 `serve --mcp` 預設會啟動獨立的本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用它。
 
 ## 快速開始
 
@@ -32,6 +32,9 @@ node dist/cli/main.js init /path/to/project
 # 查詢含證據的結構脈絡
 node dist/cli/main.js investigate "user token" --project /path/to/project --json
 
+# 小預算時以 active generation 的文字命中為中心，輸出連續原始碼片段
+node dist/cli/main.js investigate "user token" --project /path/to/project --source-render-mode focused --json
+
 # 將不可變 Git hunk 歸因限縮到一個精確檔案或目錄
 node dist/cli/main.js git-hunks /path/to/project --base origin/main --path-prefix src/domain --json
 
@@ -46,7 +49,7 @@ node dist/cli/main.js file service.ts --project /path/to/project --offset 1600 -
 
 ## 核心能力
 
-- `investigate` 以 2,048–64,000 字元的共享 declaration-source 預算，按入選順位在檔案間比例配置；短檔未用容量會重新分配，生成檔只降低權重而不隱藏，並回傳逐檔與逐 declaration 的配置、截斷收據。
+- `investigate` 以 2,048–64,000 字元的共享 declaration-source 預算，按入選順位配置；`adaptive` 會優先回傳完整 declaration，否則以同一 active generation 的文字命中為中心選取連續片段。也可明確指定 `prefix`、`focused` 或可證明邊界的 `signature`；每筆結果都揭露實際範圍、前後省略量、焦點／signature 證據與保留但未輸出的額度。
 - 將多種語言與常見框架掃描成專案本機程式碼圖譜。
 - 查詢 symbols、files、calls、routes、entrypoints、impact、history 與 diff。
 - 每條關係保留規則、階段、候選目標、信心度、解析路徑與來源範圍。

@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import {
   INVESTIGATION_SOURCE_ALLOCATION_POLICY,
+  INVESTIGATION_SOURCE_RENDER_POLICY,
   SymbolLatticeService
 } from "../../../src/application/index.js";
 import { FileSystemSourceCatalog } from "../../../src/infrastructure/filesystem/index.js";
@@ -69,7 +70,9 @@ describe("generation-bound proportional investigation context", () => {
       totalCharacterBudget: 4_096,
       minimumTotalCharacterBudget: 2_048,
       maximumTotalCharacterBudget: 64_000,
-      allocationPolicy: INVESTIGATION_SOURCE_ALLOCATION_POLICY
+      allocationPolicy: INVESTIGATION_SOURCE_ALLOCATION_POLICY,
+      renderPolicy: INVESTIGATION_SOURCE_RENDER_POLICY,
+      requestedRenderMode: "adaptive"
     });
     expect(result.sourceAllocation).toMatchObject({
       policy: INVESTIGATION_SOURCE_ALLOCATION_POLICY,
@@ -77,24 +80,30 @@ describe("generation-bound proportional investigation context", () => {
       summary: {
         candidateFileCount: 3,
         allocatedCharacters: 4_096,
-        emittedCharacters: 4_096,
-        unusedCharacters: 0,
         truncated: true
       }
     });
+    expect(result.sourceAllocation.summary.emittedCharacters).toBeLessThan(4_096);
+    expect(result.sourceAllocation.summary.unusedCharacters).toBe(
+      4_096 - result.sourceAllocation.summary.emittedCharacters
+    );
+    expect(result.sourceAllocation.summary.reservedButNotEmittedCharacters).toBe(
+      4_096 - result.sourceAllocation.summary.emittedCharacters
+    );
     expect(result.sourceAllocation.files).toHaveLength(3);
     expect(
       result.sourceAllocation.files.reduce((total, file) => total + file.emittedCharacters, 0)
-    ).toBe(4_096);
+    ).toBe(result.sourceAllocation.summary.emittedCharacters);
     expect(result.declarations).toHaveLength(3);
     expect(
       result.declarations.reduce(
         (total, declaration) => total + (declaration.source?.text.length ?? 0),
         0
       )
-    ).toBe(4_096);
+    ).toBe(result.sourceAllocation.summary.emittedCharacters);
     expect(result.declarations.every((declaration) => declaration.allocation !== null)).toBe(true);
     expect(result.declarations.every((declaration) => declaration.source?.truncated === true)).toBe(true);
+    expect(result.declarations.every((declaration) => declaration.render?.mode === "focused")).toBe(true);
 
     const generated = result.sourceAllocation.files.find(
       (file) => file.filePath === "src/generated.ts"
@@ -139,6 +148,79 @@ describe("generation-bound proportional investigation context", () => {
     });
     expect(result.sourceAllocation.summary.unusedCharacters).toBeGreaterThan(0);
     expect(result.declarations.every((declaration) => declaration.source?.truncated === false)).toBe(true);
+    expect(result.declarations.every((declaration) => declaration.render?.mode === "full")).toBe(true);
+  });
+
+  it("keeps a deep persisted lexical hit inside an adaptive contiguous slice", async () => {
+    const lines = [
+      "export function deepEvidenceTarget(): string {",
+      ...Array.from({ length: 100 }, (_value, index) =>
+        index === 72
+          ? '  const answer = "needleAtThePersistedFocus";'
+          : `  const padding${index} = "${"padding ".repeat(12)}";`
+      ),
+      "  return answer;",
+      "}",
+      ""
+    ];
+    const projectPath = await createProject({ "src/deep.ts": lines.join("\n") });
+    const service = createService();
+    await service.init({ projectPath });
+
+    const result = await service.investigate(projectPath, "needleAtThePersistedFocus", {
+      sourceCharacterBudget: 2_048,
+      sourceRenderMode: "adaptive"
+    });
+    const declaration = result.declarations[0];
+
+    expect(declaration?.source?.text).toContain("needleAtThePersistedFocus");
+    expect(declaration?.render).toMatchObject({
+      policy: INVESTIGATION_SOURCE_RENDER_POLICY,
+      requestedMode: "adaptive",
+      mode: "focused",
+      contiguous: true,
+      focus: { available: true, included: true, fallbackReason: null }
+    });
+    expect(declaration?.source?.renderedRange.start.line).toBeGreaterThan(1);
+    expect(declaration?.source?.renderedCharacterOffsets.start).toBeGreaterThan(0);
+    expect(declaration?.allocation?.emittedCharacters).toBe(declaration?.source?.text.length);
+  });
+
+  it("returns a proven signature with an explicit reservation receipt", async () => {
+    const projectPath = await createProject({
+      "src/signature.ts": [
+        "export function signatureEvidence(",
+        '  input: string = "literal { is not the body"',
+        "): string {",
+        ...Array.from({ length: 80 }, (_value, index) => `  const value${index} = input;`),
+        "  return input;",
+        "}",
+        ""
+      ].join("\n")
+    });
+    const service = createService();
+    await service.init({ projectPath });
+
+    const result = await service.investigate(projectPath, "signatureEvidence", {
+      sourceCharacterBudget: 2_048,
+      sourceRenderMode: "signature"
+    });
+    const declaration = result.declarations[0];
+
+    expect(declaration?.source?.text).toBe([
+      "export function signatureEvidence(",
+      '  input: string = "literal { is not the body"',
+      "): string"
+    ].join("\n"));
+    expect(declaration?.render).toMatchObject({
+      requestedMode: "signature",
+      mode: "signature",
+      signature: { strategy: "brace-header", proven: true, fallbackReason: null }
+    });
+    expect(result.sourceAllocation.summary.reservedButNotEmittedCharacters).toBeGreaterThan(0);
+    expect(result.sourceAllocation.summary.unusedCharacters).toBe(
+      2_048 - result.sourceAllocation.summary.emittedCharacters
+    );
   });
 
 });
