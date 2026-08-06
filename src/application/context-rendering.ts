@@ -106,6 +106,21 @@ export interface RenderInvestigationDeclarationInput {
   readonly declarationReference: string;
 }
 
+export interface InvestigationSourceSegmentIdentityInput {
+  readonly filePath: string;
+  readonly declarationReference: string;
+  readonly sourceCharacterOffsets: {
+    readonly start: number;
+    readonly end: number;
+  };
+  readonly text: string;
+}
+
+export interface InvestigationSourceSegmentIdentity {
+  readonly id: string;
+  readonly contentSha256: string;
+}
+
 interface SourceCoordinates {
   readonly lineStarts: readonly number[];
   readonly lineContentEnds: readonly number[];
@@ -552,6 +567,25 @@ function segmentHash(value: string): string {
   return createHash("sha256").update(value, "utf8").digest("hex");
 }
 
+/** Recomputes the public identity used to prove one exact persisted source slice. */
+export function investigationSourceSegmentIdentity(
+  input: InvestigationSourceSegmentIdentityInput
+): InvestigationSourceSegmentIdentity {
+  const contentSha256 = segmentHash(input.text);
+  const identity = [
+    INVESTIGATION_SOURCE_SEGMENT_POLICY,
+    input.filePath,
+    input.declarationReference,
+    String(input.sourceCharacterOffsets.start),
+    String(input.sourceCharacterOffsets.end),
+    contentSha256
+  ].join("\0");
+  return {
+    id: `segment:${segmentHash(identity)}`,
+    contentSha256
+  };
+}
+
 function sourceSegment(
   choice: SliceChoice,
   sourceText: string,
@@ -561,17 +595,14 @@ function sourceSegment(
   declarationReference: string
 ): InvestigationSourceSegment {
   const text = sourceText.slice(choice.start, choice.end);
-  const contentSha256 = segmentHash(text);
-  const identity = [
-    INVESTIGATION_SOURCE_SEGMENT_POLICY,
+  const identity = investigationSourceSegmentIdentity({
     filePath,
     declarationReference,
-    String(choice.start),
-    String(choice.end),
-    contentSha256
-  ].join("\0");
+    sourceCharacterOffsets: { start: choice.start, end: choice.end },
+    text
+  });
   return {
-    id: `segment:${segmentHash(identity)}`,
+    id: identity.id,
     policy: INVESTIGATION_SOURCE_SEGMENT_POLICY,
     roles: [...choice.roles],
     text,
@@ -582,7 +613,7 @@ function sourceSegment(
       end: offsetToPosition(choice.end, declarationRange, coordinates)
     },
     sourceCharacterOffsets: { start: choice.start, end: choice.end },
-    contentSha256
+    contentSha256: identity.contentSha256
   };
 }
 

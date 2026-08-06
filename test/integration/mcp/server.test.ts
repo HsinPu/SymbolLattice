@@ -31,6 +31,7 @@ import {
   type ImpactResult,
   type InvestigateOptions,
   type InvestigateResult,
+  renderInvestigationDeclaration,
   type NodeResult,
   type RoutesOptions,
   type RoutesResult,
@@ -645,6 +646,57 @@ function investigateResult(): InvestigateResult {
     },
     contexts: context.contexts,
     evidencePaths: context.evidencePaths
+  };
+}
+
+function investigateSessionResult(): InvestigateResult {
+  const result = investigateResult();
+  const declaration = result.declarations[0]!;
+  const sourceText = "export function userById(): void {}";
+  const rendered = renderInvestigationDeclaration({
+    sourceText,
+    allocatedCharacters: sourceText.length,
+    declarationRange: declaration.source!.range,
+    lexicalFocusRange: null,
+    language: "typescript",
+    requestedMode: "adaptive",
+    filePath: declaration.source!.filePath,
+    declarationReference: declaration.reference
+  });
+  return {
+    ...result,
+    bounds: {
+      ...result.bounds,
+      declarationSource: {
+        ...result.bounds.declarationSource,
+        renderPolicy: "evidence-slice-v1",
+        requestedRenderMode: "adaptive"
+      }
+    },
+    declarations: [{
+      ...declaration,
+      source: {
+        ...declaration.source!,
+        text: rendered.text,
+        totalCharacters: sourceText.length,
+        renderedRange: rendered.renderedRange,
+        renderedCharacterOffsets: rendered.receipt.sourceCharacterOffsets,
+        renderedSegments: rendered.segments,
+        primarySegmentIndex: rendered.primarySegmentIndex
+      },
+      render: rendered.receipt
+    }],
+    sourceAllocation: {
+      ...result.sourceAllocation,
+      summary: {
+        ...result.sourceAllocation.summary,
+        reservedButNotEmittedCharacters: 0
+      },
+      files: result.sourceAllocation.files.map((file) => ({
+        ...file,
+        reservedButNotEmittedCharacters: 0
+      }))
+    }
   };
 }
 
@@ -2356,6 +2408,115 @@ describe("SymbolLattice MCP server", () => {
         }
       }
     ]);
+  });
+
+  it("deduplicates proven investigate source only after worker execution within one MCP session", async () => {
+    const executorCalls: string[] = [];
+    const readQueryExecutor: McpReadQueryExecutor = {
+      async execute(toolName, _arguments, fallback) {
+        executorCalls.push(toolName);
+        return fallback();
+      }
+    };
+    const server = createMcpServer(
+      {
+        async explore(): Promise<ExploreResult> {
+          return exploreResult();
+        },
+        async investigate(): Promise<InvestigateResult> {
+          return investigateSessionResult();
+        }
+      },
+      "C:/default-project",
+      { readQueryExecutor }
+    );
+    const client = new Client({ name: "symbol-lattice-session-source-test", version: "1.0.0" });
+    const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+    closeCallbacks.push(() => client.close(), () => server.close());
+
+    const tools = await client.listTools();
+    expect(tools.tools.find((tool) => tool.name === "symbol_lattice_investigate")).toMatchObject({
+      inputSchema: {
+        properties: {
+          sourceSessionMode: { enum: ["deduplicate", "full"] }
+        }
+      }
+    });
+
+    const first = await client.callTool({
+      name: "symbol_lattice_investigate",
+      arguments: { query: "user" }
+    });
+    const second = await client.callTool({
+      name: "symbol_lattice_investigate",
+      arguments: { query: "user" }
+    });
+    const firstContent = first.structuredContent as {
+      sessionSource: { callIndex: number; summary: Record<string, number> };
+      declarations: Array<{ source: { text: string | null; renderedSegments: Array<Record<string, unknown>> } }>;
+    };
+    const secondContent = second.structuredContent as typeof firstContent;
+
+    expect(executorCalls).toEqual(["investigate", "investigate"]);
+    expect(firstContent.sessionSource).toMatchObject({
+      callIndex: 1,
+      summary: { candidateSegments: 1, emittedSegments: 1, referencedSegments: 0 }
+    });
+    expect(firstContent.declarations[0]?.source.renderedSegments[0]).toMatchObject({
+      text: "export function userById(): void {}",
+      delivery: { status: "emitted", callIndex: 1 }
+    });
+    expect(secondContent.sessionSource).toMatchObject({
+      callIndex: 2,
+      summary: { candidateSegments: 1, emittedSegments: 0, referencedSegments: 1 }
+    });
+    expect(secondContent.declarations[0]?.source.text).toBeNull();
+    expect(secondContent.declarations[0]?.source.renderedSegments[0]).toMatchObject({
+      delivery: { status: "already-served", firstDeliveredCallIndex: 1 }
+    });
+    expect(secondContent.declarations[0]?.source.renderedSegments[0]).not.toHaveProperty("text");
+    expect(JSON.parse(second.content[0]!.text)).toEqual(second.structuredContent);
+  });
+
+  it("keeps investigate source delivery state isolated between MCP server sessions", async () => {
+    const service = {
+      async explore(): Promise<ExploreResult> {
+        return exploreResult();
+      },
+      async investigate(): Promise<InvestigateResult> {
+        return investigateSessionResult();
+      }
+    };
+    const sessions = await Promise.all(["first", "second"].map(async (name) => {
+      const server = createMcpServer(service, "C:/default-project");
+      const client = new Client({ name: `symbol-lattice-${name}-session`, version: "1.0.0" });
+      const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair();
+      await server.connect(serverTransport);
+      await client.connect(clientTransport);
+      closeCallbacks.push(() => client.close(), () => server.close());
+      return client;
+    }));
+
+    const responses = await Promise.all(sessions.map((client) => client.callTool({
+      name: "symbol_lattice_investigate",
+      arguments: { query: "user" }
+    })));
+
+    for (const response of responses) {
+      expect(response.structuredContent).toMatchObject({
+        sessionSource: {
+          callIndex: 1,
+          summary: { emittedSegments: 1, referencedSegments: 0 }
+        },
+        declarations: [{
+          source: {
+            renderedSegments: [{ delivery: { status: "emitted", callIndex: 1 } }]
+          }
+        }]
+      });
+    }
   });
 
   it("registers affected-test analysis only when the service supports it", async () => {

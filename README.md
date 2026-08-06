@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.275.0 是開發預覽版。MCP 查詢工具唯讀；但 `serve --mcp` 預設會啟動獨立的本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用它。
+> v0.276.0 是開發預覽版。MCP 查詢工具唯讀；但 `serve --mcp` 預設會啟動獨立的本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用它。
 
 ## 快速開始
 
@@ -49,7 +49,7 @@ node dist/cli/main.js file service.ts --project /path/to/project --offset 1600 -
 
 ## 核心能力
 
-- `investigate` 以 2,048–64,000 字元的共享 declaration-source 預算配置同一 active generation 的精確片段。`adaptive` 保持單一連續輸出；也可指定 `prefix`、`focused`、`signature`，或用 `multi` 分開取得最多兩段可獨立核對的 signature 與焦點原始碼。每段都有穩定 ID、SHA-256、範圍與省略 gap；不會合成不存在的文字，證據或預算不足時會明確降級。
+- `investigate` 以 2,048–64,000 字元的共享 declaration-source 預算配置同一 active generation 的精確片段。`adaptive` 保持單一連續輸出；也可指定 `prefix`、`focused`、`signature`，或用 `multi` 分開取得最多兩段可獨立核對的 signature 與焦點原始碼。每段都有穩定 ID、SHA-256、範圍與省略 gap；MCP 同一工作階段再次遇到已驗證片段時，預設改回傳明確參照，可用 `sourceSessionMode: "full"` 強制重送。不會合成不存在的文字，證據或預算不足時會明確降級。
 - 將多種語言與常見框架掃描成專案本機程式碼圖譜。
 - 查詢 symbols、files、calls、routes、entrypoints、impact、history 與 diff。
 - 每條關係保留規則、階段、候選目標、信心度、解析路徑與來源範圍。

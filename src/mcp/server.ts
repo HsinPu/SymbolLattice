@@ -10,7 +10,19 @@ import {
   MAX_INVESTIGATION_SOURCE_CHARACTER_BUDGET,
   MIN_INVESTIGATION_SOURCE_CHARACTER_BUDGET
 } from "../application/context-allocation.js";
-import { INVESTIGATE_SOURCE_RENDER_MODES } from "../application/context-rendering.js";
+import {
+  INVESTIGATE_SOURCE_RENDER_MODES,
+  INVESTIGATION_SOURCE_MAXIMUM_SEGMENTS,
+  INVESTIGATION_SOURCE_RENDER_POLICY,
+  INVESTIGATION_SOURCE_SEGMENT_POLICY
+} from "../application/context-rendering.js";
+import {
+  MCP_INVESTIGATE_SOURCE_SESSION_LIMITS,
+  MCP_INVESTIGATE_SOURCE_SESSION_MODES,
+  MCP_INVESTIGATE_SOURCE_SESSION_POLICY,
+  McpInvestigateSourceSession,
+  type McpInvestigateSourceSessionMode
+} from "./investigate-session-source.js";
 import {
   MAX_AUTO_SYNC_DIAGNOSTIC_JOURNAL_EVENTS,
   type AutoSyncDiagnosticJournalOptions,
@@ -329,6 +341,7 @@ export interface InvestigateToolArguments {
   readonly symbolLimit?: number | undefined;
   readonly sourceCharacterBudget?: number | undefined;
   readonly sourceRenderMode?: InvestigateOptions["sourceRenderMode"];
+  readonly sourceSessionMode?: McpInvestigateSourceSessionMode | undefined;
   readonly ranking?: InvestigateOptions["ranking"];
   /** Project-relative source-path prefix. */
   readonly path?: string | undefined;
@@ -678,6 +691,102 @@ const nodeSourceOutputSchema = z.object({
   truncated: z.boolean()
 });
 
+const investigateSourceSegmentMetadataOutputSchema = z.object({
+  id: z.string().regex(/^segment:[0-9a-f]{64}$/u),
+  policy: z.literal(INVESTIGATION_SOURCE_SEGMENT_POLICY),
+  roles: z.array(z.enum(["full", "prefix", "signature", "focus"])).min(1),
+  contiguous: z.literal(true),
+  lineAligned: z.boolean(),
+  renderedRange: sourceRangeOutputSchema,
+  sourceCharacterOffsets: z.object({
+    start: z.number().int().nonnegative(),
+    end: z.number().int().nonnegative()
+  }),
+  contentSha256: z.string().regex(/^[0-9a-f]{64}$/u)
+});
+
+const investigateSourceSegmentOutputSchema = z.union([
+  investigateSourceSegmentMetadataOutputSchema.extend({
+    text: z.string(),
+    delivery: z.object({
+      policy: z.literal(MCP_INVESTIGATE_SOURCE_SESSION_POLICY),
+      status: z.literal("emitted"),
+      segmentId: z.string().regex(/^segment:[0-9a-f]{64}$/u),
+      callIndex: z.number().int().positive()
+    })
+  }),
+  investigateSourceSegmentMetadataOutputSchema.extend({
+    delivery: z.object({
+      policy: z.literal(MCP_INVESTIGATE_SOURCE_SESSION_POLICY),
+      status: z.literal("already-served"),
+      segmentId: z.string().regex(/^segment:[0-9a-f]{64}$/u),
+      firstDeliveredCallIndex: z.number().int().positive(),
+      message: z.string().min(1)
+    })
+  })
+]);
+
+const investigateNodeSourceOutputSchema = nodeSourceOutputSchema.extend({
+  text: z.string().nullable(),
+  renderedRange: sourceRangeOutputSchema.optional(),
+  renderedCharacterOffsets: z.object({
+    start: z.number().int().nonnegative(),
+    end: z.number().int().nonnegative()
+  }).optional(),
+  renderedSegments: z.array(investigateSourceSegmentOutputSchema).min(1).optional(),
+  primarySegmentIndex: z.number().int().nonnegative().optional()
+});
+
+const investigateSourceRenderReceiptOutputSchema = z.object({
+  policy: z.literal(INVESTIGATION_SOURCE_RENDER_POLICY),
+  requestedMode: z.enum(INVESTIGATE_SOURCE_RENDER_MODES),
+  mode: z.enum(["full", "focused", "signature", "prefix", "multi"]),
+  complete: z.boolean(),
+  contiguous: z.boolean(),
+  lineAligned: z.boolean(),
+  emittedCharacters: z.number().int().nonnegative(),
+  sourceCharacterOffsets: z.object({
+    start: z.number().int().nonnegative(),
+    end: z.number().int().nonnegative()
+  }),
+  omittedCharactersBefore: z.number().int().nonnegative(),
+  omittedCharactersBetween: z.number().int().nonnegative(),
+  omittedCharactersAfter: z.number().int().nonnegative(),
+  primarySegmentId: z.string().regex(/^segment:[0-9a-f]{64}$/u),
+  segmentCount: z.number().int().min(1).max(INVESTIGATION_SOURCE_MAXIMUM_SEGMENTS),
+  segments: z.array(investigateSourceSegmentMetadataOutputSchema)
+    .min(1)
+    .max(INVESTIGATION_SOURCE_MAXIMUM_SEGMENTS),
+  multi: z.object({
+    requested: z.boolean(),
+    emitted: z.boolean(),
+    maximumSegments: z.literal(INVESTIGATION_SOURCE_MAXIMUM_SEGMENTS),
+    fallbackReason: z.string().nullable()
+  }),
+  navigation: z.object({
+    synthesizedText: z.null(),
+    gaps: z.array(z.object({
+      fromSegmentId: z.string().regex(/^segment:[0-9a-f]{64}$/u),
+      toSegmentId: z.string().regex(/^segment:[0-9a-f]{64}$/u),
+      sourceCharacterOffsets: z.object({
+        start: z.number().int().nonnegative(),
+        end: z.number().int().nonnegative()
+      }),
+      omittedCharacters: z.number().int().nonnegative()
+    }))
+  }),
+  focus: z.object({
+    available: z.boolean(),
+    included: z.boolean(),
+    fallbackReason: z.string().nullable()
+  }),
+  signature: z.object({
+    strategy: z.enum(["brace-header", "python-header"]).nullable(),
+    proven: z.boolean(),
+    fallbackReason: z.string().nullable()
+  })
+});
+
 const nodeOutputSchema = z
   .object({
     status: indexStatusOutputSchema,
@@ -873,7 +982,9 @@ const investigateOutputSchema = z
         totalCharacterBudget: z.number().int().min(MIN_INVESTIGATION_SOURCE_CHARACTER_BUDGET).max(MAX_INVESTIGATION_SOURCE_CHARACTER_BUDGET),
         minimumTotalCharacterBudget: z.literal(MIN_INVESTIGATION_SOURCE_CHARACTER_BUDGET),
         maximumTotalCharacterBudget: z.literal(MAX_INVESTIGATION_SOURCE_CHARACTER_BUDGET),
-        allocationPolicy: z.literal(INVESTIGATION_SOURCE_ALLOCATION_POLICY)
+        allocationPolicy: z.literal(INVESTIGATION_SOURCE_ALLOCATION_POLICY),
+        renderPolicy: z.literal(INVESTIGATION_SOURCE_RENDER_POLICY).optional(),
+        requestedRenderMode: z.enum(INVESTIGATE_SOURCE_RENDER_MODES).optional()
       }),
       context: z.object({
         maxReferences: z.number().int().positive(),
@@ -1002,14 +1113,15 @@ const investigateOutputSchema = z
       z.object({
         reference: z.string(),
         sourceAvailability: z.enum(["active-generation", "unavailable", "not-applicable"]),
-        source: nodeSourceOutputSchema.nullable(),
+        source: investigateNodeSourceOutputSchema.nullable(),
         allocation: z.object({
           selectionRank: z.number().int().positive(),
           requestedCharacters: z.number().int().nonnegative(),
           allocatedCharacters: z.number().int().nonnegative(),
           emittedCharacters: z.number().int().nonnegative(),
           truncated: z.boolean()
-        }).nullable()
+        }).nullable(),
+        render: investigateSourceRenderReceiptOutputSchema.nullable().optional()
       })
     ),
     sourceAllocation: z.object({
@@ -1025,6 +1137,7 @@ const investigateOutputSchema = z
         requestedCharacters: z.number().int().nonnegative(),
         allocatedCharacters: z.number().int().nonnegative(),
         emittedCharacters: z.number().int().nonnegative(),
+        reservedButNotEmittedCharacters: z.number().int().nonnegative().optional(),
         unusedCharacters: z.number().int().nonnegative(),
         truncated: z.boolean()
       }),
@@ -1038,12 +1151,35 @@ const investigateOutputSchema = z
         effectiveWeight: z.number().positive(),
         allocatedCharacters: z.number().int().nonnegative(),
         emittedCharacters: z.number().int().nonnegative(),
+        reservedButNotEmittedCharacters: z.number().int().nonnegative().optional(),
         truncated: z.boolean(),
         reason: z.enum(["selection-rank-weight", "generated-file-worth-penalty"])
       }))
     }),
     contexts: z.array(z.object({}).passthrough()),
-    evidencePaths: z.array(z.object({}).passthrough())
+    evidencePaths: z.array(z.object({}).passthrough()),
+    sessionSource: z.object({
+      policy: z.literal(MCP_INVESTIGATE_SOURCE_SESSION_POLICY),
+      scope: z.literal("mcp-server-session"),
+      mode: z.enum(MCP_INVESTIGATE_SOURCE_SESSION_MODES),
+      projectPath: z.string().min(1),
+      generationId: z.string().min(1),
+      callIndex: z.number().int().positive(),
+      generationReset: z.boolean(),
+      bounds: z.object({
+        maximumProjects: z.number().int().positive(),
+        maximumSegmentsPerProject: z.number().int().positive()
+      }),
+      summary: z.object({
+        candidateSegments: z.number().int().nonnegative(),
+        emittedSegments: z.number().int().nonnegative(),
+        referencedSegments: z.number().int().nonnegative(),
+        emittedCharacters: z.number().int().nonnegative(),
+        avoidedCharacters: z.number().int().nonnegative(),
+        stateSegmentsAfterCall: z.number().int().nonnegative(),
+        stateTruncated: z.boolean()
+      })
+    }).optional()
   })
   .passthrough();
 
@@ -1934,6 +2070,10 @@ export function createMcpServer(
 ): McpServer {
   const server = new McpServer({ name: "symbol-lattice", version: SYMBOL_LATTICE_VERSION });
   const readQueryExecutor = options.readQueryExecutor;
+  const investigateSourceSession = new McpInvestigateSourceSession({
+    maximumProjects: MCP_INVESTIGATE_SOURCE_SESSION_LIMITS.maximumProjects,
+    maximumSegmentsPerProject: MCP_INVESTIGATE_SOURCE_SESSION_LIMITS.maximumSegmentsPerProject
+  });
 
   server.registerTool(
     "symbol_lattice_explore",
@@ -2343,6 +2483,10 @@ export function createMcpServer(
             .enum(INVESTIGATE_SOURCE_RENDER_MODES)
             .optional()
             .describe("`adaptive` returns full source when it fits, then a persisted lexical-focus slice; `prefix`, `focused`, and `signature` request one exact segment; `multi` requests at most two independently hashable signature-plus-focus segments."),
+          sourceSessionMode: z
+            .enum(MCP_INVESTIGATE_SOURCE_SESSION_MODES)
+            .optional()
+            .describe("MCP-only delivery policy. `deduplicate` (default) replaces proven same-generation segments already delivered by this server session with explicit back-references; `full` re-emits exact source."),
           ranking: z
             .enum(INVESTIGATE_RANKING_STRATEGIES)
             .optional()
@@ -2384,10 +2528,15 @@ export function createMcpServer(
           idempotentHint: true
         }
       },
-      async (arguments_) =>
-        executeReadTool(readQueryExecutor, "investigate", arguments_, () =>
+      async (arguments_) => {
+        const response = await executeReadTool(readQueryExecutor, "investigate", arguments_, () =>
           runInvestigateTool(investigateService, defaultProjectPath, arguments_)
-        )
+        );
+        return investigateSourceSession.project(
+          response,
+          arguments_.sourceSessionMode ?? "deduplicate"
+        );
+      }
     );
   }
 
