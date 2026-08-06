@@ -379,7 +379,14 @@ function contextResult(): ContextResult {
       maxHops: 3,
       maxVisitedSymbolsPerPath: 500,
       impactDepth: 2,
-      impactLimit: 2
+      impactLimit: 2,
+      source: {
+        totalCharacterBudget: 24_000,
+        minimumTotalCharacterBudget: 2_048,
+        maximumTotalCharacterBudget: 64_000,
+        minimumPerReference: 256,
+        allocationPolicy: "reference-order-source-v1"
+      }
     },
     contexts: [
       {
@@ -393,6 +400,25 @@ function contextResult(): ContextResult {
         impact: { paths: [], truncated: false }
       }
     ],
+    sourceAllocation: {
+      policy: "reference-order-source-v1",
+      budget: {
+        characterBudget: 24_000,
+        minimumCharacterBudget: 2_048,
+        maximumCharacterBudget: 64_000,
+        minimumPerReference: 256
+      },
+      summary: {
+        candidateCount: 0,
+        requestedCharacters: 0,
+        allocatedCharacters: 0,
+        unusedCharacters: 24_000,
+        truncated: false,
+        emittedCharacters: 0,
+        reservedButNotEmittedCharacters: 0
+      },
+      contexts: []
+    },
     evidencePaths: []
   };
 }
@@ -2375,6 +2401,7 @@ describe("SymbolLattice MCP server", () => {
         maxHops?: number;
         impactDepth?: number;
         impactLimit?: number;
+        sourceCharacterBudget?: number;
       };
     }> = [];
     const server = createMcpServer(
@@ -2404,6 +2431,17 @@ describe("SymbolLattice MCP server", () => {
       "symbol_lattice_explore",
       "symbol_lattice_context"
     ]);
+    expect(tools.tools.find((tool) => tool.name === "symbol_lattice_explore")).toMatchObject({
+      inputSchema: { properties: { sourceSessionMode: { enum: ["deduplicate", "full"] } } }
+    });
+    expect(tools.tools.find((tool) => tool.name === "symbol_lattice_context")).toMatchObject({
+      inputSchema: {
+        properties: {
+          sourceCharacterBudget: { minimum: 2_048, maximum: 64_000 },
+          sourceSessionMode: { enum: ["deduplicate", "full"] }
+        }
+      }
+    });
 
     const result = await client.callTool({
       name: "symbol_lattice_context",
@@ -2413,7 +2451,9 @@ describe("SymbolLattice MCP server", () => {
         relationLimit: 2,
         maxHops: 3,
         impactDepth: 2,
-        impactLimit: 4
+        impactLimit: 4,
+        sourceCharacterBudget: 4_096,
+        sourceSessionMode: "full"
       }
     });
 
@@ -2426,9 +2466,139 @@ describe("SymbolLattice MCP server", () => {
       {
         projectPath: "C:/chosen-project",
         references: ["src/entry.ts#entry", "src/target.ts#target"],
-        options: { relationLimit: 2, maxHops: 3, impactDepth: 2, impactLimit: 4 }
+        options: {
+          relationLimit: 2,
+          maxHops: 3,
+          impactDepth: 2,
+          impactLimit: 4,
+          sourceCharacterBudget: 4_096
+        }
       }
     ]);
+  });
+
+  it("shares exact source coverage from explore into context through one MCP session", async () => {
+    const sourceText = "export function userById(): void {}";
+    const sourceIdentity = sourceDeliveryIdentityFromText({
+      filePath: "src/users.ts",
+      text: sourceText,
+      fullFileCharacterOffsets: { start: 0, end: sourceText.length }
+    });
+    const symbol = {
+      id: "symbol:users:userById",
+      name: "userById",
+      qualifiedName: "src/users.ts#userById",
+      kind: "function" as const,
+      filePath: "src/users.ts",
+      range: { start: { line: 1, column: 1 }, end: { line: 1, column: sourceText.length + 1 } },
+      isExported: true,
+      declarationOrdinal: 0
+    };
+    const source = {
+      filePath: symbol.filePath,
+      startLine: 1,
+      endLine: 1,
+      lines: [{ line: 1, text: sourceText }],
+      range: symbol.range,
+      text: sourceText,
+      sourceIdentity,
+      requestedCharacters: sourceText.length,
+      emittedCharacters: sourceText.length,
+      truncated: false,
+      truncationReason: null
+    } as const;
+    const exactMatch = {
+      status: "exact" as const,
+      reference: symbol.qualifiedName,
+      symbol,
+      candidates: [symbol]
+    };
+    const baseContext = contextResult();
+    const server = createMcpServer(
+      {
+        async explore(): Promise<ExploreResult> {
+          return {
+            ...exploreResult(),
+            match: exactMatch,
+            sourceAvailability: "active-generation",
+            source
+          };
+        },
+        async context(): Promise<ContextResult> {
+          return {
+            ...baseContext,
+            contexts: [{
+              reference: symbol.qualifiedName,
+              match: exactMatch,
+              matchCandidatesTruncated: false,
+              sourceAvailability: "active-generation",
+              source,
+              callers: { items: [], truncated: false },
+              callees: { items: [], truncated: false },
+              impact: { paths: [], truncated: false }
+            }],
+            sourceAllocation: {
+              ...baseContext.sourceAllocation,
+              summary: {
+                candidateCount: 1,
+                requestedCharacters: sourceText.length,
+                allocatedCharacters: sourceText.length,
+                unusedCharacters: 24_000 - sourceText.length,
+                truncated: false,
+                emittedCharacters: sourceText.length,
+                reservedButNotEmittedCharacters: 0
+              },
+              contexts: [{
+                referenceIndex: 0,
+                reference: symbol.qualifiedName,
+                filePath: symbol.filePath,
+                requestedCharacters: sourceText.length,
+                referenceOrderWeight: 1,
+                allocatedCharacters: sourceText.length,
+                truncated: false,
+                reason: "reference-order-weight",
+                emittedCharacters: sourceText.length,
+                reservedButNotEmittedCharacters: 0
+              }]
+            }
+          };
+        }
+      },
+      "C:/default-project"
+    );
+    const client = new Client({ name: "symbol-lattice-explore-context-session-test", version: "1.0.0" });
+    const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+    closeCallbacks.push(() => client.close(), () => server.close());
+
+    const first = await client.callTool({
+      name: "symbol_lattice_explore",
+      arguments: { query: symbol.qualifiedName }
+    });
+    const second = await client.callTool({
+      name: "symbol_lattice_context",
+      arguments: { references: [symbol.qualifiedName] }
+    });
+
+    expect(first.structuredContent).toMatchObject({
+      source: { text: sourceText, delivery: { status: "emitted" } },
+      sessionSource: { tool: "explore", summary: { emittedSources: 1, referencedSources: 0 } }
+    });
+    expect(second.structuredContent).toMatchObject({
+      contexts: [{
+        source: {
+          text: null,
+          lines: [],
+          delivery: {
+            status: "already-served",
+            coveredBy: [{ firstDeliveredTool: "explore" }]
+          }
+        }
+      }],
+      sessionSource: { tool: "context", summary: { emittedSources: 0, referencedSources: 1 } }
+    });
+    expect(JSON.parse(second.content[0]!.text)).toEqual(second.structuredContent);
   });
 
   it("registers one-question investigation only when the service supports it", async () => {

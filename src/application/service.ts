@@ -108,6 +108,14 @@ import {
   MIN_INVESTIGATION_SOURCE_CHARACTER_BUDGET
 } from "./context-allocation.js";
 import {
+  allocateContextSource,
+  CONTEXT_SOURCE_ALLOCATION_POLICY,
+  CONTEXT_SOURCE_MINIMUM_PER_REFERENCE,
+  DEFAULT_CONTEXT_SOURCE_CHARACTER_BUDGET,
+  MAX_CONTEXT_SOURCE_CHARACTER_BUDGET,
+  MIN_CONTEXT_SOURCE_CHARACTER_BUDGET
+} from "./context-source-allocation.js";
+import {
   INVESTIGATE_SOURCE_RENDER_MODES,
   INVESTIGATION_SOURCE_RENDER_POLICY,
   renderInvestigationDeclaration,
@@ -197,6 +205,8 @@ import type {
   ContextEvidencePath,
   ContextOptions,
   ContextResult,
+  ContextSourceAllocationResult,
+  DeliveredSourceExcerpt,
   EntrypointsOptions,
   EntrypointsResult,
   ExploreResult,
@@ -390,6 +400,22 @@ interface ContextRead {
   readonly bundle: ActiveGraphBundle;
   readonly matches: readonly SymbolMatch[];
   readonly documentsByFilePath: ReadonlyMap<string, IndexedSourceDocument>;
+}
+
+interface ContextSourceDraft {
+  readonly referenceIndex: number;
+  readonly reference: string;
+  readonly filePath: string;
+  readonly sourceText: string;
+  readonly startLine: number;
+  readonly requestedEndLine: number;
+  readonly startOffset: number;
+  readonly endOffset: number;
+}
+
+interface SymbolContextPack {
+  readonly contexts: readonly SymbolContext[];
+  readonly allocation: ContextSourceAllocationResult;
 }
 
 interface InvestigationDeclarationDraft {
@@ -739,6 +765,90 @@ function sourcePositionOffset(
   }
   const offset = lineStart + position.column - 1;
   return offset <= lineContentEnd ? offset : null;
+}
+
+function sourceOffsetPosition(
+  sourceText: string,
+  lineStarts: readonly number[],
+  offset: number
+): SourceRange["start"] | null {
+  if (!Number.isSafeInteger(offset) || offset < 0 || offset > sourceText.length) return null;
+  if (offset > 0 && offset < sourceText.length && sourceText[offset - 1] === "\r" && sourceText[offset] === "\n") {
+    return null;
+  }
+  let lineIndex = 0;
+  for (let index = 1; index < lineStarts.length && lineStarts[index]! <= offset; index += 1) {
+    lineIndex = index;
+  }
+  return { line: lineIndex + 1, column: offset - lineStarts[lineIndex]! + 1 };
+}
+
+function contextSourceDraftFromPersistedText(input: {
+  readonly referenceIndex: number;
+  readonly reference: string;
+  readonly filePath: string;
+  readonly sourceText: string;
+  readonly centerLine: number;
+}): ContextSourceDraft | null {
+  const lineStarts = sourceLineStarts(input.sourceText);
+  const startLine = Math.max(1, input.centerLine - 2);
+  const requestedEndLine = Math.min(lineStarts.length, input.centerLine + 2);
+  const startOffset = lineStarts[startLine - 1];
+  const endOffset = lineStarts[requestedEndLine] ?? input.sourceText.length;
+  if (startOffset === undefined || endOffset <= startOffset) return null;
+  return {
+    referenceIndex: input.referenceIndex,
+    reference: input.reference,
+    filePath: input.filePath,
+    sourceText: input.sourceText,
+    startLine,
+    requestedEndLine,
+    startOffset,
+    endOffset
+  };
+}
+
+function renderContextSource(
+  draft: ContextSourceDraft,
+  allocatedCharacters: number
+): DeliveredSourceExcerpt | null {
+  let boundedEnd = Math.min(draft.endOffset, draft.startOffset + allocatedCharacters);
+  if (
+    boundedEnd > draft.startOffset &&
+    boundedEnd < draft.endOffset &&
+    draft.sourceText[boundedEnd - 1] === "\r" &&
+    draft.sourceText[boundedEnd] === "\n"
+  ) {
+    boundedEnd -= 1;
+  }
+  if (boundedEnd <= draft.startOffset) return null;
+  const delivery = canonicalSourceDeliverySlice({
+    filePath: draft.filePath,
+    sourceText: draft.sourceText,
+    fullFileCharacterOffsets: { start: draft.startOffset, end: boundedEnd }
+  });
+  const lineStarts = sourceLineStarts(draft.sourceText);
+  const start = sourceOffsetPosition(draft.sourceText, lineStarts, draft.startOffset);
+  const end = sourceOffsetPosition(draft.sourceText, lineStarts, boundedEnd);
+  if (start === null || end === null) return null;
+  const texts = delivery.text.split("\n");
+  if (delivery.text.endsWith("\n")) texts.pop();
+  const lines = texts.map((text, index) => ({ line: start.line + index, text }));
+  const requestedCharacters = draft.endOffset - draft.startOffset;
+  const truncated = boundedEnd < draft.endOffset;
+  return {
+    filePath: draft.filePath,
+    startLine: start.line,
+    endLine: lines.at(-1)?.line ?? start.line,
+    lines,
+    range: { start, end },
+    text: delivery.text,
+    sourceIdentity: delivery.sourceIdentity,
+    requestedCharacters,
+    emittedCharacters: delivery.text.length,
+    truncated,
+    truncationReason: truncated ? "character-budget" : null
+  };
 }
 
 function countPhysicalSourceLines(
@@ -1509,9 +1619,7 @@ export class SymbolLatticeService {
         )
       )
     };
-    const contexts = read.matches.map((match) =>
-      this.toSymbolContext(match.reference, match, read, request.contextBounds)
-    );
+    const contextPack = this.symbolContextPack(read, request.contextBounds);
     const declarationPack = this.investigationDeclarations(
       selection,
       read.documentsByFilePath,
@@ -1544,7 +1652,7 @@ export class SymbolLatticeService {
       selection,
       declarations: declarationPack.declarations,
       sourceAllocation: declarationPack.allocation,
-      contexts,
+      contexts: contextPack.contexts,
       evidencePaths: this.contextEvidencePaths(read.matches, bundle, request.contextBounds)
     };
   }
@@ -2308,14 +2416,13 @@ export class SymbolLatticeService {
 
     const read = this.getContextRead(normalizedProjectPath, initialBundle, request.references);
     const status = await this.getStatusForBundle(normalizedProjectPath, read.bundle);
-    const contexts = read.matches.map((match) =>
-      this.toSymbolContext(match.reference, match, read, request.bounds)
-    );
+    const contextPack = this.symbolContextPack(read, request.bounds);
 
     return {
       status,
       bounds: request.bounds,
-      contexts,
+      contexts: contextPack.contexts,
+      sourceAllocation: contextPack.allocation,
       evidencePaths: this.contextEvidencePaths(read.matches, read.bundle, request.bounds)
     };
   }
@@ -2377,16 +2484,28 @@ export class SymbolLatticeService {
           ? undefined
           : sourceBundle.documents.find((document) => document.filePath === sourceMatch.symbol.filePath);
       if (sourceDocument !== undefined) {
+        const sourceDraft = contextSourceDraftFromPersistedText({
+          referenceIndex: 0,
+          reference: sourceMatch.symbol.qualifiedName,
+          filePath: sourceDocument.filePath,
+          sourceText: sourceDocument.sourceText,
+          centerLine: sourceMatch.symbol.range.start.line
+        });
+        const source = sourceDraft === null
+          ? null
+          : renderContextSource(
+              sourceDraft,
+              Math.min(
+                sourceDraft.endOffset - sourceDraft.startOffset,
+                DEFAULT_CONTEXT_SOURCE_CHARACTER_BUDGET
+              )
+            );
         return this.exploreResultForBundle(
           normalizedProjectPath,
           reference,
           sourceBundle,
-          excerptFromSourceText(
-            sourceDocument.filePath,
-            sourceDocument.sourceText,
-            sourceMatch.symbol.range.start.line
-          ),
-          "active-generation"
+          source,
+          source === null ? "unavailable" : "active-generation"
         );
       }
 
@@ -3035,8 +3154,30 @@ export class SymbolLatticeService {
         MAX_CONTEXT_IMPACT_LIMIT,
         "INVALID_CONTEXT_IMPACT_LIMIT",
         "Context impact limit"
-      )
+      ),
+      source: {
+        totalCharacterBudget: this.contextSourceCharacterBudget(options.sourceCharacterBudget),
+        minimumTotalCharacterBudget: MIN_CONTEXT_SOURCE_CHARACTER_BUDGET,
+        maximumTotalCharacterBudget: MAX_CONTEXT_SOURCE_CHARACTER_BUDGET,
+        minimumPerReference: CONTEXT_SOURCE_MINIMUM_PER_REFERENCE,
+        allocationPolicy: CONTEXT_SOURCE_ALLOCATION_POLICY
+      }
     };
+  }
+
+  private contextSourceCharacterBudget(value: number | undefined): number {
+    const normalized = value ?? DEFAULT_CONTEXT_SOURCE_CHARACTER_BUDGET;
+    if (
+      !Number.isSafeInteger(normalized) ||
+      normalized < MIN_CONTEXT_SOURCE_CHARACTER_BUDGET ||
+      normalized > MAX_CONTEXT_SOURCE_CHARACTER_BUDGET
+    ) {
+      throw new SymbolLatticeError(
+        "INVALID_CONTEXT_SOURCE_CHARACTER_BUDGET",
+        `Context source character budget must be a whole number from ${MIN_CONTEXT_SOURCE_CHARACTER_BUDGET} to ${MAX_CONTEXT_SOURCE_CHARACTER_BUDGET}.`
+      );
+    }
+    return normalized;
   }
 
   private boundedContextOption(
@@ -3136,11 +3277,85 @@ export class SymbolLatticeService {
     return left.length === right.length && left.every((filePath, index) => filePath === right[index]);
   }
 
+  private symbolContextPack(read: ContextRead, bounds: ContextBounds): SymbolContextPack {
+    const drafts = new Map<number, ContextSourceDraft>();
+    const sourceProjectionAvailable =
+      read.bundle.sourceSearchVersion !== null && read.bundle.sourceSearchVersion !== undefined;
+    if (sourceProjectionAvailable) {
+      for (const [referenceIndex, match] of read.matches.entries()) {
+        if (match.status !== "exact") continue;
+        const document = read.documentsByFilePath.get(match.symbol.filePath);
+        if (document === undefined) continue;
+        const draft = contextSourceDraftFromPersistedText({
+          referenceIndex,
+          reference: match.reference,
+          filePath: document.filePath,
+          sourceText: document.sourceText,
+          centerLine: match.symbol.range.start.line
+        });
+        if (draft !== null) drafts.set(referenceIndex, draft);
+      }
+    }
+
+    const reservation = allocateContextSource({
+      characterBudget: bounds.source.totalCharacterBudget,
+      referenceCount: read.matches.length,
+      candidates: [...drafts.values()].map((draft) => ({
+        referenceIndex: draft.referenceIndex,
+        reference: draft.reference,
+        filePath: draft.filePath,
+        requestedCharacters: draft.endOffset - draft.startOffset
+      }))
+    });
+    const sources = new Map<number, DeliveredSourceExcerpt>();
+    for (const allocation of reservation.contexts) {
+      const draft = drafts.get(allocation.referenceIndex);
+      if (draft === undefined) continue;
+      const source = renderContextSource(draft, allocation.allocatedCharacters);
+      if (source !== null) sources.set(allocation.referenceIndex, source);
+    }
+    const allocationContexts = reservation.contexts.map((allocation) => {
+      const emittedCharacters = sources.get(allocation.referenceIndex)?.emittedCharacters ?? 0;
+      return {
+        ...allocation,
+        emittedCharacters,
+        reservedButNotEmittedCharacters: allocation.allocatedCharacters - emittedCharacters
+      };
+    });
+    const emittedCharacters = allocationContexts.reduce(
+      (total, allocation) => total + allocation.emittedCharacters,
+      0
+    );
+    const allocation: ContextSourceAllocationResult = {
+      ...reservation,
+      summary: {
+        ...reservation.summary,
+        emittedCharacters,
+        reservedButNotEmittedCharacters:
+          reservation.summary.allocatedCharacters - emittedCharacters
+      },
+      contexts: allocationContexts
+    };
+    return {
+      contexts: read.matches.map((match, referenceIndex) =>
+        this.toSymbolContext(
+          match.reference,
+          match,
+          read,
+          bounds,
+          sources.get(referenceIndex) ?? null
+        )
+      ),
+      allocation
+    };
+  }
+
   private toSymbolContext(
     reference: string,
     match: SymbolMatch,
     read: ContextRead,
-    bounds: ContextBounds
+    bounds: ContextBounds,
+    source: DeliveredSourceExcerpt | null
   ): SymbolContext {
     const boundedMatch = this.boundedContextMatch(match, bounds.matchCandidateLimit);
     if (match.status !== "exact") {
@@ -3156,11 +3371,6 @@ export class SymbolLatticeService {
       };
     }
 
-    const sourceProjectionAvailable =
-      read.bundle.sourceSearchVersion !== null && read.bundle.sourceSearchVersion !== undefined;
-    const sourceDocument = sourceProjectionAvailable
-      ? read.documentsByFilePath.get(match.symbol.filePath)
-      : undefined;
     const callers = getCallers(read.bundle.snapshot, match.symbol.id);
     const callees = getCallees(read.bundle.snapshot, match.symbol.id);
     const impact = getImpactPaths(read.bundle.snapshot, match.symbol.id, bounds.impactDepth);
@@ -3169,23 +3379,12 @@ export class SymbolLatticeService {
       reference,
       match: boundedMatch.match,
       matchCandidatesTruncated: boundedMatch.truncated,
-      sourceAvailability: this.sourceAvailability(sourceDocument),
-      source:
-        sourceDocument === undefined
-          ? null
-          : excerptFromSourceText(
-              sourceDocument.filePath,
-              sourceDocument.sourceText,
-              match.symbol.range.start.line
-            ),
+      sourceAvailability: source === null ? "unavailable" : "active-generation",
+      source,
       callers: this.boundedItems(callers, bounds.relationLimit),
       callees: this.boundedItems(callees, bounds.relationLimit),
       impact: this.boundedImpact(impact, bounds.impactLimit)
     };
-  }
-
-  private sourceAvailability(sourceDocument: IndexedSourceDocument | undefined): SourceAvailability {
-    return sourceDocument === undefined ? "unavailable" : "active-generation";
   }
 
   private boundedContextMatch(
@@ -4331,7 +4530,7 @@ export class SymbolLatticeService {
     normalizedProjectPath: string,
     reference: string,
     bundle: ActiveGraphBundle,
-    source: SourceExcerpt | null,
+    source: DeliveredSourceExcerpt | null,
     sourceAvailability: NonNullable<ExploreResult["sourceAvailability"]>
   ): Promise<ExploreResult> {
     const match = matchSymbol(bundle.snapshot, reference);

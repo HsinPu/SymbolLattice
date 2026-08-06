@@ -129,6 +129,19 @@ function pointerFixture() {
     filePath: "src/users.ts",
     range: { start: { line: 12, column: 1 }, end: { line: 14, column: 2 } }
   };
+  const deliveredSource = {
+    filePath: "src/users.ts",
+    startLine: 12,
+    endLine: 14,
+    lines: sourceText.split("\n").map((line, index) => ({ line: 12 + index, text: line })),
+    range: symbol.range,
+    text: sourceText,
+    sourceIdentity,
+    requestedCharacters: sourceText.length,
+    emittedCharacters: sourceText.length,
+    truncated: false,
+    truncationReason: null
+  };
   return {
     node: response({
       status: status(),
@@ -148,6 +161,21 @@ function pointerFixture() {
       sourceIdentity,
       lines: sourceText.split("\n").map((line, index) => ({ line: 12 + index, text: line })),
       symbols: [symbol]
+    }),
+    explore: response({
+      status: status(),
+      match: { status: "exact", symbol },
+      sourceAvailability: "active-generation",
+      source: deliveredSource
+    }),
+    context: response({
+      status: status(),
+      contexts: [{
+        reference: symbol.qualifiedName,
+        match: { status: "exact", symbol },
+        sourceAvailability: "active-generation",
+        source: deliveredSource
+      }]
     })
   };
 }
@@ -177,7 +205,7 @@ describe("MCP source session", () => {
     expect(second.structuredContent).toMatchObject({
       lines: [],
       sourceDelivery: {
-        policy: "mcp-session-source-dedup-v5",
+        policy: "mcp-session-source-dedup-v6",
         status: "already-served",
         coveredPointers: [{
           filePath: "src/users.ts",
@@ -188,6 +216,60 @@ describe("MCP source session", () => {
           firstDeliveredTool: "node",
           pointer: { display: "src/users.ts:L12-L14 (userById)" }
         }]
+      }
+    });
+  });
+
+  it("shares exact explore and context source coverage in one bounded session", () => {
+    const fixture = pointerFixture();
+    const session = new McpSourceSession();
+    const first = session.project(fixture.explore, "explore", "deduplicate");
+    const second = session.project(fixture.context, "context", "deduplicate");
+
+    expect(first.structuredContent).toMatchObject({
+      source: {
+        text: expect.any(String),
+        delivery: {
+          status: "emitted",
+          pointer: { display: "src/users.ts:L12-L14 (userById)" }
+        }
+      },
+      sessionSource: { summary: { emittedSources: 1, referencedSources: 0 } }
+    });
+    expect(second.structuredContent).toMatchObject({
+      contexts: [{
+        source: {
+          text: null,
+          lines: [],
+          delivery: {
+            status: "already-served",
+            coveredBy: [{
+              firstDeliveredTool: "explore",
+              pointer: { display: "src/users.ts:L12-L14 (userById)" }
+            }]
+          }
+        }
+      }],
+      sessionSource: { summary: { emittedSources: 0, referencedSources: 1 } }
+    });
+  });
+
+  it("deduplicates repeated exact context references without rejecting the response", () => {
+    const fixture = pointerFixture();
+    const repeated = structuredClone(fixture.context);
+    const contexts = repeated.structuredContent.contexts as unknown[];
+    contexts.push(structuredClone(contexts[0]));
+    repeated.content[0]!.text = JSON.stringify(repeated.structuredContent);
+
+    const projected = new McpSourceSession().project(repeated, "context", "deduplicate");
+
+    expect(projected.structuredContent).toMatchObject({
+      contexts: [
+        { source: { text: expect.any(String), delivery: { status: "emitted" } } },
+        { source: { text: null, lines: [], delivery: { status: "already-served" } } }
+      ],
+      sessionSource: {
+        summary: { candidateSources: 2, emittedSources: 1, referencedSources: 1 }
       }
     });
   });

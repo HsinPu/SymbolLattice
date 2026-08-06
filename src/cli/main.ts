@@ -14,6 +14,8 @@ import {
   MAX_CONTEXT_IMPACT_LIMIT,
   MAX_CONTEXT_MAX_HOPS,
   MAX_CONTEXT_RELATION_LIMIT,
+  MAX_CONTEXT_SOURCE_CHARACTER_BUDGET,
+  MIN_CONTEXT_SOURCE_CHARACTER_BUDGET,
   INVESTIGATE_RANKING_STRATEGIES,
   INVESTIGATE_SOURCE_RENDER_MODES,
   MAX_INVESTIGATION_SOURCE_CHARACTER_BUDGET,
@@ -219,6 +221,7 @@ interface ContextCommandOptions extends ProjectOptions {
   readonly maxHops?: number;
   readonly impactDepth?: number;
   readonly impactLimit?: number;
+  readonly sourceCharacterBudget?: number;
 }
 
 interface WatchCommandOptions extends ProjectOptions, PluginCommandOptions {
@@ -1971,12 +1974,24 @@ export function createProgram(
       `Maximum impact paths per exact symbol (1-${MAX_CONTEXT_IMPACT_LIMIT})`,
       (value: string) => parseBoundedPositiveInteger(value, MAX_CONTEXT_IMPACT_LIMIT)
     )
+    .option(
+      "--source-character-budget <count>",
+      `Shared source character budget (${MIN_CONTEXT_SOURCE_CHARACTER_BUDGET}-${MAX_CONTEXT_SOURCE_CHARACTER_BUDGET})`,
+      (value: string) => parseBoundedInteger(
+        value,
+        MIN_CONTEXT_SOURCE_CHARACTER_BUDGET,
+        MAX_CONTEXT_SOURCE_CHARACTER_BUDGET
+      )
+    )
     .action(async (references: string[], options: ContextCommandOptions) => {
       const contextOptions: ContextOptions = {
         ...(options.relationLimit === undefined ? {} : { relationLimit: options.relationLimit }),
         ...(options.maxHops === undefined ? {} : { maxHops: options.maxHops }),
         ...(options.impactDepth === undefined ? {} : { impactDepth: options.impactDepth }),
-        ...(options.impactLimit === undefined ? {} : { impactLimit: options.impactLimit })
+        ...(options.impactLimit === undefined ? {} : { impactLimit: options.impactLimit }),
+        ...(options.sourceCharacterBudget === undefined
+          ? {}
+          : { sourceCharacterBudget: options.sourceCharacterBudget })
       };
       render(await coreService.context(defaultProjectPath(options), references, contextOptions), options);
     });

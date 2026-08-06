@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.280.0 是開發預覽版。MCP 查詢工具唯讀；但 `serve --mcp` 預設會啟動獨立的本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用它。
+> v0.281.0 是開發預覽版。MCP 查詢工具唯讀；但 `serve --mcp` 預設會啟動獨立的本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用它。
 
 ## 快速開始
 
@@ -31,6 +31,9 @@ node dist/cli/main.js init /path/to/project
 
 # 查詢含證據的結構脈絡
 node dist/cli/main.js investigate "user token" --project /path/to/project --json
+
+# 以一個共享來源預算組合多個 symbol 的脈絡
+node dist/cli/main.js context "src/api.ts#route" "src/service.ts#load" --project /path/to/project --source-character-budget 12000 --json
 
 # 分開輸出可核對的 signature 與文字命中片段，不合成不存在的原始碼
 node dist/cli/main.js investigate "user token" --project /path/to/project --source-render-mode multi --json
@@ -49,7 +52,8 @@ node dist/cli/main.js file service.ts --project /path/to/project --offset 1600 -
 
 ## 核心能力
 
-- `node`、`investigate` 與 `file` 共用 session／project／generation 來源 coverage。只有 UTF-16 offsets、內容與 SHA-256 offset map 都可驗證，且符合 160 字元節省／新內容門檻與最多 4 段限制時，才回傳 back-reference 或新 fragments；否則完整重送。`sourceSessionMode: "full"` 可停用去重。
+- `explore`、`context`、`node`、`investigate` 與 `file` 共用 session／project／generation 來源 coverage。只有 UTF-16 offsets、內容與 SHA-256 offset map 都可驗證，且符合 160 字元節省／新內容門檻與最多 4 段限制時，才回傳 back-reference 或新 fragments；否則完整重送。`sourceSessionMode: "full"` 可停用去重。
+- `context` 將最多 8 個參照的 persisted source 放入同一個 2,048–64,000 字元預算，依輸入順序配置並回傳逐參照 allocation、截斷原因、實際輸出量、來源身分與 offset map；CLI 與 MCP 都可指定 `sourceCharacterBudget`。
 - 每段已傳送、已覆蓋與新 fragment 都可附 `mcp-source-pointer-v1`：專案相對路徑、精確行列、原始檔 offsets、最多 5 個重疊 symbol、可讀 `file:Lx-Ly (symbol)` 與 SHA-256 receipt。CRLF、CR、Unicode 行分隔與部分片段會重新定位；顯示證據不足時只省略 pointer，不影響來源相等性判定。
 - `investigate` 以 2,048–64,000 字元的共享 declaration-source 預算配置同一 active generation 的精確片段。`adaptive` 保持單一連續輸出；也可指定 `prefix`、`focused`、`signature`，或用 `multi` 分開取得最多兩段可獨立核對的 signature 與焦點原始碼。每段都有穩定 ID、SHA-256、範圍與省略 gap；不會合成不存在的文字，證據或預算不足時會明確降級。
 - 將多種語言與常見框架掃描成專案本機程式碼圖譜。
@@ -100,6 +104,7 @@ node dist/cli/main.js init /path/to/project --plugin ./plugins/acme.mjs
 | `git-hunks [path] --base <ref>` | 以可選的 `--path-prefix` 篩選不可變 Git hunk 與宣告歸因。 |
 | `affected --working-tree` | 以 `--path-prefix` 限縮 Git 變更，並可用 `--test-pattern` 取代預設測試命名規則。 |
 | `investigate <query>` | 將文字線索展開為結構脈絡。 |
+| `context <reference...>` | 以共享來源預算組合多個 symbol 與相鄰證據路徑。 |
 | `impact <symbol>` | 沿精確靜態關係進行有限影響分析。 |
 | `explain-edge <edge-id>` | 查看一條關係的完整證據。 |
 | `upgrade [version]` | 預覽、驗證或明確套用 GitHub Release 升級。 |

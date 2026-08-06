@@ -11,6 +11,12 @@ import {
   MIN_INVESTIGATION_SOURCE_CHARACTER_BUDGET
 } from "../application/context-allocation.js";
 import {
+  CONTEXT_SOURCE_ALLOCATION_POLICY,
+  CONTEXT_SOURCE_MINIMUM_PER_REFERENCE,
+  MAX_CONTEXT_SOURCE_CHARACTER_BUDGET,
+  MIN_CONTEXT_SOURCE_CHARACTER_BUDGET
+} from "../application/context-source-allocation.js";
+import {
   INVESTIGATE_SOURCE_RENDER_MODES,
   INVESTIGATION_SOURCE_MAXIMUM_SEGMENTS,
   INVESTIGATION_SOURCE_RENDER_POLICY,
@@ -294,6 +300,7 @@ export type AutoSyncDiagnosticJournalMcpService = ExploreService & AutoSyncDiagn
 export interface ExploreToolArguments {
   readonly query: string;
   readonly projectPath?: string | undefined;
+  readonly sourceSessionMode?: McpSourceSessionMode | undefined;
 }
 
 export interface NodeToolArguments {
@@ -309,6 +316,8 @@ export interface ContextToolArguments {
   readonly maxHops?: number | undefined;
   readonly impactDepth?: number | undefined;
   readonly impactLimit?: number | undefined;
+  readonly sourceCharacterBudget?: number | undefined;
+  readonly sourceSessionMode?: McpSourceSessionMode | undefined;
 }
 
 export interface AffectedTestsToolArguments {
@@ -685,21 +694,6 @@ const queryPoolStatusOutputSchema = z
   })
   .passthrough();
 
-const exploreOutputSchema = z
-  .object({
-    status: indexStatusOutputSchema,
-    match: z.object({}).passthrough(),
-    sourceAvailability: z
-      .enum(["active-generation", "unavailable", "not-applicable"])
-      .describe("When present, reports whether source is active-generation evidence, unavailable, or not applicable to the match.")
-      .optional(),
-    source: sourceExcerptOutputSchema.nullable(),
-    callers: z.array(z.object({}).passthrough()),
-    callees: z.array(z.object({}).passthrough()),
-    impact: z.array(z.object({}).passthrough())
-  })
-  .passthrough();
-
 const sourceDeliveryOffsetMapOutputSchema = z.object({
   policy: z.literal(SOURCE_DELIVERY_OFFSET_MAP_POLICY),
   deliveredTextLength: z.number().int().nonnegative(),
@@ -762,7 +756,7 @@ const sourcePointerOutputSchema = z.object({
 const sourceCoverageReceiptOutputSchema = z.object({
   sourceId: z.string().regex(/^source:[0-9a-f]{64}$/u),
   firstDeliveredCallIndex: z.number().int().positive(),
-  firstDeliveredTool: z.enum(["node", "investigate", "file"]),
+  firstDeliveredTool: z.enum(["node", "investigate", "file", "explore", "context"]),
   pointer: sourcePointerOutputSchema.optional()
 });
 
@@ -772,7 +766,7 @@ const sourceDeliveryOutputSchema = z.union([
     status: z.literal("emitted"),
     sourceId: z.string().regex(/^source:[0-9a-f]{64}$/u),
     callIndex: z.number().int().positive(),
-    tool: z.enum(["node", "investigate", "file"]),
+    tool: z.enum(["node", "investigate", "file", "explore", "context"]),
     pointer: sourcePointerOutputSchema.optional(),
     intervalDecision: z.object({
       status: z.literal("full"),
@@ -792,7 +786,7 @@ const sourceDeliveryOutputSchema = z.union([
     status: z.literal("already-served"),
     sourceId: z.string().regex(/^source:[0-9a-f]{64}$/u),
     firstDeliveredCallIndex: z.number().int().positive(),
-    firstDeliveredTool: z.enum(["node", "investigate", "file"]),
+    firstDeliveredTool: z.enum(["node", "investigate", "file", "explore", "context"]),
     coveredCharacterOffsets: z.array(sourceCharacterRangeOutputSchema).min(1),
     coveredPointers: z.array(sourcePointerOutputSchema).min(1).optional(),
     coveredBy: z.array(sourceCoverageReceiptOutputSchema).min(1),
@@ -803,7 +797,7 @@ const sourceDeliveryOutputSchema = z.union([
     status: z.literal("partially-served"),
     sourceId: z.string().regex(/^source:[0-9a-f]{64}$/u),
     callIndex: z.number().int().positive(),
-    tool: z.enum(["node", "investigate", "file"]),
+    tool: z.enum(["node", "investigate", "file", "explore", "context"]),
     coveredCharacterOffsets: z.array(sourceCharacterRangeOutputSchema).min(1),
     coveredPointers: z.array(sourcePointerOutputSchema).min(1).optional(),
     coveredBy: z.array(sourceCoverageReceiptOutputSchema).min(1),
@@ -829,7 +823,7 @@ const sourceSessionReceiptOutputSchema = z.object({
   pointerPolicy: z.literal(MCP_SOURCE_POINTER_POLICY),
   equality: z.literal("verified-offset-map-and-canonical-content"),
   mode: z.enum(MCP_SOURCE_SESSION_MODES),
-  tool: z.enum(["node", "investigate", "file"]),
+  tool: z.enum(["node", "investigate", "file", "explore", "context"]),
   projectPath: z.string().min(1),
   generationId: z.string().min(1),
   callIndex: z.number().int().positive(),
@@ -852,6 +846,64 @@ const sourceSessionReceiptOutputSchema = z.object({
     stateSourcesAfterCall: z.number().int().nonnegative(),
     stateTruncated: z.boolean()
   })
+});
+
+const deliveredSourceExcerptOutputSchema = sourceExcerptOutputSchema.extend({
+  range: sourceRangeOutputSchema,
+  text: z.string().nullable(),
+  sourceIdentity: sourceDeliveryIdentityOutputSchema,
+  requestedCharacters: z.number().int().positive(),
+  emittedCharacters: z.number().int().nonnegative(),
+  truncated: z.boolean(),
+  truncationReason: z.literal("character-budget").nullable(),
+  delivery: sourceDeliveryOutputSchema.optional()
+});
+
+const exploreOutputSchema = z
+  .object({
+    status: indexStatusOutputSchema,
+    match: z.object({}).passthrough(),
+    sourceAvailability: z
+      .enum(["active-generation", "unavailable", "not-applicable"])
+      .describe("When present, reports whether source is active-generation evidence is unavailable or not applicable to the match.")
+      .optional(),
+    source: deliveredSourceExcerptOutputSchema.nullable(),
+    sessionSource: sourceSessionReceiptOutputSchema.optional(),
+    callers: z.array(z.object({}).passthrough()),
+    callees: z.array(z.object({}).passthrough()),
+    impact: z.array(z.object({}).passthrough())
+  })
+  .passthrough();
+
+const contextSourceAllocationOutputSchema = z.object({
+  policy: z.literal(CONTEXT_SOURCE_ALLOCATION_POLICY),
+  budget: z.object({
+    characterBudget: z.number().int().min(MIN_CONTEXT_SOURCE_CHARACTER_BUDGET).max(MAX_CONTEXT_SOURCE_CHARACTER_BUDGET),
+    minimumCharacterBudget: z.literal(MIN_CONTEXT_SOURCE_CHARACTER_BUDGET),
+    maximumCharacterBudget: z.literal(MAX_CONTEXT_SOURCE_CHARACTER_BUDGET),
+    minimumPerReference: z.literal(CONTEXT_SOURCE_MINIMUM_PER_REFERENCE)
+  }),
+  summary: z.object({
+    candidateCount: z.number().int().nonnegative(),
+    requestedCharacters: z.number().int().nonnegative(),
+    allocatedCharacters: z.number().int().nonnegative(),
+    unusedCharacters: z.number().int().nonnegative(),
+    truncated: z.boolean(),
+    emittedCharacters: z.number().int().nonnegative(),
+    reservedButNotEmittedCharacters: z.number().int().nonnegative()
+  }),
+  contexts: z.array(z.object({
+    referenceIndex: z.number().int().nonnegative(),
+    reference: z.string().min(1),
+    filePath: z.string().min(1),
+    requestedCharacters: z.number().int().positive(),
+    referenceOrderWeight: z.number().int().positive(),
+    allocatedCharacters: z.number().int().nonnegative(),
+    truncated: z.boolean(),
+    reason: z.literal("reference-order-weight"),
+    emittedCharacters: z.number().int().nonnegative(),
+    reservedButNotEmittedCharacters: z.number().int().nonnegative()
+  }))
 });
 
 const nodeSourceOutputSchema = z.object({
@@ -1003,7 +1055,14 @@ const contextOutputSchema = z
       maxHops: z.number().int().positive(),
       maxVisitedSymbolsPerPath: z.number().int().positive(),
       impactDepth: z.number().int().positive(),
-      impactLimit: z.number().int().positive()
+      impactLimit: z.number().int().positive(),
+      source: z.object({
+        totalCharacterBudget: z.number().int().min(MIN_CONTEXT_SOURCE_CHARACTER_BUDGET).max(MAX_CONTEXT_SOURCE_CHARACTER_BUDGET),
+        minimumTotalCharacterBudget: z.literal(MIN_CONTEXT_SOURCE_CHARACTER_BUDGET),
+        maximumTotalCharacterBudget: z.literal(MAX_CONTEXT_SOURCE_CHARACTER_BUDGET),
+        minimumPerReference: z.literal(CONTEXT_SOURCE_MINIMUM_PER_REFERENCE),
+        allocationPolicy: z.literal(CONTEXT_SOURCE_ALLOCATION_POLICY)
+      })
     }),
     contexts: z.array(
       z.object({
@@ -1011,7 +1070,7 @@ const contextOutputSchema = z
         match: z.object({}).passthrough(),
         matchCandidatesTruncated: z.boolean(),
         sourceAvailability: z.enum(["active-generation", "unavailable", "not-applicable"]),
-        source: sourceExcerptOutputSchema.nullable(),
+        source: deliveredSourceExcerptOutputSchema.nullable(),
         callers: z.object({
           items: z.array(z.object({}).passthrough()),
           truncated: z.boolean()
@@ -1026,6 +1085,8 @@ const contextOutputSchema = z
         })
       })
     ),
+    sourceAllocation: contextSourceAllocationOutputSchema,
+    sessionSource: sourceSessionReceiptOutputSchema.optional(),
     evidencePaths: z.array(
       z.object({
         fromReference: z.string(),
@@ -1175,7 +1236,14 @@ const investigateOutputSchema = z
         maxHops: z.number().int().positive(),
         maxVisitedSymbolsPerPath: z.number().int().positive(),
         impactDepth: z.number().int().positive(),
-        impactLimit: z.number().int().positive()
+        impactLimit: z.number().int().positive(),
+        source: z.object({
+          totalCharacterBudget: z.number().int().min(MIN_CONTEXT_SOURCE_CHARACTER_BUDGET).max(MAX_CONTEXT_SOURCE_CHARACTER_BUDGET),
+          minimumTotalCharacterBudget: z.literal(MIN_CONTEXT_SOURCE_CHARACTER_BUDGET),
+          maximumTotalCharacterBudget: z.literal(MAX_CONTEXT_SOURCE_CHARACTER_BUDGET),
+          minimumPerReference: z.literal(CONTEXT_SOURCE_MINIMUM_PER_REFERENCE),
+          allocationPolicy: z.literal(CONTEXT_SOURCE_ALLOCATION_POLICY)
+        })
       })
     }),
     search: z.object({
@@ -1879,7 +1947,10 @@ export async function runContextTool(
       ...(arguments_.relationLimit === undefined ? {} : { relationLimit: arguments_.relationLimit }),
       ...(arguments_.maxHops === undefined ? {} : { maxHops: arguments_.maxHops }),
       ...(arguments_.impactDepth === undefined ? {} : { impactDepth: arguments_.impactDepth }),
-      ...(arguments_.impactLimit === undefined ? {} : { impactLimit: arguments_.impactLimit })
+      ...(arguments_.impactLimit === undefined ? {} : { impactLimit: arguments_.impactLimit }),
+      ...(arguments_.sourceCharacterBudget === undefined
+        ? {}
+        : { sourceCharacterBudget: arguments_.sourceCharacterBudget })
     };
     const result = await service.context(
       arguments_.projectPath ?? defaultProjectPath,
@@ -2275,7 +2346,8 @@ export function createMcpServer(
         "Returns generation-bound source evidence when available, direct callers/callees, impact paths, and index freshness from an existing local SymbolLattice index. When supplied by a v0.4.1-capable service, sourceAvailability reports whether persisted source evidence is unavailable or not applicable. This tool never creates or refreshes an index.",
       inputSchema: {
         query: z.string().trim().min(1).describe("Symbol qualified name, simple name, or relative path:line reference."),
-        projectPath: z.string().trim().min(1).optional().describe("Optional path to an already indexed project.")
+        projectPath: z.string().trim().min(1).optional().describe("Optional path to an already indexed project."),
+        sourceSessionMode: z.enum(MCP_SOURCE_SESSION_MODES).optional().describe("MCP-only exact-source delivery policy shared across explore, context, node, investigate, and file. `deduplicate` is the default; `full` re-emits source.")
       },
       outputSchema: exploreOutputSchema,
       annotations: {
@@ -2283,10 +2355,12 @@ export function createMcpServer(
         idempotentHint: true
       }
     },
-    async (arguments_) =>
-      executeReadTool(readQueryExecutor, "explore", arguments_, () =>
+    async (arguments_) => {
+      const response = await executeReadTool(readQueryExecutor, "explore", arguments_, () =>
         runExploreTool(service, defaultProjectPath, arguments_)
-      )
+      );
+      return sourceSession.project(response, "explore", arguments_.sourceSessionMode ?? "deduplicate");
+    }
   );
 
   const queryPoolStatusService = options.queryPoolStatusService ?? null;
@@ -2452,7 +2526,15 @@ export function createMcpServer(
             .min(1)
             .max(MAX_CONTEXT_IMPACT_LIMIT)
             .optional()
-            .describe("Maximum reverse-impact paths included for each exact symbol.")
+            .describe("Maximum reverse-impact paths included for each exact symbol."),
+          sourceCharacterBudget: z
+            .number()
+            .int()
+            .min(MIN_CONTEXT_SOURCE_CHARACTER_BUDGET)
+            .max(MAX_CONTEXT_SOURCE_CHARACTER_BUDGET)
+            .optional()
+            .describe("Shared persisted-source character envelope across all exact context references."),
+          sourceSessionMode: z.enum(MCP_SOURCE_SESSION_MODES).optional().describe("MCP-only exact-source delivery policy shared across explore, context, node, investigate, and file. `deduplicate` is the default; `full` re-emits source.")
         },
         outputSchema: contextOutputSchema,
         annotations: {
@@ -2460,10 +2542,12 @@ export function createMcpServer(
           idempotentHint: true
         }
       },
-      async (arguments_) =>
-        executeReadTool(readQueryExecutor, "context", arguments_, () =>
+      async (arguments_) => {
+        const response = await executeReadTool(readQueryExecutor, "context", arguments_, () =>
           runContextTool(contextService, defaultProjectPath, arguments_)
-        )
+        );
+        return sourceSession.project(response, "context", arguments_.sourceSessionMode ?? "deduplicate");
+      }
     );
   }
 

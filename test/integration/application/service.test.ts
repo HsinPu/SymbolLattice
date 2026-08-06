@@ -773,7 +773,23 @@ describe("SymbolLatticeService", () => {
     });
 
     const exploration = await service.explore(projectPath, addSymbol?.qualifiedName ?? "missing");
-    expect(exploration.source).toMatchObject({ filePath: "src/math.ts" });
+    expect(exploration.source).toMatchObject({
+      filePath: "src/math.ts",
+      text: expect.stringContaining("function add"),
+      range: expect.objectContaining({
+        start: expect.objectContaining({ line: expect.any(Number), column: expect.any(Number) }),
+        end: expect.objectContaining({ line: expect.any(Number), column: expect.any(Number) })
+      }),
+      sourceIdentity: expect.objectContaining({
+        policy: "source-delivery-v2",
+        id: expect.stringMatching(/^source:[0-9a-f]{64}$/u),
+        offsetMap: expect.objectContaining({ policy: "source-delivery-offset-map-v1" })
+      }),
+      requestedCharacters: expect.any(Number),
+      emittedCharacters: expect.any(Number),
+      truncated: false,
+      truncationReason: null
+    });
     expect(exploration.source?.lines.map((line) => line.text).join("\n")).toContain("function add");
 
     await writeFile(join(projectPath, "src", "math.ts"), "export const changed = true;", "utf8");
@@ -911,6 +927,74 @@ describe("SymbolLatticeService", () => {
         file.impactedSymbols.map((terminal) => terminal.symbol.id)
       )
     ).toEqual(boundedImpact.paths.map((path) => path.symbols.at(-1)?.id));
+  });
+
+  it("delivers context source inside one auditable character envelope", async () => {
+    const alpha = [
+      "// alpha prelude",
+      "export function alpha(): string {",
+      `  return "${"a".repeat(1_800)}";`,
+      "}",
+      "// alpha epilogue"
+    ].join("\r\n");
+    const beta = [
+      "// beta prelude",
+      "export function beta(): string {",
+      `  return "${"b".repeat(1_800)}";`,
+      "}",
+      "// beta epilogue"
+    ].join("\r\n");
+    const projectPath = await createInlineProject({
+      "src/alpha.ts": alpha,
+      "src/beta.ts": beta
+    });
+    const service = createService();
+    await service.init({ projectPath });
+
+    const result = await service.context(
+      projectPath,
+      ["src/alpha.ts#alpha", "src/beta.ts#beta"],
+      { sourceCharacterBudget: 2_048 }
+    );
+
+    expect(result.bounds.source).toEqual({
+      totalCharacterBudget: 2_048,
+      minimumTotalCharacterBudget: 2_048,
+      maximumTotalCharacterBudget: 64_000,
+      minimumPerReference: 256,
+      allocationPolicy: "reference-order-source-v1"
+    });
+    expect(result.sourceAllocation).toMatchObject({
+      policy: "reference-order-source-v1",
+      summary: {
+        candidateCount: 2,
+        allocatedCharacters: 2_048,
+        truncated: true
+      },
+      contexts: [
+        { referenceIndex: 0, reference: "src/alpha.ts#alpha", truncated: true },
+        { referenceIndex: 1, reference: "src/beta.ts#beta", truncated: true }
+      ]
+    });
+    const sources = result.contexts.map((context) => context.source!);
+    expect(sources.every((source) => !source.text.includes("\r"))).toBe(true);
+    expect(sources.reduce((total, source) => total + source.text.length, 0)).toBeLessThanOrEqual(2_048);
+    expect(result.sourceAllocation.summary.emittedCharacters).toBe(
+      sources.reduce((total, source) => total + source.text.length, 0)
+    );
+    expect(sources[0]).toMatchObject({
+      range: { start: { line: 1, column: 1 } },
+      sourceIdentity: {
+        policy: "source-delivery-v2",
+        canonicalization: "line-endings-lf",
+        filePath: "src/alpha.ts",
+        offsetMap: { policy: "source-delivery-offset-map-v1" }
+      },
+      requestedCharacters: expect.any(Number),
+      emittedCharacters: expect.any(Number),
+      truncated: true,
+      truncationReason: "character-budget"
+    });
   });
 
   it("investigates persisted lexical evidence into bounded active-generation graph context", async () => {

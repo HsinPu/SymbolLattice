@@ -18,10 +18,10 @@ import {
   type McpSourceRange
 } from "./source-pointer.js";
 
-export const MCP_SOURCE_SESSION_POLICY = "mcp-session-source-dedup-v5" as const;
+export const MCP_SOURCE_SESSION_POLICY = "mcp-session-source-dedup-v6" as const;
 export const MCP_SOURCE_SESSION_MODES = ["deduplicate", "full"] as const;
 export type McpSourceSessionMode = (typeof MCP_SOURCE_SESSION_MODES)[number];
-export type McpSourceTool = "node" | "investigate" | "file";
+export type McpSourceTool = "node" | "investigate" | "file" | "explore" | "context";
 
 export const MCP_SOURCE_SESSION_LIMITS = {
   maximumProjects: 4,
@@ -754,7 +754,7 @@ export class McpSourceSession {
   }
 
   private candidates(structured: Record<string, unknown>, tool: McpSourceTool): Candidate[] | null {
-    if (tool === "node") {
+    if (tool === "node" || tool === "explore") {
       if (!isRecord(structured.source) || typeof structured.source.text !== "string" ||
         typeof structured.source.filePath !== "string") return null;
       const identity = sourceIdentity(
@@ -818,6 +818,41 @@ export class McpSourceSession {
       });
       return [candidateWithPointer({ identity, text, tool, pointerContext })];
     }
+    if (tool === "context") {
+      if (!Array.isArray(structured.contexts)) return null;
+      const contextCandidates: Candidate[] = [];
+      for (const context of structured.contexts) {
+        if (!isRecord(context)) return null;
+        if (context.source === null) continue;
+        if (!isRecord(context.source) || typeof context.source.text !== "string" ||
+          typeof context.source.filePath !== "string") return null;
+        const identity = sourceIdentity(
+          context.source.sourceIdentity,
+          context.source.text,
+          context.source.filePath
+        );
+        if (identity === null) return null;
+        const range = sourceRange(context.source.range);
+        const matchSymbol = isRecord(context.match) && context.match.status === "exact"
+          ? pointerSymbol(context.match.symbol, identity.filePath)
+          : null;
+        const pointerContext = range === null ? null : mcpSourcePointerContext({
+          filePath: identity.filePath,
+          text: context.source.text,
+          start: range.start,
+          expectedEnd: range.end,
+          allowTruncatedEnd: context.source.truncated === true,
+          symbols: matchSymbol === null ? [] : [matchSymbol]
+        });
+        contextCandidates.push(candidateWithPointer({
+          identity,
+          text: context.source.text,
+          tool,
+          pointerContext
+        }));
+      }
+      return contextCandidates;
+    }
     if (!Array.isArray(structured.declarations)) return null;
     const candidates: Candidate[] = [];
     const seenSourceIds = new Set<string>();
@@ -877,13 +912,16 @@ export class McpSourceSession {
     tool: McpSourceTool,
     deliveries: readonly Delivery[]
   ): Record<string, unknown> | null {
-    if (tool === "node") {
+    if (tool === "node" || tool === "explore") {
       if (!isRecord(structured.source) || deliveries.length !== 1) return null;
       return {
         ...structured,
         source: {
-        ...structured.source,
+          ...structured.source,
           text: deliveries[0]!.projection === "full" ? structured.source.text : null,
+          ...(Array.isArray(structured.source.lines)
+            ? { lines: deliveries[0]!.projection === "full" ? structured.source.lines : [] }
+            : {}),
           delivery: deliveries[0]!.metadata
         }
       };
@@ -895,6 +933,27 @@ export class McpSourceSession {
         lines: deliveries[0]!.projection === "full" ? structured.lines : [],
         sourceDelivery: deliveries[0]!.metadata
       };
+    }
+    if (tool === "context") {
+      if (!Array.isArray(structured.contexts)) return null;
+      let deliveryIndex = 0;
+      const contexts = structured.contexts.map((context) => {
+        if (!isRecord(context) || context.source === null || !isRecord(context.source)) return context;
+        const delivery = deliveries[deliveryIndex++];
+        if (delivery === undefined) return context;
+        return {
+          ...context,
+          source: {
+            ...context.source,
+            text: delivery.projection === "full" ? context.source.text : null,
+            ...(Array.isArray(context.source.lines)
+              ? { lines: delivery.projection === "full" ? context.source.lines : [] }
+              : {}),
+            delivery: delivery.metadata
+          }
+        };
+      });
+      return deliveryIndex === deliveries.length ? { ...structured, contexts } : null;
     }
     if (!Array.isArray(structured.declarations)) return null;
     let deliveryIndex = 0;

@@ -61,6 +61,19 @@ export interface SourceExcerpt {
   readonly lines: readonly SourceExcerptLine[];
 }
 
+/** A bounded excerpt whose emitted text is provably tied to persisted source. */
+export interface DeliveredSourceExcerpt extends SourceExcerpt {
+  readonly range: SourceRange;
+  readonly text: string;
+  readonly sourceIdentity: import("./source-delivery.js").SourceDeliveryIdentity;
+  /** Raw UTF-16 code units requested before the shared context budget was applied. */
+  readonly requestedCharacters: number;
+  /** Canonical UTF-16 code units actually emitted in `text`. */
+  readonly emittedCharacters: number;
+  readonly truncated: boolean;
+  readonly truncationReason: "character-budget" | null;
+}
+
 /** Provenance for a source excerpt returned with graph evidence. */
 export type SourceAvailability = "active-generation" | "unavailable" | "not-applicable";
 
@@ -661,7 +674,7 @@ export interface ExploreResult {
    * legacy ExploreService embeddings that cannot make this claim.
    */
   readonly sourceAvailability?: SourceAvailability;
-  readonly source: SourceExcerpt | null;
+  readonly source: DeliveredSourceExcerpt | null;
   readonly callers: readonly GraphRelation[];
   readonly callees: readonly GraphRelation[];
   readonly impact: readonly ImpactPath[];
@@ -677,6 +690,8 @@ export interface ContextOptions {
   readonly impactDepth?: number;
   /** Maximum reverse-impact paths retained for each exact symbol. */
   readonly impactLimit?: number;
+  /** Shared raw-source character ceiling across every exact context reference. */
+  readonly sourceCharacterBudget?: number;
 }
 
 /**
@@ -709,6 +724,13 @@ export interface ContextBounds {
   readonly maxVisitedSymbolsPerPath: number;
   readonly impactDepth: number;
   readonly impactLimit: number;
+  readonly source: {
+    readonly totalCharacterBudget: number;
+    readonly minimumTotalCharacterBudget: number;
+    readonly maximumTotalCharacterBudget: number;
+    readonly minimumPerReference: number;
+    readonly allocationPolicy: typeof import("./context-source-allocation.js").CONTEXT_SOURCE_ALLOCATION_POLICY;
+  };
 }
 
 export interface BoundedRelations {
@@ -825,11 +847,26 @@ export interface SymbolContext {
   /** True when an ambiguous match has more persisted candidates than returned. */
   readonly matchCandidatesTruncated: boolean;
   readonly sourceAvailability: SourceAvailability;
-  readonly source: SourceExcerpt | null;
+  readonly source: DeliveredSourceExcerpt | null;
   readonly callers: BoundedRelations;
   readonly callees: BoundedRelations;
   readonly impact: BoundedImpactPaths;
 }
+
+export type ContextSourceReferenceAllocationReceipt =
+  import("./context-source-allocation.js").ContextSourceReferenceAllocation & {
+    readonly emittedCharacters: number;
+    readonly reservedButNotEmittedCharacters: number;
+  };
+
+export type ContextSourceAllocationResult =
+  Omit<import("./context-source-allocation.js").ContextSourceAllocation, "contexts" | "summary"> & {
+    readonly summary: import("./context-source-allocation.js").ContextSourceAllocation["summary"] & {
+      readonly emittedCharacters: number;
+      readonly reservedButNotEmittedCharacters: number;
+    };
+    readonly contexts: readonly ContextSourceReferenceAllocationReceipt[];
+  };
 
 /**
  * A directed evidence check for adjacent input references. `path` is only
@@ -851,6 +888,7 @@ export interface ContextResult {
   readonly status: IndexStatus;
   readonly bounds: ContextBounds;
   readonly contexts: readonly SymbolContext[];
+  readonly sourceAllocation: ContextSourceAllocationResult;
   readonly evidencePaths: readonly ContextEvidencePath[];
 }
 

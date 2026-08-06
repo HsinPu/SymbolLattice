@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.280.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher can update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.281.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher can update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## Quick start
 
@@ -31,6 +31,9 @@ node dist/cli/main.js init /path/to/project
 
 # Query explainable structural context
 node dist/cli/main.js investigate "user token" --project /path/to/project --json
+
+# Build multi-symbol context inside one shared source budget
+node dist/cli/main.js context "src/api.ts#route" "src/service.ts#load" --project /path/to/project --source-character-budget 12000 --json
 
 # Return separately verifiable signature and lexical-hit slices without synthetic source
 node dist/cli/main.js investigate "user token" --project /path/to/project --source-render-mode multi --json
@@ -49,7 +52,8 @@ Alternatively, download the version-pinned `.tgz`, SHA-256 checksum, and manifes
 
 ## What it does
 
-- `node`, `investigate`, and `file` share session-, project-, and generation-bound source coverage. Back-references or new fragments are emitted only when UTF-16 offsets, content, and the SHA-256 offset map are verifiable and the 160-character savings/new-context floors plus four-fragment cap are satisfied; otherwise the full source is re-emitted. `sourceSessionMode: "full"` disables deduplication.
+- `explore`, `context`, `node`, `investigate`, and `file` share session-, project-, and generation-bound source coverage. Back-references or new fragments are emitted only when UTF-16 offsets, content, and the SHA-256 offset map are verifiable and the 160-character savings/new-context floors plus four-fragment cap are satisfied; otherwise the full source is re-emitted. `sourceSessionMode: "full"` disables deduplication.
+- `context` places persisted source for up to eight references inside one 2,048–64,000-character envelope, allocates by input order, and returns per-reference allocation, truncation cause, emitted size, source identity, and offset map. CLI and MCP callers can set `sourceCharacterBudget`.
 - Every emitted, covered, or new fragment may carry `mcp-source-pointer-v1`: project-relative path, exact line/column range, raw-file offsets, at most five overlapping symbols, a readable `file:Lx-Ly (symbol)` label, and a SHA-256 receipt. CRLF, CR, Unicode separators, and partial fragments are rebased safely; insufficient display evidence omits only the pointer and never weakens source equality.
 - `investigate` allocates a shared 2,048–64,000-character budget to exact slices from one active generation. `adaptive` keeps one contiguous result; callers may request `prefix`, `focused`, `signature`, or `multi` for at most two independently verifiable signature and focus slices. Every segment has a stable ID, SHA-256, range, and explicit omission gap. No source is synthesized, and insufficient proof or budget produces a disclosed single-segment fallback.
 - Scans multiple languages and common frameworks into a project-local code graph.
@@ -100,6 +104,7 @@ One manifest may provide `frameworkFactPlugins`, `frameworkProjectPlugins`, and 
 | `git-hunks [path] --base <ref>` | Filter immutable Git hunk attribution with optional `--path-prefix`. |
 | `affected --working-tree` | Scope Git changes with `--path-prefix`, then optionally replace conventional test naming with `--test-pattern`. |
 | `investigate <query>` | Expand textual evidence into structural context. |
+| `context <reference...>` | Build multi-symbol context and adjacent evidence paths within one source budget. |
 | `impact <symbol>` | Trace bounded impact through exact static relations. |
 | `explain-edge <edge-id>` | Inspect the complete evidence for one relation. |
 | `upgrade [version]` | Preview, verify, or explicitly apply a GitHub Release upgrade. |

@@ -443,9 +443,35 @@ function contextResult(): ContextResult {
       maxHops: 4,
       maxVisitedSymbolsPerPath: 500,
       impactDepth: 2,
-      impactLimit: 8
+      impactLimit: 8,
+      source: {
+        totalCharacterBudget: 24_000,
+        minimumTotalCharacterBudget: 2_048,
+        maximumTotalCharacterBudget: 64_000,
+        minimumPerReference: 256,
+        allocationPolicy: "reference-order-source-v1"
+      }
     },
     contexts: [],
+    sourceAllocation: {
+      policy: "reference-order-source-v1",
+      budget: {
+        characterBudget: 24_000,
+        minimumCharacterBudget: 2_048,
+        maximumCharacterBudget: 64_000,
+        minimumPerReference: 256
+      },
+      summary: {
+        candidateCount: 0,
+        requestedCharacters: 0,
+        allocatedCharacters: 0,
+        unusedCharacters: 24_000,
+        truncated: false,
+        emittedCharacters: 0,
+        reservedButNotEmittedCharacters: 0
+      },
+      contexts: []
+    },
     evidencePaths: []
   };
 }
@@ -2026,6 +2052,8 @@ describe("symbol-lattice v0.5 context and impact CLI", () => {
         "3",
         "--impact-limit",
         "12",
+        "--source-character-budget",
+        "4096",
         "--json"
       ],
       { from: "node" }
@@ -2039,7 +2067,8 @@ describe("symbol-lattice v0.5 context and impact CLI", () => {
           relationLimit: 7,
           maxHops: 5,
           impactDepth: 3,
-          impactLimit: 12
+          impactLimit: 12,
+          sourceCharacterBudget: 4096
         }
       }
     ]);
@@ -2050,7 +2079,9 @@ describe("symbol-lattice v0.5 context and impact CLI", () => {
     ["--relation-limit", "26", "Expected an integer between 1 and 25"],
     ["--max-hops", "7", "Expected an integer between 1 and 6"],
     ["--impact-depth", "4", "Expected an integer between 1 and 3"],
-    ["--impact-limit", "26", "Expected an integer between 1 and 25"]
+    ["--impact-limit", "26", "Expected an integer between 1 and 25"],
+    ["--source-character-budget", "2047", "Expected an integer between 2048 and 64000"],
+    ["--source-character-budget", "64001", "Expected an integer between 2048 and 64000"]
   ] as const) {
     it(`rejects ${rangeCase[0]} outside its bounded context range`, async () => {
       const service = {
