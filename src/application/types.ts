@@ -714,37 +714,25 @@ export type ExploreSourceWindow =
     readonly source: DeliveredSourceExcerpt;
   };
 
-export interface ExploreSourceWindowAllocationResult {
-  readonly policy: typeof import("./explore-source-windows.js").EXPLORE_SOURCE_WINDOW_ALLOCATION_POLICY;
-  readonly budget: {
-    readonly totalCharacterBudget: number;
-    readonly primaryEmittedCharacters: number;
-    readonly availableCharacters: number;
-    readonly minimumPerWindow: number;
-    readonly maximumShareFraction: number;
-  };
-  readonly summary: {
-    readonly candidateCount: number;
-    readonly requestedCharacters: number;
-    readonly allocatedCharacters: number;
+type ExploreSourceWindowCharacterAllocation =
+  import("./explore-source-windows.js").ExploreSourceWindowCharacterAllocation;
+
+export type ExploreSourceWindowAllocationResult = Omit<
+  ExploreSourceWindowCharacterAllocation,
+  "summary" | "windows"
+> & {
+  readonly summary: ExploreSourceWindowCharacterAllocation["summary"] & {
     readonly emittedCharacters: number;
     readonly emittedWindows: number;
-    readonly unusedCharacters: number;
     readonly reservedButNotEmittedCharacters: number;
-    readonly truncated: boolean;
   };
-  readonly windows: readonly {
-    readonly index: number;
-    readonly requestedCharacters: number;
-    readonly relevanceWeight: number;
-    readonly maximumShareCharacters: number;
-    readonly allocatedCharacters: number;
-    readonly emittedCharacters: number;
-    readonly reservedButNotEmittedCharacters: number;
-    readonly truncated: boolean;
-    readonly reason: "score-and-spine-weight";
-  }[];
-}
+  readonly windows: readonly (
+    ExploreSourceWindowCharacterAllocation["windows"][number] & {
+      readonly emittedCharacters: number;
+      readonly reservedButNotEmittedCharacters: number;
+    }
+  )[];
+};
 
 /** Input bounds for a multi-symbol context pack. */
 export interface ContextOptions {

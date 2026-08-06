@@ -1459,19 +1459,32 @@ describe("SymbolLattice MCP server", () => {
                 budget: {
                   properties: {
                     wholeFileGraceFraction: { const: 0.15 },
-                    wholeFileBuyOvershootBudget: { minimum: 0 }
+                    wholeFileBuyOvershootBudget: { minimum: 0 },
+                    generatedSourceWorth: { const: 0.3 },
+                    relativeCliffFraction: { const: 0.15 },
+                    relativeCliffMaximumWeight: { const: 10 },
+                    relativeCliffThreshold: { minimum: 0 }
                   }
                 },
                 summary: {
                   properties: {
                     wholeFileEligibleCandidates: { minimum: 0, maximum: 8 },
-                    wholeFilePromotedWindows: { minimum: 0, maximum: 8 }
+                    wholeFilePromotedWindows: { minimum: 0, maximum: 8 },
+                    generatedCandidates: { minimum: 0, maximum: 8 },
+                    cliffedWindows: { minimum: 0, maximum: 8 }
                   }
                 },
                 windows: {
                   items: {
                     properties: {
                       filePath: { type: "string", minLength: 1 },
+                      generated: { type: "boolean" },
+                      generatedEvidenceRuleIds: { type: "array" },
+                      sourceWorth: { exclusiveMinimum: 0, maximum: 1 },
+                      effectiveWeight: { exclusiveMinimum: 0 },
+                      cliffExempt: { type: "boolean" },
+                      allocationDecision: { enum: ["admitted", "relative-cliff"] },
+                      reason: { const: "score-spine-and-source-worth" },
                       renderMode: { enum: ["window", "whole-file"] },
                       wholeFileDecision: {
                         enum: [

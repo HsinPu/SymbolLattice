@@ -3,11 +3,14 @@ import type { ExplorePathSpinePlan } from "./explore-path-spines.js";
 
 export const EXPLORE_SOURCE_WINDOW_POLICY = "explore-source-windows-v1" as const;
 export const EXPLORE_SOURCE_WINDOW_ALLOCATION_POLICY =
-  "explore-source-window-allocation-v3" as const;
+  "explore-source-window-allocation-v4" as const;
 export const EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS = {
   minimumPerWindow: 256,
   maximumShareFraction: 0.7,
   spineBoost: 1.25,
+  generatedSourceWorth: 0.3,
+  relativeCliffFraction: 0.15,
+  relativeCliffMaximumWeight: 10,
   wholeFileGraceFraction: 0.15,
   wholeFileGraceMaximumCharacters: 800,
   wholeFileBuyMinimumCoverageFraction: 0.6,
@@ -53,6 +56,10 @@ export interface ExploreSourceWindowCharacterAllocation {
     readonly availableCharacters: number;
     readonly minimumPerWindow: typeof EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS.minimumPerWindow;
     readonly maximumShareFraction: typeof EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS.maximumShareFraction;
+    readonly generatedSourceWorth: typeof EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS.generatedSourceWorth;
+    readonly relativeCliffFraction: typeof EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS.relativeCliffFraction;
+    readonly relativeCliffMaximumWeight: typeof EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS.relativeCliffMaximumWeight;
+    readonly relativeCliffThreshold: number;
     readonly wholeFileGraceFraction: typeof EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS.wholeFileGraceFraction;
     readonly wholeFileGraceMaximumCharacters: typeof EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS.wholeFileGraceMaximumCharacters;
     readonly wholeFileBuyMinimumCoverageFraction: typeof EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS.wholeFileBuyMinimumCoverageFraction;
@@ -62,6 +69,8 @@ export interface ExploreSourceWindowCharacterAllocation {
   };
   readonly summary: {
     readonly candidateCount: number;
+    readonly generatedCandidates: number;
+    readonly cliffedWindows: number;
     readonly wholeFileEligibleCandidates: number;
     readonly wholeFilePromotedWindows: number;
     readonly requestedCharacters: number;
@@ -77,6 +86,13 @@ export interface ExploreSourceWindowCharacterAllocation {
     readonly fullFileCharacters: number;
     readonly requestedCharacters: number;
     readonly relevanceWeight: number;
+    readonly generated: boolean;
+    readonly generatedClassifierVersion: string;
+    readonly generatedEvidenceRuleIds: readonly string[];
+    readonly sourceWorth: number;
+    readonly effectiveWeight: number;
+    readonly cliffExempt: boolean;
+    readonly allocationDecision: "admitted" | "relative-cliff";
     readonly maximumShareCharacters: number;
     readonly baseAllocatedCharacters: number;
     readonly allocatedCharacters: number;
@@ -94,7 +110,7 @@ export interface ExploreSourceWindowCharacterAllocation {
       | "grace"
       | "buy";
     readonly truncated: boolean;
-    readonly reason: "score-and-spine-weight";
+    readonly reason: "score-spine-and-source-worth";
   }[];
 }
 
@@ -105,6 +121,10 @@ export interface ExploreSourceWindowAllocationCandidate {
   readonly fullFileCharacters: number;
   readonly relevanceWeight: number;
   readonly wholeFileEligible: boolean;
+  readonly generated?: boolean;
+  readonly generatedClassifierVersion?: string;
+  readonly generatedEvidenceRuleIds?: readonly string[];
+  readonly cliffExempt?: boolean;
 }
 
 interface MutableWindow {
@@ -133,6 +153,10 @@ interface WindowSite {
 
 function compareText(left: string, right: string): number {
   return left.localeCompare(right, "en");
+}
+
+function roundedWeight(value: number): number {
+  return Math.round(value * 1_000_000) / 1_000_000;
 }
 
 /** Reserves the remainder of one total source envelope in stable window order. */
@@ -168,7 +192,17 @@ export function allocateExploreSourceWindowCharacters(input: {
       candidate.fullFileCharacters < candidate.requestedCharacters ||
       !Number.isFinite(candidate.relevanceWeight) ||
       candidate.relevanceWeight <= 0 ||
-      typeof candidate.wholeFileEligible !== "boolean"
+      typeof candidate.wholeFileEligible !== "boolean" ||
+      (candidate.generated !== undefined && typeof candidate.generated !== "boolean") ||
+      (candidate.generatedClassifierVersion !== undefined &&
+        (typeof candidate.generatedClassifierVersion !== "string" ||
+          candidate.generatedClassifierVersion.length === 0)) ||
+      (candidate.generatedEvidenceRuleIds !== undefined &&
+        (!Array.isArray(candidate.generatedEvidenceRuleIds) ||
+          candidate.generatedEvidenceRuleIds.some(
+            (ruleId) => typeof ruleId !== "string" || ruleId.length === 0
+          ))) ||
+      (candidate.cliffExempt !== undefined && typeof candidate.cliffExempt !== "boolean")
     ) {
       throw new RangeError("Explore source window candidates require unique indexes and positive sizes.");
     }
@@ -176,7 +210,36 @@ export function allocateExploreSourceWindowCharacters(input: {
   }
 
   const availableCharacters = input.totalCharacterBudget - input.primaryEmittedCharacters;
-  const maximumShareCharacters = candidates.length <= 1
+  const weightedCandidates = candidates.map((candidate) => {
+    const generated = candidate.generated === true;
+    const sourceWorth = generated
+      ? EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS.generatedSourceWorth
+      : 1;
+    return {
+      candidate,
+      generated,
+      generatedClassifierVersion:
+        candidate.generatedClassifierVersion ?? "unclassified-allocation-input",
+      generatedEvidenceRuleIds: [...new Set(candidate.generatedEvidenceRuleIds ?? [])].sort(compareText),
+      sourceWorth,
+      effectiveWeight: roundedWeight(candidate.relevanceWeight * sourceWorth),
+      cliffExempt: candidate.cliffExempt === true
+    };
+  });
+  const topEffectiveWeight = weightedCandidates.reduce(
+    (top, candidate) => Math.max(top, candidate.effectiveWeight),
+    0
+  );
+  const relativeCliffThreshold = roundedWeight(Math.min(
+    topEffectiveWeight * EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS.relativeCliffFraction,
+    EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS.relativeCliffMaximumWeight
+  ));
+  const scoredCandidates = weightedCandidates.map((candidate) => ({
+    ...candidate,
+    cliffed: !candidate.cliffExempt && candidate.effectiveWeight < relativeCliffThreshold
+  }));
+  const admittedCandidates = scoredCandidates.filter((candidate) => !candidate.cliffed);
+  const maximumShareCharacters = admittedCandidates.length <= 1
     ? availableCharacters
     : Math.max(
         EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS.minimumPerWindow,
@@ -184,12 +247,15 @@ export function allocateExploreSourceWindowCharacters(input: {
           availableCharacters * EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS.maximumShareFraction
         )
       );
-  const mutable = candidates.map((candidate) => ({
-    candidate,
-    maximumShareCharacters,
+  const mutable = scoredCandidates.map((candidate) => ({
+    ...candidate,
+    maximumShareCharacters: candidate.cliffed ? 0 : maximumShareCharacters,
     allocatedCharacters: 0
   }));
   const guaranteed = mutable.map((allocation) =>
+    allocation.cliffed
+      ? 0
+      :
     Math.min(
       allocation.candidate.requestedCharacters,
       allocation.maximumShareCharacters,
@@ -207,12 +273,13 @@ export function allocateExploreSourceWindowCharacters(input: {
   while (remaining > 0) {
     const active = mutable.filter(
       (allocation) =>
+        !allocation.cliffed &&
         allocation.allocatedCharacters < allocation.candidate.requestedCharacters &&
         allocation.allocatedCharacters < allocation.maximumShareCharacters
     );
     if (active.length === 0) break;
     const totalWeight = active.reduce(
-      (total, allocation) => total + allocation.candidate.relevanceWeight,
+      (total, allocation) => total + allocation.effectiveWeight,
       0
     );
     const roundCapacity = remaining;
@@ -226,7 +293,7 @@ export function allocateExploreSourceWindowCharacters(input: {
       const weightedShare = Math.max(
         1,
         Math.floor(
-          roundCapacity * allocation.candidate.relevanceWeight / totalWeight
+          roundCapacity * allocation.effectiveWeight / totalWeight
         )
       );
       const addition = Math.min(capacity, weightedShare, remaining);
@@ -238,6 +305,8 @@ export function allocateExploreSourceWindowCharacters(input: {
   }
   const wholeFileOwnerByPath = new Map<string, number>();
   for (const candidate of candidates) {
+    const weighted = mutable.find((item) => item.candidate.index === candidate.index);
+    if (weighted?.cliffed === true) continue;
     if (!candidate.wholeFileEligible) continue;
     const currentIndex = wholeFileOwnerByPath.get(candidate.filePath);
     const current = currentIndex === undefined
@@ -317,6 +386,16 @@ export function allocateExploreSourceWindowCharacters(input: {
       fullFileCharacters: candidate.fullFileCharacters,
       requestedCharacters,
       relevanceWeight: candidate.relevanceWeight,
+      generated: allocation.generated,
+      generatedClassifierVersion: allocation.generatedClassifierVersion,
+      generatedEvidenceRuleIds: allocation.generatedEvidenceRuleIds,
+      sourceWorth: allocation.sourceWorth,
+      effectiveWeight: allocation.effectiveWeight,
+      cliffExempt: allocation.cliffExempt,
+      allocationDecision:
+        allocation.cliffed
+          ? "relative-cliff" as const
+          : "admitted" as const,
       maximumShareCharacters: allocation.maximumShareCharacters,
       baseAllocatedCharacters: baseAllocated,
       allocatedCharacters,
@@ -328,7 +407,7 @@ export function allocateExploreSourceWindowCharacters(input: {
       renderMode,
       wholeFileDecision: decision,
       truncated: allocatedCharacters < requestedCharacters,
-      reason: "score-and-spine-weight" as const
+      reason: "score-spine-and-source-worth" as const
     };
   });
   const requestedCharacters = windows.reduce(
@@ -347,6 +426,11 @@ export function allocateExploreSourceWindowCharacters(input: {
       availableCharacters,
       minimumPerWindow: EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS.minimumPerWindow,
       maximumShareFraction: EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS.maximumShareFraction,
+      generatedSourceWorth: EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS.generatedSourceWorth,
+      relativeCliffFraction: EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS.relativeCliffFraction,
+      relativeCliffMaximumWeight:
+        EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS.relativeCliffMaximumWeight,
+      relativeCliffThreshold,
       wholeFileGraceFraction: EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS.wholeFileGraceFraction,
       wholeFileGraceMaximumCharacters:
         EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS.wholeFileGraceMaximumCharacters,
@@ -359,6 +443,10 @@ export function allocateExploreSourceWindowCharacters(input: {
     },
     summary: {
       candidateCount: candidates.length,
+      generatedCandidates: windows.filter((window) => window.generated).length,
+      cliffedWindows: windows.filter(
+        (window) => window.allocationDecision === "relative-cliff"
+      ).length,
       wholeFileEligibleCandidates: candidates.filter((candidate) => candidate.wholeFileEligible).length,
       wholeFilePromotedWindows: windows.filter((window) => window.renderMode === "whole-file").length,
       requestedCharacters,

@@ -4743,6 +4743,9 @@ export class SymbolLatticeService {
       primaryEmittedCharacters: contextPack.allocation.summary.emittedCharacters,
       candidates: sourceWindowPlan.windows.flatMap((window) => {
         const draft = sourceWindowDrafts.get(window.index);
+        const generated = generatedClassificationFor(
+          bundle.snapshot.files.find((file) => file.path === window.filePath) ?? {}
+        );
         return draft === undefined ? [] : [{
           index: window.index,
           filePath: window.filePath,
@@ -4751,7 +4754,11 @@ export class SymbolLatticeService {
             documentsByFilePath.get(window.filePath)?.sourceText.length ??
             draft.endOffset - draft.startOffset,
           relevanceWeight: window.relevanceWeight,
-          wholeFileEligible: sourceWindowWholeFileDrafts.has(window.index)
+          wholeFileEligible: sourceWindowWholeFileDrafts.has(window.index),
+          generated: generated.generated,
+          generatedClassifierVersion: generated.classifierVersion,
+          generatedEvidenceRuleIds: generated.evidence.map((evidence) => evidence.ruleId),
+          cliffExempt: window.reason === "exact-path-spine"
         }];
       })
     });

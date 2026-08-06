@@ -272,6 +272,10 @@ describe("explore source window planning", () => {
         availableCharacters: 1_000,
         minimumPerWindow: EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS.minimumPerWindow,
         maximumShareFraction: EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS.maximumShareFraction,
+        generatedSourceWorth: 0.3,
+        relativeCliffFraction: 0.15,
+        relativeCliffMaximumWeight: 10,
+        relativeCliffThreshold: 0.45,
         wholeFileGraceFraction: 0.15,
         wholeFileGraceMaximumCharacters: 800,
         wholeFileBuyMinimumCoverageFraction: 0.6,
@@ -281,6 +285,8 @@ describe("explore source window planning", () => {
       },
       summary: {
         candidateCount: 2,
+        generatedCandidates: 0,
+        cliffedWindows: 0,
         wholeFileEligibleCandidates: 0,
         wholeFilePromotedWindows: 0,
         requestedCharacters: 2_000,
@@ -297,6 +303,13 @@ describe("explore source window planning", () => {
           fullFileCharacters: 1_000,
           requestedCharacters: 1_000,
           relevanceWeight: 3,
+          generated: false,
+          generatedClassifierVersion: "unclassified-allocation-input",
+          generatedEvidenceRuleIds: [],
+          sourceWorth: 1,
+          effectiveWeight: 3,
+          cliffExempt: false,
+          allocationDecision: "admitted",
           maximumShareCharacters: 700,
           baseAllocatedCharacters: 622,
           allocatedCharacters: 622,
@@ -308,7 +321,7 @@ describe("explore source window planning", () => {
           renderMode: "window",
           wholeFileDecision: "not-eligible",
           truncated: true,
-          reason: "score-and-spine-weight"
+          reason: "score-spine-and-source-worth"
         },
         {
           index: 1,
@@ -317,6 +330,13 @@ describe("explore source window planning", () => {
           fullFileCharacters: 1_000,
           requestedCharacters: 1_000,
           relevanceWeight: 1,
+          generated: false,
+          generatedClassifierVersion: "unclassified-allocation-input",
+          generatedEvidenceRuleIds: [],
+          sourceWorth: 1,
+          effectiveWeight: 1,
+          cliffExempt: false,
+          allocationDecision: "admitted",
           maximumShareCharacters: 700,
           baseAllocatedCharacters: 378,
           allocatedCharacters: 378,
@@ -328,7 +348,7 @@ describe("explore source window planning", () => {
           renderMode: "window",
           wholeFileDecision: "not-eligible",
           truncated: true,
-          reason: "score-and-spine-weight"
+          reason: "score-spine-and-source-worth"
         }
       ]
     });
@@ -349,7 +369,7 @@ describe("explore source window planning", () => {
     });
 
     expect(allocation).toMatchObject({
-      policy: "explore-source-window-allocation-v3",
+      policy: "explore-source-window-allocation-v4",
       budget: {
         wholeFileGraceFraction: 0.15,
         wholeFileGraceMaximumCharacters: 800,
@@ -534,5 +554,135 @@ describe("explore source window planning", () => {
     expect(
       allocation.summary.allocatedCharacters + allocation.budget.primaryEmittedCharacters
     ).toBeLessThanOrEqual(allocation.budget.totalCharacterBudget);
+  });
+
+  it("cliffs low-worth generated source without displacing a relevant handwritten window", () => {
+    const allocation = allocateExploreSourceWindowCharacters({
+      totalCharacterBudget: 1_200,
+      primaryEmittedCharacters: 0,
+      candidates: [
+        {
+          index: 0,
+          filePath: "src/primary.ts",
+          requestedCharacters: 1_000,
+          fullFileCharacters: 1_000,
+          relevanceWeight: 100,
+          wholeFileEligible: false,
+          generated: false,
+          generatedClassifierVersion: "generated-evidence-v1",
+          generatedEvidenceRuleIds: [],
+          cliffExempt: false
+        },
+        {
+          index: 1,
+          filePath: "src/contracts.generated.ts",
+          requestedCharacters: 1_000,
+          fullFileCharacters: 1_000,
+          relevanceWeight: 20,
+          wholeFileEligible: false,
+          generated: true,
+          generatedClassifierVersion: "generated-evidence-v1",
+          generatedEvidenceRuleIds: [
+            "generated.path.javascript.generated-suffix",
+            "generated.path.javascript.generated-suffix"
+          ],
+          cliffExempt: false
+        },
+        {
+          index: 2,
+          filePath: "src/handwritten-bridge.ts",
+          requestedCharacters: 1_000,
+          fullFileCharacters: 1_000,
+          relevanceWeight: 15,
+          wholeFileEligible: false,
+          generated: false,
+          generatedClassifierVersion: "generated-evidence-v1",
+          generatedEvidenceRuleIds: [],
+          cliffExempt: false
+        }
+      ] as readonly ExploreSourceWindowAllocationCandidate[]
+    });
+
+    expect(allocation).toMatchObject({
+      policy: "explore-source-window-allocation-v4",
+      budget: {
+        generatedSourceWorth: 0.3,
+        relativeCliffFraction: 0.15,
+        relativeCliffMaximumWeight: 10,
+        relativeCliffThreshold: 10
+      },
+      summary: {
+        generatedCandidates: 1,
+        cliffedWindows: 1
+      },
+      windows: [
+        expect.objectContaining({
+          index: 0,
+          sourceWorth: 1,
+          effectiveWeight: 100,
+          allocationDecision: "admitted"
+        }),
+        expect.objectContaining({
+          index: 1,
+          sourceWorth: 0.3,
+          effectiveWeight: 6,
+          generatedEvidenceRuleIds: ["generated.path.javascript.generated-suffix"],
+          allocatedCharacters: 0,
+          allocationDecision: "relative-cliff",
+          reason: "score-spine-and-source-worth"
+        }),
+        expect.objectContaining({
+          index: 2,
+          sourceWorth: 1,
+          effectiveWeight: 15,
+          allocationDecision: "admitted"
+        })
+      ]
+    });
+    expect(allocation.windows[2]!.allocatedCharacters).toBeGreaterThan(0);
+  });
+
+  it("keeps an exact path-spine window even when generated source worth is below the cliff", () => {
+    const allocation = allocateExploreSourceWindowCharacters({
+      totalCharacterBudget: 1_000,
+      primaryEmittedCharacters: 0,
+      candidates: [
+        {
+          index: 0,
+          filePath: "src/entry.ts",
+          requestedCharacters: 1_000,
+          fullFileCharacters: 1_000,
+          relevanceWeight: 100,
+          wholeFileEligible: false,
+          generated: false,
+          generatedClassifierVersion: "generated-evidence-v1",
+          generatedEvidenceRuleIds: [],
+          cliffExempt: false
+        },
+        {
+          index: 1,
+          filePath: "src/flow.generated.ts",
+          requestedCharacters: 1_000,
+          fullFileCharacters: 1_000,
+          relevanceWeight: 1,
+          wholeFileEligible: true,
+          generated: true,
+          generatedClassifierVersion: "generated-evidence-v1",
+          generatedEvidenceRuleIds: ["generated.path.javascript.generated-suffix"],
+          cliffExempt: true
+        }
+      ]
+    });
+
+    expect(allocation.windows[1]).toMatchObject({
+      generated: true,
+      sourceWorth: 0.3,
+      effectiveWeight: 0.3,
+      cliffExempt: true,
+      allocationDecision: "admitted"
+    });
+    expect(allocation.windows[1]!.allocatedCharacters).toBeGreaterThanOrEqual(
+      EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS.minimumPerWindow
+    );
   });
 });

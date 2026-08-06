@@ -1048,6 +1048,16 @@ const exploreSourceWindowAllocationOutputSchema = z.object({
     maximumShareFraction: z.literal(
       EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS.maximumShareFraction
     ),
+    generatedSourceWorth: z.literal(
+      EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS.generatedSourceWorth
+    ),
+    relativeCliffFraction: z.literal(
+      EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS.relativeCliffFraction
+    ),
+    relativeCliffMaximumWeight: z.literal(
+      EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS.relativeCliffMaximumWeight
+    ),
+    relativeCliffThreshold: z.number().finite().nonnegative(),
     wholeFileGraceFraction: z.literal(
       EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS.wholeFileGraceFraction
     ),
@@ -1065,6 +1075,12 @@ const exploreSourceWindowAllocationOutputSchema = z.object({
   }),
   summary: z.object({
     candidateCount: z.number().int().nonnegative().max(EXPLORE_SOURCE_WINDOW_LIMITS.maximumWindows),
+    generatedCandidates: z.number().int().nonnegative().max(
+      EXPLORE_SOURCE_WINDOW_LIMITS.maximumWindows
+    ),
+    cliffedWindows: z.number().int().nonnegative().max(
+      EXPLORE_SOURCE_WINDOW_LIMITS.maximumWindows
+    ),
     wholeFileEligibleCandidates: z.number().int().nonnegative().max(
       EXPLORE_SOURCE_WINDOW_LIMITS.maximumWindows
     ),
@@ -1087,6 +1103,13 @@ const exploreSourceWindowAllocationOutputSchema = z.object({
     fullFileCharacters: z.number().int().positive(),
     requestedCharacters: z.number().int().positive(),
     relevanceWeight: z.number().finite().positive(),
+    generated: z.boolean(),
+    generatedClassifierVersion: z.string().min(1),
+    generatedEvidenceRuleIds: z.array(z.string().min(1)).max(8),
+    sourceWorth: z.number().finite().positive().max(1),
+    effectiveWeight: z.number().finite().positive(),
+    cliffExempt: z.boolean(),
+    allocationDecision: z.enum(["admitted", "relative-cliff"]),
     maximumShareCharacters: z.number().int().nonnegative(),
     baseAllocatedCharacters: z.number().int().nonnegative(),
     allocatedCharacters: z.number().int().nonnegative(),
@@ -1107,7 +1130,7 @@ const exploreSourceWindowAllocationOutputSchema = z.object({
     emittedCharacters: z.number().int().nonnegative(),
     reservedButNotEmittedCharacters: z.number().int().nonnegative(),
     truncated: z.boolean(),
-    reason: z.literal("score-and-spine-weight")
+    reason: z.literal("score-spine-and-source-worth")
   })).max(EXPLORE_SOURCE_WINDOW_LIMITS.maximumWindows)
 });
 
@@ -2581,7 +2604,7 @@ export function createMcpServer(
     {
       title: "Explore a SymbolLattice code graph",
       description:
-        "Explores either one exact symbol or a bounded question with named-file-first focus, exact selected connections, short exact path spines, and generation-bound source evidence. Question mode can add score-weighted call-site and bridge windows inside the same 24,000-character source envelope; eligible unselected bridge windows may expand to whole persisted files through bounded grace or a shared buy pool. This tool reports index freshness and never creates or refreshes an index.",
+        "Explores either one exact symbol or a bounded question with named-file-first focus, exact selected connections, short exact path spines, and generation-bound source evidence. Question mode can add source-worth-weighted call-site and bridge windows inside the same 24,000-character source envelope: persisted generated evidence reduces byte worth, a bounded relative cliff preserves receipt-only visibility, exact path spines are exempt, and eligible unselected bridges may expand to whole persisted files through bounded grace or a shared buy pool. This tool reports index freshness and never creates or refreshes an index.",
       inputSchema: {
         query: z.string().trim().min(1).describe("Exact symbol reference or a bounded question containing project-relative file and identifier clues."),
         projectPath: z.string().trim().min(1).optional().describe("Optional path to an already indexed project."),
