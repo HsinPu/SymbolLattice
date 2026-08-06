@@ -36,6 +36,7 @@ import {
   type RoutesOptions,
   type RoutesResult,
   type SearchResult,
+  canonicalSourceDeliverySlice,
   sourceDeliveryIdentityFromText
 } from "../../../src/application/index.js";
 import {
@@ -923,6 +924,40 @@ function partialCrossToolSourceResults(): {
         fullFileCharacterOffsets: { start: 0, end: sourceText.length }
       }),
       lines: [{ line: 1, text: sourceText }]
+    }
+  };
+}
+
+function crlfPartialCrossToolSourceResults(): {
+  readonly node: NodeResult;
+  readonly file: FileViewResult;
+} {
+  const rawText = `${"a".repeat(200)}\r\n${"b".repeat(200)}`;
+  const normalized = canonicalSourceDeliverySlice({
+    filePath: "src/users.ts",
+    sourceText: rawText,
+    fullFileCharacterOffsets: { start: 0, end: rawText.length }
+  });
+  const results = crossToolSourceResults();
+  return {
+    node: {
+      ...results.node,
+      source: {
+        ...results.node.source!,
+        text: "a".repeat(200),
+        totalCharacters: 200,
+        sourceIdentity: sourceDeliveryIdentityFromText({
+          filePath: "src/users.ts",
+          text: "a".repeat(200),
+          fullFileCharacterOffsets: { start: 0, end: 200 }
+        })
+      }
+    },
+    file: {
+      ...results.file,
+      bounds: { ...results.file.bounds, totalLines: 2, returnedLines: 2, limit: 2 },
+      sourceIdentity: normalized.sourceIdentity,
+      lines: normalized.text.split("\n").map((line, index) => ({ line: index + 1, text: line }))
     }
   };
 }
@@ -2684,6 +2719,57 @@ describe("SymbolLattice MCP server", () => {
           emittedCharacters: 320,
           avoidedCharacters: 320
         }
+      }
+    });
+    expect(JSON.parse(file.content[0]!.text)).toEqual(file.structuredContent);
+  });
+
+  it("preserves verified CRLF offset maps through the MCP output schema", async () => {
+    const results = crlfPartialCrossToolSourceResults();
+    const server = createMcpServer(
+      {
+        async explore(): Promise<ExploreResult> {
+          return exploreResult();
+        },
+        async node(): Promise<NodeResult> {
+          return results.node;
+        },
+        async fileView(): Promise<FileViewResult> {
+          return results.file;
+        }
+      },
+      "C:/default-project"
+    );
+    const client = new Client({ name: "symbol-lattice-crlf-source-test", version: "1.0.0" });
+    const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+    closeCallbacks.push(() => client.close(), () => server.close());
+
+    await client.callTool({
+      name: "symbol_lattice_node",
+      arguments: { query: "src/users.ts#userById" }
+    });
+    const file = await client.callTool({
+      name: "symbol_lattice_file",
+      arguments: { filePath: "src/users.ts", offset: 1, limit: 2 }
+    });
+
+    expect(file.structuredContent).toMatchObject({
+      lines: [],
+      sourceIdentity: {
+        policy: "source-delivery-v2",
+        offsetMap: { policy: "source-delivery-offset-map-v1" }
+      },
+      sourceDelivery: {
+        status: "partially-served",
+        fragments: [{
+          text: `\n${"b".repeat(200)}`,
+          sourceIdentity: {
+            policy: "source-delivery-v2",
+            offsetMap: { policy: "source-delivery-offset-map-v1" }
+          }
+        }]
       }
     });
     expect(JSON.parse(file.content[0]!.text)).toEqual(file.structuredContent);

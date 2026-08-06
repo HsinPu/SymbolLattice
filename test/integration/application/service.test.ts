@@ -2340,6 +2340,77 @@ describe("SymbolLatticeService", () => {
     });
   });
 
+  it("maps normalized CRLF file-view text back to exact persisted UTF-16 offsets", async () => {
+    const sourceText = `${"a".repeat(200)}\r\n${"b".repeat(200)}`;
+    const projectPath = await createInlineProject({ "src/crlf.ts": sourceText });
+    const service = createService();
+    await service.init({ projectPath });
+
+    const result = await service.fileView(projectPath, "src/crlf.ts", { offset: 1, limit: 2 });
+
+    expect(result.lines).toEqual([
+      { line: 1, text: "a".repeat(200) },
+      { line: 2, text: "b".repeat(200) }
+    ]);
+    expect(result.sourceIdentity).toMatchObject({
+      policy: "source-delivery-v2",
+      fullFileCharacterOffsets: { start: 0, end: sourceText.length },
+      offsetMap: {
+        policy: "source-delivery-offset-map-v1",
+        deliveredTextLength: 401,
+        sourceTextLength: 402,
+        spans: [
+          {
+            kind: "identity",
+            deliveredCharacterOffsets: { start: 0, end: 200 },
+            fullFileCharacterOffsets: { start: 0, end: 200 }
+          },
+          {
+            kind: "normalized-line-ending",
+            deliveredCharacterOffsets: { start: 200, end: 201 },
+            fullFileCharacterOffsets: { start: 200, end: 202 }
+          },
+          {
+            kind: "identity",
+            deliveredCharacterOffsets: { start: 201, end: 401 },
+            fullFileCharacterOffsets: { start: 202, end: 402 }
+          }
+        ]
+      }
+    });
+  });
+
+  it("keeps Unicode line separators aligned with canonical file-view offsets", async () => {
+    const sourceText = "// a\u2028// b\u2029// c";
+    const projectPath = await createInlineProject({ "src/unicode-lines.ts": sourceText });
+    const service = createService();
+    await service.init({ projectPath });
+
+    const result = await service.fileView(projectPath, "src/unicode-lines.ts", {
+      offset: 1,
+      limit: 3
+    });
+
+    expect(result.lines).toEqual([
+      { line: 1, text: "// a" },
+      { line: 2, text: "// b" },
+      { line: 3, text: "// c" }
+    ]);
+    expect(result.sourceIdentity).toMatchObject({
+      offsetMap: {
+        deliveredTextLength: sourceText.length,
+        sourceTextLength: sourceText.length,
+        spans: [
+          { kind: "identity", fullFileCharacterOffsets: { start: 0, end: 4 } },
+          { kind: "normalized-line-ending", fullFileCharacterOffsets: { start: 4, end: 5 } },
+          { kind: "identity", fullFileCharacterOffsets: { start: 5, end: 9 } },
+          { kind: "normalized-line-ending", fullFileCharacterOffsets: { start: 9, end: 10 } },
+          { kind: "identity", fullFileCharacterOffsets: { start: 10, end: 14 } }
+        ]
+      }
+    });
+  });
+
   it("resolves one unique indexed path suffix and rejects ambiguous basenames", async () => {
     const projectPath = await createInlineProject({
       "src/unique.ts": "export const uniqueSource = true;\n",

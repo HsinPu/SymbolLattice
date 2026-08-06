@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { sourceDeliveryIdentityFromText } from "../../src/application/source-delivery.js";
+import {
+  canonicalSourceDeliverySlice,
+  sourceDeliveryIdentityFromText
+} from "../../src/application/source-delivery.js";
 import { McpSourceSession } from "../../src/mcp/source-session.js";
 
 const text = "export const user = 1;";
@@ -141,7 +144,7 @@ describe("MCP source session", () => {
         firstDeliveredTool: "node"
       },
       sessionSource: {
-        equality: "exact-overlapping-file-offsets-and-content",
+        equality: "verified-offset-map-and-canonical-content",
         summary: { candidateSources: 1, emittedSources: 0, referencedSources: 1 }
       }
     });
@@ -216,7 +219,7 @@ describe("MCP source session", () => {
         ]
       },
       sessionSource: {
-        equality: "exact-overlapping-file-offsets-and-content",
+        equality: "verified-offset-map-and-canonical-content",
         summary: {
           candidateSources: 1,
           emittedSources: 0,
@@ -325,22 +328,159 @@ describe("MCP source session", () => {
     });
   });
 
-  it("re-emits normalized CRLF windows when raw offset mapping is unavailable", () => {
+  it("partially reuses normalized CRLF windows through a verified offset map", () => {
+    const rawText = `${"a".repeat(200)}\r\n${"b".repeat(200)}`;
     const normalizedText = `${"a".repeat(200)}\n${"b".repeat(200)}`;
     const session = new McpSourceSession();
-    session.project(nodeSliceResponse(normalizedText, 0, 200), "node", "deduplicate");
-    const identityWithRawCrlfWidth = sourceDeliveryIdentityFromText({
+    session.project(nodeSliceResponse(rawText, 0, 200), "node", "deduplicate");
+    const delivery = canonicalSourceDeliverySlice({
       filePath: "src/intervals.ts",
-      text: normalizedText,
-      fullFileCharacterOffsets: { start: 0, end: normalizedText.length + 1 }
+      sourceText: rawText,
+      fullFileCharacterOffsets: { start: 0, end: rawText.length }
     });
 
     const projected = session.project(response({
       status: status(),
       contentAvailability: "active-generation",
       selection: { filePath: "src/intervals.ts" },
-      sourceIdentity: identityWithRawCrlfWidth,
+      sourceIdentity: delivery.sourceIdentity,
       lines: normalizedText.split("\n").map((line, index) => ({ line: index + 1, text: line }))
+    }), "file", "deduplicate");
+
+    expect(projected.structuredContent).toMatchObject({
+      lines: [],
+      sourceDelivery: {
+        status: "partially-served",
+        coveredCharacterOffsets: [{ start: 0, end: 200 }],
+        fragments: [{
+          text: `\n${"b".repeat(200)}`,
+          sourceIdentity: {
+            fullFileCharacterOffsets: { start: 200, end: rawText.length },
+            offsetMap: {
+              policy: "source-delivery-offset-map-v1",
+              deliveredTextLength: 201,
+              sourceTextLength: 202,
+              spans: [
+                {
+                  kind: "normalized-line-ending",
+                  deliveredCharacterOffsets: { start: 0, end: 1 },
+                  fullFileCharacterOffsets: { start: 200, end: 202 }
+                },
+                {
+                  kind: "identity",
+                  deliveredCharacterOffsets: { start: 1, end: 201 },
+                  fullFileCharacterOffsets: { start: 202, end: rawText.length }
+                }
+              ]
+            }
+          }
+        }],
+        intervalDecision: {
+          status: "partial",
+          reason: "proven-overlap",
+          avoidedCharacters: 200,
+          emittedCharacters: 201
+        }
+      }
+    });
+  });
+
+  it("rejects a tampered offset-map receipt before changing the response", () => {
+    const rawText = `${"a".repeat(200)}\r\n${"b".repeat(200)}`;
+    const delivery = canonicalSourceDeliverySlice({
+      filePath: "src/intervals.ts",
+      sourceText: rawText,
+      fullFileCharacterOffsets: { start: 0, end: rawText.length }
+    });
+    const malformed = response({
+      status: status(),
+      contentAvailability: "active-generation",
+      selection: { filePath: "src/intervals.ts" },
+      sourceIdentity: {
+        ...delivery.sourceIdentity,
+        offsetMap: { ...delivery.sourceIdentity.offsetMap, mapSha256: "0".repeat(64) }
+      },
+      lines: delivery.text.split("\n").map((line, index) => ({ line: index + 1, text: line }))
+    });
+
+    const projected = new McpSourceSession().project(malformed, "file", "deduplicate");
+
+    expect(projected).toBe(malformed);
+    expect(projected.structuredContent).not.toHaveProperty("sessionSource");
+
+    const { mapSha256: _mapSha256, ...mapWithoutDigest } = delivery.sourceIdentity.offsetMap;
+    const missingDigest = response({
+      status: status(),
+      contentAvailability: "active-generation",
+      selection: { filePath: "src/intervals.ts" },
+      sourceIdentity: {
+        ...delivery.sourceIdentity,
+        offsetMap: mapWithoutDigest
+      },
+      lines: delivery.text.split("\n").map((line, index) => ({ line: index + 1, text: line }))
+    });
+    const missingDigestProjection = new McpSourceSession().project(
+      missingDigest,
+      "file",
+      "deduplicate"
+    );
+    expect(missingDigestProjection).toBe(missingDigest);
+    expect(missingDigestProjection.structuredContent).not.toHaveProperty("sessionSource");
+  });
+
+  it("reuses normalized file coverage when a later node retains raw CRLF text", () => {
+    const rawText = `${"a".repeat(200)}\r\n${"b".repeat(200)}`;
+    const coveredDelivery = canonicalSourceDeliverySlice({
+      filePath: "src/intervals.ts",
+      sourceText: rawText,
+      fullFileCharacterOffsets: { start: 0, end: 202 }
+    });
+    const session = new McpSourceSession();
+    session.project(response({
+      status: status(),
+      contentAvailability: "active-generation",
+      selection: { filePath: "src/intervals.ts" },
+      sourceIdentity: coveredDelivery.sourceIdentity,
+      lines: coveredDelivery.text.split("\n").map((line, index) => ({ line: index + 1, text: line }))
+    }), "file", "deduplicate");
+
+    const projected = session.project(nodeSliceResponse(rawText, 0, rawText.length), "node", "deduplicate");
+
+    expect(projected.structuredContent).toMatchObject({
+      source: {
+        text: null,
+        delivery: {
+          status: "partially-served",
+          coveredCharacterOffsets: [{ start: 0, end: 202 }],
+          fragments: [{
+            text: "b".repeat(200),
+            sourceIdentity: { fullFileCharacterOffsets: { start: 202, end: 402 } }
+          }],
+          intervalDecision: {
+            avoidedCharacters: 202,
+            emittedCharacters: 200
+          }
+        }
+      }
+    });
+  });
+
+  it("re-emits when an overlap boundary splits one normalized CRLF sequence", () => {
+    const rawText = `${"a".repeat(200)}\r\n${"b".repeat(200)}`;
+    const delivery = canonicalSourceDeliverySlice({
+      filePath: "src/intervals.ts",
+      sourceText: rawText,
+      fullFileCharacterOffsets: { start: 0, end: rawText.length }
+    });
+    const session = new McpSourceSession();
+    session.project(nodeSliceResponse(rawText, 0, 201), "node", "deduplicate");
+
+    const projected = session.project(response({
+      status: status(),
+      contentAvailability: "active-generation",
+      selection: { filePath: "src/intervals.ts" },
+      sourceIdentity: delivery.sourceIdentity,
+      lines: delivery.text.split("\n").map((line, index) => ({ line: index + 1, text: line }))
     }), "file", "deduplicate");
 
     expect(projected.structuredContent).toMatchObject({

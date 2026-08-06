@@ -1,10 +1,13 @@
 import {
   SOURCE_DELIVERY_IDENTITY_POLICY,
+  canonicalSourceDeliveryText,
   sourceDeliveryIdentityFromText,
-  type SourceDeliveryIdentity
+  sourceDeliveryOffsetMap,
+  type SourceDeliveryIdentity,
+  type SourceDeliveryOffsetMap
 } from "../application/source-delivery.js";
 
-export const MCP_SOURCE_SESSION_POLICY = "mcp-session-source-dedup-v3" as const;
+export const MCP_SOURCE_SESSION_POLICY = "mcp-session-source-dedup-v4" as const;
 export const MCP_SOURCE_SESSION_MODES = ["deduplicate", "full"] as const;
 export type McpSourceSessionMode = (typeof MCP_SOURCE_SESSION_MODES)[number];
 export type McpSourceTool = "node" | "investigate" | "file";
@@ -76,16 +79,17 @@ interface ProvenCoverage extends CharacterRange {
   readonly delivered: DeliveredSource;
 }
 
+interface MappedSlice {
+  readonly text: string;
+  readonly offsetMap: SourceDeliveryOffsetMap;
+}
+
 function boundedPositive(value: number | undefined, fallback: number): number {
   return Number.isSafeInteger(value) && (value ?? 0) > 0 ? value! : fallback;
 }
 
 function boundedNonNegative(value: number | undefined, fallback: number): number {
   return Number.isSafeInteger(value) && (value ?? -1) >= 0 ? value! : fallback;
-}
-
-function rangeLength(range: CharacterRange): number {
-  return range.end - range.start;
 }
 
 function mergeRanges(ranges: readonly CharacterRange[]): CharacterRange[] {
@@ -132,6 +136,7 @@ function sourceIdentity(
     value.canonicalization !== "line-endings-lf" || value.filePath !== expectedFilePath ||
     typeof value.contentSha256 !== "string" || !/^[0-9a-f]{64}$/u.test(value.contentSha256) ||
     !isRecord(value.fullFileCharacterOffsets) ||
+    !isRecord(value.offsetMap) ||
     !Number.isSafeInteger(value.fullFileCharacterOffsets.start) ||
     !Number.isSafeInteger(value.fullFileCharacterOffsets.end)) {
     return null;
@@ -143,11 +148,79 @@ function sourceIdentity(
       fullFileCharacterOffsets: {
         start: value.fullFileCharacterOffsets.start as number,
         end: value.fullFileCharacterOffsets.end as number
-      }
+      },
+      offsetMap: value.offsetMap as unknown as SourceDeliveryOffsetMap
     });
     return expected.id === value.id && expected.contentSha256 === value.contentSha256
       ? expected
       : null;
+  } catch {
+    return null;
+  }
+}
+
+function deliveredOffsetForSourceBoundary(
+  identity: SourceDeliveryIdentity,
+  sourceOffset: number
+): number | null {
+  for (const span of identity.offsetMap.spans) {
+    const source = span.fullFileCharacterOffsets;
+    const delivered = span.deliveredCharacterOffsets;
+    if (sourceOffset < source.start || sourceOffset > source.end) continue;
+    if (sourceOffset === source.start) return delivered.start;
+    if (sourceOffset === source.end) return delivered.end;
+    if (span.kind === "identity") {
+      return delivered.start + sourceOffset - source.start;
+    }
+    return null;
+  }
+  if (
+    identity.offsetMap.spans.length === 0 &&
+    sourceOffset === identity.fullFileCharacterOffsets.start
+  ) {
+    return 0;
+  }
+  return null;
+}
+
+function mappedSlice(
+  source: Pick<Candidate, "identity" | "text">,
+  range: CharacterRange
+): MappedSlice | null {
+  const sourceRange = source.identity.fullFileCharacterOffsets;
+  if (range.start < sourceRange.start || range.end > sourceRange.end || range.end < range.start) {
+    return null;
+  }
+  const deliveredStart = deliveredOffsetForSourceBoundary(source.identity, range.start);
+  const deliveredEnd = deliveredOffsetForSourceBoundary(source.identity, range.end);
+  if (deliveredStart === null || deliveredEnd === null || deliveredEnd < deliveredStart) return null;
+  const text = source.text.slice(deliveredStart, deliveredEnd);
+  const spans = source.identity.offsetMap.spans.flatMap((span) => {
+    const sourceStart = Math.max(range.start, span.fullFileCharacterOffsets.start);
+    const sourceEnd = Math.min(range.end, span.fullFileCharacterOffsets.end);
+    if (sourceEnd <= sourceStart) return [];
+    const spanDeliveredStart = deliveredOffsetForSourceBoundary(source.identity, sourceStart);
+    const spanDeliveredEnd = deliveredOffsetForSourceBoundary(source.identity, sourceEnd);
+    if (spanDeliveredStart === null || spanDeliveredEnd === null) return [null];
+    return [{
+      kind: span.kind,
+      deliveredCharacterOffsets: {
+        start: spanDeliveredStart - deliveredStart,
+        end: spanDeliveredEnd - deliveredStart
+      },
+      fullFileCharacterOffsets: { start: sourceStart, end: sourceEnd }
+    }];
+  });
+  if (spans.some((span) => span === null)) return null;
+  try {
+    return {
+      text,
+      offsetMap: sourceDeliveryOffsetMap({
+        text,
+        fullFileCharacterOffsets: range,
+        spans: spans as NonNullable<(typeof spans)[number]>[]
+      })
+    };
   } catch {
     return null;
   }
@@ -242,7 +315,7 @@ export class McpSourceSession {
         policy: MCP_SOURCE_SESSION_POLICY,
         scope: "mcp-server-session",
         identityPolicy: SOURCE_DELIVERY_IDENTITY_POLICY,
-        equality: "exact-overlapping-file-offsets-and-content",
+        equality: "verified-offset-map-and-canonical-content",
         mode,
         tool,
         projectPath: header.projectPath,
@@ -299,29 +372,44 @@ export class McpSourceSession {
     }
 
     const candidateRange = candidate.identity.fullFileCharacterOffsets;
-    if (rangeLength(candidateRange) !== candidate.text.length) {
+    const proof = this.provenCoverage(state, candidate);
+    const proven = proof.coverage;
+    const covered = mergeRanges(proven);
+    if (covered.length === 0) {
       return this.fullDelivery(
         state,
         candidate,
         tool,
         callIndex,
-        "offset-map-unavailable",
+        proof.offsetMapUnavailable ? "offset-map-unavailable" : "no-proven-overlap",
         []
       );
     }
-
-    const proven = this.provenCoverage(state, candidate);
-    const covered = mergeRanges(proven);
-    if (covered.length === 0) {
-      return this.fullDelivery(state, candidate, tool, callIndex, "no-proven-overlap", []);
+    const coveredSlices = covered.map((range) => mappedSlice(candidate, range));
+    if (coveredSlices.some((slice) => slice === null)) {
+      return this.fullDelivery(state, candidate, tool, callIndex, "offset-map-unavailable", covered);
     }
-    const coveredCharacters = covered.reduce((total, range) => total + rangeLength(range), 0);
-    if (coveredCharacters === candidate.text.length) {
+    const coveredCharacters = coveredSlices.reduce(
+      (total, slice) => total + slice!.text.length,
+      0
+    );
+    if (
+      covered.length === 1 &&
+      covered[0]!.start === candidateRange.start &&
+      covered[0]!.end === candidateRange.end
+    ) {
       return this.referenceDelivery(candidate, proven.map((item) => item.delivered), covered);
     }
 
     const uncovered = subtractRanges(candidateRange, covered);
-    const emittedCharacters = uncovered.reduce((total, range) => total + rangeLength(range), 0);
+    const uncoveredSlices = uncovered.map((range) => mappedSlice(candidate, range));
+    if (uncoveredSlices.some((slice) => slice === null)) {
+      return this.fullDelivery(state, candidate, tool, callIndex, "offset-map-unavailable", covered);
+    }
+    const emittedCharacters = uncoveredSlices.reduce(
+      (total, slice) => total + slice!.text.length,
+      0
+    );
     if (coveredCharacters < this.minimumAvoidedCharacters) {
       return this.fullDelivery(
         state,
@@ -354,12 +442,17 @@ export class McpSourceSession {
     }
 
     let stateTruncated = false;
-    const fragments = uncovered.map((range) => {
-      const text = candidate.text.slice(range.start - candidateRange.start, range.end - candidateRange.start);
+    const fragments = uncovered.map((range, index) => {
+      const slice = uncoveredSlices[index]!;
+      if (slice === null) {
+        throw new Error("Verified uncovered source slice disappeared before projection.");
+      }
+      const text = slice.text;
       const identity = sourceDeliveryIdentityFromText({
         filePath: candidate.identity.filePath,
         text,
-        fullFileCharacterOffsets: range
+        fullFileCharacterOffsets: range,
+        offsetMap: slice.offsetMap
       });
       stateTruncated ||= this.remember(state, { identity, text, tool }, callIndex);
       return { text, sourceIdentity: identity };
@@ -396,22 +489,29 @@ export class McpSourceSession {
   private provenCoverage(
     state: ProjectSessionState,
     candidate: Candidate
-  ): ProvenCoverage[] {
+  ): { readonly coverage: ProvenCoverage[]; readonly offsetMapUnavailable: boolean } {
     const candidateRange = candidate.identity.fullFileCharacterOffsets;
     const coverage: ProvenCoverage[] = [];
+    let offsetMapUnavailable = false;
     for (const delivered of state.sources.values()) {
       if (delivered.identity.filePath !== candidate.identity.filePath) continue;
       const deliveredRange = delivered.identity.fullFileCharacterOffsets;
-      if (rangeLength(deliveredRange) !== delivered.text.length) continue;
       const start = Math.max(candidateRange.start, deliveredRange.start);
       const end = Math.min(candidateRange.end, deliveredRange.end);
       if (end <= start) continue;
-      const candidateOverlap = candidate.text.slice(start - candidateRange.start, end - candidateRange.start);
-      const deliveredOverlap = delivered.text.slice(start - deliveredRange.start, end - deliveredRange.start);
-      if (candidateOverlap !== deliveredOverlap) continue;
+      const candidateOverlap = mappedSlice(candidate, { start, end });
+      const deliveredOverlap = mappedSlice(delivered, { start, end });
+      if (candidateOverlap === null || deliveredOverlap === null) {
+        offsetMapUnavailable = true;
+        continue;
+      }
+      if (
+        canonicalSourceDeliveryText(candidateOverlap.text) !==
+        canonicalSourceDeliveryText(deliveredOverlap.text)
+      ) continue;
       coverage.push({ start, end, delivered });
     }
-    return coverage;
+    return { coverage, offsetMapUnavailable };
   }
 
   private referenceDelivery(

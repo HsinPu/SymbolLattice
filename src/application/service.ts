@@ -85,7 +85,10 @@ import type {
 } from "../ports/index.js";
 import { ProjectConfigurationError } from "../domain/configuration.js";
 import { SymbolLatticeError } from "./errors.js";
-import { sourceDeliveryIdentity } from "./source-delivery.js";
+import {
+  canonicalSourceDeliverySlice,
+  sourceDeliveryIdentity
+} from "./source-delivery.js";
 import {
   buildFileLanguageGroups,
   buildFileTree,
@@ -1986,7 +1989,7 @@ export class SymbolLatticeService {
       }))
       .sort((left, right) => compareText(left.filePath, right.filePath));
 
-    const sourceLines = document.sourceText.split(/\r\n|\r|\n/u);
+    const sourceLines = document.sourceText.split(/\r\n|\r|\n|\u2028|\u2029/u);
     const contentAvailability = options.symbolsOnly === true
       ? "symbols-only" as const
       : document.language === "yaml" || document.language === "properties"
@@ -2019,11 +2022,15 @@ export class SymbolLatticeService {
           if (startOffset === null || endOffset === null) {
             throw new Error(`Persisted file-view line offsets are invalid for ${resolvedFilePath}.`);
           }
-          return sourceDeliveryIdentity({
+          const delivery = canonicalSourceDeliverySlice({
             filePath: resolvedFilePath,
             sourceText: document.sourceText,
             fullFileCharacterOffsets: { start: startOffset, end: endOffset }
           });
+          if (delivery.text !== lines.map((line) => line.text).join("\n")) {
+            throw new Error(`Persisted file-view delivery text is inconsistent for ${resolvedFilePath}.`);
+          }
+          return delivery.sourceIdentity;
         })();
 
     return {

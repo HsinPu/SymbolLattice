@@ -30,7 +30,11 @@ import {
   McpSourceSession,
   type McpSourceSessionMode
 } from "./source-session.js";
-import { SOURCE_DELIVERY_IDENTITY_POLICY } from "../application/source-delivery.js";
+import {
+  SOURCE_DELIVERY_IDENTITY_POLICY,
+  SOURCE_DELIVERY_MAXIMUM_OFFSET_SPANS,
+  SOURCE_DELIVERY_OFFSET_MAP_POLICY
+} from "../application/source-delivery.js";
 import {
   MAX_AUTO_SYNC_DIAGNOSTIC_JOURNAL_EVENTS,
   type AutoSyncDiagnosticJournalOptions,
@@ -692,6 +696,24 @@ const exploreOutputSchema = z
   })
   .passthrough();
 
+const sourceDeliveryOffsetMapOutputSchema = z.object({
+  policy: z.literal(SOURCE_DELIVERY_OFFSET_MAP_POLICY),
+  deliveredTextLength: z.number().int().nonnegative(),
+  sourceTextLength: z.number().int().nonnegative(),
+  spans: z.array(z.object({
+    kind: z.enum(["identity", "normalized-line-ending"]),
+    deliveredCharacterOffsets: z.object({
+      start: z.number().int().nonnegative(),
+      end: z.number().int().nonnegative()
+    }),
+    fullFileCharacterOffsets: z.object({
+      start: z.number().int().nonnegative(),
+      end: z.number().int().nonnegative()
+    })
+  })).max(SOURCE_DELIVERY_MAXIMUM_OFFSET_SPANS),
+  mapSha256: z.string().regex(/^[0-9a-f]{64}$/u)
+});
+
 const sourceDeliveryIdentityOutputSchema = z.object({
   policy: z.literal(SOURCE_DELIVERY_IDENTITY_POLICY),
   id: z.string().regex(/^source:[0-9a-f]{64}$/u),
@@ -701,7 +723,8 @@ const sourceDeliveryIdentityOutputSchema = z.object({
     start: z.number().int().nonnegative(),
     end: z.number().int().nonnegative()
   }),
-  contentSha256: z.string().regex(/^[0-9a-f]{64}$/u)
+  contentSha256: z.string().regex(/^[0-9a-f]{64}$/u),
+  offsetMap: sourceDeliveryOffsetMapOutputSchema
 });
 
 const sourceCharacterRangeOutputSchema = z.object({
@@ -771,7 +794,7 @@ const sourceSessionReceiptOutputSchema = z.object({
   policy: z.literal(MCP_SOURCE_SESSION_POLICY),
   scope: z.literal("mcp-server-session"),
   identityPolicy: z.literal(SOURCE_DELIVERY_IDENTITY_POLICY),
-  equality: z.literal("exact-overlapping-file-offsets-and-content"),
+  equality: z.literal("verified-offset-map-and-canonical-content"),
   mode: z.enum(MCP_SOURCE_SESSION_MODES),
   tool: z.enum(["node", "investigate", "file"]),
   projectPath: z.string().min(1),
