@@ -1628,8 +1628,8 @@ export function createProgram(
       )
     )
     .option(
-      "--source-render-mode <adaptive|prefix|focused|signature>",
-      "Render full declarations when possible, or use exact persisted prefix, lexical-focus, or proven signature slices",
+      "--source-render-mode <adaptive|prefix|focused|signature|multi>",
+      "Render exact persisted full, prefix, lexical-focus, signature, or bounded signature-plus-focus segments",
       parseInvestigateSourceRenderMode
     )
     .option(

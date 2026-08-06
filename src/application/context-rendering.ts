@@ -1,24 +1,58 @@
+import { createHash } from "node:crypto";
+
 import type { ArtifactLanguage, SourcePosition, SourceRange } from "../domain/types.js";
 
 export const INVESTIGATION_SOURCE_RENDER_POLICY = "evidence-slice-v1" as const;
+export const INVESTIGATION_SOURCE_SEGMENT_POLICY = "evidence-source-segment-v1" as const;
+export const INVESTIGATION_SOURCE_MAXIMUM_SEGMENTS = 2 as const;
 
 export const INVESTIGATE_SOURCE_RENDER_MODES = [
   "adaptive",
   "prefix",
   "focused",
-  "signature"
+  "signature",
+  "multi"
 ] as const;
 
 export type InvestigateSourceRenderMode = (typeof INVESTIGATE_SOURCE_RENDER_MODES)[number];
 
-export type InvestigationSourceRenderMode = "full" | "focused" | "signature" | "prefix";
+export type InvestigationSourceRenderMode = "full" | "focused" | "signature" | "prefix" | "multi";
+
+export type InvestigationSourceSegmentRole = "full" | "prefix" | "signature" | "focus";
+
+export interface InvestigationSourceSegment {
+  readonly id: string;
+  readonly policy: typeof INVESTIGATION_SOURCE_SEGMENT_POLICY;
+  readonly roles: readonly InvestigationSourceSegmentRole[];
+  readonly text: string;
+  readonly contiguous: true;
+  readonly lineAligned: boolean;
+  readonly renderedRange: SourceRange;
+  readonly sourceCharacterOffsets: {
+    readonly start: number;
+    readonly end: number;
+  };
+  readonly contentSha256: string;
+}
+
+export type InvestigationSourceSegmentReceipt = Omit<InvestigationSourceSegment, "text">;
+
+export interface InvestigationSourceGapReceipt {
+  readonly fromSegmentId: string;
+  readonly toSegmentId: string;
+  readonly sourceCharacterOffsets: {
+    readonly start: number;
+    readonly end: number;
+  };
+  readonly omittedCharacters: number;
+}
 
 export interface InvestigationSourceRenderReceipt {
   readonly policy: typeof INVESTIGATION_SOURCE_RENDER_POLICY;
   readonly requestedMode: InvestigateSourceRenderMode;
   readonly mode: InvestigationSourceRenderMode;
   readonly complete: boolean;
-  readonly contiguous: true;
+  readonly contiguous: boolean;
   readonly lineAligned: boolean;
   readonly emittedCharacters: number;
   readonly sourceCharacterOffsets: {
@@ -26,7 +60,21 @@ export interface InvestigationSourceRenderReceipt {
     readonly end: number;
   };
   readonly omittedCharactersBefore: number;
+  readonly omittedCharactersBetween: number;
   readonly omittedCharactersAfter: number;
+  readonly primarySegmentId: string;
+  readonly segmentCount: number;
+  readonly segments: readonly InvestigationSourceSegmentReceipt[];
+  readonly multi: {
+    readonly requested: boolean;
+    readonly emitted: boolean;
+    readonly maximumSegments: typeof INVESTIGATION_SOURCE_MAXIMUM_SEGMENTS;
+    readonly fallbackReason: string | null;
+  };
+  readonly navigation: {
+    readonly synthesizedText: null;
+    readonly gaps: readonly InvestigationSourceGapReceipt[];
+  };
   readonly focus: {
     readonly available: boolean;
     readonly included: boolean;
@@ -42,6 +90,8 @@ export interface InvestigationSourceRenderReceipt {
 export interface InvestigationRenderedSource {
   readonly text: string;
   readonly renderedRange: SourceRange;
+  readonly segments: readonly InvestigationSourceSegment[];
+  readonly primarySegmentIndex: number;
   readonly receipt: InvestigationSourceRenderReceipt;
 }
 
@@ -52,6 +102,8 @@ export interface RenderInvestigationDeclarationInput {
   readonly lexicalFocusRange: SourceRange | null;
   readonly language: ArtifactLanguage;
   readonly requestedMode: InvestigateSourceRenderMode;
+  readonly filePath: string;
+  readonly declarationReference: string;
 }
 
 interface SourceCoordinates {
@@ -75,6 +127,12 @@ interface SliceChoice {
   readonly end: number;
   readonly mode: InvestigationSourceRenderMode;
   readonly lineAligned: boolean;
+  readonly roles: readonly InvestigationSourceSegmentRole[];
+}
+
+interface MultiSliceChoice {
+  readonly choices: readonly SliceChoice[] | null;
+  readonly fallbackReason: string | null;
 }
 
 const BRACE_SIGNATURE_LANGUAGES = new Set<ArtifactLanguage>([
@@ -406,7 +464,7 @@ function focusedSlice(
         break;
       }
     }
-    return { start, end, mode: "focused", lineAligned: true };
+    return { start, end, mode: "focused", lineAligned: true, roles: ["focus"] };
   }
 
   const focusLength = focus.end - focus.start;
@@ -419,7 +477,7 @@ function focusedSlice(
     start = focus.start;
     end = Math.min(sourceText.length, start + allocation);
   }
-  return { start, end, mode: "focused", lineAligned: false };
+  return { start, end, mode: "focused", lineAligned: false, roles: ["focus"] };
 }
 
 function prefixSlice(sourceText: string, allocation: number): SliceChoice {
@@ -427,8 +485,125 @@ function prefixSlice(sourceText: string, allocation: number): SliceChoice {
     start: 0,
     end: Math.min(sourceText.length, allocation),
     mode: "prefix",
-    lineAligned: false
+    lineAligned: false,
+    roles: ["prefix"]
   };
+}
+
+function multiSlice(
+  sourceText: string,
+  allocation: number,
+  focus: FocusOffsets | null,
+  signature: SignatureBoundary,
+  coordinates: SourceCoordinates
+): MultiSliceChoice {
+  if (focus === null && signature.end === null) {
+    return { choices: null, fallbackReason: "multi-evidence-unavailable" };
+  }
+  if (focus === null) {
+    return { choices: null, fallbackReason: "multi-focus-unavailable" };
+  }
+  if (signature.end === null) {
+    return { choices: null, fallbackReason: "multi-signature-unavailable" };
+  }
+
+  const focusLength = Math.max(1, focus.end - focus.start);
+  if (signature.end + focusLength > allocation) {
+    return { choices: null, fallbackReason: "multi-evidence-exceeds-allocation" };
+  }
+  const focused = focusedSlice(
+    sourceText,
+    allocation - signature.end,
+    focus,
+    coordinates
+  );
+  if (focused.start <= signature.end) {
+    const mergedEnd = Math.max(signature.end, focused.end);
+    if (mergedEnd <= allocation) {
+      return {
+        choices: [{
+          start: 0,
+          end: mergedEnd,
+          mode: "focused",
+          lineAligned: focused.lineAligned,
+          roles: ["signature", "focus"]
+        }],
+        fallbackReason: "segments-overlap-or-touch"
+      };
+    }
+    return { choices: null, fallbackReason: "multi-evidence-exceeds-allocation" };
+  }
+  return {
+    choices: [
+      {
+        start: 0,
+        end: signature.end,
+        mode: "signature",
+        lineAligned: false,
+        roles: ["signature"]
+      },
+      focused
+    ],
+    fallbackReason: null
+  };
+}
+
+function segmentHash(value: string): string {
+  return createHash("sha256").update(value, "utf8").digest("hex");
+}
+
+function sourceSegment(
+  choice: SliceChoice,
+  sourceText: string,
+  declarationRange: SourceRange,
+  coordinates: SourceCoordinates,
+  filePath: string,
+  declarationReference: string
+): InvestigationSourceSegment {
+  const text = sourceText.slice(choice.start, choice.end);
+  const contentSha256 = segmentHash(text);
+  const identity = [
+    INVESTIGATION_SOURCE_SEGMENT_POLICY,
+    filePath,
+    declarationReference,
+    String(choice.start),
+    String(choice.end),
+    contentSha256
+  ].join("\0");
+  return {
+    id: `segment:${segmentHash(identity)}`,
+    policy: INVESTIGATION_SOURCE_SEGMENT_POLICY,
+    roles: [...choice.roles],
+    text,
+    contiguous: true,
+    lineAligned: choice.lineAligned,
+    renderedRange: {
+      start: offsetToPosition(choice.start, declarationRange, coordinates),
+      end: offsetToPosition(choice.end, declarationRange, coordinates)
+    },
+    sourceCharacterOffsets: { start: choice.start, end: choice.end },
+    contentSha256
+  };
+}
+
+function sourceGaps(segments: readonly InvestigationSourceSegment[]): readonly InvestigationSourceGapReceipt[] {
+  const gaps: InvestigationSourceGapReceipt[] = [];
+  for (let index = 1; index < segments.length; index += 1) {
+    const previous = segments[index - 1]!;
+    const current = segments[index]!;
+    const start = previous.sourceCharacterOffsets.end;
+    const end = current.sourceCharacterOffsets.start;
+    if (end <= start) {
+      continue;
+    }
+    gaps.push({
+      fromSegmentId: previous.id,
+      toSegmentId: current.id,
+      sourceCharacterOffsets: { start, end },
+      omittedCharacters: end - start
+    });
+  }
+  return gaps;
 }
 
 export function renderInvestigationDeclaration(
@@ -438,6 +613,9 @@ export function renderInvestigationDeclaration(
     throw new Error("Invalid allocated characters");
   }
   validateDeclarationRange(input.declarationRange);
+  if (input.filePath.length === 0 || input.declarationReference.length === 0) {
+    throw new Error("Investigation source rendering requires a file path and declaration reference");
+  }
   if (!INVESTIGATE_SOURCE_RENDER_MODES.includes(input.requestedMode)) {
     throw new Error(`Invalid investigation source render mode: ${String(input.requestedMode)}`);
   }
@@ -445,61 +623,136 @@ export function renderInvestigationDeclaration(
   const coordinates = sourceCoordinates(input.sourceText);
   const focus = focusOffsets(input.lexicalFocusRange, input.declarationRange, coordinates);
   const signature = signatureBoundary(input.sourceText, input.language);
-  let choice: SliceChoice;
+  let choices: readonly SliceChoice[];
+  let multiFallbackReason: string | null = "not-requested";
 
   if (
     input.requestedMode !== "signature" &&
+    input.requestedMode !== "multi" &&
     input.sourceText.length <= input.allocatedCharacters
   ) {
-    choice = {
+    choices = [{
       start: 0,
       end: input.sourceText.length,
       mode: "full",
-      lineAligned: true
-    };
+      lineAligned: true,
+      roles: ["full"]
+    }];
   } else if (input.requestedMode === "signature") {
-    choice = signature.end !== null && signature.end <= input.allocatedCharacters
-      ? { start: 0, end: signature.end, mode: "signature", lineAligned: false }
-      : prefixSlice(input.sourceText, input.allocatedCharacters);
+    choices = [signature.end !== null && signature.end <= input.allocatedCharacters
+      ? {
+          start: 0,
+          end: signature.end,
+          mode: "signature",
+          lineAligned: false,
+          roles: ["signature"]
+        }
+      : prefixSlice(input.sourceText, input.allocatedCharacters)];
+  } else if (input.requestedMode === "multi") {
+    const multi = multiSlice(
+      input.sourceText,
+      input.allocatedCharacters,
+      focus,
+      signature,
+      coordinates
+    );
+    multiFallbackReason = multi.fallbackReason;
+    if (multi.choices !== null && multi.choices.length > 1) {
+      choices = multi.choices.map((choice) => ({ ...choice, mode: "multi" as const }));
+    } else if (multi.choices !== null) {
+      choices = multi.choices;
+    } else if (focus !== null) {
+      choices = [focusedSlice(input.sourceText, input.allocatedCharacters, focus, coordinates)];
+    } else if (signature.end !== null && signature.end <= input.allocatedCharacters) {
+      choices = [{
+        start: 0,
+        end: signature.end,
+        mode: "signature",
+        lineAligned: false,
+        roles: ["signature"]
+      }];
+    } else {
+      choices = [prefixSlice(input.sourceText, input.allocatedCharacters)];
+    }
   } else if (
     (input.requestedMode === "adaptive" || input.requestedMode === "focused") &&
     focus !== null
   ) {
-    choice = focusedSlice(input.sourceText, input.allocatedCharacters, focus, coordinates);
+    choices = [focusedSlice(input.sourceText, input.allocatedCharacters, focus, coordinates)];
   } else if (
     input.requestedMode === "adaptive" &&
     signature.end !== null &&
     signature.end <= input.allocatedCharacters
   ) {
-    choice = { start: 0, end: signature.end, mode: "signature", lineAligned: false };
+    choices = [{
+      start: 0,
+      end: signature.end,
+      mode: "signature",
+      lineAligned: false,
+      roles: ["signature"]
+    }];
   } else {
-    choice = prefixSlice(input.sourceText, input.allocatedCharacters);
+    choices = [prefixSlice(input.sourceText, input.allocatedCharacters)];
   }
 
-  const text = input.sourceText.slice(choice.start, choice.end);
-  const focusIncluded = focus !== null && choice.start <= focus.start && choice.end >= focus.end;
+  const segments = choices.map((choice) => sourceSegment(
+    choice,
+    input.sourceText,
+    input.declarationRange,
+    coordinates,
+    input.filePath,
+    input.declarationReference
+  ));
+  const focusSegmentIndex = segments.findIndex((segment) => segment.roles.includes("focus"));
+  const primarySegmentIndex = focusSegmentIndex === -1 ? 0 : focusSegmentIndex;
+  const primary = segments[primarySegmentIndex]!;
+  const focusIncluded = focus !== null && segments.some(
+    (segment) =>
+      segment.sourceCharacterOffsets.start <= focus.start &&
+      segment.sourceCharacterOffsets.end >= focus.end
+  );
   const signatureFallbackReason = signature.fallbackReason ?? (
     signature.end !== null && signature.end > input.allocatedCharacters
       ? "signature-exceeds-allocation"
       : null
   );
+  const gaps = sourceGaps(segments);
+  const emittedCharacters = segments.reduce((total, segment) => total + segment.text.length, 0);
+  const multiEmitted = segments.length > 1;
   return {
-    text,
-    renderedRange: {
-      start: offsetToPosition(choice.start, input.declarationRange, coordinates),
-      end: offsetToPosition(choice.end, input.declarationRange, coordinates)
-    },
+    text: primary.text,
+    renderedRange: primary.renderedRange,
+    segments,
+    primarySegmentIndex,
     receipt: {
       policy: INVESTIGATION_SOURCE_RENDER_POLICY,
       requestedMode: input.requestedMode,
-      mode: choice.mode,
-      complete: choice.start === 0 && choice.end === input.sourceText.length,
-      contiguous: true,
-      lineAligned: choice.lineAligned,
-      emittedCharacters: text.length,
-      sourceCharacterOffsets: { start: choice.start, end: choice.end },
-      omittedCharactersBefore: choice.start,
-      omittedCharactersAfter: input.sourceText.length - choice.end,
+      mode: multiEmitted ? "multi" : choices[0]!.mode,
+      complete:
+        segments.length === 1 &&
+        primary.sourceCharacterOffsets.start === 0 &&
+        primary.sourceCharacterOffsets.end === input.sourceText.length,
+      contiguous: segments.length === 1,
+      lineAligned: segments.every((segment) => segment.lineAligned),
+      emittedCharacters,
+      sourceCharacterOffsets: primary.sourceCharacterOffsets,
+      omittedCharactersBefore: segments[0]!.sourceCharacterOffsets.start,
+      omittedCharactersBetween: gaps.reduce((total, gap) => total + gap.omittedCharacters, 0),
+      omittedCharactersAfter:
+        input.sourceText.length - segments[segments.length - 1]!.sourceCharacterOffsets.end,
+      primarySegmentId: primary.id,
+      segmentCount: segments.length,
+      segments: segments.map(({ text: _text, ...receipt }) => receipt),
+      multi: {
+        requested: input.requestedMode === "multi",
+        emitted: multiEmitted,
+        maximumSegments: INVESTIGATION_SOURCE_MAXIMUM_SEGMENTS,
+        fallbackReason: multiEmitted ? null : multiFallbackReason
+      },
+      navigation: {
+        synthesizedText: null,
+        gaps
+      },
       focus: {
         available: focus !== null,
         included: focusIncluded,

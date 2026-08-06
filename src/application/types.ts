@@ -982,7 +982,7 @@ export interface InvestigationDeclaration {
   readonly render: import("./context-rendering.js").InvestigationSourceRenderReceipt | null;
 }
 
-/** Exact contiguous slice and generation-bound coordinates rendered for an investigation. */
+/** Exact generation-bound source plan with a backwards-compatible primary segment. */
 export type InvestigationRenderedNodeSource = NodeSource & {
   readonly renderedRange: SourceRange;
   /** UTF-16 offsets inside the bounded persisted declaration text. */
@@ -990,6 +990,10 @@ export type InvestigationRenderedNodeSource = NodeSource & {
     readonly start: number;
     readonly end: number;
   };
+  /** Exact, independently hashable slices from the same bounded declaration. */
+  readonly renderedSegments: readonly import("./context-rendering.js").InvestigationSourceSegment[];
+  /** Segment mirrored by the backwards-compatible `text` and rendered range fields. */
+  readonly primarySegmentIndex: number;
 };
 
 export interface InvestigationDeclarationAllocation {

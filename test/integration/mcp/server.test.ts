@@ -2280,6 +2280,15 @@ describe("SymbolLattice MCP server", () => {
       "symbol_lattice_explore",
       "symbol_lattice_investigate"
     ]);
+    expect(tools.tools.find((tool) => tool.name === "symbol_lattice_investigate")).toMatchObject({
+      inputSchema: {
+        properties: {
+          sourceRenderMode: {
+            enum: ["adaptive", "prefix", "focused", "signature", "multi"]
+          }
+        }
+      }
+    });
 
     const result = await client.callTool({
       name: "symbol_lattice_investigate",
@@ -2289,7 +2298,7 @@ describe("SymbolLattice MCP server", () => {
         searchLimit: 4,
         symbolLimit: 2,
         sourceCharacterBudget: 4096,
-        sourceRenderMode: "signature",
+        sourceRenderMode: "multi",
         ranking: "topology",
         path: "src/",
         language: "typescript",
@@ -2336,7 +2345,7 @@ describe("SymbolLattice MCP server", () => {
           searchLimit: 4,
           symbolLimit: 2,
           sourceCharacterBudget: 4096,
-          sourceRenderMode: "signature",
+          sourceRenderMode: "multi",
           ranking: "topology",
           pathPrefix: "src/",
           language: "typescript",

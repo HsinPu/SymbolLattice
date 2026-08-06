@@ -223,4 +223,60 @@ describe("generation-bound proportional investigation context", () => {
     );
   });
 
+  it("publishes exact multi-segment source and accounts for every emitted segment", async () => {
+    const projectPath = await createProject({
+      "src/multi.ts": [
+        "export function multiSegmentEvidence(input: string): string {",
+        ...Array.from({ length: 90 }, (_value, index) => `  const padding${index} = input;`),
+        '  const answer = "needleAcrossTheGap";',
+        "  return answer;",
+        "}",
+        ""
+      ].join("\n")
+    });
+    const service = createService();
+    await service.init({ projectPath });
+
+    const first = await service.investigate(projectPath, "needleAcrossTheGap", {
+      sourceCharacterBudget: 2_048,
+      sourceRenderMode: "multi"
+    });
+    const second = await service.investigate(projectPath, "needleAcrossTheGap", {
+      sourceCharacterBudget: 2_048,
+      sourceRenderMode: "multi"
+    });
+    const declaration = first.declarations[0];
+    const segments = declaration?.source?.renderedSegments ?? [];
+
+    expect(declaration?.render).toMatchObject({
+      requestedMode: "multi",
+      mode: "multi",
+      contiguous: false,
+      segmentCount: 2,
+      primarySegmentId: segments[1]?.id,
+      multi: { requested: true, emitted: true, maximumSegments: 2, fallbackReason: null },
+      navigation: { synthesizedText: null }
+    });
+    expect(segments).toHaveLength(2);
+    expect(segments[0]?.roles).toEqual(["signature"]);
+    expect(segments[1]?.roles).toEqual(["focus"]);
+    expect(declaration?.source?.text).toBe(segments[1]?.text);
+    expect(declaration?.source?.primarySegmentIndex).toBe(1);
+    expect(declaration?.allocation?.emittedCharacters).toBe(
+      segments.reduce((total, segment) => total + segment.text.length, 0)
+    );
+    expect(declaration?.allocation?.emittedCharacters).toBeLessThanOrEqual(
+      declaration?.allocation?.allocatedCharacters ?? 0
+    );
+    expect(first.sourceAllocation.summary.emittedCharacters).toBe(
+      first.declarations.reduce(
+        (total, item) => total + (item.allocation?.emittedCharacters ?? 0),
+        0
+      )
+    );
+    expect(segments.map((segment) => segment.id)).toEqual(
+      second.declarations[0]?.source?.renderedSegments.map((segment) => segment.id)
+    );
+  });
+
 });

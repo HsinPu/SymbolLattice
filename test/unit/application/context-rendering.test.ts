@@ -22,7 +22,9 @@ describe("evidence-preserving investigation source rendering", () => {
       },
       lexicalFocusRange: { start: { line: 3, column: 17 }, end: { line: 3, column: 23 } },
       language: "typescript",
-      requestedMode: "adaptive"
+      requestedMode: "adaptive",
+      filePath: "src/answer.ts",
+      declarationReference: "answer"
     });
 
     expect(result.text).toBe(sourceText);
@@ -59,7 +61,9 @@ describe("evidence-preserving investigation source rendering", () => {
       declarationRange,
       lexicalFocusRange: { start: { line: 13, column: 19 }, end: { line: 13, column: 33 } },
       language: "typescript",
-      requestedMode: "adaptive"
+      requestedMode: "adaptive",
+      filePath: "src/compute.ts",
+      declarationReference: "compute"
     });
 
     expect(result.receipt).toMatchObject({
@@ -79,6 +83,186 @@ describe("evidence-preserving investigation source rendering", () => {
     )).toBe(result.text);
   });
 
+  it("renders signature and lexical focus as separately verifiable source segments", () => {
+    const sourceText = [
+      "export function compute(value: string): string {",
+      ...Array.from({ length: 16 }, (_value, index) => `  const padding${index} = value;`),
+      '  const answer = "needleEvidence";',
+      "  return answer;",
+      "}"
+    ].join("\n");
+    const input = {
+      sourceText,
+      allocatedCharacters: 120,
+      declarationRange: {
+        start: { line: 30, column: 1 },
+        end: { line: 49, column: 2 }
+      },
+      lexicalFocusRange: { start: { line: 47, column: 19 }, end: { line: 47, column: 33 } },
+      language: "typescript" as const,
+      requestedMode: "multi" as const,
+      filePath: "src/compute.ts",
+      declarationReference: "compute"
+    };
+
+    const first = renderInvestigationDeclaration(input);
+    const second = renderInvestigationDeclaration(input);
+
+    expect(first.receipt).toMatchObject({
+      requestedMode: "multi",
+      mode: "multi",
+      complete: false,
+      contiguous: false,
+      emittedCharacters: first.segments.reduce((total, segment) => total + segment.text.length, 0),
+      primarySegmentId: first.segments[1]?.id,
+      multi: {
+        requested: true,
+        emitted: true,
+        maximumSegments: 2,
+        fallbackReason: null
+      },
+      navigation: {
+        synthesizedText: null
+      }
+    });
+    expect(first.segments).toHaveLength(2);
+    expect(first.segments.map((segment) => segment.roles)).toEqual([
+      ["signature"],
+      ["focus"]
+    ]);
+    expect(first.text).toBe(first.segments[1]?.text);
+    expect(first.segments[1]?.text).toContain("needleEvidence");
+    expect(first.receipt.navigation.gaps).toHaveLength(1);
+    expect(first.receipt.navigation.gaps[0]).toMatchObject({
+      fromSegmentId: first.segments[0]?.id,
+      toSegmentId: first.segments[1]?.id
+    });
+    expect(first.receipt.navigation.gaps[0]?.omittedCharacters).toBeGreaterThan(0);
+    expect(first.segments.map((segment) => segment.id)).toEqual(
+      second.segments.map((segment) => segment.id)
+    );
+    for (const segment of first.segments) {
+      expect(segment.contiguous).toBe(true);
+      expect(sourceText.slice(
+        segment.sourceCharacterOffsets.start,
+        segment.sourceCharacterOffsets.end
+      )).toBe(segment.text);
+      expect(segment.contentSha256).toMatch(/^[0-9a-f]{64}$/u);
+    }
+  });
+
+  it("changes segment identity when the persisted source bytes change", () => {
+    const base = {
+      allocatedCharacters: 90,
+      declarationRange: {
+        start: { line: 1, column: 1 },
+        end: { line: 8, column: 2 }
+      },
+      lexicalFocusRange: { start: { line: 7, column: 11 }, end: { line: 7, column: 17 } },
+      language: "typescript" as const,
+      requestedMode: "multi" as const,
+      filePath: "src/value.ts",
+      declarationReference: "value"
+    };
+    const original = renderInvestigationDeclaration({
+      ...base,
+      sourceText: [
+        "export function value(): string {",
+        "  const a = 1;",
+        "  const b = 2;",
+        "  const c = 3;",
+        "  const d = 4;",
+        "  const e = 5;",
+        '  return "needle";',
+        "}"
+      ].join("\n")
+    });
+    const edited = renderInvestigationDeclaration({
+      ...base,
+      sourceText: [
+        "export function value(): string {",
+        "  const a = 1;",
+        "  const b = 2;",
+        "  const c = 3;",
+        "  const d = 4;",
+        "  const e = 5;",
+        '  return "needlf";',
+        "}"
+      ].join("\n")
+    });
+
+    expect(original.segments.map((segment) => segment.id)).not.toEqual(
+      edited.segments.map((segment) => segment.id)
+    );
+  });
+
+  it("falls back to one exact focus segment when both proofs exceed the allocation", () => {
+    const sourceText = [
+      "export function compute(value: string): string {",
+      ...Array.from({ length: 10 }, (_value, index) => `  const padding${index} = value;`),
+      '  return "needleEvidence";',
+      "}"
+    ].join("\n");
+    const result = renderInvestigationDeclaration({
+      sourceText,
+      allocatedCharacters: 55,
+      declarationRange: {
+        start: { line: 1, column: 1 },
+        end: { line: 13, column: 2 }
+      },
+      lexicalFocusRange: { start: { line: 12, column: 11 }, end: { line: 12, column: 25 } },
+      language: "typescript",
+      requestedMode: "multi",
+      filePath: "src/compute.ts",
+      declarationReference: "compute"
+    });
+
+    expect(result.segments).toHaveLength(1);
+    expect(result.text).toContain("needleEvidence");
+    expect(result.receipt).toMatchObject({
+      mode: "focused",
+      contiguous: true,
+      segmentCount: 1,
+      multi: {
+        requested: true,
+        emitted: false,
+        maximumSegments: 2,
+        fallbackReason: "multi-evidence-exceeds-allocation"
+      },
+      navigation: { synthesizedText: null, gaps: [] }
+    });
+  });
+
+  it("falls back to one exact focus segment when the language has no proven signature", () => {
+    const sourceText = "first line\nneedleEvidence\nlast line";
+    const result = renderInvestigationDeclaration({
+      sourceText,
+      allocatedCharacters: 24,
+      declarationRange: {
+        start: { line: 1, column: 1 },
+        end: { line: 3, column: 10 }
+      },
+      lexicalFocusRange: { start: { line: 2, column: 1 }, end: { line: 2, column: 15 } },
+      language: "properties",
+      requestedMode: "multi",
+      filePath: "config/example.properties",
+      declarationReference: "example"
+    });
+
+    expect(result.segments).toHaveLength(1);
+    expect(result.text).toContain("needleEvidence");
+    expect(result.receipt.multi).toEqual({
+      requested: true,
+      emitted: false,
+      maximumSegments: 2,
+      fallbackReason: "multi-signature-unavailable"
+    });
+    expect(result.receipt.signature).toMatchObject({
+      proven: false,
+      fallbackReason: "language-signature-boundary-unsupported"
+    });
+  });
+
   it("extracts a proven brace-language signature without trusting braces in literals", () => {
     const sourceText = [
       "export function compute(",
@@ -96,7 +280,9 @@ describe("evidence-preserving investigation source rendering", () => {
       },
       lexicalFocusRange: null,
       language: "typescript",
-      requestedMode: "signature"
+      requestedMode: "signature",
+      filePath: "src/compute.ts",
+      declarationReference: "compute"
     });
 
     expect(result.text).toBe([
@@ -127,7 +313,9 @@ describe("evidence-preserving investigation source rendering", () => {
       },
       lexicalFocusRange: null,
       language: "typescript",
-      requestedMode: "signature"
+      requestedMode: "signature",
+      filePath: "src/object-result.ts",
+      declarationReference: "objectResult"
     });
 
     expect(result.receipt).toMatchObject({
@@ -150,7 +338,9 @@ describe("evidence-preserving investigation source rendering", () => {
       },
       lexicalFocusRange: null,
       language: "properties",
-      requestedMode: "adaptive"
+      requestedMode: "adaptive",
+      filePath: "config/example.properties",
+      declarationReference: "example"
     });
 
     expect(result.renderedRange).toEqual({
@@ -175,7 +365,9 @@ describe("evidence-preserving investigation source rendering", () => {
       },
       lexicalFocusRange: null,
       language: "python",
-      requestedMode: "signature"
+      requestedMode: "signature",
+      filePath: "src/compute.py",
+      declarationReference: "compute"
     });
 
     expect(result.text).toBe([
@@ -201,7 +393,9 @@ describe("evidence-preserving investigation source rendering", () => {
       },
       lexicalFocusRange: { start: { line: 20, column: 1 }, end: { line: 20, column: 2 } },
       language: "properties",
-      requestedMode: "adaptive"
+      requestedMode: "adaptive",
+      filePath: "config/example.properties",
+      declarationReference: "example"
     });
 
     expect(result.text).toBe(sourceText.slice(0, 10));
@@ -227,7 +421,9 @@ describe("evidence-preserving investigation source rendering", () => {
       declarationRange,
       lexicalFocusRange: null,
       language: "typescript",
-      requestedMode: "adaptive"
+      requestedMode: "adaptive",
+      filePath: "src/x.ts",
+      declarationReference: "x"
     })).toThrow(/allocated characters/u);
     expect(() => renderInvestigationDeclaration({
       sourceText: "function x() {}",
@@ -235,7 +431,9 @@ describe("evidence-preserving investigation source rendering", () => {
       declarationRange: { start: { line: 0, column: 1 }, end: { line: 1, column: 1 } },
       lexicalFocusRange: null,
       language: "typescript",
-      requestedMode: "adaptive"
+      requestedMode: "adaptive",
+      filePath: "src/x.ts",
+      declarationReference: "x"
     })).toThrow(/declaration range/u);
   });
 });

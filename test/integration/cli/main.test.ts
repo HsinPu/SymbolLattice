@@ -1257,7 +1257,7 @@ describe("symbol-lattice investigate CLI", () => {
         "--source-character-budget",
         "4096",
         "--source-render-mode",
-        "focused",
+        "multi",
         "--ranking",
         "topology",
         "--path",
@@ -1285,7 +1285,7 @@ describe("symbol-lattice investigate CLI", () => {
           searchLimit: 7,
           symbolLimit: 2,
           sourceCharacterBudget: 4096,
-          sourceRenderMode: "focused",
+          sourceRenderMode: "multi",
           ranking: "topology",
           pathPrefix: "src/",
           language: "python",
@@ -1344,7 +1344,7 @@ describe("symbol-lattice investigate CLI", () => {
         ["node", "symbol-lattice", "investigate", "user", "--source-render-mode", "summary"],
         { from: "node" }
       )
-    ).rejects.toThrow("Expected one of: adaptive, prefix, focused, signature");
+    ).rejects.toThrow("Expected one of: adaptive, prefix, focused, signature, multi");
   });
 });
 

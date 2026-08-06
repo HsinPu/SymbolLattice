@@ -2342,7 +2342,7 @@ export function createMcpServer(
           sourceRenderMode: z
             .enum(INVESTIGATE_SOURCE_RENDER_MODES)
             .optional()
-            .describe("`adaptive` returns full source when it fits, then a persisted lexical-focus slice; `prefix`, `focused`, and `signature` request one explicit evidence-preserving strategy."),
+            .describe("`adaptive` returns full source when it fits, then a persisted lexical-focus slice; `prefix`, `focused`, and `signature` request one exact segment; `multi` requests at most two independently hashable signature-plus-focus segments."),
           ranking: z
             .enum(INVESTIGATE_RANKING_STRATEGIES)
             .optional()

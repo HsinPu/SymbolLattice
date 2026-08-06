@@ -3982,13 +3982,15 @@ export class SymbolLatticeService {
           declarationRange: source.range,
           lexicalFocusRange: draft.selection.lexicalFocus.range,
           language: draft.selection.lexicalFocus.language,
-          requestedMode: sourceRenderMode
+          requestedMode: sourceRenderMode,
+          filePath: draft.selection.symbol.filePath,
+          declarationReference: reference
         });
         declarationAllocations.set(reference, {
           selectionRank: draft.selection.selectionRank,
           requestedCharacters: source.text.length,
           allocatedCharacters,
-          emittedCharacters: rendered.text.length,
+          emittedCharacters: rendered.receipt.emittedCharacters,
           truncated: source.truncated || !rendered.receipt.complete
         });
         renderedSources.set(reference, {
@@ -3997,6 +3999,8 @@ export class SymbolLatticeService {
             text: rendered.text,
             renderedRange: rendered.renderedRange,
             renderedCharacterOffsets: rendered.receipt.sourceCharacterOffsets,
+            renderedSegments: rendered.segments,
+            primarySegmentIndex: rendered.primarySegmentIndex,
             truncated: source.truncated || !rendered.receipt.complete
           },
           render: rendered.receipt
