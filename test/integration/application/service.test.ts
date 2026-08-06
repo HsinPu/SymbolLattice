@@ -931,7 +931,7 @@ describe("SymbolLatticeService", () => {
         }
       ],
       sourceWindowAllocation: {
-        policy: "explore-source-window-allocation-v2",
+        policy: "explore-source-window-allocation-v3",
         budget: { totalCharacterBudget: 24_000 },
         summary: { candidateCount: 1, emittedWindows: 1 }
       }
@@ -961,9 +961,15 @@ describe("SymbolLatticeService", () => {
       ].join("\n"),
       "src/bridge.ts": [
         'import { finishFlow } from "./target.js";',
+        "// setup-a",
+        "// setup-b",
         "export function bridgeFlow(): string {",
         "  return finishFlow();",
         "}",
+        "// context-a",
+        "// context-b",
+        "// context-c",
+        "// z",
         ""
       ].join("\n"),
       "src/target.ts": [
@@ -1020,7 +1026,16 @@ describe("SymbolLatticeService", () => {
       (window) => window.reason === "exact-path-spine"
     );
     expect(bridgeWindow?.source.text).toContain("bridgeFlow");
+    expect(bridgeWindow?.source.text).toContain("// z");
     expect(bridgeWindow?.source.text).not.toContain("not indexed bridge");
+    expect(result.sourceWindowAllocation?.windows).toEqual([
+      expect.objectContaining({
+        filePath: "src/bridge.ts",
+        renderMode: "whole-file",
+        wholeFileDecision: "grace",
+        wholeFileEligible: true
+      })
+    ]);
     expect(
       (result.sourceAllocation?.summary.emittedCharacters ?? 0) +
         (result.sourceWindowAllocation?.summary.emittedCharacters ?? 0)

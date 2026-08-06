@@ -56,7 +56,7 @@ node dist/cli/main.js file service.ts --project /path/to/project --offset 1600 -
 ## 核心能力
 
 - `explore` 同時支援精確 symbol 與有界問題模式；明示的安全專案相對路徑優先，再以 symbol、檔名與精確圖譜連線選取最多 4 個檔案、8 個焦點、每檔 2 個焦點與 16 條連線。問題模式會在最多 16 組焦點間尋找 4 hops 內的 exact path，保留最多 4 條 spine 與 8 個未選取的橋接 symbol；不會用 heuristic 或 unresolved 關係補路徑。
-- `explore` 的主要摘要、exact 呼叫位置與橋接視窗共用 24,000 字元上限。視窗依焦點分數與 spine 證據配置；預算足夠時複數視窗各保留最低 256 字元，且單一視窗最多取得 70%。所有內容都來自同一 active generation，與主要摘要重疊的範圍不會重複輸出。
+- `explore` 的主要摘要、exact 呼叫位置與橋接視窗共用 24,000 字元硬上限。視窗依焦點分數與 spine 證據配置；複數視窗最低保留 256 字元，單一視窗的基礎配置最多 70%。未被主要摘要選取的 exact bridge 可在同一 active generation 內擴成完整檔案：每檔只由最強視窗取得資格，短缺在 15%／800 字元 grace 內直接補足，或在已覆蓋 60% 且共享 15% buy pool 足夠時補足。回傳會揭露每次決策與花費，重疊範圍不重複輸出。
 - `explore`、`context`、`node`、`investigate` 與 `file` 共用 session／project／generation 來源 coverage。只有 UTF-16 offsets、內容與 SHA-256 offset map 都可驗證，且符合 160 字元節省／新內容門檻與最多 4 段限制時，才回傳 back-reference 或新 fragments；否則完整重送。`sourceSessionMode: "full"` 可停用去重。
 - `context` 將最多 8 個參照的 persisted source 放入同一個 2,048–64,000 字元預算，依輸入順序配置並回傳逐參照 allocation、截斷原因、實際輸出量、來源身分與 offset map；CLI 與 MCP 都可指定 `sourceCharacterBudget`。
 - 每段已傳送、已覆蓋與新 fragment 都可附 `mcp-source-pointer-v1`：專案相對路徑、精確行列、原始檔 offsets、最多 5 個重疊 symbol、可讀 `file:Lx-Ly (symbol)` 與 SHA-256 receipt。CRLF、CR、Unicode 行分隔與部分片段會重新定位；顯示證據不足時只省略 pointer，不影響來源相等性判定。

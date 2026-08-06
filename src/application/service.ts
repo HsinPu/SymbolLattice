@@ -4710,6 +4710,8 @@ export class SymbolLatticeService {
 
     const sourceWindowPlan = planExploreSourceWindows(focuses, connections, pathSpinePlan);
     const sourceWindowDrafts = new Map<number, ContextSourceDraft>();
+    const sourceWindowWholeFileDrafts = new Map<number, ContextSourceDraft>();
+    const focusFilePaths = new Set(focuses.map((focus) => focus.symbol.filePath));
     for (const window of sourceWindowPlan.windows) {
       const document = documentsByFilePath.get(window.filePath);
       if (document === undefined) continue;
@@ -4722,6 +4724,19 @@ export class SymbolLatticeService {
         endLine: window.endLine
       });
       if (draft !== null) sourceWindowDrafts.set(window.index, draft);
+      if (window.reason === "exact-path-spine" && !focusFilePaths.has(window.filePath)) {
+        const wholeFileDraft = sourceWindowDraftFromPersistedText({
+          referenceIndex: window.index,
+          reference: `explore-whole-file:${window.index}`,
+          filePath: window.filePath,
+          sourceText: document.sourceText,
+          startLine: 1,
+          endLine: Number.MAX_SAFE_INTEGER
+        });
+        if (wholeFileDraft !== null) {
+          sourceWindowWholeFileDrafts.set(window.index, wholeFileDraft);
+        }
+      }
     }
     const sourceWindowReservation = allocateExploreSourceWindowCharacters({
       totalCharacterBudget: DEFAULT_CONTEXT_SOURCE_CHARACTER_BUDGET,
@@ -4730,15 +4745,22 @@ export class SymbolLatticeService {
         const draft = sourceWindowDrafts.get(window.index);
         return draft === undefined ? [] : [{
           index: window.index,
+          filePath: window.filePath,
           requestedCharacters: draft.endOffset - draft.startOffset,
-          relevanceWeight: window.relevanceWeight
+          fullFileCharacters:
+            documentsByFilePath.get(window.filePath)?.sourceText.length ??
+            draft.endOffset - draft.startOffset,
+          relevanceWeight: window.relevanceWeight,
+          wholeFileEligible: sourceWindowWholeFileDrafts.has(window.index)
         }];
       })
     });
     const renderedSourceWindows = new Map<number, DeliveredSourceExcerpt>();
     for (const allocation of sourceWindowReservation.windows) {
       if (allocation.allocatedCharacters === 0) continue;
-      const draft = sourceWindowDrafts.get(allocation.index);
+      const draft = allocation.renderMode === "whole-file"
+        ? sourceWindowWholeFileDrafts.get(allocation.index)
+        : sourceWindowDrafts.get(allocation.index);
       if (draft === undefined) continue;
       const source = renderContextSource(draft, allocation.allocatedCharacters);
       if (source !== null) renderedSourceWindows.set(allocation.index, source);

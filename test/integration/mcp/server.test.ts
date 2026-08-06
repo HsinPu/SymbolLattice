@@ -1452,7 +1452,45 @@ describe("SymbolLattice MCP server", () => {
         pathSpinePlan: {},
         sourceWindowPlan: {},
         sourceWindows: { type: "array" },
-        sourceWindowAllocation: {},
+        sourceWindowAllocation: {
+          anyOf: [
+            {
+              properties: {
+                budget: {
+                  properties: {
+                    wholeFileGraceFraction: { const: 0.15 },
+                    wholeFileBuyOvershootBudget: { minimum: 0 }
+                  }
+                },
+                summary: {
+                  properties: {
+                    wholeFileEligibleCandidates: { minimum: 0, maximum: 8 },
+                    wholeFilePromotedWindows: { minimum: 0, maximum: 8 }
+                  }
+                },
+                windows: {
+                  items: {
+                    properties: {
+                      filePath: { type: "string", minLength: 1 },
+                      renderMode: { enum: ["window", "whole-file"] },
+                      wholeFileDecision: {
+                        enum: [
+                          "not-eligible",
+                          "duplicate-file",
+                          "window-only",
+                          "exact-fit",
+                          "grace",
+                          "buy"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            { type: "null" }
+          ]
+        },
         evidencePaths: { type: "array" }
       }
     });

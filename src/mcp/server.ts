@@ -1047,11 +1047,32 @@ const exploreSourceWindowAllocationOutputSchema = z.object({
     minimumPerWindow: z.literal(EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS.minimumPerWindow),
     maximumShareFraction: z.literal(
       EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS.maximumShareFraction
-    )
+    ),
+    wholeFileGraceFraction: z.literal(
+      EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS.wholeFileGraceFraction
+    ),
+    wholeFileGraceMaximumCharacters: z.literal(
+      EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS.wholeFileGraceMaximumCharacters
+    ),
+    wholeFileBuyMinimumCoverageFraction: z.literal(
+      EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS.wholeFileBuyMinimumCoverageFraction
+    ),
+    wholeFileBuyOvershootFraction: z.literal(
+      EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS.wholeFileBuyOvershootFraction
+    ),
+    wholeFileBuyOvershootBudget: z.number().int().nonnegative(),
+    wholeFileBuyOvershootSpentCharacters: z.number().int().nonnegative()
   }),
   summary: z.object({
     candidateCount: z.number().int().nonnegative().max(EXPLORE_SOURCE_WINDOW_LIMITS.maximumWindows),
+    wholeFileEligibleCandidates: z.number().int().nonnegative().max(
+      EXPLORE_SOURCE_WINDOW_LIMITS.maximumWindows
+    ),
+    wholeFilePromotedWindows: z.number().int().nonnegative().max(
+      EXPLORE_SOURCE_WINDOW_LIMITS.maximumWindows
+    ),
     requestedCharacters: z.number().int().nonnegative(),
+    baseAllocatedCharacters: z.number().int().nonnegative(),
     allocatedCharacters: z.number().int().nonnegative(),
     emittedCharacters: z.number().int().nonnegative(),
     emittedWindows: z.number().int().nonnegative().max(EXPLORE_SOURCE_WINDOW_LIMITS.maximumWindows),
@@ -1061,10 +1082,28 @@ const exploreSourceWindowAllocationOutputSchema = z.object({
   }),
   windows: z.array(z.object({
     index: z.number().int().nonnegative().max(EXPLORE_SOURCE_WINDOW_LIMITS.maximumWindows - 1),
+    filePath: z.string().min(1),
+    windowRequestedCharacters: z.number().int().positive(),
+    fullFileCharacters: z.number().int().positive(),
     requestedCharacters: z.number().int().positive(),
     relevanceWeight: z.number().finite().positive(),
     maximumShareCharacters: z.number().int().nonnegative(),
+    baseAllocatedCharacters: z.number().int().nonnegative(),
     allocatedCharacters: z.number().int().nonnegative(),
+    wholeFileEligible: z.boolean(),
+    wholeFileCoverageFraction: z.number().finite().min(0).max(1),
+    wholeFileGraceCharacters: z.number().int().nonnegative(),
+    wholeFileOvershootCharacters: z.number().int().nonnegative(),
+    wholeFileBuySpentCharacters: z.number().int().nonnegative(),
+    renderMode: z.enum(["window", "whole-file"]),
+    wholeFileDecision: z.enum([
+      "not-eligible",
+      "duplicate-file",
+      "window-only",
+      "exact-fit",
+      "grace",
+      "buy"
+    ]),
     emittedCharacters: z.number().int().nonnegative(),
     reservedButNotEmittedCharacters: z.number().int().nonnegative(),
     truncated: z.boolean(),
@@ -2542,7 +2581,7 @@ export function createMcpServer(
     {
       title: "Explore a SymbolLattice code graph",
       description:
-        "Explores either one exact symbol or a bounded question with named-file-first focus, exact selected connections, short exact path spines, and generation-bound source evidence. Question mode can add score-weighted call-site and bridge windows inside the same 24,000-character source envelope. This tool reports index freshness and never creates or refreshes an index.",
+        "Explores either one exact symbol or a bounded question with named-file-first focus, exact selected connections, short exact path spines, and generation-bound source evidence. Question mode can add score-weighted call-site and bridge windows inside the same 24,000-character source envelope; eligible unselected bridge windows may expand to whole persisted files through bounded grace or a shared buy pool. This tool reports index freshness and never creates or refreshes an index.",
       inputSchema: {
         query: z.string().trim().min(1).describe("Exact symbol reference or a bounded question containing project-relative file and identifier clues."),
         projectPath: z.string().trim().min(1).optional().describe("Optional path to an already indexed project."),

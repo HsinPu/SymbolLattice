@@ -3,11 +3,15 @@ import type { ExplorePathSpinePlan } from "./explore-path-spines.js";
 
 export const EXPLORE_SOURCE_WINDOW_POLICY = "explore-source-windows-v1" as const;
 export const EXPLORE_SOURCE_WINDOW_ALLOCATION_POLICY =
-  "explore-source-window-allocation-v2" as const;
+  "explore-source-window-allocation-v3" as const;
 export const EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS = {
   minimumPerWindow: 256,
   maximumShareFraction: 0.7,
-  spineBoost: 1.25
+  spineBoost: 1.25,
+  wholeFileGraceFraction: 0.15,
+  wholeFileGraceMaximumCharacters: 800,
+  wholeFileBuyMinimumCoverageFraction: 0.6,
+  wholeFileBuyOvershootFraction: 0.15
 } as const;
 export const EXPLORE_SOURCE_WINDOW_LIMITS = {
   contextPaddingLines: 3,
@@ -49,23 +53,58 @@ export interface ExploreSourceWindowCharacterAllocation {
     readonly availableCharacters: number;
     readonly minimumPerWindow: typeof EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS.minimumPerWindow;
     readonly maximumShareFraction: typeof EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS.maximumShareFraction;
+    readonly wholeFileGraceFraction: typeof EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS.wholeFileGraceFraction;
+    readonly wholeFileGraceMaximumCharacters: typeof EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS.wholeFileGraceMaximumCharacters;
+    readonly wholeFileBuyMinimumCoverageFraction: typeof EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS.wholeFileBuyMinimumCoverageFraction;
+    readonly wholeFileBuyOvershootFraction: typeof EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS.wholeFileBuyOvershootFraction;
+    readonly wholeFileBuyOvershootBudget: number;
+    readonly wholeFileBuyOvershootSpentCharacters: number;
   };
   readonly summary: {
     readonly candidateCount: number;
+    readonly wholeFileEligibleCandidates: number;
+    readonly wholeFilePromotedWindows: number;
     readonly requestedCharacters: number;
+    readonly baseAllocatedCharacters: number;
     readonly allocatedCharacters: number;
     readonly unusedCharacters: number;
     readonly truncated: boolean;
   };
   readonly windows: readonly {
     readonly index: number;
+    readonly filePath: string;
+    readonly windowRequestedCharacters: number;
+    readonly fullFileCharacters: number;
     readonly requestedCharacters: number;
     readonly relevanceWeight: number;
     readonly maximumShareCharacters: number;
+    readonly baseAllocatedCharacters: number;
     readonly allocatedCharacters: number;
+    readonly wholeFileEligible: boolean;
+    readonly wholeFileCoverageFraction: number;
+    readonly wholeFileGraceCharacters: number;
+    readonly wholeFileOvershootCharacters: number;
+    readonly wholeFileBuySpentCharacters: number;
+    readonly renderMode: "window" | "whole-file";
+    readonly wholeFileDecision:
+      | "not-eligible"
+      | "duplicate-file"
+      | "window-only"
+      | "exact-fit"
+      | "grace"
+      | "buy";
     readonly truncated: boolean;
     readonly reason: "score-and-spine-weight";
   }[];
+}
+
+export interface ExploreSourceWindowAllocationCandidate {
+  readonly index: number;
+  readonly filePath: string;
+  readonly requestedCharacters: number;
+  readonly fullFileCharacters: number;
+  readonly relevanceWeight: number;
+  readonly wholeFileEligible: boolean;
 }
 
 interface MutableWindow {
@@ -100,11 +139,7 @@ function compareText(left: string, right: string): number {
 export function allocateExploreSourceWindowCharacters(input: {
   readonly totalCharacterBudget: number;
   readonly primaryEmittedCharacters: number;
-  readonly candidates: readonly {
-    readonly index: number;
-    readonly requestedCharacters: number;
-    readonly relevanceWeight: number;
-  }[];
+  readonly candidates: readonly ExploreSourceWindowAllocationCandidate[];
 }): ExploreSourceWindowCharacterAllocation {
   if (
     !Number.isSafeInteger(input.totalCharacterBudget) ||
@@ -125,10 +160,15 @@ export function allocateExploreSourceWindowCharacters(input: {
       !Number.isSafeInteger(candidate.index) ||
       candidate.index < 0 ||
       indexes.has(candidate.index) ||
+      typeof candidate.filePath !== "string" ||
+      candidate.filePath.length === 0 ||
       !Number.isSafeInteger(candidate.requestedCharacters) ||
       candidate.requestedCharacters <= 0 ||
+      !Number.isSafeInteger(candidate.fullFileCharacters) ||
+      candidate.fullFileCharacters < candidate.requestedCharacters ||
       !Number.isFinite(candidate.relevanceWeight) ||
-      candidate.relevanceWeight <= 0
+      candidate.relevanceWeight <= 0 ||
+      typeof candidate.wholeFileEligible !== "boolean"
     ) {
       throw new RangeError("Explore source window candidates require unique indexes and positive sizes.");
     }
@@ -196,13 +236,101 @@ export function allocateExploreSourceWindowCharacters(input: {
     }
     if (distributed === 0) break;
   }
-  const windows = mutable.map((allocation) => ({
-    ...allocation.candidate,
-    maximumShareCharacters: allocation.maximumShareCharacters,
-    allocatedCharacters: allocation.allocatedCharacters,
-    truncated: allocation.allocatedCharacters < allocation.candidate.requestedCharacters,
-    reason: "score-and-spine-weight" as const
-  }));
+  const wholeFileOwnerByPath = new Map<string, number>();
+  for (const candidate of candidates) {
+    if (!candidate.wholeFileEligible) continue;
+    const currentIndex = wholeFileOwnerByPath.get(candidate.filePath);
+    const current = currentIndex === undefined
+      ? undefined
+      : candidates.find((item) => item.index === currentIndex);
+    if (
+      current === undefined ||
+      candidate.relevanceWeight > current.relevanceWeight ||
+      (candidate.relevanceWeight === current.relevanceWeight && candidate.index < current.index)
+    ) {
+      wholeFileOwnerByPath.set(candidate.filePath, candidate.index);
+    }
+  }
+  const baseAllocatedCharacters = mutable.reduce(
+    (total, allocation) => total + allocation.allocatedCharacters,
+    0
+  );
+  let wholeFileRemainingCharacters = availableCharacters - baseAllocatedCharacters;
+  const wholeFileBuyOvershootBudget = Math.floor(
+    input.totalCharacterBudget *
+      EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS.wholeFileBuyOvershootFraction
+  );
+  let wholeFileBuyOvershootSpentCharacters = 0;
+  const windows = mutable.map((allocation) => {
+    const candidate = allocation.candidate;
+    const baseAllocated = allocation.allocatedCharacters;
+    const coverage = candidate.fullFileCharacters === 0
+      ? 0
+      : baseAllocated / candidate.fullFileCharacters;
+    const graceCharacters = Math.min(
+      EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS.wholeFileGraceMaximumCharacters,
+      Math.floor(
+        baseAllocated * EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS.wholeFileGraceFraction
+      )
+    );
+    const overshoot = Math.max(0, candidate.fullFileCharacters - baseAllocated);
+    let decision: ExploreSourceWindowCharacterAllocation["windows"][number]["wholeFileDecision"] =
+      "window-only";
+    let wholeFileBuySpentCharacters = 0;
+    let allocatedCharacters = baseAllocated;
+    if (!candidate.wholeFileEligible) {
+      decision = "not-eligible";
+    } else if (wholeFileOwnerByPath.get(candidate.filePath) !== candidate.index) {
+      decision = "duplicate-file";
+    } else if (overshoot === 0) {
+      decision = "exact-fit";
+    } else if (
+      overshoot <= graceCharacters &&
+      overshoot <= wholeFileRemainingCharacters
+    ) {
+      decision = "grace";
+      allocatedCharacters += overshoot;
+      wholeFileRemainingCharacters -= overshoot;
+    } else if (
+      coverage >=
+        EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS.wholeFileBuyMinimumCoverageFraction &&
+      overshoot <= wholeFileRemainingCharacters &&
+      overshoot <=
+        wholeFileBuyOvershootBudget - wholeFileBuyOvershootSpentCharacters
+    ) {
+      decision = "buy";
+      allocatedCharacters += overshoot;
+      wholeFileRemainingCharacters -= overshoot;
+      wholeFileBuySpentCharacters = overshoot;
+      wholeFileBuyOvershootSpentCharacters += overshoot;
+    }
+    const renderMode = decision === "exact-fit" || decision === "grace" || decision === "buy"
+      ? "whole-file" as const
+      : "window" as const;
+    const requestedCharacters = renderMode === "whole-file"
+      ? candidate.fullFileCharacters
+      : candidate.requestedCharacters;
+    return {
+      index: candidate.index,
+      filePath: candidate.filePath,
+      windowRequestedCharacters: candidate.requestedCharacters,
+      fullFileCharacters: candidate.fullFileCharacters,
+      requestedCharacters,
+      relevanceWeight: candidate.relevanceWeight,
+      maximumShareCharacters: allocation.maximumShareCharacters,
+      baseAllocatedCharacters: baseAllocated,
+      allocatedCharacters,
+      wholeFileEligible: candidate.wholeFileEligible,
+      wholeFileCoverageFraction: coverage,
+      wholeFileGraceCharacters: graceCharacters,
+      wholeFileOvershootCharacters: renderMode === "whole-file" ? overshoot : 0,
+      wholeFileBuySpentCharacters,
+      renderMode,
+      wholeFileDecision: decision,
+      truncated: allocatedCharacters < requestedCharacters,
+      reason: "score-and-spine-weight" as const
+    };
+  });
   const requestedCharacters = windows.reduce(
     (total, window) => total + window.requestedCharacters,
     0
@@ -218,11 +346,23 @@ export function allocateExploreSourceWindowCharacters(input: {
       primaryEmittedCharacters: input.primaryEmittedCharacters,
       availableCharacters,
       minimumPerWindow: EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS.minimumPerWindow,
-      maximumShareFraction: EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS.maximumShareFraction
+      maximumShareFraction: EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS.maximumShareFraction,
+      wholeFileGraceFraction: EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS.wholeFileGraceFraction,
+      wholeFileGraceMaximumCharacters:
+        EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS.wholeFileGraceMaximumCharacters,
+      wholeFileBuyMinimumCoverageFraction:
+        EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS.wholeFileBuyMinimumCoverageFraction,
+      wholeFileBuyOvershootFraction:
+        EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS.wholeFileBuyOvershootFraction,
+      wholeFileBuyOvershootBudget,
+      wholeFileBuyOvershootSpentCharacters
     },
     summary: {
       candidateCount: candidates.length,
+      wholeFileEligibleCandidates: candidates.filter((candidate) => candidate.wholeFileEligible).length,
+      wholeFilePromotedWindows: windows.filter((window) => window.renderMode === "whole-file").length,
       requestedCharacters,
+      baseAllocatedCharacters,
       allocatedCharacters,
       unusedCharacters: availableCharacters - allocatedCharacters,
       truncated: windows.some((window) => window.truncated)

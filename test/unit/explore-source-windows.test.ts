@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   allocateExploreSourceWindowCharacters,
+  type ExploreSourceWindowAllocationCandidate,
   EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS,
   EXPLORE_SOURCE_WINDOW_ALLOCATION_POLICY,
   EXPLORE_SOURCE_WINDOW_LIMITS,
@@ -245,8 +246,22 @@ describe("explore source window planning", () => {
         totalCharacterBudget: 24_000,
         primaryEmittedCharacters: 23_000,
         candidates: [
-          { index: 1, requestedCharacters: 1_000, relevanceWeight: 1 },
-          { index: 0, requestedCharacters: 1_000, relevanceWeight: 3 }
+          {
+            index: 1,
+            filePath: "src/second.ts",
+            requestedCharacters: 1_000,
+            fullFileCharacters: 1_000,
+            relevanceWeight: 1,
+            wholeFileEligible: false
+          },
+          {
+            index: 0,
+            filePath: "src/first.ts",
+            requestedCharacters: 1_000,
+            fullFileCharacters: 1_000,
+            relevanceWeight: 3,
+            wholeFileEligible: false
+          }
         ]
       })
     ).toEqual({
@@ -256,11 +271,20 @@ describe("explore source window planning", () => {
         primaryEmittedCharacters: 23_000,
         availableCharacters: 1_000,
         minimumPerWindow: EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS.minimumPerWindow,
-        maximumShareFraction: EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS.maximumShareFraction
+        maximumShareFraction: EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS.maximumShareFraction,
+        wholeFileGraceFraction: 0.15,
+        wholeFileGraceMaximumCharacters: 800,
+        wholeFileBuyMinimumCoverageFraction: 0.6,
+        wholeFileBuyOvershootFraction: 0.15,
+        wholeFileBuyOvershootBudget: 3_600,
+        wholeFileBuyOvershootSpentCharacters: 0
       },
       summary: {
         candidateCount: 2,
+        wholeFileEligibleCandidates: 0,
+        wholeFilePromotedWindows: 0,
         requestedCharacters: 2_000,
+        baseAllocatedCharacters: 1_000,
         allocatedCharacters: 1_000,
         unusedCharacters: 0,
         truncated: true
@@ -268,23 +292,247 @@ describe("explore source window planning", () => {
       windows: [
         {
           index: 0,
+          filePath: "src/first.ts",
+          windowRequestedCharacters: 1_000,
+          fullFileCharacters: 1_000,
           requestedCharacters: 1_000,
           relevanceWeight: 3,
           maximumShareCharacters: 700,
+          baseAllocatedCharacters: 622,
           allocatedCharacters: 622,
+          wholeFileEligible: false,
+          wholeFileCoverageFraction: 0.622,
+          wholeFileGraceCharacters: 93,
+          wholeFileOvershootCharacters: 0,
+          wholeFileBuySpentCharacters: 0,
+          renderMode: "window",
+          wholeFileDecision: "not-eligible",
           truncated: true,
           reason: "score-and-spine-weight"
         },
         {
           index: 1,
+          filePath: "src/second.ts",
+          windowRequestedCharacters: 1_000,
+          fullFileCharacters: 1_000,
           requestedCharacters: 1_000,
           relevanceWeight: 1,
           maximumShareCharacters: 700,
+          baseAllocatedCharacters: 378,
           allocatedCharacters: 378,
+          wholeFileEligible: false,
+          wholeFileCoverageFraction: 0.378,
+          wholeFileGraceCharacters: 56,
+          wholeFileOvershootCharacters: 0,
+          wholeFileBuySpentCharacters: 0,
+          renderMode: "window",
+          wholeFileDecision: "not-eligible",
           truncated: true,
           reason: "score-and-spine-weight"
         }
       ]
     });
+  });
+
+  it("promotes one bridge window to a whole file inside the grace allowance", () => {
+    const allocation = allocateExploreSourceWindowCharacters({
+      totalCharacterBudget: 1_000,
+      primaryEmittedCharacters: 0,
+      candidates: [{
+        index: 0,
+        filePath: "src/bridge.ts",
+        requestedCharacters: 600,
+        fullFileCharacters: 650,
+        relevanceWeight: 10,
+        wholeFileEligible: true
+      }]
+    });
+
+    expect(allocation).toMatchObject({
+      policy: "explore-source-window-allocation-v3",
+      budget: {
+        wholeFileGraceFraction: 0.15,
+        wholeFileGraceMaximumCharacters: 800,
+        wholeFileBuyMinimumCoverageFraction: 0.6,
+        wholeFileBuyOvershootFraction: 0.15,
+        wholeFileBuyOvershootBudget: 150,
+        wholeFileBuyOvershootSpentCharacters: 0
+      },
+      summary: {
+        wholeFileEligibleCandidates: 1,
+        wholeFilePromotedWindows: 1,
+        baseAllocatedCharacters: 600,
+        allocatedCharacters: 650,
+        unusedCharacters: 350,
+        truncated: false
+      },
+      windows: [{
+        index: 0,
+        filePath: "src/bridge.ts",
+        windowRequestedCharacters: 600,
+        fullFileCharacters: 650,
+        requestedCharacters: 650,
+        baseAllocatedCharacters: 600,
+        allocatedCharacters: 650,
+        wholeFileEligible: true,
+        wholeFileCoverageFraction: 600 / 650,
+        wholeFileGraceCharacters: 90,
+        wholeFileOvershootCharacters: 50,
+        wholeFileBuySpentCharacters: 0,
+        renderMode: "whole-file",
+        wholeFileDecision: "grace",
+        truncated: false
+      }]
+    });
+  });
+
+  it("spends one shared whole-file buy pool in stable window order", () => {
+    const allocation = allocateExploreSourceWindowCharacters({
+      totalCharacterBudget: 2_000,
+      primaryEmittedCharacters: 0,
+      candidates: [
+        {
+          index: 0,
+          filePath: "src/first.ts",
+          requestedCharacters: 600,
+          fullFileCharacters: 850,
+          relevanceWeight: 2,
+          wholeFileEligible: true
+        },
+        {
+          index: 1,
+          filePath: "src/second.ts",
+          requestedCharacters: 600,
+          fullFileCharacters: 850,
+          relevanceWeight: 1,
+          wholeFileEligible: true
+        }
+      ]
+    });
+
+    expect(allocation.budget).toMatchObject({
+      wholeFileBuyOvershootBudget: 300,
+      wholeFileBuyOvershootSpentCharacters: 250
+    });
+    expect(allocation.summary).toMatchObject({
+      wholeFileEligibleCandidates: 2,
+      wholeFilePromotedWindows: 1,
+      baseAllocatedCharacters: 1_200,
+      allocatedCharacters: 1_450,
+      unusedCharacters: 550,
+      truncated: false
+    });
+    expect(allocation.windows).toEqual([
+      expect.objectContaining({
+        index: 0,
+        renderMode: "whole-file",
+        wholeFileDecision: "buy",
+        wholeFileOvershootCharacters: 250,
+        wholeFileBuySpentCharacters: 250,
+        allocatedCharacters: 850
+      }),
+      expect.objectContaining({
+        index: 1,
+        renderMode: "window",
+        wholeFileDecision: "window-only",
+        wholeFileOvershootCharacters: 0,
+        wholeFileBuySpentCharacters: 0,
+        allocatedCharacters: 600
+      })
+    ]);
+    expect(
+      allocation.summary.allocatedCharacters + allocation.budget.primaryEmittedCharacters
+    ).toBeLessThanOrEqual(allocation.budget.totalCharacterBudget);
+  });
+
+  it("assigns whole-file ownership to only the strongest window for one file", () => {
+    const allocation = allocateExploreSourceWindowCharacters({
+      totalCharacterBudget: 1_000,
+      primaryEmittedCharacters: 0,
+      candidates: [
+        {
+          index: 0,
+          filePath: "src/shared.ts",
+          requestedCharacters: 400,
+          fullFileCharacters: 450,
+          relevanceWeight: 1,
+          wholeFileEligible: true
+        },
+        {
+          index: 1,
+          filePath: "src/shared.ts",
+          requestedCharacters: 400,
+          fullFileCharacters: 450,
+          relevanceWeight: 2,
+          wholeFileEligible: true
+        }
+      ]
+    });
+
+    expect(allocation.windows).toEqual([
+      expect.objectContaining({
+        index: 0,
+        renderMode: "window",
+        wholeFileDecision: "duplicate-file"
+      }),
+      expect.objectContaining({
+        index: 1,
+        renderMode: "whole-file",
+        wholeFileDecision: "grace"
+      })
+    ]);
+  });
+
+  it("fails closed when a whole-file candidate omits its persisted file identity", () => {
+    expect(() => allocateExploreSourceWindowCharacters({
+      totalCharacterBudget: 1_000,
+      primaryEmittedCharacters: 0,
+      candidates: [{
+        index: 0,
+        requestedCharacters: 400,
+        fullFileCharacters: 450,
+        relevanceWeight: 1,
+        wholeFileEligible: true
+      } as ExploreSourceWindowAllocationCandidate]
+    })).toThrowError(RangeError);
+  });
+
+  it("rejects a whole-file size smaller than its planned source window", () => {
+    expect(() => allocateExploreSourceWindowCharacters({
+      totalCharacterBudget: 1_000,
+      primaryEmittedCharacters: 0,
+      candidates: [{
+        index: 0,
+        filePath: "src/bridge.ts",
+        requestedCharacters: 451,
+        fullFileCharacters: 450,
+        relevanceWeight: 1,
+        wholeFileEligible: true
+      }]
+    })).toThrowError(RangeError);
+  });
+
+  it("never spends grace or buy characters beyond the remaining total envelope", () => {
+    const allocation = allocateExploreSourceWindowCharacters({
+      totalCharacterBudget: 1_000,
+      primaryEmittedCharacters: 600,
+      candidates: [{
+        index: 0,
+        filePath: "src/bridge.ts",
+        requestedCharacters: 300,
+        fullFileCharacters: 450,
+        relevanceWeight: 1,
+        wholeFileEligible: true
+      }]
+    });
+
+    expect(allocation.windows[0]).toMatchObject({
+      allocatedCharacters: 300,
+      renderMode: "window",
+      wholeFileDecision: "window-only"
+    });
+    expect(
+      allocation.summary.allocatedCharacters + allocation.budget.primaryEmittedCharacters
+    ).toBeLessThanOrEqual(allocation.budget.totalCharacterBudget);
   });
 });
