@@ -892,6 +892,41 @@ function crossToolSourceResults(): {
   };
 }
 
+function partialCrossToolSourceResults(): {
+  readonly node: NodeResult;
+  readonly file: FileViewResult;
+  readonly sourceText: string;
+} {
+  const sourceText = `${"a".repeat(160)}${"b".repeat(320)}${"c".repeat(160)}`;
+  const deliveredNodeText = sourceText.slice(160, 480);
+  const results = crossToolSourceResults();
+  return {
+    sourceText,
+    node: {
+      ...results.node,
+      source: {
+        ...results.node.source!,
+        text: deliveredNodeText,
+        totalCharacters: deliveredNodeText.length,
+        sourceIdentity: sourceDeliveryIdentityFromText({
+          filePath: "src/users.ts",
+          text: deliveredNodeText,
+          fullFileCharacterOffsets: { start: 160, end: 480 }
+        })
+      }
+    },
+    file: {
+      ...results.file,
+      sourceIdentity: sourceDeliveryIdentityFromText({
+        filePath: "src/users.ts",
+        text: sourceText,
+        fullFileCharacterOffsets: { start: 0, end: sourceText.length }
+      }),
+      lines: [{ line: 1, text: sourceText }]
+    }
+  };
+}
+
 function entrypointsResult(): EntrypointsResult {
   const entrypoint = {
     id: "symbol:entrypoint:author",
@@ -2597,6 +2632,58 @@ describe("SymbolLattice MCP server", () => {
       sessionSource: {
         callIndex: 3,
         summary: { emittedSources: 0, referencedSources: 1 }
+      }
+    });
+    expect(JSON.parse(file.content[0]!.text)).toEqual(file.structuredContent);
+  });
+
+  it("projects proven partial coverage after worker execution across MCP tools", async () => {
+    const results = partialCrossToolSourceResults();
+    const server = createMcpServer(
+      {
+        async explore(): Promise<ExploreResult> {
+          return exploreResult();
+        },
+        async node(): Promise<NodeResult> {
+          return results.node;
+        },
+        async fileView(): Promise<FileViewResult> {
+          return results.file;
+        }
+      },
+      "C:/default-project"
+    );
+    const client = new Client({ name: "symbol-lattice-partial-source-test", version: "1.0.0" });
+    const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+    closeCallbacks.push(() => client.close(), () => server.close());
+
+    await client.callTool({
+      name: "symbol_lattice_node",
+      arguments: { query: "src/users.ts#userById" }
+    });
+    const file = await client.callTool({
+      name: "symbol_lattice_file",
+      arguments: { filePath: "src/users.ts", offset: 1, limit: 1 }
+    });
+
+    expect(file.structuredContent).toMatchObject({
+      lines: [],
+      sourceDelivery: {
+        status: "partially-served",
+        coveredCharacterOffsets: [{ start: 160, end: 480 }],
+        fragments: [
+          { text: "a".repeat(160) },
+          { text: "c".repeat(160) }
+        ]
+      },
+      sessionSource: {
+        summary: {
+          partiallyReferencedSources: 1,
+          emittedCharacters: 320,
+          avoidedCharacters: 320
+        }
       }
     });
     expect(JSON.parse(file.content[0]!.text)).toEqual(file.structuredContent);

@@ -54,6 +54,59 @@ function fileResponse(generationId = "generation:1") {
   });
 }
 
+function nodeSliceResponse(sourceText: string, start: number, end: number) {
+  const deliveredText = sourceText.slice(start, end);
+  return response({
+    status: status(),
+    source: {
+      filePath: "src/intervals.ts",
+      text: deliveredText,
+      sourceIdentity: sourceDeliveryIdentityFromText({
+        filePath: "src/intervals.ts",
+        text: deliveredText,
+        fullFileCharacterOffsets: { start, end }
+      })
+    }
+  });
+}
+
+function fileSliceResponse(sourceText: string, start: number, end: number) {
+  const deliveredText = sourceText.slice(start, end);
+  return response({
+    status: status(),
+    contentAvailability: "active-generation",
+    selection: { filePath: "src/intervals.ts" },
+    sourceIdentity: sourceDeliveryIdentityFromText({
+      filePath: "src/intervals.ts",
+      text: deliveredText,
+      fullFileCharacterOffsets: { start, end }
+    }),
+    lines: [{ line: 1, text: deliveredText }]
+  });
+}
+
+function investigateSliceResponse(sourceText: string, start: number, end: number) {
+  const deliveredText = sourceText.slice(start, end);
+  const sourceIdentity = sourceDeliveryIdentityFromText({
+    filePath: "src/intervals.ts",
+    text: deliveredText,
+    fullFileCharacterOffsets: { start, end }
+  });
+  return response({
+    status: status(),
+    declarations: [{
+      reference: "src/intervals.ts#value",
+      source: {
+        filePath: "src/intervals.ts",
+        text: deliveredText,
+        sourceIdentity,
+        primarySegmentIndex: 0,
+        renderedSegments: [{ text: deliveredText, sourceIdentity }]
+      }
+    }]
+  });
+}
+
 describe("MCP source session", () => {
   it("deduplicates the same exact source across node, investigate, and file", () => {
     const session = new McpSourceSession();
@@ -88,7 +141,7 @@ describe("MCP source session", () => {
         firstDeliveredTool: "node"
       },
       sessionSource: {
-        equality: "exact-file-offsets-and-canonical-content",
+        equality: "exact-overlapping-file-offsets-and-content",
         summary: { candidateSources: 1, emittedSources: 0, referencedSources: 1 }
       }
     });
@@ -136,6 +189,187 @@ describe("MCP source session", () => {
     const reemitted = session.project(nodeResponse(), "node", "deduplicate");
     expect(reemitted.structuredContent).toMatchObject({
       source: { text, delivery: { status: "emitted" } }
+    });
+  });
+
+  it("emits only exact uncovered character intervals across tools", () => {
+    const sourceText = `${"a".repeat(160)}${"b".repeat(320)}${"c".repeat(160)}`;
+    const session = new McpSourceSession();
+
+    session.project(nodeSliceResponse(sourceText, 160, 480), "node", "deduplicate");
+    const partial = session.project(fileSliceResponse(sourceText, 0, sourceText.length), "file", "deduplicate");
+
+    expect(partial.structuredContent).toMatchObject({
+      lines: [],
+      sourceDelivery: {
+        status: "partially-served",
+        coveredCharacterOffsets: [{ start: 160, end: 480 }],
+        fragments: [
+          {
+            text: "a".repeat(160),
+            sourceIdentity: { fullFileCharacterOffsets: { start: 0, end: 160 } }
+          },
+          {
+            text: "c".repeat(160),
+            sourceIdentity: { fullFileCharacterOffsets: { start: 480, end: 640 } }
+          }
+        ]
+      },
+      sessionSource: {
+        equality: "exact-overlapping-file-offsets-and-content",
+        summary: {
+          candidateSources: 1,
+          emittedSources: 0,
+          partiallyReferencedSources: 1,
+          referencedSources: 0,
+          emittedCharacters: 320,
+          avoidedCharacters: 320
+        }
+      }
+    });
+
+    const nowCovered = session.project(nodeSliceResponse(sourceText, 0, sourceText.length), "node", "deduplicate");
+    expect(nowCovered.structuredContent).toMatchObject({
+      source: { text: null, delivery: { status: "already-served" } },
+      sessionSource: { summary: { referencedSources: 1, avoidedCharacters: 640 } }
+    });
+  });
+
+  it("uses the same partial projection contract for node and investigate", () => {
+    const sourceText = `${"a".repeat(160)}${"b".repeat(320)}${"c".repeat(160)}`;
+    const investigateSession = new McpSourceSession();
+    investigateSession.project(nodeSliceResponse(sourceText, 160, 480), "node", "deduplicate");
+    const investigate = investigateSession.project(
+      investigateSliceResponse(sourceText, 0, sourceText.length),
+      "investigate",
+      "deduplicate"
+    );
+    expect(investigate.structuredContent).toMatchObject({
+      declarations: [{
+        source: {
+          text: null,
+          renderedSegments: [{
+            delivery: {
+              status: "partially-served",
+              fragments: [{ text: "a".repeat(160) }, { text: "c".repeat(160) }]
+            }
+          }]
+        }
+      }]
+    });
+    expect((investigate.structuredContent!.declarations as Array<Record<string, unknown>>)[0])
+      .not.toHaveProperty("source.renderedSegments.0.text");
+
+    const nodeSession = new McpSourceSession();
+    nodeSession.project(fileSliceResponse(sourceText, 160, 480), "file", "deduplicate");
+    const node = nodeSession.project(
+      nodeSliceResponse(sourceText, 0, sourceText.length),
+      "node",
+      "deduplicate"
+    );
+    expect(node.structuredContent).toMatchObject({
+      source: {
+        text: null,
+        delivery: {
+          status: "partially-served",
+          fragments: [{ text: "a".repeat(160) }, { text: "c".repeat(160) }]
+        }
+      }
+    });
+  });
+
+  it("keeps the full source when proven overlap is below the savings floor", () => {
+    const sourceText = `${"a".repeat(100)}${"b".repeat(400)}`;
+    const session = new McpSourceSession();
+    session.project(nodeSliceResponse(sourceText, 0, 100), "node", "deduplicate");
+
+    const projected = session.project(fileSliceResponse(sourceText, 0, sourceText.length), "file", "deduplicate");
+    expect(projected.structuredContent).toMatchObject({
+      lines: [{ text: sourceText }],
+      sourceDelivery: {
+        status: "emitted",
+        intervalDecision: { status: "full", reason: "below-minimum-savings" }
+      },
+      sessionSource: { summary: { avoidedCharacters: 0, emittedCharacters: 500 } }
+    });
+  });
+
+  it("re-emits the full source when partial projection would abandon useful context", () => {
+    const sourceText = `${"a".repeat(450)}${"b".repeat(50)}`;
+    const session = new McpSourceSession();
+    session.project(nodeSliceResponse(sourceText, 0, 450), "node", "deduplicate");
+
+    const projected = session.project(fileSliceResponse(sourceText, 0, sourceText.length), "file", "deduplicate");
+    expect(projected.structuredContent).toMatchObject({
+      lines: [{ text: sourceText }],
+      sourceDelivery: {
+        status: "emitted",
+        intervalDecision: { status: "full", reason: "insufficient-new-context" }
+      }
+    });
+  });
+
+  it("does not treat offset overlap as coverage when the overlapping content differs", () => {
+    const original = `${"a".repeat(240)}${"b".repeat(240)}`;
+    const changed = `${"x".repeat(240)}${"b".repeat(240)}`;
+    const session = new McpSourceSession();
+    session.project(nodeSliceResponse(original, 0, 240), "node", "deduplicate");
+
+    const projected = session.project(fileSliceResponse(changed, 0, changed.length), "file", "deduplicate");
+    expect(projected.structuredContent).toMatchObject({
+      lines: [{ text: changed }],
+      sourceDelivery: {
+        status: "emitted",
+        intervalDecision: { status: "full", reason: "no-proven-overlap" }
+      }
+    });
+  });
+
+  it("re-emits normalized CRLF windows when raw offset mapping is unavailable", () => {
+    const normalizedText = `${"a".repeat(200)}\n${"b".repeat(200)}`;
+    const session = new McpSourceSession();
+    session.project(nodeSliceResponse(normalizedText, 0, 200), "node", "deduplicate");
+    const identityWithRawCrlfWidth = sourceDeliveryIdentityFromText({
+      filePath: "src/intervals.ts",
+      text: normalizedText,
+      fullFileCharacterOffsets: { start: 0, end: normalizedText.length + 1 }
+    });
+
+    const projected = session.project(response({
+      status: status(),
+      contentAvailability: "active-generation",
+      selection: { filePath: "src/intervals.ts" },
+      sourceIdentity: identityWithRawCrlfWidth,
+      lines: normalizedText.split("\n").map((line, index) => ({ line: index + 1, text: line }))
+    }), "file", "deduplicate");
+
+    expect(projected.structuredContent).toMatchObject({
+      lines: [{ text: "a".repeat(200) }, { text: "b".repeat(200) }],
+      sourceDelivery: {
+        status: "emitted",
+        intervalDecision: { status: "full", reason: "offset-map-unavailable" }
+      }
+    });
+  });
+
+  it("re-emits instead of returning too many uncovered fragments", () => {
+    const sourceText = "abcdefghij";
+    const session = new McpSourceSession({
+      minimumAvoidedCharacters: 1,
+      minimumEmittedCharacters: 1,
+      maximumFragmentsPerSource: 2
+    });
+    for (const [start, end] of [[1, 2], [3, 4], [5, 6]] as const) {
+      session.project(nodeSliceResponse(sourceText, start, end), "node", "deduplicate");
+    }
+
+    const projected = session.project(fileSliceResponse(sourceText, 0, sourceText.length), "file", "deduplicate");
+    expect(projected.structuredContent).toMatchObject({
+      lines: [{ text: sourceText }],
+      sourceDelivery: {
+        status: "emitted",
+        intervalDecision: { status: "full", reason: "too-many-fragments" }
+      }
     });
   });
 });

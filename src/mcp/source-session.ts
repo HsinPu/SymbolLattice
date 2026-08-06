@@ -4,19 +4,25 @@ import {
   type SourceDeliveryIdentity
 } from "../application/source-delivery.js";
 
-export const MCP_SOURCE_SESSION_POLICY = "mcp-session-source-dedup-v2" as const;
+export const MCP_SOURCE_SESSION_POLICY = "mcp-session-source-dedup-v3" as const;
 export const MCP_SOURCE_SESSION_MODES = ["deduplicate", "full"] as const;
 export type McpSourceSessionMode = (typeof MCP_SOURCE_SESSION_MODES)[number];
 export type McpSourceTool = "node" | "investigate" | "file";
 
 export const MCP_SOURCE_SESSION_LIMITS = {
   maximumProjects: 4,
-  maximumSourcesPerProject: 256
+  maximumSourcesPerProject: 256,
+  minimumAvoidedCharacters: 160,
+  minimumEmittedCharacters: 160,
+  maximumFragmentsPerSource: 4
 } as const;
 
 export interface McpSourceSessionOptions {
   readonly maximumProjects?: number;
   readonly maximumSourcesPerProject?: number;
+  readonly minimumAvoidedCharacters?: number;
+  readonly minimumEmittedCharacters?: number;
+  readonly maximumFragmentsPerSource?: number;
 }
 
 interface TextContent {
@@ -33,6 +39,7 @@ export interface SourceSessionResponse {
 
 interface DeliveredSource {
   readonly identity: SourceDeliveryIdentity;
+  readonly text: string;
   readonly firstDeliveredCallIndex: number;
   readonly firstDeliveredTool: McpSourceTool;
 }
@@ -50,12 +57,65 @@ interface Candidate {
 }
 
 interface Delivery {
-  readonly referenced: boolean;
+  readonly projection: "full" | "reference" | "partial";
   readonly metadata: Record<string, unknown>;
+  readonly emittedSources: number;
+  readonly partiallyReferencedSources: number;
+  readonly referencedSources: number;
+  readonly emittedCharacters: number;
+  readonly avoidedCharacters: number;
+  readonly stateTruncated: boolean;
+}
+
+interface CharacterRange {
+  readonly start: number;
+  readonly end: number;
+}
+
+interface ProvenCoverage extends CharacterRange {
+  readonly delivered: DeliveredSource;
 }
 
 function boundedPositive(value: number | undefined, fallback: number): number {
   return Number.isSafeInteger(value) && (value ?? 0) > 0 ? value! : fallback;
+}
+
+function boundedNonNegative(value: number | undefined, fallback: number): number {
+  return Number.isSafeInteger(value) && (value ?? -1) >= 0 ? value! : fallback;
+}
+
+function rangeLength(range: CharacterRange): number {
+  return range.end - range.start;
+}
+
+function mergeRanges(ranges: readonly CharacterRange[]): CharacterRange[] {
+  const sorted = [...ranges]
+    .filter((range) => range.end > range.start)
+    .sort((left, right) => left.start - right.start || left.end - right.end);
+  const merged: CharacterRange[] = [];
+  for (const range of sorted) {
+    const previous = merged[merged.length - 1];
+    if (previous === undefined || range.start > previous.end) {
+      merged.push({ start: range.start, end: range.end });
+      continue;
+    }
+    merged[merged.length - 1] = {
+      start: previous.start,
+      end: Math.max(previous.end, range.end)
+    };
+  }
+  return merged;
+}
+
+function subtractRanges(range: CharacterRange, covered: readonly CharacterRange[]): CharacterRange[] {
+  const uncovered: CharacterRange[] = [];
+  let cursor = range.start;
+  for (const item of covered) {
+    if (item.start > cursor) uncovered.push({ start: cursor, end: item.start });
+    cursor = Math.max(cursor, item.end);
+  }
+  if (cursor < range.end) uncovered.push({ start: cursor, end: range.end });
+  return uncovered;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -113,10 +173,13 @@ function responseHeader(response: SourceSessionResponse): {
   };
 }
 
-/** Session-local, post-worker exact-source registry shared by node, investigate, and file. */
+/** Session-local, post-worker exact-source coverage shared by node, investigate, and file. */
 export class McpSourceSession {
   private readonly maximumProjects: number;
   private readonly maximumSourcesPerProject: number;
+  private readonly minimumAvoidedCharacters: number;
+  private readonly minimumEmittedCharacters: number;
+  private readonly maximumFragmentsPerSource: number;
   private readonly projects = new Map<string, ProjectSessionState>();
 
   public constructor(options: McpSourceSessionOptions = {}) {
@@ -124,6 +187,18 @@ export class McpSourceSession {
     this.maximumSourcesPerProject = boundedPositive(
       options.maximumSourcesPerProject,
       MCP_SOURCE_SESSION_LIMITS.maximumSourcesPerProject
+    );
+    this.minimumAvoidedCharacters = boundedNonNegative(
+      options.minimumAvoidedCharacters,
+      MCP_SOURCE_SESSION_LIMITS.minimumAvoidedCharacters
+    );
+    this.minimumEmittedCharacters = boundedNonNegative(
+      options.minimumEmittedCharacters,
+      MCP_SOURCE_SESSION_LIMITS.minimumEmittedCharacters
+    );
+    this.maximumFragmentsPerSource = boundedPositive(
+      options.maximumFragmentsPerSource,
+      MCP_SOURCE_SESSION_LIMITS.maximumFragmentsPerSource
     );
   }
 
@@ -142,55 +217,22 @@ export class McpSourceSession {
     selected.state.callCount += 1;
     const callIndex = selected.state.callCount;
     let emittedSources = 0;
+    let partiallyReferencedSources = 0;
     let referencedSources = 0;
     let emittedCharacters = 0;
     let avoidedCharacters = 0;
     let stateTruncated = selected.projectEvicted;
-    const deliveries = candidates.map((candidate): Delivery => {
-      const prior = selected.state.sources.get(candidate.identity.id);
-      const referenced = mode === "deduplicate" && prior !== undefined &&
-        prior.identity.contentSha256 === candidate.identity.contentSha256;
-      if (referenced) {
-        referencedSources += 1;
-        avoidedCharacters += candidate.text.length;
-        return {
-          referenced: true,
-          metadata: {
-            policy: MCP_SOURCE_SESSION_POLICY,
-            status: "already-served",
-            sourceId: candidate.identity.id,
-            firstDeliveredCallIndex: prior.firstDeliveredCallIndex,
-            firstDeliveredTool: prior.firstDeliveredTool,
-            message: `Exact source ${candidate.identity.id} was already delivered by ${prior.firstDeliveredTool} during project call ${prior.firstDeliveredCallIndex}; project generation and content still match.`
-          }
-        };
-      }
-      emittedSources += 1;
-      emittedCharacters += candidate.text.length;
-      if (prior === undefined) {
-        selected.state.sources.set(candidate.identity.id, {
-          identity: candidate.identity,
-          firstDeliveredCallIndex: callIndex,
-          firstDeliveredTool: tool
-        });
-      }
-      while (selected.state.sources.size > this.maximumSourcesPerProject) {
-        const oldest = selected.state.sources.keys().next().value as string | undefined;
-        if (oldest === undefined) break;
-        selected.state.sources.delete(oldest);
-        stateTruncated = true;
-      }
-      return {
-        referenced: false,
-        metadata: {
-          policy: MCP_SOURCE_SESSION_POLICY,
-          status: "emitted",
-          sourceId: candidate.identity.id,
-          callIndex,
-          tool
-        }
-      };
-    });
+    const deliveries = candidates.map((candidate): Delivery =>
+      this.deliveryForCandidate(selected.state, candidate, tool, mode, callIndex)
+    );
+    for (const delivery of deliveries) {
+      emittedSources += delivery.emittedSources;
+      partiallyReferencedSources += delivery.partiallyReferencedSources;
+      referencedSources += delivery.referencedSources;
+      emittedCharacters += delivery.emittedCharacters;
+      avoidedCharacters += delivery.avoidedCharacters;
+      stateTruncated ||= delivery.stateTruncated;
+    }
 
     const projected = this.applyDeliveries(header.structured, tool, deliveries);
     if (projected === null) return response;
@@ -200,7 +242,7 @@ export class McpSourceSession {
         policy: MCP_SOURCE_SESSION_POLICY,
         scope: "mcp-server-session",
         identityPolicy: SOURCE_DELIVERY_IDENTITY_POLICY,
-        equality: "exact-file-offsets-and-canonical-content",
+        equality: "exact-overlapping-file-offsets-and-content",
         mode,
         tool,
         projectPath: header.projectPath,
@@ -209,11 +251,15 @@ export class McpSourceSession {
         generationReset: selected.generationReset,
         bounds: {
           maximumProjects: this.maximumProjects,
-          maximumSourcesPerProject: this.maximumSourcesPerProject
+          maximumSourcesPerProject: this.maximumSourcesPerProject,
+          minimumAvoidedCharacters: this.minimumAvoidedCharacters,
+          minimumEmittedCharacters: this.minimumEmittedCharacters,
+          maximumFragmentsPerSource: this.maximumFragmentsPerSource
         },
         summary: {
           candidateSources: candidates.length,
           emittedSources,
+          partiallyReferencedSources,
           referencedSources,
           emittedCharacters,
           avoidedCharacters,
@@ -227,6 +273,248 @@ export class McpSourceSession {
       content: [{ type: "text", text: JSON.stringify(structuredContent, null, 2) }],
       structuredContent
     };
+  }
+
+  private deliveryForCandidate(
+    state: ProjectSessionState,
+    candidate: Candidate,
+    tool: McpSourceTool,
+    mode: McpSourceSessionMode,
+    callIndex: number
+  ): Delivery {
+    const prior = state.sources.get(candidate.identity.id);
+    if (
+      mode === "deduplicate" &&
+      prior !== undefined &&
+      prior.identity.contentSha256 === candidate.identity.contentSha256
+    ) {
+      return this.referenceDelivery(candidate, [prior], [{
+        start: candidate.identity.fullFileCharacterOffsets.start,
+        end: candidate.identity.fullFileCharacterOffsets.end
+      }]);
+    }
+
+    if (mode === "full") {
+      return this.fullDelivery(state, candidate, tool, callIndex, "mode-full", []);
+    }
+
+    const candidateRange = candidate.identity.fullFileCharacterOffsets;
+    if (rangeLength(candidateRange) !== candidate.text.length) {
+      return this.fullDelivery(
+        state,
+        candidate,
+        tool,
+        callIndex,
+        "offset-map-unavailable",
+        []
+      );
+    }
+
+    const proven = this.provenCoverage(state, candidate);
+    const covered = mergeRanges(proven);
+    if (covered.length === 0) {
+      return this.fullDelivery(state, candidate, tool, callIndex, "no-proven-overlap", []);
+    }
+    const coveredCharacters = covered.reduce((total, range) => total + rangeLength(range), 0);
+    if (coveredCharacters === candidate.text.length) {
+      return this.referenceDelivery(candidate, proven.map((item) => item.delivered), covered);
+    }
+
+    const uncovered = subtractRanges(candidateRange, covered);
+    const emittedCharacters = uncovered.reduce((total, range) => total + rangeLength(range), 0);
+    if (coveredCharacters < this.minimumAvoidedCharacters) {
+      return this.fullDelivery(
+        state,
+        candidate,
+        tool,
+        callIndex,
+        "below-minimum-savings",
+        covered
+      );
+    }
+    if (emittedCharacters < this.minimumEmittedCharacters) {
+      return this.fullDelivery(
+        state,
+        candidate,
+        tool,
+        callIndex,
+        "insufficient-new-context",
+        covered
+      );
+    }
+    if (uncovered.length > this.maximumFragmentsPerSource) {
+      return this.fullDelivery(
+        state,
+        candidate,
+        tool,
+        callIndex,
+        "too-many-fragments",
+        covered
+      );
+    }
+
+    let stateTruncated = false;
+    const fragments = uncovered.map((range) => {
+      const text = candidate.text.slice(range.start - candidateRange.start, range.end - candidateRange.start);
+      const identity = sourceDeliveryIdentityFromText({
+        filePath: candidate.identity.filePath,
+        text,
+        fullFileCharacterOffsets: range
+      });
+      stateTruncated ||= this.remember(state, { identity, text, tool }, callIndex);
+      return { text, sourceIdentity: identity };
+    });
+    const coveredBy = this.coveredBy(proven.map((item) => item.delivered));
+    return {
+      projection: "partial",
+      metadata: {
+        policy: MCP_SOURCE_SESSION_POLICY,
+        status: "partially-served",
+        sourceId: candidate.identity.id,
+        callIndex,
+        tool,
+        coveredCharacterOffsets: covered,
+        coveredBy,
+        fragments,
+        intervalDecision: {
+          status: "partial",
+          reason: "proven-overlap",
+          avoidedCharacters: coveredCharacters,
+          emittedCharacters
+        },
+        message: `Reused ${coveredCharacters} exact UTF-16 characters already delivered in this project generation and emitted ${emittedCharacters} new characters in ${fragments.length} bounded fragment(s).`
+      },
+      emittedSources: 0,
+      partiallyReferencedSources: 1,
+      referencedSources: 0,
+      emittedCharacters,
+      avoidedCharacters: coveredCharacters,
+      stateTruncated
+    };
+  }
+
+  private provenCoverage(
+    state: ProjectSessionState,
+    candidate: Candidate
+  ): ProvenCoverage[] {
+    const candidateRange = candidate.identity.fullFileCharacterOffsets;
+    const coverage: ProvenCoverage[] = [];
+    for (const delivered of state.sources.values()) {
+      if (delivered.identity.filePath !== candidate.identity.filePath) continue;
+      const deliveredRange = delivered.identity.fullFileCharacterOffsets;
+      if (rangeLength(deliveredRange) !== delivered.text.length) continue;
+      const start = Math.max(candidateRange.start, deliveredRange.start);
+      const end = Math.min(candidateRange.end, deliveredRange.end);
+      if (end <= start) continue;
+      const candidateOverlap = candidate.text.slice(start - candidateRange.start, end - candidateRange.start);
+      const deliveredOverlap = delivered.text.slice(start - deliveredRange.start, end - deliveredRange.start);
+      if (candidateOverlap !== deliveredOverlap) continue;
+      coverage.push({ start, end, delivered });
+    }
+    return coverage;
+  }
+
+  private referenceDelivery(
+    candidate: Candidate,
+    delivered: readonly DeliveredSource[],
+    covered: readonly CharacterRange[]
+  ): Delivery {
+    const coveredBy = this.coveredBy(delivered);
+    const first = coveredBy[0]!;
+    return {
+      projection: "reference",
+      metadata: {
+        policy: MCP_SOURCE_SESSION_POLICY,
+        status: "already-served",
+        sourceId: candidate.identity.id,
+        firstDeliveredCallIndex: first.firstDeliveredCallIndex,
+        firstDeliveredTool: first.firstDeliveredTool,
+        coveredCharacterOffsets: covered,
+        coveredBy,
+        message: `Exact source ${candidate.identity.id} is fully covered by source delivered earlier in this project generation.`
+      },
+      emittedSources: 0,
+      partiallyReferencedSources: 0,
+      referencedSources: 1,
+      emittedCharacters: 0,
+      avoidedCharacters: candidate.text.length,
+      stateTruncated: false
+    };
+  }
+
+  private fullDelivery(
+    state: ProjectSessionState,
+    candidate: Candidate,
+    tool: McpSourceTool,
+    callIndex: number,
+    reason: "mode-full" | "offset-map-unavailable" | "no-proven-overlap" |
+      "below-minimum-savings" | "insufficient-new-context" | "too-many-fragments",
+    covered: readonly CharacterRange[]
+  ): Delivery {
+    const stateTruncated = this.remember(state, candidate, callIndex);
+    return {
+      projection: "full",
+      metadata: {
+        policy: MCP_SOURCE_SESSION_POLICY,
+        status: "emitted",
+        sourceId: candidate.identity.id,
+        callIndex,
+        tool,
+        intervalDecision: {
+          status: "full",
+          reason,
+          provenCoveredCharacterOffsets: covered
+        }
+      },
+      emittedSources: 1,
+      partiallyReferencedSources: 0,
+      referencedSources: 0,
+      emittedCharacters: candidate.text.length,
+      avoidedCharacters: 0,
+      stateTruncated
+    };
+  }
+
+  private coveredBy(delivered: readonly DeliveredSource[]): Array<{
+    readonly sourceId: string;
+    readonly firstDeliveredCallIndex: number;
+    readonly firstDeliveredTool: McpSourceTool;
+  }> {
+    const unique = new Map<string, DeliveredSource>();
+    for (const source of delivered) unique.set(source.identity.id, source);
+    return [...unique.values()]
+      .sort((left, right) =>
+        left.firstDeliveredCallIndex - right.firstDeliveredCallIndex ||
+        left.identity.id.localeCompare(right.identity.id)
+      )
+      .map((source) => ({
+        sourceId: source.identity.id,
+        firstDeliveredCallIndex: source.firstDeliveredCallIndex,
+        firstDeliveredTool: source.firstDeliveredTool
+      }));
+  }
+
+  private remember(
+    state: ProjectSessionState,
+    candidate: Candidate,
+    callIndex: number
+  ): boolean {
+    if (!state.sources.has(candidate.identity.id)) {
+      state.sources.set(candidate.identity.id, {
+        identity: candidate.identity,
+        text: candidate.text,
+        firstDeliveredCallIndex: callIndex,
+        firstDeliveredTool: candidate.tool
+      });
+    }
+    let truncated = false;
+    while (state.sources.size > this.maximumSourcesPerProject) {
+      const oldest = state.sources.keys().next().value as string | undefined;
+      if (oldest === undefined) break;
+      state.sources.delete(oldest);
+      truncated = true;
+    }
+    return truncated;
   }
 
   private candidates(structured: Record<string, unknown>, tool: McpSourceTool): Candidate[] | null {
@@ -301,8 +589,8 @@ export class McpSourceSession {
       return {
         ...structured,
         source: {
-          ...structured.source,
-          text: deliveries[0]!.referenced ? null : structured.source.text,
+        ...structured.source,
+          text: deliveries[0]!.projection === "full" ? structured.source.text : null,
           delivery: deliveries[0]!.metadata
         }
       };
@@ -311,7 +599,7 @@ export class McpSourceSession {
       if (deliveries.length !== 1) return null;
       return {
         ...structured,
-        lines: deliveries[0]!.referenced ? [] : structured.lines,
+        lines: deliveries[0]!.projection === "full" ? structured.lines : [],
         sourceDelivery: deliveries[0]!.metadata
       };
     }
@@ -323,7 +611,7 @@ export class McpSourceSession {
       const renderedSegments = declaration.source.renderedSegments.map((segment) => {
         const delivery = deliveries[deliveryIndex++];
         if (!isRecord(segment) || delivery === undefined) return segment;
-        if (!delivery.referenced) return { ...segment, delivery: delivery.metadata };
+        if (delivery.projection === "full") return { ...segment, delivery: delivery.metadata };
         const { text: _text, ...metadata } = segment;
         return { ...metadata, delivery: delivery.metadata };
       });
@@ -333,7 +621,7 @@ export class McpSourceSession {
         ...declaration,
         source: {
           ...declaration.source,
-          text: primary?.referenced === true ? null : declaration.source.text,
+          text: primary?.projection === "full" ? declaration.source.text : null,
           renderedSegments
         }
       };

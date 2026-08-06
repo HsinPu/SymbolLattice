@@ -704,13 +704,36 @@ const sourceDeliveryIdentityOutputSchema = z.object({
   contentSha256: z.string().regex(/^[0-9a-f]{64}$/u)
 });
 
+const sourceCharacterRangeOutputSchema = z.object({
+  start: z.number().int().nonnegative(),
+  end: z.number().int().nonnegative()
+});
+
+const sourceCoverageReceiptOutputSchema = z.object({
+  sourceId: z.string().regex(/^source:[0-9a-f]{64}$/u),
+  firstDeliveredCallIndex: z.number().int().positive(),
+  firstDeliveredTool: z.enum(["node", "investigate", "file"])
+});
+
 const sourceDeliveryOutputSchema = z.union([
   z.object({
     policy: z.literal(MCP_SOURCE_SESSION_POLICY),
     status: z.literal("emitted"),
     sourceId: z.string().regex(/^source:[0-9a-f]{64}$/u),
     callIndex: z.number().int().positive(),
-    tool: z.enum(["node", "investigate", "file"])
+    tool: z.enum(["node", "investigate", "file"]),
+    intervalDecision: z.object({
+      status: z.literal("full"),
+      reason: z.enum([
+        "mode-full",
+        "offset-map-unavailable",
+        "no-proven-overlap",
+        "below-minimum-savings",
+        "insufficient-new-context",
+        "too-many-fragments"
+      ]),
+      provenCoveredCharacterOffsets: z.array(sourceCharacterRangeOutputSchema)
+    })
   }),
   z.object({
     policy: z.literal(MCP_SOURCE_SESSION_POLICY),
@@ -718,6 +741,28 @@ const sourceDeliveryOutputSchema = z.union([
     sourceId: z.string().regex(/^source:[0-9a-f]{64}$/u),
     firstDeliveredCallIndex: z.number().int().positive(),
     firstDeliveredTool: z.enum(["node", "investigate", "file"]),
+    coveredCharacterOffsets: z.array(sourceCharacterRangeOutputSchema).min(1),
+    coveredBy: z.array(sourceCoverageReceiptOutputSchema).min(1),
+    message: z.string().min(1)
+  }),
+  z.object({
+    policy: z.literal(MCP_SOURCE_SESSION_POLICY),
+    status: z.literal("partially-served"),
+    sourceId: z.string().regex(/^source:[0-9a-f]{64}$/u),
+    callIndex: z.number().int().positive(),
+    tool: z.enum(["node", "investigate", "file"]),
+    coveredCharacterOffsets: z.array(sourceCharacterRangeOutputSchema).min(1),
+    coveredBy: z.array(sourceCoverageReceiptOutputSchema).min(1),
+    fragments: z.array(z.object({
+      text: z.string().min(1),
+      sourceIdentity: sourceDeliveryIdentityOutputSchema
+    })).min(1),
+    intervalDecision: z.object({
+      status: z.literal("partial"),
+      reason: z.literal("proven-overlap"),
+      avoidedCharacters: z.number().int().positive(),
+      emittedCharacters: z.number().int().positive()
+    }),
     message: z.string().min(1)
   })
 ]);
@@ -726,7 +771,7 @@ const sourceSessionReceiptOutputSchema = z.object({
   policy: z.literal(MCP_SOURCE_SESSION_POLICY),
   scope: z.literal("mcp-server-session"),
   identityPolicy: z.literal(SOURCE_DELIVERY_IDENTITY_POLICY),
-  equality: z.literal("exact-file-offsets-and-canonical-content"),
+  equality: z.literal("exact-overlapping-file-offsets-and-content"),
   mode: z.enum(MCP_SOURCE_SESSION_MODES),
   tool: z.enum(["node", "investigate", "file"]),
   projectPath: z.string().min(1),
@@ -735,11 +780,15 @@ const sourceSessionReceiptOutputSchema = z.object({
   generationReset: z.boolean(),
   bounds: z.object({
     maximumProjects: z.number().int().positive(),
-    maximumSourcesPerProject: z.number().int().positive()
+    maximumSourcesPerProject: z.number().int().positive(),
+    minimumAvoidedCharacters: z.number().int().nonnegative(),
+    minimumEmittedCharacters: z.number().int().nonnegative(),
+    maximumFragmentsPerSource: z.number().int().positive()
   }),
   summary: z.object({
     candidateSources: z.number().int().nonnegative(),
     emittedSources: z.number().int().nonnegative(),
+    partiallyReferencedSources: z.number().int().nonnegative(),
     referencedSources: z.number().int().nonnegative(),
     emittedCharacters: z.number().int().nonnegative(),
     avoidedCharacters: z.number().int().nonnegative(),
