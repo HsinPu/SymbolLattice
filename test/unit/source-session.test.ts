@@ -274,6 +274,19 @@ describe("MCP source session", () => {
           sourceAvailability: "active-generation",
           source: structuredClone(exact.source)
         }
+      ],
+      sourceWindows: [
+        {
+          index: 0,
+          focusRank: 1,
+          filePath: "src/users.ts",
+          startLine: 12,
+          endLine: 14,
+          reason: "exact-connection-site",
+          connectionEdgeIds: ["edge:call"],
+          relatedSymbolIds: ["symbol:users:target"],
+          source: structuredClone(exact.source)
+        }
       ]
     });
 
@@ -284,8 +297,11 @@ describe("MCP source session", () => {
         { source: { text: expect.any(String), delivery: { status: "emitted" } } },
         { source: { text: null, lines: [], delivery: { status: "already-served" } } }
       ],
+      sourceWindows: [
+        { source: { text: null, lines: [], delivery: { status: "already-served" } } }
+      ],
       sessionSource: {
-        summary: { candidateSources: 2, emittedSources: 1, referencedSources: 1 }
+        summary: { candidateSources: 3, emittedSources: 1, referencedSources: 2 }
       }
     });
   });

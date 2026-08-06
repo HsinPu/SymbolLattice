@@ -689,6 +689,12 @@ export interface ExploreResult {
   readonly connectionsTruncated?: boolean;
   /** Shared source allocation across query focuses; null for exact-symbol mode. */
   readonly sourceAllocation?: ContextSourceAllocationResult | null;
+  /** Bounded additional exact-connection call-site plan; null for exact-symbol mode. */
+  readonly sourceWindowPlan?: import("./explore-source-windows.js").ExploreSourceWindowPlan | null;
+  /** Persisted-generation call-site excerpts outside the primary focus excerpts. */
+  readonly sourceWindows?: readonly ExploreSourceWindow[];
+  /** One auditable remainder allocation inside the same total source envelope. */
+  readonly sourceWindowAllocation?: ExploreSourceWindowAllocationResult | null;
   /** Adjacent selected-focus path evidence; empty for exact-symbol mode. */
   readonly evidencePaths?: readonly ContextEvidencePath[];
 }
@@ -699,6 +705,39 @@ export interface ExploreConnection {
   readonly source: SymbolNode;
   readonly target: SymbolNode;
   readonly edge: GraphEdge;
+}
+
+export type ExploreSourceWindow =
+  import("./explore-source-windows.js").ExploreSourceWindowPlanItem & {
+    readonly source: DeliveredSourceExcerpt;
+  };
+
+export interface ExploreSourceWindowAllocationResult {
+  readonly policy: typeof import("./explore-source-windows.js").EXPLORE_SOURCE_WINDOW_ALLOCATION_POLICY;
+  readonly budget: {
+    readonly totalCharacterBudget: number;
+    readonly primaryEmittedCharacters: number;
+    readonly availableCharacters: number;
+  };
+  readonly summary: {
+    readonly candidateCount: number;
+    readonly requestedCharacters: number;
+    readonly allocatedCharacters: number;
+    readonly emittedCharacters: number;
+    readonly emittedWindows: number;
+    readonly unusedCharacters: number;
+    readonly reservedButNotEmittedCharacters: number;
+    readonly truncated: boolean;
+  };
+  readonly windows: readonly {
+    readonly index: number;
+    readonly requestedCharacters: number;
+    readonly allocatedCharacters: number;
+    readonly emittedCharacters: number;
+    readonly reservedButNotEmittedCharacters: number;
+    readonly truncated: boolean;
+    readonly reason: "focus-rank-window-order";
+  }[];
 }
 
 /** Input bounds for a multi-symbol context pack. */

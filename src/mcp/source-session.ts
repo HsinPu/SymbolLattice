@@ -755,7 +755,13 @@ export class McpSourceSession {
 
   private candidates(structured: Record<string, unknown>, tool: McpSourceTool): Candidate[] | null {
     if (tool === "explore" && structured.mode === "query" && Array.isArray(structured.focuses)) {
-      return this.contextCandidates(structured.focuses, tool);
+      const focuses = this.contextCandidates(structured.focuses, tool);
+      const windows = structured.sourceWindows === undefined
+        ? []
+        : Array.isArray(structured.sourceWindows)
+          ? this.contextCandidates(structured.sourceWindows, tool)
+          : null;
+      return focuses === null || windows === null ? null : [...focuses, ...windows];
     }
     if (tool === "node" || tool === "explore") {
       if (!isRecord(structured.source) || typeof structured.source.text !== "string" ||
@@ -921,8 +927,20 @@ export class McpSourceSession {
     deliveries: readonly Delivery[]
   ): Record<string, unknown> | null {
     if (tool === "explore" && structured.mode === "query" && Array.isArray(structured.focuses)) {
-      const focuses = this.applyContextDeliveries(structured.focuses, deliveries);
-      return focuses === null ? null : { ...structured, focuses };
+      const focusCandidates = this.contextCandidates(structured.focuses, tool);
+      if (focusCandidates === null) return null;
+      const focusDeliveries = deliveries.slice(0, focusCandidates.length);
+      const focuses = this.applyContextDeliveries(structured.focuses, focusDeliveries);
+      if (focuses === null) return null;
+      if (structured.sourceWindows === undefined) {
+        return focusDeliveries.length === deliveries.length ? { ...structured, focuses } : null;
+      }
+      if (!Array.isArray(structured.sourceWindows)) return null;
+      const sourceWindows = this.applyContextDeliveries(
+        structured.sourceWindows,
+        deliveries.slice(focusCandidates.length)
+      );
+      return sourceWindows === null ? null : { ...structured, focuses, sourceWindows };
     }
     if (tool === "node" || tool === "explore") {
       if (!isRecord(structured.source) || deliveries.length !== 1) return null;

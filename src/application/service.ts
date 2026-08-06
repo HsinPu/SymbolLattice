@@ -106,6 +106,10 @@ import {
   type ExploreQueryPlan
 } from "./explore-query.js";
 import {
+  allocateExploreSourceWindowCharacters,
+  planExploreSourceWindows
+} from "./explore-source-windows.js";
+import {
   allocateInvestigationSource,
   DEFAULT_INVESTIGATION_SOURCE_CHARACTER_BUDGET,
   INVESTIGATION_SOURCE_ALLOCATION_POLICY,
@@ -217,6 +221,8 @@ import type {
   ExploreResult,
   ExploreConnection,
   ExploreFocus,
+  ExploreSourceWindow,
+  ExploreSourceWindowAllocationResult,
   FilesOptions,
   FilesResult,
   FileViewOptions,
@@ -797,9 +803,27 @@ function contextSourceDraftFromPersistedText(input: {
   readonly sourceText: string;
   readonly centerLine: number;
 }): ContextSourceDraft | null {
+  return sourceWindowDraftFromPersistedText({
+    referenceIndex: input.referenceIndex,
+    reference: input.reference,
+    filePath: input.filePath,
+    sourceText: input.sourceText,
+    startLine: Math.max(1, input.centerLine - 2),
+    endLine: input.centerLine + 2
+  });
+}
+
+function sourceWindowDraftFromPersistedText(input: {
+  readonly referenceIndex: number;
+  readonly reference: string;
+  readonly filePath: string;
+  readonly sourceText: string;
+  readonly startLine: number;
+  readonly endLine: number;
+}): ContextSourceDraft | null {
   const lineStarts = sourceLineStarts(input.sourceText);
-  const startLine = Math.max(1, input.centerLine - 2);
-  const requestedEndLine = Math.min(lineStarts.length, input.centerLine + 2);
+  const startLine = Math.max(1, input.startLine);
+  const requestedEndLine = Math.min(lineStarts.length, input.endLine);
   const startOffset = lineStarts[startLine - 1];
   const endOffset = lineStarts[requestedEndLine] ?? input.sourceText.length;
   if (startOffset === undefined || endOffset <= startOffset) return null;
@@ -4659,6 +4683,65 @@ export class SymbolLatticeService {
         return source === undefined || target === undefined ? [] : [{ source, target, edge }];
       });
 
+    const sourceWindowPlan = planExploreSourceWindows(focuses, connections);
+    const sourceWindowDrafts = new Map<number, ContextSourceDraft>();
+    for (const window of sourceWindowPlan.windows) {
+      const document = documentsByFilePath.get(window.filePath);
+      if (document === undefined) continue;
+      const draft = sourceWindowDraftFromPersistedText({
+        referenceIndex: window.index,
+        reference: `explore-window:${window.index}`,
+        filePath: window.filePath,
+        sourceText: document.sourceText,
+        startLine: window.startLine,
+        endLine: window.endLine
+      });
+      if (draft !== null) sourceWindowDrafts.set(window.index, draft);
+    }
+    const sourceWindowReservation = allocateExploreSourceWindowCharacters({
+      totalCharacterBudget: DEFAULT_CONTEXT_SOURCE_CHARACTER_BUDGET,
+      primaryEmittedCharacters: contextPack.allocation.summary.emittedCharacters,
+      candidates: [...sourceWindowDrafts.values()].map((draft) => ({
+        index: draft.referenceIndex,
+        requestedCharacters: draft.endOffset - draft.startOffset
+      }))
+    });
+    const renderedSourceWindows = new Map<number, DeliveredSourceExcerpt>();
+    for (const allocation of sourceWindowReservation.windows) {
+      if (allocation.allocatedCharacters === 0) continue;
+      const draft = sourceWindowDrafts.get(allocation.index);
+      if (draft === undefined) continue;
+      const source = renderContextSource(draft, allocation.allocatedCharacters);
+      if (source !== null) renderedSourceWindows.set(allocation.index, source);
+    }
+    const sourceWindows: ExploreSourceWindow[] = sourceWindowPlan.windows.flatMap((window) => {
+      const source = renderedSourceWindows.get(window.index);
+      return source === undefined ? [] : [{ ...window, source }];
+    });
+    const sourceWindowAllocations = sourceWindowReservation.windows.map((allocation) => {
+      const emittedCharacters = renderedSourceWindows.get(allocation.index)?.emittedCharacters ?? 0;
+      return {
+        ...allocation,
+        emittedCharacters,
+        reservedButNotEmittedCharacters: allocation.allocatedCharacters - emittedCharacters
+      };
+    });
+    const emittedWindowCharacters = sourceWindowAllocations.reduce(
+      (total, allocation) => total + allocation.emittedCharacters,
+      0
+    );
+    const sourceWindowAllocation: ExploreSourceWindowAllocationResult = {
+      ...sourceWindowReservation,
+      summary: {
+        ...sourceWindowReservation.summary,
+        emittedCharacters: emittedWindowCharacters,
+        emittedWindows: sourceWindows.length,
+        reservedButNotEmittedCharacters:
+          sourceWindowReservation.summary.allocatedCharacters - emittedWindowCharacters
+      },
+      windows: sourceWindowAllocations
+    };
+
     return {
       status: await this.getStatusForBundle(normalizedProjectPath, bundle),
       mode: "query",
@@ -4673,6 +4756,9 @@ export class SymbolLatticeService {
       connections,
       connectionsTruncated: connectionCandidates.length > connections.length,
       sourceAllocation: contextPack.allocation,
+      sourceWindowPlan,
+      sourceWindows,
+      sourceWindowAllocation,
       evidencePaths: this.contextEvidencePaths(matches, bundle, bounds)
     };
   }

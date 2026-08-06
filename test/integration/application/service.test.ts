@@ -810,6 +810,14 @@ describe("SymbolLatticeService", () => {
         'import { persistOrder } from "../data/orders.js";',
         "",
         "export function createOrder(): string {",
+        "  // prepare order metadata",
+        "  // validate the request",
+        "  // normalize item values",
+        "  // reserve inventory",
+        "  // record the audit intent",
+        "",
+        "  // The exact call site is intentionally outside the declaration excerpt.",
+        "  // The persisted call below is the only graph connection in this function.",
         "  return persistOrder();",
         "}",
         "",
@@ -833,6 +841,11 @@ describe("SymbolLatticeService", () => {
     });
     const service = createService();
     await service.init({ projectPath });
+    await writeFile(
+      join(projectPath, "src", "api", "orders.ts"),
+      'export function liveOnlyApi() { return "not indexed api"; }\n',
+      "utf8"
+    );
     await writeFile(
       join(projectPath, "src", "data", "orders.ts"),
       'export function liveOnly() { return "not indexed"; }\n',
@@ -899,6 +912,24 @@ describe("SymbolLatticeService", () => {
         policy: "reference-order-source-v1",
         budget: { characterBudget: 24_000 },
         summary: { candidateCount: 4 }
+      },
+      sourceWindowPlan: {
+        policy: "explore-source-windows-v1",
+        summary: { candidateCount: 1, selectedCount: 1, truncated: false }
+      },
+      sourceWindows: [
+        {
+          index: 0,
+          focusRank: 1,
+          filePath: "src/api/orders.ts",
+          reason: "exact-connection-site",
+          source: { filePath: "src/api/orders.ts" }
+        }
+      ],
+      sourceWindowAllocation: {
+        policy: "explore-source-window-allocation-v1",
+        budget: { totalCharacterBudget: 24_000 },
+        summary: { candidateCount: 1, emittedWindows: 1 }
       }
     });
     expect(result.focuses?.map((focus) => focus.source?.text).join("\n")).toContain(
@@ -908,6 +939,12 @@ describe("SymbolLatticeService", () => {
       "not indexed"
     );
     expect(result.sourceAllocation?.summary.emittedCharacters).toBeLessThanOrEqual(24_000);
+    expect(result.sourceWindows?.[0]?.source.text).toContain("return persistOrder();");
+    expect(result.sourceWindows?.[0]?.source.text).not.toContain("not indexed api");
+    expect(
+      (result.sourceAllocation?.summary.emittedCharacters ?? 0) +
+        (result.sourceWindowAllocation?.summary.emittedCharacters ?? 0)
+    ).toBeLessThanOrEqual(24_000);
   });
 
   it("reports unavailable when the active generation has no matching source document", async () => {

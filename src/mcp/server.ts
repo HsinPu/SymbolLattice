@@ -21,6 +21,11 @@ import {
   EXPLORE_QUERY_PLAN_POLICY
 } from "../application/explore-query.js";
 import {
+  EXPLORE_SOURCE_WINDOW_ALLOCATION_POLICY,
+  EXPLORE_SOURCE_WINDOW_LIMITS,
+  EXPLORE_SOURCE_WINDOW_POLICY
+} from "../application/explore-source-windows.js";
+import {
   INVESTIGATE_SOURCE_RENDER_MODES,
   INVESTIGATION_SOURCE_MAXIMUM_SEGMENTS,
   INVESTIGATION_SOURCE_RENDER_POLICY,
@@ -962,6 +967,62 @@ const exploreFocusOutputSchema = exploreQuerySelectionOutputSchema
   })
   .passthrough();
 
+const exploreSourceWindowPlanItemOutputSchema = z.object({
+  index: z.number().int().nonnegative().max(EXPLORE_SOURCE_WINDOW_LIMITS.maximumWindows - 1),
+  focusRank: z.number().int().positive().max(EXPLORE_QUERY_LIMITS.maximumSymbols),
+  filePath: z.string(),
+  startLine: z.number().int().positive(),
+  endLine: z.number().int().positive(),
+  connectionEdgeIds: z.array(z.string()).max(EXPLORE_QUERY_LIMITS.maximumConnections),
+  relatedSymbolIds: z.array(z.string()).max(EXPLORE_QUERY_LIMITS.maximumConnections),
+  reason: z.literal("exact-connection-site")
+});
+
+const exploreSourceWindowPlanOutputSchema = z.object({
+  policy: z.literal(EXPLORE_SOURCE_WINDOW_POLICY),
+  limits: z.object({
+    contextPaddingLines: z.literal(EXPLORE_SOURCE_WINDOW_LIMITS.contextPaddingLines),
+    mergeGapLines: z.literal(EXPLORE_SOURCE_WINDOW_LIMITS.mergeGapLines),
+    maximumWindows: z.literal(EXPLORE_SOURCE_WINDOW_LIMITS.maximumWindows),
+    maximumWindowsPerFocus: z.literal(EXPLORE_SOURCE_WINDOW_LIMITS.maximumWindowsPerFocus)
+  }),
+  summary: z.object({
+    candidateCount: z.number().int().nonnegative(),
+    selectedCount: z.number().int().nonnegative().max(EXPLORE_SOURCE_WINDOW_LIMITS.maximumWindows),
+    selectedFocusCount: z.number().int().nonnegative().max(EXPLORE_QUERY_LIMITS.maximumSymbols),
+    truncated: z.boolean()
+  }),
+  windows: z.array(exploreSourceWindowPlanItemOutputSchema).max(EXPLORE_SOURCE_WINDOW_LIMITS.maximumWindows)
+});
+
+const exploreSourceWindowAllocationOutputSchema = z.object({
+  policy: z.literal(EXPLORE_SOURCE_WINDOW_ALLOCATION_POLICY),
+  budget: z.object({
+    totalCharacterBudget: z.number().int().nonnegative(),
+    primaryEmittedCharacters: z.number().int().nonnegative(),
+    availableCharacters: z.number().int().nonnegative()
+  }),
+  summary: z.object({
+    candidateCount: z.number().int().nonnegative().max(EXPLORE_SOURCE_WINDOW_LIMITS.maximumWindows),
+    requestedCharacters: z.number().int().nonnegative(),
+    allocatedCharacters: z.number().int().nonnegative(),
+    emittedCharacters: z.number().int().nonnegative(),
+    emittedWindows: z.number().int().nonnegative().max(EXPLORE_SOURCE_WINDOW_LIMITS.maximumWindows),
+    unusedCharacters: z.number().int().nonnegative(),
+    reservedButNotEmittedCharacters: z.number().int().nonnegative(),
+    truncated: z.boolean()
+  }),
+  windows: z.array(z.object({
+    index: z.number().int().nonnegative().max(EXPLORE_SOURCE_WINDOW_LIMITS.maximumWindows - 1),
+    requestedCharacters: z.number().int().positive(),
+    allocatedCharacters: z.number().int().nonnegative(),
+    emittedCharacters: z.number().int().nonnegative(),
+    reservedButNotEmittedCharacters: z.number().int().nonnegative(),
+    truncated: z.boolean(),
+    reason: z.literal("focus-rank-window-order")
+  })).max(EXPLORE_SOURCE_WINDOW_LIMITS.maximumWindows)
+});
+
 const exploreOutputSchema = z
   .object({
     status: indexStatusOutputSchema,
@@ -992,6 +1053,11 @@ const exploreOutputSchema = z
       .optional(),
     connectionsTruncated: z.boolean().optional(),
     sourceAllocation: contextSourceAllocationOutputSchema.nullable().optional(),
+    sourceWindowPlan: exploreSourceWindowPlanOutputSchema.nullable().optional(),
+    sourceWindows: z.array(
+      exploreSourceWindowPlanItemOutputSchema.extend({ source: deliveredSourceExcerptOutputSchema })
+    ).max(EXPLORE_SOURCE_WINDOW_LIMITS.maximumWindows).optional(),
+    sourceWindowAllocation: exploreSourceWindowAllocationOutputSchema.nullable().optional(),
     evidencePaths: z.array(contextEvidencePathOutputSchema).optional()
   })
   .passthrough();
@@ -2426,7 +2492,7 @@ export function createMcpServer(
     {
       title: "Explore a SymbolLattice code graph",
       description:
-        "Explores either one exact symbol or a bounded question with named-file-first focus, exact selected connections, generation-bound source evidence, and index freshness from an existing local SymbolLattice index. This tool never creates or refreshes an index.",
+        "Explores either one exact symbol or a bounded question with named-file-first focus, exact selected connections, and generation-bound source evidence. Question mode can add bounded exact-connection call-site windows inside the same 24,000-character source envelope. This tool reports index freshness and never creates or refreshes an index.",
       inputSchema: {
         query: z.string().trim().min(1).describe("Exact symbol reference or a bounded question containing project-relative file and identifier clues."),
         projectPath: z.string().trim().min(1).optional().describe("Optional path to an already indexed project."),
