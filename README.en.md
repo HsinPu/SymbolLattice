@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.279.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher can update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.280.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher can update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## Quick start
 
@@ -49,7 +49,8 @@ Alternatively, download the version-pinned `.tgz`, SHA-256 checksum, and manifes
 
 ## What it does
 
-- `node`, `investigate`, and `file` share session-, project-, and generation-bound source coverage. Full coverage becomes a traceable back-reference. Partial overlap emits only new fragments when UTF-16 offsets, content, and the SHA-256 offset map are verifiable, at least 160 characters are saved, at least 160 new characters remain, and no more than four fragments are needed. CRLF, CR, and Unicode line separators retain raw-file offsets; incomplete maps, boundaries inside a line-ending sequence, content mismatch, or marginal savings re-emit the full source. `sourceSessionMode: "full"` disables deduplication.
+- `node`, `investigate`, and `file` share session-, project-, and generation-bound source coverage. Back-references or new fragments are emitted only when UTF-16 offsets, content, and the SHA-256 offset map are verifiable and the 160-character savings/new-context floors plus four-fragment cap are satisfied; otherwise the full source is re-emitted. `sourceSessionMode: "full"` disables deduplication.
+- Every emitted, covered, or new fragment may carry `mcp-source-pointer-v1`: project-relative path, exact line/column range, raw-file offsets, at most five overlapping symbols, a readable `file:Lx-Ly (symbol)` label, and a SHA-256 receipt. CRLF, CR, Unicode separators, and partial fragments are rebased safely; insufficient display evidence omits only the pointer and never weakens source equality.
 - `investigate` allocates a shared 2,048–64,000-character budget to exact slices from one active generation. `adaptive` keeps one contiguous result; callers may request `prefix`, `focused`, `signature`, or `multi` for at most two independently verifiable signature and focus slices. Every segment has a stable ID, SHA-256, range, and explicit omission gap. No source is synthesized, and insufficient proof or budget produces a disclosed single-segment fallback.
 - Scans multiple languages and common frameworks into a project-local code graph.
 - Queries symbols, indexed files, calls, routes, entry points, impact, retained generations, and diffs.

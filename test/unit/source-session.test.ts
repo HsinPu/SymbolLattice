@@ -110,7 +110,212 @@ function investigateSliceResponse(sourceText: string, start: number, end: number
   });
 }
 
+function pointerFixture() {
+  const sourceText = [
+    "export function userById() {",
+    "  return 1;",
+    "}"
+  ].join("\n");
+  const sourceIdentity = sourceDeliveryIdentityFromText({
+    filePath: "src/users.ts",
+    text: sourceText,
+    fullFileCharacterOffsets: { start: 100, end: 100 + sourceText.length }
+  });
+  const symbol = {
+    id: "symbol:users:userById",
+    name: "userById",
+    qualifiedName: "src/users.ts#userById",
+    kind: "function",
+    filePath: "src/users.ts",
+    range: { start: { line: 12, column: 1 }, end: { line: 14, column: 2 } }
+  };
+  return {
+    node: response({
+      status: status(),
+      match: { status: "exact", symbol },
+      source: {
+        filePath: "src/users.ts",
+        text: sourceText,
+        sourceIdentity,
+        range: symbol.range,
+        truncated: false
+      }
+    }),
+    file: response({
+      status: status(),
+      contentAvailability: "active-generation",
+      selection: { filePath: "src/users.ts" },
+      sourceIdentity,
+      lines: sourceText.split("\n").map((line, index) => ({ line: 12 + index, text: line })),
+      symbols: [symbol]
+    })
+  };
+}
+
 describe("MCP source session", () => {
+  it("projects stable file, line, and symbol pointers for exact back-references", () => {
+    const fixture = pointerFixture();
+    const session = new McpSourceSession();
+    const first = session.project(fixture.node, "node", "deduplicate");
+    const second = session.project(fixture.file, "file", "deduplicate");
+
+    expect(first.structuredContent).toMatchObject({
+      source: {
+        delivery: {
+          status: "emitted",
+          pointer: {
+            policy: "mcp-source-pointer-v1",
+            filePath: "src/users.ts",
+            lineSpan: { start: 12, end: 14 },
+            symbols: [{ reference: "src/users.ts#userById", name: "userById", kind: "function" }],
+            symbolsTruncated: false,
+            display: "src/users.ts:L12-L14 (userById)"
+          }
+        }
+      }
+    });
+    expect(second.structuredContent).toMatchObject({
+      lines: [],
+      sourceDelivery: {
+        policy: "mcp-session-source-dedup-v5",
+        status: "already-served",
+        coveredPointers: [{
+          filePath: "src/users.ts",
+          lineSpan: { start: 12, end: 14 },
+          display: "src/users.ts:L12-L14 (userById)"
+        }],
+        coveredBy: [{
+          firstDeliveredTool: "node",
+          pointer: { display: "src/users.ts:L12-L14 (userById)" }
+        }]
+      }
+    });
+  });
+
+  it("keeps equality deduplication when display metadata cannot be proven", () => {
+    const session = new McpSourceSession();
+    const invalidFile = fileResponse();
+    ((invalidFile.structuredContent.lines as Array<Record<string, unknown>>)[0]!).line = "invalid";
+    const first = session.project(nodeResponse(), "node", "deduplicate");
+    const second = session.project(invalidFile, "file", "deduplicate");
+
+    expect(first.structuredContent).toMatchObject({
+      source: { delivery: { status: "emitted" } }
+    });
+    expect(first.structuredContent).not.toHaveProperty("source.delivery.pointer");
+    expect(second.structuredContent).toMatchObject({
+      lines: [],
+      sourceDelivery: { status: "already-served" }
+    });
+    expect(second.structuredContent).not.toHaveProperty("sourceDelivery.coveredPointers");
+    expect(second.structuredContent).not.toHaveProperty("sourceDelivery.coveredBy.0.pointer");
+  });
+
+  it("rebases CRLF partial fragments to precise pointers and overlapping symbols", () => {
+    const rawText = `${"a".repeat(200)}\r\n${"b".repeat(200)}`;
+    const normalized = canonicalSourceDeliverySlice({
+      filePath: "src/intervals.ts",
+      sourceText: rawText,
+      fullFileCharacterOffsets: { start: 0, end: rawText.length }
+    });
+    const alpha = {
+      id: "symbol:alpha",
+      name: "alpha",
+      qualifiedName: "src/intervals.ts#alpha",
+      kind: "constant",
+      filePath: "src/intervals.ts",
+      range: { start: { line: 5, column: 1 }, end: { line: 5, column: 201 } }
+    };
+    const beta = {
+      id: "symbol:beta",
+      name: "beta",
+      qualifiedName: "src/intervals.ts#beta",
+      kind: "constant",
+      filePath: "src/intervals.ts",
+      range: { start: { line: 6, column: 1 }, end: { line: 6, column: 201 } }
+    };
+    const first = response({
+      status: status(),
+      match: { status: "exact", symbol: alpha },
+      source: {
+        filePath: "src/intervals.ts",
+        text: "a".repeat(200),
+        range: alpha.range,
+        truncated: false,
+        sourceIdentity: sourceDeliveryIdentityFromText({
+          filePath: "src/intervals.ts",
+          text: "a".repeat(200),
+          fullFileCharacterOffsets: { start: 0, end: 200 }
+        })
+      }
+    });
+    const second = response({
+      status: status(),
+      contentAvailability: "active-generation",
+      selection: { filePath: "src/intervals.ts" },
+      sourceIdentity: normalized.sourceIdentity,
+      lines: normalized.text.split("\n").map((line, index) => ({ line: 5 + index, text: line })),
+      symbols: [alpha, beta]
+    });
+    const session = new McpSourceSession();
+    session.project(first, "node", "deduplicate");
+
+    const projected = session.project(second, "file", "deduplicate");
+
+    expect(projected.structuredContent).toMatchObject({
+      sourceDelivery: {
+        status: "partially-served",
+        coveredPointers: [{
+          range: { start: { line: 5, column: 1 }, end: { line: 5, column: 201 } },
+          lineSpan: { start: 5, end: 5 },
+          symbols: [{ name: "alpha" }],
+          display: "src/intervals.ts:L5 (alpha)"
+        }],
+        fragments: [{
+          text: `\n${"b".repeat(200)}`,
+          pointer: {
+            range: { start: { line: 5, column: 201 }, end: { line: 6, column: 201 } },
+            lineSpan: { start: 5, end: 6 },
+            symbols: [{ name: "beta" }],
+            display: "src/intervals.ts:L5-L6 (beta)"
+          }
+        }]
+      }
+    });
+  });
+
+  it("bounds pointer symbols and discloses truncation", () => {
+    const fixture = pointerFixture();
+    const file = fixture.file.structuredContent;
+    const base = (file.symbols as Array<Record<string, unknown>>)[0]!;
+    file.symbols = Array.from({ length: 7 }, (_value, index) => ({
+      ...base,
+      id: `symbol:${index}`,
+      name: `symbol${index}`,
+      qualifiedName: `src/users.ts#symbol${index}`
+    }));
+
+    const projected = new McpSourceSession().project(fixture.file, "file", "deduplicate");
+
+    expect(projected.structuredContent).toMatchObject({
+      sourceDelivery: {
+        status: "emitted",
+        pointer: {
+          symbols: [
+            { name: "symbol0" },
+            { name: "symbol1" },
+            { name: "symbol2" },
+            { name: "symbol3" },
+            { name: "symbol4" }
+          ],
+          symbolsTruncated: true,
+          display: "src/users.ts:L12-L14 (symbol0, symbol1, symbol2, symbol3, symbol4, +more)"
+        }
+      },
+      sessionSource: { bounds: { maximumPointerSymbols: 5 } }
+    });
+  });
+
   it("deduplicates the same exact source across node, investigate, and file", () => {
     const session = new McpSourceSession();
     const node = session.project(nodeResponse(), "node", "deduplicate");

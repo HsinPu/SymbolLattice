@@ -31,6 +31,10 @@ import {
   type McpSourceSessionMode
 } from "./source-session.js";
 import {
+  MCP_SOURCE_POINTER_MAXIMUM_SYMBOLS,
+  MCP_SOURCE_POINTER_POLICY
+} from "./source-pointer.js";
+import {
   SOURCE_DELIVERY_IDENTITY_POLICY,
   SOURCE_DELIVERY_MAXIMUM_OFFSET_SPANS,
   SOURCE_DELIVERY_OFFSET_MAP_POLICY
@@ -732,10 +736,34 @@ const sourceCharacterRangeOutputSchema = z.object({
   end: z.number().int().nonnegative()
 });
 
+const sourcePointerSymbolOutputSchema = z.object({
+  reference: z.string().min(1),
+  name: z.string().min(1),
+  kind: z.string().min(1),
+  range: sourceRangeOutputSchema
+});
+
+const sourcePointerOutputSchema = z.object({
+  policy: z.literal(MCP_SOURCE_POINTER_POLICY),
+  sourceId: z.string().regex(/^source:[0-9a-f]{64}$/u),
+  filePath: z.string().min(1),
+  range: sourceRangeOutputSchema,
+  lineSpan: z.object({
+    start: z.number().int().positive(),
+    end: z.number().int().positive()
+  }),
+  fullFileCharacterOffsets: sourceCharacterRangeOutputSchema,
+  symbols: z.array(sourcePointerSymbolOutputSchema).max(MCP_SOURCE_POINTER_MAXIMUM_SYMBOLS),
+  symbolsTruncated: z.boolean(),
+  display: z.string().min(1),
+  pointerSha256: z.string().regex(/^[0-9a-f]{64}$/u)
+});
+
 const sourceCoverageReceiptOutputSchema = z.object({
   sourceId: z.string().regex(/^source:[0-9a-f]{64}$/u),
   firstDeliveredCallIndex: z.number().int().positive(),
-  firstDeliveredTool: z.enum(["node", "investigate", "file"])
+  firstDeliveredTool: z.enum(["node", "investigate", "file"]),
+  pointer: sourcePointerOutputSchema.optional()
 });
 
 const sourceDeliveryOutputSchema = z.union([
@@ -745,6 +773,7 @@ const sourceDeliveryOutputSchema = z.union([
     sourceId: z.string().regex(/^source:[0-9a-f]{64}$/u),
     callIndex: z.number().int().positive(),
     tool: z.enum(["node", "investigate", "file"]),
+    pointer: sourcePointerOutputSchema.optional(),
     intervalDecision: z.object({
       status: z.literal("full"),
       reason: z.enum([
@@ -765,6 +794,7 @@ const sourceDeliveryOutputSchema = z.union([
     firstDeliveredCallIndex: z.number().int().positive(),
     firstDeliveredTool: z.enum(["node", "investigate", "file"]),
     coveredCharacterOffsets: z.array(sourceCharacterRangeOutputSchema).min(1),
+    coveredPointers: z.array(sourcePointerOutputSchema).min(1).optional(),
     coveredBy: z.array(sourceCoverageReceiptOutputSchema).min(1),
     message: z.string().min(1)
   }),
@@ -775,10 +805,12 @@ const sourceDeliveryOutputSchema = z.union([
     callIndex: z.number().int().positive(),
     tool: z.enum(["node", "investigate", "file"]),
     coveredCharacterOffsets: z.array(sourceCharacterRangeOutputSchema).min(1),
+    coveredPointers: z.array(sourcePointerOutputSchema).min(1).optional(),
     coveredBy: z.array(sourceCoverageReceiptOutputSchema).min(1),
     fragments: z.array(z.object({
       text: z.string().min(1),
-      sourceIdentity: sourceDeliveryIdentityOutputSchema
+      sourceIdentity: sourceDeliveryIdentityOutputSchema,
+      pointer: sourcePointerOutputSchema.optional()
     })).min(1),
     intervalDecision: z.object({
       status: z.literal("partial"),
@@ -794,6 +826,7 @@ const sourceSessionReceiptOutputSchema = z.object({
   policy: z.literal(MCP_SOURCE_SESSION_POLICY),
   scope: z.literal("mcp-server-session"),
   identityPolicy: z.literal(SOURCE_DELIVERY_IDENTITY_POLICY),
+  pointerPolicy: z.literal(MCP_SOURCE_POINTER_POLICY),
   equality: z.literal("verified-offset-map-and-canonical-content"),
   mode: z.enum(MCP_SOURCE_SESSION_MODES),
   tool: z.enum(["node", "investigate", "file"]),
@@ -806,7 +839,8 @@ const sourceSessionReceiptOutputSchema = z.object({
     maximumSourcesPerProject: z.number().int().positive(),
     minimumAvoidedCharacters: z.number().int().nonnegative(),
     minimumEmittedCharacters: z.number().int().nonnegative(),
-    maximumFragmentsPerSource: z.number().int().positive()
+    maximumFragmentsPerSource: z.number().int().positive(),
+    maximumPointerSymbols: z.literal(MCP_SOURCE_POINTER_MAXIMUM_SYMBOLS)
   }),
   summary: z.object({
     candidateSources: z.number().int().nonnegative(),

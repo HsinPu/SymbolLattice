@@ -2663,7 +2663,17 @@ describe("SymbolLattice MCP server", () => {
     });
     expect(file.structuredContent).toMatchObject({
       lines: [],
-      sourceDelivery: { status: "already-served", firstDeliveredTool: "node" },
+      sourceDelivery: {
+        status: "already-served",
+        firstDeliveredTool: "node",
+        coveredPointers: [{ filePath: "src/users.ts", lineSpan: { start: 1, end: 1 } }],
+        coveredBy: [{
+          pointer: {
+            policy: "mcp-source-pointer-v1",
+            display: "src/users.ts:L1 (userById)"
+          }
+        }]
+      },
       sessionSource: {
         callIndex: 3,
         summary: { emittedSources: 0, referencedSources: 1 }

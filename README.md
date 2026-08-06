@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.279.0 是開發預覽版。MCP 查詢工具唯讀；但 `serve --mcp` 預設會啟動獨立的本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用它。
+> v0.280.0 是開發預覽版。MCP 查詢工具唯讀；但 `serve --mcp` 預設會啟動獨立的本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用它。
 
 ## 快速開始
 
@@ -49,7 +49,8 @@ node dist/cli/main.js file service.ts --project /path/to/project --offset 1600 -
 
 ## 核心能力
 
-- `node`、`investigate` 與 `file` 共用 session／project／generation 來源 coverage。完全覆蓋會回傳可追溯的 back-reference；部分重疊只有在 UTF-16 offsets、內容與 SHA-256 offset map 都可驗證、至少省 160 字元、仍有 160 字元新內容且最多拆成 4 段時，才只傳送新 fragments。CRLF、CR 與 Unicode 行分隔會保留原始檔案 offsets；映射不完整、邊界切入換行序列、內容不符或節省不足都會完整重送。`sourceSessionMode: "full"` 可停用去重。
+- `node`、`investigate` 與 `file` 共用 session／project／generation 來源 coverage。只有 UTF-16 offsets、內容與 SHA-256 offset map 都可驗證，且符合 160 字元節省／新內容門檻與最多 4 段限制時，才回傳 back-reference 或新 fragments；否則完整重送。`sourceSessionMode: "full"` 可停用去重。
+- 每段已傳送、已覆蓋與新 fragment 都可附 `mcp-source-pointer-v1`：專案相對路徑、精確行列、原始檔 offsets、最多 5 個重疊 symbol、可讀 `file:Lx-Ly (symbol)` 與 SHA-256 receipt。CRLF、CR、Unicode 行分隔與部分片段會重新定位；顯示證據不足時只省略 pointer，不影響來源相等性判定。
 - `investigate` 以 2,048–64,000 字元的共享 declaration-source 預算配置同一 active generation 的精確片段。`adaptive` 保持單一連續輸出；也可指定 `prefix`、`focused`、`signature`，或用 `multi` 分開取得最多兩段可獨立核對的 signature 與焦點原始碼。每段都有穩定 ID、SHA-256、範圍與省略 gap；不會合成不存在的文字，證據或預算不足時會明確降級。
 - 將多種語言與常見框架掃描成專案本機程式碼圖譜。
 - 查詢 symbols、files、calls、routes、entrypoints、impact、history 與 diff。

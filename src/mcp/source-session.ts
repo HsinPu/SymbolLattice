@@ -6,8 +6,19 @@ import {
   type SourceDeliveryIdentity,
   type SourceDeliveryOffsetMap
 } from "../application/source-delivery.js";
+import {
+  MCP_SOURCE_POINTER_MAXIMUM_CANDIDATE_SYMBOLS,
+  MCP_SOURCE_POINTER_MAXIMUM_SYMBOLS,
+  MCP_SOURCE_POINTER_POLICY,
+  mcpSourcePointerContext,
+  projectMcpSourcePointer,
+  type McpSourcePointer,
+  type McpSourcePointerContext,
+  type McpSourcePointerSymbol,
+  type McpSourceRange
+} from "./source-pointer.js";
 
-export const MCP_SOURCE_SESSION_POLICY = "mcp-session-source-dedup-v4" as const;
+export const MCP_SOURCE_SESSION_POLICY = "mcp-session-source-dedup-v5" as const;
 export const MCP_SOURCE_SESSION_MODES = ["deduplicate", "full"] as const;
 export type McpSourceSessionMode = (typeof MCP_SOURCE_SESSION_MODES)[number];
 export type McpSourceTool = "node" | "investigate" | "file";
@@ -43,6 +54,7 @@ export interface SourceSessionResponse {
 interface DeliveredSource {
   readonly identity: SourceDeliveryIdentity;
   readonly text: string;
+  readonly pointer: McpSourcePointer | null;
   readonly firstDeliveredCallIndex: number;
   readonly firstDeliveredTool: McpSourceTool;
 }
@@ -57,6 +69,8 @@ interface Candidate {
   readonly identity: SourceDeliveryIdentity;
   readonly text: string;
   readonly tool: McpSourceTool;
+  readonly pointerContext: McpSourcePointerContext | null;
+  readonly pointer: McpSourcePointer | null;
 }
 
 interface Delivery {
@@ -82,6 +96,7 @@ interface ProvenCoverage extends CharacterRange {
 interface MappedSlice {
   readonly text: string;
   readonly offsetMap: SourceDeliveryOffsetMap;
+  readonly deliveredCharacterOffsets: CharacterRange;
 }
 
 function boundedPositive(value: number | undefined, fallback: number): number {
@@ -124,6 +139,66 @@ function subtractRanges(range: CharacterRange, covered: readonly CharacterRange[
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function sourcePosition(value: unknown): { readonly line: number; readonly column: number } | null {
+  if (!isRecord(value) || !Number.isSafeInteger(value.line) || (value.line as number) <= 0 ||
+    !Number.isSafeInteger(value.column) || (value.column as number) <= 0) return null;
+  return { line: value.line as number, column: value.column as number };
+}
+
+function sourceRange(value: unknown): McpSourceRange | null {
+  if (!isRecord(value)) return null;
+  const start = sourcePosition(value.start);
+  const end = sourcePosition(value.end);
+  if (start === null || end === null || end.line < start.line ||
+    (end.line === start.line && end.column < start.column)) return null;
+  return { start, end };
+}
+
+function pointerSymbol(value: unknown, expectedFilePath: string): McpSourcePointerSymbol | null {
+  if (!isRecord(value) || typeof value.name !== "string" || value.name.length === 0 ||
+    typeof value.kind !== "string" || value.kind.length === 0 ||
+    (typeof value.filePath === "string" && value.filePath !== expectedFilePath)) return null;
+  const range = sourceRange(value.range);
+  if (range === null) return null;
+  const reference = typeof value.qualifiedName === "string" && value.qualifiedName.length > 0
+    ? value.qualifiedName
+    : typeof value.reference === "string" && value.reference.length > 0
+      ? value.reference
+      : typeof value.id === "string" && value.id.length > 0 ? value.id : null;
+  return reference === null ? null : {
+    reference,
+    name: value.name,
+    kind: value.kind,
+    range
+  };
+}
+
+function pointerSymbols(value: unknown, expectedFilePath: string): {
+  readonly symbols: readonly McpSourcePointerSymbol[];
+  readonly truncated: boolean;
+} {
+  if (!Array.isArray(value)) return { symbols: [], truncated: false };
+  const symbols: McpSourcePointerSymbol[] = [];
+  let truncated = value.length > MCP_SOURCE_POINTER_MAXIMUM_CANDIDATE_SYMBOLS;
+  for (const raw of value.slice(0, MCP_SOURCE_POINTER_MAXIMUM_CANDIDATE_SYMBOLS)) {
+    const symbol = pointerSymbol(raw, expectedFilePath);
+    if (symbol === null) {
+      truncated = true;
+      continue;
+    }
+    symbols.push(symbol);
+  }
+  return { symbols, truncated };
+}
+
+function referencePointerSymbol(reference: unknown, range: McpSourceRange): McpSourcePointerSymbol | null {
+  if (typeof reference !== "string" || reference.length === 0) return null;
+  const hash = reference.lastIndexOf("#");
+  const name = (hash >= 0 ? reference.slice(hash + 1) : reference).trim();
+  if (name.length === 0) return null;
+  return { reference, name, kind: "declaration", range };
 }
 
 function sourceIdentity(
@@ -215,6 +290,7 @@ function mappedSlice(
   try {
     return {
       text,
+      deliveredCharacterOffsets: { start: deliveredStart, end: deliveredEnd },
       offsetMap: sourceDeliveryOffsetMap({
         text,
         fullFileCharacterOffsets: range,
@@ -224,6 +300,35 @@ function mappedSlice(
   } catch {
     return null;
   }
+}
+
+function candidateWithPointer(input: {
+  readonly identity: SourceDeliveryIdentity;
+  readonly text: string;
+  readonly tool: McpSourceTool;
+  readonly pointerContext: McpSourcePointerContext | null;
+}): Candidate {
+  const pointer = input.pointerContext === null ? null : projectMcpSourcePointer({
+    context: input.pointerContext,
+    sourceId: input.identity.id,
+    deliveredCharacterOffsets: { start: 0, end: input.text.length },
+    fullFileCharacterOffsets: input.identity.fullFileCharacterOffsets
+  });
+  return { ...input, pointer };
+}
+
+function pointerForSlice(
+  candidate: Candidate,
+  slice: MappedSlice,
+  sourceId: string,
+  range: CharacterRange
+): McpSourcePointer | null {
+  return candidate.pointerContext === null ? null : projectMcpSourcePointer({
+    context: candidate.pointerContext,
+    sourceId,
+    deliveredCharacterOffsets: slice.deliveredCharacterOffsets,
+    fullFileCharacterOffsets: range
+  });
 }
 
 function responseHeader(response: SourceSessionResponse): {
@@ -315,6 +420,7 @@ export class McpSourceSession {
         policy: MCP_SOURCE_SESSION_POLICY,
         scope: "mcp-server-session",
         identityPolicy: SOURCE_DELIVERY_IDENTITY_POLICY,
+        pointerPolicy: MCP_SOURCE_POINTER_POLICY,
         equality: "verified-offset-map-and-canonical-content",
         mode,
         tool,
@@ -327,7 +433,8 @@ export class McpSourceSession {
           maximumSourcesPerProject: this.maximumSourcesPerProject,
           minimumAvoidedCharacters: this.minimumAvoidedCharacters,
           minimumEmittedCharacters: this.minimumEmittedCharacters,
-          maximumFragmentsPerSource: this.maximumFragmentsPerSource
+          maximumFragmentsPerSource: this.maximumFragmentsPerSource,
+          maximumPointerSymbols: MCP_SOURCE_POINTER_MAXIMUM_SYMBOLS
         },
         summary: {
           candidateSources: candidates.length,
@@ -454,10 +561,27 @@ export class McpSourceSession {
         fullFileCharacterOffsets: range,
         offsetMap: slice.offsetMap
       });
-      stateTruncated ||= this.remember(state, { identity, text, tool }, callIndex);
-      return { text, sourceIdentity: identity };
+      const pointer = pointerForSlice(candidate, slice, identity.id, range);
+      stateTruncated ||= this.remember(state, {
+        identity,
+        text,
+        tool,
+        pointerContext: null,
+        pointer
+      }, callIndex);
+      return {
+        text,
+        sourceIdentity: identity,
+        ...(pointer === null ? {} : { pointer })
+      };
     });
     const coveredBy = this.coveredBy(proven.map((item) => item.delivered));
+    const coveredPointers = covered.flatMap((range, index) => {
+      const slice = coveredSlices[index]!;
+      if (slice === null) return [];
+      const pointer = pointerForSlice(candidate, slice, candidate.identity.id, range);
+      return pointer === null ? [] : [pointer];
+    });
     return {
       projection: "partial",
       metadata: {
@@ -467,6 +591,7 @@ export class McpSourceSession {
         callIndex,
         tool,
         coveredCharacterOffsets: covered,
+        ...(coveredPointers.length === 0 ? {} : { coveredPointers }),
         coveredBy,
         fragments,
         intervalDecision: {
@@ -521,6 +646,12 @@ export class McpSourceSession {
   ): Delivery {
     const coveredBy = this.coveredBy(delivered);
     const first = coveredBy[0]!;
+    const coveredPointers = covered.flatMap((range) => {
+      const slice = mappedSlice(candidate, range);
+      if (slice === null) return [];
+      const pointer = pointerForSlice(candidate, slice, candidate.identity.id, range);
+      return pointer === null ? [] : [pointer];
+    });
     return {
       projection: "reference",
       metadata: {
@@ -530,6 +661,7 @@ export class McpSourceSession {
         firstDeliveredCallIndex: first.firstDeliveredCallIndex,
         firstDeliveredTool: first.firstDeliveredTool,
         coveredCharacterOffsets: covered,
+        ...(coveredPointers.length === 0 ? {} : { coveredPointers }),
         coveredBy,
         message: `Exact source ${candidate.identity.id} is fully covered by source delivered earlier in this project generation.`
       },
@@ -560,6 +692,7 @@ export class McpSourceSession {
         sourceId: candidate.identity.id,
         callIndex,
         tool,
+        ...(candidate.pointer === null ? {} : { pointer: candidate.pointer }),
         intervalDecision: {
           status: "full",
           reason,
@@ -579,6 +712,7 @@ export class McpSourceSession {
     readonly sourceId: string;
     readonly firstDeliveredCallIndex: number;
     readonly firstDeliveredTool: McpSourceTool;
+    readonly pointer?: McpSourcePointer;
   }> {
     const unique = new Map<string, DeliveredSource>();
     for (const source of delivered) unique.set(source.identity.id, source);
@@ -590,7 +724,8 @@ export class McpSourceSession {
       .map((source) => ({
         sourceId: source.identity.id,
         firstDeliveredCallIndex: source.firstDeliveredCallIndex,
-        firstDeliveredTool: source.firstDeliveredTool
+        firstDeliveredTool: source.firstDeliveredTool,
+        ...(source.pointer === null ? {} : { pointer: source.pointer })
       }));
   }
 
@@ -603,6 +738,7 @@ export class McpSourceSession {
       state.sources.set(candidate.identity.id, {
         identity: candidate.identity,
         text: candidate.text,
+        pointer: candidate.pointer,
         firstDeliveredCallIndex: callIndex,
         firstDeliveredTool: candidate.tool
       });
@@ -626,20 +762,61 @@ export class McpSourceSession {
         structured.source.text,
         structured.source.filePath
       );
-      return identity === null ? null : [{ identity, text: structured.source.text, tool }];
+      if (identity === null) return null;
+      const range = sourceRange(structured.source.range);
+      const matchSymbol = isRecord(structured.match) && structured.match.status === "exact"
+        ? pointerSymbol(structured.match.symbol, identity.filePath)
+        : null;
+      const pointerContext = range === null ? null : mcpSourcePointerContext({
+        filePath: identity.filePath,
+        text: structured.source.text,
+        start: range.start,
+        expectedEnd: range.end,
+        allowTruncatedEnd: structured.source.truncated === true,
+        symbols: matchSymbol === null ? [] : [matchSymbol]
+      });
+      return [candidateWithPointer({
+        identity,
+        text: structured.source.text,
+        tool,
+        pointerContext
+      })];
     }
     if (tool === "file") {
       if (structured.contentAvailability !== "active-generation" || !Array.isArray(structured.lines)) return null;
       const lineTexts: string[] = [];
+      const lineNumbers: number[] = [];
+      let validLineMetadata = true;
       for (const line of structured.lines) {
         if (!isRecord(line) || typeof line.text !== "string") return null;
         lineTexts.push(line.text);
+        if (!Number.isSafeInteger(line.line) || (line.line as number) <= 0) {
+          validLineMetadata = false;
+        } else {
+          lineNumbers.push(line.line as number);
+        }
       }
       if (lineTexts.length === 0) return null;
       const text = lineTexts.join("\n");
       if (!isRecord(structured.selection) || typeof structured.selection.filePath !== "string") return null;
       const identity = sourceIdentity(structured.sourceIdentity, text, structured.selection.filePath);
-      return identity === null ? null : [{ identity, text, tool }];
+      if (identity === null) return null;
+      const consecutive = validLineMetadata && lineNumbers.length === lineTexts.length && lineNumbers.every(
+        (line, index) => index === 0 || line === lineNumbers[index - 1]! + 1
+      );
+      const symbolSelection = pointerSymbols(structured.symbols, identity.filePath);
+      const pointerContext = !consecutive ? null : mcpSourcePointerContext({
+        filePath: identity.filePath,
+        text,
+        start: { line: lineNumbers[0]!, column: 1 },
+        expectedEnd: {
+          line: lineNumbers[lineNumbers.length - 1]!,
+          column: lineTexts[lineTexts.length - 1]!.length + 1
+        },
+        symbols: symbolSelection.symbols,
+        symbolsTruncated: symbolSelection.truncated
+      });
+      return [candidateWithPointer({ identity, text, tool, pointerContext })];
     }
     if (!Array.isArray(structured.declarations)) return null;
     const candidates: Candidate[] = [];
@@ -664,7 +841,23 @@ export class McpSourceSession {
         );
         if (identity === null || seenSourceIds.has(identity.id)) return null;
         seenSourceIds.add(identity.id);
-        declarationCandidates.push({ identity, text: segment.text, tool });
+        const renderedRange = sourceRange(segment.renderedRange);
+        const referenceSymbol = renderedRange === null
+          ? null
+          : referencePointerSymbol(declaration.reference, renderedRange);
+        const pointerContext = renderedRange === null ? null : mcpSourcePointerContext({
+          filePath: identity.filePath,
+          text: segment.text,
+          start: renderedRange.start,
+          expectedEnd: renderedRange.end,
+          symbols: referenceSymbol === null ? [] : [referenceSymbol]
+        });
+        declarationCandidates.push(candidateWithPointer({
+          identity,
+          text: segment.text,
+          tool,
+          pointerContext
+        }));
       }
       const primary = declarationCandidates[declaration.source.primarySegmentIndex as number];
       const primaryIdentity = sourceIdentity(
