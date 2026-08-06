@@ -35,7 +35,8 @@ import {
   type NodeResult,
   type RoutesOptions,
   type RoutesResult,
-  type SearchResult
+  type SearchResult,
+  sourceDeliveryIdentityFromText
 } from "../../../src/application/index.js";
 import {
   createMcpServer,
@@ -827,6 +828,67 @@ function fileViewResult(): FileViewResult {
     lines: [],
     symbols: [],
     dependents: []
+  };
+}
+
+function crossToolSourceResults(): {
+  readonly node: NodeResult;
+  readonly investigate: InvestigateResult;
+  readonly file: FileViewResult;
+} {
+  const sourceText = "export function userById(): void {}";
+  const identity = sourceDeliveryIdentityFromText({
+    filePath: "src/users.ts",
+    text: sourceText,
+    fullFileCharacterOffsets: { start: 0, end: sourceText.length }
+  });
+  const node = nodeResult();
+  const investigation = investigateSessionResult();
+  const rendered = investigation.declarations[0]!.source!.renderedSegments[0]!;
+  return {
+    node: {
+      ...node,
+      source: {
+        ...node.source!,
+        range: { start: { line: 1, column: 1 }, end: { line: 1, column: sourceText.length + 1 } },
+        text: sourceText,
+        totalCharacters: sourceText.length,
+        sourceIdentity: identity
+      }
+    },
+    investigate: {
+      ...investigation,
+      declarations: [{
+        ...investigation.declarations[0]!,
+        source: {
+          ...investigation.declarations[0]!.source!,
+          text: sourceText,
+          sourceIdentity: identity,
+          renderedSegments: [{ ...rendered, text: sourceText, sourceIdentity: identity }]
+        }
+      }]
+    },
+    file: {
+      ...fileViewResult(),
+      selection: {
+        requestedPath: "src/users.ts",
+        filePath: "src/users.ts",
+        source: "active-generation",
+        resolution: "exact-path"
+      },
+      bounds: {
+        offset: 1,
+        limit: 1,
+        maximumLimit: 2_000,
+        totalLines: 1,
+        returnedLines: 1,
+        truncatedBefore: false,
+        truncatedAfter: false
+      },
+      contentAvailability: "active-generation",
+      sourceIdentity: identity,
+      lines: [{ line: 1, text: sourceText }]
+    }
   };
 }
 
@@ -2478,6 +2540,66 @@ describe("SymbolLattice MCP server", () => {
     });
     expect(secondContent.declarations[0]?.source.renderedSegments[0]).not.toHaveProperty("text");
     expect(JSON.parse(second.content[0]!.text)).toEqual(second.structuredContent);
+  });
+
+  it("deduplicates one proven exact source across node, investigate, and file MCP tools", async () => {
+    const results = crossToolSourceResults();
+    const server = createMcpServer(
+      {
+        async explore(): Promise<ExploreResult> {
+          return exploreResult();
+        },
+        async node(): Promise<NodeResult> {
+          return results.node;
+        },
+        async investigate(): Promise<InvestigateResult> {
+          return results.investigate;
+        },
+        async fileView(): Promise<FileViewResult> {
+          return results.file;
+        }
+      },
+      "C:/default-project"
+    );
+    const client = new Client({ name: "symbol-lattice-cross-tool-source-test", version: "1.0.0" });
+    const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+    closeCallbacks.push(() => client.close(), () => server.close());
+
+    const node = await client.callTool({
+      name: "symbol_lattice_node",
+      arguments: { query: "src/users.ts#userById" }
+    });
+    const investigate = await client.callTool({
+      name: "symbol_lattice_investigate",
+      arguments: { query: "userById" }
+    });
+    const file = await client.callTool({
+      name: "symbol_lattice_file",
+      arguments: { filePath: "src/users.ts", offset: 1, limit: 1 }
+    });
+
+    expect(node.structuredContent).toMatchObject({
+      source: { text: "export function userById(): void {}", delivery: { status: "emitted", tool: "node" } }
+    });
+    expect(investigate.structuredContent).toMatchObject({
+      declarations: [{
+        source: {
+          text: null,
+          renderedSegments: [{ delivery: { status: "already-served", firstDeliveredTool: "node" } }]
+        }
+      }]
+    });
+    expect(file.structuredContent).toMatchObject({
+      lines: [],
+      sourceDelivery: { status: "already-served", firstDeliveredTool: "node" },
+      sessionSource: {
+        callIndex: 3,
+        summary: { emittedSources: 0, referencedSources: 1 }
+      }
+    });
+    expect(JSON.parse(file.content[0]!.text)).toEqual(file.structuredContent);
   });
 
   it("keeps investigate source delivery state isolated between MCP server sessions", async () => {

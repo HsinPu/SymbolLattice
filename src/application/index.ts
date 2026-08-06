@@ -6,6 +6,7 @@ export * from "./context-allocation.js";
 export * from "./context-rendering.js";
 export * from "./plugin-modules.js";
 export * from "./reference-resolver-plugins.js";
+export * from "./source-delivery.js";
 export * from "./auto-sync-journal.js";
 export * from "./auto-sync-host-registry.js";
 export * from "./auto-sync-owner.js";

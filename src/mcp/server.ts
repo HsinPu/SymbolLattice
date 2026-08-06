@@ -24,6 +24,14 @@ import {
   type McpInvestigateSourceSessionMode
 } from "./investigate-session-source.js";
 import {
+  MCP_SOURCE_SESSION_LIMITS,
+  MCP_SOURCE_SESSION_MODES,
+  MCP_SOURCE_SESSION_POLICY,
+  McpSourceSession,
+  type McpSourceSessionMode
+} from "./source-session.js";
+import { SOURCE_DELIVERY_IDENTITY_POLICY } from "../application/source-delivery.js";
+import {
   MAX_AUTO_SYNC_DIAGNOSTIC_JOURNAL_EVENTS,
   type AutoSyncDiagnosticJournalOptions,
   type AutoSyncDiagnosticJournalResult
@@ -283,6 +291,7 @@ export interface ExploreToolArguments {
 export interface NodeToolArguments {
   readonly query: string;
   readonly projectPath?: string | undefined;
+  readonly sourceSessionMode?: McpSourceSessionMode | undefined;
 }
 
 export interface ContextToolArguments {
@@ -341,7 +350,7 @@ export interface InvestigateToolArguments {
   readonly symbolLimit?: number | undefined;
   readonly sourceCharacterBudget?: number | undefined;
   readonly sourceRenderMode?: InvestigateOptions["sourceRenderMode"];
-  readonly sourceSessionMode?: McpInvestigateSourceSessionMode | undefined;
+  readonly sourceSessionMode?: McpInvestigateSourceSessionMode | McpSourceSessionMode | undefined;
   readonly ranking?: InvestigateOptions["ranking"];
   /** Project-relative source-path prefix. */
   readonly path?: string | undefined;
@@ -377,6 +386,7 @@ export interface FileViewToolArguments {
   readonly offset?: number | undefined;
   readonly limit?: number | undefined;
   readonly symbolsOnly?: boolean | undefined;
+  readonly sourceSessionMode?: McpSourceSessionMode | undefined;
 }
 
 export interface RoutesToolArguments {
@@ -682,10 +692,68 @@ const exploreOutputSchema = z
   })
   .passthrough();
 
+const sourceDeliveryIdentityOutputSchema = z.object({
+  policy: z.literal(SOURCE_DELIVERY_IDENTITY_POLICY),
+  id: z.string().regex(/^source:[0-9a-f]{64}$/u),
+  canonicalization: z.literal("line-endings-lf"),
+  filePath: z.string().min(1),
+  fullFileCharacterOffsets: z.object({
+    start: z.number().int().nonnegative(),
+    end: z.number().int().nonnegative()
+  }),
+  contentSha256: z.string().regex(/^[0-9a-f]{64}$/u)
+});
+
+const sourceDeliveryOutputSchema = z.union([
+  z.object({
+    policy: z.literal(MCP_SOURCE_SESSION_POLICY),
+    status: z.literal("emitted"),
+    sourceId: z.string().regex(/^source:[0-9a-f]{64}$/u),
+    callIndex: z.number().int().positive(),
+    tool: z.enum(["node", "investigate", "file"])
+  }),
+  z.object({
+    policy: z.literal(MCP_SOURCE_SESSION_POLICY),
+    status: z.literal("already-served"),
+    sourceId: z.string().regex(/^source:[0-9a-f]{64}$/u),
+    firstDeliveredCallIndex: z.number().int().positive(),
+    firstDeliveredTool: z.enum(["node", "investigate", "file"]),
+    message: z.string().min(1)
+  })
+]);
+
+const sourceSessionReceiptOutputSchema = z.object({
+  policy: z.literal(MCP_SOURCE_SESSION_POLICY),
+  scope: z.literal("mcp-server-session"),
+  identityPolicy: z.literal(SOURCE_DELIVERY_IDENTITY_POLICY),
+  equality: z.literal("exact-file-offsets-and-canonical-content"),
+  mode: z.enum(MCP_SOURCE_SESSION_MODES),
+  tool: z.enum(["node", "investigate", "file"]),
+  projectPath: z.string().min(1),
+  generationId: z.string().min(1),
+  callIndex: z.number().int().positive(),
+  generationReset: z.boolean(),
+  bounds: z.object({
+    maximumProjects: z.number().int().positive(),
+    maximumSourcesPerProject: z.number().int().positive()
+  }),
+  summary: z.object({
+    candidateSources: z.number().int().nonnegative(),
+    emittedSources: z.number().int().nonnegative(),
+    referencedSources: z.number().int().nonnegative(),
+    emittedCharacters: z.number().int().nonnegative(),
+    avoidedCharacters: z.number().int().nonnegative(),
+    stateSourcesAfterCall: z.number().int().nonnegative(),
+    stateTruncated: z.boolean()
+  })
+});
+
 const nodeSourceOutputSchema = z.object({
   filePath: z.string(),
   range: sourceRangeOutputSchema,
-  text: z.string(),
+  text: z.string().nullable(),
+  sourceIdentity: sourceDeliveryIdentityOutputSchema.optional(),
+  delivery: sourceDeliveryOutputSchema.optional(),
   totalLines: z.number().int().positive(),
   totalCharacters: z.number().int().nonnegative(),
   truncated: z.boolean()
@@ -702,27 +770,34 @@ const investigateSourceSegmentMetadataOutputSchema = z.object({
     start: z.number().int().nonnegative(),
     end: z.number().int().nonnegative()
   }),
-  contentSha256: z.string().regex(/^[0-9a-f]{64}$/u)
+  contentSha256: z.string().regex(/^[0-9a-f]{64}$/u),
+  sourceIdentity: sourceDeliveryIdentityOutputSchema.optional()
 });
 
 const investigateSourceSegmentOutputSchema = z.union([
   investigateSourceSegmentMetadataOutputSchema.extend({
     text: z.string(),
-    delivery: z.object({
-      policy: z.literal(MCP_INVESTIGATE_SOURCE_SESSION_POLICY),
-      status: z.literal("emitted"),
-      segmentId: z.string().regex(/^segment:[0-9a-f]{64}$/u),
-      callIndex: z.number().int().positive()
-    })
+    delivery: z.union([
+      z.object({
+        policy: z.literal(MCP_INVESTIGATE_SOURCE_SESSION_POLICY),
+        status: z.literal("emitted"),
+        segmentId: z.string().regex(/^segment:[0-9a-f]{64}$/u),
+        callIndex: z.number().int().positive()
+      }),
+      sourceDeliveryOutputSchema
+    ])
   }),
   investigateSourceSegmentMetadataOutputSchema.extend({
-    delivery: z.object({
-      policy: z.literal(MCP_INVESTIGATE_SOURCE_SESSION_POLICY),
-      status: z.literal("already-served"),
-      segmentId: z.string().regex(/^segment:[0-9a-f]{64}$/u),
-      firstDeliveredCallIndex: z.number().int().positive(),
-      message: z.string().min(1)
-    })
+    delivery: z.union([
+      z.object({
+        policy: z.literal(MCP_INVESTIGATE_SOURCE_SESSION_POLICY),
+        status: z.literal("already-served"),
+        segmentId: z.string().regex(/^segment:[0-9a-f]{64}$/u),
+        firstDeliveredCallIndex: z.number().int().positive(),
+        message: z.string().min(1)
+      }),
+      sourceDeliveryOutputSchema
+    ])
   })
 ]);
 
@@ -800,6 +875,7 @@ const nodeOutputSchema = z
     matchCandidatesTruncated: z.boolean(),
     sourceAvailability: z.enum(["active-generation", "unavailable", "not-applicable"]),
     source: nodeSourceOutputSchema.nullable(),
+    sessionSource: sourceSessionReceiptOutputSchema.optional(),
     callers: z.object({
       items: z.array(z.object({}).passthrough()),
       truncated: z.boolean()
@@ -1158,28 +1234,31 @@ const investigateOutputSchema = z
     }),
     contexts: z.array(z.object({}).passthrough()),
     evidencePaths: z.array(z.object({}).passthrough()),
-    sessionSource: z.object({
-      policy: z.literal(MCP_INVESTIGATE_SOURCE_SESSION_POLICY),
-      scope: z.literal("mcp-server-session"),
-      mode: z.enum(MCP_INVESTIGATE_SOURCE_SESSION_MODES),
-      projectPath: z.string().min(1),
-      generationId: z.string().min(1),
-      callIndex: z.number().int().positive(),
-      generationReset: z.boolean(),
-      bounds: z.object({
-        maximumProjects: z.number().int().positive(),
-        maximumSegmentsPerProject: z.number().int().positive()
+    sessionSource: z.union([
+      z.object({
+        policy: z.literal(MCP_INVESTIGATE_SOURCE_SESSION_POLICY),
+        scope: z.literal("mcp-server-session"),
+        mode: z.enum(MCP_INVESTIGATE_SOURCE_SESSION_MODES),
+        projectPath: z.string().min(1),
+        generationId: z.string().min(1),
+        callIndex: z.number().int().positive(),
+        generationReset: z.boolean(),
+        bounds: z.object({
+          maximumProjects: z.number().int().positive(),
+          maximumSegmentsPerProject: z.number().int().positive()
+        }),
+        summary: z.object({
+          candidateSegments: z.number().int().nonnegative(),
+          emittedSegments: z.number().int().nonnegative(),
+          referencedSegments: z.number().int().nonnegative(),
+          emittedCharacters: z.number().int().nonnegative(),
+          avoidedCharacters: z.number().int().nonnegative(),
+          stateSegmentsAfterCall: z.number().int().nonnegative(),
+          stateTruncated: z.boolean()
+        })
       }),
-      summary: z.object({
-        candidateSegments: z.number().int().nonnegative(),
-        emittedSegments: z.number().int().nonnegative(),
-        referencedSegments: z.number().int().nonnegative(),
-        emittedCharacters: z.number().int().nonnegative(),
-        avoidedCharacters: z.number().int().nonnegative(),
-        stateSegmentsAfterCall: z.number().int().nonnegative(),
-        stateTruncated: z.boolean()
-      })
-    }).optional()
+      sourceSessionReceiptOutputSchema
+    ]).optional()
   })
   .passthrough();
 
@@ -1263,6 +1342,9 @@ const fileViewOutputSchema = z
       "withheld-sensitive-format",
       "symbols-only"
     ]),
+    sourceIdentity: sourceDeliveryIdentityOutputSchema.nullable().optional(),
+    sourceDelivery: sourceDeliveryOutputSchema.optional(),
+    sessionSource: sourceSessionReceiptOutputSchema.optional(),
     lines: z.array(z.object({ line: z.number().int().positive(), text: z.string() })),
     symbols: z.array(z.object({}).passthrough()),
     dependents: z.array(z.object({
@@ -2074,6 +2156,10 @@ export function createMcpServer(
     maximumProjects: MCP_INVESTIGATE_SOURCE_SESSION_LIMITS.maximumProjects,
     maximumSegmentsPerProject: MCP_INVESTIGATE_SOURCE_SESSION_LIMITS.maximumSegmentsPerProject
   });
+  const sourceSession = new McpSourceSession({
+    maximumProjects: MCP_SOURCE_SESSION_LIMITS.maximumProjects,
+    maximumSourcesPerProject: MCP_SOURCE_SESSION_LIMITS.maximumSourcesPerProject
+  });
 
   server.registerTool(
     "symbol_lattice_explore",
@@ -2200,7 +2286,8 @@ export function createMcpServer(
           "Retrieves one node's persisted graph evidence from an existing local SymbolLattice index. This tool never creates or refreshes an index.",
         inputSchema: {
           query: z.string().trim().min(1).describe("Exact symbol or source reference for the indexed node."),
-          projectPath: z.string().trim().min(1).optional().describe("Optional path to an already indexed project.")
+          projectPath: z.string().trim().min(1).optional().describe("Optional path to an already indexed project."),
+          sourceSessionMode: z.enum(MCP_SOURCE_SESSION_MODES).optional().describe("MCP-only exact-source delivery policy shared with investigate and file. `deduplicate` is the default; `full` re-emits source.")
         },
         outputSchema: nodeOutputSchema,
         annotations: {
@@ -2208,10 +2295,12 @@ export function createMcpServer(
           idempotentHint: true
         }
       },
-      async (arguments_) =>
-        executeReadTool(readQueryExecutor, "node", arguments_, () =>
+      async (arguments_) => {
+        const response = await executeReadTool(readQueryExecutor, "node", arguments_, () =>
           runNodeTool(nodeService, defaultProjectPath, arguments_)
-        )
+        );
+        return sourceSession.project(response, "node", arguments_.sourceSessionMode ?? "deduplicate");
+      }
     );
   }
 
@@ -2532,10 +2621,14 @@ export function createMcpServer(
         const response = await executeReadTool(readQueryExecutor, "investigate", arguments_, () =>
           runInvestigateTool(investigateService, defaultProjectPath, arguments_)
         );
-        return investigateSourceSession.project(
+        const projected = sourceSession.project(
           response,
+          "investigate",
           arguments_.sourceSessionMode ?? "deduplicate"
         );
+        return projected === response
+          ? investigateSourceSession.project(response, arguments_.sourceSessionMode ?? "deduplicate")
+          : projected;
       }
     );
   }
@@ -2634,7 +2727,8 @@ export function createMcpServer(
           projectPath: z.string().trim().min(1).optional().describe("Optional path to an already indexed project."),
           offset: z.number().int().min(1).optional().describe("One-based first persisted source line."),
           limit: z.number().int().min(1).max(MAX_FILE_VIEW_LINE_LIMIT).optional().describe("Maximum persisted source lines."),
-          symbolsOnly: z.boolean().optional().describe("Return symbols and dependents without source lines.")
+          symbolsOnly: z.boolean().optional().describe("Return symbols and dependents without source lines."),
+          sourceSessionMode: z.enum(MCP_SOURCE_SESSION_MODES).optional().describe("MCP-only exact-source delivery policy shared with node and investigate. `deduplicate` is the default; `full` re-emits source.")
         },
         outputSchema: fileViewOutputSchema,
         annotations: {
@@ -2642,10 +2736,12 @@ export function createMcpServer(
           idempotentHint: true
         }
       },
-      async (arguments_) =>
-        executeReadTool(readQueryExecutor, "file-view", arguments_, () =>
+      async (arguments_) => {
+        const response = await executeReadTool(readQueryExecutor, "file-view", arguments_, () =>
           runFileViewTool(fileViewService, defaultProjectPath, arguments_)
-        )
+        );
+        return sourceSession.project(response, "file", arguments_.sourceSessionMode ?? "deduplicate");
+      }
     );
   }
 

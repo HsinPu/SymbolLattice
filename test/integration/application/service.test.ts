@@ -4141,6 +4141,27 @@ describe("SymbolLatticeService", () => {
     });
   });
 
+  it("assigns one exact source identity across node, investigate, and file views", async () => {
+    const sourceText = "export function sharedIdentity(): number { return 1; }";
+    const projectPath = await createInlineProject({
+      "src/shared.ts": sourceText
+    });
+    const service = createService();
+    await service.init({ projectPath });
+
+    const node = await service.node(projectPath, "src/shared.ts#sharedIdentity");
+    const investigate = await service.investigate(projectPath, "sharedIdentity");
+    const file = await service.fileView(projectPath, "src/shared.ts", { offset: 1, limit: 1 });
+    const investigateSource = investigate.declarations[0]?.source;
+
+    expect(node.source?.text).toBe(sourceText);
+    expect(investigateSource?.text).toBe(sourceText);
+    expect(file.lines).toEqual([{ line: 1, text: sourceText }]);
+    expect(node.source?.sourceIdentity).toEqual(investigateSource?.sourceIdentity);
+    expect(node.source?.sourceIdentity).toEqual(file.sourceIdentity);
+    expect(investigateSource?.renderedSegments[0]?.sourceIdentity).toEqual(file.sourceIdentity);
+  });
+
   it("keeps node declaration evidence generation-bound after live source changes and deletion", async () => {
     const projectPath = await createInlineProject({
       "src/node-evidence.ts": [

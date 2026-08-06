@@ -85,6 +85,7 @@ import type {
 } from "../ports/index.js";
 import { ProjectConfigurationError } from "../domain/configuration.js";
 import { SymbolLatticeError } from "./errors.js";
+import { sourceDeliveryIdentity } from "./source-delivery.js";
 import {
   buildFileLanguageGroups,
   buildFileTree,
@@ -781,6 +782,11 @@ function nodeSourceFromPersistedText(
     filePath,
     range,
     text: sourceText.slice(startOffset, boundedEnd),
+    sourceIdentity: sourceDeliveryIdentity({
+      filePath,
+      sourceText,
+      fullFileCharacterOffsets: { start: startOffset, end: boundedEnd }
+    }),
     totalLines: countPhysicalSourceLines(lineStarts, startOffset, endOffset),
     totalCharacters: endOffset - startOffset,
     truncated: boundedEnd < endOffset
@@ -1997,6 +2003,28 @@ export class SymbolLatticeService {
     const lines = contentAvailability === "active-generation"
       ? returnedSourceLines.map((text, index) => ({ line: startIndex + index + 1, text }))
       : [];
+    const lineStarts = sourceLineStarts(document.sourceText);
+    const sourceIdentity = lines.length === 0
+      ? null
+      : (() => {
+          const lastLine = lines[lines.length - 1]!;
+          const startOffset = sourcePositionOffset(document.sourceText, lineStarts, {
+            line: lines[0]!.line,
+            column: 1
+          });
+          const endOffset = sourcePositionOffset(document.sourceText, lineStarts, {
+            line: lastLine.line,
+            column: lastLine.text.length + 1
+          });
+          if (startOffset === null || endOffset === null) {
+            throw new Error(`Persisted file-view line offsets are invalid for ${resolvedFilePath}.`);
+          }
+          return sourceDeliveryIdentity({
+            filePath: resolvedFilePath,
+            sourceText: document.sourceText,
+            fullFileCharacterOffsets: { start: startOffset, end: endOffset }
+          });
+        })();
 
     return {
       status: await this.getStatusForBundle(normalizedProjectPath, bundle),
@@ -2017,6 +2045,7 @@ export class SymbolLatticeService {
         truncatedAfter: startIndex + returnedSourceLines.length < sourceLines.length
       },
       contentAvailability,
+      sourceIdentity,
       lines,
       symbols,
       dependents
@@ -3986,6 +4015,26 @@ export class SymbolLatticeService {
           filePath: draft.selection.symbol.filePath,
           declarationReference: reference
         });
+        const document = documentsByFilePath.get(source.filePath);
+        if (document === undefined) {
+          throw new Error(`Missing persisted investigation source document for ${source.filePath}.`);
+        }
+        const declarationStart = source.sourceIdentity.fullFileCharacterOffsets.start;
+        const renderedSegments = rendered.segments.map((segment) => ({
+          ...segment,
+          sourceIdentity: sourceDeliveryIdentity({
+            filePath: source.filePath,
+            sourceText: document.sourceText,
+            fullFileCharacterOffsets: {
+              start: declarationStart + segment.sourceCharacterOffsets.start,
+              end: declarationStart + segment.sourceCharacterOffsets.end
+            }
+          })
+        }));
+        const primarySourceIdentity = renderedSegments[rendered.primarySegmentIndex]?.sourceIdentity;
+        if (primarySourceIdentity === undefined) {
+          throw new Error(`Missing primary investigation source identity for ${reference}.`);
+        }
         declarationAllocations.set(reference, {
           selectionRank: draft.selection.selectionRank,
           requestedCharacters: source.text.length,
@@ -3997,9 +4046,10 @@ export class SymbolLatticeService {
           source: {
             ...source,
             text: rendered.text,
+            sourceIdentity: primarySourceIdentity,
             renderedRange: rendered.renderedRange,
             renderedCharacterOffsets: rendered.receipt.sourceCharacterOffsets,
-            renderedSegments: rendered.segments,
+            renderedSegments,
             primarySegmentIndex: rendered.primarySegmentIndex,
             truncated: source.truncated || !rendered.receipt.complete
           },

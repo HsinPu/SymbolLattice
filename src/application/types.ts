@@ -725,6 +725,8 @@ export interface NodeSource {
   readonly filePath: string;
   readonly range: SourceRange;
   readonly text: string;
+  /** Tool-independent identity for the exact persisted text delivered here. */
+  readonly sourceIdentity: import("./source-delivery.js").SourceDeliveryIdentity;
   /** Physical source lines covered by the full persisted declaration range. */
   readonly totalLines: number;
   /** Raw UTF-16 code units in the full persisted declaration range. */
@@ -804,6 +806,8 @@ export interface FileViewResult {
     readonly truncatedAfter: boolean;
   };
   readonly contentAvailability: "active-generation" | "withheld-sensitive-format" | "symbols-only";
+  /** Null when source lines are withheld or intentionally omitted. */
+  readonly sourceIdentity: import("./source-delivery.js").SourceDeliveryIdentity | null;
   readonly lines: readonly SourceExcerptLine[];
   readonly symbols: readonly FileViewSymbol[];
   readonly dependents: readonly FileViewDependent[];
@@ -991,7 +995,11 @@ export type InvestigationRenderedNodeSource = NodeSource & {
     readonly end: number;
   };
   /** Exact, independently hashable slices from the same bounded declaration. */
-  readonly renderedSegments: readonly import("./context-rendering.js").InvestigationSourceSegment[];
+  readonly renderedSegments: readonly (
+    import("./context-rendering.js").InvestigationSourceSegment & {
+      readonly sourceIdentity: import("./source-delivery.js").SourceDeliveryIdentity;
+    }
+  )[];
   /** Segment mirrored by the backwards-compatible `text` and rendered range fields. */
   readonly primarySegmentIndex: number;
 };
