@@ -1,15 +1,35 @@
 import {
+  EDGE_KINDS,
   GENERATED_FILE_CLASSIFIER_VERSION,
   generatedClassificationFor,
+  type EdgeKind,
   type GeneratedFileClassification,
   type GraphEdge,
   type IndexedFile,
   type SymbolNode
 } from "../domain/index.js";
 
-export const EXPLORE_QUERY_PLAN_POLICY = "explore-query-plan-v2" as const;
+export const EXPLORE_QUERY_PLAN_POLICY = "explore-query-plan-v3" as const;
 export const EXPLORE_QUERY_SOURCE_WORTH_POLICY = "explore-query-source-worth-v1" as const;
+export const EXPLORE_QUERY_GRAPH_MASS_POLICY = "explore-query-graph-mass-v1" as const;
 export const EXPLORE_GENERATED_SOURCE_WORTH = 0.3 as const;
+export const EXPLORE_QUERY_GRAPH_MASS_LIMITS = {
+  maximumRelationships: 32,
+  maximumScore: 120
+} as const;
+export const EXPLORE_QUERY_GRAPH_MASS_RELATION_WEIGHTS = {
+  contains: 0,
+  imports: 3,
+  exports: 3,
+  references: 4,
+  calls: 12,
+  instantiates: 10,
+  overrides: 10,
+  routes: 12,
+  handles: 12,
+  extends: 8,
+  implements: 8
+} as const satisfies Readonly<Record<EdgeKind, number>>;
 export const EXPLORE_QUERY_LIMITS = {
   maximumQueryCharacters: 512,
   maximumFileHints: 4,
@@ -26,7 +46,21 @@ export type ExploreQuerySelectionReason =
   | "qualified-symbol-term"
   | "partial-symbol-term"
   | "file-name-term"
-  | "graph-connected";
+  | "graph-connected"
+  | "graph-mass";
+
+export interface ExploreQueryGraphMass {
+  readonly policy: typeof EXPLORE_QUERY_GRAPH_MASS_POLICY;
+  readonly eligibleRelationshipCount: number;
+  readonly exactRelationshipCount: number;
+  readonly omittedRelationshipCount: number;
+  readonly distinctNeighborCount: number;
+  readonly uncappedScore: number;
+  readonly score: number;
+  readonly rankingContribution: number;
+  readonly truncated: boolean;
+  readonly relationCounts: Readonly<Partial<Record<EdgeKind, number>>>;
+}
 
 export interface ExploreQuerySelection {
   readonly rank: number;
@@ -34,6 +68,7 @@ export interface ExploreQuerySelection {
   readonly score: number;
   readonly baseScore: number;
   readonly connectionScore: number;
+  readonly graphMass: ExploreQueryGraphMass;
   readonly generated: GeneratedFileClassification;
   readonly sourceWorth: number;
   readonly rankingScore: number;
@@ -61,11 +96,19 @@ export interface ExploreQueryPlan {
     readonly generatedSourceWorth: typeof EXPLORE_GENERATED_SOURCE_WORTH;
     readonly explicitFileExempt: true;
     readonly classifierVersion: string;
+    readonly graphMass: {
+      readonly policy: typeof EXPLORE_QUERY_GRAPH_MASS_POLICY;
+      readonly maximumRelationships: typeof EXPLORE_QUERY_GRAPH_MASS_LIMITS.maximumRelationships;
+      readonly maximumScore: typeof EXPLORE_QUERY_GRAPH_MASS_LIMITS.maximumScore;
+      readonly relationWeights: typeof EXPLORE_QUERY_GRAPH_MASS_RELATION_WEIGHTS;
+    };
   };
   readonly limits: typeof EXPLORE_QUERY_LIMITS;
   readonly summary: {
     readonly candidateCount: number;
     readonly generatedCandidateCount: number;
+    readonly graphMassCandidateCount: number;
+    readonly graphMassTruncatedCandidateCount: number;
     readonly selectedCount: number;
     readonly selectedGeneratedCount: number;
     readonly selectedFileCount: number;
@@ -89,6 +132,24 @@ interface Candidate {
   readonly generated: GeneratedFileClassification;
   readonly sourceWorth: number;
   connectionScore: number;
+  graphMass: CandidateGraphMass;
+}
+
+interface CandidateGraphMass {
+  readonly eligibleRelationshipCount: number;
+  readonly exactRelationshipCount: number;
+  readonly omittedRelationshipCount: number;
+  readonly distinctNeighborCount: number;
+  readonly uncappedScore: number;
+  readonly score: number;
+  readonly truncated: boolean;
+  readonly relationCounts: Readonly<Partial<Record<EdgeKind, number>>>;
+}
+
+interface GraphMassRelationship {
+  readonly edge: GraphEdge;
+  readonly neighborId: string;
+  readonly weight: number;
 }
 
 const STOP_WORDS = new Set([
@@ -213,6 +274,19 @@ function fileName(filePath: string): string {
   return filePath.slice(filePath.lastIndexOf("/") + 1);
 }
 
+function emptyGraphMass(): CandidateGraphMass {
+  return {
+    eligibleRelationshipCount: 0,
+    exactRelationshipCount: 0,
+    omittedRelationshipCount: 0,
+    distinctNeighborCount: 0,
+    uncappedScore: 0,
+    score: 0,
+    truncated: false,
+    relationCounts: {}
+  };
+}
+
 function candidateFor(
   symbol: SymbolNode,
   fileHints: readonly string[],
@@ -285,12 +359,13 @@ function candidateFor(
     baseScore,
     generated,
     sourceWorth: generated.generated ? EXPLORE_GENERATED_SOURCE_WORTH : 1,
-    connectionScore: 0
+    connectionScore: 0,
+    graphMass: emptyGraphMass()
   };
 }
 
 function rawScore(candidate: Candidate): number {
-  return candidate.baseScore + candidate.connectionScore;
+  return candidate.baseScore + candidate.connectionScore + candidate.graphMass.score;
 }
 
 function rankingScore(candidate: Candidate): number {
@@ -298,6 +373,37 @@ function rankingScore(candidate: Candidate): number {
   return candidate.explicitFile
     ? score
     : Math.round(score * candidate.sourceWorth * 1_000_000) / 1_000_000;
+}
+
+function graphMassFor(
+  relationships: ReadonlyMap<string, GraphMassRelationship>
+): CandidateGraphMass {
+  const eligible = [...relationships.values()].sort(
+    (left, right) =>
+      right.weight - left.weight ||
+      compareText(left.edge.kind, right.edge.kind) ||
+      compareText(left.neighborId, right.neighborId) ||
+      compareText(left.edge.id, right.edge.id)
+  );
+  const selected = eligible.slice(0, EXPLORE_QUERY_GRAPH_MASS_LIMITS.maximumRelationships);
+  const uncappedScore = selected.reduce((total, relationship) => total + relationship.weight, 0);
+  const relationCounts: Partial<Record<EdgeKind, number>> = {};
+  for (const kind of EDGE_KINDS) {
+    const count = selected.filter((relationship) => relationship.edge.kind === kind).length;
+    if (count > 0) relationCounts[kind] = count;
+  }
+  return {
+    eligibleRelationshipCount: eligible.length,
+    exactRelationshipCount: selected.length,
+    omittedRelationshipCount: eligible.length - selected.length,
+    distinctNeighborCount: new Set(selected.map((relationship) => relationship.neighborId)).size,
+    uncappedScore,
+    score: Math.min(uncappedScore, EXPLORE_QUERY_GRAPH_MASS_LIMITS.maximumScore),
+    truncated:
+      eligible.length > EXPLORE_QUERY_GRAPH_MASS_LIMITS.maximumRelationships ||
+      uncappedScore > EXPLORE_QUERY_GRAPH_MASS_LIMITS.maximumScore,
+    relationCounts
+  };
 }
 
 function compareCandidates(left: Candidate, right: Candidate): number {
@@ -321,13 +427,42 @@ export function planExploreQuery(graph: ExploreQueryGraph, query: string): Explo
     .map((symbol) => candidateFor(symbol, parsed.fileHints, parsed.identifierTerms, filesByPath))
     .filter((candidate): candidate is Candidate => candidate !== null);
   const candidatesById = new Map(candidates.map((candidate) => [candidate.symbol.id, candidate]));
+  const symbolsById = new Map(graph.symbols.map((symbol) => [symbol.id, symbol]));
+  const graphMassRelationshipsByCandidate = new Map<
+    string,
+    Map<string, GraphMassRelationship>
+  >();
+  const addGraphMassRelationship = (
+    candidate: Candidate,
+    edge: GraphEdge,
+    neighborId: string
+  ): void => {
+    if (!symbolsById.has(neighborId) || neighborId === candidate.symbol.id) return;
+    const weight = EXPLORE_QUERY_GRAPH_MASS_RELATION_WEIGHTS[edge.kind];
+    if (weight <= 0) return;
+    const relationships = graphMassRelationshipsByCandidate.get(candidate.symbol.id) ?? new Map();
+    const key = `${edge.kind}:${neighborId}`;
+    const current = relationships.get(key);
+    if (current === undefined || compareText(edge.id, current.edge.id) < 0) {
+      relationships.set(key, { edge, neighborId, weight });
+    }
+    graphMassRelationshipsByCandidate.set(candidate.symbol.id, relationships);
+  };
   for (const edge of graph.edges) {
     if (edge.resolution !== "exact" || edge.sourceId === null || edge.targetId === null) continue;
     const source = candidatesById.get(edge.sourceId);
     const target = candidatesById.get(edge.targetId);
-    if (source === undefined || target === undefined || source === target) continue;
-    source.connectionScore += 60;
-    target.connectionScore += 60;
+    if (source !== undefined) addGraphMassRelationship(source, edge, edge.targetId);
+    if (target !== undefined) addGraphMassRelationship(target, edge, edge.sourceId);
+    if (source !== undefined && target !== undefined && source !== target) {
+      source.connectionScore += 60;
+      target.connectionScore += 60;
+    }
+  }
+  for (const candidate of candidates) {
+    candidate.graphMass = graphMassFor(
+      graphMassRelationshipsByCandidate.get(candidate.symbol.id) ?? new Map()
+    );
   }
 
   const ranked = candidates.sort(compareCandidates);
@@ -357,6 +492,13 @@ export function planExploreQuery(graph: ExploreQueryGraph, query: string): Explo
       score,
       baseScore: candidate.baseScore,
       connectionScore: candidate.connectionScore,
+      graphMass: {
+        policy: EXPLORE_QUERY_GRAPH_MASS_POLICY,
+        ...candidate.graphMass,
+        rankingContribution: candidate.explicitFile
+          ? candidate.graphMass.score
+          : Math.round(candidate.graphMass.score * candidate.sourceWorth * 1_000_000) / 1_000_000
+      },
       generated: candidate.generated,
       sourceWorth: candidate.sourceWorth,
       rankingScore: rankingScore(candidate),
@@ -368,7 +510,8 @@ export function planExploreQuery(graph: ExploreQueryGraph, query: string): Explo
       matchedTerms: candidate.matchedTerms,
       reasons: [
         ...candidate.baseReasons,
-        ...(candidate.connectionScore > 0 ? ["graph-connected" as const] : [])
+        ...(candidate.connectionScore > 0 ? ["graph-connected" as const] : []),
+        ...(candidate.graphMass.score > 0 ? ["graph-mass" as const] : [])
       ]
     };
   });
@@ -391,12 +534,20 @@ export function planExploreQuery(graph: ExploreQueryGraph, query: string): Explo
           ? classifierVersions[0]!
           : classifierVersions.length === 0
             ? GENERATED_FILE_CLASSIFIER_VERSION
-          : `mixed:${classifierVersions.join(",")}`
+          : `mixed:${classifierVersions.join(",")}`,
+      graphMass: {
+        policy: EXPLORE_QUERY_GRAPH_MASS_POLICY,
+        maximumRelationships: EXPLORE_QUERY_GRAPH_MASS_LIMITS.maximumRelationships,
+        maximumScore: EXPLORE_QUERY_GRAPH_MASS_LIMITS.maximumScore,
+        relationWeights: EXPLORE_QUERY_GRAPH_MASS_RELATION_WEIGHTS
+      }
     },
     limits: EXPLORE_QUERY_LIMITS,
     summary: {
       candidateCount: candidates.length,
       generatedCandidateCount: candidates.filter((candidate) => candidate.generated.generated).length,
+      graphMassCandidateCount: candidates.filter((candidate) => candidate.graphMass.score > 0).length,
+      graphMassTruncatedCandidateCount: candidates.filter((candidate) => candidate.graphMass.truncated).length,
       selectedCount: selection.length,
       selectedGeneratedCount: selection.filter((candidate) => candidate.generated.generated).length,
       selectedFileCount: selectedFiles.size,

@@ -73,6 +73,147 @@ function edge(id: string, sourceId: string, targetId: string): GraphEdge {
 }
 
 describe("explore query planning", () => {
+  it("uses bounded exact one-hop graph mass to corroborate an otherwise tied candidate", () => {
+    const connected = symbol({
+      id: "connected",
+      name: "orderService",
+      filePath: "src/z-connected.ts"
+    });
+    const isolated = symbol({
+      id: "isolated",
+      name: "orderService",
+      filePath: "src/a-isolated.ts"
+    });
+    const helper = symbol({
+      id: "helper",
+      name: "persistOrder",
+      filePath: "src/persistence.ts"
+    });
+
+    const plan = planExploreQuery(
+      {
+        files: [
+          indexedFile(connected.filePath, false),
+          indexedFile(isolated.filePath, false),
+          indexedFile(helper.filePath, false)
+        ],
+        symbols: [isolated, helper, connected],
+        edges: [edge("connected-helper", connected.id, helper.id)]
+      },
+      "orderService"
+    );
+
+    expect(plan).toMatchObject({
+      policy: "explore-query-plan-v3",
+      ranking: {
+        graphMass: {
+          policy: "explore-query-graph-mass-v1",
+          maximumRelationships: 32,
+          maximumScore: 120,
+          relationWeights: { calls: 12, contains: 0 }
+        }
+      },
+      summary: {
+        graphMassCandidateCount: 1,
+        graphMassTruncatedCandidateCount: 0
+      }
+    });
+    expect(plan.selection.map((item) => item.symbol.id)).toEqual(["connected", "isolated"]);
+    expect(plan.selection[0]).toMatchObject({
+      score: 522,
+      rankingScore: 522,
+      reasons: expect.arrayContaining(["graph-mass"]),
+      graphMass: {
+        policy: "explore-query-graph-mass-v1",
+        exactRelationshipCount: 1,
+        distinctNeighborCount: 1,
+        uncappedScore: 12,
+        score: 12,
+        rankingContribution: 12,
+        truncated: false,
+        relationCounts: { calls: 1 }
+      }
+    });
+    expect(plan.selection[1]).toMatchObject({
+      score: 510,
+      graphMass: {
+        exactRelationshipCount: 0,
+        score: 0,
+        rankingContribution: 0,
+        relationCounts: {}
+      }
+    });
+  });
+
+  it("caps generated graph mass and reports omitted evidence without counting weak relations", () => {
+    const generated = symbol({
+      id: "generated",
+      name: "orderService",
+      filePath: "src/order-service.generated.ts"
+    });
+    const helpers = Array.from({ length: 40 }, (_, index) => symbol({
+      id: `helper-${index}`,
+      name: `helper${index}`,
+      filePath: `src/helpers/helper-${index}.ts`
+    }));
+    const exactCalls = helpers.map((helper, index) =>
+      edge(`call-${index}`, generated.id, helper.id)
+    );
+    const duplicateCall = edge("call-duplicate", generated.id, helpers[0]!.id);
+    const containment = {
+      ...edge("contains-helper", generated.id, helpers[1]!.id),
+      kind: "contains" as const
+    };
+    const heuristicCall = {
+      ...edge("heuristic-helper", generated.id, helpers[2]!.id),
+      resolution: "heuristic" as const
+    };
+    const unresolvedReference = {
+      ...edge("unresolved-helper", generated.id, helpers[3]!.id),
+      targetId: null,
+      resolution: "unresolved" as const
+    };
+
+    const plan = planExploreQuery(
+      {
+        files: [
+          indexedFile(generated.filePath, true),
+          ...helpers.map((helper) => indexedFile(helper.filePath, false))
+        ],
+        symbols: [generated, ...helpers],
+        edges: [
+          ...exactCalls,
+          duplicateCall,
+          containment,
+          heuristicCall,
+          unresolvedReference
+        ]
+      },
+      "orderService"
+    );
+
+    expect(plan.summary).toMatchObject({
+      graphMassCandidateCount: 1,
+      graphMassTruncatedCandidateCount: 1
+    });
+    expect(plan.selection[0]).toMatchObject({
+      score: 630,
+      rankingScore: 189,
+      sourceWorth: 0.3,
+      graphMass: {
+        eligibleRelationshipCount: 40,
+        exactRelationshipCount: 32,
+        omittedRelationshipCount: 8,
+        distinctNeighborCount: 32,
+        uncappedScore: 384,
+        score: 120,
+        rankingContribution: 36,
+        truncated: true,
+        relationCounts: { calls: 32 }
+      }
+    });
+  });
+
   it("uses numeric generated source worth without turning ranking into a hard partition", () => {
     const handwrittenExact = symbol({
       id: "hand-exact",
@@ -104,7 +245,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v2",
+      policy: "explore-query-plan-v3",
       ranking: {
         policy: "explore-query-source-worth-v1",
         generatedSourceWorth: 0.3,
@@ -237,7 +378,7 @@ describe("explore query planning", () => {
     ]);
     expect(plan.selection[0]).toMatchObject({
       rank: 1,
-      reasons: ["explicit-file", "exact-symbol-term", "graph-connected"]
+      reasons: ["explicit-file", "exact-symbol-term", "graph-connected", "graph-mass"]
     });
     expect(plan.selection[1]).toMatchObject({
       rank: 2,
@@ -313,6 +454,8 @@ describe("explore query planning", () => {
     expect(plan.summary).toEqual({
       candidateCount: 0,
       generatedCandidateCount: 0,
+      graphMassCandidateCount: 0,
+      graphMassTruncatedCandidateCount: 0,
       selectedCount: 0,
       selectedGeneratedCount: 0,
       selectedFileCount: 0,

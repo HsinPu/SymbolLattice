@@ -18,6 +18,9 @@ import {
 } from "../application/context-source-allocation.js";
 import {
   EXPLORE_GENERATED_SOURCE_WORTH,
+  EXPLORE_QUERY_GRAPH_MASS_LIMITS,
+  EXPLORE_QUERY_GRAPH_MASS_POLICY,
+  EXPLORE_QUERY_GRAPH_MASS_RELATION_WEIGHTS,
   EXPLORE_QUERY_LIMITS,
   EXPLORE_QUERY_PLAN_POLICY,
   EXPLORE_QUERY_SOURCE_WORTH_POLICY
@@ -913,12 +916,49 @@ const contextEvidencePathOutputSchema = z.object({
   path: z.object({}).passthrough().nullable()
 });
 
+const exploreQueryGraphMassRelationCountsOutputSchema = z.object({
+  contains: z.number().int().nonnegative().optional(),
+  imports: z.number().int().nonnegative().optional(),
+  exports: z.number().int().nonnegative().optional(),
+  references: z.number().int().nonnegative().optional(),
+  calls: z.number().int().nonnegative().optional(),
+  instantiates: z.number().int().nonnegative().optional(),
+  overrides: z.number().int().nonnegative().optional(),
+  routes: z.number().int().nonnegative().optional(),
+  handles: z.number().int().nonnegative().optional(),
+  extends: z.number().int().nonnegative().optional(),
+  implements: z.number().int().nonnegative().optional()
+}).strict();
+
+const exploreQueryGraphMassOutputSchema = z.object({
+  policy: z.literal(EXPLORE_QUERY_GRAPH_MASS_POLICY),
+  eligibleRelationshipCount: z.number().int().nonnegative(),
+  exactRelationshipCount: z.number().int().nonnegative().max(
+    EXPLORE_QUERY_GRAPH_MASS_LIMITS.maximumRelationships
+  ),
+  omittedRelationshipCount: z.number().int().nonnegative(),
+  distinctNeighborCount: z.number().int().nonnegative().max(
+    EXPLORE_QUERY_GRAPH_MASS_LIMITS.maximumRelationships
+  ),
+  uncappedScore: z.number().int().nonnegative().max(
+    EXPLORE_QUERY_GRAPH_MASS_LIMITS.maximumRelationships *
+      EXPLORE_QUERY_GRAPH_MASS_RELATION_WEIGHTS.calls
+  ),
+  score: z.number().int().nonnegative().max(EXPLORE_QUERY_GRAPH_MASS_LIMITS.maximumScore),
+  rankingContribution: z.number().finite().nonnegative().max(
+    EXPLORE_QUERY_GRAPH_MASS_LIMITS.maximumScore
+  ),
+  truncated: z.boolean(),
+  relationCounts: exploreQueryGraphMassRelationCountsOutputSchema
+});
+
 const exploreQuerySelectionOutputSchema = z.object({
   rank: z.number().int().positive().max(EXPLORE_QUERY_LIMITS.maximumSymbols),
   symbol: z.object({}).passthrough(),
   score: z.number().finite(),
   baseScore: z.number().finite(),
   connectionScore: z.number().finite(),
+  graphMass: exploreQueryGraphMassOutputSchema,
   generated: z.object({
     classifierVersion: z.string().min(1),
     generated: z.boolean(),
@@ -943,7 +983,8 @@ const exploreQuerySelectionOutputSchema = z.object({
       "qualified-symbol-term",
       "partial-symbol-term",
       "file-name-term",
-      "graph-connected"
+      "graph-connected",
+      "graph-mass"
     ])
   )
 });
@@ -963,7 +1004,25 @@ const exploreQueryPlanOutputSchema = z.object({
     policy: z.literal(EXPLORE_QUERY_SOURCE_WORTH_POLICY),
     generatedSourceWorth: z.literal(EXPLORE_GENERATED_SOURCE_WORTH),
     explicitFileExempt: z.literal(true),
-    classifierVersion: z.string().min(1)
+    classifierVersion: z.string().min(1),
+    graphMass: z.object({
+      policy: z.literal(EXPLORE_QUERY_GRAPH_MASS_POLICY),
+      maximumRelationships: z.literal(EXPLORE_QUERY_GRAPH_MASS_LIMITS.maximumRelationships),
+      maximumScore: z.literal(EXPLORE_QUERY_GRAPH_MASS_LIMITS.maximumScore),
+      relationWeights: z.object({
+        contains: z.literal(EXPLORE_QUERY_GRAPH_MASS_RELATION_WEIGHTS.contains),
+        imports: z.literal(EXPLORE_QUERY_GRAPH_MASS_RELATION_WEIGHTS.imports),
+        exports: z.literal(EXPLORE_QUERY_GRAPH_MASS_RELATION_WEIGHTS.exports),
+        references: z.literal(EXPLORE_QUERY_GRAPH_MASS_RELATION_WEIGHTS.references),
+        calls: z.literal(EXPLORE_QUERY_GRAPH_MASS_RELATION_WEIGHTS.calls),
+        instantiates: z.literal(EXPLORE_QUERY_GRAPH_MASS_RELATION_WEIGHTS.instantiates),
+        overrides: z.literal(EXPLORE_QUERY_GRAPH_MASS_RELATION_WEIGHTS.overrides),
+        routes: z.literal(EXPLORE_QUERY_GRAPH_MASS_RELATION_WEIGHTS.routes),
+        handles: z.literal(EXPLORE_QUERY_GRAPH_MASS_RELATION_WEIGHTS.handles),
+        extends: z.literal(EXPLORE_QUERY_GRAPH_MASS_RELATION_WEIGHTS.extends),
+        implements: z.literal(EXPLORE_QUERY_GRAPH_MASS_RELATION_WEIGHTS.implements)
+      }).strict()
+    })
   }),
   limits: z.object({
     maximumQueryCharacters: z.literal(EXPLORE_QUERY_LIMITS.maximumQueryCharacters),
@@ -977,6 +1036,8 @@ const exploreQueryPlanOutputSchema = z.object({
   summary: z.object({
     candidateCount: z.number().int().nonnegative(),
     generatedCandidateCount: z.number().int().nonnegative(),
+    graphMassCandidateCount: z.number().int().nonnegative(),
+    graphMassTruncatedCandidateCount: z.number().int().nonnegative(),
     selectedCount: z.number().int().nonnegative().max(EXPLORE_QUERY_LIMITS.maximumSymbols),
     selectedGeneratedCount: z.number().int().nonnegative().max(
       EXPLORE_QUERY_LIMITS.maximumSymbols

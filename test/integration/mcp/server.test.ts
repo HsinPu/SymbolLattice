@@ -1448,25 +1448,49 @@ describe("SymbolLattice MCP server", () => {
           anyOf: [
             {
               properties: {
-                policy: { const: "explore-query-plan-v2" },
+                policy: { const: "explore-query-plan-v3" },
                 ranking: {
                   properties: {
                     policy: { const: "explore-query-source-worth-v1" },
                     generatedSourceWorth: { const: 0.3 },
                     explicitFileExempt: { const: true },
-                    classifierVersion: { type: "string", minLength: 1 }
+                    classifierVersion: { type: "string", minLength: 1 },
+                    graphMass: {
+                      properties: {
+                        policy: { const: "explore-query-graph-mass-v1" },
+                        maximumRelationships: { const: 32 },
+                        maximumScore: { const: 120 },
+                        relationWeights: { type: "object" }
+                      }
+                    }
                   }
                 },
                 summary: {
                   properties: {
                     generatedCandidateCount: { minimum: 0 },
-                    selectedGeneratedCount: { minimum: 0, maximum: 8 }
+                    selectedGeneratedCount: { minimum: 0, maximum: 8 },
+                    graphMassCandidateCount: { minimum: 0 },
+                    graphMassTruncatedCandidateCount: { minimum: 0 }
                   }
                 },
                 selection: {
                   items: {
                     properties: {
                       generated: { type: "object" },
+                      graphMass: {
+                        properties: {
+                          policy: { const: "explore-query-graph-mass-v1" },
+                          eligibleRelationshipCount: { minimum: 0 },
+                          exactRelationshipCount: { minimum: 0, maximum: 32 },
+                          omittedRelationshipCount: { minimum: 0 },
+                          distinctNeighborCount: { minimum: 0, maximum: 32 },
+                          uncappedScore: { minimum: 0 },
+                          score: { minimum: 0, maximum: 120 },
+                          rankingContribution: { minimum: 0, maximum: 120 },
+                          truncated: { type: "boolean" },
+                          relationCounts: { type: "object" }
+                        }
+                      },
                       sourceWorth: { exclusiveMinimum: 0, maximum: 1 },
                       rankingScore: { minimum: 0 },
                       rankingDecision: {
