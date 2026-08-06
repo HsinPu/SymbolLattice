@@ -1,5 +1,6 @@
 import type { ExploreConnection, ExploreFocus } from "./types.js";
 import type { ExplorePathSpinePlan } from "./explore-path-spines.js";
+import { EXPLORE_GENERATED_SOURCE_WORTH } from "./explore-query.js";
 
 export const EXPLORE_SOURCE_WINDOW_POLICY = "explore-source-windows-v1" as const;
 export const EXPLORE_SOURCE_WINDOW_ALLOCATION_POLICY =
@@ -8,7 +9,7 @@ export const EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS = {
   minimumPerWindow: 256,
   maximumShareFraction: 0.7,
   spineBoost: 1.25,
-  generatedSourceWorth: 0.3,
+  generatedSourceWorth: EXPLORE_GENERATED_SOURCE_WORTH,
   relativeCliffFraction: 0.15,
   relativeCliffMaximumWeight: 10,
   wholeFileGraceFraction: 0.15,

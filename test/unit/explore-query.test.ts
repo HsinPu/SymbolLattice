@@ -5,7 +5,28 @@ import {
   EXPLORE_QUERY_PLAN_POLICY,
   planExploreQuery
 } from "../../src/application/explore-query.js";
-import type { GraphEdge, SymbolNode } from "../../src/domain/types.js";
+import {
+  GENERATED_FILE_CLASSIFIER_VERSION,
+  type GraphEdge,
+  type IndexedFile,
+  type SymbolNode
+} from "../../src/domain/index.js";
+
+function indexedFile(path: string, generated: boolean): IndexedFile {
+  return {
+    path,
+    contentHash: `hash:${path}`,
+    language: "typescript",
+    indexedAt: "2026-08-06T00:00:00.000Z",
+    generated: {
+      classifierVersion: GENERATED_FILE_CLASSIFIER_VERSION,
+      generated,
+      evidence: generated
+        ? [{ kind: "path", ruleId: "test.generated", range: null }]
+        : []
+    }
+  };
+}
 
 function symbol(input: {
   readonly id: string;
@@ -52,6 +73,119 @@ function edge(id: string, sourceId: string, targetId: string): GraphEdge {
 }
 
 describe("explore query planning", () => {
+  it("uses numeric generated source worth without turning ranking into a hard partition", () => {
+    const handwrittenExact = symbol({
+      id: "hand-exact",
+      name: "orderService",
+      filePath: "src/order-service.ts"
+    });
+    const generatedExact = symbol({
+      id: "generated-exact",
+      name: "orderService",
+      filePath: "src/order-service.generated.ts"
+    });
+    const handwrittenPartial = symbol({
+      id: "hand-partial",
+      name: "orderServiceAdapter",
+      filePath: "src/order-service-adapter.ts"
+    });
+
+    const plan = planExploreQuery(
+      {
+        files: [
+          indexedFile(handwrittenExact.filePath, false),
+          indexedFile(generatedExact.filePath, true),
+          indexedFile(handwrittenPartial.filePath, false)
+        ],
+        symbols: [generatedExact, handwrittenPartial, handwrittenExact],
+        edges: []
+      },
+      "orderService"
+    );
+
+    expect(plan).toMatchObject({
+      policy: "explore-query-plan-v2",
+      ranking: {
+        policy: "explore-query-source-worth-v1",
+        generatedSourceWorth: 0.3,
+        explicitFileExempt: true,
+        classifierVersion: GENERATED_FILE_CLASSIFIER_VERSION
+      },
+      summary: {
+        candidateCount: 3,
+        generatedCandidateCount: 1,
+        selectedGeneratedCount: 1
+      }
+    });
+    expect(plan.selection.map((item) => item.symbol.id)).toEqual([
+      "hand-exact",
+      "generated-exact",
+      "hand-partial"
+    ]);
+    expect(plan.selection).toEqual([
+      expect.objectContaining({
+        rank: 1,
+        score: 510,
+        rankingScore: 510,
+        sourceWorth: 1,
+        rankingDecision: "handwritten-source-worth",
+        generated: expect.objectContaining({ generated: false })
+      }),
+      expect.objectContaining({
+        rank: 2,
+        score: 510,
+        rankingScore: 153,
+        sourceWorth: 0.3,
+        rankingDecision: "generated-source-worth",
+        generated: expect.objectContaining({
+          generated: true,
+          evidence: [{ kind: "path", ruleId: "test.generated", range: null }]
+        })
+      }),
+      expect.objectContaining({
+        rank: 3,
+        score: 130,
+        rankingScore: 130,
+        sourceWorth: 1,
+        rankingDecision: "handwritten-source-worth"
+      })
+    ]);
+  });
+
+  it("keeps an explicitly named generated file ahead without hiding its lower source worth", () => {
+    const generated = symbol({
+      id: "generated",
+      name: "orderService",
+      filePath: "src/order-service.generated.ts"
+    });
+    const handwritten = symbol({
+      id: "handwritten",
+      name: "orderService",
+      filePath: "src/order-service.ts"
+    });
+
+    const plan = planExploreQuery(
+      {
+        files: [
+          indexedFile(generated.filePath, true),
+          indexedFile(handwritten.filePath, false)
+        ],
+        symbols: [handwritten, generated],
+        edges: []
+      },
+      "show src/order-service.generated.ts orderService"
+    );
+
+    expect(plan.selection.map((item) => item.symbol.id)).toEqual(["generated", "handwritten"]);
+    expect(plan.selection[0]).toMatchObject({
+      score: 1_510,
+      rankingScore: 1_510,
+      sourceWorth: 0.3,
+      rankingDecision: "explicit-file-exempt",
+      generated: { generated: true }
+    });
+  });
+
   it("puts declarations from an explicitly named file before equally named symbols elsewhere", () => {
     const apiCreate = symbol({
       id: "api-create",
@@ -178,7 +312,9 @@ describe("explore query planning", () => {
     expect(plan.selection).toEqual([]);
     expect(plan.summary).toEqual({
       candidateCount: 0,
+      generatedCandidateCount: 0,
       selectedCount: 0,
+      selectedGeneratedCount: 0,
       selectedFileCount: 0,
       truncated: false
     });

@@ -17,8 +17,10 @@ import {
   MIN_CONTEXT_SOURCE_CHARACTER_BUDGET
 } from "../application/context-source-allocation.js";
 import {
+  EXPLORE_GENERATED_SOURCE_WORTH,
   EXPLORE_QUERY_LIMITS,
-  EXPLORE_QUERY_PLAN_POLICY
+  EXPLORE_QUERY_PLAN_POLICY,
+  EXPLORE_QUERY_SOURCE_WORTH_POLICY
 } from "../application/explore-query.js";
 import {
   EXPLORE_PATH_SPINE_LIMITS,
@@ -917,6 +919,22 @@ const exploreQuerySelectionOutputSchema = z.object({
   score: z.number().finite(),
   baseScore: z.number().finite(),
   connectionScore: z.number().finite(),
+  generated: z.object({
+    classifierVersion: z.string().min(1),
+    generated: z.boolean(),
+    evidence: z.array(z.object({
+      kind: z.enum(["path", "header"]),
+      ruleId: z.string().min(1),
+      range: sourceRangeOutputSchema.nullable()
+    })).max(8)
+  }),
+  sourceWorth: z.number().finite().positive().max(1),
+  rankingScore: z.number().finite().nonnegative(),
+  rankingDecision: z.enum([
+    "explicit-file-exempt",
+    "handwritten-source-worth",
+    "generated-source-worth"
+  ]),
   matchedTerms: z.array(z.string()),
   reasons: z.array(
     z.enum([
@@ -941,6 +959,12 @@ const exploreQueryPlanOutputSchema = z.object({
   }),
   fileHints: z.array(z.string()).max(EXPLORE_QUERY_LIMITS.maximumFileHints),
   identifierTerms: z.array(z.string()).max(EXPLORE_QUERY_LIMITS.maximumIdentifierTerms),
+  ranking: z.object({
+    policy: z.literal(EXPLORE_QUERY_SOURCE_WORTH_POLICY),
+    generatedSourceWorth: z.literal(EXPLORE_GENERATED_SOURCE_WORTH),
+    explicitFileExempt: z.literal(true),
+    classifierVersion: z.string().min(1)
+  }),
   limits: z.object({
     maximumQueryCharacters: z.literal(EXPLORE_QUERY_LIMITS.maximumQueryCharacters),
     maximumFileHints: z.literal(EXPLORE_QUERY_LIMITS.maximumFileHints),
@@ -952,7 +976,11 @@ const exploreQueryPlanOutputSchema = z.object({
   }),
   summary: z.object({
     candidateCount: z.number().int().nonnegative(),
+    generatedCandidateCount: z.number().int().nonnegative(),
     selectedCount: z.number().int().nonnegative().max(EXPLORE_QUERY_LIMITS.maximumSymbols),
+    selectedGeneratedCount: z.number().int().nonnegative().max(
+      EXPLORE_QUERY_LIMITS.maximumSymbols
+    ),
     selectedFileCount: z.number().int().nonnegative().max(EXPLORE_QUERY_LIMITS.maximumFiles),
     truncated: z.boolean()
   }),

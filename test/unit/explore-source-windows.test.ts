@@ -175,6 +175,51 @@ describe("explore source window planning", () => {
     ).toEqual(planExploreSourceWindows([focus(1, source, 1, 5)], connections));
   });
 
+  it("keeps raw explore relevance so generated source worth is applied exactly once", () => {
+    const source = symbol("source", "src/source.generated.ts", 1);
+    const target = symbol("target", "src/target.ts", 1);
+    const generatedFocus: ExploreFocus = {
+      ...focus(1, source, 1, 5),
+      score: 510,
+      baseScore: 510,
+      generated: {
+        classifierVersion: "generated-evidence-v1",
+        generated: true,
+        evidence: [{ kind: "path", ruleId: "test.generated", range: null }]
+      },
+      sourceWorth: 0.3,
+      rankingScore: 153,
+      rankingDecision: "generated-source-worth"
+    };
+    const plan = planExploreSourceWindows(
+      [generatedFocus],
+      [edge("source-target", source, target, 100)]
+    );
+
+    expect(plan.windows[0]).toMatchObject({ relevanceWeight: 510 });
+    const allocation = allocateExploreSourceWindowCharacters({
+      totalCharacterBudget: 1_000,
+      primaryEmittedCharacters: 0,
+      candidates: [{
+        index: 0,
+        filePath: source.filePath,
+        requestedCharacters: 1_000,
+        fullFileCharacters: 1_000,
+        relevanceWeight: plan.windows[0]!.relevanceWeight,
+        wholeFileEligible: false,
+        generated: true,
+        generatedClassifierVersion: "generated-evidence-v1",
+        generatedEvidenceRuleIds: ["test.generated"]
+      }]
+    });
+
+    expect(allocation.windows[0]).toMatchObject({
+      relevanceWeight: 510,
+      sourceWorth: 0.3,
+      effectiveWeight: 153
+    });
+  });
+
   it("adds a bounded bridge declaration window from an exact path spine", () => {
     const entry = symbol("entry", "src/entry.ts", 1);
     const bridge = symbol("bridge", "src/bridge.ts", 1);

@@ -1,6 +1,15 @@
-import type { GraphEdge, SymbolNode } from "../domain/types.js";
+import {
+  GENERATED_FILE_CLASSIFIER_VERSION,
+  generatedClassificationFor,
+  type GeneratedFileClassification,
+  type GraphEdge,
+  type IndexedFile,
+  type SymbolNode
+} from "../domain/index.js";
 
-export const EXPLORE_QUERY_PLAN_POLICY = "explore-query-plan-v1" as const;
+export const EXPLORE_QUERY_PLAN_POLICY = "explore-query-plan-v2" as const;
+export const EXPLORE_QUERY_SOURCE_WORTH_POLICY = "explore-query-source-worth-v1" as const;
+export const EXPLORE_GENERATED_SOURCE_WORTH = 0.3 as const;
 export const EXPLORE_QUERY_LIMITS = {
   maximumQueryCharacters: 512,
   maximumFileHints: 4,
@@ -25,6 +34,13 @@ export interface ExploreQuerySelection {
   readonly score: number;
   readonly baseScore: number;
   readonly connectionScore: number;
+  readonly generated: GeneratedFileClassification;
+  readonly sourceWorth: number;
+  readonly rankingScore: number;
+  readonly rankingDecision:
+    | "explicit-file-exempt"
+    | "handwritten-source-worth"
+    | "generated-source-worth";
   readonly matchedTerms: readonly string[];
   readonly reasons: readonly ExploreQuerySelectionReason[];
 }
@@ -40,10 +56,18 @@ export interface ExploreQueryPlan {
   };
   readonly fileHints: readonly string[];
   readonly identifierTerms: readonly string[];
+  readonly ranking: {
+    readonly policy: typeof EXPLORE_QUERY_SOURCE_WORTH_POLICY;
+    readonly generatedSourceWorth: typeof EXPLORE_GENERATED_SOURCE_WORTH;
+    readonly explicitFileExempt: true;
+    readonly classifierVersion: string;
+  };
   readonly limits: typeof EXPLORE_QUERY_LIMITS;
   readonly summary: {
     readonly candidateCount: number;
+    readonly generatedCandidateCount: number;
     readonly selectedCount: number;
+    readonly selectedGeneratedCount: number;
     readonly selectedFileCount: number;
     readonly truncated: boolean;
   };
@@ -51,6 +75,7 @@ export interface ExploreQueryPlan {
 }
 
 interface ExploreQueryGraph {
+  readonly files?: readonly IndexedFile[];
   readonly symbols: readonly SymbolNode[];
   readonly edges: readonly GraphEdge[];
 }
@@ -61,6 +86,8 @@ interface Candidate {
   readonly matchedTerms: readonly string[];
   readonly baseReasons: readonly ExploreQuerySelectionReason[];
   readonly baseScore: number;
+  readonly generated: GeneratedFileClassification;
+  readonly sourceWorth: number;
   connectionScore: number;
 }
 
@@ -189,7 +216,8 @@ function fileName(filePath: string): string {
 function candidateFor(
   symbol: SymbolNode,
   fileHints: readonly string[],
-  identifierTerms: readonly string[]
+  identifierTerms: readonly string[],
+  filesByPath: ReadonlyMap<string, IndexedFile>
 ): Candidate | null {
   if (symbol.kind === "file") return null;
   const explicitFile = fileHints.includes(symbol.filePath);
@@ -248,19 +276,33 @@ function candidateFor(
     baseScore += 80;
   }
   baseScore += new Set(matchedTerms).size * 10;
+  const generated = generatedClassificationFor(filesByPath.get(symbol.filePath) ?? {});
   return {
     symbol,
     explicitFile,
     matchedTerms: [...new Set(matchedTerms)],
     baseReasons,
     baseScore,
+    generated,
+    sourceWorth: generated.generated ? EXPLORE_GENERATED_SOURCE_WORTH : 1,
     connectionScore: 0
   };
 }
 
+function rawScore(candidate: Candidate): number {
+  return candidate.baseScore + candidate.connectionScore;
+}
+
+function rankingScore(candidate: Candidate): number {
+  const score = rawScore(candidate);
+  return candidate.explicitFile
+    ? score
+    : Math.round(score * candidate.sourceWorth * 1_000_000) / 1_000_000;
+}
+
 function compareCandidates(left: Candidate, right: Candidate): number {
   if (left.explicitFile !== right.explicitFile) return left.explicitFile ? -1 : 1;
-  const scoreDifference = right.baseScore + right.connectionScore - (left.baseScore + left.connectionScore);
+  const scoreDifference = rankingScore(right) - rankingScore(left);
   if (scoreDifference !== 0) return scoreDifference;
   return (
     compareText(left.symbol.filePath, right.symbol.filePath) ||
@@ -274,8 +316,9 @@ function compareCandidates(left: Candidate, right: Candidate): number {
 /** Builds a deterministic, bounded graph focus plan without reading live source. */
 export function planExploreQuery(graph: ExploreQueryGraph, query: string): ExploreQueryPlan {
   const parsed = parseQuery(query);
+  const filesByPath = new Map((graph.files ?? []).map((file) => [file.path, file]));
   const candidates = graph.symbols
-    .map((symbol) => candidateFor(symbol, parsed.fileHints, parsed.identifierTerms))
+    .map((symbol) => candidateFor(symbol, parsed.fileHints, parsed.identifierTerms, filesByPath))
     .filter((candidate): candidate is Candidate => candidate !== null);
   const candidatesById = new Map(candidates.map((candidate) => [candidate.symbol.id, candidate]));
   for (const edge of graph.edges) {
@@ -306,18 +349,32 @@ export function planExploreQuery(graph: ExploreQueryGraph, query: string): Explo
     selectedByFile.set(candidate.symbol.filePath, fileCount + 1);
   }
 
-  const selection: ExploreQuerySelection[] = selected.map((candidate, index) => ({
-    rank: index + 1,
-    symbol: candidate.symbol,
-    score: candidate.baseScore + candidate.connectionScore,
-    baseScore: candidate.baseScore,
-    connectionScore: candidate.connectionScore,
-    matchedTerms: candidate.matchedTerms,
-    reasons: [
-      ...candidate.baseReasons,
-      ...(candidate.connectionScore > 0 ? ["graph-connected" as const] : [])
-    ]
-  }));
+  const selection: ExploreQuerySelection[] = selected.map((candidate, index) => {
+    const score = rawScore(candidate);
+    return {
+      rank: index + 1,
+      symbol: candidate.symbol,
+      score,
+      baseScore: candidate.baseScore,
+      connectionScore: candidate.connectionScore,
+      generated: candidate.generated,
+      sourceWorth: candidate.sourceWorth,
+      rankingScore: rankingScore(candidate),
+      rankingDecision: candidate.explicitFile
+        ? "explicit-file-exempt"
+        : candidate.generated.generated
+          ? "generated-source-worth"
+          : "handwritten-source-worth",
+      matchedTerms: candidate.matchedTerms,
+      reasons: [
+        ...candidate.baseReasons,
+        ...(candidate.connectionScore > 0 ? ["graph-connected" as const] : [])
+      ]
+    };
+  });
+  const classifierVersions = [...new Set(
+    candidates.map((candidate) => candidate.generated.classifierVersion)
+  )].sort(compareText);
   return {
     policy: EXPLORE_QUERY_PLAN_POLICY,
     query: parsed.boundedQuery,
@@ -325,10 +382,23 @@ export function planExploreQuery(graph: ExploreQueryGraph, query: string): Explo
     input: parsed.input,
     fileHints: parsed.fileHints,
     identifierTerms: parsed.identifierTerms,
+    ranking: {
+      policy: EXPLORE_QUERY_SOURCE_WORTH_POLICY,
+      generatedSourceWorth: EXPLORE_GENERATED_SOURCE_WORTH,
+      explicitFileExempt: true,
+      classifierVersion:
+        classifierVersions.length === 1
+          ? classifierVersions[0]!
+          : classifierVersions.length === 0
+            ? GENERATED_FILE_CLASSIFIER_VERSION
+          : `mixed:${classifierVersions.join(",")}`
+    },
     limits: EXPLORE_QUERY_LIMITS,
     summary: {
       candidateCount: candidates.length,
+      generatedCandidateCount: candidates.filter((candidate) => candidate.generated.generated).length,
       selectedCount: selection.length,
+      selectedGeneratedCount: selection.filter((candidate) => candidate.generated.generated).length,
       selectedFileCount: selectedFiles.size,
       truncated: selection.length < candidates.length
     },

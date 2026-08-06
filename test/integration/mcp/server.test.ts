@@ -1444,7 +1444,46 @@ describe("SymbolLattice MCP server", () => {
       type: "object",
       properties: {
         mode: { type: "string", enum: ["exact-symbol", "query"] },
-        queryPlan: {},
+        queryPlan: {
+          anyOf: [
+            {
+              properties: {
+                policy: { const: "explore-query-plan-v2" },
+                ranking: {
+                  properties: {
+                    policy: { const: "explore-query-source-worth-v1" },
+                    generatedSourceWorth: { const: 0.3 },
+                    explicitFileExempt: { const: true },
+                    classifierVersion: { type: "string", minLength: 1 }
+                  }
+                },
+                summary: {
+                  properties: {
+                    generatedCandidateCount: { minimum: 0 },
+                    selectedGeneratedCount: { minimum: 0, maximum: 8 }
+                  }
+                },
+                selection: {
+                  items: {
+                    properties: {
+                      generated: { type: "object" },
+                      sourceWorth: { exclusiveMinimum: 0, maximum: 1 },
+                      rankingScore: { minimum: 0 },
+                      rankingDecision: {
+                        enum: [
+                          "explicit-file-exempt",
+                          "handwritten-source-worth",
+                          "generated-source-worth"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            { type: "null" }
+          ]
+        },
         focuses: { type: "array" },
         connections: { type: "array" },
         connectionsTruncated: { type: "boolean" },
