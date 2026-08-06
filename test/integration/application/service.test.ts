@@ -804,6 +804,112 @@ describe("SymbolLatticeService", () => {
     expect((await service.sync({ projectPath })).stale).toBe(false);
   });
 
+  it("uses named-file-first graph focus for a bounded natural-language explore query", async () => {
+    const projectPath = await createInlineProject({
+      "src/api/orders.ts": [
+        'import { persistOrder } from "../data/orders.js";',
+        "",
+        "export function createOrder(): string {",
+        "  return persistOrder();",
+        "}",
+        "",
+        "export function validatePayload(): boolean {",
+        "  return true;",
+        "}",
+        ""
+      ].join("\r\n"),
+      "src/data/orders.ts": [
+        "export function persistOrder(): string {",
+        '  return "persisted generation";',
+        "}",
+        ""
+      ].join("\n"),
+      "src/legacy/orders.ts": [
+        "export function createOrder(): string {",
+        '  return "legacy";',
+        "}",
+        ""
+      ].join("\n")
+    });
+    const service = createService();
+    await service.init({ projectPath });
+    await writeFile(
+      join(projectPath, "src", "data", "orders.ts"),
+      'export function liveOnly() { return "not indexed"; }\n',
+      "utf8"
+    );
+
+    const result = await service.explore(
+      projectPath,
+      "Trace `src/api/orders.ts` createOrder to persistOrder"
+    );
+
+    expect(result).toMatchObject({
+      mode: "query",
+      status: { stale: true, staleReasons: ["source-files-changed"] },
+      match: { status: "not_found" },
+      sourceAvailability: "not-applicable",
+      source: null,
+      queryPlan: {
+        policy: "explore-query-plan-v1",
+        fileHints: ["src/api/orders.ts"],
+        identifierTerms: ["createorder", "persistorder"],
+        summary: {
+          candidateCount: 4,
+          selectedCount: 4,
+          selectedFileCount: 3,
+          truncated: false
+        }
+      },
+      focuses: [
+        {
+          rank: 1,
+          symbol: { name: "createOrder", filePath: "src/api/orders.ts" },
+          reasons: ["explicit-file", "exact-symbol-term", "graph-connected"],
+          sourceAvailability: "active-generation",
+          source: { filePath: "src/api/orders.ts" }
+        },
+        {
+          rank: 2,
+          symbol: { name: "validatePayload", filePath: "src/api/orders.ts" },
+          reasons: ["explicit-file"],
+          sourceAvailability: "active-generation"
+        },
+        {
+          rank: 3,
+          symbol: { name: "persistOrder", filePath: "src/data/orders.ts" },
+          reasons: ["exact-symbol-term", "graph-connected"],
+          sourceAvailability: "active-generation"
+        },
+        {
+          rank: 4,
+          symbol: { name: "createOrder", filePath: "src/legacy/orders.ts" },
+          reasons: ["exact-symbol-term"],
+          sourceAvailability: "active-generation"
+        }
+      ],
+      connections: [
+        {
+          source: { name: "createOrder", filePath: "src/api/orders.ts" },
+          target: { name: "persistOrder", filePath: "src/data/orders.ts" },
+          edge: { kind: "calls", resolution: "exact" }
+        }
+      ],
+      sourceAllocation: {
+        policy: "reference-order-source-v1",
+        budget: { characterBudget: 24_000 },
+        summary: { candidateCount: 4 }
+      }
+    });
+    expect(result.focuses?.map((focus) => focus.source?.text).join("\n")).toContain(
+      "persisted generation"
+    );
+    expect(result.focuses?.map((focus) => focus.source?.text).join("\n")).not.toContain(
+      "not indexed"
+    );
+    expect(result.sourceAllocation?.summary.emittedCharacters).toBeLessThanOrEqual(24_000);
+  });
+
   it("reports unavailable when the active generation has no matching source document", async () => {
     const projectPath = await createInlineProject({
       "src/missing-document.ts": 'export const persistedSymbol = "live source";\n'
@@ -3443,6 +3549,54 @@ describe("SymbolLatticeService", () => {
       source: { filePath: "src/after.ts" }
     });
     expect(exploration.source?.lines.map((line) => line.text).join("\n")).toContain("C evidence");
+    expect(sourceDocumentRequests).toEqual([["src/before.ts"], ["src/after.ts"]]);
+  });
+
+  it("replans a natural-language explore query once when its selected symbol moves", async () => {
+    const initialBundle = raceSourceDocumentsBundle(
+      "generation:A",
+      "src/before.ts",
+      'export function raceTarget() { return "A evidence"; }\n',
+      []
+    );
+    const movedBundleWithoutRequestedDocument = raceSourceDocumentsBundle(
+      "generation:B",
+      "src/after.ts",
+      'export function raceTarget() { return "B evidence"; }\n',
+      []
+    );
+    const movedBundleWithRequestedDocument = raceSourceDocumentsBundle(
+      "generation:C",
+      "src/after.ts",
+      'export function raceTarget() { return "C evidence"; }\n'
+    );
+    const { graphStore, sourceDocumentRequests } = createSequencedSourceDocumentGraphStore(
+      initialBundle,
+      [movedBundleWithoutRequestedDocument, movedBundleWithRequestedDocument]
+    );
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    const exploration = await service.explore(
+      "C:/symbol-lattice-race-project",
+      "trace raceTarget flow"
+    );
+
+    expect(exploration).toMatchObject({
+      mode: "query",
+      status: { generationId: "generation:C" },
+      queryPlan: {
+        selection: [{ symbol: { filePath: "src/after.ts" } }]
+      },
+      focuses: [
+        {
+          sourceAvailability: "active-generation",
+          source: { filePath: "src/after.ts" }
+        }
+      ]
+    });
+    expect(exploration.focuses?.[0]?.source?.lines.map((line) => line.text).join("\n")).toContain(
+      "C evidence"
+    );
     expect(sourceDocumentRequests).toEqual([["src/before.ts"], ["src/after.ts"]]);
   });
 

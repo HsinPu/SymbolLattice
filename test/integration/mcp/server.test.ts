@@ -1439,6 +1439,19 @@ describe("SymbolLattice MCP server", () => {
       "symbol_lattice_search",
       "symbol_lattice_explain_edge"
     ]);
+    const exploreTool = tools.tools.find((tool) => tool.name === "symbol_lattice_explore");
+    expect(exploreTool?.outputSchema).toMatchObject({
+      type: "object",
+      properties: {
+        mode: { type: "string", enum: ["exact-symbol", "query"] },
+        queryPlan: {},
+        focuses: { type: "array" },
+        connections: { type: "array" },
+        connectionsTruncated: { type: "boolean" },
+        sourceAllocation: {},
+        evidencePaths: { type: "array" }
+      }
+    });
 
     const result = await client.callTool({
       name: "symbol_lattice_explore",

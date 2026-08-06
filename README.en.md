@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.281.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher can update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.282.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher can update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## Quick start
 
@@ -31,6 +31,9 @@ node dist/cli/main.js init /path/to/project
 
 # Query explainable structural context
 node dist/cli/main.js investigate "user token" --project /path/to/project --json
+
+# Plan a cross-file exploration from file and symbol clues
+node dist/cli/main.js explore "Trace src/api/orders.ts createOrder to persistOrder" --project /path/to/project --json
 
 # Build multi-symbol context inside one shared source budget
 node dist/cli/main.js context "src/api.ts#route" "src/service.ts#load" --project /path/to/project --source-character-budget 12000 --json
@@ -52,6 +55,7 @@ Alternatively, download the version-pinned `.tgz`, SHA-256 checksum, and manifes
 
 ## What it does
 
+- `explore` supports both exact symbols and bounded question mode. Safe explicit project-relative paths rank first, followed by symbol, filename, and exact graph-connection evidence. It selects at most four files, eight focuses, two focuses per file, and sixteen connections; the result discloses ranking reasons, truncation, and a shared 24,000-character source allocation drawn only from the same active generation.
 - `explore`, `context`, `node`, `investigate`, and `file` share session-, project-, and generation-bound source coverage. Back-references or new fragments are emitted only when UTF-16 offsets, content, and the SHA-256 offset map are verifiable and the 160-character savings/new-context floors plus four-fragment cap are satisfied; otherwise the full source is re-emitted. `sourceSessionMode: "full"` disables deduplication.
 - `context` places persisted source for up to eight references inside one 2,048–64,000-character envelope, allocates by input order, and returns per-reference allocation, truncation cause, emitted size, source identity, and offset map. CLI and MCP callers can set `sourceCharacterBudget`.
 - Every emitted, covered, or new fragment may carry `mcp-source-pointer-v1`: project-relative path, exact line/column range, raw-file offsets, at most five overlapping symbols, a readable `file:Lx-Ly (symbol)` label, and a SHA-256 receipt. CRLF, CR, Unicode separators, and partial fragments are rebased safely; insufficient display evidence omits only the pointer and never weakens source equality.
@@ -103,6 +107,7 @@ One manifest may provide `frameworkFactPlugins`, `frameworkProjectPlugins`, and 
 | `file <path>` | Read a numbered human view; add `--json` for the stable contract. |
 | `git-hunks [path] --base <ref>` | Filter immutable Git hunk attribution with optional `--path-prefix`. |
 | `affected --working-tree` | Scope Git changes with `--path-prefix`, then optionally replace conventional test naming with `--test-pattern`. |
+| `explore <query>` | Retrieve ranked focuses, connections, and persisted source from an exact symbol or bounded question. |
 | `investigate <query>` | Expand textual evidence into structural context. |
 | `context <reference...>` | Build multi-symbol context and adjacent evidence paths within one source budget. |
 | `impact <symbol>` | Trace bounded impact through exact static relations. |

@@ -101,6 +101,11 @@ import {
 } from "./file-inventory.js";
 import { rankGeneratedValues, type GeneratedRankingItem } from "./generated-ranking.js";
 import {
+  EXPLORE_QUERY_LIMITS,
+  planExploreQuery,
+  type ExploreQueryPlan
+} from "./explore-query.js";
+import {
   allocateInvestigationSource,
   DEFAULT_INVESTIGATION_SOURCE_CHARACTER_BUDGET,
   INVESTIGATION_SOURCE_ALLOCATION_POLICY,
@@ -210,6 +215,8 @@ import type {
   EntrypointsOptions,
   EntrypointsResult,
   ExploreResult,
+  ExploreConnection,
+  ExploreFocus,
   FilesOptions,
   FilesResult,
   FileViewOptions,
@@ -2439,13 +2446,7 @@ export class SymbolLatticeService {
 
     let match = matchSymbol(graphBundle.snapshot, reference);
     if (match.status !== "exact") {
-      return this.exploreResultForBundle(
-        normalizedProjectPath,
-        reference,
-        graphBundle,
-        null,
-        "not-applicable"
-      );
+      return this.exploreQuery(normalizedProjectPath, reference, graphBundle);
     }
 
     const getActiveSourceDocumentsBundle = this.graphStore.getActiveSourceDocumentsBundle;
@@ -2537,6 +2538,62 @@ export class SymbolLatticeService {
       graphBundle,
       null,
       "unavailable"
+    );
+  }
+
+  private async exploreQuery(
+    normalizedProjectPath: string,
+    query: string,
+    initialBundle: ActiveGraphBundle
+  ): Promise<ExploreResult> {
+    let plan = planExploreQuery(initialBundle.snapshot, query);
+    const getActiveSourceDocumentsBundle = this.graphStore.getActiveSourceDocumentsBundle;
+    if (typeof getActiveSourceDocumentsBundle !== "function" || plan.selection.length === 0) {
+      return this.exploreQueryResultForBundle(
+        normalizedProjectPath,
+        query,
+        initialBundle,
+        plan,
+        new Map()
+      );
+    }
+
+    let requestedFilePaths = this.exploreQueryFilePaths(plan);
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const sourceBundle = getActiveSourceDocumentsBundle.call(
+        this.graphStore,
+        normalizedProjectPath,
+        requestedFilePaths
+      );
+      plan = planExploreQuery(sourceBundle.snapshot, query);
+      const currentFilePaths = this.exploreQueryFilePaths(plan);
+      const documentsByFilePath = new Map(
+        sourceBundle.documents.map(
+          (document): readonly [string, IndexedSourceDocument] => [document.filePath, document]
+        )
+      );
+      if (
+        attempt === 0 &&
+        !this.sameFilePaths(currentFilePaths, requestedFilePaths)
+      ) {
+        requestedFilePaths = currentFilePaths;
+        continue;
+      }
+      return this.exploreQueryResultForBundle(
+        normalizedProjectPath,
+        query,
+        sourceBundle,
+        plan,
+        documentsByFilePath
+      );
+    }
+
+    return this.exploreQueryResultForBundle(
+      normalizedProjectPath,
+      query,
+      initialBundle,
+      plan,
+      new Map()
     );
   }
 
@@ -4526,6 +4583,100 @@ export class SymbolLatticeService {
     };
   }
 
+  private exploreQueryFilePaths(plan: ExploreQueryPlan): readonly string[] {
+    const filePaths: string[] = [];
+    const seen = new Set<string>();
+    for (const selection of plan.selection) {
+      if (seen.has(selection.symbol.filePath)) continue;
+      seen.add(selection.symbol.filePath);
+      filePaths.push(selection.symbol.filePath);
+    }
+    return filePaths;
+  }
+
+  private async exploreQueryResultForBundle(
+    normalizedProjectPath: string,
+    query: string,
+    bundle: ActiveGraphBundle,
+    plan: ExploreQueryPlan,
+    documentsByFilePath: ReadonlyMap<string, IndexedSourceDocument>
+  ): Promise<ExploreResult> {
+    const matches: readonly SymbolMatch[] = plan.selection.map(({ symbol }) => ({
+      status: "exact",
+      reference: symbol.qualifiedName,
+      symbol,
+      candidates: [symbol]
+    }));
+    const bounds = this.contextBounds({
+      sourceCharacterBudget: DEFAULT_CONTEXT_SOURCE_CHARACTER_BUDGET
+    });
+    const read: ContextRead = { bundle, matches, documentsByFilePath };
+    const contextPack = this.symbolContextPack(read, bounds);
+    const focuses: readonly ExploreFocus[] = plan.selection.map((selection, index) => ({
+      ...selection,
+      ...(contextPack.contexts[index] ?? this.toSymbolContext(
+        selection.symbol.qualifiedName,
+        matches[index] ?? {
+          status: "exact",
+          reference: selection.symbol.qualifiedName,
+          symbol: selection.symbol,
+          candidates: [selection.symbol]
+        },
+        read,
+        bounds,
+        null
+      ))
+    }));
+    const rankBySymbolId = new Map(
+      plan.selection.map((selection) => [selection.symbol.id, selection.rank])
+    );
+    const symbolsById = new Map(
+      plan.selection.map((selection) => [selection.symbol.id, selection.symbol])
+    );
+    const connectionCandidates = bundle.snapshot.edges
+      .filter(
+        (edge): edge is typeof edge & { readonly sourceId: string; readonly targetId: string } =>
+          edge.resolution === "exact" &&
+          edge.sourceId !== null &&
+          edge.targetId !== null &&
+          symbolsById.has(edge.sourceId) &&
+          symbolsById.has(edge.targetId)
+      )
+      .sort(
+        (left, right) =>
+          (rankBySymbolId.get(left.sourceId) ?? Number.MAX_SAFE_INTEGER) -
+            (rankBySymbolId.get(right.sourceId) ?? Number.MAX_SAFE_INTEGER) ||
+          (rankBySymbolId.get(left.targetId) ?? Number.MAX_SAFE_INTEGER) -
+            (rankBySymbolId.get(right.targetId) ?? Number.MAX_SAFE_INTEGER) ||
+          compareText(left.kind, right.kind) ||
+          compareText(left.id, right.id)
+      );
+    const connections: ExploreConnection[] = connectionCandidates
+      .slice(0, EXPLORE_QUERY_LIMITS.maximumConnections)
+      .flatMap((edge) => {
+        const source = symbolsById.get(edge.sourceId);
+        const target = symbolsById.get(edge.targetId);
+        return source === undefined || target === undefined ? [] : [{ source, target, edge }];
+      });
+
+    return {
+      status: await this.getStatusForBundle(normalizedProjectPath, bundle),
+      mode: "query",
+      match: matchSymbol(bundle.snapshot, query),
+      sourceAvailability: "not-applicable",
+      source: null,
+      callers: [],
+      callees: [],
+      impact: [],
+      queryPlan: plan,
+      focuses,
+      connections,
+      connectionsTruncated: connectionCandidates.length > connections.length,
+      sourceAllocation: contextPack.allocation,
+      evidencePaths: this.contextEvidencePaths(matches, bundle, bounds)
+    };
+  }
+
   private async exploreResultForBundle(
     normalizedProjectPath: string,
     reference: string,
@@ -4538,23 +4689,37 @@ export class SymbolLatticeService {
     if (match.status !== "exact") {
       return {
         status,
+        mode: "exact-symbol",
         match,
         sourceAvailability: "not-applicable",
         source: null,
         callers: [],
         callees: [],
-        impact: []
+        impact: [],
+        queryPlan: null,
+        focuses: [],
+        connections: [],
+        connectionsTruncated: false,
+        sourceAllocation: null,
+        evidencePaths: []
       };
     }
 
     return {
       status,
+      mode: "exact-symbol",
       match,
       sourceAvailability,
       source,
       callers: getCallers(bundle.snapshot, match.symbol.id),
       callees: getCallees(bundle.snapshot, match.symbol.id),
-      impact: getImpactPaths(bundle.snapshot, match.symbol.id, 2)
+      impact: getImpactPaths(bundle.snapshot, match.symbol.id, 2),
+      queryPlan: null,
+      focuses: [],
+      connections: [],
+      connectionsTruncated: false,
+      sourceAllocation: null,
+      evidencePaths: []
     };
   }
 

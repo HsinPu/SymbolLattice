@@ -17,6 +17,10 @@ import {
   MIN_CONTEXT_SOURCE_CHARACTER_BUDGET
 } from "../application/context-source-allocation.js";
 import {
+  EXPLORE_QUERY_LIMITS,
+  EXPLORE_QUERY_PLAN_POLICY
+} from "../application/explore-query.js";
+import {
   INVESTIGATE_SOURCE_RENDER_MODES,
   INVESTIGATION_SOURCE_MAXIMUM_SEGMENTS,
   INVESTIGATION_SOURCE_RENDER_POLICY,
@@ -859,22 +863,6 @@ const deliveredSourceExcerptOutputSchema = sourceExcerptOutputSchema.extend({
   delivery: sourceDeliveryOutputSchema.optional()
 });
 
-const exploreOutputSchema = z
-  .object({
-    status: indexStatusOutputSchema,
-    match: z.object({}).passthrough(),
-    sourceAvailability: z
-      .enum(["active-generation", "unavailable", "not-applicable"])
-      .describe("When present, reports whether source is active-generation evidence is unavailable or not applicable to the match.")
-      .optional(),
-    source: deliveredSourceExcerptOutputSchema.nullable(),
-    sessionSource: sourceSessionReceiptOutputSchema.optional(),
-    callers: z.array(z.object({}).passthrough()),
-    callees: z.array(z.object({}).passthrough()),
-    impact: z.array(z.object({}).passthrough())
-  })
-  .passthrough();
-
 const contextSourceAllocationOutputSchema = z.object({
   policy: z.literal(CONTEXT_SOURCE_ALLOCATION_POLICY),
   budget: z.object({
@@ -905,6 +893,108 @@ const contextSourceAllocationOutputSchema = z.object({
     reservedButNotEmittedCharacters: z.number().int().nonnegative()
   }))
 });
+
+const contextEvidencePathOutputSchema = z.object({
+  fromReference: z.string(),
+  toReference: z.string(),
+  status: z.enum(["path", "same-symbol", "no-path", "not-applicable", "truncated"]),
+  path: z.object({}).passthrough().nullable()
+});
+
+const exploreQuerySelectionOutputSchema = z.object({
+  rank: z.number().int().positive().max(EXPLORE_QUERY_LIMITS.maximumSymbols),
+  symbol: z.object({}).passthrough(),
+  score: z.number().finite(),
+  baseScore: z.number().finite(),
+  connectionScore: z.number().finite(),
+  matchedTerms: z.array(z.string()),
+  reasons: z.array(
+    z.enum([
+      "explicit-file",
+      "exact-symbol-term",
+      "qualified-symbol-term",
+      "partial-symbol-term",
+      "file-name-term",
+      "graph-connected"
+    ])
+  )
+});
+
+const exploreQueryPlanOutputSchema = z.object({
+  policy: z.literal(EXPLORE_QUERY_PLAN_POLICY),
+  query: z.string(),
+  normalizedQuery: z.string().max(EXPLORE_QUERY_LIMITS.maximumQueryCharacters),
+  input: z.object({
+    characters: z.number().int().nonnegative(),
+    usedCharacters: z.number().int().nonnegative().max(EXPLORE_QUERY_LIMITS.maximumQueryCharacters),
+    truncated: z.boolean()
+  }),
+  fileHints: z.array(z.string()).max(EXPLORE_QUERY_LIMITS.maximumFileHints),
+  identifierTerms: z.array(z.string()).max(EXPLORE_QUERY_LIMITS.maximumIdentifierTerms),
+  limits: z.object({
+    maximumQueryCharacters: z.literal(EXPLORE_QUERY_LIMITS.maximumQueryCharacters),
+    maximumFileHints: z.literal(EXPLORE_QUERY_LIMITS.maximumFileHints),
+    maximumIdentifierTerms: z.literal(EXPLORE_QUERY_LIMITS.maximumIdentifierTerms),
+    maximumFiles: z.literal(EXPLORE_QUERY_LIMITS.maximumFiles),
+    maximumSymbols: z.literal(EXPLORE_QUERY_LIMITS.maximumSymbols),
+    maximumSymbolsPerFile: z.literal(EXPLORE_QUERY_LIMITS.maximumSymbolsPerFile),
+    maximumConnections: z.literal(EXPLORE_QUERY_LIMITS.maximumConnections)
+  }),
+  summary: z.object({
+    candidateCount: z.number().int().nonnegative(),
+    selectedCount: z.number().int().nonnegative().max(EXPLORE_QUERY_LIMITS.maximumSymbols),
+    selectedFileCount: z.number().int().nonnegative().max(EXPLORE_QUERY_LIMITS.maximumFiles),
+    truncated: z.boolean()
+  }),
+  selection: z.array(exploreQuerySelectionOutputSchema).max(EXPLORE_QUERY_LIMITS.maximumSymbols)
+});
+
+const exploreFocusOutputSchema = exploreQuerySelectionOutputSchema
+  .extend({
+    reference: z.string(),
+    match: z.object({}).passthrough(),
+    matchCandidatesTruncated: z.boolean(),
+    sourceAvailability: z.enum(["active-generation", "unavailable", "not-applicable"]),
+    source: deliveredSourceExcerptOutputSchema.nullable(),
+    callers: z.object({}).passthrough(),
+    callees: z.object({}).passthrough(),
+    impact: z.object({}).passthrough()
+  })
+  .passthrough();
+
+const exploreOutputSchema = z
+  .object({
+    status: indexStatusOutputSchema,
+    mode: z.enum(["exact-symbol", "query"]).optional(),
+    match: z.object({}).passthrough(),
+    sourceAvailability: z
+      .enum(["active-generation", "unavailable", "not-applicable"])
+      .describe(
+        "When present, reports whether source is active-generation evidence, unavailable, or not applicable to the match."
+      )
+      .optional(),
+    source: deliveredSourceExcerptOutputSchema.nullable(),
+    sessionSource: sourceSessionReceiptOutputSchema.optional(),
+    callers: z.array(z.object({}).passthrough()),
+    callees: z.array(z.object({}).passthrough()),
+    impact: z.array(z.object({}).passthrough()),
+    queryPlan: exploreQueryPlanOutputSchema.nullable().optional(),
+    focuses: z.array(exploreFocusOutputSchema).max(EXPLORE_QUERY_LIMITS.maximumSymbols).optional(),
+    connections: z
+      .array(
+        z.object({
+          source: z.object({}).passthrough(),
+          target: z.object({}).passthrough(),
+          edge: z.object({}).passthrough()
+        })
+      )
+      .max(EXPLORE_QUERY_LIMITS.maximumConnections)
+      .optional(),
+    connectionsTruncated: z.boolean().optional(),
+    sourceAllocation: contextSourceAllocationOutputSchema.nullable().optional(),
+    evidencePaths: z.array(contextEvidencePathOutputSchema).optional()
+  })
+  .passthrough();
 
 const nodeSourceOutputSchema = z.object({
   filePath: z.string(),
@@ -1087,14 +1177,7 @@ const contextOutputSchema = z
     ),
     sourceAllocation: contextSourceAllocationOutputSchema,
     sessionSource: sourceSessionReceiptOutputSchema.optional(),
-    evidencePaths: z.array(
-      z.object({
-        fromReference: z.string(),
-        toReference: z.string(),
-        status: z.enum(["path", "same-symbol", "no-path", "not-applicable", "truncated"]),
-        path: z.object({}).passthrough().nullable()
-      })
-    )
+    evidencePaths: z.array(contextEvidencePathOutputSchema)
   })
   .passthrough();
 
@@ -2343,9 +2426,9 @@ export function createMcpServer(
     {
       title: "Explore a SymbolLattice code graph",
       description:
-        "Returns generation-bound source evidence when available, direct callers/callees, impact paths, and index freshness from an existing local SymbolLattice index. When supplied by a v0.4.1-capable service, sourceAvailability reports whether persisted source evidence is unavailable or not applicable. This tool never creates or refreshes an index.",
+        "Explores either one exact symbol or a bounded question with named-file-first focus, exact selected connections, generation-bound source evidence, and index freshness from an existing local SymbolLattice index. This tool never creates or refreshes an index.",
       inputSchema: {
-        query: z.string().trim().min(1).describe("Symbol qualified name, simple name, or relative path:line reference."),
+        query: z.string().trim().min(1).describe("Exact symbol reference or a bounded question containing project-relative file and identifier clues."),
         projectPath: z.string().trim().min(1).optional().describe("Optional path to an already indexed project."),
         sourceSessionMode: z.enum(MCP_SOURCE_SESSION_MODES).optional().describe("MCP-only exact-source delivery policy shared across explore, context, node, investigate, and file. `deduplicate` is the default; `full` re-emits source.")
       },

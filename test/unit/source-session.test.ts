@@ -254,6 +254,42 @@ describe("MCP source session", () => {
     });
   });
 
+  it("projects every natural-language explore focus through the shared source session", () => {
+    const fixture = pointerFixture();
+    const exact = fixture.explore.structuredContent;
+    const queryExplore = response({
+      status: status(),
+      mode: "query",
+      source: null,
+      focuses: [
+        {
+          rank: 1,
+          match: exact.match,
+          sourceAvailability: "active-generation",
+          source: structuredClone(exact.source)
+        },
+        {
+          rank: 2,
+          match: exact.match,
+          sourceAvailability: "active-generation",
+          source: structuredClone(exact.source)
+        }
+      ]
+    });
+
+    const projected = new McpSourceSession().project(queryExplore, "explore", "deduplicate");
+
+    expect(projected.structuredContent).toMatchObject({
+      focuses: [
+        { source: { text: expect.any(String), delivery: { status: "emitted" } } },
+        { source: { text: null, lines: [], delivery: { status: "already-served" } } }
+      ],
+      sessionSource: {
+        summary: { candidateSources: 2, emittedSources: 1, referencedSources: 1 }
+      }
+    });
+  });
+
   it("deduplicates repeated exact context references without rejecting the response", () => {
     const fixture = pointerFixture();
     const repeated = structuredClone(fixture.context);

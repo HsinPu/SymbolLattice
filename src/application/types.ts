@@ -678,6 +678,27 @@ export interface ExploreResult {
   readonly callers: readonly GraphRelation[];
   readonly callees: readonly GraphRelation[];
   readonly impact: readonly ImpactPath[];
+  /** Additive unified-explore mode; omitted only by compatible legacy embeddings. */
+  readonly mode?: "exact-symbol" | "query";
+  /** Present only when a non-exact query was converted into a bounded focus plan. */
+  readonly queryPlan?: import("./explore-query.js").ExploreQueryPlan | null;
+  /** Ranked, generation-bound focus contexts for natural-language query mode. */
+  readonly focuses?: readonly ExploreFocus[];
+  /** Exact selected-to-selected relations; heuristic and unresolved edges are excluded. */
+  readonly connections?: readonly ExploreConnection[];
+  readonly connectionsTruncated?: boolean;
+  /** Shared source allocation across query focuses; null for exact-symbol mode. */
+  readonly sourceAllocation?: ContextSourceAllocationResult | null;
+  /** Adjacent selected-focus path evidence; empty for exact-symbol mode. */
+  readonly evidencePaths?: readonly ContextEvidencePath[];
+}
+
+export type ExploreFocus = import("./explore-query.js").ExploreQuerySelection & SymbolContext;
+
+export interface ExploreConnection {
+  readonly source: SymbolNode;
+  readonly target: SymbolNode;
+  readonly edge: GraphEdge;
 }
 
 /** Input bounds for a multi-symbol context pack. */
