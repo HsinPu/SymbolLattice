@@ -23,7 +23,8 @@ import {
   EXPLORE_QUERY_GRAPH_MASS_RELATION_WEIGHTS,
   EXPLORE_QUERY_LIMITS,
   EXPLORE_QUERY_PLAN_POLICY,
-  EXPLORE_QUERY_SOURCE_WORTH_POLICY
+  EXPLORE_QUERY_SOURCE_WORTH_POLICY,
+  EXPLORE_TEST_SOURCE_WORTH
 } from "../application/explore-query.js";
 import {
   EXPLORE_PATH_SPINE_LIMITS,
@@ -969,11 +970,26 @@ const exploreQuerySelectionOutputSchema = z.object({
     })).max(8)
   }),
   sourceWorth: z.number().finite().positive().max(1),
+  sourceRole: z.object({
+    classifierVersion: z.string().min(1),
+    role: z.enum(["production", "test"]),
+    evidence: z.array(z.object({
+      kind: z.literal("path"),
+      ruleId: z.string().min(1)
+    })).max(1)
+  }),
+  sourceRoleWorth: z.number().finite().positive().max(1),
   rankingScore: z.number().finite().nonnegative(),
   rankingDecision: z.enum([
     "explicit-file-exempt",
     "handwritten-source-worth",
     "generated-source-worth"
+  ]),
+  sourceRoleDecision: z.enum([
+    "production-source",
+    "test-source-worth",
+    "test-intent-exempt",
+    "explicit-test-file-exempt"
   ]),
   matchedTerms: z.array(z.string()),
   reasons: z.array(
@@ -1000,11 +1016,18 @@ const exploreQueryPlanOutputSchema = z.object({
   }),
   fileHints: z.array(z.string()).max(EXPLORE_QUERY_LIMITS.maximumFileHints),
   identifierTerms: z.array(z.string()).max(EXPLORE_QUERY_LIMITS.maximumIdentifierTerms),
+  queryIntent: z.object({
+    tests: z.boolean(),
+    matchedTerms: z.array(z.string()).max(EXPLORE_QUERY_LIMITS.maximumIdentifierTerms)
+  }),
   ranking: z.object({
     policy: z.literal(EXPLORE_QUERY_SOURCE_WORTH_POLICY),
     generatedSourceWorth: z.literal(EXPLORE_GENERATED_SOURCE_WORTH),
     explicitFileExempt: z.literal(true),
     classifierVersion: z.string().min(1),
+    testSourceWorth: z.literal(EXPLORE_TEST_SOURCE_WORTH),
+    testIntentExempt: z.literal(true),
+    sourceRoleClassifierVersion: z.string().min(1),
     graphMass: z.object({
       policy: z.literal(EXPLORE_QUERY_GRAPH_MASS_POLICY),
       maximumRelationships: z.literal(EXPLORE_QUERY_GRAPH_MASS_LIMITS.maximumRelationships),
@@ -1036,12 +1059,15 @@ const exploreQueryPlanOutputSchema = z.object({
   summary: z.object({
     candidateCount: z.number().int().nonnegative(),
     generatedCandidateCount: z.number().int().nonnegative(),
+    testCandidateCount: z.number().int().nonnegative(),
+    testPenaltyCandidateCount: z.number().int().nonnegative(),
     graphMassCandidateCount: z.number().int().nonnegative(),
     graphMassTruncatedCandidateCount: z.number().int().nonnegative(),
     selectedCount: z.number().int().nonnegative().max(EXPLORE_QUERY_LIMITS.maximumSymbols),
     selectedGeneratedCount: z.number().int().nonnegative().max(
       EXPLORE_QUERY_LIMITS.maximumSymbols
     ),
+    selectedTestCount: z.number().int().nonnegative().max(EXPLORE_QUERY_LIMITS.maximumSymbols),
     selectedFileCount: z.number().int().nonnegative().max(EXPLORE_QUERY_LIMITS.maximumFiles),
     truncated: z.boolean()
   }),
@@ -1790,6 +1816,20 @@ const indexedFileSummaryOutputSchema = z.object({
   filePath: z.string().min(1),
   language: z.enum(ARTIFACT_LANGUAGES),
   indexedAt: z.string().min(1),
+  generated: z.object({
+    classifierVersion: z.string().min(1),
+    generated: z.boolean(),
+    evidence: z.array(z.object({
+      kind: z.enum(["path", "header"]),
+      ruleId: z.string().min(1),
+      range: sourceRangeOutputSchema.nullable()
+    })).max(8)
+  }),
+  sourceRole: z.object({
+    classifierVersion: z.string().min(1),
+    role: z.enum(["production", "test"]),
+    evidence: z.array(z.object({ kind: z.literal("path"), ruleId: z.string().min(1) })).max(1)
+  }),
   declarationCount: z.number().int().nonnegative(),
   edgeCount: z.number().int().nonnegative(),
   pendingReferenceCount: z.number().int().nonnegative()

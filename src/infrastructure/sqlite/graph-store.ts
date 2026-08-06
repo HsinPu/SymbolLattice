@@ -24,6 +24,7 @@ import type {
   SymbolNode
 } from "../../domain/types.js";
 import type { GeneratedFileClassification } from "../../domain/generated-files.js";
+import type { SourceRoleClassification } from "../../domain/source-roles.js";
 import {
   MAX_SOURCE_SEARCH_LIMIT,
   sourceSearchCorpus,
@@ -84,7 +85,8 @@ const SNAPSHOT_SCHEMA = `
     language TEXT NOT NULL,
     indexed_at TEXT NOT NULL,
     generated INTEGER NOT NULL DEFAULT 0,
-    generated_evidence_json TEXT
+    generated_evidence_json TEXT,
+    source_role_json TEXT
   ) STRICT;
 
   CREATE TABLE IF NOT EXISTS symbols (
@@ -291,6 +293,7 @@ interface FileRow {
   readonly indexed_at: string;
   readonly generated: number;
   readonly generated_evidence_json: string | null;
+  readonly source_role_json: string | null;
 }
 
 interface SymbolRow {
@@ -437,6 +440,9 @@ function ensureGeneratedFileColumns(database: DatabaseSync): void {
   }
   if (!columnExists(database, "files", "generated_evidence_json")) {
     database.exec("ALTER TABLE files ADD COLUMN generated_evidence_json TEXT");
+  }
+  if (!columnExists(database, "files", "source_role_json")) {
+    database.exec("ALTER TABLE files ADD COLUMN source_role_json TEXT");
   }
   database.exec(
     "CREATE INDEX IF NOT EXISTS files_generated_path ON files(path) WHERE generated = 1"
@@ -689,6 +695,23 @@ function generatedFileClassification(row: FileRow): GeneratedFileClassification 
   return null;
 }
 
+function sourceRoleClassification(row: FileRow): SourceRoleClassification | null {
+  if (row.source_role_json === null) return null;
+  const parsed = parseJson<SourceRoleClassification>(
+    row.source_role_json,
+    `source-role evidence for ${row.path}`
+  );
+  if (
+    typeof parsed.classifierVersion === "string" &&
+    parsed.classifierVersion.length > 0 &&
+    (parsed.role === "production" || parsed.role === "test") &&
+    Array.isArray(parsed.evidence)
+  ) {
+    return parsed;
+  }
+  throw new Error(`Source-role evidence for ${row.path} has an invalid shape.`);
+}
+
 function toGraphEdge(row: EdgeRow): GraphEdge {
   const edge: GraphEdge = {
     id: row.id,
@@ -776,11 +799,12 @@ function artifactFactsPayload(facts: PersistedArtifactFacts): ArtifactFacts {
 
 function insertFile(database: DatabaseSync, file: IndexedFile): void {
   const generated = file.generated;
+  const sourceRole = file.sourceRole;
   database
     .prepare(
       `INSERT INTO files(
-        path, content_hash, language, indexed_at, generated, generated_evidence_json
-      ) VALUES (?, ?, ?, ?, ?, ?)`
+        path, content_hash, language, indexed_at, generated, generated_evidence_json, source_role_json
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)`
     )
     .run(
       file.path,
@@ -788,7 +812,8 @@ function insertFile(database: DatabaseSync, file: IndexedFile): void {
       file.language,
       file.indexedAt,
       Number(generated?.generated ?? false),
-      generated === undefined ? null : JSON.stringify(generated)
+      generated === undefined ? null : JSON.stringify(generated),
+      sourceRole === undefined ? null : JSON.stringify(sourceRole)
     );
 }
 
@@ -1237,10 +1262,13 @@ function readSnapshotProjection(
   const generatedEvidenceSelect = columnExists(database, "files", "generated_evidence_json")
     ? "generated_evidence_json"
     : "NULL AS generated_evidence_json";
+  const sourceRoleSelect = columnExists(database, "files", "source_role_json")
+    ? "source_role_json"
+    : "NULL AS source_role_json";
   const files = database
     .prepare(
       `SELECT path, content_hash, language, indexed_at,
-        ${generatedSelect}, ${generatedEvidenceSelect}
+        ${generatedSelect}, ${generatedEvidenceSelect}, ${sourceRoleSelect}
        FROM files ORDER BY path`
     )
     .all() as unknown as FileRow[];
@@ -1295,12 +1323,14 @@ function readSnapshotProjection(
   return {
     files: files.map((file) => {
       const generated = generatedFileClassification(file);
+      const sourceRole = sourceRoleClassification(file);
       return {
         path: file.path,
         contentHash: file.content_hash,
         language: file.language,
         indexedAt: file.indexed_at,
-        ...(generated === null ? {} : { generated })
+        ...(generated === null ? {} : { generated }),
+        ...(sourceRole === null ? {} : { sourceRole })
       };
     }),
     symbols: symbols.map((symbol) => ({

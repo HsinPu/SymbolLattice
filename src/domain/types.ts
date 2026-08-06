@@ -231,6 +231,8 @@ export interface IndexedFile {
   readonly indexedAt: string;
   /** Missing only in snapshots created before v0.272.0. */
   readonly generated?: import("./generated-files.js").GeneratedFileClassification;
+  /** Missing only in snapshots created before v0.289.0. */
+  readonly sourceRole?: import("./source-roles.js").SourceRoleClassification;
 }
 
 export interface SymbolNode {

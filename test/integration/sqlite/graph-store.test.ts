@@ -577,6 +577,39 @@ describe("SqliteGraphStore", () => {
     expect(store.getGenerationComparisonBundle(projectPath, "generation:missing")).toBeNull();
   });
 
+  it("round-trips generation-bound source-role evidence through active and retained snapshots", async () => {
+    const projectPath = await temporaryProject();
+    const store = new SqliteGraphStore();
+    const graphSnapshot: GraphSnapshot = {
+      ...snapshot([symbol("test-source", "orderService")]),
+      files: [{
+        ...snapshot([]).files[0]!,
+        path: "test/order-service.test.ts",
+        sourceRole: {
+          classifierVersion: "source-role-evidence-v1",
+          role: "test",
+          evidence: [{ kind: "path", ruleId: "source-role.path.javascript-test-suffix" }]
+        }
+      }]
+    };
+
+    store.replaceProjectFacts({
+      projectPath,
+      snapshot: graphSnapshot,
+      indexedAt: "2026-08-06T00:00:00.000Z",
+      artifactFacts: persistedFacts(graphSnapshot),
+      indexInputs: indexInputs("source-role-round-trip"),
+      resolverVersion: "test-resolver-source-role"
+    });
+
+    expect(store.getSnapshot(projectPath).files[0]?.sourceRole).toEqual(
+      graphSnapshot.files[0]?.sourceRole
+    );
+    const generationId = store.getStatus(projectPath).generationId!;
+    expect(store.getGenerationSnapshotBundle(projectPath, generationId)?.snapshot.files[0]?.sourceRole)
+      .toEqual(graphSnapshot.files[0]?.sourceRole);
+  });
+
   it("refuses every write when configured as a read-only worker store", async () => {
     const projectPath = await temporaryProject();
     const store = new SqliteGraphStore({ persistentReadProjectPath: projectPath, readOnly: true });

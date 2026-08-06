@@ -297,6 +297,8 @@ export interface IndexedFileSummary {
   readonly indexedAt: string;
   /** Generation-bound verdict with the exact path/header rules that caused it. */
   readonly generated: import("../domain/generated-files.js").GeneratedFileClassification;
+  /** Generation-bound production/test role with the exact path rule that caused it. */
+  readonly sourceRole: import("../domain/source-roles.js").SourceRoleClassification;
   /** Non-file declaration symbols stored for this file. */
   readonly declarationCount: number;
   /** Resolved and unresolved graph edges whose evidence location is this file. */

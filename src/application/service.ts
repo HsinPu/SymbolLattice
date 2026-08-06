@@ -29,8 +29,10 @@ import {
   matchSymbol,
   normalizeSourceSearchLexicalText,
   ROUTE_METHODS,
+  SOURCE_ROLE_CLASSIFIER_VERSION,
   SOURCE_SEARCH_INDEX_VERSION,
   sourceSearchTerms,
+  sourceRoleClassificationFor,
   summarizeImpactPaths,
   type GraphSnapshot,
   type ArtifactLanguage,
@@ -1251,10 +1253,10 @@ export class SymbolLatticeService {
     this.activeArtifactFactsExtractorVersion = artifactFactsExtractorVersion(
       this.artifactFactsExtractor
     );
-    this.activeProjectResolverVersion = frameworkProjectPluginProjectVersion(
+    this.activeProjectResolverVersion = `${frameworkProjectPluginProjectVersion(
       referenceResolverPluginProjectVersion(this.referenceResolverPlugins),
       this.frameworkProjectPlugins
-    );
+    )}+${SOURCE_ROLE_CLASSIFIER_VERSION}`;
   }
 
   /** True when this service can select changed source paths through its Git port. */
@@ -1741,6 +1743,7 @@ export class SymbolLatticeService {
         language: file.language,
         indexedAt: file.indexedAt,
         generated: generatedClassificationFor(file),
+        sourceRole: sourceRoleClassificationFor(file),
         declarationCount: declarationCounts.get(file.path) ?? 0,
         edgeCount: edgeCounts.get(file.path) ?? 0,
         pendingReferenceCount: pendingReferenceCounts.get(file.path) ?? 0

@@ -33,6 +33,7 @@ import {
 import {
   ARTIFACT_FACTS_EXTRACTOR_VERSION,
   PROJECT_RESOLVER_VERSION,
+  SOURCE_ROLE_CLASSIFIER_VERSION,
   SOURCE_SEARCH_INDEX_VERSION,
   type GraphSnapshot,
   type IndexedSourceDocument,
@@ -864,7 +865,7 @@ describe("SymbolLatticeService", () => {
       sourceAvailability: "not-applicable",
       source: null,
       queryPlan: {
-        policy: "explore-query-plan-v3",
+        policy: "explore-query-plan-v4",
         fileHints: ["src/api/orders.ts"],
         identifierTerms: ["createorder", "persistorder"],
         summary: {
@@ -969,7 +970,7 @@ describe("SymbolLatticeService", () => {
     const result = await service.explore(projectPath, "orderService");
 
     expect(result.queryPlan).toMatchObject({
-      policy: "explore-query-plan-v3",
+      policy: "explore-query-plan-v4",
       ranking: {
         policy: "explore-query-source-worth-v1",
         generatedSourceWorth: 0.3,
@@ -5138,7 +5139,7 @@ describe("SymbolLatticeService", () => {
       snapshot,
       indexInputs: scan.indexInputs,
       extractorVersion: ARTIFACT_FACTS_EXTRACTOR_VERSION,
-      resolverVersion: PROJECT_RESOLVER_VERSION,
+      resolverVersion: `${PROJECT_RESOLVER_VERSION}+${SOURCE_ROLE_CLASSIFIER_VERSION}`,
       sourceSearchVersion: SOURCE_SEARCH_INDEX_VERSION
     };
     const mutationCalls: string[] = [];
@@ -5334,7 +5335,7 @@ describe("SymbolLatticeService", () => {
       snapshot,
       indexInputs: scan.indexInputs,
       extractorVersion: ARTIFACT_FACTS_EXTRACTOR_VERSION,
-      resolverVersion: PROJECT_RESOLVER_VERSION,
+      resolverVersion: `${PROJECT_RESOLVER_VERSION}+${SOURCE_ROLE_CLASSIFIER_VERSION}`,
       sourceSearchVersion: SOURCE_SEARCH_INDEX_VERSION
     };
     const mutationCalls: string[] = [];

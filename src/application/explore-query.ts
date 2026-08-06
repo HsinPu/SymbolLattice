@@ -1,18 +1,22 @@
 import {
   EDGE_KINDS,
   GENERATED_FILE_CLASSIFIER_VERSION,
+  SOURCE_ROLE_CLASSIFIER_VERSION,
   generatedClassificationFor,
+  sourceRoleClassificationFor,
   type EdgeKind,
   type GeneratedFileClassification,
   type GraphEdge,
   type IndexedFile,
+  type SourceRoleClassification,
   type SymbolNode
 } from "../domain/index.js";
 
-export const EXPLORE_QUERY_PLAN_POLICY = "explore-query-plan-v3" as const;
+export const EXPLORE_QUERY_PLAN_POLICY = "explore-query-plan-v4" as const;
 export const EXPLORE_QUERY_SOURCE_WORTH_POLICY = "explore-query-source-worth-v1" as const;
 export const EXPLORE_QUERY_GRAPH_MASS_POLICY = "explore-query-graph-mass-v1" as const;
 export const EXPLORE_GENERATED_SOURCE_WORTH = 0.3 as const;
+export const EXPLORE_TEST_SOURCE_WORTH = 0.5 as const;
 export const EXPLORE_QUERY_GRAPH_MASS_LIMITS = {
   maximumRelationships: 32,
   maximumScore: 120
@@ -71,11 +75,18 @@ export interface ExploreQuerySelection {
   readonly graphMass: ExploreQueryGraphMass;
   readonly generated: GeneratedFileClassification;
   readonly sourceWorth: number;
+  readonly sourceRole: SourceRoleClassification;
+  readonly sourceRoleWorth: number;
   readonly rankingScore: number;
   readonly rankingDecision:
     | "explicit-file-exempt"
     | "handwritten-source-worth"
     | "generated-source-worth";
+  readonly sourceRoleDecision:
+    | "production-source"
+    | "test-source-worth"
+    | "test-intent-exempt"
+    | "explicit-test-file-exempt";
   readonly matchedTerms: readonly string[];
   readonly reasons: readonly ExploreQuerySelectionReason[];
 }
@@ -91,11 +102,18 @@ export interface ExploreQueryPlan {
   };
   readonly fileHints: readonly string[];
   readonly identifierTerms: readonly string[];
+  readonly queryIntent: {
+    readonly tests: boolean;
+    readonly matchedTerms: readonly string[];
+  };
   readonly ranking: {
     readonly policy: typeof EXPLORE_QUERY_SOURCE_WORTH_POLICY;
     readonly generatedSourceWorth: typeof EXPLORE_GENERATED_SOURCE_WORTH;
     readonly explicitFileExempt: true;
     readonly classifierVersion: string;
+    readonly testSourceWorth: typeof EXPLORE_TEST_SOURCE_WORTH;
+    readonly testIntentExempt: true;
+    readonly sourceRoleClassifierVersion: string;
     readonly graphMass: {
       readonly policy: typeof EXPLORE_QUERY_GRAPH_MASS_POLICY;
       readonly maximumRelationships: typeof EXPLORE_QUERY_GRAPH_MASS_LIMITS.maximumRelationships;
@@ -107,10 +125,13 @@ export interface ExploreQueryPlan {
   readonly summary: {
     readonly candidateCount: number;
     readonly generatedCandidateCount: number;
+    readonly testCandidateCount: number;
+    readonly testPenaltyCandidateCount: number;
     readonly graphMassCandidateCount: number;
     readonly graphMassTruncatedCandidateCount: number;
     readonly selectedCount: number;
     readonly selectedGeneratedCount: number;
+    readonly selectedTestCount: number;
     readonly selectedFileCount: number;
     readonly truncated: boolean;
   };
@@ -131,6 +152,8 @@ interface Candidate {
   readonly baseScore: number;
   readonly generated: GeneratedFileClassification;
   readonly sourceWorth: number;
+  readonly sourceRole: SourceRoleClassification;
+  readonly sourceRoleWorth: number;
   connectionScore: number;
   graphMass: CandidateGraphMass;
 }
@@ -186,6 +209,17 @@ const STOP_WORDS = new Set([
   "with"
 ]);
 
+const TEST_INTENT_TERMS = new Set([
+  "spec",
+  "specs",
+  "test",
+  "tests",
+  "testing",
+  "verification",
+  "verify",
+  "verifies"
+]);
+
 // Match unsafe path-looking tokens too so rejected traversal/absolute hints do
 // not leak back into identifier ranking as misleading `secret.ts` terms.
 const FILE_HINT_EXPRESSION = /(?:[^\s`"'<>]+[\\/])+[^\s`"'<>]+\.[\p{L}\p{N}]+(?::[1-9]\d*(?::\d+)?)?/gu;
@@ -222,6 +256,7 @@ function parseQuery(query: string): {
   readonly input: ExploreQueryPlan["input"];
   readonly fileHints: readonly string[];
   readonly identifierTerms: readonly string[];
+  readonly testIntentTerms: readonly string[];
 } {
   const trimmed = query.trim();
   const bounded = trimmed.slice(0, EXPLORE_QUERY_LIMITS.maximumQueryCharacters);
@@ -240,9 +275,14 @@ function parseQuery(query: string): {
     return " ";
   });
   const identifierTerms: string[] = [];
+  const testIntentTerms: string[] = [];
   const seenTerms = new Set<string>();
   for (const match of withoutFiles.matchAll(IDENTIFIER_EXPRESSION)) {
     const term = normalizedIdentifier(match[0]);
+    if (TEST_INTENT_TERMS.has(term)) {
+      if (!testIntentTerms.includes(term)) testIntentTerms.push(term);
+      continue;
+    }
     if (
       term.length < 3 ||
       STOP_WORDS.has(term) ||
@@ -266,7 +306,8 @@ function parseQuery(query: string): {
       truncated: trimmed.length > bounded.length
     },
     fileHints,
-    identifierTerms
+    identifierTerms,
+    testIntentTerms
   };
 }
 
@@ -291,6 +332,7 @@ function candidateFor(
   symbol: SymbolNode,
   fileHints: readonly string[],
   identifierTerms: readonly string[],
+  testIntent: boolean,
   filesByPath: ReadonlyMap<string, IndexedFile>
 ): Candidate | null {
   if (symbol.kind === "file") return null;
@@ -351,6 +393,9 @@ function candidateFor(
   }
   baseScore += new Set(matchedTerms).size * 10;
   const generated = generatedClassificationFor(filesByPath.get(symbol.filePath) ?? {});
+  const sourceRole = sourceRoleClassificationFor(filesByPath.get(symbol.filePath) ?? {});
+  const sourceRoleWorth =
+    sourceRole.role !== "test" || explicitFile || testIntent ? 1 : EXPLORE_TEST_SOURCE_WORTH;
   return {
     symbol,
     explicitFile,
@@ -359,6 +404,8 @@ function candidateFor(
     baseScore,
     generated,
     sourceWorth: generated.generated ? EXPLORE_GENERATED_SOURCE_WORTH : 1,
+    sourceRole,
+    sourceRoleWorth,
     connectionScore: 0,
     graphMass: emptyGraphMass()
   };
@@ -372,7 +419,7 @@ function rankingScore(candidate: Candidate): number {
   const score = rawScore(candidate);
   return candidate.explicitFile
     ? score
-    : Math.round(score * candidate.sourceWorth * 1_000_000) / 1_000_000;
+    : Math.round(score * candidate.sourceWorth * candidate.sourceRoleWorth * 1_000_000) / 1_000_000;
 }
 
 function graphMassFor(
@@ -424,7 +471,13 @@ export function planExploreQuery(graph: ExploreQueryGraph, query: string): Explo
   const parsed = parseQuery(query);
   const filesByPath = new Map((graph.files ?? []).map((file) => [file.path, file]));
   const candidates = graph.symbols
-    .map((symbol) => candidateFor(symbol, parsed.fileHints, parsed.identifierTerms, filesByPath))
+    .map((symbol) => candidateFor(
+      symbol,
+      parsed.fileHints,
+      parsed.identifierTerms,
+      parsed.testIntentTerms.length > 0,
+      filesByPath
+    ))
     .filter((candidate): candidate is Candidate => candidate !== null);
   const candidatesById = new Map(candidates.map((candidate) => [candidate.symbol.id, candidate]));
   const symbolsById = new Map(graph.symbols.map((symbol) => [symbol.id, symbol]));
@@ -497,16 +550,27 @@ export function planExploreQuery(graph: ExploreQueryGraph, query: string): Explo
         ...candidate.graphMass,
         rankingContribution: candidate.explicitFile
           ? candidate.graphMass.score
-          : Math.round(candidate.graphMass.score * candidate.sourceWorth * 1_000_000) / 1_000_000
+          : Math.round(
+              candidate.graphMass.score * candidate.sourceWorth * candidate.sourceRoleWorth * 1_000_000
+            ) / 1_000_000
       },
       generated: candidate.generated,
       sourceWorth: candidate.sourceWorth,
+      sourceRole: candidate.sourceRole,
+      sourceRoleWorth: candidate.sourceRoleWorth,
       rankingScore: rankingScore(candidate),
       rankingDecision: candidate.explicitFile
         ? "explicit-file-exempt"
         : candidate.generated.generated
           ? "generated-source-worth"
           : "handwritten-source-worth",
+      sourceRoleDecision: candidate.sourceRole.role !== "test"
+        ? "production-source"
+        : candidate.explicitFile
+          ? "explicit-test-file-exempt"
+          : parsed.testIntentTerms.length > 0
+            ? "test-intent-exempt"
+            : "test-source-worth",
       matchedTerms: candidate.matchedTerms,
       reasons: [
         ...candidate.baseReasons,
@@ -518,6 +582,9 @@ export function planExploreQuery(graph: ExploreQueryGraph, query: string): Explo
   const classifierVersions = [...new Set(
     candidates.map((candidate) => candidate.generated.classifierVersion)
   )].sort(compareText);
+  const sourceRoleClassifierVersions = [...new Set(
+    candidates.map((candidate) => candidate.sourceRole.classifierVersion)
+  )].sort(compareText);
   return {
     policy: EXPLORE_QUERY_PLAN_POLICY,
     query: parsed.boundedQuery,
@@ -525,6 +592,10 @@ export function planExploreQuery(graph: ExploreQueryGraph, query: string): Explo
     input: parsed.input,
     fileHints: parsed.fileHints,
     identifierTerms: parsed.identifierTerms,
+    queryIntent: {
+      tests: parsed.testIntentTerms.length > 0,
+      matchedTerms: parsed.testIntentTerms
+    },
     ranking: {
       policy: EXPLORE_QUERY_SOURCE_WORTH_POLICY,
       generatedSourceWorth: EXPLORE_GENERATED_SOURCE_WORTH,
@@ -535,6 +606,14 @@ export function planExploreQuery(graph: ExploreQueryGraph, query: string): Explo
           : classifierVersions.length === 0
             ? GENERATED_FILE_CLASSIFIER_VERSION
           : `mixed:${classifierVersions.join(",")}`,
+      testSourceWorth: EXPLORE_TEST_SOURCE_WORTH,
+      testIntentExempt: true,
+      sourceRoleClassifierVersion:
+        sourceRoleClassifierVersions.length === 1
+          ? sourceRoleClassifierVersions[0]!
+          : sourceRoleClassifierVersions.length === 0
+            ? SOURCE_ROLE_CLASSIFIER_VERSION
+            : `mixed:${sourceRoleClassifierVersions.join(",")}`,
       graphMass: {
         policy: EXPLORE_QUERY_GRAPH_MASS_POLICY,
         maximumRelationships: EXPLORE_QUERY_GRAPH_MASS_LIMITS.maximumRelationships,
@@ -546,10 +625,15 @@ export function planExploreQuery(graph: ExploreQueryGraph, query: string): Explo
     summary: {
       candidateCount: candidates.length,
       generatedCandidateCount: candidates.filter((candidate) => candidate.generated.generated).length,
+      testCandidateCount: candidates.filter((candidate) => candidate.sourceRole.role === "test").length,
+      testPenaltyCandidateCount: candidates.filter(
+        (candidate) => candidate.sourceRole.role === "test" && candidate.sourceRoleWorth < 1
+      ).length,
       graphMassCandidateCount: candidates.filter((candidate) => candidate.graphMass.score > 0).length,
       graphMassTruncatedCandidateCount: candidates.filter((candidate) => candidate.graphMass.truncated).length,
       selectedCount: selection.length,
       selectedGeneratedCount: selection.filter((candidate) => candidate.generated.generated).length,
+      selectedTestCount: selection.filter((candidate) => candidate.sourceRole.role === "test").length,
       selectedFileCount: selectedFiles.size,
       truncated: selection.length < candidates.length
     },

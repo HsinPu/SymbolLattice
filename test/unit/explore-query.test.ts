@@ -7,12 +7,13 @@ import {
 } from "../../src/application/explore-query.js";
 import {
   GENERATED_FILE_CLASSIFIER_VERSION,
+  SOURCE_ROLE_CLASSIFIER_VERSION,
   type GraphEdge,
   type IndexedFile,
   type SymbolNode
 } from "../../src/domain/index.js";
 
-function indexedFile(path: string, generated: boolean): IndexedFile {
+function indexedFile(path: string, generated: boolean, role: "production" | "test" = "production"): IndexedFile {
   return {
     path,
     contentHash: `hash:${path}`,
@@ -23,6 +24,13 @@ function indexedFile(path: string, generated: boolean): IndexedFile {
       generated,
       evidence: generated
         ? [{ kind: "path", ruleId: "test.generated", range: null }]
+        : []
+    },
+    sourceRole: {
+      classifierVersion: SOURCE_ROLE_CLASSIFIER_VERSION,
+      role,
+      evidence: role === "test"
+        ? [{ kind: "path", ruleId: "test.source-role" }]
         : []
     }
   };
@@ -73,6 +81,106 @@ function edge(id: string, sourceId: string, targetId: string): GraphEdge {
 }
 
 describe("explore query planning", () => {
+  it("softly lowers persisted test declarations for general queries and discloses both factors", () => {
+    const production = symbol({ id: "production", name: "orderService", filePath: "src/order-service.ts" });
+    const test = symbol({ id: "test", name: "orderService", filePath: "test/order-service.test.ts" });
+
+    const plan = planExploreQuery(
+      {
+        files: [indexedFile(production.filePath, false), indexedFile(test.filePath, false, "test")],
+        symbols: [test, production],
+        edges: []
+      },
+      "orderService"
+    );
+
+    expect(plan).toMatchObject({
+      policy: "explore-query-plan-v4",
+      queryIntent: { tests: false, matchedTerms: [] },
+      ranking: {
+        testSourceWorth: 0.5,
+        testIntentExempt: true,
+        sourceRoleClassifierVersion: SOURCE_ROLE_CLASSIFIER_VERSION
+      },
+      summary: { testCandidateCount: 1, selectedTestCount: 1, testPenaltyCandidateCount: 1 }
+    });
+    expect(plan.selection.map((item) => item.symbol.id)).toEqual(["production", "test"]);
+    expect(plan.selection[1]).toMatchObject({
+      score: 510,
+      sourceWorth: 1,
+      sourceRoleWorth: 0.5,
+      rankingScore: 255,
+      sourceRole: { role: "test", evidence: [{ ruleId: "test.source-role" }] },
+      sourceRoleDecision: "test-source-worth"
+    });
+  });
+
+  it("treats standalone test intent as intent evidence instead of a lexical symbol term", () => {
+    const production = symbol({ id: "production", name: "orderService", filePath: "src/z-order-service.ts" });
+    const test = symbol({ id: "test", name: "orderService", filePath: "test/a-order-service.test.ts" });
+    const plan = planExploreQuery(
+      {
+        files: [indexedFile(production.filePath, false), indexedFile(test.filePath, false, "test")],
+        symbols: [production, test],
+        edges: []
+      },
+      "verify orderService tests"
+    );
+
+    expect(plan.queryIntent).toEqual({ tests: true, matchedTerms: ["verify", "tests"] });
+    expect(plan.identifierTerms).toEqual(["orderservice"]);
+    expect(plan.selection.find((item) => item.symbol.id === "test")).toMatchObject({
+      symbol: { id: "test" },
+      sourceRoleWorth: 1,
+      rankingScore: 510,
+      sourceRoleDecision: "test-intent-exempt"
+    });
+  });
+
+  it("exempts an explicitly named test file while preserving its persisted role evidence", () => {
+    const test = symbol({ id: "test", name: "orderService", filePath: "test/order-service.test.ts" });
+    const plan = planExploreQuery(
+      { files: [indexedFile(test.filePath, false, "test")], symbols: [test], edges: [] },
+      "show test/order-service.test.ts orderService"
+    );
+
+    expect(plan.selection[0]).toMatchObject({
+      score: 1_510,
+      rankingScore: 1_510,
+      sourceRoleWorth: 1,
+      sourceRoleDecision: "explicit-test-file-exempt"
+    });
+  });
+
+  it("composes generated and test worth while test intent exempts only the test factor", () => {
+    const generatedTest = symbol({
+      id: "generated-test",
+      name: "orderService",
+      filePath: "test/order-service.generated.test.ts"
+    });
+    const graph = {
+      files: [indexedFile(generatedTest.filePath, true, "test")],
+      symbols: [generatedTest],
+      edges: []
+    };
+
+    expect(planExploreQuery(graph, "orderService").selection[0]).toMatchObject({
+      score: 510,
+      sourceWorth: 0.3,
+      sourceRoleWorth: 0.5,
+      rankingScore: 76.5,
+      rankingDecision: "generated-source-worth",
+      sourceRoleDecision: "test-source-worth"
+    });
+    expect(planExploreQuery(graph, "test orderService").selection[0]).toMatchObject({
+      sourceWorth: 0.3,
+      sourceRoleWorth: 1,
+      rankingScore: 153,
+      rankingDecision: "generated-source-worth",
+      sourceRoleDecision: "test-intent-exempt"
+    });
+  });
+
   it("uses bounded exact one-hop graph mass to corroborate an otherwise tied candidate", () => {
     const connected = symbol({
       id: "connected",
@@ -104,7 +212,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v3",
+      policy: "explore-query-plan-v4",
       ranking: {
         graphMass: {
           policy: "explore-query-graph-mass-v1",
@@ -245,7 +353,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v3",
+      policy: "explore-query-plan-v4",
       ranking: {
         policy: "explore-query-source-worth-v1",
         generatedSourceWorth: 0.3,
@@ -458,6 +566,9 @@ describe("explore query planning", () => {
       graphMassTruncatedCandidateCount: 0,
       selectedCount: 0,
       selectedGeneratedCount: 0,
+      testCandidateCount: 0,
+      testPenaltyCandidateCount: 0,
+      selectedTestCount: 0,
       selectedFileCount: 0,
       truncated: false
     });

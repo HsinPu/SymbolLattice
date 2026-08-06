@@ -823,6 +823,16 @@ function filesResult(): FilesResult {
         filePath: "src/routes.ts",
         language: "typescript",
         indexedAt: "2026-08-03T00:00:00.000Z",
+        generated: {
+          classifierVersion: "generated-evidence-v1",
+          generated: false,
+          evidence: []
+        },
+        sourceRole: {
+          classifierVersion: "source-role-evidence-v1",
+          role: "production",
+          evidence: []
+        },
         declarationCount: 2,
         edgeCount: 3,
         pendingReferenceCount: 1
@@ -1448,13 +1458,16 @@ describe("SymbolLattice MCP server", () => {
           anyOf: [
             {
               properties: {
-                policy: { const: "explore-query-plan-v3" },
+                policy: { const: "explore-query-plan-v4" },
                 ranking: {
                   properties: {
                     policy: { const: "explore-query-source-worth-v1" },
                     generatedSourceWorth: { const: 0.3 },
                     explicitFileExempt: { const: true },
                     classifierVersion: { type: "string", minLength: 1 },
+                    testSourceWorth: { const: 0.5 },
+                    testIntentExempt: { const: true },
+                    sourceRoleClassifierVersion: { type: "string", minLength: 1 },
                     graphMass: {
                       properties: {
                         policy: { const: "explore-query-graph-mass-v1" },
@@ -1468,7 +1481,10 @@ describe("SymbolLattice MCP server", () => {
                 summary: {
                   properties: {
                     generatedCandidateCount: { minimum: 0 },
+                    testCandidateCount: { minimum: 0 },
+                    testPenaltyCandidateCount: { minimum: 0 },
                     selectedGeneratedCount: { minimum: 0, maximum: 8 },
+                    selectedTestCount: { minimum: 0, maximum: 8 },
                     graphMassCandidateCount: { minimum: 0 },
                     graphMassTruncatedCandidateCount: { minimum: 0 }
                   }
@@ -1492,12 +1508,22 @@ describe("SymbolLattice MCP server", () => {
                         }
                       },
                       sourceWorth: { exclusiveMinimum: 0, maximum: 1 },
+                      sourceRole: { type: "object" },
+                      sourceRoleWorth: { exclusiveMinimum: 0, maximum: 1 },
                       rankingScore: { minimum: 0 },
                       rankingDecision: {
                         enum: [
                           "explicit-file-exempt",
                           "handwritten-source-worth",
                           "generated-source-worth"
+                        ]
+                      },
+                      sourceRoleDecision: {
+                        enum: [
+                          "production-source",
+                          "test-source-worth",
+                          "test-intent-exempt",
+                          "explicit-test-file-exempt"
                         ]
                       }
                     }
@@ -1912,7 +1938,15 @@ describe("SymbolLattice MCP server", () => {
         bounds: { type: "object" },
         format: { type: "string" },
         matchedFileCount: { type: "integer" },
-        files: { type: "array" },
+        files: {
+          type: "array",
+          items: {
+            properties: {
+              generated: { type: "object" },
+              sourceRole: { type: "object" }
+            }
+          }
+        },
         tree: { type: "object" },
         groups: { type: "array" },
         pagination: { type: "object" },
@@ -1944,6 +1978,8 @@ describe("SymbolLattice MCP server", () => {
         {
           filePath: "src/routes.ts",
           language: "typescript",
+          generated: { generated: false },
+          sourceRole: { role: "production" },
           declarationCount: 2,
           edgeCount: 3,
           pendingReferenceCount: 1
