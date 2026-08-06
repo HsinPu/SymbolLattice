@@ -106,6 +106,10 @@ import {
   type ExploreQueryPlan
 } from "./explore-query.js";
 import {
+  planExplorePathSpines,
+  type ExplorePathSpinePlan
+} from "./explore-path-spines.js";
+import {
   allocateExploreSourceWindowCharacters,
   planExploreSourceWindows
 } from "./explore-source-windows.js";
@@ -2571,6 +2575,7 @@ export class SymbolLatticeService {
     initialBundle: ActiveGraphBundle
   ): Promise<ExploreResult> {
     let plan = planExploreQuery(initialBundle.snapshot, query);
+    let pathSpinePlan = planExplorePathSpines(initialBundle.snapshot, plan.selection);
     const getActiveSourceDocumentsBundle = this.graphStore.getActiveSourceDocumentsBundle;
     if (typeof getActiveSourceDocumentsBundle !== "function" || plan.selection.length === 0) {
       return this.exploreQueryResultForBundle(
@@ -2578,11 +2583,12 @@ export class SymbolLatticeService {
         query,
         initialBundle,
         plan,
+        pathSpinePlan,
         new Map()
       );
     }
 
-    let requestedFilePaths = this.exploreQueryFilePaths(plan);
+    let requestedFilePaths = this.exploreQueryFilePaths(plan, pathSpinePlan);
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const sourceBundle = getActiveSourceDocumentsBundle.call(
         this.graphStore,
@@ -2590,7 +2596,8 @@ export class SymbolLatticeService {
         requestedFilePaths
       );
       plan = planExploreQuery(sourceBundle.snapshot, query);
-      const currentFilePaths = this.exploreQueryFilePaths(plan);
+      pathSpinePlan = planExplorePathSpines(sourceBundle.snapshot, plan.selection);
+      const currentFilePaths = this.exploreQueryFilePaths(plan, pathSpinePlan);
       const documentsByFilePath = new Map(
         sourceBundle.documents.map(
           (document): readonly [string, IndexedSourceDocument] => [document.filePath, document]
@@ -2608,15 +2615,22 @@ export class SymbolLatticeService {
         query,
         sourceBundle,
         plan,
+        pathSpinePlan,
         documentsByFilePath
       );
     }
 
+    const fallbackPlan = planExploreQuery(initialBundle.snapshot, query);
+    const fallbackPathSpinePlan = planExplorePathSpines(
+      initialBundle.snapshot,
+      fallbackPlan.selection
+    );
     return this.exploreQueryResultForBundle(
       normalizedProjectPath,
       query,
       initialBundle,
-      plan,
+      fallbackPlan,
+      fallbackPathSpinePlan,
       new Map()
     );
   }
@@ -4607,13 +4621,23 @@ export class SymbolLatticeService {
     };
   }
 
-  private exploreQueryFilePaths(plan: ExploreQueryPlan): readonly string[] {
+  private exploreQueryFilePaths(
+    plan: ExploreQueryPlan,
+    pathSpinePlan: ExplorePathSpinePlan
+  ): readonly string[] {
     const filePaths: string[] = [];
     const seen = new Set<string>();
     for (const selection of plan.selection) {
       if (seen.has(selection.symbol.filePath)) continue;
       seen.add(selection.symbol.filePath);
       filePaths.push(selection.symbol.filePath);
+    }
+    for (const spine of pathSpinePlan.spines) {
+      for (const bridge of spine.bridgeSymbols) {
+        if (seen.has(bridge.filePath)) continue;
+        seen.add(bridge.filePath);
+        filePaths.push(bridge.filePath);
+      }
     }
     return filePaths;
   }
@@ -4623,6 +4647,7 @@ export class SymbolLatticeService {
     query: string,
     bundle: ActiveGraphBundle,
     plan: ExploreQueryPlan,
+    pathSpinePlan: ExplorePathSpinePlan,
     documentsByFilePath: ReadonlyMap<string, IndexedSourceDocument>
   ): Promise<ExploreResult> {
     const matches: readonly SymbolMatch[] = plan.selection.map(({ symbol }) => ({
@@ -4683,7 +4708,7 @@ export class SymbolLatticeService {
         return source === undefined || target === undefined ? [] : [{ source, target, edge }];
       });
 
-    const sourceWindowPlan = planExploreSourceWindows(focuses, connections);
+    const sourceWindowPlan = planExploreSourceWindows(focuses, connections, pathSpinePlan);
     const sourceWindowDrafts = new Map<number, ContextSourceDraft>();
     for (const window of sourceWindowPlan.windows) {
       const document = documentsByFilePath.get(window.filePath);
@@ -4701,10 +4726,14 @@ export class SymbolLatticeService {
     const sourceWindowReservation = allocateExploreSourceWindowCharacters({
       totalCharacterBudget: DEFAULT_CONTEXT_SOURCE_CHARACTER_BUDGET,
       primaryEmittedCharacters: contextPack.allocation.summary.emittedCharacters,
-      candidates: [...sourceWindowDrafts.values()].map((draft) => ({
-        index: draft.referenceIndex,
-        requestedCharacters: draft.endOffset - draft.startOffset
-      }))
+      candidates: sourceWindowPlan.windows.flatMap((window) => {
+        const draft = sourceWindowDrafts.get(window.index);
+        return draft === undefined ? [] : [{
+          index: window.index,
+          requestedCharacters: draft.endOffset - draft.startOffset,
+          relevanceWeight: window.relevanceWeight
+        }];
+      })
     });
     const renderedSourceWindows = new Map<number, DeliveredSourceExcerpt>();
     for (const allocation of sourceWindowReservation.windows) {
@@ -4752,6 +4781,7 @@ export class SymbolLatticeService {
       callees: [],
       impact: [],
       queryPlan: plan,
+      pathSpinePlan,
       focuses,
       connections,
       connectionsTruncated: connectionCandidates.length > connections.length,

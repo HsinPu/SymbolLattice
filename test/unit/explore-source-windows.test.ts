@@ -2,12 +2,14 @@ import { describe, expect, it } from "vitest";
 
 import {
   allocateExploreSourceWindowCharacters,
+  EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS,
   EXPLORE_SOURCE_WINDOW_ALLOCATION_POLICY,
   EXPLORE_SOURCE_WINDOW_LIMITS,
   EXPLORE_SOURCE_WINDOW_POLICY,
   planExploreSourceWindows
 } from "../../src/application/explore-source-windows.js";
 import type { ExploreConnection, ExploreFocus } from "../../src/application/types.js";
+import type { ExplorePathSpinePlan } from "../../src/application/explore-path-spines.js";
 import type { GraphEdge, SymbolNode } from "../../src/domain/types.js";
 
 function symbol(id: string, filePath: string, line: number): SymbolNode {
@@ -172,44 +174,115 @@ describe("explore source window planning", () => {
     ).toEqual(planExploreSourceWindows([focus(1, source, 1, 5)], connections));
   });
 
+  it("adds a bounded bridge declaration window from an exact path spine", () => {
+    const entry = symbol("entry", "src/entry.ts", 1);
+    const bridge = symbol("bridge", "src/bridge.ts", 1);
+    const target = symbol("target", "src/target.ts", 20);
+    const first = edge("entry-bridge", entry, bridge, 5);
+    const second = edge("bridge-target", bridge, target, 12);
+    const spinePlan: ExplorePathSpinePlan = {
+      policy: "explore-path-spines-v1",
+      limits: {
+        maximumPairAttempts: 16,
+        maximumHops: 4,
+        maximumVisitedSymbolsPerPair: 500,
+        maximumSpines: 4,
+        maximumBridgeSymbols: 8
+      },
+      summary: {
+        pairCandidateCount: 1,
+        attemptedPairCount: 1,
+        discoveredSpineCount: 1,
+        selectedSpineCount: 1,
+        bridgeSymbolCount: 1,
+        pairAttemptsTruncated: false,
+        spinesTruncated: false,
+        traversalTruncated: false
+      },
+      spines: [{
+        index: 0,
+        fromFocusRank: 1,
+        toFocusRank: 2,
+        score: 80,
+        bridgeSymbols: [bridge],
+        edgeIds: [first.edge.id, second.edge.id],
+        path: {
+          symbols: [entry, bridge, target],
+          edges: [first.edge, second.edge],
+          steps: [
+            { from: entry, to: bridge, edge: first.edge },
+            { from: bridge, to: target, edge: second.edge }
+          ]
+        }
+      }]
+    };
+
+    const plan = planExploreSourceWindows(
+      [focus(1, entry, 1, 5), focus(2, target, 20, 24)],
+      [],
+      spinePlan
+    );
+
+    expect(plan.windows).toEqual([
+      expect.objectContaining({
+        index: 0,
+        focusRank: 1,
+        filePath: "src/bridge.ts",
+        startLine: 1,
+        endLine: 6,
+        connectionEdgeIds: ["entry-bridge", "bridge-target"],
+        relatedSymbolIds: ["bridge"],
+        pathSpineIndexes: [0],
+        relevanceWeight: 100,
+        reason: "exact-path-spine"
+      })
+    ]);
+  });
+
   it("reserves only the source budget left after primary focus excerpts", () => {
     expect(
       allocateExploreSourceWindowCharacters({
         totalCharacterBudget: 24_000,
-        primaryEmittedCharacters: 23_500,
+        primaryEmittedCharacters: 23_000,
         candidates: [
-          { index: 0, requestedCharacters: 300 },
-          { index: 1, requestedCharacters: 300 }
+          { index: 1, requestedCharacters: 1_000, relevanceWeight: 1 },
+          { index: 0, requestedCharacters: 1_000, relevanceWeight: 3 }
         ]
       })
     ).toEqual({
       policy: EXPLORE_SOURCE_WINDOW_ALLOCATION_POLICY,
       budget: {
         totalCharacterBudget: 24_000,
-        primaryEmittedCharacters: 23_500,
-        availableCharacters: 500
+        primaryEmittedCharacters: 23_000,
+        availableCharacters: 1_000,
+        minimumPerWindow: EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS.minimumPerWindow,
+        maximumShareFraction: EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS.maximumShareFraction
       },
       summary: {
         candidateCount: 2,
-        requestedCharacters: 600,
-        allocatedCharacters: 500,
+        requestedCharacters: 2_000,
+        allocatedCharacters: 1_000,
         unusedCharacters: 0,
         truncated: true
       },
       windows: [
         {
           index: 0,
-          requestedCharacters: 300,
-          allocatedCharacters: 300,
-          truncated: false,
-          reason: "focus-rank-window-order"
+          requestedCharacters: 1_000,
+          relevanceWeight: 3,
+          maximumShareCharacters: 700,
+          allocatedCharacters: 622,
+          truncated: true,
+          reason: "score-and-spine-weight"
         },
         {
           index: 1,
-          requestedCharacters: 300,
-          allocatedCharacters: 200,
+          requestedCharacters: 1_000,
+          relevanceWeight: 1,
+          maximumShareCharacters: 700,
+          allocatedCharacters: 378,
           truncated: true,
-          reason: "focus-rank-window-order"
+          reason: "score-and-spine-weight"
         }
       ]
     });

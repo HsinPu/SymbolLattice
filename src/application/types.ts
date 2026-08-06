@@ -682,6 +682,8 @@ export interface ExploreResult {
   readonly mode?: "exact-symbol" | "query";
   /** Present only when a non-exact query was converted into a bounded focus plan. */
   readonly queryPlan?: import("./explore-query.js").ExploreQueryPlan | null;
+  /** Exact-only bounded paths whose unselected interior symbols explain focus connectivity. */
+  readonly pathSpinePlan?: import("./explore-path-spines.js").ExplorePathSpinePlan | null;
   /** Ranked, generation-bound focus contexts for natural-language query mode. */
   readonly focuses?: readonly ExploreFocus[];
   /** Exact selected-to-selected relations; heuristic and unresolved edges are excluded. */
@@ -718,6 +720,8 @@ export interface ExploreSourceWindowAllocationResult {
     readonly totalCharacterBudget: number;
     readonly primaryEmittedCharacters: number;
     readonly availableCharacters: number;
+    readonly minimumPerWindow: number;
+    readonly maximumShareFraction: number;
   };
   readonly summary: {
     readonly candidateCount: number;
@@ -732,11 +736,13 @@ export interface ExploreSourceWindowAllocationResult {
   readonly windows: readonly {
     readonly index: number;
     readonly requestedCharacters: number;
+    readonly relevanceWeight: number;
+    readonly maximumShareCharacters: number;
     readonly allocatedCharacters: number;
     readonly emittedCharacters: number;
     readonly reservedButNotEmittedCharacters: number;
     readonly truncated: boolean;
-    readonly reason: "focus-rank-window-order";
+    readonly reason: "score-and-spine-weight";
   }[];
 }
 

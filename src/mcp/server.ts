@@ -21,6 +21,11 @@ import {
   EXPLORE_QUERY_PLAN_POLICY
 } from "../application/explore-query.js";
 import {
+  EXPLORE_PATH_SPINE_LIMITS,
+  EXPLORE_PATH_SPINE_POLICY
+} from "../application/explore-path-spines.js";
+import {
+  EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS,
   EXPLORE_SOURCE_WINDOW_ALLOCATION_POLICY,
   EXPLORE_SOURCE_WINDOW_LIMITS,
   EXPLORE_SOURCE_WINDOW_POLICY
@@ -967,6 +972,40 @@ const exploreFocusOutputSchema = exploreQuerySelectionOutputSchema
   })
   .passthrough();
 
+const explorePathSpinePlanOutputSchema = z.object({
+  policy: z.literal(EXPLORE_PATH_SPINE_POLICY),
+  limits: z.object({
+    maximumPairAttempts: z.literal(EXPLORE_PATH_SPINE_LIMITS.maximumPairAttempts),
+    maximumHops: z.literal(EXPLORE_PATH_SPINE_LIMITS.maximumHops),
+    maximumVisitedSymbolsPerPair: z.literal(
+      EXPLORE_PATH_SPINE_LIMITS.maximumVisitedSymbolsPerPair
+    ),
+    maximumSpines: z.literal(EXPLORE_PATH_SPINE_LIMITS.maximumSpines),
+    maximumBridgeSymbols: z.literal(EXPLORE_PATH_SPINE_LIMITS.maximumBridgeSymbols)
+  }),
+  summary: z.object({
+    pairCandidateCount: z.number().int().nonnegative(),
+    attemptedPairCount: z.number().int().nonnegative().max(EXPLORE_PATH_SPINE_LIMITS.maximumPairAttempts),
+    discoveredSpineCount: z.number().int().nonnegative(),
+    selectedSpineCount: z.number().int().nonnegative().max(EXPLORE_PATH_SPINE_LIMITS.maximumSpines),
+    bridgeSymbolCount: z.number().int().nonnegative().max(EXPLORE_PATH_SPINE_LIMITS.maximumBridgeSymbols),
+    pairAttemptsTruncated: z.boolean(),
+    spinesTruncated: z.boolean(),
+    traversalTruncated: z.boolean()
+  }),
+  spines: z.array(z.object({
+    index: z.number().int().nonnegative().max(EXPLORE_PATH_SPINE_LIMITS.maximumSpines - 1),
+    fromFocusRank: z.number().int().positive().max(EXPLORE_QUERY_LIMITS.maximumSymbols),
+    toFocusRank: z.number().int().positive().max(EXPLORE_QUERY_LIMITS.maximumSymbols),
+    score: z.number().finite(),
+    path: z.object({}).passthrough(),
+    bridgeSymbols: z.array(z.object({}).passthrough()).max(
+      EXPLORE_PATH_SPINE_LIMITS.maximumBridgeSymbols
+    ),
+    edgeIds: z.array(z.string()).max(EXPLORE_PATH_SPINE_LIMITS.maximumHops)
+  })).max(EXPLORE_PATH_SPINE_LIMITS.maximumSpines)
+});
+
 const exploreSourceWindowPlanItemOutputSchema = z.object({
   index: z.number().int().nonnegative().max(EXPLORE_SOURCE_WINDOW_LIMITS.maximumWindows - 1),
   focusRank: z.number().int().positive().max(EXPLORE_QUERY_LIMITS.maximumSymbols),
@@ -974,8 +1013,12 @@ const exploreSourceWindowPlanItemOutputSchema = z.object({
   startLine: z.number().int().positive(),
   endLine: z.number().int().positive(),
   connectionEdgeIds: z.array(z.string()).max(EXPLORE_QUERY_LIMITS.maximumConnections),
+  pathSpineIndexes: z.array(z.number().int().nonnegative()).max(
+    EXPLORE_PATH_SPINE_LIMITS.maximumSpines
+  ),
   relatedSymbolIds: z.array(z.string()).max(EXPLORE_QUERY_LIMITS.maximumConnections),
-  reason: z.literal("exact-connection-site")
+  relevanceWeight: z.number().finite().positive(),
+  reason: z.enum(["exact-connection-site", "exact-path-spine"])
 });
 
 const exploreSourceWindowPlanOutputSchema = z.object({
@@ -1000,7 +1043,11 @@ const exploreSourceWindowAllocationOutputSchema = z.object({
   budget: z.object({
     totalCharacterBudget: z.number().int().nonnegative(),
     primaryEmittedCharacters: z.number().int().nonnegative(),
-    availableCharacters: z.number().int().nonnegative()
+    availableCharacters: z.number().int().nonnegative(),
+    minimumPerWindow: z.literal(EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS.minimumPerWindow),
+    maximumShareFraction: z.literal(
+      EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS.maximumShareFraction
+    )
   }),
   summary: z.object({
     candidateCount: z.number().int().nonnegative().max(EXPLORE_SOURCE_WINDOW_LIMITS.maximumWindows),
@@ -1015,11 +1062,13 @@ const exploreSourceWindowAllocationOutputSchema = z.object({
   windows: z.array(z.object({
     index: z.number().int().nonnegative().max(EXPLORE_SOURCE_WINDOW_LIMITS.maximumWindows - 1),
     requestedCharacters: z.number().int().positive(),
+    relevanceWeight: z.number().finite().positive(),
+    maximumShareCharacters: z.number().int().nonnegative(),
     allocatedCharacters: z.number().int().nonnegative(),
     emittedCharacters: z.number().int().nonnegative(),
     reservedButNotEmittedCharacters: z.number().int().nonnegative(),
     truncated: z.boolean(),
-    reason: z.literal("focus-rank-window-order")
+    reason: z.literal("score-and-spine-weight")
   })).max(EXPLORE_SOURCE_WINDOW_LIMITS.maximumWindows)
 });
 
@@ -1053,6 +1102,7 @@ const exploreOutputSchema = z
       .optional(),
     connectionsTruncated: z.boolean().optional(),
     sourceAllocation: contextSourceAllocationOutputSchema.nullable().optional(),
+    pathSpinePlan: explorePathSpinePlanOutputSchema.nullable().optional(),
     sourceWindowPlan: exploreSourceWindowPlanOutputSchema.nullable().optional(),
     sourceWindows: z.array(
       exploreSourceWindowPlanItemOutputSchema.extend({ source: deliveredSourceExcerptOutputSchema })
@@ -2492,7 +2542,7 @@ export function createMcpServer(
     {
       title: "Explore a SymbolLattice code graph",
       description:
-        "Explores either one exact symbol or a bounded question with named-file-first focus, exact selected connections, and generation-bound source evidence. Question mode can add bounded exact-connection call-site windows inside the same 24,000-character source envelope. This tool reports index freshness and never creates or refreshes an index.",
+        "Explores either one exact symbol or a bounded question with named-file-first focus, exact selected connections, short exact path spines, and generation-bound source evidence. Question mode can add score-weighted call-site and bridge windows inside the same 24,000-character source envelope. This tool reports index freshness and never creates or refreshes an index.",
       inputSchema: {
         query: z.string().trim().min(1).describe("Exact symbol reference or a bounded question containing project-relative file and identifier clues."),
         projectPath: z.string().trim().min(1).optional().describe("Optional path to an already indexed project."),

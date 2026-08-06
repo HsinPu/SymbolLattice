@@ -1449,6 +1449,7 @@ describe("SymbolLattice MCP server", () => {
         connections: { type: "array" },
         connectionsTruncated: { type: "boolean" },
         sourceAllocation: {},
+        pathSpinePlan: {},
         sourceWindowPlan: {},
         sourceWindows: { type: "array" },
         sourceWindowAllocation: {},

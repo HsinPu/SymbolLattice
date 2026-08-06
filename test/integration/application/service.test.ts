@@ -913,6 +913,10 @@ describe("SymbolLatticeService", () => {
         budget: { characterBudget: 24_000 },
         summary: { candidateCount: 4 }
       },
+      pathSpinePlan: {
+        policy: "explore-path-spines-v1",
+        summary: { selectedSpineCount: 0, bridgeSymbolCount: 0 }
+      },
       sourceWindowPlan: {
         policy: "explore-source-windows-v1",
         summary: { candidateCount: 1, selectedCount: 1, truncated: false }
@@ -927,7 +931,7 @@ describe("SymbolLatticeService", () => {
         }
       ],
       sourceWindowAllocation: {
-        policy: "explore-source-window-allocation-v1",
+        policy: "explore-source-window-allocation-v2",
         budget: { totalCharacterBudget: 24_000 },
         summary: { candidateCount: 1, emittedWindows: 1 }
       }
@@ -941,6 +945,82 @@ describe("SymbolLatticeService", () => {
     expect(result.sourceAllocation?.summary.emittedCharacters).toBeLessThanOrEqual(24_000);
     expect(result.sourceWindows?.[0]?.source.text).toContain("return persistOrder();");
     expect(result.sourceWindows?.[0]?.source.text).not.toContain("not indexed api");
+    expect(
+      (result.sourceAllocation?.summary.emittedCharacters ?? 0) +
+        (result.sourceWindowAllocation?.summary.emittedCharacters ?? 0)
+    ).toBeLessThanOrEqual(24_000);
+  });
+
+  it("loads an unselected exact path bridge from the same persisted generation", async () => {
+    const projectPath = await createInlineProject({
+      "src/entry.ts": [
+        'import { bridgeFlow } from "./bridge.js";',
+        "export function startFlow(): string { return bridgeFlow(); }",
+        "export function entryHelper(): boolean { return true; }",
+        ""
+      ].join("\n"),
+      "src/bridge.ts": [
+        'import { finishFlow } from "./target.js";',
+        "export function bridgeFlow(): string {",
+        "  return finishFlow();",
+        "}",
+        ""
+      ].join("\n"),
+      "src/target.ts": [
+        'export function finishFlow(): string { return "persisted target"; }',
+        "export function targetHelper(): boolean { return true; }",
+        ""
+      ].join("\n"),
+      "src/extra-a.ts": [
+        "export function extraAlpha(): boolean { return true; }",
+        "export function extraBeta(): boolean { return true; }",
+        ""
+      ].join("\n"),
+      "src/extra-b.ts": [
+        "export function extraGamma(): boolean { return true; }",
+        "export function extraDelta(): boolean { return true; }",
+        ""
+      ].join("\n")
+    });
+    const service = createService();
+    await service.init({ projectPath });
+    await writeFile(
+      join(projectPath, "src", "bridge.ts"),
+      'export function liveOnlyBridge() { return "not indexed bridge"; }\n',
+      "utf8"
+    );
+
+    const result = await service.explore(
+      projectPath,
+      "Trace src/entry.ts startFlow through src/target.ts finishFlow with src/extra-a.ts extraAlpha and src/extra-b.ts extraGamma"
+    );
+
+    expect(result.queryPlan?.selection.some(({ symbol }) => symbol.name === "bridgeFlow")).toBe(false);
+    expect(result).toMatchObject({
+      mode: "query",
+      status: { stale: true },
+      pathSpinePlan: {
+        policy: "explore-path-spines-v1",
+        summary: { selectedSpineCount: 1, bridgeSymbolCount: 1 },
+        spines: [{ bridgeSymbols: [{ name: "bridgeFlow", filePath: "src/bridge.ts" }] }]
+      }
+    });
+    expect(result.sourceWindowPlan?.windows).toEqual([
+      expect.objectContaining({ reason: "exact-path-spine", filePath: "src/bridge.ts" })
+    ]);
+    expect(result.sourceWindows).toEqual([
+      expect.objectContaining({
+        filePath: "src/bridge.ts",
+        reason: "exact-path-spine",
+        pathSpineIndexes: [0],
+        source: expect.objectContaining({ filePath: "src/bridge.ts" })
+      })
+    ]);
+    const bridgeWindow = result.sourceWindows?.find(
+      (window) => window.reason === "exact-path-spine"
+    );
+    expect(bridgeWindow?.source.text).toContain("bridgeFlow");
+    expect(bridgeWindow?.source.text).not.toContain("not indexed bridge");
     expect(
       (result.sourceAllocation?.summary.emittedCharacters ?? 0) +
         (result.sourceWindowAllocation?.summary.emittedCharacters ?? 0)

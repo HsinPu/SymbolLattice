@@ -6,6 +6,7 @@ export * from "./context-allocation.js";
 export * from "./context-source-allocation.js";
 export * from "./context-rendering.js";
 export * from "./explore-query.js";
+export * from "./explore-path-spines.js";
 export * from "./explore-source-windows.js";
 export * from "./plugin-modules.js";
 export * from "./reference-resolver-plugins.js";
