@@ -98,7 +98,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v7",
+      policy: "explore-query-plan-v8",
       queryIntent: {
         tests: false,
         icons: false,
@@ -216,7 +216,7 @@ describe("explore query planning", () => {
     expect(reversed).toEqual(plan);
     expect(plan.selection.map((item) => item.symbol.id)).toEqual(["production-a", "production-b"]);
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v7",
+      policy: "explore-query-plan-v8",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",
@@ -257,6 +257,52 @@ describe("explore query planning", () => {
         truncated: true
       }
     });
+  });
+
+  it("selects diffusion seeds only after low-value filtering", () => {
+    const productionService = symbol({
+      id: "production-service",
+      name: "dispatchService",
+      filePath: "src/dispatch-service.ts"
+    });
+    const productionRepository = symbol({
+      id: "production-repository",
+      name: "dispatchRepository",
+      filePath: "src/dispatch-repository.ts"
+    });
+    const filteredTestSeed = symbol({
+      id: "filtered-test-seed",
+      name: "dispatch",
+      filePath: "test/dispatch.test.ts"
+    });
+
+    const plan = planExploreQuery(
+      {
+        files: [
+          indexedFile(productionService.filePath, false),
+          indexedFile(productionRepository.filePath, false),
+          indexedFile(filteredTestSeed.filePath, false, "test")
+        ],
+        symbols: [filteredTestSeed, productionRepository, productionService],
+        edges: []
+      },
+      "dispatch"
+    );
+
+    expect(plan.filtering).toMatchObject({
+      reason: "sufficient-production-evidence",
+      excludedTestCandidateCount: 1
+    });
+    expect(plan.ranking.graphDiffusion).toMatchObject({
+      reason: "no-reachable-relationships",
+      seedMode: "partial-lexical",
+      seedFileCount: 2,
+      seedSymbolCount: 2
+    });
+    expect(plan.selection.map((item) => item.symbol.id)).toEqual([
+      "production-repository",
+      "production-service"
+    ]);
   });
 
   it("keeps soft-ranked tests when production evidence is confined to one file", () => {
@@ -402,7 +448,7 @@ describe("explore query planning", () => {
 
     expect(plan.selection.map((item) => item.symbol.id)).toEqual(["production-a", "production-b"]);
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v7",
+      policy: "explore-query-plan-v8",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",
@@ -826,7 +872,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v7",
+      policy: "explore-query-plan-v8",
       ranking: {
         graphMass: {
           policy: "explore-query-graph-mass-v1",
@@ -842,8 +888,8 @@ describe("explore query planning", () => {
     });
     expect(plan.selection.map((item) => item.symbol.id)).toEqual(["connected", "isolated"]);
     expect(plan.selection[0]).toMatchObject({
-      score: 522,
-      rankingScore: 522,
+      score: 642,
+      rankingScore: 642,
       reasons: expect.arrayContaining(["graph-mass"]),
       graphMass: {
         policy: "explore-query-graph-mass-v1",
@@ -857,13 +903,239 @@ describe("explore query planning", () => {
       }
     });
     expect(plan.selection[1]).toMatchObject({
-      score: 510,
+      score: 562.5,
       graphMass: {
         exactRelationshipCount: 0,
         score: 0,
         rankingContribution: 0,
         relationCounts: {}
       }
+    });
+  });
+
+  it("uses exact multi-hop diffusion to rank a seed-connected candidate above an equal dead end", () => {
+    const seed = symbol({
+      id: "seed",
+      name: "dispatch",
+      filePath: "src/dispatch.ts"
+    });
+    const connected = symbol({
+      id: "connected",
+      name: "dispatchPipeline",
+      filePath: "src/z-connected.ts"
+    });
+    const deadEnd = symbol({
+      id: "dead-end",
+      name: "dispatchLegacy",
+      filePath: "src/a-dead-end.ts"
+    });
+    const bridge = symbol({ id: "bridge", name: "runPipeline", filePath: "src/bridge.ts" });
+    const deadEndNeighbor = symbol({
+      id: "dead-end-neighbor",
+      name: "legacyHelper",
+      filePath: "src/legacy-helper.ts"
+    });
+
+    const graph = {
+      files: [seed, connected, deadEnd, bridge, deadEndNeighbor].map((item) =>
+        indexedFile(item.filePath, false)
+      ),
+      symbols: [deadEnd, deadEndNeighbor, bridge, connected, seed],
+      edges: [
+        edge("seed-bridge", seed.id, bridge.id),
+        edge("bridge-connected", bridge.id, connected.id),
+        edge("dead-end-neighbor", deadEnd.id, deadEndNeighbor.id)
+      ]
+    };
+    const plan = planExploreQuery(graph, "dispatch");
+    const reversed = planExploreQuery(
+      { ...graph, symbols: [...graph.symbols].reverse(), edges: [...graph.edges].reverse() },
+      "dispatch"
+    );
+
+    expect(reversed).toEqual(plan);
+    expect(plan.ranking.graphDiffusion).toMatchObject({
+      policy: "explore-query-graph-diffusion-v1",
+      reason: "completed",
+      applied: true,
+      seedMode: "strong-lexical",
+      seedFileWeighting: "uniform-per-file",
+      restartProbability: 0.25,
+      maximumHops: 4,
+      maximumIterations: 96,
+      seedFileCount: 1,
+      seedSymbolCount: 1,
+      subgraphNodeCount: 3,
+      subgraphRelationshipCount: 2,
+      converged: true
+    });
+    expect(plan.selection.map((item) => item.symbol.id)).toEqual([
+      "seed",
+      "connected",
+      "dead-end"
+    ]);
+    expect(plan.selection[1]).toMatchObject({
+      reasons: expect.arrayContaining(["graph-diffusion"]),
+      graphDiffusion: {
+        policy: "explore-query-graph-diffusion-v1",
+        state: "reached",
+        seed: false,
+        seedWeight: 0,
+        score: expect.any(Number),
+        rankingContribution: expect.any(Number)
+      }
+    });
+    expect(plan.selection[1]!.graphDiffusion.fileMass).toBeGreaterThan(0);
+    expect(plan.selection[1]!.graphDiffusion.score).toBeGreaterThan(0);
+    expect(plan.selection[2]!.graphDiffusion).toMatchObject({
+      state: "outside-subgraph",
+      fileMass: 0,
+      score: 0,
+      rankingContribution: 0
+    });
+  });
+
+  it("balances diffusion restart mass by seed file instead of matched symbol count", () => {
+    const first = symbol({ id: "first", name: "dispatch", filePath: "src/many.ts", line: 1 });
+    const second = symbol({ id: "second", name: "dispatch", filePath: "src/many.ts", line: 10 });
+    const single = symbol({ id: "single", name: "dispatch", filePath: "src/single.ts" });
+    const firstHelper = symbol({ id: "first-helper", name: "firstHelper", filePath: "src/a.ts" });
+    const secondHelper = symbol({ id: "second-helper", name: "secondHelper", filePath: "src/b.ts" });
+    const singleHelper = symbol({ id: "single-helper", name: "singleHelper", filePath: "src/c.ts" });
+
+    const plan = planExploreQuery(
+      {
+        files: [first, single, firstHelper, secondHelper, singleHelper].map((item) =>
+          indexedFile(item.filePath, false)
+        ),
+        symbols: [first, second, single, firstHelper, secondHelper, singleHelper],
+        edges: [
+          edge("first-helper", first.id, firstHelper.id),
+          edge("second-helper", second.id, secondHelper.id),
+          edge("single-helper", single.id, singleHelper.id)
+        ]
+      },
+      "dispatch"
+    );
+
+    expect(plan.ranking.graphDiffusion).toMatchObject({
+      seedFileWeighting: "uniform-per-file",
+      seedFileCount: 2,
+      seedSymbolCount: 3,
+      normalizedSeedWeight: 1
+    });
+    const byId = new Map(plan.selection.map((item) => [item.symbol.id, item]));
+    expect(byId.get("first")?.graphDiffusion.seedWeight).toBe(0.25);
+    expect(byId.get("second")?.graphDiffusion.seedWeight).toBe(0.25);
+    expect(byId.get("single")?.graphDiffusion.seedWeight).toBe(0.5);
+    expect(byId.get("first")?.graphDiffusion.fileMass).toBe(
+      byId.get("second")?.graphDiffusion.fileMass
+    );
+  });
+
+  it("bounds the diffusion subgraph and reports when the node limit is reached", () => {
+    const seed = symbol({ id: "seed", name: "dispatch", filePath: "src/dispatch.ts" });
+    const helpers = Array.from({ length: 4_100 }, (_, index) => symbol({
+      id: `helper-${index}`,
+      name: `helper${index}`,
+      filePath: `src/helpers/helper-${index}.ts`
+    }));
+
+    const plan = planExploreQuery(
+      {
+        files: [indexedFile(seed.filePath, false)],
+        symbols: [seed, ...helpers],
+        edges: helpers.map((helper, index) => edge(`edge-${index}`, seed.id, helper.id))
+      },
+      "dispatch"
+    );
+
+    expect(plan.ranking.graphDiffusion).toMatchObject({
+      reason: "completed",
+      applied: true,
+      maximumNodes: 4_096,
+      maximumRelationships: 16_384,
+      subgraphNodeCount: 4_096,
+      subgraphRelationshipCount: 4_095,
+      nodeLimitReached: true,
+      relationshipLimitReached: false,
+      candidateWithMassCount: 1
+    });
+    expect(plan.selection[0]?.graphDiffusion).toMatchObject({
+      state: "seed",
+      normalizedFileMass: 1,
+      score: 120,
+      rankingContribution: 120
+    });
+  });
+
+  it("reports when exact graph evidence continues beyond the diffusion hop boundary", () => {
+    const nodes = [
+      symbol({ id: "seed", name: "dispatch", filePath: "src/seed.ts" }),
+      ...Array.from({ length: 5 }, (_, index) => symbol({
+        id: `hop-${index + 1}`,
+        name: `hop${index + 1}`,
+        filePath: `src/hop-${index + 1}.ts`
+      }))
+    ];
+    const edges = nodes.slice(1).map((node, index) =>
+      edge(`hop-edge-${index}`, nodes[index]!.id, node.id)
+    );
+
+    const plan = planExploreQuery(
+      { symbols: nodes, edges },
+      "dispatch"
+    );
+
+    expect(plan.ranking.graphDiffusion).toMatchObject({
+      maximumHops: 4,
+      subgraphNodeCount: 5,
+      subgraphRelationshipCount: 4,
+      hopLimitReached: true,
+      nodeLimitReached: false,
+      relationshipLimitReached: false
+    });
+  });
+
+  it("caps dense exact diffusion relationships without admitting disconnected nodes", () => {
+    const nodes = [
+      symbol({ id: "seed", name: "dispatch", filePath: "src/seed.ts" }),
+      ...Array.from({ length: 64 }, (_, index) => symbol({
+        id: `dense-${index}`,
+        name: `dense${index}`,
+        filePath: `src/dense-${index}.ts`
+      }))
+    ];
+    const kinds: readonly GraphEdge["kind"][] = [
+      "imports",
+      "exports",
+      "references",
+      "calls",
+      "instantiates",
+      "overrides",
+      "extends",
+      "implements"
+    ];
+    const edges: GraphEdge[] = [];
+    for (let left = 0; left < nodes.length; left += 1) {
+      for (let right = left + 1; right < nodes.length; right += 1) {
+        for (const kind of kinds) {
+          edges.push({
+            ...edge(`${kind}-${left}-${right}`, nodes[left]!.id, nodes[right]!.id),
+            kind
+          });
+        }
+      }
+    }
+
+    const plan = planExploreQuery({ symbols: nodes, edges }, "dispatch");
+
+    expect(plan.ranking.graphDiffusion).toMatchObject({
+      maximumRelationships: 16_384,
+      subgraphNodeCount: 65,
+      subgraphRelationshipCount: 16_384,
+      nodeLimitReached: false,
+      relationshipLimitReached: true
     });
   });
 
@@ -919,8 +1191,8 @@ describe("explore query planning", () => {
       graphMassTruncatedCandidateCount: 1
     });
     expect(plan.selection[0]).toMatchObject({
-      score: 630,
-      rankingScore: 189,
+      score: 750,
+      rankingScore: 225,
       sourceWorth: 0.3,
       graphMass: {
         eligibleRelationshipCount: 40,
@@ -967,7 +1239,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v7",
+      policy: "explore-query-plan-v8",
       ranking: {
         policy: "explore-query-source-worth-v1",
         generatedSourceWorth: 0.3,
@@ -1100,11 +1372,17 @@ describe("explore query planning", () => {
     ]);
     expect(plan.selection[0]).toMatchObject({
       rank: 1,
-      reasons: ["explicit-file", "exact-symbol-term", "graph-connected", "graph-mass"]
+      reasons: [
+        "explicit-file",
+        "exact-symbol-term",
+        "graph-connected",
+        "graph-mass",
+        "graph-diffusion"
+      ]
     });
     expect(plan.selection[1]).toMatchObject({
       rank: 2,
-      reasons: ["explicit-file"]
+      reasons: ["explicit-file", "graph-diffusion"]
     });
   });
 
@@ -1180,6 +1458,8 @@ describe("explore query planning", () => {
       lowValuePenaltyCandidateCount: 0,
       graphMassCandidateCount: 0,
       graphMassTruncatedCandidateCount: 0,
+      graphDiffusionCandidateCount: 0,
+      graphDiffusionReachedCandidateCount: 0,
       selectedCount: 0,
       selectedGeneratedCount: 0,
       selectedLowValueCount: 0,

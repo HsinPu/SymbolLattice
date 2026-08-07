@@ -1458,7 +1458,7 @@ describe("SymbolLattice MCP server", () => {
           anyOf: [
             {
               properties: {
-                policy: { const: "explore-query-plan-v7" },
+                policy: { const: "explore-query-plan-v8" },
                 queryIntent: {
                   properties: {
                     tests: { type: "boolean" },
@@ -1539,6 +1539,50 @@ describe("SymbolLattice MCP server", () => {
                         maximumScore: { const: 120 },
                         relationWeights: { type: "object" }
                       }
+                    },
+                    graphDiffusion: {
+                      properties: {
+                        policy: { const: "explore-query-graph-diffusion-v1" },
+                        reason: {
+                          enum: [
+                            "no-candidates",
+                            "no-seeds",
+                            "no-reachable-relationships",
+                            "completed"
+                          ]
+                        },
+                        applied: { type: "boolean" },
+                        seedMode: {
+                          enum: [
+                            "none",
+                            "strong-lexical",
+                            "partial-lexical",
+                            "all-candidates-fallback"
+                          ]
+                        },
+                        seedFileWeighting: { const: "uniform-per-file" },
+                        restartProbability: { const: 0.25 },
+                        maximumHops: { const: 4 },
+                        maximumSeedFiles: { const: 64 },
+                        maximumSeedSymbols: { const: 256 },
+                        maximumSeedSymbolsPerFile: { const: 4 },
+                        maximumNodes: { const: 4096 },
+                        maximumRelationships: { const: 16384 },
+                        maximumIterations: { const: 96 },
+                        convergenceTolerance: { const: 1e-9 },
+                        maximumScore: { const: 120 },
+                        relationWeights: { type: "object" },
+                        seedFileCount: { minimum: 0, maximum: 64 },
+                        seedSymbolCount: { minimum: 0, maximum: 256 },
+                        normalizedSeedWeight: { minimum: 0, maximum: 1 },
+                        subgraphNodeCount: { minimum: 0, maximum: 4096 },
+                        subgraphRelationshipCount: { minimum: 0, maximum: 16384 },
+                        hopLimitReached: { type: "boolean" },
+                        iterations: { minimum: 0, maximum: 96 },
+                        residual: { minimum: 0 },
+                        candidateWithMassCount: { minimum: 0 },
+                        topCandidateFileMass: { minimum: 0, maximum: 1 }
+                      }
                     }
                   }
                 },
@@ -1560,7 +1604,9 @@ describe("SymbolLattice MCP server", () => {
                     selectedIconCount: { minimum: 0, maximum: 8 },
                     selectedLocalizationCount: { minimum: 0, maximum: 8 },
                     graphMassCandidateCount: { minimum: 0 },
-                    graphMassTruncatedCandidateCount: { minimum: 0 }
+                    graphMassTruncatedCandidateCount: { minimum: 0 },
+                    graphDiffusionCandidateCount: { minimum: 0 },
+                    graphDiffusionReachedCandidateCount: { minimum: 0 }
                   }
                 },
                 selection: {
@@ -1579,6 +1625,21 @@ describe("SymbolLattice MCP server", () => {
                           rankingContribution: { minimum: 0, maximum: 120 },
                           truncated: { type: "boolean" },
                           relationCounts: { type: "object" }
+                        }
+                      },
+                      graphDiffusion: {
+                        properties: {
+                          policy: { const: "explore-query-graph-diffusion-v1" },
+                          state: {
+                            enum: ["seed", "reached", "outside-subgraph", "no-mass"]
+                          },
+                          seed: { type: "boolean" },
+                          seedWeight: { minimum: 0, maximum: 1 },
+                          nodeMass: { minimum: 0, maximum: 1 },
+                          fileMass: { minimum: 0, maximum: 1 },
+                          normalizedFileMass: { minimum: 0, maximum: 1 },
+                          score: { minimum: 0, maximum: 120 },
+                          rankingContribution: { minimum: 0, maximum: 120 }
                         }
                       },
                       sourceWorth: { exclusiveMinimum: 0, maximum: 1 },

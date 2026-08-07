@@ -13,9 +13,11 @@ import {
   type SymbolNode
 } from "../domain/index.js";
 
-export const EXPLORE_QUERY_PLAN_POLICY = "explore-query-plan-v7" as const;
+export const EXPLORE_QUERY_PLAN_POLICY = "explore-query-plan-v8" as const;
 export const EXPLORE_QUERY_SOURCE_WORTH_POLICY = "explore-query-source-worth-v1" as const;
 export const EXPLORE_QUERY_GRAPH_MASS_POLICY = "explore-query-graph-mass-v1" as const;
+export const EXPLORE_QUERY_GRAPH_DIFFUSION_POLICY =
+  "explore-query-graph-diffusion-v1" as const;
 export const EXPLORE_QUERY_LOW_VALUE_FILTER_POLICY =
   "explore-query-low-value-filter-v2" as const;
 export const EXPLORE_GENERATED_SOURCE_WORTH = 0.3 as const;
@@ -52,6 +54,18 @@ export const EXPLORE_QUERY_GRAPH_MASS_RELATION_WEIGHTS = {
   extends: 8,
   implements: 8
 } as const satisfies Readonly<Record<EdgeKind, number>>;
+export const EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS = {
+  restartProbability: 0.25,
+  maximumHops: 4,
+  maximumSeedFiles: 64,
+  maximumSeedSymbols: 256,
+  maximumSeedSymbolsPerFile: 4,
+  maximumNodes: 4_096,
+  maximumRelationships: 16_384,
+  maximumIterations: 96,
+  convergenceTolerance: 0.000_000_001,
+  maximumScore: 120
+} as const;
 export const EXPLORE_QUERY_LIMITS = {
   maximumQueryCharacters: 512,
   maximumFileHints: 4,
@@ -69,7 +83,8 @@ export type ExploreQuerySelectionReason =
   | "partial-symbol-term"
   | "file-name-term"
   | "graph-connected"
-  | "graph-mass";
+  | "graph-mass"
+  | "graph-diffusion";
 
 export interface ExploreQueryGraphMass {
   readonly policy: typeof EXPLORE_QUERY_GRAPH_MASS_POLICY;
@@ -84,6 +99,55 @@ export interface ExploreQueryGraphMass {
   readonly relationCounts: Readonly<Partial<Record<EdgeKind, number>>>;
 }
 
+export interface ExploreQueryGraphDiffusion {
+  readonly policy: typeof EXPLORE_QUERY_GRAPH_DIFFUSION_POLICY;
+  readonly state: "seed" | "reached" | "outside-subgraph" | "no-mass";
+  readonly seed: boolean;
+  readonly seedWeight: number;
+  readonly nodeMass: number;
+  readonly fileMass: number;
+  readonly normalizedFileMass: number;
+  readonly score: number;
+  readonly rankingContribution: number;
+}
+
+export interface ExploreQueryGraphDiffusionReceipt {
+  readonly policy: typeof EXPLORE_QUERY_GRAPH_DIFFUSION_POLICY;
+  readonly reason: "no-candidates" | "no-seeds" | "no-reachable-relationships" | "completed";
+  readonly applied: boolean;
+  readonly seedMode: "none" | "strong-lexical" | "partial-lexical" | "all-candidates-fallback";
+  readonly seedFileWeighting: "uniform-per-file";
+  readonly restartProbability: typeof EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS.restartProbability;
+  readonly maximumHops: typeof EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS.maximumHops;
+  readonly maximumSeedFiles: typeof EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS.maximumSeedFiles;
+  readonly maximumSeedSymbols: typeof EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS.maximumSeedSymbols;
+  readonly maximumSeedSymbolsPerFile:
+    typeof EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS.maximumSeedSymbolsPerFile;
+  readonly maximumNodes: typeof EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS.maximumNodes;
+  readonly maximumRelationships:
+    typeof EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS.maximumRelationships;
+  readonly maximumIterations: typeof EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS.maximumIterations;
+  readonly convergenceTolerance:
+    typeof EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS.convergenceTolerance;
+  readonly maximumScore: typeof EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS.maximumScore;
+  readonly relationWeights: typeof EXPLORE_QUERY_GRAPH_MASS_RELATION_WEIGHTS;
+  readonly seedFileCount: number;
+  readonly seedSymbolCount: number;
+  readonly normalizedSeedWeight: number;
+  readonly seedFileLimitReached: boolean;
+  readonly seedSymbolLimitReached: boolean;
+  readonly subgraphNodeCount: number;
+  readonly subgraphRelationshipCount: number;
+  readonly hopLimitReached: boolean;
+  readonly nodeLimitReached: boolean;
+  readonly relationshipLimitReached: boolean;
+  readonly iterations: number;
+  readonly converged: boolean;
+  readonly residual: number;
+  readonly candidateWithMassCount: number;
+  readonly topCandidateFileMass: number;
+}
+
 export interface ExploreQuerySelection {
   readonly rank: number;
   readonly symbol: SymbolNode;
@@ -91,6 +155,7 @@ export interface ExploreQuerySelection {
   readonly baseScore: number;
   readonly connectionScore: number;
   readonly graphMass: ExploreQueryGraphMass;
+  readonly graphDiffusion: ExploreQueryGraphDiffusion;
   readonly generated: GeneratedFileClassification;
   readonly sourceWorth: number;
   readonly sourceRole: SourceRoleClassification;
@@ -233,6 +298,7 @@ export interface ExploreQueryPlan {
       readonly maximumScore: typeof EXPLORE_QUERY_GRAPH_MASS_LIMITS.maximumScore;
       readonly relationWeights: typeof EXPLORE_QUERY_GRAPH_MASS_RELATION_WEIGHTS;
     };
+    readonly graphDiffusion: ExploreQueryGraphDiffusionReceipt;
   };
   readonly limits: typeof EXPLORE_QUERY_LIMITS;
   readonly summary: {
@@ -249,6 +315,8 @@ export interface ExploreQueryPlan {
     readonly scoreFloorFilteredFileCount: number;
     readonly graphMassCandidateCount: number;
     readonly graphMassTruncatedCandidateCount: number;
+    readonly graphDiffusionCandidateCount: number;
+    readonly graphDiffusionReachedCandidateCount: number;
     readonly selectedCount: number;
     readonly selectedGeneratedCount: number;
     readonly selectedLowValueCount: number;
@@ -279,6 +347,7 @@ interface Candidate {
   readonly sourceRoleWorth: number;
   connectionScore: number;
   graphMass: CandidateGraphMass;
+  graphDiffusion: CandidateGraphDiffusion;
 }
 
 interface CandidateGraphMass {
@@ -290,6 +359,29 @@ interface CandidateGraphMass {
   readonly score: number;
   readonly truncated: boolean;
   readonly relationCounts: Readonly<Partial<Record<EdgeKind, number>>>;
+}
+
+interface CandidateGraphDiffusion {
+  readonly state: ExploreQueryGraphDiffusion["state"];
+  readonly seed: boolean;
+  readonly seedWeight: number;
+  readonly nodeMass: number;
+  readonly fileMass: number;
+  readonly normalizedFileMass: number;
+  readonly score: number;
+}
+
+interface GraphDiffusionRelationship {
+  readonly key: string;
+  readonly edge: GraphEdge;
+  readonly sourceId: string;
+  readonly targetId: string;
+  readonly weight: number;
+}
+
+interface GraphDiffusionResult {
+  readonly receipt: ExploreQueryGraphDiffusionReceipt;
+  readonly byCandidateId: ReadonlyMap<string, CandidateGraphDiffusion>;
 }
 
 interface CandidateFilterResult {
@@ -561,6 +653,18 @@ function emptyGraphMass(): CandidateGraphMass {
   };
 }
 
+function emptyGraphDiffusion(): CandidateGraphDiffusion {
+  return {
+    state: "outside-subgraph",
+    seed: false,
+    seedWeight: 0,
+    nodeMass: 0,
+    fileMass: 0,
+    normalizedFileMass: 0,
+    score: 0
+  };
+}
+
 function candidateFor(
   symbol: SymbolNode,
   fileHints: readonly string[],
@@ -639,12 +743,18 @@ function candidateFor(
     sourceRole,
     sourceRoleWorth,
     connectionScore: 0,
-    graphMass: emptyGraphMass()
+    graphMass: emptyGraphMass(),
+    graphDiffusion: emptyGraphDiffusion()
   };
 }
 
 function rawScore(candidate: Candidate): number {
-  return candidate.baseScore + candidate.connectionScore + candidate.graphMass.score;
+  return (
+    candidate.baseScore +
+    candidate.connectionScore +
+    candidate.graphMass.score +
+    candidate.graphDiffusion.score
+  );
 }
 
 function rankingScore(candidate: Candidate): number {
@@ -683,6 +793,405 @@ function graphMassFor(
       uncappedScore > EXPLORE_QUERY_GRAPH_MASS_LIMITS.maximumScore,
     relationCounts
   };
+}
+
+function graphDiffusionFor(
+  graph: ExploreQueryGraph,
+  candidates: readonly Candidate[]
+): GraphDiffusionResult {
+  const baseReceipt = {
+    policy: EXPLORE_QUERY_GRAPH_DIFFUSION_POLICY,
+    seedFileWeighting: "uniform-per-file" as const,
+    restartProbability: EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS.restartProbability,
+    maximumHops: EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS.maximumHops,
+    maximumSeedFiles: EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS.maximumSeedFiles,
+    maximumSeedSymbols: EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS.maximumSeedSymbols,
+    maximumSeedSymbolsPerFile:
+      EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS.maximumSeedSymbolsPerFile,
+    maximumNodes: EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS.maximumNodes,
+    maximumRelationships: EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS.maximumRelationships,
+    maximumIterations: EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS.maximumIterations,
+    convergenceTolerance: EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS.convergenceTolerance,
+    maximumScore: EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS.maximumScore,
+    relationWeights: EXPLORE_QUERY_GRAPH_MASS_RELATION_WEIGHTS
+  };
+  if (candidates.length === 0) {
+    return {
+      byCandidateId: new Map(),
+      receipt: {
+        ...baseReceipt,
+        reason: "no-candidates",
+        applied: false,
+        seedMode: "none",
+        seedFileCount: 0,
+        seedSymbolCount: 0,
+        normalizedSeedWeight: 0,
+        seedFileLimitReached: false,
+        seedSymbolLimitReached: false,
+        subgraphNodeCount: 0,
+        subgraphRelationshipCount: 0,
+        hopLimitReached: false,
+        nodeLimitReached: false,
+        relationshipLimitReached: false,
+        iterations: 0,
+        converged: false,
+        residual: 0,
+        candidateWithMassCount: 0,
+        topCandidateFileMass: 0
+      }
+    };
+  }
+
+  const strongSeeds = candidates.filter(
+    (candidate) =>
+      candidate.explicitFile ||
+      candidate.baseReasons.includes("exact-symbol-term") ||
+      candidate.baseReasons.includes("qualified-symbol-term")
+  );
+  const partialSeeds = candidates.filter((candidate) =>
+    candidate.baseReasons.includes("partial-symbol-term")
+  );
+  const seedMode: ExploreQueryGraphDiffusionReceipt["seedMode"] =
+    strongSeeds.length > 0
+      ? "strong-lexical"
+      : partialSeeds.length > 0
+        ? "partial-lexical"
+        : "all-candidates-fallback";
+  const eligibleSeeds =
+    seedMode === "strong-lexical"
+      ? strongSeeds
+      : seedMode === "partial-lexical"
+        ? partialSeeds
+        : [...candidates];
+  const seedGroups = new Map<string, Candidate[]>();
+  for (const candidate of eligibleSeeds) {
+    const group = seedGroups.get(candidate.symbol.filePath) ?? [];
+    group.push(candidate);
+    seedGroups.set(candidate.symbol.filePath, group);
+  }
+  const rankedSeedFiles = [...seedGroups.entries()].sort((left, right) => {
+    const leftBest = [...left[1]].sort(compareLexicalSeedCandidates)[0];
+    const rightBest = [...right[1]].sort(compareLexicalSeedCandidates)[0];
+    if (leftBest !== undefined && rightBest !== undefined) {
+      const byCandidate = compareLexicalSeedCandidates(leftBest, rightBest);
+      if (byCandidate !== 0) return byCandidate;
+    }
+    return compareText(left[0], right[0]);
+  });
+  const selectedSeedFiles = rankedSeedFiles.slice(
+    0,
+    EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS.maximumSeedFiles
+  );
+  const seedFileLimitReached = rankedSeedFiles.length > selectedSeedFiles.length;
+  const selectedSeeds: Candidate[] = [];
+  let seedSymbolLimitReached = false;
+  for (const [, fileCandidates] of selectedSeedFiles) {
+    const selectedForFile = [...fileCandidates]
+      .sort(compareLexicalSeedCandidates)
+      .slice(0, EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS.maximumSeedSymbolsPerFile);
+    if (selectedForFile.length < fileCandidates.length) seedSymbolLimitReached = true;
+    for (const candidate of selectedForFile) {
+      if (selectedSeeds.length >= EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS.maximumSeedSymbols) {
+        seedSymbolLimitReached = true;
+        break;
+      }
+      selectedSeeds.push(candidate);
+    }
+    if (selectedSeeds.length >= EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS.maximumSeedSymbols) break;
+  }
+  if (selectedSeeds.length === 0 || selectedSeedFiles.length === 0) {
+    return {
+      byCandidateId: new Map(),
+      receipt: {
+        ...baseReceipt,
+        reason: "no-seeds",
+        applied: false,
+        seedMode: "none",
+        seedFileCount: 0,
+        seedSymbolCount: 0,
+        normalizedSeedWeight: 0,
+        seedFileLimitReached,
+        seedSymbolLimitReached,
+        subgraphNodeCount: 0,
+        subgraphRelationshipCount: 0,
+        hopLimitReached: false,
+        nodeLimitReached: false,
+        relationshipLimitReached: false,
+        iterations: 0,
+        converged: false,
+        residual: 0,
+        candidateWithMassCount: 0,
+        topCandidateFileMass: 0
+      }
+    };
+  }
+
+  const seedsByFile = new Map<string, Candidate[]>();
+  for (const seed of selectedSeeds) {
+    const group = seedsByFile.get(seed.symbol.filePath) ?? [];
+    group.push(seed);
+    seedsByFile.set(seed.symbol.filePath, group);
+  }
+  const seedWeights = new Map<string, number>();
+  const fileWeight = 1 / seedsByFile.size;
+  for (const fileSeeds of seedsByFile.values()) {
+    const symbolWeight = fileWeight / fileSeeds.length;
+    for (const seed of fileSeeds) seedWeights.set(seed.symbol.id, symbolWeight);
+  }
+
+  const symbolsById = new Map(graph.symbols.map((symbol) => [symbol.id, symbol]));
+  const relationships = new Map<string, GraphDiffusionRelationship>();
+  for (const edge of graph.edges) {
+    if (
+      edge.resolution !== "exact" ||
+      edge.sourceId === null ||
+      edge.targetId === null ||
+      edge.sourceId === edge.targetId ||
+      !symbolsById.has(edge.sourceId) ||
+      !symbolsById.has(edge.targetId)
+    ) {
+      continue;
+    }
+    const weight = EXPLORE_QUERY_GRAPH_MASS_RELATION_WEIGHTS[edge.kind];
+    if (weight <= 0) continue;
+    const [sourceId, targetId] = [edge.sourceId, edge.targetId].sort(compareText);
+    const key = `${sourceId}\u0000${targetId}\u0000${edge.kind}`;
+    const current = relationships.get(key);
+    if (current === undefined || compareText(edge.id, current.edge.id) < 0) {
+      relationships.set(key, { key, edge, sourceId: sourceId!, targetId: targetId!, weight });
+    }
+  }
+  const adjacency = new Map<string, GraphDiffusionRelationship[]>();
+  for (const relationship of relationships.values()) {
+    for (const nodeId of [relationship.sourceId, relationship.targetId]) {
+      const list = adjacency.get(nodeId) ?? [];
+      list.push(relationship);
+      adjacency.set(nodeId, list);
+    }
+  }
+  for (const list of adjacency.values()) {
+    list.sort(
+      (left, right) =>
+        right.weight - left.weight ||
+        compareText(left.edge.kind, right.edge.kind) ||
+        compareText(left.key, right.key)
+    );
+  }
+
+  const selectedNodeIds = new Set(selectedSeeds.map((candidate) => candidate.symbol.id));
+  const depths = new Map<string, number>([...selectedNodeIds].map((id) => [id, 0]));
+  const queue = [...selectedNodeIds].sort(compareText);
+  const selectedRelationships = new Map<string, GraphDiffusionRelationship>();
+  let nodeLimitReached = false;
+  let relationshipLimitReached = false;
+  let hopLimitReached = false;
+  for (let cursor = 0; cursor < queue.length; cursor += 1) {
+    const nodeId = queue[cursor]!;
+    const depth = depths.get(nodeId) ?? 0;
+    if (depth >= EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS.maximumHops) {
+      if (
+        (adjacency.get(nodeId) ?? []).some(
+          (relationship) => !selectedRelationships.has(relationship.key)
+        )
+      ) {
+        hopLimitReached = true;
+      }
+      continue;
+    }
+    for (const relationship of adjacency.get(nodeId) ?? []) {
+      const neighborId =
+        relationship.sourceId === nodeId ? relationship.targetId : relationship.sourceId;
+      const newRelationship = !selectedRelationships.has(relationship.key);
+      if (
+        newRelationship &&
+        selectedRelationships.size >= EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS.maximumRelationships
+      ) {
+        relationshipLimitReached = true;
+        continue;
+      }
+      if (!selectedNodeIds.has(neighborId)) {
+        if (selectedNodeIds.size >= EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS.maximumNodes) {
+          nodeLimitReached = true;
+          continue;
+        }
+        selectedNodeIds.add(neighborId);
+        depths.set(neighborId, depth + 1);
+        queue.push(neighborId);
+      }
+      if (newRelationship) {
+        selectedRelationships.set(relationship.key, relationship);
+      }
+    }
+  }
+
+  const emptyCandidateDiffusion = new Map(
+    candidates.map((candidate) => [
+      candidate.symbol.id,
+      {
+        ...emptyGraphDiffusion(),
+        state: seedWeights.has(candidate.symbol.id) ? "seed" as const : "outside-subgraph" as const,
+        seed: seedWeights.has(candidate.symbol.id),
+        seedWeight: roundedScore(seedWeights.get(candidate.symbol.id) ?? 0)
+      }
+    ])
+  );
+  if (selectedRelationships.size === 0) {
+    return {
+      byCandidateId: emptyCandidateDiffusion,
+      receipt: {
+        ...baseReceipt,
+        reason: "no-reachable-relationships",
+        applied: false,
+        seedMode,
+        seedFileCount: seedsByFile.size,
+        seedSymbolCount: selectedSeeds.length,
+        normalizedSeedWeight: roundedScore([...seedWeights.values()].reduce((sum, value) => sum + value, 0)),
+        seedFileLimitReached,
+        seedSymbolLimitReached,
+        subgraphNodeCount: selectedNodeIds.size,
+        subgraphRelationshipCount: 0,
+        hopLimitReached,
+        nodeLimitReached,
+        relationshipLimitReached,
+        iterations: 0,
+        converged: false,
+        residual: 0,
+        candidateWithMassCount: 0,
+        topCandidateFileMass: 0
+      }
+    };
+  }
+
+  const nodeIds = [...selectedNodeIds].sort(compareText);
+  const nodeIndex = new Map(nodeIds.map((id, index) => [id, index]));
+  const weightedAdjacency = Array.from(
+    { length: nodeIds.length },
+    () => new Map<number, number>()
+  );
+  for (const relationship of selectedRelationships.values()) {
+    const sourceIndex = nodeIndex.get(relationship.sourceId);
+    const targetIndex = nodeIndex.get(relationship.targetId);
+    if (sourceIndex === undefined || targetIndex === undefined) continue;
+    weightedAdjacency[sourceIndex]!.set(
+      targetIndex,
+      (weightedAdjacency[sourceIndex]!.get(targetIndex) ?? 0) + relationship.weight
+    );
+    weightedAdjacency[targetIndex]!.set(
+      sourceIndex,
+      (weightedAdjacency[targetIndex]!.get(sourceIndex) ?? 0) + relationship.weight
+    );
+  }
+  const restart = new Array<number>(nodeIds.length).fill(0);
+  for (const [seedId, weight] of seedWeights) {
+    const index = nodeIndex.get(seedId);
+    if (index !== undefined) restart[index] = weight;
+  }
+  const alpha = EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS.restartProbability;
+  let mass = restart.slice();
+  let residual = 0;
+  let iterations = 0;
+  let converged = false;
+  for (let iteration = 1; iteration <= EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS.maximumIterations; iteration += 1) {
+    const next = restart.map((value) => alpha * value);
+    let danglingMass = 0;
+    for (let index = 0; index < mass.length; index += 1) {
+      const neighbors = weightedAdjacency[index]!;
+      const totalWeight = [...neighbors.values()].reduce((sum, weight) => sum + weight, 0);
+      if (totalWeight === 0) {
+        danglingMass += mass[index]!;
+        continue;
+      }
+      for (const [neighborIndex, weight] of neighbors) {
+        next[neighborIndex]! += (1 - alpha) * mass[index]! * (weight / totalWeight);
+      }
+    }
+    if (danglingMass > 0) {
+      for (let index = 0; index < next.length; index += 1) {
+        next[index]! += (1 - alpha) * danglingMass * restart[index]!;
+      }
+    }
+    residual = next.reduce((sum, value, index) => sum + Math.abs(value - mass[index]!), 0);
+    mass = next;
+    iterations = iteration;
+    if (residual <= EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS.convergenceTolerance) {
+      converged = true;
+      break;
+    }
+  }
+
+  const nodeMass = new Map(nodeIds.map((id, index) => [id, mass[index] ?? 0]));
+  const fileMass = new Map<string, number>();
+  for (const [nodeId, value] of nodeMass) {
+    const symbol = symbolsById.get(nodeId);
+    if (symbol === undefined) continue;
+    fileMass.set(symbol.filePath, (fileMass.get(symbol.filePath) ?? 0) + value);
+  }
+  const candidateFileMasses = candidates.map(
+    (candidate) => fileMass.get(candidate.symbol.filePath) ?? 0
+  );
+  const topCandidateFileMass = Math.max(0, ...candidateFileMasses);
+  const byCandidateId = new Map<string, CandidateGraphDiffusion>();
+  for (const candidate of candidates) {
+    const seedWeight = seedWeights.get(candidate.symbol.id) ?? 0;
+    const candidateNodeMass = nodeMass.get(candidate.symbol.id) ?? 0;
+    const candidateFileMass = fileMass.get(candidate.symbol.filePath) ?? 0;
+    const normalizedFileMass =
+      topCandidateFileMass > 0 ? candidateFileMass / topCandidateFileMass : 0;
+    byCandidateId.set(candidate.symbol.id, {
+      state: seedWeight > 0
+        ? "seed"
+        : candidateFileMass > 0
+          ? "reached"
+          : selectedNodeIds.has(candidate.symbol.id)
+            ? "no-mass"
+            : "outside-subgraph",
+      seed: seedWeight > 0,
+      seedWeight: roundedScore(seedWeight),
+      nodeMass: roundedScore(candidateNodeMass),
+      fileMass: roundedScore(candidateFileMass),
+      normalizedFileMass: roundedScore(normalizedFileMass),
+      score: roundedScore(
+        normalizedFileMass * EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS.maximumScore
+      )
+    });
+  }
+  return {
+    byCandidateId,
+    receipt: {
+      ...baseReceipt,
+      reason: "completed",
+      applied: true,
+      seedMode,
+      seedFileCount: seedsByFile.size,
+      seedSymbolCount: selectedSeeds.length,
+      normalizedSeedWeight: roundedScore([...seedWeights.values()].reduce((sum, value) => sum + value, 0)),
+      seedFileLimitReached,
+      seedSymbolLimitReached,
+      subgraphNodeCount: selectedNodeIds.size,
+      subgraphRelationshipCount: selectedRelationships.size,
+      hopLimitReached,
+      nodeLimitReached,
+      relationshipLimitReached,
+      iterations,
+      converged,
+      residual: Math.round(residual * 1_000_000_000_000) / 1_000_000_000_000,
+      candidateWithMassCount: [...byCandidateId.values()].filter((value) => value.fileMass > 0).length,
+      topCandidateFileMass: roundedScore(topCandidateFileMass)
+    }
+  };
+}
+
+function compareLexicalSeedCandidates(left: Candidate, right: Candidate): number {
+  if (left.explicitFile !== right.explicitFile) return left.explicitFile ? -1 : 1;
+  const scoreDifference = right.baseScore - left.baseScore;
+  if (scoreDifference !== 0) return scoreDifference;
+  return (
+    compareText(left.symbol.filePath, right.symbol.filePath) ||
+    left.symbol.range.start.line - right.symbol.range.start.line ||
+    left.symbol.range.start.column - right.symbol.range.start.column ||
+    compareText(left.symbol.qualifiedName, right.symbol.qualifiedName) ||
+    compareText(left.symbol.id, right.symbol.id)
+  );
 }
 
 function compareCandidates(left: Candidate, right: Candidate): number {
@@ -978,8 +1487,13 @@ export function planExploreQuery(graph: ExploreQueryGraph, query: string): Explo
       graphMassRelationshipsByCandidate.get(candidate.symbol.id) ?? new Map()
     );
   }
-
   const filtering = filterLowValueCandidates(candidates, roleIntent);
+  const graphDiffusion = graphDiffusionFor(graph, filtering.retained);
+  for (const candidate of candidates) {
+    candidate.graphDiffusion =
+      graphDiffusion.byCandidateId.get(candidate.symbol.id) ?? emptyGraphDiffusion();
+  }
+
   const scoreFloor = applyRelativeFileScoreFloor(filtering.retained);
   const ranked = [...scoreFloor.retained].sort(compareCandidates);
   const selected: Candidate[] = [];
@@ -1017,6 +1531,18 @@ export function planExploreQuery(graph: ExploreQueryGraph, query: string): Explo
               candidate.graphMass.score * candidate.sourceWorth * candidate.sourceRoleWorth * 1_000_000
             ) / 1_000_000
       },
+      graphDiffusion: {
+        policy: EXPLORE_QUERY_GRAPH_DIFFUSION_POLICY,
+        ...candidate.graphDiffusion,
+        rankingContribution: candidate.explicitFile
+          ? candidate.graphDiffusion.score
+          : Math.round(
+              candidate.graphDiffusion.score *
+              candidate.sourceWorth *
+              candidate.sourceRoleWorth *
+              1_000_000
+            ) / 1_000_000
+      },
       generated: candidate.generated,
       sourceWorth: candidate.sourceWorth,
       sourceRole: candidate.sourceRole,
@@ -1036,7 +1562,8 @@ export function planExploreQuery(graph: ExploreQueryGraph, query: string): Explo
       reasons: [
         ...candidate.baseReasons,
         ...(candidate.connectionScore > 0 ? ["graph-connected" as const] : []),
-        ...(candidate.graphMass.score > 0 ? ["graph-mass" as const] : [])
+        ...(candidate.graphMass.score > 0 ? ["graph-mass" as const] : []),
+        ...(candidate.graphDiffusion.score > 0 ? ["graph-diffusion" as const] : [])
       ]
     };
   });
@@ -1086,7 +1613,8 @@ export function planExploreQuery(graph: ExploreQueryGraph, query: string): Explo
         maximumRelationships: EXPLORE_QUERY_GRAPH_MASS_LIMITS.maximumRelationships,
         maximumScore: EXPLORE_QUERY_GRAPH_MASS_LIMITS.maximumScore,
         relationWeights: EXPLORE_QUERY_GRAPH_MASS_RELATION_WEIGHTS
-      }
+      },
+      graphDiffusion: graphDiffusion.receipt
     },
     limits: EXPLORE_QUERY_LIMITS,
     summary: {
@@ -1112,6 +1640,12 @@ export function planExploreQuery(graph: ExploreQueryGraph, query: string): Explo
       scoreFloorFilteredFileCount: scoreFloor.receipt.excludedFileCount,
       graphMassCandidateCount: candidates.filter((candidate) => candidate.graphMass.score > 0).length,
       graphMassTruncatedCandidateCount: candidates.filter((candidate) => candidate.graphMass.truncated).length,
+      graphDiffusionCandidateCount: candidates.filter(
+        (candidate) => candidate.graphDiffusion.fileMass > 0
+      ).length,
+      graphDiffusionReachedCandidateCount: candidates.filter(
+        (candidate) => candidate.graphDiffusion.state === "reached"
+      ).length,
       selectedCount: selection.length,
       selectedGeneratedCount: selection.filter((candidate) => candidate.generated.generated).length,
       selectedLowValueCount: selection.filter(

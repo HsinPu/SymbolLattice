@@ -865,7 +865,20 @@ describe("SymbolLatticeService", () => {
       sourceAvailability: "not-applicable",
       source: null,
       queryPlan: {
-        policy: "explore-query-plan-v7",
+        policy: "explore-query-plan-v8",
+        ranking: {
+          graphDiffusion: {
+            policy: "explore-query-graph-diffusion-v1",
+            reason: "completed",
+            applied: true,
+            seedMode: "strong-lexical",
+            seedFileWeighting: "uniform-per-file",
+            restartProbability: 0.25,
+            maximumHops: 4,
+            maximumIterations: 96,
+            converged: true
+          }
+        },
         fileHints: ["src/api/orders.ts"],
         identifierTerms: ["createorder", "persistorder"],
         summary: {
@@ -879,26 +892,37 @@ describe("SymbolLatticeService", () => {
         {
           rank: 1,
           symbol: { name: "createOrder", filePath: "src/api/orders.ts" },
-          reasons: ["explicit-file", "exact-symbol-term", "graph-connected", "graph-mass"],
+          reasons: [
+            "explicit-file",
+            "exact-symbol-term",
+            "graph-connected",
+            "graph-mass",
+            "graph-diffusion"
+          ],
           sourceAvailability: "active-generation",
           source: { filePath: "src/api/orders.ts" }
         },
         {
           rank: 2,
           symbol: { name: "validatePayload", filePath: "src/api/orders.ts" },
-          reasons: ["explicit-file"],
+          reasons: ["explicit-file", "graph-diffusion"],
           sourceAvailability: "active-generation"
         },
         {
           rank: 3,
           symbol: { name: "persistOrder", filePath: "src/data/orders.ts" },
-          reasons: ["exact-symbol-term", "graph-connected", "graph-mass"],
+          reasons: [
+            "exact-symbol-term",
+            "graph-connected",
+            "graph-mass",
+            "graph-diffusion"
+          ],
           sourceAvailability: "active-generation"
         },
         {
           rank: 4,
           symbol: { name: "createOrder", filePath: "src/legacy/orders.ts" },
-          reasons: ["exact-symbol-term"],
+          reasons: ["exact-symbol-term", "graph-diffusion"],
           sourceAvailability: "active-generation"
         }
       ],
@@ -970,7 +994,7 @@ describe("SymbolLatticeService", () => {
     const result = await service.explore(projectPath, "orderService");
 
     expect(result.queryPlan).toMatchObject({
-      policy: "explore-query-plan-v7",
+      policy: "explore-query-plan-v8",
       ranking: {
         policy: "explore-query-source-worth-v1",
         generatedSourceWorth: 0.3,
@@ -990,8 +1014,8 @@ describe("SymbolLatticeService", () => {
       "src/order-service-adapter.ts"
     ]);
     expect(result.queryPlan?.selection[0]).toMatchObject({
-      score: 522,
-      rankingScore: 522,
+      score: 642,
+      rankingScore: 642,
       graphMass: {
         policy: "explore-query-graph-mass-v1",
         eligibleRelationshipCount: 1,
@@ -1006,8 +1030,8 @@ describe("SymbolLatticeService", () => {
       }
     });
     expect(result.queryPlan?.selection[1]).toMatchObject({
-      score: 510,
-      rankingScore: 153,
+      score: 562.5,
+      rankingScore: 168.75,
       sourceWorth: 0.3,
       rankingDecision: "generated-source-worth",
       generated: {
@@ -1021,6 +1045,67 @@ describe("SymbolLatticeService", () => {
           })
         ]
       }
+    });
+  });
+
+  it("uses persisted exact multi-hop edges to separate a connected query candidate from a dead end", async () => {
+    const projectPath = await createInlineProject({
+      "src/dispatch.ts":
+        "import { runPipeline } from './pipeline.js';\n" +
+        "export function dispatch() { return runPipeline(); }\n",
+      "src/pipeline.ts":
+        "import { dispatchPipeline } from './z-connected.js';\n" +
+        "export function runPipeline() { return dispatchPipeline(); }\n",
+      "src/z-connected.ts":
+        "export function dispatchPipeline() { return 'connected'; }\n",
+      "src/a-dead-end.ts":
+        "import { legacyHelper } from './legacy-helper.js';\n" +
+        "export function dispatchLegacy() { return legacyHelper(); }\n",
+      "src/legacy-helper.ts":
+        "export function legacyHelper() { return 'legacy'; }\n"
+    });
+    const service = createService();
+    await service.init({ projectPath });
+
+    const result = await service.explore(projectPath, "dispatch behavior");
+
+    expect(result.queryPlan).toMatchObject({
+      policy: "explore-query-plan-v8",
+      ranking: {
+        graphDiffusion: {
+          policy: "explore-query-graph-diffusion-v1",
+          reason: "completed",
+          applied: true,
+          seedMode: "strong-lexical",
+          seedFileCount: 1,
+          seedSymbolCount: 1,
+          subgraphNodeCount: 3,
+          subgraphRelationshipCount: 2,
+          converged: true
+        }
+      },
+      summary: {
+        candidateCount: 3,
+        graphDiffusionCandidateCount: 2,
+        graphDiffusionReachedCandidateCount: 1,
+        selectedCount: 3
+      }
+    });
+    expect(result.queryPlan?.selection.map((selection) => selection.symbol.name)).toEqual([
+      "dispatch",
+      "dispatchPipeline",
+      "dispatchLegacy"
+    ]);
+    expect(result.queryPlan?.selection[1]?.graphDiffusion).toMatchObject({
+      state: "reached",
+      seed: false,
+      seedWeight: 0
+    });
+    expect(result.queryPlan?.selection[1]?.graphDiffusion.fileMass).toBeGreaterThan(0);
+    expect(result.queryPlan?.selection[2]?.graphDiffusion).toMatchObject({
+      state: "outside-subgraph",
+      fileMass: 0,
+      score: 0
     });
   });
 
@@ -1043,7 +1128,7 @@ describe("SymbolLatticeService", () => {
     const result = await service.explore(projectPath, "dispatch pipeline");
 
     expect(result.queryPlan).toMatchObject({
-      policy: "explore-query-plan-v7",
+      policy: "explore-query-plan-v8",
       scoreFloor: {
         policy: "explore-query-relative-file-score-floor-v1",
         reason: "relative-floor-applied",
@@ -1093,7 +1178,7 @@ describe("SymbolLatticeService", () => {
     const result = await service.explore(projectPath, "orderService");
 
     expect(result.queryPlan).toMatchObject({
-      policy: "explore-query-plan-v7",
+      policy: "explore-query-plan-v8",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",
@@ -1139,7 +1224,7 @@ describe("SymbolLatticeService", () => {
 
     const general = await service.explore(projectPath, "renderAsset");
     expect(general.queryPlan).toMatchObject({
-      policy: "explore-query-plan-v7",
+      policy: "explore-query-plan-v8",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",

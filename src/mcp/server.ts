@@ -20,6 +20,8 @@ import {
   EXPLORE_GENERATED_SOURCE_WORTH,
   EXPLORE_ICON_SOURCE_WORTH,
   EXPLORE_LOCALIZATION_SOURCE_WORTH,
+  EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS,
+  EXPLORE_QUERY_GRAPH_DIFFUSION_POLICY,
   EXPLORE_QUERY_GRAPH_MASS_LIMITS,
   EXPLORE_QUERY_GRAPH_MASS_POLICY,
   EXPLORE_QUERY_GRAPH_MASS_RELATION_WEIGHTS,
@@ -959,6 +961,22 @@ const exploreQueryGraphMassOutputSchema = z.object({
   relationCounts: exploreQueryGraphMassRelationCountsOutputSchema
 });
 
+const exploreQueryGraphDiffusionOutputSchema = z.object({
+  policy: z.literal(EXPLORE_QUERY_GRAPH_DIFFUSION_POLICY),
+  state: z.enum(["seed", "reached", "outside-subgraph", "no-mass"]),
+  seed: z.boolean(),
+  seedWeight: z.number().finite().nonnegative().max(1),
+  nodeMass: z.number().finite().nonnegative().max(1),
+  fileMass: z.number().finite().nonnegative().max(1),
+  normalizedFileMass: z.number().finite().nonnegative().max(1),
+  score: z.number().finite().nonnegative().max(
+    EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS.maximumScore
+  ),
+  rankingContribution: z.number().finite().nonnegative().max(
+    EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS.maximumScore
+  )
+});
+
 const exploreQuerySelectionOutputSchema = z.object({
   rank: z.number().int().positive().max(EXPLORE_QUERY_LIMITS.maximumSymbols),
   symbol: z.object({}).passthrough(),
@@ -966,6 +984,7 @@ const exploreQuerySelectionOutputSchema = z.object({
   baseScore: z.number().finite(),
   connectionScore: z.number().finite(),
   graphMass: exploreQueryGraphMassOutputSchema,
+  graphDiffusion: exploreQueryGraphDiffusionOutputSchema,
   generated: z.object({
     classifierVersion: z.string().min(1),
     generated: z.boolean(),
@@ -1163,6 +1182,77 @@ const exploreQueryPlanOutputSchema = z.object({
         extends: z.literal(EXPLORE_QUERY_GRAPH_MASS_RELATION_WEIGHTS.extends),
         implements: z.literal(EXPLORE_QUERY_GRAPH_MASS_RELATION_WEIGHTS.implements)
       }).strict()
+    }),
+    graphDiffusion: z.object({
+      policy: z.literal(EXPLORE_QUERY_GRAPH_DIFFUSION_POLICY),
+      reason: z.enum([
+        "no-candidates",
+        "no-seeds",
+        "no-reachable-relationships",
+        "completed"
+      ]),
+      applied: z.boolean(),
+      seedMode: z.enum([
+        "none",
+        "strong-lexical",
+        "partial-lexical",
+        "all-candidates-fallback"
+      ]),
+      seedFileWeighting: z.literal("uniform-per-file"),
+      restartProbability: z.literal(EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS.restartProbability),
+      maximumHops: z.literal(EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS.maximumHops),
+      maximumSeedFiles: z.literal(EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS.maximumSeedFiles),
+      maximumSeedSymbols: z.literal(EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS.maximumSeedSymbols),
+      maximumSeedSymbolsPerFile: z.literal(
+        EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS.maximumSeedSymbolsPerFile
+      ),
+      maximumNodes: z.literal(EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS.maximumNodes),
+      maximumRelationships: z.literal(
+        EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS.maximumRelationships
+      ),
+      maximumIterations: z.literal(EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS.maximumIterations),
+      convergenceTolerance: z.literal(
+        EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS.convergenceTolerance
+      ),
+      maximumScore: z.literal(EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS.maximumScore),
+      relationWeights: z.object({
+        contains: z.literal(EXPLORE_QUERY_GRAPH_MASS_RELATION_WEIGHTS.contains),
+        imports: z.literal(EXPLORE_QUERY_GRAPH_MASS_RELATION_WEIGHTS.imports),
+        exports: z.literal(EXPLORE_QUERY_GRAPH_MASS_RELATION_WEIGHTS.exports),
+        references: z.literal(EXPLORE_QUERY_GRAPH_MASS_RELATION_WEIGHTS.references),
+        calls: z.literal(EXPLORE_QUERY_GRAPH_MASS_RELATION_WEIGHTS.calls),
+        instantiates: z.literal(EXPLORE_QUERY_GRAPH_MASS_RELATION_WEIGHTS.instantiates),
+        overrides: z.literal(EXPLORE_QUERY_GRAPH_MASS_RELATION_WEIGHTS.overrides),
+        routes: z.literal(EXPLORE_QUERY_GRAPH_MASS_RELATION_WEIGHTS.routes),
+        handles: z.literal(EXPLORE_QUERY_GRAPH_MASS_RELATION_WEIGHTS.handles),
+        extends: z.literal(EXPLORE_QUERY_GRAPH_MASS_RELATION_WEIGHTS.extends),
+        implements: z.literal(EXPLORE_QUERY_GRAPH_MASS_RELATION_WEIGHTS.implements)
+      }).strict(),
+      seedFileCount: z.number().int().nonnegative().max(
+        EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS.maximumSeedFiles
+      ),
+      seedSymbolCount: z.number().int().nonnegative().max(
+        EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS.maximumSeedSymbols
+      ),
+      normalizedSeedWeight: z.number().finite().nonnegative().max(1),
+      seedFileLimitReached: z.boolean(),
+      seedSymbolLimitReached: z.boolean(),
+      subgraphNodeCount: z.number().int().nonnegative().max(
+        EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS.maximumNodes
+      ),
+      subgraphRelationshipCount: z.number().int().nonnegative().max(
+        EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS.maximumRelationships
+      ),
+      hopLimitReached: z.boolean(),
+      nodeLimitReached: z.boolean(),
+      relationshipLimitReached: z.boolean(),
+      iterations: z.number().int().nonnegative().max(
+        EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS.maximumIterations
+      ),
+      converged: z.boolean(),
+      residual: z.number().finite().nonnegative(),
+      candidateWithMassCount: z.number().int().nonnegative(),
+      topCandidateFileMass: z.number().finite().nonnegative().max(1)
     })
   }),
   limits: z.object({
@@ -1188,6 +1278,8 @@ const exploreQueryPlanOutputSchema = z.object({
     scoreFloorFilteredFileCount: z.number().int().nonnegative(),
     graphMassCandidateCount: z.number().int().nonnegative(),
     graphMassTruncatedCandidateCount: z.number().int().nonnegative(),
+    graphDiffusionCandidateCount: z.number().int().nonnegative(),
+    graphDiffusionReachedCandidateCount: z.number().int().nonnegative(),
     selectedCount: z.number().int().nonnegative().max(EXPLORE_QUERY_LIMITS.maximumSymbols),
     selectedGeneratedCount: z.number().int().nonnegative().max(
       EXPLORE_QUERY_LIMITS.maximumSymbols
