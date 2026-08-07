@@ -98,7 +98,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v8",
+      policy: "explore-query-plan-v9",
       queryIntent: {
         tests: false,
         icons: false,
@@ -216,7 +216,7 @@ describe("explore query planning", () => {
     expect(reversed).toEqual(plan);
     expect(plan.selection.map((item) => item.symbol.id)).toEqual(["production-a", "production-b"]);
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v8",
+      policy: "explore-query-plan-v9",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",
@@ -448,7 +448,7 @@ describe("explore query planning", () => {
 
     expect(plan.selection.map((item) => item.symbol.id)).toEqual(["production-a", "production-b"]);
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v8",
+      policy: "explore-query-plan-v9",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",
@@ -872,7 +872,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v8",
+      policy: "explore-query-plan-v9",
       ranking: {
         graphMass: {
           policy: "explore-query-graph-mass-v1",
@@ -882,14 +882,18 @@ describe("explore query planning", () => {
         }
       },
       summary: {
-        graphMassCandidateCount: 1,
+        graphMassCandidateCount: 2,
         graphMassTruncatedCandidateCount: 0
       }
     });
-    expect(plan.selection.map((item) => item.symbol.id)).toEqual(["connected", "isolated"]);
+    expect(plan.selection.map((item) => item.symbol.id)).toEqual([
+      "connected",
+      "isolated",
+      "helper"
+    ]);
     expect(plan.selection[0]).toMatchObject({
-      score: 642,
-      rankingScore: 642,
+      score: 702,
+      rankingScore: 702,
       reasons: expect.arrayContaining(["graph-mass"]),
       graphMass: {
         policy: "explore-query-graph-mass-v1",
@@ -971,6 +975,7 @@ describe("explore query planning", () => {
     });
     expect(plan.selection.map((item) => item.symbol.id)).toEqual([
       "seed",
+      "bridge",
       "connected",
       "dead-end"
     ]);
@@ -988,11 +993,300 @@ describe("explore query planning", () => {
     expect(plan.selection[1]!.graphDiffusion.fileMass).toBeGreaterThan(0);
     expect(plan.selection[1]!.graphDiffusion.score).toBeGreaterThan(0);
     expect(plan.selection[2]!.graphDiffusion).toMatchObject({
+      state: "reached",
+      seed: false,
+      fileMass: expect.any(Number),
+      score: expect.any(Number)
+    });
+    expect(plan.selection[3]!.graphDiffusion).toMatchObject({
       state: "outside-subgraph",
       fileMass: 0,
       score: 0,
       rankingContribution: 0
     });
+  });
+
+  it("adds a non-lexical file through bounded exact graph expansion with a verifiable path", () => {
+    const seed = symbol({
+      id: "dispatch",
+      name: "dispatch",
+      filePath: "src/dispatch.ts"
+    });
+    const connected = symbol({
+      id: "persist-record",
+      name: "persistRecord",
+      filePath: "src/storage.ts"
+    });
+
+    const plan = planExploreQuery(
+      {
+        files: [seed, connected].map((item) => indexedFile(item.filePath, false)),
+        symbols: [connected, seed],
+        edges: [edge("dispatch-persists", seed.id, connected.id)]
+      },
+      "dispatch behavior"
+    );
+
+    expect(plan.ranking.graphExpansion).toMatchObject({
+      policy: "explore-query-graph-expansion-v1",
+      reason: "completed",
+      applied: true,
+      maximumHops: 2,
+      minimumRelationWeight: 8,
+      seedFileCount: 1,
+      seedSymbolCount: 1,
+      discoveredSymbolCount: 1,
+      admittedSymbolCount: 1,
+      admittedFileCount: 1
+    });
+    expect(plan.selection.map((item) => item.symbol.id)).toEqual([
+      "dispatch",
+      "persist-record"
+    ]);
+    expect(plan.selection[1]).toMatchObject({
+      matchedTerms: [],
+      reasons: expect.arrayContaining(["graph-expanded"]),
+      graphExpansion: {
+        policy: "explore-query-graph-expansion-v1",
+        state: "expanded",
+        seedSymbolId: "dispatch",
+        seedFilePath: "src/dispatch.ts",
+        hops: 1,
+        score: expect.any(Number),
+        rankingContribution: expect.any(Number),
+        path: [
+          {
+            edgeId: "dispatch-persists",
+            kind: "calls",
+            sourceId: "dispatch",
+            targetId: "persist-record",
+            direction: "forward"
+          }
+        ]
+      }
+    });
+    expect(plan.selection[1]!.graphExpansion.score).toBeGreaterThanOrEqual(80);
+  });
+
+  it("spends the expansion relationship budget on seed-reachable evidence before unrelated edges", () => {
+    const seed = symbol({ id: "z-seed", name: "dispatch", filePath: "src/dispatch.ts" });
+    const connected = symbol({
+      id: "z-connected",
+      name: "persistRecord",
+      filePath: "src/storage.ts"
+    });
+    const unrelatedPairs = Array.from({ length: 4_096 }, (_, index) => ({
+      source: symbol({
+        id: `a-source-${index.toString().padStart(4, "0")}`,
+        name: `source${index}`,
+        filePath: `src/unrelated/source-${index}.ts`
+      }),
+      target: symbol({
+        id: `a-target-${index.toString().padStart(4, "0")}`,
+        name: `target${index}`,
+        filePath: `src/unrelated/target-${index}.ts`
+      })
+    }));
+    const plan = planExploreQuery(
+      {
+        files: [indexedFile(seed.filePath, false), indexedFile(connected.filePath, false)],
+        symbols: [
+          ...unrelatedPairs.flatMap((pair) => [pair.source, pair.target]),
+          connected,
+          seed
+        ],
+        edges: [
+          ...unrelatedPairs.map((pair, index) =>
+            edge(`a-unrelated-${index.toString().padStart(4, "0")}`, pair.source.id, pair.target.id)
+          ),
+          edge("z-seed-connected", seed.id, connected.id)
+        ]
+      },
+      "dispatch behavior"
+    );
+
+    expect(plan.selection.some((item) => item.symbol.id === connected.id)).toBe(true);
+    expect(plan.ranking.graphExpansion).toMatchObject({
+      applied: true,
+      visitedRelationshipCount: 1,
+      relationshipLimitReached: false,
+      admittedSymbolCount: 1
+    });
+  });
+
+  it("requires high-value exact relationships and rejects heuristic or weak expansion evidence", () => {
+    const seed = symbol({ id: "seed", name: "dispatch", filePath: "src/dispatch.ts" });
+    const weak = symbol({ id: "weak", name: "weakHelper", filePath: "src/weak.ts" });
+    const heuristic = symbol({
+      id: "heuristic",
+      name: "heuristicHelper",
+      filePath: "src/heuristic.ts"
+    });
+    const plan = planExploreQuery(
+      {
+        files: [seed, weak, heuristic].map((item) => indexedFile(item.filePath, false)),
+        symbols: [seed, weak, heuristic],
+        edges: [
+          { ...edge("weak-reference", seed.id, weak.id), kind: "references" },
+          {
+            ...edge("heuristic-call", seed.id, heuristic.id),
+            resolution: "heuristic",
+            confidence: 0.7
+          }
+        ]
+      },
+      "dispatch behavior"
+    );
+
+    expect(plan.selection.map((item) => item.symbol.id)).toEqual(["seed"]);
+    expect(plan.ranking.graphExpansion).toMatchObject({
+      reason: "no-reachable-candidates",
+      applied: false,
+      minimumRelationWeight: 8,
+      visitedRelationshipCount: 0,
+      discoveredSymbolCount: 0,
+      admittedSymbolCount: 0
+    });
+  });
+
+  it("does not use an unrequested low-value lexical match as an expansion seed", () => {
+    const productionSeed = symbol({
+      id: "production-seed",
+      name: "dispatch",
+      filePath: "src/z-dispatch.ts"
+    });
+    const testSeed = symbol({
+      id: "test-seed",
+      name: "dispatch",
+      filePath: "test/a-dispatch.test.ts"
+    });
+    const connected = symbol({
+      id: "test-connected",
+      name: "fixtureOnlyHelper",
+      filePath: "src/connected.ts"
+    });
+    const plan = planExploreQuery(
+      {
+        files: [
+          indexedFile(productionSeed.filePath, false),
+          indexedFile(testSeed.filePath, false, "test"),
+          indexedFile(connected.filePath, false)
+        ],
+        symbols: [testSeed, productionSeed, connected],
+        edges: [edge("test-only-path", testSeed.id, connected.id)]
+      },
+      "dispatch behavior"
+    );
+
+    expect(plan.selection.some((item) => item.symbol.id === connected.id)).toBe(false);
+    expect(plan.ranking.graphExpansion).toMatchObject({
+      seedFileCount: 1,
+      seedSymbolCount: 1,
+      reason: "no-reachable-candidates",
+      applied: false
+    });
+  });
+
+  it("keeps expansion paths deterministic, bounded to two hops, and reports corroboration", () => {
+    const firstSeed = symbol({ id: "first-seed", name: "dispatch", filePath: "src/a.ts" });
+    const secondSeed = symbol({ id: "second-seed", name: "dispatch", filePath: "src/b.ts" });
+    const bridge = symbol({ id: "bridge", name: "routeRequest", filePath: "src/bridge.ts" });
+    const reached = symbol({ id: "reached", name: "persistRecord", filePath: "src/storage.ts" });
+    const tooFar = symbol({ id: "too-far", name: "flushDisk", filePath: "src/disk.ts" });
+    const graph = {
+      files: [firstSeed, secondSeed, bridge, reached, tooFar].map((item) =>
+        indexedFile(item.filePath, false)
+      ),
+      symbols: [tooFar, reached, bridge, secondSeed, firstSeed],
+      edges: [
+        edge("first-bridge", firstSeed.id, bridge.id),
+        edge("second-bridge", secondSeed.id, bridge.id),
+        edge("bridge-reached", bridge.id, reached.id),
+        edge("reached-too-far", reached.id, tooFar.id)
+      ]
+    };
+    const plan = planExploreQuery(graph, "dispatch behavior");
+    const reversed = planExploreQuery(
+      { ...graph, symbols: [...graph.symbols].reverse(), edges: [...graph.edges].reverse() },
+      "dispatch behavior"
+    );
+
+    expect(reversed).toEqual(plan);
+    const receipt = plan.ranking.graphExpansion.candidates.find(
+      (candidate) => candidate.symbolId === reached.id
+    );
+    expect(receipt).toMatchObject({
+      admitted: true,
+      hops: 2,
+      corroboratingSeedFileCount: 2,
+      score: 120
+    });
+    expect(plan.ranking.graphExpansion.candidates.some(
+      (candidate) => candidate.symbolId === tooFar.id
+    )).toBe(false);
+  });
+
+  it("retains admitted expansion receipts when rejected discoveries exceed the receipt cap", () => {
+    const seed = symbol({ id: "seed", name: "dispatch", filePath: "src/a.ts" });
+    const existing = Array.from({ length: 17 }, (_, index) =>
+      symbol({
+        id: `existing-${index.toString().padStart(2, "0")}`,
+        name: `dispatchExisting${index}`,
+        filePath: "src/a.ts",
+        line: index + 10
+      })
+    );
+    const admitted = symbol({ id: "admitted", name: "persistRecord", filePath: "src/z.ts" });
+    const plan = planExploreQuery(
+      {
+        files: [indexedFile(seed.filePath, false), indexedFile(admitted.filePath, false)],
+        symbols: [seed, ...existing, admitted],
+        edges: [
+          ...existing.map((item, index) => edge(`existing-edge-${index}`, seed.id, item.id)),
+          edge("admitted-edge", seed.id, admitted.id)
+        ]
+      },
+      "dispatch"
+    );
+
+    expect(plan.selection.some((item) => item.symbol.id === admitted.id)).toBe(true);
+    expect(plan.ranking.graphExpansion.candidatesTruncated).toBe(true);
+    expect(plan.ranking.graphExpansion.candidates).toContainEqual(
+      expect.objectContaining({ symbolId: admitted.id, admitted: true, reason: "admitted" })
+    );
+  });
+
+  it("caps graph-expanded files and reports every rejected overflow candidate", () => {
+    const seed = symbol({ id: "seed", name: "dispatch", filePath: "src/dispatch.ts" });
+    const targets = Array.from({ length: 10 }, (_, index) =>
+      symbol({
+        id: `target-${index}`,
+        name: `helper${index}`,
+        filePath: `src/helpers/${index}.ts`
+      })
+    );
+    const plan = planExploreQuery(
+      {
+        files: [seed, ...targets].map((item) => indexedFile(item.filePath, false)),
+        symbols: [seed, ...targets],
+        edges: targets.map((item, index) => edge(`target-edge-${index}`, seed.id, item.id))
+      },
+      "dispatch"
+    );
+
+    expect(plan.ranking.graphExpansion).toMatchObject({
+      admittedSymbolCount: 8,
+      admittedFileCount: 8,
+      expandedFileLimitReached: true,
+      expandedSymbolLimitReached: false,
+      candidatesTruncated: false
+    });
+    expect(plan.ranking.graphExpansion.candidates.filter((item) => item.admitted)).toHaveLength(8);
+    expect(
+      plan.ranking.graphExpansion.candidates.filter(
+        (item) => item.reason === "expanded-file-limit"
+      )
+    ).toHaveLength(2);
   });
 
   it("balances diffusion restart mass by seed file instead of matched symbol count", () => {
@@ -1059,7 +1353,7 @@ describe("explore query planning", () => {
       subgraphRelationshipCount: 4_095,
       nodeLimitReached: true,
       relationshipLimitReached: false,
-      candidateWithMassCount: 1
+      candidateWithMassCount: 9
     });
     expect(plan.selection[0]?.graphDiffusion).toMatchObject({
       state: "seed",
@@ -1187,12 +1481,12 @@ describe("explore query planning", () => {
     );
 
     expect(plan.summary).toMatchObject({
-      graphMassCandidateCount: 1,
+      graphMassCandidateCount: 9,
       graphMassTruncatedCandidateCount: 1
     });
     expect(plan.selection[0]).toMatchObject({
-      score: 750,
-      rankingScore: 225,
+      score: 1350,
+      rankingScore: 405,
       sourceWorth: 0.3,
       graphMass: {
         eligibleRelationshipCount: 40,
@@ -1239,7 +1533,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v8",
+      policy: "explore-query-plan-v9",
       ranking: {
         policy: "explore-query-source-worth-v1",
         generatedSourceWorth: 0.3,
@@ -1453,6 +1747,9 @@ describe("explore query planning", () => {
     expect(plan.selection).toEqual([]);
     expect(plan.summary).toEqual({
       candidateCount: 0,
+      lexicalCandidateCount: 0,
+      expandedCandidateCount: 0,
+      expandedCandidateFileCount: 0,
       generatedCandidateCount: 0,
       lowValueCandidateCount: 0,
       lowValuePenaltyCandidateCount: 0,

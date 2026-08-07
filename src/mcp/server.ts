@@ -20,6 +20,8 @@ import {
   EXPLORE_GENERATED_SOURCE_WORTH,
   EXPLORE_ICON_SOURCE_WORTH,
   EXPLORE_LOCALIZATION_SOURCE_WORTH,
+  EXPLORE_QUERY_GRAPH_EXPANSION_LIMITS,
+  EXPLORE_QUERY_GRAPH_EXPANSION_POLICY,
   EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS,
   EXPLORE_QUERY_GRAPH_DIFFUSION_POLICY,
   EXPLORE_QUERY_GRAPH_MASS_LIMITS,
@@ -961,6 +963,46 @@ const exploreQueryGraphMassOutputSchema = z.object({
   relationCounts: exploreQueryGraphMassRelationCountsOutputSchema
 });
 
+const exploreQueryGraphExpansionPathSegmentOutputSchema = z.object({
+  edgeId: z.string().min(1),
+  kind: z.enum([
+    "contains",
+    "imports",
+    "exports",
+    "references",
+    "calls",
+    "instantiates",
+    "overrides",
+    "routes",
+    "handles",
+    "extends",
+    "implements"
+  ]),
+  sourceId: z.string().min(1),
+  targetId: z.string().min(1),
+  direction: z.enum(["forward", "reverse"])
+});
+
+const exploreQueryGraphExpansionOutputSchema = z.object({
+  policy: z.literal(EXPLORE_QUERY_GRAPH_EXPANSION_POLICY),
+  state: z.enum(["lexical", "expanded"]),
+  seedSymbolId: z.string().min(1).nullable(),
+  seedFilePath: z.string().min(1).nullable(),
+  hops: z.number().int().nonnegative().max(EXPLORE_QUERY_GRAPH_EXPANSION_LIMITS.maximumHops),
+  corroboratingSeedFileCount: z.number().int().nonnegative().max(
+    EXPLORE_QUERY_GRAPH_EXPANSION_LIMITS.maximumSeedFiles
+  ),
+  score: z.number().finite().nonnegative().max(
+    EXPLORE_QUERY_GRAPH_EXPANSION_LIMITS.maximumScore
+  ),
+  rankingContribution: z.number().finite().nonnegative().max(
+    EXPLORE_QUERY_GRAPH_EXPANSION_LIMITS.maximumScore
+  ),
+  path: z.array(exploreQueryGraphExpansionPathSegmentOutputSchema).max(
+    EXPLORE_QUERY_GRAPH_EXPANSION_LIMITS.maximumHops
+  )
+});
+
 const exploreQueryGraphDiffusionOutputSchema = z.object({
   policy: z.literal(EXPLORE_QUERY_GRAPH_DIFFUSION_POLICY),
   state: z.enum(["seed", "reached", "outside-subgraph", "no-mass"]),
@@ -984,6 +1026,7 @@ const exploreQuerySelectionOutputSchema = z.object({
   baseScore: z.number().finite(),
   connectionScore: z.number().finite(),
   graphMass: exploreQueryGraphMassOutputSchema,
+  graphExpansion: exploreQueryGraphExpansionOutputSchema,
   graphDiffusion: exploreQueryGraphDiffusionOutputSchema,
   generated: z.object({
     classifierVersion: z.string().min(1),
@@ -1183,6 +1226,116 @@ const exploreQueryPlanOutputSchema = z.object({
         implements: z.literal(EXPLORE_QUERY_GRAPH_MASS_RELATION_WEIGHTS.implements)
       }).strict()
     }),
+    graphExpansion: z.object({
+      policy: z.literal(EXPLORE_QUERY_GRAPH_EXPANSION_POLICY),
+      reason: z.enum([
+        "no-lexical-candidates",
+        "no-strong-lexical-seeds",
+        "no-reachable-candidates",
+        "completed"
+      ]),
+      applied: z.boolean(),
+      maximumHops: z.literal(EXPLORE_QUERY_GRAPH_EXPANSION_LIMITS.maximumHops),
+      maximumSeedFiles: z.literal(EXPLORE_QUERY_GRAPH_EXPANSION_LIMITS.maximumSeedFiles),
+      maximumSeedSymbols: z.literal(EXPLORE_QUERY_GRAPH_EXPANSION_LIMITS.maximumSeedSymbols),
+      maximumSeedSymbolsPerFile: z.literal(
+        EXPLORE_QUERY_GRAPH_EXPANSION_LIMITS.maximumSeedSymbolsPerFile
+      ),
+      maximumVisitedNodes: z.literal(
+        EXPLORE_QUERY_GRAPH_EXPANSION_LIMITS.maximumVisitedNodes
+      ),
+      maximumVisitedRelationships: z.literal(
+        EXPLORE_QUERY_GRAPH_EXPANSION_LIMITS.maximumVisitedRelationships
+      ),
+      maximumExpandedFiles: z.literal(
+        EXPLORE_QUERY_GRAPH_EXPANSION_LIMITS.maximumExpandedFiles
+      ),
+      maximumExpandedSymbols: z.literal(
+        EXPLORE_QUERY_GRAPH_EXPANSION_LIMITS.maximumExpandedSymbols
+      ),
+      maximumExpandedSymbolsPerFile: z.literal(
+        EXPLORE_QUERY_GRAPH_EXPANSION_LIMITS.maximumExpandedSymbolsPerFile
+      ),
+      minimumRelationWeight: z.literal(
+        EXPLORE_QUERY_GRAPH_EXPANSION_LIMITS.minimumRelationWeight
+      ),
+      relationWeights: z.object({
+        contains: z.literal(EXPLORE_QUERY_GRAPH_MASS_RELATION_WEIGHTS.contains),
+        imports: z.literal(EXPLORE_QUERY_GRAPH_MASS_RELATION_WEIGHTS.imports),
+        exports: z.literal(EXPLORE_QUERY_GRAPH_MASS_RELATION_WEIGHTS.exports),
+        references: z.literal(EXPLORE_QUERY_GRAPH_MASS_RELATION_WEIGHTS.references),
+        calls: z.literal(EXPLORE_QUERY_GRAPH_MASS_RELATION_WEIGHTS.calls),
+        instantiates: z.literal(EXPLORE_QUERY_GRAPH_MASS_RELATION_WEIGHTS.instantiates),
+        overrides: z.literal(EXPLORE_QUERY_GRAPH_MASS_RELATION_WEIGHTS.overrides),
+        routes: z.literal(EXPLORE_QUERY_GRAPH_MASS_RELATION_WEIGHTS.routes),
+        handles: z.literal(EXPLORE_QUERY_GRAPH_MASS_RELATION_WEIGHTS.handles),
+        extends: z.literal(EXPLORE_QUERY_GRAPH_MASS_RELATION_WEIGHTS.extends),
+        implements: z.literal(EXPLORE_QUERY_GRAPH_MASS_RELATION_WEIGHTS.implements)
+      }).strict(),
+      seedFileCount: z.number().int().nonnegative().max(
+        EXPLORE_QUERY_GRAPH_EXPANSION_LIMITS.maximumSeedFiles
+      ),
+      seedSymbolCount: z.number().int().nonnegative().max(
+        EXPLORE_QUERY_GRAPH_EXPANSION_LIMITS.maximumSeedSymbols
+      ),
+      visitedNodeCount: z.number().int().nonnegative().max(
+        EXPLORE_QUERY_GRAPH_EXPANSION_LIMITS.maximumVisitedNodes
+      ),
+      visitedRelationshipCount: z.number().int().nonnegative().max(
+        EXPLORE_QUERY_GRAPH_EXPANSION_LIMITS.maximumVisitedRelationships
+      ),
+      discoveredSymbolCount: z.number().int().nonnegative(),
+      admittedSymbolCount: z.number().int().nonnegative().max(
+        EXPLORE_QUERY_GRAPH_EXPANSION_LIMITS.maximumExpandedSymbols
+      ),
+      admittedFileCount: z.number().int().nonnegative().max(
+        EXPLORE_QUERY_GRAPH_EXPANSION_LIMITS.maximumExpandedFiles
+      ),
+      rejectedExistingFileCount: z.number().int().nonnegative(),
+      rejectedLowValueSymbolCount: z.number().int().nonnegative(),
+      seedFileLimitReached: z.boolean(),
+      seedSymbolLimitReached: z.boolean(),
+      nodeLimitReached: z.boolean(),
+      relationshipLimitReached: z.boolean(),
+      expandedFileLimitReached: z.boolean(),
+      expandedSymbolLimitReached: z.boolean(),
+      candidatesTruncated: z.boolean(),
+      candidates: z.array(z.object({
+        symbolId: z.string().min(1),
+        filePath: z.string().min(1),
+        admitted: z.boolean(),
+        reason: z.enum([
+          "admitted",
+          "existing-candidate-file",
+          "unrequested-low-value-source",
+          "expanded-file-limit",
+          "expanded-symbol-limit",
+          "expanded-symbols-per-file-limit"
+        ]),
+        seedSymbolId: z.string().min(1),
+        seedFilePath: z.string().min(1),
+        hops: z.number().int().positive().max(
+          EXPLORE_QUERY_GRAPH_EXPANSION_LIMITS.maximumHops
+        ),
+        corroboratingSeedFileCount: z.number().int().positive().max(
+          EXPLORE_QUERY_GRAPH_EXPANSION_LIMITS.maximumSeedFiles
+        ),
+        score: z.number().finite().nonnegative().max(
+          EXPLORE_QUERY_GRAPH_EXPANSION_LIMITS.maximumScore
+        ),
+        path: z.array(exploreQueryGraphExpansionPathSegmentOutputSchema).min(1).max(
+          EXPLORE_QUERY_GRAPH_EXPANSION_LIMITS.maximumHops
+        ),
+        sourceRole: z.object({
+          classifierVersion: z.string().min(1),
+          role: z.enum(["production", "test", "icon", "localization"]),
+          evidence: z.array(z.object({
+            kind: z.literal("path"),
+            ruleId: z.string().min(1)
+          })).max(1)
+        })
+      })).max(EXPLORE_QUERY_GRAPH_EXPANSION_LIMITS.maximumReceiptCandidates)
+    }),
     graphDiffusion: z.object({
       policy: z.literal(EXPLORE_QUERY_GRAPH_DIFFUSION_POLICY),
       reason: z.enum([
@@ -1266,6 +1419,13 @@ const exploreQueryPlanOutputSchema = z.object({
   }),
   summary: z.object({
     candidateCount: z.number().int().nonnegative(),
+    lexicalCandidateCount: z.number().int().nonnegative(),
+    expandedCandidateCount: z.number().int().nonnegative().max(
+      EXPLORE_QUERY_GRAPH_EXPANSION_LIMITS.maximumExpandedSymbols
+    ),
+    expandedCandidateFileCount: z.number().int().nonnegative().max(
+      EXPLORE_QUERY_GRAPH_EXPANSION_LIMITS.maximumExpandedFiles
+    ),
     generatedCandidateCount: z.number().int().nonnegative(),
     lowValueCandidateCount: z.number().int().nonnegative(),
     lowValuePenaltyCandidateCount: z.number().int().nonnegative(),

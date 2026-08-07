@@ -1458,7 +1458,7 @@ describe("SymbolLattice MCP server", () => {
           anyOf: [
             {
               properties: {
-                policy: { const: "explore-query-plan-v8" },
+                policy: { const: "explore-query-plan-v9" },
                 queryIntent: {
                   properties: {
                     tests: { type: "boolean" },
@@ -1540,6 +1540,37 @@ describe("SymbolLattice MCP server", () => {
                         relationWeights: { type: "object" }
                       }
                     },
+                    graphExpansion: {
+                      properties: {
+                        policy: { const: "explore-query-graph-expansion-v1" },
+                        reason: {
+                          enum: [
+                            "no-lexical-candidates",
+                            "no-strong-lexical-seeds",
+                            "no-reachable-candidates",
+                            "completed"
+                          ]
+                        },
+                        applied: { type: "boolean" },
+                        maximumHops: { const: 2 },
+                        maximumSeedFiles: { const: 16 },
+                        maximumSeedSymbols: { const: 32 },
+                        maximumSeedSymbolsPerFile: { const: 2 },
+                        maximumVisitedNodes: { const: 1024 },
+                        maximumVisitedRelationships: { const: 4096 },
+                        maximumExpandedFiles: { const: 8 },
+                        maximumExpandedSymbols: { const: 16 },
+                        maximumExpandedSymbolsPerFile: { const: 2 },
+                        minimumRelationWeight: { const: 8 },
+                        seedFileCount: { minimum: 0, maximum: 16 },
+                        seedSymbolCount: { minimum: 0, maximum: 32 },
+                        visitedNodeCount: { minimum: 0, maximum: 1024 },
+                        visitedRelationshipCount: { minimum: 0, maximum: 4096 },
+                        admittedSymbolCount: { minimum: 0, maximum: 16 },
+                        admittedFileCount: { minimum: 0, maximum: 8 },
+                        candidates: { type: "array", maxItems: 16 }
+                      }
+                    },
                     graphDiffusion: {
                       properties: {
                         policy: { const: "explore-query-graph-diffusion-v1" },
@@ -1588,6 +1619,9 @@ describe("SymbolLattice MCP server", () => {
                 },
                 summary: {
                   properties: {
+                    lexicalCandidateCount: { minimum: 0 },
+                    expandedCandidateCount: { minimum: 0 },
+                    expandedCandidateFileCount: { minimum: 0 },
                     generatedCandidateCount: { minimum: 0 },
                     lowValueCandidateCount: { minimum: 0 },
                     lowValuePenaltyCandidateCount: { minimum: 0 },
@@ -1625,6 +1659,23 @@ describe("SymbolLattice MCP server", () => {
                           rankingContribution: { minimum: 0, maximum: 120 },
                           truncated: { type: "boolean" },
                           relationCounts: { type: "object" }
+                        }
+                      },
+                      graphExpansion: {
+                        properties: {
+                          policy: { const: "explore-query-graph-expansion-v1" },
+                          state: { enum: ["lexical", "expanded"] },
+                          seedSymbolId: {
+                            anyOf: [{ type: "string" }, { type: "null" }]
+                          },
+                          seedFilePath: {
+                            anyOf: [{ type: "string" }, { type: "null" }]
+                          },
+                          hops: { minimum: 0, maximum: 2 },
+                          corroboratingSeedFileCount: { minimum: 0, maximum: 16 },
+                          score: { minimum: 0, maximum: 180 },
+                          rankingContribution: { minimum: 0, maximum: 180 },
+                          path: { type: "array", maxItems: 2 }
                         }
                       },
                       graphDiffusion: {

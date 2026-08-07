@@ -865,7 +865,7 @@ describe("SymbolLatticeService", () => {
       sourceAvailability: "not-applicable",
       source: null,
       queryPlan: {
-        policy: "explore-query-plan-v8",
+        policy: "explore-query-plan-v9",
         ranking: {
           graphDiffusion: {
             policy: "explore-query-graph-diffusion-v1",
@@ -994,7 +994,7 @@ describe("SymbolLatticeService", () => {
     const result = await service.explore(projectPath, "orderService");
 
     expect(result.queryPlan).toMatchObject({
-      policy: "explore-query-plan-v8",
+      policy: "explore-query-plan-v9",
       ranking: {
         policy: "explore-query-source-worth-v1",
         generatedSourceWorth: 0.3,
@@ -1002,20 +1002,21 @@ describe("SymbolLatticeService", () => {
         classifierVersion: "generated-evidence-v1"
       },
       summary: {
-        candidateCount: 3,
+        candidateCount: 4,
         generatedCandidateCount: 1,
-        selectedCount: 3,
+        selectedCount: 4,
         selectedGeneratedCount: 1
       }
     });
     expect(result.queryPlan?.selection.map((selection) => selection.symbol.filePath)).toEqual([
       "src/order-service.ts",
+      "src/persistence.ts",
       "src/order-service.generated.ts",
       "src/order-service-adapter.ts"
     ]);
     expect(result.queryPlan?.selection[0]).toMatchObject({
-      score: 642,
-      rankingScore: 642,
+      score: 702,
+      rankingScore: 702,
       graphMass: {
         policy: "explore-query-graph-mass-v1",
         eligibleRelationshipCount: 1,
@@ -1029,7 +1030,7 @@ describe("SymbolLatticeService", () => {
         relationCounts: { calls: 1 }
       }
     });
-    expect(result.queryPlan?.selection[1]).toMatchObject({
+    expect(result.queryPlan?.selection[2]).toMatchObject({
       score: 562.5,
       rankingScore: 168.75,
       sourceWorth: 0.3,
@@ -1070,8 +1071,20 @@ describe("SymbolLatticeService", () => {
     const result = await service.explore(projectPath, "dispatch behavior");
 
     expect(result.queryPlan).toMatchObject({
-      policy: "explore-query-plan-v8",
+      policy: "explore-query-plan-v9",
       ranking: {
+        graphExpansion: {
+          policy: "explore-query-graph-expansion-v1",
+          reason: "completed",
+          applied: true,
+          maximumHops: 2,
+          seedFileCount: 1,
+          seedSymbolCount: 1,
+          discoveredSymbolCount: 2,
+          admittedSymbolCount: 1,
+          admittedFileCount: 1,
+          rejectedExistingFileCount: 1
+        },
         graphDiffusion: {
           policy: "explore-query-graph-diffusion-v1",
           reason: "completed",
@@ -1085,24 +1098,35 @@ describe("SymbolLatticeService", () => {
         }
       },
       summary: {
-        candidateCount: 3,
-        graphDiffusionCandidateCount: 2,
-        graphDiffusionReachedCandidateCount: 1,
-        selectedCount: 3
+        candidateCount: 4,
+        lexicalCandidateCount: 3,
+        expandedCandidateCount: 1,
+        expandedCandidateFileCount: 1,
+        graphDiffusionCandidateCount: 3,
+        graphDiffusionReachedCandidateCount: 2,
+        selectedCount: 4
       }
     });
     expect(result.queryPlan?.selection.map((selection) => selection.symbol.name)).toEqual([
       "dispatch",
+      "runPipeline",
       "dispatchPipeline",
       "dispatchLegacy"
     ]);
-    expect(result.queryPlan?.selection[1]?.graphDiffusion).toMatchObject({
+    expect(result.queryPlan?.selection[1]?.graphExpansion).toMatchObject({
+      policy: "explore-query-graph-expansion-v1",
+      state: "expanded",
+      seedSymbolId: expect.any(String),
+      hops: 1,
+      path: [expect.objectContaining({ kind: "calls", direction: "forward" })]
+    });
+    expect(result.queryPlan?.selection[2]?.graphDiffusion).toMatchObject({
       state: "reached",
       seed: false,
       seedWeight: 0
     });
-    expect(result.queryPlan?.selection[1]?.graphDiffusion.fileMass).toBeGreaterThan(0);
-    expect(result.queryPlan?.selection[2]?.graphDiffusion).toMatchObject({
+    expect(result.queryPlan?.selection[2]?.graphDiffusion.fileMass).toBeGreaterThan(0);
+    expect(result.queryPlan?.selection[3]?.graphDiffusion).toMatchObject({
       state: "outside-subgraph",
       fileMass: 0,
       score: 0
@@ -1128,7 +1152,7 @@ describe("SymbolLatticeService", () => {
     const result = await service.explore(projectPath, "dispatch pipeline");
 
     expect(result.queryPlan).toMatchObject({
-      policy: "explore-query-plan-v8",
+      policy: "explore-query-plan-v9",
       scoreFloor: {
         policy: "explore-query-relative-file-score-floor-v1",
         reason: "relative-floor-applied",
@@ -1178,7 +1202,7 @@ describe("SymbolLatticeService", () => {
     const result = await service.explore(projectPath, "orderService");
 
     expect(result.queryPlan).toMatchObject({
-      policy: "explore-query-plan-v8",
+      policy: "explore-query-plan-v9",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",
@@ -1224,7 +1248,7 @@ describe("SymbolLatticeService", () => {
 
     const general = await service.explore(projectPath, "renderAsset");
     expect(general.queryPlan).toMatchObject({
-      policy: "explore-query-plan-v8",
+      policy: "explore-query-plan-v9",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",
