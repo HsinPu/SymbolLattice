@@ -13,13 +13,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v214";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v215";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v102";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v103";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -119,15 +119,25 @@ export interface CallDispatchAccessEvidence {
   readonly receiverToCallerPath: readonly CallTypeHierarchySegmentEvidence[];
 }
 
-/** Lexical declaration that proves the static receiver type of one Java call. */
-export interface CallReceiverBindingEvidence {
-  readonly policy: "java-source-lexical-binding-v1";
+/** Shared lexical declaration proof for the static receiver type of one Java call. */
+interface CallReceiverBindingEvidenceBase {
   readonly kind: "parameter" | "local";
   readonly name: string;
   readonly type: CallTypeValueEvidence;
   readonly declarationRange: SourceRange;
   readonly scopeRange: SourceRange;
 }
+
+/** Lexical declaration or direct object-creation initializer proving one Java receiver type. */
+export type CallReceiverBindingEvidence = CallReceiverBindingEvidenceBase &
+  (
+    | { readonly policy: "java-source-lexical-binding-v1" }
+    | {
+        readonly policy: "java-source-lexical-binding-v2";
+        readonly typeSource: "object-creation-initializer";
+        readonly initializerRange: SourceRange;
+      }
+  );
 
 /** Project-proven Java method-set and owner selection for a chained return-type dispatch. */
 export interface CallDispatchEvidence {
@@ -1093,10 +1103,11 @@ export interface JavaChainedCallReferenceFact {
 }
 
 /**
- * One explicit Java member invocation through `this`, `super`, or a
- * lexically proven parameter/local declaration. Extraction retains source
- * binding and argument evidence; project resolution still proves the indexed
- * receiver type, hierarchy, method set, overload, and access.
+ * One explicit Java member invocation through `this`, `super`, a lexically
+ * proven parameter/local declaration, or a direct `var = new Type(...)`
+ * initializer. Extraction retains source binding and argument evidence;
+ * project resolution still proves the indexed receiver type, hierarchy,
+ * method set, overload, and access.
  */
 interface JavaMemberCallReferenceBaseFact {
   readonly sourceId: string;
@@ -1118,6 +1129,8 @@ export type JavaMemberCallReferenceFact =
       readonly receiverType: JavaCallTypeReferenceFact;
       readonly receiverBindingRange: SourceRange;
       readonly receiverScopeRange: SourceRange;
+      /** Present only when Java `var` derives its type from one direct object creation. */
+      readonly receiverInitializerRange?: SourceRange;
     });
 
 /** Syntax-only JVM package, import, heritage, and DI-point facts for project resolution. */

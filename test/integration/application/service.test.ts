@@ -3200,6 +3200,156 @@ describe("SymbolLatticeService", () => {
     expect(runnerFacts?.jvmFacts?.javaMemberCallReferences).toHaveLength(4);
   });
 
+  it("infers Java var receivers only from direct object-creation initializers", async () => {
+    const projectPath = await createInlineProject({
+      "src/api/Service.java": [
+        "package api;",
+        "public class Service {",
+        "  public void execute(String value) {}",
+        "}"
+      ].join("\n"),
+      "src/api/Holder.java": [
+        "package api;",
+        "public class Holder<T> {",
+        "  public void execute(String value) {}",
+        "}"
+      ].join("\n"),
+      "src/app/LocalService.java": [
+        "package app;",
+        "public class LocalService {",
+        "  public void execute(String value) {}",
+        "}"
+      ].join("\n"),
+      "src/app/Runner.java": [
+        "package app;",
+        "import api.Service;",
+        "import api.Holder;",
+        "public class Runner {",
+        "  public void run() {",
+        "    var imported = new Service();",
+        "    imported.execute(\"imported\");",
+        "    var qualified = new api.Service();",
+        "    qualified.execute(\"qualified\");",
+        "    var samePackage = new LocalService();",
+        "    samePackage.execute(\"same-package\");",
+        "    var unknown = factory();",
+        "    unknown.execute(\"factory\");",
+        "    before.execute(\"before\");",
+        "    var before = new Service();",
+        "    {",
+        "      var scoped = new Service();",
+        "      scoped.execute(\"scoped\");",
+        "    }",
+        "    scoped.execute(\"outside\");",
+        "    var generic = new Holder<Service>();",
+        "    generic.execute(\"generic\");",
+        "  }",
+        "  private Service factory() { return new Service(); }",
+        "}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+
+    const snapshot = graphStore.getSnapshot(projectPath);
+    const symbol = (qualifiedName: string) =>
+      snapshot.symbols.find((candidate) => candidate.qualifiedName === qualifiedName);
+    const memberCallAt = (line: number) =>
+      snapshot.edges.find(
+        (edge) =>
+          edge.kind === "calls" &&
+          edge.filePath === "src/app/Runner.java" &&
+          edge.range.start.line === line
+      );
+    const serviceId = symbol("src/api/Service.java#Service")?.id;
+    const localServiceId = symbol("src/app/LocalService.java#LocalService")?.id;
+
+    expect(memberCallAt(7)).toEqual(
+      expect.objectContaining({
+        targetId: symbol("src/api/Service.java#Service.execute")?.id,
+        evidence: expect.objectContaining({
+          callDispatch: expect.objectContaining({
+            invocationKind: "local",
+            receiverTypeSymbolId: serviceId,
+            receiverBinding: expect.objectContaining({
+              policy: "java-source-lexical-binding-v2",
+              kind: "local",
+              name: "imported",
+              typeSource: "object-creation-initializer",
+              declarationRange: expect.objectContaining({
+                start: expect.objectContaining({ line: 6 })
+              }),
+              initializerRange: expect.objectContaining({
+                start: expect.objectContaining({ line: 6 }),
+                end: expect.objectContaining({ line: 6 })
+              }),
+              scopeRange: expect.objectContaining({
+                start: expect.objectContaining({ line: 5 })
+              }),
+              type: expect.objectContaining({
+                canonicalType: "reference:api.Service",
+                proof: "explicit-import",
+                targetSymbolId: serviceId
+              })
+            })
+          })
+        })
+      })
+    );
+    expect(memberCallAt(9)?.evidence?.callDispatch?.receiverBinding).toEqual(
+      expect.objectContaining({
+        policy: "java-source-lexical-binding-v2",
+        name: "qualified",
+        typeSource: "object-creation-initializer",
+        type: expect.objectContaining({ proof: "qualified-type", targetSymbolId: serviceId })
+      })
+    );
+    expect(memberCallAt(11)?.evidence?.callDispatch?.receiverBinding).toEqual(
+      expect.objectContaining({
+        policy: "java-source-lexical-binding-v2",
+        name: "samePackage",
+        typeSource: "object-creation-initializer",
+        type: expect.objectContaining({ proof: "same-package", targetSymbolId: localServiceId })
+      })
+    );
+    expect(memberCallAt(18)?.evidence?.callDispatch?.receiverBinding).toEqual(
+      expect.objectContaining({
+        policy: "java-source-lexical-binding-v2",
+        name: "scoped",
+        typeSource: "object-creation-initializer",
+        scopeRange: expect.objectContaining({
+          start: expect.objectContaining({ line: 16 })
+        })
+      })
+    );
+    expect(memberCallAt(13)).toBeUndefined();
+    expect(memberCallAt(14)).toBeUndefined();
+    expect(memberCallAt(20)).toBeUndefined();
+    expect(memberCallAt(22)).toBeUndefined();
+
+    const runnerFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "src/app/Runner.java");
+    expect(runnerFacts?.jvmFacts?.javaMemberCallReferences).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          receiverKind: "local",
+          receiverName: "imported",
+          receiverType: expect.objectContaining({ syntax: "object-creation" }),
+          receiverInitializerRange: expect.objectContaining({
+            start: expect.objectContaining({ line: 6 })
+          })
+        }),
+        expect.objectContaining({ receiverKind: "local", receiverName: "qualified" }),
+        expect.objectContaining({ receiverKind: "local", receiverName: "samePackage" }),
+        expect.objectContaining({ receiverKind: "local", receiverName: "scoped" })
+      ])
+    );
+    expect(runnerFacts?.jvmFacts?.javaMemberCallReferences).toHaveLength(4);
+  });
+
   it("resolves Java chained overloads only from exact argument type evidence", async () => {
     const projectPath = await createInlineProject({
       "src/model/Input.java": [

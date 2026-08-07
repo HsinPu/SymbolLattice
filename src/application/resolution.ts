@@ -8768,14 +8768,25 @@ function projectJavaCallReferences(input: {
     const receiverBinding: CallReceiverBindingEvidence | undefined =
       (reference.receiverKind === "parameter" || reference.receiverKind === "local") &&
       resolvedBindingType !== null
-        ? {
-            policy: "java-source-lexical-binding-v1",
-            kind: reference.receiverKind,
-            name: reference.receiverName,
-            type: resolvedBindingType.evidence,
-            declarationRange: reference.receiverBindingRange,
-            scopeRange: reference.receiverScopeRange
-          }
+        ? reference.receiverInitializerRange === undefined
+          ? {
+              policy: "java-source-lexical-binding-v1",
+              kind: reference.receiverKind,
+              name: reference.receiverName,
+              type: resolvedBindingType.evidence,
+              declarationRange: reference.receiverBindingRange,
+              scopeRange: reference.receiverScopeRange
+            }
+          : {
+              policy: "java-source-lexical-binding-v2",
+              kind: reference.receiverKind,
+              name: reference.receiverName,
+              type: resolvedBindingType.evidence,
+              typeSource: "object-creation-initializer",
+              declarationRange: reference.receiverBindingRange,
+              initializerRange: reference.receiverInitializerRange,
+              scopeRange: reference.receiverScopeRange
+            }
         : undefined;
     const methodSetPlan = javaMethodSetPlan({
       receiverTypeSymbolId,

@@ -1579,6 +1579,7 @@ function staticJavaMemberCallReferences(input: {
     readonly type: JavaCallTypeReferenceFact;
     readonly declarationRange: SourceRange;
     readonly scopeRange: SourceRange;
+    readonly initializerRange?: SourceRange;
   }
 
   type BindingScope = Map<string, ReceiverBinding | null>;
@@ -1631,14 +1632,19 @@ function staticJavaMemberCallReferences(input: {
     scope: BindingScope,
     scopeRange: SourceRange
   ): void {
+    const declarationChildren = directChildren(declaration);
     const typeNodes = directChildren(declaration).filter(
       (child) => child.name === "PrimitiveType" || isJavaDirectTypeName(child)
     );
-    const type =
+    const declaredType =
       typeNodes.length === 1 && typeNodes[0] !== undefined
         ? staticJavaCallTypeReference(input.extraction, typeNodes[0], input.imports, "declaration")
         : null;
-    for (const child of directChildren(declaration)) {
+    const declarators = declarationChildren.filter((child) => child.name === "VariableDeclarator");
+    const isVarDeclaration =
+      declarationChildren.filter((child) => child.name === "var").length === 1 &&
+      declarators.length === 1;
+    for (const child of declarationChildren) {
       if (child.name !== "VariableDeclarator") {
         visit(child);
         continue;
@@ -1649,6 +1655,36 @@ function staticJavaMemberCallReferences(input: {
       const definitions = directChildren(child).filter((candidate) => candidate.name === "Definition");
       const definition = definitions[0];
       const name = definition === undefined ? null : identifierText(input.extraction, definition);
+      const assignments = directChildren(child).filter(
+        (candidate) => candidate.name === "AssignOp" && nodeText(input.extraction, candidate) === "="
+      );
+      const initializerCandidates = directChildren(child).filter(
+        (candidate) => candidate.name === "ObjectCreationExpression"
+      );
+      const initializer = initializerCandidates[0];
+      const initializerChildren = initializer === undefined ? [] : directChildren(initializer);
+      const initializerTypeNodes = initializerChildren.filter(isJavaDirectTypeName);
+      const safeInitializer =
+        isVarDeclaration &&
+        assignments.length === 1 &&
+        initializerCandidates.length === 1 &&
+        initializer !== undefined &&
+        initializerChildren.every(
+          (candidate) => candidate.name !== "TypeArguments" && candidate.name !== "ClassBody"
+        ) &&
+        initializerTypeNodes.length === 1 &&
+        initializerTypeNodes[0] !== undefined
+          ? {
+              type: staticJavaCallTypeReference(
+                input.extraction,
+                initializerTypeNodes[0],
+                input.imports,
+                "object-creation"
+              ),
+              range: rangeFor(lineStarts, initializer.from, initializer.to)
+            }
+          : null;
+      const type = declaredType ?? safeInitializer?.type ?? null;
       if (
         type === null ||
         definitions.length !== 1 ||
@@ -1662,7 +1698,10 @@ function staticJavaMemberCallReferences(input: {
         name,
         type,
         declarationRange: rangeFor(lineStarts, definition.from, definition.to),
-        scopeRange
+        scopeRange,
+        ...(declaredType === null && safeInitializer !== null
+          ? { initializerRange: safeInitializer.range }
+          : {})
       };
       scope.set(name, scope.has(name) ? null : binding);
     }
@@ -1724,6 +1763,9 @@ function staticJavaMemberCallReferences(input: {
               receiverType: binding.type,
               receiverBindingRange: binding.declarationRange,
               receiverScopeRange: binding.scopeRange,
+              ...(binding.initializerRange === undefined
+                ? {}
+                : { receiverInitializerRange: binding.initializerRange }),
               methodName,
               argumentCount: arguments_.length,
               argumentTypes: arguments_.map((argument) =>
