@@ -3062,6 +3062,144 @@ describe("SymbolLatticeService", () => {
     );
   });
 
+  it("resolves lexically bound Java parameter and local receiver calls", async () => {
+    const projectPath = await createInlineProject({
+      "src/api/Base.java": [
+        "package api;",
+        "public class Base {",
+        "  public void inherited(int value) {}",
+        "}"
+      ].join("\n"),
+      "src/api/Service.java": [
+        "package api;",
+        "public class Service extends Base {",
+        "  public void execute(String value) {}",
+        "}"
+      ].join("\n"),
+      "src/app/Runner.java": [
+        "package app;",
+        "import api.Service;",
+        "public class Runner {",
+        "  public void run(Service service) {",
+        "    service.execute(\"parameter\");",
+        "    service.inherited(1);",
+        "    Service local = new Service();",
+        "    local.execute(\"local\");",
+        "    missing.execute(\"missing\");",
+        "    before.execute(\"before\");",
+        "    Service before = new Service();",
+        "    {",
+        "      Service scoped = new Service();",
+        "      scoped.execute(\"scoped\");",
+        "    }",
+        "    scoped.execute(\"outside\");",
+        "  }",
+        "}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+
+    const snapshot = graphStore.getSnapshot(projectPath);
+    const symbol = (qualifiedName: string) =>
+      snapshot.symbols.find((candidate) => candidate.qualifiedName === qualifiedName);
+    const memberCallAt = (line: number) =>
+      snapshot.edges.find(
+        (edge) =>
+          edge.kind === "calls" &&
+          edge.filePath === "src/app/Runner.java" &&
+          edge.range.start.line === line
+      );
+    const serviceId = symbol("src/api/Service.java#Service")?.id;
+    const baseId = symbol("src/api/Base.java#Base")?.id;
+
+    expect(memberCallAt(5)).toEqual(
+      expect.objectContaining({
+        targetId: symbol("src/api/Service.java#Service.execute")?.id,
+        evidence: expect.objectContaining({
+          callDispatch: expect.objectContaining({
+            invocationKind: "parameter",
+            selectionReason: "declared-owner",
+            receiverTypeSymbolId: serviceId,
+            selectedOwnerTypeSymbolId: serviceId,
+            receiverBinding: expect.objectContaining({
+              policy: "java-source-lexical-binding-v1",
+              kind: "parameter",
+              name: "service",
+              declarationRange: expect.objectContaining({
+                start: expect.objectContaining({ line: 4 })
+              }),
+              scopeRange: expect.objectContaining({
+                start: expect.objectContaining({ line: 4 })
+              }),
+              type: expect.objectContaining({
+                canonicalType: "reference:api.Service",
+                proof: "explicit-import",
+                targetSymbolId: serviceId
+              })
+            })
+          })
+        })
+      })
+    );
+    expect(memberCallAt(6)?.evidence?.callDispatch).toEqual(
+      expect.objectContaining({
+        invocationKind: "parameter",
+        selectionReason: "unique-inherited-owner",
+        receiverTypeSymbolId: serviceId,
+        selectedOwnerTypeSymbolId: baseId
+      })
+    );
+    expect(memberCallAt(8)?.evidence?.callDispatch).toEqual(
+      expect.objectContaining({
+        invocationKind: "local",
+        receiverTypeSymbolId: serviceId,
+        receiverBinding: expect.objectContaining({
+          policy: "java-source-lexical-binding-v1",
+          kind: "local",
+          name: "local",
+          declarationRange: expect.objectContaining({
+            start: expect.objectContaining({ line: 7 })
+          }),
+          scopeRange: expect.objectContaining({
+            start: expect.objectContaining({ line: 4 })
+          })
+        })
+      })
+    );
+    expect(memberCallAt(14)?.evidence?.callDispatch).toEqual(
+      expect.objectContaining({
+        invocationKind: "local",
+        receiverBinding: expect.objectContaining({
+          name: "scoped",
+          declarationRange: expect.objectContaining({
+            start: expect.objectContaining({ line: 13 })
+          }),
+          scopeRange: expect.objectContaining({
+            start: expect.objectContaining({ line: 12 })
+          })
+        })
+      })
+    );
+    expect(memberCallAt(9)).toBeUndefined();
+    expect(memberCallAt(10)).toBeUndefined();
+    expect(memberCallAt(16)).toBeUndefined();
+
+    const runnerFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "src/app/Runner.java");
+    expect(runnerFacts?.jvmFacts?.javaMemberCallReferences).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ receiverKind: "parameter", receiverName: "service" }),
+        expect.objectContaining({ receiverKind: "local", receiverName: "local" }),
+        expect.objectContaining({ receiverKind: "local", receiverName: "scoped" })
+      ])
+    );
+    expect(runnerFacts?.jvmFacts?.javaMemberCallReferences).toHaveLength(4);
+  });
+
   it("resolves Java chained overloads only from exact argument type evidence", async () => {
     const projectPath = await createInlineProject({
       "src/model/Input.java": [

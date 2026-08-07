@@ -9,6 +9,7 @@ import {
   type CallArityEvidence,
   type CallDispatchAccessEvidence,
   type CallDispatchEvidence,
+  type CallReceiverBindingEvidence,
   type CallTypeConversionEvidence,
   type CallTypeHierarchySegmentEvidence,
   type CallTypeEvidence,
@@ -7870,9 +7871,16 @@ function javaMethodSetPlan(input: {
   readonly receiverTypeSymbolId: string;
   readonly accessReceiverTypeSymbolId?: string;
   readonly receiverSelectionPath?: readonly GraphEdge[];
+  readonly receiverBinding?: CallReceiverBindingEvidence;
   readonly callerType: JvmResolvedType;
   readonly methodName: string;
-  readonly invocationKind: "expression" | "type-name-static" | "this" | "super";
+  readonly invocationKind:
+    | "expression"
+    | "type-name-static"
+    | "this"
+    | "super"
+    | "parameter"
+    | "local";
   readonly callableDeclarations: readonly JavaCallableDeclarationFact[];
   readonly heritageEdgesBySourceId: ReadonlyMap<string, readonly GraphEdge[]>;
   readonly typesBySymbolId: ReadonlyMap<string, readonly JvmResolvedType[]>;
@@ -8042,6 +8050,9 @@ function javaMethodSetPlan(input: {
                 javaHierarchySegmentEvidence
               )
             }),
+        ...(input.receiverBinding === undefined
+          ? {}
+          : { receiverBinding: input.receiverBinding }),
         selectionReason,
         receiverTypeSymbolId: input.receiverTypeSymbolId,
         selectedOwnerTypeSymbolId,
@@ -8729,10 +8740,23 @@ function projectJavaCallReferences(input: {
       continue;
     }
     const directSuperEdge = directSuperEdges[0];
+    const resolvedBindingType =
+      reference.receiverKind === "parameter" || reference.receiverKind === "local"
+        ? resolveJavaCallType({
+            reference: reference.receiverType,
+            declaringType,
+            sourceFilePath: reference.filePath,
+            types,
+            membershipsByFile,
+            projectEvidence: input.jvmProjectModuleEvidence
+          })
+        : null;
     const receiverTypeSymbolId =
       reference.receiverKind === "this"
         ? declaringType.symbol.id
-        : directSuperEdge?.targetId;
+        : reference.receiverKind === "super"
+          ? directSuperEdge?.targetId
+          : resolvedBindingType?.evidence.targetSymbolId;
     if (receiverTypeSymbolId === null || receiverTypeSymbolId === undefined) {
       continue;
     }
@@ -8741,11 +8765,24 @@ function projectJavaCallReferences(input: {
       continue;
     }
     const receiverSelectionPath = directSuperEdge === undefined ? [] : [directSuperEdge];
+    const receiverBinding: CallReceiverBindingEvidence | undefined =
+      (reference.receiverKind === "parameter" || reference.receiverKind === "local") &&
+      resolvedBindingType !== null
+        ? {
+            policy: "java-source-lexical-binding-v1",
+            kind: reference.receiverKind,
+            name: reference.receiverName,
+            type: resolvedBindingType.evidence,
+            declarationRange: reference.receiverBindingRange,
+            scopeRange: reference.receiverScopeRange
+          }
+        : undefined;
     const methodSetPlan = javaMethodSetPlan({
       receiverTypeSymbolId,
       ...(reference.receiverKind === "super"
         ? { accessReceiverTypeSymbolId: declaringType.symbol.id, receiverSelectionPath }
         : {}),
+      ...(receiverBinding === undefined ? {} : { receiverBinding }),
       callerType: declaringType,
       methodName: reference.methodName,
       invocationKind: reference.receiverKind,
@@ -8779,6 +8816,7 @@ function projectJavaCallReferences(input: {
       continue;
     }
     const configurationPaths = uniqueConfigurationPaths([
+      resolvedBindingType?.configurationPaths ?? [],
       methodPlan.configurationPaths,
       ...methodSetEntry.hierarchyEdges.map((edge) => edge.evidence?.configurationPaths ?? [])
     ]);
@@ -8786,6 +8824,7 @@ function projectJavaCallReferences(input: {
       ...new Set([
         reference.filePath,
         method.filePath,
+        ...(resolvedBindingType?.sourcePaths ?? []),
         ...methodPlan.sourcePaths,
         ...methodSetEntry.hierarchyEdges.flatMap((edge) => [
           edge.filePath,

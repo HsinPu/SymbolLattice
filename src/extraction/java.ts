@@ -1240,6 +1240,16 @@ const JAVA_VALUE_DECLARATION_CONTAINERS = new Set([
   "LambdaParameter"
 ]);
 
+const NESTED_JAVA_CALLABLE_SCOPES = new Set([
+  "ClassDeclaration",
+  "InterfaceDeclaration",
+  "EnumDeclaration",
+  "RecordDeclaration",
+  "MethodDeclaration",
+  "ConstructorDeclaration",
+  "LambdaExpression"
+]);
+
 function staticJavaValueDeclarationNames(
   input: JavaExtractFileFactsInput,
   node: JavaSyntaxNode
@@ -1556,19 +1566,137 @@ function staticJavaMemberCallReferences(input: {
   readonly declaringType: SymbolNode;
   readonly imports: ReadonlyMap<string, string>;
 }): readonly JavaMemberCallReferenceFact[] {
-  if (input.callable.body === null) {
+  const body = input.callable.body;
+  if (body === null) {
     return [];
   }
   const lineStarts = lineStartsFor(input.extraction.sourceText);
   const references: JavaMemberCallReferenceFact[] = [];
 
+  interface ReceiverBinding {
+    readonly kind: "parameter" | "local";
+    readonly name: string;
+    readonly type: JavaCallTypeReferenceFact;
+    readonly declarationRange: SourceRange;
+    readonly scopeRange: SourceRange;
+  }
+
+  type BindingScope = Map<string, ReceiverBinding | null>;
+  const bodyRange = rangeFor(lineStarts, body.from, body.to);
+  const parameterScope: BindingScope = new Map();
+  const parameterLists = directChildren(input.callable.node).filter(
+    (child) => child.name === "FormalParameters"
+  );
+  if (parameterLists.length === 1 && parameterLists[0] !== undefined) {
+    for (const parameter of directChildren(parameterLists[0]).filter(
+      (child) => child.name === "FormalParameter"
+    )) {
+      const typeNodes = directChildren(parameter).filter(
+        (child) => child.name === "PrimitiveType" || isJavaDirectTypeName(child)
+      );
+      const definitions = directChildren(parameter).filter((child) => child.name === "Definition");
+      const definition = definitions[0];
+      const name = definition === undefined ? null : identifierText(input.extraction, definition);
+      const type =
+        typeNodes.length === 1 && typeNodes[0] !== undefined
+          ? staticJavaCallTypeReference(input.extraction, typeNodes[0], input.imports, "declaration")
+          : null;
+      if (definitions.length !== 1 || definition === undefined || name === null || type === null) {
+        continue;
+      }
+      const binding: ReceiverBinding = {
+        kind: "parameter",
+        name,
+        type,
+        declarationRange: rangeFor(lineStarts, definition.from, definition.to),
+        scopeRange: bodyRange
+      };
+      parameterScope.set(name, parameterScope.has(name) ? null : binding);
+    }
+  }
+  const scopes: BindingScope[] = [parameterScope];
+
+  function visibleBinding(name: string): ReceiverBinding | null {
+    for (let index = scopes.length - 1; index >= 0; index -= 1) {
+      const scope = scopes[index]!;
+      if (scope.has(name)) {
+        return scope.get(name) ?? null;
+      }
+    }
+    return null;
+  }
+
+  function addLocalDeclaration(
+    declaration: JavaSyntaxNode,
+    scope: BindingScope,
+    scopeRange: SourceRange
+  ): void {
+    const typeNodes = directChildren(declaration).filter(
+      (child) => child.name === "PrimitiveType" || isJavaDirectTypeName(child)
+    );
+    const type =
+      typeNodes.length === 1 && typeNodes[0] !== undefined
+        ? staticJavaCallTypeReference(input.extraction, typeNodes[0], input.imports, "declaration")
+        : null;
+    for (const child of directChildren(declaration)) {
+      if (child.name !== "VariableDeclarator") {
+        visit(child);
+        continue;
+      }
+      // The binding is not visible in its own initializer, but becomes visible
+      // to later declarators and statements in the same lexical block.
+      visit(child);
+      const definitions = directChildren(child).filter((candidate) => candidate.name === "Definition");
+      const definition = definitions[0];
+      const name = definition === undefined ? null : identifierText(input.extraction, definition);
+      if (
+        type === null ||
+        definitions.length !== 1 ||
+        definition === undefined ||
+        name === null
+      ) {
+        continue;
+      }
+      const binding: ReceiverBinding = {
+        kind: "local",
+        name,
+        type,
+        declarationRange: rangeFor(lineStarts, definition.from, definition.to),
+        scopeRange
+      };
+      scope.set(name, scope.has(name) ? null : binding);
+    }
+  }
+
   function visit(node: JavaSyntaxNode): void {
+    if (node !== body && NESTED_JAVA_CALLABLE_SCOPES.has(node.name)) {
+      return;
+    }
+    if (node.name === "Block" || node.name === "ConstructorBody") {
+      const scope: BindingScope = new Map();
+      const scopeRange = rangeFor(lineStarts, node.from, node.to);
+      scopes.push(scope);
+      for (const child of directChildren(node)) {
+        if (child.name === "LocalVariableDeclaration") {
+          addLocalDeclaration(child, scope, scopeRange);
+        } else {
+          visit(child);
+        }
+      }
+      scopes.pop();
+      return;
+    }
     if (node.name === "MethodInvocation") {
       const methodNode = directChildren(node).find((child) => child.name === "MethodName");
       if (methodNode !== undefined) {
-        const qualifier = input.extraction.sourceText
-          .slice(node.from, methodNode.from)
-          .match(/^\s*(this|super)\s*\.\s*$/u)?.[1] as "this" | "super" | undefined;
+        const receiverPrefix = input.extraction.sourceText.slice(node.from, methodNode.from);
+        const qualifier = receiverPrefix.match(/^\s*(this|super)\s*\.\s*$/u)?.[1] as
+          | "this"
+          | "super"
+          | undefined;
+        const receiverName = receiverPrefix.match(
+          /^\s*([A-Za-z_$][A-Za-z0-9_$]*)\s*\.\s*$/u
+        )?.[1];
         const methodName = identifierText(input.extraction, methodNode);
         const arguments_ = staticJavaArguments(node);
         if (qualifier !== undefined && methodName !== null && arguments_ !== null) {
@@ -1584,6 +1712,26 @@ function staticJavaMemberCallReferences(input: {
             ),
             range: rangeFor(lineStarts, methodNode.from, methodNode.to)
           });
+        } else if (receiverName !== undefined && methodName !== null && arguments_ !== null) {
+          const binding = visibleBinding(receiverName);
+          if (binding !== null) {
+            references.push({
+              sourceId: input.callableSymbol.id,
+              declaringTypeId: input.declaringType.id,
+              filePath: input.extraction.filePath,
+              receiverKind: binding.kind,
+              receiverName,
+              receiverType: binding.type,
+              receiverBindingRange: binding.declarationRange,
+              receiverScopeRange: binding.scopeRange,
+              methodName,
+              argumentCount: arguments_.length,
+              argumentTypes: arguments_.map((argument) =>
+                staticJavaArgumentType(input.extraction, argument, input.imports)
+              ),
+              range: rangeFor(lineStarts, methodNode.from, methodNode.to)
+            });
+          }
         }
       }
     }
@@ -1592,7 +1740,7 @@ function staticJavaMemberCallReferences(input: {
     }
   }
 
-  visit(input.callable.body);
+  visit(body);
   return references;
 }
 

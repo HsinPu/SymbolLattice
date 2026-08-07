@@ -13,13 +13,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v213";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v214";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v101";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v102";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -119,16 +119,34 @@ export interface CallDispatchAccessEvidence {
   readonly receiverToCallerPath: readonly CallTypeHierarchySegmentEvidence[];
 }
 
+/** Lexical declaration that proves the static receiver type of one Java call. */
+export interface CallReceiverBindingEvidence {
+  readonly policy: "java-source-lexical-binding-v1";
+  readonly kind: "parameter" | "local";
+  readonly name: string;
+  readonly type: CallTypeValueEvidence;
+  readonly declarationRange: SourceRange;
+  readonly scopeRange: SourceRange;
+}
+
 /** Project-proven Java method-set and owner selection for a chained return-type dispatch. */
 export interface CallDispatchEvidence {
   readonly selectionPolicy:
     | "java-source-method-set-v2"
     | "java-source-method-set-v3"
     | "java-source-method-set-v4";
-  /** Missing before v0.307; distinguishes expression, TypeName, this, and super dispatch. */
-  readonly invocationKind?: "expression" | "type-name-static" | "this" | "super";
+  /** Missing before v0.307; distinguishes static, explicit, and lexically bound dispatch. */
+  readonly invocationKind?:
+    | "expression"
+    | "type-name-static"
+    | "this"
+    | "super"
+    | "parameter"
+    | "local";
   /** Direct caller-to-receiver proof for explicit `super` dispatch; missing for older receipts. */
   readonly receiverSelectionPath?: readonly CallTypeHierarchySegmentEvidence[];
+  /** Present when a parameter or local declaration proves the receiver type. */
+  readonly receiverBinding?: CallReceiverBindingEvidence;
   readonly selectionReason:
     | "declared-owner"
     | "unique-inherited-owner"
@@ -1075,20 +1093,32 @@ export interface JavaChainedCallReferenceFact {
 }
 
 /**
- * One explicit Java `this.method(...)` or `super.method(...)` invocation.
- * Extraction retains only syntax and argument evidence. Project resolution
- * must still prove the receiver hierarchy, method set, overload, and access.
+ * One explicit Java member invocation through `this`, `super`, or a
+ * lexically proven parameter/local declaration. Extraction retains source
+ * binding and argument evidence; project resolution still proves the indexed
+ * receiver type, hierarchy, method set, overload, and access.
  */
-export interface JavaMemberCallReferenceFact {
+interface JavaMemberCallReferenceBaseFact {
   readonly sourceId: string;
   readonly declaringTypeId: string;
   readonly filePath: string;
-  readonly receiverKind: "this" | "super";
   readonly methodName: string;
   readonly argumentCount: number;
   readonly argumentTypes: readonly (JavaCallTypeReferenceFact | null)[];
   readonly range: SourceRange;
 }
+
+export type JavaMemberCallReferenceFact =
+  | (JavaMemberCallReferenceBaseFact & {
+      readonly receiverKind: "this" | "super";
+    })
+  | (JavaMemberCallReferenceBaseFact & {
+      readonly receiverKind: "parameter" | "local";
+      readonly receiverName: string;
+      readonly receiverType: JavaCallTypeReferenceFact;
+      readonly receiverBindingRange: SourceRange;
+      readonly receiverScopeRange: SourceRange;
+    });
 
 /** Syntax-only JVM package, import, heritage, and DI-point facts for project resolution. */
 export interface JvmFacts {
