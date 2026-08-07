@@ -13,13 +13,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v215";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v216";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v103";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v104";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -119,6 +119,17 @@ export interface CallDispatchAccessEvidence {
   readonly receiverToCallerPath: readonly CallTypeHierarchySegmentEvidence[];
 }
 
+/** Caller-context proof used to admit one Java field as a receiver binding. */
+export interface CallFieldAccessEvidence {
+  readonly policy: "java-source-field-access-v1";
+  readonly visibility: "public" | "protected" | "package" | "private";
+  readonly decision: "declaring-class" | "public" | "same-package" | "protected-subclass";
+  readonly callerTypeSymbolId: string;
+  readonly callerPackageName: string;
+  readonly ownerTypeSymbolId: string;
+  readonly ownerPackageName: string;
+}
+
 /** Shared source declaration proof for the static receiver type of one Java call. */
 interface CallReceiverBindingEvidenceBase {
   readonly kind: "parameter" | "local" | "field" | "this-field";
@@ -128,7 +139,7 @@ interface CallReceiverBindingEvidenceBase {
   readonly scopeRange: SourceRange;
 }
 
-/** Lexical or direct declaring-class field evidence proving one Java receiver type. */
+/** Lexical or bounded project-selected field evidence proving one Java receiver type. */
 export type CallReceiverBindingEvidence =
   | (CallReceiverBindingEvidenceBase &
       { readonly kind: "parameter" | "local" } &
@@ -140,13 +151,26 @@ export type CallReceiverBindingEvidence =
             readonly initializerRange: SourceRange;
           }
       ))
-  | (CallReceiverBindingEvidenceBase & {
-      readonly policy: "java-source-field-binding-v1";
-      readonly kind: "field" | "this-field";
-      readonly declaringTypeSymbolId: string;
-      readonly isStatic: boolean;
-      readonly visibility: "public" | "protected" | "package" | "private";
-    });
+  | (CallReceiverBindingEvidenceBase &
+      {
+        readonly kind: "field" | "this-field";
+        readonly declaringTypeSymbolId: string;
+        readonly isStatic: boolean;
+        readonly visibility: "public" | "protected" | "package" | "private";
+      } &
+      (
+        | { readonly policy: "java-source-field-binding-v1" }
+        | {
+            readonly policy: "java-source-field-binding-v2";
+            readonly selectionReason: "declared-owner" | "nearest-inherited-owner";
+            readonly ownerSelectionPath: readonly CallTypeHierarchySegmentEvidence[];
+            readonly hierarchyBounds: {
+              readonly maximumDepth: number;
+              readonly maximumVisitedTypes: number;
+            };
+            readonly access: CallFieldAccessEvidence;
+          }
+      ));
 
 /** Project-proven Java method-set and owner selection for a chained return-type dispatch. */
 export interface CallDispatchEvidence {
@@ -1158,11 +1182,12 @@ export type JavaMemberCallReferenceFact =
   | (JavaMemberCallReferenceBaseFact & {
       readonly receiverKind: "field" | "this-field";
       readonly receiverName: string;
-      readonly receiverType: JavaCallTypeReferenceFact;
-      readonly receiverBindingRange: SourceRange;
-      readonly receiverScopeRange: SourceRange;
-      readonly receiverFieldStatic: boolean;
-      readonly receiverFieldVisibility: "public" | "protected" | "package" | "private";
+      /** Legacy direct-field facts only; v0.312+ selects the owner during project resolution. */
+      readonly receiverType?: JavaCallTypeReferenceFact;
+      readonly receiverBindingRange?: SourceRange;
+      readonly receiverScopeRange?: SourceRange;
+      readonly receiverFieldStatic?: boolean;
+      readonly receiverFieldVisibility?: "public" | "protected" | "package" | "private";
     });
 
 /** Syntax-only JVM package, import, heritage, and DI-point facts for project resolution. */

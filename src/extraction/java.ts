@@ -1566,7 +1566,6 @@ function staticJavaMemberCallReferences(input: {
   readonly callableSymbol: SymbolNode;
   readonly declaringType: SymbolNode;
   readonly imports: ReadonlyMap<string, string>;
-  readonly fieldDeclarations: readonly JavaFieldDeclarationFact[];
 }): readonly JavaMemberCallReferenceFact[] {
   const body = input.callable.body;
   if (body === null) {
@@ -1630,24 +1629,6 @@ function staticJavaMemberCallReferences(input: {
       }
     }
     return undefined;
-  }
-
-  function visibleField(
-    name: string,
-    receiverKind: "field" | "this-field"
-  ): JavaFieldDeclarationFact | null {
-    const candidates = input.fieldDeclarations.filter((candidate) => candidate.name === name);
-    const candidate = candidates[0];
-    const callableIsStatic = "isStatic" in input.callable && input.callable.isStatic;
-    if (
-      candidates.length !== 1 ||
-      candidate === undefined ||
-      candidate.type === null ||
-      (callableIsStatic && (receiverKind === "this-field" || !candidate.isStatic))
-    ) {
-      return null;
-    }
-    return candidate;
   }
 
   function addLocalDeclaration(
@@ -1763,27 +1744,19 @@ function staticJavaMemberCallReferences(input: {
         const methodName = identifierText(input.extraction, methodNode);
         const arguments_ = staticJavaArguments(node);
         if (explicitFieldName !== undefined && methodName !== null && arguments_ !== null) {
-          const field = visibleField(explicitFieldName, "this-field");
-          if (field !== null && field.type !== null) {
-            references.push({
-              sourceId: input.callableSymbol.id,
-              declaringTypeId: input.declaringType.id,
-              filePath: input.extraction.filePath,
-              receiverKind: "this-field",
-              receiverName: explicitFieldName,
-              receiverType: field.type,
-              receiverBindingRange: field.declarationRange,
-              receiverScopeRange: field.scopeRange,
-              receiverFieldStatic: field.isStatic,
-              receiverFieldVisibility: field.visibility,
-              methodName,
-              argumentCount: arguments_.length,
-              argumentTypes: arguments_.map((argument) =>
-                staticJavaArgumentType(input.extraction, argument, input.imports)
-              ),
-              range: rangeFor(lineStarts, methodNode.from, methodNode.to)
-            });
-          }
+          references.push({
+            sourceId: input.callableSymbol.id,
+            declaringTypeId: input.declaringType.id,
+            filePath: input.extraction.filePath,
+            receiverKind: "this-field",
+            receiverName: explicitFieldName,
+            methodName,
+            argumentCount: arguments_.length,
+            argumentTypes: arguments_.map((argument) =>
+              staticJavaArgumentType(input.extraction, argument, input.imports)
+            ),
+            range: rangeFor(lineStarts, methodNode.from, methodNode.to)
+          });
         } else if (qualifier !== undefined && methodName !== null && arguments_ !== null) {
           references.push({
             sourceId: input.callableSymbol.id,
@@ -1820,27 +1793,19 @@ function staticJavaMemberCallReferences(input: {
               range: rangeFor(lineStarts, methodNode.from, methodNode.to)
             });
           } else if (binding === undefined) {
-            const field = visibleField(receiverName, "field");
-            if (field !== null && field.type !== null) {
-              references.push({
-                sourceId: input.callableSymbol.id,
-                declaringTypeId: input.declaringType.id,
-                filePath: input.extraction.filePath,
-                receiverKind: "field",
-                receiverName,
-                receiverType: field.type,
-                receiverBindingRange: field.declarationRange,
-                receiverScopeRange: field.scopeRange,
-                receiverFieldStatic: field.isStatic,
-                receiverFieldVisibility: field.visibility,
-                methodName,
-                argumentCount: arguments_.length,
-                argumentTypes: arguments_.map((argument) =>
-                  staticJavaArgumentType(input.extraction, argument, input.imports)
-                ),
-                range: rangeFor(lineStarts, methodNode.from, methodNode.to)
-              });
-            }
+            references.push({
+              sourceId: input.callableSymbol.id,
+              declaringTypeId: input.declaringType.id,
+              filePath: input.extraction.filePath,
+              receiverKind: "field",
+              receiverName,
+              methodName,
+              argumentCount: arguments_.length,
+              argumentTypes: arguments_.map((argument) =>
+                staticJavaArgumentType(input.extraction, argument, input.imports)
+              ),
+              range: rangeFor(lineStarts, methodNode.from, methodNode.to)
+            });
           }
         }
       }
@@ -3328,8 +3293,7 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
               callable: methodDeclaration,
               callableSymbol: methodSymbol,
               declaringType: typeSymbol,
-              imports,
-              fieldDeclarations: []
+              imports
             })
           );
         }
@@ -3468,8 +3432,7 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
             callable: constructorDeclaration,
             callableSymbol: constructorSymbol,
             declaringType: classSymbol,
-            imports,
-            fieldDeclarations: classFieldDeclarations
+            imports
           })
         );
       }
@@ -3503,8 +3466,7 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
             callable: methodDeclaration,
             callableSymbol: methodSymbol,
             declaringType: classSymbol,
-            imports,
-            fieldDeclarations: classFieldDeclarations
+            imports
           })
         );
         if (hasJavaOverrideAnnotation(methodDeclaration)) {

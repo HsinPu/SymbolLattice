@@ -9,6 +9,7 @@ import {
   type CallArityEvidence,
   type CallDispatchAccessEvidence,
   type CallDispatchEvidence,
+  type CallFieldAccessEvidence,
   type CallReceiverBindingEvidence,
   type CallTypeConversionEvidence,
   type CallTypeHierarchySegmentEvidence,
@@ -51,6 +52,7 @@ import {
   type JavaCallTypeReferenceFact,
   type JavaCallableDeclarationFact,
   type JavaChainedCallReferenceFact,
+  type JavaFieldDeclarationFact,
   type JavaMemberCallReferenceFact,
   type NestSymbolReference,
   type PendingReference,
@@ -8660,6 +8662,115 @@ function javaCallPlan(input: {
   };
 }
 
+interface JavaFieldSelectionPlan {
+  readonly field: JavaFieldDeclarationFact;
+  readonly ownerType: JvmResolvedType;
+  readonly ownerSelectionPath: readonly GraphEdge[];
+  readonly access: CallFieldAccessEvidence;
+}
+
+function javaFieldSelectionPlan(input: {
+  readonly callerType: JvmResolvedType;
+  readonly receiverKind: "field" | "this-field";
+  readonly fieldName: string;
+  readonly callerIsStatic: boolean;
+  readonly fieldsByOwnerId: ReadonlyMap<string, readonly JavaFieldDeclarationFact[]>;
+  readonly heritageEdgesBySourceId: ReadonlyMap<string, readonly GraphEdge[]>;
+  readonly typesBySymbolId: ReadonlyMap<string, readonly JvmResolvedType[]>;
+  readonly symbolsById: ReadonlyMap<string, SymbolNode>;
+}): JavaFieldSelectionPlan | null {
+  if (input.callerIsStatic && input.receiverKind === "this-field") {
+    return null;
+  }
+  let current = input.callerType;
+  const path: GraphEdge[] = [];
+  const visited = new Set<string>([current.symbol.id]);
+
+  while (true) {
+    const namedFields = (input.fieldsByOwnerId.get(current.symbol.id) ?? []).filter(
+      (candidate) => candidate.name === input.fieldName
+    );
+    if (namedFields.length > 0) {
+      const field = namedFields[0];
+      if (
+        namedFields.length !== 1 ||
+        field === undefined ||
+        field.type === null ||
+        (input.callerIsStatic && !field.isStatic)
+      ) {
+        return null;
+      }
+      const callerPackageName = input.callerType.fact.packageName;
+      const ownerPackageName = current.fact.packageName;
+      let decision: CallFieldAccessEvidence["decision"] | null = null;
+      if (current.symbol.id === input.callerType.symbol.id) {
+        decision = "declaring-class";
+      } else if (field.visibility === "public") {
+        decision = "public";
+      } else if (callerPackageName === ownerPackageName) {
+        const packagePathIsContinuous = [input.callerType.symbol.id, ...path.map((edge) => edge.targetId!)]
+          .every((symbolId) => {
+            const entries = input.typesBySymbolId.get(symbolId) ?? [];
+            return entries.length === 1 && entries[0]?.fact.packageName === ownerPackageName;
+          });
+        if (field.visibility !== "package" || packagePathIsContinuous) {
+          decision = "same-package";
+        }
+      } else if (field.visibility === "protected" && path.length > 0) {
+        decision = "protected-subclass";
+      }
+      if (decision === null) {
+        return null;
+      }
+      return {
+        field,
+        ownerType: current,
+        ownerSelectionPath: path,
+        access: {
+          policy: "java-source-field-access-v1",
+          visibility: field.visibility,
+          decision,
+          callerTypeSymbolId: input.callerType.symbol.id,
+          callerPackageName,
+          ownerTypeSymbolId: current.symbol.id,
+          ownerPackageName
+        }
+      };
+    }
+
+    if (path.length >= JAVA_REFERENCE_HIERARCHY_LIMITS.maximumDepth) {
+      return null;
+    }
+    const superEdges = (input.heritageEdgesBySourceId.get(current.symbol.id) ?? []).filter(
+      (edge) =>
+        edge.kind === "extends" &&
+        edge.targetId !== null &&
+        input.symbolsById.get(edge.targetId)?.kind === "class"
+    );
+    const superEdge = superEdges[0];
+    if (superEdges.length === 0) {
+      return null;
+    }
+    if (superEdges.length !== 1 || superEdge?.targetId === null || superEdge === undefined) {
+      return null;
+    }
+    if (
+      visited.has(superEdge.targetId) ||
+      visited.size >= JAVA_REFERENCE_HIERARCHY_LIMITS.maximumVisitedTypes
+    ) {
+      return null;
+    }
+    const superEntries = input.typesBySymbolId.get(superEdge.targetId) ?? [];
+    const superType = superEntries[0];
+    if (superEntries.length !== 1 || superType === undefined || superType.symbol.kind !== "class") {
+      return null;
+    }
+    path.push(superEdge);
+    visited.add(superEdge.targetId);
+    current = superType;
+  }
+}
+
 function projectJavaCallReferences(input: {
   readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
   readonly symbolsById: ReadonlyMap<string, SymbolNode>;
@@ -8672,6 +8783,7 @@ function projectJavaCallReferences(input: {
   const signatureReferences: JvmCallableSignatureReferenceFact[] = [];
   const chainedReferences: JavaChainedCallReferenceFact[] = [];
   const memberReferences: JavaMemberCallReferenceFact[] = [];
+  const fieldsByOwnerId = new Map<string, JavaFieldDeclarationFact[]>();
 
   for (const [, facts] of [...input.factsByFile.entries()].sort(([left], [right]) =>
     compareStableText(left, right)
@@ -8693,6 +8805,11 @@ function projectJavaCallReferences(input: {
     signatureReferences.push(...(facts.jvmFacts?.callableSignatureReferences ?? []));
     chainedReferences.push(...(facts.jvmFacts?.javaChainedCallReferences ?? []));
     memberReferences.push(...(facts.jvmFacts?.javaMemberCallReferences ?? []));
+    for (const field of facts.jvmFacts?.javaFieldDeclarations ?? []) {
+      const entries = fieldsByOwnerId.get(field.declaringTypeId) ?? [];
+      entries.push(field);
+      fieldsByOwnerId.set(field.declaringTypeId, entries);
+    }
   }
 
   const types = [...typesBySymbolId.values()]
@@ -8742,15 +8859,32 @@ function projectJavaCallReferences(input: {
       continue;
     }
     const directSuperEdge = directSuperEdges[0];
+    const fieldSelection =
+      reference.receiverKind === "field" || reference.receiverKind === "this-field"
+        ? javaFieldSelectionPlan({
+            callerType: declaringType,
+            receiverKind: reference.receiverKind,
+            fieldName: reference.receiverName,
+            callerIsStatic: callerDeclarations[0]!.isStatic,
+            fieldsByOwnerId,
+            heritageEdgesBySourceId,
+            typesBySymbolId,
+            symbolsById: input.symbolsById
+          })
+        : null;
+    const bindingTypeReference =
+      reference.receiverKind === "field" || reference.receiverKind === "this-field"
+        ? fieldSelection?.field.type ?? null
+        : reference.receiverKind === "parameter" || reference.receiverKind === "local"
+          ? reference.receiverType
+          : null;
+    const bindingDeclaringType = fieldSelection?.ownerType ?? declaringType;
     const resolvedBindingType =
-      reference.receiverKind === "parameter" ||
-      reference.receiverKind === "local" ||
-      reference.receiverKind === "field" ||
-      reference.receiverKind === "this-field"
+      bindingTypeReference !== null
         ? resolveJavaCallType({
-            reference: reference.receiverType,
-            declaringType,
-            sourceFilePath: reference.filePath,
+            reference: bindingTypeReference,
+            declaringType: bindingDeclaringType,
+            sourceFilePath: bindingDeclaringType.symbol.filePath,
             types,
             membershipsByFile,
             projectEvidence: input.jvmProjectModuleEvidence
@@ -8773,16 +8907,26 @@ function projectJavaCallReferences(input: {
     let receiverBinding: CallReceiverBindingEvidence | undefined;
     if (resolvedBindingType !== null) {
       if (reference.receiverKind === "field" || reference.receiverKind === "this-field") {
+        if (fieldSelection === null) {
+          continue;
+        }
         receiverBinding = {
-          policy: "java-source-field-binding-v1",
+          policy: "java-source-field-binding-v2",
           kind: reference.receiverKind,
           name: reference.receiverName,
           type: resolvedBindingType.evidence,
-          declarationRange: reference.receiverBindingRange,
-          scopeRange: reference.receiverScopeRange,
-          declaringTypeSymbolId: reference.declaringTypeId,
-          isStatic: reference.receiverFieldStatic,
-          visibility: reference.receiverFieldVisibility
+          declarationRange: fieldSelection.field.declarationRange,
+          scopeRange: fieldSelection.field.scopeRange,
+          declaringTypeSymbolId: fieldSelection.ownerType.symbol.id,
+          isStatic: fieldSelection.field.isStatic,
+          visibility: fieldSelection.field.visibility,
+          selectionReason:
+            fieldSelection.ownerSelectionPath.length === 0
+              ? "declared-owner"
+              : "nearest-inherited-owner",
+          ownerSelectionPath: fieldSelection.ownerSelectionPath.map(javaHierarchySegmentEvidence),
+          hierarchyBounds: JAVA_REFERENCE_HIERARCHY_LIMITS,
+          access: fieldSelection.access
         };
       } else if (reference.receiverKind === "parameter" || reference.receiverKind === "local") {
         receiverBinding =
@@ -8847,6 +8991,9 @@ function projectJavaCallReferences(input: {
     }
     const configurationPaths = uniqueConfigurationPaths([
       resolvedBindingType?.configurationPaths ?? [],
+      ...(fieldSelection?.ownerSelectionPath.map(
+        (edge) => edge.evidence?.configurationPaths ?? []
+      ) ?? []),
       methodPlan.configurationPaths,
       ...methodSetEntry.hierarchyEdges.map((edge) => edge.evidence?.configurationPaths ?? [])
     ]);
@@ -8855,6 +9002,10 @@ function projectJavaCallReferences(input: {
         reference.filePath,
         method.filePath,
         ...(resolvedBindingType?.sourcePaths ?? []),
+        ...(fieldSelection?.ownerSelectionPath.flatMap((edge) => [
+          edge.filePath,
+          ...(edge.evidence?.resolutionPath ?? [])
+        ]) ?? []),
         ...methodPlan.sourcePaths,
         ...methodSetEntry.hierarchyEdges.flatMap((edge) => [
           edge.filePath,
