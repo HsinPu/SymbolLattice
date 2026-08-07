@@ -7880,7 +7880,9 @@ function javaMethodSetPlan(input: {
     | "this"
     | "super"
     | "parameter"
-    | "local";
+    | "local"
+    | "field"
+    | "this-field";
   readonly callableDeclarations: readonly JavaCallableDeclarationFact[];
   readonly heritageEdgesBySourceId: ReadonlyMap<string, readonly GraphEdge[]>;
   readonly typesBySymbolId: ReadonlyMap<string, readonly JvmResolvedType[]>;
@@ -8741,7 +8743,10 @@ function projectJavaCallReferences(input: {
     }
     const directSuperEdge = directSuperEdges[0];
     const resolvedBindingType =
-      reference.receiverKind === "parameter" || reference.receiverKind === "local"
+      reference.receiverKind === "parameter" ||
+      reference.receiverKind === "local" ||
+      reference.receiverKind === "field" ||
+      reference.receiverKind === "this-field"
         ? resolveJavaCallType({
             reference: reference.receiverType,
             declaringType,
@@ -8765,29 +8770,43 @@ function projectJavaCallReferences(input: {
       continue;
     }
     const receiverSelectionPath = directSuperEdge === undefined ? [] : [directSuperEdge];
-    const receiverBinding: CallReceiverBindingEvidence | undefined =
-      (reference.receiverKind === "parameter" || reference.receiverKind === "local") &&
-      resolvedBindingType !== null
-        ? reference.receiverInitializerRange === undefined
-          ? {
-              policy: "java-source-lexical-binding-v1",
-              kind: reference.receiverKind,
-              name: reference.receiverName,
-              type: resolvedBindingType.evidence,
-              declarationRange: reference.receiverBindingRange,
-              scopeRange: reference.receiverScopeRange
-            }
-          : {
-              policy: "java-source-lexical-binding-v2",
-              kind: reference.receiverKind,
-              name: reference.receiverName,
-              type: resolvedBindingType.evidence,
-              typeSource: "object-creation-initializer",
-              declarationRange: reference.receiverBindingRange,
-              initializerRange: reference.receiverInitializerRange,
-              scopeRange: reference.receiverScopeRange
-            }
-        : undefined;
+    let receiverBinding: CallReceiverBindingEvidence | undefined;
+    if (resolvedBindingType !== null) {
+      if (reference.receiverKind === "field" || reference.receiverKind === "this-field") {
+        receiverBinding = {
+          policy: "java-source-field-binding-v1",
+          kind: reference.receiverKind,
+          name: reference.receiverName,
+          type: resolvedBindingType.evidence,
+          declarationRange: reference.receiverBindingRange,
+          scopeRange: reference.receiverScopeRange,
+          declaringTypeSymbolId: reference.declaringTypeId,
+          isStatic: reference.receiverFieldStatic,
+          visibility: reference.receiverFieldVisibility
+        };
+      } else if (reference.receiverKind === "parameter" || reference.receiverKind === "local") {
+        receiverBinding =
+          reference.receiverInitializerRange === undefined
+            ? {
+                policy: "java-source-lexical-binding-v1",
+                kind: reference.receiverKind,
+                name: reference.receiverName,
+                type: resolvedBindingType.evidence,
+                declarationRange: reference.receiverBindingRange,
+                scopeRange: reference.receiverScopeRange
+              }
+            : {
+                policy: "java-source-lexical-binding-v2",
+                kind: reference.receiverKind,
+                name: reference.receiverName,
+                type: resolvedBindingType.evidence,
+                typeSource: "object-creation-initializer",
+                declarationRange: reference.receiverBindingRange,
+                initializerRange: reference.receiverInitializerRange,
+                scopeRange: reference.receiverScopeRange
+              };
+      }
+    }
     const methodSetPlan = javaMethodSetPlan({
       receiverTypeSymbolId,
       ...(reference.receiverKind === "super"

@@ -12,6 +12,7 @@ import {
   type JavaCallTypeReferenceFact,
   type JavaCallableDeclarationFact,
   type JavaChainedCallReferenceFact,
+  type JavaFieldDeclarationFact,
   type JavaMemberCallReferenceFact,
   type PendingReference,
   type ReactNativeFacts,
@@ -1565,6 +1566,7 @@ function staticJavaMemberCallReferences(input: {
   readonly callableSymbol: SymbolNode;
   readonly declaringType: SymbolNode;
   readonly imports: ReadonlyMap<string, string>;
+  readonly fieldDeclarations: readonly JavaFieldDeclarationFact[];
 }): readonly JavaMemberCallReferenceFact[] {
   const body = input.callable.body;
   if (body === null) {
@@ -1602,29 +1604,50 @@ function staticJavaMemberCallReferences(input: {
         typeNodes.length === 1 && typeNodes[0] !== undefined
           ? staticJavaCallTypeReference(input.extraction, typeNodes[0], input.imports, "declaration")
           : null;
-      if (definitions.length !== 1 || definition === undefined || name === null || type === null) {
+      if (definitions.length !== 1 || definition === undefined || name === null) {
         continue;
       }
-      const binding: ReceiverBinding = {
-        kind: "parameter",
-        name,
-        type,
-        declarationRange: rangeFor(lineStarts, definition.from, definition.to),
-        scopeRange: bodyRange
-      };
+      const binding: ReceiverBinding | null =
+        type === null
+          ? null
+          : {
+              kind: "parameter",
+              name,
+              type,
+              declarationRange: rangeFor(lineStarts, definition.from, definition.to),
+              scopeRange: bodyRange
+            };
       parameterScope.set(name, parameterScope.has(name) ? null : binding);
     }
   }
   const scopes: BindingScope[] = [parameterScope];
 
-  function visibleBinding(name: string): ReceiverBinding | null {
+  function visibleBinding(name: string): ReceiverBinding | null | undefined {
     for (let index = scopes.length - 1; index >= 0; index -= 1) {
       const scope = scopes[index]!;
       if (scope.has(name)) {
         return scope.get(name) ?? null;
       }
     }
-    return null;
+    return undefined;
+  }
+
+  function visibleField(
+    name: string,
+    receiverKind: "field" | "this-field"
+  ): JavaFieldDeclarationFact | null {
+    const candidates = input.fieldDeclarations.filter((candidate) => candidate.name === name);
+    const candidate = candidates[0];
+    const callableIsStatic = "isStatic" in input.callable && input.callable.isStatic;
+    if (
+      candidates.length !== 1 ||
+      candidate === undefined ||
+      candidate.type === null ||
+      (callableIsStatic && (receiverKind === "this-field" || !candidate.isStatic))
+    ) {
+      return null;
+    }
+    return candidate;
   }
 
   function addLocalDeclaration(
@@ -1685,24 +1708,22 @@ function staticJavaMemberCallReferences(input: {
             }
           : null;
       const type = declaredType ?? safeInitializer?.type ?? null;
-      if (
-        type === null ||
-        definitions.length !== 1 ||
-        definition === undefined ||
-        name === null
-      ) {
+      if (definitions.length !== 1 || definition === undefined || name === null) {
         continue;
       }
-      const binding: ReceiverBinding = {
-        kind: "local",
-        name,
-        type,
-        declarationRange: rangeFor(lineStarts, definition.from, definition.to),
-        scopeRange,
-        ...(declaredType === null && safeInitializer !== null
-          ? { initializerRange: safeInitializer.range }
-          : {})
-      };
+      const binding: ReceiverBinding | null =
+        type === null
+          ? null
+          : {
+              kind: "local",
+              name,
+              type,
+              declarationRange: rangeFor(lineStarts, definition.from, definition.to),
+              scopeRange,
+              ...(declaredType === null && safeInitializer !== null
+                ? { initializerRange: safeInitializer.range }
+                : {})
+            };
       scope.set(name, scope.has(name) ? null : binding);
     }
   }
@@ -1729,6 +1750,9 @@ function staticJavaMemberCallReferences(input: {
       const methodNode = directChildren(node).find((child) => child.name === "MethodName");
       if (methodNode !== undefined) {
         const receiverPrefix = input.extraction.sourceText.slice(node.from, methodNode.from);
+        const explicitFieldName = receiverPrefix.match(
+          /^\s*this\s*\.\s*([A-Za-z_$][A-Za-z0-9_$]*)\s*\.\s*$/u
+        )?.[1];
         const qualifier = receiverPrefix.match(/^\s*(this|super)\s*\.\s*$/u)?.[1] as
           | "this"
           | "super"
@@ -1738,7 +1762,29 @@ function staticJavaMemberCallReferences(input: {
         )?.[1];
         const methodName = identifierText(input.extraction, methodNode);
         const arguments_ = staticJavaArguments(node);
-        if (qualifier !== undefined && methodName !== null && arguments_ !== null) {
+        if (explicitFieldName !== undefined && methodName !== null && arguments_ !== null) {
+          const field = visibleField(explicitFieldName, "this-field");
+          if (field !== null && field.type !== null) {
+            references.push({
+              sourceId: input.callableSymbol.id,
+              declaringTypeId: input.declaringType.id,
+              filePath: input.extraction.filePath,
+              receiverKind: "this-field",
+              receiverName: explicitFieldName,
+              receiverType: field.type,
+              receiverBindingRange: field.declarationRange,
+              receiverScopeRange: field.scopeRange,
+              receiverFieldStatic: field.isStatic,
+              receiverFieldVisibility: field.visibility,
+              methodName,
+              argumentCount: arguments_.length,
+              argumentTypes: arguments_.map((argument) =>
+                staticJavaArgumentType(input.extraction, argument, input.imports)
+              ),
+              range: rangeFor(lineStarts, methodNode.from, methodNode.to)
+            });
+          }
+        } else if (qualifier !== undefined && methodName !== null && arguments_ !== null) {
           references.push({
             sourceId: input.callableSymbol.id,
             declaringTypeId: input.declaringType.id,
@@ -1753,7 +1799,7 @@ function staticJavaMemberCallReferences(input: {
           });
         } else if (receiverName !== undefined && methodName !== null && arguments_ !== null) {
           const binding = visibleBinding(receiverName);
-          if (binding !== null) {
+          if (binding !== null && binding !== undefined) {
             references.push({
               sourceId: input.callableSymbol.id,
               declaringTypeId: input.declaringType.id,
@@ -1773,6 +1819,28 @@ function staticJavaMemberCallReferences(input: {
               ),
               range: rangeFor(lineStarts, methodNode.from, methodNode.to)
             });
+          } else if (binding === undefined) {
+            const field = visibleField(receiverName, "field");
+            if (field !== null && field.type !== null) {
+              references.push({
+                sourceId: input.callableSymbol.id,
+                declaringTypeId: input.declaringType.id,
+                filePath: input.extraction.filePath,
+                receiverKind: "field",
+                receiverName,
+                receiverType: field.type,
+                receiverBindingRange: field.declarationRange,
+                receiverScopeRange: field.scopeRange,
+                receiverFieldStatic: field.isStatic,
+                receiverFieldVisibility: field.visibility,
+                methodName,
+                argumentCount: arguments_.length,
+                argumentTypes: arguments_.map((argument) =>
+                  staticJavaArgumentType(input.extraction, argument, input.imports)
+                ),
+                range: rangeFor(lineStarts, methodNode.from, methodNode.to)
+              });
+            }
           }
         }
       }
@@ -1784,6 +1852,56 @@ function staticJavaMemberCallReferences(input: {
 
   visit(body);
   return references;
+}
+
+function staticJavaFieldDeclarations(input: {
+  readonly extraction: JavaExtractFileFactsInput;
+  readonly declaration: StaticJavaClass;
+  readonly declaringType: SymbolNode;
+  readonly imports: ReadonlyMap<string, string>;
+}): readonly JavaFieldDeclarationFact[] {
+  const lineStarts = lineStartsFor(input.extraction.sourceText);
+  const scopeRange = rangeFor(
+    lineStarts,
+    input.declaration.node.from,
+    input.declaration.node.to
+  );
+  const fields: JavaFieldDeclarationFact[] = [];
+  for (const field of directChildren(input.declaration.body)) {
+    if (field.name !== "FieldDeclaration") {
+      continue;
+    }
+    const children = directChildren(field);
+    const modifiers = children.find((child) => child.name === "Modifiers");
+    const typeNodes = children.filter(
+      (child) => child.name === "PrimitiveType" || isJavaDirectTypeName(child)
+    );
+    const type =
+      typeNodes.length === 1 && typeNodes[0] !== undefined
+        ? staticJavaCallTypeReference(input.extraction, typeNodes[0], input.imports, "declaration")
+        : null;
+    const isStatic =
+      modifiers !== undefined && directChildren(modifiers).some((child) => child.name === "static");
+    const visibility = staticJavaVisibility(modifiers, false);
+    for (const declarator of children.filter((child) => child.name === "VariableDeclarator")) {
+      const definitions = directChildren(declarator).filter((child) => child.name === "Definition");
+      const definition = definitions[0];
+      const name = definition === undefined ? null : identifierText(input.extraction, definition);
+      if (definitions.length !== 1 || definition === undefined || name === null) {
+        continue;
+      }
+      fields.push({
+        declaringTypeId: input.declaringType.id,
+        name,
+        type,
+        isStatic,
+        visibility,
+        declarationRange: rangeFor(lineStarts, definition.from, definition.to),
+        scopeRange
+      });
+    }
+  }
+  return fields;
 }
 
 function staticJavaTypeParameterNames(
@@ -2735,6 +2853,7 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
   const javaCallableDeclarations: JavaCallableDeclarationFact[] = [];
   const javaChainedCallReferences: JavaChainedCallReferenceFact[] = [];
   const javaMemberCallReferences: JavaMemberCallReferenceFact[] = [];
+  const javaFieldDeclarations: JavaFieldDeclarationFact[] = [];
   const springBootPropertiesValueReferences: SpringBootPropertiesValueReferenceFact[] = [];
   const springBootConfigurationPropertiesPrefixes: SpringBootConfigurationPropertiesPrefixReferenceFact[] = [];
   const reactNativeNativeMethods: ReactNativeFacts["nativeMethods"][number][] = [];
@@ -3209,7 +3328,8 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
               callable: methodDeclaration,
               callableSymbol: methodSymbol,
               declaringType: typeSymbol,
-              imports
+              imports,
+              fieldDeclarations: []
             })
           );
         }
@@ -3313,6 +3433,13 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
         .filter((candidate) => !overlapsRecord(candidate.node));
       const typeParameters = staticJavaTypeParameterNames(input, classDeclaration.node);
       const shadowedValueNames = staticJavaValueDeclarationNames(input, classDeclaration.body);
+      const classFieldDeclarations = staticJavaFieldDeclarations({
+        extraction: input,
+        declaration: classDeclaration,
+        declaringType: classSymbol,
+        imports
+      });
+      javaFieldDeclarations.push(...classFieldDeclarations);
       for (const constructorDeclaration of constructors) {
         const constructorSymbol = addMethod(classSymbol, constructorDeclaration, imports);
         jvmCallableSignatureReferences.push(
@@ -3341,7 +3468,8 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
             callable: constructorDeclaration,
             callableSymbol: constructorSymbol,
             declaringType: classSymbol,
-            imports
+            imports,
+            fieldDeclarations: classFieldDeclarations
           })
         );
       }
@@ -3375,7 +3503,8 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
             callable: methodDeclaration,
             callableSymbol: methodSymbol,
             declaringType: classSymbol,
-            imports
+            imports,
+            fieldDeclarations: classFieldDeclarations
           })
         );
         if (hasJavaOverrideAnnotation(methodDeclaration)) {
@@ -3585,7 +3714,8 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
       callableSignatureReferences: jvmCallableSignatureReferences,
       javaCallableDeclarations,
       javaChainedCallReferences,
-      javaMemberCallReferences
+      javaMemberCallReferences,
+      javaFieldDeclarations
     },
     springBootPropertiesFacts: {
       valueReferences: springBootPropertiesValueReferences,

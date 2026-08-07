@@ -3350,6 +3350,163 @@ describe("SymbolLatticeService", () => {
     expect(runnerFacts?.jvmFacts?.javaMemberCallReferences).toHaveLength(4);
   });
 
+  it("resolves direct Java field receivers without crossing lexical or static boundaries", async () => {
+    const projectPath = await createInlineProject({
+      "src/api/Service.java": [
+        "package api;",
+        "public class Service {",
+        "  public void execute(String value) {}",
+        "}"
+      ].join("\n"),
+      "src/app/Other.java": [
+        "package app;",
+        "public class Other {",
+        "  public void execute(String value) {}",
+        "}"
+      ].join("\n"),
+      "src/app/Holder.java": [
+        "package app;",
+        "public class Holder<T> {",
+        "  public void execute(String value) {}",
+        "}"
+      ].join("\n"),
+      "src/app/Runner.java": [
+        "package app;",
+        "import api.Service;",
+        "public class Runner {",
+        "  private Service service;",
+        "  private static Service shared;",
+        "  private Holder<Service> generic;",
+        "  public void bare() {",
+        "    service.execute(\"bare\");",
+        "  }",
+        "  public void shadow(Other service) {",
+        "    service.execute(\"parameter\");",
+        "    this.service.execute(\"explicit-field\");",
+        "    later.execute(\"declared-later\");",
+        "    var later = factory();",
+        "    later.execute(\"unsupported-local\");",
+        "    this.later.execute(\"explicit-later\");",
+        "  }",
+        "  public static void staticRun() {",
+        "    shared.execute(\"static-field\");",
+        "    service.execute(\"instance-from-static\");",
+        "    this.service.execute(\"this-from-static\");",
+        "    int shared = 0;",
+        "    shared.execute(\"shadowed-static\");",
+        "  }",
+        "  public void unsupported() {",
+        "    generic.execute(\"generic\");",
+        "  }",
+        "  private Service factory() { return new Service(); }",
+        "  private Service later;",
+        "}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+
+    const snapshot = graphStore.getSnapshot(projectPath);
+    const symbol = (qualifiedName: string) =>
+      snapshot.symbols.find((candidate) => candidate.qualifiedName === qualifiedName);
+    const memberCallAt = (line: number) =>
+      snapshot.edges.find(
+        (edge) =>
+          edge.kind === "calls" &&
+          edge.filePath === "src/app/Runner.java" &&
+          edge.range.start.line === line
+      );
+    const serviceId = symbol("src/api/Service.java#Service")?.id;
+    const otherId = symbol("src/app/Other.java#Other")?.id;
+
+    expect(memberCallAt(8)).toEqual(
+      expect.objectContaining({
+        targetId: symbol("src/api/Service.java#Service.execute")?.id,
+        evidence: expect.objectContaining({
+          callDispatch: expect.objectContaining({
+            invocationKind: "field",
+            receiverTypeSymbolId: serviceId,
+            receiverBinding: expect.objectContaining({
+              policy: "java-source-field-binding-v1",
+              kind: "field",
+              name: "service",
+              isStatic: false,
+              visibility: "private",
+              declaringTypeSymbolId: symbol("src/app/Runner.java#Runner")?.id,
+              declarationRange: expect.objectContaining({
+                start: expect.objectContaining({ line: 4 })
+              }),
+              scopeRange: expect.objectContaining({
+                start: expect.objectContaining({ line: 3 })
+              }),
+              type: expect.objectContaining({
+                canonicalType: "reference:api.Service",
+                proof: "explicit-import",
+                targetSymbolId: serviceId
+              })
+            })
+          })
+        })
+      })
+    );
+    expect(memberCallAt(11)?.evidence?.callDispatch).toEqual(
+      expect.objectContaining({ invocationKind: "parameter", receiverTypeSymbolId: otherId })
+    );
+    expect(memberCallAt(12)?.evidence?.callDispatch).toEqual(
+      expect.objectContaining({
+        invocationKind: "this-field",
+        receiverTypeSymbolId: serviceId,
+        receiverBinding: expect.objectContaining({
+          policy: "java-source-field-binding-v1",
+          kind: "this-field",
+          name: "service"
+        })
+      })
+    );
+    expect(memberCallAt(13)?.evidence?.callDispatch?.receiverBinding).toEqual(
+      expect.objectContaining({ kind: "field", name: "later" })
+    );
+    expect(memberCallAt(16)?.evidence?.callDispatch?.receiverBinding).toEqual(
+      expect.objectContaining({ kind: "this-field", name: "later" })
+    );
+    expect(memberCallAt(19)?.evidence?.callDispatch?.receiverBinding).toEqual(
+      expect.objectContaining({ kind: "field", name: "shared", isStatic: true })
+    );
+    expect(memberCallAt(15)).toBeUndefined();
+    expect(memberCallAt(20)).toBeUndefined();
+    expect(memberCallAt(21)).toBeUndefined();
+    expect(memberCallAt(23)).toBeUndefined();
+    expect(memberCallAt(26)).toBeUndefined();
+
+    const runnerFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "src/app/Runner.java");
+    expect(runnerFacts?.jvmFacts?.javaFieldDeclarations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: "service",
+          isStatic: false,
+          visibility: "private",
+          type: expect.objectContaining({ referenceName: "Service", syntax: "declaration" })
+        }),
+        expect.objectContaining({ name: "shared", isStatic: true }),
+        expect.objectContaining({ name: "generic", type: null }),
+        expect.objectContaining({ name: "later", isStatic: false })
+      ])
+    );
+    expect(runnerFacts?.jvmFacts?.javaMemberCallReferences).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ receiverKind: "field", receiverName: "service" }),
+        expect.objectContaining({ receiverKind: "this-field", receiverName: "service" }),
+        expect.objectContaining({ receiverKind: "field", receiverName: "later" }),
+        expect.objectContaining({ receiverKind: "this-field", receiverName: "later" }),
+        expect.objectContaining({ receiverKind: "field", receiverName: "shared" })
+      ])
+    );
+  });
+
   it("resolves Java chained overloads only from exact argument type evidence", async () => {
     const projectPath = await createInlineProject({
       "src/model/Input.java": [

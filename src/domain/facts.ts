@@ -119,25 +119,34 @@ export interface CallDispatchAccessEvidence {
   readonly receiverToCallerPath: readonly CallTypeHierarchySegmentEvidence[];
 }
 
-/** Shared lexical declaration proof for the static receiver type of one Java call. */
+/** Shared source declaration proof for the static receiver type of one Java call. */
 interface CallReceiverBindingEvidenceBase {
-  readonly kind: "parameter" | "local";
+  readonly kind: "parameter" | "local" | "field" | "this-field";
   readonly name: string;
   readonly type: CallTypeValueEvidence;
   readonly declarationRange: SourceRange;
   readonly scopeRange: SourceRange;
 }
 
-/** Lexical declaration or direct object-creation initializer proving one Java receiver type. */
-export type CallReceiverBindingEvidence = CallReceiverBindingEvidenceBase &
-  (
-    | { readonly policy: "java-source-lexical-binding-v1" }
-    | {
-        readonly policy: "java-source-lexical-binding-v2";
-        readonly typeSource: "object-creation-initializer";
-        readonly initializerRange: SourceRange;
-      }
-  );
+/** Lexical or direct declaring-class field evidence proving one Java receiver type. */
+export type CallReceiverBindingEvidence =
+  | (CallReceiverBindingEvidenceBase &
+      { readonly kind: "parameter" | "local" } &
+      (
+        | { readonly policy: "java-source-lexical-binding-v1" }
+        | {
+            readonly policy: "java-source-lexical-binding-v2";
+            readonly typeSource: "object-creation-initializer";
+            readonly initializerRange: SourceRange;
+          }
+      ))
+  | (CallReceiverBindingEvidenceBase & {
+      readonly policy: "java-source-field-binding-v1";
+      readonly kind: "field" | "this-field";
+      readonly declaringTypeSymbolId: string;
+      readonly isStatic: boolean;
+      readonly visibility: "public" | "protected" | "package" | "private";
+    });
 
 /** Project-proven Java method-set and owner selection for a chained return-type dispatch. */
 export interface CallDispatchEvidence {
@@ -152,10 +161,12 @@ export interface CallDispatchEvidence {
     | "this"
     | "super"
     | "parameter"
-    | "local";
+    | "local"
+    | "field"
+    | "this-field";
   /** Direct caller-to-receiver proof for explicit `super` dispatch; missing for older receipts. */
   readonly receiverSelectionPath?: readonly CallTypeHierarchySegmentEvidence[];
-  /** Present when a parameter or local declaration proves the receiver type. */
+  /** Present when a source declaration proves a parameter, local, or field receiver type. */
   readonly receiverBinding?: CallReceiverBindingEvidence;
   readonly selectionReason:
     | "declared-owner"
@@ -1075,6 +1086,18 @@ export interface JavaCallTypeReferenceFact {
   readonly qualifiedTypePath?: string;
 }
 
+/** One source-declared Java class field retained for receiver resolution. */
+export interface JavaFieldDeclarationFact {
+  readonly declaringTypeId: string;
+  readonly name: string;
+  /** Null preserves unsupported syntax as a name-hiding boundary. */
+  readonly type: JavaCallTypeReferenceFact | null;
+  readonly isStatic: boolean;
+  readonly visibility: "public" | "protected" | "package" | "private";
+  readonly declarationRange: SourceRange;
+  readonly scopeRange: SourceRange;
+}
+
 /**
  * A direct two-call Java chain such as `Factory.create().execute()`. The
  * extractor proves only the syntax and import spelling. Project resolution
@@ -1103,8 +1126,8 @@ export interface JavaChainedCallReferenceFact {
 }
 
 /**
- * One explicit Java member invocation through `this`, `super`, a lexically
- * proven parameter/local declaration, or a direct `var = new Type(...)`
+ * One explicit Java member invocation through `this`, `super`, a source-proven
+ * parameter/local/field declaration, or a direct `var = new Type(...)`
  * initializer. Extraction retains source binding and argument evidence;
  * project resolution still proves the indexed receiver type, hierarchy,
  * method set, overload, and access.
@@ -1131,6 +1154,15 @@ export type JavaMemberCallReferenceFact =
       readonly receiverScopeRange: SourceRange;
       /** Present only when Java `var` derives its type from one direct object creation. */
       readonly receiverInitializerRange?: SourceRange;
+    })
+  | (JavaMemberCallReferenceBaseFact & {
+      readonly receiverKind: "field" | "this-field";
+      readonly receiverName: string;
+      readonly receiverType: JavaCallTypeReferenceFact;
+      readonly receiverBindingRange: SourceRange;
+      readonly receiverScopeRange: SourceRange;
+      readonly receiverFieldStatic: boolean;
+      readonly receiverFieldVisibility: "public" | "protected" | "package" | "private";
     });
 
 /** Syntax-only JVM package, import, heritage, and DI-point facts for project resolution. */
@@ -1147,6 +1179,8 @@ export interface JvmFacts {
   readonly javaChainedCallReferences?: readonly JavaChainedCallReferenceFact[];
   /** Omitted only by artifact facts persisted before v0.308. */
   readonly javaMemberCallReferences?: readonly JavaMemberCallReferenceFact[];
+  /** Omitted only by artifact facts persisted before v0.311. */
+  readonly javaFieldDeclarations?: readonly JavaFieldDeclarationFact[];
 }
 
 /**
