@@ -704,7 +704,12 @@ function sourceRoleClassification(row: FileRow): SourceRoleClassification | null
   if (
     typeof parsed.classifierVersion === "string" &&
     parsed.classifierVersion.length > 0 &&
-    (parsed.role === "production" || parsed.role === "test") &&
+    (
+      parsed.role === "production" ||
+      parsed.role === "test" ||
+      parsed.role === "icon" ||
+      parsed.role === "localization"
+    ) &&
     Array.isArray(parsed.evidence)
   ) {
     return parsed;

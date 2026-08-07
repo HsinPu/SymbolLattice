@@ -1,7 +1,7 @@
 /** Changes whenever a path rule changes the persisted source-role verdict. */
-export const SOURCE_ROLE_CLASSIFIER_VERSION = "source-role-evidence-v1";
+export const SOURCE_ROLE_CLASSIFIER_VERSION = "source-role-evidence-v2";
 
-export type SourceRole = "production" | "test";
+export type SourceRole = "production" | "test" | "icon" | "localization";
 
 export interface SourceRoleEvidence {
   readonly kind: "path";
@@ -44,14 +44,38 @@ const TEST_PATH_RULES: readonly PathRule[] = [
   { ruleId: "source-role.path.swift-test-class", pattern: /Tests\.swift$/u }
 ];
 
+const AUXILIARY_PATH_RULES: readonly (PathRule & {
+  readonly role: Exclude<SourceRole, "production" | "test">;
+})[] = [
+  {
+    role: "icon",
+    ruleId: "source-role.path.icon-token",
+    pattern: /(?:^|[/._-])icons?(?=$|[/._-])/iu
+  },
+  {
+    role: "localization",
+    ruleId: "source-role.path.i18n-token",
+    pattern: /(?:^|[/._-])i18n(?=$|[/._-])/iu
+  }
+];
+
 /** Precision-first path classification; it never excludes the file from the graph. */
 export function classifySourceRole(filePath: string): SourceRoleClassification {
   const normalizedPath = filePath.replaceAll("\\", "/");
-  const rule = TEST_PATH_RULES.find((candidate) => candidate.pattern.test(normalizedPath));
+  const testRule = TEST_PATH_RULES.find((candidate) => candidate.pattern.test(normalizedPath));
+  const auxiliaryRule = testRule === undefined
+    ? AUXILIARY_PATH_RULES.find((candidate) => candidate.pattern.test(normalizedPath))
+    : undefined;
   return {
     classifierVersion: SOURCE_ROLE_CLASSIFIER_VERSION,
-    role: rule === undefined ? "production" : "test",
-    evidence: rule === undefined ? [] : [{ kind: "path", ruleId: rule.ruleId }]
+    role: testRule !== undefined
+      ? "test"
+      : auxiliaryRule?.role ?? "production",
+    evidence: testRule !== undefined
+      ? [{ kind: "path", ruleId: testRule.ruleId }]
+      : auxiliaryRule === undefined
+        ? []
+        : [{ kind: "path", ruleId: auxiliaryRule.ruleId }]
   };
 }
 

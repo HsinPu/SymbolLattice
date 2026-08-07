@@ -1458,14 +1458,21 @@ describe("SymbolLattice MCP server", () => {
           anyOf: [
             {
               properties: {
-                policy: { const: "explore-query-plan-v5" },
+                policy: { const: "explore-query-plan-v6" },
+                queryIntent: {
+                  properties: {
+                    tests: { type: "boolean" },
+                    icons: { type: "boolean" },
+                    localization: { type: "boolean" }
+                  }
+                },
                 filtering: {
                   properties: {
-                    policy: { const: "explore-query-low-value-filter-v1" },
+                    policy: { const: "explore-query-low-value-filter-v2" },
                     reason: {
                       enum: [
-                        "no-unrequested-test-candidates",
-                        "test-intent-exempt",
+                        "no-low-value-candidates",
+                        "all-low-value-candidates-exempt",
                         "insufficient-production-evidence",
                         "sufficient-production-evidence"
                       ]
@@ -1473,6 +1480,12 @@ describe("SymbolLattice MCP server", () => {
                     applied: { type: "boolean" },
                     minimumProductionFileCount: { const: 2 },
                     maximumExcludedFileReceipts: { const: 16 },
+                    lowValueCandidateFileCount: { minimum: 0 },
+                    iconCandidateFileCount: { minimum: 0 },
+                    localizationCandidateFileCount: { minimum: 0 },
+                    excludedLowValueCandidateCount: { minimum: 0 },
+                    excludedIconCandidateCount: { minimum: 0 },
+                    excludedLocalizationCandidateCount: { minimum: 0 },
                     excludedFiles: { type: "array", maxItems: 16 }
                   }
                 },
@@ -1484,6 +1497,10 @@ describe("SymbolLattice MCP server", () => {
                     classifierVersion: { type: "string", minLength: 1 },
                     testSourceWorth: { const: 0.5 },
                     testIntentExempt: { const: true },
+                    iconSourceWorth: { const: 0.5 },
+                    iconIntentExempt: { const: true },
+                    localizationSourceWorth: { const: 0.5 },
+                    localizationIntentExempt: { const: true },
                     sourceRoleClassifierVersion: { type: "string", minLength: 1 },
                     graphMass: {
                       properties: {
@@ -1498,11 +1515,18 @@ describe("SymbolLattice MCP server", () => {
                 summary: {
                   properties: {
                     generatedCandidateCount: { minimum: 0 },
+                    lowValueCandidateCount: { minimum: 0 },
+                    lowValuePenaltyCandidateCount: { minimum: 0 },
                     testCandidateCount: { minimum: 0 },
                     testPenaltyCandidateCount: { minimum: 0 },
+                    iconCandidateCount: { minimum: 0 },
+                    localizationCandidateCount: { minimum: 0 },
                     filteredCandidateCount: { minimum: 0 },
                     selectedGeneratedCount: { minimum: 0, maximum: 8 },
+                    selectedLowValueCount: { minimum: 0, maximum: 8 },
                     selectedTestCount: { minimum: 0, maximum: 8 },
+                    selectedIconCount: { minimum: 0, maximum: 8 },
+                    selectedLocalizationCount: { minimum: 0, maximum: 8 },
                     graphMassCandidateCount: { minimum: 0 },
                     graphMassTruncatedCandidateCount: { minimum: 0 }
                   }
@@ -1541,7 +1565,13 @@ describe("SymbolLattice MCP server", () => {
                           "production-source",
                           "test-source-worth",
                           "test-intent-exempt",
-                          "explicit-test-file-exempt"
+                          "explicit-test-file-exempt",
+                          "icon-source-worth",
+                          "icon-intent-exempt",
+                          "explicit-icon-file-exempt",
+                          "localization-source-worth",
+                          "localization-intent-exempt",
+                          "explicit-localization-file-exempt"
                         ]
                       }
                     }

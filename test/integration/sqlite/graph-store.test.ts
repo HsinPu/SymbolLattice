@@ -582,15 +582,35 @@ describe("SqliteGraphStore", () => {
     const store = new SqliteGraphStore();
     const graphSnapshot: GraphSnapshot = {
       ...snapshot([symbol("test-source", "orderService")]),
-      files: [{
-        ...snapshot([]).files[0]!,
-        path: "test/order-service.test.ts",
-        sourceRole: {
-          classifierVersion: "source-role-evidence-v1",
-          role: "test",
-          evidence: [{ kind: "path", ruleId: "source-role.path.javascript-test-suffix" }]
+      files: [
+        {
+          ...snapshot([]).files[0]!,
+          path: "test/order-service.test.ts",
+          sourceRole: {
+            classifierVersion: "source-role-evidence-v2",
+            role: "test",
+            evidence: [{ kind: "path", ruleId: "source-role.path.javascript-test-suffix" }]
+          }
+        },
+        {
+          ...snapshot([]).files[0]!,
+          path: "src/icons/order-icon.ts",
+          sourceRole: {
+            classifierVersion: "source-role-evidence-v2",
+            role: "icon",
+            evidence: [{ kind: "path", ruleId: "source-role.path.icon-token" }]
+          }
+        },
+        {
+          ...snapshot([]).files[0]!,
+          path: "src/i18n/orders.ts",
+          sourceRole: {
+            classifierVersion: "source-role-evidence-v2",
+            role: "localization",
+            evidence: [{ kind: "path", ruleId: "source-role.path.i18n-token" }]
+          }
         }
-      }]
+      ]
     };
 
     store.replaceProjectFacts({
@@ -602,12 +622,14 @@ describe("SqliteGraphStore", () => {
       resolverVersion: "test-resolver-source-role"
     });
 
-    expect(store.getSnapshot(projectPath).files[0]?.sourceRole).toEqual(
-      graphSnapshot.files[0]?.sourceRole
-    );
+    const sourceRolesByPath = (files: GraphSnapshot["files"]) =>
+      Object.fromEntries(files.map((file) => [file.path, file.sourceRole]));
+    const expectedSourceRoles = sourceRolesByPath(graphSnapshot.files);
+    expect(sourceRolesByPath(store.getSnapshot(projectPath).files)).toEqual(expectedSourceRoles);
     const generationId = store.getStatus(projectPath).generationId!;
-    expect(store.getGenerationSnapshotBundle(projectPath, generationId)?.snapshot.files[0]?.sourceRole)
-      .toEqual(graphSnapshot.files[0]?.sourceRole);
+    expect(sourceRolesByPath(
+      store.getGenerationSnapshotBundle(projectPath, generationId)?.snapshot.files ?? []
+    )).toEqual(expectedSourceRoles);
   });
 
   it("refuses every write when configured as a read-only worker store", async () => {

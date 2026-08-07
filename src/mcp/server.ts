@@ -18,6 +18,8 @@ import {
 } from "../application/context-source-allocation.js";
 import {
   EXPLORE_GENERATED_SOURCE_WORTH,
+  EXPLORE_ICON_SOURCE_WORTH,
+  EXPLORE_LOCALIZATION_SOURCE_WORTH,
   EXPLORE_QUERY_GRAPH_MASS_LIMITS,
   EXPLORE_QUERY_GRAPH_MASS_POLICY,
   EXPLORE_QUERY_GRAPH_MASS_RELATION_WEIGHTS,
@@ -974,7 +976,7 @@ const exploreQuerySelectionOutputSchema = z.object({
   sourceWorth: z.number().finite().positive().max(1),
   sourceRole: z.object({
     classifierVersion: z.string().min(1),
-    role: z.enum(["production", "test"]),
+    role: z.enum(["production", "test", "icon", "localization"]),
     evidence: z.array(z.object({
       kind: z.literal("path"),
       ruleId: z.string().min(1)
@@ -991,7 +993,13 @@ const exploreQuerySelectionOutputSchema = z.object({
     "production-source",
     "test-source-worth",
     "test-intent-exempt",
-    "explicit-test-file-exempt"
+    "explicit-test-file-exempt",
+    "icon-source-worth",
+    "icon-intent-exempt",
+    "explicit-icon-file-exempt",
+    "localization-source-worth",
+    "localization-intent-exempt",
+    "explicit-localization-file-exempt"
   ]),
   matchedTerms: z.array(z.string()),
   reasons: z.array(
@@ -1020,13 +1028,15 @@ const exploreQueryPlanOutputSchema = z.object({
   identifierTerms: z.array(z.string()).max(EXPLORE_QUERY_LIMITS.maximumIdentifierTerms),
   queryIntent: z.object({
     tests: z.boolean(),
+    icons: z.boolean(),
+    localization: z.boolean(),
     matchedTerms: z.array(z.string()).max(EXPLORE_QUERY_LIMITS.maximumIdentifierTerms)
   }),
   filtering: z.object({
     policy: z.literal(EXPLORE_QUERY_LOW_VALUE_FILTER_POLICY),
     reason: z.enum([
-      "no-unrequested-test-candidates",
-      "test-intent-exempt",
+      "no-low-value-candidates",
+      "all-low-value-candidates-exempt",
       "insufficient-production-evidence",
       "sufficient-production-evidence"
     ]),
@@ -1039,19 +1049,32 @@ const exploreQueryPlanOutputSchema = z.object({
     ),
     candidateFileCount: z.number().int().nonnegative(),
     productionCandidateFileCount: z.number().int().nonnegative(),
+    lowValueCandidateFileCount: z.number().int().nonnegative(),
     testCandidateFileCount: z.number().int().nonnegative(),
+    iconCandidateFileCount: z.number().int().nonnegative(),
+    localizationCandidateFileCount: z.number().int().nonnegative(),
     retainedCandidateCount: z.number().int().nonnegative(),
     retainedFileCount: z.number().int().nonnegative(),
+    excludedLowValueCandidateCount: z.number().int().nonnegative(),
+    excludedLowValueFileCount: z.number().int().nonnegative(),
     excludedTestCandidateCount: z.number().int().nonnegative(),
     excludedTestFileCount: z.number().int().nonnegative(),
+    excludedIconCandidateCount: z.number().int().nonnegative(),
+    excludedIconFileCount: z.number().int().nonnegative(),
+    excludedLocalizationCandidateCount: z.number().int().nonnegative(),
+    excludedLocalizationFileCount: z.number().int().nonnegative(),
     excludedFilesTruncated: z.boolean(),
     excludedFiles: z.array(z.object({
       filePath: z.string().min(1),
       candidateCount: z.number().int().positive(),
-      reason: z.literal("test-source-filtered"),
+      reason: z.enum([
+        "test-source-filtered",
+        "icon-source-filtered",
+        "localization-source-filtered"
+      ]),
       sourceRole: z.object({
         classifierVersion: z.string().min(1),
-        role: z.literal("test"),
+        role: z.enum(["test", "icon", "localization"]),
         evidence: z.array(z.object({
           kind: z.literal("path"),
           ruleId: z.string().min(1)
@@ -1066,6 +1089,10 @@ const exploreQueryPlanOutputSchema = z.object({
     classifierVersion: z.string().min(1),
     testSourceWorth: z.literal(EXPLORE_TEST_SOURCE_WORTH),
     testIntentExempt: z.literal(true),
+    iconSourceWorth: z.literal(EXPLORE_ICON_SOURCE_WORTH),
+    iconIntentExempt: z.literal(true),
+    localizationSourceWorth: z.literal(EXPLORE_LOCALIZATION_SOURCE_WORTH),
+    localizationIntentExempt: z.literal(true),
     sourceRoleClassifierVersion: z.string().min(1),
     graphMass: z.object({
       policy: z.literal(EXPLORE_QUERY_GRAPH_MASS_POLICY),
@@ -1098,8 +1125,12 @@ const exploreQueryPlanOutputSchema = z.object({
   summary: z.object({
     candidateCount: z.number().int().nonnegative(),
     generatedCandidateCount: z.number().int().nonnegative(),
+    lowValueCandidateCount: z.number().int().nonnegative(),
+    lowValuePenaltyCandidateCount: z.number().int().nonnegative(),
     testCandidateCount: z.number().int().nonnegative(),
     testPenaltyCandidateCount: z.number().int().nonnegative(),
+    iconCandidateCount: z.number().int().nonnegative(),
+    localizationCandidateCount: z.number().int().nonnegative(),
     filteredCandidateCount: z.number().int().nonnegative(),
     graphMassCandidateCount: z.number().int().nonnegative(),
     graphMassTruncatedCandidateCount: z.number().int().nonnegative(),
@@ -1107,7 +1138,14 @@ const exploreQueryPlanOutputSchema = z.object({
     selectedGeneratedCount: z.number().int().nonnegative().max(
       EXPLORE_QUERY_LIMITS.maximumSymbols
     ),
+    selectedLowValueCount: z.number().int().nonnegative().max(
+      EXPLORE_QUERY_LIMITS.maximumSymbols
+    ),
     selectedTestCount: z.number().int().nonnegative().max(EXPLORE_QUERY_LIMITS.maximumSymbols),
+    selectedIconCount: z.number().int().nonnegative().max(EXPLORE_QUERY_LIMITS.maximumSymbols),
+    selectedLocalizationCount: z.number().int().nonnegative().max(
+      EXPLORE_QUERY_LIMITS.maximumSymbols
+    ),
     selectedFileCount: z.number().int().nonnegative().max(EXPLORE_QUERY_LIMITS.maximumFiles),
     truncated: z.boolean()
   }),
@@ -1867,7 +1905,7 @@ const indexedFileSummaryOutputSchema = z.object({
   }),
   sourceRole: z.object({
     classifierVersion: z.string().min(1),
-    role: z.enum(["production", "test"]),
+    role: z.enum(["production", "test", "icon", "localization"]),
     evidence: z.array(z.object({ kind: z.literal("path"), ruleId: z.string().min(1) })).max(1)
   }),
   declarationCount: z.number().int().nonnegative(),

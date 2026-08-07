@@ -865,7 +865,7 @@ describe("SymbolLatticeService", () => {
       sourceAvailability: "not-applicable",
       source: null,
       queryPlan: {
-        policy: "explore-query-plan-v5",
+        policy: "explore-query-plan-v6",
         fileHints: ["src/api/orders.ts"],
         identifierTerms: ["createorder", "persistorder"],
         summary: {
@@ -970,7 +970,7 @@ describe("SymbolLatticeService", () => {
     const result = await service.explore(projectPath, "orderService");
 
     expect(result.queryPlan).toMatchObject({
-      policy: "explore-query-plan-v5",
+      policy: "explore-query-plan-v6",
       ranking: {
         policy: "explore-query-source-worth-v1",
         generatedSourceWorth: 0.3,
@@ -1041,9 +1041,9 @@ describe("SymbolLatticeService", () => {
     const result = await service.explore(projectPath, "orderService");
 
     expect(result.queryPlan).toMatchObject({
-      policy: "explore-query-plan-v5",
+      policy: "explore-query-plan-v6",
       filtering: {
-        policy: "explore-query-low-value-filter-v1",
+        policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",
         applied: true,
         productionCandidateFileCount: 2,
@@ -1069,6 +1069,58 @@ describe("SymbolLatticeService", () => {
     expect(result.focuses?.map((focus) => focus.source?.text).join("\n")).not.toContain(
       "test-service"
     );
+  });
+
+  it("persists and filters icon and localization sources while honoring role intent", async () => {
+    const projectPath = await createInlineProject({
+      "src/render-service.ts":
+        "export function renderAsset() { return 'production-service'; }\n",
+      "src/render-controller.ts":
+        "export function renderAsset() { return 'production-controller'; }\n",
+      "src/icons/render-asset.ts":
+        "export function renderAsset() { return 'icon-source'; }\n",
+      "src/i18n/render-asset.ts":
+        "export function renderAsset() { return 'localization-source'; }\n"
+    });
+    const service = createService();
+    await service.init({ projectPath });
+
+    const general = await service.explore(projectPath, "renderAsset");
+    expect(general.queryPlan).toMatchObject({
+      policy: "explore-query-plan-v6",
+      filtering: {
+        policy: "explore-query-low-value-filter-v2",
+        reason: "sufficient-production-evidence",
+        excludedIconCandidateCount: 1,
+        excludedLocalizationCandidateCount: 1
+      },
+      summary: {
+        iconCandidateCount: 1,
+        localizationCandidateCount: 1,
+        selectedIconCount: 0,
+        selectedLocalizationCount: 0
+      }
+    });
+    expect(general.focuses?.map((focus) => focus.source?.text).join("\n"))
+      .not.toMatch(/icon-source|localization-source/u);
+
+    const iconIntent = await service.explore(projectPath, "which icons renderAsset");
+    expect(iconIntent.queryPlan?.queryIntent).toMatchObject({
+      icons: true,
+      localization: false,
+      matchedTerms: ["icons"]
+    });
+    expect(iconIntent.focuses?.find((focus) => focus.symbol.filePath.includes("/icons/")))
+      .toMatchObject({
+        sourceRole: {
+          classifierVersion: "source-role-evidence-v2",
+          role: "icon",
+          evidence: [{ ruleId: "source-role.path.icon-token" }]
+        },
+        sourceRoleDecision: "icon-intent-exempt"
+      });
+    expect(iconIntent.focuses?.map((focus) => focus.symbol.filePath))
+      .not.toContain("src/i18n/render-asset.ts");
   });
 
   it("loads an unselected exact path bridge from the same persisted generation", async () => {

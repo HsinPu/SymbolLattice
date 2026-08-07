@@ -23,7 +23,31 @@ describe("source role classification", () => {
   });
 
   it.each([
+    ["src/icons/user-icon.tsx", "icon", "source-role.path.icon-token"],
+    ["src/phosphor-icons.ts", "icon", "source-role.path.icon-token"],
+    ["src/i18n/catalog.ts", "localization", "source-role.path.i18n-token"],
+    ["src/runtime-i18n.ts", "localization", "source-role.path.i18n-token"]
+  ])("persists precision-first auxiliary evidence for %s", (filePath, role, ruleId) => {
+    expect(classifySourceRole(filePath)).toEqual({
+      classifierVersion: SOURCE_ROLE_CLASSIFIER_VERSION,
+      role,
+      evidence: [{ kind: "path", ruleId }]
+    });
+  });
+
+  it("keeps the test role when an icon file is inside a test directory", () => {
+    expect(classifySourceRole("test/icons/user-icon.test.tsx")).toEqual({
+      classifierVersion: SOURCE_ROLE_CLASSIFIER_VERSION,
+      role: "test",
+      evidence: [{ kind: "path", ruleId: "source-role.path.test-directory" }]
+    });
+  });
+
+  it.each([
     "src/contest.ts",
+    "src/iconography.ts",
+    "src/iconButton.tsx",
+    "src/i18next-client.ts",
     "src/specification.ts",
     "src/testing-utils.ts",
     "src/order-service.ts"

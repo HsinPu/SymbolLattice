@@ -8,17 +8,20 @@ import {
   type GeneratedFileClassification,
   type GraphEdge,
   type IndexedFile,
+  type SourceRole,
   type SourceRoleClassification,
   type SymbolNode
 } from "../domain/index.js";
 
-export const EXPLORE_QUERY_PLAN_POLICY = "explore-query-plan-v5" as const;
+export const EXPLORE_QUERY_PLAN_POLICY = "explore-query-plan-v6" as const;
 export const EXPLORE_QUERY_SOURCE_WORTH_POLICY = "explore-query-source-worth-v1" as const;
 export const EXPLORE_QUERY_GRAPH_MASS_POLICY = "explore-query-graph-mass-v1" as const;
 export const EXPLORE_QUERY_LOW_VALUE_FILTER_POLICY =
-  "explore-query-low-value-filter-v1" as const;
+  "explore-query-low-value-filter-v2" as const;
 export const EXPLORE_GENERATED_SOURCE_WORTH = 0.3 as const;
 export const EXPLORE_TEST_SOURCE_WORTH = 0.5 as const;
+export const EXPLORE_ICON_SOURCE_WORTH = 0.5 as const;
+export const EXPLORE_LOCALIZATION_SOURCE_WORTH = 0.5 as const;
 export const EXPLORE_QUERY_LOW_VALUE_FILTER_LIMITS = {
   minimumProductionFileCount: 2,
   maximumExcludedFileReceipts: 16
@@ -92,7 +95,13 @@ export interface ExploreQuerySelection {
     | "production-source"
     | "test-source-worth"
     | "test-intent-exempt"
-    | "explicit-test-file-exempt";
+    | "explicit-test-file-exempt"
+    | "icon-source-worth"
+    | "icon-intent-exempt"
+    | "explicit-icon-file-exempt"
+    | "localization-source-worth"
+    | "localization-intent-exempt"
+    | "explicit-localization-file-exempt";
   readonly matchedTerms: readonly string[];
   readonly reasons: readonly ExploreQuerySelectionReason[];
 }
@@ -100,15 +109,18 @@ export interface ExploreQuerySelection {
 export interface ExploreQueryExcludedFile {
   readonly filePath: string;
   readonly candidateCount: number;
-  readonly reason: "test-source-filtered";
+  readonly reason:
+    | "test-source-filtered"
+    | "icon-source-filtered"
+    | "localization-source-filtered";
   readonly sourceRole: SourceRoleClassification;
 }
 
 export interface ExploreQueryLowValueFilter {
   readonly policy: typeof EXPLORE_QUERY_LOW_VALUE_FILTER_POLICY;
   readonly reason:
-    | "no-unrequested-test-candidates"
-    | "test-intent-exempt"
+    | "no-low-value-candidates"
+    | "all-low-value-candidates-exempt"
     | "insufficient-production-evidence"
     | "sufficient-production-evidence";
   readonly applied: boolean;
@@ -118,11 +130,20 @@ export interface ExploreQueryLowValueFilter {
     typeof EXPLORE_QUERY_LOW_VALUE_FILTER_LIMITS.maximumExcludedFileReceipts;
   readonly candidateFileCount: number;
   readonly productionCandidateFileCount: number;
+  readonly lowValueCandidateFileCount: number;
   readonly testCandidateFileCount: number;
+  readonly iconCandidateFileCount: number;
+  readonly localizationCandidateFileCount: number;
   readonly retainedCandidateCount: number;
   readonly retainedFileCount: number;
+  readonly excludedLowValueCandidateCount: number;
+  readonly excludedLowValueFileCount: number;
   readonly excludedTestCandidateCount: number;
   readonly excludedTestFileCount: number;
+  readonly excludedIconCandidateCount: number;
+  readonly excludedIconFileCount: number;
+  readonly excludedLocalizationCandidateCount: number;
+  readonly excludedLocalizationFileCount: number;
   readonly excludedFilesTruncated: boolean;
   readonly excludedFiles: readonly ExploreQueryExcludedFile[];
 }
@@ -140,6 +161,8 @@ export interface ExploreQueryPlan {
   readonly identifierTerms: readonly string[];
   readonly queryIntent: {
     readonly tests: boolean;
+    readonly icons: boolean;
+    readonly localization: boolean;
     readonly matchedTerms: readonly string[];
   };
   readonly filtering: ExploreQueryLowValueFilter;
@@ -150,6 +173,10 @@ export interface ExploreQueryPlan {
     readonly classifierVersion: string;
     readonly testSourceWorth: typeof EXPLORE_TEST_SOURCE_WORTH;
     readonly testIntentExempt: true;
+    readonly iconSourceWorth: typeof EXPLORE_ICON_SOURCE_WORTH;
+    readonly iconIntentExempt: true;
+    readonly localizationSourceWorth: typeof EXPLORE_LOCALIZATION_SOURCE_WORTH;
+    readonly localizationIntentExempt: true;
     readonly sourceRoleClassifierVersion: string;
     readonly graphMass: {
       readonly policy: typeof EXPLORE_QUERY_GRAPH_MASS_POLICY;
@@ -162,14 +189,21 @@ export interface ExploreQueryPlan {
   readonly summary: {
     readonly candidateCount: number;
     readonly generatedCandidateCount: number;
+    readonly lowValueCandidateCount: number;
+    readonly lowValuePenaltyCandidateCount: number;
     readonly testCandidateCount: number;
     readonly testPenaltyCandidateCount: number;
+    readonly iconCandidateCount: number;
+    readonly localizationCandidateCount: number;
     readonly filteredCandidateCount: number;
     readonly graphMassCandidateCount: number;
     readonly graphMassTruncatedCandidateCount: number;
     readonly selectedCount: number;
     readonly selectedGeneratedCount: number;
+    readonly selectedLowValueCount: number;
     readonly selectedTestCount: number;
+    readonly selectedIconCount: number;
+    readonly selectedLocalizationCount: number;
     readonly selectedFileCount: number;
     readonly truncated: boolean;
   };
@@ -263,6 +297,23 @@ const TEST_INTENT_TERMS = new Set([
   "verifies"
 ]);
 
+const ICON_INTENT_TERMS = new Set(["icon", "icons"]);
+const LOCALIZATION_INTENT_TERMS = new Set([
+  "i18n",
+  "locale",
+  "locales",
+  "localization",
+  "localize",
+  "translation",
+  "translations"
+]);
+
+interface ExploreQueryRoleIntent {
+  readonly tests: boolean;
+  readonly icons: boolean;
+  readonly localization: boolean;
+}
+
 // Match unsafe path-looking tokens too so rejected traversal/absolute hints do
 // not leak back into identifier ranking as misleading `secret.ts` terms.
 const FILE_HINT_EXPRESSION = /(?:[^\s`"'<>]+[\\/])+[^\s`"'<>]+\.[\p{L}\p{N}]+(?::[1-9]\d*(?::\d+)?)?/gu;
@@ -300,6 +351,9 @@ function parseQuery(query: string): {
   readonly fileHints: readonly string[];
   readonly identifierTerms: readonly string[];
   readonly testIntentTerms: readonly string[];
+  readonly iconIntentTerms: readonly string[];
+  readonly localizationIntentTerms: readonly string[];
+  readonly matchedIntentTerms: readonly string[];
 } {
   const trimmed = query.trim();
   const bounded = trimmed.slice(0, EXPLORE_QUERY_LIMITS.maximumQueryCharacters);
@@ -319,11 +373,31 @@ function parseQuery(query: string): {
   });
   const identifierTerms: string[] = [];
   const testIntentTerms: string[] = [];
+  const iconIntentTerms: string[] = [];
+  const localizationIntentTerms: string[] = [];
+  const matchedIntentTerms: string[] = [];
+  const recordIntentTerm = (terms: string[], term: string): void => {
+    if (!terms.includes(term)) terms.push(term);
+    if (
+      !matchedIntentTerms.includes(term) &&
+      matchedIntentTerms.length < EXPLORE_QUERY_LIMITS.maximumIdentifierTerms
+    ) {
+      matchedIntentTerms.push(term);
+    }
+  };
   const seenTerms = new Set<string>();
   for (const match of withoutFiles.matchAll(IDENTIFIER_EXPRESSION)) {
     const term = normalizedIdentifier(match[0]);
     if (TEST_INTENT_TERMS.has(term)) {
-      if (!testIntentTerms.includes(term)) testIntentTerms.push(term);
+      recordIntentTerm(testIntentTerms, term);
+      continue;
+    }
+    if (ICON_INTENT_TERMS.has(term)) {
+      recordIntentTerm(iconIntentTerms, term);
+      continue;
+    }
+    if (LOCALIZATION_INTENT_TERMS.has(term)) {
+      recordIntentTerm(localizationIntentTerms, term);
       continue;
     }
     if (
@@ -350,8 +424,61 @@ function parseQuery(query: string): {
     },
     fileHints,
     identifierTerms,
-    testIntentTerms
+    testIntentTerms,
+    iconIntentTerms,
+    localizationIntentTerms,
+    matchedIntentTerms
   };
+}
+
+function sourceRoleIntentExempt(role: SourceRole, intent: ExploreQueryRoleIntent): boolean {
+  return role === "test"
+    ? intent.tests
+    : role === "icon"
+      ? intent.icons
+      : role === "localization"
+        ? intent.localization
+        : false;
+}
+
+function sourceRoleWorthFor(
+  role: SourceRole,
+  explicitFile: boolean,
+  intent: ExploreQueryRoleIntent
+): number {
+  if (role === "production" || explicitFile || sourceRoleIntentExempt(role, intent)) return 1;
+  return role === "test"
+    ? EXPLORE_TEST_SOURCE_WORTH
+    : role === "icon"
+      ? EXPLORE_ICON_SOURCE_WORTH
+      : EXPLORE_LOCALIZATION_SOURCE_WORTH;
+}
+
+function sourceRoleDecisionFor(
+  role: SourceRole,
+  explicitFile: boolean,
+  intent: ExploreQueryRoleIntent
+): ExploreQuerySelection["sourceRoleDecision"] {
+  if (role === "production") return "production-source";
+  if (role === "test") {
+    return explicitFile
+      ? "explicit-test-file-exempt"
+      : intent.tests
+        ? "test-intent-exempt"
+        : "test-source-worth";
+  }
+  if (role === "icon") {
+    return explicitFile
+      ? "explicit-icon-file-exempt"
+      : intent.icons
+        ? "icon-intent-exempt"
+        : "icon-source-worth";
+  }
+  return explicitFile
+    ? "explicit-localization-file-exempt"
+    : intent.localization
+      ? "localization-intent-exempt"
+      : "localization-source-worth";
 }
 
 function fileName(filePath: string): string {
@@ -375,7 +502,7 @@ function candidateFor(
   symbol: SymbolNode,
   fileHints: readonly string[],
   identifierTerms: readonly string[],
-  testIntent: boolean,
+  roleIntent: ExploreQueryRoleIntent,
   filesByPath: ReadonlyMap<string, IndexedFile>
 ): Candidate | null {
   if (symbol.kind === "file") return null;
@@ -437,8 +564,7 @@ function candidateFor(
   baseScore += new Set(matchedTerms).size * 10;
   const generated = generatedClassificationFor(filesByPath.get(symbol.filePath) ?? {});
   const sourceRole = sourceRoleClassificationFor(filesByPath.get(symbol.filePath) ?? {});
-  const sourceRoleWorth =
-    sourceRole.role !== "test" || explicitFile || testIntent ? 1 : EXPLORE_TEST_SOURCE_WORTH;
+  const sourceRoleWorth = sourceRoleWorthFor(sourceRole.role, explicitFile, roleIntent);
   return {
     symbol,
     explicitFile,
@@ -511,7 +637,7 @@ function compareCandidates(left: Candidate, right: Candidate): number {
 
 function filterLowValueCandidates(
   candidates: readonly Candidate[],
-  testIntent: boolean
+  roleIntent: ExploreQueryRoleIntent
 ): CandidateFilterResult {
   const candidateFiles = new Set(candidates.map((candidate) => candidate.symbol.filePath));
   const productionFiles = new Set(
@@ -528,21 +654,36 @@ function filterLowValueCandidates(
       .filter((candidate) => candidate.sourceRole.role === "test")
       .map((candidate) => candidate.symbol.filePath)
   );
-  const unrequestedTests = candidates.filter(
-    (candidate) => candidate.sourceRole.role === "test" && !candidate.explicitFile
+  const iconFiles = new Set(
+    candidates
+      .filter((candidate) => candidate.sourceRole.role === "icon")
+      .map((candidate) => candidate.symbol.filePath)
+  );
+  const localizationFiles = new Set(
+    candidates
+      .filter((candidate) => candidate.sourceRole.role === "localization")
+      .map((candidate) => candidate.symbol.filePath)
+  );
+  const lowValueCandidates = candidates.filter(
+    (candidate) => candidate.sourceRole.role !== "production"
+  );
+  const unrequestedLowValue = lowValueCandidates.filter(
+    (candidate) =>
+      !candidate.explicitFile &&
+      !sourceRoleIntentExempt(candidate.sourceRole.role, roleIntent)
   );
   const reason: ExploreQueryLowValueFilter["reason"] =
-    unrequestedTests.length === 0
-      ? "no-unrequested-test-candidates"
-      : testIntent
-        ? "test-intent-exempt"
+    lowValueCandidates.length === 0
+      ? "no-low-value-candidates"
+      : unrequestedLowValue.length === 0
+        ? "all-low-value-candidates-exempt"
         : productionFiles.size < EXPLORE_QUERY_LOW_VALUE_FILTER_LIMITS.minimumProductionFileCount
           ? "insufficient-production-evidence"
           : "sufficient-production-evidence";
   const applied = reason === "sufficient-production-evidence";
-  const excluded = applied ? unrequestedTests : [];
-  const excludedIds = new Set(excluded.map((candidate) => candidate.symbol.id));
-  const retained = candidates.filter((candidate) => !excludedIds.has(candidate.symbol.id));
+  const excluded = applied ? unrequestedLowValue : [];
+  const excludedCandidates = new Set(excluded);
+  const retained = candidates.filter((candidate) => !excludedCandidates.has(candidate));
   const excludedByFile = new Map<string, Candidate[]>();
   for (const candidate of excluded) {
     const current = excludedByFile.get(candidate.symbol.filePath) ?? [];
@@ -554,9 +695,15 @@ function filterLowValueCandidates(
     .map(([filePath, fileCandidates]) => ({
       filePath,
       candidateCount: fileCandidates.length,
-      reason: "test-source-filtered" as const,
+      reason: fileCandidates[0]!.sourceRole.role === "test"
+        ? "test-source-filtered" as const
+        : fileCandidates[0]!.sourceRole.role === "icon"
+          ? "icon-source-filtered" as const
+          : "localization-source-filtered" as const,
       sourceRole: fileCandidates[0]!.sourceRole
     }));
+  const excludedFilesForRole = (role: Exclude<SourceRole, "production">): number =>
+    allExcludedFiles.filter((file) => file.sourceRole.role === role).length;
   return {
     retained,
     receipt: {
@@ -569,11 +716,26 @@ function filterLowValueCandidates(
         EXPLORE_QUERY_LOW_VALUE_FILTER_LIMITS.maximumExcludedFileReceipts,
       candidateFileCount: candidateFiles.size,
       productionCandidateFileCount: productionFiles.size,
+      lowValueCandidateFileCount: new Set([
+        ...testFiles,
+        ...iconFiles,
+        ...localizationFiles
+      ]).size,
       testCandidateFileCount: testFiles.size,
+      iconCandidateFileCount: iconFiles.size,
+      localizationCandidateFileCount: localizationFiles.size,
       retainedCandidateCount: retained.length,
       retainedFileCount: new Set(retained.map((candidate) => candidate.symbol.filePath)).size,
-      excludedTestCandidateCount: excluded.length,
-      excludedTestFileCount: allExcludedFiles.length,
+      excludedLowValueCandidateCount: excluded.length,
+      excludedLowValueFileCount: allExcludedFiles.length,
+      excludedTestCandidateCount: excluded.filter((candidate) => candidate.sourceRole.role === "test").length,
+      excludedTestFileCount: excludedFilesForRole("test"),
+      excludedIconCandidateCount: excluded.filter((candidate) => candidate.sourceRole.role === "icon").length,
+      excludedIconFileCount: excludedFilesForRole("icon"),
+      excludedLocalizationCandidateCount: excluded.filter(
+        (candidate) => candidate.sourceRole.role === "localization"
+      ).length,
+      excludedLocalizationFileCount: excludedFilesForRole("localization"),
       excludedFilesTruncated:
         allExcludedFiles.length >
         EXPLORE_QUERY_LOW_VALUE_FILTER_LIMITS.maximumExcludedFileReceipts,
@@ -588,13 +750,18 @@ function filterLowValueCandidates(
 /** Builds a deterministic, bounded graph focus plan without reading live source. */
 export function planExploreQuery(graph: ExploreQueryGraph, query: string): ExploreQueryPlan {
   const parsed = parseQuery(query);
+  const roleIntent: ExploreQueryRoleIntent = {
+    tests: parsed.testIntentTerms.length > 0,
+    icons: parsed.iconIntentTerms.length > 0,
+    localization: parsed.localizationIntentTerms.length > 0
+  };
   const filesByPath = new Map((graph.files ?? []).map((file) => [file.path, file]));
   const candidates = graph.symbols
     .map((symbol) => candidateFor(
       symbol,
       parsed.fileHints,
       parsed.identifierTerms,
-      parsed.testIntentTerms.length > 0,
+      roleIntent,
       filesByPath
     ))
     .filter((candidate): candidate is Candidate => candidate !== null);
@@ -637,7 +804,7 @@ export function planExploreQuery(graph: ExploreQueryGraph, query: string): Explo
     );
   }
 
-  const filtering = filterLowValueCandidates(candidates, parsed.testIntentTerms.length > 0);
+  const filtering = filterLowValueCandidates(candidates, roleIntent);
   const ranked = [...filtering.retained].sort(compareCandidates);
   const selected: Candidate[] = [];
   const selectedFiles = new Set<string>();
@@ -684,13 +851,11 @@ export function planExploreQuery(graph: ExploreQueryGraph, query: string): Explo
         : candidate.generated.generated
           ? "generated-source-worth"
           : "handwritten-source-worth",
-      sourceRoleDecision: candidate.sourceRole.role !== "test"
-        ? "production-source"
-        : candidate.explicitFile
-          ? "explicit-test-file-exempt"
-          : parsed.testIntentTerms.length > 0
-            ? "test-intent-exempt"
-            : "test-source-worth",
+      sourceRoleDecision: sourceRoleDecisionFor(
+        candidate.sourceRole.role,
+        candidate.explicitFile,
+        roleIntent
+      ),
       matchedTerms: candidate.matchedTerms,
       reasons: [
         ...candidate.baseReasons,
@@ -713,8 +878,8 @@ export function planExploreQuery(graph: ExploreQueryGraph, query: string): Explo
     fileHints: parsed.fileHints,
     identifierTerms: parsed.identifierTerms,
     queryIntent: {
-      tests: parsed.testIntentTerms.length > 0,
-      matchedTerms: parsed.testIntentTerms
+      ...roleIntent,
+      matchedTerms: parsed.matchedIntentTerms
     },
     filtering: filtering.receipt,
     ranking: {
@@ -729,6 +894,10 @@ export function planExploreQuery(graph: ExploreQueryGraph, query: string): Explo
           : `mixed:${classifierVersions.join(",")}`,
       testSourceWorth: EXPLORE_TEST_SOURCE_WORTH,
       testIntentExempt: true,
+      iconSourceWorth: EXPLORE_ICON_SOURCE_WORTH,
+      iconIntentExempt: true,
+      localizationSourceWorth: EXPLORE_LOCALIZATION_SOURCE_WORTH,
+      localizationIntentExempt: true,
       sourceRoleClassifierVersion:
         sourceRoleClassifierVersions.length === 1
           ? sourceRoleClassifierVersions[0]!
@@ -746,16 +915,33 @@ export function planExploreQuery(graph: ExploreQueryGraph, query: string): Explo
     summary: {
       candidateCount: candidates.length,
       generatedCandidateCount: candidates.filter((candidate) => candidate.generated.generated).length,
+      lowValueCandidateCount: candidates.filter(
+        (candidate) => candidate.sourceRole.role !== "production"
+      ).length,
+      lowValuePenaltyCandidateCount: candidates.filter(
+        (candidate) => candidate.sourceRole.role !== "production" && candidate.sourceRoleWorth < 1
+      ).length,
       testCandidateCount: candidates.filter((candidate) => candidate.sourceRole.role === "test").length,
       testPenaltyCandidateCount: candidates.filter(
         (candidate) => candidate.sourceRole.role === "test" && candidate.sourceRoleWorth < 1
       ).length,
-      filteredCandidateCount: filtering.receipt.excludedTestCandidateCount,
+      iconCandidateCount: candidates.filter((candidate) => candidate.sourceRole.role === "icon").length,
+      localizationCandidateCount: candidates.filter(
+        (candidate) => candidate.sourceRole.role === "localization"
+      ).length,
+      filteredCandidateCount: filtering.receipt.excludedLowValueCandidateCount,
       graphMassCandidateCount: candidates.filter((candidate) => candidate.graphMass.score > 0).length,
       graphMassTruncatedCandidateCount: candidates.filter((candidate) => candidate.graphMass.truncated).length,
       selectedCount: selection.length,
       selectedGeneratedCount: selection.filter((candidate) => candidate.generated.generated).length,
+      selectedLowValueCount: selection.filter(
+        (candidate) => candidate.sourceRole.role !== "production"
+      ).length,
       selectedTestCount: selection.filter((candidate) => candidate.sourceRole.role === "test").length,
+      selectedIconCount: selection.filter((candidate) => candidate.sourceRole.role === "icon").length,
+      selectedLocalizationCount: selection.filter(
+        (candidate) => candidate.sourceRole.role === "localization"
+      ).length,
       selectedFileCount: selectedFiles.size,
       truncated: selection.length < candidates.length
     },

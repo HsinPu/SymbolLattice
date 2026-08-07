@@ -10,10 +10,11 @@ import {
   SOURCE_ROLE_CLASSIFIER_VERSION,
   type GraphEdge,
   type IndexedFile,
+  type SourceRole,
   type SymbolNode
 } from "../../src/domain/index.js";
 
-function indexedFile(path: string, generated: boolean, role: "production" | "test" = "production"): IndexedFile {
+function indexedFile(path: string, generated: boolean, role: SourceRole = "production"): IndexedFile {
   return {
     path,
     contentHash: `hash:${path}`,
@@ -29,9 +30,11 @@ function indexedFile(path: string, generated: boolean, role: "production" | "tes
     sourceRole: {
       classifierVersion: SOURCE_ROLE_CLASSIFIER_VERSION,
       role,
-      evidence: role === "test"
+      evidence: role === "production"
+        ? []
+        : role === "test"
         ? [{ kind: "path", ruleId: "test.source-role" }]
-        : []
+        : [{ kind: "path", ruleId: `test.source-role.${role}` }]
     }
   };
 }
@@ -95,8 +98,13 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v5",
-      queryIntent: { tests: false, matchedTerms: [] },
+      policy: "explore-query-plan-v6",
+      queryIntent: {
+        tests: false,
+        icons: false,
+        localization: false,
+        matchedTerms: []
+      },
       ranking: {
         testSourceWorth: 0.5,
         testIntentExempt: true,
@@ -127,7 +135,12 @@ describe("explore query planning", () => {
       "verify orderService tests"
     );
 
-    expect(plan.queryIntent).toEqual({ tests: true, matchedTerms: ["verify", "tests"] });
+    expect(plan.queryIntent).toEqual({
+      tests: true,
+      icons: false,
+      localization: false,
+      matchedTerms: ["verify", "tests"]
+    });
     expect(plan.identifierTerms).toEqual(["orderservice"]);
     expect(plan.selection.find((item) => item.symbol.id === "test")).toMatchObject({
       symbol: { id: "test" },
@@ -203,9 +216,9 @@ describe("explore query planning", () => {
     expect(reversed).toEqual(plan);
     expect(plan.selection.map((item) => item.symbol.id)).toEqual(["production-a", "production-b"]);
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v5",
+      policy: "explore-query-plan-v6",
       filtering: {
-        policy: "explore-query-low-value-filter-v1",
+        policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",
         applied: true,
         minimumProductionFileCount: 2,
@@ -310,7 +323,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan.filtering).toMatchObject({
-      reason: "test-intent-exempt",
+      reason: "all-low-value-candidates-exempt",
       applied: false,
       productionCandidateFileCount: 2,
       excludedTestCandidateCount: 0,
@@ -364,6 +377,210 @@ describe("explore query planning", () => {
     });
   });
 
+  it("filters unrequested icon and localization candidates with persisted role receipts", () => {
+    const productionA = symbol({ id: "production-a", name: "renderAsset", filePath: "src/a.ts" });
+    const productionB = symbol({ id: "production-b", name: "renderAsset", filePath: "src/b.ts" });
+    const icon = symbol({ id: "icon", name: "renderAsset", filePath: "src/icons/render-asset.ts" });
+    const localization = symbol({
+      id: "localization",
+      name: "renderAsset",
+      filePath: "src/i18n/render-asset.ts"
+    });
+    const plan = planExploreQuery(
+      {
+        files: [
+          indexedFile(productionA.filePath, false),
+          indexedFile(productionB.filePath, false),
+          indexedFile(icon.filePath, false, "icon"),
+          indexedFile(localization.filePath, false, "localization")
+        ],
+        symbols: [localization, productionB, icon, productionA],
+        edges: []
+      },
+      "renderAsset"
+    );
+
+    expect(plan.selection.map((item) => item.symbol.id)).toEqual(["production-a", "production-b"]);
+    expect(plan).toMatchObject({
+      policy: "explore-query-plan-v6",
+      filtering: {
+        policy: "explore-query-low-value-filter-v2",
+        reason: "sufficient-production-evidence",
+        applied: true,
+        productionCandidateFileCount: 2,
+        lowValueCandidateFileCount: 2,
+        iconCandidateFileCount: 1,
+        localizationCandidateFileCount: 1,
+        excludedLowValueCandidateCount: 2,
+        excludedIconCandidateCount: 1,
+        excludedLocalizationCandidateCount: 1,
+        excludedFiles: [
+          {
+            filePath: "src/i18n/render-asset.ts",
+            reason: "localization-source-filtered",
+            sourceRole: { role: "localization" }
+          },
+          {
+            filePath: "src/icons/render-asset.ts",
+            reason: "icon-source-filtered",
+            sourceRole: { role: "icon" }
+          }
+        ]
+      },
+      summary: {
+        lowValueCandidateCount: 2,
+        iconCandidateCount: 1,
+        localizationCandidateCount: 1,
+        filteredCandidateCount: 2,
+        selectedLowValueCount: 0
+      }
+    });
+  });
+
+  it("exempts only the low-value role named by query intent", () => {
+    const productionA = symbol({ id: "production-a", name: "renderAsset", filePath: "src/a.ts" });
+    const productionB = symbol({ id: "production-b", name: "renderAsset", filePath: "src/b.ts" });
+    const icon = symbol({ id: "icon", name: "renderAsset", filePath: "src/icons/render-asset.ts" });
+    const localization = symbol({
+      id: "localization",
+      name: "renderAsset",
+      filePath: "src/i18n/render-asset.ts"
+    });
+    const plan = planExploreQuery(
+      {
+        files: [
+          indexedFile(productionA.filePath, false),
+          indexedFile(productionB.filePath, false),
+          indexedFile(icon.filePath, false, "icon"),
+          indexedFile(localization.filePath, false, "localization")
+        ],
+        symbols: [localization, icon, productionB, productionA],
+        edges: []
+      },
+      "which icons renderAsset"
+    );
+
+    expect(plan.queryIntent).toEqual({
+      tests: false,
+      icons: true,
+      localization: false,
+      matchedTerms: ["icons"]
+    });
+    expect(plan.selection.find((item) => item.symbol.id === "icon")).toMatchObject({
+      sourceRoleWorth: 1,
+      sourceRoleDecision: "icon-intent-exempt"
+    });
+    expect(plan.selection.map((item) => item.symbol.id)).not.toContain("localization");
+    expect(plan.filtering).toMatchObject({
+      reason: "sufficient-production-evidence",
+      applied: true,
+      excludedLowValueCandidateCount: 1,
+      excludedLocalizationCandidateCount: 1,
+      excludedIconCandidateCount: 0
+    });
+  });
+
+  it("exempts localization intent without retaining unrelated icon candidates", () => {
+    const productionA = symbol({ id: "production-a", name: "renderAsset", filePath: "src/a.ts" });
+    const productionB = symbol({ id: "production-b", name: "renderAsset", filePath: "src/b.ts" });
+    const icon = symbol({ id: "icon", name: "renderAsset", filePath: "src/icons/render-asset.ts" });
+    const localization = symbol({
+      id: "localization",
+      name: "renderAsset",
+      filePath: "src/i18n/render-asset.ts"
+    });
+    const plan = planExploreQuery(
+      {
+        files: [
+          indexedFile(productionA.filePath, false),
+          indexedFile(productionB.filePath, false),
+          indexedFile(icon.filePath, false, "icon"),
+          indexedFile(localization.filePath, false, "localization")
+        ],
+        symbols: [icon, localization, productionB, productionA],
+        edges: []
+      },
+      "which i18n renderAsset"
+    );
+
+    expect(plan.queryIntent).toEqual({
+      tests: false,
+      icons: false,
+      localization: true,
+      matchedTerms: ["i18n"]
+    });
+    expect(plan.selection.find((item) => item.symbol.id === "localization")).toMatchObject({
+      sourceRoleWorth: 1,
+      sourceRoleDecision: "localization-intent-exempt"
+    });
+    expect(plan.selection.map((item) => item.symbol.id)).not.toContain("icon");
+    expect(plan.filtering).toMatchObject({
+      reason: "sufficient-production-evidence",
+      applied: true,
+      excludedLowValueCandidateCount: 1,
+      excludedLocalizationCandidateCount: 0,
+      excludedIconCandidateCount: 1
+    });
+  });
+
+  it("retains an explicitly named localization file while filtering another auxiliary source", () => {
+    const productionA = symbol({ id: "production-a", name: "renderAsset", filePath: "src/a.ts" });
+    const productionB = symbol({ id: "production-b", name: "renderAsset", filePath: "src/b.ts" });
+    const icon = symbol({ id: "icon", name: "renderAsset", filePath: "src/icons/render-asset.ts" });
+    const localization = symbol({
+      id: "localization",
+      name: "renderAsset",
+      filePath: "src/i18n/render-asset.ts"
+    });
+    const plan = planExploreQuery(
+      {
+        files: [
+          indexedFile(productionA.filePath, false),
+          indexedFile(productionB.filePath, false),
+          indexedFile(icon.filePath, false, "icon"),
+          indexedFile(localization.filePath, false, "localization")
+        ],
+        symbols: [icon, localization, productionB, productionA],
+        edges: []
+      },
+      "show src/i18n/render-asset.ts renderAsset"
+    );
+
+    expect(plan.selection[0]).toMatchObject({
+      symbol: { id: "localization" },
+      sourceRoleWorth: 1,
+      sourceRoleDecision: "explicit-localization-file-exempt"
+    });
+    expect(plan.selection.map((item) => item.symbol.id)).not.toContain("icon");
+  });
+
+  it("bounds combined role-intent receipts across test, icon, and localization terms", () => {
+    const plan = planExploreQuery(
+      {
+        symbols: [symbol({ id: "worker", name: "worker", filePath: "src/worker.ts" })],
+        edges: []
+      },
+      "test tests testing verification verify verifies spec specs icon icons i18n locale locales localization localize translation translations worker"
+    );
+
+    expect(plan.queryIntent).toMatchObject({
+      tests: true,
+      icons: true,
+      localization: true
+    });
+    expect(plan.queryIntent.matchedTerms).toEqual([
+      "test",
+      "tests",
+      "testing",
+      "verification",
+      "verify",
+      "verifies",
+      "spec",
+      "specs"
+    ]);
+    expect(plan.identifierTerms).toEqual(["worker"]);
+  });
+
   it("uses bounded exact one-hop graph mass to corroborate an otherwise tied candidate", () => {
     const connected = symbol({
       id: "connected",
@@ -395,7 +612,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v5",
+      policy: "explore-query-plan-v6",
       ranking: {
         graphMass: {
           policy: "explore-query-graph-mass-v1",
@@ -536,7 +753,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v5",
+      policy: "explore-query-plan-v6",
       ranking: {
         policy: "explore-query-source-worth-v1",
         generatedSourceWorth: 0.3,
@@ -745,14 +962,21 @@ describe("explore query planning", () => {
     expect(plan.summary).toEqual({
       candidateCount: 0,
       generatedCandidateCount: 0,
+      lowValueCandidateCount: 0,
+      lowValuePenaltyCandidateCount: 0,
       graphMassCandidateCount: 0,
       graphMassTruncatedCandidateCount: 0,
       selectedCount: 0,
       selectedGeneratedCount: 0,
+      selectedLowValueCount: 0,
       testCandidateCount: 0,
       testPenaltyCandidateCount: 0,
+      iconCandidateCount: 0,
+      localizationCandidateCount: 0,
       filteredCandidateCount: 0,
       selectedTestCount: 0,
+      selectedIconCount: 0,
+      selectedLocalizationCount: 0,
       selectedFileCount: 0,
       truncated: false
     });
