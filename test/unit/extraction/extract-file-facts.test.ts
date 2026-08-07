@@ -478,6 +478,61 @@ describe("source extraction", () => {
     ).toEqual([[kotlinSymbol("src/kotlin-overrides.kt#KotlinChild.run")?.id, "run"]]);
   });
 
+  it("retains Java method and constructor signature type evidence without generic-parameter guesses", () => {
+    const facts = extractFileFacts({
+      filePath: "src/app/Service.java",
+      language: "java",
+      sourceText: [
+        "package app;",
+        "import api.Request;",
+        "import api.Result;",
+        "class Service<T> {",
+        "  Service(Request request, T generic) {}",
+        "  Result execute(Request input, java.util.List<Result[]> values) { return null; }",
+        "  <M> Result transform(M input, Request request) { return null; }",
+        "}",
+        "interface Port { Result execute(Request input); }"
+      ].join("\n")
+    });
+    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
+
+    expect(
+      facts.symbols
+        .filter((symbol) => symbol.kind === "method")
+        .map((symbol) => symbol.qualifiedName)
+        .sort()
+    ).toEqual([
+      "src/app/Service.java#Port.execute",
+      "src/app/Service.java#Service.Service",
+      "src/app/Service.java#Service.execute",
+      "src/app/Service.java#Service.transform"
+    ]);
+    const signatureReferences = facts.jvmFacts?.callableSignatureReferences ?? [];
+    const projectSignatureReferences = signatureReferences.filter((reference) =>
+      ["Request", "Result"].includes(reference.referenceName)
+    );
+    expect(projectSignatureReferences).toHaveLength(8);
+    expect(
+      projectSignatureReferences
+        .map((reference) => [
+          symbolsById.get(reference.sourceId)?.qualifiedName,
+          reference.relationKind,
+          reference.referenceName,
+          reference.importedTypePath
+        ])
+    ).toEqual(expect.arrayContaining([
+      ["src/app/Service.java#Port.execute", "returns", "Result", "api.Result"],
+      ["src/app/Service.java#Port.execute", "accepts", "Request", "api.Request"],
+      ["src/app/Service.java#Service.Service", "accepts", "Request", "api.Request"],
+      ["src/app/Service.java#Service.execute", "returns", "Result", "api.Result"],
+      ["src/app/Service.java#Service.execute", "accepts", "Request", "api.Request"],
+      ["src/app/Service.java#Service.execute", "accepts", "Result", "api.Result"],
+      ["src/app/Service.java#Service.transform", "returns", "Result", "api.Result"],
+      ["src/app/Service.java#Service.transform", "accepts", "Request", "api.Request"]
+    ]));
+    expect(signatureReferences.filter((reference) => ["T", "M"].includes(reference.referenceName))).toEqual([]);
+  });
+
   it("extracts exact same-file Java and Kotlin interface hierarchy evidence", () => {
     const java = extractFileFacts({
       filePath: "src/java-interfaces.java",

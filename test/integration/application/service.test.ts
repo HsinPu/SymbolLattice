@@ -2364,6 +2364,72 @@ describe("SymbolLatticeService", () => {
     }
   });
 
+  it("projects exact Java callable signatures and rejects wildcard or unimported guesses", async () => {
+    const projectPath = await createInlineProject({
+      "src/api/Request.java": "package api; public class Request {}\n",
+      "src/api/Result.java": "package api; public interface Result {}\n",
+      "src/app/Local.java": "package app; public class Local {}\n",
+      "src/app/Service.java": [
+        "package app;",
+        "import api.Request;",
+        "import api.Result;",
+        "public class Service {",
+        "  public Service(Request request) {}",
+        "  public Result execute(Request request) { return null; }",
+        "  public api.Result qualified(api.Request request) { return null; }",
+        "  public Local local(Local value) { return value; }",
+        "}"
+      ].join("\n"),
+      "src/bad/Wildcard.java": [
+        "package bad;",
+        "import api.*;",
+        "public class Wildcard { public Result run(Request request) { return null; } }"
+      ].join("\n"),
+      "src/bad/Unimported.java": [
+        "package bad;",
+        "public class Unimported { public Result run(Request request) { return null; } }"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const snapshot = graphStore.getSnapshot(projectPath);
+    const symbol = (qualifiedName: string) =>
+      snapshot.symbols.find((candidate) => candidate.qualifiedName === qualifiedName);
+    const signatures = snapshot.edges.filter(
+      (edge) => edge.kind === "accepts" || edge.kind === "returns"
+    );
+    const signature = (sourceQualifiedName: string, kind: "accepts" | "returns", targetQualifiedName: string) =>
+      signatures.find(
+        (edge) =>
+          edge.sourceId === symbol(sourceQualifiedName)?.id &&
+          edge.kind === kind &&
+          edge.targetId === symbol(targetQualifiedName)?.id
+      );
+
+    for (const [sourceQualifiedName, kind, targetQualifiedName, ruleId] of [
+      ["src/app/Service.java#Service.Service", "accepts", "src/api/Request.java#Request", "signature.java.explicit-import.accepts"],
+      ["src/app/Service.java#Service.execute", "accepts", "src/api/Request.java#Request", "signature.java.explicit-import.accepts"],
+      ["src/app/Service.java#Service.execute", "returns", "src/api/Result.java#Result", "signature.java.explicit-import.returns"],
+      ["src/app/Service.java#Service.qualified", "accepts", "src/api/Request.java#Request", "signature.java.qualified-type.accepts"],
+      ["src/app/Service.java#Service.qualified", "returns", "src/api/Result.java#Result", "signature.java.qualified-type.returns"],
+      ["src/app/Service.java#Service.local", "accepts", "src/app/Local.java#Local", "signature.java.same-package.accepts"],
+      ["src/app/Service.java#Service.local", "returns", "src/app/Local.java#Local", "signature.java.same-package.returns"]
+    ] as const) {
+      expect(signature(sourceQualifiedName, kind, targetQualifiedName)).toMatchObject({
+        resolution: "exact",
+        confidence: 1,
+        evidence: { ruleId, stage: "module", candidateSymbolIds: [symbol(targetQualifiedName)?.id] }
+      });
+    }
+    expect(
+      signatures.filter((edge) =>
+        ["src/bad/Wildcard.java", "src/bad/Unimported.java"].includes(edge.filePath)
+      )
+    ).toEqual([]);
+  });
+
   it("projects unique cross-file JVM DI types without claiming runtime provider selection", async () => {
     const projectPath = await createInlineProject({
       "src/java/app/services/PetService.java": [
@@ -20229,7 +20295,7 @@ describe("SymbolLatticeService", () => {
 
     expect(indexed).toMatchObject({
       stale: false,
-      counts: { files: 3, symbols: 7, edges: 6 }
+      counts: { files: 3, symbols: 8, edges: 7 }
     });
     expect(javaFacts?.springBootPropertiesFacts?.valueReferences).toEqual([
       expect.objectContaining({ sourceId: javaConfig.id, key: "constructor.java.port" })

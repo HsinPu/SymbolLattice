@@ -5,6 +5,7 @@ import {
   createSymbolId,
   type ArtifactFacts,
   type GraphEdge,
+  type JvmCallableSignatureReferenceFact,
   type JvmDependencyInjectionReferenceFact,
   type JvmFacts,
   type JvmHeritageSyntax,
@@ -85,6 +86,15 @@ interface StaticJavaMethod {
   readonly body: JavaSyntaxNode | null;
   readonly annotations: readonly StaticJavaAnnotation[];
   readonly isStatic: boolean;
+  readonly isExported: boolean;
+}
+
+interface StaticJavaConstructor {
+  readonly name: string;
+  readonly nameNode: JavaSyntaxNode;
+  readonly node: JavaSyntaxNode;
+  readonly body: JavaSyntaxNode;
+  readonly annotations: readonly StaticJavaAnnotation[];
   readonly isExported: boolean;
 }
 
@@ -1151,6 +1161,123 @@ function staticJavaMethod(
   };
 }
 
+function staticJavaConstructor(
+  input: JavaExtractFileFactsInput,
+  node: JavaSyntaxNode
+): StaticJavaConstructor | null {
+  if (node.name !== "ConstructorDeclaration") {
+    return null;
+  }
+  const children = directChildren(node);
+  const nameNode = children.find((child) => child.name === "Definition");
+  const body = children.find((child) => child.name === "ConstructorBody");
+  const name = nameNode === undefined ? null : identifierText(input, nameNode);
+  if (nameNode === undefined || body === undefined || name === null) {
+    return null;
+  }
+  const modifiers = children.find((child) => child.name === "Modifiers");
+  return {
+    name,
+    nameNode,
+    node,
+    body,
+    annotations: staticAnnotations(input, node),
+    isExported: modifiers !== undefined && directChildren(modifiers).some((child) => child.name === "public")
+  };
+}
+
+function staticJavaTypeParameterNames(
+  input: JavaExtractFileFactsInput,
+  node: JavaSyntaxNode
+): ReadonlySet<string> {
+  const names = new Set<string>();
+  for (const parameters of directChildren(node).filter((child) => child.name === "TypeParameters")) {
+    for (const parameter of directChildren(parameters).filter((child) => child.name === "TypeParameter")) {
+      const definition = directChildren(parameter).find((child) => child.name === "Definition");
+      const name = definition === undefined ? null : identifierText(input, definition);
+      if (name !== null) {
+        names.add(name);
+      }
+    }
+  }
+  return names;
+}
+
+function staticJavaSignatureTypeReferences(
+  input: JavaExtractFileFactsInput,
+  node: JavaSyntaxNode,
+  excludedNames: ReadonlySet<string>
+): readonly StaticJavaSuperclassReference[] {
+  if (node.name === "TypeName" || node.name === "ScopedTypeName") {
+    const reference = staticJavaDirectTypeReference(input, node);
+    return reference === null || excludedNames.has(reference.name) ? [] : [reference];
+  }
+  return directChildren(node).flatMap((child) =>
+    staticJavaSignatureTypeReferences(input, child, excludedNames)
+  );
+}
+
+function staticJavaCallableSignatureReferences(input: {
+  readonly extraction: JavaExtractFileFactsInput;
+  readonly callable: StaticJavaMethod | StaticJavaConstructor;
+  readonly callableSymbol: SymbolNode;
+  readonly declaringType: SymbolNode;
+  readonly enclosingTypeParameters: ReadonlySet<string>;
+  readonly imports: ReadonlyMap<string, string>;
+}): readonly JvmCallableSignatureReferenceFact[] {
+  const excludedNames = new Set([
+    ...input.enclosingTypeParameters,
+    ...staticJavaTypeParameterNames(input.extraction, input.callable.node)
+  ]);
+  const facts: JvmCallableSignatureReferenceFact[] = [];
+  const addReferences = (
+    relationKind: "accepts" | "returns",
+    node: JavaSyntaxNode
+  ): void => {
+    for (const reference of staticJavaSignatureTypeReferences(input.extraction, node, excludedNames)) {
+      const importedTypePath =
+        reference.qualifiedTypePath === undefined
+          ? input.imports.get(reference.name)
+          : undefined;
+      facts.push({
+        sourceId: input.callableSymbol.id,
+        declaringTypeId: input.declaringType.id,
+        filePath: input.extraction.filePath,
+        referenceName: reference.name,
+        relationKind,
+        range: rangeFor(lineStartsFor(input.extraction.sourceText), reference.node.from, reference.node.to),
+        ...(importedTypePath === undefined ? {} : { importedTypePath }),
+        ...(reference.qualifiedTypePath === undefined
+          ? {}
+          : { qualifiedTypePath: reference.qualifiedTypePath })
+      });
+    }
+  };
+  const children = directChildren(input.callable.node);
+  if (input.callable.node.name === "MethodDeclaration") {
+    const definitionIndex = children.findIndex(
+      (child) =>
+        child.name === input.callable.nameNode.name &&
+        child.from === input.callable.nameNode.from &&
+        child.to === input.callable.nameNode.to
+    );
+    for (const child of children.slice(0, Math.max(0, definitionIndex))) {
+      if (child.name !== "Modifiers" && child.name !== "TypeParameters") {
+        addReferences("returns", child);
+      }
+    }
+  }
+  const parameters = children.filter((child) => child.name === "FormalParameters");
+  if (parameters.length === 1 && parameters[0] !== undefined) {
+    for (const parameter of directChildren(parameters[0]).filter(
+      (child) => child.name === "FormalParameter" || child.name === "SpreadParameter"
+    )) {
+      addReferences("accepts", parameter);
+    }
+  }
+  return facts;
+}
+
 /**
  * A direct injection annotation is retained only when its source spelling is
  * fully qualified or a unique direct import proves one of the supported JVM
@@ -1990,6 +2117,7 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
   const jvmTypeFacts: JvmFacts["types"][number][] = [];
   const jvmHeritageReferences: JvmFacts["heritageReferences"][number][] = [];
   const jvmDependencyInjectionReferences: JvmDependencyInjectionReferenceFact[] = [];
+  const jvmCallableSignatureReferences: JvmCallableSignatureReferenceFact[] = [];
   const springBootPropertiesValueReferences: SpringBootPropertiesValueReferenceFact[] = [];
   const springBootConfigurationPropertiesPrefixes: SpringBootConfigurationPropertiesPrefixReferenceFact[] = [];
   const reactNativeNativeMethods: ReactNativeFacts["nativeMethods"][number][] = [];
@@ -2139,7 +2267,7 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
 
   function addMethod(
     parent: SymbolNode,
-    declaration: StaticJavaMethod,
+    declaration: StaticJavaMethod | StaticJavaConstructor,
     isExported: boolean = declaration.isExported
   ): SymbolNode {
     const qualifiedName = `${parent.qualifiedName}.${declaration.name}`;
@@ -2414,8 +2542,23 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
           .map((node) => staticJavaMethod(input, node))
           .filter((candidate): candidate is StaticJavaMethod => candidate !== null)
           .filter((candidate) => !overlapsRecord(candidate.node));
+        const typeParameters = staticJavaTypeParameterNames(input, typeDeclaration.node);
         for (const methodDeclaration of methods) {
-          addMethod(typeSymbol, methodDeclaration, isJavaInterfaceMethodExported(methodDeclaration));
+          const methodSymbol = addMethod(
+            typeSymbol,
+            methodDeclaration,
+            isJavaInterfaceMethodExported(methodDeclaration)
+          );
+          jvmCallableSignatureReferences.push(
+            ...staticJavaCallableSignatureReferences({
+              extraction: input,
+              callable: methodDeclaration,
+              callableSymbol: methodSymbol,
+              declaringType: typeSymbol,
+              enclosingTypeParameters: typeParameters,
+              imports
+            })
+          );
         }
         continue;
       }
@@ -2511,10 +2654,38 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
         .map((node) => staticJavaMethod(input, node))
         .filter((candidate): candidate is StaticJavaMethod => candidate !== null)
         .filter((candidate) => !overlapsRecord(candidate.node));
+      const constructors = directChildren(classDeclaration.body)
+        .map((node) => staticJavaConstructor(input, node))
+        .filter((candidate): candidate is StaticJavaConstructor => candidate !== null)
+        .filter((candidate) => !overlapsRecord(candidate.node));
+      const typeParameters = staticJavaTypeParameterNames(input, classDeclaration.node);
+      for (const constructorDeclaration of constructors) {
+        const constructorSymbol = addMethod(classSymbol, constructorDeclaration);
+        jvmCallableSignatureReferences.push(
+          ...staticJavaCallableSignatureReferences({
+            extraction: input,
+            callable: constructorDeclaration,
+            callableSymbol: constructorSymbol,
+            declaringType: classSymbol,
+            enclosingTypeParameters: typeParameters,
+            imports
+          })
+        );
+      }
       const symbolsByMethod = new Map<StaticJavaMethod, SymbolNode>();
       for (const methodDeclaration of methods) {
         const methodSymbol = addMethod(classSymbol, methodDeclaration);
         symbolsByMethod.set(methodDeclaration, methodSymbol);
+        jvmCallableSignatureReferences.push(
+          ...staticJavaCallableSignatureReferences({
+            extraction: input,
+            callable: methodDeclaration,
+            callableSymbol: methodSymbol,
+            declaringType: classSymbol,
+            enclosingTypeParameters: typeParameters,
+            imports
+          })
+        );
         if (hasJavaOverrideAnnotation(methodDeclaration)) {
           addPendingOverrideReference(methodSymbol, methodDeclaration);
         }
@@ -2718,7 +2889,8 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
     jvmFacts: {
       types: jvmTypeFacts,
       heritageReferences: jvmHeritageReferences,
-      dependencyInjectionReferences: jvmDependencyInjectionReferences
+      dependencyInjectionReferences: jvmDependencyInjectionReferences,
+      callableSignatureReferences: jvmCallableSignatureReferences
     },
     springBootPropertiesFacts: {
       valueReferences: springBootPropertiesValueReferences,

@@ -13,13 +13,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v206";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v207";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v89";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v90";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -819,12 +819,31 @@ export interface JvmDependencyInjectionReferenceFact {
   readonly qualifiedTypePath?: string;
 }
 
+/**
+ * One source-declared Java callable parameter or return type. The extractor
+ * records only direct syntax and removes enclosing class/method type
+ * parameters; project resolution still requires a unique indexed top-level
+ * type proven by an explicit import, qualified spelling, or same package.
+ */
+export interface JvmCallableSignatureReferenceFact {
+  readonly sourceId: string;
+  readonly declaringTypeId: string;
+  readonly filePath: string;
+  readonly referenceName: string;
+  readonly relationKind: "accepts" | "returns";
+  readonly range: SourceRange;
+  readonly importedTypePath?: string;
+  readonly qualifiedTypePath?: string;
+}
+
 /** Syntax-only JVM package, import, heritage, and DI-point facts for project resolution. */
 export interface JvmFacts {
   readonly types: readonly JvmTypeFact[];
   readonly heritageReferences: readonly JvmHeritageReferenceFact[];
   /** Omitted only by artifact facts persisted before v0.220. */
   readonly dependencyInjectionReferences?: readonly JvmDependencyInjectionReferenceFact[];
+  /** Omitted only by artifact facts persisted before v0.297. */
+  readonly callableSignatureReferences?: readonly JvmCallableSignatureReferenceFact[];
 }
 
 /**

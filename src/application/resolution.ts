@@ -35,6 +35,7 @@ import {
   type GoFrameStandardRouterRequestFact,
   type GraphEdge,
   type GraphSnapshot,
+  type JvmCallableSignatureReferenceFact,
   type JvmDependencyInjectionReferenceFact,
   type JvmHeritageReferenceFact,
   type JvmHeritageSyntax,
@@ -7402,6 +7403,131 @@ function projectJvmHeritageReferences(input: {
   return edges;
 }
 
+/**
+ * Projects Java callable parameter and return types only when source syntax
+ * identifies one indexed top-level project type. Wildcard imports, missing
+ * imports, duplicate type identities, nested types, and compiler-classpath
+ * semantics remain unresolved in the retained artifact facts.
+ */
+function projectJvmCallableSignatureReferences(input: {
+  readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
+  readonly symbolsById: ReadonlyMap<string, SymbolNode>;
+  readonly jvmProjectModuleEvidence?: JvmProjectModuleEvidence;
+}): readonly GraphEdge[] {
+  const typesBySymbolId = new Map<string, JvmResolvedType[]>();
+  const references: JvmCallableSignatureReferenceFact[] = [];
+  for (const [, facts] of [...input.factsByFile.entries()].sort(([left], [right]) =>
+    compareStableText(left, right)
+  )) {
+    for (const fact of facts.jvmFacts?.types ?? []) {
+      const symbol = input.symbolsById.get(fact.symbolId);
+      if (symbol?.kind !== "class" && symbol?.kind !== "interface") {
+        continue;
+      }
+      const entries = typesBySymbolId.get(symbol.id) ?? [];
+      entries.push({ fact, symbol });
+      typesBySymbolId.set(symbol.id, entries);
+    }
+    references.push(...(facts.jvmFacts?.callableSignatureReferences ?? []));
+  }
+  const types = [...typesBySymbolId.values()]
+    .filter((entries) => entries.length === 1 && entries[0] !== undefined)
+    .map((entries) => entries[0] as JvmResolvedType)
+    .sort((left, right) => compareStableText(left.symbol.id, right.symbol.id));
+  const membershipsByFile = jvmModuleMembershipsByFile(input.jvmProjectModuleEvidence);
+  const edges: GraphEdge[] = [];
+
+  for (const reference of [...references].sort((left, right) =>
+    compareStableText(
+      `${left.sourceId}\u0000${left.relationKind}\u0000${left.range.start.line}\u0000${left.range.start.column}`,
+      `${right.sourceId}\u0000${right.relationKind}\u0000${right.range.start.line}\u0000${right.range.start.column}`
+    )
+  )) {
+    const source = input.symbolsById.get(reference.sourceId);
+    const declaringTypeEntries = typesBySymbolId.get(reference.declaringTypeId) ?? [];
+    if (
+      source?.kind !== "method" ||
+      declaringTypeEntries.length !== 1 ||
+      declaringTypeEntries[0] === undefined
+    ) {
+      continue;
+    }
+    const declaringType = declaringTypeEntries[0];
+    const targetTypePath = reference.qualifiedTypePath ?? reference.importedTypePath;
+    const resolutionProof =
+      reference.qualifiedTypePath !== undefined
+        ? "qualified-type"
+        : reference.importedTypePath !== undefined
+          ? "explicit-import"
+          : "same-package";
+    const candidates = types.filter((candidate) =>
+      targetTypePath === undefined
+        ? candidate.fact.packageName === declaringType.fact.packageName &&
+          candidate.symbol.name === reference.referenceName
+        : jvmTypePath(candidate) === targetTypePath
+    );
+    if (candidates.length !== 1 || candidates[0] === undefined) {
+      continue;
+    }
+    const target = candidates[0].symbol;
+    const samePackageConfigurationPaths =
+      resolutionProof !== "same-package" || source.filePath === target.filePath
+        ? []
+        : samePackageJvmModuleEvidence({
+            projectEvidence: input.jvmProjectModuleEvidence,
+            membershipsByFile,
+            sourceFilePath: source.filePath,
+            targetFilePath: target.filePath
+          });
+    if (samePackageConfigurationPaths === null) {
+      continue;
+    }
+    const declaredProjectDependency =
+      resolutionProof === "same-package"
+        ? null
+        : declaredJvmProjectDependencyEvidence({
+            projectEvidence: input.jvmProjectModuleEvidence,
+            membershipsByFile,
+            sourceFilePath: source.filePath,
+            targetFilePath: target.filePath
+          });
+    const configurationPaths =
+      resolutionProof === "same-package"
+        ? samePackageConfigurationPaths
+        : declaredProjectDependency?.configurationPaths ?? [];
+    const proof =
+      declaredProjectDependency === null
+        ? resolutionProof
+        : `${resolutionProof}.declared-${declaredProjectDependency.kind}`;
+    edges.push({
+      id: createEdgeId({
+        sourceId: source.id,
+        targetId: target.id,
+        kind: reference.relationKind,
+        line: reference.range.start.line,
+        column: reference.range.start.column,
+        referenceName: reference.referenceName
+      }),
+      sourceId: source.id,
+      targetId: target.id,
+      kind: reference.relationKind,
+      filePath: reference.filePath,
+      range: reference.range,
+      resolution: "exact",
+      confidence: 1,
+      referenceName: reference.referenceName,
+      evidence: referenceEvidence(
+        `signature.java.${proof}.${reference.relationKind}`,
+        "module",
+        candidateSymbolIds(candidates.map((candidate) => candidate.symbol)),
+        configurationPaths,
+        [reference.filePath, target.filePath]
+      )
+    });
+  }
+  return edges;
+}
+
 function jvmDependencyInjectionRuleId(input: {
   readonly syntax: JvmDependencyInjectionReferenceFact["syntax"];
   readonly resolutionProof: "explicit-import" | "qualified-type" | "same-package";
@@ -7878,6 +8004,15 @@ export function resolveProjectFacts(input: {
   );
   resolvedEdges.push(
     ...projectJvmDependencyInjectionReferences({
+      factsByFile,
+      symbolsById,
+      ...(input.jvmProjectModuleEvidence === undefined
+        ? {}
+        : { jvmProjectModuleEvidence: input.jvmProjectModuleEvidence })
+    })
+  );
+  resolvedEdges.push(
+    ...projectJvmCallableSignatureReferences({
       factsByFile,
       symbolsById,
       ...(input.jvmProjectModuleEvidence === undefined
