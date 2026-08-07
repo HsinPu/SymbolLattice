@@ -29,6 +29,8 @@ export const EDGE_KINDS = [
   "exports",
   "references",
   "calls",
+  "accepts",
+  "returns",
   "instantiates",
   "overrides",
   "routes",
@@ -277,6 +279,8 @@ export interface PendingReference {
   readonly relationKind: Extract<
     EdgeKind,
     | "calls"
+    | "accepts"
+    | "returns"
     | "instantiates"
     | "overrides"
     | "imports"

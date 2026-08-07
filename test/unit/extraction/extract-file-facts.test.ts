@@ -59,6 +59,55 @@ describe("source extraction", () => {
     ]);
   });
 
+  it("extracts precise callable signature type references without wrapper or generic noise", () => {
+    const facts = extractFileFacts({
+      filePath: "src/service.ts",
+      language: "typescript",
+      sourceText: `
+        import type { Input as RequestInput, Result } from "./contracts.js";
+        type LocalOptions = { trace: boolean };
+        export function execute<T>(
+          input: RequestInput,
+          options: LocalOptions | null,
+          batch: ReadonlyArray<RequestInput>,
+          generic: T,
+          qualified: models.Hidden
+        ): Promise<Result> {
+          throw new Error("not implemented");
+        }
+        export class Handler {
+          handle(input: RequestInput): Result {
+            throw new Error("not implemented");
+          }
+        }
+      `
+    });
+
+    const signatureReferences = facts.pendingReferences
+      .filter(
+        (reference) =>
+          reference.relationKind === "accepts" || reference.relationKind === "returns"
+      )
+      .map((reference) => [reference.relationKind, reference.referenceName]);
+
+    expect(signatureReferences).toEqual([
+      ["accepts", "RequestInput"],
+      ["accepts", "LocalOptions"],
+      ["returns", "Result"],
+      ["accepts", "RequestInput"],
+      ["returns", "Result"]
+    ]);
+    expect(signatureReferences).not.toEqual(
+      expect.arrayContaining([
+        ["accepts", "ReadonlyArray"],
+        ["accepts", "T"],
+        ["accepts", "models"],
+        ["accepts", "Hidden"],
+        ["returns", "Promise"]
+      ])
+    );
+  });
+
   it("preserves local and public names for explicit export aliases", () => {
     const facts = extractFileFacts({
       filePath: "src/math.ts",

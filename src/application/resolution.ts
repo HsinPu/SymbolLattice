@@ -2564,6 +2564,23 @@ function isHeritageTarget(
   return symbol.kind === "class" || symbol.kind === "interface" || symbol.kind === "type";
 }
 
+function isSignatureReference(
+  reference: PendingReference
+): reference is PendingReference & { readonly relationKind: "accepts" | "returns" } {
+  return reference.relationKind === "accepts" || reference.relationKind === "returns";
+}
+
+function isSignatureTarget(symbol: SymbolNode): boolean {
+  return symbol.kind === "class" || symbol.kind === "interface" || symbol.kind === "type";
+}
+
+function signatureRuleId(
+  relationKind: "accepts" | "returns",
+  suffix: "local-type-binding" | "imported-type" | "reexported-type" | "unresolved-type"
+): string {
+  return `signature.${relationKind}.${suffix}`;
+}
+
 /** Direct `new Identifier()` facts resolve only to a statically declared class. */
 function isInstantiationTarget(symbol: SymbolNode): boolean {
   return symbol.kind === "class";
@@ -8186,6 +8203,7 @@ export function resolveProjectFacts(input: {
 
   for (const reference of [...references].sort((left, right) => compareStableText(left.id, right.id))) {
     const isHeritage = isHeritageReference(reference);
+    const isSignature = isSignatureReference(reference);
     const isInstantiation = reference.relationKind === "instantiates";
     if (
       reference.relationKind !== "calls" &&
@@ -8193,6 +8211,7 @@ export function resolveProjectFacts(input: {
       reference.relationKind !== "routes" &&
       reference.relationKind !== "handles" &&
       !isHeritage &&
+      !isSignature &&
       !isInstantiation
     ) {
       continue;
@@ -8258,7 +8277,7 @@ export function resolveProjectFacts(input: {
       continue;
     }
 
-    const expectedSpace = heritage?.expectedSpace ?? "value";
+    const expectedSpace = heritage?.expectedSpace ?? (isSignature ? "type" : "value");
     const playRouteResolution = isRouteHandler
       ? resolveExactPlayRouteHandler({ reference, factsByFile, symbolsById })
       : null;
@@ -8362,8 +8381,8 @@ export function resolveProjectFacts(input: {
         };
       });
     const exactImportedBindings = matchingImportedBindings.filter(({ binding }) =>
-      heritage !== null
-        ? importBindingSupportsSpace(binding, heritage.expectedSpace)
+      heritage !== null || isSignature
+        ? importBindingSupportsSpace(binding, expectedSpace)
         : isRouteHandler || isEntrypointHandler || isInstantiation
           ? binding.isTypeOnly !== true
           : true
@@ -8387,6 +8406,9 @@ export function resolveProjectFacts(input: {
             isHeritageTarget(candidate.symbol, heritage)
           );
         }
+        if (isSignature) {
+          return exportCandidateSupportsSpace(candidate, "type") && isSignatureTarget(candidate.symbol);
+        }
         if (isInstantiation) {
           return candidate.isTypeOnly !== true && isInstantiationTarget(candidate.symbol);
         }
@@ -8409,6 +8431,8 @@ export function resolveProjectFacts(input: {
     const scopedCandidates =
       heritage !== null
         ? scopedLocal.candidates.filter((candidate) => isHeritageTarget(candidate, heritage))
+        : isSignature
+          ? scopedLocal.candidates.filter((candidate) => isSignatureTarget(candidate))
         : isInstantiation
           ? scopedLocal.candidates.filter((candidate) => isInstantiationTarget(candidate))
           : scopedLocal.candidates;
@@ -8427,6 +8451,8 @@ export function resolveProjectFacts(input: {
                     heritage.relationKind,
                     heritage.expectedSpace === "value" ? "local-value-binding" : "local-type-binding"
                   )
+                : isSignature
+                  ? signatureRuleId(reference.relationKind, "local-type-binding")
                 : isInstantiation
                   ? instantiationRuleId("local-class-binding")
                 : isRouteHandler
@@ -8451,6 +8477,8 @@ export function resolveProjectFacts(input: {
             referenceEvidence(
               heritage !== null
                 ? heritageRuleId(heritage.relationKind, "unresolved-target")
+                : isSignature
+                  ? signatureRuleId(reference.relationKind, "unresolved-type")
                 : isInstantiation
                   ? instantiationRuleId("unresolved-class-target")
                 : isRouteHandler
@@ -8492,6 +8520,11 @@ export function resolveProjectFacts(input: {
                   heritage.relationKind,
                   resolutionPath.length === 0 ? "imported-target" : "reexported-target"
                 )
+              : isSignature
+                ? signatureRuleId(
+                    reference.relationKind,
+                    resolutionPath.length === 0 ? "imported-type" : "reexported-type"
+                  )
               : isInstantiation
                 ? instantiationRuleId(
                     resolutionPath.length === 0 ? "imported-class-target" : "reexported-class-target"
@@ -8529,6 +8562,8 @@ export function resolveProjectFacts(input: {
           referenceEvidence(
             heritage !== null
               ? heritageRuleId(heritage.relationKind, "unresolved-target")
+              : isSignature
+                ? signatureRuleId(reference.relationKind, "unresolved-type")
               : isInstantiation
                 ? instantiationRuleId("unresolved-class-target")
               : isRouteHandler
@@ -8536,7 +8571,9 @@ export function resolveProjectFacts(input: {
                 : "reference.unresolved",
             "unresolved",
             candidateSymbolIds(
-              isInstantiation || heritage !== null ? allExactImportedSymbols : exactImportedSymbols
+              isInstantiation || heritage !== null || isSignature
+                ? allExactImportedSymbols
+                : exactImportedSymbols
             ),
             exactImportedConfigurationPaths,
             reference.routeResolutionPath ?? [],
@@ -8551,7 +8588,7 @@ export function resolveProjectFacts(input: {
     // `extends` or `implements` needs a direct lexical, import, or re-export
     // proof in its required namespace; a project-wide name match would make a
     // type relationship look certain when it is not.
-    if (heritage !== null || isInstantiation) {
+    if (heritage !== null || isSignature || isInstantiation) {
       unresolvedReferences.push(reference);
       resolvedEdges.push(
         referenceEdge(
@@ -8562,6 +8599,8 @@ export function resolveProjectFacts(input: {
           referenceEvidence(
             heritage !== null
               ? heritageRuleId(heritage.relationKind, "unresolved-target")
+              : isSignature
+                ? signatureRuleId(reference.relationKind, "unresolved-type")
               : instantiationRuleId("unresolved-class-target"),
             "unresolved",
             candidateSymbolIds(

@@ -98,7 +98,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v9",
+      policy: "explore-query-plan-v10",
       queryIntent: {
         tests: false,
         icons: false,
@@ -216,7 +216,7 @@ describe("explore query planning", () => {
     expect(reversed).toEqual(plan);
     expect(plan.selection.map((item) => item.symbol.id)).toEqual(["production-a", "production-b"]);
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v9",
+      policy: "explore-query-plan-v10",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",
@@ -448,7 +448,7 @@ describe("explore query planning", () => {
 
     expect(plan.selection.map((item) => item.symbol.id)).toEqual(["production-a", "production-b"]);
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v9",
+      policy: "explore-query-plan-v10",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",
@@ -872,10 +872,10 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v9",
+      policy: "explore-query-plan-v10",
       ranking: {
         graphMass: {
-          policy: "explore-query-graph-mass-v1",
+          policy: "explore-query-graph-mass-v2",
           maximumRelationships: 32,
           maximumScore: 120,
           relationWeights: { calls: 12, contains: 0 }
@@ -896,7 +896,7 @@ describe("explore query planning", () => {
       rankingScore: 702,
       reasons: expect.arrayContaining(["graph-mass"]),
       graphMass: {
-        policy: "explore-query-graph-mass-v1",
+        policy: "explore-query-graph-mass-v2",
         exactRelationshipCount: 1,
         distinctNeighborCount: 1,
         uncappedScore: 12,
@@ -959,7 +959,7 @@ describe("explore query planning", () => {
 
     expect(reversed).toEqual(plan);
     expect(plan.ranking.graphDiffusion).toMatchObject({
-      policy: "explore-query-graph-diffusion-v1",
+      policy: "explore-query-graph-diffusion-v2",
       reason: "completed",
       applied: true,
       seedMode: "strong-lexical",
@@ -982,7 +982,7 @@ describe("explore query planning", () => {
     expect(plan.selection[1]).toMatchObject({
       reasons: expect.arrayContaining(["graph-diffusion"]),
       graphDiffusion: {
-        policy: "explore-query-graph-diffusion-v1",
+        policy: "explore-query-graph-diffusion-v2",
         state: "reached",
         seed: false,
         seedWeight: 0,
@@ -1028,7 +1028,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan.ranking.graphExpansion).toMatchObject({
-      policy: "explore-query-graph-expansion-v1",
+      policy: "explore-query-graph-expansion-v2",
       reason: "completed",
       applied: true,
       maximumHops: 2,
@@ -1047,7 +1047,7 @@ describe("explore query planning", () => {
       matchedTerms: [],
       reasons: expect.arrayContaining(["graph-expanded"]),
       graphExpansion: {
-        policy: "explore-query-graph-expansion-v1",
+        policy: "explore-query-graph-expansion-v2",
         state: "expanded",
         seedSymbolId: "dispatch",
         seedFilePath: "src/dispatch.ts",
@@ -1147,6 +1147,43 @@ describe("explore query planning", () => {
       discoveredSymbolCount: 0,
       admittedSymbolCount: 0
     });
+  });
+
+  it("rescues non-lexical callable signature types through exact accepts and returns evidence", () => {
+    const seed = symbol({ id: "execute", name: "execute", filePath: "src/service.ts" });
+    const input = symbol({
+      id: "request-input",
+      name: "RequestInput",
+      kind: "interface",
+      filePath: "src/contracts.ts"
+    });
+    const result = symbol({
+      id: "result",
+      name: "Result",
+      kind: "type",
+      filePath: "src/result.ts"
+    });
+    const plan = planExploreQuery(
+      {
+        files: [seed, input, result].map((item) => indexedFile(item.filePath, false)),
+        symbols: [seed, input, result],
+        edges: [
+          { ...edge("execute-accepts-input", seed.id, input.id), kind: "accepts" },
+          { ...edge("execute-returns-result", seed.id, result.id), kind: "returns" }
+        ]
+      },
+      "execute behavior"
+    );
+
+    expect(plan.selection.map((item) => item.symbol.id)).toEqual(
+      expect.arrayContaining(["execute", "request-input", "result"])
+    );
+    expect(
+      plan.ranking.graphExpansion.candidates
+        .filter((candidate) => candidate.admitted)
+        .map((candidate) => candidate.path[0]?.kind)
+        .sort()
+    ).toEqual(["accepts", "returns"]);
   });
 
   it("does not use an unrequested low-value lexical match as an expansion seed", () => {
@@ -1533,7 +1570,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v9",
+      policy: "explore-query-plan-v10",
       ranking: {
         policy: "explore-query-source-worth-v1",
         generatedSourceWorth: 0.3,

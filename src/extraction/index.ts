@@ -444,6 +444,66 @@ function typeParametersFor(node: ts.Node): ts.NodeArray<ts.TypeParameterDeclarat
   return ts.isFunctionLike(node) ? node.typeParameters : undefined;
 }
 
+const IGNORED_SIGNATURE_TYPE_REFERENCES = new Set([
+  "Array",
+  "Awaited",
+  "BigInt",
+  "Boolean",
+  "Date",
+  "Error",
+  "Exclude",
+  "Extract",
+  "Function",
+  "InstanceType",
+  "Map",
+  "NonNullable",
+  "Number",
+  "Object",
+  "Omit",
+  "Parameters",
+  "Partial",
+  "Pick",
+  "Promise",
+  "ReadonlyArray",
+  "Record",
+  "RegExp",
+  "Required",
+  "ReturnType",
+  "Set",
+  "String",
+  "Symbol",
+  "Uint8Array",
+  "WeakMap",
+  "WeakSet"
+]);
+
+function signatureTypeReferences(
+  typeNode: ts.TypeNode,
+  typeParameterNames: ReadonlySet<string>
+): readonly ts.Identifier[] {
+  const references: ts.Identifier[] = [];
+
+  const visit = (node: ts.Node): void => {
+    if (ts.isTypeReferenceNode(node)) {
+      if (
+        ts.isIdentifier(node.typeName) &&
+        !typeParameterNames.has(node.typeName.text) &&
+        !IGNORED_SIGNATURE_TYPE_REFERENCES.has(node.typeName.text)
+      ) {
+        references.push(node.typeName);
+      }
+      for (const argument of node.typeArguments ?? []) {
+        visit(argument);
+      }
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+
+  visit(typeNode);
+  return references;
+}
+
 interface ScopedRouteReceiverBindings {
   /** The closest value binding decides whether a receiver is known to be a supported framework. */
   readonly byScopeId: ReadonlyMap<string, ReadonlyMap<string, readonly RouteBinding[]>>;
@@ -6321,6 +6381,37 @@ export function extractFileFacts(
           reference.identifier
         );
       }
+    }
+    if (
+      declaredSymbol !== null &&
+      input.language === "typescript" &&
+      ts.isFunctionLike(node)
+    ) {
+      const typeParameterNames = new Set(
+        (node.typeParameters ?? []).map((typeParameter) => typeParameter.name.text)
+      );
+      const seenSignatureReferences = new Set<string>();
+      const addSignatureReferences = (
+        typeNode: ts.TypeNode | undefined,
+        relationKind: "accepts" | "returns"
+      ): void => {
+        if (typeNode === undefined) {
+          return;
+        }
+        for (const reference of signatureTypeReferences(typeNode, typeParameterNames)) {
+          const key = `${relationKind}\u0000${reference.text}`;
+          if (seenSignatureReferences.has(key)) {
+            continue;
+          }
+          seenSignatureReferences.add(key);
+          addPendingReference(declaredSymbol.id, reference.text, relationKind, reference);
+        }
+      };
+
+      for (const parameter of node.parameters) {
+        addSignatureReferences(parameter.type, "accepts");
+      }
+      addSignatureReferences(node.type, "returns");
     }
     if (
       declaredSymbol !== null &&

@@ -1458,7 +1458,7 @@ describe("SymbolLattice MCP server", () => {
           anyOf: [
             {
               properties: {
-                policy: { const: "explore-query-plan-v9" },
+                policy: { const: "explore-query-plan-v10" },
                 queryIntent: {
                   properties: {
                     tests: { type: "boolean" },
@@ -1534,7 +1534,7 @@ describe("SymbolLattice MCP server", () => {
                     sourceRoleClassifierVersion: { type: "string", minLength: 1 },
                     graphMass: {
                       properties: {
-                        policy: { const: "explore-query-graph-mass-v1" },
+                        policy: { const: "explore-query-graph-mass-v2" },
                         maximumRelationships: { const: 32 },
                         maximumScore: { const: 120 },
                         relationWeights: { type: "object" }
@@ -1542,7 +1542,7 @@ describe("SymbolLattice MCP server", () => {
                     },
                     graphExpansion: {
                       properties: {
-                        policy: { const: "explore-query-graph-expansion-v1" },
+                        policy: { const: "explore-query-graph-expansion-v2" },
                         reason: {
                           enum: [
                             "no-lexical-candidates",
@@ -1573,7 +1573,7 @@ describe("SymbolLattice MCP server", () => {
                     },
                     graphDiffusion: {
                       properties: {
-                        policy: { const: "explore-query-graph-diffusion-v1" },
+                        policy: { const: "explore-query-graph-diffusion-v2" },
                         reason: {
                           enum: [
                             "no-candidates",
@@ -1649,7 +1649,7 @@ describe("SymbolLattice MCP server", () => {
                       generated: { type: "object" },
                       graphMass: {
                         properties: {
-                          policy: { const: "explore-query-graph-mass-v1" },
+                          policy: { const: "explore-query-graph-mass-v2" },
                           eligibleRelationshipCount: { minimum: 0 },
                           exactRelationshipCount: { minimum: 0, maximum: 32 },
                           omittedRelationshipCount: { minimum: 0 },
@@ -1663,7 +1663,7 @@ describe("SymbolLattice MCP server", () => {
                       },
                       graphExpansion: {
                         properties: {
-                          policy: { const: "explore-query-graph-expansion-v1" },
+                          policy: { const: "explore-query-graph-expansion-v2" },
                           state: { enum: ["lexical", "expanded"] },
                           seedSymbolId: {
                             anyOf: [{ type: "string" }, { type: "null" }]
@@ -1680,7 +1680,7 @@ describe("SymbolLattice MCP server", () => {
                       },
                       graphDiffusion: {
                         properties: {
-                          policy: { const: "explore-query-graph-diffusion-v1" },
+                          policy: { const: "explore-query-graph-diffusion-v2" },
                           state: {
                             enum: ["seed", "reached", "outside-subgraph", "no-mass"]
                           },

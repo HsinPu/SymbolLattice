@@ -996,6 +996,100 @@ describe("direct TypeScript heritage resolution", () => {
   });
 });
 
+describe("TypeScript callable signature resolution", () => {
+  it("resolves only proven local and imported type targets and keeps unproven names unresolved", () => {
+    const sourceDocuments: readonly SourceDocument[] = [
+      {
+        absolutePath: "C:/project/src/contracts.ts",
+        relativePath: "src/contracts.ts",
+        language: "typescript",
+        sourceText: [
+          "export interface Input {}",
+          "export type Result = { ok: boolean };",
+          "export function ValueOnly() {}"
+        ].join("\n"),
+        contentHash: "contracts"
+      },
+      {
+        absolutePath: "C:/project/src/barrel.ts",
+        relativePath: "src/barrel.ts",
+        language: "typescript",
+        sourceText:
+          'export type { Input as RequestInput, Result } from "./contracts";',
+        contentHash: "barrel"
+      },
+      {
+        absolutePath: "C:/project/src/service.ts",
+        relativePath: "src/service.ts",
+        language: "typescript",
+        sourceText: [
+          'import type { RequestInput, Result } from "./barrel";',
+          'import { ValueOnly } from "./contracts";',
+          "type LocalOptions = { trace: boolean };",
+          "export function execute(input: RequestInput, options: LocalOptions, invalid: ValueOnly): Promise<Result> {",
+          '  throw new Error("not implemented");',
+          "}"
+        ].join("\n"),
+        contentHash: "service"
+      },
+      {
+        absolutePath: "C:/project/src/unproven.ts",
+        relativePath: "src/unproven.ts",
+        language: "typescript",
+        sourceText:
+          'export function stray(input: Input): Result { throw new Error("not implemented"); }',
+        contentHash: "unproven"
+      }
+    ];
+    const snapshot = snapshotWithResolver(sourceDocuments, undefined);
+    const symbol = (qualifiedName: string) =>
+      snapshot.symbols.find((candidate) => candidate.qualifiedName === qualifiedName);
+    const signatureEdge = (
+      sourceQualifiedName: string,
+      kind: "accepts" | "returns",
+      referenceName: string
+    ) =>
+      snapshot.edges.find(
+        (edge) =>
+          edge.sourceId === symbol(sourceQualifiedName)?.id &&
+          edge.kind === kind &&
+          edge.referenceName === referenceName
+      );
+
+    expect(signatureEdge("src/service.ts#execute", "accepts", "RequestInput")).toMatchObject({
+      targetId: symbol("src/contracts.ts#Input")?.id,
+      resolution: "exact",
+      confidence: 1,
+      evidence: { ruleId: "signature.accepts.reexported-type", stage: "module" }
+    });
+    expect(signatureEdge("src/service.ts#execute", "accepts", "LocalOptions")).toMatchObject({
+      targetId: symbol("src/service.ts#LocalOptions")?.id,
+      resolution: "exact",
+      confidence: 1,
+      evidence: { ruleId: "signature.accepts.local-type-binding", stage: "lexical" }
+    });
+    expect(signatureEdge("src/service.ts#execute", "returns", "Result")).toMatchObject({
+      targetId: symbol("src/contracts.ts#Result")?.id,
+      resolution: "exact",
+      confidence: 1,
+      evidence: { ruleId: "signature.returns.reexported-type", stage: "module" }
+    });
+
+    for (const [sourceName, kind, referenceName] of [
+      ["execute", "accepts", "ValueOnly"],
+      ["stray", "accepts", "Input"],
+      ["stray", "returns", "Result"]
+    ] as const) {
+      expect(signatureEdge(`src/${sourceName === "stray" ? "unproven" : "service"}.ts#${sourceName}`, kind, referenceName)).toMatchObject({
+        targetId: null,
+        resolution: "unresolved",
+        confidence: 0,
+        evidence: { ruleId: `signature.${kind}.unresolved-type`, stage: "unresolved" }
+      });
+    }
+  });
+});
+
 describe("direct class instantiation resolution", () => {
   it("resolves local, imported, re-exported, and JavaScript classes exactly without name guessing", () => {
     const sourceDocuments: readonly SourceDocument[] = [

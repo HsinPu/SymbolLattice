@@ -865,10 +865,10 @@ describe("SymbolLatticeService", () => {
       sourceAvailability: "not-applicable",
       source: null,
       queryPlan: {
-        policy: "explore-query-plan-v9",
+        policy: "explore-query-plan-v10",
         ranking: {
           graphDiffusion: {
-            policy: "explore-query-graph-diffusion-v1",
+            policy: "explore-query-graph-diffusion-v2",
             reason: "completed",
             applied: true,
             seedMode: "strong-lexical",
@@ -994,7 +994,7 @@ describe("SymbolLatticeService", () => {
     const result = await service.explore(projectPath, "orderService");
 
     expect(result.queryPlan).toMatchObject({
-      policy: "explore-query-plan-v9",
+      policy: "explore-query-plan-v10",
       ranking: {
         policy: "explore-query-source-worth-v1",
         generatedSourceWorth: 0.3,
@@ -1018,7 +1018,7 @@ describe("SymbolLatticeService", () => {
       score: 702,
       rankingScore: 702,
       graphMass: {
-        policy: "explore-query-graph-mass-v1",
+        policy: "explore-query-graph-mass-v2",
         eligibleRelationshipCount: 1,
         exactRelationshipCount: 1,
         omittedRelationshipCount: 0,
@@ -1071,10 +1071,10 @@ describe("SymbolLatticeService", () => {
     const result = await service.explore(projectPath, "dispatch behavior");
 
     expect(result.queryPlan).toMatchObject({
-      policy: "explore-query-plan-v9",
+      policy: "explore-query-plan-v10",
       ranking: {
         graphExpansion: {
-          policy: "explore-query-graph-expansion-v1",
+          policy: "explore-query-graph-expansion-v2",
           reason: "completed",
           applied: true,
           maximumHops: 2,
@@ -1086,7 +1086,7 @@ describe("SymbolLatticeService", () => {
           rejectedExistingFileCount: 1
         },
         graphDiffusion: {
-          policy: "explore-query-graph-diffusion-v1",
+          policy: "explore-query-graph-diffusion-v2",
           reason: "completed",
           applied: true,
           seedMode: "strong-lexical",
@@ -1114,7 +1114,7 @@ describe("SymbolLatticeService", () => {
       "dispatchLegacy"
     ]);
     expect(result.queryPlan?.selection[1]?.graphExpansion).toMatchObject({
-      policy: "explore-query-graph-expansion-v1",
+      policy: "explore-query-graph-expansion-v2",
       state: "expanded",
       seedSymbolId: expect.any(String),
       hops: 1,
@@ -1131,6 +1131,63 @@ describe("SymbolLatticeService", () => {
       fileMass: 0,
       score: 0
     });
+  });
+
+  it("rescues persisted callable input and output types from exact signature evidence", async () => {
+    const projectPath = await createInlineProject({
+      "src/contracts.ts": [
+        "export interface RequestInput { id: string }",
+        "export type Result = { ok: boolean };"
+      ].join("\n"),
+      "src/service.ts": [
+        'import type { RequestInput, Result } from "./contracts.js";',
+        "export function execute(input: RequestInput): Promise<Result> {",
+        "  return Promise.resolve({ ok: input.id.length > 0 });",
+        "}"
+      ].join("\n")
+    });
+    const service = createService();
+    await service.init({ projectPath });
+
+    const result = await service.explore(projectPath, "execute behavior");
+
+    expect(result.queryPlan?.selection.map((selection) => selection.symbol.name)).toEqual(
+      expect.arrayContaining(["execute", "RequestInput", "Result"])
+    );
+    expect(
+      result.queryPlan?.ranking.graphExpansion.candidates
+        .filter((candidate) => candidate.admitted)
+        .flatMap((candidate) => candidate.path.map((segment) => segment.kind))
+        .sort()
+    ).toEqual(["accepts", "returns"]);
+    expect(result.connections).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          source: expect.objectContaining({ name: "execute" }),
+          target: expect.objectContaining({ name: "RequestInput" }),
+          edge: expect.objectContaining({
+            kind: "accepts",
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "signature.accepts.imported-type",
+              stage: "module"
+            })
+          })
+        }),
+        expect.objectContaining({
+          source: expect.objectContaining({ name: "execute" }),
+          target: expect.objectContaining({ name: "Result" }),
+          edge: expect.objectContaining({
+            kind: "returns",
+            resolution: "exact",
+            evidence: expect.objectContaining({
+              ruleId: "signature.returns.imported-type",
+              stage: "module"
+            })
+          })
+        })
+      ])
+    );
   });
 
   it("keeps weak file-name collisions out of the persisted explore source envelope", async () => {
@@ -1152,7 +1209,7 @@ describe("SymbolLatticeService", () => {
     const result = await service.explore(projectPath, "dispatch pipeline");
 
     expect(result.queryPlan).toMatchObject({
-      policy: "explore-query-plan-v9",
+      policy: "explore-query-plan-v10",
       scoreFloor: {
         policy: "explore-query-relative-file-score-floor-v1",
         reason: "relative-floor-applied",
@@ -1202,7 +1259,7 @@ describe("SymbolLatticeService", () => {
     const result = await service.explore(projectPath, "orderService");
 
     expect(result.queryPlan).toMatchObject({
-      policy: "explore-query-plan-v9",
+      policy: "explore-query-plan-v10",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",
@@ -1248,7 +1305,7 @@ describe("SymbolLatticeService", () => {
 
     const general = await service.explore(projectPath, "renderAsset");
     expect(general.queryPlan).toMatchObject({
-      policy: "explore-query-plan-v9",
+      policy: "explore-query-plan-v10",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",
