@@ -6,6 +6,7 @@ import {
   createSymbolId,
   isCustomRouteFramework,
   type BindingSpace,
+  type CallArityEvidence,
   type DjangoImportedUrlconfInclusionFact,
   type DjangoNinjaImportedRouterInclusionFact,
   type DjangoNinjaRouterDeclarationFact,
@@ -7534,9 +7535,65 @@ function projectJvmCallableSignatureReferences(input: {
  * Resolves a direct Java `Factory.create().method()` chain only when every hop
  * is source-proven: one project-local receiver type, one static factory method,
  * one exact outer declared return type, and one directly owned target method.
- * Overloads, inherited targets, wildcard or shadowed receivers, nested return
- * wrappers, and compiler-classpath guesses deliberately produce no call edge.
+ * Overloads resolve only when one declaration is applicable by syntax-proven
+ * fixed/varargs arity. Same-arity ambiguity, inherited targets, wildcard or
+ * shadowed receivers, nested return wrappers, and compiler-classpath guesses
+ * deliberately produce no call edge.
  */
+interface JavaCallArityPlan {
+  readonly selected: JavaCallableDeclarationFact;
+  readonly evidence: CallArityEvidence;
+}
+
+function javaCallArityPlan(
+  declarations: readonly JavaCallableDeclarationFact[],
+  actualArgumentCount: number | undefined
+): JavaCallArityPlan | null {
+  if (!Number.isSafeInteger(actualArgumentCount) || actualArgumentCount === undefined || actualArgumentCount < 0) {
+    return null;
+  }
+  const ordered = [...declarations].sort((left, right) =>
+    compareStableText(left.symbolId, right.symbolId)
+  );
+  if (
+    ordered.some(
+      (declaration) =>
+        declaration.minimumArgumentCount === undefined ||
+        !Number.isSafeInteger(declaration.minimumArgumentCount) ||
+        declaration.minimumArgumentCount < 0 ||
+        declaration.maximumArgumentCount === undefined ||
+        (declaration.maximumArgumentCount !== null &&
+          (!Number.isSafeInteger(declaration.maximumArgumentCount) ||
+            declaration.maximumArgumentCount < declaration.minimumArgumentCount))
+    )
+  ) {
+    return null;
+  }
+  const candidates = ordered.map((declaration) => ({
+    symbolId: declaration.symbolId,
+    minimumArgumentCount: declaration.minimumArgumentCount!,
+    maximumArgumentCount: declaration.maximumArgumentCount!,
+    applicable:
+      actualArgumentCount >= declaration.minimumArgumentCount! &&
+      (declaration.maximumArgumentCount === null ||
+        actualArgumentCount <= declaration.maximumArgumentCount!)
+  }));
+  const applicable = candidates.filter((candidate) => candidate.applicable);
+  if (applicable.length !== 1 || applicable[0] === undefined) {
+    return null;
+  }
+  const selected = ordered.find((declaration) => declaration.symbolId === applicable[0]!.symbolId);
+  return selected === undefined
+    ? null
+    : {
+        selected,
+        evidence: {
+          actualArgumentCount,
+          candidates
+        }
+      };
+}
+
 function projectJavaChainedCallReferences(input: {
   readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
   readonly symbolsById: ReadonlyMap<string, SymbolNode>;
@@ -7652,10 +7709,11 @@ function projectJavaChainedCallReferences(input: {
         declaration.isStatic &&
         declaration.name === reference.factoryMethodName
     );
-    if (factoryCandidates.length !== 1 || factoryCandidates[0] === undefined) {
+    const factoryArity = javaCallArityPlan(factoryCandidates, reference.factoryArgumentCount);
+    if (factoryArity === null) {
       continue;
     }
-    const factory = input.symbolsById.get(factoryCandidates[0].symbolId);
+    const factory = input.symbolsById.get(factoryArity.selected.symbolId);
     if (factory?.kind !== "method") {
       continue;
     }
@@ -7696,10 +7754,11 @@ function projectJavaChainedCallReferences(input: {
         declaration.callableKind === "method" &&
         declaration.name === reference.methodName
     );
-    if (methodCandidates.length !== 1 || methodCandidates[0] === undefined) {
+    const methodArity = javaCallArityPlan(methodCandidates, reference.methodArgumentCount);
+    if (methodArity === null) {
       continue;
     }
-    const method = input.symbolsById.get(methodCandidates[0].symbolId);
+    const method = input.symbolsById.get(methodArity.selected.symbolId);
     if (method?.kind !== "method") {
       continue;
     }
@@ -7730,13 +7789,16 @@ function projectJavaChainedCallReferences(input: {
       resolution: "exact",
       confidence: 1,
       referenceName: reference.factoryMethodName,
-      evidence: referenceEvidence(
-        `call.java.chained-factory.${proof}.factory`,
-        "module",
-        [factory.id],
-        configurationPaths,
-        sourcePaths
-      )
+      evidence: {
+        ...referenceEvidence(
+          `call.java.chained-factory.${proof}.arity.factory`,
+          "module",
+          factoryArity.evidence.candidates.map((candidate) => candidate.symbolId),
+          configurationPaths,
+          sourcePaths
+        ),
+        callArity: factoryArity.evidence
+      }
     });
     edges.push({
       id: createEdgeId({
@@ -7755,13 +7817,16 @@ function projectJavaChainedCallReferences(input: {
       resolution: "exact",
       confidence: 1,
       referenceName: reference.methodName,
-      evidence: referenceEvidence(
-        `call.java.chained-factory.${proof}.return-dispatch`,
-        "module",
-        [method.id],
-        configurationPaths,
-        sourcePaths
-      )
+      evidence: {
+        ...referenceEvidence(
+          `call.java.chained-factory.${proof}.arity.return-dispatch`,
+          "module",
+          methodArity.evidence.candidates.map((candidate) => candidate.symbolId),
+          configurationPaths,
+          sourcePaths
+        ),
+        callArity: methodArity.evidence
+      }
     });
   }
   return edges;

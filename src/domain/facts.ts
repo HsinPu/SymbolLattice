@@ -13,13 +13,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v208";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v209";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v91";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v92";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -44,6 +44,21 @@ export interface RoutePrefixSegment {
   readonly prefix: string;
 }
 
+/** One source-declared overload considered against a syntax-proven call arity. */
+export interface CallArityCandidateEvidence {
+  readonly symbolId: string;
+  readonly minimumArgumentCount: number;
+  /** Null means the declaration accepts additional varargs arguments. */
+  readonly maximumArgumentCount: number | null;
+  readonly applicable: boolean;
+}
+
+/** Deterministic overload filtering evidence for one exact call edge. */
+export interface CallArityEvidence {
+  readonly actualArgumentCount: number;
+  readonly candidates: readonly CallArityCandidateEvidence[];
+}
+
 /**
  * The deterministic explanation for one graph edge.
  *
@@ -66,6 +81,8 @@ export interface EdgeEvidence {
   readonly resolutionPath?: readonly string[];
   /** Ordered static mount evidence used to project a framework route prefix. */
   readonly routePrefixChain?: readonly RoutePrefixSegment[];
+  /** Syntax-proven argument count and every declaration considered by an overload rule. */
+  readonly callArity?: CallArityEvidence;
 }
 
 /** A named import binding retained from syntax extraction for module resolution. */
@@ -849,6 +866,10 @@ export interface JavaCallableDeclarationFact {
   readonly name: string;
   readonly callableKind: "method" | "constructor";
   readonly isStatic: boolean;
+  /** Omitted by pre-v0.299 facts, which are never eligible for arity resolution. */
+  readonly minimumArgumentCount?: number;
+  /** Null denotes varargs; omitted by pre-v0.299 facts. */
+  readonly maximumArgumentCount?: number | null;
 }
 
 /**
@@ -864,6 +885,10 @@ export interface JavaChainedCallReferenceFact {
   readonly receiverTypeName: string;
   readonly factoryMethodName: string;
   readonly methodName: string;
+  /** Omitted by pre-v0.299 facts, which are never eligible for arity resolution. */
+  readonly factoryArgumentCount?: number;
+  /** Omitted by pre-v0.299 facts, which are never eligible for arity resolution. */
+  readonly methodArgumentCount?: number;
   readonly factoryRange: SourceRange;
   readonly range: SourceRange;
   readonly importedTypePath?: string;

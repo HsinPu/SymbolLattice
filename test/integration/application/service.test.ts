@@ -2430,7 +2430,7 @@ describe("SymbolLatticeService", () => {
     ).toEqual([]);
   });
 
-  it("resolves Java static-factory call chains through exact declared return types", async () => {
+  it("resolves Java static-factory call chains through exact return types and arity", async () => {
     const projectPath = await createInlineProject({
       "src/api/Executor.java": [
         "package api;",
@@ -2530,6 +2530,67 @@ describe("SymbolLatticeService", () => {
       "src/bad/OverloadedRunner.java": [
         "package bad;",
         "public class OverloadedRunner { public void run() { OverloadedFactory.create().execute(); } }"
+      ].join("\n"),
+      "src/app/VarargFactory.java": [
+        "package app;",
+        "public class VarargFactory {",
+        "  public static LocalExecutor create(String first, String... rest) { return null; }",
+        "}"
+      ].join("\n"),
+      "src/app/VarargFactoryRunner.java": [
+        "package app;",
+        "public class VarargFactoryRunner {",
+        "  public void run() { VarargFactory.create(\"first\", \"second\").execute(); }",
+        "}"
+      ].join("\n"),
+      "src/app/VarargExecutor.java": [
+        "package app;",
+        "public class VarargExecutor { public void execute(String first, String... rest) {} }"
+      ].join("\n"),
+      "src/app/VarargExecutorFactory.java": [
+        "package app;",
+        "public class VarargExecutorFactory {",
+        "  public static VarargExecutor create() { return null; }",
+        "}"
+      ].join("\n"),
+      "src/app/VarargExecutorRunner.java": [
+        "package app;",
+        "public class VarargExecutorRunner {",
+        "  public void run() { VarargExecutorFactory.create().execute(\"first\", \"second\"); }",
+        "}"
+      ].join("\n"),
+      "src/bad/SameArityFactory.java": [
+        "package bad;",
+        "import api.Executor;",
+        "public class SameArityFactory {",
+        "  public static Executor create(String value) { return null; }",
+        "  public static Executor create(Integer value) { return null; }",
+        "}"
+      ].join("\n"),
+      "src/bad/SameArityFactoryRunner.java": [
+        "package bad;",
+        "public class SameArityFactoryRunner {",
+        "  public void run() { SameArityFactory.create(\"value\").execute(); }",
+        "}"
+      ].join("\n"),
+      "src/bad/SameArityExecutor.java": [
+        "package bad;",
+        "public class SameArityExecutor {",
+        "  public void execute(String value) {}",
+        "  public void execute(Integer value) {}",
+        "}"
+      ].join("\n"),
+      "src/bad/SameArityExecutorFactory.java": [
+        "package bad;",
+        "public class SameArityExecutorFactory {",
+        "  public static SameArityExecutor create() { return null; }",
+        "}"
+      ].join("\n"),
+      "src/bad/SameArityExecutorRunner.java": [
+        "package bad;",
+        "public class SameArityExecutorRunner {",
+        "  public void run() { SameArityExecutorFactory.create().execute(\"value\"); }",
+        "}"
       ].join("\n")
     });
     const graphStore = new SqliteGraphStore();
@@ -2571,27 +2632,83 @@ describe("SymbolLatticeService", () => {
         "src/app/LocalFactory.java#LocalFactory.create",
         "src/app/LocalExecutor.java#LocalExecutor.execute",
         "same-package"
+      ],
+      [
+        "src/app/VarargFactoryRunner.java#VarargFactoryRunner.run",
+        "src/app/VarargFactory.java#VarargFactory.create",
+        "src/app/LocalExecutor.java#LocalExecutor.execute",
+        "same-package"
+      ],
+      [
+        "src/app/VarargExecutorRunner.java#VarargExecutorRunner.run",
+        "src/app/VarargExecutorFactory.java#VarargExecutorFactory.create",
+        "src/app/VarargExecutor.java#VarargExecutor.execute",
+        "same-package"
       ]
     ] as const) {
       expect(call(sourceQualifiedName, factoryQualifiedName)).toMatchObject({
         resolution: "exact",
         confidence: 1,
         evidence: {
-          ruleId: `call.java.chained-factory.${proof}.factory`,
+          ruleId: `call.java.chained-factory.${proof}.arity.factory`,
           stage: "module",
-          candidateSymbolIds: [symbol(factoryQualifiedName)?.id]
+          candidateSymbolIds: [symbol(factoryQualifiedName)?.id],
+          callArity: expect.objectContaining({
+            actualArgumentCount: sourceQualifiedName.includes("VarargFactoryRunner") ? 2 : 0
+          })
         }
       });
       expect(call(sourceQualifiedName, targetQualifiedName)).toMatchObject({
         resolution: "exact",
         confidence: 1,
         evidence: {
-          ruleId: `call.java.chained-factory.${proof}.return-dispatch`,
+          ruleId: `call.java.chained-factory.${proof}.arity.return-dispatch`,
           stage: "module",
-          candidateSymbolIds: [symbol(targetQualifiedName)?.id]
+          candidateSymbolIds: [symbol(targetQualifiedName)?.id],
+          callArity: expect.objectContaining({
+            actualArgumentCount: sourceQualifiedName.includes("VarargExecutorRunner") ? 2 : 0
+          })
         }
       });
     }
+
+    const factoryOverloadCalls = calls.filter(
+      (edge) => edge.filePath === "src/bad/AmbiguousRunner.java"
+    );
+    expect(factoryOverloadCalls).toHaveLength(2);
+    expect(
+      factoryOverloadCalls.find((edge) => edge.referenceName === "create")?.evidence
+        ?.candidateSymbolIds
+    ).toHaveLength(2);
+    expect(factoryOverloadCalls.find((edge) => edge.referenceName === "create")?.evidence).toMatchObject({
+      ruleId: "call.java.chained-factory.same-package.arity.factory",
+      callArity: {
+        actualArgumentCount: 0,
+        candidates: expect.arrayContaining([
+          expect.objectContaining({ minimumArgumentCount: 0, maximumArgumentCount: 0, applicable: true }),
+          expect.objectContaining({ minimumArgumentCount: 1, maximumArgumentCount: 1, applicable: false })
+        ])
+      }
+    });
+
+    const outerOverloadCalls = calls.filter(
+      (edge) => edge.filePath === "src/bad/OverloadedRunner.java"
+    );
+    expect(outerOverloadCalls).toHaveLength(2);
+    expect(
+      outerOverloadCalls.find((edge) => edge.referenceName === "execute")?.evidence
+        ?.candidateSymbolIds
+    ).toHaveLength(2);
+    expect(outerOverloadCalls.find((edge) => edge.referenceName === "execute")?.evidence).toMatchObject({
+      ruleId: "call.java.chained-factory.same-package.arity.return-dispatch",
+      callArity: {
+        actualArgumentCount: 0,
+        candidates: expect.arrayContaining([
+          expect.objectContaining({ minimumArgumentCount: 0, maximumArgumentCount: 0, applicable: true }),
+          expect.objectContaining({ minimumArgumentCount: 1, maximumArgumentCount: 1, applicable: false })
+        ])
+      }
+    });
 
     expect(
       calls.filter((edge) =>
@@ -2599,9 +2716,9 @@ describe("SymbolLatticeService", () => {
           "src/bad/WildcardRunner.java",
           "src/bad/UnimportedRunner.java",
           "src/bad/InstanceRunner.java",
-          "src/bad/AmbiguousRunner.java",
           "src/bad/ShadowRunner.java",
-          "src/bad/OverloadedRunner.java"
+          "src/bad/SameArityFactoryRunner.java",
+          "src/bad/SameArityExecutorRunner.java"
         ].includes(edge.filePath)
       )
     ).toEqual([]);
@@ -2620,6 +2737,8 @@ describe("SymbolLatticeService", () => {
         receiverTypeName: "Factory",
         factoryMethodName: "create",
         methodName: "execute",
+        factoryArgumentCount: 0,
+        methodArgumentCount: 0,
         importedTypePath: "factory.Factory",
         factoryRange: expect.any(Object),
         range: expect.any(Object)
@@ -2636,6 +2755,20 @@ describe("SymbolLatticeService", () => {
           referenceName: "Executor",
           relationKind: "returns",
           isTopLevelType: false
+        })
+      ])
+    );
+    expect(
+      graphStore
+        .getArtifactFacts(projectPath)
+        .find((facts) => facts.filePath === "src/app/VarargFactory.java")
+        ?.jvmFacts?.javaCallableDeclarations
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: "create",
+          minimumArgumentCount: 1,
+          maximumArgumentCount: null
         })
       ])
     );

@@ -1228,6 +1228,44 @@ function staticJavaValueDeclarationNames(
   return names;
 }
 
+function staticJavaCallableArity(
+  declaration: StaticJavaMethod | StaticJavaConstructor
+): { readonly minimumArgumentCount: number; readonly maximumArgumentCount: number | null } | null {
+  const parameterLists = directChildren(declaration.node).filter(
+    (child) => child.name === "FormalParameters"
+  );
+  if (parameterLists.length !== 1 || parameterLists[0] === undefined) {
+    return null;
+  }
+  const parameters = directChildren(parameterLists[0]).filter(
+    (child) => child.name === "FormalParameter" || child.name === "SpreadParameter"
+  );
+  const spreadIndexes = parameters.flatMap((parameter, index) =>
+    parameter.name === "SpreadParameter" ? [index] : []
+  );
+  if (
+    spreadIndexes.length > 1 ||
+    (spreadIndexes.length === 1 && spreadIndexes[0] !== parameters.length - 1)
+  ) {
+    return null;
+  }
+  const hasVarargs = spreadIndexes.length === 1;
+  return {
+    minimumArgumentCount: parameters.length - (hasVarargs ? 1 : 0),
+    maximumArgumentCount: hasVarargs ? null : parameters.length
+  };
+}
+
+function staticJavaArgumentCount(invocation: JavaSyntaxNode): number | null {
+  const argumentLists = directChildren(invocation).filter((child) => child.name === "ArgumentList");
+  if (argumentLists.length !== 1 || argumentLists[0] === undefined) {
+    return null;
+  }
+  return directChildren(argumentLists[0]).filter(
+    (child) => child.name !== "(" && child.name !== ")" && child.name !== ","
+  ).length;
+}
+
 function staticJavaChainedCallReferences(input: {
   readonly extraction: JavaExtractFileFactsInput;
   readonly callable: StaticJavaMethod | StaticJavaConstructor;
@@ -1254,6 +1292,8 @@ function staticJavaChainedCallReferences(input: {
         const methodName = identifierText(input.extraction, methodNode);
         const factoryMethodName =
           factoryMethodNode === undefined ? null : identifierText(input.extraction, factoryMethodNode);
+        const factoryArgumentCount = staticJavaArgumentCount(inner);
+        const methodArgumentCount = staticJavaArgumentCount(node);
         const receiverPrefix =
           factoryMethodNode === undefined
             ? ""
@@ -1269,6 +1309,8 @@ function staticJavaChainedCallReferences(input: {
           methodName !== null &&
           factoryMethodNode !== undefined &&
           factoryMethodName !== null &&
+          factoryArgumentCount !== null &&
+          methodArgumentCount !== null &&
           receiverPath !== undefined &&
           receiverTypeName !== undefined &&
           receiverSegments.length > 0 &&
@@ -1283,6 +1325,8 @@ function staticJavaChainedCallReferences(input: {
             receiverTypeName,
             factoryMethodName,
             methodName,
+            factoryArgumentCount,
+            methodArgumentCount,
             factoryRange: rangeFor(
               lineStarts,
               factoryMethodNode.from,
@@ -2426,13 +2470,17 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
     };
     symbols.push(symbol);
     addContainment(parent, symbol, declaration.node);
-    javaCallableDeclarations.push({
-      symbolId: symbol.id,
-      declaringTypeId: parent.id,
-      name: declaration.name,
-      callableKind: "isStatic" in declaration ? "method" : "constructor",
-      isStatic: "isStatic" in declaration && declaration.isStatic
-    });
+    const arity = staticJavaCallableArity(declaration);
+    if (arity !== null) {
+      javaCallableDeclarations.push({
+        symbolId: symbol.id,
+        declaringTypeId: parent.id,
+        name: declaration.name,
+        callableKind: "isStatic" in declaration ? "method" : "constructor",
+        isStatic: "isStatic" in declaration && declaration.isStatic,
+        ...arity
+      });
+    }
     return symbol;
   }
 
