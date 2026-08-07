@@ -8,6 +8,7 @@ import {
   type BindingSpace,
   type CallArityEvidence,
   type CallTypeConversionEvidence,
+  type CallTypeHierarchySegmentEvidence,
   type CallTypeEvidence,
   type CallTypeValueEvidence,
   type DjangoImportedUrlconfInclusionFact,
@@ -7562,7 +7563,15 @@ interface JavaCallPlan {
 interface JavaCallConversion {
   readonly evidence: CallTypeConversionEvidence;
   readonly cost: number | null;
+  readonly hierarchyEdges: readonly GraphEdge[];
+  readonly sourceSymbolId: string | null;
+  readonly targetSymbolId: string | null;
 }
+
+const JAVA_REFERENCE_HIERARCHY_LIMITS = {
+  maximumDepth: 16,
+  maximumVisitedTypes: 256
+} as const;
 
 const JAVA_PRIMITIVE_WIDENING_PATHS: Readonly<Record<string, readonly string[]>> = {
   byte: ["byte", "short", "int", "long", "float", "double"],
@@ -7586,11 +7595,100 @@ function javaPrimitiveWideningDistance(sourceType: string, targetType: string): 
   return distance > 0 ? distance : null;
 }
 
+function javaHeritageEdgesBySourceId(
+  edges: readonly GraphEdge[],
+  typesBySymbolId: ReadonlyMap<string, readonly JvmResolvedType[]>
+): ReadonlyMap<string, readonly GraphEdge[]> {
+  const bySourceId = new Map<string, Map<string, GraphEdge>>();
+  for (const edge of edges) {
+    if (
+      (edge.kind !== "extends" && edge.kind !== "implements") ||
+      edge.resolution !== "exact" ||
+      edge.targetId === null ||
+      edge.evidence === undefined ||
+      (typesBySymbolId.get(edge.sourceId)?.length ?? 0) !== 1 ||
+      (typesBySymbolId.get(edge.targetId)?.length ?? 0) !== 1
+    ) {
+      continue;
+    }
+    const candidates = bySourceId.get(edge.sourceId) ?? new Map<string, GraphEdge>();
+    candidates.set(edge.id, edge);
+    bySourceId.set(edge.sourceId, candidates);
+  }
+  return new Map(
+    [...bySourceId.entries()].map(([sourceId, candidates]) => [
+      sourceId,
+      [...candidates.values()].sort((left, right) => compareStableText(left.id, right.id))
+    ])
+  );
+}
+
+interface JavaReferenceWideningPath {
+  readonly state: "matched" | "not-assignable" | "bounded";
+  readonly edges: readonly GraphEdge[];
+}
+
+function javaReferenceWideningPath(input: {
+  readonly sourceSymbolId: string;
+  readonly targetSymbolId: string;
+  readonly heritageEdgesBySourceId: ReadonlyMap<string, readonly GraphEdge[]>;
+}): JavaReferenceWideningPath {
+  const queue: Array<{ readonly symbolId: string; readonly edges: readonly GraphEdge[] }> = [
+    { symbolId: input.sourceSymbolId, edges: [] }
+  ];
+  const visited = new Set<string>([input.sourceSymbolId]);
+  let bounded = false;
+
+  for (let index = 0; index < queue.length; index += 1) {
+    const current = queue[index]!;
+    const outgoing = input.heritageEdgesBySourceId.get(current.symbolId) ?? [];
+    if (current.edges.length >= JAVA_REFERENCE_HIERARCHY_LIMITS.maximumDepth) {
+      if (outgoing.some((edge) => edge.targetId !== null && !visited.has(edge.targetId))) {
+        bounded = true;
+      }
+      continue;
+    }
+    for (const edge of outgoing) {
+      const targetId = edge.targetId;
+      if (targetId === null) {
+        continue;
+      }
+      if (visited.has(targetId)) {
+        continue;
+      }
+      if (visited.size >= JAVA_REFERENCE_HIERARCHY_LIMITS.maximumVisitedTypes) {
+        bounded = true;
+        continue;
+      }
+      const path = [...current.edges, edge];
+      if (targetId === input.targetSymbolId) {
+        return { state: "matched", edges: path };
+      }
+      visited.add(targetId);
+      queue.push({ symbolId: targetId, edges: path });
+    }
+  }
+  return { state: bounded ? "bounded" : "not-assignable", edges: [] };
+}
+
+function javaHierarchySegmentEvidence(edge: GraphEdge): CallTypeHierarchySegmentEvidence {
+  return {
+    edgeId: edge.id,
+    sourceSymbolId: edge.sourceId,
+    targetSymbolId: edge.targetId!,
+    relationKind: edge.kind as "extends" | "implements",
+    filePath: edge.filePath,
+    range: edge.range,
+    ruleId: edge.evidence!.ruleId
+  };
+}
+
 function javaCallConversion(input: {
   readonly argumentIndex: number;
   readonly parameterIndex: number;
   readonly argument: ResolvedJavaCallType | null;
   readonly parameter: ResolvedJavaCallType | null;
+  readonly heritageEdgesBySourceId: ReadonlyMap<string, readonly GraphEdge[]>;
 }): JavaCallConversion {
   const sourceType = input.argument?.evidence.canonicalType ?? null;
   const targetType = input.parameter?.evidence.canonicalType ?? null;
@@ -7602,9 +7700,13 @@ function javaCallConversion(input: {
         kind: "unknown",
         sourceType,
         targetType,
-        distance: null
+        distance: null,
+        reason: "unresolved-type"
       },
-      cost: null
+      cost: null,
+      hierarchyEdges: [],
+      sourceSymbolId: input.argument?.evidence.targetSymbolId ?? null,
+      targetSymbolId: input.parameter?.evidence.targetSymbolId ?? null
     };
   }
   if (sourceType === targetType) {
@@ -7617,7 +7719,10 @@ function javaCallConversion(input: {
         targetType,
         distance: 0
       },
-      cost: 0
+      cost: 0,
+      hierarchyEdges: [],
+      sourceSymbolId: input.argument?.evidence.targetSymbolId ?? null,
+      targetSymbolId: input.parameter?.evidence.targetSymbolId ?? null
     };
   }
   const wideningDistance = javaPrimitiveWideningDistance(sourceType, targetType);
@@ -7631,8 +7736,59 @@ function javaCallConversion(input: {
         targetType,
         distance: wideningDistance
       },
-      cost: wideningDistance
+      cost: wideningDistance,
+      hierarchyEdges: [],
+      sourceSymbolId: null,
+      targetSymbolId: null
     };
+  }
+  const sourceSymbolId = input.argument?.evidence.targetSymbolId;
+  const targetSymbolId = input.parameter?.evidence.targetSymbolId;
+  if (
+    sourceType.startsWith("reference:") &&
+    targetType.startsWith("reference:") &&
+    sourceSymbolId !== undefined &&
+    targetSymbolId !== undefined
+  ) {
+    const hierarchy = javaReferenceWideningPath({
+      sourceSymbolId,
+      targetSymbolId,
+      heritageEdgesBySourceId: input.heritageEdgesBySourceId
+    });
+    if (hierarchy.state === "matched") {
+      return {
+        evidence: {
+          argumentIndex: input.argumentIndex,
+          parameterIndex: input.parameterIndex,
+          kind: "reference-widening",
+          sourceType,
+          targetType,
+          distance: hierarchy.edges.length,
+          hierarchyPath: hierarchy.edges.map(javaHierarchySegmentEvidence)
+        },
+        cost: hierarchy.edges.length,
+        hierarchyEdges: hierarchy.edges,
+        sourceSymbolId,
+        targetSymbolId
+      };
+    }
+    if (hierarchy.state === "bounded") {
+      return {
+        evidence: {
+          argumentIndex: input.argumentIndex,
+          parameterIndex: input.parameterIndex,
+          kind: "unknown",
+          sourceType,
+          targetType,
+          distance: null,
+          reason: "hierarchy-limit"
+        },
+        cost: null,
+        hierarchyEdges: [],
+        sourceSymbolId,
+        targetSymbolId
+      };
+    }
   }
   return {
     evidence: {
@@ -7643,32 +7799,71 @@ function javaCallConversion(input: {
       targetType,
       distance: null
     },
-    cost: null
+    cost: null,
+    hierarchyEdges: [],
+    sourceSymbolId: sourceSymbolId ?? null,
+    targetSymbolId: targetSymbolId ?? null
   };
 }
 
 function javaConversionsDominate(
   left: readonly JavaCallConversion[],
-  right: readonly JavaCallConversion[]
-): boolean {
-  if (left.length !== right.length || left.some((conversion) => conversion.cost === null)) {
-    return false;
+  right: readonly JavaCallConversion[],
+  heritageEdgesBySourceId: ReadonlyMap<string, readonly GraphEdge[]>
+): { readonly dominates: boolean; readonly usedParameterSpecificity: boolean } {
+  if (left.length !== right.length) {
+    return { dominates: false, usedParameterSpecificity: false };
   }
   let strictlyBetter = false;
+  let usedParameterSpecificity = false;
   for (let index = 0; index < left.length; index += 1) {
-    const leftCost = left[index]?.cost;
-    const rightCost = right[index]?.cost;
-    if (leftCost === null || leftCost === undefined || rightCost === null || rightCost === undefined) {
-      return false;
+    const leftConversion = left[index];
+    const rightConversion = right[index];
+    if (
+      leftConversion === undefined ||
+      rightConversion === undefined ||
+      leftConversion.cost === null ||
+      rightConversion.cost === null
+    ) {
+      return { dominates: false, usedParameterSpecificity: false };
     }
-    if (leftCost > rightCost) {
-      return false;
+    if (
+      leftConversion.evidence.targetType?.startsWith("reference:") === true &&
+      rightConversion.evidence.targetType?.startsWith("reference:") === true &&
+      leftConversion.targetSymbolId !== null &&
+      rightConversion.targetSymbolId !== null
+    ) {
+      if (leftConversion.targetSymbolId === rightConversion.targetSymbolId) {
+        continue;
+      }
+      const leftToRight = javaReferenceWideningPath({
+        sourceSymbolId: leftConversion.targetSymbolId,
+        targetSymbolId: rightConversion.targetSymbolId,
+        heritageEdgesBySourceId
+      });
+      if (leftToRight.state === "matched") {
+        strictlyBetter = true;
+        usedParameterSpecificity = true;
+        continue;
+      }
+      const rightToLeft = javaReferenceWideningPath({
+        sourceSymbolId: rightConversion.targetSymbolId,
+        targetSymbolId: leftConversion.targetSymbolId,
+        heritageEdgesBySourceId
+      });
+      if (rightToLeft.state === "matched") {
+        return { dominates: false, usedParameterSpecificity: false };
+      }
+      return { dominates: false, usedParameterSpecificity: false };
     }
-    if (leftCost < rightCost) {
+    if (leftConversion.cost > rightConversion.cost) {
+      return { dominates: false, usedParameterSpecificity: false };
+    }
+    if (leftConversion.cost < rightConversion.cost) {
       strictlyBetter = true;
     }
   }
-  return strictlyBetter;
+  return { dominates: strictlyBetter, usedParameterSpecificity };
 }
 
 function resolveJavaCallType(input: {
@@ -7787,6 +7982,7 @@ function javaCallPlan(input: {
   readonly callerType: JvmResolvedType;
   readonly typesBySymbolId: ReadonlyMap<string, readonly JvmResolvedType[]>;
   readonly types: readonly JvmResolvedType[];
+  readonly heritageEdgesBySourceId: ReadonlyMap<string, readonly GraphEdge[]>;
   readonly symbolsById: ReadonlyMap<string, SymbolNode>;
   readonly membershipsByFile: ReadonlyMap<string, readonly JvmModuleMembership[]>;
   readonly projectEvidence: JvmProjectModuleEvidence | undefined;
@@ -7898,7 +8094,8 @@ function javaCallPlan(input: {
           argumentIndex,
           parameterIndex,
           argument,
-          parameter
+          parameter,
+          heritageEdgesBySourceId: input.heritageEdgesBySourceId
         });
         conversions.push(conversion);
         if (conversion.evidence.kind === "unknown") {
@@ -7930,8 +8127,14 @@ function javaCallPlan(input: {
     | (typeof applicable)[number]
     | undefined;
   let selection: JavaCallPlan["selection"] = "arity";
+  let selectionReason: NonNullable<CallTypeEvidence["selectionReason"]> = "unique-applicable";
   if (applicable.length === 1) {
-    selectedResolution = applicable[0]?.compatibility === "incompatible" ? undefined : applicable[0];
+    const only = applicable[0];
+    const hierarchyBounded = only?.conversions.some(
+      (conversion) => conversion.evidence.reason === "hierarchy-limit"
+    );
+    selectedResolution =
+      only?.compatibility === "incompatible" || hierarchyBounded ? undefined : only;
   } else {
     const compatible = applicable.filter((candidate) => candidate.compatibility === "compatible");
     const unknown = applicable.some((candidate) => candidate.compatibility === "unknown");
@@ -7943,13 +8146,33 @@ function javaCallPlan(input: {
           !phase.some(
             (other) =>
               other.declaration.symbolId !== candidate.declaration.symbolId &&
-              javaConversionsDominate(other.conversions, candidate.conversions)
+              javaConversionsDominate(
+                other.conversions,
+                candidate.conversions,
+                input.heritageEdgesBySourceId
+              ).dominates
           )
       );
       if (nonDominated.length === 1) {
         selectedResolution = nonDominated[0];
+        selectionReason =
+          compatible.length === 1
+            ? "unique-compatible"
+            : phase.some(
+                (other) =>
+                  other.declaration.symbolId !== selectedResolution?.declaration.symbolId &&
+                  javaConversionsDominate(
+                    selectedResolution!.conversions,
+                    other.conversions,
+                    input.heritageEdgesBySourceId
+                  ).usedParameterSpecificity
+              )
+              ? "parameter-specificity"
+              : "conversion-cost";
         selection = selectedResolution?.conversions.some(
-          (conversion) => conversion.evidence.kind === "primitive-widening"
+          (conversion) =>
+            conversion.evidence.kind === "primitive-widening" ||
+            conversion.evidence.kind === "reference-widening"
         )
           ? "arity-conversion"
           : "arity-type";
@@ -7962,7 +8185,9 @@ function javaCallPlan(input: {
   if (
     selection === "arity" &&
     selectedResolution.conversions.some(
-      (conversion) => conversion.evidence.kind === "primitive-widening"
+      (conversion) =>
+        conversion.evidence.kind === "primitive-widening" ||
+        conversion.evidence.kind === "reference-widening"
     )
   ) {
     selection = "arity-conversion";
@@ -7972,6 +8197,9 @@ function javaCallPlan(input: {
     ...resolvedArguments,
     ...selectedResolution.parameters
   ].filter((candidate): candidate is ResolvedJavaCallType => candidate !== null);
+  const selectedHierarchyEdges = selectedResolution.conversions.flatMap(
+    (conversion) => conversion.hierarchyEdges
+  );
   return {
     selected: selectedResolution.declaration,
     arityEvidence: {
@@ -7990,16 +8218,27 @@ function javaCallPlan(input: {
           conversions: candidate.conversions.map((conversion) => conversion.evidence)
         };
       }),
-      selectionPolicy: "java-primitive-widening-v1",
-      selectedSymbolId: selectedResolution.declaration.symbolId
+      selectionPolicy: "java-source-widening-v2",
+      selectedSymbolId: selectedResolution.declaration.symbolId,
+      selectionReason,
+      hierarchyBounds: JAVA_REFERENCE_HIERARCHY_LIMITS
     },
     selection,
     configurationPaths: uniqueConfigurationPaths(
-      selectedTypes.map((candidate) => candidate.configurationPaths)
+      [
+        ...selectedTypes.map((candidate) => candidate.configurationPaths),
+        ...selectedHierarchyEdges.map((edge) => edge.evidence?.configurationPaths ?? [])
+      ]
     ),
-    sourcePaths: [...new Set(selectedTypes.flatMap((candidate) => candidate.sourcePaths))].sort(
-      compareStableText
-    )
+    sourcePaths: [
+      ...new Set([
+        ...selectedTypes.flatMap((candidate) => candidate.sourcePaths),
+        ...selectedHierarchyEdges.flatMap((edge) => [
+          edge.filePath,
+          ...(edge.evidence?.resolutionPath ?? [])
+        ])
+      ])
+    ].sort(compareStableText)
   };
 }
 
@@ -8007,6 +8246,7 @@ function projectJavaChainedCallReferences(input: {
   readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
   readonly symbolsById: ReadonlyMap<string, SymbolNode>;
   readonly signatureEdges: readonly GraphEdge[];
+  readonly heritageEdges: readonly GraphEdge[];
   readonly jvmProjectModuleEvidence?: JvmProjectModuleEvidence;
 }): readonly GraphEdge[] {
   const typesBySymbolId = new Map<string, JvmResolvedType[]>();
@@ -8044,6 +8284,10 @@ function projectJavaChainedCallReferences(input: {
     .map((entries) => entries[0] as JavaCallableDeclarationFact)
     .sort((left, right) => compareStableText(left.symbolId, right.symbolId));
   const membershipsByFile = jvmModuleMembershipsByFile(input.jvmProjectModuleEvidence);
+  const heritageEdgesBySourceId = javaHeritageEdgesBySourceId(
+    input.heritageEdges,
+    typesBySymbolId
+  );
   const edges: GraphEdge[] = [];
 
   for (const reference of [...chainedReferences].sort((left, right) =>
@@ -8125,6 +8369,7 @@ function projectJavaChainedCallReferences(input: {
       callerType: declaringType,
       typesBySymbolId,
       types,
+      heritageEdgesBySourceId,
       symbolsById: input.symbolsById,
       membershipsByFile,
       projectEvidence: input.jvmProjectModuleEvidence
@@ -8180,6 +8425,7 @@ function projectJavaChainedCallReferences(input: {
       callerType: declaringType,
       typesBySymbolId,
       types,
+      heritageEdgesBySourceId,
       symbolsById: input.symbolsById,
       membershipsByFile,
       projectEvidence: input.jvmProjectModuleEvidence
@@ -8734,15 +8980,17 @@ export function resolveProjectFacts(input: {
     }
   }
 
-  resolvedEdges.push(
-    ...projectJvmHeritageReferences({
-      factsByFile,
-      symbolsById,
-      ...(input.jvmProjectModuleEvidence === undefined
-        ? {}
-        : { jvmProjectModuleEvidence: input.jvmProjectModuleEvidence })
-    })
+  const jvmProjectHeritageEdges = projectJvmHeritageReferences({
+    factsByFile,
+    symbolsById,
+    ...(input.jvmProjectModuleEvidence === undefined
+      ? {}
+      : { jvmProjectModuleEvidence: input.jvmProjectModuleEvidence })
+  });
+  const jvmSyntaxHeritageEdges = input.extractedFiles.flatMap((facts) =>
+    facts.edges.filter((edge) => edge.kind === "extends" || edge.kind === "implements")
   );
+  resolvedEdges.push(...jvmProjectHeritageEdges);
   resolvedEdges.push(
     ...projectJvmDependencyInjectionReferences({
       factsByFile,
@@ -8765,6 +9013,7 @@ export function resolveProjectFacts(input: {
       factsByFile,
       symbolsById,
       signatureEdges: jvmCallableSignatureEdges,
+      heritageEdges: [...jvmSyntaxHeritageEdges, ...jvmProjectHeritageEdges],
       ...(input.jvmProjectModuleEvidence === undefined
         ? {}
         : { jvmProjectModuleEvidence: input.jvmProjectModuleEvidence })

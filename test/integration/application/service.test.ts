@@ -3248,7 +3248,8 @@ describe("SymbolLatticeService", () => {
       evidence: {
         ruleId: "call.java.chained-factory.explicit-import.arity-conversion.factory",
         callType: {
-          selectionPolicy: "java-primitive-widening-v1",
+          selectionPolicy: "java-source-widening-v2",
+          selectionReason: "conversion-cost",
           candidates: expect.arrayContaining([
             expect.objectContaining({
               symbolId: symbol("src/factory/WideningFactory.java#WideningFactory.create", 4)?.id,
@@ -3431,6 +3432,343 @@ describe("SymbolLatticeService", () => {
           "src/bad/AmbiguousPrimitiveRunner.java",
           "src/bad/NarrowingRunner.java",
           "src/bad/BooleanRunner.java"
+        ].includes(edge.filePath)
+      )
+    ).toEqual([]);
+  });
+
+  it("ranks project-proven Java reference widening paths without guessing hierarchy ambiguity", async () => {
+    const deepHierarchy = Object.fromEntries(
+      Array.from({ length: 18 }, (_, index) => [
+        `src/model/deep/Type${index}.java`,
+        [
+          "package model.deep;",
+          index === 0
+            ? "public class Type0 {}"
+            : `public class Type${index} extends Type${index - 1} {}`
+        ].join("\n")
+      ])
+    );
+    const projectPath = await createInlineProject({
+      ...deepHierarchy,
+      "src/model/Creature.java": [
+        "package model;",
+        "public interface Creature {}"
+      ].join("\n"),
+      "src/model/Mammal.java": [
+        "package model;",
+        "public class Mammal implements Creature {}"
+      ].join("\n"),
+      "src/model/Dog.java": [
+        "package model;",
+        "public class Dog extends Mammal implements Creature {}"
+      ].join("\n"),
+      "src/model/Pet.java": [
+        "package model;",
+        "public interface Pet {}"
+      ].join("\n"),
+      "src/model/Hybrid.java": [
+        "package model;",
+        "public class Hybrid extends Mammal implements Pet {}"
+      ].join("\n"),
+      "src/api/Executor.java": [
+        "package api;",
+        "import model.Creature;",
+        "import model.Mammal;",
+        "public class Executor {",
+        "  public void execute(Mammal value) {}",
+        "  public void execute(Creature value) {}",
+        "}"
+      ].join("\n"),
+      "src/factory/ReferenceFactory.java": [
+        "package factory;",
+        "import api.Executor;",
+        "import model.Creature;",
+        "import model.Mammal;",
+        "public class ReferenceFactory {",
+        "  public static Executor create(Mammal value) { return null; }",
+        "  public static Executor create(Creature value) { return null; }",
+        "}"
+      ].join("\n"),
+      "src/app/ReferenceRunner.java": [
+        "package app;",
+        "import factory.ReferenceFactory;",
+        "import model.Dog;",
+        "public class ReferenceRunner {",
+        "  public void run() { ReferenceFactory.create(new Dog()).execute(new Dog()); }",
+        "}"
+      ].join("\n"),
+      "src/factory/ExactReferenceFactory.java": [
+        "package factory;",
+        "import api.Executor;",
+        "import model.Dog;",
+        "import model.Mammal;",
+        "public class ExactReferenceFactory {",
+        "  public static Executor create(Dog value) { return null; }",
+        "  public static Executor create(Mammal value) { return null; }",
+        "}"
+      ].join("\n"),
+      "src/app/ExactReferenceRunner.java": [
+        "package app;",
+        "import factory.ExactReferenceFactory;",
+        "import model.Dog;",
+        "public class ExactReferenceRunner {",
+        "  public void run() { ExactReferenceFactory.create(new Dog()).execute(new Dog()); }",
+        "}"
+      ].join("\n"),
+      "src/factory/OuterReferenceFactory.java": [
+        "package factory;",
+        "import api.Executor;",
+        "public class OuterReferenceFactory {",
+        "  public static Executor create() { return null; }",
+        "}"
+      ].join("\n"),
+      "src/app/OuterReferenceRunner.java": [
+        "package app;",
+        "import factory.OuterReferenceFactory;",
+        "import model.Dog;",
+        "public class OuterReferenceRunner {",
+        "  public void run() { OuterReferenceFactory.create().execute(new Dog()); }",
+        "}"
+      ].join("\n"),
+      "src/factory/AmbiguousReferenceFactory.java": [
+        "package factory;",
+        "import api.Executor;",
+        "import model.Mammal;",
+        "import model.Pet;",
+        "public class AmbiguousReferenceFactory {",
+        "  public static Executor create(Mammal value) { return null; }",
+        "  public static Executor create(Pet value) { return null; }",
+        "}"
+      ].join("\n"),
+      "src/bad/AmbiguousReferenceRunner.java": [
+        "package bad;",
+        "import factory.AmbiguousReferenceFactory;",
+        "import model.Hybrid;",
+        "public class AmbiguousReferenceRunner {",
+        "  public void run() { AmbiguousReferenceFactory.create(new Hybrid()).execute(new Hybrid()); }",
+        "}"
+      ].join("\n"),
+      "src/factory/NarrowReferenceFactory.java": [
+        "package factory;",
+        "import api.Executor;",
+        "import model.Dog;",
+        "public class NarrowReferenceFactory {",
+        "  public static Executor create(Dog value) { return null; }",
+        "}"
+      ].join("\n"),
+      "src/bad/NarrowReferenceRunner.java": [
+        "package bad;",
+        "import factory.NarrowReferenceFactory;",
+        "import model.Mammal;",
+        "public class NarrowReferenceRunner {",
+        "  public void run() { NarrowReferenceFactory.create(new Mammal()).execute(new Mammal()); }",
+        "}"
+      ].join("\n"),
+      "src/factory/DeepReferenceFactory.java": [
+        "package factory;",
+        "import api.Executor;",
+        "import model.deep.Type0;",
+        "public class DeepReferenceFactory {",
+        "  public static Executor create(Type0 value) { return null; }",
+        "}"
+      ].join("\n"),
+      "src/app/BoundaryReferenceRunner.java": [
+        "package app;",
+        "import factory.DeepReferenceFactory;",
+        "import model.Dog;",
+        "import model.deep.Type16;",
+        "public class BoundaryReferenceRunner {",
+        "  public void run() { DeepReferenceFactory.create(new Type16()).execute(new Dog()); }",
+        "}"
+      ].join("\n"),
+      "src/bad/DeepReferenceRunner.java": [
+        "package bad;",
+        "import factory.DeepReferenceFactory;",
+        "import model.Dog;",
+        "import model.deep.Type17;",
+        "public class DeepReferenceRunner {",
+        "  public void run() { DeepReferenceFactory.create(new Type17()).execute(new Dog()); }",
+        "}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const snapshot = graphStore.getSnapshot(projectPath);
+    const symbol = (qualifiedName: string, line?: number) =>
+      snapshot.symbols.find(
+        (candidate) =>
+          candidate.qualifiedName === qualifiedName &&
+          (line === undefined || candidate.range.start.line === line)
+      );
+    const calls = snapshot.edges.filter((edge) => edge.kind === "calls");
+    const sourceCalls = (qualifiedName: string) =>
+      calls.filter((edge) => edge.sourceId === symbol(qualifiedName)?.id);
+    const factoryCall = (runner: string) =>
+      sourceCalls(`src/app/${runner}.java#${runner}.run`).find(
+        (edge) => edge.referenceName === "create"
+      );
+
+    const dogId = symbol("src/model/Dog.java#Dog")?.id;
+    const mammalId = symbol("src/model/Mammal.java#Mammal")?.id;
+    const creatureId = symbol("src/model/Creature.java#Creature")?.id;
+    expect(
+      snapshot.edges.filter(
+        (edge) => edge.kind === "extends" && edge.filePath.startsWith("src/model/deep/")
+      )
+    ).toHaveLength(17);
+    const referenceCall = factoryCall("ReferenceRunner");
+    expect(referenceCall).toMatchObject({
+      targetId: symbol("src/factory/ReferenceFactory.java#ReferenceFactory.create", 6)?.id,
+      resolution: "exact",
+      evidence: {
+        ruleId: "call.java.chained-factory.explicit-import.arity-conversion.factory",
+        callType: {
+          selectionPolicy: "java-source-widening-v2",
+          selectionReason: "parameter-specificity",
+          candidates: expect.arrayContaining([
+            expect.objectContaining({
+              symbolId: symbol(
+                "src/factory/ReferenceFactory.java#ReferenceFactory.create",
+                6
+              )?.id,
+              conversions: [
+                expect.objectContaining({
+                  kind: "reference-widening",
+                  sourceType: "reference:model.Dog",
+                  targetType: "reference:model.Mammal",
+                  distance: 1,
+                  hierarchyPath: [
+                    expect.objectContaining({
+                      sourceSymbolId: dogId,
+                      targetSymbolId: mammalId,
+                      relationKind: "extends",
+                      ruleId: "syntax.jvm.cross-file.same-package.direct-superclass"
+                    })
+                  ]
+                })
+              ]
+            }),
+            expect.objectContaining({
+              symbolId: symbol(
+                "src/factory/ReferenceFactory.java#ReferenceFactory.create",
+                7
+              )?.id,
+              conversions: [
+                expect.objectContaining({
+                  kind: "reference-widening",
+                  distance: 1,
+                  hierarchyPath: [
+                    expect.objectContaining({
+                      sourceSymbolId: dogId,
+                      targetSymbolId: creatureId,
+                      relationKind: "implements"
+                    })
+                  ]
+                })
+              ]
+            })
+          ]),
+          selectedSymbolId: symbol(
+            "src/factory/ReferenceFactory.java#ReferenceFactory.create",
+            6
+          )?.id
+        }
+      }
+    });
+
+    expect(factoryCall("ExactReferenceRunner")).toMatchObject({
+      targetId: symbol(
+        "src/factory/ExactReferenceFactory.java#ExactReferenceFactory.create",
+        6
+      )?.id,
+      evidence: {
+        ruleId: "call.java.chained-factory.explicit-import.arity-type.factory",
+        callType: {
+          candidates: expect.arrayContaining([
+            expect.objectContaining({
+              symbolId: symbol(
+                "src/factory/ExactReferenceFactory.java#ExactReferenceFactory.create",
+                6
+              )?.id,
+              conversions: [expect.objectContaining({ kind: "exact", distance: 0 })]
+            }),
+            expect.objectContaining({
+              symbolId: symbol(
+                "src/factory/ExactReferenceFactory.java#ExactReferenceFactory.create",
+                7
+              )?.id,
+              conversions: [
+                expect.objectContaining({ kind: "reference-widening", distance: 1 })
+              ]
+            })
+          ])
+        }
+      }
+    });
+
+    const outerCall = sourceCalls(
+      "src/app/OuterReferenceRunner.java#OuterReferenceRunner.run"
+    ).find((edge) => edge.referenceName === "execute");
+    expect(outerCall).toMatchObject({
+      targetId: symbol("src/api/Executor.java#Executor.execute", 5)?.id,
+      evidence: {
+        ruleId: "call.java.chained-factory.explicit-import.arity-conversion.return-dispatch",
+        callType: {
+          candidates: expect.arrayContaining([
+            expect.objectContaining({
+              symbolId: symbol("src/api/Executor.java#Executor.execute", 5)?.id,
+              conversions: [expect.objectContaining({ kind: "reference-widening", distance: 1 })]
+            }),
+            expect.objectContaining({
+              symbolId: symbol("src/api/Executor.java#Executor.execute", 6)?.id,
+              conversions: [expect.objectContaining({ kind: "reference-widening", distance: 1 })]
+            })
+          ])
+        }
+      }
+    });
+
+    expect(factoryCall("BoundaryReferenceRunner")).toMatchObject({
+      targetId: symbol(
+        "src/factory/DeepReferenceFactory.java#DeepReferenceFactory.create",
+        5
+      )?.id,
+      evidence: {
+        callType: {
+          hierarchyBounds: { maximumDepth: 16, maximumVisitedTypes: 256 },
+          candidates: [
+            expect.objectContaining({
+              conversions: [
+                expect.objectContaining({
+                  kind: "reference-widening",
+                  distance: 16,
+                  hierarchyPath: expect.arrayContaining([
+                    expect.objectContaining({
+                      sourceSymbolId: symbol("src/model/deep/Type16.java#Type16")?.id,
+                      targetSymbolId: symbol("src/model/deep/Type15.java#Type15")?.id
+                    }),
+                    expect.objectContaining({
+                      sourceSymbolId: symbol("src/model/deep/Type1.java#Type1")?.id,
+                      targetSymbolId: symbol("src/model/deep/Type0.java#Type0")?.id
+                    })
+                  ])
+                })
+              ]
+            })
+          ]
+        }
+      }
+    });
+
+    expect(
+      calls.filter((edge) =>
+        [
+          "src/bad/AmbiguousReferenceRunner.java",
+          "src/bad/NarrowReferenceRunner.java",
+          "src/bad/DeepReferenceRunner.java"
         ].includes(edge.filePath)
       )
     ).toEqual([]);

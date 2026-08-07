@@ -19,7 +19,7 @@ export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v211";
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v94";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v95";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -68,8 +68,20 @@ export type CallTypeCompatibility =
 export type CallTypeConversionKind =
   | "exact"
   | "primitive-widening"
+  | "reference-widening"
   | "incompatible"
   | "unknown";
+
+/** One exact persisted heritage edge used to prove a reference widening conversion. */
+export interface CallTypeHierarchySegmentEvidence {
+  readonly edgeId: string;
+  readonly sourceSymbolId: string;
+  readonly targetSymbolId: string;
+  readonly relationKind: "extends" | "implements";
+  readonly filePath: string;
+  readonly range: SourceRange;
+  readonly ruleId: string;
+}
 
 /** One ordered argument-to-parameter conversion considered by an overload rule. */
 export interface CallTypeConversionEvidence {
@@ -80,6 +92,10 @@ export interface CallTypeConversionEvidence {
   readonly targetType: string | null;
   /** Zero for identity, positive for a proven widening path, and null otherwise. */
   readonly distance: number | null;
+  /** Missing before v0.302; present only for a project-proven reference widening. */
+  readonly hierarchyPath?: readonly CallTypeHierarchySegmentEvidence[];
+  /** Distinguishes an incomplete bounded traversal from an ordinary unresolved type. */
+  readonly reason?: "unresolved-type" | "hierarchy-limit";
 }
 
 /** One syntax-proven call or parameter type after project-local resolution. */
@@ -114,9 +130,20 @@ export interface CallTypeEvidence {
   readonly arguments: readonly (CallTypeValueEvidence | null)[];
   readonly candidates: readonly CallTypeCandidateEvidence[];
   /** Missing only from pre-v0.301 persisted evidence. */
-  readonly selectionPolicy?: "java-primitive-widening-v1";
+  readonly selectionPolicy?: "java-primitive-widening-v1" | "java-source-widening-v2";
   /** Missing only from pre-v0.301 persisted evidence. */
   readonly selectedSymbolId?: string;
+  /** Missing before v0.302; explains the final overload selection phase. */
+  readonly selectionReason?:
+    | "unique-applicable"
+    | "unique-compatible"
+    | "conversion-cost"
+    | "parameter-specificity";
+  /** Missing before v0.302; traversal never reads compiler or dependency classpaths. */
+  readonly hierarchyBounds?: {
+    readonly maximumDepth: number;
+    readonly maximumVisitedTypes: number;
+  };
 }
 
 /**
