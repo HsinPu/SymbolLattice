@@ -2837,6 +2837,8 @@ describe("SymbolLatticeService", () => {
     await service.init({ projectPath });
 
     const snapshot = graphStore.getSnapshot(projectPath);
+    const symbol = (qualifiedName: string) =>
+      snapshot.symbols.find((candidate) => candidate.qualifiedName === qualifiedName);
     const factoryCalls = snapshot.edges.filter(
       (edge) => edge.kind === "calls" && edge.referenceName === "create"
     );
@@ -2873,8 +2875,63 @@ describe("SymbolLatticeService", () => {
     expect(factoryCallAt("src/outside/OutsideRunner.java", 9)?.evidence?.callAccess).toEqual(
       expect.objectContaining({ visibility: "public", decision: "public" })
     );
-    expect(factoryCallAt("src/outside/ProtectedFactoryChild.java", 5)).toBeUndefined();
-    expect(factoryCallAt("src/outside/ProtectedFactoryChild.java", 6)).toBeUndefined();
+    const protectedFactoryId = symbol(
+      "src/access/ProtectedFactory.java#ProtectedFactory"
+    )?.id;
+    const protectedFactoryChildId = symbol(
+      "src/outside/ProtectedFactoryChild.java#ProtectedFactoryChild"
+    )?.id;
+    expect(factoryCallAt("src/outside/ProtectedFactoryChild.java", 5)?.evidence).toEqual(
+      expect.objectContaining({
+        callAccess: expect.objectContaining({
+          visibility: "protected",
+          decision: "protected-subclass-static",
+          callerTypeSymbolId: protectedFactoryChildId,
+          receiverTypeSymbolId: protectedFactoryId,
+          ownerTypeSymbolId: protectedFactoryId,
+          callerToOwnerPath: [
+            expect.objectContaining({
+              sourceSymbolId: protectedFactoryChildId,
+              targetSymbolId: protectedFactoryId,
+              relationKind: "extends"
+            })
+          ],
+          receiverToCallerPath: []
+        }),
+        callDispatch: expect.objectContaining({
+          invocationKind: "type-name-static",
+          selectionReason: "declared-owner",
+          receiverTypeSymbolId: protectedFactoryId,
+          selectedOwnerTypeSymbolId: protectedFactoryId
+        })
+      })
+    );
+    expect(factoryCallAt("src/outside/ProtectedFactoryChild.java", 6)?.evidence).toEqual(
+      expect.objectContaining({
+        callAccess: expect.objectContaining({
+          visibility: "protected",
+          decision: "protected-subclass-static",
+          callerTypeSymbolId: protectedFactoryChildId,
+          receiverTypeSymbolId: protectedFactoryChildId,
+          ownerTypeSymbolId: protectedFactoryId,
+          callerToOwnerPath: [expect.objectContaining({ relationKind: "extends" })],
+          receiverToCallerPath: []
+        }),
+        callDispatch: expect.objectContaining({
+          invocationKind: "type-name-static",
+          selectionReason: "unique-inherited-owner",
+          receiverTypeSymbolId: protectedFactoryChildId,
+          selectedOwnerTypeSymbolId: protectedFactoryId,
+          candidates: [
+            expect.objectContaining({
+              ownerTypeSymbolId: protectedFactoryId,
+              distance: 1,
+              hierarchyPath: [expect.objectContaining({ relationKind: "extends" })]
+            })
+          ]
+        })
+      })
+    );
   });
 
   it("resolves Java chained overloads only from exact argument type evidence", async () => {
@@ -3929,7 +3986,7 @@ describe("SymbolLatticeService", () => {
         ruleId:
           "call.java.chained-factory.explicit-import.arity.inherited-return-dispatch",
         callDispatch: {
-          selectionPolicy: "java-source-method-set-v3",
+          selectionPolicy: "java-source-method-set-v4",
           selectionReason: "unique-inherited-owner",
           receiverTypeSymbolId: leafTypeId,
           selectedOwnerTypeSymbolId: baseTypeId,
@@ -4273,7 +4330,7 @@ describe("SymbolLatticeService", () => {
       evidence: {
         ruleId: "call.java.chained-factory.explicit-import.arity-type.inherited-return-dispatch",
         callDispatch: {
-          selectionPolicy: "java-source-method-set-v3",
+          selectionPolicy: "java-source-method-set-v4",
           selectionReason: "class-precedence",
           receiverTypeSymbolId: mixedLeafId,
           selectedOwnerTypeSymbolId: classBaseId,
@@ -4301,7 +4358,7 @@ describe("SymbolLatticeService", () => {
       evidence: {
         ruleId: "call.java.chained-factory.explicit-import.arity-type.return-dispatch",
         callDispatch: {
-          selectionPolicy: "java-source-method-set-v3",
+          selectionPolicy: "java-source-method-set-v4",
           selectionReason: "declared-owner",
           receiverTypeSymbolId: mixedLeafId,
           selectedOwnerTypeSymbolId: mixedLeafId,
@@ -4325,7 +4382,7 @@ describe("SymbolLatticeService", () => {
       targetId: symbol("src/api/ConflictLeaf.java#ConflictLeaf.execute")?.id,
       evidence: {
         callDispatch: {
-          selectionPolicy: "java-source-method-set-v3",
+          selectionPolicy: "java-source-method-set-v4",
           selectionReason: "declared-owner",
           selectedOwnerTypeSymbolId: symbol("src/api/ConflictLeaf.java#ConflictLeaf")?.id,
           selectedSignature: {

@@ -19,7 +19,7 @@ export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v212";
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v99";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v100";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -104,7 +104,11 @@ export interface CallDispatchSignatureEvidence {
 export interface CallDispatchAccessEvidence {
   readonly policy: "java-source-access-v1";
   readonly visibility: "public" | "protected" | "package" | "private";
-  readonly decision: "public" | "same-package" | "protected-subclass-receiver";
+  readonly decision:
+    | "public"
+    | "same-package"
+    | "protected-subclass-receiver"
+    | "protected-subclass-static";
   readonly callerTypeSymbolId: string;
   readonly callerPackageName: string;
   readonly receiverTypeSymbolId: string;
@@ -117,7 +121,12 @@ export interface CallDispatchAccessEvidence {
 
 /** Project-proven Java method-set and owner selection for a chained return-type dispatch. */
 export interface CallDispatchEvidence {
-  readonly selectionPolicy: "java-source-method-set-v2" | "java-source-method-set-v3";
+  readonly selectionPolicy:
+    | "java-source-method-set-v2"
+    | "java-source-method-set-v3"
+    | "java-source-method-set-v4";
+  /** Missing before v0.307; distinguishes expression lookup from a TypeName-qualified static call. */
+  readonly invocationKind?: "expression" | "type-name-static";
   readonly selectionReason:
     | "declared-owner"
     | "unique-inherited-owner"

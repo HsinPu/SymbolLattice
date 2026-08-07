@@ -7778,7 +7778,7 @@ function javaMethodAccessPlan(input: {
     return evidence("same-package");
   }
 
-  if (visibility !== "protected" || input.declaration.isStatic) {
+  if (visibility !== "protected") {
     return null;
   }
   const callerToOwner = javaReferenceWideningPath({
@@ -7786,6 +7786,12 @@ function javaMethodAccessPlan(input: {
     targetSymbolId: ownerType.symbol.id,
     heritageEdgesBySourceId: input.heritageEdgesBySourceId
   });
+  if (callerToOwner.state !== "matched") {
+    return null;
+  }
+  if (input.declaration.isStatic) {
+    return evidence("protected-subclass-static", callerToOwner.edges);
+  }
   const receiverToCaller =
     receiverType.symbol.id === input.callerType.symbol.id
       ? { state: "matched" as const, edges: [] }
@@ -7794,7 +7800,7 @@ function javaMethodAccessPlan(input: {
           targetSymbolId: input.callerType.symbol.id,
           heritageEdgesBySourceId: input.heritageEdgesBySourceId
         });
-  if (callerToOwner.state !== "matched" || receiverToCaller.state !== "matched") {
+  if (receiverToCaller.state !== "matched") {
     return null;
   }
   return evidence(
@@ -7863,6 +7869,7 @@ function javaMethodSetPlan(input: {
   readonly receiverTypeSymbolId: string;
   readonly callerType: JvmResolvedType;
   readonly methodName: string;
+  readonly invocationKind: "expression" | "type-name-static";
   readonly callableDeclarations: readonly JavaCallableDeclarationFact[];
   readonly heritageEdgesBySourceId: ReadonlyMap<string, readonly GraphEdge[]>;
   readonly typesBySymbolId: ReadonlyMap<string, readonly JvmResolvedType[]>;
@@ -7932,9 +7939,16 @@ function javaMethodSetPlan(input: {
       continue;
     }
     for (const declaration of declarationsByOwnerId.get(ownerTypeSymbolId) ?? []) {
+      if (input.invocationKind === "type-name-static" && !declaration.isStatic) {
+        continue;
+      }
       // Java interface static methods belong to the declaring interface and are
       // never inherited or invocable through an instance-valued expression.
-      if (owner.kind === "interface" && declaration.isStatic) {
+      if (
+        owner.kind === "interface" &&
+        declaration.isStatic &&
+        (input.invocationKind === "expression" || ownerTypeSymbolId !== input.receiverTypeSymbolId)
+      ) {
         continue;
       }
       const accessPlan = javaMethodAccessPlan({
@@ -8014,7 +8028,8 @@ function javaMethodSetPlan(input: {
     selectedEntries.push({
       declaration: selected.declaration,
       evidence: {
-        selectionPolicy: "java-source-method-set-v3",
+        selectionPolicy: "java-source-method-set-v4",
+        invocationKind: input.invocationKind,
         selectionReason,
         receiverTypeSymbolId: input.receiverTypeSymbolId,
         selectedOwnerTypeSymbolId,
@@ -8729,32 +8744,21 @@ function projectJavaChainedCallReferences(input: {
       declaredProjectDependency === null
         ? resolutionProof
         : `${resolutionProof}.declared-${declaredProjectDependency.kind}`;
-    const factoryAccessPlansBySymbolId = new Map<string, JavaMethodAccessPlan>();
-    const factoryCandidates = callableDeclarations.filter((declaration) => {
-      if (
-        declaration.declaringTypeId !== receiverType.id ||
-        declaration.callableKind !== "method" ||
-        !declaration.isStatic ||
-        declaration.name !== reference.factoryMethodName
-      ) {
-        return false;
-      }
-      const accessPlan = javaMethodAccessPlan({
-        declaration,
-        callerType: declaringType,
-        receiverTypeSymbolId: receiverType.id,
-        ownerHierarchyPath: [],
-        heritageEdgesBySourceId,
-        typesBySymbolId
-      });
-      if (accessPlan === null) {
-        return false;
-      }
-      factoryAccessPlansBySymbolId.set(declaration.symbolId, accessPlan);
-      return true;
+    const factoryMethodSetPlan = javaMethodSetPlan({
+      receiverTypeSymbolId: receiverType.id,
+      callerType: declaringType,
+      methodName: reference.factoryMethodName,
+      invocationKind: "type-name-static",
+      callableDeclarations,
+      heritageEdgesBySourceId,
+      typesBySymbolId,
+      symbolsById: input.symbolsById
     });
+    if (factoryMethodSetPlan === null) {
+      continue;
+    }
     const factoryPlan = javaCallPlan({
-      declarations: factoryCandidates,
+      declarations: factoryMethodSetPlan.declarations,
       actualArgumentCount: reference.factoryArgumentCount,
       argumentTypes: reference.factoryArgumentTypes,
       callerType: declaringType,
@@ -8769,8 +8773,15 @@ function projectJavaChainedCallReferences(input: {
       continue;
     }
     const factory = input.symbolsById.get(factoryPlan.selected.symbolId);
-    const factoryAccessPlan = factoryAccessPlansBySymbolId.get(factoryPlan.selected.symbolId);
-    if (factory?.kind !== "method" || factoryAccessPlan === undefined) {
+    const factoryMethodSetEntry = factoryMethodSetPlan.entriesBySymbolId.get(
+      factoryPlan.selected.symbolId
+    );
+    const factoryAccessEvidence = factoryMethodSetEntry?.evidence.access;
+    if (
+      factory?.kind !== "method" ||
+      factoryMethodSetEntry === undefined ||
+      factoryAccessEvidence === undefined
+    ) {
       continue;
     }
     const topLevelReturnReferences = signatureReferences.filter(
@@ -8808,6 +8819,7 @@ function projectJavaChainedCallReferences(input: {
       receiverTypeSymbolId: returnedType.id,
       callerType: declaringType,
       methodName: reference.methodName,
+      invocationKind: "expression",
       callableDeclarations,
       heritageEdgesBySourceId,
       typesBySymbolId,
@@ -8844,7 +8856,9 @@ function projectJavaChainedCallReferences(input: {
       returnEdge.evidence?.configurationPaths ?? [],
       factoryPlan.configurationPaths,
       methodPlan.configurationPaths,
-      ...factoryAccessPlan.hierarchyEdges.map((edge) => edge.evidence?.configurationPaths ?? []),
+      ...factoryMethodSetEntry.hierarchyEdges.map(
+        (edge) => edge.evidence?.configurationPaths ?? []
+      ),
       ...methodSetEntry.hierarchyEdges.map((edge) => edge.evidence?.configurationPaths ?? [])
     ]);
     const sourcePaths = [
@@ -8855,7 +8869,7 @@ function projectJavaChainedCallReferences(input: {
         method.filePath,
         ...factoryPlan.sourcePaths,
         ...methodPlan.sourcePaths,
-        ...factoryAccessPlan.hierarchyEdges.flatMap((edge) => [
+        ...factoryMethodSetEntry.hierarchyEdges.flatMap((edge) => [
           edge.filePath,
           ...(edge.evidence?.resolutionPath ?? [])
         ]),
@@ -8892,7 +8906,8 @@ function projectJavaChainedCallReferences(input: {
         ),
         callArity: factoryPlan.arityEvidence,
         callType: factoryPlan.typeEvidence,
-        callAccess: factoryAccessPlan.evidence
+        callAccess: factoryAccessEvidence,
+        callDispatch: factoryMethodSetEntry.evidence
       }
     });
     edges.push({
