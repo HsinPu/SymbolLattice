@@ -95,7 +95,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v4",
+      policy: "explore-query-plan-v5",
       queryIntent: { tests: false, matchedTerms: [] },
       ranking: {
         testSourceWorth: 0.5,
@@ -181,6 +181,189 @@ describe("explore query planning", () => {
     });
   });
 
+  it("filters unrequested test candidates only when two distinct production files are proven", () => {
+    const productionA = symbol({ id: "production-a", name: "orderService", filePath: "src/a.ts" });
+    const productionB = symbol({ id: "production-b", name: "orderService", filePath: "src/b.ts" });
+    const testA = symbol({ id: "test-a", name: "orderService", filePath: "test/a.test.ts" });
+    const testB = symbol({ id: "test-b", name: "orderService", filePath: "test/b.test.ts" });
+    const graph = {
+      files: [
+        indexedFile(productionA.filePath, false),
+        indexedFile(productionB.filePath, false),
+        indexedFile(testA.filePath, false, "test"),
+        indexedFile(testB.filePath, false, "test")
+      ],
+      symbols: [testB, productionB, testA, productionA],
+      edges: []
+    };
+
+    const plan = planExploreQuery(graph, "orderService");
+    const reversed = planExploreQuery({ ...graph, symbols: [...graph.symbols].reverse() }, "orderService");
+
+    expect(reversed).toEqual(plan);
+    expect(plan.selection.map((item) => item.symbol.id)).toEqual(["production-a", "production-b"]);
+    expect(plan).toMatchObject({
+      policy: "explore-query-plan-v5",
+      filtering: {
+        policy: "explore-query-low-value-filter-v1",
+        reason: "sufficient-production-evidence",
+        applied: true,
+        minimumProductionFileCount: 2,
+        maximumExcludedFileReceipts: 16,
+        candidateFileCount: 4,
+        productionCandidateFileCount: 2,
+        testCandidateFileCount: 2,
+        retainedCandidateCount: 2,
+        retainedFileCount: 2,
+        excludedTestCandidateCount: 2,
+        excludedTestFileCount: 2,
+        excludedFilesTruncated: false,
+        excludedFiles: [
+          {
+            filePath: "test/a.test.ts",
+            candidateCount: 1,
+            reason: "test-source-filtered",
+            sourceRole: {
+              classifierVersion: SOURCE_ROLE_CLASSIFIER_VERSION,
+              role: "test",
+              evidence: [{ kind: "path", ruleId: "test.source-role" }]
+            }
+          },
+          {
+            filePath: "test/b.test.ts",
+            candidateCount: 1,
+            reason: "test-source-filtered"
+          }
+        ]
+      },
+      summary: {
+        candidateCount: 4,
+        filteredCandidateCount: 2,
+        selectedCount: 2,
+        selectedTestCount: 0,
+        truncated: true
+      }
+    });
+  });
+
+  it("keeps soft-ranked tests when production evidence is confined to one file", () => {
+    const productionA = symbol({ id: "production-a", name: "orderService", filePath: "src/orders.ts" });
+    const productionB = symbol({ id: "production-b", name: "orderServiceHelper", filePath: "src/orders.ts" });
+    const test = symbol({ id: "test", name: "orderService", filePath: "test/orders.test.ts" });
+    const plan = planExploreQuery(
+      {
+        files: [indexedFile(productionA.filePath, false), indexedFile(test.filePath, false, "test")],
+        symbols: [test, productionB, productionA],
+        edges: []
+      },
+      "orderService"
+    );
+
+    expect(plan.filtering).toMatchObject({
+      reason: "insufficient-production-evidence",
+      applied: false,
+      productionCandidateFileCount: 1,
+      excludedTestCandidateCount: 0,
+      excludedFiles: []
+    });
+    expect(plan.selection.map((item) => item.symbol.id)).toContain("test");
+  });
+
+  it("does not treat legacy unclassified files as production evidence for filtering", () => {
+    const legacyA = symbol({ id: "legacy-a", name: "orderService", filePath: "legacy/a.ts" });
+    const legacyB = symbol({ id: "legacy-b", name: "orderService", filePath: "legacy/b.ts" });
+    const test = symbol({ id: "test", name: "orderService", filePath: "test/orders.test.ts" });
+    const plan = planExploreQuery(
+      {
+        files: [indexedFile(test.filePath, false, "test")],
+        symbols: [test, legacyB, legacyA],
+        edges: []
+      },
+      "orderService"
+    );
+
+    expect(plan.filtering).toMatchObject({
+      reason: "insufficient-production-evidence",
+      applied: false,
+      productionCandidateFileCount: 0,
+      excludedTestCandidateCount: 0,
+      excludedFiles: []
+    });
+    expect(plan.selection.map((item) => item.symbol.id)).toContain("test");
+  });
+
+  it("keeps tests for explicit test intent even when production evidence is sufficient", () => {
+    const productionA = symbol({ id: "production-a", name: "orderService", filePath: "src/a.ts" });
+    const productionB = symbol({ id: "production-b", name: "orderService", filePath: "src/b.ts" });
+    const test = symbol({ id: "test", name: "orderService", filePath: "test/orders.test.ts" });
+    const plan = planExploreQuery(
+      {
+        files: [
+          indexedFile(productionA.filePath, false),
+          indexedFile(productionB.filePath, false),
+          indexedFile(test.filePath, false, "test")
+        ],
+        symbols: [test, productionB, productionA],
+        edges: []
+      },
+      "which tests verify orderService"
+    );
+
+    expect(plan.filtering).toMatchObject({
+      reason: "test-intent-exempt",
+      applied: false,
+      productionCandidateFileCount: 2,
+      excludedTestCandidateCount: 0,
+      excludedFiles: []
+    });
+    expect(plan.selection.map((item) => item.symbol.id)).toContain("test");
+  });
+
+  it("retains an explicitly named test file while filtering other test candidates", () => {
+    const productionA = symbol({ id: "production-a", name: "orderService", filePath: "src/a.ts" });
+    const productionB = symbol({ id: "production-b", name: "orderService", filePath: "src/b.ts" });
+    const explicitTest = symbol({
+      id: "explicit-test",
+      name: "orderService",
+      filePath: "test/explicit-order.test.ts"
+    });
+    const otherTest = symbol({
+      id: "other-test",
+      name: "orderService",
+      filePath: "test/other-order.test.ts"
+    });
+    const plan = planExploreQuery(
+      {
+        files: [
+          indexedFile(productionA.filePath, false),
+          indexedFile(productionB.filePath, false),
+          indexedFile(explicitTest.filePath, false, "test"),
+          indexedFile(otherTest.filePath, false, "test")
+        ],
+        symbols: [otherTest, productionB, explicitTest, productionA],
+        edges: []
+      },
+      "show test/explicit-order.test.ts orderService"
+    );
+
+    expect(plan.selection.map((item) => item.symbol.id)).toEqual([
+      "explicit-test",
+      "production-a",
+      "production-b"
+    ]);
+    expect(plan.filtering).toMatchObject({
+      reason: "sufficient-production-evidence",
+      applied: true,
+      excludedTestCandidateCount: 1,
+      excludedTestFileCount: 1,
+      excludedFiles: [{ filePath: "test/other-order.test.ts" }]
+    });
+    expect(plan.selection[0]).toMatchObject({
+      sourceRoleDecision: "explicit-test-file-exempt",
+      sourceRoleWorth: 1
+    });
+  });
+
   it("uses bounded exact one-hop graph mass to corroborate an otherwise tied candidate", () => {
     const connected = symbol({
       id: "connected",
@@ -212,7 +395,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v4",
+      policy: "explore-query-plan-v5",
       ranking: {
         graphMass: {
           policy: "explore-query-graph-mass-v1",
@@ -353,7 +536,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v4",
+      policy: "explore-query-plan-v5",
       ranking: {
         policy: "explore-query-source-worth-v1",
         generatedSourceWorth: 0.3,
@@ -568,6 +751,7 @@ describe("explore query planning", () => {
       selectedGeneratedCount: 0,
       testCandidateCount: 0,
       testPenaltyCandidateCount: 0,
+      filteredCandidateCount: 0,
       selectedTestCount: 0,
       selectedFileCount: 0,
       truncated: false

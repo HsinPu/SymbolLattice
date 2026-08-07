@@ -1458,7 +1458,24 @@ describe("SymbolLattice MCP server", () => {
           anyOf: [
             {
               properties: {
-                policy: { const: "explore-query-plan-v4" },
+                policy: { const: "explore-query-plan-v5" },
+                filtering: {
+                  properties: {
+                    policy: { const: "explore-query-low-value-filter-v1" },
+                    reason: {
+                      enum: [
+                        "no-unrequested-test-candidates",
+                        "test-intent-exempt",
+                        "insufficient-production-evidence",
+                        "sufficient-production-evidence"
+                      ]
+                    },
+                    applied: { type: "boolean" },
+                    minimumProductionFileCount: { const: 2 },
+                    maximumExcludedFileReceipts: { const: 16 },
+                    excludedFiles: { type: "array", maxItems: 16 }
+                  }
+                },
                 ranking: {
                   properties: {
                     policy: { const: "explore-query-source-worth-v1" },
@@ -1483,6 +1500,7 @@ describe("SymbolLattice MCP server", () => {
                     generatedCandidateCount: { minimum: 0 },
                     testCandidateCount: { minimum: 0 },
                     testPenaltyCandidateCount: { minimum: 0 },
+                    filteredCandidateCount: { minimum: 0 },
                     selectedGeneratedCount: { minimum: 0, maximum: 8 },
                     selectedTestCount: { minimum: 0, maximum: 8 },
                     graphMassCandidateCount: { minimum: 0 },

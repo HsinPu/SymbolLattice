@@ -865,7 +865,7 @@ describe("SymbolLatticeService", () => {
       sourceAvailability: "not-applicable",
       source: null,
       queryPlan: {
-        policy: "explore-query-plan-v4",
+        policy: "explore-query-plan-v5",
         fileHints: ["src/api/orders.ts"],
         identifierTerms: ["createorder", "persistorder"],
         summary: {
@@ -970,7 +970,7 @@ describe("SymbolLatticeService", () => {
     const result = await service.explore(projectPath, "orderService");
 
     expect(result.queryPlan).toMatchObject({
-      policy: "explore-query-plan-v4",
+      policy: "explore-query-plan-v5",
       ranking: {
         policy: "explore-query-source-worth-v1",
         generatedSourceWorth: 0.3,
@@ -1022,6 +1022,53 @@ describe("SymbolLatticeService", () => {
         ]
       }
     });
+  });
+
+  it("keeps test source out of a general explore envelope when production evidence is sufficient", async () => {
+    const projectPath = await createInlineProject({
+      "src/order-service.ts":
+        "export function orderService() { return 'production-service'; }\n",
+      "src/order-controller.ts":
+        "export function orderService() { return 'production-controller'; }\n",
+      "test/order-service.test.ts":
+        "export function orderService() { return 'test-service'; }\n",
+      "test/order-controller.test.ts":
+        "export function orderService() { return 'test-controller'; }\n"
+    });
+    const service = createService();
+    await service.init({ projectPath });
+
+    const result = await service.explore(projectPath, "orderService");
+
+    expect(result.queryPlan).toMatchObject({
+      policy: "explore-query-plan-v5",
+      filtering: {
+        policy: "explore-query-low-value-filter-v1",
+        reason: "sufficient-production-evidence",
+        applied: true,
+        productionCandidateFileCount: 2,
+        testCandidateFileCount: 2,
+        excludedTestCandidateCount: 2,
+        excludedTestFileCount: 2,
+        excludedFiles: [
+          { filePath: "test/order-controller.test.ts", reason: "test-source-filtered" },
+          { filePath: "test/order-service.test.ts", reason: "test-source-filtered" }
+        ]
+      },
+      summary: {
+        candidateCount: 4,
+        filteredCandidateCount: 2,
+        selectedCount: 2,
+        selectedTestCount: 0
+      }
+    });
+    expect(result.focuses?.map((focus) => focus.symbol.filePath)).toEqual([
+      "src/order-controller.ts",
+      "src/order-service.ts"
+    ]);
+    expect(result.focuses?.map((focus) => focus.source?.text).join("\n")).not.toContain(
+      "test-service"
+    );
   });
 
   it("loads an unselected exact path bridge from the same persisted generation", async () => {

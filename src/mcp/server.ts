@@ -22,6 +22,8 @@ import {
   EXPLORE_QUERY_GRAPH_MASS_POLICY,
   EXPLORE_QUERY_GRAPH_MASS_RELATION_WEIGHTS,
   EXPLORE_QUERY_LIMITS,
+  EXPLORE_QUERY_LOW_VALUE_FILTER_LIMITS,
+  EXPLORE_QUERY_LOW_VALUE_FILTER_POLICY,
   EXPLORE_QUERY_PLAN_POLICY,
   EXPLORE_QUERY_SOURCE_WORTH_POLICY,
   EXPLORE_TEST_SOURCE_WORTH
@@ -1020,6 +1022,43 @@ const exploreQueryPlanOutputSchema = z.object({
     tests: z.boolean(),
     matchedTerms: z.array(z.string()).max(EXPLORE_QUERY_LIMITS.maximumIdentifierTerms)
   }),
+  filtering: z.object({
+    policy: z.literal(EXPLORE_QUERY_LOW_VALUE_FILTER_POLICY),
+    reason: z.enum([
+      "no-unrequested-test-candidates",
+      "test-intent-exempt",
+      "insufficient-production-evidence",
+      "sufficient-production-evidence"
+    ]),
+    applied: z.boolean(),
+    minimumProductionFileCount: z.literal(
+      EXPLORE_QUERY_LOW_VALUE_FILTER_LIMITS.minimumProductionFileCount
+    ),
+    maximumExcludedFileReceipts: z.literal(
+      EXPLORE_QUERY_LOW_VALUE_FILTER_LIMITS.maximumExcludedFileReceipts
+    ),
+    candidateFileCount: z.number().int().nonnegative(),
+    productionCandidateFileCount: z.number().int().nonnegative(),
+    testCandidateFileCount: z.number().int().nonnegative(),
+    retainedCandidateCount: z.number().int().nonnegative(),
+    retainedFileCount: z.number().int().nonnegative(),
+    excludedTestCandidateCount: z.number().int().nonnegative(),
+    excludedTestFileCount: z.number().int().nonnegative(),
+    excludedFilesTruncated: z.boolean(),
+    excludedFiles: z.array(z.object({
+      filePath: z.string().min(1),
+      candidateCount: z.number().int().positive(),
+      reason: z.literal("test-source-filtered"),
+      sourceRole: z.object({
+        classifierVersion: z.string().min(1),
+        role: z.literal("test"),
+        evidence: z.array(z.object({
+          kind: z.literal("path"),
+          ruleId: z.string().min(1)
+        })).max(1)
+      })
+    })).max(EXPLORE_QUERY_LOW_VALUE_FILTER_LIMITS.maximumExcludedFileReceipts)
+  }),
   ranking: z.object({
     policy: z.literal(EXPLORE_QUERY_SOURCE_WORTH_POLICY),
     generatedSourceWorth: z.literal(EXPLORE_GENERATED_SOURCE_WORTH),
@@ -1061,6 +1100,7 @@ const exploreQueryPlanOutputSchema = z.object({
     generatedCandidateCount: z.number().int().nonnegative(),
     testCandidateCount: z.number().int().nonnegative(),
     testPenaltyCandidateCount: z.number().int().nonnegative(),
+    filteredCandidateCount: z.number().int().nonnegative(),
     graphMassCandidateCount: z.number().int().nonnegative(),
     graphMassTruncatedCandidateCount: z.number().int().nonnegative(),
     selectedCount: z.number().int().nonnegative().max(EXPLORE_QUERY_LIMITS.maximumSymbols),

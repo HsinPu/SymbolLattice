@@ -12,11 +12,17 @@ import {
   type SymbolNode
 } from "../domain/index.js";
 
-export const EXPLORE_QUERY_PLAN_POLICY = "explore-query-plan-v4" as const;
+export const EXPLORE_QUERY_PLAN_POLICY = "explore-query-plan-v5" as const;
 export const EXPLORE_QUERY_SOURCE_WORTH_POLICY = "explore-query-source-worth-v1" as const;
 export const EXPLORE_QUERY_GRAPH_MASS_POLICY = "explore-query-graph-mass-v1" as const;
+export const EXPLORE_QUERY_LOW_VALUE_FILTER_POLICY =
+  "explore-query-low-value-filter-v1" as const;
 export const EXPLORE_GENERATED_SOURCE_WORTH = 0.3 as const;
 export const EXPLORE_TEST_SOURCE_WORTH = 0.5 as const;
+export const EXPLORE_QUERY_LOW_VALUE_FILTER_LIMITS = {
+  minimumProductionFileCount: 2,
+  maximumExcludedFileReceipts: 16
+} as const;
 export const EXPLORE_QUERY_GRAPH_MASS_LIMITS = {
   maximumRelationships: 32,
   maximumScore: 120
@@ -91,6 +97,36 @@ export interface ExploreQuerySelection {
   readonly reasons: readonly ExploreQuerySelectionReason[];
 }
 
+export interface ExploreQueryExcludedFile {
+  readonly filePath: string;
+  readonly candidateCount: number;
+  readonly reason: "test-source-filtered";
+  readonly sourceRole: SourceRoleClassification;
+}
+
+export interface ExploreQueryLowValueFilter {
+  readonly policy: typeof EXPLORE_QUERY_LOW_VALUE_FILTER_POLICY;
+  readonly reason:
+    | "no-unrequested-test-candidates"
+    | "test-intent-exempt"
+    | "insufficient-production-evidence"
+    | "sufficient-production-evidence";
+  readonly applied: boolean;
+  readonly minimumProductionFileCount:
+    typeof EXPLORE_QUERY_LOW_VALUE_FILTER_LIMITS.minimumProductionFileCount;
+  readonly maximumExcludedFileReceipts:
+    typeof EXPLORE_QUERY_LOW_VALUE_FILTER_LIMITS.maximumExcludedFileReceipts;
+  readonly candidateFileCount: number;
+  readonly productionCandidateFileCount: number;
+  readonly testCandidateFileCount: number;
+  readonly retainedCandidateCount: number;
+  readonly retainedFileCount: number;
+  readonly excludedTestCandidateCount: number;
+  readonly excludedTestFileCount: number;
+  readonly excludedFilesTruncated: boolean;
+  readonly excludedFiles: readonly ExploreQueryExcludedFile[];
+}
+
 export interface ExploreQueryPlan {
   readonly policy: typeof EXPLORE_QUERY_PLAN_POLICY;
   readonly query: string;
@@ -106,6 +142,7 @@ export interface ExploreQueryPlan {
     readonly tests: boolean;
     readonly matchedTerms: readonly string[];
   };
+  readonly filtering: ExploreQueryLowValueFilter;
   readonly ranking: {
     readonly policy: typeof EXPLORE_QUERY_SOURCE_WORTH_POLICY;
     readonly generatedSourceWorth: typeof EXPLORE_GENERATED_SOURCE_WORTH;
@@ -127,6 +164,7 @@ export interface ExploreQueryPlan {
     readonly generatedCandidateCount: number;
     readonly testCandidateCount: number;
     readonly testPenaltyCandidateCount: number;
+    readonly filteredCandidateCount: number;
     readonly graphMassCandidateCount: number;
     readonly graphMassTruncatedCandidateCount: number;
     readonly selectedCount: number;
@@ -167,6 +205,11 @@ interface CandidateGraphMass {
   readonly score: number;
   readonly truncated: boolean;
   readonly relationCounts: Readonly<Partial<Record<EdgeKind, number>>>;
+}
+
+interface CandidateFilterResult {
+  readonly receipt: ExploreQueryLowValueFilter;
+  readonly retained: readonly Candidate[];
 }
 
 interface GraphMassRelationship {
@@ -466,6 +509,82 @@ function compareCandidates(left: Candidate, right: Candidate): number {
   );
 }
 
+function filterLowValueCandidates(
+  candidates: readonly Candidate[],
+  testIntent: boolean
+): CandidateFilterResult {
+  const candidateFiles = new Set(candidates.map((candidate) => candidate.symbol.filePath));
+  const productionFiles = new Set(
+    candidates
+      .filter(
+        (candidate) =>
+          candidate.sourceRole.role === "production" &&
+          candidate.sourceRole.classifierVersion === SOURCE_ROLE_CLASSIFIER_VERSION
+      )
+      .map((candidate) => candidate.symbol.filePath)
+  );
+  const testFiles = new Set(
+    candidates
+      .filter((candidate) => candidate.sourceRole.role === "test")
+      .map((candidate) => candidate.symbol.filePath)
+  );
+  const unrequestedTests = candidates.filter(
+    (candidate) => candidate.sourceRole.role === "test" && !candidate.explicitFile
+  );
+  const reason: ExploreQueryLowValueFilter["reason"] =
+    unrequestedTests.length === 0
+      ? "no-unrequested-test-candidates"
+      : testIntent
+        ? "test-intent-exempt"
+        : productionFiles.size < EXPLORE_QUERY_LOW_VALUE_FILTER_LIMITS.minimumProductionFileCount
+          ? "insufficient-production-evidence"
+          : "sufficient-production-evidence";
+  const applied = reason === "sufficient-production-evidence";
+  const excluded = applied ? unrequestedTests : [];
+  const excludedIds = new Set(excluded.map((candidate) => candidate.symbol.id));
+  const retained = candidates.filter((candidate) => !excludedIds.has(candidate.symbol.id));
+  const excludedByFile = new Map<string, Candidate[]>();
+  for (const candidate of excluded) {
+    const current = excludedByFile.get(candidate.symbol.filePath) ?? [];
+    current.push(candidate);
+    excludedByFile.set(candidate.symbol.filePath, current);
+  }
+  const allExcludedFiles = [...excludedByFile.entries()]
+    .sort(([left], [right]) => compareText(left, right))
+    .map(([filePath, fileCandidates]) => ({
+      filePath,
+      candidateCount: fileCandidates.length,
+      reason: "test-source-filtered" as const,
+      sourceRole: fileCandidates[0]!.sourceRole
+    }));
+  return {
+    retained,
+    receipt: {
+      policy: EXPLORE_QUERY_LOW_VALUE_FILTER_POLICY,
+      reason,
+      applied,
+      minimumProductionFileCount:
+        EXPLORE_QUERY_LOW_VALUE_FILTER_LIMITS.minimumProductionFileCount,
+      maximumExcludedFileReceipts:
+        EXPLORE_QUERY_LOW_VALUE_FILTER_LIMITS.maximumExcludedFileReceipts,
+      candidateFileCount: candidateFiles.size,
+      productionCandidateFileCount: productionFiles.size,
+      testCandidateFileCount: testFiles.size,
+      retainedCandidateCount: retained.length,
+      retainedFileCount: new Set(retained.map((candidate) => candidate.symbol.filePath)).size,
+      excludedTestCandidateCount: excluded.length,
+      excludedTestFileCount: allExcludedFiles.length,
+      excludedFilesTruncated:
+        allExcludedFiles.length >
+        EXPLORE_QUERY_LOW_VALUE_FILTER_LIMITS.maximumExcludedFileReceipts,
+      excludedFiles: allExcludedFiles.slice(
+        0,
+        EXPLORE_QUERY_LOW_VALUE_FILTER_LIMITS.maximumExcludedFileReceipts
+      )
+    }
+  };
+}
+
 /** Builds a deterministic, bounded graph focus plan without reading live source. */
 export function planExploreQuery(graph: ExploreQueryGraph, query: string): ExploreQueryPlan {
   const parsed = parseQuery(query);
@@ -518,7 +637,8 @@ export function planExploreQuery(graph: ExploreQueryGraph, query: string): Explo
     );
   }
 
-  const ranked = candidates.sort(compareCandidates);
+  const filtering = filterLowValueCandidates(candidates, parsed.testIntentTerms.length > 0);
+  const ranked = [...filtering.retained].sort(compareCandidates);
   const selected: Candidate[] = [];
   const selectedFiles = new Set<string>();
   const selectedByFile = new Map<string, number>();
@@ -596,6 +716,7 @@ export function planExploreQuery(graph: ExploreQueryGraph, query: string): Explo
       tests: parsed.testIntentTerms.length > 0,
       matchedTerms: parsed.testIntentTerms
     },
+    filtering: filtering.receipt,
     ranking: {
       policy: EXPLORE_QUERY_SOURCE_WORTH_POLICY,
       generatedSourceWorth: EXPLORE_GENERATED_SOURCE_WORTH,
@@ -629,6 +750,7 @@ export function planExploreQuery(graph: ExploreQueryGraph, query: string): Explo
       testPenaltyCandidateCount: candidates.filter(
         (candidate) => candidate.sourceRole.role === "test" && candidate.sourceRoleWorth < 1
       ).length,
+      filteredCandidateCount: filtering.receipt.excludedTestCandidateCount,
       graphMassCandidateCount: candidates.filter((candidate) => candidate.graphMass.score > 0).length,
       graphMassTruncatedCandidateCount: candidates.filter((candidate) => candidate.graphMass.truncated).length,
       selectedCount: selection.length,
