@@ -3827,14 +3827,15 @@ describe("SymbolLatticeService", () => {
         ruleId:
           "call.java.chained-factory.explicit-import.arity.inherited-return-dispatch",
         callDispatch: {
-          selectionPolicy: "java-source-owner-hierarchy-v1",
+          selectionPolicy: "java-source-method-set-v2",
           selectionReason: "unique-inherited-owner",
           receiverTypeSymbolId: leafTypeId,
           selectedOwnerTypeSymbolId: baseTypeId,
           hierarchyBounds: { maximumDepth: 16, maximumVisitedTypes: 256 },
-          candidates: [
+          candidates: expect.arrayContaining([
             expect.objectContaining({
               ownerTypeSymbolId: baseTypeId,
+              ownerTypeKind: "class",
               declarationSymbolIds: [inheritedMethodId],
               distance: 1,
               hierarchyPath: [
@@ -3846,7 +3847,7 @@ describe("SymbolLatticeService", () => {
                 })
               ]
             })
-          ]
+          ])
         }
       }
     });
@@ -3995,6 +3996,15 @@ describe("SymbolLatticeService", () => {
     const executeAt = (line: number) =>
       calls.find((edge) => edge.referenceName === "execute" && edge.range.start.line === line);
 
+    expect(
+      graphStore
+        .getArtifactFacts(projectPath)
+        .find((facts) => facts.filePath === "src/api/DefaultContract.java")
+        ?.jvmFacts?.javaCallableDeclarations
+    ).toEqual([
+      expect.objectContaining({ name: "execute", visibility: "public", isStatic: false })
+    ]);
+
     const defaultContractId = symbol("src/api/DefaultContract.java#DefaultContract")?.id;
     expect(executeAt(5)).toMatchObject({
       targetId: symbol("src/api/DefaultContract.java#DefaultContract.execute")?.id,
@@ -4058,7 +4068,14 @@ describe("SymbolLatticeService", () => {
           selectionReason: "declared-owner",
           receiverTypeSymbolId: directLeafId,
           selectedOwnerTypeSymbolId: directLeafId,
-          candidates: [expect.objectContaining({ distance: 0, hierarchyPath: [] })]
+          candidates: expect.arrayContaining([
+            expect.objectContaining({
+              ownerTypeSymbolId: directLeafId,
+              ownerTypeKind: "class",
+              distance: 0,
+              hierarchyPath: []
+            })
+          ])
         }
       }
     });
@@ -4074,6 +4091,254 @@ describe("SymbolLatticeService", () => {
     });
     expect(executeAt(10)).toBeUndefined();
     expect(executeAt(11)).toBeUndefined();
+  });
+
+  it("builds a Java method set across direct and inherited overloads with class precedence", async () => {
+    const projectPath = await createInlineProject({
+      "src/api/ClassBase.java": [
+        "package api;",
+        "public class ClassBase {",
+        "  public void execute(int value) {}",
+        "}"
+      ].join("\n"),
+      "src/api/DefaultContract.java": [
+        "package api;",
+        "public interface DefaultContract {",
+        "  default void execute(int value) {}",
+        "}"
+      ].join("\n"),
+      "src/api/MixedLeaf.java": [
+        "package api;",
+        "public class MixedLeaf extends ClassBase implements DefaultContract {",
+        "  public void execute(String value) {}",
+        "}"
+      ].join("\n"),
+      "src/api/LeftContract.java": [
+        "package api;",
+        "public interface LeftContract { void execute(long value); }"
+      ].join("\n"),
+      "src/api/RightContract.java": [
+        "package api;",
+        "public interface RightContract { void execute(long value); }"
+      ].join("\n"),
+      "src/api/ConflictLeaf.java": [
+        "package api;",
+        "public abstract class ConflictLeaf implements LeftContract, RightContract {",
+        "  public void execute(String value) {}",
+        "}"
+      ].join("\n"),
+      "src/factory/MixedFactory.java": [
+        "package factory;",
+        "import api.ConflictLeaf;",
+        "import api.MixedLeaf;",
+        "public class MixedFactory {",
+        "  public static MixedLeaf create() { return null; }",
+        "  public static ConflictLeaf createConflict() { return null; }",
+        "}"
+      ].join("\n"),
+      "src/app/MixedRunner.java": [
+        "package app;",
+        "import factory.MixedFactory;",
+        "public class MixedRunner {",
+        "  public void run() {",
+        "    MixedFactory.create().execute(1);",
+        "    MixedFactory.create().execute(\"direct\");",
+        "    MixedFactory.createConflict().execute(1L);",
+        "    MixedFactory.createConflict().execute(\"safe\");",
+        "  }",
+        "}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const snapshot = graphStore.getSnapshot(projectPath);
+    const symbol = (qualifiedName: string) =>
+      snapshot.symbols.find((candidate) => candidate.qualifiedName === qualifiedName);
+    const runnerId = symbol("src/app/MixedRunner.java#MixedRunner.run")?.id;
+    const mixedLeafId = symbol("src/api/MixedLeaf.java#MixedLeaf")?.id;
+    const classBaseId = symbol("src/api/ClassBase.java#ClassBase")?.id;
+    const defaultContractId = symbol("src/api/DefaultContract.java#DefaultContract")?.id;
+    const calls = snapshot.edges.filter(
+      (edge) => edge.kind === "calls" && edge.sourceId === runnerId
+    );
+    const executeAt = (line: number) =>
+      calls.find((edge) => edge.referenceName === "execute" && edge.range.start.line === line);
+
+    expect(executeAt(5)).toMatchObject({
+      targetId: symbol("src/api/ClassBase.java#ClassBase.execute")?.id,
+      evidence: {
+        ruleId: "call.java.chained-factory.explicit-import.arity-type.inherited-return-dispatch",
+        callDispatch: {
+          selectionPolicy: "java-source-method-set-v2",
+          selectionReason: "class-precedence",
+          receiverTypeSymbolId: mixedLeafId,
+          selectedOwnerTypeSymbolId: classBaseId,
+          selectedSignature: {
+            invocationMode: "fixed",
+            parameterTypes: ["primitive:int"]
+          },
+          candidates: expect.arrayContaining([
+            expect.objectContaining({
+              ownerTypeSymbolId: classBaseId,
+              ownerTypeKind: "class",
+              distance: 1
+            }),
+            expect.objectContaining({
+              ownerTypeSymbolId: defaultContractId,
+              ownerTypeKind: "interface",
+              distance: 1
+            })
+          ])
+        }
+      }
+    });
+    expect(executeAt(6)).toMatchObject({
+      targetId: symbol("src/api/MixedLeaf.java#MixedLeaf.execute")?.id,
+      evidence: {
+        ruleId: "call.java.chained-factory.explicit-import.arity-type.return-dispatch",
+        callDispatch: {
+          selectionPolicy: "java-source-method-set-v2",
+          selectionReason: "declared-owner",
+          receiverTypeSymbolId: mixedLeafId,
+          selectedOwnerTypeSymbolId: mixedLeafId,
+          selectedSignature: {
+            invocationMode: "fixed",
+            parameterTypes: ["reference:java.lang.String"]
+          },
+          candidates: [
+            expect.objectContaining({
+              ownerTypeSymbolId: mixedLeafId,
+              ownerTypeKind: "class",
+              distance: 0,
+              hierarchyPath: []
+            })
+          ]
+        }
+      }
+    });
+    expect(executeAt(7)).toBeUndefined();
+    expect(executeAt(8)).toMatchObject({
+      targetId: symbol("src/api/ConflictLeaf.java#ConflictLeaf.execute")?.id,
+      evidence: {
+        callDispatch: {
+          selectionPolicy: "java-source-method-set-v2",
+          selectionReason: "declared-owner",
+          selectedOwnerTypeSymbolId: symbol("src/api/ConflictLeaf.java#ConflictLeaf")?.id,
+          selectedSignature: {
+            invocationMode: "fixed",
+            parameterTypes: ["reference:java.lang.String"],
+            complete: true
+          }
+        }
+      }
+    });
+  });
+
+  it("does not inherit a Java interface static method into a factory return dispatch", async () => {
+    const projectPath = await createInlineProject({
+      "src/api/StaticContract.java": [
+        "package api;",
+        "public interface StaticContract {",
+        "  static void execute(int value) {}",
+        "}"
+      ].join("\n"),
+      "src/api/StaticLeaf.java": [
+        "package api;",
+        "public class StaticLeaf implements StaticContract {}"
+      ].join("\n"),
+      "src/factory/StaticFactory.java": [
+        "package factory;",
+        "import api.StaticLeaf;",
+        "public class StaticFactory {",
+        "  public static StaticLeaf create() { return null; }",
+        "}"
+      ].join("\n"),
+      "src/app/StaticRunner.java": [
+        "package app;",
+        "import factory.StaticFactory;",
+        "public class StaticRunner {",
+        "  public void run() { StaticFactory.create().execute(1); }",
+        "}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const snapshot = graphStore.getSnapshot(projectPath);
+    const runnerId = snapshot.symbols.find(
+      (candidate) => candidate.qualifiedName === "src/app/StaticRunner.java#StaticRunner.run"
+    )?.id;
+    expect(
+      snapshot.edges.find(
+        (edge) =>
+          edge.kind === "calls" &&
+          edge.sourceId === runnerId &&
+          edge.referenceName === "execute"
+      )
+    ).toBeUndefined();
+  });
+
+  it("does not project inaccessible Java methods through a factory return type", async () => {
+    const projectPath = await createInlineProject({
+      "src/api/PrivateBase.java": [
+        "package api;",
+        "public class PrivateBase { private void execute(int value) {} }"
+      ].join("\n"),
+      "src/api/PrivateLeaf.java": [
+        "package api;",
+        "public class PrivateLeaf extends PrivateBase {}"
+      ].join("\n"),
+      "src/api/DirectPrivateLeaf.java": [
+        "package api;",
+        "public class DirectPrivateLeaf { private void execute(int value) {} }"
+      ].join("\n"),
+      "src/factory/PrivateFactory.java": [
+        "package factory;",
+        "import api.DirectPrivateLeaf;",
+        "import api.PrivateLeaf;",
+        "public class PrivateFactory {",
+        "  public static PrivateLeaf createInherited() { return null; }",
+        "  public static DirectPrivateLeaf createDirect() { return null; }",
+        "}"
+      ].join("\n"),
+      "src/app/PrivateRunner.java": [
+        "package app;",
+        "import factory.PrivateFactory;",
+        "public class PrivateRunner {",
+        "  public void run() {",
+        "    PrivateFactory.createInherited().execute(1);",
+        "    PrivateFactory.createDirect().execute(1);",
+        "  }",
+        "}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const snapshot = graphStore.getSnapshot(projectPath);
+    const runnerId = snapshot.symbols.find(
+      (candidate) => candidate.qualifiedName === "src/app/PrivateRunner.java#PrivateRunner.run"
+    )?.id;
+    expect(
+      graphStore
+        .getArtifactFacts(projectPath)
+        .find((facts) => facts.filePath === "src/api/PrivateBase.java")
+        ?.jvmFacts?.javaCallableDeclarations
+    ).toEqual([
+      expect.objectContaining({ name: "execute", visibility: "private" })
+    ]);
+    expect(
+      snapshot.edges.filter(
+        (edge) =>
+          edge.kind === "calls" &&
+          edge.sourceId === runnerId &&
+          edge.referenceName === "execute"
+      )
+    ).toEqual([]);
   });
 
   it("projects unique cross-file JVM DI types without claiming runtime provider selection", async () => {

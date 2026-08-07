@@ -89,6 +89,7 @@ interface StaticJavaMethod {
   readonly body: JavaSyntaxNode | null;
   readonly annotations: readonly StaticJavaAnnotation[];
   readonly isStatic: boolean;
+  readonly visibility: "public" | "protected" | "package" | "private";
   readonly isExported: boolean;
 }
 
@@ -98,6 +99,7 @@ interface StaticJavaConstructor {
   readonly node: JavaSyntaxNode;
   readonly body: JavaSyntaxNode;
   readonly annotations: readonly StaticJavaAnnotation[];
+  readonly visibility: "public" | "protected" | "package" | "private";
   readonly isExported: boolean;
 }
 
@@ -1162,6 +1164,19 @@ function hasJavaOverrideAnnotation(declaration: StaticJavaMethod): boolean {
   );
 }
 
+function staticJavaVisibility(
+  modifiers: JavaSyntaxNode | undefined,
+  implicitPublic: boolean
+): "public" | "protected" | "package" | "private" {
+  const names = new Set(
+    (modifiers === undefined ? [] : directChildren(modifiers)).map((child) => child.name)
+  );
+  if (names.has("public")) return "public";
+  if (names.has("protected")) return "protected";
+  if (names.has("private")) return "private";
+  return implicitPublic ? "public" : "package";
+}
+
 function staticJavaMethod(
   input: JavaExtractFileFactsInput,
   node: JavaSyntaxNode
@@ -1177,6 +1192,7 @@ function staticJavaMethod(
     return null;
   }
   const modifiers = children.find((child) => child.name === "Modifiers");
+  const visibility = staticJavaVisibility(modifiers, node.parent?.name === "InterfaceBody");
   return {
     name,
     nameNode,
@@ -1184,7 +1200,8 @@ function staticJavaMethod(
     body,
     annotations: staticAnnotations(input, node),
     isStatic: modifiers !== undefined && directChildren(modifiers).some((child) => child.name === "static"),
-    isExported: modifiers !== undefined && directChildren(modifiers).some((child) => child.name === "public")
+    visibility,
+    isExported: visibility === "public"
   };
 }
 
@@ -1203,13 +1220,15 @@ function staticJavaConstructor(
     return null;
   }
   const modifiers = children.find((child) => child.name === "Modifiers");
+  const visibility = staticJavaVisibility(modifiers, false);
   return {
     name,
     nameNode,
     node,
     body,
     annotations: staticAnnotations(input, node),
-    isExported: modifiers !== undefined && directChildren(modifiers).some((child) => child.name === "public")
+    visibility,
+    isExported: visibility === "public"
   };
 }
 
@@ -2658,6 +2677,7 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
         name: declaration.name,
         callableKind: "isStatic" in declaration ? "method" : "constructor",
         isStatic: "isStatic" in declaration && declaration.isStatic,
+        visibility: declaration.visibility,
         ...arity,
         parameterTypes
       });

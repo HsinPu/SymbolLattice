@@ -13,13 +13,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v211";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v212";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v96";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v97";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -86,17 +86,31 @@ export interface CallTypeHierarchySegmentEvidence {
 /** One declaration owner considered while dispatching a call through an inherited Java type. */
 export interface CallDispatchOwnerCandidateEvidence {
   readonly ownerTypeSymbolId: string;
+  /** Persisted declaration kind used by Java's class-over-interface precedence rule. */
+  readonly ownerTypeKind: "class" | "interface";
   readonly declarationSymbolIds: readonly string[];
   readonly distance: number;
   readonly hierarchyPath: readonly CallTypeHierarchySegmentEvidence[];
 }
 
-/** Project-proven Java method-owner selection for a chained return-type dispatch. */
+/** One bounded Java dispatch signature after syntax-proven type canonicalization. */
+export interface CallDispatchSignatureEvidence {
+  readonly invocationMode: "fixed" | "varargs";
+  readonly parameterTypes: readonly (string | null)[];
+  readonly complete: boolean;
+}
+
+/** Project-proven Java method-set and owner selection for a chained return-type dispatch. */
 export interface CallDispatchEvidence {
-  readonly selectionPolicy: "java-source-owner-hierarchy-v1";
-  readonly selectionReason: "declared-owner" | "unique-inherited-owner" | "owner-specificity";
+  readonly selectionPolicy: "java-source-method-set-v2";
+  readonly selectionReason:
+    | "declared-owner"
+    | "unique-inherited-owner"
+    | "owner-specificity"
+    | "class-precedence";
   readonly receiverTypeSymbolId: string;
   readonly selectedOwnerTypeSymbolId: string;
+  readonly selectedSignature: CallDispatchSignatureEvidence;
   readonly hierarchyBounds: {
     readonly maximumDepth: number;
     readonly maximumVisitedTypes: number;
@@ -978,6 +992,8 @@ export interface JavaCallableDeclarationFact {
   readonly name: string;
   readonly callableKind: "method" | "constructor";
   readonly isStatic: boolean;
+  /** Omitted by pre-v0.304 facts; unresolved visibility is never treated as public. */
+  readonly visibility?: "public" | "protected" | "package" | "private";
   /** Omitted by pre-v0.299 facts, which are never eligible for arity resolution. */
   readonly minimumArgumentCount?: number;
   /** Null denotes varargs; omitted by pre-v0.299 facts. */

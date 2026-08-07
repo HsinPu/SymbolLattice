@@ -7684,19 +7684,86 @@ function javaHierarchySegmentEvidence(edge: GraphEdge): CallTypeHierarchySegment
   };
 }
 
-interface JavaMethodOwnerPlan {
-  readonly declarations: readonly JavaCallableDeclarationFact[];
+interface JavaMethodSetEntry {
+  readonly declaration: JavaCallableDeclarationFact;
   readonly evidence: CallDispatchEvidence;
   readonly hierarchyEdges: readonly GraphEdge[];
   readonly inherited: boolean;
 }
 
-function javaMethodOwnerPlan(input: {
+interface JavaMethodSetPlan {
+  readonly declarations: readonly JavaCallableDeclarationFact[];
+  readonly entriesBySymbolId: ReadonlyMap<string, JavaMethodSetEntry>;
+}
+
+interface JavaMethodSignaturePlan {
+  readonly key: string;
+  readonly evidence: CallDispatchEvidence["selectedSignature"];
+}
+
+function javaMethodSignaturePlan(
+  declaration: JavaCallableDeclarationFact,
+  typesBySymbolId: ReadonlyMap<string, readonly JvmResolvedType[]>
+): JavaMethodSignaturePlan {
+  const declaringTypes = typesBySymbolId.get(declaration.declaringTypeId) ?? [];
+  const declaringType = declaringTypes.length === 1 ? declaringTypes[0] : undefined;
+  const expectedParameterCount =
+    declaration.maximumArgumentCount === null
+      ? declaration.minimumArgumentCount === undefined
+        ? -1
+        : declaration.minimumArgumentCount + 1
+      : declaration.maximumArgumentCount ?? -1;
+  const parameterFacts = declaration.parameterTypes;
+  const parameterTypes =
+    declaringType !== undefined &&
+    expectedParameterCount >= 0 &&
+    parameterFacts !== undefined &&
+    parameterFacts.length === expectedParameterCount
+      ? parameterFacts.map((parameter): string | null => {
+          if (parameter === null) {
+            return null;
+          }
+          if (parameter.kind === "primitive") {
+            return `primitive:${parameter.referenceName}`;
+          }
+          const explicitPath = parameter.qualifiedTypePath ?? parameter.importedTypePath;
+          if (explicitPath !== undefined) {
+            return `reference:${explicitPath}`;
+          }
+          if (parameter.referenceName === "String") {
+            return "reference:java.lang.String";
+          }
+          const localPath =
+            declaringType.fact.packageName.length === 0
+              ? parameter.referenceName
+              : `${declaringType.fact.packageName}.${parameter.referenceName}`;
+          return `reference:${localPath}`;
+        })
+      : Array.from({ length: Math.max(0, expectedParameterCount) }, () => null);
+  const evidence: CallDispatchEvidence["selectedSignature"] = {
+    invocationMode: declaration.maximumArgumentCount === null ? "varargs" : "fixed",
+    parameterTypes,
+    complete:
+      expectedParameterCount >= 0 &&
+      parameterTypes.length === expectedParameterCount &&
+      parameterTypes.every((parameter) => parameter !== null)
+  };
+  return {
+    key: evidence.complete
+      ? JSON.stringify([evidence.invocationMode, evidence.parameterTypes])
+      : `unproven:${declaration.symbolId}`,
+    evidence
+  };
+}
+
+function javaMethodSetPlan(input: {
   readonly receiverTypeSymbolId: string;
   readonly methodName: string;
   readonly callableDeclarations: readonly JavaCallableDeclarationFact[];
   readonly heritageEdgesBySourceId: ReadonlyMap<string, readonly GraphEdge[]>;
-}): JavaMethodOwnerPlan | null {
+  readonly typesBySymbolId: ReadonlyMap<string, readonly JvmResolvedType[]>;
+  readonly symbolsById: ReadonlyMap<string, SymbolNode>;
+}): JavaMethodSetPlan | null {
   const declarationsByOwnerId = new Map<string, JavaCallableDeclarationFact[]>();
   for (const declaration of input.callableDeclarations) {
     if (declaration.callableKind !== "method" || declaration.name !== input.methodName) {
@@ -7710,35 +7777,13 @@ function javaMethodOwnerPlan(input: {
     declarations.sort((left, right) => compareStableText(left.symbolId, right.symbolId));
   }
 
-  const direct = declarationsByOwnerId.get(input.receiverTypeSymbolId) ?? [];
-  if (direct.length > 0) {
-    return {
-      declarations: direct,
-      evidence: {
-        selectionPolicy: "java-source-owner-hierarchy-v1",
-        selectionReason: "declared-owner",
-        receiverTypeSymbolId: input.receiverTypeSymbolId,
-        selectedOwnerTypeSymbolId: input.receiverTypeSymbolId,
-        hierarchyBounds: JAVA_REFERENCE_HIERARCHY_LIMITS,
-        candidates: [
-          {
-            ownerTypeSymbolId: input.receiverTypeSymbolId,
-            declarationSymbolIds: direct.map((declaration) => declaration.symbolId),
-            distance: 0,
-            hierarchyPath: []
-          }
-        ]
-      },
-      hierarchyEdges: [],
-      inherited: false
-    };
-  }
-
   const queue: Array<{ readonly symbolId: string; readonly edges: readonly GraphEdge[] }> = [
     { symbolId: input.receiverTypeSymbolId, edges: [] }
   ];
   const visited = new Set<string>([input.receiverTypeSymbolId]);
-  const pathsByOwnerId = new Map<string, readonly GraphEdge[]>();
+  const pathsByOwnerId = new Map<string, readonly GraphEdge[]>([
+    [input.receiverTypeSymbolId, []]
+  ]);
   let bounded = false;
   for (let index = 0; index < queue.length; index += 1) {
     const current = queue[index]!;
@@ -7761,64 +7806,139 @@ function javaMethodOwnerPlan(input: {
       const path = [...current.edges, edge];
       visited.add(targetId);
       queue.push({ symbolId: targetId, edges: path });
-      if ((declarationsByOwnerId.get(targetId)?.length ?? 0) > 0) {
-        pathsByOwnerId.set(targetId, path);
-      }
+      pathsByOwnerId.set(targetId, path);
     }
   }
-  if (bounded || pathsByOwnerId.size === 0) {
+  if (bounded) {
     return null;
   }
 
-  const ownerIds = [...pathsByOwnerId.keys()].sort(compareStableText);
+  const declarationsBySignature = new Map<
+    string,
+    Array<{
+      readonly declaration: JavaCallableDeclarationFact;
+      readonly signature: JavaMethodSignaturePlan;
+      readonly ownerTypeKind: "class" | "interface";
+    }>
+  >();
+  for (const ownerTypeSymbolId of [...pathsByOwnerId.keys()].sort(compareStableText)) {
+    const owner = input.symbolsById.get(ownerTypeSymbolId);
+    if (owner?.kind !== "class" && owner?.kind !== "interface") {
+      continue;
+    }
+    for (const declaration of declarationsByOwnerId.get(ownerTypeSymbolId) ?? []) {
+      // The current cross-file chain proof intentionally admits only public
+      // members. Protected and package access need caller/receiver semantics;
+      // private members are never eligible here.
+      if (declaration.visibility !== "public") {
+        continue;
+      }
+      // Java interface static methods belong to the declaring interface and are
+      // never inherited or invocable through an instance-valued expression.
+      if (owner.kind === "interface" && declaration.isStatic) {
+        continue;
+      }
+      const signature = javaMethodSignaturePlan(declaration, input.typesBySymbolId);
+      const entries = declarationsBySignature.get(signature.key) ?? [];
+      entries.push({ declaration, signature, ownerTypeKind: owner.kind });
+      declarationsBySignature.set(signature.key, entries);
+    }
+  }
+
+  const selectedEntries: JavaMethodSetEntry[] = [];
   let comparisonBounded = false;
-  const mostSpecificOwnerIds = ownerIds.filter((ownerId) =>
-    !ownerIds.some((otherOwnerId) => {
-      if (otherOwnerId === ownerId) {
-        return false;
-      }
-      const relation = javaReferenceWideningPath({
-        sourceSymbolId: otherOwnerId,
-        targetSymbolId: ownerId,
-        heritageEdgesBySourceId: input.heritageEdgesBySourceId
-      });
-      if (relation.state === "bounded") {
-        comparisonBounded = true;
-      }
-      return relation.state === "matched";
-    })
-  );
-  if (comparisonBounded || mostSpecificOwnerIds.length !== 1 || mostSpecificOwnerIds[0] === undefined) {
-    return null;
-  }
-  const selectedOwnerTypeSymbolId = mostSpecificOwnerIds[0];
-  const declarations = declarationsByOwnerId.get(selectedOwnerTypeSymbolId) ?? [];
-  const selectedPath = pathsByOwnerId.get(selectedOwnerTypeSymbolId) ?? [];
-  if (declarations.length === 0 || selectedPath.length === 0) {
-    return null;
-  }
-  return {
-    declarations,
-    evidence: {
-      selectionPolicy: "java-source-owner-hierarchy-v1",
-      selectionReason: ownerIds.length === 1 ? "unique-inherited-owner" : "owner-specificity",
-      receiverTypeSymbolId: input.receiverTypeSymbolId,
-      selectedOwnerTypeSymbolId,
-      hierarchyBounds: JAVA_REFERENCE_HIERARCHY_LIMITS,
-      candidates: ownerIds.map((ownerTypeSymbolId) => {
-        const path = pathsByOwnerId.get(ownerTypeSymbolId) ?? [];
-        return {
-          ownerTypeSymbolId,
-          declarationSymbolIds: (declarationsByOwnerId.get(ownerTypeSymbolId) ?? []).map(
-            (declaration) => declaration.symbolId
-          ),
-          distance: path.length,
-          hierarchyPath: path.map(javaHierarchySegmentEvidence)
-        };
+  for (const [, signatureEntries] of [...declarationsBySignature.entries()].sort(([left], [right]) =>
+    compareStableText(left, right)
+  )) {
+    signatureEntries.sort((left, right) =>
+      compareStableText(left.declaration.symbolId, right.declaration.symbolId)
+    );
+    const ownerIds = [...new Set(signatureEntries.map((entry) => entry.declaration.declaringTypeId))]
+      .sort(compareStableText);
+    const directOwnerIds = ownerIds.filter((ownerId) => ownerId === input.receiverTypeSymbolId);
+    const classOwnerIds = ownerIds.filter(
+      (ownerId) => input.symbolsById.get(ownerId)?.kind === "class"
+    );
+    const precedenceOwnerIds =
+      directOwnerIds.length > 0
+        ? directOwnerIds
+        : classOwnerIds.length > 0
+          ? classOwnerIds
+          : ownerIds;
+    const mostSpecificOwnerIds = precedenceOwnerIds.filter((ownerId) =>
+      !precedenceOwnerIds.some((otherOwnerId) => {
+        if (otherOwnerId === ownerId) {
+          return false;
+        }
+        const relation = javaReferenceWideningPath({
+          sourceSymbolId: otherOwnerId,
+          targetSymbolId: ownerId,
+          heritageEdgesBySourceId: input.heritageEdgesBySourceId
+        });
+        if (relation.state === "bounded") {
+          comparisonBounded = true;
+        }
+        return relation.state === "matched";
       })
-    },
-    hierarchyEdges: selectedPath,
-    inherited: true
+    );
+    const selectedOwnerTypeSymbolId = mostSpecificOwnerIds[0];
+    if (mostSpecificOwnerIds.length !== 1 || selectedOwnerTypeSymbolId === undefined) {
+      continue;
+    }
+    const selectedDeclarations = signatureEntries.filter(
+      (entry) => entry.declaration.declaringTypeId === selectedOwnerTypeSymbolId
+    );
+    const selected = selectedDeclarations[0];
+    if (selectedDeclarations.length !== 1 || selected === undefined) {
+      continue;
+    }
+    const selectedPath = pathsByOwnerId.get(selectedOwnerTypeSymbolId) ?? [];
+    const selectionReason: CallDispatchEvidence["selectionReason"] =
+      selectedOwnerTypeSymbolId === input.receiverTypeSymbolId
+        ? "declared-owner"
+        : classOwnerIds.length > 0 && classOwnerIds.length < ownerIds.length
+          ? "class-precedence"
+          : precedenceOwnerIds.length === 1
+            ? "unique-inherited-owner"
+            : "owner-specificity";
+    selectedEntries.push({
+      declaration: selected.declaration,
+      evidence: {
+        selectionPolicy: "java-source-method-set-v2",
+        selectionReason,
+        receiverTypeSymbolId: input.receiverTypeSymbolId,
+        selectedOwnerTypeSymbolId,
+        selectedSignature: selected.signature.evidence,
+        hierarchyBounds: JAVA_REFERENCE_HIERARCHY_LIMITS,
+        candidates: ownerIds.map((ownerTypeSymbolId) => {
+          const path = pathsByOwnerId.get(ownerTypeSymbolId) ?? [];
+          const owner = input.symbolsById.get(ownerTypeSymbolId)!;
+          return {
+            ownerTypeSymbolId,
+            ownerTypeKind: owner.kind as "class" | "interface",
+            declarationSymbolIds: signatureEntries
+              .filter((entry) => entry.declaration.declaringTypeId === ownerTypeSymbolId)
+              .map((entry) => entry.declaration.symbolId),
+            distance: path.length,
+            hierarchyPath: path.map(javaHierarchySegmentEvidence)
+          };
+        })
+      },
+      hierarchyEdges: selectedPath,
+      inherited: selectedOwnerTypeSymbolId !== input.receiverTypeSymbolId
+    });
+  }
+  if (comparisonBounded || selectedEntries.length === 0) {
+    return null;
+  }
+  selectedEntries.sort((left, right) =>
+    compareStableText(left.declaration.symbolId, right.declaration.symbolId)
+  );
+  return {
+    declarations: selectedEntries.map((entry) => entry.declaration),
+    entriesBySymbolId: new Map(
+      selectedEntries.map((entry) => [entry.declaration.symbolId, entry] as const)
+    )
   };
 }
 
@@ -8499,6 +8619,7 @@ function projectJavaChainedCallReferences(input: {
         declaration.declaringTypeId === receiverType.id &&
         declaration.callableKind === "method" &&
         declaration.isStatic &&
+        declaration.visibility === "public" &&
         declaration.name === reference.factoryMethodName
     );
     const factoryPlan = javaCallPlan({
@@ -8551,17 +8672,19 @@ function projectJavaChainedCallReferences(input: {
       continue;
     }
     const returnedType = returnedTypeEntries[0].symbol;
-    const methodOwnerPlan = javaMethodOwnerPlan({
+    const methodSetPlan = javaMethodSetPlan({
       receiverTypeSymbolId: returnedType.id,
       methodName: reference.methodName,
       callableDeclarations,
-      heritageEdgesBySourceId
+      heritageEdgesBySourceId,
+      typesBySymbolId,
+      symbolsById: input.symbolsById
     });
-    if (methodOwnerPlan === null) {
+    if (methodSetPlan === null) {
       continue;
     }
     const methodPlan = javaCallPlan({
-      declarations: methodOwnerPlan.declarations,
+      declarations: methodSetPlan.declarations,
       actualArgumentCount: reference.methodArgumentCount,
       argumentTypes: reference.methodArgumentTypes,
       callerType: declaringType,
@@ -8579,12 +8702,16 @@ function projectJavaChainedCallReferences(input: {
     if (method?.kind !== "method") {
       continue;
     }
+    const methodSetEntry = methodSetPlan.entriesBySymbolId.get(method.id);
+    if (methodSetEntry === undefined) {
+      continue;
+    }
     const configurationPaths = uniqueConfigurationPaths([
       receiverConfigurationPaths,
       returnEdge.evidence?.configurationPaths ?? [],
       factoryPlan.configurationPaths,
       methodPlan.configurationPaths,
-      ...methodOwnerPlan.hierarchyEdges.map((edge) => edge.evidence?.configurationPaths ?? [])
+      ...methodSetEntry.hierarchyEdges.map((edge) => edge.evidence?.configurationPaths ?? [])
     ]);
     const sourcePaths = [
       ...new Set([
@@ -8594,7 +8721,7 @@ function projectJavaChainedCallReferences(input: {
         method.filePath,
         ...factoryPlan.sourcePaths,
         ...methodPlan.sourcePaths,
-        ...methodOwnerPlan.hierarchyEdges.flatMap((edge) => [
+        ...methodSetEntry.hierarchyEdges.flatMap((edge) => [
           edge.filePath,
           ...(edge.evidence?.resolutionPath ?? [])
         ])
@@ -8649,7 +8776,7 @@ function projectJavaChainedCallReferences(input: {
       evidence: {
         ...referenceEvidence(
           `call.java.chained-factory.${proof}.${methodPlan.selection}.${
-            methodOwnerPlan.inherited ? "inherited-return-dispatch" : "return-dispatch"
+            methodSetEntry.inherited ? "inherited-return-dispatch" : "return-dispatch"
           }`,
           "module",
           methodPlan.arityEvidence.candidates.map((candidate) => candidate.symbolId),
@@ -8658,7 +8785,7 @@ function projectJavaChainedCallReferences(input: {
         ),
         callArity: methodPlan.arityEvidence,
         callType: methodPlan.typeEvidence,
-        callDispatch: methodOwnerPlan.evidence
+        callDispatch: methodSetEntry.evidence
       }
     });
   }
