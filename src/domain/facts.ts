@@ -13,13 +13,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v207";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v208";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v90";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v91";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -831,6 +831,40 @@ export interface JvmCallableSignatureReferenceFact {
   readonly filePath: string;
   readonly referenceName: string;
   readonly relationKind: "accepts" | "returns";
+  /** True only for the outer declared return type; omitted by pre-v0.298 facts. */
+  readonly isTopLevelType?: boolean;
+  readonly range: SourceRange;
+  readonly importedTypePath?: string;
+  readonly qualifiedTypePath?: string;
+}
+
+/**
+ * One source-declared Java callable retained for receiver-aware project
+ * resolution. Static-ness is syntax evidence only; constructors can never be
+ * selected as static factories by the chained-call projector.
+ */
+export interface JavaCallableDeclarationFact {
+  readonly symbolId: string;
+  readonly declaringTypeId: string;
+  readonly name: string;
+  readonly callableKind: "method" | "constructor";
+  readonly isStatic: boolean;
+}
+
+/**
+ * A direct two-call Java chain such as `Factory.create().execute()`. The
+ * extractor proves only the syntax and import spelling. Project resolution
+ * must still prove the receiver type, a unique static factory, its exact
+ * declared return type, and a unique method owned by that return type.
+ */
+export interface JavaChainedCallReferenceFact {
+  readonly sourceId: string;
+  readonly declaringTypeId: string;
+  readonly filePath: string;
+  readonly receiverTypeName: string;
+  readonly factoryMethodName: string;
+  readonly methodName: string;
+  readonly factoryRange: SourceRange;
   readonly range: SourceRange;
   readonly importedTypePath?: string;
   readonly qualifiedTypePath?: string;
@@ -844,6 +878,10 @@ export interface JvmFacts {
   readonly dependencyInjectionReferences?: readonly JvmDependencyInjectionReferenceFact[];
   /** Omitted only by artifact facts persisted before v0.297. */
   readonly callableSignatureReferences?: readonly JvmCallableSignatureReferenceFact[];
+  /** Omitted only by artifact facts persisted before v0.298. */
+  readonly javaCallableDeclarations?: readonly JavaCallableDeclarationFact[];
+  /** Omitted only by artifact facts persisted before v0.298. */
+  readonly javaChainedCallReferences?: readonly JavaChainedCallReferenceFact[];
 }
 
 /**

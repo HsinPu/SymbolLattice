@@ -40,6 +40,8 @@ import {
   type JvmHeritageReferenceFact,
   type JvmHeritageSyntax,
   type JvmTypeFact,
+  type JavaCallableDeclarationFact,
+  type JavaChainedCallReferenceFact,
   type NestSymbolReference,
   type PendingReference,
   type ResolutionKind,
@@ -7528,6 +7530,243 @@ function projectJvmCallableSignatureReferences(input: {
   return edges;
 }
 
+/**
+ * Resolves a direct Java `Factory.create().method()` chain only when every hop
+ * is source-proven: one project-local receiver type, one static factory method,
+ * one exact outer declared return type, and one directly owned target method.
+ * Overloads, inherited targets, wildcard or shadowed receivers, nested return
+ * wrappers, and compiler-classpath guesses deliberately produce no call edge.
+ */
+function projectJavaChainedCallReferences(input: {
+  readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
+  readonly symbolsById: ReadonlyMap<string, SymbolNode>;
+  readonly signatureEdges: readonly GraphEdge[];
+  readonly jvmProjectModuleEvidence?: JvmProjectModuleEvidence;
+}): readonly GraphEdge[] {
+  const typesBySymbolId = new Map<string, JvmResolvedType[]>();
+  const callableDeclarationsBySymbolId = new Map<string, JavaCallableDeclarationFact[]>();
+  const signatureReferences: JvmCallableSignatureReferenceFact[] = [];
+  const chainedReferences: JavaChainedCallReferenceFact[] = [];
+
+  for (const [, facts] of [...input.factsByFile.entries()].sort(([left], [right]) =>
+    compareStableText(left, right)
+  )) {
+    for (const fact of facts.jvmFacts?.types ?? []) {
+      const symbol = input.symbolsById.get(fact.symbolId);
+      if (symbol?.kind !== "class" && symbol?.kind !== "interface") {
+        continue;
+      }
+      const entries = typesBySymbolId.get(symbol.id) ?? [];
+      entries.push({ fact, symbol });
+      typesBySymbolId.set(symbol.id, entries);
+    }
+    for (const declaration of facts.jvmFacts?.javaCallableDeclarations ?? []) {
+      const entries = callableDeclarationsBySymbolId.get(declaration.symbolId) ?? [];
+      entries.push(declaration);
+      callableDeclarationsBySymbolId.set(declaration.symbolId, entries);
+    }
+    signatureReferences.push(...(facts.jvmFacts?.callableSignatureReferences ?? []));
+    chainedReferences.push(...(facts.jvmFacts?.javaChainedCallReferences ?? []));
+  }
+
+  const types = [...typesBySymbolId.values()]
+    .filter((entries) => entries.length === 1 && entries[0] !== undefined)
+    .map((entries) => entries[0] as JvmResolvedType)
+    .sort((left, right) => compareStableText(left.symbol.id, right.symbol.id));
+  const callableDeclarations = [...callableDeclarationsBySymbolId.values()]
+    .filter((entries) => entries.length === 1 && entries[0] !== undefined)
+    .map((entries) => entries[0] as JavaCallableDeclarationFact)
+    .sort((left, right) => compareStableText(left.symbolId, right.symbolId));
+  const membershipsByFile = jvmModuleMembershipsByFile(input.jvmProjectModuleEvidence);
+  const edges: GraphEdge[] = [];
+
+  for (const reference of [...chainedReferences].sort((left, right) =>
+    compareStableText(
+      `${left.sourceId}\u0000${left.range.start.line}\u0000${left.range.start.column}`,
+      `${right.sourceId}\u0000${right.range.start.line}\u0000${right.range.start.column}`
+    )
+  )) {
+    const source = input.symbolsById.get(reference.sourceId);
+    const callerDeclarations = callableDeclarationsBySymbolId.get(reference.sourceId) ?? [];
+    const declaringTypeEntries = typesBySymbolId.get(reference.declaringTypeId) ?? [];
+    if (
+      source?.kind !== "method" ||
+      callerDeclarations.length !== 1 ||
+      callerDeclarations[0]?.declaringTypeId !== reference.declaringTypeId ||
+      declaringTypeEntries.length !== 1 ||
+      declaringTypeEntries[0] === undefined
+    ) {
+      continue;
+    }
+    const declaringType = declaringTypeEntries[0];
+    const targetTypePath = reference.qualifiedTypePath ?? reference.importedTypePath;
+    const resolutionProof =
+      reference.qualifiedTypePath !== undefined
+        ? "qualified-type"
+        : reference.importedTypePath !== undefined
+          ? "explicit-import"
+          : "same-package";
+    const receiverCandidates = types.filter((candidate) =>
+      targetTypePath === undefined
+        ? candidate.fact.packageName === declaringType.fact.packageName &&
+          candidate.symbol.name === reference.receiverTypeName
+        : jvmTypePath(candidate) === targetTypePath
+    );
+    if (receiverCandidates.length !== 1 || receiverCandidates[0] === undefined) {
+      continue;
+    }
+    const receiverType = receiverCandidates[0].symbol;
+    const samePackageConfigurationPaths =
+      resolutionProof !== "same-package" || source.filePath === receiverType.filePath
+        ? []
+        : samePackageJvmModuleEvidence({
+            projectEvidence: input.jvmProjectModuleEvidence,
+            membershipsByFile,
+            sourceFilePath: source.filePath,
+            targetFilePath: receiverType.filePath
+          });
+    if (samePackageConfigurationPaths === null) {
+      continue;
+    }
+    const declaredProjectDependency =
+      resolutionProof === "same-package"
+        ? null
+        : declaredJvmProjectDependencyEvidence({
+            projectEvidence: input.jvmProjectModuleEvidence,
+            membershipsByFile,
+            sourceFilePath: source.filePath,
+            targetFilePath: receiverType.filePath
+          });
+    const receiverConfigurationPaths =
+      resolutionProof === "same-package"
+        ? samePackageConfigurationPaths
+        : declaredProjectDependency?.configurationPaths ?? [];
+    const proof =
+      declaredProjectDependency === null
+        ? resolutionProof
+        : `${resolutionProof}.declared-${declaredProjectDependency.kind}`;
+    const factoryCandidates = callableDeclarations.filter(
+      (declaration) =>
+        declaration.declaringTypeId === receiverType.id &&
+        declaration.callableKind === "method" &&
+        declaration.isStatic &&
+        declaration.name === reference.factoryMethodName
+    );
+    if (factoryCandidates.length !== 1 || factoryCandidates[0] === undefined) {
+      continue;
+    }
+    const factory = input.symbolsById.get(factoryCandidates[0].symbolId);
+    if (factory?.kind !== "method") {
+      continue;
+    }
+    const topLevelReturnReferences = signatureReferences.filter(
+      (candidate) =>
+        candidate.sourceId === factory.id &&
+        candidate.relationKind === "returns" &&
+        candidate.isTopLevelType === true
+    );
+    if (topLevelReturnReferences.length !== 1 || topLevelReturnReferences[0] === undefined) {
+      continue;
+    }
+    const returnReference = topLevelReturnReferences[0];
+    const returnEdges = input.signatureEdges.filter(
+      (edge) =>
+        edge.sourceId === factory.id &&
+        edge.kind === "returns" &&
+        edge.targetId !== null &&
+        edge.referenceName === returnReference.referenceName &&
+        edge.range.start.line === returnReference.range.start.line &&
+        edge.range.start.column === returnReference.range.start.column &&
+        edge.range.end.line === returnReference.range.end.line &&
+        edge.range.end.column === returnReference.range.end.column
+    );
+    const returnEdge = returnEdges[0];
+    const returnedTypeId = returnEdge?.targetId;
+    if (returnEdges.length !== 1 || returnEdge === undefined || returnedTypeId === null || returnedTypeId === undefined) {
+      continue;
+    }
+    const returnedTypeEntries = typesBySymbolId.get(returnedTypeId) ?? [];
+    if (returnedTypeEntries.length !== 1 || returnedTypeEntries[0] === undefined) {
+      continue;
+    }
+    const returnedType = returnedTypeEntries[0].symbol;
+    const methodCandidates = callableDeclarations.filter(
+      (declaration) =>
+        declaration.declaringTypeId === returnedType.id &&
+        declaration.callableKind === "method" &&
+        declaration.name === reference.methodName
+    );
+    if (methodCandidates.length !== 1 || methodCandidates[0] === undefined) {
+      continue;
+    }
+    const method = input.symbolsById.get(methodCandidates[0].symbolId);
+    if (method?.kind !== "method") {
+      continue;
+    }
+    const configurationPaths = uniqueConfigurationPaths([
+      receiverConfigurationPaths,
+      returnEdge.evidence?.configurationPaths ?? []
+    ]);
+    const sourcePaths = [
+      reference.filePath,
+      receiverType.filePath,
+      returnedType.filePath,
+      method.filePath
+    ];
+    edges.push({
+      id: createEdgeId({
+        sourceId: source.id,
+        targetId: factory.id,
+        kind: "calls",
+        line: reference.factoryRange.start.line,
+        column: reference.factoryRange.start.column,
+        referenceName: reference.factoryMethodName
+      }),
+      sourceId: source.id,
+      targetId: factory.id,
+      kind: "calls",
+      filePath: reference.filePath,
+      range: reference.factoryRange,
+      resolution: "exact",
+      confidence: 1,
+      referenceName: reference.factoryMethodName,
+      evidence: referenceEvidence(
+        `call.java.chained-factory.${proof}.factory`,
+        "module",
+        [factory.id],
+        configurationPaths,
+        sourcePaths
+      )
+    });
+    edges.push({
+      id: createEdgeId({
+        sourceId: source.id,
+        targetId: method.id,
+        kind: "calls",
+        line: reference.range.start.line,
+        column: reference.range.start.column,
+        referenceName: reference.methodName
+      }),
+      sourceId: source.id,
+      targetId: method.id,
+      kind: "calls",
+      filePath: reference.filePath,
+      range: reference.range,
+      resolution: "exact",
+      confidence: 1,
+      referenceName: reference.methodName,
+      evidence: referenceEvidence(
+        `call.java.chained-factory.${proof}.return-dispatch`,
+        "module",
+        [method.id],
+        configurationPaths,
+        sourcePaths
+      )
+    });
+  }
+  return edges;
+}
+
 function jvmDependencyInjectionRuleId(input: {
   readonly syntax: JvmDependencyInjectionReferenceFact["syntax"];
   readonly resolutionProof: "explicit-import" | "qualified-type" | "same-package";
@@ -8011,10 +8250,19 @@ export function resolveProjectFacts(input: {
         : { jvmProjectModuleEvidence: input.jvmProjectModuleEvidence })
     })
   );
+  const jvmCallableSignatureEdges = projectJvmCallableSignatureReferences({
+    factsByFile,
+    symbolsById,
+    ...(input.jvmProjectModuleEvidence === undefined
+      ? {}
+      : { jvmProjectModuleEvidence: input.jvmProjectModuleEvidence })
+  });
+  resolvedEdges.push(...jvmCallableSignatureEdges);
   resolvedEdges.push(
-    ...projectJvmCallableSignatureReferences({
+    ...projectJavaChainedCallReferences({
       factsByFile,
       symbolsById,
+      signatureEdges: jvmCallableSignatureEdges,
       ...(input.jvmProjectModuleEvidence === undefined
         ? {}
         : { jvmProjectModuleEvidence: input.jvmProjectModuleEvidence })

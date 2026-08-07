@@ -2430,6 +2430,218 @@ describe("SymbolLatticeService", () => {
     ).toEqual([]);
   });
 
+  it("resolves Java static-factory call chains through exact declared return types", async () => {
+    const projectPath = await createInlineProject({
+      "src/api/Executor.java": [
+        "package api;",
+        "public class Executor { public void execute() {} }"
+      ].join("\n"),
+      "src/api/Wrapper.java": [
+        "package api;",
+        "public class Wrapper<T> { public void execute() {} }"
+      ].join("\n"),
+      "src/factory/Factory.java": [
+        "package factory;",
+        "import api.Executor;",
+        "public class Factory { public static Executor create() { return null; } }"
+      ].join("\n"),
+      "src/app/Runner.java": [
+        "package app;",
+        "import factory.Factory;",
+        "public class Runner { public void run() { Factory.create().execute(); } }"
+      ].join("\n"),
+      "src/factory/WrappedFactory.java": [
+        "package factory;",
+        "import api.Executor;",
+        "import api.Wrapper;",
+        "public class WrappedFactory {",
+        "  public static Wrapper<Executor> create() { return null; }",
+        "}"
+      ].join("\n"),
+      "src/app/WrappedRunner.java": [
+        "package app;",
+        "import factory.WrappedFactory;",
+        "public class WrappedRunner { public void run() { WrappedFactory.create().execute(); } }"
+      ].join("\n"),
+      "src/app/QualifiedRunner.java": [
+        "package app;",
+        "public class QualifiedRunner { public void run() { factory.Factory.create().execute(); } }"
+      ].join("\n"),
+      "src/app/LocalExecutor.java": [
+        "package app;",
+        "public class LocalExecutor { public void execute() {} }"
+      ].join("\n"),
+      "src/app/LocalFactory.java": [
+        "package app;",
+        "public class LocalFactory { public static LocalExecutor create() { return null; } }"
+      ].join("\n"),
+      "src/app/LocalRunner.java": [
+        "package app;",
+        "public class LocalRunner { public void run() { LocalFactory.create().execute(); } }"
+      ].join("\n"),
+      "src/bad/WildcardRunner.java": [
+        "package bad;",
+        "import factory.*;",
+        "public class WildcardRunner { public void run() { Factory.create().execute(); } }"
+      ].join("\n"),
+      "src/bad/UnimportedRunner.java": [
+        "package bad;",
+        "public class UnimportedRunner { public void run() { Factory.create().execute(); } }"
+      ].join("\n"),
+      "src/bad/InstanceFactory.java": [
+        "package bad;",
+        "import api.Executor;",
+        "public class InstanceFactory { public Executor create() { return null; } }"
+      ].join("\n"),
+      "src/bad/InstanceRunner.java": [
+        "package bad;",
+        "public class InstanceRunner { public void run() { InstanceFactory.create().execute(); } }"
+      ].join("\n"),
+      "src/bad/AmbiguousFactory.java": [
+        "package bad;",
+        "import api.Executor;",
+        "public class AmbiguousFactory {",
+        "  public static Executor create() { return null; }",
+        "  public static Executor create(String value) { return null; }",
+        "}"
+      ].join("\n"),
+      "src/bad/AmbiguousRunner.java": [
+        "package bad;",
+        "public class AmbiguousRunner { public void run() { AmbiguousFactory.create().execute(); } }"
+      ].join("\n"),
+      "src/bad/ShadowRunner.java": [
+        "package bad;",
+        "import factory.Factory;",
+        "public class ShadowRunner {",
+        "  public void run(Object Factory) { Factory.create().execute(); }",
+        "}"
+      ].join("\n"),
+      "src/bad/OverloadedExecutor.java": [
+        "package bad;",
+        "public class OverloadedExecutor {",
+        "  public void execute() {}",
+        "  public void execute(String value) {}",
+        "}"
+      ].join("\n"),
+      "src/bad/OverloadedFactory.java": [
+        "package bad;",
+        "public class OverloadedFactory { public static OverloadedExecutor create() { return null; } }"
+      ].join("\n"),
+      "src/bad/OverloadedRunner.java": [
+        "package bad;",
+        "public class OverloadedRunner { public void run() { OverloadedFactory.create().execute(); } }"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const snapshot = graphStore.getSnapshot(projectPath);
+    const symbol = (qualifiedName: string) =>
+      snapshot.symbols.find((candidate) => candidate.qualifiedName === qualifiedName);
+    const calls = snapshot.edges.filter((edge) => edge.kind === "calls");
+    const call = (sourceQualifiedName: string, targetQualifiedName: string) =>
+      calls.find(
+        (edge) =>
+          edge.sourceId === symbol(sourceQualifiedName)?.id &&
+          edge.targetId === symbol(targetQualifiedName)?.id
+      );
+
+    for (const [sourceQualifiedName, factoryQualifiedName, targetQualifiedName, proof] of [
+      [
+        "src/app/Runner.java#Runner.run",
+        "src/factory/Factory.java#Factory.create",
+        "src/api/Executor.java#Executor.execute",
+        "explicit-import"
+      ],
+      [
+        "src/app/WrappedRunner.java#WrappedRunner.run",
+        "src/factory/WrappedFactory.java#WrappedFactory.create",
+        "src/api/Wrapper.java#Wrapper.execute",
+        "explicit-import"
+      ],
+      [
+        "src/app/QualifiedRunner.java#QualifiedRunner.run",
+        "src/factory/Factory.java#Factory.create",
+        "src/api/Executor.java#Executor.execute",
+        "qualified-type"
+      ],
+      [
+        "src/app/LocalRunner.java#LocalRunner.run",
+        "src/app/LocalFactory.java#LocalFactory.create",
+        "src/app/LocalExecutor.java#LocalExecutor.execute",
+        "same-package"
+      ]
+    ] as const) {
+      expect(call(sourceQualifiedName, factoryQualifiedName)).toMatchObject({
+        resolution: "exact",
+        confidence: 1,
+        evidence: {
+          ruleId: `call.java.chained-factory.${proof}.factory`,
+          stage: "module",
+          candidateSymbolIds: [symbol(factoryQualifiedName)?.id]
+        }
+      });
+      expect(call(sourceQualifiedName, targetQualifiedName)).toMatchObject({
+        resolution: "exact",
+        confidence: 1,
+        evidence: {
+          ruleId: `call.java.chained-factory.${proof}.return-dispatch`,
+          stage: "module",
+          candidateSymbolIds: [symbol(targetQualifiedName)?.id]
+        }
+      });
+    }
+
+    expect(
+      calls.filter((edge) =>
+        [
+          "src/bad/WildcardRunner.java",
+          "src/bad/UnimportedRunner.java",
+          "src/bad/InstanceRunner.java",
+          "src/bad/AmbiguousRunner.java",
+          "src/bad/ShadowRunner.java",
+          "src/bad/OverloadedRunner.java"
+        ].includes(edge.filePath)
+      )
+    ).toEqual([]);
+
+    const runnerFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "src/app/Runner.java");
+    const wrappedFactoryFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "src/factory/WrappedFactory.java");
+    const shadowFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "src/bad/ShadowRunner.java");
+    expect(runnerFacts?.jvmFacts?.javaChainedCallReferences).toEqual([
+      expect.objectContaining({
+        receiverTypeName: "Factory",
+        factoryMethodName: "create",
+        methodName: "execute",
+        importedTypePath: "factory.Factory",
+        factoryRange: expect.any(Object),
+        range: expect.any(Object)
+      })
+    ]);
+    expect(wrappedFactoryFacts?.jvmFacts?.callableSignatureReferences).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          referenceName: "Wrapper",
+          relationKind: "returns",
+          isTopLevelType: true
+        }),
+        expect.objectContaining({
+          referenceName: "Executor",
+          relationKind: "returns",
+          isTopLevelType: false
+        })
+      ])
+    );
+    expect(shadowFacts?.jvmFacts?.javaChainedCallReferences).toEqual([]);
+  });
+
   it("projects unique cross-file JVM DI types without claiming runtime provider selection", async () => {
     const projectPath = await createInlineProject({
       "src/java/app/services/PetService.java": [
