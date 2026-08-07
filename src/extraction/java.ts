@@ -12,6 +12,7 @@ import {
   type JavaCallTypeReferenceFact,
   type JavaCallableDeclarationFact,
   type JavaChainedCallReferenceFact,
+  type JavaMemberCallReferenceFact,
   type PendingReference,
   type ReactNativeFacts,
   type RouteMethod,
@@ -1548,6 +1549,53 @@ function staticJavaChainedCallReferences(input: {
   return references;
 }
 
+function staticJavaMemberCallReferences(input: {
+  readonly extraction: JavaExtractFileFactsInput;
+  readonly callable: StaticJavaMethod | StaticJavaConstructor;
+  readonly callableSymbol: SymbolNode;
+  readonly declaringType: SymbolNode;
+  readonly imports: ReadonlyMap<string, string>;
+}): readonly JavaMemberCallReferenceFact[] {
+  if (input.callable.body === null) {
+    return [];
+  }
+  const lineStarts = lineStartsFor(input.extraction.sourceText);
+  const references: JavaMemberCallReferenceFact[] = [];
+
+  function visit(node: JavaSyntaxNode): void {
+    if (node.name === "MethodInvocation") {
+      const methodNode = directChildren(node).find((child) => child.name === "MethodName");
+      if (methodNode !== undefined) {
+        const qualifier = input.extraction.sourceText
+          .slice(node.from, methodNode.from)
+          .match(/^\s*(this|super)\s*\.\s*$/u)?.[1] as "this" | "super" | undefined;
+        const methodName = identifierText(input.extraction, methodNode);
+        const arguments_ = staticJavaArguments(node);
+        if (qualifier !== undefined && methodName !== null && arguments_ !== null) {
+          references.push({
+            sourceId: input.callableSymbol.id,
+            declaringTypeId: input.declaringType.id,
+            filePath: input.extraction.filePath,
+            receiverKind: qualifier,
+            methodName,
+            argumentCount: arguments_.length,
+            argumentTypes: arguments_.map((argument) =>
+              staticJavaArgumentType(input.extraction, argument, input.imports)
+            ),
+            range: rangeFor(lineStarts, methodNode.from, methodNode.to)
+          });
+        }
+      }
+    }
+    for (const child of directChildren(node)) {
+      visit(child);
+    }
+  }
+
+  visit(input.callable.body);
+  return references;
+}
+
 function staticJavaTypeParameterNames(
   input: JavaExtractFileFactsInput,
   node: JavaSyntaxNode
@@ -2496,6 +2544,7 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
   const jvmCallableSignatureReferences: JvmCallableSignatureReferenceFact[] = [];
   const javaCallableDeclarations: JavaCallableDeclarationFact[] = [];
   const javaChainedCallReferences: JavaChainedCallReferenceFact[] = [];
+  const javaMemberCallReferences: JavaMemberCallReferenceFact[] = [];
   const springBootPropertiesValueReferences: SpringBootPropertiesValueReferenceFact[] = [];
   const springBootConfigurationPropertiesPrefixes: SpringBootConfigurationPropertiesPrefixReferenceFact[] = [];
   const reactNativeNativeMethods: ReactNativeFacts["nativeMethods"][number][] = [];
@@ -2964,6 +3013,15 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
               shadowedValueNames
             })
           );
+          javaMemberCallReferences.push(
+            ...staticJavaMemberCallReferences({
+              extraction: input,
+              callable: methodDeclaration,
+              callableSymbol: methodSymbol,
+              declaringType: typeSymbol,
+              imports
+            })
+          );
         }
         continue;
       }
@@ -3087,6 +3145,15 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
             shadowedValueNames
           })
         );
+        javaMemberCallReferences.push(
+          ...staticJavaMemberCallReferences({
+            extraction: input,
+            callable: constructorDeclaration,
+            callableSymbol: constructorSymbol,
+            declaringType: classSymbol,
+            imports
+          })
+        );
       }
       const symbolsByMethod = new Map<StaticJavaMethod, SymbolNode>();
       for (const methodDeclaration of methods) {
@@ -3110,6 +3177,15 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
             declaringType: classSymbol,
             imports,
             shadowedValueNames
+          })
+        );
+        javaMemberCallReferences.push(
+          ...staticJavaMemberCallReferences({
+            extraction: input,
+            callable: methodDeclaration,
+            callableSymbol: methodSymbol,
+            declaringType: classSymbol,
+            imports
           })
         );
         if (hasJavaOverrideAnnotation(methodDeclaration)) {
@@ -3318,7 +3394,8 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
       dependencyInjectionReferences: jvmDependencyInjectionReferences,
       callableSignatureReferences: jvmCallableSignatureReferences,
       javaCallableDeclarations,
-      javaChainedCallReferences
+      javaChainedCallReferences,
+      javaMemberCallReferences
     },
     springBootPropertiesFacts: {
       valueReferences: springBootPropertiesValueReferences,

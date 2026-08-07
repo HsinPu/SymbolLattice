@@ -2934,6 +2934,134 @@ describe("SymbolLatticeService", () => {
     );
   });
 
+  it("resolves explicit this and super Java member calls with method-set evidence", async () => {
+    const projectPath = await createInlineProject({
+      "src/api/Base.java": [
+        "package api;",
+        "public class Base {",
+        "  protected void inherited(int value) {}",
+        "  public void hiddenByChild(String value) {}",
+        "  private void privateBase() {}",
+        "}"
+      ].join("\n"),
+      "src/app/Child.java": [
+        "package app;",
+        "import api.Base;",
+        "public class Child extends Base {",
+        "  public void local(String value) {}",
+        "  public void hiddenByChild(String value) {}",
+        "  public void run() {",
+        "    this.local(\"x\");",
+        "    this.inherited(1);",
+        "    super.inherited(2);",
+        "    super.hiddenByChild(\"base\");",
+        "    this.privateBase();",
+        "  }",
+        "}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+
+    const snapshot = graphStore.getSnapshot(projectPath);
+    const symbol = (qualifiedName: string) =>
+      snapshot.symbols.find((candidate) => candidate.qualifiedName === qualifiedName);
+    const memberCallAt = (line: number) =>
+      snapshot.edges.find(
+        (edge) =>
+          edge.kind === "calls" &&
+          edge.filePath === "src/app/Child.java" &&
+          edge.range.start.line === line
+      );
+    const childId = symbol("src/app/Child.java#Child")?.id;
+    const baseId = symbol("src/api/Base.java#Base")?.id;
+
+    expect(memberCallAt(7)).toEqual(
+      expect.objectContaining({
+        targetId: symbol("src/app/Child.java#Child.local")?.id,
+        evidence: expect.objectContaining({
+          callDispatch: expect.objectContaining({
+            invocationKind: "this",
+            selectionReason: "declared-owner",
+            receiverTypeSymbolId: childId,
+            selectedOwnerTypeSymbolId: childId
+          })
+        })
+      })
+    );
+    expect(memberCallAt(8)?.evidence).toEqual(
+      expect.objectContaining({
+        callAccess: expect.objectContaining({
+          decision: "protected-subclass-receiver",
+          callerTypeSymbolId: childId,
+          receiverTypeSymbolId: childId,
+          ownerTypeSymbolId: baseId,
+          callerToOwnerPath: [expect.objectContaining({ relationKind: "extends" })],
+          receiverToCallerPath: []
+        }),
+        callDispatch: expect.objectContaining({
+          invocationKind: "this",
+          selectionReason: "unique-inherited-owner",
+          receiverTypeSymbolId: childId,
+          selectedOwnerTypeSymbolId: baseId
+        })
+      })
+    );
+    expect(memberCallAt(9)?.evidence).toEqual(
+      expect.objectContaining({
+        callAccess: expect.objectContaining({
+          decision: "protected-subclass-receiver",
+          receiverTypeSymbolId: childId,
+          ownerTypeSymbolId: baseId
+        }),
+        callDispatch: expect.objectContaining({
+          invocationKind: "super",
+          selectionReason: "declared-owner",
+          receiverTypeSymbolId: baseId,
+          selectedOwnerTypeSymbolId: baseId,
+          receiverSelectionPath: [
+            expect.objectContaining({
+              sourceSymbolId: childId,
+              targetSymbolId: baseId,
+              relationKind: "extends"
+            })
+          ]
+        })
+      })
+    );
+    expect(memberCallAt(10)).toEqual(
+      expect.objectContaining({
+        targetId: symbol("src/api/Base.java#Base.hiddenByChild")?.id,
+        evidence: expect.objectContaining({
+          callDispatch: expect.objectContaining({
+            invocationKind: "super",
+            selectionReason: "declared-owner",
+            receiverTypeSymbolId: baseId,
+            selectedOwnerTypeSymbolId: baseId
+          })
+        })
+      })
+    );
+    expect(memberCallAt(11)).toBeUndefined();
+
+    const childFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "src/app/Child.java");
+    expect(childFacts?.jvmFacts).toEqual(
+      expect.objectContaining({
+        javaMemberCallReferences: expect.arrayContaining([
+          expect.objectContaining({ receiverKind: "this", methodName: "local" }),
+          expect.objectContaining({ receiverKind: "this", methodName: "inherited" }),
+          expect.objectContaining({ receiverKind: "super", methodName: "inherited" }),
+          expect.objectContaining({ receiverKind: "super", methodName: "hiddenByChild" }),
+          expect.objectContaining({ receiverKind: "this", methodName: "privateBase" })
+        ])
+      })
+    );
+  });
+
   it("resolves Java chained overloads only from exact argument type evidence", async () => {
     const projectPath = await createInlineProject({
       "src/model/Input.java": [

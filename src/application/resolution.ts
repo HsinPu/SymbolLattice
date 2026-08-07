@@ -50,6 +50,7 @@ import {
   type JavaCallTypeReferenceFact,
   type JavaCallableDeclarationFact,
   type JavaChainedCallReferenceFact,
+  type JavaMemberCallReferenceFact,
   type NestSymbolReference,
   type PendingReference,
   type ResolutionKind,
@@ -7867,9 +7868,11 @@ function javaMethodSignaturePlan(
 
 function javaMethodSetPlan(input: {
   readonly receiverTypeSymbolId: string;
+  readonly accessReceiverTypeSymbolId?: string;
+  readonly receiverSelectionPath?: readonly GraphEdge[];
   readonly callerType: JvmResolvedType;
   readonly methodName: string;
-  readonly invocationKind: "expression" | "type-name-static";
+  readonly invocationKind: "expression" | "type-name-static" | "this" | "super";
   readonly callableDeclarations: readonly JavaCallableDeclarationFact[];
   readonly heritageEdgesBySourceId: ReadonlyMap<string, readonly GraphEdge[]>;
   readonly typesBySymbolId: ReadonlyMap<string, readonly JvmResolvedType[]>;
@@ -7947,14 +7950,16 @@ function javaMethodSetPlan(input: {
       if (
         owner.kind === "interface" &&
         declaration.isStatic &&
-        (input.invocationKind === "expression" || ownerTypeSymbolId !== input.receiverTypeSymbolId)
+        (input.invocationKind !== "type-name-static" ||
+          ownerTypeSymbolId !== input.receiverTypeSymbolId)
       ) {
         continue;
       }
       const accessPlan = javaMethodAccessPlan({
         declaration,
         callerType: input.callerType,
-        receiverTypeSymbolId: input.receiverTypeSymbolId,
+        receiverTypeSymbolId:
+          input.accessReceiverTypeSymbolId ?? input.receiverTypeSymbolId,
         ownerHierarchyPath: pathsByOwnerId.get(ownerTypeSymbolId) ?? [],
         heritageEdgesBySourceId: input.heritageEdgesBySourceId,
         typesBySymbolId: input.typesBySymbolId
@@ -8030,6 +8035,13 @@ function javaMethodSetPlan(input: {
       evidence: {
         selectionPolicy: "java-source-method-set-v4",
         invocationKind: input.invocationKind,
+        ...(input.receiverSelectionPath === undefined
+          ? {}
+          : {
+              receiverSelectionPath: input.receiverSelectionPath.map(
+                javaHierarchySegmentEvidence
+              )
+            }),
         selectionReason,
         receiverTypeSymbolId: input.receiverTypeSymbolId,
         selectedOwnerTypeSymbolId,
@@ -8052,7 +8064,11 @@ function javaMethodSetPlan(input: {
       },
       hierarchyEdges: [
         ...new Map(
-          [...selectedPath, ...selected.accessPlan.hierarchyEdges].map((edge) => [edge.id, edge])
+          [
+            ...(input.receiverSelectionPath ?? []),
+            ...selectedPath,
+            ...selected.accessPlan.hierarchyEdges
+          ].map((edge) => [edge.id, edge])
         ).values()
       ],
       inherited: selectedOwnerTypeSymbolId !== input.receiverTypeSymbolId
@@ -8631,7 +8647,7 @@ function javaCallPlan(input: {
   };
 }
 
-function projectJavaChainedCallReferences(input: {
+function projectJavaCallReferences(input: {
   readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
   readonly symbolsById: ReadonlyMap<string, SymbolNode>;
   readonly signatureEdges: readonly GraphEdge[];
@@ -8642,6 +8658,7 @@ function projectJavaChainedCallReferences(input: {
   const callableDeclarationsBySymbolId = new Map<string, JavaCallableDeclarationFact[]>();
   const signatureReferences: JvmCallableSignatureReferenceFact[] = [];
   const chainedReferences: JavaChainedCallReferenceFact[] = [];
+  const memberReferences: JavaMemberCallReferenceFact[] = [];
 
   for (const [, facts] of [...input.factsByFile.entries()].sort(([left], [right]) =>
     compareStableText(left, right)
@@ -8662,6 +8679,7 @@ function projectJavaChainedCallReferences(input: {
     }
     signatureReferences.push(...(facts.jvmFacts?.callableSignatureReferences ?? []));
     chainedReferences.push(...(facts.jvmFacts?.javaChainedCallReferences ?? []));
+    memberReferences.push(...(facts.jvmFacts?.javaMemberCallReferences ?? []));
   }
 
   const types = [...typesBySymbolId.values()]
@@ -8678,6 +8696,137 @@ function projectJavaChainedCallReferences(input: {
     typesBySymbolId
   );
   const edges: GraphEdge[] = [];
+
+  for (const reference of [...memberReferences].sort((left, right) =>
+    compareStableText(
+      `${left.sourceId}\u0000${left.range.start.line}\u0000${left.range.start.column}`,
+      `${right.sourceId}\u0000${right.range.start.line}\u0000${right.range.start.column}`
+    )
+  )) {
+    const source = input.symbolsById.get(reference.sourceId);
+    const callerDeclarations = callableDeclarationsBySymbolId.get(reference.sourceId) ?? [];
+    const declaringTypeEntries = typesBySymbolId.get(reference.declaringTypeId) ?? [];
+    if (
+      source?.kind !== "method" ||
+      callerDeclarations.length !== 1 ||
+      callerDeclarations[0]?.declaringTypeId !== reference.declaringTypeId ||
+      declaringTypeEntries.length !== 1 ||
+      declaringTypeEntries[0] === undefined
+    ) {
+      continue;
+    }
+    const declaringType = declaringTypeEntries[0];
+    const directSuperEdges =
+      reference.receiverKind === "super"
+        ? (heritageEdgesBySourceId.get(declaringType.symbol.id) ?? []).filter(
+            (edge) =>
+              edge.kind === "extends" &&
+              edge.targetId !== null &&
+              input.symbolsById.get(edge.targetId)?.kind === "class"
+          )
+        : [];
+    if (reference.receiverKind === "super" && directSuperEdges.length !== 1) {
+      continue;
+    }
+    const directSuperEdge = directSuperEdges[0];
+    const receiverTypeSymbolId =
+      reference.receiverKind === "this"
+        ? declaringType.symbol.id
+        : directSuperEdge?.targetId;
+    if (receiverTypeSymbolId === null || receiverTypeSymbolId === undefined) {
+      continue;
+    }
+    const receiverTypeEntries = typesBySymbolId.get(receiverTypeSymbolId) ?? [];
+    if (receiverTypeEntries.length !== 1) {
+      continue;
+    }
+    const receiverSelectionPath = directSuperEdge === undefined ? [] : [directSuperEdge];
+    const methodSetPlan = javaMethodSetPlan({
+      receiverTypeSymbolId,
+      ...(reference.receiverKind === "super"
+        ? { accessReceiverTypeSymbolId: declaringType.symbol.id, receiverSelectionPath }
+        : {}),
+      callerType: declaringType,
+      methodName: reference.methodName,
+      invocationKind: reference.receiverKind,
+      callableDeclarations,
+      heritageEdgesBySourceId,
+      typesBySymbolId,
+      symbolsById: input.symbolsById
+    });
+    if (methodSetPlan === null) {
+      continue;
+    }
+    const methodPlan = javaCallPlan({
+      declarations: methodSetPlan.declarations,
+      actualArgumentCount: reference.argumentCount,
+      argumentTypes: reference.argumentTypes,
+      callerType: declaringType,
+      typesBySymbolId,
+      types,
+      heritageEdgesBySourceId,
+      symbolsById: input.symbolsById,
+      membershipsByFile,
+      projectEvidence: input.jvmProjectModuleEvidence
+    });
+    if (methodPlan === null) {
+      continue;
+    }
+    const method = input.symbolsById.get(methodPlan.selected.symbolId);
+    const methodSetEntry = methodSetPlan.entriesBySymbolId.get(methodPlan.selected.symbolId);
+    const accessEvidence = methodSetEntry?.evidence.access;
+    if (method?.kind !== "method" || methodSetEntry === undefined || accessEvidence === undefined) {
+      continue;
+    }
+    const configurationPaths = uniqueConfigurationPaths([
+      methodPlan.configurationPaths,
+      ...methodSetEntry.hierarchyEdges.map((edge) => edge.evidence?.configurationPaths ?? [])
+    ]);
+    const sourcePaths = [
+      ...new Set([
+        reference.filePath,
+        method.filePath,
+        ...methodPlan.sourcePaths,
+        ...methodSetEntry.hierarchyEdges.flatMap((edge) => [
+          edge.filePath,
+          ...(edge.evidence?.resolutionPath ?? [])
+        ])
+      ])
+    ].sort(compareStableText);
+    edges.push({
+      id: createEdgeId({
+        sourceId: source.id,
+        targetId: method.id,
+        kind: "calls",
+        line: reference.range.start.line,
+        column: reference.range.start.column,
+        referenceName: reference.methodName
+      }),
+      sourceId: source.id,
+      targetId: method.id,
+      kind: "calls",
+      filePath: reference.filePath,
+      range: reference.range,
+      resolution: "exact",
+      confidence: 1,
+      referenceName: reference.methodName,
+      evidence: {
+        ...referenceEvidence(
+          `call.java.member.${reference.receiverKind}.${methodPlan.selection}.${
+            methodSetEntry.inherited ? "inherited-dispatch" : "direct-dispatch"
+          }`,
+          "module",
+          methodPlan.arityEvidence.candidates.map((candidate) => candidate.symbolId),
+          configurationPaths,
+          sourcePaths
+        ),
+        callArity: methodPlan.arityEvidence,
+        callType: methodPlan.typeEvidence,
+        callAccess: accessEvidence,
+        callDispatch: methodSetEntry.evidence
+      }
+    });
+  }
 
   for (const reference of [...chainedReferences].sort((left, right) =>
     compareStableText(
@@ -9440,7 +9589,7 @@ export function resolveProjectFacts(input: {
   });
   resolvedEdges.push(...jvmCallableSignatureEdges);
   resolvedEdges.push(
-    ...projectJavaChainedCallReferences({
+    ...projectJavaCallReferences({
       factsByFile,
       symbolsById,
       signatureEdges: jvmCallableSignatureEdges,

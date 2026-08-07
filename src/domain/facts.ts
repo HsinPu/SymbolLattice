@@ -13,13 +13,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v212";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v213";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v100";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v101";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -125,8 +125,10 @@ export interface CallDispatchEvidence {
     | "java-source-method-set-v2"
     | "java-source-method-set-v3"
     | "java-source-method-set-v4";
-  /** Missing before v0.307; distinguishes expression lookup from a TypeName-qualified static call. */
-  readonly invocationKind?: "expression" | "type-name-static";
+  /** Missing before v0.307; distinguishes expression, TypeName, this, and super dispatch. */
+  readonly invocationKind?: "expression" | "type-name-static" | "this" | "super";
+  /** Direct caller-to-receiver proof for explicit `super` dispatch; missing for older receipts. */
+  readonly receiverSelectionPath?: readonly CallTypeHierarchySegmentEvidence[];
   readonly selectionReason:
     | "declared-owner"
     | "unique-inherited-owner"
@@ -1072,6 +1074,22 @@ export interface JavaChainedCallReferenceFact {
   readonly qualifiedTypePath?: string;
 }
 
+/**
+ * One explicit Java `this.method(...)` or `super.method(...)` invocation.
+ * Extraction retains only syntax and argument evidence. Project resolution
+ * must still prove the receiver hierarchy, method set, overload, and access.
+ */
+export interface JavaMemberCallReferenceFact {
+  readonly sourceId: string;
+  readonly declaringTypeId: string;
+  readonly filePath: string;
+  readonly receiverKind: "this" | "super";
+  readonly methodName: string;
+  readonly argumentCount: number;
+  readonly argumentTypes: readonly (JavaCallTypeReferenceFact | null)[];
+  readonly range: SourceRange;
+}
+
 /** Syntax-only JVM package, import, heritage, and DI-point facts for project resolution. */
 export interface JvmFacts {
   readonly types: readonly JvmTypeFact[];
@@ -1084,6 +1102,8 @@ export interface JvmFacts {
   readonly javaCallableDeclarations?: readonly JavaCallableDeclarationFact[];
   /** Omitted only by artifact facts persisted before v0.298. */
   readonly javaChainedCallReferences?: readonly JavaChainedCallReferenceFact[];
+  /** Omitted only by artifact facts persisted before v0.308. */
+  readonly javaMemberCallReferences?: readonly JavaMemberCallReferenceFact[];
 }
 
 /**
