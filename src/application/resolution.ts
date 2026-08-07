@@ -7,6 +7,8 @@ import {
   isCustomRouteFramework,
   type BindingSpace,
   type CallArityEvidence,
+  type CallTypeEvidence,
+  type CallTypeValueEvidence,
   type DjangoImportedUrlconfInclusionFact,
   type DjangoNinjaImportedRouterInclusionFact,
   type DjangoNinjaRouterDeclarationFact,
@@ -41,6 +43,7 @@ import {
   type JvmHeritageReferenceFact,
   type JvmHeritageSyntax,
   type JvmTypeFact,
+  type JavaCallTypeReferenceFact,
   type JavaCallableDeclarationFact,
   type JavaChainedCallReferenceFact,
   type NestSymbolReference,
@@ -7540,19 +7543,144 @@ function projectJvmCallableSignatureReferences(input: {
  * shadowed receivers, nested return wrappers, and compiler-classpath guesses
  * deliberately produce no call edge.
  */
-interface JavaCallArityPlan {
-  readonly selected: JavaCallableDeclarationFact;
-  readonly evidence: CallArityEvidence;
+interface ResolvedJavaCallType {
+  readonly evidence: CallTypeValueEvidence;
+  readonly configurationPaths: readonly string[];
+  readonly sourcePaths: readonly string[];
 }
 
-function javaCallArityPlan(
-  declarations: readonly JavaCallableDeclarationFact[],
-  actualArgumentCount: number | undefined
-): JavaCallArityPlan | null {
+interface JavaCallPlan {
+  readonly selected: JavaCallableDeclarationFact;
+  readonly arityEvidence: CallArityEvidence;
+  readonly typeEvidence: CallTypeEvidence;
+  readonly selection: "arity" | "arity-type";
+  readonly configurationPaths: readonly string[];
+  readonly sourcePaths: readonly string[];
+}
+
+function resolveJavaCallType(input: {
+  readonly reference: JavaCallTypeReferenceFact | null;
+  readonly declaringType: JvmResolvedType;
+  readonly sourceFilePath: string;
+  readonly types: readonly JvmResolvedType[];
+  readonly membershipsByFile: ReadonlyMap<string, readonly JvmModuleMembership[]>;
+  readonly projectEvidence: JvmProjectModuleEvidence | undefined;
+}): ResolvedJavaCallType | null {
+  const { reference } = input;
+  if (reference === null) {
+    return null;
+  }
+  if (reference.kind === "primitive") {
+    return {
+      evidence: {
+        canonicalType: `primitive:${reference.referenceName}`,
+        proof:
+          reference.syntax === "primitive-literal"
+            ? "primitive-literal"
+            : "primitive-declaration",
+        range: reference.range
+      },
+      configurationPaths: [],
+      sourcePaths: [input.sourceFilePath]
+    };
+  }
+
+  const targetTypePath = reference.qualifiedTypePath ?? reference.importedTypePath;
+  if (targetTypePath === "java.lang.String") {
+    return {
+      evidence: {
+        canonicalType: "reference:java.lang.String",
+        proof:
+          reference.syntax === "string-literal"
+            ? "string-literal"
+            : reference.qualifiedTypePath !== undefined
+              ? "qualified-type"
+              : "explicit-import",
+        range: reference.range
+      },
+      configurationPaths: [],
+      sourcePaths: [input.sourceFilePath]
+    };
+  }
+  const resolutionProof =
+    reference.qualifiedTypePath !== undefined
+      ? "qualified-type"
+      : reference.importedTypePath !== undefined
+        ? "explicit-import"
+        : "same-package";
+  const candidates = input.types.filter((candidate) =>
+    targetTypePath === undefined
+      ? candidate.fact.packageName === input.declaringType.fact.packageName &&
+        candidate.symbol.name === reference.referenceName
+      : jvmTypePath(candidate) === targetTypePath
+  );
+  if (candidates.length === 0 && targetTypePath === undefined && reference.referenceName === "String") {
+    return {
+      evidence: {
+        canonicalType: "reference:java.lang.String",
+        proof: "java-lang-default",
+        range: reference.range
+      },
+      configurationPaths: [],
+      sourcePaths: [input.sourceFilePath]
+    };
+  }
+  if (candidates.length !== 1 || candidates[0] === undefined) {
+    return null;
+  }
+  const target = candidates[0];
+  const samePackageConfigurationPaths =
+    resolutionProof !== "same-package" || input.sourceFilePath === target.symbol.filePath
+      ? []
+      : samePackageJvmModuleEvidence({
+          projectEvidence: input.projectEvidence,
+          membershipsByFile: input.membershipsByFile,
+          sourceFilePath: input.sourceFilePath,
+          targetFilePath: target.symbol.filePath
+        });
+  if (samePackageConfigurationPaths === null) {
+    return null;
+  }
+  const declaredProjectDependency =
+    resolutionProof === "same-package"
+      ? null
+      : declaredJvmProjectDependencyEvidence({
+          projectEvidence: input.projectEvidence,
+          membershipsByFile: input.membershipsByFile,
+          sourceFilePath: input.sourceFilePath,
+          targetFilePath: target.symbol.filePath
+        });
+  return {
+    evidence: {
+      canonicalType: `reference:${jvmTypePath(target)}`,
+      proof: resolutionProof,
+      range: reference.range,
+      targetSymbolId: target.symbol.id
+    },
+    configurationPaths:
+      resolutionProof === "same-package"
+        ? samePackageConfigurationPaths
+        : declaredProjectDependency?.configurationPaths ?? [],
+    sourcePaths: [input.sourceFilePath, target.symbol.filePath]
+  };
+}
+
+function javaCallPlan(input: {
+  readonly declarations: readonly JavaCallableDeclarationFact[];
+  readonly actualArgumentCount: number | undefined;
+  readonly argumentTypes: readonly (JavaCallTypeReferenceFact | null)[] | undefined;
+  readonly callerType: JvmResolvedType;
+  readonly typesBySymbolId: ReadonlyMap<string, readonly JvmResolvedType[]>;
+  readonly types: readonly JvmResolvedType[];
+  readonly symbolsById: ReadonlyMap<string, SymbolNode>;
+  readonly membershipsByFile: ReadonlyMap<string, readonly JvmModuleMembership[]>;
+  readonly projectEvidence: JvmProjectModuleEvidence | undefined;
+}): JavaCallPlan | null {
+  const { actualArgumentCount } = input;
   if (!Number.isSafeInteger(actualArgumentCount) || actualArgumentCount === undefined || actualArgumentCount < 0) {
     return null;
   }
-  const ordered = [...declarations].sort((left, right) =>
+  const ordered = [...input.declarations].sort((left, right) =>
     compareStableText(left.symbolId, right.symbolId)
   );
   if (
@@ -7578,20 +7706,141 @@ function javaCallArityPlan(
       (declaration.maximumArgumentCount === null ||
         actualArgumentCount <= declaration.maximumArgumentCount!)
   }));
-  const applicable = candidates.filter((candidate) => candidate.applicable);
-  if (applicable.length !== 1 || applicable[0] === undefined) {
+  const applicableIds = new Set(
+    candidates.filter((candidate) => candidate.applicable).map((candidate) => candidate.symbolId)
+  );
+  if (applicableIds.size === 0) {
     return null;
   }
-  const selected = ordered.find((declaration) => declaration.symbolId === applicable[0]!.symbolId);
-  return selected === undefined
-    ? null
-    : {
-        selected,
-        evidence: {
-          actualArgumentCount,
-          candidates
+
+  const argumentFacts =
+    input.argumentTypes !== undefined && input.argumentTypes.length === actualArgumentCount
+      ? input.argumentTypes
+      : Array.from({ length: actualArgumentCount }, () => null);
+  const resolvedArguments = argumentFacts.map((reference) =>
+    resolveJavaCallType({
+      reference,
+      declaringType: input.callerType,
+      sourceFilePath: input.callerType.symbol.filePath,
+      types: input.types,
+      membershipsByFile: input.membershipsByFile,
+      projectEvidence: input.projectEvidence
+    })
+  );
+  const candidateResolutions = new Map<
+    string,
+    {
+      readonly declaration: JavaCallableDeclarationFact;
+      readonly parameters: readonly (ResolvedJavaCallType | null)[];
+      readonly compatibility: "compatible" | "incompatible" | "unknown" | "not-applicable";
+    }
+  >();
+
+  for (const declaration of ordered) {
+    const declaringTypeEntries = input.typesBySymbolId.get(declaration.declaringTypeId) ?? [];
+    const declaringType =
+      declaringTypeEntries.length === 1 ? declaringTypeEntries[0] : undefined;
+    const declarationSymbol = input.symbolsById.get(declaration.symbolId);
+    const parameterFacts = declaration.parameterTypes;
+    const expectedParameterCount =
+      declaration.maximumArgumentCount === null
+        ? (declaration.minimumArgumentCount ?? -1) + 1
+        : declaration.maximumArgumentCount;
+    const parameters =
+      declaringType !== undefined &&
+      declarationSymbol !== undefined &&
+      parameterFacts !== undefined &&
+      parameterFacts.length === expectedParameterCount
+        ? parameterFacts.map((reference) =>
+            resolveJavaCallType({
+              reference,
+              declaringType,
+              sourceFilePath: declarationSymbol.filePath,
+              types: input.types,
+              membershipsByFile: input.membershipsByFile,
+              projectEvidence: input.projectEvidence
+            })
+          )
+        : Array.from({ length: Math.max(0, expectedParameterCount ?? 0) }, () => null);
+    let compatibility: "compatible" | "incompatible" | "unknown" | "not-applicable" =
+      applicableIds.has(declaration.symbolId) ? "compatible" : "not-applicable";
+    if (compatibility !== "not-applicable") {
+      let unknown = false;
+      const fixedParameterCount =
+        declaration.maximumArgumentCount === null ? Math.max(0, parameters.length - 1) : parameters.length;
+      for (let argumentIndex = 0; argumentIndex < actualArgumentCount; argumentIndex += 1) {
+        const parameterIndex =
+          declaration.maximumArgumentCount === null && argumentIndex >= fixedParameterCount
+            ? parameters.length - 1
+            : argumentIndex;
+        const argument = resolvedArguments[argumentIndex] ?? null;
+        const parameter = parameters[parameterIndex] ?? null;
+        if (argument === null || parameter === null) {
+          unknown = true;
+          continue;
         }
-      };
+        if (argument.evidence.canonicalType !== parameter.evidence.canonicalType) {
+          compatibility = "incompatible";
+          break;
+        }
+      }
+      if (compatibility === "compatible" && unknown) {
+        compatibility = "unknown";
+      }
+    }
+    candidateResolutions.set(declaration.symbolId, { declaration, parameters, compatibility });
+  }
+
+  const applicable = [...candidateResolutions.values()].filter(
+    (candidate) => candidate.compatibility !== "not-applicable"
+  );
+  let selectedResolution:
+    | (typeof applicable)[number]
+    | undefined;
+  let selection: JavaCallPlan["selection"] = "arity";
+  if (applicable.length === 1) {
+    selectedResolution = applicable[0]?.compatibility === "incompatible" ? undefined : applicable[0];
+  } else {
+    const compatible = applicable.filter((candidate) => candidate.compatibility === "compatible");
+    const unknown = applicable.some((candidate) => candidate.compatibility === "unknown");
+    if (compatible.length === 1 && !unknown) {
+      selectedResolution = compatible[0];
+      selection = "arity-type";
+    }
+  }
+  if (selectedResolution === undefined) {
+    return null;
+  }
+
+  const selectedTypes = [
+    ...resolvedArguments,
+    ...selectedResolution.parameters
+  ].filter((candidate): candidate is ResolvedJavaCallType => candidate !== null);
+  return {
+    selected: selectedResolution.declaration,
+    arityEvidence: {
+      actualArgumentCount,
+      candidates
+    },
+    typeEvidence: {
+      arguments: resolvedArguments.map((candidate) => candidate?.evidence ?? null),
+      candidates: ordered.map((declaration) => {
+        const candidate = candidateResolutions.get(declaration.symbolId)!;
+        return {
+          symbolId: declaration.symbolId,
+          parameterTypes: candidate.parameters.map((parameter) => parameter?.evidence ?? null),
+          compatibility: candidate.compatibility
+        };
+      })
+    },
+    selection,
+    configurationPaths: uniqueConfigurationPaths(
+      selectedTypes.map((candidate) => candidate.configurationPaths)
+    ),
+    sourcePaths: [...new Set(selectedTypes.flatMap((candidate) => candidate.sourcePaths))].sort(
+      compareStableText
+    )
+  };
 }
 
 function projectJavaChainedCallReferences(input: {
@@ -7709,11 +7958,21 @@ function projectJavaChainedCallReferences(input: {
         declaration.isStatic &&
         declaration.name === reference.factoryMethodName
     );
-    const factoryArity = javaCallArityPlan(factoryCandidates, reference.factoryArgumentCount);
-    if (factoryArity === null) {
+    const factoryPlan = javaCallPlan({
+      declarations: factoryCandidates,
+      actualArgumentCount: reference.factoryArgumentCount,
+      argumentTypes: reference.factoryArgumentTypes,
+      callerType: declaringType,
+      typesBySymbolId,
+      types,
+      symbolsById: input.symbolsById,
+      membershipsByFile,
+      projectEvidence: input.jvmProjectModuleEvidence
+    });
+    if (factoryPlan === null) {
       continue;
     }
-    const factory = input.symbolsById.get(factoryArity.selected.symbolId);
+    const factory = input.symbolsById.get(factoryPlan.selected.symbolId);
     if (factory?.kind !== "method") {
       continue;
     }
@@ -7754,24 +8013,40 @@ function projectJavaChainedCallReferences(input: {
         declaration.callableKind === "method" &&
         declaration.name === reference.methodName
     );
-    const methodArity = javaCallArityPlan(methodCandidates, reference.methodArgumentCount);
-    if (methodArity === null) {
+    const methodPlan = javaCallPlan({
+      declarations: methodCandidates,
+      actualArgumentCount: reference.methodArgumentCount,
+      argumentTypes: reference.methodArgumentTypes,
+      callerType: declaringType,
+      typesBySymbolId,
+      types,
+      symbolsById: input.symbolsById,
+      membershipsByFile,
+      projectEvidence: input.jvmProjectModuleEvidence
+    });
+    if (methodPlan === null) {
       continue;
     }
-    const method = input.symbolsById.get(methodArity.selected.symbolId);
+    const method = input.symbolsById.get(methodPlan.selected.symbolId);
     if (method?.kind !== "method") {
       continue;
     }
     const configurationPaths = uniqueConfigurationPaths([
       receiverConfigurationPaths,
-      returnEdge.evidence?.configurationPaths ?? []
+      returnEdge.evidence?.configurationPaths ?? [],
+      factoryPlan.configurationPaths,
+      methodPlan.configurationPaths
     ]);
     const sourcePaths = [
-      reference.filePath,
-      receiverType.filePath,
-      returnedType.filePath,
-      method.filePath
-    ];
+      ...new Set([
+        reference.filePath,
+        receiverType.filePath,
+        returnedType.filePath,
+        method.filePath,
+        ...factoryPlan.sourcePaths,
+        ...methodPlan.sourcePaths
+      ])
+    ].sort(compareStableText);
     edges.push({
       id: createEdgeId({
         sourceId: source.id,
@@ -7791,13 +8066,14 @@ function projectJavaChainedCallReferences(input: {
       referenceName: reference.factoryMethodName,
       evidence: {
         ...referenceEvidence(
-          `call.java.chained-factory.${proof}.arity.factory`,
+          `call.java.chained-factory.${proof}.${factoryPlan.selection}.factory`,
           "module",
-          factoryArity.evidence.candidates.map((candidate) => candidate.symbolId),
+          factoryPlan.arityEvidence.candidates.map((candidate) => candidate.symbolId),
           configurationPaths,
           sourcePaths
         ),
-        callArity: factoryArity.evidence
+        callArity: factoryPlan.arityEvidence,
+        callType: factoryPlan.typeEvidence
       }
     });
     edges.push({
@@ -7819,13 +8095,14 @@ function projectJavaChainedCallReferences(input: {
       referenceName: reference.methodName,
       evidence: {
         ...referenceEvidence(
-          `call.java.chained-factory.${proof}.arity.return-dispatch`,
+          `call.java.chained-factory.${proof}.${methodPlan.selection}.return-dispatch`,
           "module",
-          methodArity.evidence.candidates.map((candidate) => candidate.symbolId),
+          methodPlan.arityEvidence.candidates.map((candidate) => candidate.symbolId),
           configurationPaths,
           sourcePaths
         ),
-        callArity: methodArity.evidence
+        callArity: methodPlan.arityEvidence,
+        callType: methodPlan.typeEvidence
       }
     });
   }

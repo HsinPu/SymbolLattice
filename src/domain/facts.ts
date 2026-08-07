@@ -13,13 +13,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v209";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v210";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v92";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v93";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -59,6 +59,40 @@ export interface CallArityEvidence {
   readonly candidates: readonly CallArityCandidateEvidence[];
 }
 
+export type CallTypeCompatibility =
+  | "compatible"
+  | "incompatible"
+  | "unknown"
+  | "not-applicable";
+
+/** One syntax-proven call or parameter type after project-local resolution. */
+export interface CallTypeValueEvidence {
+  readonly canonicalType: string;
+  readonly proof:
+    | "primitive-declaration"
+    | "primitive-literal"
+    | "string-literal"
+    | "explicit-import"
+    | "qualified-type"
+    | "same-package"
+    | "java-lang-default";
+  readonly range: SourceRange;
+  readonly targetSymbolId?: string;
+}
+
+/** Type evidence for one overload candidate considered by a call rule. */
+export interface CallTypeCandidateEvidence {
+  readonly symbolId: string;
+  readonly parameterTypes: readonly (CallTypeValueEvidence | null)[];
+  readonly compatibility: CallTypeCompatibility;
+}
+
+/** Ordered argument and overload evidence used for exact type disambiguation. */
+export interface CallTypeEvidence {
+  readonly arguments: readonly (CallTypeValueEvidence | null)[];
+  readonly candidates: readonly CallTypeCandidateEvidence[];
+}
+
 /**
  * The deterministic explanation for one graph edge.
  *
@@ -83,6 +117,8 @@ export interface EdgeEvidence {
   readonly routePrefixChain?: readonly RoutePrefixSegment[];
   /** Syntax-proven argument count and every declaration considered by an overload rule. */
   readonly callArity?: CallArityEvidence;
+  /** Ordered, project-resolved argument and parameter types considered by an overload rule. */
+  readonly callType?: CallTypeEvidence;
 }
 
 /** A named import binding retained from syntax extraction for module resolution. */
@@ -870,6 +906,22 @@ export interface JavaCallableDeclarationFact {
   readonly minimumArgumentCount?: number;
   /** Null denotes varargs; omitted by pre-v0.299 facts. */
   readonly maximumArgumentCount?: number | null;
+  /** Ordered declaration types; null entries are unsupported syntax. Omitted by pre-v0.300 facts. */
+  readonly parameterTypes?: readonly (JavaCallTypeReferenceFact | null)[];
+}
+
+/** A direct Java primitive or non-generic reference type retained for call matching. */
+export interface JavaCallTypeReferenceFact {
+  readonly kind: "primitive" | "reference";
+  readonly referenceName: string;
+  readonly syntax:
+    | "declaration"
+    | "object-creation"
+    | "primitive-literal"
+    | "string-literal";
+  readonly range: SourceRange;
+  readonly importedTypePath?: string;
+  readonly qualifiedTypePath?: string;
 }
 
 /**
@@ -889,6 +941,10 @@ export interface JavaChainedCallReferenceFact {
   readonly factoryArgumentCount?: number;
   /** Omitted by pre-v0.299 facts, which are never eligible for arity resolution. */
   readonly methodArgumentCount?: number;
+  /** Ordered argument types; null entries are intentionally unknown. Omitted by pre-v0.300 facts. */
+  readonly factoryArgumentTypes?: readonly (JavaCallTypeReferenceFact | null)[];
+  /** Ordered argument types; null entries are intentionally unknown. Omitted by pre-v0.300 facts. */
+  readonly methodArgumentTypes?: readonly (JavaCallTypeReferenceFact | null)[];
   readonly factoryRange: SourceRange;
   readonly range: SourceRange;
   readonly importedTypePath?: string;

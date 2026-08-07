@@ -9,6 +9,7 @@ import {
   type JvmDependencyInjectionReferenceFact,
   type JvmFacts,
   type JvmHeritageSyntax,
+  type JavaCallTypeReferenceFact,
   type JavaCallableDeclarationFact,
   type JavaChainedCallReferenceFact,
   type PendingReference,
@@ -1256,14 +1257,140 @@ function staticJavaCallableArity(
   };
 }
 
-function staticJavaArgumentCount(invocation: JavaSyntaxNode): number | null {
+function staticJavaCallTypeReference(
+  input: JavaExtractFileFactsInput,
+  node: JavaSyntaxNode,
+  imports: ReadonlyMap<string, string>,
+  syntax: JavaCallTypeReferenceFact["syntax"]
+): JavaCallTypeReferenceFact | null {
+  if (node.name === "PrimitiveType") {
+    const referenceName = nodeText(input, node);
+    return /^(?:boolean|byte|char|double|float|int|long|short)$/u.test(referenceName)
+      ? {
+          kind: "primitive",
+          referenceName,
+          syntax,
+          range: rangeFor(lineStartsFor(input.sourceText), node.from, node.to)
+        }
+      : null;
+  }
+  if (!isJavaDirectTypeName(node)) {
+    return null;
+  }
+  const reference = staticJavaDirectTypeReference(input, node);
+  if (reference === null) {
+    return null;
+  }
+  const importedTypePath =
+    reference.qualifiedTypePath === undefined ? imports.get(reference.name) : undefined;
+  return {
+    kind: "reference",
+    referenceName: reference.name,
+    syntax,
+    range: rangeFor(lineStartsFor(input.sourceText), node.from, node.to),
+    ...(importedTypePath === undefined ? {} : { importedTypePath }),
+    ...(reference.qualifiedTypePath === undefined
+      ? {}
+      : { qualifiedTypePath: reference.qualifiedTypePath })
+  };
+}
+
+function staticJavaCallableParameterTypes(
+  input: JavaExtractFileFactsInput,
+  declaration: StaticJavaMethod | StaticJavaConstructor,
+  imports: ReadonlyMap<string, string>
+): readonly (JavaCallTypeReferenceFact | null)[] | null {
+  const parameterLists = directChildren(declaration.node).filter(
+    (child) => child.name === "FormalParameters"
+  );
+  if (parameterLists.length !== 1 || parameterLists[0] === undefined) {
+    return null;
+  }
+  return directChildren(parameterLists[0])
+    .filter((child) => child.name === "FormalParameter" || child.name === "SpreadParameter")
+    .map((parameter) => {
+      const typeNodes = directChildren(parameter).filter(
+        (child) => child.name === "PrimitiveType" || isJavaDirectTypeName(child)
+      );
+      return typeNodes.length === 1 && typeNodes[0] !== undefined
+        ? staticJavaCallTypeReference(input, typeNodes[0], imports, "declaration")
+        : null;
+    });
+}
+
+function staticJavaArguments(invocation: JavaSyntaxNode): readonly JavaSyntaxNode[] | null {
   const argumentLists = directChildren(invocation).filter((child) => child.name === "ArgumentList");
   if (argumentLists.length !== 1 || argumentLists[0] === undefined) {
     return null;
   }
   return directChildren(argumentLists[0]).filter(
     (child) => child.name !== "(" && child.name !== ")" && child.name !== ","
-  ).length;
+  );
+}
+
+function staticJavaPrimitiveLiteralType(
+  input: JavaExtractFileFactsInput,
+  node: JavaSyntaxNode
+): string | null {
+  if (node.name === "BooleanLiteral") {
+    return "boolean";
+  }
+  if (node.name === "CharacterLiteral") {
+    return "char";
+  }
+  const literal = nodeText(input, node).replace(/_/gu, "");
+  if (node.name === "IntegerLiteral" && /^[0-9]+[lL]?$/u.test(literal)) {
+    const isLong = /[lL]$/u.test(literal);
+    const digits = isLong ? literal.slice(0, -1) : literal;
+    try {
+      const value = BigInt(digits);
+      if (isLong) {
+        return value <= 9_223_372_036_854_775_807n ? "long" : null;
+      }
+      if (value <= 2_147_483_647n) {
+        return "int";
+      }
+      return value <= 9_223_372_036_854_775_807n ? "long" : null;
+    } catch {
+      return null;
+    }
+  }
+  if (node.name === "FloatingPointLiteral" && !/^0[xX]/u.test(literal)) {
+    return /[fF]$/u.test(literal) ? "float" : "double";
+  }
+  return null;
+}
+
+function staticJavaArgumentType(
+  input: JavaExtractFileFactsInput,
+  node: JavaSyntaxNode,
+  imports: ReadonlyMap<string, string>
+): JavaCallTypeReferenceFact | null {
+  const primitive = staticJavaPrimitiveLiteralType(input, node);
+  if (primitive !== null) {
+    return {
+      kind: "primitive",
+      referenceName: primitive,
+      syntax: "primitive-literal",
+      range: rangeFor(lineStartsFor(input.sourceText), node.from, node.to)
+    };
+  }
+  if (node.name === "StringLiteral") {
+    return {
+      kind: "reference",
+      referenceName: "String",
+      syntax: "string-literal",
+      range: rangeFor(lineStartsFor(input.sourceText), node.from, node.to),
+      qualifiedTypePath: "java.lang.String"
+    };
+  }
+  if (node.name !== "ObjectCreationExpression") {
+    return null;
+  }
+  const typeNodes = directChildren(node).filter(isJavaDirectTypeName);
+  return typeNodes.length === 1 && typeNodes[0] !== undefined
+    ? staticJavaCallTypeReference(input, typeNodes[0], imports, "object-creation")
+    : null;
 }
 
 function staticJavaChainedCallReferences(input: {
@@ -1292,8 +1419,10 @@ function staticJavaChainedCallReferences(input: {
         const methodName = identifierText(input.extraction, methodNode);
         const factoryMethodName =
           factoryMethodNode === undefined ? null : identifierText(input.extraction, factoryMethodNode);
-        const factoryArgumentCount = staticJavaArgumentCount(inner);
-        const methodArgumentCount = staticJavaArgumentCount(node);
+        const factoryArguments = staticJavaArguments(inner);
+        const methodArguments = staticJavaArguments(node);
+        const factoryArgumentCount = factoryArguments?.length ?? null;
+        const methodArgumentCount = methodArguments?.length ?? null;
         const receiverPrefix =
           factoryMethodNode === undefined
             ? ""
@@ -1309,6 +1438,8 @@ function staticJavaChainedCallReferences(input: {
           methodName !== null &&
           factoryMethodNode !== undefined &&
           factoryMethodName !== null &&
+          factoryArguments !== null &&
+          methodArguments !== null &&
           factoryArgumentCount !== null &&
           methodArgumentCount !== null &&
           receiverPath !== undefined &&
@@ -1327,6 +1458,12 @@ function staticJavaChainedCallReferences(input: {
             methodName,
             factoryArgumentCount,
             methodArgumentCount,
+            factoryArgumentTypes: factoryArguments.map((argument) =>
+              staticJavaArgumentType(input.extraction, argument, input.imports)
+            ),
+            methodArgumentTypes: methodArguments.map((argument) =>
+              staticJavaArgumentType(input.extraction, argument, input.imports)
+            ),
             factoryRange: rangeFor(
               lineStarts,
               factoryMethodNode.from,
@@ -2449,6 +2586,7 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
   function addMethod(
     parent: SymbolNode,
     declaration: StaticJavaMethod | StaticJavaConstructor,
+    imports: ReadonlyMap<string, string>,
     isExported: boolean = declaration.isExported
   ): SymbolNode {
     const qualifiedName = `${parent.qualifiedName}.${declaration.name}`;
@@ -2471,14 +2609,16 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
     symbols.push(symbol);
     addContainment(parent, symbol, declaration.node);
     const arity = staticJavaCallableArity(declaration);
-    if (arity !== null) {
+    const parameterTypes = staticJavaCallableParameterTypes(input, declaration, imports);
+    if (arity !== null && parameterTypes !== null) {
       javaCallableDeclarations.push({
         symbolId: symbol.id,
         declaringTypeId: parent.id,
         name: declaration.name,
         callableKind: "isStatic" in declaration ? "method" : "constructor",
         isStatic: "isStatic" in declaration && declaration.isStatic,
-        ...arity
+        ...arity,
+        parameterTypes
       });
     }
     return symbol;
@@ -2740,6 +2880,7 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
           const methodSymbol = addMethod(
             typeSymbol,
             methodDeclaration,
+            imports,
             isJavaInterfaceMethodExported(methodDeclaration)
           );
           jvmCallableSignatureReferences.push(
@@ -2864,7 +3005,7 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
       const typeParameters = staticJavaTypeParameterNames(input, classDeclaration.node);
       const shadowedValueNames = staticJavaValueDeclarationNames(input, classDeclaration.body);
       for (const constructorDeclaration of constructors) {
-        const constructorSymbol = addMethod(classSymbol, constructorDeclaration);
+        const constructorSymbol = addMethod(classSymbol, constructorDeclaration, imports);
         jvmCallableSignatureReferences.push(
           ...staticJavaCallableSignatureReferences({
             extraction: input,
@@ -2888,7 +3029,7 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
       }
       const symbolsByMethod = new Map<StaticJavaMethod, SymbolNode>();
       for (const methodDeclaration of methods) {
-        const methodSymbol = addMethod(classSymbol, methodDeclaration);
+        const methodSymbol = addMethod(classSymbol, methodDeclaration, imports);
         symbolsByMethod.set(methodDeclaration, methodSymbol);
         jvmCallableSignatureReferences.push(
           ...staticJavaCallableSignatureReferences({

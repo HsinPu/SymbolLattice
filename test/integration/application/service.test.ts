@@ -2775,6 +2775,284 @@ describe("SymbolLatticeService", () => {
     expect(shadowFacts?.jvmFacts?.javaChainedCallReferences).toEqual([]);
   });
 
+  it("resolves Java chained overloads only from exact argument type evidence", async () => {
+    const projectPath = await createInlineProject({
+      "src/model/Input.java": [
+        "package model;",
+        "public class Input {}"
+      ].join("\n"),
+      "src/model/OtherInput.java": [
+        "package model;",
+        "public class OtherInput {}"
+      ].join("\n"),
+      "src/api/Executor.java": [
+        "package api;",
+        "public class Executor { public void execute() {} }"
+      ].join("\n"),
+      "src/factory/TypedFactory.java": [
+        "package factory;",
+        "import api.Executor;",
+        "import model.Input;",
+        "import model.OtherInput;",
+        "public class TypedFactory {",
+        "  public static Executor create(Input value) { return null; }",
+        "  public static Executor create(OtherInput value) { return null; }",
+        "}"
+      ].join("\n"),
+      "src/app/TypedRunner.java": [
+        "package app;",
+        "import factory.TypedFactory;",
+        "import model.Input;",
+        "public class TypedRunner {",
+        "  public void run() { TypedFactory.create(new Input()).execute(); }",
+        "}"
+      ].join("\n"),
+      "src/app/QualifiedTypedRunner.java": [
+        "package app;",
+        "public class QualifiedTypedRunner {",
+        "  public void run() { factory.TypedFactory.create(new model.Input()).execute(); }",
+        "}"
+      ].join("\n"),
+      "src/api/TypedExecutor.java": [
+        "package api;",
+        "import model.Input;",
+        "import model.OtherInput;",
+        "public class TypedExecutor {",
+        "  public void execute(Input value) {}",
+        "  public void execute(OtherInput value) {}",
+        "}"
+      ].join("\n"),
+      "src/factory/OuterFactory.java": [
+        "package factory;",
+        "import api.TypedExecutor;",
+        "public class OuterFactory { public static TypedExecutor create() { return null; } }"
+      ].join("\n"),
+      "src/app/OuterRunner.java": [
+        "package app;",
+        "import factory.OuterFactory;",
+        "import model.Input;",
+        "public class OuterRunner {",
+        "  public void run() { OuterFactory.create().execute(new Input()); }",
+        "}"
+      ].join("\n"),
+      "src/factory/PrimitiveFactory.java": [
+        "package factory;",
+        "import api.Executor;",
+        "public class PrimitiveFactory {",
+        "  public static Executor create(boolean value) { return null; }",
+        "  public static Executor create(int value) { return null; }",
+        "}"
+      ].join("\n"),
+      "src/app/PrimitiveRunner.java": [
+        "package app;",
+        "import factory.PrimitiveFactory;",
+        "public class PrimitiveRunner {",
+        "  public void run() { PrimitiveFactory.create(true).execute(); }",
+        "}"
+      ].join("\n"),
+      "src/factory/StringFactory.java": [
+        "package factory;",
+        "import api.Executor;",
+        "public class StringFactory {",
+        "  public static Executor create(java.lang.String value) { return null; }",
+        "  public static Executor create(int value) { return null; }",
+        "}"
+      ].join("\n"),
+      "src/app/StringRunner.java": [
+        "package app;",
+        "import factory.StringFactory;",
+        "public class StringRunner {",
+        "  public void run() { StringFactory.create(\"value\").execute(); }",
+        "}"
+      ].join("\n"),
+      "src/factory/VarargTypeFactory.java": [
+        "package factory;",
+        "import api.Executor;",
+        "import model.Input;",
+        "import model.OtherInput;",
+        "public class VarargTypeFactory {",
+        "  public static Executor create(Input... values) { return null; }",
+        "  public static Executor create(OtherInput... values) { return null; }",
+        "}"
+      ].join("\n"),
+      "src/app/VarargTypeRunner.java": [
+        "package app;",
+        "import factory.VarargTypeFactory;",
+        "import model.Input;",
+        "public class VarargTypeRunner {",
+        "  public void run() { VarargTypeFactory.create(new Input(), new Input()).execute(); }",
+        "}"
+      ].join("\n"),
+      "src/bad/UnknownRunner.java": [
+        "package bad;",
+        "import factory.TypedFactory;",
+        "public class UnknownRunner {",
+        "  public void run(Object value) { TypedFactory.create(value).execute(); }",
+        "}"
+      ].join("\n"),
+      "src/bad/NullRunner.java": [
+        "package bad;",
+        "import factory.TypedFactory;",
+        "public class NullRunner {",
+        "  public void run() { TypedFactory.create(null).execute(); }",
+        "}"
+      ].join("\n"),
+      "src/factory/OnlyIntFactory.java": [
+        "package factory;",
+        "import api.Executor;",
+        "public class OnlyIntFactory {",
+        "  public static Executor create(int value) { return null; }",
+        "}"
+      ].join("\n"),
+      "src/bad/IncompatibleRunner.java": [
+        "package bad;",
+        "import factory.OnlyIntFactory;",
+        "public class IncompatibleRunner {",
+        "  public void run() { OnlyIntFactory.create(true).execute(); }",
+        "}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const snapshot = graphStore.getSnapshot(projectPath);
+    const symbol = (qualifiedName: string, line?: number) =>
+      snapshot.symbols.find(
+        (candidate) =>
+          candidate.qualifiedName === qualifiedName &&
+          (line === undefined || candidate.range.start.line === line)
+      );
+    const calls = snapshot.edges.filter((edge) => edge.kind === "calls");
+    const sourceCalls = (qualifiedName: string) =>
+      calls.filter((edge) => edge.sourceId === symbol(qualifiedName)?.id);
+
+    const typedFactoryCall = sourceCalls("src/app/TypedRunner.java#TypedRunner.run").find(
+      (edge) => edge.referenceName === "create"
+    );
+    expect(typedFactoryCall).toMatchObject({
+      targetId: symbol("src/factory/TypedFactory.java#TypedFactory.create", 6)?.id,
+      resolution: "exact",
+      evidence: {
+        ruleId: "call.java.chained-factory.explicit-import.arity-type.factory",
+        candidateSymbolIds: expect.arrayContaining([
+          symbol("src/factory/TypedFactory.java#TypedFactory.create", 6)?.id,
+          symbol("src/factory/TypedFactory.java#TypedFactory.create", 7)?.id
+        ]),
+        callType: {
+          arguments: [
+            expect.objectContaining({
+              canonicalType: "reference:model.Input",
+              proof: "explicit-import"
+            })
+          ],
+          candidates: expect.arrayContaining([
+            expect.objectContaining({
+              symbolId: symbol("src/factory/TypedFactory.java#TypedFactory.create", 6)?.id,
+              compatibility: "compatible"
+            }),
+            expect.objectContaining({
+              symbolId: symbol("src/factory/TypedFactory.java#TypedFactory.create", 7)?.id,
+              compatibility: "incompatible"
+            })
+          ])
+        }
+      }
+    });
+    expect(sourceCalls("src/app/TypedRunner.java#TypedRunner.run")).toHaveLength(2);
+
+    const qualifiedFactoryCall = sourceCalls(
+      "src/app/QualifiedTypedRunner.java#QualifiedTypedRunner.run"
+    ).find((edge) => edge.referenceName === "create");
+    expect(qualifiedFactoryCall).toMatchObject({
+      targetId: symbol("src/factory/TypedFactory.java#TypedFactory.create", 6)?.id,
+      evidence: {
+        ruleId: "call.java.chained-factory.qualified-type.arity-type.factory",
+        callType: {
+          arguments: [expect.objectContaining({ proof: "qualified-type" })]
+        }
+      }
+    });
+
+    const outerCall = sourceCalls("src/app/OuterRunner.java#OuterRunner.run").find(
+      (edge) => edge.referenceName === "execute"
+    );
+    expect(outerCall).toMatchObject({
+      targetId: symbol("src/api/TypedExecutor.java#TypedExecutor.execute", 5)?.id,
+      evidence: {
+        ruleId: "call.java.chained-factory.explicit-import.arity-type.return-dispatch",
+        callType: {
+          arguments: [expect.objectContaining({ canonicalType: "reference:model.Input" })]
+        }
+      }
+    });
+
+    for (const [runner, expectedType, expectedProof] of [
+      ["PrimitiveRunner", "primitive:boolean", "primitive-literal"],
+      ["StringRunner", "reference:java.lang.String", "string-literal"],
+      ["VarargTypeRunner", "reference:model.Input", "explicit-import"]
+    ] as const) {
+      const edge = sourceCalls(`src/app/${runner}.java#${runner}.run`).find(
+        (candidate) => candidate.referenceName === "create"
+      );
+      expect(edge).toMatchObject({
+        resolution: "exact",
+        evidence: {
+          ruleId: "call.java.chained-factory.explicit-import.arity-type.factory",
+          callType: {
+            arguments: expect.arrayContaining([
+              expect.objectContaining({ canonicalType: expectedType, proof: expectedProof })
+            ])
+          }
+        }
+      });
+    }
+
+    expect(
+      calls.filter((edge) =>
+        [
+          "src/bad/UnknownRunner.java",
+          "src/bad/NullRunner.java",
+          "src/bad/IncompatibleRunner.java"
+        ].includes(edge.filePath)
+      )
+    ).toEqual([]);
+
+    const typedRunnerFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "src/app/TypedRunner.java");
+    expect(typedRunnerFacts?.jvmFacts?.javaChainedCallReferences).toEqual([
+      expect.objectContaining({
+        factoryArgumentTypes: [
+          expect.objectContaining({ referenceName: "Input", importedTypePath: "model.Input" })
+        ],
+        methodArgumentTypes: []
+      })
+    ]);
+    const typedFactoryFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "src/factory/TypedFactory.java");
+    expect(typedFactoryFacts?.jvmFacts?.javaCallableDeclarations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: "create",
+          parameterTypes: [
+            expect.objectContaining({ referenceName: "Input", importedTypePath: "model.Input" })
+          ]
+        }),
+        expect.objectContaining({
+          name: "create",
+          parameterTypes: [
+            expect.objectContaining({
+              referenceName: "OtherInput",
+              importedTypePath: "model.OtherInput"
+            })
+          ]
+        })
+      ])
+    );
+  });
+
   it("projects unique cross-file JVM DI types without claiming runtime provider selection", async () => {
     const projectPath = await createInlineProject({
       "src/java/app/services/PetService.java": [
