@@ -8667,7 +8667,17 @@ interface JavaFieldSelectionPlan {
   readonly field: JavaFieldDeclarationFact;
   readonly ownerType: JvmResolvedType;
   readonly ownerSelectionPath: readonly GraphEdge[];
+  readonly selectionReason:
+    | "declared-owner"
+    | "nearest-inherited-owner"
+    | "unique-interface-owner";
   readonly access: CallFieldAccessEvidence;
+}
+
+interface JavaHeritageReferenceCounts {
+  readonly classSuperclass: number;
+  readonly classInterfaces: number;
+  readonly interfaceSuperinterfaces: number;
 }
 
 function javaFieldSelectionPlan(input: {
@@ -8677,6 +8687,7 @@ function javaFieldSelectionPlan(input: {
   readonly callerIsStatic: boolean;
   readonly fieldsByOwnerId: ReadonlyMap<string, readonly JavaFieldDeclarationFact[]>;
   readonly heritageEdgesBySourceId: ReadonlyMap<string, readonly GraphEdge[]>;
+  readonly heritageReferenceCountsBySourceId: ReadonlyMap<string, JavaHeritageReferenceCounts>;
   readonly typesBySymbolId: ReadonlyMap<string, readonly JvmResolvedType[]>;
   readonly symbolsById: ReadonlyMap<string, SymbolNode>;
 }): JavaFieldSelectionPlan | null {
@@ -8686,101 +8697,308 @@ function javaFieldSelectionPlan(input: {
   ) {
     return null;
   }
-  let current = input.callerType;
-  const path: GraphEdge[] = [];
-  const visited = new Set<string>([current.symbol.id]);
 
-  function advanceToDirectSuperclass(): boolean {
-    if (path.length >= JAVA_REFERENCE_HIERARCHY_LIMITS.maximumDepth) {
-      return false;
-    }
-    const superEdges = (input.heritageEdgesBySourceId.get(current.symbol.id) ?? []).filter(
+  type DeclaredFieldSelection =
+    | { readonly state: "absent" }
+    | { readonly state: "invalid" }
+    | { readonly state: "selected"; readonly plan: JavaFieldSelectionPlan };
+
+  const referenceCounts = (symbolId: string): JavaHeritageReferenceCounts =>
+    input.heritageReferenceCountsBySourceId.get(symbolId) ?? {
+      classSuperclass: 0,
+      classInterfaces: 0,
+      interfaceSuperinterfaces: 0
+    };
+  const exactEdges = (
+    sourceId: string,
+    relationKind: "extends" | "implements",
+    targetKind: "class" | "interface"
+  ): readonly GraphEdge[] =>
+    (input.heritageEdgesBySourceId.get(sourceId) ?? []).filter(
       (edge) =>
-        edge.kind === "extends" &&
+        edge.kind === relationKind &&
         edge.targetId !== null &&
-        input.symbolsById.get(edge.targetId)?.kind === "class"
+        input.symbolsById.get(edge.targetId)?.kind === targetKind
     );
-    const superEdge = superEdges[0];
-    if (
-      superEdges.length !== 1 ||
-      superEdge?.targetId === null ||
-      superEdge === undefined ||
-      visited.has(superEdge.targetId) ||
-      visited.size >= JAVA_REFERENCE_HIERARCHY_LIMITS.maximumVisitedTypes
-    ) {
-      return false;
-    }
-    const superEntries = input.typesBySymbolId.get(superEdge.targetId) ?? [];
-    const superType = superEntries[0];
-    if (superEntries.length !== 1 || superType === undefined || superType.symbol.kind !== "class") {
-      return false;
-    }
-    path.push(superEdge);
-    visited.add(superEdge.targetId);
-    current = superType;
-    return true;
-  }
-
-  if (input.receiverKind === "super-field" && !advanceToDirectSuperclass()) {
-    return null;
-  }
-
-  while (true) {
-    const namedFields = (input.fieldsByOwnerId.get(current.symbol.id) ?? []).filter(
+  const resolvedType = (symbolId: string, kind: "class" | "interface"): JvmResolvedType | null => {
+    const entries = input.typesBySymbolId.get(symbolId) ?? [];
+    const entry = entries[0];
+    return entries.length === 1 && entry?.symbol.kind === kind ? entry : null;
+  };
+  const selectDeclaredField = (
+    ownerType: JvmResolvedType,
+    ownerSelectionPath: readonly GraphEdge[],
+    selectionReason: JavaFieldSelectionPlan["selectionReason"]
+  ): DeclaredFieldSelection => {
+    const namedFields = (input.fieldsByOwnerId.get(ownerType.symbol.id) ?? []).filter(
       (candidate) => candidate.name === input.fieldName
     );
-    if (namedFields.length > 0) {
-      const field = namedFields[0];
-      if (
-        namedFields.length !== 1 ||
-        field === undefined ||
-        field.type === null ||
-        (input.callerIsStatic && !field.isStatic)
-      ) {
-        return null;
+    if (namedFields.length === 0) {
+      return { state: "absent" };
+    }
+    const field = namedFields[0];
+    if (
+      namedFields.length !== 1 ||
+      field === undefined ||
+      field.type === null ||
+      (input.callerIsStatic && !field.isStatic)
+    ) {
+      return { state: "invalid" };
+    }
+    const callerPackageName = input.callerType.fact.packageName;
+    const ownerPackageName = ownerType.fact.packageName;
+    let decision: CallFieldAccessEvidence["decision"] | null = null;
+    if (ownerType.symbol.id === input.callerType.symbol.id) {
+      decision = "declaring-class";
+    } else if (field.visibility === "public") {
+      decision = "public";
+    } else if (callerPackageName === ownerPackageName) {
+      const packagePathIsContinuous = [
+        input.callerType.symbol.id,
+        ...ownerSelectionPath.map((edge) => edge.targetId!)
+      ].every((symbolId) => {
+        const entries = input.typesBySymbolId.get(symbolId) ?? [];
+        return entries.length === 1 && entries[0]?.fact.packageName === ownerPackageName;
+      });
+      if (field.visibility !== "package" || packagePathIsContinuous) {
+        decision = "same-package";
       }
-      const callerPackageName = input.callerType.fact.packageName;
-      const ownerPackageName = current.fact.packageName;
-      let decision: CallFieldAccessEvidence["decision"] | null = null;
-      if (current.symbol.id === input.callerType.symbol.id) {
-        decision = "declaring-class";
-      } else if (field.visibility === "public") {
-        decision = "public";
-      } else if (callerPackageName === ownerPackageName) {
-        const packagePathIsContinuous = [input.callerType.symbol.id, ...path.map((edge) => edge.targetId!)]
-          .every((symbolId) => {
-            const entries = input.typesBySymbolId.get(symbolId) ?? [];
-            return entries.length === 1 && entries[0]?.fact.packageName === ownerPackageName;
-          });
-        if (field.visibility !== "package" || packagePathIsContinuous) {
-          decision = "same-package";
-        }
-      } else if (field.visibility === "protected" && path.length > 0) {
-        decision = "protected-subclass";
-      }
-      if (decision === null) {
-        return null;
-      }
-      return {
+    } else if (field.visibility === "protected" && ownerSelectionPath.length > 0) {
+      decision = "protected-subclass";
+    }
+    if (decision === null) {
+      return { state: "invalid" };
+    }
+    return {
+      state: "selected",
+      plan: {
         field,
-        ownerType: current,
-        ownerSelectionPath: path,
+        ownerType,
+        ownerSelectionPath,
+        selectionReason,
         access: {
           policy: "java-source-field-access-v1",
           visibility: field.visibility,
           decision,
           callerTypeSymbolId: input.callerType.symbol.id,
           callerPackageName,
-          ownerTypeSymbolId: current.symbol.id,
+          ownerTypeSymbolId: ownerType.symbol.id,
           ownerPackageName
         }
-      };
-    }
+      }
+    };
+  };
 
-    if (!advanceToDirectSuperclass()) {
+  const visitedClassIds = new Set<string>();
+  const interfaceSeeds: Array<{
+    readonly type: JvmResolvedType;
+    readonly path: readonly GraphEdge[];
+  }> = [];
+  let current = input.callerType;
+  let classPath: readonly GraphEdge[] = [];
+
+  if (input.receiverKind === "super-field") {
+    if (current.symbol.kind !== "class" || referenceCounts(current.symbol.id).classSuperclass !== 1) {
+      return null;
+    }
+    const edges = exactEdges(current.symbol.id, "extends", "class");
+    const edge = edges[0];
+    const target = edge?.targetId === null || edge === undefined ? null : resolvedType(edge.targetId, "class");
+    if (edges.length !== 1 || edge === undefined || target === null) {
+      return null;
+    }
+    classPath = [edge];
+    current = target;
+  }
+
+  if (current.symbol.kind === "interface") {
+    const own = selectDeclaredField(current, classPath, "declared-owner");
+    if (own.state === "selected") {
+      return own.plan;
+    }
+    if (own.state === "invalid" || input.receiverKind === "super-field") {
+      return null;
+    }
+    const parentEdges = exactEdges(current.symbol.id, "extends", "interface");
+    if (parentEdges.length !== referenceCounts(current.symbol.id).interfaceSuperinterfaces) {
+      return null;
+    }
+    for (const edge of parentEdges) {
+      const target = edge.targetId === null ? null : resolvedType(edge.targetId, "interface");
+      if (target === null) {
+        return null;
+      }
+      interfaceSeeds.push({ type: target, path: [...classPath, edge] });
+    }
+  } else {
+    while (true) {
+      if (
+        visitedClassIds.has(current.symbol.id) ||
+        visitedClassIds.size >= JAVA_REFERENCE_HIERARCHY_LIMITS.maximumVisitedTypes ||
+        classPath.length > JAVA_REFERENCE_HIERARCHY_LIMITS.maximumDepth
+      ) {
+        return null;
+      }
+      visitedClassIds.add(current.symbol.id);
+      const declared = selectDeclaredField(
+        current,
+        classPath,
+        classPath.length === 0 ? "declared-owner" : "nearest-inherited-owner"
+      );
+      if (declared.state === "selected") {
+        return declared.plan;
+      }
+      if (declared.state === "invalid") {
+        return null;
+      }
+      if (input.receiverKind !== "super-field") {
+        const implementedEdges = exactEdges(current.symbol.id, "implements", "interface");
+        if (implementedEdges.length !== referenceCounts(current.symbol.id).classInterfaces) {
+          return null;
+        }
+        for (const edge of implementedEdges) {
+          const target = edge.targetId === null ? null : resolvedType(edge.targetId, "interface");
+          if (target === null) {
+            return null;
+          }
+          interfaceSeeds.push({ type: target, path: [...classPath, edge] });
+        }
+      }
+      const expectedSuperclassCount = referenceCounts(current.symbol.id).classSuperclass;
+      if (expectedSuperclassCount === 0) {
+        break;
+      }
+      const superEdges = exactEdges(current.symbol.id, "extends", "class");
+      const superEdge = superEdges[0];
+      const superType =
+        superEdge?.targetId === null || superEdge === undefined
+          ? null
+          : resolvedType(superEdge.targetId, "class");
+      if (
+        expectedSuperclassCount !== 1 ||
+        superEdges.length !== 1 ||
+        superEdge === undefined ||
+        superType === null ||
+        classPath.length >= JAVA_REFERENCE_HIERARCHY_LIMITS.maximumDepth
+      ) {
+        return null;
+      }
+      classPath = [...classPath, superEdge];
+      current = superType;
+    }
+    if (input.receiverKind === "super-field") {
       return null;
     }
   }
+
+  interface InterfaceFieldCandidate {
+    readonly ownerType: JvmResolvedType;
+    readonly path: readonly GraphEdge[];
+    readonly selection: DeclaredFieldSelection;
+  }
+  const candidatesByOwnerId = new Map<string, InterfaceFieldCandidate>();
+  const interfacePaths = new Map<string, readonly GraphEdge[]>();
+  const queue = [...interfaceSeeds].sort((left, right) =>
+    compareStableText(
+      left.path.map((edge) => edge.id).join("\u0000"),
+      right.path.map((edge) => edge.id).join("\u0000")
+    )
+  );
+  for (let index = 0; index < queue.length; index += 1) {
+    const entry = queue[index]!;
+    if (interfacePaths.has(entry.type.symbol.id)) {
+      continue;
+    }
+    if (
+      interfacePaths.size + visitedClassIds.size >=
+        JAVA_REFERENCE_HIERARCHY_LIMITS.maximumVisitedTypes ||
+      entry.path.length > JAVA_REFERENCE_HIERARCHY_LIMITS.maximumDepth
+    ) {
+      return null;
+    }
+    interfacePaths.set(entry.type.symbol.id, entry.path);
+    const declared = selectDeclaredField(entry.type, entry.path, "unique-interface-owner");
+    if (declared.state !== "absent") {
+      candidatesByOwnerId.set(entry.type.symbol.id, {
+        ownerType: entry.type,
+        path: entry.path,
+        selection: declared
+      });
+      continue;
+    }
+    const parentEdges = exactEdges(entry.type.symbol.id, "extends", "interface");
+    if (parentEdges.length !== referenceCounts(entry.type.symbol.id).interfaceSuperinterfaces) {
+      return null;
+    }
+    for (const edge of parentEdges) {
+      const target = edge.targetId === null ? null : resolvedType(edge.targetId, "interface");
+      if (target === null) {
+        return null;
+      }
+      queue.push({ type: target, path: [...entry.path, edge] });
+    }
+  }
+
+  const interfaceReaches = (sourceId: string, targetId: string): boolean | null => {
+    const seen = new Set<string>([sourceId]);
+    const pending: Array<{ readonly symbolId: string; readonly depth: number }> = [
+      { symbolId: sourceId, depth: 0 }
+    ];
+    for (let index = 0; index < pending.length; index += 1) {
+      const entry = pending[index]!;
+      const parentEdges = exactEdges(entry.symbolId, "extends", "interface");
+      if (parentEdges.length !== referenceCounts(entry.symbolId).interfaceSuperinterfaces) {
+        return null;
+      }
+      for (const edge of parentEdges) {
+        const parentId = edge.targetId;
+        if (parentId === null || resolvedType(parentId, "interface") === null) {
+          return null;
+        }
+        if (parentId === targetId) {
+          return true;
+        }
+        if (seen.has(parentId)) {
+          continue;
+        }
+        if (
+          entry.depth >= JAVA_REFERENCE_HIERARCHY_LIMITS.maximumDepth ||
+          seen.size >= JAVA_REFERENCE_HIERARCHY_LIMITS.maximumVisitedTypes ||
+          pending.length >= JAVA_REFERENCE_HIERARCHY_LIMITS.maximumVisitedTypes
+        ) {
+          return null;
+        }
+        seen.add(parentId);
+        pending.push({ symbolId: parentId, depth: entry.depth + 1 });
+      }
+    }
+    return false;
+  };
+  const candidates = [...candidatesByOwnerId.values()];
+  const nonDominated: InterfaceFieldCandidate[] = [];
+  for (const candidate of candidates) {
+    let dominated = false;
+    for (const other of candidates) {
+      if (other.ownerType.symbol.id === candidate.ownerType.symbol.id) {
+        continue;
+      }
+      const reaches = interfaceReaches(other.ownerType.symbol.id, candidate.ownerType.symbol.id);
+      if (reaches === null) {
+        return null;
+      }
+      if (reaches) {
+        dominated = true;
+        break;
+      }
+    }
+    if (!dominated) {
+      nonDominated.push(candidate);
+    }
+  }
+  const selected = nonDominated[0];
+  return nonDominated.length === 1 && selected?.selection.state === "selected"
+    ? selected.selection.plan
+    : null;
 }
 
 function projectJavaCallReferences(input: {
@@ -8796,6 +9014,7 @@ function projectJavaCallReferences(input: {
   const chainedReferences: JavaChainedCallReferenceFact[] = [];
   const memberReferences: JavaMemberCallReferenceFact[] = [];
   const fieldsByOwnerId = new Map<string, JavaFieldDeclarationFact[]>();
+  const heritageReferenceCountsBySourceId = new Map<string, JavaHeritageReferenceCounts>();
 
   for (const [, facts] of [...input.factsByFile.entries()].sort(([left], [right]) =>
     compareStableText(left, right)
@@ -8817,6 +9036,22 @@ function projectJavaCallReferences(input: {
     signatureReferences.push(...(facts.jvmFacts?.callableSignatureReferences ?? []));
     chainedReferences.push(...(facts.jvmFacts?.javaChainedCallReferences ?? []));
     memberReferences.push(...(facts.jvmFacts?.javaMemberCallReferences ?? []));
+    for (const reference of facts.jvmFacts?.heritageReferences ?? []) {
+      const previous = heritageReferenceCountsBySourceId.get(reference.sourceId) ?? {
+        classSuperclass: 0,
+        classInterfaces: 0,
+        interfaceSuperinterfaces: 0
+      };
+      heritageReferenceCountsBySourceId.set(reference.sourceId, {
+        classSuperclass:
+          previous.classSuperclass + (reference.syntax === "java-class-superclass" ? 1 : 0),
+        classInterfaces:
+          previous.classInterfaces + (reference.syntax === "java-class-interface" ? 1 : 0),
+        interfaceSuperinterfaces:
+          previous.interfaceSuperinterfaces +
+          (reference.syntax === "java-interface-superinterface" ? 1 : 0)
+      });
+    }
     for (const field of facts.jvmFacts?.javaFieldDeclarations ?? []) {
       const entries = fieldsByOwnerId.get(field.declaringTypeId) ?? [];
       entries.push(field);
@@ -8882,6 +9117,7 @@ function projectJavaCallReferences(input: {
             callerIsStatic: callerDeclarations[0]!.isStatic,
             fieldsByOwnerId,
             heritageEdgesBySourceId,
+            heritageReferenceCountsBySourceId,
             typesBySymbolId,
             symbolsById: input.symbolsById
           })
@@ -8931,19 +9167,19 @@ function projectJavaCallReferences(input: {
           continue;
         }
         receiverBinding = {
-          policy: "java-source-field-binding-v2",
+          policy: "java-source-field-binding-v3",
           kind: reference.receiverKind,
           name: reference.receiverName,
           type: resolvedBindingType.evidence,
           declarationRange: fieldSelection.field.declarationRange,
           scopeRange: fieldSelection.field.scopeRange,
           declaringTypeSymbolId: fieldSelection.ownerType.symbol.id,
+          declaringTypeKind: fieldSelection.ownerType.symbol.kind as "class" | "interface",
           isStatic: fieldSelection.field.isStatic,
+          isFinal: fieldSelection.field.isFinal,
           visibility: fieldSelection.field.visibility,
-          selectionReason:
-            fieldSelection.ownerSelectionPath.length === 0
-              ? "declared-owner"
-              : "nearest-inherited-owner",
+          modifierProof: fieldSelection.field.modifierProof,
+          selectionReason: fieldSelection.selectionReason,
           ownerSelectionPath: fieldSelection.ownerSelectionPath.map(javaHierarchySegmentEvidence),
           hierarchyBounds: JAVA_REFERENCE_HIERARCHY_LIMITS,
           access: fieldSelection.access

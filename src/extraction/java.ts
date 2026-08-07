@@ -1842,7 +1842,7 @@ function staticJavaMemberCallReferences(input: {
 
 function staticJavaFieldDeclarations(input: {
   readonly extraction: JavaExtractFileFactsInput;
-  readonly declaration: StaticJavaClass;
+  readonly declaration: StaticJavaType;
   readonly declaringType: SymbolNode;
   readonly imports: ReadonlyMap<string, string>;
 }): readonly JavaFieldDeclarationFact[] {
@@ -1854,7 +1854,9 @@ function staticJavaFieldDeclarations(input: {
   );
   const fields: JavaFieldDeclarationFact[] = [];
   for (const field of directChildren(input.declaration.body)) {
-    if (field.name !== "FieldDeclaration") {
+    const isInterfaceConstant =
+      input.declaration.kind === "interface" && field.name === "ConstantDeclaration";
+    if (!isInterfaceConstant && field.name !== "FieldDeclaration") {
       continue;
     }
     const children = directChildren(field);
@@ -1866,9 +1868,12 @@ function staticJavaFieldDeclarations(input: {
       typeNodes.length === 1 && typeNodes[0] !== undefined
         ? staticJavaCallTypeReference(input.extraction, typeNodes[0], input.imports, "declaration")
         : null;
-    const isStatic =
-      modifiers !== undefined && directChildren(modifiers).some((child) => child.name === "static");
-    const visibility = staticJavaVisibility(modifiers, false);
+    const modifierNames = new Set(
+      modifiers === undefined ? [] : directChildren(modifiers).map((child) => child.name)
+    );
+    const isStatic = isInterfaceConstant || modifierNames.has("static");
+    const isFinal = isInterfaceConstant || modifierNames.has("final");
+    const visibility = isInterfaceConstant ? "public" : staticJavaVisibility(modifiers, false);
     for (const declarator of children.filter((child) => child.name === "VariableDeclarator")) {
       const definitions = directChildren(declarator).filter((child) => child.name === "Definition");
       const definition = definitions[0];
@@ -1879,9 +1884,12 @@ function staticJavaFieldDeclarations(input: {
       fields.push({
         declaringTypeId: input.declaringType.id,
         name,
+        declarationKind: isInterfaceConstant ? "interface-constant" : "class-field",
         type,
         isStatic,
+        isFinal,
         visibility,
+        modifierProof: isInterfaceConstant ? "interface-implicit" : "declared",
         declarationRange: rangeFor(lineStarts, definition.from, definition.to),
         scopeRange
       });
@@ -3275,6 +3283,14 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
 
       if (typeDeclaration.kind === "interface") {
         declaredInterfaces.push({ declaration: typeDeclaration, symbol: typeSymbol });
+        javaFieldDeclarations.push(
+          ...staticJavaFieldDeclarations({
+            extraction: input,
+            declaration: typeDeclaration,
+            declaringType: typeSymbol,
+            imports
+          })
+        );
         const methods = directChildren(typeDeclaration.body)
           .map((node) => staticJavaMethod(input, node))
           .filter((candidate): candidate is StaticJavaMethod => candidate !== null)

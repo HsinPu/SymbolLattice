@@ -3437,7 +3437,7 @@ describe("SymbolLatticeService", () => {
             invocationKind: "field",
             receiverTypeSymbolId: serviceId,
             receiverBinding: expect.objectContaining({
-              policy: "java-source-field-binding-v2",
+              policy: "java-source-field-binding-v3",
               kind: "field",
               name: "service",
               isStatic: false,
@@ -3473,7 +3473,7 @@ describe("SymbolLatticeService", () => {
         invocationKind: "this-field",
         receiverTypeSymbolId: serviceId,
         receiverBinding: expect.objectContaining({
-          policy: "java-source-field-binding-v2",
+          policy: "java-source-field-binding-v3",
           kind: "this-field",
           name: "service"
         })
@@ -3617,7 +3617,7 @@ describe("SymbolLatticeService", () => {
             invocationKind: "field",
             receiverTypeSymbolId: serviceId,
             receiverBinding: expect.objectContaining({
-              policy: "java-source-field-binding-v2",
+              policy: "java-source-field-binding-v3",
               kind: "field",
               name: "inherited",
               declaringTypeSymbolId: baseId,
@@ -3776,7 +3776,7 @@ describe("SymbolLatticeService", () => {
             invocationKind: "super-field",
             receiverTypeSymbolId: serviceId,
             receiverBinding: expect.objectContaining({
-              policy: "java-source-field-binding-v2",
+              policy: "java-source-field-binding-v3",
               kind: "super-field",
               name: "inherited",
               declaringTypeSymbolId: grandBaseId,
@@ -3836,6 +3836,224 @@ describe("SymbolLatticeService", () => {
         expect.objectContaining({ receiverKind: "super-field", receiverName: "inherited" }),
         expect.objectContaining({ receiverKind: "super-field", receiverName: "shadowed" }),
         expect.objectContaining({ receiverKind: "super-field", receiverName: "shared" })
+      ])
+    );
+  });
+
+  it("resolves Java interface field receivers with class precedence and interface hiding", async () => {
+    const projectPath = await createInlineProject({
+      "src/api/Service.java": [
+        "package api;",
+        "public class Service {",
+        "  public void execute(String value) {}",
+        "}"
+      ].join("\n"),
+      "src/api/Holder.java": [
+        "package api;",
+        "public class Holder<T> {}"
+      ].join("\n"),
+      "src/contracts/RootContract.java": [
+        "package contracts;",
+        "import api.Service;",
+        "public interface RootContract {",
+        "  Service inherited = null;",
+        "  Service shadowed = null;",
+        "  Service ambiguous = null;",
+        "  Service genericBarrier = null;",
+        "}"
+      ].join("\n"),
+      "src/contracts/NearContract.java": [
+        "package contracts;",
+        "import api.Service;",
+        "import api.Holder;",
+        "public interface NearContract extends RootContract {",
+        "  Service shadowed = null;",
+        "  Holder<Service> genericBarrier = null;",
+        "  default void interfaceRun() {",
+        "    inherited.execute(\"interface-inherited\");",
+        "    this.shadowed.execute(\"interface-declared\");",
+        "  }",
+        "  static void staticRun() {",
+        "    inherited.execute(\"interface-static\");",
+        "  }",
+        "}"
+      ].join("\n"),
+      "src/contracts/OtherContract.java": [
+        "package contracts;",
+        "import api.Service;",
+        "public interface OtherContract {",
+        "  Service ambiguous = null;",
+        "}"
+      ].join("\n"),
+      "src/base/Base.java": [
+        "package base;",
+        "import contracts.NearContract;",
+        "public class Base implements NearContract {}"
+      ].join("\n"),
+      "src/app/Child.java": [
+        "package app;",
+        "import base.Base;",
+        "public class Child extends Base {",
+        "  public void run() {",
+        "    inherited.execute(\"class-inherited\");",
+        "    this.inherited.execute(\"class-this\");",
+        "    shadowed.execute(\"nearest-interface\");",
+        "    genericBarrier.execute(\"generic-hiding\");",
+        "    super.inherited.execute(\"super-does-not-search-interfaces\");",
+        "  }",
+        "  public static void staticRun() {",
+        "    inherited.execute(\"class-static\");",
+        "  }",
+        "}"
+      ].join("\n"),
+      "src/app/ClassShadow.java": [
+        "package app;",
+        "import api.Service;",
+        "import base.Base;",
+        "public class ClassShadow extends Base {",
+        "  public Service shadowed;",
+        "  public void run() { shadowed.execute(\"class-wins\"); }",
+        "}"
+      ].join("\n"),
+      "src/app/Ambiguous.java": [
+        "package app;",
+        "import contracts.NearContract;",
+        "import contracts.OtherContract;",
+        "public class Ambiguous implements NearContract, OtherContract {",
+        "  public void run() { ambiguous.execute(\"ambiguous\"); }",
+        "}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+
+    const snapshot = graphStore.getSnapshot(projectPath);
+    const symbol = (qualifiedName: string) =>
+      snapshot.symbols.find((candidate) => candidate.qualifiedName === qualifiedName);
+    const callAt = (filePath: string, line: number) =>
+      snapshot.edges.find(
+        (edge) =>
+          edge.kind === "calls" &&
+          edge.filePath === filePath &&
+          edge.range.start.line === line
+      );
+    const serviceId = symbol("src/api/Service.java#Service")?.id;
+    const executeId = symbol("src/api/Service.java#Service.execute")?.id;
+    const rootId = symbol("src/contracts/RootContract.java#RootContract")?.id;
+    const nearId = symbol("src/contracts/NearContract.java#NearContract")?.id;
+    const baseId = symbol("src/base/Base.java#Base")?.id;
+    const childId = symbol("src/app/Child.java#Child")?.id;
+    const classShadowId = symbol("src/app/ClassShadow.java#ClassShadow")?.id;
+
+    expect(callAt("src/app/Child.java", 5)).toEqual(
+      expect.objectContaining({
+        targetId: executeId,
+        evidence: expect.objectContaining({
+          callDispatch: expect.objectContaining({
+            invocationKind: "field",
+            receiverTypeSymbolId: serviceId,
+            receiverBinding: expect.objectContaining({
+              policy: "java-source-field-binding-v3",
+              kind: "field",
+              name: "inherited",
+              declaringTypeSymbolId: rootId,
+              declaringTypeKind: "interface",
+              isStatic: true,
+              isFinal: true,
+              visibility: "public",
+              modifierProof: "interface-implicit",
+              selectionReason: "unique-interface-owner",
+              ownerSelectionPath: [
+                expect.objectContaining({ sourceSymbolId: childId, targetSymbolId: baseId }),
+                expect.objectContaining({ sourceSymbolId: baseId, targetSymbolId: nearId }),
+                expect.objectContaining({ sourceSymbolId: nearId, targetSymbolId: rootId })
+              ],
+              access: expect.objectContaining({
+                policy: "java-source-field-access-v1",
+                decision: "public",
+                callerTypeSymbolId: childId,
+                ownerTypeSymbolId: rootId
+              }),
+              type: expect.objectContaining({
+                canonicalType: "reference:api.Service",
+                proof: "explicit-import",
+                targetSymbolId: serviceId
+              })
+            })
+          })
+        })
+      })
+    );
+    expect(callAt("src/app/Child.java", 6)?.evidence?.callDispatch?.receiverBinding).toEqual(
+      expect.objectContaining({ kind: "this-field", declaringTypeSymbolId: rootId })
+    );
+    expect(callAt("src/app/Child.java", 7)?.evidence?.callDispatch?.receiverBinding).toEqual(
+      expect.objectContaining({
+        name: "shadowed",
+        declaringTypeSymbolId: nearId,
+        selectionReason: "unique-interface-owner"
+      })
+    );
+    expect(callAt("src/app/Child.java", 12)?.evidence?.callDispatch?.receiverBinding).toEqual(
+      expect.objectContaining({ name: "inherited", declaringTypeSymbolId: rootId, isStatic: true })
+    );
+    expect(callAt("src/contracts/NearContract.java", 8)?.evidence?.callDispatch?.receiverBinding).toEqual(
+      expect.objectContaining({
+        name: "inherited",
+        declaringTypeSymbolId: rootId,
+        selectionReason: "unique-interface-owner",
+        ownerSelectionPath: [
+          expect.objectContaining({ sourceSymbolId: nearId, targetSymbolId: rootId })
+        ]
+      })
+    );
+    expect(callAt("src/contracts/NearContract.java", 9)?.evidence?.callDispatch?.receiverBinding).toEqual(
+      expect.objectContaining({
+        kind: "this-field",
+        name: "shadowed",
+        declaringTypeSymbolId: nearId,
+        selectionReason: "declared-owner"
+      })
+    );
+    expect(callAt("src/contracts/NearContract.java", 12)?.evidence?.callDispatch?.receiverBinding).toEqual(
+      expect.objectContaining({ name: "inherited", declaringTypeSymbolId: rootId, isStatic: true })
+    );
+    expect(callAt("src/app/ClassShadow.java", 6)?.evidence?.callDispatch?.receiverBinding).toEqual(
+      expect.objectContaining({
+        name: "shadowed",
+        declaringTypeSymbolId: classShadowId,
+        declaringTypeKind: "class",
+        modifierProof: "declared",
+        selectionReason: "declared-owner"
+      })
+    );
+
+    expect(callAt("src/app/Child.java", 8)).toBeUndefined();
+    expect(callAt("src/app/Child.java", 9)).toBeUndefined();
+    expect(callAt("src/app/Ambiguous.java", 5)).toBeUndefined();
+
+    const nearFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "src/contracts/NearContract.java");
+    expect(nearFacts?.jvmFacts?.javaFieldDeclarations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          declaringTypeId: nearId,
+          name: "shadowed",
+          declarationKind: "interface-constant",
+          isStatic: true,
+          isFinal: true,
+          visibility: "public",
+          modifierProof: "interface-implicit"
+        }),
+        expect.objectContaining({
+          declaringTypeId: nearId,
+          name: "genericBarrier",
+          declarationKind: "interface-constant",
+          type: null
+        })
       ])
     );
   });

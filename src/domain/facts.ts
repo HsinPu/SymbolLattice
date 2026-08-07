@@ -13,13 +13,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v217";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v218";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v105";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v106";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -163,6 +163,22 @@ export type CallReceiverBindingEvidence =
         | {
             readonly policy: "java-source-field-binding-v2";
             readonly selectionReason: "declared-owner" | "nearest-inherited-owner";
+            readonly ownerSelectionPath: readonly CallTypeHierarchySegmentEvidence[];
+            readonly hierarchyBounds: {
+              readonly maximumDepth: number;
+              readonly maximumVisitedTypes: number;
+            };
+            readonly access: CallFieldAccessEvidence;
+          }
+        | {
+            readonly policy: "java-source-field-binding-v3";
+            readonly declaringTypeKind: "class" | "interface";
+            readonly isFinal: boolean;
+            readonly modifierProof: "declared" | "interface-implicit";
+            readonly selectionReason:
+              | "declared-owner"
+              | "nearest-inherited-owner"
+              | "unique-interface-owner";
             readonly ownerSelectionPath: readonly CallTypeHierarchySegmentEvidence[];
             readonly hierarchyBounds: {
               readonly maximumDepth: number;
@@ -1111,14 +1127,17 @@ export interface JavaCallTypeReferenceFact {
   readonly qualifiedTypePath?: string;
 }
 
-/** One source-declared Java class field retained for receiver resolution. */
+/** One source-declared Java class field or interface constant retained for receiver resolution. */
 export interface JavaFieldDeclarationFact {
   readonly declaringTypeId: string;
   readonly name: string;
+  readonly declarationKind: "class-field" | "interface-constant";
   /** Null preserves unsupported syntax as a name-hiding boundary. */
   readonly type: JavaCallTypeReferenceFact | null;
   readonly isStatic: boolean;
+  readonly isFinal: boolean;
   readonly visibility: "public" | "protected" | "package" | "private";
+  readonly modifierProof: "declared" | "interface-implicit";
   readonly declarationRange: SourceRange;
   readonly scopeRange: SourceRange;
 }
