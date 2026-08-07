@@ -7885,7 +7885,8 @@ function javaMethodSetPlan(input: {
     | "local"
     | "field"
     | "this-field"
-    | "super-field";
+    | "super-field"
+    | "type-field";
   readonly callableDeclarations: readonly JavaCallableDeclarationFact[];
   readonly heritageEdgesBySourceId: ReadonlyMap<string, readonly GraphEdge[]>;
   readonly typesBySymbolId: ReadonlyMap<string, readonly JvmResolvedType[]>;
@@ -8680,9 +8681,79 @@ interface JavaHeritageReferenceCounts {
   readonly interfaceSuperinterfaces: number;
 }
 
+function javaHierarchyFieldNameState(input: {
+  readonly callerType: JvmResolvedType;
+  readonly fieldName: string;
+  readonly fieldsByOwnerId: ReadonlyMap<string, readonly JavaFieldDeclarationFact[]>;
+  readonly heritageEdgesBySourceId: ReadonlyMap<string, readonly GraphEdge[]>;
+  readonly heritageReferenceCountsBySourceId: ReadonlyMap<string, JavaHeritageReferenceCounts>;
+  readonly typesBySymbolId: ReadonlyMap<string, readonly JvmResolvedType[]>;
+  readonly symbolsById: ReadonlyMap<string, SymbolNode>;
+}): "present" | "absent" | "unknown" {
+  const queue: Array<{ readonly type: JvmResolvedType; readonly depth: number }> = [
+    { type: input.callerType, depth: 0 }
+  ];
+  const visited = new Set<string>();
+  for (let index = 0; index < queue.length; index += 1) {
+    const entry = queue[index]!;
+    if (visited.has(entry.type.symbol.id)) {
+      continue;
+    }
+    if (visited.size >= JAVA_REFERENCE_HIERARCHY_LIMITS.maximumVisitedTypes) {
+      return "unknown";
+    }
+    visited.add(entry.type.symbol.id);
+    if (
+      (input.fieldsByOwnerId.get(entry.type.symbol.id) ?? []).some(
+        (field) => field.name === input.fieldName
+      )
+    ) {
+      return "present";
+    }
+
+    const counts = input.heritageReferenceCountsBySourceId.get(entry.type.symbol.id) ?? {
+      classSuperclass: 0,
+      classInterfaces: 0,
+      interfaceSuperinterfaces: 0
+    };
+    const expectedCount =
+      entry.type.symbol.kind === "class"
+        ? counts.classSuperclass + counts.classInterfaces
+        : counts.interfaceSuperinterfaces;
+    const outgoing = (input.heritageEdgesBySourceId.get(entry.type.symbol.id) ?? []).filter(
+      (edge) => {
+        const targetKind =
+          edge.targetId === null ? undefined : input.symbolsById.get(edge.targetId)?.kind;
+        return entry.type.symbol.kind === "class"
+          ? (edge.kind === "extends" && targetKind === "class") ||
+              (edge.kind === "implements" && targetKind === "interface")
+          : edge.kind === "extends" && targetKind === "interface";
+      }
+    );
+    if (outgoing.length !== expectedCount) {
+      return "unknown";
+    }
+    if (
+      entry.depth >= JAVA_REFERENCE_HIERARCHY_LIMITS.maximumDepth &&
+      outgoing.some((edge) => edge.targetId !== null && !visited.has(edge.targetId))
+    ) {
+      return "unknown";
+    }
+    for (const edge of outgoing) {
+      const targetEntries = edge.targetId === null ? [] : (input.typesBySymbolId.get(edge.targetId) ?? []);
+      if (targetEntries.length !== 1 || targetEntries[0] === undefined) {
+        return "unknown";
+      }
+      queue.push({ type: targetEntries[0], depth: entry.depth + 1 });
+    }
+  }
+  return "absent";
+}
+
 function javaFieldSelectionPlan(input: {
   readonly callerType: JvmResolvedType;
-  readonly receiverKind: "field" | "this-field" | "super-field";
+  readonly receiverKind: "field" | "this-field" | "super-field" | "type-field";
+  readonly lookupType?: JvmResolvedType;
   readonly fieldName: string;
   readonly callerIsStatic: boolean;
   readonly fieldsByOwnerId: ReadonlyMap<string, readonly JavaFieldDeclarationFact[]>;
@@ -8694,6 +8765,12 @@ function javaFieldSelectionPlan(input: {
   if (
     input.callerIsStatic &&
     (input.receiverKind === "this-field" || input.receiverKind === "super-field")
+  ) {
+    return null;
+  }
+  if (
+    input.receiverKind === "type-field" &&
+    (input.lookupType === undefined || input.lookupType.symbol.kind !== "interface")
   ) {
     return null;
   }
@@ -8741,7 +8818,7 @@ function javaFieldSelectionPlan(input: {
       namedFields.length !== 1 ||
       field === undefined ||
       field.type === null ||
-      (input.callerIsStatic && !field.isStatic)
+      ((input.callerIsStatic || input.receiverKind === "type-field") && !field.isStatic)
     ) {
       return { state: "invalid" };
     }
@@ -8794,7 +8871,7 @@ function javaFieldSelectionPlan(input: {
     readonly type: JvmResolvedType;
     readonly path: readonly GraphEdge[];
   }> = [];
-  let current = input.callerType;
+  let current = input.lookupType ?? input.callerType;
   let classPath: readonly GraphEdge[] = [];
 
   if (input.receiverKind === "super-field") {
@@ -9106,13 +9183,51 @@ function projectJavaCallReferences(input: {
       continue;
     }
     const directSuperEdge = directSuperEdges[0];
+    if (
+      reference.receiverKind === "type-field" &&
+      javaHierarchyFieldNameState({
+        callerType: declaringType,
+        fieldName: reference.receiverQualifierRootName,
+        fieldsByOwnerId,
+        heritageEdgesBySourceId,
+        heritageReferenceCountsBySourceId,
+        typesBySymbolId,
+        symbolsById: input.symbolsById
+      }) !== "absent"
+    ) {
+      continue;
+    }
+    const resolvedOwnerType =
+      reference.receiverKind === "type-field"
+        ? resolveJavaCallType({
+            reference: reference.receiverOwnerType,
+            declaringType,
+            sourceFilePath: reference.filePath,
+            types,
+            membershipsByFile,
+            projectEvidence: input.jvmProjectModuleEvidence
+          })
+        : null;
+    const ownerTypeEntries =
+      resolvedOwnerType?.evidence.targetSymbolId === undefined
+        ? []
+        : (typesBySymbolId.get(resolvedOwnerType.evidence.targetSymbolId) ?? []);
+    const explicitOwnerType =
+      ownerTypeEntries.length === 1 && ownerTypeEntries[0]?.symbol.kind === "interface"
+        ? ownerTypeEntries[0]
+        : undefined;
+    if (reference.receiverKind === "type-field" && explicitOwnerType === undefined) {
+      continue;
+    }
     const fieldSelection =
       reference.receiverKind === "field" ||
       reference.receiverKind === "this-field" ||
-      reference.receiverKind === "super-field"
+      reference.receiverKind === "super-field" ||
+      reference.receiverKind === "type-field"
         ? javaFieldSelectionPlan({
             callerType: declaringType,
             receiverKind: reference.receiverKind,
+            ...(explicitOwnerType === undefined ? {} : { lookupType: explicitOwnerType }),
             fieldName: reference.receiverName,
             callerIsStatic: callerDeclarations[0]!.isStatic,
             fieldsByOwnerId,
@@ -9125,7 +9240,8 @@ function projectJavaCallReferences(input: {
     const bindingTypeReference =
       reference.receiverKind === "field" ||
       reference.receiverKind === "this-field" ||
-      reference.receiverKind === "super-field"
+      reference.receiverKind === "super-field" ||
+      reference.receiverKind === "type-field"
         ? fieldSelection?.field.type ?? null
         : reference.receiverKind === "parameter" || reference.receiverKind === "local"
           ? reference.receiverType
@@ -9158,7 +9274,35 @@ function projectJavaCallReferences(input: {
     const receiverSelectionPath = directSuperEdge === undefined ? [] : [directSuperEdge];
     let receiverBinding: CallReceiverBindingEvidence | undefined;
     if (resolvedBindingType !== null) {
-      if (
+      if (reference.receiverKind === "type-field") {
+        if (
+          fieldSelection === null ||
+          resolvedOwnerType === null ||
+          fieldSelection.ownerType.symbol.kind !== "interface" ||
+          !fieldSelection.field.isStatic
+        ) {
+          continue;
+        }
+        receiverBinding = {
+          policy: "java-source-field-binding-v4",
+          kind: "type-field",
+          name: reference.receiverName,
+          type: resolvedBindingType.evidence,
+          declarationRange: fieldSelection.field.declarationRange,
+          scopeRange: fieldSelection.field.scopeRange,
+          declaringTypeSymbolId: fieldSelection.ownerType.symbol.id,
+          declaringTypeKind: "interface",
+          isStatic: true,
+          isFinal: fieldSelection.field.isFinal,
+          visibility: fieldSelection.field.visibility,
+          modifierProof: fieldSelection.field.modifierProof,
+          selectionReason: fieldSelection.selectionReason,
+          ownerSelectionPath: fieldSelection.ownerSelectionPath.map(javaHierarchySegmentEvidence),
+          hierarchyBounds: JAVA_REFERENCE_HIERARCHY_LIMITS,
+          access: fieldSelection.access,
+          qualifiedOwnerType: resolvedOwnerType.evidence
+        };
+      } else if (
         reference.receiverKind === "field" ||
         reference.receiverKind === "this-field" ||
         reference.receiverKind === "super-field"
@@ -9246,6 +9390,7 @@ function projectJavaCallReferences(input: {
       continue;
     }
     const configurationPaths = uniqueConfigurationPaths([
+      resolvedOwnerType?.configurationPaths ?? [],
       resolvedBindingType?.configurationPaths ?? [],
       ...(fieldSelection?.ownerSelectionPath.map(
         (edge) => edge.evidence?.configurationPaths ?? []
@@ -9257,6 +9402,7 @@ function projectJavaCallReferences(input: {
       ...new Set([
         reference.filePath,
         method.filePath,
+        ...(resolvedOwnerType?.sourcePaths ?? []),
         ...(resolvedBindingType?.sourcePaths ?? []),
         ...(fieldSelection?.ownerSelectionPath.flatMap((edge) => [
           edge.filePath,

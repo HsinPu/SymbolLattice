@@ -4058,6 +4058,190 @@ describe("SymbolLatticeService", () => {
     );
   });
 
+  it("resolves type-qualified Java interface constants without guessing value-qualified chains", async () => {
+    const projectPath = await createInlineProject({
+      "src/api/Service.java": [
+        "package api;",
+        "public class Service { public void execute() {} }"
+      ].join("\n"),
+      "src/contracts/RootContract.java": [
+        "package contracts;",
+        "import api.Service;",
+        "public interface RootContract {",
+        "  Service inherited = null;",
+        "  Service ambiguous = null;",
+        "  Service[] unsupported = null;",
+        "}"
+      ].join("\n"),
+      "src/contracts/NearContract.java": [
+        "package contracts;",
+        "import api.Service;",
+        "public interface NearContract extends RootContract {",
+        "  Service shadowed = null;",
+        "}"
+      ].join("\n"),
+      "src/contracts/OtherContract.java": [
+        "package contracts;",
+        "import api.Service;",
+        "public interface OtherContract {",
+        "  Service ambiguous = null;",
+        "}"
+      ].join("\n"),
+      "src/contracts/CombinedContract.java": [
+        "package contracts;",
+        "public interface CombinedContract extends NearContract, OtherContract {}"
+      ].join("\n"),
+      "src/app/ClassFields.java": [
+        "package app;",
+        "import api.Service;",
+        "public class ClassFields { public static Service shadowed; }"
+      ].join("\n"),
+      "src/app/ValueShadow.java": [
+        "package app;",
+        "import api.Service;",
+        "import contracts.NearContract;",
+        "public class ValueShadow {",
+        "  Service NearContract;",
+        "  public void run() { NearContract.shadowed.execute(); }",
+        "}"
+      ].join("\n"),
+      "src/app/Runner.java": [
+        "package app;",
+        "import api.Service;",
+        "import contracts.NearContract;",
+        "import contracts.CombinedContract;",
+        "public class Runner {",
+        "  public void run() {",
+        "    NearContract.shadowed.execute();",
+        "    NearContract.inherited.execute();",
+        "    contracts.NearContract.shadowed.execute();",
+        "    NearContract.unsupported.execute();",
+        "    CombinedContract.ambiguous.execute();",
+        "    ClassFields.shadowed.execute();",
+        "    MissingContract.shadowed.execute();",
+        "    Service NearContract = null;",
+        "    NearContract.shadowed.execute();",
+        "  }",
+        "  public static void staticRun() {",
+        "    NearContract.shadowed.execute();",
+        "  }",
+        "}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+
+    const snapshot = graphStore.getSnapshot(projectPath);
+    const symbol = (qualifiedName: string) =>
+      snapshot.symbols.find((candidate) => candidate.qualifiedName === qualifiedName);
+    const callAt = (line: number) =>
+      snapshot.edges.find(
+        (edge) =>
+          edge.kind === "calls" &&
+          edge.filePath === "src/app/Runner.java" &&
+          edge.range.start.line === line
+      );
+    const executeId = symbol("src/api/Service.java#Service.execute")?.id;
+    const serviceId = symbol("src/api/Service.java#Service")?.id;
+    const runnerId = symbol("src/app/Runner.java#Runner")?.id;
+    const rootId = symbol("src/contracts/RootContract.java#RootContract")?.id;
+    const nearId = symbol("src/contracts/NearContract.java#NearContract")?.id;
+
+    expect(callAt(7)).toEqual(
+      expect.objectContaining({
+        targetId: executeId,
+        evidence: expect.objectContaining({
+          callDispatch: expect.objectContaining({
+            invocationKind: "type-field",
+            receiverTypeSymbolId: serviceId,
+            receiverBinding: expect.objectContaining({
+              policy: "java-source-field-binding-v4",
+              kind: "type-field",
+              name: "shadowed",
+              declaringTypeSymbolId: nearId,
+              declaringTypeKind: "interface",
+              selectionReason: "declared-owner",
+              ownerSelectionPath: [],
+              qualifiedOwnerType: expect.objectContaining({
+                canonicalType: "reference:contracts.NearContract",
+                proof: "explicit-import",
+                targetSymbolId: nearId,
+                range: expect.objectContaining({ start: expect.objectContaining({ line: 7 }) })
+              }),
+              access: expect.objectContaining({
+                decision: "public",
+                callerTypeSymbolId: runnerId,
+                ownerTypeSymbolId: nearId
+              })
+            })
+          })
+        })
+      })
+    );
+    expect(callAt(8)?.evidence?.callDispatch?.receiverBinding).toEqual(
+      expect.objectContaining({
+        policy: "java-source-field-binding-v4",
+        declaringTypeSymbolId: rootId,
+        selectionReason: "unique-interface-owner",
+        ownerSelectionPath: [
+          expect.objectContaining({ sourceSymbolId: nearId, targetSymbolId: rootId })
+        ]
+      })
+    );
+    expect(callAt(9)?.evidence?.callDispatch?.receiverBinding).toEqual(
+      expect.objectContaining({
+        qualifiedOwnerType: expect.objectContaining({
+          canonicalType: "reference:contracts.NearContract",
+          proof: "qualified-type",
+          targetSymbolId: nearId
+        })
+      })
+    );
+    expect(callAt(18)?.evidence?.callDispatch?.receiverBinding).toEqual(
+      expect.objectContaining({ kind: "type-field", declaringTypeSymbolId: nearId })
+    );
+
+    for (const line of [10, 11, 12, 13, 15]) {
+      expect(callAt(line)).toBeUndefined();
+    }
+    expect(
+      snapshot.edges.find(
+        (edge) =>
+          edge.kind === "calls" &&
+          edge.filePath === "src/app/ValueShadow.java" &&
+          edge.range.start.line === 6
+      )
+    ).toBeUndefined();
+
+    const runnerFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "src/app/Runner.java");
+    expect(runnerFacts?.jvmFacts?.javaMemberCallReferences).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          receiverKind: "type-field",
+          receiverName: "shadowed",
+          receiverOwnerType: expect.objectContaining({
+            syntax: "type-qualifier",
+            referenceName: "NearContract",
+            importedTypePath: "contracts.NearContract"
+          })
+        }),
+        expect.objectContaining({
+          receiverKind: "type-field",
+          receiverName: "shadowed",
+          receiverOwnerType: expect.objectContaining({
+            syntax: "type-qualifier",
+            referenceName: "NearContract",
+            qualifiedTypePath: "contracts.NearContract"
+          })
+        })
+      ])
+    );
+  });
+
   it("resolves Java chained overloads only from exact argument type evidence", async () => {
     const projectPath = await createInlineProject({
       "src/model/Input.java": [

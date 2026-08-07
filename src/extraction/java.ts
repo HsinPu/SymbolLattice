@@ -1744,6 +1744,15 @@ function staticJavaMemberCallReferences(input: {
         const receiverName = receiverPrefix.match(
           /^\s*([A-Za-z_$][A-Za-z0-9_$]*)\s*\.\s*$/u
         )?.[1];
+        const typeFieldMatch = receiverPrefix.match(
+          /^\s*([A-Za-z_$][A-Za-z0-9_$]*(?:\s*\.\s*[A-Za-z_$][A-Za-z0-9_$]*)*)\s*\.\s*([A-Za-z_$][A-Za-z0-9_$]*)\s*\.\s*$/u
+        );
+        const rawOwnerType = typeFieldMatch?.[1];
+        const typeFieldName = typeFieldMatch?.[2];
+        const ownerTypePath = rawOwnerType?.replace(/\s*\.\s*/gu, ".").trim();
+        const ownerTypeSegments = ownerTypePath?.split(".") ?? [];
+        const ownerTypeName = ownerTypeSegments.at(-1);
+        const ownerTypeRootName = ownerTypeSegments[0];
         const methodName = identifierText(input.extraction, methodNode);
         const arguments_ = staticJavaArguments(node);
         if (explicitFieldName !== undefined && methodName !== null && arguments_ !== null) {
@@ -1784,6 +1793,45 @@ function staticJavaMemberCallReferences(input: {
             declaringTypeId: input.declaringType.id,
             filePath: input.extraction.filePath,
             receiverKind: qualifier,
+            methodName,
+            argumentCount: arguments_.length,
+            argumentTypes: arguments_.map((argument) =>
+              staticJavaArgumentType(input.extraction, argument, input.imports)
+            ),
+              range: rangeFor(lineStarts, methodNode.from, methodNode.to)
+            });
+        } else if (
+          rawOwnerType !== undefined &&
+          typeFieldName !== undefined &&
+          ownerTypePath !== undefined &&
+          ownerTypeName !== undefined &&
+          ownerTypeRootName !== undefined &&
+          ownerTypeRootName !== "this" &&
+          ownerTypeRootName !== "super" &&
+          visibleBinding(ownerTypeRootName) === undefined &&
+          methodName !== null &&
+          arguments_ !== null
+        ) {
+          const ownerTypeStart = node.from + receiverPrefix.indexOf(rawOwnerType);
+          const importedTypePath =
+            ownerTypeSegments.length === 1 ? input.imports.get(ownerTypeName) : undefined;
+          references.push({
+            sourceId: input.callableSymbol.id,
+            declaringTypeId: input.declaringType.id,
+            filePath: input.extraction.filePath,
+            receiverKind: "type-field",
+            receiverName: typeFieldName,
+            receiverOwnerType: {
+              kind: "reference",
+              referenceName: ownerTypeName,
+              syntax: "type-qualifier",
+              range: rangeFor(lineStarts, ownerTypeStart, ownerTypeStart + rawOwnerType.length),
+              ...(importedTypePath === undefined ? {} : { importedTypePath }),
+              ...(ownerTypeSegments.length === 1
+                ? {}
+                : { qualifiedTypePath: ownerTypePath })
+            },
+            receiverQualifierRootName: ownerTypeRootName,
             methodName,
             argumentCount: arguments_.length,
             argumentTypes: arguments_.map((argument) =>

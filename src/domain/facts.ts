@@ -13,13 +13,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v218";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v219";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v106";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v107";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -132,7 +132,13 @@ export interface CallFieldAccessEvidence {
 
 /** Shared source declaration proof for the static receiver type of one Java call. */
 interface CallReceiverBindingEvidenceBase {
-  readonly kind: "parameter" | "local" | "field" | "this-field" | "super-field";
+  readonly kind:
+    | "parameter"
+    | "local"
+    | "field"
+    | "this-field"
+    | "super-field"
+    | "type-field";
   readonly name: string;
   readonly type: CallTypeValueEvidence;
   readonly declarationRange: SourceRange;
@@ -186,7 +192,28 @@ export type CallReceiverBindingEvidence =
             };
             readonly access: CallFieldAccessEvidence;
           }
-      ));
+      ))
+  | (CallReceiverBindingEvidenceBase & {
+      readonly kind: "type-field";
+      readonly policy: "java-source-field-binding-v4";
+      readonly declaringTypeSymbolId: string;
+      readonly declaringTypeKind: "interface";
+      readonly isStatic: true;
+      readonly isFinal: boolean;
+      readonly modifierProof: "declared" | "interface-implicit";
+      readonly visibility: "public" | "protected" | "package" | "private";
+      readonly selectionReason:
+        | "declared-owner"
+        | "nearest-inherited-owner"
+        | "unique-interface-owner";
+      readonly ownerSelectionPath: readonly CallTypeHierarchySegmentEvidence[];
+      readonly hierarchyBounds: {
+        readonly maximumDepth: number;
+        readonly maximumVisitedTypes: number;
+      };
+      readonly access: CallFieldAccessEvidence;
+      readonly qualifiedOwnerType: CallTypeValueEvidence;
+    });
 
 /** Project-proven Java method-set and owner selection for a chained return-type dispatch. */
 export interface CallDispatchEvidence {
@@ -204,7 +231,8 @@ export interface CallDispatchEvidence {
     | "local"
     | "field"
     | "this-field"
-    | "super-field";
+    | "super-field"
+    | "type-field";
   /** Direct caller-to-receiver proof for explicit `super` dispatch; missing for older receipts. */
   readonly receiverSelectionPath?: readonly CallTypeHierarchySegmentEvidence[];
   /** Present when a source declaration proves a parameter, local, or field receiver type. */
@@ -1121,7 +1149,8 @@ export interface JavaCallTypeReferenceFact {
     | "object-creation"
     | "primitive-literal"
     | "primitive-cast"
-    | "string-literal";
+    | "string-literal"
+    | "type-qualifier";
   readonly range: SourceRange;
   readonly importedTypePath?: string;
   readonly qualifiedTypePath?: string;
@@ -1208,6 +1237,13 @@ export type JavaMemberCallReferenceFact =
       readonly receiverScopeRange?: SourceRange;
       readonly receiverFieldStatic?: boolean;
       readonly receiverFieldVisibility?: "public" | "protected" | "package" | "private";
+    })
+  | (JavaMemberCallReferenceBaseFact & {
+      readonly receiverKind: "type-field";
+      readonly receiverName: string;
+      readonly receiverOwnerType: JavaCallTypeReferenceFact;
+      /** First lexical segment; project resolution rejects competing value-field bindings. */
+      readonly receiverQualifierRootName: string;
     });
 
 /** Syntax-only JVM package, import, heritage, and DI-point facts for project resolution. */
