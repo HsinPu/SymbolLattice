@@ -1028,7 +1028,10 @@ describe("TypeScript callable signature resolution", () => {
           "type LocalOptions = { trace: boolean };",
           "export function execute(input: RequestInput, options: LocalOptions, invalid: ValueOnly): Promise<Result> {",
           '  throw new Error("not implemented");',
-          "}"
+          "}",
+          "export interface Handler { handle(input: RequestInput): Result; }",
+          "export class Service { constructor(input: RequestInput) {} }",
+          "export const arrow = (input: RequestInput): Result => ({ ok: true });"
         ].join("\n"),
         contentHash: "service"
       },
@@ -1074,6 +1077,22 @@ describe("TypeScript callable signature resolution", () => {
       confidence: 1,
       evidence: { ruleId: "signature.returns.reexported-type", stage: "module" }
     });
+    for (const [sourceQualifiedName, kind, referenceName] of [
+      ["src/service.ts#Handler.handle", "accepts", "RequestInput"],
+      ["src/service.ts#Handler.handle", "returns", "Result"],
+      ["src/service.ts#Service.constructor", "accepts", "RequestInput"],
+      ["src/service.ts#arrow", "accepts", "RequestInput"],
+      ["src/service.ts#arrow", "returns", "Result"]
+    ] as const) {
+      expect(signatureEdge(sourceQualifiedName, kind, referenceName)).toMatchObject({
+        targetId: symbol(
+          `src/contracts.ts#${referenceName === "RequestInput" ? "Input" : "Result"}`
+        )?.id,
+        resolution: "exact",
+        confidence: 1,
+        evidence: { ruleId: `signature.${kind}.reexported-type`, stage: "module" }
+      });
+    }
 
     for (const [sourceName, kind, referenceName] of [
       ["execute", "accepts", "ValueOnly"],

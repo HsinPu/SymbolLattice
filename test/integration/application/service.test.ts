@@ -1141,9 +1141,8 @@ describe("SymbolLatticeService", () => {
       ].join("\n"),
       "src/service.ts": [
         'import type { RequestInput, Result } from "./contracts.js";',
-        "export function execute(input: RequestInput): Promise<Result> {",
-        "  return Promise.resolve({ ok: input.id.length > 0 });",
-        "}"
+        "export const execute = (input: RequestInput): Promise<Result> =>",
+        "  Promise.resolve({ ok: input.id.length > 0 });"
       ].join("\n")
     });
     const service = createService();

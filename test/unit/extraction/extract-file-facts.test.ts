@@ -108,6 +108,99 @@ describe("source extraction", () => {
     );
   });
 
+  it("extracts interface methods and constructors with enclosing generic noise removed", () => {
+    const facts = extractFileFacts({
+      filePath: "src/contracts.ts",
+      language: "typescript",
+      sourceText: `
+        type RequestInput = { id: string };
+        type Result = { ok: boolean };
+        export interface Contract<T> {
+          execute(input: RequestInput, generic: T): Result;
+        }
+        export class Service<T> {
+          constructor(input: RequestInput, generic: T) {}
+        }
+      `
+    });
+
+    const execute = facts.symbols.find(
+      (symbol) => symbol.kind === "method" && symbol.qualifiedName.endsWith("#Contract.execute")
+    );
+    const constructor = facts.symbols.find(
+      (symbol) => symbol.kind === "method" && symbol.qualifiedName.endsWith("#Service.constructor")
+    );
+
+    expect(execute).toBeDefined();
+    expect(constructor).toBeDefined();
+    expect(
+      facts.pendingReferences
+        .filter(
+          (reference) =>
+            (reference.sourceId === execute?.id || reference.sourceId === constructor?.id) &&
+            (reference.relationKind === "accepts" || reference.relationKind === "returns")
+        )
+        .map((reference) => [
+          reference.sourceId === execute?.id ? "execute" : "constructor",
+          reference.relationKind,
+          reference.referenceName
+        ])
+    ).toEqual([
+      ["execute", "accepts", "RequestInput"],
+      ["execute", "returns", "Result"],
+      ["constructor", "accepts", "RequestInput"]
+    ]);
+  });
+
+  it("attributes typed function expressions to their persisted callable owners", () => {
+    const facts = extractFileFacts({
+      filePath: "src/callables.ts",
+      language: "typescript",
+      sourceText: `
+        type RequestInput = { id: string };
+        type Result = { ok: boolean };
+        type OtherInput = { other: string };
+        type OtherResult = { other: boolean };
+        export const arrow = <T>(input: RequestInput, generic: T): Result => ({ ok: true });
+        export const expression = function<T>(input: RequestInput, generic: T): Result {
+          return { ok: true };
+        };
+        export const annotated: (input: RequestInput) => Result =
+          (input: OtherInput): OtherResult => ({ other: input.other.length > 0 });
+        export default (input: RequestInput): Result => ({ ok: true });
+      `
+    });
+
+    const owners = new Map(
+      facts.symbols
+        .filter((symbol) => ["arrow", "expression", "annotated", "default"].includes(symbol.name))
+        .map((symbol) => [symbol.id, symbol.name])
+    );
+    expect([...owners.values()].sort()).toEqual(["annotated", "arrow", "default", "expression"]);
+    expect(
+      facts.pendingReferences
+        .filter(
+          (reference) =>
+            owners.has(reference.sourceId) &&
+            (reference.relationKind === "accepts" || reference.relationKind === "returns")
+        )
+        .map((reference) => [
+          owners.get(reference.sourceId),
+          reference.relationKind,
+          reference.referenceName
+        ])
+    ).toEqual([
+      ["arrow", "accepts", "RequestInput"],
+      ["arrow", "returns", "Result"],
+      ["expression", "accepts", "RequestInput"],
+      ["expression", "returns", "Result"],
+      ["annotated", "accepts", "RequestInput"],
+      ["annotated", "returns", "Result"],
+      ["default", "accepts", "RequestInput"],
+      ["default", "returns", "Result"]
+    ]);
+  });
+
   it("preserves local and public names for explicit export aliases", () => {
     const facts = extractFileFacts({
       filePath: "src/math.ts",

@@ -273,9 +273,13 @@ function declarationInfo(
         };
   }
 
-  if (ts.isMethodDeclaration(node)) {
+  if (ts.isMethodDeclaration(node) || ts.isMethodSignature(node)) {
     const name = declarationName(node);
     return name === null ? null : { name, kind: "method", isExported: false };
+  }
+
+  if (ts.isConstructorDeclaration(node)) {
+    return { name: "constructor", kind: "method", isExported: false };
   }
 
   if (ts.isInterfaceDeclaration(node)) {
@@ -442,6 +446,18 @@ function typeParametersFor(node: ts.Node): ts.NodeArray<ts.TypeParameterDeclarat
   }
 
   return ts.isFunctionLike(node) ? node.typeParameters : undefined;
+}
+
+function enclosingTypeParameterNames(node: ts.Node): ReadonlySet<string> {
+  const names = new Set<string>();
+  let current: ts.Node | undefined = node;
+  while (current !== undefined && !ts.isSourceFile(current)) {
+    for (const typeParameter of typeParametersFor(current) ?? []) {
+      names.add(typeParameter.name.text);
+    }
+    current = current.parent;
+  }
+  return names;
 }
 
 const IGNORED_SIGNATURE_TYPE_REFERENCES = new Set([
@@ -5824,6 +5840,35 @@ export function extractFileFacts(
     return reference;
   }
 
+  function addCallableSignatureReferences(
+    owner: SymbolNode,
+    signature: ts.SignatureDeclaration,
+    seen: Set<string>
+  ): void {
+    const typeParameterNames = enclosingTypeParameterNames(signature);
+    const addSignatureReferences = (
+      typeNode: ts.TypeNode | undefined,
+      relationKind: "accepts" | "returns"
+    ): void => {
+      if (typeNode === undefined) {
+        return;
+      }
+      for (const reference of signatureTypeReferences(typeNode, typeParameterNames)) {
+        const key = `${relationKind}\u0000${reference.text}`;
+        if (seen.has(key)) {
+          continue;
+        }
+        seen.add(key);
+        addPendingReference(owner.id, reference.text, relationKind, reference);
+      }
+    };
+
+    for (const parameter of signature.parameters) {
+      addSignatureReferences(parameter.type, "accepts");
+    }
+    addSignatureReferences(signature.type, "returns");
+  }
+
   function addRouteSymbol(node: ts.Node, method: RouteMethod, path: string): SymbolNode {
     const name = `${method} ${path}`;
     const qualifiedName = `${input.filePath}#route:${name}`;
@@ -6382,36 +6427,30 @@ export function extractFileFacts(
         );
       }
     }
-    if (
-      declaredSymbol !== null &&
-      input.language === "typescript" &&
-      ts.isFunctionLike(node)
-    ) {
-      const typeParameterNames = new Set(
-        (node.typeParameters ?? []).map((typeParameter) => typeParameter.name.text)
-      );
+    if (declaredSymbol !== null && input.language === "typescript") {
       const seenSignatureReferences = new Set<string>();
-      const addSignatureReferences = (
-        typeNode: ts.TypeNode | undefined,
-        relationKind: "accepts" | "returns"
-      ): void => {
-        if (typeNode === undefined) {
-          return;
+      if (ts.isFunctionLike(node)) {
+        addCallableSignatureReferences(declaredSymbol, node, seenSignatureReferences);
+      } else if (ts.isVariableDeclaration(node)) {
+        if (node.type !== undefined && ts.isFunctionTypeNode(node.type)) {
+          addCallableSignatureReferences(declaredSymbol, node.type, seenSignatureReferences);
+        } else if (
+          node.initializer !== undefined &&
+          (ts.isArrowFunction(node.initializer) || ts.isFunctionExpression(node.initializer))
+        ) {
+          addCallableSignatureReferences(declaredSymbol, node.initializer, seenSignatureReferences);
         }
-        for (const reference of signatureTypeReferences(typeNode, typeParameterNames)) {
-          const key = `${relationKind}\u0000${reference.text}`;
-          if (seenSignatureReferences.has(key)) {
-            continue;
-          }
-          seenSignatureReferences.add(key);
-          addPendingReference(declaredSymbol.id, reference.text, relationKind, reference);
-        }
-      };
-
-      for (const parameter of node.parameters) {
-        addSignatureReferences(parameter.type, "accepts");
+      } else if (
+        exportAssignment !== null &&
+        (ts.isArrowFunction(exportAssignment.expression) ||
+          ts.isFunctionExpression(exportAssignment.expression))
+      ) {
+        addCallableSignatureReferences(
+          declaredSymbol,
+          exportAssignment.expression,
+          seenSignatureReferences
+        );
       }
-      addSignatureReferences(node.type, "returns");
     }
     if (
       declaredSymbol !== null &&
@@ -6707,11 +6746,9 @@ export function extractFileFacts(
           return;
         }
         for (const method of spec.methods) {
-          const methodSymbol = addReactNativeTurboModuleSpecMethod(
-            specSymbol,
-            method.declaration,
-            method.name
-          );
+          const methodSymbol =
+            symbolsByDeclaration.get(method.declaration) ??
+            addReactNativeTurboModuleSpecMethod(specSymbol, method.declaration, method.name);
           reactNativeFacts.turboModuleSpecMethods.push({
             sourceId: methodSymbol.id,
             filePath: input.filePath,
