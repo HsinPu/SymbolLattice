@@ -3774,6 +3774,308 @@ describe("SymbolLatticeService", () => {
     ).toEqual([]);
   });
 
+  it("dispatches a direct Java factory chain to a project-proven inherited target owner", async () => {
+    const projectPath = await createInlineProject({
+      "src/api/BaseExecutor.java": [
+        "package api;",
+        "public class BaseExecutor {",
+        "  public void execute(int value) {}",
+        "}"
+      ].join("\n"),
+      "src/api/LeafExecutor.java": [
+        "package api;",
+        "public class LeafExecutor extends BaseExecutor {}"
+      ].join("\n"),
+      "src/factory/InheritedFactory.java": [
+        "package factory;",
+        "import api.LeafExecutor;",
+        "public class InheritedFactory {",
+        "  public static LeafExecutor create() { return null; }",
+        "}"
+      ].join("\n"),
+      "src/app/InheritedRunner.java": [
+        "package app;",
+        "import factory.InheritedFactory;",
+        "public class InheritedRunner {",
+        "  public void run() { InheritedFactory.create().execute(1); }",
+        "}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const snapshot = graphStore.getSnapshot(projectPath);
+    const symbol = (qualifiedName: string) =>
+      snapshot.symbols.find((candidate) => candidate.qualifiedName === qualifiedName);
+    const runnerId = symbol("src/app/InheritedRunner.java#InheritedRunner.run")?.id;
+    const baseTypeId = symbol("src/api/BaseExecutor.java#BaseExecutor")?.id;
+    const leafTypeId = symbol("src/api/LeafExecutor.java#LeafExecutor")?.id;
+    const inheritedMethodId = symbol("src/api/BaseExecutor.java#BaseExecutor.execute")?.id;
+    const runnerCalls = snapshot.edges.filter(
+      (edge) => edge.kind === "calls" && edge.sourceId === runnerId
+    );
+
+    expect(runnerCalls.find((edge) => edge.referenceName === "create")).toMatchObject({
+      targetId: symbol("src/factory/InheritedFactory.java#InheritedFactory.create")?.id,
+      resolution: "exact"
+    });
+    expect(runnerCalls.find((edge) => edge.referenceName === "execute")).toMatchObject({
+      targetId: inheritedMethodId,
+      resolution: "exact",
+      evidence: {
+        ruleId:
+          "call.java.chained-factory.explicit-import.arity.inherited-return-dispatch",
+        callDispatch: {
+          selectionPolicy: "java-source-owner-hierarchy-v1",
+          selectionReason: "unique-inherited-owner",
+          receiverTypeSymbolId: leafTypeId,
+          selectedOwnerTypeSymbolId: baseTypeId,
+          hierarchyBounds: { maximumDepth: 16, maximumVisitedTypes: 256 },
+          candidates: [
+            expect.objectContaining({
+              ownerTypeSymbolId: baseTypeId,
+              declarationSymbolIds: [inheritedMethodId],
+              distance: 1,
+              hierarchyPath: [
+                expect.objectContaining({
+                  sourceSymbolId: leafTypeId,
+                  targetSymbolId: baseTypeId,
+                  relationKind: "extends",
+                  ruleId: "syntax.jvm.cross-file.same-package.direct-superclass"
+                })
+              ]
+            })
+          ]
+        }
+      }
+    });
+  });
+
+  it("selects a unique Java inherited method owner without guessing hierarchy ambiguity or bounds", async () => {
+    const deepOwners = Object.fromEntries(
+      Array.from({ length: 18 }, (_, index) => [
+        `src/api/deep/Owner${index}.java`,
+        [
+          "package api.deep;",
+          index === 0
+            ? "public class Owner0 { public void execute(int value) {} }"
+            : `public class Owner${index} extends Owner${index - 1} {}`
+        ].join("\n")
+      ])
+    );
+    const projectPath = await createInlineProject({
+      ...deepOwners,
+      "src/api/DefaultContract.java": [
+        "package api;",
+        "public interface DefaultContract {",
+        "  default void execute(int value) {}",
+        "}"
+      ].join("\n"),
+      "src/api/DefaultLeaf.java": [
+        "package api;",
+        "public class DefaultLeaf implements DefaultContract {}"
+      ].join("\n"),
+      "src/api/SpecificRoot.java": [
+        "package api;",
+        "public class SpecificRoot {",
+        "  public void execute(int value) {}",
+        "}"
+      ].join("\n"),
+      "src/api/SpecificMiddle.java": [
+        "package api;",
+        "public class SpecificMiddle extends SpecificRoot {",
+        "  public void execute(int value) {}",
+        "}"
+      ].join("\n"),
+      "src/api/SpecificLeaf.java": [
+        "package api;",
+        "public class SpecificLeaf extends SpecificMiddle {}"
+      ].join("\n"),
+      "src/api/TopContract.java": [
+        "package api;",
+        "public interface TopContract {",
+        "  default void execute(int value) {}",
+        "}"
+      ].join("\n"),
+      "src/api/LeftContract.java": [
+        "package api;",
+        "public interface LeftContract extends TopContract {}"
+      ].join("\n"),
+      "src/api/RightContract.java": [
+        "package api;",
+        "public interface RightContract extends TopContract {}"
+      ].join("\n"),
+      "src/api/DiamondLeaf.java": [
+        "package api;",
+        "public class DiamondLeaf implements LeftContract, RightContract {}"
+      ].join("\n"),
+      "src/api/DirectLeaf.java": [
+        "package api;",
+        "public class DirectLeaf extends SpecificRoot {",
+        "  public void execute(int value) {}",
+        "}"
+      ].join("\n"),
+      "src/api/LeftDefault.java": [
+        "package api;",
+        "public interface LeftDefault {",
+        "  default void execute(int value) {}",
+        "}"
+      ].join("\n"),
+      "src/api/RightDefault.java": [
+        "package api;",
+        "public interface RightDefault {",
+        "  default void execute(int value) {}",
+        "}"
+      ].join("\n"),
+      "src/api/AmbiguousLeaf.java": [
+        "package api;",
+        "public class AmbiguousLeaf implements LeftDefault, RightDefault {}"
+      ].join("\n"),
+      "src/api/MalformedContract.java": [
+        "package api;",
+        "public interface MalformedContract {",
+        "  default void broken(",
+        "}"
+      ].join("\n"),
+      "src/api/InvalidDefaultClass.java": [
+        "package api;",
+        "public class InvalidDefaultClass {",
+        "  default void broken() {}",
+        "}"
+      ].join("\n"),
+      "src/factory/OwnerFactory.java": [
+        "package factory;",
+        "import api.AmbiguousLeaf;",
+        "import api.DefaultLeaf;",
+        "import api.DiamondLeaf;",
+        "import api.DirectLeaf;",
+        "import api.SpecificLeaf;",
+        "import api.deep.Owner16;",
+        "import api.deep.Owner17;",
+        "public class OwnerFactory {",
+        "  public static DefaultLeaf createDefault() { return null; }",
+        "  public static SpecificLeaf createSpecific() { return null; }",
+        "  public static DiamondLeaf createDiamond() { return null; }",
+        "  public static DirectLeaf createDirect() { return null; }",
+        "  public static Owner16 createBoundary() { return null; }",
+        "  public static Owner17 createTooDeep() { return null; }",
+        "  public static AmbiguousLeaf createAmbiguous() { return null; }",
+        "}"
+      ].join("\n"),
+      "src/app/OwnerRunner.java": [
+        "package app;",
+        "import factory.OwnerFactory;",
+        "public class OwnerRunner {",
+        "  public void run() {",
+        "    OwnerFactory.createDefault().execute(1);",
+        "    OwnerFactory.createSpecific().execute(1);",
+        "    OwnerFactory.createDiamond().execute(1);",
+        "    OwnerFactory.createDirect().execute(1);",
+        "    OwnerFactory.createBoundary().execute(1);",
+        "    OwnerFactory.createTooDeep().execute(1);",
+        "    OwnerFactory.createAmbiguous().execute(1);",
+        "  }",
+        "}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const snapshot = graphStore.getSnapshot(projectPath);
+    const symbol = (qualifiedName: string) =>
+      snapshot.symbols.find((candidate) => candidate.qualifiedName === qualifiedName);
+    const runnerId = symbol("src/app/OwnerRunner.java#OwnerRunner.run")?.id;
+    expect(symbol("src/api/MalformedContract.java#MalformedContract")).toBeUndefined();
+    expect(symbol("src/api/InvalidDefaultClass.java#InvalidDefaultClass")).toBeUndefined();
+    const calls = snapshot.edges.filter(
+      (edge) => edge.kind === "calls" && edge.sourceId === runnerId
+    );
+    const executeAt = (line: number) =>
+      calls.find((edge) => edge.referenceName === "execute" && edge.range.start.line === line);
+
+    const defaultContractId = symbol("src/api/DefaultContract.java#DefaultContract")?.id;
+    expect(executeAt(5)).toMatchObject({
+      targetId: symbol("src/api/DefaultContract.java#DefaultContract.execute")?.id,
+      evidence: {
+        callDispatch: {
+          selectionReason: "unique-inherited-owner",
+          selectedOwnerTypeSymbolId: defaultContractId,
+          candidates: [
+            expect.objectContaining({
+              ownerTypeSymbolId: defaultContractId,
+              distance: 1,
+              hierarchyPath: [expect.objectContaining({ relationKind: "implements" })]
+            })
+          ]
+        }
+      }
+    });
+
+    const specificMiddleId = symbol("src/api/SpecificMiddle.java#SpecificMiddle")?.id;
+    const specificRootId = symbol("src/api/SpecificRoot.java#SpecificRoot")?.id;
+    expect(executeAt(6)).toMatchObject({
+      targetId: symbol("src/api/SpecificMiddle.java#SpecificMiddle.execute")?.id,
+      evidence: {
+        callDispatch: {
+          selectionReason: "owner-specificity",
+          selectedOwnerTypeSymbolId: specificMiddleId,
+          candidates: expect.arrayContaining([
+            expect.objectContaining({ ownerTypeSymbolId: specificMiddleId, distance: 1 }),
+            expect.objectContaining({ ownerTypeSymbolId: specificRootId, distance: 2 })
+          ])
+        }
+      }
+    });
+
+    const topContractId = symbol("src/api/TopContract.java#TopContract")?.id;
+    expect(executeAt(7)).toMatchObject({
+      targetId: symbol("src/api/TopContract.java#TopContract.execute")?.id,
+      evidence: {
+        callDispatch: {
+          selectionReason: "unique-inherited-owner",
+          selectedOwnerTypeSymbolId: topContractId,
+          candidates: [
+            expect.objectContaining({
+              ownerTypeSymbolId: topContractId,
+              distance: 2,
+              hierarchyPath: [
+                expect.objectContaining({ relationKind: "implements" }),
+                expect.objectContaining({ relationKind: "extends", targetSymbolId: topContractId })
+              ]
+            })
+          ]
+        }
+      }
+    });
+
+    const directLeafId = symbol("src/api/DirectLeaf.java#DirectLeaf")?.id;
+    expect(executeAt(8)).toMatchObject({
+      targetId: symbol("src/api/DirectLeaf.java#DirectLeaf.execute")?.id,
+      evidence: {
+        callDispatch: {
+          selectionReason: "declared-owner",
+          receiverTypeSymbolId: directLeafId,
+          selectedOwnerTypeSymbolId: directLeafId,
+          candidates: [expect.objectContaining({ distance: 0, hierarchyPath: [] })]
+        }
+      }
+    });
+
+    expect(executeAt(9)).toMatchObject({
+      targetId: symbol("src/api/deep/Owner0.java#Owner0.execute")?.id,
+      evidence: {
+        callDispatch: {
+          hierarchyBounds: { maximumDepth: 16, maximumVisitedTypes: 256 },
+          candidates: [expect.objectContaining({ distance: 16 })]
+        }
+      }
+    });
+    expect(executeAt(10)).toBeUndefined();
+    expect(executeAt(11)).toBeUndefined();
+  });
+
   it("projects unique cross-file JVM DI types without claiming runtime provider selection", async () => {
     const projectPath = await createInlineProject({
       "src/java/app/services/PetService.java": [

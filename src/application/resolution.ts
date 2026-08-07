@@ -7,6 +7,7 @@ import {
   isCustomRouteFramework,
   type BindingSpace,
   type CallArityEvidence,
+  type CallDispatchEvidence,
   type CallTypeConversionEvidence,
   type CallTypeHierarchySegmentEvidence,
   type CallTypeEvidence,
@@ -7683,6 +7684,144 @@ function javaHierarchySegmentEvidence(edge: GraphEdge): CallTypeHierarchySegment
   };
 }
 
+interface JavaMethodOwnerPlan {
+  readonly declarations: readonly JavaCallableDeclarationFact[];
+  readonly evidence: CallDispatchEvidence;
+  readonly hierarchyEdges: readonly GraphEdge[];
+  readonly inherited: boolean;
+}
+
+function javaMethodOwnerPlan(input: {
+  readonly receiverTypeSymbolId: string;
+  readonly methodName: string;
+  readonly callableDeclarations: readonly JavaCallableDeclarationFact[];
+  readonly heritageEdgesBySourceId: ReadonlyMap<string, readonly GraphEdge[]>;
+}): JavaMethodOwnerPlan | null {
+  const declarationsByOwnerId = new Map<string, JavaCallableDeclarationFact[]>();
+  for (const declaration of input.callableDeclarations) {
+    if (declaration.callableKind !== "method" || declaration.name !== input.methodName) {
+      continue;
+    }
+    const declarations = declarationsByOwnerId.get(declaration.declaringTypeId) ?? [];
+    declarations.push(declaration);
+    declarationsByOwnerId.set(declaration.declaringTypeId, declarations);
+  }
+  for (const declarations of declarationsByOwnerId.values()) {
+    declarations.sort((left, right) => compareStableText(left.symbolId, right.symbolId));
+  }
+
+  const direct = declarationsByOwnerId.get(input.receiverTypeSymbolId) ?? [];
+  if (direct.length > 0) {
+    return {
+      declarations: direct,
+      evidence: {
+        selectionPolicy: "java-source-owner-hierarchy-v1",
+        selectionReason: "declared-owner",
+        receiverTypeSymbolId: input.receiverTypeSymbolId,
+        selectedOwnerTypeSymbolId: input.receiverTypeSymbolId,
+        hierarchyBounds: JAVA_REFERENCE_HIERARCHY_LIMITS,
+        candidates: [
+          {
+            ownerTypeSymbolId: input.receiverTypeSymbolId,
+            declarationSymbolIds: direct.map((declaration) => declaration.symbolId),
+            distance: 0,
+            hierarchyPath: []
+          }
+        ]
+      },
+      hierarchyEdges: [],
+      inherited: false
+    };
+  }
+
+  const queue: Array<{ readonly symbolId: string; readonly edges: readonly GraphEdge[] }> = [
+    { symbolId: input.receiverTypeSymbolId, edges: [] }
+  ];
+  const visited = new Set<string>([input.receiverTypeSymbolId]);
+  const pathsByOwnerId = new Map<string, readonly GraphEdge[]>();
+  let bounded = false;
+  for (let index = 0; index < queue.length; index += 1) {
+    const current = queue[index]!;
+    const outgoing = input.heritageEdgesBySourceId.get(current.symbolId) ?? [];
+    if (current.edges.length >= JAVA_REFERENCE_HIERARCHY_LIMITS.maximumDepth) {
+      if (outgoing.some((edge) => edge.targetId !== null && !visited.has(edge.targetId))) {
+        bounded = true;
+      }
+      continue;
+    }
+    for (const edge of outgoing) {
+      const targetId = edge.targetId;
+      if (targetId === null || visited.has(targetId)) {
+        continue;
+      }
+      if (visited.size >= JAVA_REFERENCE_HIERARCHY_LIMITS.maximumVisitedTypes) {
+        bounded = true;
+        continue;
+      }
+      const path = [...current.edges, edge];
+      visited.add(targetId);
+      queue.push({ symbolId: targetId, edges: path });
+      if ((declarationsByOwnerId.get(targetId)?.length ?? 0) > 0) {
+        pathsByOwnerId.set(targetId, path);
+      }
+    }
+  }
+  if (bounded || pathsByOwnerId.size === 0) {
+    return null;
+  }
+
+  const ownerIds = [...pathsByOwnerId.keys()].sort(compareStableText);
+  let comparisonBounded = false;
+  const mostSpecificOwnerIds = ownerIds.filter((ownerId) =>
+    !ownerIds.some((otherOwnerId) => {
+      if (otherOwnerId === ownerId) {
+        return false;
+      }
+      const relation = javaReferenceWideningPath({
+        sourceSymbolId: otherOwnerId,
+        targetSymbolId: ownerId,
+        heritageEdgesBySourceId: input.heritageEdgesBySourceId
+      });
+      if (relation.state === "bounded") {
+        comparisonBounded = true;
+      }
+      return relation.state === "matched";
+    })
+  );
+  if (comparisonBounded || mostSpecificOwnerIds.length !== 1 || mostSpecificOwnerIds[0] === undefined) {
+    return null;
+  }
+  const selectedOwnerTypeSymbolId = mostSpecificOwnerIds[0];
+  const declarations = declarationsByOwnerId.get(selectedOwnerTypeSymbolId) ?? [];
+  const selectedPath = pathsByOwnerId.get(selectedOwnerTypeSymbolId) ?? [];
+  if (declarations.length === 0 || selectedPath.length === 0) {
+    return null;
+  }
+  return {
+    declarations,
+    evidence: {
+      selectionPolicy: "java-source-owner-hierarchy-v1",
+      selectionReason: ownerIds.length === 1 ? "unique-inherited-owner" : "owner-specificity",
+      receiverTypeSymbolId: input.receiverTypeSymbolId,
+      selectedOwnerTypeSymbolId,
+      hierarchyBounds: JAVA_REFERENCE_HIERARCHY_LIMITS,
+      candidates: ownerIds.map((ownerTypeSymbolId) => {
+        const path = pathsByOwnerId.get(ownerTypeSymbolId) ?? [];
+        return {
+          ownerTypeSymbolId,
+          declarationSymbolIds: (declarationsByOwnerId.get(ownerTypeSymbolId) ?? []).map(
+            (declaration) => declaration.symbolId
+          ),
+          distance: path.length,
+          hierarchyPath: path.map(javaHierarchySegmentEvidence)
+        };
+      })
+    },
+    hierarchyEdges: selectedPath,
+    inherited: true
+  };
+}
+
 function javaCallConversion(input: {
   readonly argumentIndex: number;
   readonly parameterIndex: number;
@@ -8412,14 +8551,17 @@ function projectJavaChainedCallReferences(input: {
       continue;
     }
     const returnedType = returnedTypeEntries[0].symbol;
-    const methodCandidates = callableDeclarations.filter(
-      (declaration) =>
-        declaration.declaringTypeId === returnedType.id &&
-        declaration.callableKind === "method" &&
-        declaration.name === reference.methodName
-    );
+    const methodOwnerPlan = javaMethodOwnerPlan({
+      receiverTypeSymbolId: returnedType.id,
+      methodName: reference.methodName,
+      callableDeclarations,
+      heritageEdgesBySourceId
+    });
+    if (methodOwnerPlan === null) {
+      continue;
+    }
     const methodPlan = javaCallPlan({
-      declarations: methodCandidates,
+      declarations: methodOwnerPlan.declarations,
       actualArgumentCount: reference.methodArgumentCount,
       argumentTypes: reference.methodArgumentTypes,
       callerType: declaringType,
@@ -8441,7 +8583,8 @@ function projectJavaChainedCallReferences(input: {
       receiverConfigurationPaths,
       returnEdge.evidence?.configurationPaths ?? [],
       factoryPlan.configurationPaths,
-      methodPlan.configurationPaths
+      methodPlan.configurationPaths,
+      ...methodOwnerPlan.hierarchyEdges.map((edge) => edge.evidence?.configurationPaths ?? [])
     ]);
     const sourcePaths = [
       ...new Set([
@@ -8450,7 +8593,11 @@ function projectJavaChainedCallReferences(input: {
         returnedType.filePath,
         method.filePath,
         ...factoryPlan.sourcePaths,
-        ...methodPlan.sourcePaths
+        ...methodPlan.sourcePaths,
+        ...methodOwnerPlan.hierarchyEdges.flatMap((edge) => [
+          edge.filePath,
+          ...(edge.evidence?.resolutionPath ?? [])
+        ])
       ])
     ].sort(compareStableText);
     edges.push({
@@ -8501,14 +8648,17 @@ function projectJavaChainedCallReferences(input: {
       referenceName: reference.methodName,
       evidence: {
         ...referenceEvidence(
-          `call.java.chained-factory.${proof}.${methodPlan.selection}.return-dispatch`,
+          `call.java.chained-factory.${proof}.${methodPlan.selection}.${
+            methodOwnerPlan.inherited ? "inherited-return-dispatch" : "return-dispatch"
+          }`,
           "module",
           methodPlan.arityEvidence.candidates.map((candidate) => candidate.symbolId),
           configurationPaths,
           sourcePaths
         ),
         callArity: methodPlan.arityEvidence,
-        callType: methodPlan.typeEvidence
+        callType: methodPlan.typeEvidence,
+        callDispatch: methodOwnerPlan.evidence
       }
     });
   }

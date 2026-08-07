@@ -279,8 +279,32 @@ function rangeFor(lineStarts: readonly number[], from: number, to: number): Sour
   };
 }
 
+function isLegacyGrammarDefaultModifierMarker(node: JavaSyntaxNode): boolean {
+  if (
+    !node.type.isError ||
+    node.from !== node.to ||
+    node.parent?.name !== "Modifiers" ||
+    node.parent.parent?.name !== "MethodDeclaration" ||
+    node.parent.parent.parent?.name !== "InterfaceBody"
+  ) {
+    return false;
+  }
+  const siblings = directChildren(node.parent);
+  return (
+    siblings.length === 2 &&
+    siblings[0]?.name === "default" &&
+    siblings[1]?.type.isError === true &&
+    siblings[1]?.from === node.from &&
+    siblings[1]?.to === node.to &&
+    node.prevSibling?.name === "default"
+  );
+}
+
 function hasSyntaxError(node: JavaSyntaxNode): boolean {
-  return node.type.isError || directChildren(node).some((child) => hasSyntaxError(child));
+  return (
+    (node.type.isError && !isLegacyGrammarDefaultModifierMarker(node)) ||
+    directChildren(node).some((child) => hasSyntaxError(child))
+  );
 }
 
 function identifierText(input: JavaExtractFileFactsInput, node: JavaSyntaxNode): string | null {

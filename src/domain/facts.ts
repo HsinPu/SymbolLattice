@@ -19,7 +19,7 @@ export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v211";
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v95";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v96";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -81,6 +81,27 @@ export interface CallTypeHierarchySegmentEvidence {
   readonly filePath: string;
   readonly range: SourceRange;
   readonly ruleId: string;
+}
+
+/** One declaration owner considered while dispatching a call through an inherited Java type. */
+export interface CallDispatchOwnerCandidateEvidence {
+  readonly ownerTypeSymbolId: string;
+  readonly declarationSymbolIds: readonly string[];
+  readonly distance: number;
+  readonly hierarchyPath: readonly CallTypeHierarchySegmentEvidence[];
+}
+
+/** Project-proven Java method-owner selection for a chained return-type dispatch. */
+export interface CallDispatchEvidence {
+  readonly selectionPolicy: "java-source-owner-hierarchy-v1";
+  readonly selectionReason: "declared-owner" | "unique-inherited-owner" | "owner-specificity";
+  readonly receiverTypeSymbolId: string;
+  readonly selectedOwnerTypeSymbolId: string;
+  readonly hierarchyBounds: {
+    readonly maximumDepth: number;
+    readonly maximumVisitedTypes: number;
+  };
+  readonly candidates: readonly CallDispatchOwnerCandidateEvidence[];
 }
 
 /** One ordered argument-to-parameter conversion considered by an overload rule. */
@@ -172,6 +193,8 @@ export interface EdgeEvidence {
   readonly callArity?: CallArityEvidence;
   /** Ordered, project-resolved argument and parameter types considered by an overload rule. */
   readonly callType?: CallTypeEvidence;
+  /** Project-proven declaration owner used for a Java chained return-type dispatch. */
+  readonly callDispatch?: CallDispatchEvidence;
 }
 
 /** A named import binding retained from syntax extraction for module resolution. */
