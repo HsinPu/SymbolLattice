@@ -2775,6 +2775,108 @@ describe("SymbolLatticeService", () => {
     expect(shadowFacts?.jvmFacts?.javaChainedCallReferences).toEqual([]);
   });
 
+  it("enforces caller-context access for Java static-factory call chains", async () => {
+    const projectPath = await createInlineProject({
+      "src/access/Executor.java": [
+        "package access;",
+        "public class Executor { public void execute() {} }"
+      ].join("\n"),
+      "src/access/PackageFactory.java": [
+        "package access;",
+        "public class PackageFactory { static Executor create() { return null; } }"
+      ].join("\n"),
+      "src/access/ProtectedFactory.java": [
+        "package access;",
+        "public class ProtectedFactory { protected static Executor create() { return null; } }"
+      ].join("\n"),
+      "src/access/PrivateFactory.java": [
+        "package access;",
+        "public class PrivateFactory { private static Executor create() { return null; } }"
+      ].join("\n"),
+      "src/access/PublicFactory.java": [
+        "package access;",
+        "public class PublicFactory { public static Executor create() { return null; } }"
+      ].join("\n"),
+      "src/access/AccessRunner.java": [
+        "package access;",
+        "public class AccessRunner {",
+        "  void run() {",
+        "    PackageFactory.create().execute();",
+        "    ProtectedFactory.create().execute();",
+        "    PrivateFactory.create().execute();",
+        "  }",
+        "}"
+      ].join("\n"),
+      "src/outside/OutsideRunner.java": [
+        "package outside;",
+        "import access.PackageFactory;",
+        "import access.ProtectedFactory;",
+        "import access.PublicFactory;",
+        "public class OutsideRunner {",
+        "  void run() {",
+        "    PackageFactory.create().execute();",
+        "    ProtectedFactory.create().execute();",
+        "    PublicFactory.create().execute();",
+        "  }",
+        "}"
+      ].join("\n"),
+      "src/outside/ProtectedFactoryChild.java": [
+        "package outside;",
+        "import access.ProtectedFactory;",
+        "public class ProtectedFactoryChild extends ProtectedFactory {",
+        "  void run() {",
+        "    ProtectedFactory.create().execute();",
+        "    ProtectedFactoryChild.create().execute();",
+        "  }",
+        "}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+
+    const snapshot = graphStore.getSnapshot(projectPath);
+    const factoryCalls = snapshot.edges.filter(
+      (edge) => edge.kind === "calls" && edge.referenceName === "create"
+    );
+    const factoryCallAt = (filePath: string, line: number) =>
+      factoryCalls.find(
+        (edge) => edge.filePath === filePath && edge.range?.start.line === line
+      );
+
+    expect(factoryCallAt("src/access/AccessRunner.java", 4)).toEqual(
+      expect.objectContaining({
+        evidence: expect.objectContaining({
+          callAccess: expect.objectContaining({
+            policy: "java-source-access-v1",
+            visibility: "package",
+            decision: "same-package"
+          })
+        })
+      })
+    );
+    expect(factoryCallAt("src/access/AccessRunner.java", 5)).toEqual(
+      expect.objectContaining({
+        evidence: expect.objectContaining({
+          callAccess: expect.objectContaining({
+            policy: "java-source-access-v1",
+            visibility: "protected",
+            decision: "same-package"
+          })
+        })
+      })
+    );
+    expect(factoryCallAt("src/access/AccessRunner.java", 6)).toBeUndefined();
+    expect(factoryCallAt("src/outside/OutsideRunner.java", 7)).toBeUndefined();
+    expect(factoryCallAt("src/outside/OutsideRunner.java", 8)).toBeUndefined();
+    expect(factoryCallAt("src/outside/OutsideRunner.java", 9)?.evidence?.callAccess).toEqual(
+      expect.objectContaining({ visibility: "public", decision: "public" })
+    );
+    expect(factoryCallAt("src/outside/ProtectedFactoryChild.java", 5)).toBeUndefined();
+    expect(factoryCallAt("src/outside/ProtectedFactoryChild.java", 6)).toBeUndefined();
+  });
+
   it("resolves Java chained overloads only from exact argument type evidence", async () => {
     const projectPath = await createInlineProject({
       "src/model/Input.java": [

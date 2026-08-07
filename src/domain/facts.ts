@@ -19,7 +19,7 @@ export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v212";
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v98";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v99";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -224,6 +224,8 @@ export interface EdgeEvidence {
   readonly callArity?: CallArityEvidence;
   /** Ordered, project-resolved argument and parameter types considered by an overload rule. */
   readonly callType?: CallTypeEvidence;
+  /** Caller-context access proof for a directly selected Java callable. */
+  readonly callAccess?: CallDispatchAccessEvidence;
   /** Project-proven declaration owner used for a Java chained return-type dispatch. */
   readonly callDispatch?: CallDispatchEvidence;
 }

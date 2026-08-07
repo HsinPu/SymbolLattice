@@ -8729,14 +8729,30 @@ function projectJavaChainedCallReferences(input: {
       declaredProjectDependency === null
         ? resolutionProof
         : `${resolutionProof}.declared-${declaredProjectDependency.kind}`;
-    const factoryCandidates = callableDeclarations.filter(
-      (declaration) =>
-        declaration.declaringTypeId === receiverType.id &&
-        declaration.callableKind === "method" &&
-        declaration.isStatic &&
-        declaration.visibility === "public" &&
-        declaration.name === reference.factoryMethodName
-    );
+    const factoryAccessPlansBySymbolId = new Map<string, JavaMethodAccessPlan>();
+    const factoryCandidates = callableDeclarations.filter((declaration) => {
+      if (
+        declaration.declaringTypeId !== receiverType.id ||
+        declaration.callableKind !== "method" ||
+        !declaration.isStatic ||
+        declaration.name !== reference.factoryMethodName
+      ) {
+        return false;
+      }
+      const accessPlan = javaMethodAccessPlan({
+        declaration,
+        callerType: declaringType,
+        receiverTypeSymbolId: receiverType.id,
+        ownerHierarchyPath: [],
+        heritageEdgesBySourceId,
+        typesBySymbolId
+      });
+      if (accessPlan === null) {
+        return false;
+      }
+      factoryAccessPlansBySymbolId.set(declaration.symbolId, accessPlan);
+      return true;
+    });
     const factoryPlan = javaCallPlan({
       declarations: factoryCandidates,
       actualArgumentCount: reference.factoryArgumentCount,
@@ -8753,7 +8769,8 @@ function projectJavaChainedCallReferences(input: {
       continue;
     }
     const factory = input.symbolsById.get(factoryPlan.selected.symbolId);
-    if (factory?.kind !== "method") {
+    const factoryAccessPlan = factoryAccessPlansBySymbolId.get(factoryPlan.selected.symbolId);
+    if (factory?.kind !== "method" || factoryAccessPlan === undefined) {
       continue;
     }
     const topLevelReturnReferences = signatureReferences.filter(
@@ -8827,6 +8844,7 @@ function projectJavaChainedCallReferences(input: {
       returnEdge.evidence?.configurationPaths ?? [],
       factoryPlan.configurationPaths,
       methodPlan.configurationPaths,
+      ...factoryAccessPlan.hierarchyEdges.map((edge) => edge.evidence?.configurationPaths ?? []),
       ...methodSetEntry.hierarchyEdges.map((edge) => edge.evidence?.configurationPaths ?? [])
     ]);
     const sourcePaths = [
@@ -8837,6 +8855,10 @@ function projectJavaChainedCallReferences(input: {
         method.filePath,
         ...factoryPlan.sourcePaths,
         ...methodPlan.sourcePaths,
+        ...factoryAccessPlan.hierarchyEdges.flatMap((edge) => [
+          edge.filePath,
+          ...(edge.evidence?.resolutionPath ?? [])
+        ]),
         ...methodSetEntry.hierarchyEdges.flatMap((edge) => [
           edge.filePath,
           ...(edge.evidence?.resolutionPath ?? [])
@@ -8869,7 +8891,8 @@ function projectJavaChainedCallReferences(input: {
           sourcePaths
         ),
         callArity: factoryPlan.arityEvidence,
-        callType: factoryPlan.typeEvidence
+        callType: factoryPlan.typeEvidence,
+        callAccess: factoryAccessPlan.evidence
       }
     });
     edges.push({
