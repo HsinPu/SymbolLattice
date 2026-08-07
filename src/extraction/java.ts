@@ -1734,6 +1734,9 @@ function staticJavaMemberCallReferences(input: {
         const explicitFieldName = receiverPrefix.match(
           /^\s*this\s*\.\s*([A-Za-z_$][A-Za-z0-9_$]*)\s*\.\s*$/u
         )?.[1];
+        const explicitSuperFieldName = receiverPrefix.match(
+          /^\s*super\s*\.\s*([A-Za-z_$][A-Za-z0-9_$]*)\s*\.\s*$/u
+        )?.[1];
         const qualifier = receiverPrefix.match(/^\s*(this|super)\s*\.\s*$/u)?.[1] as
           | "this"
           | "super"
@@ -1750,6 +1753,24 @@ function staticJavaMemberCallReferences(input: {
             filePath: input.extraction.filePath,
             receiverKind: "this-field",
             receiverName: explicitFieldName,
+            methodName,
+            argumentCount: arguments_.length,
+            argumentTypes: arguments_.map((argument) =>
+              staticJavaArgumentType(input.extraction, argument, input.imports)
+            ),
+            range: rangeFor(lineStarts, methodNode.from, methodNode.to)
+          });
+        } else if (
+          explicitSuperFieldName !== undefined &&
+          methodName !== null &&
+          arguments_ !== null
+        ) {
+          references.push({
+            sourceId: input.callableSymbol.id,
+            declaringTypeId: input.declaringType.id,
+            filePath: input.extraction.filePath,
+            receiverKind: "super-field",
+            receiverName: explicitSuperFieldName,
             methodName,
             argumentCount: arguments_.length,
             argumentTypes: arguments_.map((argument) =>

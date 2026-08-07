@@ -7884,7 +7884,8 @@ function javaMethodSetPlan(input: {
     | "parameter"
     | "local"
     | "field"
-    | "this-field";
+    | "this-field"
+    | "super-field";
   readonly callableDeclarations: readonly JavaCallableDeclarationFact[];
   readonly heritageEdgesBySourceId: ReadonlyMap<string, readonly GraphEdge[]>;
   readonly typesBySymbolId: ReadonlyMap<string, readonly JvmResolvedType[]>;
@@ -8671,7 +8672,7 @@ interface JavaFieldSelectionPlan {
 
 function javaFieldSelectionPlan(input: {
   readonly callerType: JvmResolvedType;
-  readonly receiverKind: "field" | "this-field";
+  readonly receiverKind: "field" | "this-field" | "super-field";
   readonly fieldName: string;
   readonly callerIsStatic: boolean;
   readonly fieldsByOwnerId: ReadonlyMap<string, readonly JavaFieldDeclarationFact[]>;
@@ -8679,12 +8680,50 @@ function javaFieldSelectionPlan(input: {
   readonly typesBySymbolId: ReadonlyMap<string, readonly JvmResolvedType[]>;
   readonly symbolsById: ReadonlyMap<string, SymbolNode>;
 }): JavaFieldSelectionPlan | null {
-  if (input.callerIsStatic && input.receiverKind === "this-field") {
+  if (
+    input.callerIsStatic &&
+    (input.receiverKind === "this-field" || input.receiverKind === "super-field")
+  ) {
     return null;
   }
   let current = input.callerType;
   const path: GraphEdge[] = [];
   const visited = new Set<string>([current.symbol.id]);
+
+  function advanceToDirectSuperclass(): boolean {
+    if (path.length >= JAVA_REFERENCE_HIERARCHY_LIMITS.maximumDepth) {
+      return false;
+    }
+    const superEdges = (input.heritageEdgesBySourceId.get(current.symbol.id) ?? []).filter(
+      (edge) =>
+        edge.kind === "extends" &&
+        edge.targetId !== null &&
+        input.symbolsById.get(edge.targetId)?.kind === "class"
+    );
+    const superEdge = superEdges[0];
+    if (
+      superEdges.length !== 1 ||
+      superEdge?.targetId === null ||
+      superEdge === undefined ||
+      visited.has(superEdge.targetId) ||
+      visited.size >= JAVA_REFERENCE_HIERARCHY_LIMITS.maximumVisitedTypes
+    ) {
+      return false;
+    }
+    const superEntries = input.typesBySymbolId.get(superEdge.targetId) ?? [];
+    const superType = superEntries[0];
+    if (superEntries.length !== 1 || superType === undefined || superType.symbol.kind !== "class") {
+      return false;
+    }
+    path.push(superEdge);
+    visited.add(superEdge.targetId);
+    current = superType;
+    return true;
+  }
+
+  if (input.receiverKind === "super-field" && !advanceToDirectSuperclass()) {
+    return null;
+  }
 
   while (true) {
     const namedFields = (input.fieldsByOwnerId.get(current.symbol.id) ?? []).filter(
@@ -8738,36 +8777,9 @@ function javaFieldSelectionPlan(input: {
       };
     }
 
-    if (path.length >= JAVA_REFERENCE_HIERARCHY_LIMITS.maximumDepth) {
+    if (!advanceToDirectSuperclass()) {
       return null;
     }
-    const superEdges = (input.heritageEdgesBySourceId.get(current.symbol.id) ?? []).filter(
-      (edge) =>
-        edge.kind === "extends" &&
-        edge.targetId !== null &&
-        input.symbolsById.get(edge.targetId)?.kind === "class"
-    );
-    const superEdge = superEdges[0];
-    if (superEdges.length === 0) {
-      return null;
-    }
-    if (superEdges.length !== 1 || superEdge?.targetId === null || superEdge === undefined) {
-      return null;
-    }
-    if (
-      visited.has(superEdge.targetId) ||
-      visited.size >= JAVA_REFERENCE_HIERARCHY_LIMITS.maximumVisitedTypes
-    ) {
-      return null;
-    }
-    const superEntries = input.typesBySymbolId.get(superEdge.targetId) ?? [];
-    const superType = superEntries[0];
-    if (superEntries.length !== 1 || superType === undefined || superType.symbol.kind !== "class") {
-      return null;
-    }
-    path.push(superEdge);
-    visited.add(superEdge.targetId);
-    current = superType;
   }
 }
 
@@ -8860,7 +8872,9 @@ function projectJavaCallReferences(input: {
     }
     const directSuperEdge = directSuperEdges[0];
     const fieldSelection =
-      reference.receiverKind === "field" || reference.receiverKind === "this-field"
+      reference.receiverKind === "field" ||
+      reference.receiverKind === "this-field" ||
+      reference.receiverKind === "super-field"
         ? javaFieldSelectionPlan({
             callerType: declaringType,
             receiverKind: reference.receiverKind,
@@ -8873,7 +8887,9 @@ function projectJavaCallReferences(input: {
           })
         : null;
     const bindingTypeReference =
-      reference.receiverKind === "field" || reference.receiverKind === "this-field"
+      reference.receiverKind === "field" ||
+      reference.receiverKind === "this-field" ||
+      reference.receiverKind === "super-field"
         ? fieldSelection?.field.type ?? null
         : reference.receiverKind === "parameter" || reference.receiverKind === "local"
           ? reference.receiverType
@@ -8906,7 +8922,11 @@ function projectJavaCallReferences(input: {
     const receiverSelectionPath = directSuperEdge === undefined ? [] : [directSuperEdge];
     let receiverBinding: CallReceiverBindingEvidence | undefined;
     if (resolvedBindingType !== null) {
-      if (reference.receiverKind === "field" || reference.receiverKind === "this-field") {
+      if (
+        reference.receiverKind === "field" ||
+        reference.receiverKind === "this-field" ||
+        reference.receiverKind === "super-field"
+      ) {
         if (fieldSelection === null) {
           continue;
         }

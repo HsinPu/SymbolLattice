@@ -3687,6 +3687,159 @@ describe("SymbolLatticeService", () => {
     );
   });
 
+  it("resolves Java super field receivers from the direct superclass lookup boundary", async () => {
+    const projectPath = await createInlineProject({
+      "src/api/Service.java": [
+        "package api;",
+        "public class Service {",
+        "  public void execute(String value) {}",
+        "}"
+      ].join("\n"),
+      "src/base/Holder.java": [
+        "package base;",
+        "public class Holder<T> {}"
+      ].join("\n"),
+      "src/base/GrandBase.java": [
+        "package base;",
+        "import api.Service;",
+        "public class GrandBase {",
+        "  protected Service inherited;",
+        "  public Service shadowed;",
+        "  private Service privateOnly;",
+        "  Service packageOnly;",
+        "  protected static Service shared;",
+        "  public Service genericBarrier;",
+        "}"
+      ].join("\n"),
+      "src/base/Base.java": [
+        "package base;",
+        "import api.Service;",
+        "public class Base extends GrandBase {",
+        "  public Service shadowed;",
+        "  public Holder<Service> genericBarrier;",
+        "}"
+      ].join("\n"),
+      "src/base/SamePackageChild.java": [
+        "package base;",
+        "public class SamePackageChild extends Base {",
+        "  public void run() {",
+        "    super.packageOnly.execute(\"same-package\");",
+        "  }",
+        "}"
+      ].join("\n"),
+      "src/app/Child.java": [
+        "package app;",
+        "import base.Base;",
+        "import api.Service;",
+        "public class Child extends Base {",
+        "  private Service inherited;",
+        "  public void run() {",
+        "    super.inherited.execute(\"inherited\");",
+        "    super.shadowed.execute(\"nearest\");",
+        "    super.shared.execute(\"static\");",
+        "    super.privateOnly.execute(\"private\");",
+        "    super.packageOnly.execute(\"package\");",
+        "    super.genericBarrier.execute(\"generic-hiding\");",
+        "  }",
+        "  public static void staticRun() {",
+        "    super.shadowed.execute(\"static-super\");",
+        "  }",
+        "}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+
+    const snapshot = graphStore.getSnapshot(projectPath);
+    const symbol = (qualifiedName: string) =>
+      snapshot.symbols.find((candidate) => candidate.qualifiedName === qualifiedName);
+    const callAt = (filePath: string, line: number) =>
+      snapshot.edges.find(
+        (edge) =>
+          edge.kind === "calls" &&
+          edge.filePath === filePath &&
+          edge.range.start.line === line
+      );
+    const serviceId = symbol("src/api/Service.java#Service")?.id;
+    const grandBaseId = symbol("src/base/GrandBase.java#GrandBase")?.id;
+    const baseId = symbol("src/base/Base.java#Base")?.id;
+    const childId = symbol("src/app/Child.java#Child")?.id;
+    const serviceExecuteId = symbol("src/api/Service.java#Service.execute")?.id;
+
+    expect(callAt("src/app/Child.java", 7)).toEqual(
+      expect.objectContaining({
+        targetId: serviceExecuteId,
+        evidence: expect.objectContaining({
+          callDispatch: expect.objectContaining({
+            invocationKind: "super-field",
+            receiverTypeSymbolId: serviceId,
+            receiverBinding: expect.objectContaining({
+              policy: "java-source-field-binding-v2",
+              kind: "super-field",
+              name: "inherited",
+              declaringTypeSymbolId: grandBaseId,
+              selectionReason: "nearest-inherited-owner",
+              ownerSelectionPath: [
+                expect.objectContaining({ sourceSymbolId: childId, targetSymbolId: baseId }),
+                expect.objectContaining({ sourceSymbolId: baseId, targetSymbolId: grandBaseId })
+              ],
+              access: expect.objectContaining({
+                policy: "java-source-field-access-v1",
+                decision: "protected-subclass",
+                callerTypeSymbolId: childId,
+                ownerTypeSymbolId: grandBaseId
+              }),
+              type: expect.objectContaining({
+                canonicalType: "reference:api.Service",
+                proof: "explicit-import",
+                targetSymbolId: serviceId
+              })
+            })
+          })
+        })
+      })
+    );
+    expect(callAt("src/app/Child.java", 8)?.evidence?.callDispatch?.receiverBinding).toEqual(
+      expect.objectContaining({
+        kind: "super-field",
+        name: "shadowed",
+        declaringTypeSymbolId: baseId,
+        ownerSelectionPath: [
+          expect.objectContaining({ sourceSymbolId: childId, targetSymbolId: baseId })
+        ]
+      })
+    );
+    expect(callAt("src/app/Child.java", 9)?.evidence?.callDispatch?.receiverBinding).toEqual(
+      expect.objectContaining({ kind: "super-field", name: "shared", isStatic: true })
+    );
+    expect(callAt("src/base/SamePackageChild.java", 4)?.evidence?.callDispatch?.receiverBinding).toEqual(
+      expect.objectContaining({
+        kind: "super-field",
+        name: "packageOnly",
+        declaringTypeSymbolId: grandBaseId,
+        access: expect.objectContaining({ decision: "same-package" })
+      })
+    );
+
+    expect(callAt("src/app/Child.java", 10)).toBeUndefined();
+    expect(callAt("src/app/Child.java", 11)).toBeUndefined();
+    expect(callAt("src/app/Child.java", 12)).toBeUndefined();
+    expect(callAt("src/app/Child.java", 15)).toBeUndefined();
+
+    const childFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "src/app/Child.java");
+    expect(childFacts?.jvmFacts?.javaMemberCallReferences).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ receiverKind: "super-field", receiverName: "inherited" }),
+        expect.objectContaining({ receiverKind: "super-field", receiverName: "shadowed" }),
+        expect.objectContaining({ receiverKind: "super-field", receiverName: "shared" })
+      ])
+    );
+  });
+
   it("resolves Java chained overloads only from exact argument type evidence", async () => {
     const projectPath = await createInlineProject({
       "src/model/Input.java": [

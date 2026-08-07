@@ -13,13 +13,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v216";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v217";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v104";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v105";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -132,7 +132,7 @@ export interface CallFieldAccessEvidence {
 
 /** Shared source declaration proof for the static receiver type of one Java call. */
 interface CallReceiverBindingEvidenceBase {
-  readonly kind: "parameter" | "local" | "field" | "this-field";
+  readonly kind: "parameter" | "local" | "field" | "this-field" | "super-field";
   readonly name: string;
   readonly type: CallTypeValueEvidence;
   readonly declarationRange: SourceRange;
@@ -153,7 +153,7 @@ export type CallReceiverBindingEvidence =
       ))
   | (CallReceiverBindingEvidenceBase &
       {
-        readonly kind: "field" | "this-field";
+        readonly kind: "field" | "this-field" | "super-field";
         readonly declaringTypeSymbolId: string;
         readonly isStatic: boolean;
         readonly visibility: "public" | "protected" | "package" | "private";
@@ -187,7 +187,8 @@ export interface CallDispatchEvidence {
     | "parameter"
     | "local"
     | "field"
-    | "this-field";
+    | "this-field"
+    | "super-field";
   /** Direct caller-to-receiver proof for explicit `super` dispatch; missing for older receipts. */
   readonly receiverSelectionPath?: readonly CallTypeHierarchySegmentEvidence[];
   /** Present when a source declaration proves a parameter, local, or field receiver type. */
@@ -1180,7 +1181,7 @@ export type JavaMemberCallReferenceFact =
       readonly receiverInitializerRange?: SourceRange;
     })
   | (JavaMemberCallReferenceBaseFact & {
-      readonly receiverKind: "field" | "this-field";
+      readonly receiverKind: "field" | "this-field" | "super-field";
       readonly receiverName: string;
       /** Legacy direct-field facts only; v0.312+ selects the owner during project resolution. */
       readonly receiverType?: JavaCallTypeReferenceFact;
