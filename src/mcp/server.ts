@@ -27,6 +27,8 @@ import {
   EXPLORE_QUERY_LOW_VALUE_FILTER_LIMITS,
   EXPLORE_QUERY_LOW_VALUE_FILTER_POLICY,
   EXPLORE_QUERY_PLAN_POLICY,
+  EXPLORE_QUERY_RELATIVE_SCORE_FLOOR_LIMITS,
+  EXPLORE_QUERY_RELATIVE_SCORE_FLOOR_POLICY,
   EXPLORE_QUERY_SOURCE_WORTH_POLICY,
   EXPLORE_TEST_SOURCE_WORTH
 } from "../application/explore-query.js";
@@ -1082,6 +1084,56 @@ const exploreQueryPlanOutputSchema = z.object({
       })
     })).max(EXPLORE_QUERY_LOW_VALUE_FILTER_LIMITS.maximumExcludedFileReceipts)
   }),
+  scoreFloor: z.object({
+    policy: z.literal(EXPLORE_QUERY_RELATIVE_SCORE_FLOOR_POLICY),
+    reason: z.enum([
+      "no-candidate-files",
+      "all-files-past-floor",
+      "minimum-backfill-applied",
+      "relative-floor-applied"
+    ]),
+    applied: z.boolean(),
+    absoluteFloor: z.literal(EXPLORE_QUERY_RELATIVE_SCORE_FLOOR_LIMITS.absoluteFloor),
+    fractionOfTop: z.literal(EXPLORE_QUERY_RELATIVE_SCORE_FLOOR_LIMITS.fractionOfTop),
+    maximumFloor: z.literal(EXPLORE_QUERY_RELATIVE_SCORE_FLOOR_LIMITS.maximumFloor),
+    backfillTargetFileCount: z.literal(
+      EXPLORE_QUERY_RELATIVE_SCORE_FLOOR_LIMITS.backfillTargetFileCount
+    ),
+    maximumFileReceipts: z.literal(
+      EXPLORE_QUERY_RELATIVE_SCORE_FLOOR_LIMITS.maximumFileReceipts
+    ),
+    fileScoreAggregation: z.literal("maximum-candidate-score"),
+    backfillEvidenceFloor: z.number().nonnegative().max(
+      EXPLORE_QUERY_RELATIVE_SCORE_FLOOR_LIMITS.absoluteFloor
+    ),
+    topFileScore: z.number().nonnegative(),
+    computedFloor: z.number().nonnegative().max(
+      EXPLORE_QUERY_RELATIVE_SCORE_FLOOR_LIMITS.maximumFloor
+    ),
+    candidateFileCount: z.number().int().nonnegative(),
+    filesPastFloorCount: z.number().int().nonnegative(),
+    retainedFileCount: z.number().int().nonnegative(),
+    backfilledFileCount: z.number().int().nonnegative(),
+    excludedFileCount: z.number().int().nonnegative(),
+    backfilledFilesTruncated: z.boolean(),
+    backfilledFiles: z.array(z.object({
+      filePath: z.string().min(1),
+      candidateCount: z.number().int().positive(),
+      fileScore: z.number().nonnegative(),
+      bestCandidateId: z.string().min(1),
+      bestCandidateScore: z.number().nonnegative(),
+      reason: z.literal("minimum-retained-files")
+    })).max(EXPLORE_QUERY_RELATIVE_SCORE_FLOOR_LIMITS.maximumFileReceipts),
+    excludedFilesTruncated: z.boolean(),
+    excludedFiles: z.array(z.object({
+      filePath: z.string().min(1),
+      candidateCount: z.number().int().positive(),
+      fileScore: z.number().nonnegative(),
+      bestCandidateId: z.string().min(1),
+      bestCandidateScore: z.number().nonnegative(),
+      reason: z.literal("below-relative-floor")
+    })).max(EXPLORE_QUERY_RELATIVE_SCORE_FLOOR_LIMITS.maximumFileReceipts)
+  }),
   ranking: z.object({
     policy: z.literal(EXPLORE_QUERY_SOURCE_WORTH_POLICY),
     generatedSourceWorth: z.literal(EXPLORE_GENERATED_SOURCE_WORTH),
@@ -1132,6 +1184,8 @@ const exploreQueryPlanOutputSchema = z.object({
     iconCandidateCount: z.number().int().nonnegative(),
     localizationCandidateCount: z.number().int().nonnegative(),
     filteredCandidateCount: z.number().int().nonnegative(),
+    scoreFloorFilteredCandidateCount: z.number().int().nonnegative(),
+    scoreFloorFilteredFileCount: z.number().int().nonnegative(),
     graphMassCandidateCount: z.number().int().nonnegative(),
     graphMassTruncatedCandidateCount: z.number().int().nonnegative(),
     selectedCount: z.number().int().nonnegative().max(EXPLORE_QUERY_LIMITS.maximumSymbols),

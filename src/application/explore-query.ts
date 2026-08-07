@@ -13,7 +13,7 @@ import {
   type SymbolNode
 } from "../domain/index.js";
 
-export const EXPLORE_QUERY_PLAN_POLICY = "explore-query-plan-v6" as const;
+export const EXPLORE_QUERY_PLAN_POLICY = "explore-query-plan-v7" as const;
 export const EXPLORE_QUERY_SOURCE_WORTH_POLICY = "explore-query-source-worth-v1" as const;
 export const EXPLORE_QUERY_GRAPH_MASS_POLICY = "explore-query-graph-mass-v1" as const;
 export const EXPLORE_QUERY_LOW_VALUE_FILTER_POLICY =
@@ -25,6 +25,15 @@ export const EXPLORE_LOCALIZATION_SOURCE_WORTH = 0.5 as const;
 export const EXPLORE_QUERY_LOW_VALUE_FILTER_LIMITS = {
   minimumProductionFileCount: 2,
   maximumExcludedFileReceipts: 16
+} as const;
+export const EXPLORE_QUERY_RELATIVE_SCORE_FLOOR_POLICY =
+  "explore-query-relative-file-score-floor-v1" as const;
+export const EXPLORE_QUERY_RELATIVE_SCORE_FLOOR_LIMITS = {
+  absoluteFloor: 80,
+  fractionOfTop: 0.2,
+  maximumFloor: 120,
+  backfillTargetFileCount: 3,
+  maximumFileReceipts: 16
 } as const;
 export const EXPLORE_QUERY_GRAPH_MASS_LIMITS = {
   maximumRelationships: 32,
@@ -148,6 +157,45 @@ export interface ExploreQueryLowValueFilter {
   readonly excludedFiles: readonly ExploreQueryExcludedFile[];
 }
 
+export interface ExploreQueryScoreFloorFileReceipt {
+  readonly filePath: string;
+  readonly candidateCount: number;
+  readonly fileScore: number;
+  readonly bestCandidateId: string;
+  readonly bestCandidateScore: number;
+  readonly reason: "minimum-retained-files" | "below-relative-floor";
+}
+
+export interface ExploreQueryRelativeScoreFloor {
+  readonly policy: typeof EXPLORE_QUERY_RELATIVE_SCORE_FLOOR_POLICY;
+  readonly reason:
+    | "no-candidate-files"
+    | "all-files-past-floor"
+    | "minimum-backfill-applied"
+    | "relative-floor-applied";
+  readonly applied: boolean;
+  readonly absoluteFloor: typeof EXPLORE_QUERY_RELATIVE_SCORE_FLOOR_LIMITS.absoluteFloor;
+  readonly fractionOfTop: typeof EXPLORE_QUERY_RELATIVE_SCORE_FLOOR_LIMITS.fractionOfTop;
+  readonly maximumFloor: typeof EXPLORE_QUERY_RELATIVE_SCORE_FLOOR_LIMITS.maximumFloor;
+  readonly backfillTargetFileCount:
+    typeof EXPLORE_QUERY_RELATIVE_SCORE_FLOOR_LIMITS.backfillTargetFileCount;
+  readonly maximumFileReceipts:
+    typeof EXPLORE_QUERY_RELATIVE_SCORE_FLOOR_LIMITS.maximumFileReceipts;
+  readonly fileScoreAggregation: "maximum-candidate-score";
+  readonly backfillEvidenceFloor: number;
+  readonly topFileScore: number;
+  readonly computedFloor: number;
+  readonly candidateFileCount: number;
+  readonly filesPastFloorCount: number;
+  readonly retainedFileCount: number;
+  readonly backfilledFileCount: number;
+  readonly excludedFileCount: number;
+  readonly backfilledFilesTruncated: boolean;
+  readonly backfilledFiles: readonly ExploreQueryScoreFloorFileReceipt[];
+  readonly excludedFilesTruncated: boolean;
+  readonly excludedFiles: readonly ExploreQueryScoreFloorFileReceipt[];
+}
+
 export interface ExploreQueryPlan {
   readonly policy: typeof EXPLORE_QUERY_PLAN_POLICY;
   readonly query: string;
@@ -166,6 +214,7 @@ export interface ExploreQueryPlan {
     readonly matchedTerms: readonly string[];
   };
   readonly filtering: ExploreQueryLowValueFilter;
+  readonly scoreFloor: ExploreQueryRelativeScoreFloor;
   readonly ranking: {
     readonly policy: typeof EXPLORE_QUERY_SOURCE_WORTH_POLICY;
     readonly generatedSourceWorth: typeof EXPLORE_GENERATED_SOURCE_WORTH;
@@ -196,6 +245,8 @@ export interface ExploreQueryPlan {
     readonly iconCandidateCount: number;
     readonly localizationCandidateCount: number;
     readonly filteredCandidateCount: number;
+    readonly scoreFloorFilteredCandidateCount: number;
+    readonly scoreFloorFilteredFileCount: number;
     readonly graphMassCandidateCount: number;
     readonly graphMassTruncatedCandidateCount: number;
     readonly selectedCount: number;
@@ -244,6 +295,18 @@ interface CandidateGraphMass {
 interface CandidateFilterResult {
   readonly receipt: ExploreQueryLowValueFilter;
   readonly retained: readonly Candidate[];
+}
+
+interface CandidateScoreFloorResult {
+  readonly receipt: ExploreQueryRelativeScoreFloor;
+  readonly retained: readonly Candidate[];
+}
+
+interface CandidateFileScore {
+  readonly filePath: string;
+  readonly candidates: readonly Candidate[];
+  readonly bestCandidate: Candidate;
+  readonly fileScore: number;
 }
 
 interface GraphMassRelationship {
@@ -747,6 +810,118 @@ function filterLowValueCandidates(
   };
 }
 
+function roundedScore(value: number): number {
+  return Math.round(value * 1_000_000) / 1_000_000;
+}
+
+function applyRelativeFileScoreFloor(
+  candidates: readonly Candidate[]
+): CandidateScoreFloorResult {
+  const candidatesByFile = new Map<string, Candidate[]>();
+  for (const candidate of candidates) {
+    const current = candidatesByFile.get(candidate.symbol.filePath) ?? [];
+    current.push(candidate);
+    candidatesByFile.set(candidate.symbol.filePath, current);
+  }
+  const files: CandidateFileScore[] = [...candidatesByFile.entries()]
+    .map(([filePath, fileCandidates]) => {
+      const rankedCandidates = [...fileCandidates].sort(compareCandidates);
+      const bestCandidate = rankedCandidates[0]!;
+      return {
+        filePath,
+        candidates: fileCandidates,
+        bestCandidate,
+        fileScore: rankingScore(bestCandidate)
+      };
+    })
+    .sort(
+      (left, right) =>
+        right.fileScore - left.fileScore || compareText(left.filePath, right.filePath)
+    );
+  const topFileScore = files[0]?.fileScore ?? 0;
+  const computedFloor = files.length === 0
+    ? 0
+    : roundedScore(Math.max(
+        EXPLORE_QUERY_RELATIVE_SCORE_FLOOR_LIMITS.absoluteFloor,
+        Math.min(
+          EXPLORE_QUERY_RELATIVE_SCORE_FLOOR_LIMITS.maximumFloor,
+          topFileScore * EXPLORE_QUERY_RELATIVE_SCORE_FLOOR_LIMITS.fractionOfTop
+        )
+      ));
+  const filesPastFloor = files.filter((file) => file.fileScore >= computedFloor);
+  const filesBelowFloor = files.filter((file) => file.fileScore < computedFloor);
+  const backfillTargetFileCount = Math.min(
+    EXPLORE_QUERY_RELATIVE_SCORE_FLOOR_LIMITS.backfillTargetFileCount,
+    files.length
+  );
+  const backfillEvidenceFloor = filesPastFloor.length === 0
+    ? 0
+    : EXPLORE_QUERY_RELATIVE_SCORE_FLOOR_LIMITS.absoluteFloor;
+  const backfilledFiles = filesBelowFloor
+    .filter((file) => backfillEvidenceFloor === 0
+      ? file.fileScore > 0
+      : file.fileScore >= backfillEvidenceFloor)
+    .slice(0, Math.max(0, backfillTargetFileCount - filesPastFloor.length));
+  const retainedPaths = new Set([
+    ...filesPastFloor.map((file) => file.filePath),
+    ...backfilledFiles.map((file) => file.filePath)
+  ]);
+  const excludedFiles = filesBelowFloor.filter((file) => !retainedPaths.has(file.filePath));
+  const retained = candidates.filter((candidate) => retainedPaths.has(candidate.symbol.filePath));
+  const receiptFor = (
+    file: CandidateFileScore,
+    reason: ExploreQueryScoreFloorFileReceipt["reason"]
+  ): ExploreQueryScoreFloorFileReceipt => ({
+    filePath: file.filePath,
+    candidateCount: file.candidates.length,
+    fileScore: file.fileScore,
+    bestCandidateId: file.bestCandidate.symbol.id,
+    bestCandidateScore: rankingScore(file.bestCandidate),
+    reason
+  });
+  const reason: ExploreQueryRelativeScoreFloor["reason"] = files.length === 0
+    ? "no-candidate-files"
+    : excludedFiles.length === 0 && backfilledFiles.length === 0
+      ? "all-files-past-floor"
+      : backfilledFiles.length > 0
+        ? "minimum-backfill-applied"
+        : "relative-floor-applied";
+  return {
+    retained,
+    receipt: {
+      policy: EXPLORE_QUERY_RELATIVE_SCORE_FLOOR_POLICY,
+      reason,
+      applied: excludedFiles.length > 0,
+      absoluteFloor: EXPLORE_QUERY_RELATIVE_SCORE_FLOOR_LIMITS.absoluteFloor,
+      fractionOfTop: EXPLORE_QUERY_RELATIVE_SCORE_FLOOR_LIMITS.fractionOfTop,
+      maximumFloor: EXPLORE_QUERY_RELATIVE_SCORE_FLOOR_LIMITS.maximumFloor,
+      backfillTargetFileCount:
+        EXPLORE_QUERY_RELATIVE_SCORE_FLOOR_LIMITS.backfillTargetFileCount,
+      maximumFileReceipts: EXPLORE_QUERY_RELATIVE_SCORE_FLOOR_LIMITS.maximumFileReceipts,
+      fileScoreAggregation: "maximum-candidate-score",
+      backfillEvidenceFloor,
+      topFileScore,
+      computedFloor,
+      candidateFileCount: files.length,
+      filesPastFloorCount: filesPastFloor.length,
+      retainedFileCount: retainedPaths.size,
+      backfilledFileCount: backfilledFiles.length,
+      excludedFileCount: excludedFiles.length,
+      backfilledFilesTruncated:
+        backfilledFiles.length > EXPLORE_QUERY_RELATIVE_SCORE_FLOOR_LIMITS.maximumFileReceipts,
+      backfilledFiles: backfilledFiles
+        .slice(0, EXPLORE_QUERY_RELATIVE_SCORE_FLOOR_LIMITS.maximumFileReceipts)
+        .map((file) => receiptFor(file, "minimum-retained-files")),
+      excludedFilesTruncated:
+        excludedFiles.length > EXPLORE_QUERY_RELATIVE_SCORE_FLOOR_LIMITS.maximumFileReceipts,
+      excludedFiles: excludedFiles
+        .slice(0, EXPLORE_QUERY_RELATIVE_SCORE_FLOOR_LIMITS.maximumFileReceipts)
+        .sort((left, right) => compareText(left.filePath, right.filePath))
+        .map((file) => receiptFor(file, "below-relative-floor"))
+    }
+  };
+}
+
 /** Builds a deterministic, bounded graph focus plan without reading live source. */
 export function planExploreQuery(graph: ExploreQueryGraph, query: string): ExploreQueryPlan {
   const parsed = parseQuery(query);
@@ -805,7 +980,8 @@ export function planExploreQuery(graph: ExploreQueryGraph, query: string): Explo
   }
 
   const filtering = filterLowValueCandidates(candidates, roleIntent);
-  const ranked = [...filtering.retained].sort(compareCandidates);
+  const scoreFloor = applyRelativeFileScoreFloor(filtering.retained);
+  const ranked = [...scoreFloor.retained].sort(compareCandidates);
   const selected: Candidate[] = [];
   const selectedFiles = new Set<string>();
   const selectedByFile = new Map<string, number>();
@@ -882,6 +1058,7 @@ export function planExploreQuery(graph: ExploreQueryGraph, query: string): Explo
       matchedTerms: parsed.matchedIntentTerms
     },
     filtering: filtering.receipt,
+    scoreFloor: scoreFloor.receipt,
     ranking: {
       policy: EXPLORE_QUERY_SOURCE_WORTH_POLICY,
       generatedSourceWorth: EXPLORE_GENERATED_SOURCE_WORTH,
@@ -930,6 +1107,9 @@ export function planExploreQuery(graph: ExploreQueryGraph, query: string): Explo
         (candidate) => candidate.sourceRole.role === "localization"
       ).length,
       filteredCandidateCount: filtering.receipt.excludedLowValueCandidateCount,
+      scoreFloorFilteredCandidateCount:
+        filtering.retained.length - scoreFloor.retained.length,
+      scoreFloorFilteredFileCount: scoreFloor.receipt.excludedFileCount,
       graphMassCandidateCount: candidates.filter((candidate) => candidate.graphMass.score > 0).length,
       graphMassTruncatedCandidateCount: candidates.filter((candidate) => candidate.graphMass.truncated).length,
       selectedCount: selection.length,

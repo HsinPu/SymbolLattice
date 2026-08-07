@@ -1458,7 +1458,7 @@ describe("SymbolLattice MCP server", () => {
           anyOf: [
             {
               properties: {
-                policy: { const: "explore-query-plan-v6" },
+                policy: { const: "explore-query-plan-v7" },
                 queryIntent: {
                   properties: {
                     tests: { type: "boolean" },
@@ -1486,6 +1486,36 @@ describe("SymbolLattice MCP server", () => {
                     excludedLowValueCandidateCount: { minimum: 0 },
                     excludedIconCandidateCount: { minimum: 0 },
                     excludedLocalizationCandidateCount: { minimum: 0 },
+                    excludedFiles: { type: "array", maxItems: 16 }
+                  }
+                },
+                scoreFloor: {
+                  properties: {
+                    policy: { const: "explore-query-relative-file-score-floor-v1" },
+                    reason: {
+                      enum: [
+                        "no-candidate-files",
+                        "all-files-past-floor",
+                        "minimum-backfill-applied",
+                        "relative-floor-applied"
+                      ]
+                    },
+                    applied: { type: "boolean" },
+                    absoluteFloor: { const: 80 },
+                    fractionOfTop: { const: 0.2 },
+                    maximumFloor: { const: 120 },
+                    backfillTargetFileCount: { const: 3 },
+                    maximumFileReceipts: { const: 16 },
+                    fileScoreAggregation: { const: "maximum-candidate-score" },
+                    backfillEvidenceFloor: { minimum: 0, maximum: 80 },
+                    topFileScore: { minimum: 0 },
+                    computedFloor: { minimum: 0, maximum: 120 },
+                    candidateFileCount: { minimum: 0 },
+                    filesPastFloorCount: { minimum: 0 },
+                    retainedFileCount: { minimum: 0 },
+                    backfilledFileCount: { minimum: 0 },
+                    excludedFileCount: { minimum: 0 },
+                    backfilledFiles: { type: "array", maxItems: 16 },
                     excludedFiles: { type: "array", maxItems: 16 }
                   }
                 },
@@ -1522,6 +1552,8 @@ describe("SymbolLattice MCP server", () => {
                     iconCandidateCount: { minimum: 0 },
                     localizationCandidateCount: { minimum: 0 },
                     filteredCandidateCount: { minimum: 0 },
+                    scoreFloorFilteredCandidateCount: { minimum: 0 },
+                    scoreFloorFilteredFileCount: { minimum: 0 },
                     selectedGeneratedCount: { minimum: 0, maximum: 8 },
                     selectedLowValueCount: { minimum: 0, maximum: 8 },
                     selectedTestCount: { minimum: 0, maximum: 8 },

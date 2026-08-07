@@ -98,7 +98,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v6",
+      policy: "explore-query-plan-v7",
       queryIntent: {
         tests: false,
         icons: false,
@@ -216,7 +216,7 @@ describe("explore query planning", () => {
     expect(reversed).toEqual(plan);
     expect(plan.selection.map((item) => item.symbol.id)).toEqual(["production-a", "production-b"]);
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v6",
+      policy: "explore-query-plan-v7",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",
@@ -402,7 +402,7 @@ describe("explore query planning", () => {
 
     expect(plan.selection.map((item) => item.symbol.id)).toEqual(["production-a", "production-b"]);
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v6",
+      policy: "explore-query-plan-v7",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",
@@ -554,6 +554,220 @@ describe("explore query planning", () => {
     expect(plan.selection.map((item) => item.symbol.id)).not.toContain("icon");
   });
 
+  it("removes weak file-name collisions below a bounded relative file-score floor", () => {
+    const exact = symbol({ id: "exact", name: "dispatch", filePath: "src/dispatch.ts" });
+    const partialA = symbol({
+      id: "partial-a",
+      name: "dispatchPipeline",
+      filePath: "src/dispatch-pipeline.ts"
+    });
+    const partialB = symbol({
+      id: "partial-b",
+      name: "dispatchRegistry",
+      filePath: "src/dispatch-registry.ts"
+    });
+    const weakA = symbol({ id: "weak-a", name: "worker", filePath: "src/dispatch-noise-a.ts" });
+    const weakB = symbol({ id: "weak-b", name: "helper", filePath: "src/dispatch-noise-b.ts" });
+    const plan = planExploreQuery(
+      { symbols: [weakB, partialB, exact, weakA, partialA], edges: [] },
+      "dispatch"
+    );
+
+    expect(plan.selection.map((item) => item.symbol.id)).toEqual([
+      "exact",
+      "partial-a",
+      "partial-b"
+    ]);
+    expect(plan.scoreFloor).toEqual({
+      policy: "explore-query-relative-file-score-floor-v1",
+      reason: "relative-floor-applied",
+      applied: true,
+      absoluteFloor: 80,
+      fractionOfTop: 0.2,
+      maximumFloor: 120,
+      backfillTargetFileCount: 3,
+      maximumFileReceipts: 16,
+      fileScoreAggregation: "maximum-candidate-score",
+      backfillEvidenceFloor: 80,
+      topFileScore: 510,
+      computedFloor: 102,
+      candidateFileCount: 5,
+      filesPastFloorCount: 3,
+      retainedFileCount: 3,
+      backfilledFileCount: 0,
+      excludedFileCount: 2,
+      backfilledFilesTruncated: false,
+      backfilledFiles: [],
+      excludedFilesTruncated: false,
+      excludedFiles: [
+        {
+          filePath: "src/dispatch-noise-a.ts",
+          candidateCount: 1,
+          fileScore: 90,
+          bestCandidateId: "weak-a",
+          bestCandidateScore: 90,
+          reason: "below-relative-floor"
+        },
+        {
+          filePath: "src/dispatch-noise-b.ts",
+          candidateCount: 1,
+          fileScore: 90,
+          bestCandidateId: "weak-b",
+          bestCandidateScore: 90,
+          reason: "below-relative-floor"
+        }
+      ]
+    });
+    expect(plan.summary).toMatchObject({
+      scoreFloorFilteredCandidateCount: 2,
+      scoreFloorFilteredFileCount: 2
+    });
+  });
+
+  it("keeps a diffuse file-name-only result spread at the absolute floor", () => {
+    const symbols = [
+      symbol({ id: "a", name: "worker", filePath: "src/dispatch-a.ts" }),
+      symbol({ id: "b", name: "helper", filePath: "src/dispatch-b.ts" }),
+      symbol({ id: "c", name: "factory", filePath: "src/dispatch-c.ts" }),
+      symbol({ id: "d", name: "adapter", filePath: "src/dispatch-d.ts" })
+    ];
+    const plan = planExploreQuery({ symbols: symbols.reverse(), edges: [] }, "dispatch");
+
+    expect(plan.scoreFloor).toMatchObject({
+      reason: "all-files-past-floor",
+      applied: false,
+      topFileScore: 90,
+      computedFloor: 80,
+      candidateFileCount: 4,
+      retainedFileCount: 4,
+      backfilledFileCount: 0,
+      excludedFileCount: 0
+    });
+    expect(plan.selection.map((item) => item.symbol.id)).toEqual(["a", "b", "c", "d"]);
+  });
+
+  it("backfills a thin result to three files without admitting every collision", () => {
+    const plan = planExploreQuery(
+      {
+        symbols: [
+          symbol({ id: "weak-b", name: "worker", filePath: "src/dispatch-noise-b.ts" }),
+          symbol({ id: "partial", name: "dispatchPipeline", filePath: "src/dispatch-pipeline.ts" }),
+          symbol({ id: "weak-a", name: "helper", filePath: "src/dispatch-noise-a.ts" }),
+          symbol({ id: "exact", name: "dispatch", filePath: "src/dispatch.ts" })
+        ],
+        edges: []
+      },
+      "dispatch"
+    );
+
+    expect(plan.scoreFloor).toMatchObject({
+      reason: "minimum-backfill-applied",
+      applied: true,
+      filesPastFloorCount: 2,
+      retainedFileCount: 3,
+      backfilledFileCount: 1,
+      excludedFileCount: 1,
+      backfilledFiles: [
+        {
+          filePath: "src/dispatch-noise-a.ts",
+          fileScore: 90,
+          bestCandidateId: "weak-a",
+          reason: "minimum-retained-files"
+        }
+      ],
+      excludedFiles: [{ filePath: "src/dispatch-noise-b.ts" }]
+    });
+    expect(plan.selection.map((item) => item.symbol.id)).toEqual(["exact", "partial", "weak-a"]);
+  });
+
+  it("caps the relative floor so explicit evidence cannot suppress partial symbol matches", () => {
+    const plan = planExploreQuery(
+      {
+        symbols: [
+          symbol({ id: "weak", name: "worker", filePath: "src/dispatch-noise.ts" }),
+          symbol({ id: "partial-b", name: "dispatchRegistry", filePath: "src/registry.ts" }),
+          symbol({ id: "god", name: "dispatch", filePath: "src/god.ts" }),
+          symbol({ id: "partial-a", name: "dispatchPipeline", filePath: "src/pipeline.ts" })
+        ],
+        edges: []
+      },
+      "show src/god.ts dispatch"
+    );
+
+    expect(plan.scoreFloor).toMatchObject({
+      topFileScore: 1510,
+      computedFloor: 120,
+      filesPastFloorCount: 3,
+      retainedFileCount: 3,
+      excludedFileCount: 1
+    });
+    expect(plan.selection.map((item) => item.symbol.id)).toEqual([
+      "god",
+      "partial-a",
+      "partial-b"
+    ]);
+  });
+
+  it("uses the strongest candidate per file instead of inflating score by symbol count", () => {
+    const weak = Array.from({ length: 6 }, (_value, index) =>
+      symbol({
+        id: `weak-${index}`,
+        name: `worker${index}`,
+        filePath: "src/dispatch-noise.ts",
+        line: index * 4 + 1
+      })
+    );
+    const plan = planExploreQuery(
+      {
+        symbols: [
+          ...weak,
+          symbol({ id: "partial-b", name: "dispatchRegistry", filePath: "src/registry.ts" }),
+          symbol({ id: "exact", name: "dispatch", filePath: "src/dispatch.ts" }),
+          symbol({ id: "partial-a", name: "dispatchPipeline", filePath: "src/pipeline.ts" })
+        ],
+        edges: []
+      },
+      "dispatch"
+    );
+
+    expect(plan.scoreFloor.excludedFiles).toEqual([
+      expect.objectContaining({
+        filePath: "src/dispatch-noise.ts",
+        candidateCount: 6,
+        fileScore: 90,
+        bestCandidateScore: 90
+      })
+    ]);
+    expect(plan.summary).toMatchObject({
+      scoreFloorFilteredCandidateCount: 6,
+      scoreFloorFilteredFileCount: 1
+    });
+  });
+
+  it("fail-opens to positive evidence when no generated file clears the absolute floor", () => {
+    const files = ["a", "b", "c"].map((name) =>
+      indexedFile(`src/dispatch-${name}.generated.ts`, true)
+    );
+    const symbols = files.map((file, index) =>
+      symbol({ id: `weak-${index}`, name: `worker${index}`, filePath: file.path })
+    );
+    const plan = planExploreQuery({ files, symbols, edges: [] }, "dispatch");
+
+    expect(plan.scoreFloor).toMatchObject({
+      reason: "minimum-backfill-applied",
+      applied: false,
+      fileScoreAggregation: "maximum-candidate-score",
+      topFileScore: 27,
+      computedFloor: 80,
+      filesPastFloorCount: 0,
+      backfillEvidenceFloor: 0,
+      retainedFileCount: 3,
+      backfilledFileCount: 3,
+      excludedFileCount: 0
+    });
+    expect(plan.selection).toHaveLength(3);
+  });
+
   it("bounds combined role-intent receipts across test, icon, and localization terms", () => {
     const plan = planExploreQuery(
       {
@@ -612,7 +826,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v6",
+      policy: "explore-query-plan-v7",
       ranking: {
         graphMass: {
           policy: "explore-query-graph-mass-v1",
@@ -753,7 +967,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v6",
+      policy: "explore-query-plan-v7",
       ranking: {
         policy: "explore-query-source-worth-v1",
         generatedSourceWorth: 0.3,
@@ -974,6 +1188,8 @@ describe("explore query planning", () => {
       iconCandidateCount: 0,
       localizationCandidateCount: 0,
       filteredCandidateCount: 0,
+      scoreFloorFilteredCandidateCount: 0,
+      scoreFloorFilteredFileCount: 0,
       selectedTestCount: 0,
       selectedIconCount: 0,
       selectedLocalizationCount: 0,

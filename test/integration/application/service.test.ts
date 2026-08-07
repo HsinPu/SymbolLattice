@@ -865,7 +865,7 @@ describe("SymbolLatticeService", () => {
       sourceAvailability: "not-applicable",
       source: null,
       queryPlan: {
-        policy: "explore-query-plan-v6",
+        policy: "explore-query-plan-v7",
         fileHints: ["src/api/orders.ts"],
         identifierTerms: ["createorder", "persistorder"],
         summary: {
@@ -970,7 +970,7 @@ describe("SymbolLatticeService", () => {
     const result = await service.explore(projectPath, "orderService");
 
     expect(result.queryPlan).toMatchObject({
-      policy: "explore-query-plan-v6",
+      policy: "explore-query-plan-v7",
       ranking: {
         policy: "explore-query-source-worth-v1",
         generatedSourceWorth: 0.3,
@@ -1024,6 +1024,58 @@ describe("SymbolLatticeService", () => {
     });
   });
 
+  it("keeps weak file-name collisions out of the persisted explore source envelope", async () => {
+    const projectPath = await createInlineProject({
+      "src/dispatch.ts":
+        "export function dispatch() { return 'exact-dispatch'; }\n",
+      "src/dispatch-pipeline.ts":
+        "export function dispatchPipeline() { return 'partial-pipeline'; }\n",
+      "src/dispatch-registry.ts":
+        "export function dispatchRegistry() { return 'partial-registry'; }\n",
+      "src/dispatch-noise-a.ts":
+        "export function worker() { return 'weak-file-a'; }\n",
+      "src/dispatch-noise-b.ts":
+        "export function helper() { return 'weak-file-b'; }\n"
+    });
+    const service = createService();
+    await service.init({ projectPath });
+
+    const result = await service.explore(projectPath, "dispatch pipeline");
+
+    expect(result.queryPlan).toMatchObject({
+      policy: "explore-query-plan-v7",
+      scoreFloor: {
+        policy: "explore-query-relative-file-score-floor-v1",
+        reason: "relative-floor-applied",
+        applied: true,
+        topFileScore: 510,
+        computedFloor: 102,
+        candidateFileCount: 5,
+        filesPastFloorCount: 3,
+        retainedFileCount: 3,
+        excludedFileCount: 2,
+        excludedFiles: [
+          { filePath: "src/dispatch-noise-a.ts", bestCandidateId: expect.any(String) },
+          { filePath: "src/dispatch-noise-b.ts", bestCandidateId: expect.any(String) }
+        ]
+      },
+      summary: {
+        candidateCount: 5,
+        scoreFloorFilteredCandidateCount: 2,
+        scoreFloorFilteredFileCount: 2,
+        selectedCount: 3,
+        selectedFileCount: 3
+      }
+    });
+    expect(result.focuses?.map((focus) => focus.symbol.filePath)).toEqual([
+      "src/dispatch.ts",
+      "src/dispatch-pipeline.ts",
+      "src/dispatch-registry.ts"
+    ]);
+    expect(result.focuses?.map((focus) => focus.source?.text).join("\n"))
+      .not.toMatch(/weak-file-a|weak-file-b/u);
+  });
+
   it("keeps test source out of a general explore envelope when production evidence is sufficient", async () => {
     const projectPath = await createInlineProject({
       "src/order-service.ts":
@@ -1041,7 +1093,7 @@ describe("SymbolLatticeService", () => {
     const result = await service.explore(projectPath, "orderService");
 
     expect(result.queryPlan).toMatchObject({
-      policy: "explore-query-plan-v6",
+      policy: "explore-query-plan-v7",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",
@@ -1087,7 +1139,7 @@ describe("SymbolLatticeService", () => {
 
     const general = await service.explore(projectPath, "renderAsset");
     expect(general.queryPlan).toMatchObject({
-      policy: "explore-query-plan-v6",
+      policy: "explore-query-plan-v7",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",
