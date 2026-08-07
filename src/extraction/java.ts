@@ -1366,6 +1366,23 @@ function staticJavaArgumentType(
   node: JavaSyntaxNode,
   imports: ReadonlyMap<string, string>
 ): JavaCallTypeReferenceFact | null {
+  if (node.name === "CastExpression") {
+    const primitiveTypes = directChildren(node).filter((child) => child.name === "PrimitiveType");
+    if (primitiveTypes.length === 1 && primitiveTypes[0] !== undefined) {
+      const castType = staticJavaCallTypeReference(
+        input,
+        primitiveTypes[0],
+        imports,
+        "primitive-cast"
+      );
+      return castType === null
+        ? null
+        : {
+            ...castType,
+            range: rangeFor(lineStartsFor(input.sourceText), node.from, node.to)
+          };
+    }
+  }
   const primitive = staticJavaPrimitiveLiteralType(input, node);
   if (primitive !== null) {
     return {

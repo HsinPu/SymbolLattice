@@ -7,6 +7,7 @@ import {
   isCustomRouteFramework,
   type BindingSpace,
   type CallArityEvidence,
+  type CallTypeConversionEvidence,
   type CallTypeEvidence,
   type CallTypeValueEvidence,
   type DjangoImportedUrlconfInclusionFact,
@@ -7553,9 +7554,121 @@ interface JavaCallPlan {
   readonly selected: JavaCallableDeclarationFact;
   readonly arityEvidence: CallArityEvidence;
   readonly typeEvidence: CallTypeEvidence;
-  readonly selection: "arity" | "arity-type";
+  readonly selection: "arity" | "arity-type" | "arity-conversion";
   readonly configurationPaths: readonly string[];
   readonly sourcePaths: readonly string[];
+}
+
+interface JavaCallConversion {
+  readonly evidence: CallTypeConversionEvidence;
+  readonly cost: number | null;
+}
+
+const JAVA_PRIMITIVE_WIDENING_PATHS: Readonly<Record<string, readonly string[]>> = {
+  byte: ["byte", "short", "int", "long", "float", "double"],
+  short: ["short", "int", "long", "float", "double"],
+  char: ["char", "int", "long", "float", "double"],
+  int: ["int", "long", "float", "double"],
+  long: ["long", "float", "double"],
+  float: ["float", "double"],
+  double: ["double"],
+  boolean: ["boolean"]
+};
+
+function javaPrimitiveWideningDistance(sourceType: string, targetType: string): number | null {
+  if (!sourceType.startsWith("primitive:") || !targetType.startsWith("primitive:")) {
+    return null;
+  }
+  const source = sourceType.slice("primitive:".length);
+  const target = targetType.slice("primitive:".length);
+  const path = JAVA_PRIMITIVE_WIDENING_PATHS[source];
+  const distance = path?.indexOf(target) ?? -1;
+  return distance > 0 ? distance : null;
+}
+
+function javaCallConversion(input: {
+  readonly argumentIndex: number;
+  readonly parameterIndex: number;
+  readonly argument: ResolvedJavaCallType | null;
+  readonly parameter: ResolvedJavaCallType | null;
+}): JavaCallConversion {
+  const sourceType = input.argument?.evidence.canonicalType ?? null;
+  const targetType = input.parameter?.evidence.canonicalType ?? null;
+  if (sourceType === null || targetType === null) {
+    return {
+      evidence: {
+        argumentIndex: input.argumentIndex,
+        parameterIndex: input.parameterIndex,
+        kind: "unknown",
+        sourceType,
+        targetType,
+        distance: null
+      },
+      cost: null
+    };
+  }
+  if (sourceType === targetType) {
+    return {
+      evidence: {
+        argumentIndex: input.argumentIndex,
+        parameterIndex: input.parameterIndex,
+        kind: "exact",
+        sourceType,
+        targetType,
+        distance: 0
+      },
+      cost: 0
+    };
+  }
+  const wideningDistance = javaPrimitiveWideningDistance(sourceType, targetType);
+  if (wideningDistance !== null) {
+    return {
+      evidence: {
+        argumentIndex: input.argumentIndex,
+        parameterIndex: input.parameterIndex,
+        kind: "primitive-widening",
+        sourceType,
+        targetType,
+        distance: wideningDistance
+      },
+      cost: wideningDistance
+    };
+  }
+  return {
+    evidence: {
+      argumentIndex: input.argumentIndex,
+      parameterIndex: input.parameterIndex,
+      kind: "incompatible",
+      sourceType,
+      targetType,
+      distance: null
+    },
+    cost: null
+  };
+}
+
+function javaConversionsDominate(
+  left: readonly JavaCallConversion[],
+  right: readonly JavaCallConversion[]
+): boolean {
+  if (left.length !== right.length || left.some((conversion) => conversion.cost === null)) {
+    return false;
+  }
+  let strictlyBetter = false;
+  for (let index = 0; index < left.length; index += 1) {
+    const leftCost = left[index]?.cost;
+    const rightCost = right[index]?.cost;
+    if (leftCost === null || leftCost === undefined || rightCost === null || rightCost === undefined) {
+      return false;
+    }
+    if (leftCost > rightCost) {
+      return false;
+    }
+    if (leftCost < rightCost) {
+      strictlyBetter = true;
+    }
+  }
+  return strictlyBetter;
 }
 
 function resolveJavaCallType(input: {
@@ -7577,7 +7690,9 @@ function resolveJavaCallType(input: {
         proof:
           reference.syntax === "primitive-literal"
             ? "primitive-literal"
-            : "primitive-declaration",
+            : reference.syntax === "primitive-cast"
+              ? "primitive-cast"
+              : "primitive-declaration",
         range: reference.range
       },
       configurationPaths: [],
@@ -7732,6 +7847,8 @@ function javaCallPlan(input: {
     {
       readonly declaration: JavaCallableDeclarationFact;
       readonly parameters: readonly (ResolvedJavaCallType | null)[];
+      readonly invocationMode: "fixed" | "varargs";
+      readonly conversions: readonly JavaCallConversion[];
       readonly compatibility: "compatible" | "incompatible" | "unknown" | "not-applicable";
     }
   >();
@@ -7762,6 +7879,8 @@ function javaCallPlan(input: {
             })
           )
         : Array.from({ length: Math.max(0, expectedParameterCount ?? 0) }, () => null);
+    const invocationMode = declaration.maximumArgumentCount === null ? "varargs" : "fixed";
+    const conversions: JavaCallConversion[] = [];
     let compatibility: "compatible" | "incompatible" | "unknown" | "not-applicable" =
       applicableIds.has(declaration.symbolId) ? "compatible" : "not-applicable";
     if (compatibility !== "not-applicable") {
@@ -7775,20 +7894,33 @@ function javaCallPlan(input: {
             : argumentIndex;
         const argument = resolvedArguments[argumentIndex] ?? null;
         const parameter = parameters[parameterIndex] ?? null;
-        if (argument === null || parameter === null) {
+        const conversion = javaCallConversion({
+          argumentIndex,
+          parameterIndex,
+          argument,
+          parameter
+        });
+        conversions.push(conversion);
+        if (conversion.evidence.kind === "unknown") {
           unknown = true;
           continue;
         }
-        if (argument.evidence.canonicalType !== parameter.evidence.canonicalType) {
+        if (conversion.evidence.kind === "incompatible") {
           compatibility = "incompatible";
-          break;
+          continue;
         }
       }
       if (compatibility === "compatible" && unknown) {
         compatibility = "unknown";
       }
     }
-    candidateResolutions.set(declaration.symbolId, { declaration, parameters, compatibility });
+    candidateResolutions.set(declaration.symbolId, {
+      declaration,
+      parameters,
+      invocationMode,
+      conversions,
+      compatibility
+    });
   }
 
   const applicable = [...candidateResolutions.values()].filter(
@@ -7803,13 +7935,37 @@ function javaCallPlan(input: {
   } else {
     const compatible = applicable.filter((candidate) => candidate.compatibility === "compatible");
     const unknown = applicable.some((candidate) => candidate.compatibility === "unknown");
-    if (compatible.length === 1 && !unknown) {
-      selectedResolution = compatible[0];
-      selection = "arity-type";
+    if (!unknown) {
+      const fixed = compatible.filter((candidate) => candidate.invocationMode === "fixed");
+      const phase = fixed.length > 0 ? fixed : compatible;
+      const nonDominated = phase.filter(
+        (candidate) =>
+          !phase.some(
+            (other) =>
+              other.declaration.symbolId !== candidate.declaration.symbolId &&
+              javaConversionsDominate(other.conversions, candidate.conversions)
+          )
+      );
+      if (nonDominated.length === 1) {
+        selectedResolution = nonDominated[0];
+        selection = selectedResolution?.conversions.some(
+          (conversion) => conversion.evidence.kind === "primitive-widening"
+        )
+          ? "arity-conversion"
+          : "arity-type";
+      }
     }
   }
   if (selectedResolution === undefined) {
     return null;
+  }
+  if (
+    selection === "arity" &&
+    selectedResolution.conversions.some(
+      (conversion) => conversion.evidence.kind === "primitive-widening"
+    )
+  ) {
+    selection = "arity-conversion";
   }
 
   const selectedTypes = [
@@ -7829,9 +7985,13 @@ function javaCallPlan(input: {
         return {
           symbolId: declaration.symbolId,
           parameterTypes: candidate.parameters.map((parameter) => parameter?.evidence ?? null),
-          compatibility: candidate.compatibility
+          compatibility: candidate.compatibility,
+          invocationMode: candidate.invocationMode,
+          conversions: candidate.conversions.map((conversion) => conversion.evidence)
         };
-      })
+      }),
+      selectionPolicy: "java-primitive-widening-v1",
+      selectedSymbolId: selectedResolution.declaration.symbolId
     },
     selection,
     configurationPaths: uniqueConfigurationPaths(

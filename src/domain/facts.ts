@@ -13,13 +13,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v210";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v211";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v93";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v94";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -65,12 +65,30 @@ export type CallTypeCompatibility =
   | "unknown"
   | "not-applicable";
 
+export type CallTypeConversionKind =
+  | "exact"
+  | "primitive-widening"
+  | "incompatible"
+  | "unknown";
+
+/** One ordered argument-to-parameter conversion considered by an overload rule. */
+export interface CallTypeConversionEvidence {
+  readonly argumentIndex: number;
+  readonly parameterIndex: number;
+  readonly kind: CallTypeConversionKind;
+  readonly sourceType: string | null;
+  readonly targetType: string | null;
+  /** Zero for identity, positive for a proven widening path, and null otherwise. */
+  readonly distance: number | null;
+}
+
 /** One syntax-proven call or parameter type after project-local resolution. */
 export interface CallTypeValueEvidence {
   readonly canonicalType: string;
   readonly proof:
     | "primitive-declaration"
     | "primitive-literal"
+    | "primitive-cast"
     | "string-literal"
     | "explicit-import"
     | "qualified-type"
@@ -85,12 +103,20 @@ export interface CallTypeCandidateEvidence {
   readonly symbolId: string;
   readonly parameterTypes: readonly (CallTypeValueEvidence | null)[];
   readonly compatibility: CallTypeCompatibility;
+  /** Missing only from pre-v0.301 persisted evidence. */
+  readonly invocationMode?: "fixed" | "varargs";
+  /** Missing only from pre-v0.301 persisted evidence. */
+  readonly conversions?: readonly CallTypeConversionEvidence[];
 }
 
 /** Ordered argument and overload evidence used for exact type disambiguation. */
 export interface CallTypeEvidence {
   readonly arguments: readonly (CallTypeValueEvidence | null)[];
   readonly candidates: readonly CallTypeCandidateEvidence[];
+  /** Missing only from pre-v0.301 persisted evidence. */
+  readonly selectionPolicy?: "java-primitive-widening-v1";
+  /** Missing only from pre-v0.301 persisted evidence. */
+  readonly selectedSymbolId?: string;
 }
 
 /**
@@ -918,6 +944,7 @@ export interface JavaCallTypeReferenceFact {
     | "declaration"
     | "object-creation"
     | "primitive-literal"
+    | "primitive-cast"
     | "string-literal";
   readonly range: SourceRange;
   readonly importedTypePath?: string;

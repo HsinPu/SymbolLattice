@@ -3053,6 +3053,389 @@ describe("SymbolLatticeService", () => {
     );
   });
 
+  it("ranks proven Java primitive widening conversions without guessing ambiguous overloads", async () => {
+    const projectPath = await createInlineProject({
+      "src/api/Executor.java": [
+        "package api;",
+        "public class Executor { public void execute() {} }"
+      ].join("\n"),
+      "src/factory/WideningFactory.java": [
+        "package factory;",
+        "import api.Executor;",
+        "public class WideningFactory {",
+        "  public static Executor create(long value) { return null; }",
+        "  public static Executor create(float value) { return null; }",
+        "  public static Executor create(double value) { return null; }",
+        "}"
+      ].join("\n"),
+      "src/app/WideningRunner.java": [
+        "package app;",
+        "import factory.WideningFactory;",
+        "public class WideningRunner {",
+        "  public void run() { WideningFactory.create(1).execute(); }",
+        "}"
+      ].join("\n"),
+      "src/factory/ExactPrimitiveFactory.java": [
+        "package factory;",
+        "import api.Executor;",
+        "public class ExactPrimitiveFactory {",
+        "  public static Executor create(int value) { return null; }",
+        "  public static Executor create(long value) { return null; }",
+        "}"
+      ].join("\n"),
+      "src/app/ExactPrimitiveRunner.java": [
+        "package app;",
+        "import factory.ExactPrimitiveFactory;",
+        "public class ExactPrimitiveRunner {",
+        "  public void run() { ExactPrimitiveFactory.create(1).execute(); }",
+        "}"
+      ].join("\n"),
+      "src/factory/CharFactory.java": [
+        "package factory;",
+        "import api.Executor;",
+        "public class CharFactory {",
+        "  public static Executor create(int value) { return null; }",
+        "  public static Executor create(long value) { return null; }",
+        "}"
+      ].join("\n"),
+      "src/app/CharRunner.java": [
+        "package app;",
+        "import factory.CharFactory;",
+        "public class CharRunner {",
+        "  public void run() { CharFactory.create('a').execute(); }",
+        "}"
+      ].join("\n"),
+      "src/factory/ByteFactory.java": [
+        "package factory;",
+        "import api.Executor;",
+        "public class ByteFactory {",
+        "  public static Executor create(short value) { return null; }",
+        "  public static Executor create(int value) { return null; }",
+        "}"
+      ].join("\n"),
+      "src/app/ByteRunner.java": [
+        "package app;",
+        "import factory.ByteFactory;",
+        "public class ByteRunner {",
+        "  public void run() { ByteFactory.create((byte) 1).execute(); }",
+        "}"
+      ].join("\n"),
+      "src/factory/ShortFactory.java": [
+        "package factory;",
+        "import api.Executor;",
+        "public class ShortFactory {",
+        "  public static Executor create(int value) { return null; }",
+        "  public static Executor create(long value) { return null; }",
+        "}"
+      ].join("\n"),
+      "src/app/ShortRunner.java": [
+        "package app;",
+        "import factory.ShortFactory;",
+        "public class ShortRunner {",
+        "  public void run() { ShortFactory.create((short) 1).execute(); }",
+        "}"
+      ].join("\n"),
+      "src/api/WideningExecutor.java": [
+        "package api;",
+        "public class WideningExecutor {",
+        "  public void execute(float value) {}",
+        "  public void execute(double value) {}",
+        "}"
+      ].join("\n"),
+      "src/factory/OuterWideningFactory.java": [
+        "package factory;",
+        "import api.WideningExecutor;",
+        "public class OuterWideningFactory {",
+        "  public static WideningExecutor create() { return null; }",
+        "}"
+      ].join("\n"),
+      "src/app/OuterWideningRunner.java": [
+        "package app;",
+        "import factory.OuterWideningFactory;",
+        "public class OuterWideningRunner {",
+        "  public void run() { OuterWideningFactory.create().execute(1L); }",
+        "}"
+      ].join("\n"),
+      "src/factory/OnlyDoubleFactory.java": [
+        "package factory;",
+        "import api.Executor;",
+        "public class OnlyDoubleFactory {",
+        "  public static Executor create(double value) { return null; }",
+        "}"
+      ].join("\n"),
+      "src/app/FloatWideningRunner.java": [
+        "package app;",
+        "import factory.OnlyDoubleFactory;",
+        "public class FloatWideningRunner {",
+        "  public void run() { OnlyDoubleFactory.create(1.0f).execute(); }",
+        "}"
+      ].join("\n"),
+      "src/factory/MixedPhaseFactory.java": [
+        "package factory;",
+        "import api.Executor;",
+        "public class MixedPhaseFactory {",
+        "  public static Executor create(long value) { return null; }",
+        "  public static Executor create(int... values) { return null; }",
+        "}"
+      ].join("\n"),
+      "src/app/MixedPhaseRunner.java": [
+        "package app;",
+        "import factory.MixedPhaseFactory;",
+        "public class MixedPhaseRunner {",
+        "  public void run() { MixedPhaseFactory.create(1).execute(); }",
+        "}"
+      ].join("\n"),
+      "src/factory/AmbiguousPrimitiveFactory.java": [
+        "package factory;",
+        "import api.Executor;",
+        "public class AmbiguousPrimitiveFactory {",
+        "  public static Executor create(long first, float second) { return null; }",
+        "  public static Executor create(float first, long second) { return null; }",
+        "}"
+      ].join("\n"),
+      "src/bad/AmbiguousPrimitiveRunner.java": [
+        "package bad;",
+        "import factory.AmbiguousPrimitiveFactory;",
+        "public class AmbiguousPrimitiveRunner {",
+        "  public void run() { AmbiguousPrimitiveFactory.create(1, 1).execute(); }",
+        "}"
+      ].join("\n"),
+      "src/factory/OnlyIntFactory.java": [
+        "package factory;",
+        "import api.Executor;",
+        "public class OnlyIntFactory {",
+        "  public static Executor create(int value) { return null; }",
+        "}"
+      ].join("\n"),
+      "src/bad/NarrowingRunner.java": [
+        "package bad;",
+        "import factory.OnlyIntFactory;",
+        "public class NarrowingRunner {",
+        "  public void run() { OnlyIntFactory.create(1L).execute(); }",
+        "}"
+      ].join("\n"),
+      "src/bad/BooleanRunner.java": [
+        "package bad;",
+        "import factory.WideningFactory;",
+        "public class BooleanRunner {",
+        "  public void run() { WideningFactory.create(true).execute(); }",
+        "}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const snapshot = graphStore.getSnapshot(projectPath);
+    const symbol = (qualifiedName: string, line?: number) =>
+      snapshot.symbols.find(
+        (candidate) =>
+          candidate.qualifiedName === qualifiedName &&
+          (line === undefined || candidate.range.start.line === line)
+      );
+    const calls = snapshot.edges.filter((edge) => edge.kind === "calls");
+    const sourceCalls = (qualifiedName: string) =>
+      calls.filter((edge) => edge.sourceId === symbol(qualifiedName)?.id);
+    const factoryCall = (runner: string) =>
+      sourceCalls(`src/app/${runner}.java#${runner}.run`).find(
+        (edge) => edge.referenceName === "create"
+      );
+
+    const wideningCall = factoryCall("WideningRunner");
+    expect(wideningCall).toMatchObject({
+      targetId: symbol("src/factory/WideningFactory.java#WideningFactory.create", 4)?.id,
+      resolution: "exact",
+      evidence: {
+        ruleId: "call.java.chained-factory.explicit-import.arity-conversion.factory",
+        callType: {
+          selectionPolicy: "java-primitive-widening-v1",
+          candidates: expect.arrayContaining([
+            expect.objectContaining({
+              symbolId: symbol("src/factory/WideningFactory.java#WideningFactory.create", 4)?.id,
+              invocationMode: "fixed",
+              compatibility: "compatible",
+              conversions: [
+                expect.objectContaining({
+                  kind: "primitive-widening",
+                  sourceType: "primitive:int",
+                  targetType: "primitive:long",
+                  distance: 1
+                })
+              ]
+            }),
+            expect.objectContaining({
+              symbolId: symbol("src/factory/WideningFactory.java#WideningFactory.create", 5)?.id,
+              conversions: [expect.objectContaining({ distance: 2 })]
+            }),
+            expect.objectContaining({
+              symbolId: symbol("src/factory/WideningFactory.java#WideningFactory.create", 6)?.id,
+              conversions: [expect.objectContaining({ distance: 3 })]
+            })
+          ]),
+          selectedSymbolId: symbol(
+            "src/factory/WideningFactory.java#WideningFactory.create",
+            4
+          )?.id
+        }
+      }
+    });
+
+    const exactCall = factoryCall("ExactPrimitiveRunner");
+    expect(exactCall).toMatchObject({
+      targetId: symbol(
+        "src/factory/ExactPrimitiveFactory.java#ExactPrimitiveFactory.create",
+        4
+      )?.id,
+      evidence: {
+        ruleId: "call.java.chained-factory.explicit-import.arity-type.factory",
+        callType: {
+          candidates: expect.arrayContaining([
+            expect.objectContaining({
+              symbolId: symbol(
+                "src/factory/ExactPrimitiveFactory.java#ExactPrimitiveFactory.create",
+                4
+              )?.id,
+              conversions: [expect.objectContaining({ kind: "exact", distance: 0 })]
+            }),
+            expect.objectContaining({
+              symbolId: symbol(
+                "src/factory/ExactPrimitiveFactory.java#ExactPrimitiveFactory.create",
+                5
+              )?.id,
+              conversions: [
+                expect.objectContaining({ kind: "primitive-widening", distance: 1 })
+              ]
+            })
+          ]),
+          selectedSymbolId: symbol(
+            "src/factory/ExactPrimitiveFactory.java#ExactPrimitiveFactory.create",
+            4
+          )?.id
+        }
+      }
+    });
+
+    expect(factoryCall("CharRunner")).toMatchObject({
+      targetId: symbol("src/factory/CharFactory.java#CharFactory.create", 4)?.id,
+      evidence: {
+        ruleId: "call.java.chained-factory.explicit-import.arity-conversion.factory",
+        callType: {
+          arguments: [expect.objectContaining({ canonicalType: "primitive:char" })],
+          candidates: expect.arrayContaining([
+            expect.objectContaining({
+              symbolId: symbol("src/factory/CharFactory.java#CharFactory.create", 4)?.id,
+              conversions: [expect.objectContaining({ distance: 1 })]
+            })
+          ])
+        }
+      }
+    });
+
+    for (const [runner, factory, sourceType, targetType] of [
+      ["ByteRunner", "ByteFactory", "primitive:byte", "primitive:short"],
+      ["ShortRunner", "ShortFactory", "primitive:short", "primitive:int"]
+    ] as const) {
+      expect(factoryCall(runner)).toMatchObject({
+        targetId: symbol(`src/factory/${factory}.java#${factory}.create`, 4)?.id,
+        evidence: {
+          ruleId: "call.java.chained-factory.explicit-import.arity-conversion.factory",
+          callType: {
+            arguments: [
+              expect.objectContaining({ canonicalType: sourceType, proof: "primitive-cast" })
+            ],
+            candidates: expect.arrayContaining([
+              expect.objectContaining({
+                symbolId: symbol(`src/factory/${factory}.java#${factory}.create`, 4)?.id,
+                conversions: [
+                  expect.objectContaining({
+                    kind: "primitive-widening",
+                    sourceType,
+                    targetType,
+                    distance: 1
+                  })
+                ]
+              })
+            ])
+          }
+        }
+      });
+    }
+
+    const outerCall = sourceCalls(
+      "src/app/OuterWideningRunner.java#OuterWideningRunner.run"
+    ).find((edge) => edge.referenceName === "execute");
+    expect(outerCall).toMatchObject({
+      targetId: symbol("src/api/WideningExecutor.java#WideningExecutor.execute", 3)?.id,
+      evidence: {
+        ruleId: "call.java.chained-factory.explicit-import.arity-conversion.return-dispatch",
+        callType: {
+          arguments: [expect.objectContaining({ canonicalType: "primitive:long" })],
+          candidates: expect.arrayContaining([
+            expect.objectContaining({
+              symbolId: symbol("src/api/WideningExecutor.java#WideningExecutor.execute", 3)?.id,
+              conversions: [expect.objectContaining({ distance: 1 })]
+            }),
+            expect.objectContaining({
+              symbolId: symbol("src/api/WideningExecutor.java#WideningExecutor.execute", 4)?.id,
+              conversions: [expect.objectContaining({ distance: 2 })]
+            })
+          ])
+        }
+      }
+    });
+
+    expect(factoryCall("FloatWideningRunner")).toMatchObject({
+      targetId: symbol("src/factory/OnlyDoubleFactory.java#OnlyDoubleFactory.create", 4)?.id,
+      evidence: {
+        ruleId: "call.java.chained-factory.explicit-import.arity-conversion.factory",
+        callType: {
+          candidates: [
+            expect.objectContaining({
+              conversions: [
+                expect.objectContaining({
+                  sourceType: "primitive:float",
+                  targetType: "primitive:double",
+                  distance: 1
+                })
+              ]
+            })
+          ]
+        }
+      }
+    });
+
+    expect(factoryCall("MixedPhaseRunner")).toMatchObject({
+      targetId: symbol("src/factory/MixedPhaseFactory.java#MixedPhaseFactory.create", 4)?.id,
+      evidence: {
+        ruleId: "call.java.chained-factory.explicit-import.arity-conversion.factory",
+        callType: {
+          candidates: expect.arrayContaining([
+            expect.objectContaining({
+              symbolId: symbol("src/factory/MixedPhaseFactory.java#MixedPhaseFactory.create", 4)?.id,
+              invocationMode: "fixed",
+              compatibility: "compatible"
+            }),
+            expect.objectContaining({
+              symbolId: symbol("src/factory/MixedPhaseFactory.java#MixedPhaseFactory.create", 5)?.id,
+              invocationMode: "varargs",
+              compatibility: "compatible"
+            })
+          ])
+        }
+      }
+    });
+
+    expect(
+      calls.filter((edge) =>
+        [
+          "src/bad/AmbiguousPrimitiveRunner.java",
+          "src/bad/NarrowingRunner.java",
+          "src/bad/BooleanRunner.java"
+        ].includes(edge.filePath)
+      )
+    ).toEqual([]);
+  });
+
   it("projects unique cross-file JVM DI types without claiming runtime provider selection", async () => {
     const projectPath = await createInlineProject({
       "src/java/app/services/PetService.java": [
