@@ -19,7 +19,7 @@ export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v212";
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v97";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v98";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -100,9 +100,24 @@ export interface CallDispatchSignatureEvidence {
   readonly complete: boolean;
 }
 
+/** Caller-context proof used to admit one Java member into a chained dispatch method set. */
+export interface CallDispatchAccessEvidence {
+  readonly policy: "java-source-access-v1";
+  readonly visibility: "public" | "protected" | "package" | "private";
+  readonly decision: "public" | "same-package" | "protected-subclass-receiver";
+  readonly callerTypeSymbolId: string;
+  readonly callerPackageName: string;
+  readonly receiverTypeSymbolId: string;
+  readonly receiverPackageName: string;
+  readonly ownerTypeSymbolId: string;
+  readonly ownerPackageName: string;
+  readonly callerToOwnerPath: readonly CallTypeHierarchySegmentEvidence[];
+  readonly receiverToCallerPath: readonly CallTypeHierarchySegmentEvidence[];
+}
+
 /** Project-proven Java method-set and owner selection for a chained return-type dispatch. */
 export interface CallDispatchEvidence {
-  readonly selectionPolicy: "java-source-method-set-v2";
+  readonly selectionPolicy: "java-source-method-set-v2" | "java-source-method-set-v3";
   readonly selectionReason:
     | "declared-owner"
     | "unique-inherited-owner"
@@ -111,6 +126,8 @@ export interface CallDispatchEvidence {
   readonly receiverTypeSymbolId: string;
   readonly selectedOwnerTypeSymbolId: string;
   readonly selectedSignature: CallDispatchSignatureEvidence;
+  /** Missing only from generations written before v0.305. */
+  readonly access?: CallDispatchAccessEvidence;
   readonly hierarchyBounds: {
     readonly maximumDepth: number;
     readonly maximumVisitedTypes: number;

@@ -7,6 +7,7 @@ import {
   isCustomRouteFramework,
   type BindingSpace,
   type CallArityEvidence,
+  type CallDispatchAccessEvidence,
   type CallDispatchEvidence,
   type CallTypeConversionEvidence,
   type CallTypeHierarchySegmentEvidence,
@@ -7701,6 +7702,108 @@ interface JavaMethodSignaturePlan {
   readonly evidence: CallDispatchEvidence["selectedSignature"];
 }
 
+interface JavaMethodAccessPlan {
+  readonly evidence: CallDispatchAccessEvidence;
+  readonly hierarchyEdges: readonly GraphEdge[];
+}
+
+function uniqueJvmResolvedType(
+  symbolId: string,
+  typesBySymbolId: ReadonlyMap<string, readonly JvmResolvedType[]>
+): JvmResolvedType | null {
+  const candidates = typesBySymbolId.get(symbolId) ?? [];
+  return candidates.length === 1 && candidates[0] !== undefined ? candidates[0] : null;
+}
+
+function javaMethodAccessPlan(input: {
+  readonly declaration: JavaCallableDeclarationFact;
+  readonly callerType: JvmResolvedType;
+  readonly receiverTypeSymbolId: string;
+  readonly ownerHierarchyPath: readonly GraphEdge[];
+  readonly heritageEdgesBySourceId: ReadonlyMap<string, readonly GraphEdge[]>;
+  readonly typesBySymbolId: ReadonlyMap<string, readonly JvmResolvedType[]>;
+}): JavaMethodAccessPlan | null {
+  const visibility = input.declaration.visibility;
+  const receiverType = uniqueJvmResolvedType(input.receiverTypeSymbolId, input.typesBySymbolId);
+  const ownerType = uniqueJvmResolvedType(input.declaration.declaringTypeId, input.typesBySymbolId);
+  if (
+    visibility === undefined ||
+    visibility === "private" ||
+    receiverType === null ||
+    ownerType === null
+  ) {
+    return null;
+  }
+
+  const evidence = (
+    decision: CallDispatchAccessEvidence["decision"],
+    callerToOwnerPath: readonly GraphEdge[] = [],
+    receiverToCallerPath: readonly GraphEdge[] = []
+  ): JavaMethodAccessPlan => ({
+    evidence: {
+      policy: "java-source-access-v1",
+      visibility,
+      decision,
+      callerTypeSymbolId: input.callerType.symbol.id,
+      callerPackageName: input.callerType.fact.packageName,
+      receiverTypeSymbolId: receiverType.symbol.id,
+      receiverPackageName: receiverType.fact.packageName,
+      ownerTypeSymbolId: ownerType.symbol.id,
+      ownerPackageName: ownerType.fact.packageName,
+      callerToOwnerPath: callerToOwnerPath.map(javaHierarchySegmentEvidence),
+      receiverToCallerPath: receiverToCallerPath.map(javaHierarchySegmentEvidence)
+    },
+    hierarchyEdges: [...callerToOwnerPath, ...receiverToCallerPath]
+  });
+
+  if (visibility === "public") {
+    return evidence("public");
+  }
+
+  if (input.callerType.fact.packageName === ownerType.fact.packageName) {
+    if (visibility === "package") {
+      const inheritedWithinPackage = input.ownerHierarchyPath.every((edge) => {
+        const sourceType = uniqueJvmResolvedType(edge.sourceId, input.typesBySymbolId);
+        const targetType =
+          edge.targetId === null ? null : uniqueJvmResolvedType(edge.targetId, input.typesBySymbolId);
+        return (
+          sourceType?.fact.packageName === ownerType.fact.packageName &&
+          targetType?.fact.packageName === ownerType.fact.packageName
+        );
+      });
+      if (!inheritedWithinPackage) {
+        return null;
+      }
+    }
+    return evidence("same-package");
+  }
+
+  if (visibility !== "protected" || input.declaration.isStatic) {
+    return null;
+  }
+  const callerToOwner = javaReferenceWideningPath({
+    sourceSymbolId: input.callerType.symbol.id,
+    targetSymbolId: ownerType.symbol.id,
+    heritageEdgesBySourceId: input.heritageEdgesBySourceId
+  });
+  const receiverToCaller =
+    receiverType.symbol.id === input.callerType.symbol.id
+      ? { state: "matched" as const, edges: [] }
+      : javaReferenceWideningPath({
+          sourceSymbolId: receiverType.symbol.id,
+          targetSymbolId: input.callerType.symbol.id,
+          heritageEdgesBySourceId: input.heritageEdgesBySourceId
+        });
+  if (callerToOwner.state !== "matched" || receiverToCaller.state !== "matched") {
+    return null;
+  }
+  return evidence(
+    "protected-subclass-receiver",
+    callerToOwner.edges,
+    receiverToCaller.edges
+  );
+}
+
 function javaMethodSignaturePlan(
   declaration: JavaCallableDeclarationFact,
   typesBySymbolId: ReadonlyMap<string, readonly JvmResolvedType[]>
@@ -7758,6 +7861,7 @@ function javaMethodSignaturePlan(
 
 function javaMethodSetPlan(input: {
   readonly receiverTypeSymbolId: string;
+  readonly callerType: JvmResolvedType;
   readonly methodName: string;
   readonly callableDeclarations: readonly JavaCallableDeclarationFact[];
   readonly heritageEdgesBySourceId: ReadonlyMap<string, readonly GraphEdge[]>;
@@ -7819,6 +7923,7 @@ function javaMethodSetPlan(input: {
       readonly declaration: JavaCallableDeclarationFact;
       readonly signature: JavaMethodSignaturePlan;
       readonly ownerTypeKind: "class" | "interface";
+      readonly accessPlan: JavaMethodAccessPlan;
     }>
   >();
   for (const ownerTypeSymbolId of [...pathsByOwnerId.keys()].sort(compareStableText)) {
@@ -7827,20 +7932,25 @@ function javaMethodSetPlan(input: {
       continue;
     }
     for (const declaration of declarationsByOwnerId.get(ownerTypeSymbolId) ?? []) {
-      // The current cross-file chain proof intentionally admits only public
-      // members. Protected and package access need caller/receiver semantics;
-      // private members are never eligible here.
-      if (declaration.visibility !== "public") {
-        continue;
-      }
       // Java interface static methods belong to the declaring interface and are
       // never inherited or invocable through an instance-valued expression.
       if (owner.kind === "interface" && declaration.isStatic) {
         continue;
       }
+      const accessPlan = javaMethodAccessPlan({
+        declaration,
+        callerType: input.callerType,
+        receiverTypeSymbolId: input.receiverTypeSymbolId,
+        ownerHierarchyPath: pathsByOwnerId.get(ownerTypeSymbolId) ?? [],
+        heritageEdgesBySourceId: input.heritageEdgesBySourceId,
+        typesBySymbolId: input.typesBySymbolId
+      });
+      if (accessPlan === null) {
+        continue;
+      }
       const signature = javaMethodSignaturePlan(declaration, input.typesBySymbolId);
       const entries = declarationsBySignature.get(signature.key) ?? [];
-      entries.push({ declaration, signature, ownerTypeKind: owner.kind });
+      entries.push({ declaration, signature, ownerTypeKind: owner.kind, accessPlan });
       declarationsBySignature.set(signature.key, entries);
     }
   }
@@ -7904,11 +8014,12 @@ function javaMethodSetPlan(input: {
     selectedEntries.push({
       declaration: selected.declaration,
       evidence: {
-        selectionPolicy: "java-source-method-set-v2",
+        selectionPolicy: "java-source-method-set-v3",
         selectionReason,
         receiverTypeSymbolId: input.receiverTypeSymbolId,
         selectedOwnerTypeSymbolId,
         selectedSignature: selected.signature.evidence,
+        access: selected.accessPlan.evidence,
         hierarchyBounds: JAVA_REFERENCE_HIERARCHY_LIMITS,
         candidates: ownerIds.map((ownerTypeSymbolId) => {
           const path = pathsByOwnerId.get(ownerTypeSymbolId) ?? [];
@@ -7924,7 +8035,11 @@ function javaMethodSetPlan(input: {
           };
         })
       },
-      hierarchyEdges: selectedPath,
+      hierarchyEdges: [
+        ...new Map(
+          [...selectedPath, ...selected.accessPlan.hierarchyEdges].map((edge) => [edge.id, edge])
+        ).values()
+      ],
       inherited: selectedOwnerTypeSymbolId !== input.receiverTypeSymbolId
     });
   }
@@ -8674,6 +8789,7 @@ function projectJavaChainedCallReferences(input: {
     const returnedType = returnedTypeEntries[0].symbol;
     const methodSetPlan = javaMethodSetPlan({
       receiverTypeSymbolId: returnedType.id,
+      callerType: declaringType,
       methodName: reference.methodName,
       callableDeclarations,
       heritageEdgesBySourceId,

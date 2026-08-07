@@ -3827,7 +3827,7 @@ describe("SymbolLatticeService", () => {
         ruleId:
           "call.java.chained-factory.explicit-import.arity.inherited-return-dispatch",
         callDispatch: {
-          selectionPolicy: "java-source-method-set-v2",
+          selectionPolicy: "java-source-method-set-v3",
           selectionReason: "unique-inherited-owner",
           receiverTypeSymbolId: leafTypeId,
           selectedOwnerTypeSymbolId: baseTypeId,
@@ -4171,7 +4171,7 @@ describe("SymbolLatticeService", () => {
       evidence: {
         ruleId: "call.java.chained-factory.explicit-import.arity-type.inherited-return-dispatch",
         callDispatch: {
-          selectionPolicy: "java-source-method-set-v2",
+          selectionPolicy: "java-source-method-set-v3",
           selectionReason: "class-precedence",
           receiverTypeSymbolId: mixedLeafId,
           selectedOwnerTypeSymbolId: classBaseId,
@@ -4199,7 +4199,7 @@ describe("SymbolLatticeService", () => {
       evidence: {
         ruleId: "call.java.chained-factory.explicit-import.arity-type.return-dispatch",
         callDispatch: {
-          selectionPolicy: "java-source-method-set-v2",
+          selectionPolicy: "java-source-method-set-v3",
           selectionReason: "declared-owner",
           receiverTypeSymbolId: mixedLeafId,
           selectedOwnerTypeSymbolId: mixedLeafId,
@@ -4223,7 +4223,7 @@ describe("SymbolLatticeService", () => {
       targetId: symbol("src/api/ConflictLeaf.java#ConflictLeaf.execute")?.id,
       evidence: {
         callDispatch: {
-          selectionPolicy: "java-source-method-set-v2",
+          selectionPolicy: "java-source-method-set-v3",
           selectionReason: "declared-owner",
           selectedOwnerTypeSymbolId: symbol("src/api/ConflictLeaf.java#ConflictLeaf")?.id,
           selectedSignature: {
@@ -4339,6 +4339,177 @@ describe("SymbolLatticeService", () => {
           edge.referenceName === "execute"
       )
     ).toEqual([]);
+  });
+
+  it("enforces Java package and protected caller-context access on factory return dispatch", async () => {
+    const projectPath = await createInlineProject({
+      "src/shared/PackageBase.java": [
+        "package shared;",
+        "public class PackageBase { void packageExecute(int value) {} }"
+      ].join("\n"),
+      "src/shared/PackageLeaf.java": [
+        "package shared;",
+        "public class PackageLeaf extends PackageBase {}"
+      ].join("\n"),
+      "src/shared/PackageFactory.java": [
+        "package shared;",
+        "import foreign.ForeignLeaf;",
+        "public class PackageFactory {",
+        "  public static PackageLeaf create() { return null; }",
+        "  public static ForeignLeaf createForeign() { return null; }",
+        "}"
+      ].join("\n"),
+      "src/shared/PackageRunner.java": [
+        "package shared;",
+        "public class PackageRunner {",
+        "  public void run() {",
+        "    PackageFactory.create().packageExecute(1);",
+        "    PackageFactory.createForeign().packageExecute(1);",
+        "  }",
+        "}"
+      ].join("\n"),
+      "src/foreign/ForeignLeaf.java": [
+        "package foreign;",
+        "import shared.PackageBase;",
+        "public class ForeignLeaf extends PackageBase {}"
+      ].join("\n"),
+      "src/base/ProtectedBase.java": [
+        "package base;",
+        "public class ProtectedBase { protected void protectedExecute(int value) {} }"
+      ].join("\n"),
+      "src/base/SiblingLeaf.java": [
+        "package base;",
+        "public class SiblingLeaf extends ProtectedBase {}"
+      ].join("\n"),
+      "src/base/BaseFactory.java": [
+        "package base;",
+        "public class BaseFactory {",
+        "  public static ProtectedBase createSamePackage() { return null; }",
+        "}"
+      ].join("\n"),
+      "src/base/BaseRunner.java": [
+        "package base;",
+        "public class BaseRunner {",
+        "  public void run() { BaseFactory.createSamePackage().protectedExecute(1); }",
+        "}"
+      ].join("\n"),
+      "src/factory/AccessFactory.java": [
+        "package factory;",
+        "import app.ProtectedChild;",
+        "import app.ProtectedRunner;",
+        "import base.SiblingLeaf;",
+        "public class AccessFactory {",
+        "  public static ProtectedRunner createAllowed() { return null; }",
+        "  public static ProtectedChild createAllowedChild() { return null; }",
+        "  public static SiblingLeaf createWrongReceiver() { return null; }",
+        "}"
+      ].join("\n"),
+      "src/app/ProtectedChild.java": [
+        "package app;",
+        "public class ProtectedChild extends ProtectedRunner {}"
+      ].join("\n"),
+      "src/app/ProtectedRunner.java": [
+        "package app;",
+        "import base.ProtectedBase;",
+        "import factory.AccessFactory;",
+        "public class ProtectedRunner extends ProtectedBase {",
+        "  public void run() {",
+        "    AccessFactory.createAllowed().protectedExecute(1);",
+        "    AccessFactory.createAllowedChild().protectedExecute(1);",
+        "    AccessFactory.createWrongReceiver().protectedExecute(1);",
+        "  }",
+        "}"
+      ].join("\n"),
+      "src/app/OutsiderRunner.java": [
+        "package app;",
+        "import base.BaseFactory;",
+        "public class OutsiderRunner {",
+        "  public void run() { BaseFactory.createSamePackage().protectedExecute(1); }",
+        "}"
+      ].join("\n"),
+      "src/app/PackageOutsider.java": [
+        "package app;",
+        "import shared.PackageFactory;",
+        "public class PackageOutsider {",
+        "  public void run() { PackageFactory.create().packageExecute(1); }",
+        "}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const snapshot = graphStore.getSnapshot(projectPath);
+    const symbol = (qualifiedName: string) =>
+      snapshot.symbols.find((candidate) => candidate.qualifiedName === qualifiedName);
+    const executeCall = (sourceQualifiedName: string, line?: number) =>
+      snapshot.edges.find(
+        (edge) =>
+          edge.kind === "calls" &&
+          edge.sourceId === symbol(sourceQualifiedName)?.id &&
+          (line === undefined || edge.range.start.line === line) &&
+          (edge.referenceName === "packageExecute" || edge.referenceName === "protectedExecute")
+      );
+
+    expect(executeCall("src/shared/PackageRunner.java#PackageRunner.run", 4)).toMatchObject({
+      targetId: symbol("src/shared/PackageBase.java#PackageBase.packageExecute")?.id,
+      evidence: {
+        callDispatch: {
+          access: {
+            policy: "java-source-access-v1",
+            visibility: "package",
+            decision: "same-package",
+            callerTypeSymbolId: symbol("src/shared/PackageRunner.java#PackageRunner")?.id,
+            ownerTypeSymbolId: symbol("src/shared/PackageBase.java#PackageBase")?.id,
+            callerToOwnerPath: [],
+            receiverToCallerPath: []
+          }
+        }
+      }
+    });
+    expect(executeCall("src/shared/PackageRunner.java#PackageRunner.run", 5)).toBeUndefined();
+    expect(executeCall("src/base/BaseRunner.java#BaseRunner.run")).toMatchObject({
+      targetId: symbol("src/base/ProtectedBase.java#ProtectedBase.protectedExecute")?.id,
+      evidence: {
+        callDispatch: {
+          access: {
+            policy: "java-source-access-v1",
+            visibility: "protected",
+            decision: "same-package"
+          }
+        }
+      }
+    });
+    expect(executeCall("src/app/ProtectedRunner.java#ProtectedRunner.run", 6)).toMatchObject({
+      targetId: symbol("src/base/ProtectedBase.java#ProtectedBase.protectedExecute")?.id,
+      evidence: {
+        callDispatch: {
+          access: {
+            policy: "java-source-access-v1",
+            visibility: "protected",
+            decision: "protected-subclass-receiver",
+            callerTypeSymbolId: symbol("src/app/ProtectedRunner.java#ProtectedRunner")?.id,
+            ownerTypeSymbolId: symbol("src/base/ProtectedBase.java#ProtectedBase")?.id,
+            callerToOwnerPath: [expect.objectContaining({ relationKind: "extends" })],
+            receiverToCallerPath: []
+          }
+        }
+      }
+    });
+    expect(executeCall("src/app/ProtectedRunner.java#ProtectedRunner.run", 7)).toMatchObject({
+      targetId: symbol("src/base/ProtectedBase.java#ProtectedBase.protectedExecute")?.id,
+      evidence: {
+        callDispatch: {
+          access: {
+            decision: "protected-subclass-receiver",
+            receiverToCallerPath: [expect.objectContaining({ relationKind: "extends" })]
+          }
+        }
+      }
+    });
+    expect(executeCall("src/app/ProtectedRunner.java#ProtectedRunner.run", 8)).toBeUndefined();
+    expect(executeCall("src/app/OutsiderRunner.java#OutsiderRunner.run")).toBeUndefined();
+    expect(executeCall("src/app/PackageOutsider.java#PackageOutsider.run")).toBeUndefined();
   });
 
   it("projects unique cross-file JVM DI types without claiming runtime provider selection", async () => {
