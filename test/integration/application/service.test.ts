@@ -1,4 +1,4 @@
-import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, rm, stat, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -56,7 +56,8 @@ import type {
   GitRevisionHunkProvider,
   GitRevisionHunkSet,
   GraphStore,
-  ReplaceProjectFactsInput
+  ReplaceProjectFactsInput,
+  SourceCatalog
 } from "../../../src/ports/index.js";
 import { GitChangeSetError } from "../../../src/ports/index.js";
 
@@ -10855,8 +10856,120 @@ describe("SymbolLatticeService", () => {
     });
     expect(status.operationPerformance?.phases.map((phase) => phase.name)).toEqual([
       "load-status",
+      "freshness-preflight",
+      "fast-path-check",
+      "status-read"
+    ]);
+  });
+
+  it("proves a no-op through full-content fingerprints without running a full source scan", async () => {
+    const projectPath = await createFixtureProject();
+    const graphStore = new SqliteGraphStore();
+    const backingCatalog = new FileSystemSourceCatalog();
+    let fullScans = 0;
+    const sourceCatalog: SourceCatalog = {
+      scan: async (...args) => {
+        fullScans += 1;
+        return backingCatalog.scan(...args);
+      },
+      verifyFreshness: (...args) => backingCatalog.verifyFreshness(...args),
+      read: (...args) => backingCatalog.read(...args),
+      isUnsafeProjectPath: (...args) => backingCatalog.isUnsafeProjectPath(...args)
+    };
+    const service = new SymbolLatticeService(graphStore, sourceCatalog);
+    await service.init({ projectPath });
+    const generationId = graphStore.getStatus(projectPath).generationId;
+    fullScans = 0;
+
+    const status = await service.sync({ projectPath });
+
+    expect(fullScans).toBe(0);
+    expect(status.generationId).toBe(generationId);
+    expect(status.operationPerformance?.phases.map((phase) => phase.name)).toEqual([
+      "load-status",
+      "freshness-preflight",
+      "fast-path-check",
+      "status-read"
+    ]);
+  });
+
+  it("detects same-size source edits even when the modification time is restored", async () => {
+    const projectPath = await createInlineProject({
+      "src/value.ts": "export const value = 'before';\n"
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+    await service.init({ projectPath });
+    const generationId = graphStore.getStatus(projectPath).generationId;
+    const sourcePath = join(projectPath, "src", "value.ts");
+    const before = await stat(sourcePath);
+    await writeFile(sourcePath, "export const value = 'after!';\n", "utf8");
+    await utimes(sourcePath, before.atime, before.mtime);
+    const restored = await stat(sourcePath);
+    expect(restored.size).toBe(before.size);
+    expect(Math.floor(restored.mtimeMs)).toBe(Math.floor(before.mtimeMs));
+
+    const status = await service.sync({ projectPath });
+
+    expect(status.generationId).not.toBe(generationId);
+    expect(status.lastIndexWork).toMatchObject({ modifiedFiles: ["src/value.ts"] });
+    expect(status.operationPerformance?.phases.map((phase) => phase.name)).toEqual([
+      "load-status",
+      "freshness-preflight",
       "scan",
       "fast-path-check",
+      "load-generation",
+      "change-planning",
+      "resolution",
+      "persistence",
+      "status-read"
+    ]);
+  });
+
+  it("falls back to a full scan when workspace configuration inputs change", async () => {
+    const projectPath = await createInlineProject({
+      "package.json": JSON.stringify({ private: true, workspaces: ["packages/*"] }),
+      "packages/app/package.json": JSON.stringify({ name: "@fixture/app" }),
+      "packages/app/src/index.ts": "export const app = true;\n"
+    });
+    const graphStore = new SqliteGraphStore();
+    const backingCatalog = new FileSystemSourceCatalog();
+    let fullScans = 0;
+    const sourceCatalog: SourceCatalog = {
+      scan: async (...args) => {
+        fullScans += 1;
+        return backingCatalog.scan(...args);
+      },
+      verifyFreshness: (...args) => backingCatalog.verifyFreshness(...args),
+      read: (...args) => backingCatalog.read(...args),
+      isUnsafeProjectPath: (...args) => backingCatalog.isUnsafeProjectPath(...args)
+    };
+    const service = new SymbolLatticeService(graphStore, sourceCatalog);
+    await service.init({ projectPath });
+    const generationId = graphStore.getStatus(projectPath).generationId;
+    await mkdir(join(projectPath, "packages", "worker"), { recursive: true });
+    await writeFile(
+      join(projectPath, "packages", "worker", "package.json"),
+      JSON.stringify({ name: "@fixture/worker" }),
+      "utf8"
+    );
+    fullScans = 0;
+
+    const status = await service.sync({ projectPath });
+
+    // One scan plans/publishes the changed generation; the existing status
+    // read independently verifies the newly active generation.
+    expect(fullScans).toBe(2);
+    expect(status.generationId).not.toBe(generationId);
+    expect(status.operationPerformance?.phases.map((phase) => phase.name)).toEqual([
+      "load-status",
+      "freshness-preflight",
+      "scan",
+      "fast-path-check",
+      "load-generation",
+      "change-planning",
+      "resolution",
+      "persistence",
       "status-read"
     ]);
   });
@@ -10957,7 +11070,7 @@ describe("SymbolLatticeService", () => {
     });
     expect(synced.operationPerformance?.phases.map((phase) => phase.name)).toEqual([
       "load-status",
-      "scan",
+      "freshness-preflight",
       "fast-path-check",
       "status-read"
     ]);

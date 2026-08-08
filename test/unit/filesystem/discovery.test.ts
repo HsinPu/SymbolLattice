@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import {
   canonicalizeScopeRoots,
+  discoverSourceFileFingerprints,
   discoverSourceFiles,
   getSourceLanguage,
   hashSource,
@@ -31,6 +32,24 @@ afterEach(async () => {
 });
 
 describe("source discovery", () => {
+  it("verifies full source hashes without retaining source text", async () => {
+    const projectPath = await createProject();
+    await mkdir(join(projectPath, "src"), { recursive: true });
+    await writeFile(join(projectPath, "src", "entry.ts"), "export const answer = 42;\n", "utf8");
+
+    const fingerprints = await discoverSourceFileFingerprints(projectPath);
+
+    expect(fingerprints).toEqual([
+      {
+        relativePath: "src/entry.ts",
+        language: "typescript",
+        contentHash: hashSource("export const answer = 42;\n")
+      }
+    ]);
+    expect(fingerprints[0]).not.toHaveProperty("sourceText");
+    expect(fingerprints[0]).not.toHaveProperty("absolutePath");
+  });
+
   it("discovers supported source files in deterministic relative-path order", async () => {
     const projectPath = await createProject();
     await mkdir(join(projectPath, "src"), { recursive: true });

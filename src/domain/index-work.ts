@@ -30,6 +30,7 @@ export const INDEX_PERFORMANCE_PHASE_NAMES = [
   "load-prior-inputs",
   "load-status",
   "load-generation",
+  "freshness-preflight",
   "scan",
   "extraction",
   "fast-path-check",

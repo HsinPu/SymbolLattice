@@ -14,6 +14,24 @@ export interface ProjectScanOptions {
   readonly scopeRoots?: readonly string[];
 }
 
+export interface ProjectFreshnessVerificationInput {
+  readonly files: readonly IndexedFile[];
+  readonly indexInputs: ProjectIndexInputs;
+}
+
+/**
+ * A non-mutating freshness verdict based on full source hashes and the same
+ * configuration discovery used by a full scan. It deliberately carries no
+ * source text or resolver so a proven no-op remains memory-bounded.
+ */
+export interface ProjectFreshnessVerification {
+  readonly policy: "full-content-project-inputs-v1";
+  readonly outcome: "proven-unchanged" | "source-files-changed" | "project-inputs-changed";
+  readonly filesChecked: number;
+  readonly sourceHash: "sha256";
+  readonly retainedSourceText: false;
+}
+
 export type ModuleResolutionStrategy =
   | "relative"
   | "tsconfig-paths"
@@ -100,6 +118,11 @@ export interface ProjectScan {
 
 export interface SourceCatalog {
   scan(projectPath: string, options?: ProjectScanOptions): Promise<ProjectScan>;
+  /** Optional additive fast path; older/custom catalogs continue through `scan`. */
+  verifyFreshness?(
+    projectPath: string,
+    input: ProjectFreshnessVerificationInput
+  ): Promise<ProjectFreshnessVerification>;
   read(projectPath: string, relativePath: string): Promise<string>;
   isUnsafeProjectPath(projectPath: string): boolean;
 }

@@ -85,6 +85,7 @@ import type {
   GenerationHistoryBundle,
   GenerationHistoryEntry,
   GraphStore,
+  ProjectFreshnessVerification,
   ProjectScan,
   ProjectScanOptions,
   SourceCatalog,
@@ -1403,6 +1404,48 @@ export class SymbolLatticeService {
       };
       performance.end("load-generation", loadStatusStartedAt);
     }
+    const resolverChanged = statusBundle.resolverVersion !== this.activeProjectResolverVersion;
+    const extractorChanged =
+      statusBundle.files.length > 0 &&
+      statusBundle.extractorVersion !== this.activeArtifactFactsExtractorVersion;
+    const sourceSearchChanged = this.sourceSearchProjectionChanged(statusBundle.sourceSearchVersion);
+    const verifyFreshness = this.sourceCatalog.verifyFreshness;
+    if (
+      typeof readStatusBundle === "function" &&
+      typeof verifyFreshness === "function" &&
+      statusBundle.indexInputs !== null &&
+      !resolverChanged &&
+      !extractorChanged &&
+      !sourceSearchChanged
+    ) {
+      const freshnessStartedAt = performance.start();
+      let freshness: ProjectFreshnessVerification;
+      try {
+        freshness = await verifyFreshness.call(this.sourceCatalog, projectPath, {
+          files: statusBundle.files,
+          indexInputs: statusBundle.indexInputs
+        });
+      } catch (error) {
+        if (error instanceof ProjectConfigurationError) {
+          throw new SymbolLatticeError("INVALID_PROJECT_CONFIGURATION", error.message);
+        }
+        throw error;
+      }
+      performance.end("freshness-preflight", freshnessStartedAt);
+      if (freshness.outcome === "proven-unchanged") {
+        const fastPathStartedAt = performance.start();
+        performance.end("fast-path-check", fastPathStartedAt);
+        const statusStartedAt = performance.start();
+        const status = {
+          ...statusBundle.status,
+          stale: false,
+          staleReasons: []
+        };
+        performance.end("status-read", statusStartedAt);
+        return { ...status, operationPerformance: performance.finish() };
+      }
+    }
+
     const scanStartedAt = performance.start();
     const scan = await this.scanForIndex(projectPath, options, statusBundle.indexInputs);
     performance.end("scan", scanStartedAt);
@@ -1415,13 +1458,8 @@ export class SymbolLatticeService {
     const configurationChanged =
       statusBundle.indexInputs === null ||
       statusBundle.indexInputs.fingerprint !== scan.indexInputs.fingerprint;
-    const resolverChanged = statusBundle.resolverVersion !== this.activeProjectResolverVersion;
-    const extractorChanged =
-      statusBundle.files.length > 0 &&
-      statusBundle.extractorVersion !== this.activeArtifactFactsExtractorVersion;
     const astroFrameworkEvidenceChanged =
       (scan.frameworkEvidence?.astro ?? false) !== astroProjectEnabled(statusBundle.indexInputs);
-    const sourceSearchChanged = this.sourceSearchProjectionChanged(statusBundle.sourceSearchVersion);
     const isProvenNoOp =
       noSourceChange &&
       !configurationChanged &&

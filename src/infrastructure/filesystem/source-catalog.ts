@@ -2,6 +2,8 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 import type {
+  ProjectFreshnessVerification,
+  ProjectFreshnessVerificationInput,
   ProjectScan,
   ProjectScanOptions,
   SourceCatalog,
@@ -9,6 +11,7 @@ import type {
 } from "../../ports/source-catalog.js";
 import { createTypeScriptProjectModuleResolver } from "../typescript/index.js";
 import {
+  discoverSourceFileFingerprints,
   discoverSourceFiles,
   isUnsafeProjectPath,
   toProjectRelativePath
@@ -37,6 +40,26 @@ function mergeConfigurationPaths(
   }
 
   return result;
+}
+
+function freshnessFilesMatch(
+  fingerprints: readonly {
+    readonly relativePath: string;
+    readonly language: SourceDocument["language"];
+    readonly contentHash: string;
+  }[],
+  indexedFiles: ProjectFreshnessVerificationInput["files"]
+): boolean {
+  if (fingerprints.length !== indexedFiles.length) {
+    return false;
+  }
+  const expectedByPath = new Map(indexedFiles.map((file) => [file.path, file]));
+  return fingerprints.every((fingerprint) => {
+    const expected = expectedByPath.get(fingerprint.relativePath);
+    return expected !== undefined &&
+      expected.language === fingerprint.language &&
+      expected.contentHash === fingerprint.contentHash;
+  });
 }
 
 export class FileSystemSourceCatalog implements SourceCatalog {
@@ -169,6 +192,81 @@ export class FileSystemSourceCatalog implements SourceCatalog {
           };
         }
       }
+    };
+  }
+
+  public async verifyFreshness(
+    projectPath: string,
+    input: ProjectFreshnessVerificationInput
+  ): Promise<ProjectFreshnessVerification> {
+    const normalizedProjectPath = resolve(projectPath);
+    const fingerprints = await discoverSourceFileFingerprints(normalizedProjectPath, {
+      scopeRoots: input.indexInputs.scopeRoots
+    });
+    const receipt = {
+      policy: "full-content-project-inputs-v1" as const,
+      filesChecked: fingerprints.length,
+      sourceHash: "sha256" as const,
+      retainedSourceText: false as const
+    };
+    if (!freshnessFilesMatch(fingerprints, input.files)) {
+      return { ...receipt, outcome: "source-files-changed" };
+    }
+
+    // The project/configuration resolvers consume source identity and paths,
+    // not source text. Reconstruct their complete configuration input set from
+    // compact fingerprints so new workspace/module/build files are detected
+    // without retaining the project's source contents.
+    const lightweightDocuments: SourceDocument[] = fingerprints.map((fingerprint) => ({
+      absolutePath: resolve(normalizedProjectPath, ...fingerprint.relativePath.split("/")),
+      relativePath: fingerprint.relativePath,
+      language: fingerprint.language,
+      sourceText: "",
+      contentHash: fingerprint.contentHash
+    }));
+    const typeScriptResolver = createTypeScriptProjectModuleResolver({
+      projectPath: normalizedProjectPath,
+      sourceDocuments: lightweightDocuments
+    });
+    const workspaceResolver = await createWorkspaceProjectModuleResolver({
+      projectPath: normalizedProjectPath,
+      sourceDocuments: lightweightDocuments
+    });
+    const cargoWorkspaceResolver = await createCargoWorkspaceProjectModuleResolver({
+      projectPath: normalizedProjectPath,
+      sourceDocuments: lightweightDocuments
+    });
+    const goModuleResolver = await createGoModuleProjectModuleResolver({
+      projectPath: normalizedProjectPath,
+      sourceDocuments: lightweightDocuments
+    });
+    const astroProject = await detectAstroProject(normalizedProjectPath);
+    const xcodeProject = await detectXcodeProjectEvidence(
+      normalizedProjectPath,
+      lightweightDocuments
+    );
+    const jvmProject = await detectJvmProjectModuleEvidence(
+      normalizedProjectPath,
+      lightweightDocuments
+    );
+    const currentInputs = await buildProjectIndexInputs(normalizedProjectPath, {
+      scopeRoots: input.indexInputs.scopeRoots,
+      additionalConfigurationInputs: [
+        ...typeScriptResolver.configurationInputs,
+        ...workspaceResolver.configurationInputs,
+        ...cargoWorkspaceResolver.configurationInputs,
+        ...goModuleResolver.configurationInputs,
+        ...astroProject.configurationInputs,
+        ...xcodeProject.configurationInputs,
+        ...jvmProject.configurationInputs
+      ]
+    });
+
+    return {
+      ...receipt,
+      outcome: currentInputs.fingerprint === input.indexInputs.fingerprint
+        ? "proven-unchanged"
+        : "project-inputs-changed"
     };
   }
 

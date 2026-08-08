@@ -125,6 +125,13 @@ export interface SourceFile {
   readonly contentHash: string;
 }
 
+/** Full-content identity used by freshness checks without retaining source text. */
+export interface SourceFileFingerprint {
+  readonly relativePath: string;
+  readonly language: SupportedLanguage;
+  readonly contentHash: string;
+}
+
 export interface SourceDiscoveryOptions {
   /** Source directories relative to the project root. Defaults to the project root. */
   readonly scopeRoots?: readonly string[];
@@ -278,6 +285,71 @@ export async function discoverSourceFiles(
   ).filter((file): file is SourceFile => file !== null);
 
   return sourceFiles.sort((left, right) => compareProjectPaths(left.relativePath, right.relativePath));
+}
+
+/**
+ * Re-hashes every discovered source file while retaining only its compact
+ * identity. Bounded batches prevent a no-op sync from holding the whole
+ * project's source text in memory, while full SHA-256 verification avoids the
+ * same-size/same-mtime blind spot of metadata-only caches.
+ */
+export async function discoverSourceFileFingerprints(
+  projectPath: string,
+  options?: SourceDiscoveryOptions
+): Promise<readonly SourceFileFingerprint[]> {
+  const normalizedProjectPath = resolve(projectPath);
+  const paths = await discoverSourcePaths(normalizedProjectPath, options);
+  const fingerprints: SourceFileFingerprint[] = [];
+  const maximumConcurrentReads = 8;
+
+  for (let offset = 0; offset < paths.length; offset += maximumConcurrentReads) {
+    const batch = await Promise.all(
+      paths.slice(offset, offset + maximumConcurrentReads).map(async (absolutePath) => {
+        const sourceText = await readFile(absolutePath, "utf8");
+        const language = getSourceLanguage(absolutePath, sourceText);
+        if (language === null) {
+          if (isObjectiveCHeaderPath(absolutePath)) {
+            return null;
+          }
+          throw new Error(`Unsupported source file was discovered: ${absolutePath}`);
+        }
+        return {
+          relativePath: toProjectRelativePath(normalizedProjectPath, absolutePath),
+          language,
+          contentHash: hashSource(sourceText)
+        };
+      })
+    );
+    for (const fingerprint of batch) {
+      if (fingerprint !== null) {
+        fingerprints.push(fingerprint);
+      }
+    }
+  }
+
+  return fingerprints.sort((left, right) => compareProjectPaths(left.relativePath, right.relativePath));
+}
+
+async function discoverSourcePaths(
+  normalizedProjectPath: string,
+  options?: SourceDiscoveryOptions
+): Promise<readonly string[]> {
+  const scopeRoots = await canonicalizeScopeRoots(normalizedProjectPath, options?.scopeRoots);
+  const ignoreMatcher = await loadRootGitignore(normalizedProjectPath);
+  return (
+    await Promise.all(
+      scopeRoots.map(async (scopeRoot) => {
+        if (containsHardExcludedDirectory(scopeRoot)) {
+          return [];
+        }
+        return collectSourcePaths(
+          resolve(normalizedProjectPath, scopeRoot),
+          scopeRoot,
+          ignoreMatcher
+        );
+      })
+    )
+  ).flat();
 }
 
 async function collectSourcePaths(

@@ -38,8 +38,12 @@ describe("comparison CLI adapters", () => {
       operation: "sync" as const,
       phases: [
         { name: "load-status", durationMs: 4.25 },
+        { name: "freshness-preflight", durationMs: 1.5 },
         { name: "fast-path-check", durationMs: 5.75 }
-      ]
+      ],
+      totalDurationMs: 12.5,
+      measuredDurationMs: 11.5,
+      unattributedDurationMs: 1
     };
     expect(parseSymbolLatticeIndexPerformance(JSON.stringify({
       operationPerformance: noOpSyncReceipt
