@@ -32,6 +32,18 @@ describe("comparison CLI adapters", () => {
     expect(() => parseSymbolLatticeIndexPerformance(JSON.stringify({
       operationPerformance: { ...receipt, operation: "sync" }
     }), "index")).toThrow("index operation");
+
+    const noOpSyncReceipt = {
+      ...receipt,
+      operation: "sync" as const,
+      phases: [
+        { name: "load-status", durationMs: 4.25 },
+        { name: "fast-path-check", durationMs: 5.75 }
+      ]
+    };
+    expect(parseSymbolLatticeIndexPerformance(JSON.stringify({
+      operationPerformance: noOpSyncReceipt
+    }), "sync")).toEqual(noOpSyncReceipt);
   });
 
   it("normalizes exact SymbolLattice callable edges and rejects truncated evidence", () => {

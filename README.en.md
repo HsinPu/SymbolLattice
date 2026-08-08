@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.338.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher can update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.339.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher can update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## Quick start
 
@@ -70,8 +70,9 @@ Alternatively, download the version-pinned `.tgz`, SHA-256 checksum, and manifes
 - `context` places persisted source for up to eight references inside one 2,048–64,000-character envelope, allocates by input order, and returns per-reference allocation, truncation cause, emitted size, source identity, and offset map. CLI and MCP callers can set `sourceCharacterBudget`.
 - Every emitted, covered, or new fragment may carry `mcp-source-pointer-v1`: project-relative path, exact line/column range, raw-file offsets, at most five overlapping symbols, a readable `file:Lx-Ly (symbol)` label, and a SHA-256 receipt. CRLF, CR, Unicode separators, and partial fragments are rebased safely; insufficient display evidence omits only the pointer and never weakens source equality.
 - `investigate` allocates a shared 2,048–64,000-character budget to exact slices from one active generation. `adaptive` keeps one contiguous result; callers may request `prefix`, `focused`, `signature`, or `multi` for at most two independently verifiable signature and focus slices. Every segment has a stable ID, SHA-256, range, and explicit omission gap. No source is synthesized, and insufficient proof or budget produces a disclosed single-segment fallback.
-- `benchmark:comparison` evaluates SymbolLattice and a pinned CodeGraph checkout against the same ground truth and queries in isolated Git worktree copies. It reports TP/FP/FN, precision/recall/F1, unresolved rate, cold indexing, one-file sync, working-set memory, CLI latency, and four-way MCP latency. SymbolLattice additionally returns non-persisted monotonic phase receipts for scan, extraction, resolution, persistence, and related work; version drift, ambiguity, truncation, and incomplete output fail the run.
-- SQLite generation writes reuse prepared statements, while status reads avoid loading the full graph; neither changes transaction, active-generation, or evidence semantics.
+- `benchmark:comparison` evaluates SymbolLattice and a pinned CodeGraph checkout against the same ground truth and queries in isolated Git worktree copies. It reports TP/FP/FN, precision/recall/F1, unresolved rate, cold indexing, no-change sync, one-file sync, working-set memory, CLI latency, and four-way MCP latency. SymbolLattice additionally returns non-persisted monotonic phase receipts for scan, extraction, resolution, persistence, and related work; version drift, ambiguity, truncation, and incomplete output fail the run.
+- SQLite generation writes reuse prepared statements, and status reads avoid loading the complete graph; neither changes transaction, active-generation, or evidence semantics.
+- `sync` first performs a lightweight proof over content hashes, project inputs, and indexer versions. A proven no-change run neither loads complete generation facts nor publishes a generation; uncertain cases still take the full incremental path.
 - Direct calls in TypeScript local-variable initializers belong to the enclosing callable. A direct `sort(callback)` comparator becomes an exact call only for an immutable receiver initialized by an array literal; other methods named `sort` remain uninferred.
 - Scans multiple languages and common frameworks into a project-local code graph.
 - Queries symbols, indexed files, calls, routes, entry points, impact, retained generations, and diffs.

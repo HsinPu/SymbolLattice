@@ -78,6 +78,7 @@ import {
 } from "../ports/git-change-set.js";
 import type {
   ActiveGraphBundle,
+  ActiveGenerationBundle,
   ActiveStatusBundle,
   ActiveSourceDocumentsBundle,
   GenerationComparisonBundle,
@@ -1100,10 +1101,10 @@ function statusBundleFiles(
 
 function sourceChangeSet(
   sourceDocuments: readonly SourceDocument[],
-  snapshot: GraphSnapshot
+  previousFiles: readonly IndexedFile[]
 ): SourceChangeSet {
   const currentByPath = new Map(sourceDocuments.map((document) => [document.relativePath, document]));
-  const previousByPath = new Map(snapshot.files.map((file) => [file.path, file]));
+  const previousByPath = new Map(previousFiles.map((file) => [file.path, file]));
   const addedFiles: string[] = [];
   const modifiedFiles: string[] = [];
   const removedFiles: string[] = [];
@@ -1382,20 +1383,70 @@ export class SymbolLatticeService {
     // `sync` is the explicit repair/upgrade operation. Let a store complete
     // additive migrations even when the source scan later proves this is a
     // graph no-op (including the short-lived v0.4 prerelease metadata marker).
-    const loadGenerationStartedAt = performance.start();
+    const loadStatusStartedAt = performance.start();
     this.graphStore.initialize(projectPath);
-    const bundle = this.graphStore.getActiveGenerationBundle(projectPath);
-    performance.end("load-generation", loadGenerationStartedAt);
+    const readStatusBundle = this.graphStore.getActiveStatusBundle;
+    let bundle: ActiveGenerationBundle | null = null;
+    let statusBundle: ActiveStatusBundle;
+    if (typeof readStatusBundle === "function") {
+      statusBundle = readStatusBundle.call(this.graphStore, projectPath);
+      performance.end("load-status", loadStatusStartedAt);
+    } else {
+      bundle = this.graphStore.getActiveGenerationBundle(projectPath);
+      statusBundle = {
+        status: bundle.status,
+        files: bundle.snapshot.files,
+        indexInputs: bundle.indexInputs,
+        extractorVersion: bundle.extractorVersion,
+        resolverVersion: bundle.resolverVersion,
+        sourceSearchVersion: bundle.sourceSearchVersion ?? null
+      };
+      performance.end("load-generation", loadStatusStartedAt);
+    }
     const scanStartedAt = performance.start();
-    const scan = await this.scanForIndex(projectPath, options, bundle.indexInputs);
+    const scan = await this.scanForIndex(projectPath, options, statusBundle.indexInputs);
     performance.end("scan", scanStartedAt);
-    const changePlanningStartedAt = performance.start();
-    const changes = sourceChangeSet(scan.sourceDocuments, bundle.snapshot);
+    const fastPathStartedAt = performance.start();
+    const changes = sourceChangeSet(scan.sourceDocuments, statusBundle.files);
+    const noSourceChange =
+      changes.addedFiles.length === 0 &&
+      changes.modifiedFiles.length === 0 &&
+      changes.removedFiles.length === 0;
     const configurationChanged =
-      bundle.indexInputs === null || bundle.indexInputs.fingerprint !== scan.indexInputs.fingerprint;
-    const resolverChanged = bundle.resolverVersion !== this.activeProjectResolverVersion;
+      statusBundle.indexInputs === null ||
+      statusBundle.indexInputs.fingerprint !== scan.indexInputs.fingerprint;
+    const resolverChanged = statusBundle.resolverVersion !== this.activeProjectResolverVersion;
+    const extractorChanged =
+      statusBundle.files.length > 0 &&
+      statusBundle.extractorVersion !== this.activeArtifactFactsExtractorVersion;
     const astroFrameworkEvidenceChanged =
-      (scan.frameworkEvidence?.astro ?? false) !== astroProjectEnabled(bundle.indexInputs);
+      (scan.frameworkEvidence?.astro ?? false) !== astroProjectEnabled(statusBundle.indexInputs);
+    const sourceSearchChanged = this.sourceSearchProjectionChanged(statusBundle.sourceSearchVersion);
+    const isProvenNoOp =
+      noSourceChange &&
+      !configurationChanged &&
+      !resolverChanged &&
+      !extractorChanged &&
+      !astroFrameworkEvidenceChanged &&
+      !sourceSearchChanged;
+    performance.end("fast-path-check", fastPathStartedAt);
+    if (isProvenNoOp) {
+      const statusStartedAt = performance.start();
+      const status = {
+        ...statusBundle.status,
+        stale: false,
+        staleReasons: []
+      };
+      performance.end("status-read", statusStartedAt);
+      return { ...status, operationPerformance: performance.finish() };
+    }
+
+    if (bundle === null) {
+      const loadGenerationStartedAt = performance.start();
+      bundle = this.graphStore.getActiveGenerationBundle(projectPath);
+      performance.end("load-generation", loadGenerationStartedAt);
+    }
+    const changePlanningStartedAt = performance.start();
     const persistedFactsByPath = new Map(
       bundle.artifactFacts.map((facts) => [facts.filePath, facts])
     );
@@ -1431,11 +1482,6 @@ export class SymbolLatticeService {
       reExtractedFiles.push(document.relativePath);
     }
 
-    const noSourceChange =
-      changes.addedFiles.length === 0 &&
-      changes.modifiedFiles.length === 0 &&
-      changes.removedFiles.length === 0;
-    const sourceSearchChanged = this.sourceSearchProjectionChanged(bundle.sourceSearchVersion);
     if (
       noSourceChange &&
       !configurationChanged &&

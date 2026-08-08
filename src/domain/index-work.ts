@@ -28,9 +28,11 @@ export const INDEX_PERFORMANCE_POLICY = "index-performance-v1" as const;
 
 export const INDEX_PERFORMANCE_PHASE_NAMES = [
   "load-prior-inputs",
+  "load-status",
   "load-generation",
   "scan",
   "extraction",
+  "fast-path-check",
   "change-planning",
   "resolution",
   "persistence",

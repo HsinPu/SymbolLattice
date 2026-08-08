@@ -10820,6 +10820,109 @@ describe("SymbolLatticeService", () => {
     expect(status.lastIndexWork).toMatchObject({ mode: "full" });
   });
 
+  it("proves a no-op sync from the lightweight status projection before loading generation facts", async () => {
+    const projectPath = await createFixtureProject();
+    const backingStore = new SqliteGraphStore();
+    await new SymbolLatticeService(backingStore, new FileSystemSourceCatalog()).init({ projectPath });
+    const generationId = backingStore.getStatus(projectPath).generationId;
+    let activeGenerationReads = 0;
+    const graphStore: GraphStore = {
+      isInitialized: (path) => backingStore.isInitialized(path),
+      initialize: (path) => backingStore.initialize(path),
+      getStatus: (path) => backingStore.getStatus(path),
+      getSnapshot: (path) => backingStore.getSnapshot(path),
+      getArtifactFacts: (path) => backingStore.getArtifactFacts(path),
+      getIndexInputs: (path) => backingStore.getIndexInputs(path),
+      getActiveGraphBundle: (path) => backingStore.getActiveGraphBundle(path),
+      getActiveStatusBundle: (path) => backingStore.getActiveStatusBundle(path),
+      getActiveGenerationBundle: () => {
+        activeGenerationReads += 1;
+        throw new Error("no-op sync must not load the full active generation");
+      },
+      replaceProjectFacts: (input) => backingStore.replaceProjectFacts(input)
+    };
+
+    const status = await new SymbolLatticeService(
+      graphStore,
+      new FileSystemSourceCatalog()
+    ).sync({ projectPath });
+
+    expect(activeGenerationReads).toBe(0);
+    expect(status).toMatchObject({
+      generationId,
+      stale: false,
+      staleReasons: []
+    });
+    expect(status.operationPerformance?.phases.map((phase) => phase.name)).toEqual([
+      "load-status",
+      "scan",
+      "fast-path-check",
+      "status-read"
+    ]);
+  });
+
+  it("loads the full generation when the lightweight projection detects a source change", async () => {
+    const projectPath = await createFixtureProject();
+    const backingStore = new SqliteGraphStore();
+    await new SymbolLatticeService(backingStore, new FileSystemSourceCatalog()).init({ projectPath });
+    const generationId = backingStore.getStatus(projectPath).generationId;
+    await writeFile(
+      join(projectPath, "src", "math.ts"),
+      "export function add(left: number, right: number) { return left + right + 1; }\n",
+      "utf8"
+    );
+    let activeGenerationReads = 0;
+    const graphStore: GraphStore = {
+      isInitialized: (path) => backingStore.isInitialized(path),
+      initialize: (path) => backingStore.initialize(path),
+      getStatus: (path) => backingStore.getStatus(path),
+      getSnapshot: (path) => backingStore.getSnapshot(path),
+      getArtifactFacts: (path) => backingStore.getArtifactFacts(path),
+      getIndexInputs: (path) => backingStore.getIndexInputs(path),
+      getActiveGraphBundle: (path) => backingStore.getActiveGraphBundle(path),
+      getActiveStatusBundle: (path) => backingStore.getActiveStatusBundle(path),
+      getActiveGenerationBundle: (path) => {
+        activeGenerationReads += 1;
+        return backingStore.getActiveGenerationBundle(path);
+      },
+      replaceProjectFacts: (input) => backingStore.replaceProjectFacts(input)
+    };
+
+    const status = await new SymbolLatticeService(
+      graphStore,
+      new FileSystemSourceCatalog()
+    ).sync({ projectPath });
+
+    expect(activeGenerationReads).toBe(1);
+    expect(status.generationId).not.toBe(generationId);
+    expect(status.lastIndexWork).toMatchObject({
+      modifiedFiles: ["src/math.ts"],
+      reExtractedFiles: ["src/math.ts"]
+    });
+    expect(status.operationPerformance?.phases.map((phase) => phase.name)).toContain(
+      "load-generation"
+    );
+  });
+
+  it("preserves the full-generation no-op fallback for legacy graph stores", async () => {
+    const projectPath = await createFixtureProject();
+    const backingStore = new SqliteGraphStore();
+    const graphStore = createV03GraphStore(backingStore);
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+    await service.init({ projectPath });
+    const generationId = backingStore.getStatus(projectPath).generationId;
+
+    const status = await service.sync({ projectPath });
+
+    expect(status.generationId).toBe(generationId);
+    expect(status.operationPerformance?.phases.map((phase) => phase.name)).toEqual([
+      "load-generation",
+      "scan",
+      "fast-path-check",
+      "status-read"
+    ]);
+  });
+
   it("returns bounded phase timings for index and no-op sync without persisting process-local timings", async () => {
     const projectPath = await createFixtureProject();
     const graphStore = new SqliteGraphStore();
@@ -10853,9 +10956,9 @@ describe("SymbolLatticeService", () => {
       clock: "monotonic-milliseconds"
     });
     expect(synced.operationPerformance?.phases.map((phase) => phase.name)).toEqual([
-      "load-generation",
+      "load-status",
       "scan",
-      "change-planning",
+      "fast-path-check",
       "status-read"
     ]);
   });
