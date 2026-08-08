@@ -5,6 +5,7 @@ import {
   createEdgeId,
   createSymbolId,
   isCustomRouteFramework,
+  JAVA_EXHAUSTIVE_ASSIGNMENT_JOIN_MAXIMUM_BRANCHES,
   type BindingSpace,
   type CallArityEvidence,
   type CallDispatchAccessEvidence,
@@ -9334,7 +9335,37 @@ function projectJavaCallReferences(input: {
                   });
             return { branch, resolvedType, widening };
           });
-    if (assignmentTypeReference !== undefined && assignmentJoin !== undefined) {
+    const assignmentChain =
+      reference.receiverKind === "local" ? reference.receiverAssignmentChain : undefined;
+    const resolvedAssignmentChainBranches =
+      assignmentChain === undefined
+        ? []
+        : assignmentChain.branches.map((branch) => {
+            const resolvedType = resolveJavaCallType({
+              reference: branch.type,
+              declaringType,
+              sourceFilePath: reference.filePath,
+              types,
+              membershipsByFile,
+              projectEvidence: input.jvmProjectModuleEvidence
+            });
+            const widening =
+              resolvedType?.evidence.targetSymbolId === undefined ||
+              resolvedBindingType?.evidence.targetSymbolId === undefined
+                ? null
+                : javaReferenceWideningPath({
+                    sourceSymbolId: resolvedType.evidence.targetSymbolId,
+                    targetSymbolId: resolvedBindingType.evidence.targetSymbolId,
+                    heritageEdgesBySourceId
+                  });
+            return { branch, resolvedType, widening };
+          });
+    const assignmentProofCount = [
+      assignmentTypeReference,
+      assignmentJoin,
+      assignmentChain
+    ].filter((candidate) => candidate !== undefined).length;
+    if (assignmentProofCount > 1) {
       continue;
     }
     if (
@@ -9355,6 +9386,34 @@ function projectJavaCallReferences(input: {
     ) {
       continue;
     }
+    const assignmentChainHasValidShape =
+      assignmentChain !== undefined &&
+      assignmentChain.bounds.maximumBranches ===
+        JAVA_EXHAUSTIVE_ASSIGNMENT_JOIN_MAXIMUM_BRANCHES &&
+      assignmentChain.bounds.observedBranches === assignmentChain.branches.length &&
+      assignmentChain.branches.length >= 3 &&
+      assignmentChain.branches.length <= JAVA_EXHAUSTIVE_ASSIGNMENT_JOIN_MAXIMUM_BRANCHES &&
+      assignmentChain.branches.every((branch, index, branches) => {
+        const expectedBranch =
+          index === 0 ? "if" : index === branches.length - 1 ? "else" : "else-if";
+        return (
+          branch.ordinal === index &&
+          branch.branch === expectedBranch &&
+          (expectedBranch === "else"
+            ? branch.conditionRange === undefined
+            : branch.conditionRange !== undefined)
+        );
+      });
+    if (
+      assignmentChain !== undefined &&
+      (!assignmentChainHasValidShape ||
+        resolvedAssignmentChainBranches.length !== assignmentChain.branches.length ||
+        resolvedAssignmentChainBranches.some(
+          (branch) => branch.resolvedType === null || branch.widening?.state !== "matched"
+        ))
+    ) {
+      continue;
+    }
     const receiverTypeSymbolId =
       reference.receiverKind === "this"
         ? declaringType.symbol.id
@@ -9369,6 +9428,31 @@ function projectJavaCallReferences(input: {
       continue;
     }
     const receiverSelectionPath = directSuperEdge === undefined ? [] : [directSuperEdge];
+    const assignmentChainEvidenceBranches = resolvedAssignmentChainBranches.flatMap(
+      ({ branch, resolvedType, widening }) =>
+        resolvedType === null || widening?.state !== "matched"
+          ? []
+          : [
+              {
+                ordinal: branch.ordinal,
+                branch: branch.branch,
+                statementRange: branch.statementRange,
+                ...(branch.conditionRange === undefined
+                  ? {}
+                  : { conditionRange: branch.conditionRange }),
+                scopeRange: branch.scopeRange,
+                assignmentRange: branch.assignmentRange,
+                initializerRange: branch.initializerRange,
+                valueType: resolvedType.evidence,
+                compatibility:
+                  widening.edges.length === 0
+                    ? ("identity" as const)
+                    : ("reference-widening" as const),
+                hierarchyPath: widening.edges.map(javaHierarchySegmentEvidence),
+                hierarchyBounds: JAVA_REFERENCE_HIERARCHY_LIMITS
+              }
+            ]
+    );
     let receiverBinding: CallReceiverBindingEvidence | undefined;
     if (resolvedBindingType !== null) {
       if (reference.receiverKind === "type-field") {
@@ -9449,13 +9533,33 @@ function projectJavaCallReferences(input: {
         const thenJoinBranch = resolvedAssignmentJoinBranches[0];
         const elseJoinBranch = resolvedAssignmentJoinBranches[1];
         receiverBinding =
-          assignmentJoin !== undefined &&
-          thenJoinBranch?.branch.branch === "then" &&
-          thenJoinBranch.resolvedType !== null &&
-          thenJoinBranch.widening?.state === "matched" &&
-          elseJoinBranch?.branch.branch === "else" &&
-          elseJoinBranch.resolvedType !== null &&
-          elseJoinBranch.widening?.state === "matched"
+          assignmentChain !== undefined &&
+          assignmentChainEvidenceBranches.length === assignmentChain.branches.length
+            ? {
+                policy: "java-source-lexical-binding-v8",
+                kind: "local",
+                name: reference.receiverName,
+                type: resolvedBindingType.evidence,
+                typeSource: "declared-type-after-exhaustive-if-else-chain",
+                declarationRange: reference.receiverBindingRange,
+                scopeRange: reference.receiverScopeRange,
+                assignmentJoin: {
+                  policy: "java-source-if-else-chain-assignment-join-v1",
+                  statementRange: assignmentChain.statementRange,
+                  bounds: {
+                    maximumBranches: JAVA_EXHAUSTIVE_ASSIGNMENT_JOIN_MAXIMUM_BRANCHES,
+                    observedBranches: assignmentChain.branches.length
+                  },
+                  branches: assignmentChainEvidenceBranches
+                }
+              }
+            : assignmentJoin !== undefined &&
+              thenJoinBranch?.branch.branch === "then" &&
+              thenJoinBranch.resolvedType !== null &&
+              thenJoinBranch.widening?.state === "matched" &&
+              elseJoinBranch?.branch.branch === "else" &&
+              elseJoinBranch.resolvedType !== null &&
+              elseJoinBranch.widening?.state === "matched"
             ? {
                 policy: "java-source-lexical-binding-v7",
                 kind: "local",
@@ -9636,6 +9740,14 @@ function projectJavaCallReferences(input: {
           ? branch.widening.edges.map((edge) => edge.evidence?.configurationPaths ?? [])
           : []
       ),
+      ...resolvedAssignmentChainBranches.map(
+        (branch) => branch.resolvedType?.configurationPaths ?? []
+      ),
+      ...resolvedAssignmentChainBranches.flatMap((branch) =>
+        branch.widening?.state === "matched"
+          ? branch.widening.edges.map((edge) => edge.evidence?.configurationPaths ?? [])
+          : []
+      ),
       ...(fieldSelection?.ownerSelectionPath.map(
         (edge) => edge.evidence?.configurationPaths ?? []
       ) ?? []),
@@ -9652,6 +9764,17 @@ function projectJavaCallReferences(input: {
           (branch) => branch.resolvedType?.sourcePaths ?? []
         ),
         ...resolvedAssignmentJoinBranches.flatMap((branch) =>
+          branch.widening?.state === "matched"
+            ? branch.widening.edges.flatMap((edge) => [
+                edge.filePath,
+                ...(edge.evidence?.resolutionPath ?? [])
+              ])
+            : []
+        ),
+        ...resolvedAssignmentChainBranches.flatMap(
+          (branch) => branch.resolvedType?.sourcePaths ?? []
+        ),
+        ...resolvedAssignmentChainBranches.flatMap((branch) =>
           branch.widening?.state === "matched"
             ? branch.widening.edges.flatMap((edge) => [
                 edge.filePath,

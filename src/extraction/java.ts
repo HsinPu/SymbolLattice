@@ -3,6 +3,7 @@ import { parser } from "@lezer/java";
 import {
   createEdgeId,
   createSymbolId,
+  JAVA_EXHAUSTIVE_ASSIGNMENT_JOIN_MAXIMUM_BRANCHES,
   type ArtifactFacts,
   type GraphEdge,
   type JvmCallableSignatureReferenceFact,
@@ -1603,6 +1604,20 @@ function staticJavaMemberCallReferences(input: {
     ];
   }
 
+  interface ExhaustiveAssignmentChainBranchBinding extends DirectAssignmentBinding {
+    readonly ordinal: number;
+    readonly branch: "if" | "else-if" | "else";
+    readonly name: string;
+    readonly statementRange: SourceRange;
+    readonly conditionRange?: SourceRange;
+    readonly scopeRange: SourceRange;
+  }
+
+  interface ExhaustiveAssignmentChainBinding {
+    readonly statementRange: SourceRange;
+    readonly branches: readonly ExhaustiveAssignmentChainBranchBinding[];
+  }
+
   type ReceiverBinding = ReceiverBindingBase &
     (
       | { readonly kind: "parameter" | "enhanced-for" | "catch" | "lambda" }
@@ -1610,6 +1625,7 @@ function staticJavaMemberCallReferences(input: {
           readonly kind: "local";
           readonly directAssignment?: DirectAssignmentBinding;
           readonly assignmentJoin?: ExhaustiveAssignmentJoinBinding;
+          readonly assignmentChain?: ExhaustiveAssignmentChainBinding;
         }
       | {
           readonly kind: "try-resource";
@@ -1967,6 +1983,82 @@ function staticJavaMemberCallReferences(input: {
         };
   }
 
+  function exhaustiveAssignmentChain(
+    statement: JavaSyntaxNode
+  ): ExhaustiveAssignmentChainBinding | null {
+    const branches: ExhaustiveAssignmentChainBranchBinding[] = [];
+    let current = statement;
+
+    while (true) {
+      // Every remaining IfStatement requires both its own branch and one terminal else branch.
+      if (branches.length >= JAVA_EXHAUSTIVE_ASSIGNMENT_JOIN_MAXIMUM_BRANCHES - 1) {
+        return null;
+      }
+      const children = directChildren(current);
+      const condition = children[1];
+      const block = children[2];
+      const tail = children[4];
+      if (
+        children.length !== 5 ||
+        children[0]?.name !== "if" ||
+        condition?.name !== "ParenthesizedExpression" ||
+        containsJavaNode(condition, "AssignmentExpression") ||
+        block?.name !== "Block" ||
+        children[3]?.name !== "else" ||
+        (tail?.name !== "Block" && tail?.name !== "IfStatement")
+      ) {
+        return null;
+      }
+      const assignment = exhaustiveBranchAssignment(block, "then");
+      if (assignment === null) {
+        return null;
+      }
+      branches.push({
+        ordinal: branches.length,
+        branch: branches.length === 0 ? "if" : "else-if",
+        name: assignment.name,
+        statementRange: rangeFor(lineStarts, current.from, current.to),
+        conditionRange: rangeFor(lineStarts, condition.from, condition.to),
+        scopeRange: assignment.scopeRange,
+        type: assignment.type,
+        assignmentRange: assignment.assignmentRange,
+        initializerRange: assignment.initializerRange
+      });
+
+      if (tail.name === "IfStatement") {
+        current = tail;
+        continue;
+      }
+      const finalAssignment = exhaustiveBranchAssignment(tail, "else");
+      if (finalAssignment === null) {
+        return null;
+      }
+      branches.push({
+        ordinal: branches.length,
+        branch: "else",
+        name: finalAssignment.name,
+        statementRange: rangeFor(lineStarts, current.from, current.to),
+        scopeRange: finalAssignment.scopeRange,
+        type: finalAssignment.type,
+        assignmentRange: finalAssignment.assignmentRange,
+        initializerRange: finalAssignment.initializerRange
+      });
+      break;
+    }
+
+    if (
+      branches.length < 3 ||
+      branches.length > JAVA_EXHAUSTIVE_ASSIGNMENT_JOIN_MAXIMUM_BRANCHES ||
+      new Set(branches.map((branch) => branch.name)).size !== 1
+    ) {
+      return null;
+    }
+    return {
+      statementRange: rangeFor(lineStarts, statement.from, statement.to),
+      branches
+    };
+  }
+
   function visitExhaustiveIfElseAssignment(statement: JavaSyntaxNode, scope: BindingScope): void {
     // Calls in the condition and branches observe the pre-join state.
     visit(statement);
@@ -1978,6 +2070,27 @@ function staticJavaMemberCallReferences(input: {
         // Any conditional write invalidates an earlier linear or joined proof.
         scope.set(name, null);
       }
+    }
+
+    const assignmentChain = exhaustiveAssignmentChain(statement);
+    const chainName = assignmentChain?.branches[0]?.name;
+    const chainPrior = chainName === undefined ? undefined : scope.get(chainName);
+    if (
+      assignmentChain !== null &&
+      chainName !== undefined &&
+      chainPrior !== undefined &&
+      chainPrior !== null &&
+      chainPrior.kind === "unassigned-local"
+    ) {
+      scope.set(chainName, {
+        kind: "local",
+        name: chainPrior.name,
+        type: chainPrior.type,
+        declarationRange: chainPrior.declarationRange,
+        scopeRange: chainPrior.scopeRange,
+        assignmentChain
+      });
+      return;
     }
 
     const children = directChildren(statement);
@@ -2487,6 +2600,30 @@ function staticJavaMemberCallReferences(input: {
                               binding.assignmentJoin.branches[1].initializerRange
                           }
                         ]
+                      }
+                    }),
+                ...(binding.kind !== "local" || binding.assignmentChain === undefined
+                  ? {}
+                  : {
+                      receiverAssignmentChain: {
+                        statementRange: binding.assignmentChain.statementRange,
+                        bounds: {
+                          maximumBranches:
+                            JAVA_EXHAUSTIVE_ASSIGNMENT_JOIN_MAXIMUM_BRANCHES,
+                          observedBranches: binding.assignmentChain.branches.length
+                        },
+                        branches: binding.assignmentChain.branches.map((branch) => ({
+                          ordinal: branch.ordinal,
+                          branch: branch.branch,
+                          statementRange: branch.statementRange,
+                          ...(branch.conditionRange === undefined
+                            ? {}
+                            : { conditionRange: branch.conditionRange }),
+                          scopeRange: branch.scopeRange,
+                          type: branch.type,
+                          assignmentRange: branch.assignmentRange,
+                          initializerRange: branch.initializerRange
+                        }))
                       }
                     }),
                 methodName,

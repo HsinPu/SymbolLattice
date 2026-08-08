@@ -13,13 +13,16 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v224";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v225";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v113";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v114";
+
+/** Hard cap for one source-proven Java exhaustive if/else-if/else assignment join. */
+export const JAVA_EXHAUSTIVE_ASSIGNMENT_JOIN_MAXIMUM_BRANCHES = 8;
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -216,6 +219,35 @@ export type CallReceiverBindingEvidence =
                   };
                 }
               ];
+            };
+          }
+        | {
+            readonly kind: "local";
+            readonly policy: "java-source-lexical-binding-v8";
+            readonly typeSource: "declared-type-after-exhaustive-if-else-chain";
+            readonly assignmentJoin: {
+              readonly policy: "java-source-if-else-chain-assignment-join-v1";
+              readonly statementRange: SourceRange;
+              readonly bounds: {
+                readonly maximumBranches: number;
+                readonly observedBranches: number;
+              };
+              readonly branches: readonly {
+                readonly ordinal: number;
+                readonly branch: "if" | "else-if" | "else";
+                readonly statementRange: SourceRange;
+                readonly conditionRange?: SourceRange;
+                readonly scopeRange: SourceRange;
+                readonly assignmentRange: SourceRange;
+                readonly initializerRange: SourceRange;
+                readonly valueType: CallTypeValueEvidence;
+                readonly compatibility: "identity" | "reference-widening";
+                readonly hierarchyPath: readonly CallTypeHierarchySegmentEvidence[];
+                readonly hierarchyBounds: {
+                  readonly maximumDepth: number;
+                  readonly maximumVisitedTypes: number;
+                };
+              }[];
             };
           }
       ))
@@ -1373,6 +1405,24 @@ export type JavaMemberCallReferenceFact =
             readonly initializerRange: SourceRange;
           }
         ];
+      };
+      /** Present only after one bounded exhaustive if/else-if/else assignment chain. */
+      readonly receiverAssignmentChain?: {
+        readonly statementRange: SourceRange;
+        readonly bounds: {
+          readonly maximumBranches: number;
+          readonly observedBranches: number;
+        };
+        readonly branches: readonly {
+          readonly ordinal: number;
+          readonly branch: "if" | "else-if" | "else";
+          readonly statementRange: SourceRange;
+          readonly conditionRange?: SourceRange;
+          readonly scopeRange: SourceRange;
+          readonly type: JavaCallTypeReferenceFact;
+          readonly assignmentRange: SourceRange;
+          readonly initializerRange: SourceRange;
+        }[];
       };
     })
   | (JavaMemberCallReferenceBaseFact & {
