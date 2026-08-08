@@ -13,13 +13,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v230";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v231";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v119";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v120";
 
 /** Hard cap for one source-proven Java exhaustive if/else-if/else assignment join. */
 export const JAVA_EXHAUSTIVE_ASSIGNMENT_JOIN_MAXIMUM_BRANCHES = 8;
@@ -29,6 +29,9 @@ export const JAVA_EXHAUSTIVE_SWITCH_JOIN_MAXIMUM_ARMS = 8;
 
 /** Hard cap for one source-proven Java positive instanceof `&&` flow chain. */
 export const JAVA_INSTANCEOF_AND_CHAIN_MAXIMUM_OPERANDS = 8;
+
+/** Hard cap for parentheses retained around one negated Java pattern guard. */
+export const JAVA_NEGATED_PATTERN_MAXIMUM_GROUPING_DEPTH = 4;
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -151,6 +154,7 @@ interface CallReceiverBindingEvidenceBase {
     | "instanceof-and-pattern"
     | "instanceof-and-chain-pattern"
     | "instanceof-grouped-and-pattern"
+    | "instanceof-negated-early-exit-pattern"
     | "try-resource"
     | "field"
     | "this-field"
@@ -342,6 +346,21 @@ export type CallReceiverBindingEvidence =
       readonly operandCount: number;
       readonly maximumOperands: number;
     })
+  | (CallReceiverBindingEvidenceBase & {
+      readonly kind: "instanceof-negated-early-exit-pattern";
+      readonly policy: "java-source-lexical-binding-v14";
+      readonly typeSource: "instanceof-pattern";
+      readonly conditionRange: SourceRange;
+      readonly testedValueRange: SourceRange;
+      readonly negatedPatternRange: SourceRange;
+      readonly negationGroupingRanges: readonly SourceRange[];
+      readonly maximumGroupingDepth: number;
+      readonly guardStatementRange: SourceRange;
+      readonly exitBodyKind: "block" | "statement";
+      readonly exitBodyRange: SourceRange;
+      readonly abruptCompletionKind: "return" | "throw";
+      readonly abruptStatementRange: SourceRange;
+    })
   | (CallReceiverBindingEvidenceBase &
       (
         | {
@@ -464,6 +483,7 @@ export interface CallDispatchEvidence {
     | "instanceof-and-pattern"
     | "instanceof-and-chain-pattern"
     | "instanceof-grouped-and-pattern"
+    | "instanceof-negated-early-exit-pattern"
     | "try-resource"
     | "field"
     | "this-field"
@@ -1594,6 +1614,23 @@ export type JavaMemberCallReferenceFact =
       readonly receiverTrueBlockRange: SourceRange;
       readonly receiverOperandCount: number;
       readonly receiverMaximumOperands: number;
+    })
+  | (JavaMemberCallReferenceBaseFact & {
+      readonly receiverKind: "instanceof-negated-early-exit-pattern";
+      readonly receiverName: string;
+      readonly receiverType: JavaCallTypeReferenceFact;
+      readonly receiverBindingRange: SourceRange;
+      readonly receiverScopeRange: SourceRange;
+      readonly receiverConditionRange: SourceRange;
+      readonly receiverTestedValueRange: SourceRange;
+      readonly receiverNegatedPatternRange: SourceRange;
+      readonly receiverNegationGroupingRanges: readonly SourceRange[];
+      readonly receiverMaximumGroupingDepth: number;
+      readonly receiverGuardStatementRange: SourceRange;
+      readonly receiverExitBodyKind: "block" | "statement";
+      readonly receiverExitBodyRange: SourceRange;
+      readonly receiverAbruptCompletionKind: "return" | "throw";
+      readonly receiverAbruptStatementRange: SourceRange;
     })
   | (JavaMemberCallReferenceBaseFact & {
       readonly receiverKind: "try-resource";

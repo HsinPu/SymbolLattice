@@ -6,6 +6,7 @@ import {
   JAVA_EXHAUSTIVE_ASSIGNMENT_JOIN_MAXIMUM_BRANCHES,
   JAVA_EXHAUSTIVE_SWITCH_JOIN_MAXIMUM_ARMS,
   JAVA_INSTANCEOF_AND_CHAIN_MAXIMUM_OPERANDS,
+  JAVA_NEGATED_PATTERN_MAXIMUM_GROUPING_DEPTH,
   type ArtifactFacts,
   type GraphEdge,
   type JvmCallableSignatureReferenceFact,
@@ -116,7 +117,26 @@ type StaticJavaInstanceofAndPatternSyntax =
       }[];
       readonly operandCount: number;
       readonly maximumOperands: number;
-    });
+    })
+  | {
+      readonly kind: "negated-early-exit";
+      readonly name: string;
+      readonly typePath: string;
+      readonly typeRange: SourceRange;
+      readonly declarationRange: SourceRange;
+      readonly conditionRange: SourceRange;
+      readonly testedValueRange: SourceRange;
+      readonly negatedPatternRange: SourceRange;
+      readonly negationGroupingRanges: readonly SourceRange[];
+      readonly maximumGroupingDepth: number;
+      readonly guardStatementRange: SourceRange;
+      readonly exitBodyKind: "block" | "statement";
+      readonly exitBodyRange: SourceRange;
+      readonly abruptCompletionKind: "return" | "throw";
+      readonly abruptStatementRange: SourceRange;
+      readonly followingScopeRange: SourceRange;
+      readonly followingScopeOffsets: { readonly start: number; readonly end: number };
+    };
 
 interface StaticJavaInstanceofAndPatternInspection {
   readonly syntaxes: readonly StaticJavaInstanceofAndPatternSyntax[];
@@ -424,10 +444,170 @@ function normalizeJavaAndExpression(
   };
 }
 
+function unwrapJavaParenthesizedExpression(
+  node: SgNode
+): { readonly expression: SgNode; readonly groupingNodes: readonly SgNode[] } | null {
+  const groupingNodes: SgNode[] = [];
+  let expression = node;
+  while (expression.kind() === "parenthesized_expression") {
+    if (groupingNodes.length >= JAVA_NEGATED_PATTERN_MAXIMUM_GROUPING_DEPTH) {
+      return null;
+    }
+    const children = astGrepChildren(expression);
+    const nested = children[1];
+    if (
+      children.length !== 3 ||
+      children[0]?.kind() !== "(" ||
+      nested === undefined ||
+      children[2]?.kind() !== ")"
+    ) {
+      return null;
+    }
+    groupingNodes.push(expression);
+    expression = nested;
+  }
+  return { expression, groupingNodes };
+}
+
+function javaNegatedEarlyExitPatternSyntax(input: {
+  readonly extraction: JavaExtractFileFactsInput;
+  readonly statement: SgNode;
+  readonly enclosingBlock: SgNode;
+  readonly lineStarts: readonly number[];
+}): Extract<StaticJavaInstanceofAndPatternSyntax, { readonly kind: "negated-early-exit" }> | null {
+  const statementChildren = astGrepChildren(input.statement);
+  const condition = statementChildren[1];
+  const exitBody = statementChildren[2];
+  if (
+    statementChildren.length !== 3 ||
+    statementChildren[0]?.kind() !== "if" ||
+    condition?.kind() !== "parenthesized_expression" ||
+    exitBody === undefined ||
+    astGrepContainsKind(condition, "assignment_expression")
+  ) {
+    return null;
+  }
+  const conditionChildren = astGrepChildren(condition);
+  const unary = conditionChildren[1];
+  const unaryChildren = unary === undefined ? [] : astGrepChildren(unary);
+  const groupedPattern =
+    unaryChildren[1] === undefined ? null : unwrapJavaParenthesizedExpression(unaryChildren[1]);
+  const pattern = groupedPattern?.expression;
+  const patternChildren = pattern === undefined ? [] : astGrepChildren(pattern);
+  const testedValue = patternChildren[0];
+  const typeNode = patternChildren[2];
+  const definition = patternChildren[3];
+  const name = definition?.text();
+  const typePath = typeNode?.text();
+  if (
+    conditionChildren.length !== 3 ||
+    conditionChildren[0]?.kind() !== "(" ||
+    conditionChildren[2]?.kind() !== ")" ||
+    unary?.kind() !== "unary_expression" ||
+    unaryChildren.length !== 2 ||
+    unaryChildren[0]?.kind() !== "!" ||
+    groupedPattern === null ||
+    groupedPattern.groupingNodes.length < 1 ||
+    pattern?.kind() !== "instanceof_expression" ||
+    patternChildren.length !== 4 ||
+    testedValue === undefined ||
+    patternChildren[1]?.kind() !== "instanceof" ||
+    typeNode === undefined ||
+    (typeNode.kind() !== "type_identifier" && typeNode.kind() !== "scoped_type_identifier") ||
+    definition?.kind() !== "identifier" ||
+    name === undefined ||
+    !/^[A-Za-z_$][A-Za-z0-9_$]*$/u.test(name) ||
+    typePath === undefined ||
+    !/^[A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)*$/u.test(typePath)
+  ) {
+    return null;
+  }
+  const exitBodyChildren = exitBody.kind() === "block" ? astGrepChildren(exitBody) : [];
+  const blockStatements = exitBodyChildren.filter(
+    (child) => child.kind() !== "{" && child.kind() !== "}"
+  );
+  const abruptStatement = exitBody.kind() === "block" ? blockStatements.at(-1) : exitBody;
+  const abruptCompletionKind =
+    abruptStatement?.kind() === "return_statement"
+      ? "return"
+      : abruptStatement?.kind() === "throw_statement"
+        ? "throw"
+        : null;
+  if (abruptStatement === undefined || abruptCompletionKind === null) {
+    return null;
+  }
+  const conditionOffsets = condition.range();
+  const statementOffsets = input.statement.range();
+  const enclosingBlockOffsets = input.enclosingBlock.range();
+  const testedValueOffsets = testedValue.range();
+  const typeOffsets = typeNode.range();
+  const definitionOffsets = definition.range();
+  const patternOffsets = pattern.range();
+  const exitBodyOffsets = exitBody.range();
+  const abruptOffsets = abruptStatement.range();
+  return {
+    kind: "negated-early-exit",
+    name,
+    typePath,
+    typeRange: rangeFor(input.lineStarts, typeOffsets.start.index, typeOffsets.end.index),
+    declarationRange: rangeFor(
+      input.lineStarts,
+      definitionOffsets.start.index,
+      definitionOffsets.end.index
+    ),
+    conditionRange: rangeFor(
+      input.lineStarts,
+      conditionOffsets.start.index,
+      conditionOffsets.end.index
+    ),
+    testedValueRange: rangeFor(
+      input.lineStarts,
+      testedValueOffsets.start.index,
+      testedValueOffsets.end.index
+    ),
+    negatedPatternRange: rangeFor(
+      input.lineStarts,
+      patternOffsets.start.index,
+      patternOffsets.end.index
+    ),
+    negationGroupingRanges: groupedPattern.groupingNodes.map((grouping) => {
+      const offsets = grouping.range();
+      return rangeFor(input.lineStarts, offsets.start.index, offsets.end.index);
+    }),
+    maximumGroupingDepth: JAVA_NEGATED_PATTERN_MAXIMUM_GROUPING_DEPTH,
+    guardStatementRange: rangeFor(
+      input.lineStarts,
+      statementOffsets.start.index,
+      statementOffsets.end.index
+    ),
+    exitBodyKind: exitBody.kind() === "block" ? "block" : "statement",
+    exitBodyRange: rangeFor(
+      input.lineStarts,
+      exitBodyOffsets.start.index,
+      exitBodyOffsets.end.index
+    ),
+    abruptCompletionKind,
+    abruptStatementRange: rangeFor(
+      input.lineStarts,
+      abruptOffsets.start.index,
+      abruptOffsets.end.index
+    ),
+    followingScopeRange: rangeFor(
+      input.lineStarts,
+      statementOffsets.end.index,
+      enclosingBlockOffsets.end.index
+    ),
+    followingScopeOffsets: {
+      start: statementOffsets.end.index,
+      end: enclosingBlockOffsets.end.index
+    }
+  };
+}
+
 function inspectJavaInstanceofAndPatterns(
   input: JavaExtractFileFactsInput
 ): StaticJavaInstanceofAndPatternInspection {
-  if (!input.sourceText.includes("instanceof") || !input.sourceText.includes("&&")) {
+  if (!input.sourceText.includes("instanceof")) {
     return { syntaxes: [], legacyRecoveryOffsets: [] };
   }
   const root = parseAstGrep("java", input.sourceText).root();
@@ -438,8 +618,24 @@ function inspectJavaInstanceofAndPatterns(
   const syntaxes: StaticJavaInstanceofAndPatternSyntax[] = [];
   const legacyRecoveryOffsets: Array<{ readonly start: number; readonly end: number }> = [];
 
-  function visit(node: SgNode): void {
+  function visit(node: SgNode, enclosingBlock: SgNode | null): void {
     if (node.kind() === "if_statement") {
+      if (enclosingBlock !== null) {
+        const earlyExit = javaNegatedEarlyExitPatternSyntax({
+          extraction: input,
+          statement: node,
+          enclosingBlock,
+          lineStarts
+        });
+        if (earlyExit !== null) {
+          const statementOffsets = node.range();
+          legacyRecoveryOffsets.push({
+            start: statementOffsets.start.index,
+            end: statementOffsets.end.index
+          });
+          syntaxes.push(earlyExit);
+        }
+      }
       const statementChildren = astGrepChildren(node);
       const condition = statementChildren[1];
       const trueBlock = statementChildren[2];
@@ -568,12 +764,13 @@ function inspectJavaInstanceofAndPatterns(
         }
       }
     }
+    const childEnclosingBlock = node.kind() === "block" ? node : enclosingBlock;
     for (const child of astGrepChildren(node)) {
-      visit(child);
+      visit(child, childEnclosingBlock);
     }
   }
 
-  visit(root);
+  visit(root, null);
   return {
     syntaxes,
     legacyRecoveryOffsets
@@ -2027,6 +2224,19 @@ function staticJavaMemberCallReferences(input: {
           readonly maximumOperands: number;
         }
       | {
+          readonly kind: "instanceof-negated-early-exit-pattern";
+          readonly conditionRange: SourceRange;
+          readonly testedValueRange: SourceRange;
+          readonly negatedPatternRange: SourceRange;
+          readonly negationGroupingRanges: readonly SourceRange[];
+          readonly maximumGroupingDepth: number;
+          readonly guardStatementRange: SourceRange;
+          readonly exitBodyKind: "block" | "statement";
+          readonly exitBodyRange: SourceRange;
+          readonly abruptCompletionKind: "return" | "throw";
+          readonly abruptStatementRange: SourceRange;
+        }
+      | {
           readonly kind: "local";
           readonly directAssignment?: DirectAssignmentBinding;
           readonly assignmentJoin?: ExhaustiveAssignmentJoinBinding;
@@ -2113,6 +2323,19 @@ function staticJavaMemberCallReferences(input: {
       if (syntax.name !== name) {
         continue;
       }
+      if (syntax.kind === "negated-early-exit") {
+        if (
+          syntax.followingScopeOffsets.start <= offset &&
+          offset < syntax.followingScopeOffsets.end
+        ) {
+          activePatterns.push({
+            syntax,
+            activeOperandRange: null,
+            activeOperandOrdinal: null
+          });
+        }
+        continue;
+      }
       if (syntax.kind === "single") {
         if (
           syntax.rightOperandOffsets.start <= offset &&
@@ -2159,7 +2382,10 @@ function staticJavaMemberCallReferences(input: {
     const qualifiedTypePath = typeSegments.length > 1 ? pattern.typePath : undefined;
     const importedTypePath =
       qualifiedTypePath === undefined ? input.imports.get(referenceName) : undefined;
-    const scopeRange = activePattern.activeOperandRange ?? pattern.trueBlockRange;
+    const scopeRange =
+      pattern.kind === "negated-early-exit"
+        ? pattern.followingScopeRange
+        : activePattern.activeOperandRange ?? pattern.trueBlockRange;
     const bindingBase: ReceiverBindingBase & {
       readonly conditionRange: SourceRange;
       readonly testedValueRange: SourceRange;
@@ -2178,6 +2404,20 @@ function staticJavaMemberCallReferences(input: {
       conditionRange: pattern.conditionRange,
       testedValueRange: pattern.testedValueRange
     };
+    if (pattern.kind === "negated-early-exit") {
+      return {
+        ...bindingBase,
+        kind: "instanceof-negated-early-exit-pattern",
+        negatedPatternRange: pattern.negatedPatternRange,
+        negationGroupingRanges: pattern.negationGroupingRanges,
+        maximumGroupingDepth: pattern.maximumGroupingDepth,
+        guardStatementRange: pattern.guardStatementRange,
+        exitBodyKind: pattern.exitBodyKind,
+        exitBodyRange: pattern.exitBodyRange,
+        abruptCompletionKind: pattern.abruptCompletionKind,
+        abruptStatementRange: pattern.abruptStatementRange
+      };
+    }
     if (pattern.kind === "single") {
       return {
         ...bindingBase,
@@ -3357,6 +3597,31 @@ function staticJavaMemberCallReferences(input: {
                 receiverTrueBlockRange: binding.trueBlockRange,
                 receiverOperandCount: binding.operandCount,
                 receiverMaximumOperands: binding.maximumOperands,
+                methodName,
+                argumentCount: arguments_.length,
+                argumentTypes,
+                range: rangeFor(lineStarts, methodNode.from, methodNode.to)
+              });
+            } else if (binding.kind === "instanceof-negated-early-exit-pattern") {
+              references.push({
+                sourceId: input.callableSymbol.id,
+                declaringTypeId: input.declaringType.id,
+                filePath: input.extraction.filePath,
+                receiverKind: binding.kind,
+                receiverName,
+                receiverType: binding.type,
+                receiverBindingRange: binding.declarationRange,
+                receiverScopeRange: binding.scopeRange,
+                receiverConditionRange: binding.conditionRange,
+                receiverTestedValueRange: binding.testedValueRange,
+                receiverNegatedPatternRange: binding.negatedPatternRange,
+                receiverNegationGroupingRanges: binding.negationGroupingRanges,
+                receiverMaximumGroupingDepth: binding.maximumGroupingDepth,
+                receiverGuardStatementRange: binding.guardStatementRange,
+                receiverExitBodyKind: binding.exitBodyKind,
+                receiverExitBodyRange: binding.exitBodyRange,
+                receiverAbruptCompletionKind: binding.abruptCompletionKind,
+                receiverAbruptStatementRange: binding.abruptStatementRange,
                 methodName,
                 argumentCount: arguments_.length,
                 argumentTypes,

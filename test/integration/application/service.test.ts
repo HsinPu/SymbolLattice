@@ -4172,6 +4172,230 @@ describe("SymbolLatticeService", () => {
     expect(callAt("src/app/GroupedPatternMiddle.java", 6, "execute")).toBeUndefined();
   });
 
+  it("binds a Java negated instanceof pattern after a proven early exit", async () => {
+    const projectPath = await createInlineProject({
+      "src/api/Service.java": [
+        "package api;",
+        "public class Service { public void execute(String value) {} }"
+      ].join("\n"),
+      "src/app/EarlyReturn.java": [
+        "package app;",
+        "import api.Service;",
+        "public class EarlyReturn {",
+        "  public void run(Object value) {",
+        "    if (!(value instanceof Service service)) {",
+        "      audit();",
+        "      return;",
+        "    }",
+        "    service.execute(\"return\");",
+        "    {",
+        "      service.execute(\"nested\");",
+        "    }",
+        "  }",
+        "  private void audit() {}",
+        "}"
+      ].join("\n"),
+      "src/app/DirectThrow.java": [
+        "package app;",
+        "import api.Service;",
+        "public class DirectThrow {",
+        "  public void run(Object value) {",
+        "    if (!(value instanceof Service service))",
+        "      throw new IllegalArgumentException();",
+        "    service.execute(\"throw\");",
+        "  }",
+        "}"
+      ].join("\n"),
+      "src/app/RepeatedGrouping.java": [
+        "package app;",
+        "import api.Service;",
+        "public class RepeatedGrouping {",
+        "  public void run(Object value) {",
+        "    if (!((((value instanceof Service service))))) { return; }",
+        "    service.execute(\"grouped\");",
+        "  }",
+        "}"
+      ].join("\n"),
+      "src/app/GroupingOverBound.java": [
+        "package app;",
+        "import api.Service;",
+        "public class GroupingOverBound {",
+        "  public void run(Object value) {",
+        "    if (!(((((value instanceof Service service)))))) { return; }",
+        "    service.execute(\"over-bound\");",
+        "  }",
+        "}"
+      ].join("\n"),
+      "src/app/NestedGuard.java": [
+        "package app;",
+        "import api.Service;",
+        "public class NestedGuard {",
+        "  public void run(boolean flag, Object value) {",
+        "    if (flag) {",
+        "      if (!(value instanceof Service service)) { return; }",
+        "      service.execute(\"inside\");",
+        "    }",
+        "    service.execute(\"outside\");",
+        "  }",
+        "}"
+      ].join("\n"),
+      "src/app/FallsThrough.java": [
+        "package app;",
+        "import api.Service;",
+        "public class FallsThrough {",
+        "  public void run(Object value) {",
+        "    if (!(value instanceof Service service)) { audit(); }",
+        "    service.execute(\"falls-through\");",
+        "  }",
+        "  private void audit() {}",
+        "}"
+      ].join("\n"),
+      "src/app/ConditionalExit.java": [
+        "package app;",
+        "import api.Service;",
+        "public class ConditionalExit {",
+        "  public void run(boolean flag, Object value) {",
+        "    if (!(value instanceof Service service)) { if (flag) return; }",
+        "    service.execute(\"conditional\");",
+        "  }",
+        "}"
+      ].join("\n"),
+      "src/app/ElsePresent.java": [
+        "package app;",
+        "import api.Service;",
+        "public class ElsePresent {",
+        "  public void run(Object value) {",
+        "    if (!(value instanceof Service service)) { return; } else {",
+        "      service.execute(\"else\");",
+        "    }",
+        "    service.execute(\"after-else\");",
+        "  }",
+        "}"
+      ].join("\n"),
+      "src/app/ExistingBinding.java": [
+        "package app;",
+        "import api.Service;",
+        "public class ExistingBinding {",
+        "  public void run(Object value, Service service) {",
+        "    if (!(value instanceof Service service)) { return; }",
+        "    service.execute(\"existing\");",
+        "  }",
+        "}"
+      ].join("\n"),
+      "src/app/GenericPattern.java": [
+        "package app;",
+        "import api.Service;",
+        "public class GenericPattern {",
+        "  public void run(Object value) {",
+        "    if (!(value instanceof Service<String> service)) { return; }",
+        "    service.execute(\"generic\");",
+        "  }",
+        "}"
+      ].join("\n"),
+      "src/app/WrongPolarity.java": [
+        "package app;",
+        "import api.Service;",
+        "public class WrongPolarity {",
+        "  public void run(Object value) {",
+        "    if (value instanceof Service service) { return; }",
+        "    service.execute(\"wrong-polarity\");",
+        "  }",
+        "}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+
+    const snapshot = graphStore.getSnapshot(projectPath);
+    const calls = snapshot.edges.filter((edge) => edge.kind === "calls");
+    const callAt = (filePath: string, line: number, name = "execute") =>
+      calls.find(
+        (edge) =>
+          edge.filePath === filePath &&
+          edge.range.start.line === line &&
+          edge.referenceName === name
+      );
+    const serviceId = snapshot.symbols.find(
+      (candidate) => candidate.qualifiedName === "src/api/Service.java#Service"
+    )?.id;
+    const returnCall = callAt("src/app/EarlyReturn.java", 9);
+    expect(returnCall?.targetId).toBe(
+      snapshot.symbols.find(
+        (candidate) => candidate.qualifiedName === "src/api/Service.java#Service.execute"
+      )?.id
+    );
+    expect(returnCall?.evidence?.callDispatch).toEqual(
+      expect.objectContaining({
+        invocationKind: "instanceof-negated-early-exit-pattern",
+        receiverTypeSymbolId: serviceId,
+        receiverBinding: expect.objectContaining({
+          policy: "java-source-lexical-binding-v14",
+          kind: "instanceof-negated-early-exit-pattern",
+          abruptCompletionKind: "return",
+          exitBodyKind: "block",
+          guardStatementRange: expect.objectContaining({
+            start: expect.objectContaining({ line: 5 })
+          }),
+          conditionRange: expect.objectContaining({
+            start: expect.objectContaining({ line: 5 })
+          }),
+          negatedPatternRange: expect.objectContaining({
+            start: expect.objectContaining({ line: 5 })
+          }),
+          negationGroupingRanges: [
+            expect.objectContaining({ start: expect.objectContaining({ line: 5 }) })
+          ],
+          exitBodyRange: expect.objectContaining({
+            start: expect.objectContaining({ line: 5 })
+          }),
+          abruptStatementRange: expect.objectContaining({
+            start: expect.objectContaining({ line: 7 })
+          }),
+          scopeRange: expect.objectContaining({
+            start: expect.objectContaining({ line: 8 })
+          })
+        })
+      })
+    );
+    expect(callAt("src/app/EarlyReturn.java", 11)?.targetId).toBe(returnCall?.targetId);
+    const throwCall = callAt("src/app/DirectThrow.java", 7);
+    expect(throwCall?.targetId).toBe(returnCall?.targetId);
+    expect(throwCall?.evidence?.callDispatch?.receiverBinding).toEqual(
+      expect.objectContaining({
+        policy: "java-source-lexical-binding-v14",
+        abruptCompletionKind: "throw",
+        exitBodyKind: "statement",
+        abruptStatementRange: expect.objectContaining({
+          start: expect.objectContaining({ line: 6 })
+        })
+      })
+    );
+    expect(callAt("src/app/RepeatedGrouping.java", 6)?.evidence?.callDispatch?.receiverBinding).toEqual(
+      expect.objectContaining({
+        policy: "java-source-lexical-binding-v14",
+        maximumGroupingDepth: 4,
+        negationGroupingRanges: [
+          expect.objectContaining({ start: expect.objectContaining({ line: 5 }) }),
+          expect.objectContaining({ start: expect.objectContaining({ line: 5 }) }),
+          expect.objectContaining({ start: expect.objectContaining({ line: 5 }) }),
+          expect.objectContaining({ start: expect.objectContaining({ line: 5 }) })
+        ]
+      })
+    );
+    expect(callAt("src/app/GroupingOverBound.java", 6)).toBeUndefined();
+    expect(callAt("src/app/NestedGuard.java", 7)?.targetId).toBe(returnCall?.targetId);
+    expect(callAt("src/app/NestedGuard.java", 9)).toBeUndefined();
+    expect(callAt("src/app/FallsThrough.java", 6)).toBeUndefined();
+    expect(callAt("src/app/ConditionalExit.java", 6)).toBeUndefined();
+    expect(callAt("src/app/ElsePresent.java", 6)).toBeUndefined();
+    expect(callAt("src/app/ElsePresent.java", 8)).toBeUndefined();
+    expect(callAt("src/app/ExistingBinding.java", 6)).toBeUndefined();
+    expect(callAt("src/app/GenericPattern.java", 6)).toBeUndefined();
+    expect(callAt("src/app/WrongPolarity.java", 6)).toBeUndefined();
+  });
+
   it("resolves Java enhanced-for, catch, and explicit lambda bindings within their exact scopes", async () => {
     const projectPath = await createInlineProject({
       "src/api/Service.java": [

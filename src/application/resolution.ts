@@ -7895,6 +7895,7 @@ function javaMethodSetPlan(input: {
     | "instanceof-and-pattern"
     | "instanceof-and-chain-pattern"
     | "instanceof-grouped-and-pattern"
+    | "instanceof-negated-early-exit-pattern"
     | "try-resource"
     | "field"
     | "this-field"
@@ -9276,6 +9277,7 @@ function projectJavaCallReferences(input: {
             reference.receiverKind === "instanceof-and-pattern" ||
             reference.receiverKind === "instanceof-and-chain-pattern" ||
             reference.receiverKind === "instanceof-grouped-and-pattern" ||
+            reference.receiverKind === "instanceof-negated-early-exit-pattern" ||
             reference.receiverKind === "try-resource"
           ? reference.receiverType
           : null;
@@ -9822,6 +9824,26 @@ function projectJavaCallReferences(input: {
           trueBlockRange: reference.receiverTrueBlockRange,
           operandCount: reference.receiverOperandCount,
           maximumOperands: reference.receiverMaximumOperands
+        };
+      } else if (reference.receiverKind === "instanceof-negated-early-exit-pattern") {
+        receiverBinding = {
+          policy: "java-source-lexical-binding-v14",
+          kind: "instanceof-negated-early-exit-pattern",
+          name: reference.receiverName,
+          type: resolvedBindingType.evidence,
+          typeSource: "instanceof-pattern",
+          declarationRange: reference.receiverBindingRange,
+          scopeRange: reference.receiverScopeRange,
+          conditionRange: reference.receiverConditionRange,
+          testedValueRange: reference.receiverTestedValueRange,
+          negatedPatternRange: reference.receiverNegatedPatternRange,
+          negationGroupingRanges: reference.receiverNegationGroupingRanges,
+          maximumGroupingDepth: reference.receiverMaximumGroupingDepth,
+          guardStatementRange: reference.receiverGuardStatementRange,
+          exitBodyKind: reference.receiverExitBodyKind,
+          exitBodyRange: reference.receiverExitBodyRange,
+          abruptCompletionKind: reference.receiverAbruptCompletionKind,
+          abruptStatementRange: reference.receiverAbruptStatementRange
         };
       } else if (reference.receiverKind === "try-resource") {
         receiverBinding =
