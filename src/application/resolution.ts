@@ -9309,12 +9309,49 @@ function projectJavaCallReferences(input: {
             targetSymbolId: resolvedBindingType.evidence.targetSymbolId,
             heritageEdgesBySourceId
           });
+    const assignmentJoin =
+      reference.receiverKind === "local" ? reference.receiverAssignmentJoin : undefined;
+    const resolvedAssignmentJoinBranches =
+      assignmentJoin === undefined
+        ? []
+        : assignmentJoin.branches.map((branch) => {
+            const resolvedType = resolveJavaCallType({
+              reference: branch.type,
+              declaringType,
+              sourceFilePath: reference.filePath,
+              types,
+              membershipsByFile,
+              projectEvidence: input.jvmProjectModuleEvidence
+            });
+            const widening =
+              resolvedType?.evidence.targetSymbolId === undefined ||
+              resolvedBindingType?.evidence.targetSymbolId === undefined
+                ? null
+                : javaReferenceWideningPath({
+                    sourceSymbolId: resolvedType.evidence.targetSymbolId,
+                    targetSymbolId: resolvedBindingType.evidence.targetSymbolId,
+                    heritageEdgesBySourceId
+                  });
+            return { branch, resolvedType, widening };
+          });
+    if (assignmentTypeReference !== undefined && assignmentJoin !== undefined) {
+      continue;
+    }
     if (
       assignmentTypeReference !== undefined &&
       (assignmentRange === undefined ||
         assignmentInitializerRange === undefined ||
         resolvedAssignmentType === null ||
         assignmentWidening?.state !== "matched")
+    ) {
+      continue;
+    }
+    if (
+      assignmentJoin !== undefined &&
+      (resolvedAssignmentJoinBranches.length !== 2 ||
+        resolvedAssignmentJoinBranches.some(
+          (branch) => branch.resolvedType === null || branch.widening?.state !== "matched"
+        ))
     ) {
       continue;
     }
@@ -9409,8 +9446,61 @@ function projectJavaCallReferences(input: {
           scopeRange: reference.receiverScopeRange
         };
       } else if (reference.receiverKind === "local") {
+        const thenJoinBranch = resolvedAssignmentJoinBranches[0];
+        const elseJoinBranch = resolvedAssignmentJoinBranches[1];
         receiverBinding =
-          assignmentTypeReference !== undefined &&
+          assignmentJoin !== undefined &&
+          thenJoinBranch?.branch.branch === "then" &&
+          thenJoinBranch.resolvedType !== null &&
+          thenJoinBranch.widening?.state === "matched" &&
+          elseJoinBranch?.branch.branch === "else" &&
+          elseJoinBranch.resolvedType !== null &&
+          elseJoinBranch.widening?.state === "matched"
+            ? {
+                policy: "java-source-lexical-binding-v7",
+                kind: "local",
+                name: reference.receiverName,
+                type: resolvedBindingType.evidence,
+                typeSource: "declared-type-after-exhaustive-if-else",
+                declarationRange: reference.receiverBindingRange,
+                scopeRange: reference.receiverScopeRange,
+                assignmentJoin: {
+                  policy: "java-source-if-else-assignment-join-v1",
+                  statementRange: assignmentJoin.statementRange,
+                  conditionRange: assignmentJoin.conditionRange,
+                  branches: [
+                    {
+                      branch: "then",
+                      scopeRange: thenJoinBranch.branch.scopeRange,
+                      assignmentRange: thenJoinBranch.branch.assignmentRange,
+                      initializerRange: thenJoinBranch.branch.initializerRange,
+                      valueType: thenJoinBranch.resolvedType.evidence,
+                      compatibility:
+                        thenJoinBranch.widening.edges.length === 0
+                          ? "identity"
+                          : "reference-widening",
+                      hierarchyPath:
+                        thenJoinBranch.widening.edges.map(javaHierarchySegmentEvidence),
+                      hierarchyBounds: JAVA_REFERENCE_HIERARCHY_LIMITS
+                    },
+                    {
+                      branch: "else",
+                      scopeRange: elseJoinBranch.branch.scopeRange,
+                      assignmentRange: elseJoinBranch.branch.assignmentRange,
+                      initializerRange: elseJoinBranch.branch.initializerRange,
+                      valueType: elseJoinBranch.resolvedType.evidence,
+                      compatibility:
+                        elseJoinBranch.widening.edges.length === 0
+                          ? "identity"
+                          : "reference-widening",
+                      hierarchyPath:
+                        elseJoinBranch.widening.edges.map(javaHierarchySegmentEvidence),
+                      hierarchyBounds: JAVA_REFERENCE_HIERARCHY_LIMITS
+                    }
+                  ]
+                }
+              }
+            : assignmentTypeReference !== undefined &&
           assignmentRange !== undefined &&
           assignmentInitializerRange !== undefined &&
           resolvedAssignmentType !== null &&
@@ -9538,6 +9628,14 @@ function projectJavaCallReferences(input: {
     const configurationPaths = uniqueConfigurationPaths([
       resolvedOwnerType?.configurationPaths ?? [],
       resolvedBindingType?.configurationPaths ?? [],
+      ...resolvedAssignmentJoinBranches.map(
+        (branch) => branch.resolvedType?.configurationPaths ?? []
+      ),
+      ...resolvedAssignmentJoinBranches.flatMap((branch) =>
+        branch.widening?.state === "matched"
+          ? branch.widening.edges.map((edge) => edge.evidence?.configurationPaths ?? [])
+          : []
+      ),
       ...(fieldSelection?.ownerSelectionPath.map(
         (edge) => edge.evidence?.configurationPaths ?? []
       ) ?? []),
@@ -9550,6 +9648,17 @@ function projectJavaCallReferences(input: {
         method.filePath,
         ...(resolvedOwnerType?.sourcePaths ?? []),
         ...(resolvedBindingType?.sourcePaths ?? []),
+        ...resolvedAssignmentJoinBranches.flatMap(
+          (branch) => branch.resolvedType?.sourcePaths ?? []
+        ),
+        ...resolvedAssignmentJoinBranches.flatMap((branch) =>
+          branch.widening?.state === "matched"
+            ? branch.widening.edges.flatMap((edge) => [
+                edge.filePath,
+                ...(edge.evidence?.resolutionPath ?? [])
+              ])
+            : []
+        ),
         ...(fieldSelection?.ownerSelectionPath.flatMap((edge) => [
           edge.filePath,
           ...(edge.evidence?.resolutionPath ?? [])

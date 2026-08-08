@@ -3243,6 +3243,13 @@ describe("SymbolLatticeService", () => {
         "    reassigned.execute(\"before-reassignment\");",
         "    reassigned = new Derived();",
         "    reassigned.execute(\"after-reassignment\");",
+        "    Service conditionalReassigned;",
+        "    conditionalReassigned = new Service();",
+        "    if (flag) { conditionalReassigned = new Derived(); }",
+        "    conditionalReassigned.execute(\"after-conditional-reassignment\");",
+        "    Service chained;",
+        "    if (flag) { chained = new Service(); } else if (!flag) { chained = new Derived(); } else { chained = new Service(); }",
+        "    chained.execute(\"else-if\");",
         "  }",
         "}"
       ].join("\n")
@@ -3302,6 +3309,100 @@ describe("SymbolLatticeService", () => {
     expect(callAt(19)).toBeUndefined();
     expect(callAt(22)?.targetId).toBe(symbolId("src/api/Service.java#Service.execute"));
     expect(callAt(24)).toBeUndefined();
+  });
+
+  it("joins uninitialized Java locals only when both exact if-else branches assign", async () => {
+    const projectPath = await createInlineProject({
+      "src/api/Service.java": [
+        "package api;",
+        "public class Service { public void execute(String value) {} }"
+      ].join("\n"),
+      "src/api/Derived.java": [
+        "package api;",
+        "public class Derived extends Service {}"
+      ].join("\n"),
+      "src/api/Other.java": [
+        "package api;",
+        "public class Other { public void execute(String value) {} }"
+      ].join("\n"),
+      "src/app/Runner.java": [
+        "package app;",
+        "import api.Service;",
+        "import api.Derived;",
+        "import api.Other;",
+        "public class Runner {",
+        "  public void run(boolean flag) {",
+        "    Service joined;",
+        "    if (flag) { joined = new Service(); } else { joined = new Derived(); }",
+        "    joined.execute(\"joined\");",
+        "    Service missing;",
+        "    if (flag) { missing = new Service(); }",
+        "    missing.execute(\"missing\");",
+        "    Service mismatch;",
+        "    if (flag) { mismatch = new Service(); } else { mismatch = new Other(); }",
+        "    mismatch.execute(\"mismatch\");",
+        "    Service reassigned;",
+        "    if (flag) { reassigned = new Service(); } else { reassigned = new Service(); }",
+        "    reassigned.execute(\"before-reassignment\");",
+        "    reassigned = new Derived();",
+        "    reassigned.execute(\"after-reassignment\");",
+        "  }",
+        "}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+
+    const snapshot = graphStore.getSnapshot(projectPath);
+    const calls = snapshot.edges.filter(
+      (edge) => edge.kind === "calls" && edge.filePath === "src/app/Runner.java"
+    );
+    const callAt = (line: number) => calls.find((edge) => edge.range.start.line === line);
+    const symbolId = (qualifiedName: string) =>
+      snapshot.symbols.find((candidate) => candidate.qualifiedName === qualifiedName)?.id;
+    const serviceId = symbolId("src/api/Service.java#Service");
+    const derivedId = symbolId("src/api/Derived.java#Derived");
+
+    expect(callAt(9)?.targetId).toBe(symbolId("src/api/Service.java#Service.execute"));
+    expect(callAt(9)?.evidence?.callDispatch).toEqual(
+      expect.objectContaining({
+        invocationKind: "local",
+        receiverTypeSymbolId: serviceId,
+        receiverBinding: expect.objectContaining({
+          policy: "java-source-lexical-binding-v7",
+          kind: "local",
+          name: "joined",
+          typeSource: "declared-type-after-exhaustive-if-else",
+          assignmentJoin: expect.objectContaining({
+            policy: "java-source-if-else-assignment-join-v1",
+            branches: [
+              expect.objectContaining({
+                branch: "then",
+                compatibility: "identity",
+                valueType: expect.objectContaining({ targetSymbolId: serviceId }),
+                hierarchyPath: []
+              }),
+              expect.objectContaining({
+                branch: "else",
+                compatibility: "reference-widening",
+                valueType: expect.objectContaining({ targetSymbolId: derivedId }),
+                hierarchyPath: [
+                  expect.objectContaining({ sourceSymbolId: derivedId, targetSymbolId: serviceId })
+                ]
+              })
+            ]
+          })
+        })
+      })
+    );
+    expect(callAt(12)).toBeUndefined();
+    expect(callAt(15)).toBeUndefined();
+    expect(callAt(18)?.targetId).toBe(symbolId("src/api/Service.java#Service.execute"));
+    expect(callAt(20)).toBeUndefined();
+    expect(callAt(24)).toBeUndefined();
+    expect(callAt(27)).toBeUndefined();
   });
 
   it("resolves Java enhanced-for, catch, and explicit lambda bindings within their exact scopes", async () => {

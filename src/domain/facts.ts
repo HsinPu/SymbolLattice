@@ -13,13 +13,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v223";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v224";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v112";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v113";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -178,6 +178,44 @@ export type CallReceiverBindingEvidence =
                 readonly maximumDepth: number;
                 readonly maximumVisitedTypes: number;
               };
+            };
+          }
+        | {
+            readonly kind: "local";
+            readonly policy: "java-source-lexical-binding-v7";
+            readonly typeSource: "declared-type-after-exhaustive-if-else";
+            readonly assignmentJoin: {
+              readonly policy: "java-source-if-else-assignment-join-v1";
+              readonly statementRange: SourceRange;
+              readonly conditionRange: SourceRange;
+              readonly branches: readonly [
+                {
+                  readonly branch: "then";
+                  readonly scopeRange: SourceRange;
+                  readonly assignmentRange: SourceRange;
+                  readonly initializerRange: SourceRange;
+                  readonly valueType: CallTypeValueEvidence;
+                  readonly compatibility: "identity" | "reference-widening";
+                  readonly hierarchyPath: readonly CallTypeHierarchySegmentEvidence[];
+                  readonly hierarchyBounds: {
+                    readonly maximumDepth: number;
+                    readonly maximumVisitedTypes: number;
+                  };
+                },
+                {
+                  readonly branch: "else";
+                  readonly scopeRange: SourceRange;
+                  readonly assignmentRange: SourceRange;
+                  readonly initializerRange: SourceRange;
+                  readonly valueType: CallTypeValueEvidence;
+                  readonly compatibility: "identity" | "reference-widening";
+                  readonly hierarchyPath: readonly CallTypeHierarchySegmentEvidence[];
+                  readonly hierarchyBounds: {
+                    readonly maximumDepth: number;
+                    readonly maximumVisitedTypes: number;
+                  };
+                }
+              ];
             };
           }
       ))
@@ -1315,6 +1353,27 @@ export type JavaMemberCallReferenceFact =
       readonly receiverAssignmentType?: JavaCallTypeReferenceFact;
       readonly receiverAssignmentRange?: SourceRange;
       readonly receiverAssignmentInitializerRange?: SourceRange;
+      /** Present only after one exhaustive, exact two-block if/else assignment join. */
+      readonly receiverAssignmentJoin?: {
+        readonly statementRange: SourceRange;
+        readonly conditionRange: SourceRange;
+        readonly branches: readonly [
+          {
+            readonly branch: "then";
+            readonly scopeRange: SourceRange;
+            readonly type: JavaCallTypeReferenceFact;
+            readonly assignmentRange: SourceRange;
+            readonly initializerRange: SourceRange;
+          },
+          {
+            readonly branch: "else";
+            readonly scopeRange: SourceRange;
+            readonly type: JavaCallTypeReferenceFact;
+            readonly assignmentRange: SourceRange;
+            readonly initializerRange: SourceRange;
+          }
+        ];
+      };
     })
   | (JavaMemberCallReferenceBaseFact & {
       readonly receiverKind: "enhanced-for" | "catch" | "lambda";

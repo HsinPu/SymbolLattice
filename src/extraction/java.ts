@@ -1588,10 +1588,29 @@ function staticJavaMemberCallReferences(input: {
     readonly initializerRange: SourceRange;
   }
 
+  interface ExhaustiveAssignmentBranchBinding extends DirectAssignmentBinding {
+    readonly branch: "then" | "else";
+    readonly name: string;
+    readonly scopeRange: SourceRange;
+  }
+
+  interface ExhaustiveAssignmentJoinBinding {
+    readonly statementRange: SourceRange;
+    readonly conditionRange: SourceRange;
+    readonly branches: readonly [
+      ExhaustiveAssignmentBranchBinding,
+      ExhaustiveAssignmentBranchBinding
+    ];
+  }
+
   type ReceiverBinding = ReceiverBindingBase &
     (
       | { readonly kind: "parameter" | "enhanced-for" | "catch" | "lambda" }
-      | { readonly kind: "local"; readonly directAssignment?: DirectAssignmentBinding }
+      | {
+          readonly kind: "local";
+          readonly directAssignment?: DirectAssignmentBinding;
+          readonly assignmentJoin?: ExhaustiveAssignmentJoinBinding;
+        }
       | {
           readonly kind: "try-resource";
           readonly resourceOrdinal: number;
@@ -1830,6 +1849,176 @@ function staticJavaMemberCallReferences(input: {
         type: assignmentType,
         assignmentRange: rangeFor(lineStarts, assignment.from, assignment.to),
         initializerRange: rangeFor(lineStarts, initializer.from, initializer.to)
+      }
+    });
+  }
+
+  function directObjectCreationAssignment(
+    statement: JavaSyntaxNode
+  ):
+    | {
+        readonly name: string;
+        readonly type: JavaCallTypeReferenceFact;
+        readonly assignmentRange: SourceRange;
+        readonly initializerRange: SourceRange;
+      }
+    | null {
+    const assignments = directChildren(statement).filter(
+      (child) => child.name === "AssignmentExpression"
+    );
+    const assignment = assignments[0];
+    const children = assignment === undefined ? [] : directChildren(assignment);
+    const identifier = children[0];
+    const assignOp = children[1];
+    const initializer = children[2];
+    if (
+      assignments.length !== 1 ||
+      assignment === undefined ||
+      children.length !== 3 ||
+      identifier?.name !== "Identifier" ||
+      assignOp?.name !== "AssignOp" ||
+      nodeText(input.extraction, assignOp) !== "=" ||
+      initializer?.name !== "ObjectCreationExpression"
+    ) {
+      return null;
+    }
+    const name = identifierText(input.extraction, identifier);
+    const initializerChildren = directChildren(initializer);
+    const initializerTypeNodes = initializerChildren.filter(isJavaDirectTypeName);
+    const initializerType = initializerTypeNodes[0];
+    if (
+      name === null ||
+      initializerChildren.some(
+        (candidate) => candidate.name === "TypeArguments" || candidate.name === "ClassBody"
+      ) ||
+      initializerTypeNodes.length !== 1 ||
+      initializerType === undefined
+    ) {
+      return null;
+    }
+    const type = staticJavaCallTypeReference(
+      input.extraction,
+      initializerType,
+      input.imports,
+      "object-creation"
+    );
+    return type === null
+      ? null
+      : {
+          name,
+          type,
+          assignmentRange: rangeFor(lineStarts, assignment.from, assignment.to),
+          initializerRange: rangeFor(lineStarts, initializer.from, initializer.to)
+        };
+  }
+
+  function containsJavaNode(node: JavaSyntaxNode, name: string): boolean {
+    if (node.name === name) {
+      return true;
+    }
+    return directChildren(node).some((child) => containsJavaNode(child, name));
+  }
+
+  function assignedIdentifierNames(node: JavaSyntaxNode, root = true): ReadonlySet<string> {
+    const names = new Set<string>();
+    function collect(candidate: JavaSyntaxNode, isRoot: boolean): void {
+      if (!isRoot && NESTED_JAVA_CALLABLE_SCOPES.has(candidate.name)) {
+        return;
+      }
+      if (candidate.name === "AssignmentExpression") {
+        const children = directChildren(candidate);
+        const identifier = children[0];
+        if (identifier?.name === "Identifier" && children[1]?.name === "AssignOp") {
+          const name = identifierText(input.extraction, identifier);
+          if (name !== null) {
+            names.add(name);
+          }
+        }
+      }
+      for (const child of directChildren(candidate)) {
+        collect(child, false);
+      }
+    }
+    collect(node, root);
+    return names;
+  }
+
+  function exhaustiveBranchAssignment(
+    block: JavaSyntaxNode,
+    branch: "then" | "else"
+  ): ExhaustiveAssignmentBranchBinding | null {
+    const statements = directChildren(block).filter(
+      (child) => child.name !== "{" && child.name !== "}"
+    );
+    const statement = statements[0];
+    if (statements.length !== 1 || statement?.name !== "ExpressionStatement") {
+      return null;
+    }
+    const assignment = directObjectCreationAssignment(statement);
+    return assignment === null
+      ? null
+      : {
+          branch,
+          name: assignment.name,
+          scopeRange: rangeFor(lineStarts, block.from, block.to),
+          type: assignment.type,
+          assignmentRange: assignment.assignmentRange,
+          initializerRange: assignment.initializerRange
+        };
+  }
+
+  function visitExhaustiveIfElseAssignment(statement: JavaSyntaxNode, scope: BindingScope): void {
+    // Calls in the condition and branches observe the pre-join state.
+    visit(statement);
+
+    const assignedNames = assignedIdentifierNames(statement);
+    for (const name of assignedNames) {
+      const prior = scope.get(name);
+      if (prior !== undefined && prior !== null && prior.kind === "local") {
+        // Any conditional write invalidates an earlier linear or joined proof.
+        scope.set(name, null);
+      }
+    }
+
+    const children = directChildren(statement);
+    const condition = children.find((child) => child.name === "ParenthesizedExpression");
+    const branches = children.filter((child) => child.name === "Block");
+    const elseTokens = children.filter((child) => child.name === "else");
+    const thenBranch = branches[0];
+    const elseBranch = branches[1];
+    if (
+      condition === undefined ||
+      containsJavaNode(condition, "AssignmentExpression") ||
+      branches.length !== 2 ||
+      thenBranch === undefined ||
+      elseBranch === undefined ||
+      elseTokens.length !== 1
+    ) {
+      return;
+    }
+    const thenAssignment = exhaustiveBranchAssignment(thenBranch, "then");
+    const elseAssignment = exhaustiveBranchAssignment(elseBranch, "else");
+    if (
+      thenAssignment === null ||
+      elseAssignment === null ||
+      thenAssignment.name !== elseAssignment.name
+    ) {
+      return;
+    }
+    const prior = scope.get(thenAssignment.name);
+    if (prior === undefined || prior === null || prior.kind !== "unassigned-local") {
+      return;
+    }
+    scope.set(thenAssignment.name, {
+      kind: "local",
+      name: prior.name,
+      type: prior.type,
+      declarationRange: prior.declarationRange,
+      scopeRange: prior.scopeRange,
+      assignmentJoin: {
+        statementRange: rangeFor(lineStarts, statement.from, statement.to),
+        conditionRange: rangeFor(lineStarts, condition.from, condition.to),
+        branches: [thenAssignment, elseAssignment]
       }
     });
   }
@@ -2104,6 +2293,8 @@ function staticJavaMemberCallReferences(input: {
           addLocalDeclaration(child, scope, scopeRange);
         } else if (child.name === "ExpressionStatement") {
           visitDirectSameBlockAssignment(child, scope);
+        } else if (child.name === "IfStatement") {
+          visitExhaustiveIfElseAssignment(child, scope);
         } else {
           visit(child);
         }
@@ -2269,6 +2460,34 @@ function staticJavaMemberCallReferences(input: {
                       receiverAssignmentRange: binding.directAssignment.assignmentRange,
                       receiverAssignmentInitializerRange:
                         binding.directAssignment.initializerRange
+                    }),
+                ...(binding.kind !== "local" || binding.assignmentJoin === undefined
+                  ? {}
+                  : {
+                      receiverAssignmentJoin: {
+                        statementRange: binding.assignmentJoin.statementRange,
+                        conditionRange: binding.assignmentJoin.conditionRange,
+                        branches: [
+                          {
+                            branch: "then",
+                            scopeRange: binding.assignmentJoin.branches[0].scopeRange,
+                            type: binding.assignmentJoin.branches[0].type,
+                            assignmentRange:
+                              binding.assignmentJoin.branches[0].assignmentRange,
+                            initializerRange:
+                              binding.assignmentJoin.branches[0].initializerRange
+                          },
+                          {
+                            branch: "else",
+                            scopeRange: binding.assignmentJoin.branches[1].scopeRange,
+                            type: binding.assignmentJoin.branches[1].type,
+                            assignmentRange:
+                              binding.assignmentJoin.branches[1].assignmentRange,
+                            initializerRange:
+                              binding.assignmentJoin.branches[1].initializerRange
+                          }
+                        ]
+                      }
                     }),
                 methodName,
                 argumentCount: arguments_.length,
