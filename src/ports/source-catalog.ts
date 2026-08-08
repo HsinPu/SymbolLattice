@@ -25,11 +25,13 @@ export interface ProjectFreshnessVerificationInput {
  * source text or resolver so a proven no-op remains memory-bounded.
  */
 export interface ProjectFreshnessVerification {
-  readonly policy: "full-content-project-inputs-v1";
+  readonly policy: "full-content-configuration-candidates-v2";
   readonly outcome: "proven-unchanged" | "source-files-changed" | "project-inputs-changed";
   readonly filesChecked: number;
   readonly sourceHash: "sha256";
   readonly retainedSourceText: false;
+  readonly configurationPolicy: "configuration-candidates-v1";
+  readonly configurationCandidatesChecked: number;
 }
 
 export type ModuleResolutionStrategy =

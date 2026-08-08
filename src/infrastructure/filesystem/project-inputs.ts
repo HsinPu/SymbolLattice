@@ -9,6 +9,7 @@ import {
   type ProjectIndexInputs
 } from "../../domain/index-inputs.js";
 import { canonicalizeScopeRoots, compareProjectPaths, hashSource } from "./discovery.js";
+import { discoverConfigurationCandidateInput } from "./configuration-discovery.js";
 
 export interface BuildProjectIndexInputsOptions {
   /** Source directories relative to the project root. Defaults to the project root. */
@@ -36,9 +37,19 @@ export async function buildProjectIndexInputs(
     "root-gitignore",
     ".gitignore"
   );
-  const configurationInputs = canonicalizeConfigurationInputs([
+  const trackedConfigurationInputs = canonicalizeConfigurationInputs([
     rootGitignore,
-    ...(options?.additionalConfigurationInputs ?? [])
+    ...(options?.additionalConfigurationInputs ?? []).filter(
+      (input) => input.kind !== "configuration-discovery"
+    )
+  ]);
+  const configurationDiscoveryInput = await discoverConfigurationCandidateInput(
+    normalizedProjectPath,
+    trackedConfigurationInputs
+  );
+  const configurationInputs = canonicalizeConfigurationInputs([
+    ...trackedConfigurationInputs,
+    configurationDiscoveryInput
   ]);
 
   return createProjectIndexInputs(scopeRoots, configurationInputs);
@@ -253,6 +264,8 @@ function configurationInputKindOrder(kind: ProjectConfigurationInputKind): numbe
       return 13;
     case "gradle-build":
       return 14;
+    case "configuration-discovery":
+      return 15;
   }
 }
 

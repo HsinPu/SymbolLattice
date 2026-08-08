@@ -84,6 +84,12 @@ describe("project index inputs", () => {
         path: "configs/base.json",
         state: "present",
         contentHash: "base-hash"
+      },
+      {
+        kind: "configuration-discovery",
+        path: ".symbol-lattice/configuration-candidates.json",
+        state: "present",
+        contentHash: expect.stringMatching(/^[a-f0-9]{64}$/u)
       }
     ]);
     expect(second).toEqual(first);
@@ -100,6 +106,12 @@ describe("project index inputs", () => {
           path: ".gitignore",
           state: "absent",
           contentHash: null
+        },
+        {
+          kind: "configuration-discovery",
+          path: ".symbol-lattice/configuration-candidates.json",
+          state: "present",
+          contentHash: expect.stringMatching(/^[a-f0-9]{64}$/u)
         }
       ]
     });

@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.340.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher can update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.341.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher can update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## Quick start
 
@@ -72,7 +72,7 @@ Alternatively, download the version-pinned `.tgz`, SHA-256 checksum, and manifes
 - `investigate` allocates a shared 2,048–64,000-character budget to exact slices from one active generation. `adaptive` keeps one contiguous result; callers may request `prefix`, `focused`, `signature`, or `multi` for at most two independently verifiable signature and focus slices. Every segment has a stable ID, SHA-256, range, and explicit omission gap. No source is synthesized, and insufficient proof or budget produces a disclosed single-segment fallback.
 - `benchmark:comparison` evaluates SymbolLattice and a pinned CodeGraph checkout against the same ground truth and queries in isolated Git worktree copies. It reports TP/FP/FN, precision/recall/F1, unresolved rate, cold indexing, no-change sync, one-file sync, working-set memory, CLI latency, and four-way MCP latency. SymbolLattice additionally returns non-persisted monotonic phase receipts for scan, extraction, resolution, persistence, and related work; version drift, ambiguity, truncation, and incomplete output fail the run.
 - SQLite generation writes reuse prepared statements, and status reads avoid loading the complete graph; neither changes transaction, active-generation, or evidence semantics.
-- `sync` revalidates every source with full SHA-256 using at most eight concurrent reads, then reconstructs the same project inputs from lightweight identities that retain no source text. A proven no-change run builds no full scan, loads no generation facts, and publishes no generation; source, workspace, module, or build-input drift still enters the complete incremental path.
+- `sync` revalidates every source with full SHA-256 using at most eight concurrent reads and rechecks a bounded configuration-candidate snapshot without rebuilding the TypeScript, workspace, Cargo, Go, Astro, Xcode, or JVM resolvers. A proven no-change run builds no full scan, loads no generation facts, and publishes no generation; candidate addition, deletion, content drift, or an explicit scope replacement still enters the complete incremental path.
 - Direct calls in TypeScript local-variable initializers belong to the enclosing callable. A direct `sort(callback)` comparator becomes an exact call only for an immutable receiver initialized by an array literal; other methods named `sort` remain uninferred.
 - Scans multiple languages and common frameworks into a project-local code graph.
 - Queries symbols, indexed files, calls, routes, entry points, impact, retained generations, and diffs.

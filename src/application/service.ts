@@ -1414,6 +1414,7 @@ export class SymbolLatticeService {
       typeof readStatusBundle === "function" &&
       typeof verifyFreshness === "function" &&
       statusBundle.indexInputs !== null &&
+      options.scopeRoots === undefined &&
       !resolverChanged &&
       !extractorChanged &&
       !sourceSearchChanged

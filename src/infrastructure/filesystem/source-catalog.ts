@@ -23,6 +23,10 @@ import { createWorkspaceProjectModuleResolver } from "./workspace.js";
 import { detectAstroProject } from "./astro-project.js";
 import { detectJvmProjectModuleEvidence } from "./jvm-project.js";
 import { detectXcodeProjectEvidence } from "./xcode-project.js";
+import {
+  CONFIGURATION_DISCOVERY_POLICY,
+  discoverConfigurationCandidateSnapshot
+} from "./configuration-discovery.js";
 
 function mergeConfigurationPaths(
   ...configurationPathGroups: readonly (readonly string[])[]
@@ -203,68 +207,40 @@ export class FileSystemSourceCatalog implements SourceCatalog {
     const fingerprints = await discoverSourceFileFingerprints(normalizedProjectPath, {
       scopeRoots: input.indexInputs.scopeRoots
     });
-    const receipt = {
-      policy: "full-content-project-inputs-v1" as const,
+    const receiptBase = {
+      policy: "full-content-configuration-candidates-v2" as const,
       filesChecked: fingerprints.length,
       sourceHash: "sha256" as const,
-      retainedSourceText: false as const
+      retainedSourceText: false as const,
+      configurationPolicy: CONFIGURATION_DISCOVERY_POLICY
     };
     if (!freshnessFilesMatch(fingerprints, input.files)) {
-      return { ...receipt, outcome: "source-files-changed" };
+      return {
+        ...receiptBase,
+        configurationCandidatesChecked: 0,
+        outcome: "source-files-changed"
+      };
     }
 
-    // The project/configuration resolvers consume source identity and paths,
-    // not source text. Reconstruct their complete configuration input set from
-    // compact fingerprints so new workspace/module/build files are detected
-    // without retaining the project's source contents.
-    const lightweightDocuments: SourceDocument[] = fingerprints.map((fingerprint) => ({
-      absolutePath: resolve(normalizedProjectPath, ...fingerprint.relativePath.split("/")),
-      relativePath: fingerprint.relativePath,
-      language: fingerprint.language,
-      sourceText: "",
-      contentHash: fingerprint.contentHash
-    }));
-    const typeScriptResolver = createTypeScriptProjectModuleResolver({
-      projectPath: normalizedProjectPath,
-      sourceDocuments: lightweightDocuments
-    });
-    const workspaceResolver = await createWorkspaceProjectModuleResolver({
-      projectPath: normalizedProjectPath,
-      sourceDocuments: lightweightDocuments
-    });
-    const cargoWorkspaceResolver = await createCargoWorkspaceProjectModuleResolver({
-      projectPath: normalizedProjectPath,
-      sourceDocuments: lightweightDocuments
-    });
-    const goModuleResolver = await createGoModuleProjectModuleResolver({
-      projectPath: normalizedProjectPath,
-      sourceDocuments: lightweightDocuments
-    });
-    const astroProject = await detectAstroProject(normalizedProjectPath);
-    const xcodeProject = await detectXcodeProjectEvidence(
-      normalizedProjectPath,
-      lightweightDocuments
+    const expectedConfigurationDiscovery = input.indexInputs.configurationInputs.find(
+      (configurationInput) => configurationInput.kind === "configuration-discovery"
     );
-    const jvmProject = await detectJvmProjectModuleEvidence(
+    if (expectedConfigurationDiscovery === undefined) {
+      return {
+        ...receiptBase,
+        configurationCandidatesChecked: 0,
+        outcome: "project-inputs-changed"
+      };
+    }
+    const configurationSnapshot = await discoverConfigurationCandidateSnapshot(
       normalizedProjectPath,
-      lightweightDocuments
+      input.indexInputs.configurationInputs
     );
-    const currentInputs = await buildProjectIndexInputs(normalizedProjectPath, {
-      scopeRoots: input.indexInputs.scopeRoots,
-      additionalConfigurationInputs: [
-        ...typeScriptResolver.configurationInputs,
-        ...workspaceResolver.configurationInputs,
-        ...cargoWorkspaceResolver.configurationInputs,
-        ...goModuleResolver.configurationInputs,
-        ...astroProject.configurationInputs,
-        ...xcodeProject.configurationInputs,
-        ...jvmProject.configurationInputs
-      ]
-    });
 
     return {
-      ...receipt,
-      outcome: currentInputs.fingerprint === input.indexInputs.fingerprint
+      ...receiptBase,
+      configurationCandidatesChecked: configurationSnapshot.candidatesChecked,
+      outcome: configurationSnapshot.input.contentHash === expectedConfigurationDiscovery.contentHash
         ? "proven-unchanged"
         : "project-inputs-changed"
     };

@@ -3,6 +3,7 @@ export * from "./auto-sync-host-registry.js";
 export * from "./auto-sync-restart-control.js";
 export * from "./auto-sync-start-control.js";
 export * from "./auto-sync-stop-control.js";
+export * from "./configuration-discovery.js";
 export * from "./discovery.js";
 export * from "./go-module.js";
 export * from "./jvm-project.js";

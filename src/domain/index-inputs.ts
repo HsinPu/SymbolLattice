@@ -3,7 +3,7 @@
  * resolved. Persisting this compact identity lets a read-only status request
  * detect configuration-only drift without reconstructing a graph first.
  */
-export const PROJECT_INDEX_INPUTS_FORMAT_VERSION = "project-inputs-v7";
+export const PROJECT_INDEX_INPUTS_FORMAT_VERSION = "project-inputs-v8";
 
 export const PROJECT_CONFIGURATION_INPUT_KINDS = [
   "root-gitignore",
@@ -20,7 +20,8 @@ export const PROJECT_CONFIGURATION_INPUT_KINDS = [
   "xcode-project",
   "maven-project",
   "gradle-settings",
-  "gradle-build"
+  "gradle-build",
+  "configuration-discovery"
 ] as const;
 
 export type ProjectConfigurationInputKind = (typeof PROJECT_CONFIGURATION_INPUT_KINDS)[number];

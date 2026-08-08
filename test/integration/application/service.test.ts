@@ -10738,6 +10738,22 @@ describe("SymbolLatticeService", () => {
     expect(await service.sync({ projectPath })).toMatchObject({ stale: false, counts: { files: 2 } });
   });
 
+  it("does not take the freshness fast path when sync explicitly replaces the stored scope", async () => {
+    const projectPath = await createInlineProject({
+      "src/inside.ts": "export const inside = true;\n",
+      "outside.ts": "export const outside = true;\n"
+    });
+    const service = createService();
+    const initial = await service.init({ projectPath, scopeRoots: ["src"] });
+
+    const synced = await service.sync({ projectPath, scopeRoots: ["."] });
+
+    expect(initial.counts.files).toBe(1);
+    expect(synced.counts.files).toBe(2);
+    expect(synced.generationId).not.toBe(initial.generationId);
+    expect(synced.operationPerformance?.phases.map((phase) => phase.name)).toContain("scan");
+  });
+
   it("reports invalid configuration as stale and preserves the previous active generation when sync fails", async () => {
     const projectPath = await createFixtureProject(configuredFixturePath);
     const graphStore = new SqliteGraphStore();
@@ -10899,9 +10915,11 @@ describe("SymbolLatticeService", () => {
     });
     const graphStore = new SqliteGraphStore();
     const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+    const sourcePath = join(projectPath, "src", "value.ts");
+    const fixedTime = new Date(Math.floor((Date.now() - 60_000) / 1_000) * 1_000);
+    await utimes(sourcePath, fixedTime, fixedTime);
     await service.init({ projectPath });
     const generationId = graphStore.getStatus(projectPath).generationId;
-    const sourcePath = join(projectPath, "src", "value.ts");
     const before = await stat(sourcePath);
     await writeFile(sourcePath, "export const value = 'after!';\n", "utf8");
     await utimes(sourcePath, before.atime, before.mtime);
