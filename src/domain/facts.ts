@@ -13,13 +13,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v234";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v235";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v123";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v124";
 
 /** Hard cap for one source-proven Java exhaustive if/else-if/else assignment join. */
 export const JAVA_EXHAUSTIVE_ASSIGNMENT_JOIN_MAXIMUM_BRANCHES = 8;
@@ -381,6 +381,26 @@ export type CallReceiverBindingEvidence =
       readonly abruptTargetRange: SourceRange;
     })
   | (CallReceiverBindingEvidenceBase & {
+      readonly kind: "instanceof-negated-target-exit-pattern";
+      readonly policy: "java-source-lexical-binding-v18";
+      readonly typeSource: "instanceof-pattern";
+      readonly conditionRange: SourceRange;
+      readonly testedValueRange: SourceRange;
+      readonly negatedPatternRange: SourceRange;
+      readonly negationGroupingRanges: readonly SourceRange[];
+      readonly maximumGroupingDepth: number;
+      readonly guardStatementRange: SourceRange;
+      readonly exitBodyKind: "block" | "statement";
+      readonly exitBodyRange: SourceRange;
+      readonly abruptCompletionKind: "break" | "continue";
+      readonly abruptStatementRange: SourceRange;
+      readonly abruptTargetKind: "while" | "do" | "for" | "enhanced-for" | "block" | "statement";
+      readonly abruptTargetRange: SourceRange;
+      readonly abruptTargetBodyRange: SourceRange;
+      readonly abruptTargetLabel: string;
+      readonly abruptTargetLabelRange: SourceRange;
+    })
+  | (CallReceiverBindingEvidenceBase & {
       readonly kind: "instanceof-negated-else-pattern";
       readonly policy: "java-source-lexical-binding-v15";
       readonly typeSource: "instanceof-pattern";
@@ -414,6 +434,35 @@ export type CallReceiverBindingEvidence =
       readonly thenAbruptStatementRange: SourceRange;
       readonly thenAbruptTargetKind: "while" | "do" | "for" | "enhanced-for";
       readonly thenAbruptTargetRange: SourceRange;
+      readonly elseBodyKind: "block" | "statement";
+      readonly elseBodyRange: SourceRange;
+      readonly activeRegion: "else-body" | "following-scope";
+    })
+  | (CallReceiverBindingEvidenceBase & {
+      readonly kind: "instanceof-negated-else-pattern";
+      readonly policy: "java-source-lexical-binding-v19";
+      readonly typeSource: "instanceof-pattern";
+      readonly conditionRange: SourceRange;
+      readonly testedValueRange: SourceRange;
+      readonly negatedPatternRange: SourceRange;
+      readonly negationGroupingRanges: readonly SourceRange[];
+      readonly maximumGroupingDepth: number;
+      readonly guardStatementRange: SourceRange;
+      readonly thenBodyKind: "block" | "statement";
+      readonly thenBodyRange: SourceRange;
+      readonly thenAbruptCompletionKind: "break" | "continue";
+      readonly thenAbruptStatementRange: SourceRange;
+      readonly thenAbruptTargetKind:
+        | "while"
+        | "do"
+        | "for"
+        | "enhanced-for"
+        | "block"
+        | "statement";
+      readonly thenAbruptTargetRange: SourceRange;
+      readonly thenAbruptTargetBodyRange: SourceRange;
+      readonly thenAbruptTargetLabel: string;
+      readonly thenAbruptTargetLabelRange: SourceRange;
       readonly elseBodyKind: "block" | "statement";
       readonly elseBodyRange: SourceRange;
       readonly activeRegion: "else-body" | "following-scope";
@@ -1707,8 +1756,17 @@ export type JavaMemberCallReferenceFact =
       readonly receiverExitBodyRange: SourceRange;
       readonly receiverAbruptCompletionKind: "break" | "continue";
       readonly receiverAbruptStatementRange: SourceRange;
-      readonly receiverAbruptTargetKind: "while" | "do" | "for" | "enhanced-for";
+      readonly receiverAbruptTargetKind:
+        | "while"
+        | "do"
+        | "for"
+        | "enhanced-for"
+        | "block"
+        | "statement";
       readonly receiverAbruptTargetRange: SourceRange;
+      readonly receiverAbruptTargetBodyRange: SourceRange;
+      readonly receiverAbruptTargetLabel: string | null;
+      readonly receiverAbruptTargetLabelRange: SourceRange | null;
     })
   | (JavaMemberCallReferenceBaseFact & {
       readonly receiverKind: "instanceof-negated-else-pattern";
@@ -1731,8 +1789,18 @@ export type JavaMemberCallReferenceFact =
         | "continue"
         | null;
       readonly receiverThenAbruptStatementRange: SourceRange | null;
-      readonly receiverThenAbruptTargetKind: "while" | "do" | "for" | "enhanced-for" | null;
+      readonly receiverThenAbruptTargetKind:
+        | "while"
+        | "do"
+        | "for"
+        | "enhanced-for"
+        | "block"
+        | "statement"
+        | null;
       readonly receiverThenAbruptTargetRange: SourceRange | null;
+      readonly receiverThenAbruptTargetBodyRange: SourceRange | null;
+      readonly receiverThenAbruptTargetLabel: string | null;
+      readonly receiverThenAbruptTargetLabelRange: SourceRange | null;
       readonly receiverElseBodyKind: "block" | "statement";
       readonly receiverElseBodyRange: SourceRange;
       readonly receiverActiveRegion: "else-body" | "following-scope";

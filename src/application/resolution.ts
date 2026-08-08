@@ -9850,8 +9850,7 @@ function projectJavaCallReferences(input: {
           abruptStatementRange: reference.receiverAbruptStatementRange
         };
       } else if (reference.receiverKind === "instanceof-negated-target-exit-pattern") {
-        receiverBinding = {
-          policy: "java-source-lexical-binding-v16",
+        const receiverBindingBase = {
           kind: "instanceof-negated-target-exit-pattern",
           name: reference.receiverName,
           type: resolvedBindingType.evidence,
@@ -9867,10 +9866,34 @@ function projectJavaCallReferences(input: {
           exitBodyKind: reference.receiverExitBodyKind,
           exitBodyRange: reference.receiverExitBodyRange,
           abruptCompletionKind: reference.receiverAbruptCompletionKind,
-          abruptStatementRange: reference.receiverAbruptStatementRange,
-          abruptTargetKind: reference.receiverAbruptTargetKind,
-          abruptTargetRange: reference.receiverAbruptTargetRange
-        };
+          abruptStatementRange: reference.receiverAbruptStatementRange
+        } as const;
+        if (
+          reference.receiverAbruptTargetLabel !== null &&
+          reference.receiverAbruptTargetLabelRange !== null
+        ) {
+          receiverBinding = {
+            ...receiverBindingBase,
+            policy: "java-source-lexical-binding-v18",
+            abruptTargetKind: reference.receiverAbruptTargetKind,
+            abruptTargetRange: reference.receiverAbruptTargetRange,
+            abruptTargetBodyRange: reference.receiverAbruptTargetBodyRange,
+            abruptTargetLabel: reference.receiverAbruptTargetLabel,
+            abruptTargetLabelRange: reference.receiverAbruptTargetLabelRange
+          };
+        } else if (
+          reference.receiverAbruptTargetKind === "while" ||
+          reference.receiverAbruptTargetKind === "do" ||
+          reference.receiverAbruptTargetKind === "for" ||
+          reference.receiverAbruptTargetKind === "enhanced-for"
+        ) {
+          receiverBinding = {
+            ...receiverBindingBase,
+            policy: "java-source-lexical-binding-v16",
+            abruptTargetKind: reference.receiverAbruptTargetKind,
+            abruptTargetRange: reference.receiverAbruptTargetRange
+          };
+        }
       } else if (reference.receiverKind === "instanceof-negated-else-pattern") {
         const receiverBindingBase = {
           kind: "instanceof-negated-else-pattern" as const,
@@ -9896,7 +9919,31 @@ function projectJavaCallReferences(input: {
             reference.receiverThenAbruptCompletionKind === "continue") &&
           reference.receiverThenAbruptStatementRange !== null &&
           reference.receiverThenAbruptTargetKind !== null &&
-          reference.receiverThenAbruptTargetRange !== null
+          reference.receiverThenAbruptTargetRange !== null &&
+          reference.receiverThenAbruptTargetBodyRange !== null &&
+          reference.receiverThenAbruptTargetLabel !== null &&
+          reference.receiverThenAbruptTargetLabelRange !== null
+        ) {
+          receiverBinding = {
+            ...receiverBindingBase,
+            policy: "java-source-lexical-binding-v19",
+            thenAbruptCompletionKind: reference.receiverThenAbruptCompletionKind,
+            thenAbruptStatementRange: reference.receiverThenAbruptStatementRange,
+            thenAbruptTargetKind: reference.receiverThenAbruptTargetKind,
+            thenAbruptTargetRange: reference.receiverThenAbruptTargetRange,
+            thenAbruptTargetBodyRange: reference.receiverThenAbruptTargetBodyRange,
+            thenAbruptTargetLabel: reference.receiverThenAbruptTargetLabel,
+            thenAbruptTargetLabelRange: reference.receiverThenAbruptTargetLabelRange
+          };
+        } else if (
+          (reference.receiverThenAbruptCompletionKind === "break" ||
+            reference.receiverThenAbruptCompletionKind === "continue") &&
+          reference.receiverThenAbruptStatementRange !== null &&
+          reference.receiverThenAbruptTargetRange !== null &&
+          (reference.receiverThenAbruptTargetKind === "while" ||
+            reference.receiverThenAbruptTargetKind === "do" ||
+            reference.receiverThenAbruptTargetKind === "for" ||
+            reference.receiverThenAbruptTargetKind === "enhanced-for")
         ) {
           receiverBinding = {
             ...receiverBindingBase,

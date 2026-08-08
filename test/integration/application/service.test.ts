@@ -4571,7 +4571,7 @@ describe("SymbolLatticeService", () => {
         "public class LabeledContinue {",
         "  public void run(Object value) {",
         "    outer: while (true) {",
-        "      if (!(value instanceof Service service)) continue outer;",
+        "      if (!(value instanceof Service service)) continue missing;",
         "      service.execute(\"labeled\");",
         "    }",
         "  }",
@@ -4711,7 +4711,7 @@ describe("SymbolLatticeService", () => {
         "public class LabeledContinueElse {",
         "  public void run(Object value) {",
         "    outer: while (true) {",
-        "      if (!(value instanceof Service service)) continue outer; else {",
+        "      if (!(value instanceof Service service)) continue missing; else {",
         "        service.execute(\"else-only\");",
         "      }",
         "      service.execute(\"not-following\");",
@@ -4785,6 +4785,196 @@ describe("SymbolLatticeService", () => {
     expect(callAt("src/app/LabeledContinueElse.java", 9)).toBeUndefined();
     expect(callAt("src/app/UnbracedLoopElse.java", 6)?.targetId).toBe(targetId);
     expect(callAt("src/app/UnbracedLoopElse.java", 7)).toBeUndefined();
+  });
+
+  it("binds Java negated patterns after exact labeled exits", async () => {
+    const projectPath = await createInlineProject({
+      "src/api/Service.java": [
+        "package api;",
+        "public class Service { public void execute(String value) {} }"
+      ].join("\n"),
+      "src/app/LabeledContinue.java": [
+        "package app;",
+        "import api.Service;",
+        "public class LabeledContinue {",
+        "  public void run(Object value) {",
+        "    outer: while (ready()) {",
+        "      if (!(value instanceof Service service)) continue outer;",
+        "      service.execute(\"following\");",
+        "    }",
+        "    service.execute(\"outside\");",
+        "  }",
+        "  private boolean ready() { return false; }",
+        "}"
+      ].join("\n"),
+      "src/app/LabeledBlockBreak.java": [
+        "package app;",
+        "import api.Service;",
+        "public class LabeledBlockBreak {",
+        "  public void run(Object value) {",
+        "    exit: {",
+        "      if (!(value instanceof Service service)) { break exit; }",
+        "      service.execute(\"block\");",
+        "    }",
+        "    service.execute(\"outside\");",
+        "  }",
+        "}"
+      ].join("\n"),
+      "src/app/LabeledContinueElse.java": [
+        "package app;",
+        "import api.Service;",
+        "public class LabeledContinueElse {",
+        "  public void run(Object value) {",
+        "    outer: for (;;) {",
+        "      if (!(value instanceof Service service)) continue outer;",
+        "      else service.execute(\"else\");",
+        "      service.execute(\"following\");",
+        "    }",
+        "  }",
+        "}"
+      ].join("\n"),
+      "src/app/LabeledBlockBreakElse.java": [
+        "package app;",
+        "import api.Service;",
+        "public class LabeledBlockBreakElse {",
+        "  public void run(Object value) {",
+        "    exit: {",
+        "      if (!(value instanceof Service service)) break exit; else {",
+        "        service.execute(\"else\");",
+        "      }",
+        "      service.execute(\"following\");",
+        "    }",
+        "  }",
+        "}"
+      ].join("\n"),
+      "src/app/WrongLabel.java": [
+        "package app;",
+        "import api.Service;",
+        "public class WrongLabel {",
+        "  public void run(Object value) {",
+        "    outer: while (true) {",
+        "      if (!(value instanceof Service service)) continue missing;",
+        "      service.execute(\"invalid\");",
+        "    }",
+        "  }",
+        "}"
+      ].join("\n"),
+      "src/app/ContinueBlock.java": [
+        "package app;",
+        "import api.Service;",
+        "public class ContinueBlock {",
+        "  public void run(Object value) {",
+        "    exit: {",
+        "      if (!(value instanceof Service service)) continue exit; else {",
+        "        service.execute(\"else-only\");",
+        "      }",
+        "      service.execute(\"invalid-following\");",
+        "    }",
+        "  }",
+        "}"
+      ].join("\n"),
+      "src/app/DuplicateLabel.java": [
+        "package app;",
+        "import api.Service;",
+        "public class DuplicateLabel {",
+        "  public void run(Object value) {",
+        "    same: while (true) {",
+        "      same: while (true) {",
+        "        if (!(value instanceof Service service)) continue same;",
+        "        service.execute(\"invalid\");",
+        "      }",
+        "    }",
+        "  }",
+        "}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+
+    const snapshot = graphStore.getSnapshot(projectPath);
+    const calls = snapshot.edges.filter((edge) => edge.kind === "calls");
+    const callAt = (filePath: string, line: number) =>
+      calls.find(
+        (edge) =>
+          edge.filePath === filePath &&
+          edge.range.start.line === line &&
+          edge.referenceName === "execute"
+      );
+    const targetId = snapshot.symbols.find(
+      (candidate) => candidate.qualifiedName === "src/api/Service.java#Service.execute"
+    )?.id;
+    const continueCall = callAt("src/app/LabeledContinue.java", 7);
+    expect(continueCall?.targetId).toBe(targetId);
+    expect(continueCall?.evidence?.callDispatch?.receiverBinding).toEqual(
+      expect.objectContaining({
+        policy: "java-source-lexical-binding-v18",
+        kind: "instanceof-negated-target-exit-pattern",
+        abruptCompletionKind: "continue",
+        abruptTargetKind: "while",
+        abruptTargetLabel: "outer",
+        abruptTargetLabelRange: expect.objectContaining({
+          start: expect.objectContaining({ line: 5 })
+        }),
+        abruptTargetBodyRange: expect.objectContaining({
+          start: expect.objectContaining({ line: 5 })
+        })
+      })
+    );
+    expect(callAt("src/app/LabeledContinue.java", 9)).toBeUndefined();
+    expect(callAt("src/app/LabeledBlockBreak.java", 7)?.targetId).toBe(targetId);
+    expect(
+      callAt("src/app/LabeledBlockBreak.java", 7)?.evidence?.callDispatch?.receiverBinding
+    ).toEqual(
+      expect.objectContaining({
+        policy: "java-source-lexical-binding-v18",
+        abruptCompletionKind: "break",
+        abruptTargetKind: "block",
+        abruptTargetLabel: "exit"
+      })
+    );
+    expect(callAt("src/app/LabeledBlockBreak.java", 9)).toBeUndefined();
+    const elseCall = callAt("src/app/LabeledContinueElse.java", 7);
+    expect(elseCall?.targetId).toBe(targetId);
+    expect(elseCall?.evidence?.callDispatch?.receiverBinding).toEqual(
+      expect.objectContaining({
+        policy: "java-source-lexical-binding-v19",
+        kind: "instanceof-negated-else-pattern",
+        activeRegion: "else-body",
+        thenAbruptCompletionKind: "continue",
+        thenAbruptTargetKind: "for",
+        thenAbruptTargetLabel: "outer"
+      })
+    );
+    expect(callAt("src/app/LabeledContinueElse.java", 8)?.targetId).toBe(targetId);
+    expect(
+      callAt("src/app/LabeledContinueElse.java", 8)?.evidence?.callDispatch?.receiverBinding
+    ).toEqual(
+      expect.objectContaining({
+        policy: "java-source-lexical-binding-v19",
+        activeRegion: "following-scope"
+      })
+    );
+    expect(callAt("src/app/LabeledBlockBreakElse.java", 7)?.targetId).toBe(targetId);
+    expect(callAt("src/app/LabeledBlockBreakElse.java", 9)?.targetId).toBe(targetId);
+    expect(
+      callAt("src/app/LabeledBlockBreakElse.java", 9)?.evidence?.callDispatch?.receiverBinding
+    ).toEqual(
+      expect.objectContaining({
+        policy: "java-source-lexical-binding-v19",
+        thenAbruptCompletionKind: "break",
+        thenAbruptTargetKind: "block",
+        thenAbruptTargetLabel: "exit"
+      })
+    );
+    expect(callAt("src/app/WrongLabel.java", 7)).toBeUndefined();
+    expect(callAt("src/app/ContinueBlock.java", 7)?.targetId).toBe(targetId);
+    expect(callAt("src/app/ContinueBlock.java", 7)?.evidence?.callDispatch?.receiverBinding).toEqual(
+      expect.objectContaining({ policy: "java-source-lexical-binding-v15" })
+    );
+    expect(callAt("src/app/ContinueBlock.java", 9)).toBeUndefined();
+    expect(callAt("src/app/DuplicateLabel.java", 8)).toBeUndefined();
   });
 
   it("resolves Java enhanced-for, catch, and explicit lambda bindings within their exact scopes", async () => {
