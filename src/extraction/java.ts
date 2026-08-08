@@ -41,6 +41,7 @@ type JavaSyntaxNode = ReturnType<typeof parser.parse>["topNode"];
 
 type StaticJavaLoopTargetKind = "while" | "do" | "for" | "enhanced-for";
 type StaticJavaLabeledTargetKind = StaticJavaLoopTargetKind | "block" | "statement";
+type StaticJavaAbruptTargetKind = StaticJavaLabeledTargetKind | "switch";
 
 interface StaticJavaAnnotation {
   readonly name: string;
@@ -137,9 +138,11 @@ type StaticJavaInstanceofAndPatternSyntax =
       readonly exitBodyRange: SourceRange;
       readonly abruptCompletionKind: "return" | "throw" | "break" | "continue";
       readonly abruptStatementRange: SourceRange;
-      readonly abruptTargetKind: StaticJavaLabeledTargetKind | null;
+      readonly abruptTargetKind: StaticJavaAbruptTargetKind | null;
       readonly abruptTargetRange: SourceRange | null;
       readonly abruptTargetBodyRange: SourceRange | null;
+      readonly abruptTargetCaseGroupRange: SourceRange | null;
+      readonly abruptTargetCaseLabelRanges: readonly SourceRange[];
       readonly abruptTargetLabel: string | null;
       readonly abruptTargetLabelRange: SourceRange | null;
       readonly followingScopeRange: SourceRange;
@@ -161,9 +164,11 @@ type StaticJavaInstanceofAndPatternSyntax =
       readonly thenBodyRange: SourceRange;
       readonly thenAbruptCompletionKind: "return" | "throw" | "break" | "continue" | null;
       readonly thenAbruptStatementRange: SourceRange | null;
-      readonly thenAbruptTargetKind: StaticJavaLabeledTargetKind | null;
+      readonly thenAbruptTargetKind: StaticJavaAbruptTargetKind | null;
       readonly thenAbruptTargetRange: SourceRange | null;
       readonly thenAbruptTargetBodyRange: SourceRange | null;
+      readonly thenAbruptTargetCaseGroupRange: SourceRange | null;
+      readonly thenAbruptTargetCaseLabelRanges: readonly SourceRange[];
       readonly thenAbruptTargetLabel: string | null;
       readonly thenAbruptTargetLabelRange: SourceRange | null;
       readonly elseBodyKind: "block" | "statement";
@@ -517,6 +522,15 @@ interface StaticJavaLabeledAbruptTarget {
   readonly labelNode: SgNode;
 }
 
+interface StaticJavaSwitchBreakTarget {
+  readonly kind: "switch";
+  readonly node: SgNode;
+  readonly body: SgNode;
+  readonly caseGroup: SgNode;
+  readonly caseLabels: readonly SgNode[];
+  readonly followingScopeEnd: number;
+}
+
 function javaLoopTargetKind(node: SgNode): StaticJavaLoopTargetKind | null {
   const kind = node.kind();
   return kind === "while_statement"
@@ -564,6 +578,106 @@ function javaUnlabeledLoopTarget(input: {
         return null;
       }
       return { kind: targetKind, node: ancestor };
+    }
+    if (
+      kind === "method_declaration" ||
+      kind === "constructor_declaration" ||
+      kind === "lambda_expression" ||
+      kind === "class_declaration" ||
+      kind === "interface_declaration"
+    ) {
+      return null;
+    }
+    ancestor = ancestor.parent();
+  }
+  return null;
+}
+
+function javaUnlabeledSwitchBreakTarget(input: {
+  readonly statement: SgNode;
+  readonly guardStatement: SgNode;
+  readonly enclosingBlock: SgNode;
+}): StaticJavaSwitchBreakTarget | null {
+  const children = astGrepChildren(input.statement);
+  if (children.length !== 2 || children[0]?.kind() !== "break" || children[1]?.kind() !== ";") {
+    return null;
+  }
+  let caseGroup: SgNode | null = null;
+  let ancestor = input.statement.parent();
+  while (ancestor !== null) {
+    const kind = ancestor.kind();
+    if (javaLoopTargetKind(ancestor) !== null) {
+      return null;
+    }
+    if (kind === "switch_block_statement_group" && caseGroup === null) {
+      caseGroup = ancestor;
+    }
+    if (kind === "switch_expression") {
+      const switchBody = astGrepChildren(ancestor).filter(
+        (child) => child.kind() === "switch_block"
+      );
+      if (
+        caseGroup === null ||
+        switchBody.length !== 1 ||
+        switchBody[0] === undefined ||
+        caseGroup.parent()?.range().start.index !== switchBody[0].range().start.index ||
+        caseGroup.parent()?.range().end.index !== switchBody[0].range().end.index
+      ) {
+        return null;
+      }
+      const groupChildren = astGrepChildren(caseGroup);
+      if (
+        groupChildren[0]?.kind() !== "switch_label" ||
+        groupChildren[1]?.kind() !== ":"
+      ) {
+        return null;
+      }
+      const bodyGroups = astGrepChildren(switchBody[0]).filter(
+        (child) => child.kind() === "switch_block_statement_group"
+      );
+      const caseGroupOffsets = caseGroup.range();
+      const caseGroupIndex = bodyGroups.findIndex((candidate) => {
+        const offsets = candidate.range();
+        return (
+          offsets.start.index === caseGroupOffsets.start.index &&
+          offsets.end.index === caseGroupOffsets.end.index
+        );
+      });
+      if (caseGroupIndex < 0) {
+        return null;
+      }
+      const caseLabels: SgNode[] = [groupChildren[0]];
+      for (let index = caseGroupIndex - 1; index >= 0; index -= 1) {
+        const precedingChildren = astGrepChildren(bodyGroups[index]!);
+        if (
+          precedingChildren.length !== 2 ||
+          precedingChildren[0]?.kind() !== "switch_label" ||
+          precedingChildren[1]?.kind() !== ":"
+        ) {
+          break;
+        }
+        caseLabels.unshift(precedingChildren[0]);
+      }
+      const guardParent = input.guardStatement.parent();
+      const groupOffsets = caseGroup.range();
+      const blockOffsets = input.enclosingBlock.range();
+      const blockIsInsideGroup =
+        groupOffsets.start.index <= blockOffsets.start.index &&
+        blockOffsets.end.index <= groupOffsets.end.index;
+      const guardIsDirectlyInGroup =
+        guardParent?.range().start.index === groupOffsets.start.index &&
+        guardParent.range().end.index === groupOffsets.end.index;
+      if (!blockIsInsideGroup && !guardIsDirectlyInGroup) {
+        return null;
+      }
+      return {
+        kind: "switch",
+        node: ancestor,
+        body: switchBody[0],
+        caseGroup,
+        caseLabels,
+        followingScopeEnd: blockIsInsideGroup ? blockOffsets.end.index : groupOffsets.end.index
+      };
     }
     if (
       kind === "method_declaration" ||
@@ -726,16 +840,25 @@ function javaNegatedEarlyExitPatternSyntax(input: {
           enclosingBlock: input.enclosingBlock
         })
       : null;
+  const switchBreakTarget =
+    abruptCompletionKind === "break" && unlabeledAbruptTarget === null
+      ? javaUnlabeledSwitchBreakTarget({
+          statement: abruptStatement,
+          guardStatement: input.statement,
+          enclosingBlock: input.enclosingBlock
+        })
+      : null;
   const labeledAbruptTarget =
     (abruptCompletionKind === "break" || abruptCompletionKind === "continue") &&
-    unlabeledAbruptTarget === null
+    unlabeledAbruptTarget === null &&
+    switchBreakTarget === null
       ? javaLabeledAbruptTarget({
           statement: abruptStatement,
           abruptCompletionKind,
           enclosingBlock: input.enclosingBlock
         })
       : null;
-  const abruptTarget = unlabeledAbruptTarget ?? labeledAbruptTarget;
+  const abruptTarget = unlabeledAbruptTarget ?? switchBreakTarget ?? labeledAbruptTarget;
   if (
     (abruptCompletionKind === "break" || abruptCompletionKind === "continue") &&
     abruptTarget === null
@@ -753,7 +876,10 @@ function javaNegatedEarlyExitPatternSyntax(input: {
   const abruptOffsets = abruptStatement.range();
   const abruptTargetOffsets = abruptTarget?.node.range();
   const abruptTargetBodyOffsets =
-    labeledAbruptTarget?.body.range() ?? unlabeledAbruptTarget?.node.range();
+    switchBreakTarget?.body.range() ??
+    labeledAbruptTarget?.body.range() ??
+    unlabeledAbruptTarget?.node.range();
+  const abruptTargetCaseGroupOffsets = switchBreakTarget?.caseGroup.range();
   const abruptTargetLabelOffsets = labeledAbruptTarget?.labelNode.range();
   return {
     kind: "negated-early-exit",
@@ -819,6 +945,19 @@ function javaNegatedEarlyExitPatternSyntax(input: {
             abruptTargetBodyOffsets.start.index,
             abruptTargetBodyOffsets.end.index
           ),
+    abruptTargetCaseGroupRange:
+      abruptTargetCaseGroupOffsets === undefined
+        ? null
+        : rangeFor(
+            input.lineStarts,
+            abruptTargetCaseGroupOffsets.start.index,
+            abruptTargetCaseGroupOffsets.end.index
+          ),
+    abruptTargetCaseLabelRanges:
+      switchBreakTarget?.caseLabels.map((label) => {
+        const offsets = label.range();
+        return rangeFor(input.lineStarts, offsets.start.index, offsets.end.index);
+      }) ?? [],
     abruptTargetLabel: labeledAbruptTarget?.label ?? null,
     abruptTargetLabelRange:
       abruptTargetLabelOffsets === undefined
@@ -831,11 +970,11 @@ function javaNegatedEarlyExitPatternSyntax(input: {
     followingScopeRange: rangeFor(
       input.lineStarts,
       statementOffsets.end.index,
-      enclosingBlockOffsets.end.index
+      switchBreakTarget?.followingScopeEnd ?? enclosingBlockOffsets.end.index
     ),
     followingScopeOffsets: {
       start: statementOffsets.end.index,
-      end: enclosingBlockOffsets.end.index
+      end: switchBreakTarget?.followingScopeEnd ?? enclosingBlockOffsets.end.index
     }
   };
 }
@@ -919,17 +1058,26 @@ function javaNegatedElsePatternSyntax(input: {
           enclosingBlock: input.enclosingBlock
         })
       : null;
+  const switchBreakTarget =
+    candidateAbruptCompletionKind === "break" && unlabeledAbruptTarget === null
+      ? javaUnlabeledSwitchBreakTarget({
+          statement: abruptStatement!,
+          guardStatement: input.statement,
+          enclosingBlock: input.enclosingBlock
+        })
+      : null;
   const labeledAbruptTarget =
     (candidateAbruptCompletionKind === "break" ||
       candidateAbruptCompletionKind === "continue") &&
-    unlabeledAbruptTarget === null
+    unlabeledAbruptTarget === null &&
+    switchBreakTarget === null
       ? javaLabeledAbruptTarget({
           statement: abruptStatement!,
           abruptCompletionKind: candidateAbruptCompletionKind,
           enclosingBlock: input.enclosingBlock
         })
       : null;
-  const abruptTarget = unlabeledAbruptTarget ?? labeledAbruptTarget;
+  const abruptTarget = unlabeledAbruptTarget ?? switchBreakTarget ?? labeledAbruptTarget;
   const thenAbruptCompletionKind =
     (candidateAbruptCompletionKind === "break" ||
       candidateAbruptCompletionKind === "continue") &&
@@ -948,7 +1096,10 @@ function javaNegatedElsePatternSyntax(input: {
   const abruptOffsets = thenAbruptCompletionKind === null ? null : abruptStatement!.range();
   const abruptTargetOffsets = abruptTarget?.node.range();
   const abruptTargetBodyOffsets =
-    labeledAbruptTarget?.body.range() ?? unlabeledAbruptTarget?.node.range();
+    switchBreakTarget?.body.range() ??
+    labeledAbruptTarget?.body.range() ??
+    unlabeledAbruptTarget?.node.range();
+  const abruptTargetCaseGroupOffsets = switchBreakTarget?.caseGroup.range();
   const abruptTargetLabelOffsets = labeledAbruptTarget?.labelNode.range();
   return {
     kind: "negated-else",
@@ -1013,6 +1164,19 @@ function javaNegatedElsePatternSyntax(input: {
             abruptTargetBodyOffsets.start.index,
             abruptTargetBodyOffsets.end.index
           ),
+    thenAbruptTargetCaseGroupRange:
+      abruptTargetCaseGroupOffsets === undefined
+        ? null
+        : rangeFor(
+            input.lineStarts,
+            abruptTargetCaseGroupOffsets.start.index,
+            abruptTargetCaseGroupOffsets.end.index
+          ),
+    thenAbruptTargetCaseLabelRanges:
+      switchBreakTarget?.caseLabels.map((label) => {
+        const offsets = label.range();
+        return rangeFor(input.lineStarts, offsets.start.index, offsets.end.index);
+      }) ?? [],
     thenAbruptTargetLabel: labeledAbruptTarget?.label ?? null,
     thenAbruptTargetLabelRange:
       abruptTargetLabelOffsets === undefined
@@ -1038,14 +1202,14 @@ function javaNegatedElsePatternSyntax(input: {
         : rangeFor(
             input.lineStarts,
             statementOffsets.end.index,
-            enclosingBlockOffsets.end.index
+            switchBreakTarget?.followingScopeEnd ?? enclosingBlockOffsets.end.index
           ),
     followingScopeOffsets:
       thenAbruptCompletionKind === null
         ? null
         : {
             start: statementOffsets.end.index,
-            end: enclosingBlockOffsets.end.index
+            end: switchBreakTarget?.followingScopeEnd ?? enclosingBlockOffsets.end.index
           }
   };
 }
@@ -2708,9 +2872,11 @@ function staticJavaMemberCallReferences(input: {
           readonly exitBodyRange: SourceRange;
           readonly abruptCompletionKind: "break" | "continue";
           readonly abruptStatementRange: SourceRange;
-          readonly abruptTargetKind: StaticJavaLabeledTargetKind;
+          readonly abruptTargetKind: StaticJavaAbruptTargetKind;
           readonly abruptTargetRange: SourceRange;
           readonly abruptTargetBodyRange: SourceRange;
+          readonly abruptTargetCaseGroupRange: SourceRange | null;
+          readonly abruptTargetCaseLabelRanges: readonly SourceRange[];
           readonly abruptTargetLabel: string | null;
           readonly abruptTargetLabelRange: SourceRange | null;
         }
@@ -2731,9 +2897,11 @@ function staticJavaMemberCallReferences(input: {
             | "continue"
             | null;
           readonly thenAbruptStatementRange: SourceRange | null;
-          readonly thenAbruptTargetKind: StaticJavaLabeledTargetKind | null;
+          readonly thenAbruptTargetKind: StaticJavaAbruptTargetKind | null;
           readonly thenAbruptTargetRange: SourceRange | null;
           readonly thenAbruptTargetBodyRange: SourceRange | null;
+          readonly thenAbruptTargetCaseGroupRange: SourceRange | null;
+          readonly thenAbruptTargetCaseLabelRanges: readonly SourceRange[];
           readonly thenAbruptTargetLabel: string | null;
           readonly thenAbruptTargetLabelRange: SourceRange | null;
           readonly elseBodyKind: "block" | "statement";
@@ -2962,6 +3130,8 @@ function staticJavaMemberCallReferences(input: {
           abruptTargetKind: pattern.abruptTargetKind,
           abruptTargetRange: pattern.abruptTargetRange,
           abruptTargetBodyRange: pattern.abruptTargetBodyRange,
+          abruptTargetCaseGroupRange: pattern.abruptTargetCaseGroupRange,
+          abruptTargetCaseLabelRanges: pattern.abruptTargetCaseLabelRanges,
           abruptTargetLabel: pattern.abruptTargetLabel,
           abruptTargetLabelRange: pattern.abruptTargetLabelRange
         };
@@ -3000,6 +3170,8 @@ function staticJavaMemberCallReferences(input: {
         thenAbruptTargetKind: pattern.thenAbruptTargetKind,
         thenAbruptTargetRange: pattern.thenAbruptTargetRange,
         thenAbruptTargetBodyRange: pattern.thenAbruptTargetBodyRange,
+        thenAbruptTargetCaseGroupRange: pattern.thenAbruptTargetCaseGroupRange,
+        thenAbruptTargetCaseLabelRanges: pattern.thenAbruptTargetCaseLabelRanges,
         thenAbruptTargetLabel: pattern.thenAbruptTargetLabel,
         thenAbruptTargetLabelRange: pattern.thenAbruptTargetLabelRange,
         elseBodyKind: pattern.elseBodyKind,
@@ -4239,6 +4411,8 @@ function staticJavaMemberCallReferences(input: {
                 receiverAbruptTargetKind: binding.abruptTargetKind,
                 receiverAbruptTargetRange: binding.abruptTargetRange,
                 receiverAbruptTargetBodyRange: binding.abruptTargetBodyRange,
+                receiverAbruptTargetCaseGroupRange: binding.abruptTargetCaseGroupRange,
+                receiverAbruptTargetCaseLabelRanges: binding.abruptTargetCaseLabelRanges,
                 receiverAbruptTargetLabel: binding.abruptTargetLabel,
                 receiverAbruptTargetLabelRange: binding.abruptTargetLabelRange,
                 methodName,
@@ -4269,6 +4443,8 @@ function staticJavaMemberCallReferences(input: {
                 receiverThenAbruptTargetKind: binding.thenAbruptTargetKind,
                 receiverThenAbruptTargetRange: binding.thenAbruptTargetRange,
                 receiverThenAbruptTargetBodyRange: binding.thenAbruptTargetBodyRange,
+                receiverThenAbruptTargetCaseGroupRange: binding.thenAbruptTargetCaseGroupRange,
+                receiverThenAbruptTargetCaseLabelRanges: binding.thenAbruptTargetCaseLabelRanges,
                 receiverThenAbruptTargetLabel: binding.thenAbruptTargetLabel,
                 receiverThenAbruptTargetLabelRange: binding.thenAbruptTargetLabelRange,
                 receiverElseBodyKind: binding.elseBodyKind,

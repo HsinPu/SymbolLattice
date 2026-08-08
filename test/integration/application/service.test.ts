@@ -4666,8 +4666,162 @@ describe("SymbolLatticeService", () => {
     expect(callAt("src/app/LabeledContinue.java", 7)).toBeUndefined();
     expect(callAt("src/app/UnbracedLoop.java", 7)).toBeUndefined();
     expect(callAt("src/app/NoTarget.java", 6)).toBeUndefined();
-    expect(callAt("src/app/SwitchBreak.java", 8)).toBeUndefined();
+    expect(callAt("src/app/SwitchBreak.java", 8)?.targetId).toBe(targetId);
+    expect(callAt("src/app/SwitchBreak.java", 8)?.evidence?.callDispatch?.receiverBinding).toEqual(
+      expect.objectContaining({
+        policy: "java-source-lexical-binding-v20",
+        abruptCompletionKind: "break",
+        abruptTargetKind: "switch",
+        abruptTargetCaseGroupRange: expect.objectContaining({
+          start: expect.objectContaining({ line: 6 })
+        })
+      })
+    );
     expect(callAt("src/app/SwitchBreak.java", 10)).toBeUndefined();
+  });
+
+  it("binds Java negated patterns within exact switch case groups", async () => {
+    const projectPath = await createInlineProject({
+      "src/api/Service.java": [
+        "package api;",
+        "public class Service { public void execute(String value) {} }"
+      ].join("\n"),
+      "src/app/SwitchCase.java": [
+        "package app;",
+        "import api.Service;",
+        "public class SwitchCase {",
+        "  public void run(int selector, Object value) {",
+        "    switch (selector) {",
+        "      case 0:",
+        "      case 1:",
+        "        if (!(value instanceof Service service)) break;",
+        "        service.execute(\"case\");",
+        "        break;",
+        "      case 2:",
+        "        service.execute(\"next-case\");",
+        "    }",
+        "    service.execute(\"outside\");",
+        "  }",
+        "}"
+      ].join("\n"),
+      "src/app/SwitchBlock.java": [
+        "package app;",
+        "import api.Service;",
+        "public class SwitchBlock {",
+        "  public void run(int selector, Object value) {",
+        "    switch (selector) {",
+        "      default: {",
+        "        if (!(value instanceof Service service)) break;",
+        "        service.execute(\"block\");",
+        "      }",
+        "    }",
+        "    service.execute(\"outside\");",
+        "  }",
+        "}"
+      ].join("\n"),
+      "src/app/SwitchElse.java": [
+        "package app;",
+        "import api.Service;",
+        "public class SwitchElse {",
+        "  public void run(int selector, Object value) {",
+        "    switch (selector) {",
+        "      default:",
+        "        if (!(value instanceof Service service)) break; else {",
+        "          service.execute(\"else\");",
+        "        }",
+        "        service.execute(\"following\");",
+        "    }",
+        "    service.execute(\"outside\");",
+        "  }",
+        "}"
+      ].join("\n"),
+      "src/app/NestedLoop.java": [
+        "package app;",
+        "import api.Service;",
+        "public class NestedLoop {",
+        "  public void run(int selector, Object value) {",
+        "    switch (selector) {",
+        "      default:",
+        "        while (true) {",
+        "          if (!(value instanceof Service service)) break;",
+        "          service.execute(\"loop\");",
+        "        }",
+        "        service.execute(\"after-loop\");",
+        "    }",
+        "  }",
+        "}"
+      ].join("\n"),
+      "src/app/NestedConditional.java": [
+        "package app;",
+        "import api.Service;",
+        "public class NestedConditional {",
+        "  public void run(int selector, Object value, boolean flag) {",
+        "    switch (selector) {",
+        "      default:",
+        "        if (flag)",
+        "          if (!(value instanceof Service service)) break;",
+        "        service.execute(\"unsafe\");",
+        "    }",
+        "  }",
+        "}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+
+    const snapshot = graphStore.getSnapshot(projectPath);
+    const calls = snapshot.edges.filter((edge) => edge.kind === "calls");
+    const callAt = (filePath: string, line: number) =>
+      calls.find(
+        (edge) =>
+          edge.filePath === filePath &&
+          edge.range.start.line === line &&
+          edge.referenceName === "execute"
+      );
+    const targetId = snapshot.symbols.find(
+      (candidate) => candidate.qualifiedName === "src/api/Service.java#Service.execute"
+    )?.id;
+    const caseCall = callAt("src/app/SwitchCase.java", 9);
+    expect(caseCall?.targetId).toBe(targetId);
+    expect(caseCall?.evidence?.callDispatch?.receiverBinding).toEqual(
+      expect.objectContaining({
+        policy: "java-source-lexical-binding-v20",
+        abruptTargetKind: "switch",
+        abruptTargetCaseGroupRange: expect.objectContaining({
+          start: expect.objectContaining({ line: 7 })
+        }),
+        abruptTargetCaseLabelRanges: [
+          expect.objectContaining({ start: expect.objectContaining({ line: 6 }) }),
+          expect.objectContaining({ start: expect.objectContaining({ line: 7 }) })
+        ],
+        scopeRange: expect.objectContaining({
+          start: expect.objectContaining({ line: 8 }),
+          end: expect.objectContaining({ line: 10 })
+        })
+      })
+    );
+    expect(callAt("src/app/SwitchCase.java", 12)).toBeUndefined();
+    expect(callAt("src/app/SwitchCase.java", 14)).toBeUndefined();
+    expect(callAt("src/app/SwitchBlock.java", 8)?.targetId).toBe(targetId);
+    expect(callAt("src/app/SwitchBlock.java", 11)).toBeUndefined();
+    expect(callAt("src/app/SwitchElse.java", 8)?.targetId).toBe(targetId);
+    expect(callAt("src/app/SwitchElse.java", 8)?.evidence?.callDispatch?.receiverBinding).toEqual(
+      expect.objectContaining({
+        policy: "java-source-lexical-binding-v21",
+        activeRegion: "else-body",
+        thenAbruptTargetKind: "switch"
+      })
+    );
+    expect(callAt("src/app/SwitchElse.java", 10)?.targetId).toBe(targetId);
+    expect(callAt("src/app/SwitchElse.java", 12)).toBeUndefined();
+    expect(callAt("src/app/NestedLoop.java", 9)?.targetId).toBe(targetId);
+    expect(callAt("src/app/NestedLoop.java", 9)?.evidence?.callDispatch?.receiverBinding).toEqual(
+      expect.objectContaining({ policy: "java-source-lexical-binding-v16", abruptTargetKind: "while" })
+    );
+    expect(callAt("src/app/NestedLoop.java", 11)).toBeUndefined();
+    expect(callAt("src/app/NestedConditional.java", 9)).toBeUndefined();
   });
 
   it("binds a Java negated else pattern after a proven unlabeled loop exit", async () => {

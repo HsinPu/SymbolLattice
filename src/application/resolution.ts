@@ -9869,6 +9869,22 @@ function projectJavaCallReferences(input: {
           abruptStatementRange: reference.receiverAbruptStatementRange
         } as const;
         if (
+          reference.receiverAbruptTargetKind === "switch" &&
+          reference.receiverAbruptCompletionKind === "break" &&
+          reference.receiverAbruptTargetCaseGroupRange !== null
+        ) {
+          receiverBinding = {
+            ...receiverBindingBase,
+            policy: "java-source-lexical-binding-v20",
+            abruptTargetKind: "switch",
+            abruptTargetRange: reference.receiverAbruptTargetRange,
+            abruptTargetBodyRange: reference.receiverAbruptTargetBodyRange,
+            abruptTargetCaseGroupRange: reference.receiverAbruptTargetCaseGroupRange,
+            abruptTargetCaseLabelRanges: reference.receiverAbruptTargetCaseLabelRanges,
+            abruptCompletionKind: "break"
+          };
+        } else if (
+          reference.receiverAbruptTargetKind !== "switch" &&
           reference.receiverAbruptTargetLabel !== null &&
           reference.receiverAbruptTargetLabelRange !== null
         ) {
@@ -9915,10 +9931,30 @@ function projectJavaCallReferences(input: {
           activeRegion: reference.receiverActiveRegion
         };
         if (
+          reference.receiverThenAbruptCompletionKind === "break" &&
+          reference.receiverThenAbruptStatementRange !== null &&
+          reference.receiverThenAbruptTargetKind === "switch" &&
+          reference.receiverThenAbruptTargetRange !== null &&
+          reference.receiverThenAbruptTargetBodyRange !== null &&
+          reference.receiverThenAbruptTargetCaseGroupRange !== null
+        ) {
+          receiverBinding = {
+            ...receiverBindingBase,
+            policy: "java-source-lexical-binding-v21",
+            thenAbruptCompletionKind: "break",
+            thenAbruptStatementRange: reference.receiverThenAbruptStatementRange,
+            thenAbruptTargetKind: "switch",
+            thenAbruptTargetRange: reference.receiverThenAbruptTargetRange,
+            thenAbruptTargetBodyRange: reference.receiverThenAbruptTargetBodyRange,
+            thenAbruptTargetCaseGroupRange: reference.receiverThenAbruptTargetCaseGroupRange,
+            thenAbruptTargetCaseLabelRanges: reference.receiverThenAbruptTargetCaseLabelRanges
+          };
+        } else if (
           (reference.receiverThenAbruptCompletionKind === "break" ||
             reference.receiverThenAbruptCompletionKind === "continue") &&
           reference.receiverThenAbruptStatementRange !== null &&
           reference.receiverThenAbruptTargetKind !== null &&
+          reference.receiverThenAbruptTargetKind !== "switch" &&
           reference.receiverThenAbruptTargetRange !== null &&
           reference.receiverThenAbruptTargetBodyRange !== null &&
           reference.receiverThenAbruptTargetLabel !== null &&

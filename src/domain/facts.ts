@@ -13,13 +13,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v235";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v236";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v124";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v125";
 
 /** Hard cap for one source-proven Java exhaustive if/else-if/else assignment join. */
 export const JAVA_EXHAUSTIVE_ASSIGNMENT_JOIN_MAXIMUM_BRANCHES = 8;
@@ -401,6 +401,26 @@ export type CallReceiverBindingEvidence =
       readonly abruptTargetLabelRange: SourceRange;
     })
   | (CallReceiverBindingEvidenceBase & {
+      readonly kind: "instanceof-negated-target-exit-pattern";
+      readonly policy: "java-source-lexical-binding-v20";
+      readonly typeSource: "instanceof-pattern";
+      readonly conditionRange: SourceRange;
+      readonly testedValueRange: SourceRange;
+      readonly negatedPatternRange: SourceRange;
+      readonly negationGroupingRanges: readonly SourceRange[];
+      readonly maximumGroupingDepth: number;
+      readonly guardStatementRange: SourceRange;
+      readonly exitBodyKind: "block" | "statement";
+      readonly exitBodyRange: SourceRange;
+      readonly abruptCompletionKind: "break";
+      readonly abruptStatementRange: SourceRange;
+      readonly abruptTargetKind: "switch";
+      readonly abruptTargetRange: SourceRange;
+      readonly abruptTargetBodyRange: SourceRange;
+      readonly abruptTargetCaseGroupRange: SourceRange;
+      readonly abruptTargetCaseLabelRanges: readonly SourceRange[];
+    })
+  | (CallReceiverBindingEvidenceBase & {
       readonly kind: "instanceof-negated-else-pattern";
       readonly policy: "java-source-lexical-binding-v15";
       readonly typeSource: "instanceof-pattern";
@@ -463,6 +483,29 @@ export type CallReceiverBindingEvidence =
       readonly thenAbruptTargetBodyRange: SourceRange;
       readonly thenAbruptTargetLabel: string;
       readonly thenAbruptTargetLabelRange: SourceRange;
+      readonly elseBodyKind: "block" | "statement";
+      readonly elseBodyRange: SourceRange;
+      readonly activeRegion: "else-body" | "following-scope";
+    })
+  | (CallReceiverBindingEvidenceBase & {
+      readonly kind: "instanceof-negated-else-pattern";
+      readonly policy: "java-source-lexical-binding-v21";
+      readonly typeSource: "instanceof-pattern";
+      readonly conditionRange: SourceRange;
+      readonly testedValueRange: SourceRange;
+      readonly negatedPatternRange: SourceRange;
+      readonly negationGroupingRanges: readonly SourceRange[];
+      readonly maximumGroupingDepth: number;
+      readonly guardStatementRange: SourceRange;
+      readonly thenBodyKind: "block" | "statement";
+      readonly thenBodyRange: SourceRange;
+      readonly thenAbruptCompletionKind: "break";
+      readonly thenAbruptStatementRange: SourceRange;
+      readonly thenAbruptTargetKind: "switch";
+      readonly thenAbruptTargetRange: SourceRange;
+      readonly thenAbruptTargetBodyRange: SourceRange;
+      readonly thenAbruptTargetCaseGroupRange: SourceRange;
+      readonly thenAbruptTargetCaseLabelRanges: readonly SourceRange[];
       readonly elseBodyKind: "block" | "statement";
       readonly elseBodyRange: SourceRange;
       readonly activeRegion: "else-body" | "following-scope";
@@ -1762,9 +1805,12 @@ export type JavaMemberCallReferenceFact =
         | "for"
         | "enhanced-for"
         | "block"
-        | "statement";
+        | "statement"
+        | "switch";
       readonly receiverAbruptTargetRange: SourceRange;
       readonly receiverAbruptTargetBodyRange: SourceRange;
+      readonly receiverAbruptTargetCaseGroupRange: SourceRange | null;
+      readonly receiverAbruptTargetCaseLabelRanges: readonly SourceRange[];
       readonly receiverAbruptTargetLabel: string | null;
       readonly receiverAbruptTargetLabelRange: SourceRange | null;
     })
@@ -1796,9 +1842,12 @@ export type JavaMemberCallReferenceFact =
         | "enhanced-for"
         | "block"
         | "statement"
+        | "switch"
         | null;
       readonly receiverThenAbruptTargetRange: SourceRange | null;
       readonly receiverThenAbruptTargetBodyRange: SourceRange | null;
+      readonly receiverThenAbruptTargetCaseGroupRange: SourceRange | null;
+      readonly receiverThenAbruptTargetCaseLabelRanges: readonly SourceRange[];
       readonly receiverThenAbruptTargetLabel: string | null;
       readonly receiverThenAbruptTargetLabelRange: SourceRange | null;
       readonly receiverElseBodyKind: "block" | "statement";
