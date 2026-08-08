@@ -13,13 +13,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v237";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v238";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v126";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v127";
 
 /** Hard cap for one source-proven Java exhaustive if/else-if/else assignment join. */
 export const JAVA_EXHAUSTIVE_ASSIGNMENT_JOIN_MAXIMUM_BRANCHES = 8;
@@ -443,6 +443,59 @@ export type CallReceiverBindingEvidence =
       readonly abruptTargetExpressionContext: "return" | "initializer" | "assignment" | "yield";
     })
   | (CallReceiverBindingEvidenceBase & {
+      readonly kind:
+        | "instanceof-negated-early-exit-pattern"
+        | "instanceof-negated-target-exit-pattern";
+      readonly policy: "java-source-lexical-binding-v24";
+      readonly typeSource: "instanceof-pattern";
+      readonly conditionRange: SourceRange;
+      readonly testedValueRange: SourceRange;
+      readonly negatedPatternRange: SourceRange;
+      readonly negationGroupingRanges: readonly SourceRange[];
+      readonly maximumGroupingDepth: number;
+      readonly guardStatementRange: SourceRange;
+      readonly exitBodyKind: "block" | "statement";
+      readonly exitBodyRange: SourceRange;
+      readonly abruptCompletionKind: "return" | "throw" | "break" | "continue" | "yield";
+      readonly abruptStatementRange: SourceRange;
+      readonly abruptTargetKind:
+        | "while"
+        | "do"
+        | "for"
+        | "enhanced-for"
+        | "block"
+        | "statement"
+        | "switch"
+        | "switch-expression"
+        | null;
+      readonly abruptTargetRange: SourceRange | null;
+      readonly abruptTargetBodyRange: SourceRange | null;
+      readonly abruptTargetCaseGroupRange: SourceRange | null;
+      readonly abruptTargetCaseLabelRanges: readonly SourceRange[];
+      readonly abruptTargetRuleRange: SourceRange | null;
+      readonly abruptTargetRuleBodyRange: SourceRange | null;
+      readonly abruptTargetRuleLabelRange: SourceRange | null;
+      readonly abruptTargetExpressionContext:
+        | "return"
+        | "initializer"
+        | "assignment"
+        | "yield"
+        | null;
+      readonly abruptTargetLabel: string | null;
+      readonly abruptTargetLabelRange: SourceRange | null;
+      readonly abruptWrapperKind: "try-finally";
+      readonly abruptWrapperPolicy: "java-source-transparent-finally-v1";
+      readonly abruptWrapperRange: SourceRange;
+      readonly abruptWrapperTryBodyRange: SourceRange;
+      readonly abruptWrapperFinallyRange: SourceRange;
+      readonly abruptWrapperFinallyBodyRange: SourceRange;
+      readonly abruptWrapperFinallyStatementRanges: readonly SourceRange[];
+      readonly abruptWrapperBounds: {
+        readonly maximumFinallyStatements: number;
+        readonly observedFinallyStatements: number;
+      };
+    })
+  | (CallReceiverBindingEvidenceBase & {
       readonly kind: "instanceof-negated-else-pattern";
       readonly policy: "java-source-lexical-binding-v15";
       readonly typeSource: "instanceof-pattern";
@@ -557,6 +610,65 @@ export type CallReceiverBindingEvidence =
         | "initializer"
         | "assignment"
         | "yield";
+      readonly elseBodyKind: "block" | "statement";
+      readonly elseBodyRange: SourceRange;
+      readonly activeRegion: "else-body" | "following-scope";
+    })
+  | (CallReceiverBindingEvidenceBase & {
+      readonly kind: "instanceof-negated-else-pattern";
+      readonly policy: "java-source-lexical-binding-v25";
+      readonly typeSource: "instanceof-pattern";
+      readonly conditionRange: SourceRange;
+      readonly testedValueRange: SourceRange;
+      readonly negatedPatternRange: SourceRange;
+      readonly negationGroupingRanges: readonly SourceRange[];
+      readonly maximumGroupingDepth: number;
+      readonly guardStatementRange: SourceRange;
+      readonly thenBodyKind: "block" | "statement";
+      readonly thenBodyRange: SourceRange;
+      readonly thenAbruptCompletionKind:
+        | "return"
+        | "throw"
+        | "break"
+        | "continue"
+        | "yield";
+      readonly thenAbruptStatementRange: SourceRange;
+      readonly thenAbruptTargetKind:
+        | "while"
+        | "do"
+        | "for"
+        | "enhanced-for"
+        | "block"
+        | "statement"
+        | "switch"
+        | "switch-expression"
+        | null;
+      readonly thenAbruptTargetRange: SourceRange | null;
+      readonly thenAbruptTargetBodyRange: SourceRange | null;
+      readonly thenAbruptTargetCaseGroupRange: SourceRange | null;
+      readonly thenAbruptTargetCaseLabelRanges: readonly SourceRange[];
+      readonly thenAbruptTargetRuleRange: SourceRange | null;
+      readonly thenAbruptTargetRuleBodyRange: SourceRange | null;
+      readonly thenAbruptTargetRuleLabelRange: SourceRange | null;
+      readonly thenAbruptTargetExpressionContext:
+        | "return"
+        | "initializer"
+        | "assignment"
+        | "yield"
+        | null;
+      readonly thenAbruptTargetLabel: string | null;
+      readonly thenAbruptTargetLabelRange: SourceRange | null;
+      readonly thenAbruptWrapperKind: "try-finally";
+      readonly thenAbruptWrapperPolicy: "java-source-transparent-finally-v1";
+      readonly thenAbruptWrapperRange: SourceRange;
+      readonly thenAbruptWrapperTryBodyRange: SourceRange;
+      readonly thenAbruptWrapperFinallyRange: SourceRange;
+      readonly thenAbruptWrapperFinallyBodyRange: SourceRange;
+      readonly thenAbruptWrapperFinallyStatementRanges: readonly SourceRange[];
+      readonly thenAbruptWrapperBounds: {
+        readonly maximumFinallyStatements: number;
+        readonly observedFinallyStatements: number;
+      };
       readonly elseBodyKind: "block" | "statement";
       readonly elseBodyRange: SourceRange;
       readonly activeRegion: "else-body" | "following-scope";
@@ -1833,6 +1945,13 @@ export type JavaMemberCallReferenceFact =
       readonly receiverExitBodyRange: SourceRange;
       readonly receiverAbruptCompletionKind: "return" | "throw";
       readonly receiverAbruptStatementRange: SourceRange;
+      readonly receiverAbruptWrapperKind: "try-finally" | null;
+      readonly receiverAbruptWrapperRange: SourceRange | null;
+      readonly receiverAbruptWrapperTryBodyRange: SourceRange | null;
+      readonly receiverAbruptWrapperFinallyRange: SourceRange | null;
+      readonly receiverAbruptWrapperFinallyBodyRange: SourceRange | null;
+      readonly receiverAbruptWrapperFinallyStatementRanges: readonly SourceRange[];
+      readonly receiverAbruptWrapperMaximumFinallyStatements: number;
     })
   | (JavaMemberCallReferenceBaseFact & {
       readonly receiverKind: "instanceof-negated-target-exit-pattern";
@@ -1850,6 +1969,13 @@ export type JavaMemberCallReferenceFact =
       readonly receiverExitBodyRange: SourceRange;
       readonly receiverAbruptCompletionKind: "break" | "continue" | "yield";
       readonly receiverAbruptStatementRange: SourceRange;
+      readonly receiverAbruptWrapperKind: "try-finally" | null;
+      readonly receiverAbruptWrapperRange: SourceRange | null;
+      readonly receiverAbruptWrapperTryBodyRange: SourceRange | null;
+      readonly receiverAbruptWrapperFinallyRange: SourceRange | null;
+      readonly receiverAbruptWrapperFinallyBodyRange: SourceRange | null;
+      readonly receiverAbruptWrapperFinallyStatementRanges: readonly SourceRange[];
+      readonly receiverAbruptWrapperMaximumFinallyStatements: number;
       readonly receiverAbruptTargetKind:
         | "while"
         | "do"
@@ -1897,6 +2023,13 @@ export type JavaMemberCallReferenceFact =
         | "yield"
         | null;
       readonly receiverThenAbruptStatementRange: SourceRange | null;
+      readonly receiverThenAbruptWrapperKind: "try-finally" | null;
+      readonly receiverThenAbruptWrapperRange: SourceRange | null;
+      readonly receiverThenAbruptWrapperTryBodyRange: SourceRange | null;
+      readonly receiverThenAbruptWrapperFinallyRange: SourceRange | null;
+      readonly receiverThenAbruptWrapperFinallyBodyRange: SourceRange | null;
+      readonly receiverThenAbruptWrapperFinallyStatementRanges: readonly SourceRange[];
+      readonly receiverThenAbruptWrapperMaximumFinallyStatements: number;
       readonly receiverThenAbruptTargetKind:
         | "while"
         | "do"

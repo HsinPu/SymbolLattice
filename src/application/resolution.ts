@@ -9830,12 +9830,11 @@ function projectJavaCallReferences(input: {
           maximumOperands: reference.receiverMaximumOperands
         };
       } else if (reference.receiverKind === "instanceof-negated-early-exit-pattern") {
-        receiverBinding = {
-          policy: "java-source-lexical-binding-v14",
-          kind: "instanceof-negated-early-exit-pattern",
+        const receiverBindingBase = {
+          kind: "instanceof-negated-early-exit-pattern" as const,
           name: reference.receiverName,
           type: resolvedBindingType.evidence,
-          typeSource: "instanceof-pattern",
+          typeSource: "instanceof-pattern" as const,
           declarationRange: reference.receiverBindingRange,
           scopeRange: reference.receiverScopeRange,
           conditionRange: reference.receiverConditionRange,
@@ -9849,6 +9848,48 @@ function projectJavaCallReferences(input: {
           abruptCompletionKind: reference.receiverAbruptCompletionKind,
           abruptStatementRange: reference.receiverAbruptStatementRange
         };
+        if (
+          reference.receiverAbruptWrapperKind === "try-finally" &&
+          reference.receiverAbruptWrapperRange !== null &&
+          reference.receiverAbruptWrapperTryBodyRange !== null &&
+          reference.receiverAbruptWrapperFinallyRange !== null &&
+          reference.receiverAbruptWrapperFinallyBodyRange !== null
+        ) {
+          receiverBinding = {
+            ...receiverBindingBase,
+            policy: "java-source-lexical-binding-v24",
+            abruptTargetKind: null,
+            abruptTargetRange: null,
+            abruptTargetBodyRange: null,
+            abruptTargetCaseGroupRange: null,
+            abruptTargetCaseLabelRanges: [],
+            abruptTargetRuleRange: null,
+            abruptTargetRuleBodyRange: null,
+            abruptTargetRuleLabelRange: null,
+            abruptTargetExpressionContext: null,
+            abruptTargetLabel: null,
+            abruptTargetLabelRange: null,
+            abruptWrapperKind: "try-finally",
+            abruptWrapperPolicy: "java-source-transparent-finally-v1",
+            abruptWrapperRange: reference.receiverAbruptWrapperRange,
+            abruptWrapperTryBodyRange: reference.receiverAbruptWrapperTryBodyRange,
+            abruptWrapperFinallyRange: reference.receiverAbruptWrapperFinallyRange,
+            abruptWrapperFinallyBodyRange: reference.receiverAbruptWrapperFinallyBodyRange,
+            abruptWrapperFinallyStatementRanges:
+              reference.receiverAbruptWrapperFinallyStatementRanges,
+            abruptWrapperBounds: {
+              maximumFinallyStatements:
+                reference.receiverAbruptWrapperMaximumFinallyStatements,
+              observedFinallyStatements:
+                reference.receiverAbruptWrapperFinallyStatementRanges.length
+            }
+          };
+        } else {
+          receiverBinding = {
+            ...receiverBindingBase,
+            policy: "java-source-lexical-binding-v14"
+          };
+        }
       } else if (reference.receiverKind === "instanceof-negated-target-exit-pattern") {
         const receiverBindingBase = {
           kind: "instanceof-negated-target-exit-pattern",
@@ -9869,6 +9910,42 @@ function projectJavaCallReferences(input: {
           abruptStatementRange: reference.receiverAbruptStatementRange
         } as const;
         if (
+          reference.receiverAbruptWrapperKind === "try-finally" &&
+          reference.receiverAbruptWrapperRange !== null &&
+          reference.receiverAbruptWrapperTryBodyRange !== null &&
+          reference.receiverAbruptWrapperFinallyRange !== null &&
+          reference.receiverAbruptWrapperFinallyBodyRange !== null
+        ) {
+          receiverBinding = {
+            ...receiverBindingBase,
+            policy: "java-source-lexical-binding-v24",
+            abruptTargetKind: reference.receiverAbruptTargetKind,
+            abruptTargetRange: reference.receiverAbruptTargetRange,
+            abruptTargetBodyRange: reference.receiverAbruptTargetBodyRange,
+            abruptTargetCaseGroupRange: reference.receiverAbruptTargetCaseGroupRange,
+            abruptTargetCaseLabelRanges: reference.receiverAbruptTargetCaseLabelRanges,
+            abruptTargetRuleRange: reference.receiverAbruptTargetRuleRange,
+            abruptTargetRuleBodyRange: reference.receiverAbruptTargetRuleBodyRange,
+            abruptTargetRuleLabelRange: reference.receiverAbruptTargetRuleLabelRange,
+            abruptTargetExpressionContext: reference.receiverAbruptTargetExpressionContext,
+            abruptTargetLabel: reference.receiverAbruptTargetLabel,
+            abruptTargetLabelRange: reference.receiverAbruptTargetLabelRange,
+            abruptWrapperKind: "try-finally",
+            abruptWrapperPolicy: "java-source-transparent-finally-v1",
+            abruptWrapperRange: reference.receiverAbruptWrapperRange,
+            abruptWrapperTryBodyRange: reference.receiverAbruptWrapperTryBodyRange,
+            abruptWrapperFinallyRange: reference.receiverAbruptWrapperFinallyRange,
+            abruptWrapperFinallyBodyRange: reference.receiverAbruptWrapperFinallyBodyRange,
+            abruptWrapperFinallyStatementRanges:
+              reference.receiverAbruptWrapperFinallyStatementRanges,
+            abruptWrapperBounds: {
+              maximumFinallyStatements:
+                reference.receiverAbruptWrapperMaximumFinallyStatements,
+              observedFinallyStatements:
+                reference.receiverAbruptWrapperFinallyStatementRanges.length
+            }
+          };
+        } else if (
           reference.receiverAbruptTargetKind === "switch-expression" &&
           reference.receiverAbruptCompletionKind === "yield" &&
           reference.receiverAbruptTargetRuleRange !== null &&
@@ -9960,6 +10037,54 @@ function projectJavaCallReferences(input: {
           activeRegion: reference.receiverActiveRegion
         };
         if (
+          reference.receiverThenAbruptCompletionKind !== null &&
+          reference.receiverThenAbruptStatementRange !== null &&
+          reference.receiverThenAbruptWrapperKind === "try-finally" &&
+          reference.receiverThenAbruptWrapperRange !== null &&
+          reference.receiverThenAbruptWrapperTryBodyRange !== null &&
+          reference.receiverThenAbruptWrapperFinallyRange !== null &&
+          reference.receiverThenAbruptWrapperFinallyBodyRange !== null
+        ) {
+          receiverBinding = {
+            ...receiverBindingBase,
+            policy: "java-source-lexical-binding-v25",
+            thenAbruptCompletionKind: reference.receiverThenAbruptCompletionKind,
+            thenAbruptStatementRange: reference.receiverThenAbruptStatementRange,
+            thenAbruptTargetKind: reference.receiverThenAbruptTargetKind,
+            thenAbruptTargetRange: reference.receiverThenAbruptTargetRange,
+            thenAbruptTargetBodyRange: reference.receiverThenAbruptTargetBodyRange,
+            thenAbruptTargetCaseGroupRange:
+              reference.receiverThenAbruptTargetCaseGroupRange,
+            thenAbruptTargetCaseLabelRanges:
+              reference.receiverThenAbruptTargetCaseLabelRanges,
+            thenAbruptTargetRuleRange: reference.receiverThenAbruptTargetRuleRange,
+            thenAbruptTargetRuleBodyRange:
+              reference.receiverThenAbruptTargetRuleBodyRange,
+            thenAbruptTargetRuleLabelRange:
+              reference.receiverThenAbruptTargetRuleLabelRange,
+            thenAbruptTargetExpressionContext:
+              reference.receiverThenAbruptTargetExpressionContext,
+            thenAbruptTargetLabel: reference.receiverThenAbruptTargetLabel,
+            thenAbruptTargetLabelRange: reference.receiverThenAbruptTargetLabelRange,
+            thenAbruptWrapperKind: "try-finally",
+            thenAbruptWrapperPolicy: "java-source-transparent-finally-v1",
+            thenAbruptWrapperRange: reference.receiverThenAbruptWrapperRange,
+            thenAbruptWrapperTryBodyRange:
+              reference.receiverThenAbruptWrapperTryBodyRange,
+            thenAbruptWrapperFinallyRange:
+              reference.receiverThenAbruptWrapperFinallyRange,
+            thenAbruptWrapperFinallyBodyRange:
+              reference.receiverThenAbruptWrapperFinallyBodyRange,
+            thenAbruptWrapperFinallyStatementRanges:
+              reference.receiverThenAbruptWrapperFinallyStatementRanges,
+            thenAbruptWrapperBounds: {
+              maximumFinallyStatements:
+                reference.receiverThenAbruptWrapperMaximumFinallyStatements,
+              observedFinallyStatements:
+                reference.receiverThenAbruptWrapperFinallyStatementRanges.length
+            }
+          };
+        } else if (
           reference.receiverThenAbruptCompletionKind === "yield" &&
           reference.receiverThenAbruptStatementRange !== null &&
           reference.receiverThenAbruptTargetKind === "switch-expression" &&

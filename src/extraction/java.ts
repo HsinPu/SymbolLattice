@@ -141,6 +141,13 @@ type StaticJavaInstanceofAndPatternSyntax =
       readonly exitBodyRange: SourceRange;
       readonly abruptCompletionKind: "return" | "throw" | "break" | "continue" | "yield";
       readonly abruptStatementRange: SourceRange;
+      readonly abruptWrapperKind: "try-finally" | null;
+      readonly abruptWrapperRange: SourceRange | null;
+      readonly abruptWrapperTryBodyRange: SourceRange | null;
+      readonly abruptWrapperFinallyRange: SourceRange | null;
+      readonly abruptWrapperFinallyBodyRange: SourceRange | null;
+      readonly abruptWrapperFinallyStatementRanges: readonly SourceRange[];
+      readonly abruptWrapperMaximumFinallyStatements: number;
       readonly abruptTargetKind: StaticJavaAbruptTargetKind | null;
       readonly abruptTargetRange: SourceRange | null;
       readonly abruptTargetBodyRange: SourceRange | null;
@@ -179,6 +186,13 @@ type StaticJavaInstanceofAndPatternSyntax =
         | "yield"
         | null;
       readonly thenAbruptStatementRange: SourceRange | null;
+      readonly thenAbruptWrapperKind: "try-finally" | null;
+      readonly thenAbruptWrapperRange: SourceRange | null;
+      readonly thenAbruptWrapperTryBodyRange: SourceRange | null;
+      readonly thenAbruptWrapperFinallyRange: SourceRange | null;
+      readonly thenAbruptWrapperFinallyBodyRange: SourceRange | null;
+      readonly thenAbruptWrapperFinallyStatementRanges: readonly SourceRange[];
+      readonly thenAbruptWrapperMaximumFinallyStatements: number;
       readonly thenAbruptTargetKind: StaticJavaAbruptTargetKind | null;
       readonly thenAbruptTargetRange: SourceRange | null;
       readonly thenAbruptTargetBodyRange: SourceRange | null;
@@ -561,6 +575,87 @@ interface StaticJavaSwitchYieldTarget {
   readonly ruleLabel: SgNode;
   readonly expressionContext: "return" | "initializer" | "assignment" | "yield";
   readonly followingScopeEnd: number;
+}
+
+const JAVA_NEGATED_PATTERN_MAXIMUM_FINALLY_STATEMENTS = 8;
+
+interface StaticJavaTransparentFinallyWrapper {
+  readonly node: SgNode;
+  readonly tryBody: SgNode;
+  readonly abruptStatement: SgNode;
+  readonly finallyClause: SgNode;
+  readonly finallyBody: SgNode;
+  readonly finallyStatements: readonly SgNode[];
+}
+
+function javaTransparentFinallyWrapper(
+  node: SgNode
+): StaticJavaTransparentFinallyWrapper | null {
+  if (node.kind() !== "try_statement") {
+    return null;
+  }
+  const children = astGrepChildren(node);
+  const tryBody = children[1];
+  const finallyClause = children[2];
+  if (
+    children.length !== 3 ||
+    children[0]?.kind() !== "try" ||
+    tryBody?.kind() !== "block" ||
+    finallyClause?.kind() !== "finally_clause"
+  ) {
+    return null;
+  }
+  const tryStatements = astGrepChildren(tryBody).filter(
+    (child) => child.kind() !== "{" && child.kind() !== "}"
+  );
+  const abruptStatement = tryStatements[0];
+  if (
+    tryStatements.length !== 1 ||
+    abruptStatement === undefined ||
+    (abruptStatement.kind() !== "return_statement" &&
+      abruptStatement.kind() !== "throw_statement" &&
+      abruptStatement.kind() !== "break_statement" &&
+      abruptStatement.kind() !== "continue_statement" &&
+      abruptStatement.kind() !== "yield_statement")
+  ) {
+    return null;
+  }
+  const finallyChildren = astGrepChildren(finallyClause);
+  const finallyBody = finallyChildren[1];
+  if (
+    finallyChildren.length !== 2 ||
+    finallyChildren[0]?.kind() !== "finally" ||
+    finallyBody?.kind() !== "block"
+  ) {
+    return null;
+  }
+  const finallyStatements = astGrepChildren(finallyBody).filter(
+    (child) => child.kind() !== "{" && child.kind() !== "}"
+  );
+  if (
+    finallyStatements.length > JAVA_NEGATED_PATTERN_MAXIMUM_FINALLY_STATEMENTS ||
+    finallyStatements.some(
+      (statement) =>
+        (statement.kind() !== "expression_statement" &&
+          statement.kind() !== "local_variable_declaration" &&
+          statement.kind() !== "empty_statement") ||
+        astGrepContainsKind(statement, "return_statement") ||
+        astGrepContainsKind(statement, "throw_statement") ||
+        astGrepContainsKind(statement, "break_statement") ||
+        astGrepContainsKind(statement, "continue_statement") ||
+        astGrepContainsKind(statement, "yield_statement")
+    )
+  ) {
+    return null;
+  }
+  return {
+    node,
+    tryBody,
+    abruptStatement,
+    finallyClause,
+    finallyBody,
+    finallyStatements
+  };
 }
 
 function javaLoopTargetKind(node: SgNode): StaticJavaLoopTargetKind | null {
@@ -1005,7 +1100,10 @@ function javaNegatedEarlyExitPatternSyntax(input: {
   const blockStatements = exitBodyChildren.filter(
     (child) => child.kind() !== "{" && child.kind() !== "}"
   );
-  const abruptStatement = exitBody.kind() === "block" ? blockStatements.at(-1) : exitBody;
+  const abruptCandidate = exitBody.kind() === "block" ? blockStatements.at(-1) : exitBody;
+  const abruptWrapper =
+    abruptCandidate === undefined ? null : javaTransparentFinallyWrapper(abruptCandidate);
+  const abruptStatement = abruptWrapper?.abruptStatement ?? abruptCandidate;
   const abruptCompletionKind =
     abruptStatement?.kind() === "return_statement"
       ? "return"
@@ -1074,6 +1172,10 @@ function javaNegatedEarlyExitPatternSyntax(input: {
   const patternOffsets = pattern.range();
   const exitBodyOffsets = exitBody.range();
   const abruptOffsets = abruptStatement.range();
+  const abruptWrapperOffsets = abruptWrapper?.node.range();
+  const abruptWrapperTryBodyOffsets = abruptWrapper?.tryBody.range();
+  const abruptWrapperFinallyOffsets = abruptWrapper?.finallyClause.range();
+  const abruptWrapperFinallyBodyOffsets = abruptWrapper?.finallyBody.range();
   const abruptTargetOffsets = abruptTarget?.node.range();
   const abruptTargetBodyOffsets =
     switchYieldTarget?.body.range() ??
@@ -1132,6 +1234,45 @@ function javaNegatedEarlyExitPatternSyntax(input: {
       abruptOffsets.start.index,
       abruptOffsets.end.index
     ),
+    abruptWrapperKind: abruptWrapper === null ? null : "try-finally",
+    abruptWrapperRange:
+      abruptWrapperOffsets === undefined
+        ? null
+        : rangeFor(
+            input.lineStarts,
+            abruptWrapperOffsets.start.index,
+            abruptWrapperOffsets.end.index
+          ),
+    abruptWrapperTryBodyRange:
+      abruptWrapperTryBodyOffsets === undefined
+        ? null
+        : rangeFor(
+            input.lineStarts,
+            abruptWrapperTryBodyOffsets.start.index,
+            abruptWrapperTryBodyOffsets.end.index
+          ),
+    abruptWrapperFinallyRange:
+      abruptWrapperFinallyOffsets === undefined
+        ? null
+        : rangeFor(
+            input.lineStarts,
+            abruptWrapperFinallyOffsets.start.index,
+            abruptWrapperFinallyOffsets.end.index
+          ),
+    abruptWrapperFinallyBodyRange:
+      abruptWrapperFinallyBodyOffsets === undefined
+        ? null
+        : rangeFor(
+            input.lineStarts,
+            abruptWrapperFinallyBodyOffsets.start.index,
+            abruptWrapperFinallyBodyOffsets.end.index
+          ),
+    abruptWrapperFinallyStatementRanges:
+      abruptWrapper?.finallyStatements.map((statement) => {
+        const offsets = statement.range();
+        return rangeFor(input.lineStarts, offsets.start.index, offsets.end.index);
+      }) ?? [],
+    abruptWrapperMaximumFinallyStatements: JAVA_NEGATED_PATTERN_MAXIMUM_FINALLY_STATEMENTS,
     abruptTargetKind: abruptTarget?.kind ?? null,
     abruptTargetRange:
       abruptTargetOffsets === undefined
@@ -1273,7 +1414,10 @@ function javaNegatedElsePatternSyntax(input: {
     thenBody.kind() === "block"
       ? astGrepChildren(thenBody).filter((child) => child.kind() !== "{" && child.kind() !== "}")
       : [];
-  const abruptStatement = thenBody.kind() === "block" ? thenStatements.at(-1) : thenBody;
+  const abruptCandidate = thenBody.kind() === "block" ? thenStatements.at(-1) : thenBody;
+  const abruptWrapper =
+    abruptCandidate === undefined ? null : javaTransparentFinallyWrapper(abruptCandidate);
+  const abruptStatement = abruptWrapper?.abruptStatement ?? abruptCandidate;
   const candidateAbruptCompletionKind =
     abruptStatement?.kind() === "return_statement"
       ? "return"
@@ -1340,6 +1484,14 @@ function javaNegatedElsePatternSyntax(input: {
   const thenBodyOffsets = thenBody.range();
   const elseBodyOffsets = elseBody.range();
   const abruptOffsets = thenAbruptCompletionKind === null ? null : abruptStatement!.range();
+  const abruptWrapperOffsets =
+    thenAbruptCompletionKind === null ? undefined : abruptWrapper?.node.range();
+  const abruptWrapperTryBodyOffsets =
+    thenAbruptCompletionKind === null ? undefined : abruptWrapper?.tryBody.range();
+  const abruptWrapperFinallyOffsets =
+    thenAbruptCompletionKind === null ? undefined : abruptWrapper?.finallyClause.range();
+  const abruptWrapperFinallyBodyOffsets =
+    thenAbruptCompletionKind === null ? undefined : abruptWrapper?.finallyBody.range();
   const abruptTargetOffsets = abruptTarget?.node.range();
   const abruptTargetBodyOffsets =
     switchYieldTarget?.body.range() ??
@@ -1397,6 +1549,49 @@ function javaNegatedElsePatternSyntax(input: {
       abruptOffsets === null
         ? null
         : rangeFor(input.lineStarts, abruptOffsets.start.index, abruptOffsets.end.index),
+    thenAbruptWrapperKind:
+      thenAbruptCompletionKind === null || abruptWrapper === null ? null : "try-finally",
+    thenAbruptWrapperRange:
+      abruptWrapperOffsets === undefined
+        ? null
+        : rangeFor(
+            input.lineStarts,
+            abruptWrapperOffsets.start.index,
+            abruptWrapperOffsets.end.index
+          ),
+    thenAbruptWrapperTryBodyRange:
+      abruptWrapperTryBodyOffsets === undefined
+        ? null
+        : rangeFor(
+            input.lineStarts,
+            abruptWrapperTryBodyOffsets.start.index,
+            abruptWrapperTryBodyOffsets.end.index
+          ),
+    thenAbruptWrapperFinallyRange:
+      abruptWrapperFinallyOffsets === undefined
+        ? null
+        : rangeFor(
+            input.lineStarts,
+            abruptWrapperFinallyOffsets.start.index,
+            abruptWrapperFinallyOffsets.end.index
+          ),
+    thenAbruptWrapperFinallyBodyRange:
+      abruptWrapperFinallyBodyOffsets === undefined
+        ? null
+        : rangeFor(
+            input.lineStarts,
+            abruptWrapperFinallyBodyOffsets.start.index,
+            abruptWrapperFinallyBodyOffsets.end.index
+          ),
+    thenAbruptWrapperFinallyStatementRanges:
+      thenAbruptCompletionKind === null
+        ? []
+        : (abruptWrapper?.finallyStatements.map((statement) => {
+            const offsets = statement.range();
+            return rangeFor(input.lineStarts, offsets.start.index, offsets.end.index);
+          }) ?? []),
+    thenAbruptWrapperMaximumFinallyStatements:
+      JAVA_NEGATED_PATTERN_MAXIMUM_FINALLY_STATEMENTS,
     thenAbruptTargetKind: abruptTarget?.kind ?? null,
     thenAbruptTargetRange:
       abruptTargetOffsets === undefined
@@ -3159,6 +3354,13 @@ function staticJavaMemberCallReferences(input: {
           readonly exitBodyRange: SourceRange;
           readonly abruptCompletionKind: "return" | "throw";
           readonly abruptStatementRange: SourceRange;
+          readonly abruptWrapperKind: "try-finally" | null;
+          readonly abruptWrapperRange: SourceRange | null;
+          readonly abruptWrapperTryBodyRange: SourceRange | null;
+          readonly abruptWrapperFinallyRange: SourceRange | null;
+          readonly abruptWrapperFinallyBodyRange: SourceRange | null;
+          readonly abruptWrapperFinallyStatementRanges: readonly SourceRange[];
+          readonly abruptWrapperMaximumFinallyStatements: number;
         }
       | {
           readonly kind: "instanceof-negated-target-exit-pattern";
@@ -3172,6 +3374,13 @@ function staticJavaMemberCallReferences(input: {
           readonly exitBodyRange: SourceRange;
           readonly abruptCompletionKind: "break" | "continue" | "yield";
           readonly abruptStatementRange: SourceRange;
+          readonly abruptWrapperKind: "try-finally" | null;
+          readonly abruptWrapperRange: SourceRange | null;
+          readonly abruptWrapperTryBodyRange: SourceRange | null;
+          readonly abruptWrapperFinallyRange: SourceRange | null;
+          readonly abruptWrapperFinallyBodyRange: SourceRange | null;
+          readonly abruptWrapperFinallyStatementRanges: readonly SourceRange[];
+          readonly abruptWrapperMaximumFinallyStatements: number;
           readonly abruptTargetKind: StaticJavaAbruptTargetKind;
           readonly abruptTargetRange: SourceRange;
           readonly abruptTargetBodyRange: SourceRange;
@@ -3204,6 +3413,13 @@ function staticJavaMemberCallReferences(input: {
             | "yield"
             | null;
           readonly thenAbruptStatementRange: SourceRange | null;
+          readonly thenAbruptWrapperKind: "try-finally" | null;
+          readonly thenAbruptWrapperRange: SourceRange | null;
+          readonly thenAbruptWrapperTryBodyRange: SourceRange | null;
+          readonly thenAbruptWrapperFinallyRange: SourceRange | null;
+          readonly thenAbruptWrapperFinallyBodyRange: SourceRange | null;
+          readonly thenAbruptWrapperFinallyStatementRanges: readonly SourceRange[];
+          readonly thenAbruptWrapperMaximumFinallyStatements: number;
           readonly thenAbruptTargetKind: StaticJavaAbruptTargetKind | null;
           readonly thenAbruptTargetRange: SourceRange | null;
           readonly thenAbruptTargetBodyRange: SourceRange | null;
@@ -3441,6 +3657,14 @@ function staticJavaMemberCallReferences(input: {
           exitBodyRange: pattern.exitBodyRange,
           abruptCompletionKind: pattern.abruptCompletionKind,
           abruptStatementRange: pattern.abruptStatementRange,
+          abruptWrapperKind: pattern.abruptWrapperKind,
+          abruptWrapperRange: pattern.abruptWrapperRange,
+          abruptWrapperTryBodyRange: pattern.abruptWrapperTryBodyRange,
+          abruptWrapperFinallyRange: pattern.abruptWrapperFinallyRange,
+          abruptWrapperFinallyBodyRange: pattern.abruptWrapperFinallyBodyRange,
+          abruptWrapperFinallyStatementRanges: pattern.abruptWrapperFinallyStatementRanges,
+          abruptWrapperMaximumFinallyStatements:
+            pattern.abruptWrapperMaximumFinallyStatements,
           abruptTargetKind: pattern.abruptTargetKind,
           abruptTargetRange: pattern.abruptTargetRange,
           abruptTargetBodyRange: pattern.abruptTargetBodyRange,
@@ -3470,7 +3694,14 @@ function staticJavaMemberCallReferences(input: {
         exitBodyKind: pattern.exitBodyKind,
         exitBodyRange: pattern.exitBodyRange,
         abruptCompletionKind: pattern.abruptCompletionKind,
-        abruptStatementRange: pattern.abruptStatementRange
+        abruptStatementRange: pattern.abruptStatementRange,
+        abruptWrapperKind: pattern.abruptWrapperKind,
+        abruptWrapperRange: pattern.abruptWrapperRange,
+        abruptWrapperTryBodyRange: pattern.abruptWrapperTryBodyRange,
+        abruptWrapperFinallyRange: pattern.abruptWrapperFinallyRange,
+        abruptWrapperFinallyBodyRange: pattern.abruptWrapperFinallyBodyRange,
+        abruptWrapperFinallyStatementRanges: pattern.abruptWrapperFinallyStatementRanges,
+        abruptWrapperMaximumFinallyStatements: pattern.abruptWrapperMaximumFinallyStatements
       };
     }
     if (pattern.kind === "negated-else") {
@@ -3485,6 +3716,15 @@ function staticJavaMemberCallReferences(input: {
         thenBodyRange: pattern.thenBodyRange,
         thenAbruptCompletionKind: pattern.thenAbruptCompletionKind,
         thenAbruptStatementRange: pattern.thenAbruptStatementRange,
+        thenAbruptWrapperKind: pattern.thenAbruptWrapperKind,
+        thenAbruptWrapperRange: pattern.thenAbruptWrapperRange,
+        thenAbruptWrapperTryBodyRange: pattern.thenAbruptWrapperTryBodyRange,
+        thenAbruptWrapperFinallyRange: pattern.thenAbruptWrapperFinallyRange,
+        thenAbruptWrapperFinallyBodyRange: pattern.thenAbruptWrapperFinallyBodyRange,
+        thenAbruptWrapperFinallyStatementRanges:
+          pattern.thenAbruptWrapperFinallyStatementRanges,
+        thenAbruptWrapperMaximumFinallyStatements:
+          pattern.thenAbruptWrapperMaximumFinallyStatements,
         thenAbruptTargetKind: pattern.thenAbruptTargetKind,
         thenAbruptTargetRange: pattern.thenAbruptTargetRange,
         thenAbruptTargetBodyRange: pattern.thenAbruptTargetBodyRange,
@@ -4705,6 +4945,15 @@ function staticJavaMemberCallReferences(input: {
                 receiverExitBodyRange: binding.exitBodyRange,
                 receiverAbruptCompletionKind: binding.abruptCompletionKind,
                 receiverAbruptStatementRange: binding.abruptStatementRange,
+                receiverAbruptWrapperKind: binding.abruptWrapperKind,
+                receiverAbruptWrapperRange: binding.abruptWrapperRange,
+                receiverAbruptWrapperTryBodyRange: binding.abruptWrapperTryBodyRange,
+                receiverAbruptWrapperFinallyRange: binding.abruptWrapperFinallyRange,
+                receiverAbruptWrapperFinallyBodyRange: binding.abruptWrapperFinallyBodyRange,
+                receiverAbruptWrapperFinallyStatementRanges:
+                  binding.abruptWrapperFinallyStatementRanges,
+                receiverAbruptWrapperMaximumFinallyStatements:
+                  binding.abruptWrapperMaximumFinallyStatements,
                 methodName,
                 argumentCount: arguments_.length,
                 argumentTypes,
@@ -4730,6 +4979,15 @@ function staticJavaMemberCallReferences(input: {
                 receiverExitBodyRange: binding.exitBodyRange,
                 receiverAbruptCompletionKind: binding.abruptCompletionKind,
                 receiverAbruptStatementRange: binding.abruptStatementRange,
+                receiverAbruptWrapperKind: binding.abruptWrapperKind,
+                receiverAbruptWrapperRange: binding.abruptWrapperRange,
+                receiverAbruptWrapperTryBodyRange: binding.abruptWrapperTryBodyRange,
+                receiverAbruptWrapperFinallyRange: binding.abruptWrapperFinallyRange,
+                receiverAbruptWrapperFinallyBodyRange: binding.abruptWrapperFinallyBodyRange,
+                receiverAbruptWrapperFinallyStatementRanges:
+                  binding.abruptWrapperFinallyStatementRanges,
+                receiverAbruptWrapperMaximumFinallyStatements:
+                  binding.abruptWrapperMaximumFinallyStatements,
                 receiverAbruptTargetKind: binding.abruptTargetKind,
                 receiverAbruptTargetRange: binding.abruptTargetRange,
                 receiverAbruptTargetBodyRange: binding.abruptTargetBodyRange,
@@ -4766,6 +5024,16 @@ function staticJavaMemberCallReferences(input: {
                 receiverThenBodyRange: binding.thenBodyRange,
                 receiverThenAbruptCompletionKind: binding.thenAbruptCompletionKind,
                 receiverThenAbruptStatementRange: binding.thenAbruptStatementRange,
+                receiverThenAbruptWrapperKind: binding.thenAbruptWrapperKind,
+                receiverThenAbruptWrapperRange: binding.thenAbruptWrapperRange,
+                receiverThenAbruptWrapperTryBodyRange: binding.thenAbruptWrapperTryBodyRange,
+                receiverThenAbruptWrapperFinallyRange: binding.thenAbruptWrapperFinallyRange,
+                receiverThenAbruptWrapperFinallyBodyRange:
+                  binding.thenAbruptWrapperFinallyBodyRange,
+                receiverThenAbruptWrapperFinallyStatementRanges:
+                  binding.thenAbruptWrapperFinallyStatementRanges,
+                receiverThenAbruptWrapperMaximumFinallyStatements:
+                  binding.thenAbruptWrapperMaximumFinallyStatements,
                 receiverThenAbruptTargetKind: binding.thenAbruptTargetKind,
                 receiverThenAbruptTargetRange: binding.thenAbruptTargetRange,
                 receiverThenAbruptTargetBodyRange: binding.thenAbruptTargetBodyRange,

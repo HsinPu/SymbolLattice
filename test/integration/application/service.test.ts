@@ -5031,6 +5031,196 @@ describe("SymbolLatticeService", () => {
     expect(callAt("src/app/ColonYield.java", 8)).toBeUndefined();
   });
 
+  it("binds Java negated patterns through a bounded transparent try-finally wrapper", async () => {
+    const projectPath = await createInlineProject({
+      "src/api/Service.java": [
+        "package api;",
+        "public class Service { public void execute(String value) {} }"
+      ].join("\n"),
+      "src/app/TryFinallyReturn.java": [
+        "package app;",
+        "import api.Service;",
+        "public class TryFinallyReturn {",
+        "  public Service run(Object value, Service fallback) {",
+        "    if (!(value instanceof Service service)) try { return fallback; } finally {",
+        "      cleanup();",
+        "      int marker = 1;",
+        "    }",
+        "    service.execute(\"following\");",
+        "    return service;",
+        "  }",
+        "  private void cleanup() {}",
+        "}"
+      ].join("\n"),
+      "src/app/TryFinallyElse.java": [
+        "package app;",
+        "import api.Service;",
+        "public class TryFinallyElse {",
+        "  public Service run(Object value) {",
+        "    if (!(value instanceof Service service)) try {",
+        "      throw new IllegalArgumentException();",
+        "    } finally { cleanup(); } else {",
+        "      service.execute(\"else\");",
+        "    }",
+        "    service.execute(\"following\");",
+        "    return service;",
+        "  }",
+        "  private void cleanup() {}",
+        "}"
+      ].join("\n"),
+      "src/app/TryFinallyBreak.java": [
+        "package app;",
+        "import api.Service;",
+        "public class TryFinallyBreak {",
+        "  public void run(Object value) {",
+        "    while (true) {",
+        "      if (!(value instanceof Service service)) try { break; } finally { cleanup(); }",
+        "      service.execute(\"inside\");",
+        "      break;",
+        "    }",
+        "  }",
+        "  private void cleanup() {}",
+        "}"
+      ].join("\n"),
+      "src/app/TryFinallyYield.java": [
+        "package app;",
+        "import api.Service;",
+        "public class TryFinallyYield {",
+        "  public Service run(int selector, Object value, Service fallback) {",
+        "    return switch (selector) {",
+        "      case 1 -> {",
+        "        if (!(value instanceof Service service)) try { yield fallback; } finally { cleanup(); }",
+        "        service.execute(\"following\");",
+        "        yield service;",
+        "      }",
+        "      default -> fallback;",
+        "    };",
+        "  }",
+        "  private void cleanup() {}",
+        "}"
+      ].join("\n"),
+      "src/app/CatchFallsThrough.java": [
+        "package app;",
+        "import api.Service;",
+        "public class CatchFallsThrough {",
+        "  public Service run(Object value) {",
+        "    if (!(value instanceof Service service)) try {",
+        "      throw new IllegalArgumentException();",
+        "    } catch (IllegalArgumentException ignored) {}",
+        "    service.execute(\"unsafe-catch\");",
+        "    return service;",
+        "  }",
+        "}"
+      ].join("\n"),
+      "src/app/FinallyTransfers.java": [
+        "package app;",
+        "import api.Service;",
+        "public class FinallyTransfers {",
+        "  public Service run(Object value, Service fallback, boolean flag) {",
+        "    if (!(value instanceof Service service)) try { return fallback; } finally {",
+        "      if (flag) return fallback;",
+        "    }",
+        "    service.execute(\"unsafe-finally\");",
+        "    return service;",
+        "  }",
+        "}"
+      ].join("\n"),
+      "src/app/FinallyOverflow.java": [
+        "package app;",
+        "import api.Service;",
+        "public class FinallyOverflow {",
+        "  public Service run(Object value, Service fallback) {",
+        "    if (!(value instanceof Service service)) try { return fallback; } finally {",
+        "      cleanup(); cleanup(); cleanup(); cleanup(); cleanup();",
+        "      cleanup(); cleanup(); cleanup(); cleanup();",
+        "    }",
+        "    service.execute(\"unsafe-overflow\");",
+        "    return service;",
+        "  }",
+        "  private void cleanup() {}",
+        "}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+
+    const snapshot = graphStore.getSnapshot(projectPath);
+    const calls = snapshot.edges.filter((edge) => edge.kind === "calls");
+    const callAt = (filePath: string, line: number) =>
+      calls.find(
+        (edge) =>
+          edge.filePath === filePath &&
+          edge.range.start.line === line &&
+          edge.referenceName === "execute"
+      );
+    const targetId = snapshot.symbols.find(
+      (candidate) => candidate.qualifiedName === "src/api/Service.java#Service.execute"
+    )?.id;
+    const returnCall = callAt("src/app/TryFinallyReturn.java", 9);
+    expect(returnCall?.targetId).toBe(targetId);
+    expect(returnCall?.evidence?.callDispatch?.receiverBinding).toEqual(
+      expect.objectContaining({
+        policy: "java-source-lexical-binding-v24",
+        abruptCompletionKind: "return",
+        abruptWrapperKind: "try-finally",
+        abruptWrapperPolicy: "java-source-transparent-finally-v1",
+        abruptWrapperBounds: {
+          maximumFinallyStatements: 8,
+          observedFinallyStatements: 2
+        },
+        abruptWrapperRange: expect.objectContaining({
+          start: expect.objectContaining({ line: 5 }),
+          end: expect.objectContaining({ line: 8 })
+        }),
+        abruptWrapperTryBodyRange: expect.objectContaining({
+          start: expect.objectContaining({ line: 5 })
+        }),
+        abruptWrapperFinallyBodyRange: expect.objectContaining({
+          start: expect.objectContaining({ line: 5 }),
+          end: expect.objectContaining({ line: 8 })
+        }),
+        abruptWrapperFinallyStatementRanges: [
+          expect.objectContaining({ start: expect.objectContaining({ line: 6 }) }),
+          expect.objectContaining({ start: expect.objectContaining({ line: 7 }) })
+        ]
+      })
+    );
+    expect(callAt("src/app/TryFinallyElse.java", 8)?.targetId).toBe(targetId);
+    expect(callAt("src/app/TryFinallyElse.java", 8)?.evidence?.callDispatch?.receiverBinding).toEqual(
+      expect.objectContaining({
+        policy: "java-source-lexical-binding-v25",
+        activeRegion: "else-body",
+        thenAbruptCompletionKind: "throw",
+        thenAbruptWrapperKind: "try-finally",
+        thenAbruptWrapperPolicy: "java-source-transparent-finally-v1"
+      })
+    );
+    expect(callAt("src/app/TryFinallyElse.java", 10)?.targetId).toBe(targetId);
+    expect(callAt("src/app/TryFinallyBreak.java", 7)?.targetId).toBe(targetId);
+    expect(callAt("src/app/TryFinallyBreak.java", 7)?.evidence?.callDispatch?.receiverBinding).toEqual(
+      expect.objectContaining({
+        policy: "java-source-lexical-binding-v24",
+        abruptCompletionKind: "break",
+        abruptTargetKind: "while",
+        abruptWrapperKind: "try-finally"
+      })
+    );
+    expect(callAt("src/app/TryFinallyYield.java", 8)?.targetId).toBe(targetId);
+    expect(callAt("src/app/TryFinallyYield.java", 8)?.evidence?.callDispatch?.receiverBinding).toEqual(
+      expect.objectContaining({
+        policy: "java-source-lexical-binding-v24",
+        abruptCompletionKind: "yield",
+        abruptTargetKind: "switch-expression",
+        abruptWrapperKind: "try-finally"
+      })
+    );
+    expect(callAt("src/app/CatchFallsThrough.java", 8)).toBeUndefined();
+    expect(callAt("src/app/FinallyTransfers.java", 8)).toBeUndefined();
+    expect(callAt("src/app/FinallyOverflow.java", 9)).toBeUndefined();
+  });
+
   it("binds a Java negated else pattern after a proven unlabeled loop exit", async () => {
     const projectPath = await createInlineProject({
       "src/api/Service.java": [
