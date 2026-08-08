@@ -13,13 +13,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v236";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v237";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v125";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v126";
 
 /** Hard cap for one source-proven Java exhaustive if/else-if/else assignment join. */
 export const JAVA_EXHAUSTIVE_ASSIGNMENT_JOIN_MAXIMUM_BRANCHES = 8;
@@ -421,6 +421,28 @@ export type CallReceiverBindingEvidence =
       readonly abruptTargetCaseLabelRanges: readonly SourceRange[];
     })
   | (CallReceiverBindingEvidenceBase & {
+      readonly kind: "instanceof-negated-target-exit-pattern";
+      readonly policy: "java-source-lexical-binding-v22";
+      readonly typeSource: "instanceof-pattern";
+      readonly conditionRange: SourceRange;
+      readonly testedValueRange: SourceRange;
+      readonly negatedPatternRange: SourceRange;
+      readonly negationGroupingRanges: readonly SourceRange[];
+      readonly maximumGroupingDepth: number;
+      readonly guardStatementRange: SourceRange;
+      readonly exitBodyKind: "block" | "statement";
+      readonly exitBodyRange: SourceRange;
+      readonly abruptCompletionKind: "yield";
+      readonly abruptStatementRange: SourceRange;
+      readonly abruptTargetKind: "switch-expression";
+      readonly abruptTargetRange: SourceRange;
+      readonly abruptTargetBodyRange: SourceRange;
+      readonly abruptTargetRuleRange: SourceRange;
+      readonly abruptTargetRuleBodyRange: SourceRange;
+      readonly abruptTargetRuleLabelRange: SourceRange;
+      readonly abruptTargetExpressionContext: "return" | "initializer" | "assignment" | "yield";
+    })
+  | (CallReceiverBindingEvidenceBase & {
       readonly kind: "instanceof-negated-else-pattern";
       readonly policy: "java-source-lexical-binding-v15";
       readonly typeSource: "instanceof-pattern";
@@ -506,6 +528,35 @@ export type CallReceiverBindingEvidence =
       readonly thenAbruptTargetBodyRange: SourceRange;
       readonly thenAbruptTargetCaseGroupRange: SourceRange;
       readonly thenAbruptTargetCaseLabelRanges: readonly SourceRange[];
+      readonly elseBodyKind: "block" | "statement";
+      readonly elseBodyRange: SourceRange;
+      readonly activeRegion: "else-body" | "following-scope";
+    })
+  | (CallReceiverBindingEvidenceBase & {
+      readonly kind: "instanceof-negated-else-pattern";
+      readonly policy: "java-source-lexical-binding-v23";
+      readonly typeSource: "instanceof-pattern";
+      readonly conditionRange: SourceRange;
+      readonly testedValueRange: SourceRange;
+      readonly negatedPatternRange: SourceRange;
+      readonly negationGroupingRanges: readonly SourceRange[];
+      readonly maximumGroupingDepth: number;
+      readonly guardStatementRange: SourceRange;
+      readonly thenBodyKind: "block" | "statement";
+      readonly thenBodyRange: SourceRange;
+      readonly thenAbruptCompletionKind: "yield";
+      readonly thenAbruptStatementRange: SourceRange;
+      readonly thenAbruptTargetKind: "switch-expression";
+      readonly thenAbruptTargetRange: SourceRange;
+      readonly thenAbruptTargetBodyRange: SourceRange;
+      readonly thenAbruptTargetRuleRange: SourceRange;
+      readonly thenAbruptTargetRuleBodyRange: SourceRange;
+      readonly thenAbruptTargetRuleLabelRange: SourceRange;
+      readonly thenAbruptTargetExpressionContext:
+        | "return"
+        | "initializer"
+        | "assignment"
+        | "yield";
       readonly elseBodyKind: "block" | "statement";
       readonly elseBodyRange: SourceRange;
       readonly activeRegion: "else-body" | "following-scope";
@@ -1797,7 +1848,7 @@ export type JavaMemberCallReferenceFact =
       readonly receiverGuardStatementRange: SourceRange;
       readonly receiverExitBodyKind: "block" | "statement";
       readonly receiverExitBodyRange: SourceRange;
-      readonly receiverAbruptCompletionKind: "break" | "continue";
+      readonly receiverAbruptCompletionKind: "break" | "continue" | "yield";
       readonly receiverAbruptStatementRange: SourceRange;
       readonly receiverAbruptTargetKind:
         | "while"
@@ -1806,11 +1857,21 @@ export type JavaMemberCallReferenceFact =
         | "enhanced-for"
         | "block"
         | "statement"
-        | "switch";
+        | "switch"
+        | "switch-expression";
       readonly receiverAbruptTargetRange: SourceRange;
       readonly receiverAbruptTargetBodyRange: SourceRange;
       readonly receiverAbruptTargetCaseGroupRange: SourceRange | null;
       readonly receiverAbruptTargetCaseLabelRanges: readonly SourceRange[];
+      readonly receiverAbruptTargetRuleRange: SourceRange | null;
+      readonly receiverAbruptTargetRuleBodyRange: SourceRange | null;
+      readonly receiverAbruptTargetRuleLabelRange: SourceRange | null;
+      readonly receiverAbruptTargetExpressionContext:
+        | "return"
+        | "initializer"
+        | "assignment"
+        | "yield"
+        | null;
       readonly receiverAbruptTargetLabel: string | null;
       readonly receiverAbruptTargetLabelRange: SourceRange | null;
     })
@@ -1833,6 +1894,7 @@ export type JavaMemberCallReferenceFact =
         | "throw"
         | "break"
         | "continue"
+        | "yield"
         | null;
       readonly receiverThenAbruptStatementRange: SourceRange | null;
       readonly receiverThenAbruptTargetKind:
@@ -1843,11 +1905,21 @@ export type JavaMemberCallReferenceFact =
         | "block"
         | "statement"
         | "switch"
+        | "switch-expression"
         | null;
       readonly receiverThenAbruptTargetRange: SourceRange | null;
       readonly receiverThenAbruptTargetBodyRange: SourceRange | null;
       readonly receiverThenAbruptTargetCaseGroupRange: SourceRange | null;
       readonly receiverThenAbruptTargetCaseLabelRanges: readonly SourceRange[];
+      readonly receiverThenAbruptTargetRuleRange: SourceRange | null;
+      readonly receiverThenAbruptTargetRuleBodyRange: SourceRange | null;
+      readonly receiverThenAbruptTargetRuleLabelRange: SourceRange | null;
+      readonly receiverThenAbruptTargetExpressionContext:
+        | "return"
+        | "initializer"
+        | "assignment"
+        | "yield"
+        | null;
       readonly receiverThenAbruptTargetLabel: string | null;
       readonly receiverThenAbruptTargetLabelRange: SourceRange | null;
       readonly receiverElseBodyKind: "block" | "statement";

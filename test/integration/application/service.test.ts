@@ -4824,6 +4824,213 @@ describe("SymbolLatticeService", () => {
     expect(callAt("src/app/NestedConditional.java", 9)).toBeUndefined();
   });
 
+  it("binds Java negated patterns after an exact switch-expression yield", async () => {
+    const projectPath = await createInlineProject({
+      "src/api/Service.java": [
+        "package api;",
+        "public class Service { public void execute(String value) {} }"
+      ].join("\n"),
+      "src/app/YieldRule.java": [
+        "package app;",
+        "import api.Service;",
+        "public class YieldRule {",
+        "  public Service run(int selector, Object value, Service fallback) {",
+        "    return switch (selector) {",
+        "      case 1 -> {",
+        "        if (!(value instanceof Service service)) yield fallback;",
+        "        service.execute(\"following\");",
+        "        yield service;",
+        "      }",
+        "      default -> fallback;",
+        "    };",
+        "  }",
+        "}"
+      ].join("\n"),
+      "src/app/YieldElse.java": [
+        "package app;",
+        "import api.Service;",
+        "public class YieldElse {",
+        "  public Service run(int selector, Object value, Service fallback) {",
+        "    return switch (selector) {",
+        "      case 1 -> {",
+        "        if (!(value instanceof Service service)) yield fallback; else {",
+        "          service.execute(\"else\");",
+        "        }",
+        "        service.execute(\"following\");",
+        "        yield service;",
+        "      }",
+        "      default -> fallback;",
+        "    };",
+        "  }",
+        "}"
+      ].join("\n"),
+      "src/app/InitializerYield.java": [
+        "package app;",
+        "import api.Service;",
+        "public class InitializerYield {",
+        "  public Service run(int selector, Object value, Service fallback) {",
+        "    Service result = switch (selector) {",
+        "      case 1 -> {",
+        "        if (!(value instanceof Service service)) yield fallback;",
+        "        service.execute(\"initializer\");",
+        "        yield service;",
+        "      }",
+        "      default -> fallback;",
+        "    };",
+        "    return result;",
+        "  }",
+        "}"
+      ].join("\n"),
+      "src/app/AssignmentYield.java": [
+        "package app;",
+        "import api.Service;",
+        "public class AssignmentYield {",
+        "  public Service run(int selector, Object value, Service fallback) {",
+        "    Service result;",
+        "    result = switch (selector) {",
+        "      case 1 -> {",
+        "        if (!(value instanceof Service service)) yield fallback;",
+        "        service.execute(\"assignment\");",
+        "        yield service;",
+        "      }",
+        "      default -> fallback;",
+        "    };",
+        "    return result;",
+        "  }",
+        "}"
+      ].join("\n"),
+      "src/app/NestedYield.java": [
+        "package app;",
+        "import api.Service;",
+        "public class NestedYield {",
+        "  public Service run(int outer, int inner, Object value, Service fallback) {",
+        "    return switch (outer) {",
+        "      case 1 -> {",
+        "        yield switch (inner) {",
+        "          case 2 -> {",
+        "            if (!(value instanceof Service service)) yield fallback;",
+        "            service.execute(\"nested\");",
+        "            yield service;",
+        "          }",
+        "          default -> fallback;",
+        "        };",
+        "      }",
+        "      default -> fallback;",
+        "    };",
+        "  }",
+        "}"
+      ].join("\n"),
+      "src/app/UnsafeNested.java": [
+        "package app;",
+        "import api.Service;",
+        "public class UnsafeNested {",
+        "  public Service run(int selector, Object value, Service fallback, boolean flag) {",
+        "    return switch (selector) {",
+        "      case 1 -> {",
+        "        if (flag)",
+        "          if (!(value instanceof Service service)) yield fallback;",
+        "        service.execute(\"unsafe\");",
+        "        yield fallback;",
+        "      }",
+        "      default -> fallback;",
+        "    };",
+        "  }",
+        "}"
+      ].join("\n"),
+      "src/app/ColonYield.java": [
+        "package app;",
+        "import api.Service;",
+        "public class ColonYield {",
+        "  public Service run(int selector, Object value, Service fallback) {",
+        "    return switch (selector) {",
+        "      case 1:",
+        "        if (!(value instanceof Service service)) yield fallback;",
+        "        service.execute(\"colon\");",
+        "        yield service;",
+        "      default:",
+        "        yield fallback;",
+        "    };",
+        "  }",
+        "}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+
+    const snapshot = graphStore.getSnapshot(projectPath);
+    const calls = snapshot.edges.filter((edge) => edge.kind === "calls");
+    const callAt = (filePath: string, line: number) =>
+      calls.find(
+        (edge) =>
+          edge.filePath === filePath &&
+          edge.range.start.line === line &&
+          edge.referenceName === "execute"
+      );
+    const targetId = snapshot.symbols.find(
+      (candidate) => candidate.qualifiedName === "src/api/Service.java#Service.execute"
+    )?.id;
+    const followingCall = callAt("src/app/YieldRule.java", 8);
+    expect(followingCall?.targetId).toBe(targetId);
+    expect(followingCall?.evidence?.callDispatch?.receiverBinding).toEqual(
+      expect.objectContaining({
+        policy: "java-source-lexical-binding-v22",
+        abruptCompletionKind: "yield",
+        abruptTargetKind: "switch-expression",
+        abruptTargetExpressionContext: "return",
+        abruptTargetRuleRange: expect.objectContaining({
+          start: expect.objectContaining({ line: 6 })
+        }),
+        abruptTargetRuleLabelRange: expect.objectContaining({
+          start: expect.objectContaining({ line: 6 })
+        }),
+        scopeRange: expect.objectContaining({
+          start: expect.objectContaining({ line: 7 }),
+          end: expect.objectContaining({ line: 10 })
+        })
+      })
+    );
+    expect(callAt("src/app/YieldElse.java", 8)?.targetId).toBe(targetId);
+    expect(callAt("src/app/YieldElse.java", 8)?.evidence?.callDispatch?.receiverBinding).toEqual(
+      expect.objectContaining({
+        policy: "java-source-lexical-binding-v23",
+        activeRegion: "else-body",
+        thenAbruptCompletionKind: "yield",
+        thenAbruptTargetKind: "switch-expression",
+        thenAbruptTargetExpressionContext: "return"
+      })
+    );
+    expect(callAt("src/app/YieldElse.java", 10)?.targetId).toBe(targetId);
+    expect(callAt("src/app/InitializerYield.java", 8)?.targetId).toBe(targetId);
+    expect(
+      callAt("src/app/InitializerYield.java", 8)?.evidence?.callDispatch?.receiverBinding
+    ).toEqual(
+      expect.objectContaining({
+        policy: "java-source-lexical-binding-v22",
+        abruptTargetExpressionContext: "initializer"
+      })
+    );
+    expect(callAt("src/app/AssignmentYield.java", 9)?.targetId).toBe(targetId);
+    expect(
+      callAt("src/app/AssignmentYield.java", 9)?.evidence?.callDispatch?.receiverBinding
+    ).toEqual(
+      expect.objectContaining({
+        policy: "java-source-lexical-binding-v22",
+        abruptTargetExpressionContext: "assignment"
+      })
+    );
+    expect(callAt("src/app/NestedYield.java", 10)?.targetId).toBe(targetId);
+    expect(callAt("src/app/NestedYield.java", 10)?.evidence?.callDispatch?.receiverBinding).toEqual(
+      expect.objectContaining({
+        policy: "java-source-lexical-binding-v22",
+        abruptTargetExpressionContext: "yield"
+      })
+    );
+    expect(callAt("src/app/UnsafeNested.java", 9)).toBeUndefined();
+    expect(callAt("src/app/ColonYield.java", 8)).toBeUndefined();
+  });
+
   it("binds a Java negated else pattern after a proven unlabeled loop exit", async () => {
     const projectPath = await createInlineProject({
       "src/api/Service.java": [

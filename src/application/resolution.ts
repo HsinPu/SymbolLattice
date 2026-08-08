@@ -9869,6 +9869,26 @@ function projectJavaCallReferences(input: {
           abruptStatementRange: reference.receiverAbruptStatementRange
         } as const;
         if (
+          reference.receiverAbruptTargetKind === "switch-expression" &&
+          reference.receiverAbruptCompletionKind === "yield" &&
+          reference.receiverAbruptTargetRuleRange !== null &&
+          reference.receiverAbruptTargetRuleBodyRange !== null &&
+          reference.receiverAbruptTargetRuleLabelRange !== null &&
+          reference.receiverAbruptTargetExpressionContext !== null
+        ) {
+          receiverBinding = {
+            ...receiverBindingBase,
+            policy: "java-source-lexical-binding-v22",
+            abruptCompletionKind: "yield",
+            abruptTargetKind: "switch-expression",
+            abruptTargetRange: reference.receiverAbruptTargetRange,
+            abruptTargetBodyRange: reference.receiverAbruptTargetBodyRange,
+            abruptTargetRuleRange: reference.receiverAbruptTargetRuleRange,
+            abruptTargetRuleBodyRange: reference.receiverAbruptTargetRuleBodyRange,
+            abruptTargetRuleLabelRange: reference.receiverAbruptTargetRuleLabelRange,
+            abruptTargetExpressionContext: reference.receiverAbruptTargetExpressionContext
+          };
+        } else if (
           reference.receiverAbruptTargetKind === "switch" &&
           reference.receiverAbruptCompletionKind === "break" &&
           reference.receiverAbruptTargetCaseGroupRange !== null
@@ -9885,6 +9905,9 @@ function projectJavaCallReferences(input: {
           };
         } else if (
           reference.receiverAbruptTargetKind !== "switch" &&
+          reference.receiverAbruptTargetKind !== "switch-expression" &&
+          (reference.receiverAbruptCompletionKind === "break" ||
+            reference.receiverAbruptCompletionKind === "continue") &&
           reference.receiverAbruptTargetLabel !== null &&
           reference.receiverAbruptTargetLabelRange !== null
         ) {
@@ -9895,19 +9918,25 @@ function projectJavaCallReferences(input: {
             abruptTargetRange: reference.receiverAbruptTargetRange,
             abruptTargetBodyRange: reference.receiverAbruptTargetBodyRange,
             abruptTargetLabel: reference.receiverAbruptTargetLabel,
-            abruptTargetLabelRange: reference.receiverAbruptTargetLabelRange
+            abruptTargetLabelRange: reference.receiverAbruptTargetLabelRange,
+            abruptCompletionKind:
+              reference.receiverAbruptCompletionKind === "break" ? "break" : "continue"
           };
         } else if (
-          reference.receiverAbruptTargetKind === "while" ||
-          reference.receiverAbruptTargetKind === "do" ||
-          reference.receiverAbruptTargetKind === "for" ||
-          reference.receiverAbruptTargetKind === "enhanced-for"
+          (reference.receiverAbruptCompletionKind === "break" ||
+            reference.receiverAbruptCompletionKind === "continue") &&
+          (reference.receiverAbruptTargetKind === "while" ||
+            reference.receiverAbruptTargetKind === "do" ||
+            reference.receiverAbruptTargetKind === "for" ||
+            reference.receiverAbruptTargetKind === "enhanced-for")
         ) {
           receiverBinding = {
             ...receiverBindingBase,
             policy: "java-source-lexical-binding-v16",
             abruptTargetKind: reference.receiverAbruptTargetKind,
-            abruptTargetRange: reference.receiverAbruptTargetRange
+            abruptTargetRange: reference.receiverAbruptTargetRange,
+            abruptCompletionKind:
+              reference.receiverAbruptCompletionKind === "break" ? "break" : "continue"
           };
         }
       } else if (reference.receiverKind === "instanceof-negated-else-pattern") {
@@ -9931,6 +9960,31 @@ function projectJavaCallReferences(input: {
           activeRegion: reference.receiverActiveRegion
         };
         if (
+          reference.receiverThenAbruptCompletionKind === "yield" &&
+          reference.receiverThenAbruptStatementRange !== null &&
+          reference.receiverThenAbruptTargetKind === "switch-expression" &&
+          reference.receiverThenAbruptTargetRange !== null &&
+          reference.receiverThenAbruptTargetBodyRange !== null &&
+          reference.receiverThenAbruptTargetRuleRange !== null &&
+          reference.receiverThenAbruptTargetRuleBodyRange !== null &&
+          reference.receiverThenAbruptTargetRuleLabelRange !== null &&
+          reference.receiverThenAbruptTargetExpressionContext !== null
+        ) {
+          receiverBinding = {
+            ...receiverBindingBase,
+            policy: "java-source-lexical-binding-v23",
+            thenAbruptCompletionKind: "yield",
+            thenAbruptStatementRange: reference.receiverThenAbruptStatementRange,
+            thenAbruptTargetKind: "switch-expression",
+            thenAbruptTargetRange: reference.receiverThenAbruptTargetRange,
+            thenAbruptTargetBodyRange: reference.receiverThenAbruptTargetBodyRange,
+            thenAbruptTargetRuleRange: reference.receiverThenAbruptTargetRuleRange,
+            thenAbruptTargetRuleBodyRange: reference.receiverThenAbruptTargetRuleBodyRange,
+            thenAbruptTargetRuleLabelRange: reference.receiverThenAbruptTargetRuleLabelRange,
+            thenAbruptTargetExpressionContext:
+              reference.receiverThenAbruptTargetExpressionContext
+          };
+        } else if (
           reference.receiverThenAbruptCompletionKind === "break" &&
           reference.receiverThenAbruptStatementRange !== null &&
           reference.receiverThenAbruptTargetKind === "switch" &&
@@ -9955,6 +10009,7 @@ function projectJavaCallReferences(input: {
           reference.receiverThenAbruptStatementRange !== null &&
           reference.receiverThenAbruptTargetKind !== null &&
           reference.receiverThenAbruptTargetKind !== "switch" &&
+          reference.receiverThenAbruptTargetKind !== "switch-expression" &&
           reference.receiverThenAbruptTargetRange !== null &&
           reference.receiverThenAbruptTargetBodyRange !== null &&
           reference.receiverThenAbruptTargetLabel !== null &&
@@ -9992,7 +10047,8 @@ function projectJavaCallReferences(input: {
         } else {
           const thenAbruptCompletionKind =
             reference.receiverThenAbruptCompletionKind === "break" ||
-            reference.receiverThenAbruptCompletionKind === "continue"
+            reference.receiverThenAbruptCompletionKind === "continue" ||
+            reference.receiverThenAbruptCompletionKind === "yield"
               ? null
               : reference.receiverThenAbruptCompletionKind;
           receiverBinding = {
