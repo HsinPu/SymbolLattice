@@ -329,11 +329,31 @@ function isLegacyGrammarSwitchRuleMarker(
   );
 }
 
+function isLegacyGrammarInstanceofPatternMarker(
+  input: JavaExtractFileFactsInput,
+  node: JavaSyntaxNode
+): boolean {
+  if (!node.type.isError || node.parent?.name !== "InstanceofExpression") {
+    return false;
+  }
+  const siblings = directChildren(node.parent);
+  return (
+    siblings.length === 4 &&
+    siblings[1]?.name === "instanceof" &&
+    siblings[2] !== undefined &&
+    isJavaDirectTypeName(siblings[2]) &&
+    siblings[3]?.from === node.from &&
+    siblings[3]?.to === node.to &&
+    identifierText(input, node) !== null
+  );
+}
+
 function hasSyntaxError(input: JavaExtractFileFactsInput, node: JavaSyntaxNode): boolean {
   return (
     (node.type.isError &&
       !isLegacyGrammarDefaultModifierMarker(node) &&
-      !isLegacyGrammarSwitchRuleMarker(input, node)) ||
+      !isLegacyGrammarSwitchRuleMarker(input, node) &&
+      !isLegacyGrammarInstanceofPatternMarker(input, node)) ||
     directChildren(node).some((child) => hasSyntaxError(input, child))
   );
 }
@@ -1661,6 +1681,11 @@ function staticJavaMemberCallReferences(input: {
     (
       | { readonly kind: "parameter" | "enhanced-for" | "catch" | "lambda" }
       | {
+          readonly kind: "instanceof-pattern";
+          readonly conditionRange: SourceRange;
+          readonly testedValueRange: SourceRange;
+        }
+      | {
           readonly kind: "local";
           readonly directAssignment?: DirectAssignmentBinding;
           readonly assignmentJoin?: ExhaustiveAssignmentJoinBinding;
@@ -2101,7 +2126,7 @@ function staticJavaMemberCallReferences(input: {
 
   function visitExhaustiveIfElseAssignment(statement: JavaSyntaxNode, scope: BindingScope): void {
     // Calls in the condition and branches observe the pre-join state.
-    visit(statement);
+    visitIfStatementContents(statement);
 
     const assignedNames = assignedIdentifierNames(statement);
     for (const name of assignedNames) {
@@ -2174,6 +2199,102 @@ function staticJavaMemberCallReferences(input: {
         branches: [thenAssignment, elseAssignment]
       }
     });
+  }
+
+  function positiveInstanceofPatternBinding(
+    statement: JavaSyntaxNode
+  ):
+    | {
+        readonly condition: JavaSyntaxNode;
+        readonly body: JavaSyntaxNode;
+        readonly name: string;
+        readonly binding: ReceiverBinding;
+      }
+    | null {
+    const children = directChildren(statement);
+    const condition = children[1];
+    const body = children[2];
+    if (
+      children[0]?.name !== "if" ||
+      condition?.name !== "ParenthesizedExpression" ||
+      body?.name !== "Block" ||
+      containsJavaNode(condition, "AssignmentExpression")
+    ) {
+      return null;
+    }
+    const conditionChildren = directChildren(condition);
+    const pattern = conditionChildren[1];
+    if (
+      conditionChildren.length !== 3 ||
+      conditionChildren[0]?.name !== "(" ||
+      pattern?.name !== "InstanceofExpression" ||
+      conditionChildren[2]?.name !== ")"
+    ) {
+      return null;
+    }
+    const patternChildren = directChildren(pattern);
+    const testedValue = patternChildren[0];
+    const typeNode = patternChildren[2];
+    const definition = patternChildren[3];
+    if (
+      patternChildren.length !== 4 ||
+      testedValue === undefined ||
+      patternChildren[1]?.name !== "instanceof" ||
+      typeNode === undefined ||
+      !isJavaDirectTypeName(typeNode) ||
+      definition === undefined ||
+      !definition.type.isError
+    ) {
+      return null;
+    }
+    const name = identifierText(input.extraction, definition);
+    const type = staticJavaCallTypeReference(input.extraction, typeNode, input.imports, "declaration");
+    if (name === null || type === null || visibleBinding(name) !== undefined) {
+      return null;
+    }
+    const scopeRange = rangeFor(lineStarts, body.from, body.to);
+    return {
+      condition,
+      body,
+      name,
+      binding: {
+        kind: "instanceof-pattern",
+        name,
+        type,
+        declarationRange: rangeFor(lineStarts, definition.from, definition.to),
+        scopeRange,
+        conditionRange: rangeFor(lineStarts, condition.from, condition.to),
+        testedValueRange: rangeFor(lineStarts, testedValue.from, testedValue.to)
+      }
+    };
+  }
+
+  function visitIfStatementContents(statement: JavaSyntaxNode): void {
+    const pattern = positiveInstanceofPatternBinding(statement);
+    if (pattern === null) {
+      visit(statement);
+      return;
+    }
+    visit(pattern.condition);
+    visitWithScopedBindings(pattern.body, [{ name: pattern.name, binding: pattern.binding }]);
+    for (const child of directChildren(statement)) {
+      if (
+        !(
+          child.name === pattern.condition.name &&
+          child.from === pattern.condition.from &&
+          child.to === pattern.condition.to
+        ) &&
+        !(
+          child.name === pattern.body.name &&
+          child.from === pattern.body.from &&
+          child.to === pattern.body.to
+        ) &&
+        child.name !== "if" &&
+        child.name !== "else"
+      ) {
+        visit(child);
+      }
+    }
   }
 
   function exhaustiveSwitchAssignmentJoin(
@@ -2698,6 +2819,23 @@ function staticJavaMemberCallReferences(input: {
                   : { receiverInitializerRange: binding.initializerRange }),
                 receiverResourceOrdinal: binding.resourceOrdinal,
                 receiverTryBodyRange: binding.tryBodyRange,
+                methodName,
+                argumentCount: arguments_.length,
+                argumentTypes,
+                range: rangeFor(lineStarts, methodNode.from, methodNode.to)
+              });
+            } else if (binding.kind === "instanceof-pattern") {
+              references.push({
+                sourceId: input.callableSymbol.id,
+                declaringTypeId: input.declaringType.id,
+                filePath: input.extraction.filePath,
+                receiverKind: binding.kind,
+                receiverName,
+                receiverType: binding.type,
+                receiverBindingRange: binding.declarationRange,
+                receiverScopeRange: binding.scopeRange,
+                receiverConditionRange: binding.conditionRange,
+                receiverTestedValueRange: binding.testedValueRange,
                 methodName,
                 argumentCount: arguments_.length,
                 argumentTypes,

@@ -7891,6 +7891,7 @@ function javaMethodSetPlan(input: {
     | "enhanced-for"
     | "catch"
     | "lambda"
+    | "instanceof-pattern"
     | "try-resource"
     | "field"
     | "this-field"
@@ -9268,6 +9269,7 @@ function projectJavaCallReferences(input: {
             reference.receiverKind === "enhanced-for" ||
             reference.receiverKind === "catch" ||
             reference.receiverKind === "lambda" ||
+            reference.receiverKind === "instanceof-pattern" ||
             reference.receiverKind === "try-resource"
           ? reference.receiverType
           : null;
@@ -9750,6 +9752,18 @@ function projectJavaCallReferences(input: {
           typeSource: "declared-type",
           declarationRange: reference.receiverBindingRange,
           scopeRange: reference.receiverScopeRange
+        };
+      } else if (reference.receiverKind === "instanceof-pattern") {
+        receiverBinding = {
+          policy: "java-source-lexical-binding-v10",
+          kind: "instanceof-pattern",
+          name: reference.receiverName,
+          type: resolvedBindingType.evidence,
+          typeSource: "instanceof-pattern",
+          declarationRange: reference.receiverBindingRange,
+          scopeRange: reference.receiverScopeRange,
+          conditionRange: reference.receiverConditionRange,
+          testedValueRange: reference.receiverTestedValueRange
         };
       } else if (reference.receiverKind === "try-resource") {
         receiverBinding =

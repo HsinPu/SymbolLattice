@@ -13,13 +13,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v226";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v227";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v115";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v116";
 
 /** Hard cap for one source-proven Java exhaustive if/else-if/else assignment join. */
 export const JAVA_EXHAUSTIVE_ASSIGNMENT_JOIN_MAXIMUM_BRANCHES = 8;
@@ -144,6 +144,7 @@ interface CallReceiverBindingEvidenceBase {
     | "enhanced-for"
     | "catch"
     | "lambda"
+    | "instanceof-pattern"
     | "try-resource"
     | "field"
     | "this-field"
@@ -287,6 +288,13 @@ export type CallReceiverBindingEvidence =
       readonly policy: "java-source-lexical-binding-v3";
       readonly typeSource: "declared-type";
     })
+  | (CallReceiverBindingEvidenceBase & {
+      readonly kind: "instanceof-pattern";
+      readonly policy: "java-source-lexical-binding-v10";
+      readonly typeSource: "instanceof-pattern";
+      readonly conditionRange: SourceRange;
+      readonly testedValueRange: SourceRange;
+    })
   | (CallReceiverBindingEvidenceBase &
       (
         | {
@@ -405,6 +413,7 @@ export interface CallDispatchEvidence {
     | "enhanced-for"
     | "catch"
     | "lambda"
+    | "instanceof-pattern"
     | "try-resource"
     | "field"
     | "this-field"
@@ -1377,8 +1386,8 @@ export interface JavaChainedCallReferenceFact {
 
 /**
  * One explicit Java member invocation through `this`, `super`, a source-proven
- * parameter/local/field declaration, an enhanced-for/catch/explicit-lambda
- * binding, or a direct `var = new Type(...)`
+ * parameter/local/field declaration, an enhanced-for/catch/explicit-lambda/
+ * positive-instanceof binding, or a direct `var = new Type(...)`
  * initializer. Extraction retains source binding and argument evidence;
  * project resolution still proves the indexed receiver type, hierarchy,
  * method set, overload, and access.
@@ -1479,6 +1488,15 @@ export type JavaMemberCallReferenceFact =
       readonly receiverType: JavaCallTypeReferenceFact;
       readonly receiverBindingRange: SourceRange;
       readonly receiverScopeRange: SourceRange;
+    })
+  | (JavaMemberCallReferenceBaseFact & {
+      readonly receiverKind: "instanceof-pattern";
+      readonly receiverName: string;
+      readonly receiverType: JavaCallTypeReferenceFact;
+      readonly receiverBindingRange: SourceRange;
+      readonly receiverScopeRange: SourceRange;
+      readonly receiverConditionRange: SourceRange;
+      readonly receiverTestedValueRange: SourceRange;
     })
   | (JavaMemberCallReferenceBaseFact & {
       readonly receiverKind: "try-resource";
