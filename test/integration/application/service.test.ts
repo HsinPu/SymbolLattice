@@ -3204,6 +3204,126 @@ describe("SymbolLatticeService", () => {
     ).toHaveLength(4);
   });
 
+  it("resolves Java enhanced-for, catch, and explicit lambda bindings within their exact scopes", async () => {
+    const projectPath = await createInlineProject({
+      "src/api/Service.java": [
+        "package api;",
+        "public class Service { public void execute(String value) {} }"
+      ].join("\n"),
+      "src/api/Failure.java": [
+        "package api;",
+        "public class Failure extends Exception { public void recover() {} }"
+      ].join("\n"),
+      "src/api/OtherFailure.java": [
+        "package api;",
+        "public class OtherFailure extends Exception {}"
+      ].join("\n"),
+      "src/app/Runner.java": [
+        "package app;",
+        "import api.Failure;",
+        "import api.OtherFailure;",
+        "import api.Service;",
+        "public class Runner {",
+        "  public void run(Service outer) {",
+        "    for (Service loop : services()) {",
+        "      loop.execute(\"loop\");",
+        "    }",
+        "    loop.execute(\"outside-loop\");",
+        "    try { risky(); } catch (Failure failure) {",
+        "      failure.recover();",
+        "    }",
+        "    failure.recover();",
+        "    consume((Service lambda) -> lambda.execute(\"lambda\"));",
+        "    lambda.execute(\"outside-lambda\");",
+        "    consume(outer -> outer.execute(\"untyped\"));",
+        "    outer.execute(\"outer\");",
+        "    try { risky(); } catch (Failure | OtherFailure ambiguous) {",
+        "      ambiguous.recover();",
+        "    }",
+        "  }",
+        "  private Service[] services() { return null; }",
+        "  private void risky() throws Failure, OtherFailure {}",
+        "  private void consume(java.util.function.Consumer<Service> sink) {}",
+        "}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+
+    const snapshot = graphStore.getSnapshot(projectPath);
+    const symbol = (qualifiedName: string) =>
+      snapshot.symbols.find((candidate) => candidate.qualifiedName === qualifiedName);
+    const callAt = (line: number) =>
+      snapshot.edges.find(
+        (edge) =>
+          edge.kind === "calls" &&
+          edge.filePath === "src/app/Runner.java" &&
+          edge.range.start.line === line
+      );
+    const serviceId = symbol("src/api/Service.java#Service")?.id;
+    const failureId = symbol("src/api/Failure.java#Failure")?.id;
+
+    expect(callAt(8)?.evidence?.callDispatch).toEqual(
+      expect.objectContaining({
+        invocationKind: "enhanced-for",
+        receiverTypeSymbolId: serviceId,
+        receiverBinding: expect.objectContaining({
+          policy: "java-source-lexical-binding-v3",
+          kind: "enhanced-for",
+          name: "loop",
+          declarationRange: expect.objectContaining({ start: expect.objectContaining({ line: 7 }) }),
+          scopeRange: expect.objectContaining({ start: expect.objectContaining({ line: 7 }) })
+        })
+      })
+    );
+    expect(callAt(12)?.evidence?.callDispatch).toEqual(
+      expect.objectContaining({
+        invocationKind: "catch",
+        receiverTypeSymbolId: failureId,
+        receiverBinding: expect.objectContaining({
+          policy: "java-source-lexical-binding-v3",
+          kind: "catch",
+          name: "failure",
+          declarationRange: expect.objectContaining({ start: expect.objectContaining({ line: 11 }) }),
+          scopeRange: expect.objectContaining({ start: expect.objectContaining({ line: 11 }) })
+        })
+      })
+    );
+    expect(callAt(15)?.evidence?.callDispatch).toEqual(
+      expect.objectContaining({
+        invocationKind: "lambda",
+        receiverTypeSymbolId: serviceId,
+        receiverBinding: expect.objectContaining({
+          policy: "java-source-lexical-binding-v3",
+          kind: "lambda",
+          name: "lambda",
+          declarationRange: expect.objectContaining({ start: expect.objectContaining({ line: 15 }) }),
+          scopeRange: expect.objectContaining({ start: expect.objectContaining({ line: 15 }) })
+        })
+      })
+    );
+    expect(callAt(18)?.evidence?.callDispatch).toEqual(
+      expect.objectContaining({ invocationKind: "parameter", receiverTypeSymbolId: serviceId })
+    );
+
+    for (const line of [10, 14, 16, 17, 20]) {
+      expect(callAt(line)).toBeUndefined();
+    }
+
+    const runnerFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "src/app/Runner.java");
+    expect(runnerFacts?.jvmFacts?.javaMemberCallReferences).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ receiverKind: "enhanced-for", receiverName: "loop" }),
+        expect.objectContaining({ receiverKind: "catch", receiverName: "failure" }),
+        expect.objectContaining({ receiverKind: "lambda", receiverName: "lambda" })
+      ])
+    );
+  });
+
   it("infers Java var receivers only from direct object-creation initializers", async () => {
     const projectPath = await createInlineProject({
       "src/api/Service.java": [

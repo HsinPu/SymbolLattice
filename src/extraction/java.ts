@@ -1575,7 +1575,7 @@ function staticJavaMemberCallReferences(input: {
   const references: JavaMemberCallReferenceFact[] = [];
 
   interface ReceiverBinding {
-    readonly kind: "parameter" | "local";
+    readonly kind: "parameter" | "local" | "enhanced-for" | "catch" | "lambda";
     readonly name: string;
     readonly type: JavaCallTypeReferenceFact;
     readonly declarationRange: SourceRange;
@@ -1709,7 +1709,143 @@ function staticJavaMemberCallReferences(input: {
     }
   }
 
+  function scopedBinding(input_: {
+    readonly declaration: JavaSyntaxNode;
+    readonly typeNodes: readonly JavaSyntaxNode[];
+    readonly kind: "enhanced-for" | "catch" | "lambda";
+    readonly scopeRange: SourceRange;
+  }): { readonly name: string; readonly binding: ReceiverBinding | null } | null {
+    const definitions = directChildren(input_.declaration).filter(
+      (candidate) => candidate.name === "Definition"
+    );
+    const definition = definitions[0];
+    const name = definition === undefined ? null : identifierText(input.extraction, definition);
+    if (definitions.length !== 1 || definition === undefined || name === null) {
+      return null;
+    }
+    const type =
+      input_.typeNodes.length === 1 && input_.typeNodes[0] !== undefined
+        ? staticJavaCallTypeReference(
+            input.extraction,
+            input_.typeNodes[0],
+            input.imports,
+            "declaration"
+          )
+        : null;
+    return {
+      name,
+      binding:
+        type === null
+          ? null
+          : {
+              kind: input_.kind,
+              name,
+              type,
+              declarationRange: rangeFor(lineStarts, definition.from, definition.to),
+              scopeRange: input_.scopeRange
+            }
+    };
+  }
+
+  function visitWithScopedBindings(
+    scopedBody: JavaSyntaxNode,
+    bindings: readonly { readonly name: string; readonly binding: ReceiverBinding | null }[]
+  ): void {
+    const scope: BindingScope = new Map();
+    for (const entry of bindings) {
+      scope.set(entry.name, scope.has(entry.name) ? null : entry.binding);
+    }
+    scopes.push(scope);
+    visit(scopedBody);
+    scopes.pop();
+  }
+
   function visit(node: JavaSyntaxNode): void {
+    if (node.name === "EnhancedForStatement") {
+      const children = directChildren(node);
+      const specification = children.find((child) => child.name === "ForSpec");
+      const scopedBody = children.at(-1);
+      if (specification === undefined || scopedBody === undefined || scopedBody === specification) {
+        return;
+      }
+      visit(specification);
+      const scopeRange = rangeFor(lineStarts, scopedBody.from, scopedBody.to);
+      const binding = scopedBinding({
+        declaration: specification,
+        typeNodes: directChildren(specification).filter(
+          (child) => child.name === "PrimitiveType" || isJavaDirectTypeName(child)
+        ),
+        kind: "enhanced-for",
+        scopeRange
+      });
+      visitWithScopedBindings(scopedBody, binding === null ? [] : [binding]);
+      return;
+    }
+    if (node.name === "CatchClause") {
+      const children = directChildren(node);
+      const parameter = children.find((child) => child.name === "CatchFormalParameter");
+      const scopedBody = children.at(-1);
+      if (parameter === undefined || scopedBody === undefined || scopedBody === parameter) {
+        return;
+      }
+      const catchTypes = directChildren(parameter).filter((child) => child.name === "CatchType");
+      const typeNodes =
+        catchTypes.length === 1 && catchTypes[0] !== undefined
+          ? directChildren(catchTypes[0]).filter(isJavaDirectTypeName)
+          : [];
+      const binding = scopedBinding({
+        declaration: parameter,
+        typeNodes,
+        kind: "catch",
+        scopeRange: rangeFor(lineStarts, scopedBody.from, scopedBody.to)
+      });
+      visitWithScopedBindings(scopedBody, binding === null ? [] : [binding]);
+      return;
+    }
+    if (node.name === "LambdaExpression") {
+      const children = directChildren(node);
+      const scopedBody = children.at(-1);
+      if (scopedBody === undefined) {
+        return;
+      }
+      const scopeRange = rangeFor(lineStarts, scopedBody.from, scopedBody.to);
+      const bindings: Array<{
+        readonly name: string;
+        readonly binding: ReceiverBinding | null;
+      }> = [];
+      const formalParameters = children.find((child) => child.name === "FormalParameters");
+      if (formalParameters !== undefined) {
+        for (const parameter of directChildren(formalParameters).filter(
+          (child) => child.name === "FormalParameter"
+        )) {
+          const binding = scopedBinding({
+            declaration: parameter,
+            typeNodes: directChildren(parameter).filter(
+              (child) => child.name === "PrimitiveType" || isJavaDirectTypeName(child)
+            ),
+            kind: "lambda",
+            scopeRange
+          });
+          if (binding !== null) {
+            bindings.push(binding);
+          }
+        }
+      } else {
+        const inferredParameters = children.find((child) => child.name === "InferredParameters");
+        const definitions =
+          inferredParameters === undefined
+            ? children.filter((child) => child.name === "Definition")
+            : directChildren(inferredParameters).filter((child) => child.name === "Definition");
+        for (const definition of definitions) {
+          const name = identifierText(input.extraction, definition);
+          if (name !== null) {
+            bindings.push({ name, binding: null });
+          }
+        }
+      }
+      visitWithScopedBindings(scopedBody, bindings);
+      return;
+    }
     if (node !== body && NESTED_JAVA_CALLABLE_SCOPES.has(node.name)) {
       return;
     }

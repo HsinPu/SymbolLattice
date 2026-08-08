@@ -7883,6 +7883,9 @@ function javaMethodSetPlan(input: {
     | "super"
     | "parameter"
     | "local"
+    | "enhanced-for"
+    | "catch"
+    | "lambda"
     | "field"
     | "this-field"
     | "super-field"
@@ -9254,7 +9257,11 @@ function projectJavaCallReferences(input: {
       reference.receiverKind === "super-field" ||
       reference.receiverKind === "type-field"
         ? fieldSelection?.field.type ?? null
-        : reference.receiverKind === "parameter" || reference.receiverKind === "local"
+        : reference.receiverKind === "parameter" ||
+            reference.receiverKind === "local" ||
+            reference.receiverKind === "enhanced-for" ||
+            reference.receiverKind === "catch" ||
+            reference.receiverKind === "lambda"
           ? reference.receiverType
           : null;
     const bindingDeclaringType = fieldSelection?.ownerType ?? declaringType;
@@ -9371,6 +9378,20 @@ function projectJavaCallReferences(input: {
                 initializerRange: reference.receiverInitializerRange,
                 scopeRange: reference.receiverScopeRange
               };
+      } else if (
+        reference.receiverKind === "enhanced-for" ||
+        reference.receiverKind === "catch" ||
+        reference.receiverKind === "lambda"
+      ) {
+        receiverBinding = {
+          policy: "java-source-lexical-binding-v3",
+          kind: reference.receiverKind,
+          name: reference.receiverName,
+          type: resolvedBindingType.evidence,
+          typeSource: "declared-type",
+          declarationRange: reference.receiverBindingRange,
+          scopeRange: reference.receiverScopeRange
+        };
       }
     }
     const methodSetPlan = javaMethodSetPlan({

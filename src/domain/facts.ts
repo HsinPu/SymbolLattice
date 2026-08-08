@@ -13,13 +13,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v219";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v220";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v108";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v109";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -135,6 +135,9 @@ interface CallReceiverBindingEvidenceBase {
   readonly kind:
     | "parameter"
     | "local"
+    | "enhanced-for"
+    | "catch"
+    | "lambda"
     | "field"
     | "this-field"
     | "super-field"
@@ -157,6 +160,11 @@ export type CallReceiverBindingEvidence =
             readonly initializerRange: SourceRange;
           }
       ))
+  | (CallReceiverBindingEvidenceBase & {
+      readonly kind: "enhanced-for" | "catch" | "lambda";
+      readonly policy: "java-source-lexical-binding-v3";
+      readonly typeSource: "declared-type";
+    })
   | (CallReceiverBindingEvidenceBase &
       {
         readonly kind: "field" | "this-field" | "super-field";
@@ -251,6 +259,9 @@ export interface CallDispatchEvidence {
     | "super"
     | "parameter"
     | "local"
+    | "enhanced-for"
+    | "catch"
+    | "lambda"
     | "field"
     | "this-field"
     | "super-field"
@@ -1222,7 +1233,8 @@ export interface JavaChainedCallReferenceFact {
 
 /**
  * One explicit Java member invocation through `this`, `super`, a source-proven
- * parameter/local/field declaration, or a direct `var = new Type(...)`
+ * parameter/local/field declaration, an enhanced-for/catch/explicit-lambda
+ * binding, or a direct `var = new Type(...)`
  * initializer. Extraction retains source binding and argument evidence;
  * project resolution still proves the indexed receiver type, hierarchy,
  * method set, overload, and access.
@@ -1249,6 +1261,13 @@ export type JavaMemberCallReferenceFact =
       readonly receiverScopeRange: SourceRange;
       /** Present only when Java `var` derives its type from one direct object creation. */
       readonly receiverInitializerRange?: SourceRange;
+    })
+  | (JavaMemberCallReferenceBaseFact & {
+      readonly receiverKind: "enhanced-for" | "catch" | "lambda";
+      readonly receiverName: string;
+      readonly receiverType: JavaCallTypeReferenceFact;
+      readonly receiverBindingRange: SourceRange;
+      readonly receiverScopeRange: SourceRange;
     })
   | (JavaMemberCallReferenceBaseFact & {
       readonly receiverKind: "field" | "this-field" | "super-field";
