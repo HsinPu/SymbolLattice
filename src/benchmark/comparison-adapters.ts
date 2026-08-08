@@ -1,5 +1,13 @@
+import {
+  INDEX_PERFORMANCE_PHASE_NAMES,
+  INDEX_PERFORMANCE_POLICY,
+  type IndexOperationPerformance,
+  type IndexPerformancePhaseName
+} from "../domain/index-work.js";
+
 const ANSI_SEQUENCE = /\u001B\[[0-?]*[ -/]*[@-~]/gu;
 const CALLABLE_KINDS = new Set(["function", "method"]);
+const INDEX_PERFORMANCE_PHASES = new Set<string>(INDEX_PERFORMANCE_PHASE_NAMES);
 
 function record(value: unknown): Record<string, unknown> | null {
   return typeof value === "object" && value !== null && !Array.isArray(value)
@@ -10,6 +18,82 @@ function record(value: unknown): Record<string, unknown> | null {
 function canonicalCalls(source: string, targets: Iterable<string>): readonly string[] {
   return [...new Set([...targets].map((target) => `calls|${source}|${target}`))]
     .sort((left, right) => left.localeCompare(right, "en"));
+}
+
+function nonnegativeFinite(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0;
+}
+
+/** Fail-closed adapter for SymbolLattice's process-local index/sync timing receipt. */
+export function parseSymbolLatticeIndexPerformance(
+  output: string,
+  operation: IndexOperationPerformance["operation"]
+): IndexOperationPerformance {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(output);
+  } catch (error) {
+    throw new Error(`SymbolLattice returned invalid performance JSON: ${String(error)}`);
+  }
+  const root = record(parsed);
+  const receipt = record(root?.operationPerformance);
+  if (
+    receipt?.policy !== INDEX_PERFORMANCE_POLICY ||
+    receipt.operation !== operation ||
+    receipt.clock !== "monotonic-milliseconds" ||
+    !Array.isArray(receipt.phases)
+  ) {
+    throw new Error(`SymbolLattice omitted the ${operation} operation performance receipt.`);
+  }
+
+  const seen = new Set<string>();
+  const phases = receipt.phases.map((value, index) => {
+    const phase = record(value);
+    if (
+      phase === null ||
+      typeof phase.name !== "string" ||
+      !INDEX_PERFORMANCE_PHASES.has(phase.name) ||
+      !nonnegativeFinite(phase.durationMs)
+    ) {
+      throw new Error(`SymbolLattice returned an invalid performance phase at index ${index}.`);
+    }
+    if (seen.has(phase.name)) {
+      throw new Error(`SymbolLattice returned a duplicate phase: ${phase.name}.`);
+    }
+    seen.add(phase.name);
+    return {
+      name: phase.name as IndexPerformancePhaseName,
+      durationMs: phase.durationMs
+    };
+  });
+  if (
+    !nonnegativeFinite(receipt.totalDurationMs) ||
+    !nonnegativeFinite(receipt.measuredDurationMs) ||
+    !nonnegativeFinite(receipt.unattributedDurationMs)
+  ) {
+    throw new Error("SymbolLattice returned invalid performance duration totals.");
+  }
+  const phaseDuration = phases.reduce((total, phase) => total + phase.durationMs, 0);
+  if (Math.abs(phaseDuration - receipt.measuredDurationMs) > 0.002) {
+    throw new Error("SymbolLattice measured duration does not equal its phase durations.");
+  }
+  if (
+    receipt.totalDurationMs + 0.002 < receipt.measuredDurationMs ||
+    Math.abs(
+      receipt.totalDurationMs - receipt.measuredDurationMs - receipt.unattributedDurationMs
+    ) > 0.002
+  ) {
+    throw new Error("SymbolLattice total duration does not reconcile with measured and unattributed time.");
+  }
+  return {
+    policy: INDEX_PERFORMANCE_POLICY,
+    operation,
+    clock: "monotonic-milliseconds",
+    phases,
+    totalDurationMs: receipt.totalDurationMs,
+    measuredDurationMs: receipt.measuredDurationMs,
+    unattributedDurationMs: receipt.unattributedDurationMs
+  };
 }
 
 /** Converts SymbolLattice's stable node or callees JSON contract into bounded canonical call relations. */

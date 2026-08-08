@@ -1,6 +1,6 @@
 import type { EdgeEvidence, RoutePrefixSegment } from "./facts.js";
 import type { IndexStalenessReason } from "./index-inputs.js";
-import type { IndexWork } from "./index-work.js";
+import type { IndexOperationPerformance, IndexWork } from "./index-work.js";
 
 export const SYMBOL_KINDS = [
   "file",
@@ -325,6 +325,8 @@ export interface IndexStatus {
   readonly counts: IndexCounts;
   /** Omitted for generations created before index-work telemetry existed. */
   readonly lastIndexWork?: IndexWork;
+  /** Present only on the direct result of the current process's index or sync operation. */
+  readonly operationPerformance?: IndexOperationPerformance;
 }
 
 export interface GraphSnapshot {

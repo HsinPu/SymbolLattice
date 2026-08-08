@@ -1,5 +1,6 @@
 import type {
   GraphSnapshot,
+  IndexedFile,
   IndexCounts,
   IndexStatus
 } from "../domain/types.js";
@@ -36,6 +37,16 @@ export interface ActiveGraphBundle {
   readonly extractorVersion: string | null;
   readonly resolverVersion: string | null;
   /** Undefined/null when an older adapter or generation has no source retrieval. */
+  readonly sourceSearchVersion?: string | null;
+}
+
+/** Minimal active-generation projection needed for freshness checks. */
+export interface ActiveStatusBundle {
+  readonly status: IndexStatus;
+  readonly files: readonly IndexedFile[];
+  readonly indexInputs: ProjectIndexInputs | null;
+  readonly extractorVersion: string | null;
+  readonly resolverVersion: string | null;
   readonly sourceSearchVersion?: string | null;
 }
 
@@ -113,6 +124,8 @@ export interface GraphStore {
   getIndexInputs(projectPath: string): ProjectIndexInputs | null;
   /** Optional additive v0.4 read optimization; v0.3 adapters use the legacy bundle. */
   getActiveGraphBundle?(projectPath: string): ActiveGraphBundle;
+  /** Optional lightweight freshness projection that omits symbols, edges, and pending references. */
+  getActiveStatusBundle?(projectPath: string): ActiveStatusBundle;
   getActiveGenerationBundle(projectPath: string): ActiveGenerationBundle;
   /** Optional v0.4 retrieval capability. Its absence must not break graph reads. */
   getActiveSourceSearchBundle?(

@@ -46,6 +46,9 @@ import {
   type IndexedSourceDocument,
   type IndexedSourceSearchHit,
   type IndexWork,
+  INDEX_PERFORMANCE_POLICY,
+  type IndexOperationPerformance,
+  type IndexPerformancePhaseName,
   type PersistedArtifactFacts,
   type ProjectIndexInputs,
   type RouteMethod,
@@ -75,6 +78,7 @@ import {
 } from "../ports/git-change-set.js";
 import type {
   ActiveGraphBundle,
+  ActiveStatusBundle,
   ActiveSourceDocumentsBundle,
   GenerationComparisonBundle,
   GenerationHistoryBundle,
@@ -1088,6 +1092,12 @@ function filesMatch(
   );
 }
 
+function statusBundleFiles(
+  bundle: ActiveGraphBundle | ActiveStatusBundle
+): ActiveStatusBundle["files"] {
+  return "files" in bundle ? bundle.files : bundle.snapshot.files;
+}
+
 function sourceChangeSet(
   sourceDocuments: readonly SourceDocument[],
   snapshot: GraphSnapshot
@@ -1210,6 +1220,60 @@ function fullIndexWork(sourceDocuments: readonly SourceDocument[]): IndexWork {
   };
 }
 
+interface MutableIndexPerformancePhase {
+  readonly name: IndexPerformancePhaseName;
+  readonly durationMs: number;
+}
+
+class IndexPerformanceRecorder {
+  private readonly operation: IndexOperationPerformance["operation"];
+  private readonly now: () => number;
+  private readonly startedAt: number;
+  private readonly phases: MutableIndexPerformancePhase[] = [];
+
+  public constructor(
+    operation: IndexOperationPerformance["operation"],
+    now: () => number = () => Number(process.hrtime.bigint()) / 1_000_000
+  ) {
+    this.operation = operation;
+    this.now = now;
+    this.startedAt = this.now();
+  }
+
+  public start(): number {
+    return this.now();
+  }
+
+  public end(name: IndexPerformancePhaseName, startedAt: number): void {
+    this.phases.push({ name, durationMs: Math.max(0, this.now() - startedAt) });
+  }
+
+  public finish(): IndexOperationPerformance {
+    const rawTotal = Math.max(0, this.now() - this.startedAt);
+    const rawMeasured = this.phases.reduce((total, phase) => total + phase.durationMs, 0);
+    const measuredDurationMs = roundPerformanceMilliseconds(rawMeasured);
+    const totalDurationMs = Math.max(roundPerformanceMilliseconds(rawTotal), measuredDurationMs);
+    return {
+      policy: INDEX_PERFORMANCE_POLICY,
+      operation: this.operation,
+      clock: "monotonic-milliseconds",
+      phases: this.phases.map((phase) => ({
+        name: phase.name,
+        durationMs: roundPerformanceMilliseconds(phase.durationMs)
+      })),
+      totalDurationMs,
+      measuredDurationMs,
+      unattributedDurationMs: roundPerformanceMilliseconds(
+        Math.max(0, totalDurationMs - measuredDurationMs)
+      )
+    };
+  }
+}
+
+function roundPerformanceMilliseconds(value: number): number {
+  return Math.round(value * 1_000) / 1_000;
+}
+
 export class SymbolLatticeService {
   private readonly graphStore: GraphStore;
   private readonly sourceCatalog: SourceCatalog;
@@ -1276,20 +1340,37 @@ export class SymbolLatticeService {
 
   public async index(options: IndexOptions): Promise<GraphContext["status"]> {
     this.assertSafeProjectPath(options);
+    const performance = new IndexPerformanceRecorder("index");
     const projectPath = resolve(options.projectPath);
+    const loadPriorInputsStartedAt = performance.start();
     const bundle = this.graphStore.isInitialized(projectPath)
       ? this.getActiveGraphBundle(projectPath)
       : null;
+    performance.end("load-prior-inputs", loadPriorInputsStartedAt);
+    const scanStartedAt = performance.start();
     const scan = await this.scanForIndex(projectPath, options, bundle?.indexInputs ?? null);
+    performance.end("scan", scanStartedAt);
+    const extractionStartedAt = performance.start();
     const artifactFacts = scan.sourceDocuments.map((document) =>
       this.extractPersistedFacts(document, scan.frameworkEvidence)
     );
-    this.replaceGeneration(projectPath, scan, artifactFacts, fullIndexWork(scan.sourceDocuments));
-    return this.getStatus(projectPath);
+    performance.end("extraction", extractionStartedAt);
+    this.replaceGeneration(
+      projectPath,
+      scan,
+      artifactFacts,
+      fullIndexWork(scan.sourceDocuments),
+      performance
+    );
+    const statusStartedAt = performance.start();
+    const status = await this.getStatus(projectPath);
+    performance.end("status-read", statusStartedAt);
+    return { ...status, operationPerformance: performance.finish() };
   }
 
   public async sync(options: IndexOptions): Promise<GraphContext["status"]> {
     this.assertSafeProjectPath(options);
+    const performance = new IndexPerformanceRecorder("sync");
     const projectPath = resolve(options.projectPath);
     if (!this.graphStore.isInitialized(projectPath)) {
       throw new SymbolLatticeError(
@@ -1301,9 +1382,14 @@ export class SymbolLatticeService {
     // `sync` is the explicit repair/upgrade operation. Let a store complete
     // additive migrations even when the source scan later proves this is a
     // graph no-op (including the short-lived v0.4 prerelease metadata marker).
+    const loadGenerationStartedAt = performance.start();
     this.graphStore.initialize(projectPath);
     const bundle = this.graphStore.getActiveGenerationBundle(projectPath);
+    performance.end("load-generation", loadGenerationStartedAt);
+    const scanStartedAt = performance.start();
     const scan = await this.scanForIndex(projectPath, options, bundle.indexInputs);
+    performance.end("scan", scanStartedAt);
+    const changePlanningStartedAt = performance.start();
     const changes = sourceChangeSet(scan.sourceDocuments, bundle.snapshot);
     const configurationChanged =
       bundle.indexInputs === null || bundle.indexInputs.fingerprint !== scan.indexInputs.fingerprint;
@@ -1357,7 +1443,11 @@ export class SymbolLatticeService {
       reExtractedFiles.length === 0 &&
       !sourceSearchChanged
     ) {
-      return this.getStatus(projectPath);
+      performance.end("change-planning", changePlanningStartedAt);
+      const statusStartedAt = performance.start();
+      const status = await this.getStatus(projectPath);
+      performance.end("status-read", statusStartedAt);
+      return { ...status, operationPerformance: performance.finish() };
     }
 
     const changedFiles = new Set([
@@ -1382,13 +1472,20 @@ export class SymbolLatticeService {
       dependencyInvalidatedFiles,
       reuseInvalidationReasons: [...reuseInvalidationReasons].sort(compareText)
     };
-    this.replaceGeneration(projectPath, scan, artifactFacts, work);
-    return this.getStatus(projectPath);
+    performance.end("change-planning", changePlanningStartedAt);
+    this.replaceGeneration(projectPath, scan, artifactFacts, work, performance);
+    const statusStartedAt = performance.start();
+    const status = await this.getStatus(projectPath);
+    performance.end("status-read", statusStartedAt);
+    return { ...status, operationPerformance: performance.finish() };
   }
 
   public async getStatus(projectPath: string): Promise<GraphContext["status"]> {
     const normalizedProjectPath = resolve(projectPath);
-    const bundle = this.getActiveGraphBundle(normalizedProjectPath);
+    const readStatusBundle = this.graphStore.getActiveStatusBundle;
+    const bundle = typeof readStatusBundle === "function"
+      ? readStatusBundle.call(this.graphStore, normalizedProjectPath)
+      : this.getActiveGraphBundle(normalizedProjectPath);
     return this.getStatusForBundle(normalizedProjectPath, bundle);
   }
 
@@ -4441,9 +4538,11 @@ export class SymbolLatticeService {
     projectPath: string,
     scan: ProjectScan,
     artifactFacts: readonly PersistedArtifactFacts[],
-    indexWork: IndexWork
+    indexWork: IndexWork,
+    performance: IndexPerformanceRecorder
   ): void {
     const indexedAt = new Date().toISOString();
+    const resolutionStartedAt = performance.start();
     const snapshot = resolveProjectFacts({
       sourceDocuments: scan.sourceDocuments,
       extractedFiles: artifactFacts,
@@ -4462,6 +4561,8 @@ export class SymbolLatticeService {
         ? {}
         : { frameworkProjectPlugins: this.frameworkProjectPlugins })
     });
+    performance.end("resolution", resolutionStartedAt);
+    const persistenceStartedAt = performance.start();
     this.graphStore.replaceProjectFacts({
       projectPath,
       snapshot,
@@ -4477,11 +4578,12 @@ export class SymbolLatticeService {
       sourceSearchVersion: SOURCE_SEARCH_INDEX_VERSION,
       indexWork
     });
+    performance.end("persistence", persistenceStartedAt);
   }
 
   private async getStatusForBundle(
     normalizedProjectPath: string,
-    bundle: ActiveGraphBundle
+    bundle: ActiveGraphBundle | ActiveStatusBundle
   ): Promise<GraphContext["status"]> {
     const persistedStatus = bundle.status;
     if (!persistedStatus.initialized) {
@@ -4489,7 +4591,7 @@ export class SymbolLatticeService {
     }
 
     const versionChanged =
-      bundle.snapshot.files.length > 0 &&
+      statusBundleFiles(bundle).length > 0 &&
       (bundle.extractorVersion !== this.activeArtifactFactsExtractorVersion ||
         bundle.resolverVersion !== this.activeProjectResolverVersion ||
         this.sourceSearchProjectionChanged(bundle.sourceSearchVersion));
@@ -4524,7 +4626,7 @@ export class SymbolLatticeService {
       throw error;
     }
     const staleReasons = [
-      ...(filesMatch(scan.sourceDocuments, bundle.snapshot.files)
+      ...(filesMatch(scan.sourceDocuments, statusBundleFiles(bundle))
         ? []
         : (["source-files-changed"] as const)),
       ...(scan.indexInputs.fingerprint === persistedInputs.fingerprint

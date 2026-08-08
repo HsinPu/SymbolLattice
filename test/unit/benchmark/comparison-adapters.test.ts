@@ -2,10 +2,38 @@ import { describe, expect, it } from "vitest";
 
 import {
   parseCodeGraphCallees,
-  parseSymbolLatticeCallees
+  parseSymbolLatticeCallees,
+  parseSymbolLatticeIndexPerformance
 } from "../../../src/benchmark/comparison-adapters.js";
 
 describe("comparison CLI adapters", () => {
+  it("validates SymbolLattice process-local index performance receipts", () => {
+    const receipt = {
+      policy: "index-performance-v1",
+      operation: "index",
+      clock: "monotonic-milliseconds",
+      phases: [
+        { name: "scan", durationMs: 4.25 },
+        { name: "extraction", durationMs: 5.75 }
+      ],
+      totalDurationMs: 11,
+      measuredDurationMs: 10,
+      unattributedDurationMs: 1
+    };
+
+    expect(parseSymbolLatticeIndexPerformance(JSON.stringify({ operationPerformance: receipt }), "index"))
+      .toEqual(receipt);
+    expect(() => parseSymbolLatticeIndexPerformance(JSON.stringify({
+      operationPerformance: { ...receipt, phases: [...receipt.phases, receipt.phases[0]] }
+    }), "index")).toThrow("duplicate phase");
+    expect(() => parseSymbolLatticeIndexPerformance(JSON.stringify({
+      operationPerformance: { ...receipt, measuredDurationMs: 9 }
+    }), "index")).toThrow("measured duration");
+    expect(() => parseSymbolLatticeIndexPerformance(JSON.stringify({
+      operationPerformance: { ...receipt, operation: "sync" }
+    }), "index")).toThrow("index operation");
+  });
+
   it("normalizes exact SymbolLattice callable edges and rejects truncated evidence", () => {
     const output = JSON.stringify({
       match: { status: "exact" },

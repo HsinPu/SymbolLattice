@@ -23,3 +23,39 @@ export const INDEX_WORK_REUSE_INVALIDATION_REASONS = [
 
 export type IndexWorkReuseInvalidationReason =
   (typeof INDEX_WORK_REUSE_INVALIDATION_REASONS)[number];
+
+export const INDEX_PERFORMANCE_POLICY = "index-performance-v1" as const;
+
+export const INDEX_PERFORMANCE_PHASE_NAMES = [
+  "load-prior-inputs",
+  "load-generation",
+  "scan",
+  "extraction",
+  "change-planning",
+  "resolution",
+  "persistence",
+  "status-read"
+] as const;
+
+export type IndexPerformancePhaseName = (typeof INDEX_PERFORMANCE_PHASE_NAMES)[number];
+
+export interface IndexPerformancePhase {
+  readonly name: IndexPerformancePhaseName;
+  /** Elapsed monotonic milliseconds spent in this phase. */
+  readonly durationMs: number;
+}
+
+/**
+ * Process-local timing receipt returned by an explicit index or sync command.
+ * It is deliberately not persisted because timings describe one process run,
+ * not immutable graph-generation semantics.
+ */
+export interface IndexOperationPerformance {
+  readonly policy: typeof INDEX_PERFORMANCE_POLICY;
+  readonly operation: "index" | "sync";
+  readonly clock: "monotonic-milliseconds";
+  readonly phases: readonly IndexPerformancePhase[];
+  readonly totalDurationMs: number;
+  readonly measuredDurationMs: number;
+  readonly unattributedDurationMs: number;
+}

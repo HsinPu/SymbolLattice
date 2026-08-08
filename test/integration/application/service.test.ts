@@ -10820,6 +10820,73 @@ describe("SymbolLatticeService", () => {
     expect(status.lastIndexWork).toMatchObject({ mode: "full" });
   });
 
+  it("returns bounded phase timings for index and no-op sync without persisting process-local timings", async () => {
+    const projectPath = await createFixtureProject();
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    const indexed = await service.init({ projectPath });
+    expect(indexed.operationPerformance).toMatchObject({
+      policy: "index-performance-v1",
+      operation: "index",
+      clock: "monotonic-milliseconds"
+    });
+    expect(indexed.operationPerformance?.phases.map((phase) => phase.name)).toEqual([
+      "load-prior-inputs",
+      "scan",
+      "extraction",
+      "resolution",
+      "persistence",
+      "status-read"
+    ]);
+    expect(indexed.operationPerformance?.phases.every((phase) => phase.durationMs >= 0)).toBe(true);
+    expect(indexed.operationPerformance?.totalDurationMs).toBeGreaterThanOrEqual(
+      indexed.operationPerformance?.measuredDurationMs ?? Number.POSITIVE_INFINITY
+    );
+    expect(indexed.operationPerformance?.unattributedDurationMs).toBeGreaterThanOrEqual(0);
+    expect(graphStore.getStatus(projectPath)).not.toHaveProperty("operationPerformance");
+
+    const synced = await service.sync({ projectPath });
+    expect(synced.operationPerformance).toMatchObject({
+      policy: "index-performance-v1",
+      operation: "sync",
+      clock: "monotonic-milliseconds"
+    });
+    expect(synced.operationPerformance?.phases.map((phase) => phase.name)).toEqual([
+      "load-generation",
+      "scan",
+      "change-planning",
+      "status-read"
+    ]);
+  });
+
+  it("uses the lightweight status projection without loading the full active graph", async () => {
+    const projectPath = await createFixtureProject();
+    const backingStore = new SqliteGraphStore();
+    await new SymbolLatticeService(backingStore, new FileSystemSourceCatalog()).init({ projectPath });
+    const graphStore: GraphStore = {
+      isInitialized: (path) => backingStore.isInitialized(path),
+      initialize: (path) => backingStore.initialize(path),
+      getStatus: (path) => backingStore.getStatus(path),
+      getSnapshot: (path) => backingStore.getSnapshot(path),
+      getArtifactFacts: (path) => backingStore.getArtifactFacts(path),
+      getIndexInputs: (path) => backingStore.getIndexInputs(path),
+      getActiveGraphBundle: () => {
+        throw new Error("full graph should not be loaded for status");
+      },
+      getActiveStatusBundle: (path) => backingStore.getActiveStatusBundle(path),
+      getActiveGenerationBundle: (path) => backingStore.getActiveGenerationBundle(path),
+      replaceProjectFacts: (input) => backingStore.replaceProjectFacts(input)
+    };
+
+    const status = await new SymbolLatticeService(
+      graphStore,
+      new FileSystemSourceCatalog()
+    ).getStatus(projectPath);
+
+    expect(status).toMatchObject({ initialized: true, stale: false, staleReasons: [] });
+  });
+
   it("normalizes the pre-release source-search marker during a no-op sync", async () => {
     const projectPath = await createFixtureProject();
     const graphStore = new SqliteGraphStore();

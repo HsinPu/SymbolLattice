@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.337.0 是開發預覽版。MCP 查詢工具唯讀；但 `serve --mcp` 預設會啟動獨立的本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用它。
+> v0.338.0 是開發預覽版。MCP 查詢工具唯讀；但 `serve --mcp` 預設會啟動獨立的本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用它。
 
 ## 快速開始
 
@@ -70,7 +70,8 @@ node dist/cli/main.js file service.ts --project /path/to/project --offset 1600 -
 - `context` 將最多 8 個參照的 persisted source 放入同一個 2,048–64,000 字元預算，依輸入順序配置並回傳逐參照 allocation、截斷原因、實際輸出量、來源身分與 offset map；CLI 與 MCP 都可指定 `sourceCharacterBudget`。
 - 每段已傳送、已覆蓋與新 fragment 都可附 `mcp-source-pointer-v1`：專案相對路徑、精確行列、原始檔 offsets、最多 5 個重疊 symbol、可讀 `file:Lx-Ly (symbol)` 與 SHA-256 receipt。CRLF、CR、Unicode 行分隔與部分片段會重新定位；顯示證據不足時只省略 pointer，不影響來源相等性判定。
 - `investigate` 以 2,048–64,000 字元的共享 declaration-source 預算配置同一 active generation 的精確片段。`adaptive` 保持單一連續輸出；也可指定 `prefix`、`focused`、`signature`，或用 `multi` 分開取得最多兩段可獨立核對的 signature 與焦點原始碼。每段都有穩定 ID、SHA-256、範圍與省略 gap；不會合成不存在的文字，證據或預算不足時會明確降級。
-- `benchmark:comparison` 會在隔離的 Git 工作樹副本上，以同一組真值與查詢比較 SymbolLattice 與指定 CodeGraph checkout。結果包含 TP／FP／FN、precision／recall／F1、未解析率、首次索引、單檔同步、工作集記憶體、CLI 延遲與 4-way MCP 並行延遲；版本不一致、模糊、截斷或不完整輸出會直接失敗。
+- `benchmark:comparison` 會在隔離的 Git 工作樹副本上，以同一組真值與查詢比較 SymbolLattice 與指定 CodeGraph checkout。結果包含 TP／FP／FN、precision／recall／F1、未解析率、首次索引、單檔同步、工作集記憶體、CLI 延遲與 4-way MCP 並行延遲；SymbolLattice 另回傳不持久化的 scan／extraction／resolution／persistence 等單調時鐘分段收據。版本不一致、模糊、截斷或不完整輸出會直接失敗。
+- SQLite generation 寫入會重用已準備的 statement，狀態查詢不載入完整圖譜；兩者都不改變交易、active generation 或證據語意。
 - TypeScript 區域變數 initializer 的直接呼叫歸屬外層 callable；只有不可重新綁定且以陣列 literal 建立的 receiver，才會把直接 `sort(callback)` comparator 保存為 exact call，其他同名方法維持未推論。
 - 將多種語言與常見框架掃描成專案本機程式碼圖譜。
 - 查詢 symbols、files、calls、routes、entrypoints、impact、history 與 diff。

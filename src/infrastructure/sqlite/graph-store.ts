@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync } from "node:fs";
-import { DatabaseSync } from "node:sqlite";
+import { DatabaseSync, type StatementSync } from "node:sqlite";
 import { join, resolve } from "node:path";
 
 import type {
@@ -35,6 +35,7 @@ import {
 } from "../../domain/source-search.js";
 import type {
   ActiveGraphBundle,
+  ActiveStatusBundle,
   ActiveGenerationBundle,
   ActiveSourceDocumentsBundle,
   ActiveSourceSearchBundle,
@@ -802,16 +803,39 @@ function artifactFactsPayload(facts: PersistedArtifactFacts): ArtifactFacts {
   };
 }
 
-function insertFile(database: DatabaseSync, file: IndexedFile): void {
+const INSERT_FILE_SQL = `INSERT INTO files(
+  path, content_hash, language, indexed_at, generated, generated_evidence_json, source_role_json
+) VALUES (?, ?, ?, ?, ?, ?, ?)`;
+const INSERT_SYMBOL_SQL = `INSERT INTO symbols(
+  id, name, qualified_name, kind, file_path,
+  start_line, start_column, end_line, end_column,
+  is_exported, declaration_ordinal
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+const INSERT_EDGE_SQL = `INSERT INTO edges(
+  id, source_id, target_id, kind, file_path,
+  start_line, start_column, end_line, end_column,
+  resolution, confidence, reference_name
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+const INSERT_PENDING_REFERENCE_SQL = `INSERT INTO pending_refs(
+  id, source_id, file_path, reference_name, relation_kind,
+  start_line, start_column, end_line, end_column, extension_json
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+const INSERT_ARTIFACT_FACTS_SQL = `INSERT INTO artifact_facts(
+  generation_id, file_path, content_hash, language, extractor_version, facts_json
+) VALUES (?, ?, ?, ?, ?, ?)`;
+const INSERT_EDGE_EVIDENCE_SQL =
+  "INSERT INTO edge_evidence(generation_id, edge_id, evidence_json) VALUES (?, ?, ?)";
+const INSERT_SOURCE_DOCUMENT_SQL = `INSERT INTO source_documents(
+  generation_id, file_path, language, source_text
+) VALUES (?, ?, ?, ?)`;
+const INSERT_SOURCE_SEARCH_SQL = `INSERT INTO source_search(
+  generation_id, file_path, language, corpus
+) VALUES (?, ?, ?, ?)`;
+
+function insertFile(statement: StatementSync, file: IndexedFile): void {
   const generated = file.generated;
   const sourceRole = file.sourceRole;
-  database
-    .prepare(
-      `INSERT INTO files(
-        path, content_hash, language, indexed_at, generated, generated_evidence_json, source_role_json
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)`
-    )
-    .run(
+  statement.run(
       file.path,
       file.contentHash,
       file.language,
@@ -819,19 +843,11 @@ function insertFile(database: DatabaseSync, file: IndexedFile): void {
       Number(generated?.generated ?? false),
       generated === undefined ? null : JSON.stringify(generated),
       sourceRole === undefined ? null : JSON.stringify(sourceRole)
-    );
+  );
 }
 
-function insertSymbol(database: DatabaseSync, symbol: SymbolNode): void {
-  database
-    .prepare(
-      `INSERT INTO symbols(
-        id, name, qualified_name, kind, file_path,
-        start_line, start_column, end_line, end_column,
-        is_exported, declaration_ordinal
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    )
-    .run(
+function insertSymbol(statement: StatementSync, symbol: SymbolNode): void {
+  statement.run(
       symbol.id,
       symbol.name,
       symbol.qualifiedName,
@@ -843,19 +859,11 @@ function insertSymbol(database: DatabaseSync, symbol: SymbolNode): void {
       symbol.range.end.column,
       Number(symbol.isExported),
       symbol.declarationOrdinal
-    );
+  );
 }
 
-function insertEdge(database: DatabaseSync, edge: GraphEdge): void {
-  database
-    .prepare(
-      `INSERT INTO edges(
-        id, source_id, target_id, kind, file_path,
-        start_line, start_column, end_line, end_column,
-        resolution, confidence, reference_name
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    )
-    .run(
+function insertEdge(statement: StatementSync, edge: GraphEdge): void {
+  statement.run(
       edge.id,
       edge.sourceId,
       edge.targetId,
@@ -868,24 +876,17 @@ function insertEdge(database: DatabaseSync, edge: GraphEdge): void {
       edge.resolution,
       edge.confidence,
       edge.referenceName
-    );
+  );
 }
 
-function insertPendingReference(database: DatabaseSync, reference: PendingReference): void {
+function insertPendingReference(statement: StatementSync, reference: PendingReference): void {
   const extension = {
     ...(reference.extractionPlugin === undefined
       ? {}
       : { extractionPlugin: reference.extractionPlugin }),
     ...(reference.projectPlugin === undefined ? {} : { projectPlugin: reference.projectPlugin })
   };
-  database
-    .prepare(
-      `INSERT INTO pending_refs(
-        id, source_id, file_path, reference_name, relation_kind,
-        start_line, start_column, end_line, end_column, extension_json
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    )
-    .run(
+  statement.run(
       reference.id,
       reference.sourceId,
       reference.filePath,
@@ -896,40 +897,30 @@ function insertPendingReference(database: DatabaseSync, reference: PendingRefere
       reference.range.end.line,
       reference.range.end.column,
       Object.keys(extension).length === 0 ? null : JSON.stringify(extension)
-    );
+  );
 }
 
 function insertArtifactFacts(
-  database: DatabaseSync,
+  statement: StatementSync,
   generationId: string,
   facts: PersistedArtifactFacts
 ): void {
-  database
-    .prepare(
-      `INSERT INTO artifact_facts(
-        generation_id, file_path, content_hash, language, extractor_version, facts_json
-      ) VALUES (?, ?, ?, ?, ?, ?)`
-    )
-    .run(
+  statement.run(
       generationId,
       facts.filePath,
       facts.contentHash,
       facts.language,
       facts.extractorVersion,
       JSON.stringify(artifactFactsPayload(facts))
-    );
+  );
 }
 
-function insertEdgeEvidence(database: DatabaseSync, generationId: string, edge: GraphEdge): void {
+function insertEdgeEvidence(statement: StatementSync, generationId: string, edge: GraphEdge): void {
   if (edge.evidence === undefined) {
     return;
   }
 
-  database
-    .prepare(
-      "INSERT INTO edge_evidence(generation_id, edge_id, evidence_json) VALUES (?, ?, ?)"
-    )
-    .run(generationId, edge.id, JSON.stringify(edge.evidence));
+  statement.run(generationId, edge.id, JSON.stringify(edge.evidence));
 }
 
 function insertIndexInputs(
@@ -963,27 +954,18 @@ function insertSourceSearchVersion(
 }
 
 function insertSourceDocument(
-  database: DatabaseSync,
+  documentStatement: StatementSync,
+  searchStatement: StatementSync,
   generationId: string,
   document: IndexedSourceDocument
 ): void {
-  database
-    .prepare(
-      `INSERT INTO source_documents(generation_id, file_path, language, source_text)
-       VALUES (?, ?, ?, ?)`
-    )
-    .run(generationId, document.filePath, document.language, document.sourceText);
-  database
-    .prepare(
-      `INSERT INTO source_search(generation_id, file_path, language, corpus)
-       VALUES (?, ?, ?, ?)`
-    )
-    .run(
+  documentStatement.run(generationId, document.filePath, document.language, document.sourceText);
+  searchStatement.run(
       generationId,
       document.filePath,
       document.language,
       sourceSearchCorpus(document.sourceText)
-    );
+  );
 }
 
 function emptySnapshot(): GraphSnapshot {
@@ -1257,10 +1239,7 @@ function pruneRetainedGenerations(
   }
 }
 
-function readSnapshotProjection(
-  database: DatabaseSync,
-  activeGenerationId: string | null
-): GraphSnapshot {
+function readActiveFiles(database: DatabaseSync): readonly IndexedFile[] {
   const generatedSelect = columnExists(database, "files", "generated")
     ? "generated"
     : "0 AS generated";
@@ -1277,6 +1256,25 @@ function readSnapshotProjection(
        FROM files ORDER BY path`
     )
     .all() as unknown as FileRow[];
+  return files.map((file) => {
+    const generated = generatedFileClassification(file);
+    const sourceRole = sourceRoleClassification(file);
+    return {
+      path: file.path,
+      contentHash: file.content_hash,
+      language: file.language,
+      indexedAt: file.indexed_at,
+      ...(generated === null ? {} : { generated }),
+      ...(sourceRole === null ? {} : { sourceRole })
+    };
+  });
+}
+
+function readSnapshotProjection(
+  database: DatabaseSync,
+  activeGenerationId: string | null
+): GraphSnapshot {
+  const files = readActiveFiles(database);
   const symbols = database
     .prepare(
       `SELECT id, name, qualified_name, kind, file_path,
@@ -1326,18 +1324,7 @@ function readSnapshotProjection(
     .all() as unknown as PendingReferenceRow[];
 
   return {
-    files: files.map((file) => {
-      const generated = generatedFileClassification(file);
-      const sourceRole = sourceRoleClassification(file);
-      return {
-        path: file.path,
-        contentHash: file.content_hash,
-        language: file.language,
-        indexedAt: file.indexed_at,
-        ...(generated === null ? {} : { generated }),
-        ...(sourceRole === null ? {} : { sourceRole })
-      };
-    }),
+    files,
     symbols: symbols.map((symbol) => ({
       id: symbol.id,
       name: symbol.name,
@@ -1637,15 +1624,36 @@ function readActiveGraphBundle(
   database: DatabaseSync,
   projectPath: string
 ): ActiveGraphBundle {
+  const active = readActiveStatusState(database, projectPath);
+  const sourceSearchVersion = readActiveSourceSearchVersion(
+    database,
+    active.generationId
+  );
+
+  return {
+    status: active.status,
+    snapshot: readSnapshotProjection(database, active.generationId),
+    indexInputs: readActiveIndexInputs(database, active.schemaVersion, active.generationId),
+    extractorVersion: active.generation?.extractor_version ?? null,
+    resolverVersion: active.generation?.resolver_version ?? null,
+    sourceSearchVersion
+  };
+}
+
+function readActiveStatusState(
+  database: DatabaseSync,
+  projectPath: string
+): {
+  readonly schemaVersion: SupportedSchemaVersion;
+  readonly generationId: string | null;
+  readonly generation: GenerationRow | null;
+  readonly status: IndexStatus;
+} {
   const schemaVersion = readSchemaVersion(database);
   const generationId =
     supportsGenerationData(schemaVersion) ? getActiveGenerationId(database) : null;
   const generation = readGeneration(database, generationId);
   const indexWork = readActiveIndexWork(database, schemaVersion, generationId);
-  const sourceSearchVersion = readActiveSourceSearchVersion(
-    database,
-    generationId
-  );
   const statusWithoutWork: IndexStatus = {
     initialized: true,
     stale: false,
@@ -1655,16 +1663,26 @@ function readActiveGraphBundle(
     generationId,
     counts: readCounts(database)
   };
-  const status: IndexStatus =
-    indexWork === null ? statusWithoutWork : { ...statusWithoutWork, lastIndexWork: indexWork };
-
   return {
-    status,
-    snapshot: readSnapshotProjection(database, generationId),
-    indexInputs: readActiveIndexInputs(database, schemaVersion, generationId),
-    extractorVersion: generation?.extractor_version ?? null,
-    resolverVersion: generation?.resolver_version ?? null,
-    sourceSearchVersion
+    schemaVersion,
+    generationId,
+    generation,
+    status: indexWork === null ? statusWithoutWork : { ...statusWithoutWork, lastIndexWork: indexWork }
+  };
+}
+
+function readActiveStatusBundle(
+  database: DatabaseSync,
+  projectPath: string
+): ActiveStatusBundle {
+  const active = readActiveStatusState(database, projectPath);
+  return {
+    status: active.status,
+    files: readActiveFiles(database),
+    indexInputs: readActiveIndexInputs(database, active.schemaVersion, active.generationId),
+    extractorVersion: active.generation?.extractor_version ?? null,
+    resolverVersion: active.generation?.resolver_version ?? null,
+    sourceSearchVersion: readActiveSourceSearchVersion(database, active.generationId)
   };
 }
 
@@ -1741,7 +1759,13 @@ export class SqliteGraphStore implements GraphStore {
   }
 
   public getStatus(projectPath: string): IndexStatus {
-    return this.getActiveGraphBundle(projectPath).status;
+    const normalizedProjectPath = resolve(projectPath);
+    if (!this.isInitialized(normalizedProjectPath)) {
+      return uninitializedStatus(normalizedProjectPath);
+    }
+    return this.withReadDatabase(normalizedProjectPath, (database) =>
+      readActiveStatusState(database, normalizedProjectPath).status
+    );
   }
 
   public getSnapshot(projectPath: string): GraphSnapshot {
@@ -1771,6 +1795,23 @@ export class SqliteGraphStore implements GraphStore {
 
     return this.withReadDatabase(normalizedProjectPath, (database) =>
       readActiveGraphBundle(database, normalizedProjectPath)
+    );
+  }
+
+  public getActiveStatusBundle(projectPath: string): ActiveStatusBundle {
+    const normalizedProjectPath = resolve(projectPath);
+    if (!this.isInitialized(normalizedProjectPath)) {
+      return {
+        status: uninitializedStatus(normalizedProjectPath),
+        files: [],
+        indexInputs: null,
+        extractorVersion: null,
+        resolverVersion: null,
+        sourceSearchVersion: null
+      };
+    }
+    return this.withReadDatabase(normalizedProjectPath, (database) =>
+      readActiveStatusBundle(database, normalizedProjectPath)
     );
   }
 
@@ -1926,18 +1967,27 @@ export class SqliteGraphStore implements GraphStore {
           insertSourceSearchVersion(database, generationId, input.sourceSearchVersion);
         }
 
+        const artifactFactsInsert = database.prepare(INSERT_ARTIFACT_FACTS_SQL);
         for (const facts of input.artifactFacts) {
-          insertArtifactFacts(database, generationId, facts);
+          insertArtifactFacts(artifactFactsInsert, generationId, facts);
         }
 
         if (writesSourceSearch) {
+          const sourceDocumentInsert = database.prepare(INSERT_SOURCE_DOCUMENT_SQL);
+          const sourceSearchInsert = database.prepare(INSERT_SOURCE_SEARCH_SQL);
           for (const document of input.sourceDocuments) {
-            insertSourceDocument(database, generationId, document);
+            insertSourceDocument(
+              sourceDocumentInsert,
+              sourceSearchInsert,
+              generationId,
+              document
+            );
           }
         }
 
+        const edgeEvidenceInsert = database.prepare(INSERT_EDGE_EVIDENCE_SQL);
         for (const edge of input.snapshot.edges) {
-          insertEdgeEvidence(database, generationId, edge);
+          insertEdgeEvidence(edgeEvidenceInsert, generationId, edge);
         }
 
         database.exec("DELETE FROM edges");
@@ -1945,17 +1995,21 @@ export class SqliteGraphStore implements GraphStore {
         database.exec("DELETE FROM symbols");
         database.exec("DELETE FROM files");
 
+        const fileInsert = database.prepare(INSERT_FILE_SQL);
         for (const file of input.snapshot.files) {
-          insertFile(database, file);
+          insertFile(fileInsert, file);
         }
+        const symbolInsert = database.prepare(INSERT_SYMBOL_SQL);
         for (const symbol of input.snapshot.symbols) {
-          insertSymbol(database, symbol);
+          insertSymbol(symbolInsert, symbol);
         }
+        const edgeInsert = database.prepare(INSERT_EDGE_SQL);
         for (const edge of input.snapshot.edges) {
-          insertEdge(database, edge);
+          insertEdge(edgeInsert, edge);
         }
+        const pendingReferenceInsert = database.prepare(INSERT_PENDING_REFERENCE_SQL);
         for (const reference of input.snapshot.pendingReferences) {
-          insertPendingReference(database, reference);
+          insertPendingReference(pendingReferenceInsert, reference);
         }
 
         setMeta(database, INDEXED_AT_META_KEY, input.indexedAt);

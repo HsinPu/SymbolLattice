@@ -16,7 +16,8 @@ import { fileURLToPath } from "node:url";
 
 import {
   parseCodeGraphCallees,
-  parseSymbolLatticeCallees
+  parseSymbolLatticeCallees,
+  parseSymbolLatticeIndexPerformance
 } from "../dist/benchmark/comparison-adapters.js";
 import { scoreComparisonCases } from "../dist/benchmark/comparison-metrics.js";
 import { summarizeReadQueryExecutions } from "../dist/benchmark/read-query-metrics.js";
@@ -282,6 +283,7 @@ async function engineDefinitions(workspacePath) {
       syncArgs: (projectPath) => [symbolCli, "sync", projectPath, "--json"],
       queryArgs: (projectPath, reference) => [symbolCli, "callees", reference, "--project", projectPath, "--json"],
       parseQuery: parseSymbolLatticeCallees,
+      parseOperationPerformance: parseSymbolLatticeIndexPerformance,
       mcpArgs: (projectPath) => [symbolCli, "serve", "--mcp", "--project", projectPath, "--no-auto-sync"],
       mcpTool: "symbol_lattice_node",
       mcpArguments: (projectPath, reference) => ({ projectPath, query: reference, sourceSessionMode: "deduplicate" }),
@@ -297,6 +299,7 @@ async function engineDefinitions(workspacePath) {
       syncArgs: (projectPath) => [...codeGraphLaunch.prefixArgs, "sync", projectPath],
       queryArgs: (projectPath, reference) => [...codeGraphLaunch.prefixArgs, "callees", reference, "--path", projectPath, "--json"],
       parseQuery: parseCodeGraphCallees,
+      parseOperationPerformance: null,
       mcpArgs: (projectPath) => [...codeGraphLaunch.prefixArgs, "serve", "--mcp", "--path", projectPath],
       mcpTool: "codegraph_node",
       mcpArguments: (projectPath, reference) => ({ projectPath, symbol: reference, includeCode: false }),
@@ -481,12 +484,18 @@ async function runEngineProject(engine, project, cases, repositoryPath, scratchR
     },
     index: {
       durationMs: init.durationMs,
-      peakRssBytes: init.peakRssBytes
+      peakRssBytes: init.peakRssBytes,
+      operationPerformance: engine.parseOperationPerformance === null
+        ? null
+        : engine.parseOperationPerformance(init.stdout, "index")
     },
     incrementalSync: {
       mutationPath: project.mutationPath,
       durationMs: sync.durationMs,
-      peakRssBytes: sync.peakRssBytes
+      peakRssBytes: sync.peakRssBytes,
+      operationPerformance: engine.parseOperationPerformance === null
+        ? null
+        : engine.parseOperationPerformance(sync.stdout, "sync")
     },
     correctness: scoreComparisonCases(observations),
     cliQueries: {
@@ -529,7 +538,7 @@ async function main() {
     }
 
     const result = {
-      schemaVersion: 1,
+      schemaVersion: 2,
       benchmark: manifest.benchmarkId,
       generatedAt: new Date().toISOString(),
       manifest: {
@@ -550,6 +559,7 @@ async function main() {
         correctnessScope: "curated project-local function and method callees",
         cliQueries: "both engines use their JSON callees command; latency includes each command's complete response contract",
         memory: "sampled process working set; null when unsupported",
+        phaseTimings: "SymbolLattice index and sync expose validated process-local monotonic phase receipts; CodeGraph has no equivalent public receipt, so its value is null and only end-to-end totals are compared",
         mcp: {
           requests: MCP_REQUEST_COUNT,
           concurrency: MCP_CONCURRENCY,
