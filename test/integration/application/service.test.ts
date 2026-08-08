@@ -4389,11 +4389,123 @@ describe("SymbolLatticeService", () => {
     expect(callAt("src/app/NestedGuard.java", 9)).toBeUndefined();
     expect(callAt("src/app/FallsThrough.java", 6)).toBeUndefined();
     expect(callAt("src/app/ConditionalExit.java", 6)).toBeUndefined();
-    expect(callAt("src/app/ElsePresent.java", 6)).toBeUndefined();
-    expect(callAt("src/app/ElsePresent.java", 8)).toBeUndefined();
+    expect(callAt("src/app/ElsePresent.java", 6)?.targetId).toBe(returnCall?.targetId);
+    expect(callAt("src/app/ElsePresent.java", 8)?.targetId).toBe(returnCall?.targetId);
     expect(callAt("src/app/ExistingBinding.java", 6)).toBeUndefined();
     expect(callAt("src/app/GenericPattern.java", 6)).toBeUndefined();
     expect(callAt("src/app/WrongPolarity.java", 6)).toBeUndefined();
+  });
+
+  it("binds a Java negated instanceof pattern in else and proven following flow", async () => {
+    const projectPath = await createInlineProject({
+      "src/api/Service.java": [
+        "package api;",
+        "public class Service { public void execute(String value) {} }"
+      ].join("\n"),
+      "src/app/ElseAbrupt.java": [
+        "package app;",
+        "import api.Service;",
+        "public class ElseAbrupt {",
+        "  public void run(Object value) {",
+        "    if (!(value instanceof Service service)) { return; } else {",
+        "      service.execute(\"else\");",
+        "    }",
+        "    service.execute(\"following\");",
+        "  }",
+        "}"
+      ].join("\n"),
+      "src/app/ElseFallsThrough.java": [
+        "package app;",
+        "import api.Service;",
+        "public class ElseFallsThrough {",
+        "  public void run(Object value) {",
+        "    if (!(value instanceof Service service)) { audit(); } else {",
+        "      service.execute(\"else-only\");",
+        "    }",
+        "    service.execute(\"not-following\");",
+        "  }",
+        "  private void audit() {}",
+        "}"
+      ].join("\n"),
+      "src/app/DirectElse.java": [
+        "package app;",
+        "import api.Service;",
+        "public class DirectElse {",
+        "  public void run(Object value) {",
+        "    if (!(value instanceof Service service)) throw new IllegalArgumentException();",
+        "    else service.execute(\"direct\");",
+        "    service.execute(\"after-direct\");",
+        "  }",
+        "}"
+      ].join("\n"),
+      "src/app/NestedElse.java": [
+        "package app;",
+        "import api.Service;",
+        "public class NestedElse {",
+        "  public void run(boolean flag, Object value) {",
+        "    if (flag) {",
+        "      if (!(value instanceof Service service)) { return; } else { service.execute(\"inside-else\"); }",
+        "      service.execute(\"inside-following\");",
+        "    }",
+        "    service.execute(\"outside\");",
+        "  }",
+        "}"
+      ].join("\n"),
+      "src/app/ThenCall.java": [
+        "package app;",
+        "import api.Service;",
+        "public class ThenCall {",
+        "  public void run(Object value) {",
+        "    if (!(value instanceof Service service)) { service.execute(\"then\"); }",
+        "    else { service.execute(\"else\"); }",
+        "  }",
+        "}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+
+    const snapshot = graphStore.getSnapshot(projectPath);
+    const calls = snapshot.edges.filter((edge) => edge.kind === "calls");
+    const callAt = (filePath: string, line: number) =>
+      calls.find(
+        (edge) =>
+          edge.filePath === filePath &&
+          edge.range.start.line === line &&
+          edge.referenceName === "execute"
+      );
+    const targetId = snapshot.symbols.find(
+      (candidate) => candidate.qualifiedName === "src/api/Service.java#Service.execute"
+    )?.id;
+    const elseCall = callAt("src/app/ElseAbrupt.java", 6);
+    expect(elseCall?.targetId).toBe(targetId);
+    expect(elseCall?.evidence?.callDispatch?.receiverBinding).toEqual(
+      expect.objectContaining({
+        policy: "java-source-lexical-binding-v15",
+        kind: "instanceof-negated-else-pattern",
+        activeRegion: "else-body",
+        thenAbruptCompletionKind: "return",
+        elseBodyKind: "block"
+      })
+    );
+    expect(callAt("src/app/ElseAbrupt.java", 8)?.targetId).toBe(targetId);
+    expect(callAt("src/app/ElseAbrupt.java", 8)?.evidence?.callDispatch?.receiverBinding).toEqual(
+      expect.objectContaining({
+        policy: "java-source-lexical-binding-v15",
+        activeRegion: "following-scope"
+      })
+    );
+    expect(callAt("src/app/ElseFallsThrough.java", 6)?.targetId).toBe(targetId);
+    expect(callAt("src/app/ElseFallsThrough.java", 8)).toBeUndefined();
+    expect(callAt("src/app/DirectElse.java", 6)?.targetId).toBe(targetId);
+    expect(callAt("src/app/DirectElse.java", 7)?.targetId).toBe(targetId);
+    expect(callAt("src/app/NestedElse.java", 6)?.targetId).toBe(targetId);
+    expect(callAt("src/app/NestedElse.java", 7)?.targetId).toBe(targetId);
+    expect(callAt("src/app/NestedElse.java", 9)).toBeUndefined();
+    expect(callAt("src/app/ThenCall.java", 5)).toBeUndefined();
+    expect(callAt("src/app/ThenCall.java", 6)?.targetId).toBe(targetId);
   });
 
   it("resolves Java enhanced-for, catch, and explicit lambda bindings within their exact scopes", async () => {
