@@ -3766,6 +3766,141 @@ describe("SymbolLatticeService", () => {
     expect(callAt("src/app/Generic.java", 4)).toBeUndefined();
   });
 
+  it("binds one left-hand Java instanceof pattern across an exact && right operand and true block", async () => {
+    const projectPath = await createInlineProject({
+      "src/api/Service.java": [
+        "package api;",
+        "public class Service {",
+        "  public boolean ready() { return true; }",
+        "  public boolean enabled() { return true; }",
+        "  public void execute(String value) {}",
+        "}"
+      ].join("\n"),
+      "src/app/Runner.java": [
+        "package app;",
+        "import api.Service;",
+        "public class Runner {",
+        "  public void run(Object value) {",
+        "    if (value instanceof Service service && service.ready()) {",
+        "      service.execute(\"inside\");",
+        "    } else {",
+        "      service.execute(\"false-branch\");",
+        "    }",
+        "    service.execute(\"outside\");",
+        "  }",
+        "}"
+      ].join("\n"),
+      "src/app/OrPattern.java": [
+        "package app;",
+        "import api.Service;",
+        "public class OrPattern {",
+        "  public void run(Object value) {",
+        "    if (value instanceof Service service || service.ready()) { service.execute(\"or\"); }",
+        "  }",
+        "}"
+      ].join("\n"),
+      "src/app/RightPattern.java": [
+        "package app;",
+        "import api.Service;",
+        "public class RightPattern {",
+        "  private boolean ready() { return true; }",
+        "  public void run(Object value) {",
+        "    if (ready() && value instanceof Service service) { service.execute(\"right\"); }",
+        "  }",
+        "}"
+      ].join("\n"),
+      "src/app/Chained.java": [
+        "package app;",
+        "import api.Service;",
+        "public class Chained {",
+        "  public void run(Object value) {",
+        "    if (value instanceof Service service && service.ready() && service.enabled()) {",
+        "      service.execute(\"chained\");",
+        "    }",
+        "  }",
+        "}"
+      ].join("\n"),
+      "src/app/Assigned.java": [
+        "package app;",
+        "import api.Service;",
+        "public class Assigned {",
+        "  private boolean flag;",
+        "  public void run(Object value) {",
+        "    if (value instanceof Service service && (flag = service.ready())) {",
+        "      service.execute(\"assigned\");",
+        "    }",
+        "  }",
+        "}"
+      ].join("\n"),
+      "src/app/Unbraced.java": [
+        "package app;",
+        "import api.Service;",
+        "public class Unbraced {",
+        "  public void run(Object value) {",
+        "    if (value instanceof Service service && service.ready()) service.execute(\"unbraced\");",
+        "  }",
+        "}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+
+    const snapshot = graphStore.getSnapshot(projectPath);
+    const calls = snapshot.edges.filter((edge) => edge.kind === "calls");
+    const callAt = (filePath: string, line: number) =>
+      calls.find((edge) => edge.filePath === filePath && edge.range.start.line === line);
+    const symbolId = (qualifiedName: string) =>
+      snapshot.symbols.find((candidate) => candidate.qualifiedName === qualifiedName)?.id;
+    const serviceId = symbolId("src/api/Service.java#Service");
+    const readyCall = callAt("src/app/Runner.java", 5);
+    const executeCall = callAt("src/app/Runner.java", 6);
+    expect(readyCall?.targetId).toBe(symbolId("src/api/Service.java#Service.ready"));
+    expect(readyCall?.evidence?.callDispatch).toEqual(
+      expect.objectContaining({
+        invocationKind: "instanceof-and-pattern",
+        receiverTypeSymbolId: serviceId,
+        receiverBinding: expect.objectContaining({
+          policy: "java-source-lexical-binding-v11",
+          kind: "instanceof-and-pattern",
+          name: "service",
+          typeSource: "instanceof-pattern",
+          type: expect.objectContaining({
+            canonicalType: "reference:api.Service",
+            proof: "explicit-import",
+            targetSymbolId: serviceId
+          }),
+          conditionRange: expect.objectContaining({ start: expect.objectContaining({ line: 5 }) }),
+          rightOperandRange: expect.objectContaining({
+            start: expect.objectContaining({ line: 5 })
+          }),
+          trueBlockRange: expect.objectContaining({
+            start: expect.objectContaining({ line: 5 })
+          }),
+          scopeRange: expect.objectContaining({ start: expect.objectContaining({ line: 5 }) })
+        })
+      })
+    );
+    expect(executeCall?.targetId).toBe(symbolId("src/api/Service.java#Service.execute"));
+    expect(executeCall?.evidence?.callDispatch?.receiverBinding).toEqual(
+      expect.objectContaining({
+        policy: "java-source-lexical-binding-v11",
+        scopeRange: expect.objectContaining({ start: expect.objectContaining({ line: 5 }) }),
+        trueBlockRange: expect.objectContaining({ start: expect.objectContaining({ line: 5 }) })
+      })
+    );
+    expect(callAt("src/app/Runner.java", 8)).toBeUndefined();
+    expect(callAt("src/app/Runner.java", 10)).toBeUndefined();
+    expect(callAt("src/app/OrPattern.java", 5)).toBeUndefined();
+    expect(callAt("src/app/RightPattern.java", 6)).toBeUndefined();
+    expect(callAt("src/app/Chained.java", 5)).toBeUndefined();
+    expect(callAt("src/app/Chained.java", 6)).toBeUndefined();
+    expect(callAt("src/app/Assigned.java", 6)).toBeUndefined();
+    expect(callAt("src/app/Assigned.java", 7)).toBeUndefined();
+    expect(callAt("src/app/Unbraced.java", 5)).toBeUndefined();
+  });
+
   it("resolves Java enhanced-for, catch, and explicit lambda bindings within their exact scopes", async () => {
     const projectPath = await createInlineProject({
       "src/api/Service.java": [

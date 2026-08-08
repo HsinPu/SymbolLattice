@@ -25,6 +25,7 @@ import {
   type SpringBootPropertiesValueReferenceFact,
   type SymbolNode
 } from "../domain/index.js";
+import { parse as parseAstGrep, type SgNode } from "./ast-grep-languages.js";
 import { frameworkCapability } from "./framework-capabilities.js";
 import { inspectJavaRecords, type StaticJavaRecord } from "./java-records.js";
 
@@ -70,6 +71,24 @@ interface StaticJavaSuperclassReference {
 interface StaticJavaDependencyInjectionReference {
   readonly syntax: JvmDependencyInjectionReferenceFact["syntax"];
   readonly reference: StaticJavaSuperclassReference;
+}
+
+interface StaticJavaInstanceofAndPatternSyntax {
+  readonly name: string;
+  readonly typePath: string;
+  readonly typeRange: SourceRange;
+  readonly declarationRange: SourceRange;
+  readonly conditionRange: SourceRange;
+  readonly testedValueRange: SourceRange;
+  readonly rightOperandRange: SourceRange;
+  readonly trueBlockRange: SourceRange;
+  readonly rightOperandOffsets: { readonly start: number; readonly end: number };
+  readonly trueBlockOffsets: { readonly start: number; readonly end: number };
+}
+
+interface StaticJavaInstanceofAndPatternInspection {
+  readonly syntaxes: readonly StaticJavaInstanceofAndPatternSyntax[];
+  readonly legacyRecoveryOffsets: readonly { readonly start: number; readonly end: number }[];
 }
 
 interface StaticJavaDependencyInjectionAnnotation {
@@ -285,6 +304,147 @@ function rangeFor(lineStarts: readonly number[], from: number, to: number): Sour
   };
 }
 
+function astGrepChildren(node: SgNode): readonly SgNode[] {
+  return node.children();
+}
+
+function astGrepHasError(node: SgNode): boolean {
+  return node.kind() === "ERROR" || astGrepChildren(node).some((child) => astGrepHasError(child));
+}
+
+function astGrepContainsKind(node: SgNode, kind: string): boolean {
+  return node.kind() === kind || astGrepChildren(node).some((child) => astGrepContainsKind(child, kind));
+}
+
+function astGrepContainsLogicalOperator(node: SgNode): boolean {
+  return (
+    node.kind() === "&&" ||
+    node.kind() === "||" ||
+    astGrepChildren(node).some((child) => astGrepContainsLogicalOperator(child))
+  );
+}
+
+function inspectJavaInstanceofAndPatterns(
+  input: JavaExtractFileFactsInput
+): StaticJavaInstanceofAndPatternInspection {
+  if (!input.sourceText.includes("instanceof") || !input.sourceText.includes("&&")) {
+    return { syntaxes: [], legacyRecoveryOffsets: [] };
+  }
+  const root = parseAstGrep("java", input.sourceText).root();
+  if (astGrepHasError(root)) {
+    return { syntaxes: [], legacyRecoveryOffsets: [] };
+  }
+  const lineStarts = lineStartsFor(input.sourceText);
+  const syntaxes: StaticJavaInstanceofAndPatternSyntax[] = [];
+  const legacyRecoveryOffsets: Array<{ readonly start: number; readonly end: number }> = [];
+
+  function visit(node: SgNode): void {
+    if (node.kind() === "if_statement") {
+      const statementChildren = astGrepChildren(node);
+      const condition = statementChildren[1];
+      const trueBlock = statementChildren[2];
+      if (
+        statementChildren[0]?.kind() === "if" &&
+        condition?.kind() === "parenthesized_expression" &&
+        trueBlock?.kind() === "block"
+      ) {
+        const conditionChildren = astGrepChildren(condition);
+        const binary = conditionChildren[1];
+        const binaryChildren = binary === undefined ? [] : astGrepChildren(binary);
+        const pattern = binaryChildren[0];
+        const rightOperand = binaryChildren[2];
+        const patternChildren = pattern === undefined ? [] : astGrepChildren(pattern);
+        const testedValue = patternChildren[0];
+        const typeNode = patternChildren[2];
+        const definition = patternChildren[3];
+        const name = definition?.text();
+        const typePath = typeNode?.text();
+        if (
+          conditionChildren.length === 3 &&
+          conditionChildren[0]?.kind() === "(" &&
+          conditionChildren[2]?.kind() === ")" &&
+          binary?.kind() === "binary_expression" &&
+          binaryChildren.length === 3 &&
+          binaryChildren[1]?.kind() === "&&" &&
+          pattern?.kind() === "instanceof_expression" &&
+          patternChildren.length === 4 &&
+          testedValue !== undefined &&
+          patternChildren[1]?.kind() === "instanceof" &&
+          typeNode !== undefined &&
+          (typeNode.kind() === "type_identifier" || typeNode.kind() === "scoped_type_identifier") &&
+          definition?.kind() === "identifier" &&
+          name !== undefined &&
+          /^[A-Za-z_$][A-Za-z0-9_$]*$/u.test(name) &&
+          typePath !== undefined &&
+          /^[A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)*$/u.test(typePath) &&
+          rightOperand !== undefined &&
+          !astGrepContainsLogicalOperator(rightOperand) &&
+          !astGrepContainsKind(binary, "assignment_expression")
+        ) {
+          const conditionOffsets = condition.range();
+          const statementOffsets = node.range();
+          const testedValueOffsets = testedValue.range();
+          const typeOffsets = typeNode.range();
+          const definitionOffsets = definition.range();
+          const rightOperandOffsets = rightOperand.range();
+          const trueBlockOffsets = trueBlock.range();
+          legacyRecoveryOffsets.push({
+            start: statementOffsets.start.index,
+            end: statementOffsets.end.index
+          });
+          syntaxes.push({
+            name,
+            typePath,
+            typeRange: rangeFor(lineStarts, typeOffsets.start.index, typeOffsets.end.index),
+            declarationRange: rangeFor(
+              lineStarts,
+              definitionOffsets.start.index,
+              definitionOffsets.end.index
+            ),
+            conditionRange: rangeFor(
+              lineStarts,
+              conditionOffsets.start.index,
+              conditionOffsets.end.index
+            ),
+            testedValueRange: rangeFor(
+              lineStarts,
+              testedValueOffsets.start.index,
+              testedValueOffsets.end.index
+            ),
+            rightOperandRange: rangeFor(
+              lineStarts,
+              rightOperandOffsets.start.index,
+              rightOperandOffsets.end.index
+            ),
+            trueBlockRange: rangeFor(
+              lineStarts,
+              trueBlockOffsets.start.index,
+              trueBlockOffsets.end.index
+            ),
+            rightOperandOffsets: {
+              start: rightOperandOffsets.start.index,
+              end: rightOperandOffsets.end.index
+            },
+            trueBlockOffsets: {
+              start: trueBlockOffsets.start.index,
+              end: trueBlockOffsets.end.index
+            }
+          });
+        }
+      }
+    }
+    for (const child of astGrepChildren(node)) {
+      visit(child);
+    }
+  }
+
+  visit(root);
+  return {
+    syntaxes,
+    legacyRecoveryOffsets
+  };
+}
+
 function isLegacyGrammarDefaultModifierMarker(node: JavaSyntaxNode): boolean {
   if (
     !node.type.isError ||
@@ -348,13 +508,23 @@ function isLegacyGrammarInstanceofPatternMarker(
   );
 }
 
-function hasSyntaxError(input: JavaExtractFileFactsInput, node: JavaSyntaxNode): boolean {
+function hasSyntaxError(
+  input: JavaExtractFileFactsInput,
+  node: JavaSyntaxNode,
+  modernRecoveryOffsets: readonly { readonly start: number; readonly end: number }[] = []
+): boolean {
+  const isModernRecoveredError =
+    node.type.isError &&
+    modernRecoveryOffsets.some(
+      (range) => range.start <= node.from && node.to <= range.end
+    );
   return (
     (node.type.isError &&
+      !isModernRecoveredError &&
       !isLegacyGrammarDefaultModifierMarker(node) &&
       !isLegacyGrammarSwitchRuleMarker(input, node) &&
       !isLegacyGrammarInstanceofPatternMarker(input, node)) ||
-    directChildren(node).some((child) => hasSyntaxError(input, child))
+    directChildren(node).some((child) => hasSyntaxError(input, child, modernRecoveryOffsets))
   );
 }
 
@@ -1613,6 +1783,7 @@ function staticJavaMemberCallReferences(input: {
   readonly callableSymbol: SymbolNode;
   readonly declaringType: SymbolNode;
   readonly imports: ReadonlyMap<string, string>;
+  readonly instanceofAndPatternSyntaxes: readonly StaticJavaInstanceofAndPatternSyntax[];
 }): readonly JavaMemberCallReferenceFact[] {
   const body = input.callable.body;
   if (body === null) {
@@ -1686,6 +1857,13 @@ function staticJavaMemberCallReferences(input: {
           readonly testedValueRange: SourceRange;
         }
       | {
+          readonly kind: "instanceof-and-pattern";
+          readonly conditionRange: SourceRange;
+          readonly testedValueRange: SourceRange;
+          readonly rightOperandRange: SourceRange;
+          readonly trueBlockRange: SourceRange;
+        }
+      | {
           readonly kind: "local";
           readonly directAssignment?: DirectAssignmentBinding;
           readonly assignmentJoin?: ExhaustiveAssignmentJoinBinding;
@@ -1756,6 +1934,56 @@ function staticJavaMemberCallReferences(input: {
       }
     }
     return undefined;
+  }
+
+  function visibleBindingAt(
+    name: string,
+    offset: number
+  ): ReceiverBinding | null | undefined {
+    const lexical = visibleBinding(name);
+    const activePatterns = input.instanceofAndPatternSyntaxes.filter(
+      (syntax) =>
+        syntax.name === name &&
+        ((syntax.rightOperandOffsets.start <= offset && offset < syntax.rightOperandOffsets.end) ||
+          (syntax.trueBlockOffsets.start <= offset && offset < syntax.trueBlockOffsets.end))
+    );
+    if (activePatterns.length === 0) {
+      return lexical;
+    }
+    const pattern = activePatterns[0];
+    if (activePatterns.length !== 1 || pattern === undefined || lexical !== undefined) {
+      return null;
+    }
+    const typeSegments = pattern.typePath.split(".");
+    const referenceName = typeSegments.at(-1);
+    if (referenceName === undefined) {
+      return null;
+    }
+    const qualifiedTypePath = typeSegments.length > 1 ? pattern.typePath : undefined;
+    const importedTypePath =
+      qualifiedTypePath === undefined ? input.imports.get(referenceName) : undefined;
+    const scopeRange =
+      pattern.rightOperandOffsets.start <= offset && offset < pattern.rightOperandOffsets.end
+        ? pattern.rightOperandRange
+        : pattern.trueBlockRange;
+    return {
+      kind: "instanceof-and-pattern",
+      name,
+      type: {
+        kind: "reference",
+        referenceName,
+        syntax: "declaration",
+        range: pattern.typeRange,
+        ...(importedTypePath === undefined ? {} : { importedTypePath }),
+        ...(qualifiedTypePath === undefined ? {} : { qualifiedTypePath })
+      },
+      declarationRange: pattern.declarationRange,
+      scopeRange,
+      conditionRange: pattern.conditionRange,
+      testedValueRange: pattern.testedValueRange,
+      rightOperandRange: pattern.rightOperandRange,
+      trueBlockRange: pattern.trueBlockRange
+    };
   }
 
   function addLocalDeclaration(
@@ -2799,7 +3027,7 @@ function staticJavaMemberCallReferences(input: {
             range: rangeFor(lineStarts, methodNode.from, methodNode.to)
           });
         } else if (receiverName !== undefined && methodName !== null && arguments_ !== null) {
-          const binding = visibleBinding(receiverName);
+          const binding = visibleBindingAt(receiverName, node.from);
           if (binding !== null && binding !== undefined) {
             const argumentTypes = arguments_.map((argument) =>
               staticJavaArgumentType(input.extraction, argument, input.imports)
@@ -2836,6 +3064,25 @@ function staticJavaMemberCallReferences(input: {
                 receiverScopeRange: binding.scopeRange,
                 receiverConditionRange: binding.conditionRange,
                 receiverTestedValueRange: binding.testedValueRange,
+                methodName,
+                argumentCount: arguments_.length,
+                argumentTypes,
+                range: rangeFor(lineStarts, methodNode.from, methodNode.to)
+              });
+            } else if (binding.kind === "instanceof-and-pattern") {
+              references.push({
+                sourceId: input.callableSymbol.id,
+                declaringTypeId: input.declaringType.id,
+                filePath: input.extraction.filePath,
+                receiverKind: binding.kind,
+                receiverName,
+                receiverType: binding.type,
+                receiverBindingRange: binding.declarationRange,
+                receiverScopeRange: binding.scopeRange,
+                receiverConditionRange: binding.conditionRange,
+                receiverTestedValueRange: binding.testedValueRange,
+                receiverRightOperandRange: binding.rightOperandRange,
+                receiverTrueBlockRange: binding.trueBlockRange,
                 methodName,
                 argumentCount: arguments_.length,
                 argumentTypes,
@@ -3961,6 +4208,7 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
   }
 
   const root = parser.parse(input.sourceText).topNode;
+  const instanceofAndPatternInspection = inspectJavaInstanceofAndPatterns(input);
   const recordInspection = inspectJavaRecords({ sourceText: input.sourceText });
   const lineStarts = lineStartsFor(input.sourceText);
   const symbols: SymbolNode[] = [];
@@ -4381,7 +4629,7 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
   }
 
   const canUseLegacyJavaRoot =
-    !hasSyntaxError(input, root) ||
+    !hasSyntaxError(input, root, instanceofAndPatternInspection.legacyRecoveryOffsets) ||
     (recordInspection.isSyntaxClean && recordInspection.recordRanges.length > 0);
   const packageName = canUseLegacyJavaRoot ? staticJavaPackage(input, root) : null;
   const overlapsRecord = (node: JavaSyntaxNode): boolean =>
@@ -4394,7 +4642,14 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
     const types = directChildren(root)
       .map((node) => staticJavaType(input, node))
       .filter((candidate): candidate is StaticJavaType => candidate !== null)
-      .filter((candidate) => !hasSyntaxError(input, candidate.node));
+      .filter(
+        (candidate) =>
+          !hasSyntaxError(
+            input,
+            candidate.node,
+            instanceofAndPatternInspection.legacyRecoveryOffsets
+          )
+      );
     const typesByName = new Map<string, SymbolNode[]>();
     const declaredClasses: Array<{ declaration: StaticJavaClass; symbol: SymbolNode }> = [];
     const declaredInterfaces: Array<{ declaration: StaticJavaInterface; symbol: SymbolNode }> = [];
@@ -4457,7 +4712,8 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
               callable: methodDeclaration,
               callableSymbol: methodSymbol,
               declaringType: typeSymbol,
-              imports
+              imports,
+              instanceofAndPatternSyntaxes: instanceofAndPatternInspection.syntaxes
             })
           );
         }
@@ -4596,7 +4852,8 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
             callable: constructorDeclaration,
             callableSymbol: constructorSymbol,
             declaringType: classSymbol,
-            imports
+            imports,
+            instanceofAndPatternSyntaxes: instanceofAndPatternInspection.syntaxes
           })
         );
       }
@@ -4630,7 +4887,8 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
             callable: methodDeclaration,
             callableSymbol: methodSymbol,
             declaringType: classSymbol,
-            imports
+            imports,
+            instanceofAndPatternSyntaxes: instanceofAndPatternInspection.syntaxes
           })
         );
         if (hasJavaOverrideAnnotation(methodDeclaration)) {

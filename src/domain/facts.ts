@@ -13,13 +13,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v227";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v228";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v116";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v117";
 
 /** Hard cap for one source-proven Java exhaustive if/else-if/else assignment join. */
 export const JAVA_EXHAUSTIVE_ASSIGNMENT_JOIN_MAXIMUM_BRANCHES = 8;
@@ -145,6 +145,7 @@ interface CallReceiverBindingEvidenceBase {
     | "catch"
     | "lambda"
     | "instanceof-pattern"
+    | "instanceof-and-pattern"
     | "try-resource"
     | "field"
     | "this-field"
@@ -295,6 +296,15 @@ export type CallReceiverBindingEvidence =
       readonly conditionRange: SourceRange;
       readonly testedValueRange: SourceRange;
     })
+  | (CallReceiverBindingEvidenceBase & {
+      readonly kind: "instanceof-and-pattern";
+      readonly policy: "java-source-lexical-binding-v11";
+      readonly typeSource: "instanceof-pattern";
+      readonly conditionRange: SourceRange;
+      readonly testedValueRange: SourceRange;
+      readonly rightOperandRange: SourceRange;
+      readonly trueBlockRange: SourceRange;
+    })
   | (CallReceiverBindingEvidenceBase &
       (
         | {
@@ -414,6 +424,7 @@ export interface CallDispatchEvidence {
     | "catch"
     | "lambda"
     | "instanceof-pattern"
+    | "instanceof-and-pattern"
     | "try-resource"
     | "field"
     | "this-field"
@@ -1497,6 +1508,17 @@ export type JavaMemberCallReferenceFact =
       readonly receiverScopeRange: SourceRange;
       readonly receiverConditionRange: SourceRange;
       readonly receiverTestedValueRange: SourceRange;
+    })
+  | (JavaMemberCallReferenceBaseFact & {
+      readonly receiverKind: "instanceof-and-pattern";
+      readonly receiverName: string;
+      readonly receiverType: JavaCallTypeReferenceFact;
+      readonly receiverBindingRange: SourceRange;
+      readonly receiverScopeRange: SourceRange;
+      readonly receiverConditionRange: SourceRange;
+      readonly receiverTestedValueRange: SourceRange;
+      readonly receiverRightOperandRange: SourceRange;
+      readonly receiverTrueBlockRange: SourceRange;
     })
   | (JavaMemberCallReferenceBaseFact & {
       readonly receiverKind: "try-resource";
