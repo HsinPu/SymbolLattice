@@ -13,13 +13,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v233";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v234";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v122";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v123";
 
 /** Hard cap for one source-proven Java exhaustive if/else-if/else assignment join. */
 export const JAVA_EXHAUSTIVE_ASSIGNMENT_JOIN_MAXIMUM_BRANCHES = 8;
@@ -394,6 +394,26 @@ export type CallReceiverBindingEvidence =
       readonly thenBodyRange: SourceRange;
       readonly thenAbruptCompletionKind: "return" | "throw" | null;
       readonly thenAbruptStatementRange: SourceRange | null;
+      readonly elseBodyKind: "block" | "statement";
+      readonly elseBodyRange: SourceRange;
+      readonly activeRegion: "else-body" | "following-scope";
+    })
+  | (CallReceiverBindingEvidenceBase & {
+      readonly kind: "instanceof-negated-else-pattern";
+      readonly policy: "java-source-lexical-binding-v17";
+      readonly typeSource: "instanceof-pattern";
+      readonly conditionRange: SourceRange;
+      readonly testedValueRange: SourceRange;
+      readonly negatedPatternRange: SourceRange;
+      readonly negationGroupingRanges: readonly SourceRange[];
+      readonly maximumGroupingDepth: number;
+      readonly guardStatementRange: SourceRange;
+      readonly thenBodyKind: "block" | "statement";
+      readonly thenBodyRange: SourceRange;
+      readonly thenAbruptCompletionKind: "break" | "continue";
+      readonly thenAbruptStatementRange: SourceRange;
+      readonly thenAbruptTargetKind: "while" | "do" | "for" | "enhanced-for";
+      readonly thenAbruptTargetRange: SourceRange;
       readonly elseBodyKind: "block" | "statement";
       readonly elseBodyRange: SourceRange;
       readonly activeRegion: "else-body" | "following-scope";
@@ -1704,8 +1724,15 @@ export type JavaMemberCallReferenceFact =
       readonly receiverGuardStatementRange: SourceRange;
       readonly receiverThenBodyKind: "block" | "statement";
       readonly receiverThenBodyRange: SourceRange;
-      readonly receiverThenAbruptCompletionKind: "return" | "throw" | null;
+      readonly receiverThenAbruptCompletionKind:
+        | "return"
+        | "throw"
+        | "break"
+        | "continue"
+        | null;
       readonly receiverThenAbruptStatementRange: SourceRange | null;
+      readonly receiverThenAbruptTargetKind: "while" | "do" | "for" | "enhanced-for" | null;
+      readonly receiverThenAbruptTargetRange: SourceRange | null;
       readonly receiverElseBodyKind: "block" | "statement";
       readonly receiverElseBodyRange: SourceRange;
       readonly receiverActiveRegion: "else-body" | "following-scope";

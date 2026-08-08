@@ -153,8 +153,10 @@ type StaticJavaInstanceofAndPatternSyntax =
       readonly guardStatementRange: SourceRange;
       readonly thenBodyKind: "block" | "statement";
       readonly thenBodyRange: SourceRange;
-      readonly thenAbruptCompletionKind: "return" | "throw" | null;
+      readonly thenAbruptCompletionKind: "return" | "throw" | "break" | "continue" | null;
       readonly thenAbruptStatementRange: SourceRange | null;
+      readonly thenAbruptTargetKind: "while" | "do" | "for" | "enhanced-for" | null;
+      readonly thenAbruptTargetRange: SourceRange | null;
       readonly elseBodyKind: "block" | "statement";
       readonly elseBodyRange: SourceRange;
       readonly elseBodyOffsets: { readonly start: number; readonly end: number };
@@ -776,12 +778,30 @@ function javaNegatedElsePatternSyntax(input: {
       ? astGrepChildren(thenBody).filter((child) => child.kind() !== "{" && child.kind() !== "}")
       : [];
   const abruptStatement = thenBody.kind() === "block" ? thenStatements.at(-1) : thenBody;
-  const thenAbruptCompletionKind =
+  const candidateAbruptCompletionKind =
     abruptStatement?.kind() === "return_statement"
       ? "return"
       : abruptStatement?.kind() === "throw_statement"
         ? "throw"
-        : null;
+        : abruptStatement?.kind() === "break_statement"
+          ? "break"
+          : abruptStatement?.kind() === "continue_statement"
+            ? "continue"
+            : null;
+  const abruptTarget =
+    candidateAbruptCompletionKind === "break" || candidateAbruptCompletionKind === "continue"
+      ? javaUnlabeledLoopTarget({
+          statement: abruptStatement!,
+          abruptCompletionKind: candidateAbruptCompletionKind,
+          enclosingBlock: input.enclosingBlock
+        })
+      : null;
+  const thenAbruptCompletionKind =
+    (candidateAbruptCompletionKind === "break" ||
+      candidateAbruptCompletionKind === "continue") &&
+    abruptTarget === null
+      ? null
+      : candidateAbruptCompletionKind;
   const conditionOffsets = condition.range();
   const statementOffsets = input.statement.range();
   const enclosingBlockOffsets = input.enclosingBlock.range();
@@ -792,6 +812,7 @@ function javaNegatedElsePatternSyntax(input: {
   const thenBodyOffsets = thenBody.range();
   const elseBodyOffsets = elseBody.range();
   const abruptOffsets = thenAbruptCompletionKind === null ? null : abruptStatement!.range();
+  const abruptTargetOffsets = abruptTarget?.node.range();
   return {
     kind: "negated-else",
     name,
@@ -838,6 +859,15 @@ function javaNegatedElsePatternSyntax(input: {
       abruptOffsets === null
         ? null
         : rangeFor(input.lineStarts, abruptOffsets.start.index, abruptOffsets.end.index),
+    thenAbruptTargetKind: abruptTarget?.kind ?? null,
+    thenAbruptTargetRange:
+      abruptTargetOffsets === undefined
+        ? null
+        : rangeFor(
+            input.lineStarts,
+            abruptTargetOffsets.start.index,
+            abruptTargetOffsets.end.index
+          ),
     elseBodyKind: elseBody.kind() === "block" ? "block" : "statement",
     elseBodyRange: rangeFor(
       input.lineStarts,
@@ -2537,8 +2567,15 @@ function staticJavaMemberCallReferences(input: {
           readonly guardStatementRange: SourceRange;
           readonly thenBodyKind: "block" | "statement";
           readonly thenBodyRange: SourceRange;
-          readonly thenAbruptCompletionKind: "return" | "throw" | null;
+          readonly thenAbruptCompletionKind:
+            | "return"
+            | "throw"
+            | "break"
+            | "continue"
+            | null;
           readonly thenAbruptStatementRange: SourceRange | null;
+          readonly thenAbruptTargetKind: "while" | "do" | "for" | "enhanced-for" | null;
+          readonly thenAbruptTargetRange: SourceRange | null;
           readonly elseBodyKind: "block" | "statement";
           readonly elseBodyRange: SourceRange;
           readonly activeRegion: "else-body" | "following-scope";
@@ -2796,6 +2833,8 @@ function staticJavaMemberCallReferences(input: {
         thenBodyRange: pattern.thenBodyRange,
         thenAbruptCompletionKind: pattern.thenAbruptCompletionKind,
         thenAbruptStatementRange: pattern.thenAbruptStatementRange,
+        thenAbruptTargetKind: pattern.thenAbruptTargetKind,
+        thenAbruptTargetRange: pattern.thenAbruptTargetRange,
         elseBodyKind: pattern.elseBodyKind,
         elseBodyRange: pattern.elseBodyRange,
         activeRegion: activePattern.activeRegion!
@@ -4057,6 +4096,8 @@ function staticJavaMemberCallReferences(input: {
                 receiverThenBodyRange: binding.thenBodyRange,
                 receiverThenAbruptCompletionKind: binding.thenAbruptCompletionKind,
                 receiverThenAbruptStatementRange: binding.thenAbruptStatementRange,
+                receiverThenAbruptTargetKind: binding.thenAbruptTargetKind,
+                receiverThenAbruptTargetRange: binding.thenAbruptTargetRange,
                 receiverElseBodyKind: binding.elseBodyKind,
                 receiverElseBodyRange: binding.elseBodyRange,
                 receiverActiveRegion: binding.activeRegion,

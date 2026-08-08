@@ -9872,12 +9872,11 @@ function projectJavaCallReferences(input: {
           abruptTargetRange: reference.receiverAbruptTargetRange
         };
       } else if (reference.receiverKind === "instanceof-negated-else-pattern") {
-        receiverBinding = {
-          policy: "java-source-lexical-binding-v15",
-          kind: "instanceof-negated-else-pattern",
+        const receiverBindingBase = {
+          kind: "instanceof-negated-else-pattern" as const,
           name: reference.receiverName,
           type: resolvedBindingType.evidence,
-          typeSource: "instanceof-pattern",
+          typeSource: "instanceof-pattern" as const,
           declarationRange: reference.receiverBindingRange,
           scopeRange: reference.receiverScopeRange,
           conditionRange: reference.receiverConditionRange,
@@ -9888,12 +9887,41 @@ function projectJavaCallReferences(input: {
           guardStatementRange: reference.receiverGuardStatementRange,
           thenBodyKind: reference.receiverThenBodyKind,
           thenBodyRange: reference.receiverThenBodyRange,
-          thenAbruptCompletionKind: reference.receiverThenAbruptCompletionKind,
-          thenAbruptStatementRange: reference.receiverThenAbruptStatementRange,
           elseBodyKind: reference.receiverElseBodyKind,
           elseBodyRange: reference.receiverElseBodyRange,
           activeRegion: reference.receiverActiveRegion
         };
+        if (
+          (reference.receiverThenAbruptCompletionKind === "break" ||
+            reference.receiverThenAbruptCompletionKind === "continue") &&
+          reference.receiverThenAbruptStatementRange !== null &&
+          reference.receiverThenAbruptTargetKind !== null &&
+          reference.receiverThenAbruptTargetRange !== null
+        ) {
+          receiverBinding = {
+            ...receiverBindingBase,
+            policy: "java-source-lexical-binding-v17",
+            thenAbruptCompletionKind: reference.receiverThenAbruptCompletionKind,
+            thenAbruptStatementRange: reference.receiverThenAbruptStatementRange,
+            thenAbruptTargetKind: reference.receiverThenAbruptTargetKind,
+            thenAbruptTargetRange: reference.receiverThenAbruptTargetRange
+          };
+        } else {
+          const thenAbruptCompletionKind =
+            reference.receiverThenAbruptCompletionKind === "break" ||
+            reference.receiverThenAbruptCompletionKind === "continue"
+              ? null
+              : reference.receiverThenAbruptCompletionKind;
+          receiverBinding = {
+            ...receiverBindingBase,
+            policy: "java-source-lexical-binding-v15",
+            thenAbruptCompletionKind,
+            thenAbruptStatementRange:
+              thenAbruptCompletionKind === null
+                ? null
+                : reference.receiverThenAbruptStatementRange
+          };
+        }
       } else if (reference.receiverKind === "try-resource") {
         receiverBinding =
           reference.receiverInitializerRange === undefined
