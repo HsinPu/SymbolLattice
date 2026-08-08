@@ -7886,6 +7886,7 @@ function javaMethodSetPlan(input: {
     | "enhanced-for"
     | "catch"
     | "lambda"
+    | "try-resource"
     | "field"
     | "this-field"
     | "super-field"
@@ -9261,7 +9262,8 @@ function projectJavaCallReferences(input: {
             reference.receiverKind === "local" ||
             reference.receiverKind === "enhanced-for" ||
             reference.receiverKind === "catch" ||
-            reference.receiverKind === "lambda"
+            reference.receiverKind === "lambda" ||
+            reference.receiverKind === "try-resource"
           ? reference.receiverType
           : null;
     const bindingDeclaringType = fieldSelection?.ownerType ?? declaringType;
@@ -9392,6 +9394,28 @@ function projectJavaCallReferences(input: {
           declarationRange: reference.receiverBindingRange,
           scopeRange: reference.receiverScopeRange
         };
+      } else if (reference.receiverKind === "try-resource") {
+        receiverBinding =
+          reference.receiverInitializerRange === undefined
+            ? {
+                policy: "java-source-lexical-binding-v4",
+                kind: "try-resource",
+                name: reference.receiverName,
+                type: resolvedBindingType.evidence,
+                typeSource: "declared-type",
+                declarationRange: reference.receiverBindingRange,
+                scopeRange: reference.receiverScopeRange
+              }
+            : {
+                policy: "java-source-lexical-binding-v4",
+                kind: "try-resource",
+                name: reference.receiverName,
+                type: resolvedBindingType.evidence,
+                typeSource: "object-creation-initializer",
+                declarationRange: reference.receiverBindingRange,
+                initializerRange: reference.receiverInitializerRange,
+                scopeRange: reference.receiverScopeRange
+              };
       }
     }
     const methodSetPlan = javaMethodSetPlan({

@@ -3324,6 +3324,116 @@ describe("SymbolLatticeService", () => {
     );
   });
 
+  it("resolves Java try-resource bindings only inside the protected try body", async () => {
+    const projectPath = await createInlineProject({
+      "src/api/Service.java": [
+        "package api;",
+        "public class Service implements AutoCloseable {",
+        "  public void execute(String value) {}",
+        "  public void close() {}",
+        "}"
+      ].join("\n"),
+      "src/app/Runner.java": [
+        "package app;",
+        "import api.Service;",
+        "public class Runner {",
+        "  public void run(Service outer) throws Exception {",
+        "    try (Service explicit = new Service(); var inferred = new Service()) {",
+        "      explicit.execute(\"explicit\");",
+        "      inferred.execute(\"inferred\");",
+        "    }",
+        "    explicit.execute(\"outside-explicit\");",
+        "    inferred.execute(\"outside-inferred\");",
+        "    try (Service scoped = new Service()) {",
+        "      scoped.execute(\"inside\");",
+        "    } catch (Exception failure) {",
+        "      scoped.execute(\"catch\");",
+        "    } finally {",
+        "      scoped.execute(\"finally\");",
+        "    }",
+        "    try (var generic = new Box<Service>(); var factory = create()) {",
+        "      generic.execute(\"generic\");",
+        "      factory.execute(\"factory\");",
+        "    }",
+        "    outer.execute(\"outer\");",
+        "  }",
+        "  private Service create() { return new Service(); }",
+        "  private static class Box<T> implements AutoCloseable { public void close() {} }",
+        "}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+
+    const snapshot = graphStore.getSnapshot(projectPath);
+    const serviceId = snapshot.symbols.find(
+      (candidate) => candidate.qualifiedName === "src/api/Service.java#Service"
+    )?.id;
+    const callAt = (line: number) =>
+      snapshot.edges.find(
+        (edge) =>
+          edge.kind === "calls" &&
+          edge.filePath === "src/app/Runner.java" &&
+          edge.range.start.line === line
+      );
+
+    expect(callAt(6)?.evidence?.callDispatch).toEqual(
+      expect.objectContaining({
+        invocationKind: "try-resource",
+        receiverTypeSymbolId: serviceId,
+        receiverBinding: expect.objectContaining({
+          policy: "java-source-lexical-binding-v4",
+          kind: "try-resource",
+          name: "explicit",
+          typeSource: "declared-type",
+          declarationRange: expect.objectContaining({ start: expect.objectContaining({ line: 5 }) }),
+          scopeRange: expect.objectContaining({ start: expect.objectContaining({ line: 5 }) })
+        })
+      })
+    );
+    expect(callAt(7)?.evidence?.callDispatch).toEqual(
+      expect.objectContaining({
+        invocationKind: "try-resource",
+        receiverTypeSymbolId: serviceId,
+        receiverBinding: expect.objectContaining({
+          policy: "java-source-lexical-binding-v4",
+          kind: "try-resource",
+          name: "inferred",
+          typeSource: "object-creation-initializer",
+          declarationRange: expect.objectContaining({ start: expect.objectContaining({ line: 5 }) }),
+          initializerRange: expect.objectContaining({ start: expect.objectContaining({ line: 5 }) }),
+          scopeRange: expect.objectContaining({ start: expect.objectContaining({ line: 5 }) })
+        })
+      })
+    );
+    expect(callAt(12)?.evidence?.callDispatch).toEqual(
+      expect.objectContaining({ invocationKind: "try-resource", receiverTypeSymbolId: serviceId })
+    );
+    expect(callAt(22)?.evidence?.callDispatch).toEqual(
+      expect.objectContaining({ invocationKind: "parameter", receiverTypeSymbolId: serviceId })
+    );
+
+    for (const line of [9, 10, 14, 16, 19, 20]) {
+      expect(callAt(line)).toBeUndefined();
+    }
+
+    const runnerFacts = graphStore
+      .getArtifactFacts(projectPath)
+      .find((facts) => facts.filePath === "src/app/Runner.java");
+    expect(runnerFacts?.jvmFacts?.javaMemberCallReferences).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ receiverKind: "try-resource", receiverName: "explicit" }),
+        expect.objectContaining({
+          receiverKind: "try-resource",
+          receiverName: "inferred",
+          receiverInitializerRange: expect.any(Object)
+        })
+      ])
+    );
+  });
+
   it("infers Java var receivers only from direct object-creation initializers", async () => {
     const projectPath = await createInlineProject({
       "src/api/Service.java": [

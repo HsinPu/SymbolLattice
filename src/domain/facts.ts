@@ -13,13 +13,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v220";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v221";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v109";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v110";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -138,6 +138,7 @@ interface CallReceiverBindingEvidenceBase {
     | "enhanced-for"
     | "catch"
     | "lambda"
+    | "try-resource"
     | "field"
     | "this-field"
     | "super-field"
@@ -165,6 +166,15 @@ export type CallReceiverBindingEvidence =
       readonly policy: "java-source-lexical-binding-v3";
       readonly typeSource: "declared-type";
     })
+  | (CallReceiverBindingEvidenceBase &
+      { readonly kind: "try-resource"; readonly policy: "java-source-lexical-binding-v4" } &
+      (
+        | { readonly typeSource: "declared-type" }
+        | {
+            readonly typeSource: "object-creation-initializer";
+            readonly initializerRange: SourceRange;
+          }
+      ))
   | (CallReceiverBindingEvidenceBase &
       {
         readonly kind: "field" | "this-field" | "super-field";
@@ -262,6 +272,7 @@ export interface CallDispatchEvidence {
     | "enhanced-for"
     | "catch"
     | "lambda"
+    | "try-resource"
     | "field"
     | "this-field"
     | "super-field"
@@ -1268,6 +1279,15 @@ export type JavaMemberCallReferenceFact =
       readonly receiverType: JavaCallTypeReferenceFact;
       readonly receiverBindingRange: SourceRange;
       readonly receiverScopeRange: SourceRange;
+    })
+  | (JavaMemberCallReferenceBaseFact & {
+      readonly receiverKind: "try-resource";
+      readonly receiverName: string;
+      readonly receiverType: JavaCallTypeReferenceFact;
+      readonly receiverBindingRange: SourceRange;
+      readonly receiverScopeRange: SourceRange;
+      /** Present only when Java `var` derives its type from one direct object creation. */
+      readonly receiverInitializerRange?: SourceRange;
     })
   | (JavaMemberCallReferenceBaseFact & {
       readonly receiverKind: "field" | "this-field" | "super-field";

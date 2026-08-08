@@ -1575,7 +1575,13 @@ function staticJavaMemberCallReferences(input: {
   const references: JavaMemberCallReferenceFact[] = [];
 
   interface ReceiverBinding {
-    readonly kind: "parameter" | "local" | "enhanced-for" | "catch" | "lambda";
+    readonly kind:
+      | "parameter"
+      | "local"
+      | "enhanced-for"
+      | "catch"
+      | "lambda"
+      | "try-resource";
     readonly name: string;
     readonly type: JavaCallTypeReferenceFact;
     readonly declarationRange: SourceRange;
@@ -1760,7 +1766,111 @@ function staticJavaMemberCallReferences(input: {
     scopes.pop();
   }
 
+  function tryResourceBinding(
+    resource: JavaSyntaxNode,
+    scopeRange: SourceRange
+  ): { readonly name: string; readonly binding: ReceiverBinding | null } | null {
+    const children = directChildren(resource);
+    const definitions = children.filter((candidate) => candidate.name === "Definition");
+    const definition = definitions[0];
+    const name = definition === undefined ? null : identifierText(input.extraction, definition);
+    if (definitions.length !== 1 || definition === undefined || name === null) {
+      return null;
+    }
+    const typeNodes = children.filter(isJavaDirectTypeName);
+    const varTypeNodes = typeNodes.filter(
+      (candidate) => nodeText(input.extraction, candidate) === "var"
+    );
+    const declaredTypeNodes = typeNodes.filter(
+      (candidate) => nodeText(input.extraction, candidate) !== "var"
+    );
+    const declaredType =
+      varTypeNodes.length === 0 &&
+      declaredTypeNodes.length === 1 &&
+      declaredTypeNodes[0] !== undefined
+        ? staticJavaCallTypeReference(
+            input.extraction,
+            declaredTypeNodes[0],
+            input.imports,
+            "declaration"
+          )
+        : null;
+    const assignments = children.filter(
+      (candidate) => candidate.name === "AssignOp" && nodeText(input.extraction, candidate) === "="
+    );
+    const initializerCandidates = children.filter(
+      (candidate) => candidate.name === "ObjectCreationExpression"
+    );
+    const initializer = initializerCandidates[0];
+    const initializerChildren = initializer === undefined ? [] : directChildren(initializer);
+    const initializerTypeNodes = initializerChildren.filter(isJavaDirectTypeName);
+    const safeInitializer =
+      varTypeNodes.length === 1 &&
+      typeNodes.length === 1 &&
+      assignments.length === 1 &&
+      initializerCandidates.length === 1 &&
+      initializer !== undefined &&
+      initializerChildren.every(
+        (candidate) => candidate.name !== "TypeArguments" && candidate.name !== "ClassBody"
+      ) &&
+      initializerTypeNodes.length === 1 &&
+      initializerTypeNodes[0] !== undefined
+        ? {
+            type: staticJavaCallTypeReference(
+              input.extraction,
+              initializerTypeNodes[0],
+              input.imports,
+              "object-creation"
+            ),
+            range: rangeFor(lineStarts, initializer.from, initializer.to)
+          }
+        : null;
+    const type = declaredType ?? safeInitializer?.type ?? null;
+    return {
+      name,
+      binding:
+        type === null
+          ? null
+          : {
+              kind: "try-resource",
+              name,
+              type,
+              declarationRange: rangeFor(lineStarts, definition.from, definition.to),
+              scopeRange,
+              ...(declaredType === null && safeInitializer !== null
+                ? { initializerRange: safeInitializer.range }
+                : {})
+            }
+    };
+  }
+
   function visit(node: JavaSyntaxNode): void {
+    if (node.name === "TryWithResourcesStatement") {
+      const children = directChildren(node);
+      const specification = children.find((child) => child.name === "ResourceSpecification");
+      const scopedBody = children.find((child) => child.name === "Block");
+      if (specification === undefined || scopedBody === undefined) {
+        return;
+      }
+      visit(specification);
+      const scopeRange = rangeFor(lineStarts, scopedBody.from, scopedBody.to);
+      const bindings = directChildren(specification)
+        .filter((child) => child.name === "Resource")
+        .map((resource) => tryResourceBinding(resource, scopeRange))
+        .filter(
+          (
+            binding
+          ): binding is { readonly name: string; readonly binding: ReceiverBinding | null } =>
+            binding !== null
+        );
+      visitWithScopedBindings(scopedBody, bindings);
+      for (const child of children) {
+        if (child !== specification && child !== scopedBody) {
+          visit(child);
+        }
+      }
+      return;
+    }
     if (node.name === "EnhancedForStatement") {
       const children = directChildren(node);
       const specification = children.find((child) => child.name === "ForSpec");
