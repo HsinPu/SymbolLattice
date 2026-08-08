@@ -7896,6 +7896,7 @@ function javaMethodSetPlan(input: {
     | "instanceof-and-chain-pattern"
     | "instanceof-grouped-and-pattern"
     | "instanceof-negated-early-exit-pattern"
+    | "instanceof-negated-target-exit-pattern"
     | "instanceof-negated-else-pattern"
     | "try-resource"
     | "field"
@@ -9279,6 +9280,7 @@ function projectJavaCallReferences(input: {
             reference.receiverKind === "instanceof-and-chain-pattern" ||
             reference.receiverKind === "instanceof-grouped-and-pattern" ||
             reference.receiverKind === "instanceof-negated-early-exit-pattern" ||
+            reference.receiverKind === "instanceof-negated-target-exit-pattern" ||
             reference.receiverKind === "instanceof-negated-else-pattern" ||
             reference.receiverKind === "try-resource"
           ? reference.receiverType
@@ -9846,6 +9848,28 @@ function projectJavaCallReferences(input: {
           exitBodyRange: reference.receiverExitBodyRange,
           abruptCompletionKind: reference.receiverAbruptCompletionKind,
           abruptStatementRange: reference.receiverAbruptStatementRange
+        };
+      } else if (reference.receiverKind === "instanceof-negated-target-exit-pattern") {
+        receiverBinding = {
+          policy: "java-source-lexical-binding-v16",
+          kind: "instanceof-negated-target-exit-pattern",
+          name: reference.receiverName,
+          type: resolvedBindingType.evidence,
+          typeSource: "instanceof-pattern",
+          declarationRange: reference.receiverBindingRange,
+          scopeRange: reference.receiverScopeRange,
+          conditionRange: reference.receiverConditionRange,
+          testedValueRange: reference.receiverTestedValueRange,
+          negatedPatternRange: reference.receiverNegatedPatternRange,
+          negationGroupingRanges: reference.receiverNegationGroupingRanges,
+          maximumGroupingDepth: reference.receiverMaximumGroupingDepth,
+          guardStatementRange: reference.receiverGuardStatementRange,
+          exitBodyKind: reference.receiverExitBodyKind,
+          exitBodyRange: reference.receiverExitBodyRange,
+          abruptCompletionKind: reference.receiverAbruptCompletionKind,
+          abruptStatementRange: reference.receiverAbruptStatementRange,
+          abruptTargetKind: reference.receiverAbruptTargetKind,
+          abruptTargetRange: reference.receiverAbruptTargetRange
         };
       } else if (reference.receiverKind === "instanceof-negated-else-pattern") {
         receiverBinding = {

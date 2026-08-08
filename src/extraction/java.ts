@@ -132,8 +132,10 @@ type StaticJavaInstanceofAndPatternSyntax =
       readonly guardStatementRange: SourceRange;
       readonly exitBodyKind: "block" | "statement";
       readonly exitBodyRange: SourceRange;
-      readonly abruptCompletionKind: "return" | "throw";
+      readonly abruptCompletionKind: "return" | "throw" | "break" | "continue";
       readonly abruptStatementRange: SourceRange;
+      readonly abruptTargetKind: "while" | "do" | "for" | "enhanced-for" | null;
+      readonly abruptTargetRange: SourceRange | null;
       readonly followingScopeRange: SourceRange;
       readonly followingScopeOffsets: { readonly start: number; readonly end: number };
     }
@@ -491,6 +493,65 @@ function unwrapJavaParenthesizedExpression(
   return { expression, groupingNodes };
 }
 
+interface StaticJavaUnlabeledLoopTarget {
+  readonly kind: "while" | "do" | "for" | "enhanced-for";
+  readonly node: SgNode;
+}
+
+function javaUnlabeledLoopTarget(input: {
+  readonly statement: SgNode;
+  readonly abruptCompletionKind: "break" | "continue";
+  readonly enclosingBlock: SgNode;
+}): StaticJavaUnlabeledLoopTarget | null {
+  const children = astGrepChildren(input.statement);
+  if (
+    children.length !== 2 ||
+    children[0]?.kind() !== input.abruptCompletionKind ||
+    children[1]?.kind() !== ";"
+  ) {
+    return null;
+  }
+  let ancestor = input.statement.parent();
+  while (ancestor !== null) {
+    const kind = ancestor.kind();
+    if (input.abruptCompletionKind === "break" && kind === "switch_expression") {
+      return null;
+    }
+    const targetKind =
+      kind === "while_statement"
+        ? "while"
+        : kind === "do_statement"
+          ? "do"
+          : kind === "for_statement"
+            ? "for"
+            : kind === "enhanced_for_statement"
+              ? "enhanced-for"
+              : null;
+    if (targetKind !== null) {
+      const targetOffsets = ancestor.range();
+      const blockOffsets = input.enclosingBlock.range();
+      if (
+        targetOffsets.start.index >= blockOffsets.start.index ||
+        blockOffsets.end.index > targetOffsets.end.index
+      ) {
+        return null;
+      }
+      return { kind: targetKind, node: ancestor };
+    }
+    if (
+      kind === "method_declaration" ||
+      kind === "constructor_declaration" ||
+      kind === "lambda_expression" ||
+      kind === "class_declaration" ||
+      kind === "interface_declaration"
+    ) {
+      return null;
+    }
+    ancestor = ancestor.parent();
+  }
+  return null;
+}
+
 function javaNegatedEarlyExitPatternSyntax(input: {
   readonly extraction: JavaExtractFileFactsInput;
   readonly statement: SgNode;
@@ -554,8 +615,26 @@ function javaNegatedEarlyExitPatternSyntax(input: {
       ? "return"
       : abruptStatement?.kind() === "throw_statement"
         ? "throw"
+        : abruptStatement?.kind() === "break_statement"
+          ? "break"
+          : abruptStatement?.kind() === "continue_statement"
+            ? "continue"
         : null;
   if (abruptStatement === undefined || abruptCompletionKind === null) {
+    return null;
+  }
+  const abruptTarget =
+    abruptCompletionKind === "break" || abruptCompletionKind === "continue"
+      ? javaUnlabeledLoopTarget({
+          statement: abruptStatement,
+          abruptCompletionKind,
+          enclosingBlock: input.enclosingBlock
+        })
+      : null;
+  if (
+    (abruptCompletionKind === "break" || abruptCompletionKind === "continue") &&
+    abruptTarget === null
+  ) {
     return null;
   }
   const conditionOffsets = condition.range();
@@ -567,6 +646,7 @@ function javaNegatedEarlyExitPatternSyntax(input: {
   const patternOffsets = pattern.range();
   const exitBodyOffsets = exitBody.range();
   const abruptOffsets = abruptStatement.range();
+  const abruptTargetOffsets = abruptTarget?.node.range();
   return {
     kind: "negated-early-exit",
     name,
@@ -614,6 +694,15 @@ function javaNegatedEarlyExitPatternSyntax(input: {
       abruptOffsets.start.index,
       abruptOffsets.end.index
     ),
+    abruptTargetKind: abruptTarget?.kind ?? null,
+    abruptTargetRange:
+      abruptTargetOffsets === undefined
+        ? null
+        : rangeFor(
+            input.lineStarts,
+            abruptTargetOffsets.start.index,
+            abruptTargetOffsets.end.index
+          ),
     followingScopeRange: rangeFor(
       input.lineStarts,
       statementOffsets.end.index,
@@ -2424,6 +2513,21 @@ function staticJavaMemberCallReferences(input: {
           readonly abruptStatementRange: SourceRange;
         }
       | {
+          readonly kind: "instanceof-negated-target-exit-pattern";
+          readonly conditionRange: SourceRange;
+          readonly testedValueRange: SourceRange;
+          readonly negatedPatternRange: SourceRange;
+          readonly negationGroupingRanges: readonly SourceRange[];
+          readonly maximumGroupingDepth: number;
+          readonly guardStatementRange: SourceRange;
+          readonly exitBodyKind: "block" | "statement";
+          readonly exitBodyRange: SourceRange;
+          readonly abruptCompletionKind: "break" | "continue";
+          readonly abruptStatementRange: SourceRange;
+          readonly abruptTargetKind: "while" | "do" | "for" | "enhanced-for";
+          readonly abruptTargetRange: SourceRange;
+        }
+      | {
           readonly kind: "instanceof-negated-else-pattern";
           readonly conditionRange: SourceRange;
           readonly testedValueRange: SourceRange;
@@ -2640,6 +2744,33 @@ function staticJavaMemberCallReferences(input: {
       testedValueRange: pattern.testedValueRange
     };
     if (pattern.kind === "negated-early-exit") {
+      if (
+        (pattern.abruptCompletionKind === "break" ||
+          pattern.abruptCompletionKind === "continue") &&
+        pattern.abruptTargetKind !== null &&
+        pattern.abruptTargetRange !== null
+      ) {
+        return {
+          ...bindingBase,
+          kind: "instanceof-negated-target-exit-pattern",
+          negatedPatternRange: pattern.negatedPatternRange,
+          negationGroupingRanges: pattern.negationGroupingRanges,
+          maximumGroupingDepth: pattern.maximumGroupingDepth,
+          guardStatementRange: pattern.guardStatementRange,
+          exitBodyKind: pattern.exitBodyKind,
+          exitBodyRange: pattern.exitBodyRange,
+          abruptCompletionKind: pattern.abruptCompletionKind,
+          abruptStatementRange: pattern.abruptStatementRange,
+          abruptTargetKind: pattern.abruptTargetKind,
+          abruptTargetRange: pattern.abruptTargetRange
+        };
+      }
+      if (
+        pattern.abruptCompletionKind !== "return" &&
+        pattern.abruptCompletionKind !== "throw"
+      ) {
+        return null;
+      }
       return {
         ...bindingBase,
         kind: "instanceof-negated-early-exit-pattern",
@@ -3874,6 +4005,33 @@ function staticJavaMemberCallReferences(input: {
                 receiverExitBodyRange: binding.exitBodyRange,
                 receiverAbruptCompletionKind: binding.abruptCompletionKind,
                 receiverAbruptStatementRange: binding.abruptStatementRange,
+                methodName,
+                argumentCount: arguments_.length,
+                argumentTypes,
+                range: rangeFor(lineStarts, methodNode.from, methodNode.to)
+              });
+            } else if (binding.kind === "instanceof-negated-target-exit-pattern") {
+              references.push({
+                sourceId: input.callableSymbol.id,
+                declaringTypeId: input.declaringType.id,
+                filePath: input.extraction.filePath,
+                receiverKind: binding.kind,
+                receiverName,
+                receiverType: binding.type,
+                receiverBindingRange: binding.declarationRange,
+                receiverScopeRange: binding.scopeRange,
+                receiverConditionRange: binding.conditionRange,
+                receiverTestedValueRange: binding.testedValueRange,
+                receiverNegatedPatternRange: binding.negatedPatternRange,
+                receiverNegationGroupingRanges: binding.negationGroupingRanges,
+                receiverMaximumGroupingDepth: binding.maximumGroupingDepth,
+                receiverGuardStatementRange: binding.guardStatementRange,
+                receiverExitBodyKind: binding.exitBodyKind,
+                receiverExitBodyRange: binding.exitBodyRange,
+                receiverAbruptCompletionKind: binding.abruptCompletionKind,
+                receiverAbruptStatementRange: binding.abruptStatementRange,
+                receiverAbruptTargetKind: binding.abruptTargetKind,
+                receiverAbruptTargetRange: binding.abruptTargetRange,
                 methodName,
                 argumentCount: arguments_.length,
                 argumentTypes,

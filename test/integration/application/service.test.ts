@@ -4508,6 +4508,168 @@ describe("SymbolLatticeService", () => {
     expect(callAt("src/app/ThenCall.java", 6)?.targetId).toBe(targetId);
   });
 
+  it("binds a Java negated pattern after a proven unlabeled loop exit", async () => {
+    const projectPath = await createInlineProject({
+      "src/api/Service.java": [
+        "package api;",
+        "public class Service { public void execute(String value) {} }"
+      ].join("\n"),
+      "src/app/WhileContinue.java": [
+        "package app;",
+        "import api.Service;",
+        "public class WhileContinue {",
+        "  public void run(Object value) {",
+        "    while (ready()) {",
+        "      if (!(value instanceof Service service)) { continue; }",
+        "      service.execute(\"while\");",
+        "    }",
+        "    service.execute(\"outside\");",
+        "  }",
+        "  private boolean ready() { return false; }",
+        "}"
+      ].join("\n"),
+      "src/app/ForBreak.java": [
+        "package app;",
+        "import api.Service;",
+        "public class ForBreak {",
+        "  public void run(Object value) {",
+        "    for (;;) {",
+        "      if (!(value instanceof Service service)) break;",
+        "      service.execute(\"for\");",
+        "    }",
+        "  }",
+        "}"
+      ].join("\n"),
+      "src/app/DoContinue.java": [
+        "package app;",
+        "import api.Service;",
+        "public class DoContinue {",
+        "  public void run(Object value) {",
+        "    do {",
+        "      if (!(value instanceof Service service)) continue;",
+        "      service.execute(\"do\");",
+        "    } while (ready());",
+        "  }",
+        "  private boolean ready() { return false; }",
+        "}"
+      ].join("\n"),
+      "src/app/EnhancedForBreak.java": [
+        "package app;",
+        "import api.Service;",
+        "public class EnhancedForBreak {",
+        "  public void run(Object[] values) {",
+        "    for (Object value : values) {",
+        "      if (!(value instanceof Service service)) { break; }",
+        "      service.execute(\"enhanced\");",
+        "    }",
+        "  }",
+        "}"
+      ].join("\n"),
+      "src/app/LabeledContinue.java": [
+        "package app;",
+        "import api.Service;",
+        "public class LabeledContinue {",
+        "  public void run(Object value) {",
+        "    outer: while (true) {",
+        "      if (!(value instanceof Service service)) continue outer;",
+        "      service.execute(\"labeled\");",
+        "    }",
+        "  }",
+        "}"
+      ].join("\n"),
+      "src/app/UnbracedLoop.java": [
+        "package app;",
+        "import api.Service;",
+        "public class UnbracedLoop {",
+        "  public void run(Object value) {",
+        "    while (true)",
+        "      if (!(value instanceof Service service)) continue;",
+        "    service.execute(\"after-loop\");",
+        "  }",
+        "}"
+      ].join("\n"),
+      "src/app/NoTarget.java": [
+        "package app;",
+        "import api.Service;",
+        "public class NoTarget {",
+        "  public void run(Object value) {",
+        "    if (!(value instanceof Service service)) continue;",
+        "    service.execute(\"invalid\");",
+        "  }",
+        "}"
+      ].join("\n"),
+      "src/app/SwitchBreak.java": [
+        "package app;",
+        "import api.Service;",
+        "public class SwitchBreak {",
+        "  public void run(int selector, Object value) {",
+        "    switch (selector) {",
+        "      default:",
+        "        if (!(value instanceof Service service)) break;",
+        "        service.execute(\"switch\");",
+        "    }",
+        "    service.execute(\"outside-switch\");",
+        "  }",
+        "}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+
+    const snapshot = graphStore.getSnapshot(projectPath);
+    const calls = snapshot.edges.filter((edge) => edge.kind === "calls");
+    const callAt = (filePath: string, line: number) =>
+      calls.find(
+        (edge) =>
+          edge.filePath === filePath &&
+          edge.range.start.line === line &&
+          edge.referenceName === "execute"
+      );
+    const targetId = snapshot.symbols.find(
+      (candidate) => candidate.qualifiedName === "src/api/Service.java#Service.execute"
+    )?.id;
+    const whileCall = callAt("src/app/WhileContinue.java", 7);
+    expect(whileCall?.targetId).toBe(targetId);
+    expect(whileCall?.evidence?.callDispatch?.receiverBinding).toEqual(
+      expect.objectContaining({
+        policy: "java-source-lexical-binding-v16",
+        kind: "instanceof-negated-target-exit-pattern",
+        abruptCompletionKind: "continue",
+        abruptTargetKind: "while",
+        abruptTargetRange: expect.objectContaining({
+          start: expect.objectContaining({ line: 5 })
+        }),
+        scopeRange: expect.objectContaining({
+          start: expect.objectContaining({ line: 6 })
+        })
+      })
+    );
+    expect(callAt("src/app/WhileContinue.java", 9)).toBeUndefined();
+    expect(callAt("src/app/ForBreak.java", 7)?.targetId).toBe(targetId);
+    expect(callAt("src/app/ForBreak.java", 7)?.evidence?.callDispatch?.receiverBinding).toEqual(
+      expect.objectContaining({
+        policy: "java-source-lexical-binding-v16",
+        abruptCompletionKind: "break",
+        abruptTargetKind: "for"
+      })
+    );
+    expect(callAt("src/app/DoContinue.java", 7)?.targetId).toBe(targetId);
+    expect(callAt("src/app/DoContinue.java", 7)?.evidence?.callDispatch?.receiverBinding).toEqual(
+      expect.objectContaining({ abruptTargetKind: "do" })
+    );
+    expect(callAt("src/app/EnhancedForBreak.java", 7)?.targetId).toBe(targetId);
+    expect(
+      callAt("src/app/EnhancedForBreak.java", 7)?.evidence?.callDispatch?.receiverBinding
+    ).toEqual(expect.objectContaining({ abruptTargetKind: "enhanced-for" }));
+    expect(callAt("src/app/LabeledContinue.java", 7)).toBeUndefined();
+    expect(callAt("src/app/UnbracedLoop.java", 7)).toBeUndefined();
+    expect(callAt("src/app/NoTarget.java", 6)).toBeUndefined();
+    expect(callAt("src/app/SwitchBreak.java", 8)).toBeUndefined();
+    expect(callAt("src/app/SwitchBreak.java", 10)).toBeUndefined();
+  });
+
   it("resolves Java enhanced-for, catch, and explicit lambda bindings within their exact scopes", async () => {
     const projectPath = await createInlineProject({
       "src/api/Service.java": [
