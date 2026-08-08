@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.318.0 是開發預覽版。MCP 查詢工具唯讀；但 `serve --mcp` 預設會啟動獨立的本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用它。
+> v0.319.0 是開發預覽版。MCP 查詢工具唯讀；但 `serve --mcp` 預設會啟動獨立的本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用它。
 
 ## 快速開始
 
@@ -55,7 +55,7 @@ node dist/cli/main.js file service.ts --project /path/to/project --offset 1600 -
 
 ## 核心能力
 
-- Java try-with-resources 支援明確型別與 `var = new DirectType(...)` receiver；binding 只存在於對應的 try body，catch、finally 與外部不會誤用。泛型、匿名類別與 factory initializer 維持 fail closed，exact call edge 會保存宣告、initializer、scope 與 canonical type 證據。
+- Java try-with-resources 支援明確型別與 `var = new DirectType(...)` receiver，並依宣告順序讓較早資源可用於後續 initializer；目前資源名稱會在自身 initializer 形成 fail-closed 遮蔽邊界。binding 延伸至對應 try body，但不會洩漏至 catch、finally 或外部；v5 receipt 保存資源序號、宣告、initializer、try body、scope 與 canonical type 證據。
 
 - TypeScript 函式、類別與介面方法、建構子、具型別 arrow／function expression，以及函式型別變數的輸入／回傳型別會形成 exact `accepts`／`returns` 關係。只接受可證明的本機、type-only import 或 re-export 型別；外層與函式泛型參數、內建包裝型別、qualified name 與未匯入同名型別不會被猜成精確關係。
 - Java 類別／介面方法與建構子會保留參數及回傳型別來源範圍，並只在明確 import、完整限定名稱或唯一同 package top-level type 可證明時形成 exact `accepts`／`returns`。泛型參數、wildcard import、未匯入同名型別、nested type 與 classpath 推測都保持不解析。

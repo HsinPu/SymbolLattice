@@ -3384,7 +3384,7 @@ describe("SymbolLatticeService", () => {
         invocationKind: "try-resource",
         receiverTypeSymbolId: serviceId,
         receiverBinding: expect.objectContaining({
-          policy: "java-source-lexical-binding-v4",
+          policy: "java-source-lexical-binding-v5",
           kind: "try-resource",
           name: "explicit",
           typeSource: "declared-type",
@@ -3398,7 +3398,7 @@ describe("SymbolLatticeService", () => {
         invocationKind: "try-resource",
         receiverTypeSymbolId: serviceId,
         receiverBinding: expect.objectContaining({
-          policy: "java-source-lexical-binding-v4",
+          policy: "java-source-lexical-binding-v5",
           kind: "try-resource",
           name: "inferred",
           typeSource: "object-creation-initializer",
@@ -3431,6 +3431,103 @@ describe("SymbolLatticeService", () => {
           receiverInitializerRange: expect.any(Object)
         })
       ])
+    );
+  });
+
+  it("resolves prior Java resources in later initializers without leaking self-shadowed fields", async () => {
+    const projectPath = await createInlineProject({
+      "src/api/Service.java": [
+        "package api;",
+        "public class Service implements AutoCloseable {",
+        "  public Resource open() { return null; }",
+        "  public Service copy() { return null; }",
+        "  public void execute() {}",
+        "  public void close() {}",
+        "}"
+      ].join("\n"),
+      "src/api/Resource.java": [
+        "package api;",
+        "public class Resource implements AutoCloseable {",
+        "  public Resource next() { return null; }",
+        "  public void execute() {}",
+        "  public void close() {}",
+        "}"
+      ].join("\n"),
+      "src/app/Runner.java": [
+        "package app;",
+        "import api.Resource;",
+        "import api.Service;",
+        "public class Runner {",
+        "  private Service shadowed;",
+        "  public void run() throws Exception {",
+        "    try (Service first = new Service(); Resource second = first.open(); Resource third = second.next()) {",
+        "      first.execute();",
+        "      second.execute();",
+        "      third.execute();",
+        "    }",
+        "    try (Service shadowed = shadowed.copy()) {",
+        "      shadowed.execute();",
+        "    }",
+        "  }",
+        "}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+
+    const snapshot = graphStore.getSnapshot(projectPath);
+    const calls = snapshot.edges.filter(
+      (edge) => edge.kind === "calls" && edge.filePath === "src/app/Runner.java"
+    );
+    const call = (line: number, name: string) =>
+      calls.find((edge) => edge.range.start.line === line && edge.referenceName === name);
+    const serviceId = snapshot.symbols.find(
+      (candidate) => candidate.qualifiedName === "src/api/Service.java#Service"
+    )?.id;
+    const resourceId = snapshot.symbols.find(
+      (candidate) => candidate.qualifiedName === "src/api/Resource.java#Resource"
+    )?.id;
+
+    expect(call(7, "open")?.evidence?.callDispatch).toEqual(
+      expect.objectContaining({
+        invocationKind: "try-resource",
+        receiverTypeSymbolId: serviceId,
+        receiverBinding: expect.objectContaining({
+          policy: "java-source-lexical-binding-v5",
+          kind: "try-resource",
+          name: "first",
+          resourceOrdinal: 0,
+          visibility: "later-resources-and-try-body",
+          tryBodyRange: expect.objectContaining({ start: expect.objectContaining({ line: 7 }) })
+        })
+      })
+    );
+    expect(call(7, "next")?.evidence?.callDispatch).toEqual(
+      expect.objectContaining({
+        invocationKind: "try-resource",
+        receiverTypeSymbolId: resourceId,
+        receiverBinding: expect.objectContaining({
+          policy: "java-source-lexical-binding-v5",
+          name: "second",
+          resourceOrdinal: 1,
+          visibility: "later-resources-and-try-body"
+        })
+      })
+    );
+    expect(call(8, "execute")?.evidence?.callDispatch).toEqual(
+      expect.objectContaining({ invocationKind: "try-resource", receiverTypeSymbolId: serviceId })
+    );
+    expect(call(9, "execute")?.evidence?.callDispatch).toEqual(
+      expect.objectContaining({ invocationKind: "try-resource", receiverTypeSymbolId: resourceId })
+    );
+    expect(call(10, "execute")?.evidence?.callDispatch).toEqual(
+      expect.objectContaining({ invocationKind: "try-resource", receiverTypeSymbolId: resourceId })
+    );
+    expect(call(12, "copy")).toBeUndefined();
+    expect(call(13, "execute")?.evidence?.callDispatch).toEqual(
+      expect.objectContaining({ invocationKind: "try-resource", receiverTypeSymbolId: serviceId })
     );
   });
 

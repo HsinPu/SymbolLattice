@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.318.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher can update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.319.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher can update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## Quick start
 
@@ -55,7 +55,7 @@ Alternatively, download the version-pinned `.tgz`, SHA-256 checksum, and manifes
 
 ## What it does
 
-- Java try-with-resources supports explicit reference types and `var = new DirectType(...)` receivers. Bindings exist only inside the matching try body, never in catch, finally, or following statements. Generic, anonymous-class, and factory initializers stay fail closed; exact call edges retain declaration, initializer, scope, and canonical-type evidence.
+- Java try-with-resources supports explicit reference types and `var = new DirectType(...)` receivers, exposing earlier resources to later initializers in declaration order; the current resource name creates a fail-closed shadow boundary in its own initializer. Bindings continue through the matching try body but never leak into catch, finally, or following statements. v5 receipts retain the resource ordinal, declaration, initializer, try body, scope, and canonical-type evidence.
 
 - TypeScript functions, class and interface methods, constructors, typed arrow/function expressions, and function-typed variables emit `accepts`/`returns` relations only when local, type-only import, or re-export proof exists. Enclosing and callable type parameters, built-in wrappers, qualified names, and unimported same-name types are never guessed into exact edges.
 - Java class/interface methods and constructors retain parameter and return-type source ranges, then emit exact `accepts`/`returns` only from an explicit import, fully qualified spelling, or one unique same-package top-level type. Type parameters, wildcard imports, unimported same-name types, nested types, and classpath guesses remain unresolved.

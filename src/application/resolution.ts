@@ -9398,20 +9398,26 @@ function projectJavaCallReferences(input: {
         receiverBinding =
           reference.receiverInitializerRange === undefined
             ? {
-                policy: "java-source-lexical-binding-v4",
+                policy: "java-source-lexical-binding-v5",
                 kind: "try-resource",
                 name: reference.receiverName,
                 type: resolvedBindingType.evidence,
                 typeSource: "declared-type",
+                resourceOrdinal: reference.receiverResourceOrdinal,
+                visibility: "later-resources-and-try-body",
+                tryBodyRange: reference.receiverTryBodyRange,
                 declarationRange: reference.receiverBindingRange,
                 scopeRange: reference.receiverScopeRange
               }
             : {
-                policy: "java-source-lexical-binding-v4",
+                policy: "java-source-lexical-binding-v5",
                 kind: "try-resource",
                 name: reference.receiverName,
                 type: resolvedBindingType.evidence,
                 typeSource: "object-creation-initializer",
+                resourceOrdinal: reference.receiverResourceOrdinal,
+                visibility: "later-resources-and-try-body",
+                tryBodyRange: reference.receiverTryBodyRange,
                 declarationRange: reference.receiverBindingRange,
                 initializerRange: reference.receiverInitializerRange,
                 scopeRange: reference.receiverScopeRange

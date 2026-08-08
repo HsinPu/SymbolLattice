@@ -1574,20 +1574,26 @@ function staticJavaMemberCallReferences(input: {
   const lineStarts = lineStartsFor(input.extraction.sourceText);
   const references: JavaMemberCallReferenceFact[] = [];
 
-  interface ReceiverBinding {
-    readonly kind:
-      | "parameter"
-      | "local"
-      | "enhanced-for"
-      | "catch"
-      | "lambda"
-      | "try-resource";
+  interface ReceiverBindingBase {
     readonly name: string;
     readonly type: JavaCallTypeReferenceFact;
     readonly declarationRange: SourceRange;
     readonly scopeRange: SourceRange;
     readonly initializerRange?: SourceRange;
   }
+
+  type ReceiverBinding = ReceiverBindingBase &
+    (
+      | {
+          readonly kind: "parameter" | "local" | "enhanced-for" | "catch" | "lambda";
+        }
+      | {
+          readonly kind: "try-resource";
+          readonly resourceOrdinal: number;
+          readonly visibility: "later-resources-and-try-body";
+          readonly tryBodyRange: SourceRange;
+        }
+    );
 
   type BindingScope = Map<string, ReceiverBinding | null>;
   const bodyRange = rangeFor(lineStarts, body.from, body.to);
@@ -1768,7 +1774,9 @@ function staticJavaMemberCallReferences(input: {
 
   function tryResourceBinding(
     resource: JavaSyntaxNode,
-    scopeRange: SourceRange
+    resourceOrdinal: number,
+    scopeRange: SourceRange,
+    tryBodyRange: SourceRange
   ): { readonly name: string; readonly binding: ReceiverBinding | null } | null {
     const children = directChildren(resource);
     const definitions = children.filter((candidate) => candidate.name === "Definition");
@@ -1837,6 +1845,9 @@ function staticJavaMemberCallReferences(input: {
               type,
               declarationRange: rangeFor(lineStarts, definition.from, definition.to),
               scopeRange,
+              resourceOrdinal,
+              visibility: "later-resources-and-try-body",
+              tryBodyRange,
               ...(declaredType === null && safeInitializer !== null
                 ? { initializerRange: safeInitializer.range }
                 : {})
@@ -1852,18 +1863,30 @@ function staticJavaMemberCallReferences(input: {
       if (specification === undefined || scopedBody === undefined) {
         return;
       }
-      visit(specification);
-      const scopeRange = rangeFor(lineStarts, scopedBody.from, scopedBody.to);
-      const bindings = directChildren(specification)
-        .filter((child) => child.name === "Resource")
-        .map((resource) => tryResourceBinding(resource, scopeRange))
-        .filter(
-          (
-            binding
-          ): binding is { readonly name: string; readonly binding: ReceiverBinding | null } =>
-            binding !== null
+      const tryBodyRange = rangeFor(lineStarts, scopedBody.from, scopedBody.to);
+      const resourceScope: BindingScope = new Map();
+      scopes.push(resourceScope);
+      const resources = directChildren(specification).filter((child) => child.name === "Resource");
+      for (const [resourceOrdinal, resource] of resources.entries()) {
+        const entry = tryResourceBinding(
+          resource,
+          resourceOrdinal,
+          rangeFor(lineStarts, resource.to, scopedBody.to),
+          tryBodyRange
         );
-      visitWithScopedBindings(scopedBody, bindings);
+        if (entry === null) {
+          visit(resource);
+          continue;
+        }
+        const duplicate = resourceScope.has(entry.name);
+        // JLS 6.3 starts resource scope at its declaration. Keep the current
+        // initializer fail closed instead of falling back to an outer value or field.
+        resourceScope.set(entry.name, null);
+        visit(resource);
+        resourceScope.set(entry.name, duplicate ? null : entry.binding);
+      }
+      visit(scopedBody);
+      scopes.pop();
       for (const child of children) {
         if (child !== specification && child !== scopedBody) {
           visit(child);
@@ -2088,25 +2111,48 @@ function staticJavaMemberCallReferences(input: {
         } else if (receiverName !== undefined && methodName !== null && arguments_ !== null) {
           const binding = visibleBinding(receiverName);
           if (binding !== null && binding !== undefined) {
-            references.push({
-              sourceId: input.callableSymbol.id,
-              declaringTypeId: input.declaringType.id,
-              filePath: input.extraction.filePath,
-              receiverKind: binding.kind,
-              receiverName,
-              receiverType: binding.type,
-              receiverBindingRange: binding.declarationRange,
-              receiverScopeRange: binding.scopeRange,
-              ...(binding.initializerRange === undefined
-                ? {}
-                : { receiverInitializerRange: binding.initializerRange }),
-              methodName,
-              argumentCount: arguments_.length,
-              argumentTypes: arguments_.map((argument) =>
-                staticJavaArgumentType(input.extraction, argument, input.imports)
-              ),
-              range: rangeFor(lineStarts, methodNode.from, methodNode.to)
-            });
+            const argumentTypes = arguments_.map((argument) =>
+              staticJavaArgumentType(input.extraction, argument, input.imports)
+            );
+            if (binding.kind === "try-resource") {
+              references.push({
+                sourceId: input.callableSymbol.id,
+                declaringTypeId: input.declaringType.id,
+                filePath: input.extraction.filePath,
+                receiverKind: binding.kind,
+                receiverName,
+                receiverType: binding.type,
+                receiverBindingRange: binding.declarationRange,
+                receiverScopeRange: binding.scopeRange,
+                ...(binding.initializerRange === undefined
+                  ? {}
+                  : { receiverInitializerRange: binding.initializerRange }),
+                receiverResourceOrdinal: binding.resourceOrdinal,
+                receiverTryBodyRange: binding.tryBodyRange,
+                methodName,
+                argumentCount: arguments_.length,
+                argumentTypes,
+                range: rangeFor(lineStarts, methodNode.from, methodNode.to)
+              });
+            } else {
+              references.push({
+                sourceId: input.callableSymbol.id,
+                declaringTypeId: input.declaringType.id,
+                filePath: input.extraction.filePath,
+                receiverKind: binding.kind,
+                receiverName,
+                receiverType: binding.type,
+                receiverBindingRange: binding.declarationRange,
+                receiverScopeRange: binding.scopeRange,
+                ...(binding.initializerRange === undefined
+                  ? {}
+                  : { receiverInitializerRange: binding.initializerRange }),
+                methodName,
+                argumentCount: arguments_.length,
+                argumentTypes,
+                range: rangeFor(lineStarts, methodNode.from, methodNode.to)
+              });
+            }
           } else if (binding === undefined) {
             references.push({
               sourceId: input.callableSymbol.id,

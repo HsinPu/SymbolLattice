@@ -13,13 +13,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v221";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v222";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v110";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v111";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -167,7 +167,19 @@ export type CallReceiverBindingEvidence =
       readonly typeSource: "declared-type";
     })
   | (CallReceiverBindingEvidenceBase &
-      { readonly kind: "try-resource"; readonly policy: "java-source-lexical-binding-v4" } &
+      (
+        | {
+            readonly kind: "try-resource";
+            readonly policy: "java-source-lexical-binding-v4";
+          }
+        | {
+            readonly kind: "try-resource";
+            readonly policy: "java-source-lexical-binding-v5";
+            readonly resourceOrdinal: number;
+            readonly visibility: "later-resources-and-try-body";
+            readonly tryBodyRange: SourceRange;
+          }
+      ) &
       (
         | { readonly typeSource: "declared-type" }
         | {
@@ -1288,6 +1300,8 @@ export type JavaMemberCallReferenceFact =
       readonly receiverScopeRange: SourceRange;
       /** Present only when Java `var` derives its type from one direct object creation. */
       readonly receiverInitializerRange?: SourceRange;
+      readonly receiverResourceOrdinal: number;
+      readonly receiverTryBodyRange: SourceRange;
     })
   | (JavaMemberCallReferenceBaseFact & {
       readonly receiverKind: "field" | "this-field" | "super-field";
