@@ -805,6 +805,44 @@ describe("SymbolLatticeService", () => {
     expect((await service.sync({ projectPath })).stale).toBe(false);
   });
 
+  it("persists callable-owned initializer calls and proven Array.sort callback evidence", async () => {
+    const projectPath = await createInlineProject({
+      "src/calls.ts": [
+        "function helper(): number { return 1; }",
+        "function compare(left: number, right: number): number { return left - right; }",
+        "function makeUnknown(): { sort(callback: typeof compare): void } { throw new Error(); }",
+        "export function execute(): number {",
+        "  const direct = helper();",
+        "  const values: number[] = [];",
+        "  const unknown = makeUnknown();",
+        "  values.sort(compare);",
+        "  unknown.sort(compare);",
+        "  return direct;",
+        "}"
+      ].join("\n")
+    });
+    const service = createService();
+
+    await service.init({ projectPath });
+    const result = await service.callees(projectPath, "src/calls.ts#execute");
+    const helper = result.relations.filter((relation) => relation.symbol.name === "helper");
+    const comparator = result.relations.filter((relation) => relation.symbol.name === "compare");
+
+    expect(helper).toHaveLength(1);
+    expect(helper[0]?.edge).toMatchObject({
+      resolution: "exact",
+      evidence: { ruleId: "lexical.local-binding", stage: "lexical" }
+    });
+    expect(comparator).toHaveLength(1);
+    expect(comparator[0]?.edge).toMatchObject({
+      resolution: "exact",
+      evidence: {
+        ruleId: "syntax.typescript.array-sort-comparator",
+        stage: "lexical"
+      }
+    });
+  });
+
   it("uses named-file-first graph focus for a bounded natural-language explore query", async () => {
     const projectPath = await createInlineProject({
       "src/api/orders.ts": [

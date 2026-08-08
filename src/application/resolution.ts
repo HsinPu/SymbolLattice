@@ -11696,7 +11696,9 @@ export function resolveProjectFacts(input: {
                   ? instantiationRuleId("local-class-binding")
                 : isRouteHandler
                   ? staticRouteHandlerRuleId(reference, "local-handler")
-                  : "lexical.local-binding",
+                  : reference.callSemantics === "typescript-array-sort-comparator"
+                    ? "syntax.typescript.array-sort-comparator"
+                    : "lexical.local-binding",
               "lexical",
               candidateSymbolIds(scopedLocal.candidates),
               [],

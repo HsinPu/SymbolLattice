@@ -59,6 +59,64 @@ describe("source extraction", () => {
     ]);
   });
 
+  it("attributes calls inside local variable initializers to the enclosing callable", () => {
+    const facts = extractFileFacts({
+      filePath: "src/initializer-calls.ts",
+      language: "typescript",
+      sourceText: [
+        "function helper(): number { return 1; }",
+        "export function execute(): number {",
+        "  const direct = helper();",
+        "  const nested = { value: helper() };",
+        "  return direct + nested.value;",
+        "}"
+      ].join("\n")
+    });
+
+    const execute = facts.symbols.find(
+      (symbol) => symbol.kind === "function" && symbol.name === "execute"
+    );
+    const helperCalls = facts.pendingReferences.filter(
+      (reference) => reference.relationKind === "calls" && reference.referenceName === "helper"
+    );
+
+    expect(execute).toBeDefined();
+    expect(helperCalls).toHaveLength(2);
+    expect(helperCalls.map((reference) => reference.sourceId)).toEqual([
+      execute?.id,
+      execute?.id
+    ]);
+  });
+
+  it("extracts only a statically proven local Array.sort comparator callback", () => {
+    const facts = extractFileFacts({
+      filePath: "src/sort-callback.ts",
+      language: "typescript",
+      sourceText: [
+        "function compare(left: number, right: number): number { return left - right; }",
+        "function makeUnknown(): { sort(callback: typeof compare): void } { throw new Error(); }",
+        "export function execute(): void {",
+        "  const values: number[] = [];",
+        "  const unknown = makeUnknown();",
+        "  values.sort(compare);",
+        "  unknown.sort(compare);",
+        "}"
+      ].join("\n")
+    });
+
+    const execute = facts.symbols.find(
+      (symbol) => symbol.kind === "function" && symbol.name === "execute"
+    );
+    const comparatorCalls = facts.pendingReferences.filter(
+      (reference) => reference.relationKind === "calls" && reference.referenceName === "compare"
+    );
+
+    expect(comparatorCalls).toEqual([
+      expect.objectContaining({ sourceId: execute?.id })
+    ]);
+    expect(comparatorCalls[0]?.range.start.line).toBe(6);
+  });
+
   it("extracts precise callable signature type references without wrapper or generic noise", () => {
     const facts = extractFileFacts({
       filePath: "src/service.ts",

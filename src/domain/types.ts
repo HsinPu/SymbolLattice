@@ -290,6 +290,8 @@ export interface PendingReference {
     | "handles"
     | HierarchyRelationKind
   >;
+  /** Syntax-proven invocation semantics that are stronger than a generic identifier reference. */
+  readonly callSemantics?: "typescript-array-sort-comparator";
   /** Present only when a validated extraction plugin emitted this reference. */
   readonly extractionPlugin?: ExtractionPluginProvenance;
   /** Present only when a validated project finalizer emitted this reference. */

@@ -1213,6 +1213,45 @@ function visibleRouteBindingKind(
 }
 
 /**
+ * Proves the callback hop made by one direct `const values = []` Array sort.
+ * Unknown receivers, mutable bindings, optional calls, extra arguments, and
+ * object methods named `sort` remain ordinary property calls with no inferred
+ * callback edge.
+ */
+function staticArraySortComparator(
+  sourceFile: ts.SourceFile,
+  node: ts.CallExpression,
+  bindings: ScopedRouteReceiverBindings
+): ts.Identifier | null {
+  const expression = node.expression;
+  const callback = node.arguments[0];
+  if (
+    node.questionDotToken !== undefined ||
+    node.arguments.length !== 1 ||
+    callback === undefined ||
+    !ts.isIdentifier(callback) ||
+    !ts.isPropertyAccessExpression(expression) ||
+    expression.questionDotToken !== undefined ||
+    expression.name.text !== "sort" ||
+    !ts.isIdentifier(expression.expression)
+  ) {
+    return null;
+  }
+
+  const binding = visibleRouteBinding(sourceFile, expression.expression, bindings);
+  if (
+    binding === undefined ||
+    !ts.isVariableDeclaration(binding.declaration) ||
+    !isConstVariableDeclaration(binding.declaration) ||
+    binding.declaration.initializer === undefined ||
+    !ts.isArrayLiteralExpression(binding.declaration.initializer)
+  ) {
+    return null;
+  }
+  return callback;
+}
+
+/**
  * Recognizes `NativeModules.Module.method()` and
  * `ReactNative.NativeModules.Module.method()` only through one exact visible
  * import binding. Property aliases, computed access, optional chains, and
@@ -5771,6 +5810,36 @@ export function extractFileFacts(
     return owner;
   }
 
+  /**
+   * A local variable is a declaration node, but evaluating its initializer is
+   * executable work performed by the enclosing callable. Keep top-level and
+   * class-boundary initializers on their declaration owner instead of crossing
+   * into an unrelated outer callable.
+   */
+  function currentCallOwner(): SymbolNode {
+    const owner = currentOwner();
+    if (owner.kind !== "variable") {
+      return owner;
+    }
+    for (let index = stack.length - 2; index >= 0; index -= 1) {
+      const candidate = stack[index];
+      if (candidate === undefined) {
+        continue;
+      }
+      if (candidate.kind === "function" || candidate.kind === "method") {
+        return candidate;
+      }
+      if (
+        candidate.kind === "file" ||
+        candidate.kind === "class" ||
+        candidate.kind === "interface"
+      ) {
+        return owner;
+      }
+    }
+    return owner;
+  }
+
   function addResolvedEdge(
     sourceId: string,
     targetId: string,
@@ -5811,7 +5880,8 @@ export function extractFileFacts(
     node: ts.Node,
     routeFramework?: PendingReference["routeFramework"],
     routeRegistration?: PendingReference["routeRegistration"],
-    routePrefixChain?: PendingReference["routePrefixChain"]
+    routePrefixChain?: PendingReference["routePrefixChain"],
+    callSemantics?: PendingReference["callSemantics"]
   ): PendingReference {
     const range = sourceRange(sourceFile, node);
     const reference: PendingReference = {
@@ -5828,6 +5898,7 @@ export function extractFileFacts(
       referenceName,
       relationKind,
       range,
+      ...(callSemantics === undefined ? {} : { callSemantics }),
       ...(routeFramework === undefined ? {} : { routeFramework }),
       ...(routeRegistration === undefined ? {} : { routeRegistration }),
       ...(routePrefixChain === undefined ? {} : { routePrefixChain })
@@ -6528,7 +6599,22 @@ export function extractFileFacts(
     }
 
     if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
-      addPendingReference(currentOwner().id, node.expression.text, "calls", node.expression);
+      addPendingReference(currentCallOwner().id, node.expression.text, "calls", node.expression);
+    }
+    if (ts.isCallExpression(node)) {
+      const comparator = staticArraySortComparator(sourceFile, node, routeReceiverBindings);
+      if (comparator !== null) {
+        addPendingReference(
+          currentCallOwner().id,
+          comparator.text,
+          "calls",
+          comparator,
+          undefined,
+          undefined,
+          undefined,
+          "typescript-array-sort-comparator"
+        );
+      }
     }
 
     ts.forEachChild(node, visit);
