@@ -7893,6 +7893,7 @@ function javaMethodSetPlan(input: {
     | "lambda"
     | "instanceof-pattern"
     | "instanceof-and-pattern"
+    | "instanceof-and-chain-pattern"
     | "try-resource"
     | "field"
     | "this-field"
@@ -9272,6 +9273,7 @@ function projectJavaCallReferences(input: {
             reference.receiverKind === "lambda" ||
             reference.receiverKind === "instanceof-pattern" ||
             reference.receiverKind === "instanceof-and-pattern" ||
+            reference.receiverKind === "instanceof-and-chain-pattern" ||
             reference.receiverKind === "try-resource"
           ? reference.receiverType
           : null;
@@ -9780,6 +9782,24 @@ function projectJavaCallReferences(input: {
           testedValueRange: reference.receiverTestedValueRange,
           rightOperandRange: reference.receiverRightOperandRange,
           trueBlockRange: reference.receiverTrueBlockRange
+        };
+      } else if (reference.receiverKind === "instanceof-and-chain-pattern") {
+        receiverBinding = {
+          policy: "java-source-lexical-binding-v12",
+          kind: "instanceof-and-chain-pattern",
+          name: reference.receiverName,
+          type: resolvedBindingType.evidence,
+          typeSource: "instanceof-pattern",
+          declarationRange: reference.receiverBindingRange,
+          scopeRange: reference.receiverScopeRange,
+          conditionRange: reference.receiverConditionRange,
+          testedValueRange: reference.receiverTestedValueRange,
+          logicalOperandRanges: reference.receiverLogicalOperandRanges,
+          activeOperandRange: reference.receiverActiveOperandRange,
+          activeOperandOrdinal: reference.receiverActiveOperandOrdinal,
+          trueBlockRange: reference.receiverTrueBlockRange,
+          operandCount: reference.receiverOperandCount,
+          maximumOperands: reference.receiverMaximumOperands
         };
       } else if (reference.receiverKind === "try-resource") {
         receiverBinding =

@@ -5,6 +5,7 @@ import {
   createSymbolId,
   JAVA_EXHAUSTIVE_ASSIGNMENT_JOIN_MAXIMUM_BRANCHES,
   JAVA_EXHAUSTIVE_SWITCH_JOIN_MAXIMUM_ARMS,
+  JAVA_INSTANCEOF_AND_CHAIN_MAXIMUM_OPERANDS,
   type ArtifactFacts,
   type GraphEdge,
   type JvmCallableSignatureReferenceFact,
@@ -73,18 +74,33 @@ interface StaticJavaDependencyInjectionReference {
   readonly reference: StaticJavaSuperclassReference;
 }
 
-interface StaticJavaInstanceofAndPatternSyntax {
+interface StaticJavaInstanceofAndPatternSyntaxBase {
   readonly name: string;
   readonly typePath: string;
   readonly typeRange: SourceRange;
   readonly declarationRange: SourceRange;
   readonly conditionRange: SourceRange;
   readonly testedValueRange: SourceRange;
-  readonly rightOperandRange: SourceRange;
   readonly trueBlockRange: SourceRange;
-  readonly rightOperandOffsets: { readonly start: number; readonly end: number };
   readonly trueBlockOffsets: { readonly start: number; readonly end: number };
 }
+
+type StaticJavaInstanceofAndPatternSyntax =
+  | (StaticJavaInstanceofAndPatternSyntaxBase & {
+      readonly kind: "single";
+      readonly rightOperandRange: SourceRange;
+      readonly rightOperandOffsets: { readonly start: number; readonly end: number };
+    })
+  | (StaticJavaInstanceofAndPatternSyntaxBase & {
+      readonly kind: "chain";
+      readonly logicalOperandRanges: readonly SourceRange[];
+      readonly activeOperandOffsets: readonly {
+        readonly start: number;
+        readonly end: number;
+      }[];
+      readonly operandCount: number;
+      readonly maximumOperands: number;
+    });
 
 interface StaticJavaInstanceofAndPatternInspection {
   readonly syntaxes: readonly StaticJavaInstanceofAndPatternSyntax[];
@@ -324,6 +340,30 @@ function astGrepContainsLogicalOperator(node: SgNode): boolean {
   );
 }
 
+function leftAssociativeJavaAndOperands(node: SgNode): readonly SgNode[] | null {
+  if (node.kind() !== "binary_expression") {
+    return null;
+  }
+  const children = astGrepChildren(node);
+  const left = children[0];
+  const operator = children[1];
+  const right = children[2];
+  if (
+    children.length !== 3 ||
+    left === undefined ||
+    operator?.kind() !== "&&" ||
+    right === undefined ||
+    astGrepContainsLogicalOperator(right)
+  ) {
+    return null;
+  }
+  if (left.kind() !== "binary_expression") {
+    return astGrepContainsLogicalOperator(left) ? null : [left, right];
+  }
+  const leftOperands = leftAssociativeJavaAndOperands(left);
+  return leftOperands === null ? null : [...leftOperands, right];
+}
+
 function inspectJavaInstanceofAndPatterns(
   input: JavaExtractFileFactsInput
 ): StaticJavaInstanceofAndPatternInspection {
@@ -350,9 +390,8 @@ function inspectJavaInstanceofAndPatterns(
       ) {
         const conditionChildren = astGrepChildren(condition);
         const binary = conditionChildren[1];
-        const binaryChildren = binary === undefined ? [] : astGrepChildren(binary);
-        const pattern = binaryChildren[0];
-        const rightOperand = binaryChildren[2];
+        const operands = binary === undefined ? null : leftAssociativeJavaAndOperands(binary);
+        const pattern = operands?.[0];
         const patternChildren = pattern === undefined ? [] : astGrepChildren(pattern);
         const testedValue = patternChildren[0];
         const typeNode = patternChildren[2];
@@ -364,8 +403,9 @@ function inspectJavaInstanceofAndPatterns(
           conditionChildren[0]?.kind() === "(" &&
           conditionChildren[2]?.kind() === ")" &&
           binary?.kind() === "binary_expression" &&
-          binaryChildren.length === 3 &&
-          binaryChildren[1]?.kind() === "&&" &&
+          operands !== null &&
+          operands.length >= 2 &&
+          operands.length <= JAVA_INSTANCEOF_AND_CHAIN_MAXIMUM_OPERANDS &&
           pattern?.kind() === "instanceof_expression" &&
           patternChildren.length === 4 &&
           testedValue !== undefined &&
@@ -377,8 +417,6 @@ function inspectJavaInstanceofAndPatterns(
           /^[A-Za-z_$][A-Za-z0-9_$]*$/u.test(name) &&
           typePath !== undefined &&
           /^[A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)*$/u.test(typePath) &&
-          rightOperand !== undefined &&
-          !astGrepContainsLogicalOperator(rightOperand) &&
           !astGrepContainsKind(binary, "assignment_expression")
         ) {
           const conditionOffsets = condition.range();
@@ -386,13 +424,37 @@ function inspectJavaInstanceofAndPatterns(
           const testedValueOffsets = testedValue.range();
           const typeOffsets = typeNode.range();
           const definitionOffsets = definition.range();
-          const rightOperandOffsets = rightOperand.range();
+          const operandOffsets = operands.map((operand) => operand.range());
+          const logicalOperandRanges = operandOffsets.map((operand) =>
+            rangeFor(lineStarts, operand.start.index, operand.end.index)
+          );
+          const rightOperandOffsets = operandOffsets[1]!;
+          const rightOperandRange = logicalOperandRanges[1]!;
           const trueBlockOffsets = trueBlock.range();
           legacyRecoveryOffsets.push({
             start: statementOffsets.start.index,
             end: statementOffsets.end.index
           });
           syntaxes.push({
+            ...(operands.length === 2
+              ? {
+                  kind: "single" as const,
+                  rightOperandRange,
+                  rightOperandOffsets: {
+                    start: rightOperandOffsets.start.index,
+                    end: rightOperandOffsets.end.index
+                  }
+                }
+              : {
+                  kind: "chain" as const,
+                  logicalOperandRanges,
+                  activeOperandOffsets: operandOffsets.slice(1).map((operand) => ({
+                    start: operand.start.index,
+                    end: operand.end.index
+                  })),
+                  operandCount: operands.length,
+                  maximumOperands: JAVA_INSTANCEOF_AND_CHAIN_MAXIMUM_OPERANDS
+                }),
             name,
             typePath,
             typeRange: rangeFor(lineStarts, typeOffsets.start.index, typeOffsets.end.index),
@@ -411,20 +473,11 @@ function inspectJavaInstanceofAndPatterns(
               testedValueOffsets.start.index,
               testedValueOffsets.end.index
             ),
-            rightOperandRange: rangeFor(
-              lineStarts,
-              rightOperandOffsets.start.index,
-              rightOperandOffsets.end.index
-            ),
             trueBlockRange: rangeFor(
               lineStarts,
               trueBlockOffsets.start.index,
               trueBlockOffsets.end.index
             ),
-            rightOperandOffsets: {
-              start: rightOperandOffsets.start.index,
-              end: rightOperandOffsets.end.index
-            },
             trueBlockOffsets: {
               start: trueBlockOffsets.start.index,
               end: trueBlockOffsets.end.index
@@ -1864,6 +1917,17 @@ function staticJavaMemberCallReferences(input: {
           readonly trueBlockRange: SourceRange;
         }
       | {
+          readonly kind: "instanceof-and-chain-pattern";
+          readonly conditionRange: SourceRange;
+          readonly testedValueRange: SourceRange;
+          readonly logicalOperandRanges: readonly SourceRange[];
+          readonly activeOperandRange: SourceRange | null;
+          readonly activeOperandOrdinal: number | null;
+          readonly trueBlockRange: SourceRange;
+          readonly operandCount: number;
+          readonly maximumOperands: number;
+        }
+      | {
           readonly kind: "local";
           readonly directAssignment?: DirectAssignmentBinding;
           readonly assignmentJoin?: ExhaustiveAssignmentJoinBinding;
@@ -1941,19 +2005,53 @@ function staticJavaMemberCallReferences(input: {
     offset: number
   ): ReceiverBinding | null | undefined {
     const lexical = visibleBinding(name);
-    const activePatterns = input.instanceofAndPatternSyntaxes.filter(
-      (syntax) =>
-        syntax.name === name &&
-        ((syntax.rightOperandOffsets.start <= offset && offset < syntax.rightOperandOffsets.end) ||
-          (syntax.trueBlockOffsets.start <= offset && offset < syntax.trueBlockOffsets.end))
-    );
+    const activePatterns: Array<{
+      readonly syntax: StaticJavaInstanceofAndPatternSyntax;
+      readonly activeOperandRange: SourceRange | null;
+      readonly activeOperandOrdinal: number | null;
+    }> = [];
+    for (const syntax of input.instanceofAndPatternSyntaxes) {
+      if (syntax.name !== name) {
+        continue;
+      }
+      if (syntax.kind === "single") {
+        if (
+          syntax.rightOperandOffsets.start <= offset &&
+          offset < syntax.rightOperandOffsets.end
+        ) {
+          activePatterns.push({
+            syntax,
+            activeOperandRange: syntax.rightOperandRange,
+            activeOperandOrdinal: 1
+          });
+          continue;
+        }
+      } else {
+        const activeIndex = syntax.activeOperandOffsets.findIndex(
+          (operand) => operand.start <= offset && offset < operand.end
+        );
+        const activeOperandRange = syntax.logicalOperandRanges[activeIndex + 1];
+        if (activeIndex >= 0 && activeOperandRange !== undefined) {
+          activePatterns.push({
+            syntax,
+            activeOperandRange,
+            activeOperandOrdinal: activeIndex + 1
+          });
+          continue;
+        }
+      }
+      if (syntax.trueBlockOffsets.start <= offset && offset < syntax.trueBlockOffsets.end) {
+        activePatterns.push({ syntax, activeOperandRange: null, activeOperandOrdinal: null });
+      }
+    }
     if (activePatterns.length === 0) {
       return lexical;
     }
-    const pattern = activePatterns[0];
-    if (activePatterns.length !== 1 || pattern === undefined || lexical !== undefined) {
+    const activePattern = activePatterns[0];
+    if (activePatterns.length !== 1 || activePattern === undefined || lexical !== undefined) {
       return null;
     }
+    const pattern = activePattern.syntax;
     const typeSegments = pattern.typePath.split(".");
     const referenceName = typeSegments.at(-1);
     if (referenceName === undefined) {
@@ -1962,12 +2060,11 @@ function staticJavaMemberCallReferences(input: {
     const qualifiedTypePath = typeSegments.length > 1 ? pattern.typePath : undefined;
     const importedTypePath =
       qualifiedTypePath === undefined ? input.imports.get(referenceName) : undefined;
-    const scopeRange =
-      pattern.rightOperandOffsets.start <= offset && offset < pattern.rightOperandOffsets.end
-        ? pattern.rightOperandRange
-        : pattern.trueBlockRange;
-    return {
-      kind: "instanceof-and-pattern",
+    const scopeRange = activePattern.activeOperandRange ?? pattern.trueBlockRange;
+    const bindingBase: ReceiverBindingBase & {
+      readonly conditionRange: SourceRange;
+      readonly testedValueRange: SourceRange;
+    } = {
       name,
       type: {
         kind: "reference",
@@ -1980,10 +2077,25 @@ function staticJavaMemberCallReferences(input: {
       declarationRange: pattern.declarationRange,
       scopeRange,
       conditionRange: pattern.conditionRange,
-      testedValueRange: pattern.testedValueRange,
-      rightOperandRange: pattern.rightOperandRange,
-      trueBlockRange: pattern.trueBlockRange
+      testedValueRange: pattern.testedValueRange
     };
+    return pattern.kind === "single"
+      ? {
+          ...bindingBase,
+          kind: "instanceof-and-pattern",
+          rightOperandRange: pattern.rightOperandRange,
+          trueBlockRange: pattern.trueBlockRange
+        }
+      : {
+          ...bindingBase,
+          kind: "instanceof-and-chain-pattern",
+          logicalOperandRanges: pattern.logicalOperandRanges,
+          activeOperandRange: activePattern.activeOperandRange,
+          activeOperandOrdinal: activePattern.activeOperandOrdinal,
+          trueBlockRange: pattern.trueBlockRange,
+          operandCount: pattern.operandCount,
+          maximumOperands: pattern.maximumOperands
+        };
   }
 
   function addLocalDeclaration(
@@ -3083,6 +3195,29 @@ function staticJavaMemberCallReferences(input: {
                 receiverTestedValueRange: binding.testedValueRange,
                 receiverRightOperandRange: binding.rightOperandRange,
                 receiverTrueBlockRange: binding.trueBlockRange,
+                methodName,
+                argumentCount: arguments_.length,
+                argumentTypes,
+                range: rangeFor(lineStarts, methodNode.from, methodNode.to)
+              });
+            } else if (binding.kind === "instanceof-and-chain-pattern") {
+              references.push({
+                sourceId: input.callableSymbol.id,
+                declaringTypeId: input.declaringType.id,
+                filePath: input.extraction.filePath,
+                receiverKind: binding.kind,
+                receiverName,
+                receiverType: binding.type,
+                receiverBindingRange: binding.declarationRange,
+                receiverScopeRange: binding.scopeRange,
+                receiverConditionRange: binding.conditionRange,
+                receiverTestedValueRange: binding.testedValueRange,
+                receiverLogicalOperandRanges: binding.logicalOperandRanges,
+                receiverActiveOperandRange: binding.activeOperandRange,
+                receiverActiveOperandOrdinal: binding.activeOperandOrdinal,
+                receiverTrueBlockRange: binding.trueBlockRange,
+                receiverOperandCount: binding.operandCount,
+                receiverMaximumOperands: binding.maximumOperands,
                 methodName,
                 argumentCount: arguments_.length,
                 argumentTypes,

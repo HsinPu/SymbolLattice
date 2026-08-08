@@ -3809,17 +3809,6 @@ describe("SymbolLatticeService", () => {
         "  }",
         "}"
       ].join("\n"),
-      "src/app/Chained.java": [
-        "package app;",
-        "import api.Service;",
-        "public class Chained {",
-        "  public void run(Object value) {",
-        "    if (value instanceof Service service && service.ready() && service.enabled()) {",
-        "      service.execute(\"chained\");",
-        "    }",
-        "  }",
-        "}"
-      ].join("\n"),
       "src/app/Assigned.java": [
         "package app;",
         "import api.Service;",
@@ -3894,11 +3883,148 @@ describe("SymbolLatticeService", () => {
     expect(callAt("src/app/Runner.java", 10)).toBeUndefined();
     expect(callAt("src/app/OrPattern.java", 5)).toBeUndefined();
     expect(callAt("src/app/RightPattern.java", 6)).toBeUndefined();
-    expect(callAt("src/app/Chained.java", 5)).toBeUndefined();
-    expect(callAt("src/app/Chained.java", 6)).toBeUndefined();
     expect(callAt("src/app/Assigned.java", 6)).toBeUndefined();
     expect(callAt("src/app/Assigned.java", 7)).toBeUndefined();
     expect(callAt("src/app/Unbraced.java", 5)).toBeUndefined();
+  });
+
+  it("binds a Java instanceof pattern across a bounded left-associative && chain", async () => {
+    const serviceSource = [
+      "package api;",
+      "public class Service {",
+      ...Array.from({ length: 8 }, (_, index) =>
+        `  public boolean check${index + 1}() { return true; }`
+      ),
+      "  public void execute(String value) {}",
+      "}"
+    ].join("\n");
+    const projectPath = await createInlineProject({
+      "src/api/Service.java": serviceSource,
+      "src/app/Chain.java": [
+        "package app;",
+        "import api.Service;",
+        "public class Chain {",
+        "  public void run(Object value) {",
+        "    if (value instanceof Service service && service.check1() && service.check2()) {",
+        "      service.execute(\"chain\");",
+        "    } else {",
+        "      service.execute(\"false-branch\");",
+        "    }",
+        "    service.execute(\"outside\");",
+        "  }",
+        "}"
+      ].join("\n"),
+      "src/app/AtBound.java": [
+        "package app;",
+        "import api.Service;",
+        "public class AtBound {",
+        "  public void run(Object value) {",
+        "    if (value instanceof Service service && service.check1() && service.check2() && service.check3() && service.check4() && service.check5() && service.check6() && service.check7()) {",
+        "      service.execute(\"at-bound\");",
+        "    }",
+        "  }",
+        "}"
+      ].join("\n"),
+      "src/app/OverBound.java": [
+        "package app;",
+        "import api.Service;",
+        "public class OverBound {",
+        "  public void run(Object value) {",
+        "    if (value instanceof Service service && service.check1() && service.check2() && service.check3() && service.check4() && service.check5() && service.check6() && service.check7() && service.check8()) {",
+        "      service.execute(\"over-bound\");",
+        "    }",
+        "  }",
+        "}"
+      ].join("\n"),
+      "src/app/Grouped.java": [
+        "package app;",
+        "import api.Service;",
+        "public class Grouped {",
+        "  public void run(Object value) {",
+        "    if (value instanceof Service service && (service.check1() && service.check2())) {",
+        "      service.execute(\"grouped\");",
+        "    }",
+        "  }",
+        "}"
+      ].join("\n"),
+      "src/app/PatternMiddle.java": [
+        "package app;",
+        "import api.Service;",
+        "public class PatternMiddle {",
+        "  public void run(boolean flag, Object value) {",
+        "    if (flag && value instanceof Service service && service.check1()) {",
+        "      service.execute(\"middle\");",
+        "    }",
+        "  }",
+        "}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+
+    const snapshot = graphStore.getSnapshot(projectPath);
+    const calls = snapshot.edges.filter((edge) => edge.kind === "calls");
+    const callAt = (filePath: string, line: number, name: string) =>
+      calls.find(
+        (edge) =>
+          edge.filePath === filePath &&
+          edge.range.start.line === line &&
+          edge.referenceName === name
+      );
+    const symbolId = (qualifiedName: string) =>
+      snapshot.symbols.find((candidate) => candidate.qualifiedName === qualifiedName)?.id;
+    const serviceId = symbolId("src/api/Service.java#Service");
+    const firstCall = callAt("src/app/Chain.java", 5, "check1");
+    const secondCall = callAt("src/app/Chain.java", 5, "check2");
+    expect(firstCall?.targetId).toBe(symbolId("src/api/Service.java#Service.check1"));
+    expect(secondCall?.targetId).toBe(symbolId("src/api/Service.java#Service.check2"));
+    expect(secondCall?.evidence?.callDispatch).toEqual(
+      expect.objectContaining({
+        invocationKind: "instanceof-and-chain-pattern",
+        receiverTypeSymbolId: serviceId,
+        receiverBinding: expect.objectContaining({
+          policy: "java-source-lexical-binding-v12",
+          kind: "instanceof-and-chain-pattern",
+          operandCount: 3,
+          maximumOperands: 8,
+          activeOperandOrdinal: 2,
+          logicalOperandRanges: expect.arrayContaining([
+            expect.objectContaining({ start: expect.objectContaining({ line: 5 }) })
+          ]),
+          activeOperandRange: expect.objectContaining({
+            start: expect.objectContaining({ line: 5 })
+          }),
+          scopeRange: expect.objectContaining({ start: expect.objectContaining({ line: 5 }) })
+        })
+      })
+    );
+    const executeCall = callAt("src/app/Chain.java", 6, "execute");
+    expect(executeCall?.targetId).toBe(symbolId("src/api/Service.java#Service.execute"));
+    expect(executeCall?.evidence?.callDispatch?.receiverBinding).toEqual(
+      expect.objectContaining({
+        policy: "java-source-lexical-binding-v12",
+        activeOperandRange: null,
+        activeOperandOrdinal: null,
+        trueBlockRange: expect.objectContaining({ start: expect.objectContaining({ line: 5 }) }),
+        scopeRange: expect.objectContaining({ start: expect.objectContaining({ line: 5 }) })
+      })
+    );
+    expect(callAt("src/app/Chain.java", 8, "execute")).toBeUndefined();
+    expect(callAt("src/app/Chain.java", 10, "execute")).toBeUndefined();
+    expect(callAt("src/app/AtBound.java", 5, "check7")?.targetId).toBe(
+      symbolId("src/api/Service.java#Service.check7")
+    );
+    expect(callAt("src/app/AtBound.java", 6, "execute")?.targetId).toBe(
+      symbolId("src/api/Service.java#Service.execute")
+    );
+    expect(callAt("src/app/OverBound.java", 5, "check1")).toBeUndefined();
+    expect(callAt("src/app/OverBound.java", 6, "execute")).toBeUndefined();
+    expect(callAt("src/app/Grouped.java", 5, "check1")).toBeUndefined();
+    expect(callAt("src/app/Grouped.java", 6, "execute")).toBeUndefined();
+    expect(callAt("src/app/PatternMiddle.java", 5, "check1")).toBeUndefined();
+    expect(callAt("src/app/PatternMiddle.java", 6, "execute")).toBeUndefined();
   });
 
   it("resolves Java enhanced-for, catch, and explicit lambda bindings within their exact scopes", async () => {
