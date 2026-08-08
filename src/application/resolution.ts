@@ -6,6 +6,7 @@ import {
   createSymbolId,
   isCustomRouteFramework,
   JAVA_EXHAUSTIVE_ASSIGNMENT_JOIN_MAXIMUM_BRANCHES,
+  JAVA_EXHAUSTIVE_SWITCH_JOIN_MAXIMUM_ARMS,
   type BindingSpace,
   type CallArityEvidence,
   type CallDispatchAccessEvidence,
@@ -9360,10 +9361,36 @@ function projectJavaCallReferences(input: {
                   });
             return { branch, resolvedType, widening };
           });
+    const switchAssignmentJoin =
+      reference.receiverKind === "local" ? reference.receiverSwitchAssignmentJoin : undefined;
+    const resolvedSwitchAssignmentArms =
+      switchAssignmentJoin === undefined
+        ? []
+        : switchAssignmentJoin.arms.map((arm) => {
+            const resolvedType = resolveJavaCallType({
+              reference: arm.type,
+              declaringType,
+              sourceFilePath: reference.filePath,
+              types,
+              membershipsByFile,
+              projectEvidence: input.jvmProjectModuleEvidence
+            });
+            const widening =
+              resolvedType?.evidence.targetSymbolId === undefined ||
+              resolvedBindingType?.evidence.targetSymbolId === undefined
+                ? null
+                : javaReferenceWideningPath({
+                    sourceSymbolId: resolvedType.evidence.targetSymbolId,
+                    targetSymbolId: resolvedBindingType.evidence.targetSymbolId,
+                    heritageEdgesBySourceId
+                  });
+            return { arm, resolvedType, widening };
+          });
     const assignmentProofCount = [
       assignmentTypeReference,
       assignmentJoin,
-      assignmentChain
+      assignmentChain,
+      switchAssignmentJoin
     ].filter((candidate) => candidate !== undefined).length;
     if (assignmentProofCount > 1) {
       continue;
@@ -9414,6 +9441,27 @@ function projectJavaCallReferences(input: {
     ) {
       continue;
     }
+    const switchAssignmentHasValidShape =
+      switchAssignmentJoin !== undefined &&
+      switchAssignmentJoin.bounds.maximumArms === JAVA_EXHAUSTIVE_SWITCH_JOIN_MAXIMUM_ARMS &&
+      switchAssignmentJoin.bounds.observedArms === switchAssignmentJoin.arms.length &&
+      switchAssignmentJoin.arms.length >= 2 &&
+      switchAssignmentJoin.arms.length <= JAVA_EXHAUSTIVE_SWITCH_JOIN_MAXIMUM_ARMS &&
+      switchAssignmentJoin.arms.every(
+        (arm, index, arms) =>
+          arm.ordinal === index &&
+          arm.arm === (index === arms.length - 1 ? "default" : "case")
+      );
+    if (
+      switchAssignmentJoin !== undefined &&
+      (!switchAssignmentHasValidShape ||
+        resolvedSwitchAssignmentArms.length !== switchAssignmentJoin.arms.length ||
+        resolvedSwitchAssignmentArms.some(
+          (arm) => arm.resolvedType === null || arm.widening?.state !== "matched"
+        ))
+    ) {
+      continue;
+    }
     const receiverTypeSymbolId =
       reference.receiverKind === "this"
         ? declaringType.symbol.id
@@ -9443,6 +9491,27 @@ function projectJavaCallReferences(input: {
                 scopeRange: branch.scopeRange,
                 assignmentRange: branch.assignmentRange,
                 initializerRange: branch.initializerRange,
+                valueType: resolvedType.evidence,
+                compatibility:
+                  widening.edges.length === 0
+                    ? ("identity" as const)
+                    : ("reference-widening" as const),
+                hierarchyPath: widening.edges.map(javaHierarchySegmentEvidence),
+                hierarchyBounds: JAVA_REFERENCE_HIERARCHY_LIMITS
+              }
+            ]
+    );
+    const switchAssignmentEvidenceArms = resolvedSwitchAssignmentArms.flatMap(
+      ({ arm, resolvedType, widening }) =>
+        resolvedType === null || widening?.state !== "matched"
+          ? []
+          : [
+              {
+                ordinal: arm.ordinal,
+                arm: arm.arm,
+                labelRange: arm.labelRange,
+                assignmentRange: arm.assignmentRange,
+                initializerRange: arm.initializerRange,
                 valueType: resolvedType.evidence,
                 compatibility:
                   widening.edges.length === 0
@@ -9533,7 +9602,28 @@ function projectJavaCallReferences(input: {
         const thenJoinBranch = resolvedAssignmentJoinBranches[0];
         const elseJoinBranch = resolvedAssignmentJoinBranches[1];
         receiverBinding =
-          assignmentChain !== undefined &&
+          switchAssignmentJoin !== undefined &&
+          switchAssignmentEvidenceArms.length === switchAssignmentJoin.arms.length
+            ? {
+                policy: "java-source-lexical-binding-v9",
+                kind: "local",
+                name: reference.receiverName,
+                type: resolvedBindingType.evidence,
+                typeSource: "declared-type-after-exhaustive-switch-rules",
+                declarationRange: reference.receiverBindingRange,
+                scopeRange: reference.receiverScopeRange,
+                assignmentJoin: {
+                  policy: "java-source-switch-rule-assignment-join-v1",
+                  statementRange: switchAssignmentJoin.statementRange,
+                  selectorRange: switchAssignmentJoin.selectorRange,
+                  bounds: {
+                    maximumArms: JAVA_EXHAUSTIVE_SWITCH_JOIN_MAXIMUM_ARMS,
+                    observedArms: switchAssignmentJoin.arms.length
+                  },
+                  arms: switchAssignmentEvidenceArms
+                }
+              }
+            : assignmentChain !== undefined &&
           assignmentChainEvidenceBranches.length === assignmentChain.branches.length
             ? {
                 policy: "java-source-lexical-binding-v8",

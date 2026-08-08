@@ -13,16 +13,19 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v225";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v226";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v114";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v115";
 
 /** Hard cap for one source-proven Java exhaustive if/else-if/else assignment join. */
 export const JAVA_EXHAUSTIVE_ASSIGNMENT_JOIN_MAXIMUM_BRANCHES = 8;
+
+/** Hard cap for one source-proven Java exhaustive switch-rule assignment join. */
+export const JAVA_EXHAUSTIVE_SWITCH_JOIN_MAXIMUM_ARMS = 8;
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -238,6 +241,34 @@ export type CallReceiverBindingEvidence =
                 readonly statementRange: SourceRange;
                 readonly conditionRange?: SourceRange;
                 readonly scopeRange: SourceRange;
+                readonly assignmentRange: SourceRange;
+                readonly initializerRange: SourceRange;
+                readonly valueType: CallTypeValueEvidence;
+                readonly compatibility: "identity" | "reference-widening";
+                readonly hierarchyPath: readonly CallTypeHierarchySegmentEvidence[];
+                readonly hierarchyBounds: {
+                  readonly maximumDepth: number;
+                  readonly maximumVisitedTypes: number;
+                };
+              }[];
+            };
+          }
+        | {
+            readonly kind: "local";
+            readonly policy: "java-source-lexical-binding-v9";
+            readonly typeSource: "declared-type-after-exhaustive-switch-rules";
+            readonly assignmentJoin: {
+              readonly policy: "java-source-switch-rule-assignment-join-v1";
+              readonly statementRange: SourceRange;
+              readonly selectorRange: SourceRange;
+              readonly bounds: {
+                readonly maximumArms: number;
+                readonly observedArms: number;
+              };
+              readonly arms: readonly {
+                readonly ordinal: number;
+                readonly arm: "case" | "default";
+                readonly labelRange: SourceRange;
                 readonly assignmentRange: SourceRange;
                 readonly initializerRange: SourceRange;
                 readonly valueType: CallTypeValueEvidence;
@@ -1419,6 +1450,23 @@ export type JavaMemberCallReferenceFact =
           readonly statementRange: SourceRange;
           readonly conditionRange?: SourceRange;
           readonly scopeRange: SourceRange;
+          readonly type: JavaCallTypeReferenceFact;
+          readonly assignmentRange: SourceRange;
+          readonly initializerRange: SourceRange;
+        }[];
+      };
+      /** Present only after one bounded exhaustive arrow-rule switch assignment join. */
+      readonly receiverSwitchAssignmentJoin?: {
+        readonly statementRange: SourceRange;
+        readonly selectorRange: SourceRange;
+        readonly bounds: {
+          readonly maximumArms: number;
+          readonly observedArms: number;
+        };
+        readonly arms: readonly {
+          readonly ordinal: number;
+          readonly arm: "case" | "default";
+          readonly labelRange: SourceRange;
           readonly type: JavaCallTypeReferenceFact;
           readonly assignmentRange: SourceRange;
           readonly initializerRange: SourceRange;

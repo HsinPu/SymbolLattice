@@ -3523,6 +3523,130 @@ describe("SymbolLatticeService", () => {
     expect(callAt(34)).toBeUndefined();
   });
 
+  it("joins bounded exhaustive Java switch-rule assignments", async () => {
+    const projectPath = await createInlineProject({
+      "src/api/Service.java": [
+        "package api;",
+        "public class Service { public void execute(String value) {} }"
+      ].join("\n"),
+      "src/api/Derived.java": [
+        "package api;",
+        "public class Derived extends Service {}"
+      ].join("\n"),
+      "src/api/Other.java": [
+        "package api;",
+        "public class Other {}"
+      ].join("\n"),
+      "src/app/Runner.java": [
+        "package app;",
+        "import api.Service;",
+        "import api.Derived;",
+        "import api.Other;",
+        "public class Runner {",
+        "  public void run(int code) {",
+        "    Service switched;",
+        "    switch (code) {",
+        "      case 0 -> switched = new Service();",
+        "      case 1 -> switched = new Derived();",
+        "      default -> switched = new Service();",
+        "    }",
+        "    switched.execute(\"switched\");",
+        "    Service missingDefault;",
+        "    switch (code) { case 0 -> missingDefault = new Service(); }",
+        "    missingDefault.execute(\"missing-default\");",
+        "    Service mismatch;",
+        "    switch (code) { case 0 -> mismatch = new Service(); default -> mismatch = new Other(); }",
+        "    mismatch.execute(\"mismatch\");",
+        "    Service colon;",
+        "    switch (code) { case 0: colon = new Service(); break; default: colon = new Service(); }",
+        "    colon.execute(\"colon\");",
+        "    Service blockRule;",
+        "    switch (code) { case 0 -> { blockRule = new Service(); } default -> blockRule = new Service(); }",
+        "    blockRule.execute(\"block-rule\");",
+        "    Service selectorWrite;",
+        "    switch (code = 1) { case 0 -> selectorWrite = new Service(); default -> selectorWrite = new Service(); }",
+        "    selectorWrite.execute(\"selector-write\");",
+        "    Service maximum;",
+        "    switch (code) { case 0 -> maximum = new Service(); case 1 -> maximum = new Service(); case 2 -> maximum = new Service(); case 3 -> maximum = new Service(); case 4 -> maximum = new Service(); case 5 -> maximum = new Service(); case 6 -> maximum = new Service(); default -> maximum = new Service(); }",
+        "    maximum.execute(\"maximum\");",
+        "    Service overflow;",
+        "    switch (code) { case 0 -> overflow = new Service(); case 1 -> overflow = new Service(); case 2 -> overflow = new Service(); case 3 -> overflow = new Service(); case 4 -> overflow = new Service(); case 5 -> overflow = new Service(); case 6 -> overflow = new Service(); case 7 -> overflow = new Service(); default -> overflow = new Service(); }",
+        "    overflow.execute(\"overflow\");",
+        "    Service rewritten;",
+        "    switch (code) { case 0 -> rewritten = new Service(); default -> rewritten = new Service(); }",
+        "    rewritten.execute(\"before-rewrite\");",
+        "    switch (code) { case 0 -> rewritten = new Derived(); default -> rewritten = new Service(); }",
+        "    rewritten.execute(\"after-rewrite\");",
+        "  }",
+        "}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+
+    const snapshot = graphStore.getSnapshot(projectPath);
+    const calls = snapshot.edges.filter(
+      (edge) => edge.kind === "calls" && edge.filePath === "src/app/Runner.java"
+    );
+    const callAt = (line: number) => calls.find((edge) => edge.range.start.line === line);
+    const symbolId = (qualifiedName: string) =>
+      snapshot.symbols.find((candidate) => candidate.qualifiedName === qualifiedName)?.id;
+    const serviceId = symbolId("src/api/Service.java#Service");
+    const derivedId = symbolId("src/api/Derived.java#Derived");
+
+    expect(callAt(13)?.targetId).toBe(symbolId("src/api/Service.java#Service.execute"));
+    expect(callAt(13)?.evidence?.callDispatch).toEqual(
+      expect.objectContaining({
+        invocationKind: "local",
+        receiverTypeSymbolId: serviceId,
+        receiverBinding: expect.objectContaining({
+          policy: "java-source-lexical-binding-v9",
+          kind: "local",
+          name: "switched",
+          typeSource: "declared-type-after-exhaustive-switch-rules",
+          assignmentJoin: expect.objectContaining({
+            policy: "java-source-switch-rule-assignment-join-v1",
+            bounds: { maximumArms: 8, observedArms: 3 },
+            arms: [
+              expect.objectContaining({
+                ordinal: 0,
+                arm: "case",
+                compatibility: "identity",
+                valueType: expect.objectContaining({ targetSymbolId: serviceId })
+              }),
+              expect.objectContaining({
+                ordinal: 1,
+                arm: "case",
+                compatibility: "reference-widening",
+                valueType: expect.objectContaining({ targetSymbolId: derivedId }),
+                hierarchyPath: [
+                  expect.objectContaining({ sourceSymbolId: derivedId, targetSymbolId: serviceId })
+                ]
+              }),
+              expect.objectContaining({
+                ordinal: 2,
+                arm: "default",
+                compatibility: "identity",
+                valueType: expect.objectContaining({ targetSymbolId: serviceId })
+              })
+            ]
+          })
+        })
+      })
+    );
+    expect(callAt(16)).toBeUndefined();
+    expect(callAt(19)).toBeUndefined();
+    expect(callAt(22)).toBeUndefined();
+    expect(callAt(25)).toBeUndefined();
+    expect(callAt(28)).toBeUndefined();
+    expect(callAt(31)?.targetId).toBe(symbolId("src/api/Service.java#Service.execute"));
+    expect(callAt(34)).toBeUndefined();
+    expect(callAt(37)?.targetId).toBe(symbolId("src/api/Service.java#Service.execute"));
+    expect(callAt(39)).toBeUndefined();
+  });
+
   it("resolves Java enhanced-for, catch, and explicit lambda bindings within their exact scopes", async () => {
     const projectPath = await createInlineProject({
       "src/api/Service.java": [

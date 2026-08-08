@@ -4,6 +4,7 @@ import {
   createEdgeId,
   createSymbolId,
   JAVA_EXHAUSTIVE_ASSIGNMENT_JOIN_MAXIMUM_BRANCHES,
+  JAVA_EXHAUSTIVE_SWITCH_JOIN_MAXIMUM_ARMS,
   type ArtifactFacts,
   type GraphEdge,
   type JvmCallableSignatureReferenceFact,
@@ -305,10 +306,35 @@ function isLegacyGrammarDefaultModifierMarker(node: JavaSyntaxNode): boolean {
   );
 }
 
-function hasSyntaxError(node: JavaSyntaxNode): boolean {
+function isLegacyGrammarSwitchRuleMarker(
+  input: JavaExtractFileFactsInput,
+  node: JavaSyntaxNode
+): boolean {
+  if (!node.type.isError || node.parent?.name !== "SwitchLabel") {
+    return false;
+  }
+  const siblings = directChildren(node.parent);
+  const labelKind = siblings[0]?.name;
+  if (labelKind !== "case" && labelKind !== "default") {
+    return false;
+  }
+  if (node.from < node.to) {
+    return nodeText(input, node) === "->" &&
+      (node.nextSibling?.type.isError === true || node.nextSibling === null);
+  }
   return (
-    (node.type.isError && !isLegacyGrammarDefaultModifierMarker(node)) ||
-    directChildren(node).some((child) => hasSyntaxError(child))
+    labelKind === "default" &&
+    node.prevSibling?.type.isError === true &&
+    nodeText(input, node.prevSibling) === "->"
+  );
+}
+
+function hasSyntaxError(input: JavaExtractFileFactsInput, node: JavaSyntaxNode): boolean {
+  return (
+    (node.type.isError &&
+      !isLegacyGrammarDefaultModifierMarker(node) &&
+      !isLegacyGrammarSwitchRuleMarker(input, node)) ||
+    directChildren(node).some((child) => hasSyntaxError(input, child))
   );
 }
 
@@ -1618,6 +1644,19 @@ function staticJavaMemberCallReferences(input: {
     readonly branches: readonly ExhaustiveAssignmentChainBranchBinding[];
   }
 
+  interface ExhaustiveSwitchAssignmentArmBinding extends DirectAssignmentBinding {
+    readonly ordinal: number;
+    readonly arm: "case" | "default";
+    readonly name: string;
+    readonly labelRange: SourceRange;
+  }
+
+  interface ExhaustiveSwitchAssignmentJoinBinding {
+    readonly statementRange: SourceRange;
+    readonly selectorRange: SourceRange;
+    readonly arms: readonly ExhaustiveSwitchAssignmentArmBinding[];
+  }
+
   type ReceiverBinding = ReceiverBindingBase &
     (
       | { readonly kind: "parameter" | "enhanced-for" | "catch" | "lambda" }
@@ -1626,6 +1665,7 @@ function staticJavaMemberCallReferences(input: {
           readonly directAssignment?: DirectAssignmentBinding;
           readonly assignmentJoin?: ExhaustiveAssignmentJoinBinding;
           readonly assignmentChain?: ExhaustiveAssignmentChainBinding;
+          readonly switchAssignmentJoin?: ExhaustiveSwitchAssignmentJoinBinding;
         }
       | {
           readonly kind: "try-resource";
@@ -2136,6 +2176,114 @@ function staticJavaMemberCallReferences(input: {
     });
   }
 
+  function exhaustiveSwitchAssignmentJoin(
+    statement: JavaSyntaxNode
+  ): ExhaustiveSwitchAssignmentJoinBinding | null {
+    const children = directChildren(statement);
+    const selector = children[1];
+    const block = children[2];
+    if (
+      children.length !== 3 ||
+      children[0]?.name !== "switch" ||
+      selector?.name !== "ParenthesizedExpression" ||
+      containsJavaNode(selector, "AssignmentExpression") ||
+      block?.name !== "SwitchBlock"
+    ) {
+      return null;
+    }
+    const rules = directChildren(block).filter((child) => child.name !== "{" && child.name !== "}");
+    if (
+      rules.length < 4 ||
+      rules.length % 2 !== 0 ||
+      rules.length / 2 > JAVA_EXHAUSTIVE_SWITCH_JOIN_MAXIMUM_ARMS
+    ) {
+      return null;
+    }
+    const arms: ExhaustiveSwitchAssignmentArmBinding[] = [];
+    for (let index = 0; index < rules.length; index += 2) {
+      const label = rules[index];
+      const body = rules[index + 1];
+      if (label?.name !== "SwitchLabel" || body?.name !== "ExpressionStatement") {
+        return null;
+      }
+      const labelChildren = directChildren(label);
+      const arm = labelChildren[0]?.name;
+      const labelText = nodeText(input.extraction, label);
+      const isCaseRule =
+        arm === "case" &&
+        labelChildren.length === 3 &&
+        /^case\s+[^,\s]+\s*->\s*$/u.test(labelText);
+      const isDefaultRule =
+        arm === "default" &&
+        labelChildren.filter((child) => nodeText(input.extraction, child) === "->").length === 1 &&
+        /^default\s*->\s*$/u.test(labelText);
+      if (!isCaseRule && !isDefaultRule) {
+        return null;
+      }
+      const assignment = directObjectCreationAssignment(body);
+      if (assignment === null) {
+        return null;
+      }
+      arms.push({
+        ordinal: arms.length,
+        arm: isDefaultRule ? "default" : "case",
+        name: assignment.name,
+        labelRange: rangeFor(lineStarts, label.from, label.to),
+        type: assignment.type,
+        assignmentRange: assignment.assignmentRange,
+        initializerRange: assignment.initializerRange
+      });
+    }
+    if (
+      arms.length < 2 ||
+      arms.length > JAVA_EXHAUSTIVE_SWITCH_JOIN_MAXIMUM_ARMS ||
+      arms.at(-1)?.arm !== "default" ||
+      arms.filter((arm) => arm.arm === "default").length !== 1 ||
+      new Set(arms.map((arm) => arm.name)).size !== 1
+    ) {
+      return null;
+    }
+    return {
+      statementRange: rangeFor(lineStarts, statement.from, statement.to),
+      selectorRange: rangeFor(lineStarts, selector.from, selector.to),
+      arms
+    };
+  }
+
+  function visitExhaustiveSwitchAssignment(statement: JavaSyntaxNode, scope: BindingScope): void {
+    // Calls in the selector and arms observe the pre-join state.
+    visit(statement);
+
+    const assignedNames = assignedIdentifierNames(statement);
+    for (const name of assignedNames) {
+      const prior = scope.get(name);
+      if (prior !== undefined && prior !== null && prior.kind === "local") {
+        scope.set(name, null);
+      }
+    }
+
+    const assignmentJoin = exhaustiveSwitchAssignmentJoin(statement);
+    const name = assignmentJoin?.arms[0]?.name;
+    const prior = name === undefined ? undefined : scope.get(name);
+    if (
+      assignmentJoin === null ||
+      name === undefined ||
+      prior === undefined ||
+      prior === null ||
+      prior.kind !== "unassigned-local"
+    ) {
+      return;
+    }
+    scope.set(name, {
+      kind: "local",
+      name: prior.name,
+      type: prior.type,
+      declarationRange: prior.declarationRange,
+      scopeRange: prior.scopeRange,
+      switchAssignmentJoin: assignmentJoin
+    });
+  }
+
   function scopedBinding(input_: {
     readonly declaration: JavaSyntaxNode;
     readonly typeNodes: readonly JavaSyntaxNode[];
@@ -2408,6 +2556,8 @@ function staticJavaMemberCallReferences(input: {
           visitDirectSameBlockAssignment(child, scope);
         } else if (child.name === "IfStatement") {
           visitExhaustiveIfElseAssignment(child, scope);
+        } else if (child.name === "SwitchStatement") {
+          visitExhaustiveSwitchAssignment(child, scope);
         } else {
           visit(child);
         }
@@ -2623,6 +2773,26 @@ function staticJavaMemberCallReferences(input: {
                           type: branch.type,
                           assignmentRange: branch.assignmentRange,
                           initializerRange: branch.initializerRange
+                        }))
+                      }
+                    }),
+                ...(binding.kind !== "local" || binding.switchAssignmentJoin === undefined
+                  ? {}
+                  : {
+                      receiverSwitchAssignmentJoin: {
+                        statementRange: binding.switchAssignmentJoin.statementRange,
+                        selectorRange: binding.switchAssignmentJoin.selectorRange,
+                        bounds: {
+                          maximumArms: JAVA_EXHAUSTIVE_SWITCH_JOIN_MAXIMUM_ARMS,
+                          observedArms: binding.switchAssignmentJoin.arms.length
+                        },
+                        arms: binding.switchAssignmentJoin.arms.map((arm) => ({
+                          ordinal: arm.ordinal,
+                          arm: arm.arm,
+                          labelRange: arm.labelRange,
+                          type: arm.type,
+                          assignmentRange: arm.assignmentRange,
+                          initializerRange: arm.initializerRange
                         }))
                       }
                     }),
@@ -4073,7 +4243,7 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
   }
 
   const canUseLegacyJavaRoot =
-    !hasSyntaxError(root) ||
+    !hasSyntaxError(input, root) ||
     (recordInspection.isSyntaxClean && recordInspection.recordRanges.length > 0);
   const packageName = canUseLegacyJavaRoot ? staticJavaPackage(input, root) : null;
   const overlapsRecord = (node: JavaSyntaxNode): boolean =>
@@ -4086,7 +4256,7 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
     const types = directChildren(root)
       .map((node) => staticJavaType(input, node))
       .filter((candidate): candidate is StaticJavaType => candidate !== null)
-      .filter((candidate) => !hasSyntaxError(candidate.node));
+      .filter((candidate) => !hasSyntaxError(input, candidate.node));
     const typesByName = new Map<string, SymbolNode[]>();
     const declaredClasses: Array<{ declaration: StaticJavaClass; symbol: SymbolNode }> = [];
     const declaredInterfaces: Array<{ declaration: StaticJavaInterface; symbol: SymbolNode }> = [];
