@@ -1582,11 +1582,16 @@ function staticJavaMemberCallReferences(input: {
     readonly initializerRange?: SourceRange;
   }
 
+  interface DirectAssignmentBinding {
+    readonly type: JavaCallTypeReferenceFact;
+    readonly assignmentRange: SourceRange;
+    readonly initializerRange: SourceRange;
+  }
+
   type ReceiverBinding = ReceiverBindingBase &
     (
-      | {
-          readonly kind: "parameter" | "local" | "enhanced-for" | "catch" | "lambda";
-        }
+      | { readonly kind: "parameter" | "enhanced-for" | "catch" | "lambda" }
+      | { readonly kind: "local"; readonly directAssignment?: DirectAssignmentBinding }
       | {
           readonly kind: "try-resource";
           readonly resourceOrdinal: number;
@@ -1595,7 +1600,16 @@ function staticJavaMemberCallReferences(input: {
         }
     );
 
-  type BindingScope = Map<string, ReceiverBinding | null>;
+  interface UnassignedLocalBinding {
+    readonly kind: "unassigned-local";
+    readonly name: string;
+    readonly type: JavaCallTypeReferenceFact;
+    readonly declarationRange: SourceRange;
+    readonly scopeRange: SourceRange;
+  }
+
+  type BindingEntry = ReceiverBinding | UnassignedLocalBinding | null;
+  type BindingScope = Map<string, BindingEntry>;
   const bodyRange = rangeFor(lineStarts, body.from, body.to);
   const parameterScope: BindingScope = new Map();
   const parameterLists = directChildren(input.callable.node).filter(
@@ -1637,7 +1651,8 @@ function staticJavaMemberCallReferences(input: {
     for (let index = scopes.length - 1; index >= 0; index -= 1) {
       const scope = scopes[index]!;
       if (scope.has(name)) {
-        return scope.get(name) ?? null;
+        const entry = scope.get(name) ?? null;
+        return entry === null || entry.kind === "unassigned-local" ? null : entry;
       }
     }
     return undefined;
@@ -1704,9 +1719,17 @@ function staticJavaMemberCallReferences(input: {
       if (definitions.length !== 1 || definition === undefined || name === null) {
         continue;
       }
-      const binding: ReceiverBinding | null =
+      const binding: BindingEntry =
         type === null
           ? null
+          : declaredType !== null && assignments.length === 0
+            ? {
+                kind: "unassigned-local",
+                name,
+                type,
+                declarationRange: rangeFor(lineStarts, definition.from, definition.to),
+                scopeRange
+              }
           : {
               kind: "local",
               name,
@@ -1719,6 +1742,96 @@ function staticJavaMemberCallReferences(input: {
             };
       scope.set(name, scope.has(name) ? null : binding);
     }
+  }
+
+  function visitDirectSameBlockAssignment(statement: JavaSyntaxNode, scope: BindingScope): void {
+    const assignments = directChildren(statement).filter(
+      (child) => child.name === "AssignmentExpression"
+    );
+    const assignment = assignments[0];
+    const children = assignment === undefined ? [] : directChildren(assignment);
+    const identifiers = children.filter((child) => child.name === "Identifier");
+    const assignOps = children.filter(
+      (child) => child.name === "AssignOp" && nodeText(input.extraction, child) === "="
+    );
+    const initializers = children.filter((child) => child.name === "ObjectCreationExpression");
+    const identifier = identifiers[0];
+    const initializer = initializers[0];
+
+    // Calls inside the assignment expression observe the pre-assignment state.
+    visit(statement);
+
+    const name = identifier === undefined ? null : identifierText(input.extraction, identifier);
+    const prior = name === null ? undefined : scope.get(name);
+    const isDirectIdentifierAssignment =
+      assignments.length === 1 &&
+      assignment !== undefined &&
+      children.length === 3 &&
+      identifiers.length === 1 &&
+      identifier !== undefined &&
+      children[0] === identifier &&
+      children.filter((child) => child.name === "AssignOp").length === 1;
+    if (
+      isDirectIdentifierAssignment &&
+      name !== null &&
+      prior !== undefined &&
+      prior !== null &&
+      prior.kind === "local"
+    ) {
+      // A later write invalidates the earlier assignment proof. Reassignment dataflow is
+      // intentionally unsupported until every intervening value can be proven.
+      scope.set(name, null);
+      return;
+    }
+
+    if (
+      assignments.length !== 1 ||
+      assignment === undefined ||
+      children.length !== 3 ||
+      identifiers.length !== 1 ||
+      identifier === undefined ||
+      assignOps.length !== 1 ||
+      initializers.length !== 1 ||
+      initializer === undefined
+    ) {
+      return;
+    }
+    if (name === null || prior === undefined || prior === null || prior.kind !== "unassigned-local") {
+      return;
+    }
+    const initializerChildren = directChildren(initializer);
+    const initializerTypeNodes = initializerChildren.filter(isJavaDirectTypeName);
+    const initializerType = initializerTypeNodes[0];
+    if (
+      initializerChildren.some(
+        (candidate) => candidate.name === "TypeArguments" || candidate.name === "ClassBody"
+      ) ||
+      initializerTypeNodes.length !== 1 ||
+      initializerType === undefined
+    ) {
+      return;
+    }
+    const assignmentType = staticJavaCallTypeReference(
+      input.extraction,
+      initializerType,
+      input.imports,
+      "object-creation"
+    );
+    if (assignmentType === null) {
+      return;
+    }
+    scope.set(name, {
+      kind: "local",
+      name,
+      type: prior.type,
+      declarationRange: prior.declarationRange,
+      scopeRange: prior.scopeRange,
+      directAssignment: {
+        type: assignmentType,
+        assignmentRange: rangeFor(lineStarts, assignment.from, assignment.to),
+        initializerRange: rangeFor(lineStarts, initializer.from, initializer.to)
+      }
+    });
   }
 
   function scopedBinding(input_: {
@@ -1989,6 +2102,8 @@ function staticJavaMemberCallReferences(input: {
       for (const child of directChildren(node)) {
         if (child.name === "LocalVariableDeclaration") {
           addLocalDeclaration(child, scope, scopeRange);
+        } else if (child.name === "ExpressionStatement") {
+          visitDirectSameBlockAssignment(child, scope);
         } else {
           visit(child);
         }
@@ -2147,6 +2262,14 @@ function staticJavaMemberCallReferences(input: {
                 ...(binding.initializerRange === undefined
                   ? {}
                   : { receiverInitializerRange: binding.initializerRange }),
+                ...(binding.kind !== "local" || binding.directAssignment === undefined
+                  ? {}
+                  : {
+                      receiverAssignmentType: binding.directAssignment.type,
+                      receiverAssignmentRange: binding.directAssignment.assignmentRange,
+                      receiverAssignmentInitializerRange:
+                        binding.directAssignment.initializerRange
+                    }),
                 methodName,
                 argumentCount: arguments_.length,
                 argumentTypes,

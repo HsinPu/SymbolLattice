@@ -13,13 +13,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v222";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v223";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v111";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v112";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -152,13 +152,33 @@ interface CallReceiverBindingEvidenceBase {
 /** Lexical or bounded project-selected field evidence proving one Java receiver type. */
 export type CallReceiverBindingEvidence =
   | (CallReceiverBindingEvidenceBase &
-      { readonly kind: "parameter" | "local" } &
       (
-        | { readonly policy: "java-source-lexical-binding-v1" }
         | {
+            readonly kind: "parameter" | "local";
+            readonly policy: "java-source-lexical-binding-v1";
+          }
+        | {
+            readonly kind: "local";
             readonly policy: "java-source-lexical-binding-v2";
             readonly typeSource: "object-creation-initializer";
             readonly initializerRange: SourceRange;
+          }
+        | {
+            readonly kind: "local";
+            readonly policy: "java-source-lexical-binding-v6";
+            readonly typeSource: "declared-type-after-direct-assignment";
+            readonly assignment: {
+              readonly policy: "java-source-direct-assignment-v1";
+              readonly range: SourceRange;
+              readonly initializerRange: SourceRange;
+              readonly valueType: CallTypeValueEvidence;
+              readonly compatibility: "identity" | "reference-widening";
+              readonly hierarchyPath: readonly CallTypeHierarchySegmentEvidence[];
+              readonly hierarchyBounds: {
+                readonly maximumDepth: number;
+                readonly maximumVisitedTypes: number;
+              };
+            };
           }
       ))
   | (CallReceiverBindingEvidenceBase & {
@@ -1277,13 +1297,24 @@ export type JavaMemberCallReferenceFact =
       readonly receiverKind: "this" | "super";
     })
   | (JavaMemberCallReferenceBaseFact & {
-      readonly receiverKind: "parameter" | "local";
+      readonly receiverKind: "parameter";
+      readonly receiverName: string;
+      readonly receiverType: JavaCallTypeReferenceFact;
+      readonly receiverBindingRange: SourceRange;
+      readonly receiverScopeRange: SourceRange;
+    })
+  | (JavaMemberCallReferenceBaseFact & {
+      readonly receiverKind: "local";
       readonly receiverName: string;
       readonly receiverType: JavaCallTypeReferenceFact;
       readonly receiverBindingRange: SourceRange;
       readonly receiverScopeRange: SourceRange;
       /** Present only when Java `var` derives its type from one direct object creation. */
       readonly receiverInitializerRange?: SourceRange;
+      /** Present only after one direct same-block assignment activates an uninitialized local. */
+      readonly receiverAssignmentType?: JavaCallTypeReferenceFact;
+      readonly receiverAssignmentRange?: SourceRange;
+      readonly receiverAssignmentInitializerRange?: SourceRange;
     })
   | (JavaMemberCallReferenceBaseFact & {
       readonly receiverKind: "enhanced-for" | "catch" | "lambda";

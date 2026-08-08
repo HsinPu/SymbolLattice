@@ -3204,6 +3204,106 @@ describe("SymbolLatticeService", () => {
     ).toHaveLength(4);
   });
 
+  it("activates uninitialized Java locals only after a proven same-block assignment", async () => {
+    const projectPath = await createInlineProject({
+      "src/api/Service.java": [
+        "package api;",
+        "public class Service { public void execute(String value) {} }"
+      ].join("\n"),
+      "src/api/Derived.java": [
+        "package api;",
+        "public class Derived extends Service {}"
+      ].join("\n"),
+      "src/api/Other.java": [
+        "package api;",
+        "public class Other { public void execute(String value) {} }"
+      ].join("\n"),
+      "src/app/Runner.java": [
+        "package app;",
+        "import api.Derived;",
+        "import api.Other;",
+        "import api.Service;",
+        "public class Runner {",
+        "  public void run(boolean flag) {",
+        "    Service pending;",
+        "    pending.execute(\"before\");",
+        "    pending = new Service();",
+        "    pending.execute(\"after\");",
+        "    Service widened;",
+        "    widened = new Derived();",
+        "    widened.execute(\"widened\");",
+        "    Service mismatch;",
+        "    mismatch = new Other();",
+        "    mismatch.execute(\"mismatch\");",
+        "    Service conditional;",
+        "    if (flag) { conditional = new Service(); }",
+        "    conditional.execute(\"conditional\");",
+        "    Service reassigned;",
+        "    reassigned = new Service();",
+        "    reassigned.execute(\"before-reassignment\");",
+        "    reassigned = new Derived();",
+        "    reassigned.execute(\"after-reassignment\");",
+        "  }",
+        "}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+
+    const snapshot = graphStore.getSnapshot(projectPath);
+    const calls = snapshot.edges.filter(
+      (edge) => edge.kind === "calls" && edge.filePath === "src/app/Runner.java"
+    );
+    const callAt = (line: number) => calls.find((edge) => edge.range.start.line === line);
+    const symbolId = (qualifiedName: string) =>
+      snapshot.symbols.find((candidate) => candidate.qualifiedName === qualifiedName)?.id;
+    const serviceId = symbolId("src/api/Service.java#Service");
+    const derivedId = symbolId("src/api/Derived.java#Derived");
+
+    expect(callAt(8)).toBeUndefined();
+    expect(callAt(10)?.targetId).toBe(symbolId("src/api/Service.java#Service.execute"));
+    expect(callAt(10)?.evidence?.callDispatch).toEqual(
+      expect.objectContaining({
+        invocationKind: "local",
+        receiverTypeSymbolId: serviceId,
+        receiverBinding: expect.objectContaining({
+          policy: "java-source-lexical-binding-v6",
+          kind: "local",
+          name: "pending",
+          typeSource: "declared-type-after-direct-assignment",
+          assignment: expect.objectContaining({
+            policy: "java-source-direct-assignment-v1",
+            compatibility: "identity",
+            valueType: expect.objectContaining({ targetSymbolId: serviceId }),
+            hierarchyPath: []
+          })
+        })
+      })
+    );
+    expect(callAt(13)?.targetId).toBe(symbolId("src/api/Service.java#Service.execute"));
+    expect(callAt(13)?.evidence?.callDispatch).toEqual(
+      expect.objectContaining({
+        receiverBinding: expect.objectContaining({
+          policy: "java-source-lexical-binding-v6",
+          name: "widened",
+          assignment: expect.objectContaining({
+            compatibility: "reference-widening",
+            valueType: expect.objectContaining({ targetSymbolId: derivedId }),
+            hierarchyPath: [
+              expect.objectContaining({ sourceSymbolId: derivedId, targetSymbolId: serviceId })
+            ]
+          })
+        })
+      })
+    );
+    expect(callAt(16)).toBeUndefined();
+    expect(callAt(19)).toBeUndefined();
+    expect(callAt(22)?.targetId).toBe(symbolId("src/api/Service.java#Service.execute"));
+    expect(callAt(24)).toBeUndefined();
+  });
+
   it("resolves Java enhanced-for, catch, and explicit lambda bindings within their exact scopes", async () => {
     const projectPath = await createInlineProject({
       "src/api/Service.java": [

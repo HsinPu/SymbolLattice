@@ -7639,6 +7639,9 @@ function javaReferenceWideningPath(input: {
   readonly targetSymbolId: string;
   readonly heritageEdgesBySourceId: ReadonlyMap<string, readonly GraphEdge[]>;
 }): JavaReferenceWideningPath {
+  if (input.sourceSymbolId === input.targetSymbolId) {
+    return { state: "matched", edges: [] };
+  }
   const queue: Array<{ readonly symbolId: string; readonly edges: readonly GraphEdge[] }> = [
     { symbolId: input.sourceSymbolId, edges: [] }
   ];
@@ -9278,6 +9281,43 @@ function projectJavaCallReferences(input: {
             projectEvidence: input.jvmProjectModuleEvidence
           })
         : null;
+    const assignmentTypeReference =
+      reference.receiverKind === "local" ? reference.receiverAssignmentType : undefined;
+    const assignmentRange =
+      reference.receiverKind === "local" ? reference.receiverAssignmentRange : undefined;
+    const assignmentInitializerRange =
+      reference.receiverKind === "local"
+        ? reference.receiverAssignmentInitializerRange
+        : undefined;
+    const resolvedAssignmentType =
+      assignmentTypeReference === undefined
+        ? null
+        : resolveJavaCallType({
+            reference: assignmentTypeReference,
+            declaringType,
+            sourceFilePath: reference.filePath,
+            types,
+            membershipsByFile,
+            projectEvidence: input.jvmProjectModuleEvidence
+          });
+    const assignmentWidening =
+      resolvedAssignmentType?.evidence.targetSymbolId === undefined ||
+      resolvedBindingType?.evidence.targetSymbolId === undefined
+        ? null
+        : javaReferenceWideningPath({
+            sourceSymbolId: resolvedAssignmentType.evidence.targetSymbolId,
+            targetSymbolId: resolvedBindingType.evidence.targetSymbolId,
+            heritageEdgesBySourceId
+          });
+    if (
+      assignmentTypeReference !== undefined &&
+      (assignmentRange === undefined ||
+        assignmentInitializerRange === undefined ||
+        resolvedAssignmentType === null ||
+        assignmentWidening?.state !== "matched")
+    ) {
+      continue;
+    }
     const receiverTypeSymbolId =
       reference.receiverKind === "this"
         ? declaringType.symbol.id
@@ -9359,27 +9399,60 @@ function projectJavaCallReferences(input: {
           hierarchyBounds: JAVA_REFERENCE_HIERARCHY_LIMITS,
           access: fieldSelection.access
         };
-      } else if (reference.receiverKind === "parameter" || reference.receiverKind === "local") {
+      } else if (reference.receiverKind === "parameter") {
+        receiverBinding = {
+          policy: "java-source-lexical-binding-v1",
+          kind: "parameter",
+          name: reference.receiverName,
+          type: resolvedBindingType.evidence,
+          declarationRange: reference.receiverBindingRange,
+          scopeRange: reference.receiverScopeRange
+        };
+      } else if (reference.receiverKind === "local") {
         receiverBinding =
-          reference.receiverInitializerRange === undefined
+          assignmentTypeReference !== undefined &&
+          assignmentRange !== undefined &&
+          assignmentInitializerRange !== undefined &&
+          resolvedAssignmentType !== null &&
+          assignmentWidening?.state === "matched"
             ? {
-                policy: "java-source-lexical-binding-v1",
-                kind: reference.receiverKind,
+                policy: "java-source-lexical-binding-v6",
+                kind: "local",
                 name: reference.receiverName,
                 type: resolvedBindingType.evidence,
+                typeSource: "declared-type-after-direct-assignment",
                 declarationRange: reference.receiverBindingRange,
-                scopeRange: reference.receiverScopeRange
+                scopeRange: reference.receiverScopeRange,
+                assignment: {
+                  policy: "java-source-direct-assignment-v1",
+                  range: assignmentRange,
+                  initializerRange: assignmentInitializerRange,
+                  valueType: resolvedAssignmentType.evidence,
+                  compatibility:
+                    assignmentWidening.edges.length === 0 ? "identity" : "reference-widening",
+                  hierarchyPath: assignmentWidening.edges.map(javaHierarchySegmentEvidence),
+                  hierarchyBounds: JAVA_REFERENCE_HIERARCHY_LIMITS
+                }
               }
-            : {
-                policy: "java-source-lexical-binding-v2",
-                kind: reference.receiverKind,
-                name: reference.receiverName,
-                type: resolvedBindingType.evidence,
-                typeSource: "object-creation-initializer",
-                declarationRange: reference.receiverBindingRange,
-                initializerRange: reference.receiverInitializerRange,
-                scopeRange: reference.receiverScopeRange
-              };
+            : reference.receiverInitializerRange === undefined
+              ? {
+                  policy: "java-source-lexical-binding-v1",
+                  kind: "local",
+                  name: reference.receiverName,
+                  type: resolvedBindingType.evidence,
+                  declarationRange: reference.receiverBindingRange,
+                  scopeRange: reference.receiverScopeRange
+                }
+              : {
+                  policy: "java-source-lexical-binding-v2",
+                  kind: "local",
+                  name: reference.receiverName,
+                  type: resolvedBindingType.evidence,
+                  typeSource: "object-creation-initializer",
+                  declarationRange: reference.receiverBindingRange,
+                  initializerRange: reference.receiverInitializerRange,
+                  scopeRange: reference.receiverScopeRange
+                };
       } else if (
         reference.receiverKind === "enhanced-for" ||
         reference.receiverKind === "catch" ||
