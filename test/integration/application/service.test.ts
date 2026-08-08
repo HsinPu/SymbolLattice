@@ -3936,17 +3936,6 @@ describe("SymbolLatticeService", () => {
         "  }",
         "}"
       ].join("\n"),
-      "src/app/Grouped.java": [
-        "package app;",
-        "import api.Service;",
-        "public class Grouped {",
-        "  public void run(Object value) {",
-        "    if (value instanceof Service service && (service.check1() && service.check2())) {",
-        "      service.execute(\"grouped\");",
-        "    }",
-        "  }",
-        "}"
-      ].join("\n"),
       "src/app/PatternMiddle.java": [
         "package app;",
         "import api.Service;",
@@ -4021,10 +4010,166 @@ describe("SymbolLatticeService", () => {
     );
     expect(callAt("src/app/OverBound.java", 5, "check1")).toBeUndefined();
     expect(callAt("src/app/OverBound.java", 6, "execute")).toBeUndefined();
-    expect(callAt("src/app/Grouped.java", 5, "check1")).toBeUndefined();
-    expect(callAt("src/app/Grouped.java", 6, "execute")).toBeUndefined();
     expect(callAt("src/app/PatternMiddle.java", 5, "check1")).toBeUndefined();
     expect(callAt("src/app/PatternMiddle.java", 6, "execute")).toBeUndefined();
+  });
+
+  it("binds a Java instanceof pattern through bounded parenthesized && groups", async () => {
+    const serviceSource = [
+      "package api;",
+      "public class Service {",
+      ...Array.from({ length: 8 }, (_, index) =>
+        `  public boolean check${index + 1}() { return true; }`
+      ),
+      "  public void execute(String value) {}",
+      "}"
+    ].join("\n");
+    const projectPath = await createInlineProject({
+      "src/api/Service.java": serviceSource,
+      "src/app/RightGrouped.java": [
+        "package app;",
+        "import api.Service;",
+        "public class RightGrouped {",
+        "  public void run(Object value) {",
+        "    if (value instanceof Service service && (service.check1() && service.check2())) {",
+        "      service.execute(\"right-grouped\");",
+        "    } else {",
+        "      service.execute(\"false-branch\");",
+        "    }",
+        "    service.execute(\"outside\");",
+        "  }",
+        "}"
+      ].join("\n"),
+      "src/app/MixedGrouped.java": [
+        "package app;",
+        "import api.Service;",
+        "public class MixedGrouped {",
+        "  public void run(Object value) {",
+        "    if ((value instanceof Service service && service.check1()) && (service.check2() && service.check3())) {",
+        "      service.execute(\"mixed-grouped\");",
+        "    }",
+        "  }",
+        "}"
+      ].join("\n"),
+      "src/app/GroupedAtBound.java": [
+        "package app;",
+        "import api.Service;",
+        "public class GroupedAtBound {",
+        "  public void run(Object value) {",
+        "    if (value instanceof Service service && (service.check1() && service.check2() && service.check3() && service.check4() && service.check5() && service.check6() && service.check7())) {",
+        "      service.execute(\"at-bound\");",
+        "    }",
+        "  }",
+        "}"
+      ].join("\n"),
+      "src/app/GroupedOverBound.java": [
+        "package app;",
+        "import api.Service;",
+        "public class GroupedOverBound {",
+        "  public void run(Object value) {",
+        "    if (value instanceof Service service && (service.check1() && service.check2() && service.check3() && service.check4() && service.check5() && service.check6() && service.check7() && service.check8())) {",
+        "      service.execute(\"over-bound\");",
+        "    }",
+        "  }",
+        "}"
+      ].join("\n"),
+      "src/app/GroupedOr.java": [
+        "package app;",
+        "import api.Service;",
+        "public class GroupedOr {",
+        "  public void run(Object value) {",
+        "    if (value instanceof Service service && (service.check1() || service.check2())) {",
+        "      service.execute(\"or\");",
+        "    }",
+        "  }",
+        "}"
+      ].join("\n"),
+      "src/app/GroupedPatternMiddle.java": [
+        "package app;",
+        "import api.Service;",
+        "public class GroupedPatternMiddle {",
+        "  public void run(boolean flag, Object value) {",
+        "    if ((flag && value instanceof Service service) && service.check1()) {",
+        "      service.execute(\"middle\");",
+        "    }",
+        "  }",
+        "}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+
+    const snapshot = graphStore.getSnapshot(projectPath);
+    const calls = snapshot.edges.filter((edge) => edge.kind === "calls");
+    const callAt = (filePath: string, line: number, name: string) =>
+      calls.find(
+        (edge) =>
+          edge.filePath === filePath &&
+          edge.range.start.line === line &&
+          edge.referenceName === name
+      );
+    const symbolId = (qualifiedName: string) =>
+      snapshot.symbols.find((candidate) => candidate.qualifiedName === qualifiedName)?.id;
+    const serviceId = symbolId("src/api/Service.java#Service");
+    const groupedCall = callAt("src/app/RightGrouped.java", 5, "check2");
+    expect(groupedCall?.targetId).toBe(symbolId("src/api/Service.java#Service.check2"));
+    expect(groupedCall?.evidence?.callDispatch).toEqual(
+      expect.objectContaining({
+        invocationKind: "instanceof-grouped-and-pattern",
+        receiverTypeSymbolId: serviceId,
+        receiverBinding: expect.objectContaining({
+          policy: "java-source-lexical-binding-v13",
+          kind: "instanceof-grouped-and-pattern",
+          operandCount: 3,
+          maximumOperands: 8,
+          activeOperandOrdinal: 2,
+          logicalOperandGroupingPaths: [
+            ["left"],
+            ["right", "parenthesized", "left"],
+            ["right", "parenthesized", "right"]
+          ],
+          groupingRanges: [
+            expect.objectContaining({ start: expect.objectContaining({ line: 5 }) })
+          ],
+          activeOperandRange: expect.objectContaining({
+            start: expect.objectContaining({ line: 5 })
+          })
+        })
+      })
+    );
+    const executeCall = callAt("src/app/RightGrouped.java", 6, "execute");
+    expect(executeCall?.targetId).toBe(symbolId("src/api/Service.java#Service.execute"));
+    expect(executeCall?.evidence?.callDispatch?.receiverBinding).toEqual(
+      expect.objectContaining({
+        policy: "java-source-lexical-binding-v13",
+        activeOperandRange: null,
+        activeOperandOrdinal: null,
+        trueBlockRange: expect.objectContaining({ start: expect.objectContaining({ line: 5 }) }),
+        scopeRange: expect.objectContaining({ start: expect.objectContaining({ line: 5 }) })
+      })
+    );
+    expect(callAt("src/app/RightGrouped.java", 8, "execute")).toBeUndefined();
+    expect(callAt("src/app/RightGrouped.java", 10, "execute")).toBeUndefined();
+    expect(callAt("src/app/MixedGrouped.java", 5, "check3")?.targetId).toBe(
+      symbolId("src/api/Service.java#Service.check3")
+    );
+    expect(callAt("src/app/MixedGrouped.java", 6, "execute")?.targetId).toBe(
+      symbolId("src/api/Service.java#Service.execute")
+    );
+    expect(callAt("src/app/GroupedAtBound.java", 5, "check7")?.targetId).toBe(
+      symbolId("src/api/Service.java#Service.check7")
+    );
+    expect(callAt("src/app/GroupedAtBound.java", 6, "execute")?.targetId).toBe(
+      symbolId("src/api/Service.java#Service.execute")
+    );
+    expect(callAt("src/app/GroupedOverBound.java", 5, "check1")).toBeUndefined();
+    expect(callAt("src/app/GroupedOverBound.java", 6, "execute")).toBeUndefined();
+    expect(callAt("src/app/GroupedOr.java", 5, "check1")).toBeUndefined();
+    expect(callAt("src/app/GroupedOr.java", 6, "execute")).toBeUndefined();
+    expect(callAt("src/app/GroupedPatternMiddle.java", 5, "check1")).toBeUndefined();
+    expect(callAt("src/app/GroupedPatternMiddle.java", 6, "execute")).toBeUndefined();
   });
 
   it("resolves Java enhanced-for, catch, and explicit lambda bindings within their exact scopes", async () => {

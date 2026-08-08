@@ -13,13 +13,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v229";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v230";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v118";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v119";
 
 /** Hard cap for one source-proven Java exhaustive if/else-if/else assignment join. */
 export const JAVA_EXHAUSTIVE_ASSIGNMENT_JOIN_MAXIMUM_BRANCHES = 8;
@@ -150,6 +150,7 @@ interface CallReceiverBindingEvidenceBase {
     | "instanceof-pattern"
     | "instanceof-and-pattern"
     | "instanceof-and-chain-pattern"
+    | "instanceof-grouped-and-pattern"
     | "try-resource"
     | "field"
     | "this-field"
@@ -322,6 +323,25 @@ export type CallReceiverBindingEvidence =
       readonly operandCount: number;
       readonly maximumOperands: number;
     })
+  | (CallReceiverBindingEvidenceBase & {
+      readonly kind: "instanceof-grouped-and-pattern";
+      readonly policy: "java-source-lexical-binding-v13";
+      readonly typeSource: "instanceof-pattern";
+      readonly conditionRange: SourceRange;
+      readonly testedValueRange: SourceRange;
+      readonly logicalOperandRanges: readonly SourceRange[];
+      readonly logicalOperandGroupingPaths: readonly (readonly (
+        | "left"
+        | "right"
+        | "parenthesized"
+      )[])[];
+      readonly groupingRanges: readonly SourceRange[];
+      readonly activeOperandRange: SourceRange | null;
+      readonly activeOperandOrdinal: number | null;
+      readonly trueBlockRange: SourceRange;
+      readonly operandCount: number;
+      readonly maximumOperands: number;
+    })
   | (CallReceiverBindingEvidenceBase &
       (
         | {
@@ -443,6 +463,7 @@ export interface CallDispatchEvidence {
     | "instanceof-pattern"
     | "instanceof-and-pattern"
     | "instanceof-and-chain-pattern"
+    | "instanceof-grouped-and-pattern"
     | "try-resource"
     | "field"
     | "this-field"
@@ -1547,6 +1568,27 @@ export type JavaMemberCallReferenceFact =
       readonly receiverConditionRange: SourceRange;
       readonly receiverTestedValueRange: SourceRange;
       readonly receiverLogicalOperandRanges: readonly SourceRange[];
+      readonly receiverActiveOperandRange: SourceRange | null;
+      readonly receiverActiveOperandOrdinal: number | null;
+      readonly receiverTrueBlockRange: SourceRange;
+      readonly receiverOperandCount: number;
+      readonly receiverMaximumOperands: number;
+    })
+  | (JavaMemberCallReferenceBaseFact & {
+      readonly receiverKind: "instanceof-grouped-and-pattern";
+      readonly receiverName: string;
+      readonly receiverType: JavaCallTypeReferenceFact;
+      readonly receiverBindingRange: SourceRange;
+      readonly receiverScopeRange: SourceRange;
+      readonly receiverConditionRange: SourceRange;
+      readonly receiverTestedValueRange: SourceRange;
+      readonly receiverLogicalOperandRanges: readonly SourceRange[];
+      readonly receiverLogicalOperandGroupingPaths: readonly (readonly (
+        | "left"
+        | "right"
+        | "parenthesized"
+      )[])[];
+      readonly receiverGroupingRanges: readonly SourceRange[];
       readonly receiverActiveOperandRange: SourceRange | null;
       readonly receiverActiveOperandOrdinal: number | null;
       readonly receiverTrueBlockRange: SourceRange;

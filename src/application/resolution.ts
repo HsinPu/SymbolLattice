@@ -7894,6 +7894,7 @@ function javaMethodSetPlan(input: {
     | "instanceof-pattern"
     | "instanceof-and-pattern"
     | "instanceof-and-chain-pattern"
+    | "instanceof-grouped-and-pattern"
     | "try-resource"
     | "field"
     | "this-field"
@@ -9274,6 +9275,7 @@ function projectJavaCallReferences(input: {
             reference.receiverKind === "instanceof-pattern" ||
             reference.receiverKind === "instanceof-and-pattern" ||
             reference.receiverKind === "instanceof-and-chain-pattern" ||
+            reference.receiverKind === "instanceof-grouped-and-pattern" ||
             reference.receiverKind === "try-resource"
           ? reference.receiverType
           : null;
@@ -9795,6 +9797,26 @@ function projectJavaCallReferences(input: {
           conditionRange: reference.receiverConditionRange,
           testedValueRange: reference.receiverTestedValueRange,
           logicalOperandRanges: reference.receiverLogicalOperandRanges,
+          activeOperandRange: reference.receiverActiveOperandRange,
+          activeOperandOrdinal: reference.receiverActiveOperandOrdinal,
+          trueBlockRange: reference.receiverTrueBlockRange,
+          operandCount: reference.receiverOperandCount,
+          maximumOperands: reference.receiverMaximumOperands
+        };
+      } else if (reference.receiverKind === "instanceof-grouped-and-pattern") {
+        receiverBinding = {
+          policy: "java-source-lexical-binding-v13",
+          kind: "instanceof-grouped-and-pattern",
+          name: reference.receiverName,
+          type: resolvedBindingType.evidence,
+          typeSource: "instanceof-pattern",
+          declarationRange: reference.receiverBindingRange,
+          scopeRange: reference.receiverScopeRange,
+          conditionRange: reference.receiverConditionRange,
+          testedValueRange: reference.receiverTestedValueRange,
+          logicalOperandRanges: reference.receiverLogicalOperandRanges,
+          logicalOperandGroupingPaths: reference.receiverLogicalOperandGroupingPaths,
+          groupingRanges: reference.receiverGroupingRanges,
           activeOperandRange: reference.receiverActiveOperandRange,
           activeOperandOrdinal: reference.receiverActiveOperandOrdinal,
           trueBlockRange: reference.receiverTrueBlockRange,

@@ -100,6 +100,22 @@ type StaticJavaInstanceofAndPatternSyntax =
       }[];
       readonly operandCount: number;
       readonly maximumOperands: number;
+    })
+  | (StaticJavaInstanceofAndPatternSyntaxBase & {
+      readonly kind: "grouped-chain";
+      readonly logicalOperandRanges: readonly SourceRange[];
+      readonly logicalOperandGroupingPaths: readonly (readonly (
+        | "left"
+        | "right"
+        | "parenthesized"
+      )[])[];
+      readonly groupingRanges: readonly SourceRange[];
+      readonly activeOperandOffsets: readonly {
+        readonly start: number;
+        readonly end: number;
+      }[];
+      readonly operandCount: number;
+      readonly maximumOperands: number;
     });
 
 interface StaticJavaInstanceofAndPatternInspection {
@@ -340,28 +356,72 @@ function astGrepContainsLogicalOperator(node: SgNode): boolean {
   );
 }
 
-function leftAssociativeJavaAndOperands(node: SgNode): readonly SgNode[] | null {
+type StaticJavaLogicalGroupingStep = "left" | "right" | "parenthesized";
+
+interface StaticJavaNormalizedAndOperand {
+  readonly node: SgNode;
+  readonly groupingPath: readonly StaticJavaLogicalGroupingStep[];
+}
+
+interface StaticJavaNormalizedAndExpression {
+  readonly operands: readonly StaticJavaNormalizedAndOperand[];
+  readonly groupingNodes: readonly SgNode[];
+  readonly andOperatorCount: number;
+}
+
+function normalizeJavaAndExpression(
+  node: SgNode,
+  groupingPath: readonly StaticJavaLogicalGroupingStep[] = []
+): StaticJavaNormalizedAndExpression | null {
+  if (node.kind() === "parenthesized_expression") {
+    const children = astGrepChildren(node);
+    const expression = children[1];
+    if (
+      children.length !== 3 ||
+      children[0]?.kind() !== "(" ||
+      expression === undefined ||
+      children[2]?.kind() !== ")"
+    ) {
+      return null;
+    }
+    const nested = normalizeJavaAndExpression(expression, [...groupingPath, "parenthesized"]);
+    if (nested === null) {
+      return null;
+    }
+    return {
+      ...nested,
+      groupingNodes:
+        nested.andOperatorCount > 0 ? [node, ...nested.groupingNodes] : nested.groupingNodes
+    };
+  }
   if (node.kind() !== "binary_expression") {
-    return null;
+    return astGrepContainsLogicalOperator(node)
+      ? null
+      : { operands: [{ node, groupingPath }], groupingNodes: [], andOperatorCount: 0 };
   }
   const children = astGrepChildren(node);
   const left = children[0];
   const operator = children[1];
   const right = children[2];
-  if (
-    children.length !== 3 ||
-    left === undefined ||
-    operator?.kind() !== "&&" ||
-    right === undefined ||
-    astGrepContainsLogicalOperator(right)
-  ) {
+  if (children.length !== 3 || left === undefined || right === undefined) {
     return null;
   }
-  if (left.kind() !== "binary_expression") {
-    return astGrepContainsLogicalOperator(left) ? null : [left, right];
+  if (operator?.kind() !== "&&") {
+    return astGrepContainsLogicalOperator(node)
+      ? null
+      : { operands: [{ node, groupingPath }], groupingNodes: [], andOperatorCount: 0 };
   }
-  const leftOperands = leftAssociativeJavaAndOperands(left);
-  return leftOperands === null ? null : [...leftOperands, right];
+  const normalizedLeft = normalizeJavaAndExpression(left, [...groupingPath, "left"]);
+  const normalizedRight = normalizeJavaAndExpression(right, [...groupingPath, "right"]);
+  if (normalizedLeft === null || normalizedRight === null) {
+    return null;
+  }
+  return {
+    operands: [...normalizedLeft.operands, ...normalizedRight.operands],
+    groupingNodes: [...normalizedLeft.groupingNodes, ...normalizedRight.groupingNodes],
+    andOperatorCount:
+      normalizedLeft.andOperatorCount + normalizedRight.andOperatorCount + 1
+  };
 }
 
 function inspectJavaInstanceofAndPatterns(
@@ -390,8 +450,10 @@ function inspectJavaInstanceofAndPatterns(
       ) {
         const conditionChildren = astGrepChildren(condition);
         const binary = conditionChildren[1];
-        const operands = binary === undefined ? null : leftAssociativeJavaAndOperands(binary);
-        const pattern = operands?.[0];
+        const normalized =
+          binary === undefined ? null : normalizeJavaAndExpression(binary);
+        const operands = normalized?.operands;
+        const pattern = operands?.[0]?.node;
         const patternChildren = pattern === undefined ? [] : astGrepChildren(pattern);
         const testedValue = patternChildren[0];
         const typeNode = patternChildren[2];
@@ -403,7 +465,9 @@ function inspectJavaInstanceofAndPatterns(
           conditionChildren[0]?.kind() === "(" &&
           conditionChildren[2]?.kind() === ")" &&
           binary?.kind() === "binary_expression" &&
-          operands !== null &&
+          normalized !== null &&
+          normalized.andOperatorCount >= 1 &&
+          operands !== undefined &&
           operands.length >= 2 &&
           operands.length <= JAVA_INSTANCEOF_AND_CHAIN_MAXIMUM_OPERANDS &&
           pattern?.kind() === "instanceof_expression" &&
@@ -424,19 +488,37 @@ function inspectJavaInstanceofAndPatterns(
           const testedValueOffsets = testedValue.range();
           const typeOffsets = typeNode.range();
           const definitionOffsets = definition.range();
-          const operandOffsets = operands.map((operand) => operand.range());
+          const operandOffsets = operands.map((operand) => operand.node.range());
           const logicalOperandRanges = operandOffsets.map((operand) =>
             rangeFor(lineStarts, operand.start.index, operand.end.index)
           );
           const rightOperandOffsets = operandOffsets[1]!;
           const rightOperandRange = logicalOperandRanges[1]!;
+          const logicalOperandGroupingPaths = operands.map((operand) => operand.groupingPath);
+          const groupingRanges = normalized.groupingNodes.map((grouping) => {
+            const offsets = grouping.range();
+            return rangeFor(lineStarts, offsets.start.index, offsets.end.index);
+          });
           const trueBlockOffsets = trueBlock.range();
           legacyRecoveryOffsets.push({
             start: statementOffsets.start.index,
             end: statementOffsets.end.index
           });
           syntaxes.push({
-            ...(operands.length === 2
+            ...(groupingRanges.length > 0
+              ? {
+                  kind: "grouped-chain" as const,
+                  logicalOperandRanges,
+                  logicalOperandGroupingPaths,
+                  groupingRanges,
+                  activeOperandOffsets: operandOffsets.slice(1).map((operand) => ({
+                    start: operand.start.index,
+                    end: operand.end.index
+                  })),
+                  operandCount: operands.length,
+                  maximumOperands: JAVA_INSTANCEOF_AND_CHAIN_MAXIMUM_OPERANDS
+                }
+              : operands.length === 2
               ? {
                   kind: "single" as const,
                   rightOperandRange,
@@ -1928,6 +2010,23 @@ function staticJavaMemberCallReferences(input: {
           readonly maximumOperands: number;
         }
       | {
+          readonly kind: "instanceof-grouped-and-pattern";
+          readonly conditionRange: SourceRange;
+          readonly testedValueRange: SourceRange;
+          readonly logicalOperandRanges: readonly SourceRange[];
+          readonly logicalOperandGroupingPaths: readonly (readonly (
+            | "left"
+            | "right"
+            | "parenthesized"
+          )[])[];
+          readonly groupingRanges: readonly SourceRange[];
+          readonly activeOperandRange: SourceRange | null;
+          readonly activeOperandOrdinal: number | null;
+          readonly trueBlockRange: SourceRange;
+          readonly operandCount: number;
+          readonly maximumOperands: number;
+        }
+      | {
           readonly kind: "local";
           readonly directAssignment?: DirectAssignmentBinding;
           readonly assignmentJoin?: ExhaustiveAssignmentJoinBinding;
@@ -2079,23 +2178,38 @@ function staticJavaMemberCallReferences(input: {
       conditionRange: pattern.conditionRange,
       testedValueRange: pattern.testedValueRange
     };
-    return pattern.kind === "single"
-      ? {
-          ...bindingBase,
-          kind: "instanceof-and-pattern",
-          rightOperandRange: pattern.rightOperandRange,
-          trueBlockRange: pattern.trueBlockRange
-        }
-      : {
-          ...bindingBase,
-          kind: "instanceof-and-chain-pattern",
-          logicalOperandRanges: pattern.logicalOperandRanges,
-          activeOperandRange: activePattern.activeOperandRange,
-          activeOperandOrdinal: activePattern.activeOperandOrdinal,
-          trueBlockRange: pattern.trueBlockRange,
-          operandCount: pattern.operandCount,
-          maximumOperands: pattern.maximumOperands
-        };
+    if (pattern.kind === "single") {
+      return {
+        ...bindingBase,
+        kind: "instanceof-and-pattern",
+        rightOperandRange: pattern.rightOperandRange,
+        trueBlockRange: pattern.trueBlockRange
+      };
+    }
+    if (pattern.kind === "chain") {
+      return {
+        ...bindingBase,
+        kind: "instanceof-and-chain-pattern",
+        logicalOperandRanges: pattern.logicalOperandRanges,
+        activeOperandRange: activePattern.activeOperandRange,
+        activeOperandOrdinal: activePattern.activeOperandOrdinal,
+        trueBlockRange: pattern.trueBlockRange,
+        operandCount: pattern.operandCount,
+        maximumOperands: pattern.maximumOperands
+      };
+    }
+    return {
+      ...bindingBase,
+      kind: "instanceof-grouped-and-pattern",
+      logicalOperandRanges: pattern.logicalOperandRanges,
+      logicalOperandGroupingPaths: pattern.logicalOperandGroupingPaths,
+      groupingRanges: pattern.groupingRanges,
+      activeOperandRange: activePattern.activeOperandRange,
+      activeOperandOrdinal: activePattern.activeOperandOrdinal,
+      trueBlockRange: pattern.trueBlockRange,
+      operandCount: pattern.operandCount,
+      maximumOperands: pattern.maximumOperands
+    };
   }
 
   function addLocalDeclaration(
@@ -3213,6 +3327,31 @@ function staticJavaMemberCallReferences(input: {
                 receiverConditionRange: binding.conditionRange,
                 receiverTestedValueRange: binding.testedValueRange,
                 receiverLogicalOperandRanges: binding.logicalOperandRanges,
+                receiverActiveOperandRange: binding.activeOperandRange,
+                receiverActiveOperandOrdinal: binding.activeOperandOrdinal,
+                receiverTrueBlockRange: binding.trueBlockRange,
+                receiverOperandCount: binding.operandCount,
+                receiverMaximumOperands: binding.maximumOperands,
+                methodName,
+                argumentCount: arguments_.length,
+                argumentTypes,
+                range: rangeFor(lineStarts, methodNode.from, methodNode.to)
+              });
+            } else if (binding.kind === "instanceof-grouped-and-pattern") {
+              references.push({
+                sourceId: input.callableSymbol.id,
+                declaringTypeId: input.declaringType.id,
+                filePath: input.extraction.filePath,
+                receiverKind: binding.kind,
+                receiverName,
+                receiverType: binding.type,
+                receiverBindingRange: binding.declarationRange,
+                receiverScopeRange: binding.scopeRange,
+                receiverConditionRange: binding.conditionRange,
+                receiverTestedValueRange: binding.testedValueRange,
+                receiverLogicalOperandRanges: binding.logicalOperandRanges,
+                receiverLogicalOperandGroupingPaths: binding.logicalOperandGroupingPaths,
+                receiverGroupingRanges: binding.groupingRanges,
                 receiverActiveOperandRange: binding.activeOperandRange,
                 receiverActiveOperandOrdinal: binding.activeOperandOrdinal,
                 receiverTrueBlockRange: binding.trueBlockRange,
