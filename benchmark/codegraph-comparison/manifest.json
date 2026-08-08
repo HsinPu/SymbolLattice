@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "benchmarkId": "symbol-lattice-codegraph-comparison-v1",
+  "projects": [
+    {
+      "id": "symbol-lattice",
+      "repository": "HsinPu/symbol-lattice",
+      "workspacePath": "symbol-lattice",
+      "mutationPath": "src/version.ts"
+    },
+    {
+      "id": "codegraph",
+      "repository": "colbymchenry/codegraph",
+      "workspacePath": "codegraph",
+      "mutationPath": "src/types.ts"
+    }
+  ],
+  "cases": [
+    {
+      "id": "symbol-lattice-canonical-observation-call",
+      "projectId": "symbol-lattice",
+      "language": "typescript",
+      "reference": "requireCanonicalObservation",
+      "expectedTargets": ["requireIdentity"]
+    },
+    {
+      "id": "symbol-lattice-git-status-parser-calls",
+      "projectId": "symbol-lattice",
+      "language": "typescript",
+      "reference": "parseGitNameStatusZ",
+      "expectedTargets": [
+        "changeKind",
+        "compareChangeRecords",
+        "malformed",
+        "normalizeGitProjectPath",
+        "nullDelimitedFields",
+        "scoreFromStatus"
+      ]
+    },
+    {
+      "id": "codegraph-source-file-detection-calls",
+      "projectId": "codegraph",
+      "language": "typescript",
+      "reference": "isSourceFile",
+      "expectedTargets": ["isErlangAppFile", "isPlayRoutesFile", "isShopifyLiquidJson"]
+    },
+    {
+      "id": "codegraph-grammar-loader-calls",
+      "projectId": "codegraph",
+      "language": "typescript",
+      "reference": "loadGrammarsForLanguages",
+      "expectedTargets": ["expandGrammarLanguages", "initGrammars", "resolveWasmPath"]
+    },
+    {
+      "id": "codegraph-supported-language-negative-control",
+      "projectId": "codegraph",
+      "language": "typescript",
+      "reference": "getSupportedLanguages",
+      "expectedTargets": []
+    }
+  ]
+}
