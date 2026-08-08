@@ -4203,7 +4203,17 @@ describe("SymbolLatticeService", () => {
       expect.objectContaining({ kind: "type-field", declaringTypeSymbolId: nearId })
     );
 
-    for (const line of [10, 11, 12, 13, 15]) {
+    expect(callAt(12)?.evidence?.callDispatch?.receiverBinding).toEqual(
+      expect.objectContaining({
+        policy: "java-source-field-binding-v5",
+        kind: "type-field",
+        declaringTypeKind: "class",
+        declaringTypeSymbolId: symbol("src/app/ClassFields.java#ClassFields")?.id,
+        qualifiedOwnerTypeKind: "class"
+      })
+    );
+
+    for (const line of [10, 11, 13, 15]) {
       expect(callAt(line)).toBeUndefined();
     }
     expect(
@@ -4240,6 +4250,168 @@ describe("SymbolLatticeService", () => {
         })
       ])
     );
+  });
+
+  it("resolves class-qualified Java static fields without crossing access or hiding boundaries", async () => {
+    const projectPath = await createInlineProject({
+      "src/api/Service.java": [
+        "package api;",
+        "public class Service { public void execute() {} }"
+      ].join("\n"),
+      "src/contracts/Named.java": [
+        "package contracts;",
+        "import api.Service;",
+        "public interface Named { Service interfaceValue = null; }"
+      ].join("\n"),
+      "src/contracts/Left.java": [
+        "package contracts;",
+        "import api.Service;",
+        "public interface Left { Service ambiguous = null; }"
+      ].join("\n"),
+      "src/contracts/Right.java": [
+        "package contracts;",
+        "import api.Service;",
+        "public interface Right { Service ambiguous = null; }"
+      ].join("\n"),
+      "src/base/BaseFields.java": [
+        "package base;",
+        "import api.Service;",
+        "public class BaseFields {",
+        "  public static Service inherited = null;",
+        "  protected static Service protectedValue = null;",
+        "  static Service packageValue = null;",
+        "  private static Service privateValue = null;",
+        "}"
+      ].join("\n"),
+      "src/app/DirectFields.java": [
+        "package app;",
+        "import api.Service;",
+        "public class DirectFields {",
+        "  public static Service direct = null;",
+        "  static Service packageValue = null;",
+        "  private static Service privateValue = null;",
+        "  public void self() { DirectFields.privateValue.execute(); }",
+        "}"
+      ].join("\n"),
+      "src/app/StaticChild.java": [
+        "package app;",
+        "import base.BaseFields;",
+        "import contracts.Named;",
+        "public class StaticChild extends BaseFields implements Named {}"
+      ].join("\n"),
+      "src/app/InstanceBarrier.java": [
+        "package app;",
+        "import api.Service;",
+        "public class InstanceBarrier extends StaticChild {",
+        "  public Service inherited = null;",
+        "}"
+      ].join("\n"),
+      "src/app/Ambiguous.java": [
+        "package app;",
+        "import contracts.Left;",
+        "import contracts.Right;",
+        "public class Ambiguous implements Left, Right {}"
+      ].join("\n"),
+      "src/app/Runner.java": [
+        "package app;",
+        "import base.BaseFields;",
+        "public class Runner {",
+        "  public void run() {",
+        "    DirectFields.direct.execute();",
+        "    DirectFields.packageValue.execute();",
+        "    BaseFields.inherited.execute();",
+        "    StaticChild.inherited.execute();",
+        "    StaticChild.interfaceValue.execute();",
+        "    app.DirectFields.direct.execute();",
+        "    StaticChild.protectedValue.execute();",
+        "    StaticChild.packageValue.execute();",
+        "    StaticChild.privateValue.execute();",
+        "    InstanceBarrier.inherited.execute();",
+        "    Ambiguous.ambiguous.execute();",
+        "  }",
+        "}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+
+    const snapshot = graphStore.getSnapshot(projectPath);
+    const symbol = (qualifiedName: string) =>
+      snapshot.symbols.find((candidate) => candidate.qualifiedName === qualifiedName);
+    const callAt = (filePath: string, line: number) =>
+      snapshot.edges.find(
+        (edge) =>
+          edge.kind === "calls" && edge.filePath === filePath && edge.range.start.line === line
+      );
+    const executeId = symbol("src/api/Service.java#Service.execute")?.id;
+    const directFieldsId = symbol("src/app/DirectFields.java#DirectFields")?.id;
+    const staticChildId = symbol("src/app/StaticChild.java#StaticChild")?.id;
+    const baseFieldsId = symbol("src/base/BaseFields.java#BaseFields")?.id;
+    const namedId = symbol("src/contracts/Named.java#Named")?.id;
+
+    expect(callAt("src/app/Runner.java", 5)).toEqual(
+      expect.objectContaining({
+        targetId: executeId,
+        evidence: expect.objectContaining({
+          callDispatch: expect.objectContaining({
+            invocationKind: "type-field",
+            receiverBinding: expect.objectContaining({
+              policy: "java-source-field-binding-v5",
+              declaringTypeSymbolId: directFieldsId,
+              declaringTypeKind: "class",
+              qualifiedOwnerTypeKind: "class",
+              selectionReason: "declared-owner",
+              ownerSelectionPath: [],
+              access: expect.objectContaining({ decision: "public" })
+            })
+          })
+        })
+      })
+    );
+    expect(callAt("src/app/Runner.java", 6)?.evidence?.callDispatch?.receiverBinding).toEqual(
+      expect.objectContaining({ access: expect.objectContaining({ decision: "same-package" }) })
+    );
+    expect(callAt("src/app/Runner.java", 7)?.evidence?.callDispatch?.receiverBinding).toEqual(
+      expect.objectContaining({
+        declaringTypeSymbolId: baseFieldsId,
+        qualifiedOwnerType: expect.objectContaining({ proof: "explicit-import" })
+      })
+    );
+    expect(callAt("src/app/Runner.java", 8)?.evidence?.callDispatch?.receiverBinding).toEqual(
+      expect.objectContaining({
+        declaringTypeSymbolId: baseFieldsId,
+        selectionReason: "nearest-inherited-owner",
+        ownerSelectionPath: [
+          expect.objectContaining({ sourceSymbolId: staticChildId, targetSymbolId: baseFieldsId })
+        ]
+      })
+    );
+    expect(callAt("src/app/Runner.java", 9)?.evidence?.callDispatch?.receiverBinding).toEqual(
+      expect.objectContaining({
+        declaringTypeSymbolId: namedId,
+        declaringTypeKind: "interface",
+        selectionReason: "unique-interface-owner",
+        ownerSelectionPath: [
+          expect.objectContaining({ sourceSymbolId: staticChildId, targetSymbolId: namedId })
+        ]
+      })
+    );
+    expect(callAt("src/app/Runner.java", 10)?.evidence?.callDispatch?.receiverBinding).toEqual(
+      expect.objectContaining({
+        qualifiedOwnerType: expect.objectContaining({ proof: "qualified-type" })
+      })
+    );
+    expect(
+      callAt("src/app/DirectFields.java", 7)?.evidence?.callDispatch?.receiverBinding
+    ).toEqual(
+      expect.objectContaining({ access: expect.objectContaining({ decision: "declaring-class" }) })
+    );
+
+    for (const line of [11, 12, 13, 14, 15]) {
+      expect(callAt("src/app/Runner.java", line)).toBeUndefined();
+    }
   });
 
   it("resolves Java chained overloads only from exact argument type evidence", async () => {

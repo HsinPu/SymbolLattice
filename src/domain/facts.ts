@@ -19,7 +19,7 @@ export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v219";
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v107";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v108";
 
 export const EDGE_EVIDENCE_STAGES = [
   "syntax",
@@ -213,6 +213,28 @@ export type CallReceiverBindingEvidence =
       };
       readonly access: CallFieldAccessEvidence;
       readonly qualifiedOwnerType: CallTypeValueEvidence;
+    })
+  | (CallReceiverBindingEvidenceBase & {
+      readonly kind: "type-field";
+      readonly policy: "java-source-field-binding-v5";
+      readonly declaringTypeSymbolId: string;
+      readonly declaringTypeKind: "class" | "interface";
+      readonly isStatic: true;
+      readonly isFinal: boolean;
+      readonly modifierProof: "declared" | "interface-implicit";
+      readonly visibility: "public" | "protected" | "package" | "private";
+      readonly selectionReason:
+        | "declared-owner"
+        | "nearest-inherited-owner"
+        | "unique-interface-owner";
+      readonly ownerSelectionPath: readonly CallTypeHierarchySegmentEvidence[];
+      readonly hierarchyBounds: {
+        readonly maximumDepth: number;
+        readonly maximumVisitedTypes: number;
+      };
+      readonly access: CallFieldAccessEvidence;
+      readonly qualifiedOwnerType: CallTypeValueEvidence;
+      readonly qualifiedOwnerTypeKind: "class";
     });
 
 /** Project-proven Java method-set and owner selection for a chained return-type dispatch. */

@@ -8770,10 +8770,11 @@ function javaFieldSelectionPlan(input: {
   }
   if (
     input.receiverKind === "type-field" &&
-    (input.lookupType === undefined || input.lookupType.symbol.kind !== "interface")
+    input.lookupType === undefined
   ) {
     return null;
   }
+  const lookupType = input.lookupType ?? input.callerType;
 
   type DeclaredFieldSelection =
     | { readonly state: "absent" }
@@ -8825,13 +8826,17 @@ function javaFieldSelectionPlan(input: {
     const callerPackageName = input.callerType.fact.packageName;
     const ownerPackageName = ownerType.fact.packageName;
     let decision: CallFieldAccessEvidence["decision"] | null = null;
-    if (ownerType.symbol.id === input.callerType.symbol.id) {
+    if (
+      ownerType.symbol.id === input.callerType.symbol.id &&
+      lookupType.symbol.id === ownerType.symbol.id &&
+      ownerSelectionPath.length === 0
+    ) {
       decision = "declaring-class";
     } else if (field.visibility === "public") {
       decision = "public";
-    } else if (callerPackageName === ownerPackageName) {
+    } else if (field.visibility !== "private" && callerPackageName === ownerPackageName) {
       const packagePathIsContinuous = [
-        input.callerType.symbol.id,
+        lookupType.symbol.id,
         ...ownerSelectionPath.map((edge) => edge.targetId!)
       ].every((symbolId) => {
         const entries = input.typesBySymbolId.get(symbolId) ?? [];
@@ -8840,7 +8845,11 @@ function javaFieldSelectionPlan(input: {
       if (field.visibility !== "package" || packagePathIsContinuous) {
         decision = "same-package";
       }
-    } else if (field.visibility === "protected" && ownerSelectionPath.length > 0) {
+    } else if (
+      input.receiverKind !== "type-field" &&
+      field.visibility === "protected" &&
+      ownerSelectionPath.length > 0
+    ) {
       decision = "protected-subclass";
     }
     if (decision === null) {
@@ -8871,7 +8880,7 @@ function javaFieldSelectionPlan(input: {
     readonly type: JvmResolvedType;
     readonly path: readonly GraphEdge[];
   }> = [];
-  let current = input.lookupType ?? input.callerType;
+  let current = lookupType;
   let classPath: readonly GraphEdge[] = [];
 
   if (input.receiverKind === "super-field") {
@@ -9213,7 +9222,9 @@ function projectJavaCallReferences(input: {
         ? []
         : (typesBySymbolId.get(resolvedOwnerType.evidence.targetSymbolId) ?? []);
     const explicitOwnerType =
-      ownerTypeEntries.length === 1 && ownerTypeEntries[0]?.symbol.kind === "interface"
+      ownerTypeEntries.length === 1 &&
+      (ownerTypeEntries[0]?.symbol.kind === "class" ||
+        ownerTypeEntries[0]?.symbol.kind === "interface")
         ? ownerTypeEntries[0]
         : undefined;
     if (reference.receiverKind === "type-field" && explicitOwnerType === undefined) {
@@ -9278,21 +9289,19 @@ function projectJavaCallReferences(input: {
         if (
           fieldSelection === null ||
           resolvedOwnerType === null ||
-          fieldSelection.ownerType.symbol.kind !== "interface" ||
+          explicitOwnerType === undefined ||
           !fieldSelection.field.isStatic
         ) {
           continue;
         }
-        receiverBinding = {
-          policy: "java-source-field-binding-v4",
-          kind: "type-field",
+        const bindingBase = {
+          kind: "type-field" as const,
           name: reference.receiverName,
           type: resolvedBindingType.evidence,
           declarationRange: fieldSelection.field.declarationRange,
           scopeRange: fieldSelection.field.scopeRange,
           declaringTypeSymbolId: fieldSelection.ownerType.symbol.id,
-          declaringTypeKind: "interface",
-          isStatic: true,
+          isStatic: true as const,
           isFinal: fieldSelection.field.isFinal,
           visibility: fieldSelection.field.visibility,
           modifierProof: fieldSelection.field.modifierProof,
@@ -9302,6 +9311,19 @@ function projectJavaCallReferences(input: {
           access: fieldSelection.access,
           qualifiedOwnerType: resolvedOwnerType.evidence
         };
+        receiverBinding =
+          explicitOwnerType.symbol.kind === "interface"
+            ? {
+                ...bindingBase,
+                policy: "java-source-field-binding-v4",
+                declaringTypeKind: "interface"
+              }
+            : {
+                ...bindingBase,
+                policy: "java-source-field-binding-v5",
+                declaringTypeKind: fieldSelection.ownerType.symbol.kind as "class" | "interface",
+                qualifiedOwnerTypeKind: "class"
+              };
       } else if (
         reference.receiverKind === "field" ||
         reference.receiverKind === "this-field" ||
