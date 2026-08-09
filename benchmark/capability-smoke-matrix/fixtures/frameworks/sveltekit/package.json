@@ -1,0 +1,6 @@
+{
+  "devDependencies": {
+    "@sveltejs/kit": "latest",
+    "svelte": "latest"
+  }
+}

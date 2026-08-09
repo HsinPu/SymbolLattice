@@ -2,9 +2,8 @@
 
 # SymbolLattice
 
-**Queryable, explainable, evidence-first local code intelligence**
+**Evidence-first, local-first code graphs and code context for AI agents**
 
-[![Version](https://img.shields.io/github/v/tag/HsinPu/symbol-lattice?label=version)](https://github.com/HsinPu/symbol-lattice/tags)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D22.13-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![License](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
@@ -14,7 +13,17 @@
 </div>
 
 > [!IMPORTANT]
-> v0.343.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher can update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.344.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+
+## What it is
+
+SymbolLattice scans a local repository, persists a code graph, and exposes CLI/MCP queries for:
+
+- Files, symbols, calls, imports, inheritance, routes, and entry points.
+- Callers, callees, impact, affected paths, context, and cross-file exploration.
+- Source ranges, resolution stages, confidence, and rule evidence for every relationship.
+
+Relationships that cannot be proven exactly remain unresolved or pending instead of becoming false exact edges.
 
 ## Quick start
 
@@ -26,127 +35,64 @@ cd symbol-lattice
 npm install
 npm run build
 
-# Create a project-local graph
+# Build a local graph
 node dist/cli/main.js init /path/to/project
 
-# Query explainable structural context
-node dist/cli/main.js investigate "user token" --project /path/to/project --json
+# Refresh it
+node dist/cli/main.js sync /path/to/project
 
-# Plan a cross-file exploration from file and symbol clues
-node dist/cli/main.js explore "Trace src/api/orders.ts createOrder to persistOrder" --project /path/to/project --json
+# Basic queries
+node dist/cli/main.js files --project /path/to/project --json
+node dist/cli/main.js find createOrder --project /path/to/project --json
+node dist/cli/main.js callees createOrder --project /path/to/project --json
+node dist/cli/main.js routes --project /path/to/project --json
 
-# Build multi-symbol context inside one shared source budget
-node dist/cli/main.js context "src/api.ts#route" "src/service.ts#load" --project /path/to/project --source-character-budget 12000 --json
-
-# Return separately verifiable signature and lexical-hit slices without synthetic source
-node dist/cli/main.js investigate "user token" --project /path/to/project --source-render-mode multi --json
-
-# Restrict immutable Git hunk attribution to one exact file or directory
-node dist/cli/main.js git-hunks /path/to/project --base origin/main --path-prefix src/domain --json
-
-# Scope Git changes and select affected tests with a custom pattern
-node dist/cli/main.js affected --working-tree --project /path/to/project --path-prefix src/domain --test-pattern "scenarios/**/*.scenario.ts" --json
-
-# Resolve one unique suffix and read numbered, generation-bound source
-node dist/cli/main.js file service.ts --project /path/to/project --offset 1600 --limit 120
+# Bounded cross-file context for an agent
+node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-Alternatively, download the version-pinned `.tgz`, SHA-256 checksum, and manifest from [GitHub Releases](https://github.com/HsinPu/symbol-lattice/releases), then install the `.tgz` with npm. Every tagged release verifies the full suite, a clean installation, and build provenance first.
+## v0.344.0 usability snapshot
 
-## What it does
+The repeatable smoke matrix checks committed cases against the exported language and framework registries instead of treating README claims as proof.
 
-- Java try-with-resources supports explicit reference types and `var = new DirectType(...)` receivers, exposing earlier resources to later initializers in declaration order; the current resource name creates a fail-closed shadow boundary in its own initializer. Bindings continue through the matching try body but never leak into catch, finally, or following statements. v5 receipts retain the resource ordinal, declaration, initializer, try body, scope, and canonical-type evidence.
-- An uninitialized, explicitly typed Java local becomes a member-call receiver after a proven direct `receiver = new DirectType(...)` assignment in the same lexical block. It can also join an exhaustive `if/else`, a bounded three-to-eight-branch `if/else-if/else`, or a bounded two-to-eight-arm arrow-rule `switch` with one terminal `default`. Every branch or arm must contain exactly one direct object-creation assignment to the same receiver, and every created type must be identical to the declared type or connected by an exact reference-widening hierarchy path. Missing terminal coverage, colon fallthrough, block rules, extra statements, selector or condition assignments, incompatible types, bounds overflow, and later writes fail closed. v6–v9 receipts retain declaration, scope, order, bounds, selector or condition, labels, assignment and initializer ranges, canonical types, compatibility decisions, and complete hierarchy paths.
+- Fourteen priority languages complete `init`, no-op `sync`, changed `sync`, file inventory, and symbol lookup: TypeScript, JavaScript, Python, Java, Go, Rust, C, C++, C#, PHP, Ruby, Kotlin, Swift, and Dart.
+- TypeScript and JavaScript expose a basic call relation in the current minimal cases. The remaining priority languages scan and query successfully but still need deeper call relationships.
+- Representative React Router, Next.js, Vue Router, SvelteKit, Astro, Spring Web, FastAPI, Django, and ASP.NET Core cases produce the expected route.
+- Nuxt Vue files scan and query successfully, but there is no dedicated Nuxt route capability yet.
 
-- TypeScript functions, class and interface methods, constructors, typed arrow/function expressions, and function-typed variables emit `accepts`/`returns` relations only when local, type-only import, or re-export proof exists. Enclosing and callable type parameters, built-in wrappers, qualified names, and unimported same-name types are never guessed into exact edges.
-- Java class/interface methods and constructors retain parameter and return-type source ranges, then emit exact `accepts`/`returns` only from an explicit import, fully qualified spelling, or one unique same-package top-level type. Type parameters, wildcard imports, unimported same-name types, nested types, and classpath guesses remain unresolved.
-- Java can follow a `Factory.create().execute()` static-factory chain through a proven top-level return type. Its factory method set supports class inheritance, hiding, and bounded owner precedence. Public methods, same-package package-private/protected methods, and cross-package protected static methods with a proven caller-to-owner subclass path may resolve. Interface static methods are never inherited; private access, invalid package inheritance, unknown types, boxing, and generics remain unresolved. `callType`, `callDispatch`, and access receipts expose invocation kind, signatures, owners, packages, bounds, and every hierarchy edge.
-- Explicit Java `this.method()` and `super.method()` calls, parameter/block-local/enhanced-for/catch/explicitly typed lambda/field receivers with direct reference types, positive `instanceof DirectType name` patterns, and `var receiver = new DirectType(...)` reuse the same overload, method-set, and access evidence. A direct pattern binding exists only inside its exact true block. With the pattern leftmost, a bounded `&&` expression of 2–8 total operands extends the binding through every later leaf operand and the true block, including left and right parenthesized groups that the AST can normalize completely. A single `&&` retains its v11 receipt and an ungrouped longer chain uses v12; grouped v13 receipts additionally record each leaf's left/right/parenthesized path and every grouping range. `||`, non-leftmost patterns, more than 8 operands, assignments, incomplete syntax, unbraced bodies, generic patterns, false branches, and following statements remain unresolved. Fields support bare names, `this.field`, `super.field`, and `TypeName.FIELD.method()` when an explicit import, same-package type, or fully qualified spelling proves the owner. Type-qualified lookup admits static fields only and follows the exact class/interface graph for superclass fields, interface constants, hiding, class precedence, and ambiguity. Public fields, same-package fields with a continuous inheritance path, and private-self access through the declaring class may resolve; cross-package protected qualifiers remain unresolved for now. Same-name locals or fields in the caller hierarchy, instance-field hiding, inaccessible or unknown types, cycles, competing owners, bounds, and static-context violations fail closed. `var` accepts only direct non-generic object creation. Except for proven same-block direct assignment and bounded exhaustive `if/else`, `if/else-if/else`, or arrow-rule `switch` joins, loops, general reassignments, nestmate private access, and classpath guesses remain unresolved. `super.method()` still requires one proven exact direct superclass and retains its complete path.
-- A negated Java pattern guard supports `if (!(value instanceof DirectType name))`. v14-v23 cover proven `return`/`throw`, negated `else`, unlabeled and named loop exits, traditional `switch break`, and `yield` in a switch-expression arrow-rule block. v24/v25 additionally allow one catch-free `try/finally` wrapper around an abrupt statement: the try body must contain exactly one supported abrupt statement, while the finally body is bounded to eight expression, local-declaration, or empty statements and may not contain `return`, `throw`, `break`, `continue`, or `yield`. Receipts retain the wrapper, try/finally bodies, every finally statement, bounds, target, and exact scope. Catches, try-with-resources, control transfer from finally, bounds overflow, conditional exits, unsafe nested guards, existing same-name bindings, generics, and out-of-scope uses fail closed.
-- `explore` supports exact symbols and bounded question mode. Safe explicit project-relative paths rank first. Strong lexical seeds can also recover production candidates with no textual match across at most two hops of exact `calls`, `instantiates`, `overrides`, `routes`, `handles`, `accepts`, `returns`, or inheritance relationships, bounded to eight files, sixteen symbols, and two symbols per file. General questions do not seed from unrequested test, icon, or localization candidates and do not expand through heuristic, unresolved, or low-weight relationships. Receipts expose the seed, every directed edge, corroborating seed-file count, resource bounds, rejection reasons, and truncation; receipts for admitted candidates are retained first. Ranking then combines exact one-hop graph mass, bounded graph diffusion across at most four hops, persisted generated worth (`0.3`), and test, icon, or localization worth (`0.5` each). Final selection remains bounded to four files, eight focuses, two focuses per file, sixteen connections, and exact paths within four hops.
-- After low-value filtering, a file-level relative score floor uses only each file's strongest candidate. The threshold is 20% of the top file score, clamped to 80–120. Thin results fail open to positive evidence and target three files; many symbols in one file cannot inflate its score. CLI and MCP receipts expose the threshold, aggregation, backfill, and up to sixteen excluded files.
-- `explore` primary excerpts, exact call sites, and bridge windows share one hard 24,000-character ceiling. Additional windows reuse raw focus and spine relevance, then apply the same persisted generated byte worth exactly once: generated bytes have `0.3` worth, and a window below 15% of the top effective weight (threshold capped at 10) remains visible as receipt-only; exact path spines are cliff-exempt. Multiple windows retain a 256-character floor and one receives at most 70% of the base allocation. An unselected exact bridge may still expand to its same-generation whole file through 15%/800-character grace, or 60% coverage plus a shared 15% buy pool. Receipts expose classifier rules, weights, cliff, and whole-file decisions.
-- `explore`, `context`, `node`, `investigate`, and `file` share session-, project-, and generation-bound source coverage. Back-references or new fragments are emitted only when UTF-16 offsets, content, and the SHA-256 offset map are verifiable and the 160-character savings/new-context floors plus four-fragment cap are satisfied; otherwise the full source is re-emitted. `sourceSessionMode: "full"` disables deduplication.
-- `context` places persisted source for up to eight references inside one 2,048–64,000-character envelope, allocates by input order, and returns per-reference allocation, truncation cause, emitted size, source identity, and offset map. CLI and MCP callers can set `sourceCharacterBudget`.
-- Every emitted, covered, or new fragment may carry `mcp-source-pointer-v1`: project-relative path, exact line/column range, raw-file offsets, at most five overlapping symbols, a readable `file:Lx-Ly (symbol)` label, and a SHA-256 receipt. CRLF, CR, Unicode separators, and partial fragments are rebased safely; insufficient display evidence omits only the pointer and never weakens source equality.
-- `investigate` allocates a shared 2,048–64,000-character budget to exact slices from one active generation. `adaptive` keeps one contiguous result; callers may request `prefix`, `focused`, `signature`, or `multi` for at most two independently verifiable signature and focus slices. Every segment has a stable ID, SHA-256, range, and explicit omission gap. No source is synthesized, and insufficient proof or budget produces a disclosed single-segment fallback.
-- `benchmark:comparison` evaluates SymbolLattice and a pinned CodeGraph checkout against the same ground truth and queries in isolated Git worktree copies. It reports multi-language callable TP/FP/FN, precision/recall/F1, cold indexing, median/p95/outliers from five no-change syncs, one-file sync, working-set memory, CLI latency, and four-way MCP latency. SymbolLattice additionally returns non-persisted phase and subphase timing with boundary RSS; version drift, ambiguity, truncation, and incomplete output fail the run.
-- SQLite generation writes reuse prepared statements, and status reads avoid loading the complete graph; neither changes transaction, active-generation, or evidence semantics.
-- `sync` uses one project walk to discover in-scope sources and project-wide configuration candidates, then validates complete UTF-8 SHA-256 identities for ordinary sources with at most eight concurrent streaming reads; Objective-C `.h` files retain their content-classification step. It does not retain every file's text or rebuild the TypeScript, workspace, Cargo, Go, Astro, Xcode, or JVM resolvers. A proven no-change run builds no full scan, loads no generation facts, and publishes no generation; candidate addition, deletion, content drift, or an explicit scope replacement still enters the complete incremental path.
-- Direct calls in TypeScript local-variable initializers belong to the enclosing callable. A direct `sort(callback)` comparator becomes an exact call only for an immutable receiver initialized by an array literal; other methods named `sort` remain uninferred.
-- Scans multiple languages and common frameworks into a project-local code graph.
-- Queries symbols, indexed files, calls, routes, entry points, impact, retained generations, and diffs.
-- Persists generated and production, test, icon, or localization source-role evidence during indexing; `files` exposes classifier versions and matching rules. Legacy generations are never silently reclassified from live paths, and a classifier-version change requires `sync` to rebuild the projection.
-- `files` queries only files persisted in the active generation, with path-segment-safe filtering, anchored globs, flat/tree/grouped projections, and safe cursor pagination. `src` never includes `src2`, and cursors bind to the generation and selection filters.
-- `file` defaults to a compact numbered human view with dependency, selection, generation, and freshness context; `--json` keeps the stable machine contract. Exact paths are preferred, unique suffixes are accepted, ambiguity is never guessed, and an offset past EOF fails clearly. YAML and properties files expose structure without content values.
-- Preserves the rule, stage, candidate targets, confidence, and resolution path behind every relation.
-- Extension-framework route plugins resolve exact same-file and cross-file fixed-prefix mounts. `explain-edge` returns each mount segment and the ESM import/re-export path; dynamic or ambiguous composition is never guessed into a route.
-- Projects can register versioned reference resolver plugins that only see relations left unresolved by built-in resolvers. The host bounds candidates, validates results, and preserves collisions, exceptions, or unsafe choices as explainable unresolved evidence.
-- Framework fact plugins can add validated symbols, routes, entry points, and pending references from framework syntax. Stable IDs, containment edges, output bounds, source ranges, and provenance remain host-owned.
-- Framework project plugins can inspect frozen project-wide facts after per-file extraction and add cross-file pending references or bounded route-prefix projections. The host creates route identities, moves relations, and retains plugin provenance plus each mount segment.
+The exported registry covers more languages and frameworks than this first batch. Entries do not imply equal depth until they pass the same matrix.
 
-## Plugin extensions
-
-```js
-// plugins/acme.mjs
-export const symbolLatticePlugin = {
-  schemaVersion: 1,
-  frameworkFactPlugins: [{
-    id: "acme/framework-facts",
-    version: "1.0.0",
-    languages: ["typescript"],
-    extract: () => ({ symbols: [], references: [] })
-  }]
-};
-```
+## MCP
 
 ```bash
-node dist/cli/main.js init /path/to/project --plugin ./plugins/acme.mjs
+node dist/cli/main.js serve --mcp --project /path/to/project
+
+# Disable background index updates completely
+node dist/cli/main.js serve --mcp --project /path/to/project --no-auto-sync
 ```
 
-One manifest may provide `frameworkFactPlugins`, `frameworkProjectPlugins`, and `referenceResolverPlugins`. Repeat `--plugin` as needed; the same arguments flow through watch, watch-start, watch-restart, MCP configuration, install, doctor, and uninstall. Plugins are trusted in-process JavaScript, not a sandbox. SymbolLattice never discovers or executes project modules implicitly. By default, only `.js`, `.mjs`, and `.cjs` files whose real paths stay inside the project are accepted; add `--allow-external-plugin` to trust an explicit external path.
+MCP queries do not directly run `init` or `sync`. Use the CLI's `init`, `sync`, `watch`, or an explicitly approved watcher flow when you need to control indexing.
 
 ## Common commands
 
 | Command | Purpose |
 | --- | --- |
-| `init <path>` | Create a graph. |
-| `sync <path>` | Explicitly synchronize or repair a graph. |
-| `watch <path>` | Watch and synchronize in the foreground. |
-| `watch-start [path]` | Preview or explicitly start one manageable background auto-sync host. |
-| `watch-restart <host-id> [path]` | Safely replace one foreground watch host in a single approved transaction. |
-| `watch-status [path]` | Read index freshness, durable events, and local host live/stale/unverifiable state. |
-| `watch-stop <host-id> [path]` | Preview or explicitly ask one registered host to stop itself safely. |
-| `files [path]` | Page persisted files by glob, projection, and generation-bound cursor. |
-| `file <path>` | Read a numbered human view; add `--json` for the stable contract. |
-| `git-hunks [path] --base <ref>` | Filter immutable Git hunk attribution with optional `--path-prefix`. |
-| `affected --working-tree` | Scope Git changes with `--path-prefix`, then optionally replace conventional test naming with `--test-pattern`. |
-| `explore <query>` | Retrieve ranked focuses, connections, and persisted source from an exact symbol or bounded question. |
-| `investigate <query>` | Expand textual evidence into structural context. |
-| `context <reference...>` | Build multi-symbol context and adjacent evidence paths within one source budget. |
-| `impact <symbol>` | Trace bounded impact through exact static relations. |
-| `explain-edge <edge-id>` | Inspect the complete evidence for one relation. |
-| `upgrade [version]` | Preview, verify, or explicitly apply a GitHub Release upgrade. |
-| `serve --mcp` | Start the MCP stdio host. |
-| `mcp-doctor <target>` | Read-only diagnosis of an Agent MCP configuration, CLI, and index. |
-| `mcp-install <target>` | Preview or, with `--apply --yes`, safely write an MCP configuration. |
-| `mcp-uninstall <target>` | Preview or, with `--apply --yes`, remove the matching MCP entry. |
+| `init` | Build a project graph. |
+| `sync` | Explicitly synchronize the index. |
+| `status` | Inspect generation and freshness. |
+| `files` / `file` | List or read persisted source. |
+| `find` / `node` | Find and inspect a symbol. |
+| `callers` / `callees` | Query static call relationships. |
+| `routes` / `entrypoints` | Inspect framework routes and entry points. |
+| `impact` / `affected` | Run bounded impact analysis. |
+| `context` / `explore` | Retrieve agent-ready code context. |
+| `explain-edge` | Inspect the complete evidence for one edge. |
 
-`watch-status` only uses a PID signal-0 probe to observe process existence; it does not start, stop, or synchronize a watcher. PID reuse cannot prove process identity, and journal state is only the latest evidence in the bounded window.
+Run `node dist/cli/main.js <command> --help` for all options.
 
-`watch-start` produces a read-only plan by default. Applying it requires `--apply --yes --approval <fingerprint>`; the approval binds the project, Node/CLI paths, launch arguments, and SHA-256 of executable JavaScript inputs. It starts the background `watch` without a shell and verifies host ID, PID, version, and registration before reporting success. A registration timeout never sends a signal to an unknown process.
+## Limits
 
-`watch-stop` only creates an approval bound to the project's real path and the complete host record by default. Applying it requires `--apply --yes --approval <fingerprint>`. It writes a short-lived local request that the target host validates before shutting itself down; it never sends TERM, KILL, or another signal to a PID.
-
-`watch-restart` binds the complete current foreground-host identity and the next launch command, plugins, and executable JavaScript SHA-256 values into one approval. Apply requests a cooperative stop first; a replacement starts only after the old host is proven absent, the launch plan is unchanged, and no competing host exists. Stop timeouts and partial failures return attributable receipts without signalling a PID directly.
-
-`upgrade` produces a read-only plan by default. `--verify` downloads and checks the `.tgz`, SHA-256 checksum, manifest, and GitHub Artifact Attestations API evidence without installing. `--apply --yes` supports only local or global npm layouts, installs the verified local bytes, and then proves the CLI version. Source checkouts and `npx` are never changed automatically; downgrades also require `--allow-downgrade`.
-
-```bash
-symbol-lattice upgrade --check
-symbol-lattice upgrade 0.267.0 --verify
-symbol-lattice upgrade 0.267.0 --apply --yes
-```
+SymbolLattice is a static code graph and code intelligence tool. It is not a complete compiler, type checker, runtime tracer, RDF ontology, or general reasoning engine. Dynamic dispatch, reflection, macros, code generation, dependency injection, and external package types may remain unresolved.
 
 ## Verification
 
@@ -154,9 +100,11 @@ symbol-lattice upgrade 0.267.0 --apply --yes
 npm run check
 npm test
 npm run build
+npm run benchmark:capabilities
+npm run verify:mcp-worker-generation
 npm run benchmark:mcp
 npm run benchmark:comparison
-npm run verify:mcp-worker-generation
+npm pack --dry-run
 ```
 
 ## License
