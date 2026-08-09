@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.354.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.355.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## What it is
 
@@ -51,13 +51,13 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.354.0 usability snapshot
+## v0.355.0 usability snapshot
 
 The repeatable smoke matrix checks committed cases against the exported language and framework registries instead of treating README claims as proof.
 
-- Thirty-seven priority languages complete `init`, no-op `sync`, changed `sync`, file inventory, and full-identity symbol lookup. Thirty-six pass B1 relation receipts; Ruby remains partial.
-- ArkTS uses a local-component `handles` edge, Objective-C a unique same-file superclass, and Solidity a private zero-argument call inside one contract.
-- COBOL supports a unique same-PROGRAM paragraph `PERFORM`. Blade resolves literal `@extends` only when the project proves the conventional `resources/views` root; custom view roots fail closed.
+- Forty-two priority languages complete `init`, no-op `sync`, changed `sync`, file inventory, and full-identity symbol lookup. Forty-one pass B1 relation receipts; Ruby remains partial.
+- Liquid and Twig validate project-local literal template references. XML validates a MyBatis statement referencing a same-file SQL fragment.
+- YAML and Properties validate a Spring Boot `@Value` consumer referencing one unique configuration key; dynamic templates and missing or ambiguous keys remain unresolved.
 - Every language relation receipt binds complete symbol identities and edge endpoints and requires `resolution: exact` with `confidence: 1`; heuristic or wrong-target records cannot pass B1.
 - Groovy, CFML, and Ruby remain conservative partials for general calls. Later batches will use provable routes, file references, or another non-dynamic relation instead.
 - Representative React Router, Next.js, Vue Router, SvelteKit, Astro, Spring Web, FastAPI, Django, and ASP.NET Core cases produce the expected route.

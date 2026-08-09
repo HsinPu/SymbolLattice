@@ -220,7 +220,7 @@ describe("capability smoke matrix contract", () => {
     });
 
     expect(plan.schemaVersion).toBe(2);
-    expect(plan.languageCases).toHaveLength(37);
+    expect(plan.languageCases).toHaveLength(42);
     expect(plan.frameworkCases).toHaveLength(10);
     expect(new Set(plan.registryCoverage.languages.selected)).toEqual(
       new Set([
@@ -261,6 +261,11 @@ describe("capability smoke matrix contract", () => {
         ,"solidity"
         ,"cobol"
         ,"blade"
+        ,"liquid"
+        ,"twig"
+        ,"xml"
+        ,"yaml"
+        ,"properties"
       ])
     );
     expect(plan.frameworkCases.filter((candidate) => candidate.capabilityId === null)).toEqual([
@@ -347,6 +352,50 @@ describe("capability smoke matrix contract", () => {
         })])
       })
     );
+    for (const id of ["liquid-basic", "twig-basic"]) {
+      expect(plan.languageCases.find((candidate) => candidate.id === id)?.assertions).toEqual(
+        expect.objectContaining({
+          symbols: expect.arrayContaining([
+            expect.objectContaining({ id: "page", kind: "file" })
+          ]),
+          relations: expect.arrayContaining([expect.objectContaining({
+            command: "callees",
+            source: "page",
+            kind: "calls"
+          })])
+        })
+      );
+    }
+    expect(plan.languageCases.find((candidate) => candidate.id === "xml-basic")?.assertions).toEqual(
+      expect.objectContaining({
+        symbols: expect.arrayContaining([
+          expect.objectContaining({ id: "entry", kind: "method" }),
+          expect.objectContaining({ id: "fragment", kind: "method" })
+        ]),
+        relations: expect.arrayContaining([expect.objectContaining({
+          command: "callees",
+          source: "entry",
+          target: "fragment",
+          kind: "calls"
+        })])
+      })
+    );
+    for (const id of ["yaml-basic", "properties-basic"]) {
+      expect(plan.languageCases.find((candidate) => candidate.id === id)?.assertions).toEqual(
+        expect.objectContaining({
+          symbols: expect.arrayContaining([
+            expect.objectContaining({ id: "consumer", kind: "class" }),
+            expect.objectContaining({ id: "key", kind: "variable" })
+          ]),
+          relations: expect.arrayContaining([expect.objectContaining({
+            command: "callees",
+            source: "consumer",
+            target: "key",
+            kind: "references"
+          })])
+        })
+      );
+    }
     expect(plan.languageCases.find((candidate) => candidate.id === "arkts-basic")?.assertions).toEqual(
       expect.objectContaining({
         relations: expect.arrayContaining([expect.objectContaining({
