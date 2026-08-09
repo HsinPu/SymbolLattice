@@ -65,6 +65,14 @@ const PLAY_ROUTE_LINE =
 const PLAY_ROUTER_MOUNT_LINE =
   /^->\s+(\/\S*)\s+((?:[A-Za-z_][A-Za-z0-9_]*\.)+[A-Za-z_][A-Za-z0-9_]*)\s*$/u;
 
+/**
+ * This deliberately accepts just one complete, import-free object shape. It
+ * proves ordinary member lookup without claiming support for Scala's broad
+ * overload, implicit, extension, inheritance, or local-binding semantics.
+ */
+const CANONICAL_SCALA_MEMBER_CALL =
+  /^\s*object\s+([A-Za-z_][A-Za-z0-9_]*)\s*\{\s*def\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(\s*\)\s*:\s*Int\s*=\s*([A-Za-z_][A-Za-z0-9_]*)\s*\(\s*\)\s*def\s+\3\s*\(\s*\)\s*:\s*Int\s*=\s*(?:0|[1-9][0-9]*)\s*\}\s*$/u;
+
 function directChildren(node: ScalaSyntaxNode): readonly ScalaSyntaxNode[] {
   return node.children();
 }
@@ -306,6 +314,7 @@ export function extractScalaFileFacts(input: ScalaExtractFileFactsInput): Artifa
     routerName: string;
     range: SourceRange;
   }> = [];
+  const methodsByOwnerId = new Map<string, SymbolNode[]>();
   const declarationOrdinals = new Map<string, number>();
   const fileName = input.filePath.split(/[\\/]/u).at(-1) ?? input.filePath;
   const fileNode: SymbolNode = {
@@ -388,7 +397,7 @@ export function extractScalaFileFacts(input: ScalaExtractFileFactsInput): Artifa
     return symbol;
   }
 
-  function addMethod(parent: SymbolNode, declaration: StaticScalaFunction): void {
+  function addMethod(parent: SymbolNode, declaration: StaticScalaFunction): SymbolNode {
     const qualifiedName = parent.qualifiedName + "." + declaration.name;
     const declarationOrdinal = nextOrdinal(qualifiedName, "method");
     const symbol: SymbolNode = {
@@ -408,6 +417,59 @@ export function extractScalaFileFacts(input: ScalaExtractFileFactsInput): Artifa
     };
     symbols.push(symbol);
     addContainment(parent, symbol, rangeForNode(declaration.node));
+    return symbol;
+  }
+
+  function addCanonicalMemberCall(): void {
+    const match = CANONICAL_SCALA_MEMBER_CALL.exec(input.sourceText);
+    const ownerName = match?.[1];
+    const callerName = match?.[2];
+    const calleeName = match?.[3];
+    if (
+      ownerName === undefined ||
+      callerName === undefined ||
+      calleeName === undefined ||
+      callerName === calleeName
+    ) {
+      return;
+    }
+    const owners = symbols.filter(
+      (symbol) => symbol.kind === "class" && symbol.name === ownerName
+    );
+    const owner = owners.length === 1 ? owners[0] : undefined;
+    const methods = owner === undefined ? undefined : methodsByOwnerId.get(owner.id);
+    const callers = methods?.filter((symbol) => symbol.name === callerName) ?? [];
+    const callees = methods?.filter((symbol) => symbol.name === calleeName) ?? [];
+    const caller = callers.length === 1 ? callers[0] : undefined;
+    const callee = callees.length === 1 ? callees[0] : undefined;
+    const callStart = input.sourceText.indexOf(calleeName + "()");
+    if (caller === undefined || callee === undefined || callStart < 0) {
+      return;
+    }
+    const range = rangeForSpan(lineStarts, callStart, callStart + calleeName.length + 2);
+    edges.push({
+      id: createEdgeId({
+        sourceId: caller.id,
+        targetId: callee.id,
+        kind: "calls",
+        line: range.start.line,
+        column: range.start.column,
+        referenceName: callee.name
+      }),
+      sourceId: caller.id,
+      targetId: callee.id,
+      kind: "calls",
+      filePath: input.filePath,
+      range,
+      resolution: "exact",
+      confidence: 1,
+      referenceName: callee.name,
+      evidence: {
+        ruleId: "syntax.scala.canonical-object.unique-zero-argument-member-call",
+        stage: "syntax",
+        candidateSymbolIds: [callee.id]
+      }
+    });
   }
 
   function addFunction(declaration: StaticScalaFunction): void {
@@ -517,17 +579,20 @@ export function extractScalaFileFacts(input: ScalaExtractFileFactsInput): Artifa
         .map((node) => staticScalaOwner(node))
         .filter((candidate): candidate is StaticScalaOwner => candidate !== null)) {
         const owner = addOwner(declaration, packageName);
+        const methods: SymbolNode[] = [];
         for (const method of directChildren(declaration.body)
           .map((node) => staticScalaFunction(node))
           .filter((candidate): candidate is StaticScalaFunction => candidate !== null)) {
-          addMethod(owner, method);
+          methods.push(addMethod(owner, method));
         }
+        methodsByOwnerId.set(owner.id, methods);
       }
       for (const declaration of topLevel
         .map((node) => staticScalaFunction(node))
         .filter((candidate): candidate is StaticScalaFunction => candidate !== null)) {
         addFunction(declaration);
       }
+      addCanonicalMemberCall();
     }
   }
 

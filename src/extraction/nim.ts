@@ -29,6 +29,13 @@ interface StaticNimFunction {
   readonly end: number;
 }
 
+interface StaticNimDirectCall {
+  readonly callerName: string;
+  readonly calleeName: string;
+  readonly start: number;
+  readonly end: number;
+}
+
 interface StaticJesterRoute {
   readonly method: RouteMethod;
   readonly path: string;
@@ -40,6 +47,7 @@ interface StaticJesterRoute {
 interface StaticNimFacts {
   readonly valid: boolean;
   readonly functions: readonly StaticNimFunction[];
+  readonly calls: readonly StaticNimDirectCall[];
   readonly routes: readonly StaticJesterRoute[];
 }
 
@@ -332,11 +340,37 @@ function directNimFunction(line: NimLine): StaticNimFunction | null {
   }
 
   const match =
-    /^proc\s+([A-Za-z_][A-Za-z0-9_]*)(?:\*)?\s*\(\s*\)\s*(?::\s*[A-Za-z_][A-Za-z0-9_.\[\]]*)?\s*=\s*$/u.exec(
+    /^proc\s+([A-Za-z_][A-Za-z0-9_]*)(?:\*)?\s*\(\s*\)\s*(?::\s*[A-Za-z_][A-Za-z0-9_.\[\]]*)?\s*=/u.exec(
       line.content
     );
   const name = match?.[1];
   return name === undefined ? null : { name, start: line.start, end: line.end };
+}
+
+function directNimZeroArgumentCall(line: NimLine): StaticNimDirectCall | null {
+  if (line.indent !== 0) {
+    return null;
+  }
+  const match =
+    /^proc\s+([A-Za-z_][A-Za-z0-9_]*)(?:\*)?\s*\(\s*\)\s*(?::\s*[A-Za-z_][A-Za-z0-9_.\[\]]*)?\s*=\s*([A-Za-z_][A-Za-z0-9_]*)\s*\(\s*\)\s*$/u.exec(
+      line.content
+    );
+  const callerName = match?.[1];
+  const calleeName = match?.[2];
+  if (callerName === undefined || calleeName === undefined || callerName === calleeName) {
+    return null;
+  }
+  const calleeStart = line.start + line.content.lastIndexOf(calleeName);
+  return { callerName, calleeName, start: calleeStart, end: calleeStart + calleeName.length };
+}
+
+function isNimB1Line(line: NimLine): boolean {
+  return (
+    line.indent === 0 &&
+    /^proc\s+[A-Za-z_][A-Za-z0-9_]*(?:\*)?\s*\(\s*\)\s*(?::\s*[A-Za-z_][A-Za-z0-9_.\[\]]*)?\s*=\s*(?:[A-Za-z_][A-Za-z0-9_]*\s*\(\s*\)|[0-9]+|true|false)\s*$/u.test(
+      line.content
+    )
+  );
 }
 
 function directTopLevelBindingName(line: NimLine): string | null {
@@ -448,13 +482,16 @@ function directJesterRoute(
 function staticNimFacts(sourceText: string): StaticNimFacts {
   const sanitized = sanitizeNim(sourceText);
   if (!sanitized.valid || sanitized.text.includes("\t")) {
-    return { valid: false, functions: [], routes: [] };
+    return { valid: false, functions: [], calls: [], routes: [] };
   }
 
   const lines = linesFor(sanitized.text);
   const functions = lines
     .map((line) => directNimFunction(line))
     .filter((functionFact): functionFact is StaticNimFunction => functionFact !== null);
+  const calls = lines
+    .map((line) => directNimZeroArgumentCall(line))
+    .filter((call): call is StaticNimDirectCall => call !== null);
   const jesterImportProof = lines
     .map((line) => directJesterImportProof(line))
     .reduce<JesterImportProof>(
@@ -499,6 +536,7 @@ function staticNimFacts(sourceText: string): StaticNimFacts {
   return {
     valid: true,
     functions,
+    calls: lines.every((line) => line.content.length === 0 || isNimB1Line(line)) ? calls : [],
     routes:
       jesterImportProof.exactCount === 1 &&
       !jesterImportProof.hasUnsupportedJesterForm &&
@@ -646,13 +684,50 @@ export function extractNimFileFacts(input: NimExtractFileFactsInput): ArtifactFa
 
   if (staticFacts.valid) {
     const functionsByName = new Map<string, SymbolNode[]>();
+    const functionStartsById = new Map<string, number>();
     for (const functionFact of [...staticFacts.functions].sort((left, right) => left.start - right.start)) {
       const symbol = addFunction(functionFact);
       functionsByName.set(functionFact.name, [...(functionsByName.get(functionFact.name) ?? []), symbol]);
+      functionStartsById.set(symbol.id, functionFact.start);
     }
     for (const routeFact of [...staticFacts.routes].sort((left, right) => left.start - right.start)) {
       const candidates = functionsByName.get(routeFact.handlerName) ?? [];
       addJesterRoute(routeFact, candidates.length === 1 ? candidates[0] ?? null : null);
+    }
+    for (const callFact of staticFacts.calls) {
+      const callers = functionsByName.get(callFact.callerName) ?? [];
+      const candidates = (functionsByName.get(callFact.calleeName) ?? []).filter(
+        (candidate) => (functionStartsById.get(candidate.id) ?? Number.POSITIVE_INFINITY) < callFact.start
+      );
+      const caller = callers.length === 1 ? callers[0] : undefined;
+      const callee = candidates.length === 1 ? candidates[0] : undefined;
+      if (caller === undefined || callee === undefined) {
+        continue;
+      }
+      const range = rangeFor(lineStarts, callFact.start, callFact.end);
+      edges.push({
+        id: createEdgeId({
+          sourceId: caller.id,
+          targetId: callee.id,
+          kind: "calls",
+          line: range.start.line,
+          column: range.start.column,
+          referenceName: callFact.calleeName
+        }),
+        sourceId: caller.id,
+        targetId: callee.id,
+        kind: "calls",
+        filePath: input.filePath,
+        range,
+        resolution: "exact",
+        confidence: 1,
+        referenceName: callFact.calleeName,
+        evidence: {
+          ruleId: "syntax.nim.same-file.unique-top-level-zero-argument-proc-call",
+          stage: "syntax",
+          candidateSymbolIds: [callee.id]
+        }
+      });
     }
   }
 

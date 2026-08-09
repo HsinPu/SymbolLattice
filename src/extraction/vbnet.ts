@@ -53,6 +53,14 @@ interface VbImport {
 
 const FILE_SCOPE_ID = "vbnet:file";
 
+/**
+ * A complete module with exactly two ordinary zero-argument Functions is the
+ * first sound call slice. The full-file shape excludes Imports, Partial,
+ * overloads, defaults, local shadowing, qualifiers, and cross-file members.
+ */
+const CANONICAL_VBNET_MODULE_CALL =
+  /^\s*module\s+([A-Za-z_][A-Za-z0-9_]*)\s*\r?\n\s*function\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(\s*\)\s+as\s+integer\s*\r?\n\s*return\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(\s*\)\s*\r?\n\s*end\s+function\s*\r?\n\s*function\s+\3\s*\(\s*\)\s+as\s+integer\s*\r?\n\s*return\s+(?:0|[1-9][0-9]*)\s*\r?\n\s*end\s+function\s*\r?\n\s*end\s+module\s*$/iu;
+
 function lineStartsFor(sourceText: string): readonly number[] {
   const starts = [0];
   for (let index = 0; index < sourceText.length; index += 1) {
@@ -101,6 +109,19 @@ function rangeForSpan(
   return {
     start: positionFor(lineStarts, start),
     end: positionFor(lineStarts, end)
+  };
+}
+
+/** Existing VB.NET declaration ranges retain their established offsets. */
+function callRangeForSpan(
+  lineStarts: readonly number[],
+  start: number,
+  end: number
+): SourceRange {
+  const range = rangeForSpan(lineStarts, start, end);
+  return {
+    start: { ...range.start, column: range.start.column + 1 },
+    end: { ...range.end, column: range.end.column + 1 }
   };
 }
 
@@ -493,6 +514,66 @@ export function extractVbnetFileFacts(input: VbnetExtractFileFactsInput): Artifa
         candidateSymbolIds: [symbol.id]
       }
     });
+  }
+  const canonicalCall = CANONICAL_VBNET_MODULE_CALL.exec(input.sourceText);
+  const moduleName = canonicalCall?.[1];
+  const callerName = canonicalCall?.[2];
+  const calleeName = canonicalCall?.[3];
+  if (
+    moduleName !== undefined &&
+    callerName !== undefined &&
+    calleeName !== undefined &&
+    callerName.toLocaleLowerCase() !== calleeName.toLocaleLowerCase()
+  ) {
+    const modules = symbols.filter(
+      (symbol) => symbol.kind === "module" && symbol.name.toLocaleLowerCase() === moduleName.toLocaleLowerCase()
+    );
+    const module = modules.length === 1 ? modules[0] : undefined;
+    const memberMethods =
+      module === undefined
+        ? []
+        : symbols.filter(
+            (symbol) => symbol.kind === "method" && symbol.qualifiedName.startsWith(module.qualifiedName + "::")
+          );
+    const callers = memberMethods.filter(
+      (symbol) => symbol.name.toLocaleLowerCase() === callerName.toLocaleLowerCase()
+    );
+    const callees = memberMethods.filter(
+      (symbol) => symbol.name.toLocaleLowerCase() === calleeName.toLocaleLowerCase()
+    );
+    const caller = callers.length === 1 ? callers[0] : undefined;
+    const callee = callees.length === 1 ? callees[0] : undefined;
+    const returnCall = /\breturn\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(\s*\)/iu.exec(input.sourceText);
+    const callStart =
+      returnCall?.index === undefined || returnCall[1] === undefined
+        ? -1
+        : returnCall.index + returnCall[0].lastIndexOf(returnCall[1]);
+    if (caller !== undefined && callee !== undefined && callStart >= 0) {
+      const range = callRangeForSpan(lineStarts, callStart, callStart + calleeName.length + 2);
+      edges.push({
+        id: createEdgeId({
+          sourceId: caller.id,
+          targetId: callee.id,
+          kind: "calls",
+          line: range.start.line,
+          column: range.start.column,
+          referenceName: callee.name
+        }),
+        sourceId: caller.id,
+        targetId: callee.id,
+        kind: "calls",
+        filePath: input.filePath,
+        range,
+        resolution: "exact",
+        confidence: 1,
+        referenceName: callee.name,
+        evidence: {
+          ruleId: "syntax.vbnet.canonical-module.unique-zero-argument-method-call",
+          stage: "syntax",
+          candidateSymbolIds: [callee.id]
+        }
+      });
+    }
   }
   for (const imported of parsed.imports) {
     const range = rangeForSpan(lineStarts, imported.start, imported.end);

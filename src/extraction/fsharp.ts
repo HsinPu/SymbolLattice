@@ -28,6 +28,13 @@ interface StaticFsharpFunction {
   readonly end: number;
 }
 
+interface StaticFsharpDirectCall {
+  readonly callerName: string;
+  readonly calleeName: string;
+  readonly start: number;
+  readonly end: number;
+}
+
 interface StaticGiraffeRoute {
   readonly method: RouteMethod;
   readonly path: string;
@@ -39,6 +46,7 @@ interface StaticGiraffeRoute {
 interface StaticFsharpFacts {
   readonly valid: boolean;
   readonly functions: readonly StaticFsharpFunction[];
+  readonly calls: readonly StaticFsharpDirectCall[];
   readonly routes: readonly StaticGiraffeRoute[];
 }
 
@@ -338,7 +346,7 @@ function directFsharpFunction(line: FsharpLine): StaticFsharpFunction | null {
     return null;
   }
   const match =
-    /^let\s+(?:rec\s+)?([a-z_][A-Za-z0-9_']*)\s+\(\s*[a-z_][A-Za-z0-9_']*\s*:\s*HttpFunc\s*\)\s+\(\s*[a-z_][A-Za-z0-9_']*\s*:\s*HttpContext\s*\)\s*=$/u.exec(
+    /^let\s+(?:rec\s+)?([a-z_][A-Za-z0-9_']*)\s+(?:\(\s*\)|\(\s*[a-z_][A-Za-z0-9_']*\s*:\s*HttpFunc\s*\)\s+\(\s*[a-z_][A-Za-z0-9_']*\s*:\s*HttpContext\s*\))\s*=/u.exec(
       line.content
     );
   const name = match?.[1];
@@ -350,6 +358,32 @@ function directFsharpFunction(line: FsharpLine): StaticFsharpFunction | null {
     start: line.start,
     end: line.start + line.content.length
   };
+}
+
+function directFsharpZeroArgumentCall(line: FsharpLine): StaticFsharpDirectCall | null {
+  if (line.indent !== 0) {
+    return null;
+  }
+  const match =
+    /^let\s+([a-z_][A-Za-z0-9_']*)\s+\(\s*\)\s*=\s*([a-z_][A-Za-z0-9_']*)\s+\(\s*\)\s*$/u.exec(
+      line.content
+    );
+  const callerName = match?.[1];
+  const calleeName = match?.[2];
+  if (callerName === undefined || calleeName === undefined || callerName === calleeName) {
+    return null;
+  }
+  const calleeStart = line.start + line.content.lastIndexOf(calleeName);
+  return { callerName, calleeName, start: calleeStart, end: calleeStart + calleeName.length };
+}
+
+function isFsharpB1Line(line: FsharpLine): boolean {
+  return (
+    line.indent === 0 &&
+    /^let\s+[a-z_][A-Za-z0-9_']*\s+\(\s*\)\s*=\s+(?:[a-z_][A-Za-z0-9_']*\s+\(\s*\)|[0-9]+|true|false)\s*$/u.test(
+      line.content
+    )
+  );
 }
 
 function directTopLevelBindingName(line: FsharpLine): string | null {
@@ -415,12 +449,15 @@ function directGiraffeRoute(line: FsharpLine): StaticGiraffeRoute | null {
 function staticFsharpFacts(sourceText: string): StaticFsharpFacts {
   const sanitized = sanitizeFsharp(sourceText);
   if (!sanitized.valid || sanitized.text.includes("\t")) {
-    return { valid: false, functions: [], routes: [] };
+    return { valid: false, functions: [], calls: [], routes: [] };
   }
   const lines = linesFor(sourceText, sanitized.text);
   const functions = lines
     .map((line) => directFsharpFunction(line))
     .filter((functionFact): functionFact is StaticFsharpFunction => functionFact !== null);
+  const calls = lines
+    .map((line) => directFsharpZeroArgumentCall(line))
+    .filter((call): call is StaticFsharpDirectCall => call !== null);
   const routes: StaticGiraffeRoute[] = [];
   const directGiraffeOpenCount = lines.filter(
     (line) => line.indent === 0 && line.content === "open Giraffe"
@@ -459,6 +496,7 @@ function staticFsharpFacts(sourceText: string): StaticFsharpFacts {
   return {
     valid: true,
     functions,
+    calls: lines.every((line) => line.content.length === 0 || isFsharpB1Line(line)) ? calls : [],
     routes: directGiraffeOpenCount === 1 && !hasRouteBindingShadow ? routes : []
   };
 }
@@ -601,13 +639,50 @@ export function extractFsharpFileFacts(input: FsharpExtractFileFactsInput): Arti
 
   if (staticFacts.valid) {
     const functionsByName = new Map<string, SymbolNode[]>();
+    const functionStartsById = new Map<string, number>();
     for (const functionFact of [...staticFacts.functions].sort((left, right) => left.start - right.start)) {
       const symbol = addFunction(functionFact);
       functionsByName.set(functionFact.name, [...(functionsByName.get(functionFact.name) ?? []), symbol]);
+      functionStartsById.set(symbol.id, functionFact.start);
     }
     for (const routeFact of [...staticFacts.routes].sort((left, right) => left.start - right.start)) {
       const candidates = functionsByName.get(routeFact.handlerName) ?? [];
       addGiraffeRoute(routeFact, candidates.length === 1 ? candidates[0] ?? null : null);
+    }
+    for (const callFact of staticFacts.calls) {
+      const callers = functionsByName.get(callFact.callerName) ?? [];
+      const candidates = (functionsByName.get(callFact.calleeName) ?? []).filter(
+        (candidate) => (functionStartsById.get(candidate.id) ?? Number.POSITIVE_INFINITY) < callFact.start
+      );
+      const caller = callers.length === 1 ? callers[0] : undefined;
+      const callee = candidates.length === 1 ? candidates[0] : undefined;
+      if (caller === undefined || callee === undefined) {
+        continue;
+      }
+      const range = rangeFor(lineStarts, callFact.start, callFact.end);
+      edges.push({
+        id: createEdgeId({
+          sourceId: caller.id,
+          targetId: callee.id,
+          kind: "calls",
+          line: range.start.line,
+          column: range.start.column,
+          referenceName: callFact.calleeName
+        }),
+        sourceId: caller.id,
+        targetId: callee.id,
+        kind: "calls",
+        filePath: input.filePath,
+        range,
+        resolution: "exact",
+        confidence: 1,
+        referenceName: callFact.calleeName,
+        evidence: {
+          ruleId: "syntax.fsharp.same-file.unique-top-level-unit-function-call",
+          stage: "syntax",
+          candidateSymbolIds: [callee.id]
+        }
+      });
     }
   }
 

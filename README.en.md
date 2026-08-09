@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.352.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.353.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## What it is
 
@@ -51,14 +51,14 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.352.0 usability snapshot
+## v0.353.0 usability snapshot
 
 The repeatable smoke matrix checks committed cases against the exported language and framework registries instead of treating README claims as proof.
 
-- Twenty-seven priority languages complete `init`, no-op `sync`, changed `sync`, file inventory, and full-identity symbol lookup. Twenty-six pass B1 relation receipts; Ruby remains partial.
-- Elixir, Erlang, Julia, and Haskell add bounded exact same-module or same-file calls. Anonymous functions, compile attributes, dynamic scopes, method redefinitions, and competing pattern equations fail closed.
-- Perl reaches B1 through an exact Dancer2 literal-route-to-local-coderef-handler relation. Routes are projected only when the entire file satisfies a strict structural allowlist.
-- Lua, R, and Clojure reach B1 through exact Lapis, Plumber, and Compojure literal routes. Luau and Pascal retain narrow, provable direct-call subsets.
+- Thirty-two priority languages complete `init`, no-op `sync`, changed `sync`, file inventory, and full-identity symbol lookup. Thirty-one pass B1 relation receipts; Ruby remains partial.
+- OCaml, F#, and Nim accept only declaration-before-use, unique, same-file unit or zero-argument calls. Opens/imports/modules/macros, forward standard-library bindings, and multiple candidates fail closed.
+- Scala and VB.NET accept only unique zero-argument calls inside canonical objects or modules. Overloads, defaults, implicits, extensions, partials, shadows, qualified forms, and cross-file shapes do not produce exact edges.
+- The bounded Elixir, Erlang, Perl, Julia, Haskell, and route-based B1 relations from earlier versions retain the same conservative evidence contract.
 - Language route receipts bind the complete handler identity and edge endpoints and require `resolution: exact` with `confidence: 1`; heuristic or same-path wrong-handler records cannot pass B1.
 - Groovy, CFML, and Ruby remain conservative partials for general calls. Later batches will use provable routes, file references, or another non-dynamic relation instead.
 - Representative React Router, Next.js, Vue Router, SvelteKit, Astro, Spring Web, FastAPI, Django, and ASP.NET Core cases produce the expected route.

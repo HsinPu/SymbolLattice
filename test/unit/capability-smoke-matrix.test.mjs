@@ -220,7 +220,7 @@ describe("capability smoke matrix contract", () => {
     });
 
     expect(plan.schemaVersion).toBe(2);
-    expect(plan.languageCases).toHaveLength(27);
+    expect(plan.languageCases).toHaveLength(32);
     expect(plan.frameworkCases).toHaveLength(10);
     expect(new Set(plan.registryCoverage.languages.selected)).toEqual(
       new Set([
@@ -251,6 +251,11 @@ describe("capability smoke matrix contract", () => {
         ,"perl"
         ,"julia"
         ,"haskell"
+        ,"ocaml"
+        ,"fsharp"
+        ,"nim"
+        ,"scala"
+        ,"vbnet"
       ])
     );
     expect(plan.frameworkCases.filter((candidate) => candidate.capabilityId === null)).toEqual([
@@ -276,6 +281,11 @@ describe("capability smoke matrix contract", () => {
       ,"erlang-basic"
       ,"julia-basic"
       ,"haskell-basic"
+      ,"ocaml-basic"
+      ,"fsharp-basic"
+      ,"nim-basic"
+      ,"scala-basic"
+      ,"vbnet-basic"
     ]) {
       expect(plan.languageCases.find((candidate) => candidate.id === id)?.assertions).toEqual(
         expect.objectContaining({

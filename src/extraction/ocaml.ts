@@ -30,6 +30,13 @@ interface StaticOcamlFunction {
   readonly end: number;
 }
 
+interface StaticOcamlDirectCall {
+  readonly callerName: string;
+  readonly calleeName: string;
+  readonly start: number;
+  readonly end: number;
+}
+
 interface StaticDreamRoute {
   readonly method: RouteMethod;
   readonly path: string;
@@ -41,6 +48,7 @@ interface StaticDreamRoute {
 interface StaticOcamlFacts {
   readonly valid: boolean;
   readonly functions: readonly StaticOcamlFunction[];
+  readonly calls: readonly StaticOcamlDirectCall[];
   readonly routes: readonly StaticDreamRoute[];
 }
 
@@ -271,7 +279,7 @@ function directOcamlFunction(line: OcamlLine): StaticOcamlFunction | null {
     return null;
   }
   const match =
-    /^let\s+(?:rec\s+)?([a-z_][A-Za-z0-9_']*)\s+(_|[a-z_][A-Za-z0-9_']*)\s*=(?!=)/u.exec(
+    /^let\s+(?:rec\s+)?([a-z_][A-Za-z0-9_']*)\s+(?:\(\s*\)|_|[a-z_][A-Za-z0-9_']*)\s*=(?!=)/u.exec(
       line.content
     );
   const name = match?.[1];
@@ -283,6 +291,32 @@ function directOcamlFunction(line: OcamlLine): StaticOcamlFunction | null {
     start: line.start,
     end: line.start + line.content.length
   };
+}
+
+function directOcamlZeroArgumentCall(line: OcamlLine): StaticOcamlDirectCall | null {
+  if (line.indent !== 0) {
+    return null;
+  }
+  const match =
+    /^let\s+([a-z_][A-Za-z0-9_']*)\s+\(\s*\)\s*=\s*([a-z_][A-Za-z0-9_']*)\s+\(\s*\)\s*$/u.exec(
+      line.content
+    );
+  const callerName = match?.[1];
+  const calleeName = match?.[2];
+  if (callerName === undefined || calleeName === undefined || callerName === calleeName) {
+    return null;
+  }
+  const calleeStart = line.start + line.content.lastIndexOf(calleeName);
+  return { callerName, calleeName, start: calleeStart, end: calleeStart + calleeName.length };
+}
+
+function isOcamlB1Line(line: OcamlLine): boolean {
+  return (
+    line.indent === 0 &&
+    /^let\s+[a-z_][A-Za-z0-9_']*\s+\(\s*\)\s*=\s+(?:[a-z_][A-Za-z0-9_']*\s+\(\s*\)|[0-9]+|true|false)\s*$/u.test(
+      line.content
+    )
+  );
 }
 
 function priorNonEmptyLine(lines: readonly OcamlLine[], index: number): OcamlLine | null {
@@ -351,12 +385,15 @@ function directDreamRoute(line: OcamlLine): StaticDreamRoute | null {
 function staticOcamlFacts(sourceText: string): StaticOcamlFacts {
   const sanitized = sanitizeOcaml(sourceText);
   if (!sanitized.valid) {
-    return { valid: false, functions: [], routes: [] };
+    return { valid: false, functions: [], calls: [], routes: [] };
   }
   const lines = linesFor(sourceText, sanitized.text);
   const functions = lines
     .map((line) => directOcamlFunction(line))
     .filter((functionFact): functionFact is StaticOcamlFunction => functionFact !== null);
+  const calls = lines
+    .map((line) => directOcamlZeroArgumentCall(line))
+    .filter((call): call is StaticOcamlDirectCall => call !== null);
   const routes: StaticDreamRoute[] = [];
 
   for (let index = 0; index < lines.length; index += 1) {
@@ -385,7 +422,12 @@ function staticOcamlFacts(sourceText: string): StaticOcamlFacts {
     }
   }
 
-  return { valid: true, functions, routes };
+  return {
+    valid: true,
+    functions,
+    calls: lines.every((line) => line.content.length === 0 || isOcamlB1Line(line)) ? calls : [],
+    routes
+  };
 }
 
 export function extractOcamlFileFacts(input: OcamlExtractFileFactsInput): ArtifactFacts {
@@ -526,13 +568,50 @@ export function extractOcamlFileFacts(input: OcamlExtractFileFactsInput): Artifa
 
   if (staticFacts.valid) {
     const functionsByName = new Map<string, SymbolNode[]>();
+    const functionStartsById = new Map<string, number>();
     for (const functionFact of [...staticFacts.functions].sort((left, right) => left.start - right.start)) {
       const symbol = addFunction(functionFact);
       functionsByName.set(functionFact.name, [...(functionsByName.get(functionFact.name) ?? []), symbol]);
+      functionStartsById.set(symbol.id, functionFact.start);
     }
     for (const routeFact of [...staticFacts.routes].sort((left, right) => left.start - right.start)) {
       const candidates = functionsByName.get(routeFact.handlerName) ?? [];
       addDreamRoute(routeFact, candidates.length === 1 ? candidates[0] ?? null : null);
+    }
+    for (const callFact of staticFacts.calls) {
+      const callers = functionsByName.get(callFact.callerName) ?? [];
+      const candidates = (functionsByName.get(callFact.calleeName) ?? []).filter(
+        (candidate) => (functionStartsById.get(candidate.id) ?? Number.POSITIVE_INFINITY) < callFact.start
+      );
+      const caller = callers.length === 1 ? callers[0] : undefined;
+      const callee = candidates.length === 1 ? candidates[0] : undefined;
+      if (caller === undefined || callee === undefined) {
+        continue;
+      }
+      const range = rangeFor(lineStarts, callFact.start, callFact.end);
+      edges.push({
+        id: createEdgeId({
+          sourceId: caller.id,
+          targetId: callee.id,
+          kind: "calls",
+          line: range.start.line,
+          column: range.start.column,
+          referenceName: callFact.calleeName
+        }),
+        sourceId: caller.id,
+        targetId: callee.id,
+        kind: "calls",
+        filePath: input.filePath,
+        range,
+        resolution: "exact",
+        confidence: 1,
+        referenceName: callFact.calleeName,
+        evidence: {
+          ruleId: "syntax.ocaml.same-file.unique-top-level-unit-function-call",
+          stage: "syntax",
+          candidateSymbolIds: [callee.id]
+        }
+      });
     }
   }
 
