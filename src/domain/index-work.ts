@@ -24,7 +24,7 @@ export const INDEX_WORK_REUSE_INVALIDATION_REASONS = [
 export type IndexWorkReuseInvalidationReason =
   (typeof INDEX_WORK_REUSE_INVALIDATION_REASONS)[number];
 
-export const INDEX_PERFORMANCE_POLICY = "index-performance-v2" as const;
+export const INDEX_PERFORMANCE_POLICY = "index-performance-v3" as const;
 
 export const INDEX_PERFORMANCE_PHASE_NAMES = [
   "load-prior-inputs",
@@ -42,6 +42,32 @@ export const INDEX_PERFORMANCE_PHASE_NAMES = [
 
 export type IndexPerformancePhaseName = (typeof INDEX_PERFORMANCE_PHASE_NAMES)[number];
 
+export const INDEX_PERFORMANCE_SUBPHASE_NAMES = [
+  "store-initialize",
+  "status-projection-read",
+  "freshness-discovery",
+  "freshness-source-hash",
+  "freshness-configuration-snapshot"
+] as const;
+
+export type IndexPerformanceSubphaseName =
+  (typeof INDEX_PERFORMANCE_SUBPHASE_NAMES)[number];
+
+export interface ProcessResidentSetSizeEvidence {
+  readonly unit: "bytes";
+  readonly samplingPolicy: "phase-boundary-v1";
+  readonly startBytes: number;
+  readonly endBytes: number;
+  readonly observedPeakBytes: number;
+}
+
+export interface IndexPerformanceSubphase {
+  readonly name: IndexPerformanceSubphaseName;
+  /** Elapsed monotonic milliseconds spent in this non-overlapping child step. */
+  readonly durationMs: number;
+  readonly residentSetSize: ProcessResidentSetSizeEvidence;
+}
+
 export interface IndexPerformancePhase {
   readonly name: IndexPerformancePhaseName;
   /** Elapsed monotonic milliseconds spent in this phase. */
@@ -50,13 +76,9 @@ export interface IndexPerformancePhase {
    * Process RSS observed at the phase boundaries. This is diagnostic evidence,
    * not a claim that short-lived peaks between the two samples were captured.
    */
-  readonly residentSetSize: {
-    readonly unit: "bytes";
-    readonly samplingPolicy: "phase-boundary-v1";
-    readonly startBytes: number;
-    readonly endBytes: number;
-    readonly observedPeakBytes: number;
-  };
+  readonly residentSetSize: ProcessResidentSetSizeEvidence;
+  /** Diagnostic child steps; their durations are already included in this phase. */
+  readonly subphases?: readonly IndexPerformanceSubphase[];
 }
 
 /**

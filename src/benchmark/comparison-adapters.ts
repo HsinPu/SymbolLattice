@@ -1,13 +1,27 @@
 import {
   INDEX_PERFORMANCE_PHASE_NAMES,
   INDEX_PERFORMANCE_POLICY,
+  INDEX_PERFORMANCE_SUBPHASE_NAMES,
   type IndexOperationPerformance,
-  type IndexPerformancePhaseName
+  type IndexPerformancePhaseName,
+  type IndexPerformanceSubphaseName,
+  type ProcessResidentSetSizeEvidence
 } from "../domain/index-work.js";
 
 const ANSI_SEQUENCE = /\u001B\[[0-?]*[ -/]*[@-~]/gu;
 const CALLABLE_KINDS = new Set(["function", "method"]);
 const INDEX_PERFORMANCE_PHASES = new Set<string>(INDEX_PERFORMANCE_PHASE_NAMES);
+const INDEX_PERFORMANCE_SUBPHASES = new Set<string>(INDEX_PERFORMANCE_SUBPHASE_NAMES);
+const INDEX_PERFORMANCE_SUBPHASE_PARENTS: Readonly<Record<
+  IndexPerformanceSubphaseName,
+  IndexPerformancePhaseName
+>> = {
+  "store-initialize": "load-status",
+  "status-projection-read": "load-status",
+  "freshness-discovery": "freshness-preflight",
+  "freshness-source-hash": "freshness-preflight",
+  "freshness-configuration-snapshot": "freshness-preflight"
+};
 
 function record(value: unknown): Record<string, unknown> | null {
   return typeof value === "object" && value !== null && !Array.isArray(value)
@@ -22,6 +36,31 @@ function canonicalCalls(source: string, targets: Iterable<string>): readonly str
 
 function nonnegativeFinite(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value >= 0;
+}
+
+function parseResidentSetSizeEvidence(
+  value: unknown,
+  location: string
+): ProcessResidentSetSizeEvidence {
+  const residentSetSize = record(value);
+  if (
+    residentSetSize?.unit !== "bytes" ||
+    residentSetSize.samplingPolicy !== "phase-boundary-v1" ||
+    !nonnegativeFinite(residentSetSize.startBytes) ||
+    !nonnegativeFinite(residentSetSize.endBytes) ||
+    !nonnegativeFinite(residentSetSize.observedPeakBytes) ||
+    residentSetSize.observedPeakBytes < residentSetSize.startBytes ||
+    residentSetSize.observedPeakBytes < residentSetSize.endBytes
+  ) {
+    throw new Error(`SymbolLattice returned invalid resident-set-size evidence at ${location}.`);
+  }
+  return {
+    unit: "bytes",
+    samplingPolicy: "phase-boundary-v1",
+    startBytes: residentSetSize.startBytes,
+    endBytes: residentSetSize.endBytes,
+    observedPeakBytes: residentSetSize.observedPeakBytes
+  };
 }
 
 /** Fail-closed adapter for SymbolLattice's process-local index/sync timing receipt. */
@@ -60,29 +99,63 @@ export function parseSymbolLatticeIndexPerformance(
     if (seen.has(phase.name)) {
       throw new Error(`SymbolLattice returned a duplicate phase: ${phase.name}.`);
     }
-    const residentSetSize = record(phase.residentSetSize);
-    if (
-      residentSetSize?.unit !== "bytes" ||
-      residentSetSize.samplingPolicy !== "phase-boundary-v1" ||
-      !nonnegativeFinite(residentSetSize.startBytes) ||
-      !nonnegativeFinite(residentSetSize.endBytes) ||
-      !nonnegativeFinite(residentSetSize.observedPeakBytes) ||
-      residentSetSize.observedPeakBytes < residentSetSize.startBytes ||
-      residentSetSize.observedPeakBytes < residentSetSize.endBytes
-    ) {
-      throw new Error(`SymbolLattice returned invalid resident-set-size evidence at phase ${phase.name}.`);
-    }
+    const residentSetSize = parseResidentSetSizeEvidence(
+      phase.residentSetSize,
+      `phase ${phase.name}`
+    );
+    const subphases = phase.subphases === undefined
+      ? undefined
+      : (() => {
+          if (!Array.isArray(phase.subphases)) {
+            throw new Error(`SymbolLattice returned invalid subphases at phase ${phase.name}.`);
+          }
+          const seenSubphases = new Set<string>();
+          const parsedSubphases = phase.subphases.map((value, subphaseIndex) => {
+            const subphase = record(value);
+            if (
+              subphase === null ||
+              typeof subphase.name !== "string" ||
+              !INDEX_PERFORMANCE_SUBPHASES.has(subphase.name) ||
+              !nonnegativeFinite(subphase.durationMs)
+            ) {
+              throw new Error(
+                `SymbolLattice returned an invalid performance subphase at index ${subphaseIndex}.`
+              );
+            }
+            if (seenSubphases.has(subphase.name)) {
+              throw new Error(`SymbolLattice returned a duplicate subphase: ${subphase.name}.`);
+            }
+            const subphaseName = subphase.name as IndexPerformanceSubphaseName;
+            if (INDEX_PERFORMANCE_SUBPHASE_PARENTS[subphaseName] !== phase.name) {
+              throw new Error(
+                `SymbolLattice subphase ${subphase.name} is not valid under phase ${phase.name}.`
+              );
+            }
+            seenSubphases.add(subphase.name);
+            return {
+              name: subphaseName,
+              durationMs: subphase.durationMs,
+              residentSetSize: parseResidentSetSizeEvidence(
+                subphase.residentSetSize,
+                `subphase ${subphase.name}`
+              )
+            };
+          });
+          const subphaseDuration = parsedSubphases.reduce(
+            (total, subphase) => total + subphase.durationMs,
+            0
+          );
+          if (subphaseDuration > phase.durationMs + 0.005) {
+            throw new Error(`SymbolLattice subphase durations exceed phase ${phase.name}.`);
+          }
+          return parsedSubphases;
+        })();
     seen.add(phase.name);
     return {
       name: phase.name as IndexPerformancePhaseName,
       durationMs: phase.durationMs,
-      residentSetSize: {
-        unit: "bytes" as const,
-        samplingPolicy: "phase-boundary-v1" as const,
-        startBytes: residentSetSize.startBytes,
-        endBytes: residentSetSize.endBytes,
-        observedPeakBytes: residentSetSize.observedPeakBytes
-      }
+      residentSetSize,
+      ...(subphases === undefined ? {} : { subphases })
     };
   });
   if (

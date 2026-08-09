@@ -49,6 +49,8 @@ import {
   INDEX_PERFORMANCE_POLICY,
   type IndexOperationPerformance,
   type IndexPerformancePhaseName,
+  type IndexPerformanceSubphase,
+  type IndexPerformanceSubphaseName,
   type PersistedArtifactFacts,
   type ProjectIndexInputs,
   type RouteMethod,
@@ -1226,6 +1228,7 @@ interface MutableIndexPerformancePhase {
   readonly name: IndexPerformancePhaseName;
   readonly durationMs: number;
   readonly residentSetSize: IndexOperationPerformance["phases"][number]["residentSetSize"];
+  readonly subphases?: readonly IndexPerformanceSubphase[];
 }
 
 interface IndexPerformancePhaseToken {
@@ -1258,11 +1261,25 @@ class IndexPerformanceRecorder {
     };
   }
 
-  public end(name: IndexPerformancePhaseName, token: IndexPerformancePhaseToken): void {
+  public endSubphase(
+    name: IndexPerformanceSubphaseName,
+    token: IndexPerformancePhaseToken
+  ): IndexPerformanceSubphase {
+    return this.completeStep(name, token);
+  }
+
+  private completeStep<Name extends IndexPerformancePhaseName | IndexPerformanceSubphaseName>(
+    name: Name,
+    token: IndexPerformancePhaseToken
+  ): {
+    readonly name: Name;
+    readonly durationMs: number;
+    readonly residentSetSize: IndexOperationPerformance["phases"][number]["residentSetSize"];
+  } {
     const rssEndBytes = Math.max(0, this.readResidentSetSize());
-    this.phases.push({
+    return {
       name,
-      durationMs: Math.max(0, this.now() - token.startedAt),
+      durationMs: roundPerformanceMilliseconds(Math.max(0, this.now() - token.startedAt)),
       residentSetSize: {
         unit: "bytes",
         samplingPolicy: "phase-boundary-v1",
@@ -1270,6 +1287,19 @@ class IndexPerformanceRecorder {
         endBytes: rssEndBytes,
         observedPeakBytes: Math.max(token.rssStartBytes, rssEndBytes)
       }
+    };
+  }
+
+  public end(
+    name: IndexPerformancePhaseName,
+    token: IndexPerformancePhaseToken,
+    subphases?: readonly IndexPerformanceSubphase[]
+  ): void {
+    const completed = this.completeStep(name, token);
+    this.phases.push({
+      ...completed,
+      name,
+      ...(subphases === undefined ? {} : { subphases })
     });
   }
 
@@ -1278,7 +1308,8 @@ class IndexPerformanceRecorder {
     const phases = this.phases.map((phase) => ({
       name: phase.name,
       durationMs: roundPerformanceMilliseconds(phase.durationMs),
-      residentSetSize: phase.residentSetSize
+      residentSetSize: phase.residentSetSize,
+      ...(phase.subphases === undefined ? {} : { subphases: phase.subphases })
     }));
     const measuredDurationMs = roundPerformanceMilliseconds(
       phases.reduce((total, phase) => total + phase.durationMs, 0)
@@ -1411,13 +1442,22 @@ export class SymbolLatticeService {
     // additive migrations even when the source scan later proves this is a
     // graph no-op (including the short-lived v0.4 prerelease metadata marker).
     const loadStatusStartedAt = performance.start();
+    const storeInitializeStartedAt = performance.start();
     this.graphStore.initialize(projectPath);
+    const loadStatusSubphases: IndexPerformanceSubphase[] = [
+      performance.endSubphase("store-initialize", storeInitializeStartedAt)
+    ];
     const readStatusBundle = this.graphStore.getActiveStatusBundle;
     let bundle: ActiveGenerationBundle | null = null;
     let statusBundle: ActiveStatusBundle;
     if (typeof readStatusBundle === "function") {
+      const statusProjectionStartedAt = performance.start();
       statusBundle = readStatusBundle.call(this.graphStore, projectPath);
-      performance.end("load-status", loadStatusStartedAt);
+      loadStatusSubphases.push(performance.endSubphase(
+        "status-projection-read",
+        statusProjectionStartedAt
+      ));
+      performance.end("load-status", loadStatusStartedAt, loadStatusSubphases);
     } else {
       bundle = this.graphStore.getActiveGenerationBundle(projectPath);
       statusBundle = {
@@ -1458,7 +1498,13 @@ export class SymbolLatticeService {
         }
         throw error;
       }
-      performance.end("freshness-preflight", freshnessStartedAt);
+      performance.end(
+        "freshness-preflight",
+        freshnessStartedAt,
+        freshness.performance?.policy === "freshness-performance-v1"
+          ? freshness.performance.phases
+          : undefined
+      );
       if (freshness.outcome === "proven-unchanged") {
         const fastPathStartedAt = performance.start();
         performance.end("fast-path-check", fastPathStartedAt);

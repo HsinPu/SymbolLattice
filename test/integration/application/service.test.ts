@@ -11061,7 +11061,7 @@ describe("SymbolLatticeService", () => {
 
     const indexed = await service.init({ projectPath });
     expect(indexed.operationPerformance).toMatchObject({
-      policy: "index-performance-v2",
+      policy: "index-performance-v3",
       operation: "index",
       clock: "monotonic-milliseconds"
     });
@@ -11094,7 +11094,7 @@ describe("SymbolLatticeService", () => {
 
     const synced = await service.sync({ projectPath });
     expect(synced.operationPerformance).toMatchObject({
-      policy: "index-performance-v2",
+      policy: "index-performance-v3",
       operation: "sync",
       clock: "monotonic-milliseconds"
     });
@@ -11103,6 +11103,19 @@ describe("SymbolLatticeService", () => {
       "freshness-preflight",
       "fast-path-check",
       "status-read"
+    ]);
+    expect(synced.operationPerformance?.phases.find(
+      (phase) => phase.name === "load-status"
+    )?.subphases?.map((phase) => phase.name)).toEqual([
+      "store-initialize",
+      "status-projection-read"
+    ]);
+    expect(synced.operationPerformance?.phases.find(
+      (phase) => phase.name === "freshness-preflight"
+    )?.subphases?.map((phase) => phase.name)).toEqual([
+      "freshness-discovery",
+      "freshness-source-hash",
+      "freshness-configuration-snapshot"
     ]);
   });
 

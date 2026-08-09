@@ -20,6 +20,7 @@ import {
   parseSymbolLatticeIndexPerformance
 } from "../dist/benchmark/comparison-adapters.js";
 import { scoreComparisonCases } from "../dist/benchmark/comparison-metrics.js";
+import { summarizeOperationSamples } from "../dist/benchmark/operation-samples.js";
 import { summarizeReadQueryExecutions } from "../dist/benchmark/read-query-metrics.js";
 
 const SCRIPT_DIRECTORY = dirname(fileURLToPath(import.meta.url));
@@ -30,6 +31,7 @@ const PROCESS_TIMEOUT_MS = 180_000;
 const MCP_REQUEST_TIMEOUT_MS = 30_000;
 const MCP_REQUEST_COUNT = 8;
 const MCP_CONCURRENCY = 4;
+const NO_OP_SYNC_SAMPLE_COUNT = 5;
 
 function requireCondition(condition, message) {
   if (!condition) throw new Error(message);
@@ -444,10 +446,21 @@ async function runEngineProject(engine, project, cases, repositoryPath, scratchR
     env: engine.env
   });
 
-  const noOpSync = await runCommand(engine.command, engine.syncArgs(projectPath), {
-    cwd: projectPath,
-    env: engine.env
-  });
+  const noOpSyncSamples = [];
+  for (let sampleIndex = 0; sampleIndex < NO_OP_SYNC_SAMPLE_COUNT; sampleIndex += 1) {
+    const execution = await runCommand(engine.command, engine.syncArgs(projectPath), {
+      cwd: projectPath,
+      env: engine.env
+    });
+    noOpSyncSamples.push({
+      sampleIndex,
+      durationMs: execution.durationMs,
+      peakRssBytes: execution.peakRssBytes,
+      operationPerformance: engine.parseOperationPerformance === null
+        ? null
+        : engine.parseOperationPerformance(execution.stdout, "sync")
+    });
+  }
 
   const mutationPath = safeDestination(projectPath, project.mutationPath);
   await writeFile(mutationPath, `${await readFile(mutationPath, "utf8")}\n// symbol-lattice comparison benchmark mutation\n`, "utf8");
@@ -495,11 +508,10 @@ async function runEngineProject(engine, project, cases, repositoryPath, scratchR
         : engine.parseOperationPerformance(init.stdout, "index")
     },
     noOpSync: {
-      durationMs: noOpSync.durationMs,
-      peakRssBytes: noOpSync.peakRssBytes,
-      operationPerformance: engine.parseOperationPerformance === null
-        ? null
-        : engine.parseOperationPerformance(noOpSync.stdout, "sync")
+      policy: "repeated-sequential-no-op-v1",
+      sampleCount: NO_OP_SYNC_SAMPLE_COUNT,
+      samples: noOpSyncSamples,
+      summary: summarizeOperationSamples(noOpSyncSamples)
     },
     incrementalSync: {
       mutationPath: project.mutationPath,
@@ -550,7 +562,7 @@ async function main() {
     }
 
     const result = {
-      schemaVersion: 3,
+      schemaVersion: 4,
       benchmark: manifest.benchmarkId,
       generatedAt: new Date().toISOString(),
       manifest: {
@@ -571,7 +583,12 @@ async function main() {
         correctnessScope: "curated project-local function and method callees",
         cliQueries: "both engines use their JSON callees command; latency includes each command's complete response contract",
         memory: "sampled process working set; null when unsupported",
-        noOpSync: "measured immediately after index without source mutation, using each engine's normal sync command",
+        noOpSync: {
+          policy: "repeated-sequential-no-op-v1",
+          samples: NO_OP_SYNC_SAMPLE_COUNT,
+          ordering: "sequential samples immediately after index without source mutation",
+          summary: "raw samples plus nearest-rank median/p95 and median-absolute-deviation outlier indexes; unsupported working-set samples remain null"
+        },
         phaseTimings: "SymbolLattice index and sync expose validated process-local monotonic phase receipts; CodeGraph has no equivalent public receipt, so its value is null and only end-to-end totals are compared",
         mcp: {
           requests: MCP_REQUEST_COUNT,

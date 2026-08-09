@@ -38,6 +38,20 @@
       ]
     },
     {
+      "id": "symbol-lattice-java-static-call",
+      "projectId": "symbol-lattice",
+      "language": "java",
+      "reference": "comparisonJavaEntry",
+      "expectedTargets": ["comparisonJavaHelper"]
+    },
+    {
+      "id": "symbol-lattice-python-function-call",
+      "projectId": "symbol-lattice",
+      "language": "python",
+      "reference": "comparison_python_entry",
+      "expectedTargets": ["comparison_python_helper"]
+    },
+    {
       "id": "codegraph-source-file-detection-calls",
       "projectId": "codegraph",
       "language": "typescript",

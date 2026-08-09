@@ -43,7 +43,7 @@ describe("filesystem source catalog freshness", () => {
       ])
     );
     expect(verification).toEqual({
-      policy: "streaming-full-content-configuration-candidates-v3",
+      policy: "streaming-full-content-configuration-candidates-v4",
       outcome: "proven-unchanged",
       filesChecked: 1,
       sourceHash: "sha256",
@@ -53,9 +53,22 @@ describe("filesystem source catalog freshness", () => {
       sourceReadPolicy: "streaming-utf8-with-objective-c-header-classification-v1",
       configurationReadPolicy: "streaming-utf8-v1",
       discoveryPolicy: "single-project-walk-v1",
-      maximumConcurrentReads: 8
+      maximumConcurrentReads: 8,
+      performance: {
+        policy: "freshness-performance-v1",
+        phases: [
+          expect.objectContaining({ name: "freshness-discovery" }),
+          expect.objectContaining({ name: "freshness-source-hash" }),
+          expect.objectContaining({ name: "freshness-configuration-snapshot" })
+        ]
+      }
     });
     expect(verification.configurationCandidatesChecked).toBeGreaterThanOrEqual(2);
+    expect(verification.performance.phases.every((phase) =>
+      phase.durationMs >= 0 &&
+      phase.residentSetSize.unit === "bytes" &&
+      phase.residentSetSize.samplingPolicy === "phase-boundary-v1"
+    )).toBe(true);
   });
 
   it("fails closed to a full project-input check for an index without discovery identity", async () => {

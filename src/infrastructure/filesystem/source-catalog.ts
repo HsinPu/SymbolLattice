@@ -2,6 +2,11 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 import type {
+  IndexPerformanceSubphase,
+  IndexPerformanceSubphaseName
+} from "../../domain/index-work.js";
+
+import type {
   ProjectFreshnessVerification,
   ProjectFreshnessVerificationInput,
   ProjectScan,
@@ -70,6 +75,39 @@ function freshnessFilesMatch(
       expected.language === fingerprint.language &&
       expected.contentHash === fingerprint.contentHash;
   });
+}
+
+interface FreshnessPerformanceToken {
+  readonly startedAt: number;
+  readonly rssStartBytes: number;
+}
+
+function startFreshnessPerformance(): FreshnessPerformanceToken {
+  return {
+    startedAt: Number(process.hrtime.bigint()) / 1_000_000,
+    rssStartBytes: Math.max(0, process.memoryUsage().rss)
+  };
+}
+
+function endFreshnessPerformance(
+  name: IndexPerformanceSubphaseName,
+  token: FreshnessPerformanceToken
+): IndexPerformanceSubphase {
+  const rssEndBytes = Math.max(0, process.memoryUsage().rss);
+  return {
+    name,
+    durationMs: Math.round(Math.max(
+      0,
+      Number(process.hrtime.bigint()) / 1_000_000 - token.startedAt
+    ) * 1_000) / 1_000,
+    residentSetSize: {
+      unit: "bytes",
+      samplingPolicy: "phase-boundary-v1",
+      startBytes: token.rssStartBytes,
+      endBytes: rssEndBytes,
+      observedPeakBytes: Math.max(token.rssStartBytes, rssEndBytes)
+    }
+  };
 }
 
 export class FileSystemSourceCatalog implements SourceCatalog {
@@ -210,13 +248,18 @@ export class FileSystemSourceCatalog implements SourceCatalog {
     input: ProjectFreshnessVerificationInput
   ): Promise<ProjectFreshnessVerification> {
     const normalizedProjectPath = resolve(projectPath);
+    const performancePhases: IndexPerformanceSubphase[] = [];
+    const discoveryStartedAt = startFreshnessPerformance();
     const paths = await discoverFreshnessProjectPaths(normalizedProjectPath, {
       scopeRoots: input.indexInputs.scopeRoots,
       isConfigurationCandidateFileName
     });
+    performancePhases.push(endFreshnessPerformance("freshness-discovery", discoveryStartedAt));
+    const sourceHashStartedAt = startFreshnessPerformance();
     const fingerprints = await fingerprintSourcePaths(normalizedProjectPath, paths.sourcePaths);
+    performancePhases.push(endFreshnessPerformance("freshness-source-hash", sourceHashStartedAt));
     const receiptBase = {
-      policy: "streaming-full-content-configuration-candidates-v3" as const,
+      policy: "streaming-full-content-configuration-candidates-v4" as const,
       filesChecked: fingerprints.length,
       sourceHash: "sha256" as const,
       retainedSourceText: false as const,
@@ -224,7 +267,11 @@ export class FileSystemSourceCatalog implements SourceCatalog {
       sourceReadPolicy: SOURCE_FINGERPRINT_READ_POLICY,
       configurationReadPolicy: STREAMING_UTF8_HASH_POLICY,
       discoveryPolicy: FRESHNESS_PATH_DISCOVERY_POLICY,
-      maximumConcurrentReads: MAXIMUM_FRESHNESS_CONCURRENT_READS
+      maximumConcurrentReads: MAXIMUM_FRESHNESS_CONCURRENT_READS,
+      performance: {
+        policy: "freshness-performance-v1" as const,
+        phases: performancePhases
+      }
     };
     if (!freshnessFilesMatch(fingerprints, input.files)) {
       return {
@@ -244,11 +291,16 @@ export class FileSystemSourceCatalog implements SourceCatalog {
         outcome: "project-inputs-changed"
       };
     }
+    const configurationSnapshotStartedAt = startFreshnessPerformance();
     const configurationSnapshot = await discoverConfigurationCandidateSnapshot(
       normalizedProjectPath,
       input.indexInputs.configurationInputs,
       paths.configurationPaths
     );
+    performancePhases.push(endFreshnessPerformance(
+      "freshness-configuration-snapshot",
+      configurationSnapshotStartedAt
+    ));
 
     return {
       ...receiptBase,

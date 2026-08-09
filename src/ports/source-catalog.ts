@@ -1,5 +1,6 @@
 import type { IndexedFile, ProjectFrameworkEvidence } from "../domain/types.js";
 import type { ProjectIndexInputs } from "../domain/index-inputs.js";
+import type { IndexPerformanceSubphase } from "../domain/index-work.js";
 
 export interface SourceDocument {
   readonly absolutePath: string;
@@ -25,7 +26,7 @@ export interface ProjectFreshnessVerificationInput {
  * source text or resolver so a proven no-op remains memory-bounded.
  */
 export interface ProjectFreshnessVerification {
-  readonly policy: "streaming-full-content-configuration-candidates-v3";
+  readonly policy: "streaming-full-content-configuration-candidates-v4";
   readonly outcome: "proven-unchanged" | "source-files-changed" | "project-inputs-changed";
   readonly filesChecked: number;
   readonly sourceHash: "sha256";
@@ -36,6 +37,11 @@ export interface ProjectFreshnessVerification {
   readonly configurationReadPolicy: "streaming-utf8-v1";
   readonly discoveryPolicy: "single-project-walk-v1";
   readonly maximumConcurrentReads: 8;
+  readonly performance: {
+    readonly policy: "freshness-performance-v1";
+    /** Non-overlapping steps included in the caller's freshness parent phase. */
+    readonly phases: readonly IndexPerformanceSubphase[];
+  };
 }
 
 export type ModuleResolutionStrategy =

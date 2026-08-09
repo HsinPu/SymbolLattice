@@ -16,7 +16,7 @@ describe("comparison CLI adapters", () => {
       observedPeakBytes: 120
     } as const;
     const receipt = {
-      policy: "index-performance-v2",
+      policy: "index-performance-v3",
       operation: "index",
       clock: "monotonic-milliseconds",
       phases: [
@@ -53,8 +53,25 @@ describe("comparison CLI adapters", () => {
       ...receipt,
       operation: "sync" as const,
       phases: [
-        { name: "load-status", durationMs: 4.25, residentSetSize },
-        { name: "freshness-preflight", durationMs: 1.5, residentSetSize },
+        {
+          name: "load-status",
+          durationMs: 4.25,
+          residentSetSize,
+          subphases: [
+            { name: "store-initialize", durationMs: 1.25, residentSetSize },
+            { name: "status-projection-read", durationMs: 3, residentSetSize }
+          ]
+        },
+        {
+          name: "freshness-preflight",
+          durationMs: 1.5,
+          residentSetSize,
+          subphases: [
+            { name: "freshness-discovery", durationMs: 0.5, residentSetSize },
+            { name: "freshness-source-hash", durationMs: 0.5, residentSetSize },
+            { name: "freshness-configuration-snapshot", durationMs: 0.5, residentSetSize }
+          ]
+        },
         { name: "fast-path-check", durationMs: 5.75, residentSetSize }
       ],
       totalDurationMs: 12.5,
@@ -64,6 +81,39 @@ describe("comparison CLI adapters", () => {
     expect(parseSymbolLatticeIndexPerformance(JSON.stringify({
       operationPerformance: noOpSyncReceipt
     }), "sync")).toEqual(noOpSyncReceipt);
+    expect(() => parseSymbolLatticeIndexPerformance(JSON.stringify({
+      operationPerformance: {
+        ...noOpSyncReceipt,
+        phases: [{
+          ...noOpSyncReceipt.phases[0],
+          subphases: [
+            ...noOpSyncReceipt.phases[0].subphases,
+            noOpSyncReceipt.phases[0].subphases[0]
+          ]
+        }]
+      }
+    }), "sync")).toThrow("duplicate subphase");
+    expect(() => parseSymbolLatticeIndexPerformance(JSON.stringify({
+      operationPerformance: {
+        ...noOpSyncReceipt,
+        phases: [{
+          ...noOpSyncReceipt.phases[0],
+          durationMs: 1
+        }],
+        measuredDurationMs: 1,
+        totalDurationMs: 1,
+        unattributedDurationMs: 0
+      }
+    }), "sync")).toThrow("subphase durations");
+    expect(() => parseSymbolLatticeIndexPerformance(JSON.stringify({
+      operationPerformance: {
+        ...receipt,
+        phases: [{
+          ...receipt.phases[0],
+          subphases: [{ name: "store-initialize", durationMs: 1, residentSetSize }]
+        }]
+      }
+    }), "index")).toThrow("not valid under phase scan");
   });
 
   it("normalizes exact SymbolLattice callable edges and rejects truncated evidence", () => {
