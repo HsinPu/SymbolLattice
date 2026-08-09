@@ -469,6 +469,16 @@ function staticKotlinDirectImports(root: KotlinSyntaxNode): ReadonlyMap<string, 
   return imports;
 }
 
+function hasKotlinImport(root: KotlinSyntaxNode): boolean {
+  const importList = directChildren(root).find((child) => child.kind() === "import_list");
+  return (
+    importList !== undefined &&
+    directChildren(importList)
+      .filter((child) => child.kind() === "import_header")
+      .length > 0
+  );
+}
+
 /** One direct package header is the minimum proof for JVM same-package resolution. */
 function staticKotlinPackage(root: KotlinSyntaxNode): string | null {
   const packageHeaders = directChildren(root).filter((child) => child.kind() === "package_header");
@@ -1885,6 +1895,81 @@ function staticDirectCall(node: KotlinSyntaxNode): StaticKotlinCall | null {
   return { name, suffix };
 }
 
+function isKotlinZeroArgumentCall(call: StaticKotlinCall): boolean {
+  const suffixChildren = directChildren(call.suffix);
+  const arguments_ = suffixChildren[0];
+  return (
+    suffixChildren.length === 1 &&
+    arguments_?.kind() === "value_arguments" &&
+    nodeText(arguments_) === "()"
+  );
+}
+
+function isKotlinExplicitZeroParameterFunction(functionDeclaration: StaticKotlinFunction): boolean {
+  const parameterLists = directChildren(functionDeclaration.node).filter(
+    (child) => child.kind() === "function_value_parameters"
+  );
+  return parameterLists.length === 1 && parameterLists[0] !== undefined && nodeText(parameterLists[0]) === "()";
+}
+
+function hasKotlinFunctionParameterNamed(functionDeclaration: StaticKotlinFunction, name: string): boolean {
+  const parameters = directChildren(functionDeclaration.node).find(
+    (child) => child.kind() === "function_value_parameters"
+  );
+  return parameters !== undefined && new RegExp(`\\b${name}\\b`, "u").test(nodeText(parameters));
+}
+
+function kotlinDirectCalls(body: KotlinSyntaxNode): {
+  readonly calls: readonly {
+    readonly isZeroArgument: boolean;
+    readonly name: string;
+    readonly node: KotlinSyntaxNode;
+  }[];
+  readonly boundNames: ReadonlySet<string>;
+  readonly unsafe: boolean;
+} {
+  const calls: Array<{
+    readonly isZeroArgument: boolean;
+    readonly name: string;
+    readonly node: KotlinSyntaxNode;
+  }> = [];
+  const boundNames = new Set<string>();
+  let unsafe = false;
+  const bindingKinds: ReadonlySet<string> = new Set([
+    "property_declaration",
+    "multi_variable_declaration",
+    "for_statement",
+    "catch_block"
+  ]);
+  const collectIdentifiers = (node: KotlinSyntaxNode): void => {
+    const name = identifierText(node);
+    if (name !== null) {
+      boundNames.add(name);
+    }
+    for (const child of directChildren(node)) {
+      collectIdentifiers(child);
+    }
+  };
+  const visit = (node: KotlinSyntaxNode): void => {
+    if (node.kind() === "function_declaration" || node.kind() === "lambda_literal") {
+      unsafe = true;
+      return;
+    }
+    if (bindingKinds.has(node.kind() as string)) {
+      collectIdentifiers(node);
+    }
+    const call = staticDirectCall(node);
+    if (call !== null) {
+      calls.push({ isZeroArgument: isKotlinZeroArgumentCall(call), name: call.name, node });
+    }
+    for (const child of directChildren(node)) {
+      visit(child);
+    }
+  };
+  visit(body);
+  return { calls, boundNames, unsafe };
+}
+
 function staticLambdaStatements(callSuffix: KotlinSyntaxNode): readonly KotlinSyntaxNode[] | null {
   const suffixChildren = directChildren(callSuffix);
   const annotatedLambda = suffixChildren[0];
@@ -2343,6 +2428,38 @@ export function extractKotlinFileFacts(input: KotlinExtractFileFactsInput): Arti
     });
   }
 
+  function addExactSameFileTopLevelFunctionCall(
+    caller: SymbolNode,
+    callee: SymbolNode,
+    name: string,
+    node: KotlinSyntaxNode
+  ): void {
+    const range = rangeForNode(node);
+    edges.push({
+      id: createEdgeId({
+        sourceId: caller.id,
+        targetId: callee.id,
+        kind: "calls",
+        line: range.start.line,
+        column: range.start.column,
+        referenceName: name
+      }),
+      sourceId: caller.id,
+      targetId: callee.id,
+      kind: "calls",
+      filePath: input.filePath,
+      range,
+      resolution: "exact",
+      confidence: 1,
+      referenceName: name,
+      evidence: {
+        ruleId: "syntax.kotlin.same-file.unique-top-level-function-call",
+        stage: "syntax",
+        candidateSymbolIds: [callee.id]
+      }
+    });
+  }
+
   if (!hasSyntaxError(root)) {
     const topLevel = directChildren(root);
     const imports = staticDirectImportPaths(root);
@@ -2485,11 +2602,53 @@ export function extractKotlinFileFacts(input: KotlinExtractFileFactsInput): Arti
       }
     }
 
+    const topLevelFunctionSymbols: Array<{
+      readonly declaration: StaticKotlinFunction;
+      readonly symbol: SymbolNode;
+    }> = [];
     for (const functionDeclaration of topLevelFunctions) {
       const symbol = addFunction(functionDeclaration);
+      topLevelFunctionSymbols.push({ declaration: functionDeclaration, symbol });
       const candidates = functionsByName.get(functionDeclaration.name) ?? [];
       candidates.push(symbol);
       functionsByName.set(functionDeclaration.name, candidates);
+    }
+
+    if (
+      !hasKotlinImport(root) &&
+      !topLevel.some((node) => node.kind() === "package_header")
+    ) {
+      for (const caller of topLevelFunctionSymbols) {
+        if (caller.declaration.receiverName !== null || caller.declaration.body === null) {
+          continue;
+        }
+        const directCalls = kotlinDirectCalls(caller.declaration.body);
+        if (directCalls.unsafe) {
+          continue;
+        }
+        for (const call of directCalls.calls) {
+          if (
+            !call.isZeroArgument ||
+            directCalls.boundNames.has(call.name) ||
+            hasKotlinFunctionParameterNamed(caller.declaration, call.name) ||
+            typesByName.has(call.name)
+          ) {
+            continue;
+          }
+          const candidates = topLevelFunctionSymbols.filter(
+            (candidate) => candidate.declaration.name === call.name
+          );
+          if (
+            candidates.length !== 1 ||
+            candidates[0] === undefined ||
+            candidates[0].declaration.receiverName !== null ||
+            !isKotlinExplicitZeroParameterFunction(candidates[0].declaration)
+          ) {
+            continue;
+          }
+          addExactSameFileTopLevelFunctionCall(caller.symbol, candidates[0].symbol, call.name, call.node);
+        }
+      }
     }
 
     if (imports.has(KTOR_APPLICATION_IMPORT) && imports.has(KTOR_ROUTING_IMPORT)) {

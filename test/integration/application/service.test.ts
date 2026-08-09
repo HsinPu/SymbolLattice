@@ -3403,6 +3403,144 @@ describe("SymbolLatticeService", () => {
     }
   });
 
+  it("persists bounded C#, PHP, and Kotlin calls while Ruby remains fail-closed", async () => {
+    const projectPath = await createInlineProject({
+      "src/Smoke.cs": [
+        "public static class Smoke {",
+        "  public static int CsharpHelper() => 1;",
+        "  public static int CsharpEntry() => CsharpHelper();",
+        "}"
+      ].join("\n"),
+      "src/smoke.php": [
+        "<?php",
+        "function php_helper(): int { return 1; }",
+        "function php_entry(): int { return php_helper(); }"
+      ].join("\n"),
+      "src/smoke.rb": [
+        "module Smoke",
+        "  def self.ruby_helper",
+        "    1",
+        "  end",
+        "  def self.ruby_entry",
+        "    self.ruby_helper",
+        "  end",
+        "end"
+      ].join("\n"),
+      "src/Smoke.kt": [
+        "fun kotlinHelper(): Int = 1",
+        "fun kotlinEntry(): Int = kotlinHelper()"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+
+    const snapshot = graphStore.getSnapshot(projectPath);
+    const contracts = [
+      {
+        filePath: "src/Smoke.cs",
+        entryQualifiedName: "src/Smoke.cs#Smoke.CsharpEntry",
+        helperQualifiedName: "src/Smoke.cs#Smoke.CsharpHelper",
+        entry: "CsharpEntry",
+        helper: "CsharpHelper",
+        kind: "method",
+        ruleId: "syntax.csharp.same-file.unique-static-class-method-call"
+      },
+      {
+        filePath: "src/smoke.php",
+        entryQualifiedName: "src/smoke.php#php_entry",
+        helperQualifiedName: "src/smoke.php#php_helper",
+        entry: "php_entry",
+        helper: "php_helper",
+        kind: "function",
+        ruleId: "syntax.php.same-file.unique-top-level-function-call"
+      },
+      {
+        filePath: "src/Smoke.kt",
+        entryQualifiedName: "src/Smoke.kt#kotlinEntry",
+        helperQualifiedName: "src/Smoke.kt#kotlinHelper",
+        entry: "kotlinEntry",
+        helper: "kotlinHelper",
+        kind: "function",
+        ruleId: "syntax.kotlin.same-file.unique-top-level-function-call"
+      }
+    ] as const;
+
+    const rubyEntry = snapshot.symbols.find(
+      (candidate) => candidate.qualifiedName === "src/smoke.rb#Smoke.ruby_entry"
+    );
+    const rubyHelper = snapshot.symbols.find(
+      (candidate) => candidate.qualifiedName === "src/smoke.rb#Smoke.ruby_helper"
+    );
+    expect(rubyEntry).toMatchObject({ kind: "method", name: "ruby_entry" });
+    expect(rubyHelper).toMatchObject({ kind: "method", name: "ruby_helper" });
+    expect((await service.callees(projectPath, rubyEntry?.id ?? "missing")).relations).toEqual([]);
+    expect((await service.callers(projectPath, rubyHelper?.id ?? "missing")).relations).toEqual([]);
+    expect(
+      graphStore
+        .getArtifactFacts(projectPath)
+        .find((facts) => facts.filePath === "src/smoke.rb")
+        ?.edges.filter((edge) => edge.kind === "calls")
+    ).toEqual([]);
+
+    for (const contract of contracts) {
+      const entry = snapshot.symbols.find(
+        (candidate) =>
+          candidate.qualifiedName === contract.entryQualifiedName &&
+          candidate.kind === contract.kind
+      );
+      const helper = snapshot.symbols.find(
+        (candidate) =>
+          candidate.qualifiedName === contract.helperQualifiedName &&
+          candidate.kind === contract.kind
+      );
+      expect(entry).toBeDefined();
+      expect(helper).toBeDefined();
+
+      const callees = await service.callees(projectPath, entry?.id ?? "missing");
+      expect(callees.relations).toEqual([
+        expect.objectContaining({
+          symbol: expect.objectContaining({ id: helper?.id }),
+          edge: expect.objectContaining({
+            sourceId: entry?.id,
+            targetId: helper?.id,
+            kind: "calls",
+            resolution: "exact",
+            confidence: 1,
+            evidence: {
+              ruleId: contract.ruleId,
+              stage: "syntax",
+              candidateSymbolIds: [helper?.id]
+            }
+          })
+        })
+      ]);
+      const callers = await service.callers(projectPath, helper?.id ?? "missing");
+      expect(callers.relations.map((relation) => relation.symbol.id)).toEqual([entry?.id]);
+      expect(
+        graphStore
+          .getArtifactFacts(projectPath)
+          .find((facts) => facts.filePath === contract.filePath)
+          ?.edges.filter((edge) => edge.kind === "calls")
+      ).toHaveLength(1);
+    }
+
+    const reopened = new SymbolLatticeService(
+      new SqliteGraphStore(),
+      new FileSystemSourceCatalog()
+    );
+    for (const contract of contracts) {
+      const callers = await reopened.callers(projectPath, contract.helperQualifiedName);
+      expect(callers.relations.map((relation) => relation.symbol.name)).toEqual([
+        contract.entry
+      ]);
+    }
+    expect(
+      (await reopened.callers(projectPath, "src/smoke.rb#Smoke.ruby_helper")).relations
+    ).toEqual([]);
+  });
+
   it("resolves lexically bound Java parameter and local receiver calls", async () => {
     const projectPath = await createInlineProject({
       "src/api/Base.java": [

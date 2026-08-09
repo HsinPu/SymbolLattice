@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.346.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.347.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## What it is
 
@@ -51,13 +51,13 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.346.0 usability snapshot
+## v0.347.0 usability snapshot
 
 The repeatable smoke matrix checks committed cases against the exported language and framework registries instead of treating README claims as proof.
 
 - Fourteen priority languages complete `init`, no-op `sync`, changed `sync`, file inventory, and symbol lookup: TypeScript, JavaScript, Python, Java, Go, Rust, C, C++, C#, PHP, Ruby, Kotlin, Swift, and Dart.
-- TypeScript, JavaScript, Java, Python, Go, Rust, C, and C++ expose a basic call relation whose source, target, and edge identities are checked exactly. The other six priority languages scan and query successfully but still need deeper call relationships.
-- Go, Rust, C, and C++ only create exact edges for unique, unshadowed bare calls between same-file top-level or free functions. Parameter or local shadowing, closures or lambdas, member or qualified calls, macros, overloads, and indirect calls fail closed.
+- TypeScript, JavaScript, Java, Python, Go, Rust, C, C++, C#, PHP, and Kotlin expose a basic call relation whose source, target, and edge identities are checked exactly. Ruby, Swift, and Dart scan and query successfully but still need deeper call relationships.
+- The added languages use bounded, conservative exact rules: C# requires one non-partial static class, PHP requires a unique same-file function, and Kotlin requires a zero-argument same-file function without package or import headers. Ruby exposes module-singleton symbols, but its dynamic method table cannot be proven from one file, so it does not emit exact call edges yet.
 - Representative React Router, Next.js, Vue Router, SvelteKit, Astro, Spring Web, FastAPI, Django, and ASP.NET Core cases produce the expected route.
 - Nuxt Vue files scan and query successfully, but there is no dedicated Nuxt route capability yet.
 

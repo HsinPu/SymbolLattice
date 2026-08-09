@@ -249,7 +249,11 @@ describe("capability smoke matrix contract", () => {
       "go-basic",
       "rust-basic",
       "c-basic",
-      "cpp-basic"
+      "cpp-basic",
+      "csharp-basic",
+      "php-basic",
+      "ruby-basic",
+      "kotlin-basic"
     ]) {
       expect(plan.languageCases.find((candidate) => candidate.id === id)?.assertions).toEqual(
         expect.objectContaining({

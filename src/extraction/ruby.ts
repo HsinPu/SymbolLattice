@@ -30,9 +30,21 @@ interface StaticRubyClass {
   readonly body: RubySyntaxNode;
 }
 
+interface StaticRubyModule {
+  readonly name: string;
+  readonly node: RubySyntaxNode;
+  readonly body: RubySyntaxNode;
+}
+
 interface StaticRubyMethod {
   readonly name: string;
   readonly node: RubySyntaxNode;
+}
+
+interface StaticRubySingletonMethod {
+  readonly name: string;
+  readonly node: RubySyntaxNode;
+  readonly body: RubySyntaxNode | null;
 }
 
 interface StaticRailsControllerAction {
@@ -84,6 +96,28 @@ const RAILS_SINGULAR_RESOURCE_ACTIONS = [
   "update",
   "destroy"
 ] as const;
+
+const RUBY_SINGLETON_METHOD_TABLE_MUTATION_NAMES: ReadonlySet<string> = new Set([
+  "alias_method",
+  "class_eval",
+  "class_exec",
+  "define_method",
+  "define_singleton_method",
+  "extend",
+  "include",
+  "instance_eval",
+  "instance_exec",
+  "module_eval",
+  "module_function",
+  "prepend",
+  "public_send",
+  "remove_method",
+  "remove_singleton_method",
+  "send",
+  "singleton_class",
+  "undef_method",
+  "using"
+]);
 
 function directChildren(node: RubySyntaxNode): readonly RubySyntaxNode[] {
   return node.children();
@@ -201,6 +235,21 @@ function staticRubyClass(node: RubySyntaxNode): StaticRubyClass | null {
   return name === null || body === undefined ? null : { name, node, body };
 }
 
+function staticRubyModule(node: RubySyntaxNode): StaticRubyModule | null {
+  if (node.kind() !== "module") {
+    return null;
+  }
+  const children = directChildren(node);
+  const names = children.filter((child) => child.kind() === "constant");
+  const bodies = children.filter((child) => child.kind() === "body_statement");
+  const nameNode = names[0];
+  const body = bodies[0];
+  const name = nameNode === undefined ? null : constantText(nameNode);
+  return name === null || names.length !== 1 || bodies.length !== 1 || body === undefined
+    ? null
+    : { name, node, body };
+}
+
 function staticRubyMethod(node: RubySyntaxNode): StaticRubyMethod | null {
   if (node.kind() !== "method") {
     return null;
@@ -208,6 +257,95 @@ function staticRubyMethod(node: RubySyntaxNode): StaticRubyMethod | null {
   const nameNode = directChildren(node).find((child) => child.kind() === "identifier");
   const name = nameNode === undefined ? null : identifierText(nameNode);
   return name === null ? null : { name, node };
+}
+
+function staticRubySingletonMethod(node: RubySyntaxNode): StaticRubySingletonMethod | null {
+  if (node.kind() !== "singleton_method") {
+    return null;
+  }
+  const children = directChildren(node);
+  const nameNode = children[3];
+  const bodies = children.filter((child) => child.kind() === "body_statement");
+  const name = nameNode === undefined ? null : identifierText(nameNode);
+  return (
+    name === null ||
+    children[0]?.kind() !== "def" ||
+    children[1]?.kind() !== "self" ||
+    children[2]?.kind() !== "." ||
+    children.filter((child) => child.kind() === "identifier").length !== 1 ||
+    bodies.length > 1
+  )
+    ? null
+    : { name, node, body: bodies[0] ?? null };
+}
+
+/**
+ * The singleton-call slice accepts no module-scope execution: every direct
+ * body child must be one of the explicitly modelled `def self.name` forms.
+ */
+function staticRubyModuleSingletonMethods(
+  module: StaticRubyModule
+): readonly StaticRubySingletonMethod[] | null {
+  const declarations = directChildren(module.body);
+  const methods = declarations
+    .map((node) => staticRubySingletonMethod(node))
+    .filter((candidate): candidate is StaticRubySingletonMethod => candidate !== null);
+  return methods.length === declarations.length ? methods : null;
+}
+
+function rubyCallName(node: RubySyntaxNode): string | null {
+  if (node.kind() !== "call") {
+    return null;
+  }
+  const identifiers = directChildren(node).filter((child) => child.kind() === "identifier");
+  const nameNode = identifiers[identifiers.length - 1];
+  return identifiers.length === 1 && nameNode !== undefined ? identifierText(nameNode) : null;
+}
+
+/** True for `singleton_class` and receiver chains rooted at it. */
+function isRubySingletonClassChain(node: RubySyntaxNode): boolean {
+  if (node.kind() === "identifier") {
+    return nodeText(node) === "singleton_class";
+  }
+  if (node.kind() !== "call") {
+    return false;
+  }
+  const children = directChildren(node);
+  return children[0] !== undefined && children[1]?.kind() === "." && isRubySingletonClassChain(children[0]);
+}
+
+function isRubySingletonClassMutation(node: RubySyntaxNode): boolean {
+  if (node.kind() !== "call") {
+    return false;
+  }
+  const children = directChildren(node);
+  const receiver = children[0];
+  const methodName = children[2];
+  const name = methodName === undefined ? null : identifierText(methodName);
+  return (
+    receiver !== undefined &&
+    children[1]?.kind() === "." &&
+    name !== null &&
+    RUBY_SINGLETON_METHOD_TABLE_MUTATION_NAMES.has(name) &&
+    isRubySingletonClassChain(receiver)
+  );
+}
+
+function hasRubyModuleSingletonAmbiguity(module: StaticRubyModule): boolean {
+  function visit(node: RubySyntaxNode): boolean {
+    if (node.kind() === "alias" || node.kind() === "undef" || node.kind() === "singleton_class") {
+      return true;
+    }
+    const name = rubyCallName(node);
+    if (
+      isRubySingletonClassMutation(node) ||
+      (name !== null && RUBY_SINGLETON_METHOD_TABLE_MUTATION_NAMES.has(name))
+    ) {
+      return true;
+    }
+    return directChildren(node).some((child) => visit(child));
+  }
+  return visit(module.body);
 }
 
 function staticMemberCall(node: RubySyntaxNode): StaticRubyMemberCall | null {
@@ -562,7 +700,56 @@ export function extractRubyFileFacts(input: RubyExtractFileFactsInput): Artifact
     return symbol;
   }
 
+  function addModule(declaration: StaticRubyModule): SymbolNode {
+    const qualifiedName = input.filePath + "#" + declaration.name;
+    const declarationOrdinal = nextOrdinal(qualifiedName, "module");
+    const symbol: SymbolNode = {
+      id: createSymbolId({
+        filePath: input.filePath,
+        qualifiedName,
+        kind: "module",
+        declarationOrdinal
+      }),
+      name: declaration.name,
+      qualifiedName,
+      kind: "module",
+      filePath: input.filePath,
+      range: rangeForNode(declaration.node),
+      isExported: true,
+      declarationOrdinal
+    };
+    symbols.push(symbol);
+    addContainment(fileNode, symbol, declaration.node);
+    return symbol;
+  }
+
   function addMethod(parent: SymbolNode, declaration: StaticRubyMethod): SymbolNode {
+    const qualifiedName = parent.qualifiedName + "." + declaration.name;
+    const declarationOrdinal = nextOrdinal(qualifiedName, "method");
+    const symbol: SymbolNode = {
+      id: createSymbolId({
+        filePath: input.filePath,
+        qualifiedName,
+        kind: "method",
+        declarationOrdinal
+      }),
+      name: declaration.name,
+      qualifiedName,
+      kind: "method",
+      filePath: input.filePath,
+      range: rangeForNode(declaration.node),
+      isExported: true,
+      declarationOrdinal
+    };
+    symbols.push(symbol);
+    addContainment(parent, symbol, declaration.node);
+    return symbol;
+  }
+
+  function addSingletonMethod(
+    parent: SymbolNode,
+    declaration: StaticRubySingletonMethod
+  ): SymbolNode {
     const qualifiedName = parent.qualifiedName + "." + declaration.name;
     const declarationOrdinal = nextOrdinal(qualifiedName, "method");
     const symbol: SymbolNode = {
@@ -715,6 +902,35 @@ export function extractRubyFileFacts(input: RubyExtractFileFactsInput): Artifact
       .map((node) => staticRubyMethod(node))
       .filter((candidate): candidate is StaticRubyMethod => candidate !== null)) {
       addFunction(functionDeclaration);
+    }
+
+    const modulesByName = new Map<string, StaticRubyModule[]>();
+    for (const moduleDeclaration of topLevel
+      .map((node) => staticRubyModule(node))
+      .filter((candidate): candidate is StaticRubyModule => candidate !== null)) {
+      modulesByName.set(moduleDeclaration.name, [
+        ...(modulesByName.get(moduleDeclaration.name) ?? []),
+        moduleDeclaration
+      ]);
+    }
+    for (const moduleDeclarations of modulesByName.values()) {
+      const moduleDeclaration = moduleDeclarations[0];
+      const singletonMethods =
+        moduleDeclaration === undefined ? null : staticRubyModuleSingletonMethods(moduleDeclaration);
+      if (
+        moduleDeclarations.length !== 1 ||
+        moduleDeclaration === undefined ||
+        topLevel.length !== 1 ||
+        topLevel[0] !== moduleDeclaration.node ||
+        singletonMethods === null ||
+        hasRubyModuleSingletonAmbiguity(moduleDeclaration)
+      ) {
+        continue;
+      }
+      const moduleSymbol = addModule(moduleDeclaration);
+      for (const declaration of singletonMethods) {
+        addSingletonMethod(moduleSymbol, declaration);
+      }
     }
 
     for (const topLevelCall of topLevel) {

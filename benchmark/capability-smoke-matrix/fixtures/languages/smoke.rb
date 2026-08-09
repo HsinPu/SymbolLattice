@@ -1,7 +1,9 @@
-def ruby_helper
-  1
-end
+module Smoke
+  def self.ruby_helper
+    1
+  end
 
-def ruby_entry
-  ruby_helper
+  def self.ruby_entry
+    self.ruby_helper
+  end
 end

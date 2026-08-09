@@ -34,6 +34,7 @@ interface StaticPhpMethod {
 interface StaticPhpFunction {
   readonly name: string;
   readonly node: PhpSyntaxNode;
+  readonly body: PhpSyntaxNode;
 }
 
 interface StaticLaravelControllerAction {
@@ -203,9 +204,67 @@ function staticPhpFunction(input: PhpExtractFileFactsInput, node: PhpSyntaxNode)
     .filter((child) => child.name === "Name")
     .map((child) => identifierText(input, child))
     .filter((candidate): candidate is string => candidate !== null);
-  return hasFunctionKeyword && names.length === 1 && names[0] !== undefined
-    ? { name: names[0], node }
+  const bodies = children.filter((child) => child.name === "Block");
+  return hasFunctionKeyword && names.length === 1 && bodies.length === 1 && names[0] !== undefined && bodies[0] !== undefined
+    ? { name: names[0], node, body: bodies[0] }
     : null;
+}
+
+function staticPhpDirectCall(
+  input: PhpExtractFileFactsInput,
+  node: PhpSyntaxNode
+): { readonly name: string; readonly node: PhpSyntaxNode } | null {
+  if (node.name !== "CallExpression") {
+    return null;
+  }
+  const children = directChildren(node);
+  const callee = children[0];
+  const arguments_ = children[1];
+  const name = callee === undefined ? null : identifierText(input, callee);
+  return (
+    name === null ||
+    name.toLowerCase() === "call_user_func" ||
+    callee?.name !== "Name" ||
+    arguments_?.name !== "ArgList" ||
+    children.length !== 2 ||
+    directChildren(arguments_).some((child) => child.name === "SpreadArgument")
+  )
+    ? null
+    : { name, node };
+}
+
+/**
+ * Traverses exactly one eligible caller body. Nested declarations and closures
+ * deliberately remain out of scope because their runtime binding differs from
+ * the enclosing top-level function.
+ */
+function directPhpCalls(
+  input: PhpExtractFileFactsInput,
+  body: PhpSyntaxNode
+): readonly { readonly name: string; readonly node: PhpSyntaxNode }[] {
+  const calls: { readonly name: string; readonly node: PhpSyntaxNode }[] = [];
+  function visit(node: PhpSyntaxNode): void {
+    if (
+      node !== body &&
+      (node.name === "FunctionDefinition" ||
+        node.name === "FunctionExpression" ||
+        node.name === "ArrowFunction" ||
+        node.name === "MethodDeclaration" ||
+        node.name === "ClassDeclaration")
+    ) {
+      return;
+    }
+    const call = staticPhpDirectCall(input, node);
+    if (call !== null) {
+      calls.push(call);
+      return;
+    }
+    for (const child of directChildren(node)) {
+      visit(child);
+    }
+  }
+  visit(body);
+  return calls;
 }
 
 function staticLaravelFacadeAliases(
@@ -570,10 +629,56 @@ export function extractPhpFileFacts(input: PhpExtractFileFactsInput): ArtifactFa
       }
     }
 
+    const localFunctionsByName = new Map<string, SymbolNode[]>();
+    const localFunctions: Array<{ readonly declaration: StaticPhpFunction; readonly symbol: SymbolNode }> = [];
     for (const functionDeclaration of topLevel
       .map((node) => staticPhpFunction(input, node))
       .filter((candidate): candidate is StaticPhpFunction => candidate !== null)) {
-      addFunction(functionDeclaration);
+      const symbol = addFunction(functionDeclaration);
+      localFunctions.push({ declaration: functionDeclaration, symbol });
+      localFunctionsByName.set(functionDeclaration.name, [
+        ...(localFunctionsByName.get(functionDeclaration.name) ?? []),
+        symbol
+      ]);
+    }
+
+    const hasFunctionScopeAmbiguity = topLevel.some(
+      (node) => node.name === "NamespaceDefinition" || node.name === "NamespaceUseDeclaration"
+    );
+    if (!hasFunctionScopeAmbiguity) {
+      for (const caller of localFunctions) {
+        for (const call of directPhpCalls(input, caller.declaration.body)) {
+          const candidates = localFunctionsByName.get(call.name) ?? [];
+          const target = candidates.length === 1 ? candidates[0] : undefined;
+          if (target === undefined) {
+            continue;
+          }
+          const range = rangeFor(lineStarts, call.node.from, call.node.to);
+          edges.push({
+            id: createEdgeId({
+              sourceId: caller.symbol.id,
+              targetId: target.id,
+              kind: "calls",
+              line: range.start.line,
+              column: range.start.column,
+              referenceName: call.name
+            }),
+            sourceId: caller.symbol.id,
+            targetId: target.id,
+            kind: "calls",
+            filePath: input.filePath,
+            range,
+            resolution: "exact",
+            confidence: 1,
+            referenceName: call.name,
+            evidence: {
+              ruleId: "syntax.php.same-file.unique-top-level-function-call",
+              stage: "syntax",
+              candidateSymbolIds: [target.id]
+            }
+          });
+        }
+      }
     }
 
     const facadeAliases = staticLaravelFacadeAliases(input, root);

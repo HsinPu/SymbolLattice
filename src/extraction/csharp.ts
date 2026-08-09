@@ -27,12 +27,16 @@ type CsharpSyntaxNode = SgNode;
 
 interface StaticCsharpType {
   readonly kind: "class" | "interface";
+  readonly isPartial: boolean;
+  readonly isStatic: boolean;
   readonly name: string;
   readonly node: CsharpSyntaxNode;
   readonly body: CsharpSyntaxNode;
 }
 
 interface StaticCsharpMethod {
+  readonly body: CsharpSyntaxNode | null;
+  readonly isStatic: boolean;
   readonly name: string;
   readonly node: CsharpSyntaxNode;
 }
@@ -308,7 +312,13 @@ function staticCsharpType(node: CsharpSyntaxNode): StaticCsharpType | null {
   const nameNode = children.find((child) => child.kind() === "identifier");
   const body = children.find((child) => child.kind() === "declaration_list");
   const name = nameNode === undefined ? null : identifierText(nameNode);
-  return name === null || body === undefined ? null : { kind, name, node, body };
+  const isStatic = children.some(
+    (child) => child.kind() === "modifier" && nodeText(child) === "static"
+  );
+  const isPartial = children.some(
+    (child) => child.kind() === "modifier" && nodeText(child) === "partial"
+  );
+  return name === null || body === undefined ? null : { kind, isPartial, isStatic, name, node, body };
 }
 
 function directTopLevelTypeNodes(root: CsharpSyntaxNode): readonly CsharpSyntaxNode[] {
@@ -353,7 +363,83 @@ function staticCsharpMethod(node: CsharpSyntaxNode): StaticCsharpMethod | null {
     .filter((child) => child.kind() === "identifier")
     .at(-1);
   const name = nameNode === undefined ? null : identifierText(nameNode);
-  return name === null ? null : { name, node };
+  const body = children.find(
+    (child) => child.kind() === "block" || child.kind() === "arrow_expression_clause"
+  );
+  const isStatic = children.some(
+    (child) => child.kind() === "modifier" && nodeText(child) === "static"
+  );
+  return name === null ? null : { body: body ?? null, isStatic, name, node };
+}
+
+function hasAmbiguousCsharpUsing(root: CsharpSyntaxNode): boolean {
+  return directChildren(root).some((node) => {
+    if (node.kind() !== "using_directive" && node.kind() !== "global_using_directive") {
+      return false;
+    }
+    const text = nodeText(node);
+    return /\busing\s+static\b/u.test(text) || /=/u.test(text);
+  });
+}
+
+function hasCsharpMethodParameterNamed(method: StaticCsharpMethod, name: string): boolean {
+  const parameterList = directChildren(method.node).find((child) => child.kind() === "parameter_list");
+  return parameterList !== undefined && new RegExp(`\\b${name}\\b`, "u").test(nodeText(parameterList));
+}
+
+function csharpDirectCalls(body: CsharpSyntaxNode): {
+  readonly calls: readonly { readonly name: string; readonly node: CsharpSyntaxNode }[];
+  readonly boundNames: ReadonlySet<string>;
+  readonly unsafe: boolean;
+} {
+  const calls: Array<{ readonly name: string; readonly node: CsharpSyntaxNode }> = [];
+  const boundNames = new Set<string>();
+  let unsafe = false;
+  const bindingKinds: ReadonlySet<string> = new Set([
+    "local_declaration_statement",
+    "declaration_pattern",
+    "catch_declaration",
+    "for_each_statement",
+    "for_statement",
+    "using_statement",
+    "fixed_statement"
+  ]);
+  const collectIdentifiers = (node: CsharpSyntaxNode): void => {
+    const name = identifierText(node);
+    if (name !== null) {
+      boundNames.add(name);
+    }
+    for (const child of directChildren(node)) {
+      collectIdentifiers(child);
+    }
+  };
+  const visit = (node: CsharpSyntaxNode): void => {
+    if (
+      node.kind() === "local_function_statement" ||
+      node.kind() === "lambda_expression" ||
+      node.kind() === "anonymous_method_expression"
+    ) {
+      unsafe = true;
+      return;
+    }
+    if (bindingKinds.has(node.kind() as string)) {
+      collectIdentifiers(node);
+    }
+    if (node.kind() === "invocation_expression") {
+      const children = directChildren(node);
+      const callee = children[0];
+      const arguments_ = children[1];
+      const name = callee === undefined ? null : identifierText(callee);
+      if (name !== null && arguments_?.kind() === "argument_list" && children.length === 2) {
+        calls.push({ name, node });
+      }
+    }
+    for (const child of directChildren(node)) {
+      visit(child);
+    }
+  };
+  visit(body);
+  return { calls, boundNames, unsafe };
 }
 
 function staticCsharpFunction(node: CsharpSyntaxNode): StaticCsharpFunction | null {
@@ -766,19 +852,59 @@ export function extractCsharpFileFacts(input: CsharpExtractFileFactsInput): Arti
     });
   }
 
+  function addExactSameStaticClassMethodCall(
+    caller: SymbolNode,
+    callee: SymbolNode,
+    name: string,
+    node: CsharpSyntaxNode
+  ): void {
+    const range = rangeForNode(node);
+    edges.push({
+      id: createEdgeId({
+        sourceId: caller.id,
+        targetId: callee.id,
+        kind: "calls",
+        line: range.start.line,
+        column: range.start.column,
+        referenceName: name
+      }),
+      sourceId: caller.id,
+      targetId: callee.id,
+      kind: "calls",
+      filePath: input.filePath,
+      range,
+      resolution: "exact",
+      confidence: 1,
+      referenceName: name,
+      evidence: {
+        ruleId: "syntax.csharp.same-file.unique-static-class-method-call",
+        stage: "syntax",
+        candidateSymbolIds: [callee.id]
+      }
+    });
+  }
+
   if (!hasSyntaxError(root)) {
     const types = directTopLevelTypeNodes(root)
       .map((node) => staticCsharpType(node))
       .filter((candidate): candidate is StaticCsharpType => candidate !== null);
     const hasMvcImport = hasDirectMvcImport(root);
+    const staticClassMethods: Array<{
+      readonly declaration: StaticCsharpMethod;
+      readonly symbol: SymbolNode;
+      readonly type: StaticCsharpType;
+      readonly typeSymbol: SymbolNode;
+    }> = [];
 
     for (const type of types) {
       const typeSymbol = addType(type);
       const controllerPath = staticControllerPath(type, hasMvcImport);
-      for (const methodDeclaration of directChildren(type.body)
+      const methods = directChildren(type.body)
         .map((node) => staticCsharpMethod(node))
-        .filter((candidate): candidate is StaticCsharpMethod => candidate !== null)) {
+        .filter((candidate): candidate is StaticCsharpMethod => candidate !== null);
+      for (const methodDeclaration of methods) {
         const methodSymbol = addMethod(typeSymbol, methodDeclaration);
+        staticClassMethods.push({ declaration: methodDeclaration, symbol: methodSymbol, type, typeSymbol });
         if (controllerPath === null) {
           continue;
         }
@@ -790,6 +916,44 @@ export function extractCsharpFileFacts(input: CsharpExtractFileFactsInput): Arti
             methodSymbol,
             "framework.aspnet-core.direct-api-controller.literal-route.method"
           );
+        }
+      }
+    }
+
+    if (!hasAmbiguousCsharpUsing(root)) {
+      for (const caller of staticClassMethods) {
+        if (
+          caller.type.kind !== "class" ||
+          caller.type.isPartial ||
+          !caller.type.isStatic ||
+          !caller.declaration.isStatic ||
+          caller.declaration.body === null ||
+          types.filter((type) => type.kind === "class" && type.name === caller.type.name).length !== 1
+        ) {
+          continue;
+        }
+        const directCalls = csharpDirectCalls(caller.declaration.body);
+        if (directCalls.unsafe) {
+          continue;
+        }
+        for (const call of directCalls.calls) {
+          if (
+            directCalls.boundNames.has(call.name) ||
+            hasCsharpMethodParameterNamed(caller.declaration, call.name)
+          ) {
+            continue;
+          }
+          const candidates = staticClassMethods.filter(
+            (candidate) => candidate.typeSymbol.id === caller.typeSymbol.id && candidate.declaration.name === call.name
+          );
+          if (
+            candidates.length !== 1 ||
+            candidates[0] === undefined ||
+            !candidates[0].declaration.isStatic
+          ) {
+            continue;
+          }
+          addExactSameStaticClassMethodCall(caller.symbol, candidates[0].symbol, call.name, call.node);
         }
       }
     }
