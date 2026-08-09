@@ -64,7 +64,7 @@ function validateV2Assertions(value, label, profile) {
       return { id: record.id, notApplicable: { reason: record.notApplicable.reason } };
     }
     const command = requireNonemptyString(record.command, `${assertionLabel}.command`);
-    if (command === "callees") {
+    if (command === "callees" || command === "file-symbols") {
       const source = requireNonemptyString(record.source, `${assertionLabel}.source`);
       const target = requireNonemptyString(record.target, `${assertionLabel}.target`);
       if (!symbolsById.has(source) || symbolsById.get(source)?.notApplicable !== undefined) {
@@ -143,7 +143,7 @@ function validateV2Assertions(value, label, profile) {
     if (!relations.some(
       (assertion) =>
         assertion.notApplicable === undefined &&
-        ["callees", "hierarchy", "impact", "file-dependents", "routes"].includes(assertion.command)
+        ["callees", "file-symbols", "hierarchy", "impact", "file-dependents", "routes"].includes(assertion.command)
     )) {
       throw new Error(`${label} must include at least one required language relation assertion.`);
     }
@@ -609,6 +609,44 @@ export async function runCapabilitySmokeCase(candidateValue, kind, runtimeValue,
               } else {
                 receipt.status = "failed";
                 receipt.message = `callees returned ${matches.length} exact edges for ${assertion.id}.`;
+                errors.push({ stage: "relation", assertionId: assertion.id, message: receipt.message });
+              }
+            } else if (assertion.command === "file-symbols") {
+              const source = resolvedSymbols.get(assertion.source);
+              const target = resolvedSymbols.get(assertion.target);
+              if (source === undefined || target === undefined || source.kind !== "file") {
+                throw new Error("File-symbol endpoints were not resolved to an exact file and symbol identity.");
+              }
+              if (source.filePath !== target.filePath) {
+                throw new Error("File-symbol endpoints must belong to the same indexed file.");
+              }
+              const result = await runtime.runJson("file", [
+                source.filePath,
+                "--project",
+                projectPath,
+                "--json",
+                "--symbols-only"
+              ]);
+              receipt.rootId = source.id;
+              receipt.targetId = target.id;
+              const matches = result?.selection?.resolution === "exact-path" &&
+                result?.selection?.filePath === source.filePath &&
+                Array.isArray(result?.symbols)
+                ? result.symbols.filter((symbol) =>
+                    symbol?.id === target.id &&
+                    symbol?.name === target.name &&
+                    symbol?.qualifiedName === target.qualifiedName &&
+                    symbol?.kind === target.kind
+                  )
+                : [];
+              if (matches.length === 1 && assertion.kind === "contains") {
+                receipt.status = "passed";
+                receipt.kind = assertion.kind;
+                receipt.filePath = source.filePath;
+                evidence.relation ??= `${assertion.kind} ${source.id} -> ${target.id}`;
+              } else {
+                receipt.status = "failed";
+                receipt.message = `file view returned ${matches.length} exact symbols for ${assertion.id}.`;
                 errors.push({ stage: "relation", assertionId: assertion.id, message: receipt.message });
               }
             } else if (assertion.command === "hierarchy") {

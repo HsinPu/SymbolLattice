@@ -220,7 +220,7 @@ describe("capability smoke matrix contract", () => {
     });
 
     expect(plan.schemaVersion).toBe(2);
-    expect(plan.languageCases).toHaveLength(42);
+    expect(plan.languageCases).toHaveLength(47);
     expect(plan.frameworkCases).toHaveLength(10);
     expect(new Set(plan.registryCoverage.languages.selected)).toEqual(
       new Set([
@@ -266,6 +266,11 @@ describe("capability smoke matrix contract", () => {
         ,"xml"
         ,"yaml"
         ,"properties"
+        ,"terraform"
+        ,"nix"
+        ,"shell"
+        ,"vue"
+        ,"svelte"
       ])
     );
     expect(plan.frameworkCases.filter((candidate) => candidate.capabilityId === null)).toEqual([
@@ -392,6 +397,44 @@ describe("capability smoke matrix contract", () => {
             source: "consumer",
             target: "key",
             kind: "references"
+          })])
+        })
+      );
+    }
+    for (const id of ["terraform-basic", "shell-basic"]) {
+      expect(plan.languageCases.find((candidate) => candidate.id === id)?.assertions).toEqual(
+        expect.objectContaining({
+          symbols: expect.arrayContaining([
+            expect.objectContaining({ id: "file", kind: "file" })
+          ]),
+          relations: expect.arrayContaining([expect.objectContaining({
+            command: "file-symbols",
+            source: "file",
+            kind: "contains"
+          })])
+        })
+      );
+    }
+    expect(plan.languageCases.find((candidate) => candidate.id === "nix-basic")?.assertions).toEqual(
+      expect.objectContaining({
+        relations: expect.arrayContaining([expect.objectContaining({
+          command: "file-dependents",
+          sourceFile: "default.nix",
+          targetFile: "package.nix",
+          kind: "imports"
+        })])
+      })
+    );
+    for (const id of ["vue-basic", "svelte-basic"]) {
+      expect(plan.languageCases.find((candidate) => candidate.id === id)?.assertions).toEqual(
+        expect.objectContaining({
+          symbols: expect.arrayContaining([
+            expect.objectContaining({ id: "component", kind: "variable" })
+          ]),
+          relations: expect.arrayContaining([expect.objectContaining({
+            command: "routes",
+            target: "component",
+            expectedMethod: "NAVIGATE"
           })])
         })
       );
@@ -563,6 +606,75 @@ describe("capability smoke matrix contract", () => {
       .rejects.toThrow("schemaVersion 1");
     await expect(runCapabilitySmokeCase(candidate, "language", successfulV2Runtime(), 2))
       .resolves.toMatchObject({ classification: "basic-usable" });
+  });
+
+  it("proves file containment through an exact immutable file view", async () => {
+    const file = {
+      id: "symbol:file",
+      name: "main.tf",
+      qualifiedName: "src/main.tf",
+      filePath: "src/main.tf",
+      kind: "file"
+    };
+    const resource = {
+      id: "symbol:resource",
+      name: "resource aws_instance.web",
+      qualifiedName: "src/main.tf#resource:aws_instance.web",
+      filePath: "src/main.tf",
+      kind: "resource"
+    };
+    const candidate = {
+      ...v2Manifest().languageCases[0],
+      expectedFilePath: file.filePath,
+      assertions: {
+        symbols: [
+          { id: "file", name: file.name, filePath: file.filePath, kind: file.kind },
+          { id: "resource", name: resource.name, filePath: resource.filePath, kind: resource.kind }
+        ],
+        relations: [{
+          id: "file-contains-resource",
+          command: "file-symbols",
+          source: "file",
+          target: "resource",
+          kind: "contains"
+        }]
+      }
+    };
+    let syncCount = 0;
+    const runtime = successfulV2Runtime({
+      async runJson(command, arguments_) {
+        if (command === "init") return { initialized: true, stale: false, generationId: "generation:1" };
+        if (command === "sync") {
+          const generationId = syncCount === 0 ? "generation:1" : "generation:2";
+          syncCount += 1;
+          return { initialized: true, stale: false, generationId };
+        }
+        if (command === "files") return { files: [{ filePath: file.filePath, language: "typescript" }] };
+        if (command === "find") {
+          return { symbols: [arguments_[0] === file.name ? file : resource] };
+        }
+        if (command === "file") {
+          expect(arguments_[0]).toBe(file.filePath);
+          return {
+            selection: { filePath: file.filePath, resolution: "exact-path" },
+            symbols: [
+              { id: resource.id, name: resource.name, qualifiedName: resource.qualifiedName, kind: resource.kind }
+            ]
+          };
+        }
+        throw new Error(`Unexpected command: ${command}`);
+      }
+    });
+
+    const result = await runCapabilitySmokeCase(candidate, "language", runtime, 2);
+    expect(result.errors).toEqual([]);
+    expect(result).toMatchObject({
+      classification: "basic-usable",
+      stages: { relation: true },
+      assertions: {
+        relations: [{ id: "file-contains-resource", status: "passed", kind: "contains" }]
+      }
+    });
   });
 
   it("binds an impact receipt to one exact incoming edge and rejects heuristic evidence", async () => {
