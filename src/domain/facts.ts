@@ -117,6 +117,7 @@ export interface CallDispatchAccessEvidence {
   readonly policy: "java-source-access-v1";
   readonly visibility: "public" | "protected" | "package" | "private";
   readonly decision:
+    | "declaring-class"
     | "public"
     | "same-package"
     | "protected-subclass-receiver"
@@ -784,6 +785,7 @@ export interface CallDispatchEvidence {
   readonly invocationKind?:
     | "expression"
     | "type-name-static"
+    | "implicit-static"
     | "this"
     | "super"
     | "parameter"
@@ -1787,6 +1789,10 @@ interface JavaMemberCallReferenceBaseFact {
 }
 
 export type JavaMemberCallReferenceFact =
+  | (JavaMemberCallReferenceBaseFact & {
+      /** Bare invocation in a static callable; resolution is locked to the declaring type. */
+      readonly receiverKind: "implicit-static";
+    })
   | (JavaMemberCallReferenceBaseFact & {
       readonly receiverKind: "this" | "super";
     })

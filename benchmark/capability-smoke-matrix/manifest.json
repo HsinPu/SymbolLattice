@@ -1,220 +1,32 @@
 {
-  "schemaVersion": 1,
-  "matrixId": "symbol-lattice-capability-smoke-v1",
+  "schemaVersion": 2,
+  "matrixId": "symbol-lattice-capability-smoke-v2",
   "languageCases": [
-    {
-      "id": "typescript-basic",
-      "language": "typescript",
-      "fixturePath": "benchmark/capability-smoke-matrix/fixtures/languages/typescript.ts",
-      "expectedFilePath": "src/typescript.ts",
-      "expectedSymbol": "typeScriptEntry",
-      "relation": { "command": "callees", "reference": "typeScriptEntry", "expectedTarget": "typeScriptHelper" }
-    },
-    {
-      "id": "javascript-basic",
-      "language": "javascript",
-      "fixturePath": "benchmark/capability-smoke-matrix/fixtures/languages/javascript.js",
-      "expectedFilePath": "src/javascript.js",
-      "expectedSymbol": "javaScriptEntry",
-      "relation": { "command": "callees", "reference": "javaScriptEntry", "expectedTarget": "javaScriptHelper" }
-    },
-    {
-      "id": "python-basic",
-      "language": "python",
-      "fixturePath": "benchmark/capability-smoke-matrix/fixtures/languages/python.py",
-      "expectedFilePath": "src/python.py",
-      "expectedSymbol": "python_entry",
-      "relation": { "command": "callees", "reference": "python_entry", "expectedTarget": "python_helper" }
-    },
-    {
-      "id": "java-basic",
-      "language": "java",
-      "fixturePath": "benchmark/capability-smoke-matrix/fixtures/languages/JavaSmoke.java",
-      "expectedFilePath": "src/JavaSmoke.java",
-      "expectedSymbol": "javaEntry",
-      "relation": { "command": "callees", "reference": "javaEntry", "expectedTarget": "javaHelper" }
-    },
-    {
-      "id": "go-basic",
-      "language": "go",
-      "fixturePath": "benchmark/capability-smoke-matrix/fixtures/languages/smoke.go",
-      "expectedFilePath": "src/smoke.go",
-      "expectedSymbol": "goEntry",
-      "relation": { "command": "callees", "reference": "goEntry", "expectedTarget": "goHelper" }
-    },
-    {
-      "id": "rust-basic",
-      "language": "rust",
-      "fixturePath": "benchmark/capability-smoke-matrix/fixtures/languages/smoke.rs",
-      "expectedFilePath": "src/smoke.rs",
-      "expectedSymbol": "rust_entry",
-      "relation": { "command": "callees", "reference": "rust_entry", "expectedTarget": "rust_helper" }
-    },
-    {
-      "id": "c-basic",
-      "language": "c",
-      "fixturePath": "benchmark/capability-smoke-matrix/fixtures/languages/smoke.c",
-      "expectedFilePath": "src/smoke.c",
-      "expectedSymbol": "c_entry",
-      "relation": { "command": "callees", "reference": "c_entry", "expectedTarget": "c_helper" }
-    },
-    {
-      "id": "cpp-basic",
-      "language": "cpp",
-      "fixturePath": "benchmark/capability-smoke-matrix/fixtures/languages/smoke.cpp",
-      "expectedFilePath": "src/smoke.cpp",
-      "expectedSymbol": "cpp_entry",
-      "relation": { "command": "callees", "reference": "cpp_entry", "expectedTarget": "cpp_helper" }
-    },
-    {
-      "id": "csharp-basic",
-      "language": "csharp",
-      "fixturePath": "benchmark/capability-smoke-matrix/fixtures/languages/Smoke.cs",
-      "expectedFilePath": "src/Smoke.cs",
-      "expectedSymbol": "CsharpEntry",
-      "relation": { "command": "callees", "reference": "CsharpEntry", "expectedTarget": "CsharpHelper" }
-    },
-    {
-      "id": "php-basic",
-      "language": "php",
-      "fixturePath": "benchmark/capability-smoke-matrix/fixtures/languages/smoke.php",
-      "expectedFilePath": "src/smoke.php",
-      "expectedSymbol": "php_entry",
-      "relation": { "command": "callees", "reference": "php_entry", "expectedTarget": "php_helper" }
-    },
-    {
-      "id": "ruby-basic",
-      "language": "ruby",
-      "fixturePath": "benchmark/capability-smoke-matrix/fixtures/languages/smoke.rb",
-      "expectedFilePath": "src/smoke.rb",
-      "expectedSymbol": "ruby_entry",
-      "relation": { "command": "callees", "reference": "ruby_entry", "expectedTarget": "ruby_helper" }
-    },
-    {
-      "id": "kotlin-basic",
-      "language": "kotlin",
-      "fixturePath": "benchmark/capability-smoke-matrix/fixtures/languages/Smoke.kt",
-      "expectedFilePath": "src/Smoke.kt",
-      "expectedSymbol": "kotlinEntry",
-      "relation": { "command": "callees", "reference": "kotlinEntry", "expectedTarget": "kotlinHelper" }
-    },
-    {
-      "id": "swift-basic",
-      "language": "swift",
-      "fixturePath": "benchmark/capability-smoke-matrix/fixtures/languages/Smoke.swift",
-      "expectedFilePath": "src/Smoke.swift",
-      "expectedSymbol": "swiftEntry",
-      "relation": { "command": "callees", "reference": "swiftEntry", "expectedTarget": "swiftHelper" }
-    },
-    {
-      "id": "dart-basic",
-      "language": "dart",
-      "fixturePath": "benchmark/capability-smoke-matrix/fixtures/languages/smoke.dart",
-      "expectedFilePath": "src/smoke.dart",
-      "expectedSymbol": "dartEntry",
-      "relation": { "command": "callees", "reference": "dartEntry", "expectedTarget": "dartHelper" }
-    }
+    { "id": "typescript-basic", "language": "typescript", "fixturePath": "benchmark/capability-smoke-matrix/fixtures/languages/typescript.ts", "expectedFilePath": "src/typescript.ts", "assertions": { "symbols": [{ "id": "entry", "name": "typeScriptEntry", "filePath": "src/typescript.ts", "kind": "function" }, { "id": "helper", "name": "typeScriptHelper", "filePath": "src/typescript.ts", "kind": "function" }], "relations": [{ "id": "entry-calls-helper", "command": "callees", "source": "entry", "target": "helper", "kind": "calls" }] } },
+    { "id": "javascript-basic", "language": "javascript", "fixturePath": "benchmark/capability-smoke-matrix/fixtures/languages/javascript.js", "expectedFilePath": "src/javascript.js", "assertions": { "symbols": [{ "id": "entry", "name": "javaScriptEntry", "filePath": "src/javascript.js", "kind": "function" }, { "id": "helper", "name": "javaScriptHelper", "filePath": "src/javascript.js", "kind": "function" }], "relations": [{ "id": "entry-calls-helper", "command": "callees", "source": "entry", "target": "helper", "kind": "calls" }] } },
+    { "id": "python-basic", "language": "python", "fixturePath": "benchmark/capability-smoke-matrix/fixtures/languages/python.py", "expectedFilePath": "src/python.py", "assertions": { "symbols": [{ "id": "entry", "name": "python_entry", "filePath": "src/python.py", "kind": "function" }, { "id": "helper", "name": "python_helper", "filePath": "src/python.py", "kind": "function" }], "relations": [{ "id": "entry-calls-helper", "command": "callees", "source": "entry", "target": "helper", "kind": "calls" }] } },
+    { "id": "java-basic", "language": "java", "fixturePath": "benchmark/capability-smoke-matrix/fixtures/languages/JavaSmoke.java", "expectedFilePath": "src/JavaSmoke.java", "assertions": { "symbols": [{ "id": "entry", "name": "javaEntry", "filePath": "src/JavaSmoke.java", "kind": "method" }, { "id": "helper", "name": "javaHelper", "filePath": "src/JavaSmoke.java", "kind": "method" }], "relations": [{ "id": "entry-calls-helper", "command": "callees", "source": "entry", "target": "helper", "kind": "calls" }] } },
+    { "id": "go-basic", "language": "go", "fixturePath": "benchmark/capability-smoke-matrix/fixtures/languages/smoke.go", "expectedFilePath": "src/smoke.go", "assertions": { "symbols": [{ "id": "entry", "name": "goEntry", "filePath": "src/smoke.go", "kind": "function" }, { "id": "helper", "name": "goHelper", "filePath": "src/smoke.go", "kind": "function" }], "relations": [{ "id": "entry-calls-helper", "command": "callees", "source": "entry", "target": "helper", "kind": "calls" }] } },
+    { "id": "rust-basic", "language": "rust", "fixturePath": "benchmark/capability-smoke-matrix/fixtures/languages/smoke.rs", "expectedFilePath": "src/smoke.rs", "assertions": { "symbols": [{ "id": "entry", "name": "rust_entry", "filePath": "src/smoke.rs", "kind": "function" }, { "id": "helper", "name": "rust_helper", "filePath": "src/smoke.rs", "kind": "function" }], "relations": [{ "id": "entry-calls-helper", "command": "callees", "source": "entry", "target": "helper", "kind": "calls" }] } },
+    { "id": "c-basic", "language": "c", "fixturePath": "benchmark/capability-smoke-matrix/fixtures/languages/smoke.c", "expectedFilePath": "src/smoke.c", "assertions": { "symbols": [{ "id": "entry", "name": "c_entry", "filePath": "src/smoke.c", "kind": "function" }, { "id": "helper", "name": "c_helper", "filePath": "src/smoke.c", "kind": "function" }], "relations": [{ "id": "entry-calls-helper", "command": "callees", "source": "entry", "target": "helper", "kind": "calls" }] } },
+    { "id": "cpp-basic", "language": "cpp", "fixturePath": "benchmark/capability-smoke-matrix/fixtures/languages/smoke.cpp", "expectedFilePath": "src/smoke.cpp", "assertions": { "symbols": [{ "id": "entry", "name": "cpp_entry", "filePath": "src/smoke.cpp", "kind": "function" }, { "id": "helper", "name": "cpp_helper", "filePath": "src/smoke.cpp", "kind": "function" }], "relations": [{ "id": "entry-calls-helper", "command": "callees", "source": "entry", "target": "helper", "kind": "calls" }] } },
+    { "id": "csharp-basic", "language": "csharp", "fixturePath": "benchmark/capability-smoke-matrix/fixtures/languages/Smoke.cs", "expectedFilePath": "src/Smoke.cs", "assertions": { "symbols": [{ "id": "entry", "name": "CsharpEntry", "filePath": "src/Smoke.cs", "kind": "method" }, { "id": "helper", "name": "CsharpHelper", "filePath": "src/Smoke.cs", "kind": "method" }], "relations": [{ "id": "entry-calls-helper", "command": "callees", "source": "entry", "target": "helper", "kind": "calls" }] } },
+    { "id": "php-basic", "language": "php", "fixturePath": "benchmark/capability-smoke-matrix/fixtures/languages/smoke.php", "expectedFilePath": "src/smoke.php", "assertions": { "symbols": [{ "id": "entry", "name": "php_entry", "filePath": "src/smoke.php", "kind": "function" }, { "id": "helper", "name": "php_helper", "filePath": "src/smoke.php", "kind": "function" }], "relations": [{ "id": "entry-calls-helper", "command": "callees", "source": "entry", "target": "helper", "kind": "calls" }] } },
+    { "id": "ruby-basic", "language": "ruby", "fixturePath": "benchmark/capability-smoke-matrix/fixtures/languages/smoke.rb", "expectedFilePath": "src/smoke.rb", "assertions": { "symbols": [{ "id": "entry", "name": "ruby_entry", "filePath": "src/smoke.rb", "kind": "function" }, { "id": "helper", "name": "ruby_helper", "filePath": "src/smoke.rb", "kind": "function" }], "relations": [{ "id": "entry-calls-helper", "command": "callees", "source": "entry", "target": "helper", "kind": "calls" }] } },
+    { "id": "kotlin-basic", "language": "kotlin", "fixturePath": "benchmark/capability-smoke-matrix/fixtures/languages/Smoke.kt", "expectedFilePath": "src/Smoke.kt", "assertions": { "symbols": [{ "id": "entry", "name": "kotlinEntry", "filePath": "src/Smoke.kt", "kind": "function" }, { "id": "helper", "name": "kotlinHelper", "filePath": "src/Smoke.kt", "kind": "function" }], "relations": [{ "id": "entry-calls-helper", "command": "callees", "source": "entry", "target": "helper", "kind": "calls" }] } },
+    { "id": "swift-basic", "language": "swift", "fixturePath": "benchmark/capability-smoke-matrix/fixtures/languages/Smoke.swift", "expectedFilePath": "src/Smoke.swift", "assertions": { "symbols": [{ "id": "entry", "name": "swiftEntry", "filePath": "src/Smoke.swift", "kind": "function" }, { "id": "helper", "name": "swiftHelper", "filePath": "src/Smoke.swift", "kind": "function" }], "relations": [{ "id": "entry-calls-helper", "command": "callees", "source": "entry", "target": "helper", "kind": "calls" }] } },
+    { "id": "dart-basic", "language": "dart", "fixturePath": "benchmark/capability-smoke-matrix/fixtures/languages/smoke.dart", "expectedFilePath": "src/smoke.dart", "assertions": { "symbols": [{ "id": "entry", "name": "dartEntry", "filePath": "src/smoke.dart", "kind": "function" }, { "id": "helper", "name": "dartHelper", "filePath": "src/smoke.dart", "kind": "function" }], "relations": [{ "id": "entry-calls-helper", "command": "callees", "source": "entry", "target": "helper", "kind": "calls" }] } }
   ],
   "frameworkCases": [
-    {
-      "id": "react-router-basic",
-      "framework": "React Router",
-      "capabilityId": "react-router",
-      "language": "typescript",
-      "fixturePath": "benchmark/capability-smoke-matrix/fixtures/frameworks/react-router",
-      "expectedFilePath": "src/router.tsx",
-      "expectedSymbol": null,
-      "relation": { "command": "routes", "expectedMethod": "NAVIGATE", "expectedPath": "/home" }
-    },
-    {
-      "id": "nextjs-basic",
-      "framework": "Next.js",
-      "capabilityId": "nextjs",
-      "language": "typescript",
-      "fixturePath": "benchmark/capability-smoke-matrix/fixtures/frameworks/nextjs",
-      "expectedFilePath": "pages/about.tsx",
-      "expectedSymbol": null,
-      "relation": { "command": "routes", "expectedMethod": "NAVIGATE", "expectedPath": "/about" }
-    },
-    {
-      "id": "vue-router-basic",
-      "framework": "Vue Router",
-      "capabilityId": "vue-router",
-      "language": "typescript",
-      "fixturePath": "benchmark/capability-smoke-matrix/fixtures/frameworks/vue-router",
-      "expectedFilePath": "src/router.ts",
-      "expectedSymbol": null,
-      "relation": { "command": "routes", "expectedMethod": "NAVIGATE", "expectedPath": "/home" }
-    },
-    {
-      "id": "nuxt-basic",
-      "framework": "Nuxt",
-      "capabilityId": null,
-      "language": "vue",
-      "fixturePath": "benchmark/capability-smoke-matrix/fixtures/frameworks/nuxt",
-      "expectedFilePath": "pages/index.vue",
-      "expectedSymbol": null,
-      "relation": { "command": "routes", "expectedMethod": "NAVIGATE", "expectedPath": "/" }
-    },
-    {
-      "id": "sveltekit-basic",
-      "framework": "SvelteKit",
-      "capabilityId": "sveltekit",
-      "language": "svelte",
-      "fixturePath": "benchmark/capability-smoke-matrix/fixtures/frameworks/sveltekit",
-      "expectedFilePath": "src/routes/about/+page.svelte",
-      "expectedSymbol": null,
-      "relation": { "command": "routes", "expectedMethod": "NAVIGATE", "expectedPath": "/about" }
-    },
-    {
-      "id": "astro-basic",
-      "framework": "Astro",
-      "capabilityId": "astro",
-      "language": "astro",
-      "fixturePath": "benchmark/capability-smoke-matrix/fixtures/frameworks/astro",
-      "expectedFilePath": "src/pages/about.astro",
-      "expectedSymbol": null,
-      "relation": { "command": "routes", "expectedMethod": "NAVIGATE", "expectedPath": "/about" }
-    },
-    {
-      "id": "spring-web-basic",
-      "framework": "Spring Web",
-      "capabilityId": "spring-web",
-      "language": "java",
-      "fixturePath": "benchmark/capability-smoke-matrix/fixtures/frameworks/spring-web",
-      "expectedFilePath": "src/main/java/smoke/SmokeController.java",
-      "expectedSymbol": "items",
-      "relation": { "command": "routes", "expectedMethod": "GET", "expectedPath": "/api/items" }
-    },
-    {
-      "id": "fastapi-basic",
-      "framework": "FastAPI",
-      "capabilityId": "fastapi",
-      "language": "python",
-      "fixturePath": "benchmark/capability-smoke-matrix/fixtures/frameworks/fastapi",
-      "expectedFilePath": "app.py",
-      "expectedSymbol": "read_item",
-      "relation": { "command": "routes", "expectedMethod": "GET", "expectedPath": "/items" }
-    },
-    {
-      "id": "django-basic",
-      "framework": "Django",
-      "capabilityId": "django",
-      "language": "python",
-      "fixturePath": "benchmark/capability-smoke-matrix/fixtures/frameworks/django",
-      "expectedFilePath": "urls.py",
-      "expectedSymbol": "home",
-      "relation": { "command": "routes", "expectedMethod": "ALL", "expectedPath": "/home/" }
-    },
-    {
-      "id": "aspnet-core-basic",
-      "framework": "ASP.NET Core",
-      "capabilityId": "aspnet-core",
-      "language": "csharp",
-      "fixturePath": "benchmark/capability-smoke-matrix/fixtures/frameworks/aspnet-core",
-      "expectedFilePath": "Program.cs",
-      "expectedSymbol": null,
-      "relation": { "command": "routes", "expectedMethod": "GET", "expectedPath": "/items" }
-    }
+    { "id": "react-router-basic", "framework": "React Router", "capabilityId": "react-router", "language": "typescript", "fixturePath": "benchmark/capability-smoke-matrix/fixtures/frameworks/react-router", "expectedFilePath": "src/router.tsx", "assertions": { "symbols": [], "relations": [{ "id": "route", "command": "routes", "expectedMethod": "NAVIGATE", "expectedPath": "/home" }] } },
+    { "id": "nextjs-basic", "framework": "Next.js", "capabilityId": "nextjs", "language": "typescript", "fixturePath": "benchmark/capability-smoke-matrix/fixtures/frameworks/nextjs", "expectedFilePath": "pages/about.tsx", "assertions": { "symbols": [], "relations": [{ "id": "route", "command": "routes", "expectedMethod": "NAVIGATE", "expectedPath": "/about" }] } },
+    { "id": "vue-router-basic", "framework": "Vue Router", "capabilityId": "vue-router", "language": "typescript", "fixturePath": "benchmark/capability-smoke-matrix/fixtures/frameworks/vue-router", "expectedFilePath": "src/router.ts", "assertions": { "symbols": [], "relations": [{ "id": "route", "command": "routes", "expectedMethod": "NAVIGATE", "expectedPath": "/home" }] } },
+    { "id": "nuxt-basic", "framework": "Nuxt", "capabilityId": null, "language": "vue", "fixturePath": "benchmark/capability-smoke-matrix/fixtures/frameworks/nuxt", "expectedFilePath": "pages/index.vue", "assertions": { "symbols": [], "relations": [{ "id": "route", "command": "routes", "expectedMethod": "NAVIGATE", "expectedPath": "/" }] } },
+    { "id": "sveltekit-basic", "framework": "SvelteKit", "capabilityId": "sveltekit", "language": "svelte", "fixturePath": "benchmark/capability-smoke-matrix/fixtures/frameworks/sveltekit", "expectedFilePath": "src/routes/about/+page.svelte", "assertions": { "symbols": [], "relations": [{ "id": "route", "command": "routes", "expectedMethod": "NAVIGATE", "expectedPath": "/about" }] } },
+    { "id": "astro-basic", "framework": "Astro", "capabilityId": "astro", "language": "astro", "fixturePath": "benchmark/capability-smoke-matrix/fixtures/frameworks/astro", "expectedFilePath": "src/pages/about.astro", "assertions": { "symbols": [], "relations": [{ "id": "route", "command": "routes", "expectedMethod": "NAVIGATE", "expectedPath": "/about" }] } },
+    { "id": "spring-web-basic", "framework": "Spring Web", "capabilityId": "spring-web", "language": "java", "fixturePath": "benchmark/capability-smoke-matrix/fixtures/frameworks/spring-web", "expectedFilePath": "src/main/java/smoke/SmokeController.java", "assertions": { "symbols": [{ "id": "items", "name": "items", "filePath": "src/main/java/smoke/SmokeController.java", "kind": "method" }], "relations": [{ "id": "route", "command": "routes", "expectedMethod": "GET", "expectedPath": "/api/items" }] } },
+    { "id": "fastapi-basic", "framework": "FastAPI", "capabilityId": "fastapi", "language": "python", "fixturePath": "benchmark/capability-smoke-matrix/fixtures/frameworks/fastapi", "expectedFilePath": "app.py", "assertions": { "symbols": [{ "id": "read-item", "name": "read_item", "filePath": "app.py", "kind": "function" }], "relations": [{ "id": "route", "command": "routes", "expectedMethod": "GET", "expectedPath": "/items" }] } },
+    { "id": "django-basic", "framework": "Django", "capabilityId": "django", "language": "python", "fixturePath": "benchmark/capability-smoke-matrix/fixtures/frameworks/django", "expectedFilePath": "urls.py", "assertions": { "symbols": [{ "id": "home", "name": "home", "filePath": "urls.py", "kind": "function" }], "relations": [{ "id": "route", "command": "routes", "expectedMethod": "ALL", "expectedPath": "/home/" }] } },
+    { "id": "aspnet-core-basic", "framework": "ASP.NET Core", "capabilityId": "aspnet-core", "language": "csharp", "fixturePath": "benchmark/capability-smoke-matrix/fixtures/frameworks/aspnet-core", "expectedFilePath": "Program.cs", "assertions": { "symbols": [], "relations": [{ "id": "route", "command": "routes", "expectedMethod": "GET", "expectedPath": "/items" }] } }
   ]
 }

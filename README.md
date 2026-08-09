@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.344.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
+> v0.345.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
 
 ## 專案用途
 
@@ -51,12 +51,13 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.344.0 可用性快照
+## v0.345.0 可用性快照
 
 可重跑的 smoke matrix 會從正式語言與框架 registry 核對測試案例，而不是依 README 宣稱支援。
 
 - 14 個優先語言皆可完成 `init`、no-op `sync`、changed `sync`、檔案與 symbol 查詢：TypeScript、JavaScript、Python、Java、Go、Rust、C、C++、C#、PHP、Ruby、Kotlin、Swift、Dart。
-- TypeScript／JavaScript 在目前最小案例具基本 call 關係；其餘優先語言可掃描與查詢，但 call 關係深度仍待加強。
+- TypeScript、JavaScript、Java、Python 已能在最小案例建立經來源、目標與 edge ID 精確核對的基本 call 關係；其餘十種優先語言可掃描與查詢，但 call 關係深度仍待加強。
+- Java 支援同類別中有界的裸 `static` 呼叫；Python 支援未裝飾、未重綁的同檔 top-level function 直接呼叫。無法證明的綁定形式會保留未解析，不建立錯誤的 exact edge。
 - React Router、Next.js、Vue Router、SvelteKit、Astro、Spring Web、FastAPI、Django 與 ASP.NET Core 的代表案例可建立預期 route。
 - Nuxt 可掃描與查詢 Vue 檔案，但目前沒有專用 Nuxt route capability。
 

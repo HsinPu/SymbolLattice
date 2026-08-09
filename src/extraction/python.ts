@@ -40,6 +40,8 @@ export interface PythonExtractFileFactsInput {
   readonly filePath: string;
   readonly sourceText: string;
   readonly language: "python";
+  /** Optional diagnostics hook; invoked exactly once for each direct-call caller body traversal. */
+  readonly directCallTraversalObserver?: () => void;
 }
 
 type PythonSyntaxNode = ReturnType<typeof parser.parse>["topNode"];
@@ -4178,6 +4180,290 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
     }
   }
 
+  function addSameFileTopLevelFunctionCalls(
+    topLevelNodes: readonly PythonSyntaxNode[]
+  ): void {
+    if (
+      topLevelNodes.some(
+        (node) => {
+          if (node.name !== "ImportStatement") {
+            return false;
+          }
+          const children = directChildren(node);
+          const importIndex = children.findIndex((child) => child.name === "import");
+          return (
+            children.some((child) => child.name === "from") &&
+            importIndex >= 0 &&
+            children.slice(importIndex + 1).some((child) => child.name === "*")
+          );
+        }
+      )
+    ) {
+      return;
+    }
+
+    const declarations = topLevelNodes.flatMap((statement) => {
+      if (statement.name === "DecoratedStatement") {
+        return [];
+      }
+      const definition = statement;
+      if (definition.name !== "FunctionDefinition") {
+        return [];
+      }
+      const name = declarationName(input, definition);
+      const symbol = symbolsByNodeKey.get(nodeKey(definition));
+      return name === null || symbol?.kind !== "function"
+        ? []
+        : [{ definition, name, symbol }];
+    });
+    const declarationsByName = new Map<string, typeof declarations>();
+    for (const declaration of declarations) {
+      const candidates = declarationsByName.get(declaration.name) ?? [];
+      candidates.push(declaration);
+      declarationsByName.set(declaration.name, candidates);
+    }
+
+    function addTargetNames(node: PythonSyntaxNode, names: Set<string>): void {
+      if (node.name === "VariableName") {
+        const name = declarationName(input, node);
+        if (name !== null) {
+          names.add(name);
+        }
+        return;
+      }
+      if (
+        ![
+          "TupleExpression",
+          "ListExpression",
+          "ParenthesizedExpression",
+          "StarExpression"
+        ].includes(node.name)
+      ) {
+        return;
+      }
+      for (const child of directChildren(node)) {
+        addTargetNames(child, names);
+      }
+    }
+
+    function addDirectBindingNames(node: PythonSyntaxNode, names: Set<string>): void {
+      const children = directChildren(node);
+      if (node.name === "ImportStatement" || node.name === "ScopeStatement") {
+        for (const name of directVariableNames(input, node)) {
+          names.add(name);
+        }
+        return;
+      }
+      if (node.name === "AssignStatement" || node.name === "NamedExpression") {
+        for (let index = 1; index < children.length; index += 1) {
+          if (children[index]?.name === "TypeDef" && children[index - 1] !== undefined) {
+            addTargetNames(children[index - 1]!, names);
+          }
+        }
+        for (let index = 0; index < children.length - 1; index += 1) {
+          if (children[index + 1]?.name !== "AssignOp" || children[index] === undefined) {
+            continue;
+          }
+          const target =
+            children[index]?.name === "TypeDef" && index > 0
+              ? children[index - 1]
+              : children[index];
+          if (target !== undefined) {
+            addTargetNames(target, names);
+          }
+        }
+        return;
+      }
+      if (node.name === "UpdateStatement") {
+        if (children[0] !== undefined) {
+          addTargetNames(children[0], names);
+        }
+        return;
+      }
+      if (node.name === "DeleteStatement") {
+        for (const child of children.slice(1)) {
+          addTargetNames(child, names);
+        }
+        return;
+      }
+      if (node.name === "ForStatement") {
+        const inIndex = children.findIndex((child) => child.name === "in");
+        for (const child of children.slice(0, inIndex < 0 ? 0 : inIndex)) {
+          addTargetNames(child, names);
+        }
+        return;
+      }
+      if (
+        node.name.endsWith("ComprehensionExpression") ||
+        node.name === "GeneratorExpression"
+      ) {
+        for (let index = 0; index < children.length; index += 1) {
+          if (children[index]?.name !== "for") {
+            continue;
+          }
+          const inIndex = children.findIndex(
+            (child, candidateIndex) => candidateIndex > index && child.name === "in"
+          );
+          if (inIndex < 0) {
+            continue;
+          }
+          for (const child of children.slice(index + 1, inIndex)) {
+            addTargetNames(child, names);
+          }
+        }
+        return;
+      }
+      if (node.name === "WithStatement" || node.name === "TryStatement") {
+        for (let index = 0; index < children.length - 1; index += 1) {
+          if (children[index]?.name === "as" && children[index + 1] !== undefined) {
+            addTargetNames(children[index + 1]!, names);
+          }
+        }
+        return;
+      }
+      if (node.name === "CapturePattern") {
+        for (const child of children) {
+          addTargetNames(child, names);
+        }
+      }
+    }
+
+    function topLevelBindingNames(node: PythonSyntaxNode): readonly string[] {
+      const definition = decoratedDefinition(node) ?? node;
+      if (definition.name === "FunctionDefinition" || definition.name === "ClassDefinition") {
+        const name = declarationName(input, definition);
+        return name === null ? [] : [name];
+      }
+      const names = new Set<string>();
+      function visitBinding(candidate: PythonSyntaxNode): void {
+        addDirectBindingNames(candidate, names);
+        for (const child of directChildren(candidate)) {
+          visitBinding(child);
+        }
+      }
+      visitBinding(node);
+      return [...names];
+    }
+
+    const topLevelBindCounts = new Map<string, number>();
+    for (const node of topLevelNodes) {
+      for (const name of topLevelBindingNames(node)) {
+        topLevelBindCounts.set(name, (topLevelBindCounts.get(name) ?? 0) + 1);
+      }
+    }
+
+    function analyzeCaller(definition: PythonSyntaxNode): {
+      readonly callsByName: ReadonlyMap<string, readonly PythonSyntaxNode[]>;
+      readonly unsafeBindingNames: ReadonlySet<string>;
+    } {
+      const bodies = directChildren(definition).filter((child) => child.name === "Body");
+      const parameterLists = directChildren(definition).filter(
+        (child) => child.name === "ParamList"
+      );
+      if (
+        bodies.length !== 1 ||
+        bodies[0] === undefined ||
+        parameterLists.length !== 1 ||
+        parameterLists[0] === undefined
+      ) {
+        return { callsByName: new Map(), unsafeBindingNames: new Set() };
+      }
+      input.directCallTraversalObserver?.();
+      const unsafeBindingNames = new Set<string>();
+      for (const child of directChildren(parameterLists[0])) {
+        if (child.name === "VariableName") {
+          const name = declarationName(input, child);
+          if (name !== null) {
+            unsafeBindingNames.add(name);
+          }
+        }
+      }
+      const callsByName = new Map<string, PythonSyntaxNode[]>();
+      function visitCall(candidate: PythonSyntaxNode): void {
+        if (
+          candidate !== bodies[0] &&
+          (candidate.name === "DecoratedStatement" ||
+            candidate.name === "FunctionDefinition" ||
+            candidate.name === "ClassDefinition" ||
+            candidate.name === "LambdaExpression")
+        ) {
+          const definition = decoratedDefinition(candidate) ?? candidate;
+          if (
+            definition.name === "FunctionDefinition" ||
+            definition.name === "ClassDefinition"
+          ) {
+            const name = declarationName(input, definition);
+            if (name !== null) {
+              unsafeBindingNames.add(name);
+            }
+          }
+          return;
+        }
+        addDirectBindingNames(candidate, unsafeBindingNames);
+        if (candidate.name === "CallExpression") {
+          const callee = directChildren(candidate)[0];
+          const name = callee?.name === "VariableName" ? declarationName(input, callee) : null;
+          if (
+            name !== null &&
+            candidate.parent?.name !== "CallExpression" &&
+            candidate.parent?.name !== "MemberExpression"
+          ) {
+            const calls = callsByName.get(name) ?? [];
+            calls.push(callee!);
+            callsByName.set(name, calls);
+          }
+        }
+        for (const child of directChildren(candidate)) {
+          visitCall(child);
+        }
+      }
+      visitCall(bodies[0]);
+      return { callsByName, unsafeBindingNames };
+    }
+
+    for (const caller of declarations) {
+      const analysis = analyzeCaller(caller.definition);
+      for (const [targetName, calls] of analysis.callsByName) {
+        const candidates = declarationsByName.get(targetName) ?? [];
+        const target = candidates[0];
+        if (
+          analysis.unsafeBindingNames.has(targetName) ||
+          candidates.length !== 1 ||
+          target === undefined ||
+          topLevelBindCounts.get(targetName) !== 1
+        ) {
+          continue;
+        }
+        for (const call of calls) {
+          const range = rangeFor(lineStarts, call.from, call.to);
+          edges.push({
+            id: createEdgeId({
+              sourceId: caller.symbol.id,
+              targetId: target.symbol.id,
+              kind: "calls",
+              line: range.start.line,
+              column: range.start.column,
+              referenceName: targetName
+            }),
+            sourceId: caller.symbol.id,
+            targetId: target.symbol.id,
+            kind: "calls",
+            filePath: input.filePath,
+            range,
+            resolution: "exact",
+            confidence: 1,
+            referenceName: targetName,
+            evidence: {
+              ruleId: "syntax.python.same-file.unique-top-level-function-call",
+              stage: "syntax",
+              candidateSymbolIds: [target.symbol.id]
+            }
+          });
+        }
+      }
+    }
+  }
+
   function addPythonRoute(
     method: RouteMethod,
     declarationNode: PythonSyntaxNode,
@@ -4247,6 +4533,7 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
     for (const node of topLevelNodes) {
       visit(node, fileNode);
     }
+    addSameFileTopLevelFunctionCalls(topLevelNodes);
 
     const imports = topLevelNodes.flatMap((node) => staticFastApiImports(input, node));
     const djangoNinjaImports = topLevelNodes.flatMap((node) => staticDjangoNinjaImports(input, node));

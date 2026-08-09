@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { extractFileFacts } from "../../../src/extraction/index.js";
+import { extractPythonFileFacts } from "../../../src/extraction/python.js";
 
 describe("source extraction", () => {
   it("collects declarations, containment, module references, and direct calls", () => {
@@ -2691,6 +2692,245 @@ describe("source extraction", () => {
 
     expect(facts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
     expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+  });
+
+  it("retains only bounded Java implicit-static and Python same-file top-level direct calls", () => {
+    const javaFacts = extractFileFacts({
+      filePath: "src/ComparisonJavaFixture.java",
+      language: "java",
+      sourceText: [
+        "public class ComparisonJavaFixture {",
+        "  private static void comparisonJavaHelper() {}",
+        "  static void comparisonJavaEntry() { comparisonJavaHelper(); }",
+        "  void instanceEntry() { comparisonJavaHelper(); }",
+        "  void instanceHelper() {}",
+        "  static void invalidInstanceTarget() { instanceHelper(); }",
+        "}"
+      ].join("\n")
+    });
+
+    expect(javaFacts.jvmFacts?.javaMemberCallReferences).toEqual([
+      expect.objectContaining({
+        receiverKind: "implicit-static",
+        methodName: "comparisonJavaHelper",
+        argumentCount: 0
+      }),
+      expect.objectContaining({
+        receiverKind: "implicit-static",
+        methodName: "instanceHelper",
+        argumentCount: 0
+      })
+    ]);
+
+    const staticallyImportedJavaFacts = extractFileFacts({
+      filePath: "src/StaticImportFixture.java",
+      language: "java",
+      sourceText: [
+        "import static external.Helpers.comparisonJavaHelper;",
+        "public class StaticImportFixture {",
+        "  static void comparisonJavaHelper() {}",
+        "  static void entry() { comparisonJavaHelper(); }",
+        "}"
+      ].join("\n")
+    });
+    expect(staticallyImportedJavaFacts.jvmFacts?.javaMemberCallReferences).toEqual([]);
+
+    const pythonFacts = extractFileFacts({
+      filePath: "comparison_fixture.py",
+      language: "python",
+      sourceText: [
+        "def comparison_python_helper():",
+        "    return 1",
+        "",
+        "def comparison_python_entry():",
+        "    return comparison_python_helper()",
+        "",
+        "def parameter_shadow(comparison_python_helper):",
+        "    return comparison_python_helper()",
+        "",
+        "def assignment_shadow():",
+        "    comparison_python_helper()",
+        "    comparison_python_helper = lambda: 2",
+        "",
+        "def global_shadow():",
+        "    global comparison_python_helper",
+        "    return comparison_python_helper()",
+        "",
+        "def nonlocal_shadow():",
+        "    nonlocal comparison_python_helper",
+        "    return comparison_python_helper()",
+        "",
+        "def nested_scope():",
+        "    def nested():",
+        "        return comparison_python_helper()",
+        "    return nested()",
+        "",
+        "class Container:",
+        "    def method(self):",
+        "        return comparison_python_helper()",
+        "",
+        "def member_and_chain(obj):",
+        "    obj.comparison_python_helper()",
+        "    return comparison_python_helper()()",
+        "",
+        "def rebound_helper():",
+        "    return 1",
+        "rebound_helper = lambda: 2",
+        "def rebound_entry():",
+        "    return rebound_helper()"
+      ].join("\n")
+    });
+    const pythonSymbolsById = new Map(
+      pythonFacts.symbols.map((symbol) => [symbol.id, symbol])
+    );
+
+    expect(
+      pythonFacts.edges
+        .filter((edge) => edge.kind === "calls")
+        .map((edge) => ({
+          source: pythonSymbolsById.get(edge.sourceId)?.qualifiedName,
+          target: pythonSymbolsById.get(edge.targetId ?? "")?.qualifiedName,
+          referenceName: edge.referenceName,
+          resolution: edge.resolution,
+          confidence: edge.confidence,
+          evidence: edge.evidence
+        }))
+    ).toEqual([
+      {
+        source: "comparison_fixture.py#comparison_python_entry",
+        target: "comparison_fixture.py#comparison_python_helper",
+        referenceName: "comparison_python_helper",
+        resolution: "exact",
+        confidence: 1,
+        evidence: {
+          ruleId: "syntax.python.same-file.unique-top-level-function-call",
+          stage: "syntax",
+          candidateSymbolIds: [expect.any(String)]
+        }
+      }
+    ]);
+  });
+
+  it("fails closed for decorated Python direct-call targets", () => {
+    const decorated = extractFileFacts({
+      filePath: "decorated.py",
+      language: "python",
+      sourceText: [
+        "def replacement():",
+        "    return 2",
+        "def redirect(function):",
+        "    return replacement",
+        "@redirect",
+        "def helper():",
+        "    return 1",
+        "def entry():",
+        "    return helper()"
+      ].join("\n")
+    });
+    expect(decorated.edges.filter((edge) => edge.kind === "calls")).toEqual([]);
+  });
+
+  it("fails closed for Python direct calls when a wildcard import exists", () => {
+    const wildcard = extractFileFacts({
+      filePath: "wildcard.py",
+      language: "python",
+      sourceText: [
+        "from external_helpers import *",
+        "def helper():",
+        "    return 1",
+        "def entry():",
+        "    return helper()"
+      ].join("\n")
+    });
+    expect(wildcard.edges.filter((edge) => edge.kind === "calls")).toEqual([]);
+  });
+
+  it("fails closed for continued Python wildcard imports", () => {
+    const facts = extractFileFacts({
+      filePath: "continued-wildcard.py",
+      language: "python",
+      sourceText: [
+        "from external_helpers import \\",
+        "*",
+        "def helper():",
+        "    return 1",
+        "def entry():",
+        "    return helper()"
+      ].join("\n")
+    });
+
+    expect(facts.edges.filter((edge) => edge.kind === "calls")).toEqual([]);
+  });
+
+  it("fails closed when a Python caller deletes the target name", () => {
+    const facts = extractFileFacts({
+      filePath: "delete-binding.py",
+      language: "python",
+      sourceText: [
+        "def helper():",
+        "    return 1",
+        "def entry():",
+        "    del helper",
+        "    return helper()"
+      ].join("\n")
+    });
+
+    expect(facts.edges.filter((edge) => edge.kind === "calls")).toEqual([]);
+  });
+
+  it("fails closed for annotated Python caller assignments", () => {
+    const facts = extractFileFacts({
+      filePath: "annotated-binding.py",
+      language: "python",
+      sourceText: [
+        "def helper():",
+        "    return 1",
+        "def entry():",
+        "    helper: Callable = lambda: 2",
+        "    return helper()"
+      ].join("\n")
+    });
+
+    expect(facts.edges.filter((edge) => edge.kind === "calls")).toEqual([]);
+  });
+
+  it("fails closed for Python comprehension target bindings", () => {
+    const facts = extractFileFacts({
+      filePath: "comprehension-binding.py",
+      language: "python",
+      sourceText: [
+        "def helper():",
+        "    return 1",
+        "def entry(functions):",
+        "    return [helper() for helper in functions]"
+      ].join("\n")
+    });
+
+    expect(facts.edges.filter((edge) => edge.kind === "calls")).toEqual([]);
+  });
+
+  it("walks each Python caller body once instead of once per possible target", () => {
+    const functionCount = 48;
+    let callerBodyTraversals = 0;
+    const facts = extractPythonFileFacts({
+      filePath: "wide.py",
+      language: "python",
+      sourceText: Array.from(
+        { length: functionCount },
+        (_, index) =>
+          index === 0
+            ? "def function_0():\n    return None"
+            : `def function_${index}():\n    return function_0()`
+      ).join("\n\n"),
+      directCallTraversalObserver: () => {
+        callerBodyTraversals += 1;
+      }
+    });
+
+    expect(callerBodyTraversals).toBe(functionCount);
+    expect(facts.edges.filter((edge) => edge.kind === "calls")).toHaveLength(
+      functionCount - 1
+    );
   });
 
   it("extracts Python declarations and direct FastAPI decorator routes with syntax evidence", () => {

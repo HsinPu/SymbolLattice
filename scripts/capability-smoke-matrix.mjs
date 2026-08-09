@@ -31,13 +31,98 @@ function requireUniqueStrings(values, label) {
   return [...values];
 }
 
-function validateCases(value, label) {
+function validateNotApplicable(value, label) {
+  const notApplicable = requireRecord(value, label);
+  requireNonemptyString(notApplicable.reason, `${label}.reason`);
+  return { reason: notApplicable.reason };
+}
+
+function validateV2Assertions(value, label, profile) {
+  const assertions = requireRecord(value, label);
+  const symbols = requireArray(assertions.symbols, `${label}.symbols`).map((candidate, index) => {
+    const assertionLabel = `${label}.symbols[${index}]`;
+    const record = requireRecord(candidate, assertionLabel);
+    requireNonemptyString(record.id, `${assertionLabel}.id`);
+    if (record.notApplicable !== undefined) {
+      validateNotApplicable(record.notApplicable, `${assertionLabel}.notApplicable`);
+      return { id: record.id, notApplicable: { reason: record.notApplicable.reason } };
+    }
+    return {
+      id: record.id,
+      name: requireNonemptyString(record.name, `${assertionLabel}.name`),
+      filePath: requireNonemptyString(record.filePath, `${assertionLabel}.filePath`),
+      kind: requireNonemptyString(record.kind, `${assertionLabel}.kind`)
+    };
+  });
+  const symbolsById = new Map(symbols.map((assertion) => [assertion.id, assertion]));
+  const relations = requireArray(assertions.relations, `${label}.relations`).map((candidate, index) => {
+    const assertionLabel = `${label}.relations[${index}]`;
+    const record = requireRecord(candidate, assertionLabel);
+    requireNonemptyString(record.id, `${assertionLabel}.id`);
+    if (record.notApplicable !== undefined) {
+      validateNotApplicable(record.notApplicable, `${assertionLabel}.notApplicable`);
+      return { id: record.id, notApplicable: { reason: record.notApplicable.reason } };
+    }
+    const command = requireNonemptyString(record.command, `${assertionLabel}.command`);
+    if (command === "callees") {
+      const source = requireNonemptyString(record.source, `${assertionLabel}.source`);
+      const target = requireNonemptyString(record.target, `${assertionLabel}.target`);
+      if (!symbolsById.has(source) || symbolsById.get(source)?.notApplicable !== undefined) {
+        throw new Error(`${assertionLabel}.source must reference an applicable symbol assertion.`);
+      }
+      if (!symbolsById.has(target) || symbolsById.get(target)?.notApplicable !== undefined) {
+        throw new Error(`${assertionLabel}.target must reference an applicable symbol assertion.`);
+      }
+      return {
+        id: record.id,
+        command,
+        source,
+        target,
+        kind: requireNonemptyString(record.kind, `${assertionLabel}.kind`)
+      };
+    }
+    if (command === "routes") {
+      return {
+        id: record.id,
+        command,
+        expectedPath: requireNonemptyString(record.expectedPath, `${assertionLabel}.expectedPath`),
+        ...(record.expectedMethod === undefined
+          ? {}
+          : { expectedMethod: requireNonemptyString(record.expectedMethod, `${assertionLabel}.expectedMethod`) })
+      };
+    }
+    throw new Error(`${assertionLabel}.command is unsupported: ${command}`);
+  });
+  requireUniqueStrings(
+    [...symbols, ...relations].map((assertion) => assertion.id),
+    `${label}.id`
+  );
+  if (profile === "language") {
+    if (!symbols.some((assertion) => assertion.notApplicable === undefined)) {
+      throw new Error(`${label} must include at least one required symbol assertion.`);
+    }
+    if (!relations.some(
+      (assertion) => assertion.notApplicable === undefined && assertion.command === "callees"
+    )) {
+      throw new Error(`${label} must include at least one required callees relation assertion.`);
+    }
+  }
+  return { symbols, relations };
+}
+
+function validateCases(value, label, schemaVersion, profile) {
   const cases = requireArray(value, label).map((candidate, index) => {
     const record = requireRecord(candidate, `${label}[${index}]`);
     requireNonemptyString(record.id, `${label}[${index}].id`);
     requireNonemptyString(record.language, `${label}[${index}].language`);
     requireNonemptyString(record.fixturePath, `${label}[${index}].fixturePath`);
     requireNonemptyString(record.expectedFilePath, `${label}[${index}].expectedFilePath`);
+    if (schemaVersion === 2) {
+      return {
+        ...record,
+        assertions: validateV2Assertions(record.assertions, `${label}[${index}].assertions`, profile)
+      };
+    }
     if (record.expectedSymbol !== undefined && record.expectedSymbol !== null) {
       requireNonemptyString(record.expectedSymbol, `${label}[${index}].expectedSymbol`);
     }
@@ -56,8 +141,8 @@ function validateCases(value, label) {
 export function createCapabilitySmokePlan(value, registriesValue) {
   const manifest = requireRecord(value, "manifest");
   const registries = requireRecord(registriesValue, "registries");
-  if (manifest.schemaVersion !== 1) {
-    throw new Error("manifest.schemaVersion must be 1.");
+  if (manifest.schemaVersion !== 1 && manifest.schemaVersion !== 2) {
+    throw new Error("manifest.schemaVersion must be 1 or 2.");
   }
   const matrixId = requireNonemptyString(manifest.matrixId, "manifest.matrixId");
   const artifactLanguages = requireUniqueStrings(
@@ -76,8 +161,18 @@ export function createCapabilitySmokePlan(value, registriesValue) {
   );
   const registeredLanguageSet = new Set(artifactLanguages);
   const registeredFrameworkSet = new Set(frameworkCapabilityIds);
-  const languageCases = validateCases(manifest.languageCases, "manifest.languageCases");
-  const frameworkCases = validateCases(manifest.frameworkCases, "manifest.frameworkCases");
+  const languageCases = validateCases(
+    manifest.languageCases,
+    "manifest.languageCases",
+    manifest.schemaVersion,
+    "language"
+  );
+  const frameworkCases = validateCases(
+    manifest.frameworkCases,
+    "manifest.frameworkCases",
+    manifest.schemaVersion,
+    "framework"
+  );
 
   for (const candidate of [...languageCases, ...frameworkCases]) {
     if (!registeredLanguageSet.has(candidate.language)) {
@@ -107,7 +202,7 @@ export function createCapabilitySmokePlan(value, registriesValue) {
   );
 
   return {
-    schemaVersion: 1,
+    schemaVersion: manifest.schemaVersion,
     matrixId,
     registryCoverage: {
       languages: {
@@ -156,10 +251,65 @@ function commandError(error) {
   return error instanceof Error ? error.message : String(error);
 }
 
+function sameSymbolIdentity(actual, expected) {
+  return (
+    actual?.id === expected?.id &&
+    actual?.name === expected?.name &&
+    actual?.filePath === expected?.filePath &&
+    actual?.kind === expected?.kind
+  );
+}
+
+function requireRuntimeSchemaVersion(value) {
+  if (value === undefined) {
+    return 1;
+  }
+  if (value !== 1 && value !== 2) {
+    throw new Error("schemaVersion must be 1 or 2.");
+  }
+  return value;
+}
+
+export function capabilitySmokeFailureSummary(casesValue) {
+  const cases = requireArray(casesValue, "cases");
+  const failedCases = cases.map((candidate, index) => {
+    const receipt = requireRecord(candidate, `cases[${index}]`);
+    const errors = requireArray(receipt.errors, `cases[${index}].errors`);
+    const integrityErrors = errors.filter(
+      (error) => error?.failureKind === "cleanup" || error?.failureKind === "runner"
+    );
+    const paths = [
+      ...(receipt.classification === "unavailable" ? ["classification.unavailable"] : []),
+      ...integrityErrors.map((error) => `errors.${error.stage}`)
+    ];
+    return { id: receipt.id, paths, errors: integrityErrors };
+  }).filter((candidate) => candidate.paths.length > 0);
+  return {
+    failedCases: failedCases.length,
+    errorCount: failedCases.reduce((total, candidate) => total + candidate.errors.length, 0),
+    cases: failedCases
+  };
+}
+
+export function capabilitySmokeExitCode(failureSummaryValue) {
+  const failureSummary = requireRecord(failureSummaryValue, "failureSummary");
+  if (!Number.isInteger(failureSummary.failedCases) || failureSummary.failedCases < 0) {
+    throw new Error("failureSummary.failedCases must be a nonnegative integer.");
+  }
+  return failureSummary.failedCases > 0 ? 1 : 0;
+}
+
 /** Runs one isolated, real application-flow case through an injected CLI runtime. */
-export async function runCapabilitySmokeCase(candidateValue, kind, runtimeValue) {
+export async function runCapabilitySmokeCase(candidateValue, kind, runtimeValue, schemaVersionValue) {
   const candidate = requireRecord(candidateValue, "candidate");
   const runtime = requireRecord(runtimeValue, "runtime");
+  const schemaVersion = requireRuntimeSchemaVersion(schemaVersionValue);
+  if (schemaVersion === 1 && candidate.assertions !== undefined) {
+    throw new Error("schemaVersion 1 cases must not include assertions.");
+  }
+  const assertions = schemaVersion === 2
+    ? validateV2Assertions(candidate.assertions, `Case ${candidate.id}.assertions`, kind)
+    : null;
   if (kind !== "language" && kind !== "framework") {
     throw new Error("kind must be language or framework.");
   }
@@ -186,6 +336,31 @@ export async function runCapabilitySmokeCase(candidateValue, kind, runtimeValue)
     relation: null
   };
   const errors = [];
+  const assertionReceipts = assertions === null
+    ? null
+    : {
+        symbols: assertions.symbols.map((assertion) => ({
+          id: assertion.id,
+          status: assertion.notApplicable === undefined ? "pending" : "not-applicable",
+          ...(assertion.notApplicable === undefined
+            ? {
+                expected: {
+                  name: assertion.name,
+                  filePath: assertion.filePath,
+                  kind: assertion.kind
+                },
+                actualId: null
+              }
+            : { reason: assertion.notApplicable.reason })
+        })),
+        relations: assertions.relations.map((assertion) => ({
+          id: assertion.id,
+          status: assertion.notApplicable === undefined ? "pending" : "not-applicable",
+          ...(assertion.notApplicable === undefined
+            ? { command: assertion.command }
+            : { reason: assertion.notApplicable.reason })
+        }))
+      };
   let projectPath = null;
 
   try {
@@ -274,7 +449,173 @@ export async function runCapabilitySmokeCase(candidateValue, kind, runtimeValue)
       }
     }
 
-    if (stages.files) {
+    if (stages.files && assertions !== null) {
+      const resolvedSymbols = new Map();
+      for (const [index, assertion] of assertions.symbols.entries()) {
+        if (assertion.notApplicable !== undefined) {
+          continue;
+        }
+        const receipt = assertionReceipts.symbols[index];
+        try {
+          const result = await runtime.runJson("find", [
+            assertion.name,
+            "--project",
+            projectPath,
+            "--json",
+            "--limit",
+            "20"
+          ]);
+          const matches = Array.isArray(result?.symbols)
+            ? result.symbols.filter(
+                (item) =>
+                  item?.name === assertion.name &&
+                  item?.filePath === assertion.filePath &&
+                  item?.kind === assertion.kind &&
+                  typeof item?.id === "string" &&
+                  item.id.length > 0
+              )
+            : [];
+          if (matches.length === 1) {
+            const [symbol] = matches;
+            receipt.status = "passed";
+            receipt.actualId = symbol.id;
+            resolvedSymbols.set(assertion.id, symbol);
+            evidence.symbolName ??= symbol.name;
+          } else {
+            receipt.status = "failed";
+            receipt.message = `find returned ${matches.length} exact identities for ${assertion.id}.`;
+            errors.push({ stage: "symbol", assertionId: assertion.id, message: receipt.message });
+          }
+        } catch (error) {
+          receipt.status = "failed";
+          receipt.message = commandError(error);
+          errors.push({
+            stage: "symbol",
+            assertionId: assertion.id,
+            message: receipt.message,
+            failureKind: "runner"
+          });
+        }
+      }
+      stages.symbol = assertions.symbols
+        .filter((assertion) => assertion.notApplicable === undefined)
+        .every((assertion) => resolvedSymbols.has(assertion.id));
+      const assertionsByActualId = new Map();
+      for (const [assertionId, symbol] of resolvedSymbols) {
+        const assertionIds = assertionsByActualId.get(symbol.id) ?? [];
+        assertionIds.push(assertionId);
+        assertionsByActualId.set(symbol.id, assertionIds);
+      }
+      for (const [actualId, assertionIds] of assertionsByActualId) {
+        if (assertionIds.length < 2) {
+          continue;
+        }
+        for (const assertionId of assertionIds) {
+          const receipt = assertionReceipts.symbols.find((candidate) => candidate.id === assertionId);
+          receipt.status = "failed";
+          receipt.message = `Exact symbol identity ${actualId} was selected by multiple assertions.`;
+          resolvedSymbols.delete(assertionId);
+          errors.push({ stage: "symbol", assertionId, message: receipt.message });
+        }
+      }
+      stages.symbol = assertions.symbols
+        .filter((assertion) => assertion.notApplicable === undefined)
+        .every((assertion) => resolvedSymbols.has(assertion.id));
+
+      const requiredRelations = assertions.relations.filter(
+        (assertion) => assertion.notApplicable === undefined
+      );
+      if (stages.symbol) {
+        for (const [index, assertion] of assertions.relations.entries()) {
+          if (assertion.notApplicable !== undefined) {
+            continue;
+          }
+          const receipt = assertionReceipts.relations[index];
+          try {
+            if (assertion.command === "callees") {
+              const source = resolvedSymbols.get(assertion.source);
+              const target = resolvedSymbols.get(assertion.target);
+              if (source === undefined || target === undefined) {
+                throw new Error("Relation symbols were not resolved by exact identity.");
+              }
+              const result = await runtime.runJson("callees", [
+                source.id,
+                "--project",
+                projectPath,
+                "--json"
+              ]);
+              receipt.rootId = result?.symbol?.id ?? null;
+              receipt.targetId = target.id;
+              const matches = Array.isArray(result?.relations)
+                ? result.relations.filter(
+                    (item) =>
+                      sameSymbolIdentity(result?.symbol, source) &&
+                      sameSymbolIdentity(item?.symbol, target) &&
+                      item?.edge?.sourceId === source.id &&
+                      item?.edge?.targetId === target.id &&
+                      item?.edge?.kind === assertion.kind
+                  )
+                : [];
+              if (matches.length === 1) {
+                const edge = matches[0].edge;
+                receipt.status = "passed";
+                receipt.edge = {
+                  sourceId: edge.sourceId,
+                  targetId: edge.targetId,
+                  kind: edge.kind
+                };
+                evidence.relation ??= `${edge.kind} ${source.id} -> ${target.id}`;
+              } else {
+                receipt.status = "failed";
+                receipt.message = `callees returned ${matches.length} exact edges for ${assertion.id}.`;
+                errors.push({ stage: "relation", assertionId: assertion.id, message: receipt.message });
+              }
+            } else if (assertion.command === "routes") {
+              const result = await runtime.runJson("routes", [
+                "--project",
+                projectPath,
+                "--json",
+                "--limit",
+                "100"
+              ]);
+              const matches = Array.isArray(result?.routes)
+                ? result.routes.filter(
+                    (item) =>
+                      item?.path === assertion.expectedPath &&
+                      (assertion.expectedMethod === undefined || item?.method === assertion.expectedMethod)
+                  )
+                : [];
+              if (matches.length === 1) {
+                receipt.status = "passed";
+                receipt.route = { method: matches[0].method, path: matches[0].path };
+                evidence.relation ??= `${matches[0].method} ${matches[0].path}`;
+              } else {
+                receipt.status = "failed";
+                receipt.message = `routes returned ${matches.length} exact routes for ${assertion.id}.`;
+                errors.push({ stage: "relation", assertionId: assertion.id, message: receipt.message });
+              }
+            }
+          } catch (error) {
+            receipt.status = "failed";
+            receipt.message = commandError(error);
+            errors.push({
+              stage: "relation",
+              assertionId: assertion.id,
+              message: receipt.message,
+              failureKind: "runner"
+            });
+          }
+        }
+      }
+      stages.relation =
+        requiredRelations.length > 0 &&
+        requiredRelations.every(
+          (assertion) =>
+            assertionReceipts.relations.find((receipt) => receipt.id === assertion.id)?.status === "passed"
+        );
+    }
+
+    if (stages.files && assertions === null) {
       if (candidate.expectedSymbol === null || candidate.expectedSymbol === undefined) {
         stages.symbol = true;
       } else {
@@ -299,12 +640,12 @@ export async function runCapabilitySmokeCase(candidateValue, kind, runtimeValue)
             });
           }
         } catch (error) {
-          errors.push({ stage: "symbol", message: commandError(error) });
+          errors.push({ stage: "symbol", message: commandError(error), failureKind: "runner" });
         }
       }
     }
 
-    if (stages.symbol) {
+    if (stages.symbol && assertions === null) {
       const relation = requireRecord(candidate.relation, `Case ${candidate.id}.relation`);
       try {
         if (relation.command === "callees") {
@@ -348,17 +689,17 @@ export async function runCapabilitySmokeCase(candidateValue, kind, runtimeValue)
           });
         }
       } catch (error) {
-        errors.push({ stage: "relation", message: commandError(error) });
+        errors.push({ stage: "relation", message: commandError(error), failureKind: "runner" });
       }
     }
   } catch (error) {
-    errors.push({ stage: "prepare", message: commandError(error) });
+    errors.push({ stage: "prepare", message: commandError(error), failureKind: "runner" });
   } finally {
     if (projectPath !== null) {
       try {
         await runtime.cleanup(projectPath);
       } catch (error) {
-        errors.push({ stage: "cleanup", message: commandError(error) });
+        errors.push({ stage: "cleanup", message: commandError(error), failureKind: "cleanup" });
       }
     }
   }
@@ -376,6 +717,7 @@ export async function runCapabilitySmokeCase(candidateValue, kind, runtimeValue)
     classification: classifyCapabilitySmokeStages(stages),
     stages,
     evidence,
+    ...(assertionReceipts === null ? {} : { assertions: assertionReceipts }),
     errors
   };
 }
@@ -546,10 +888,10 @@ async function main(argv) {
   });
   const cases = [];
   for (const candidate of plan.languageCases) {
-    cases.push(await runCapabilitySmokeCase(candidate, "language", runtime));
+    cases.push(await runCapabilitySmokeCase(candidate, "language", runtime, plan.schemaVersion));
   }
   for (const candidate of plan.frameworkCases) {
-    cases.push(await runCapabilitySmokeCase(candidate, "framework", runtime));
+    cases.push(await runCapabilitySmokeCase(candidate, "framework", runtime, plan.schemaVersion));
   }
   const classifications = ["basic-usable", "partial-usable", "scan-only", "unavailable"];
   const summary = Object.fromEntries(
@@ -558,8 +900,9 @@ async function main(argv) {
       cases.filter((candidate) => candidate.classification === classification).length
     ])
   );
+  const failureSummary = capabilitySmokeFailureSummary(cases);
   const result = {
-    schemaVersion: 1,
+    schemaVersion: plan.schemaVersion,
     matrixId: plan.matrixId,
     generatedAt: new Date().toISOString(),
     package: { name: packageJson.name, version: packageJson.version },
@@ -570,6 +913,7 @@ async function main(argv) {
       frameworks: plan.frameworkCases.length
     },
     summary,
+    failureSummary,
     cases,
     retainedTemporaryProjects: runtime.retainedProjects
   };
@@ -580,11 +924,11 @@ async function main(argv) {
     await mkdir(dirname(outputPath), { recursive: true });
     await writeFile(outputPath, `${JSON.stringify(result, null, 2)}\n`, "utf8");
     process.stdout.write(
-      `${JSON.stringify({ outputPath, summary, selectedCases: result.selectedCases }, null, 2)}\n`
+      `${JSON.stringify({ outputPath, summary, failureSummary, selectedCases: result.selectedCases }, null, 2)}\n`
     );
   }
-  if (summary.unavailable > 0) {
-    process.exitCode = 1;
+  if (capabilitySmokeExitCode(failureSummary) !== 0) {
+    process.exitCode = capabilitySmokeExitCode(failureSummary);
   }
 }
 

@@ -3101,6 +3101,195 @@ describe("SymbolLatticeService", () => {
     );
   });
 
+  it("indexes and persists exact Java implicit-static and Python same-file direct calls", async () => {
+    const projectPath = await createInlineProject({
+      "src/ComparisonJavaFixture.java": [
+        "public class ComparisonJavaFixture {",
+        "  private static void comparisonJavaHelper() {}",
+        "  static void comparisonJavaEntry() { comparisonJavaHelper(); }",
+        "  void nonStaticEntry() { comparisonJavaHelper(); }",
+        "  void instanceOnly() {}",
+        "  static void invalidInstanceTarget() { instanceOnly(); }",
+        "  static void overloaded(int value) {}",
+        "  static void overloaded(String value) {}",
+        "  static void ambiguous() { overloaded(null); }",
+        "}"
+      ].join("\n"),
+      "comparison_fixture.py": [
+        "def comparison_python_helper():",
+        "    return 1",
+        "",
+        "def comparison_python_entry():",
+        "    return comparison_python_helper()",
+        "",
+        "def parameter_shadow(comparison_python_helper):",
+        "    return comparison_python_helper()",
+        "",
+        "def assignment_shadow():",
+        "    comparison_python_helper()",
+        "    comparison_python_helper = lambda: 2",
+        "",
+        "def global_shadow():",
+        "    global comparison_python_helper",
+        "    return comparison_python_helper()",
+        "",
+        "class Container:",
+        "    def method(self):",
+        "        return comparison_python_helper()"
+      ].join("\n"),
+      "duplicate.py": [
+        "def duplicate():",
+        "    return 1",
+        "def duplicate():",
+        "    return 2",
+        "def entry():",
+        "    return duplicate()"
+      ].join("\n"),
+      "cross_file.py": [
+        "def comparison_python_helper():",
+        "    return 2"
+      ].join("\n"),
+      "cross_file_caller.py": [
+        "from cross_file import comparison_python_helper",
+        "def entry():",
+        "    return comparison_python_helper()"
+      ].join("\n"),
+      "rebound.py": [
+        "def helper():",
+        "    return 1",
+        "helper = lambda: 2",
+        "def entry():",
+        "    return helper()"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+
+    const snapshot = graphStore.getSnapshot(projectPath);
+    const symbol = (qualifiedName: string) =>
+      snapshot.symbols.find((candidate) => candidate.qualifiedName === qualifiedName);
+    const javaHelper = symbol(
+      "src/ComparisonJavaFixture.java#ComparisonJavaFixture.comparisonJavaHelper"
+    );
+    const javaEntry = symbol(
+      "src/ComparisonJavaFixture.java#ComparisonJavaFixture.comparisonJavaEntry"
+    );
+    const pythonHelper = symbol("comparison_fixture.py#comparison_python_helper");
+    const pythonEntry = symbol("comparison_fixture.py#comparison_python_entry");
+    expect(javaHelper).toBeDefined();
+    expect(javaEntry).toBeDefined();
+    expect(pythonHelper).toBeDefined();
+    expect(pythonEntry).toBeDefined();
+
+    const javaCallers = await service.callers(projectPath, javaHelper?.qualifiedName ?? "missing");
+    expect(javaCallers.relations).toEqual([
+      expect.objectContaining({
+        symbol: expect.objectContaining({ id: javaEntry?.id }),
+        edge: expect.objectContaining({
+          resolution: "exact",
+          confidence: 1,
+          evidence: expect.objectContaining({
+            ruleId: expect.stringContaining("call.java.member.implicit-static"),
+            callAccess: expect.objectContaining({
+              visibility: "private",
+              decision: "declaring-class"
+            }),
+            callDispatch: expect.objectContaining({ invocationKind: "implicit-static" })
+          })
+        })
+      })
+    ]);
+    const javaCallees = await service.callees(projectPath, javaEntry?.qualifiedName ?? "missing");
+    expect(javaCallees.relations.map((relation) => relation.symbol.id)).toEqual([javaHelper?.id]);
+
+    const pythonCallers = await service.callers(
+      projectPath,
+      pythonHelper?.qualifiedName ?? "missing"
+    );
+    expect(pythonCallers.relations).toEqual([
+      expect.objectContaining({
+        symbol: expect.objectContaining({ id: pythonEntry?.id }),
+        edge: expect.objectContaining({
+          resolution: "exact",
+          confidence: 1,
+          evidence: {
+            ruleId: "syntax.python.same-file.unique-top-level-function-call",
+            stage: "syntax",
+            candidateSymbolIds: [pythonHelper?.id]
+          }
+        })
+      })
+    ]);
+    const pythonCallees = await service.callees(
+      projectPath,
+      pythonEntry?.qualifiedName ?? "missing"
+    );
+    expect(pythonCallees.relations.map((relation) => relation.symbol.id)).toEqual([
+      pythonHelper?.id
+    ]);
+
+    expect(
+      snapshot.edges.filter(
+        (edge) =>
+          edge.kind === "calls" &&
+          (edge.referenceName === "instanceOnly" || edge.referenceName === "overloaded")
+      )
+    ).toEqual([]);
+    expect(
+      snapshot.edges.filter(
+        (edge) => edge.kind === "calls" && edge.filePath === "duplicate.py"
+      )
+    ).toEqual([]);
+    expect(
+      snapshot.edges.filter(
+        (edge) =>
+          edge.kind === "calls" &&
+          (edge.filePath === "cross_file_caller.py" || edge.filePath === "rebound.py")
+      )
+    ).toEqual([]);
+
+    const persistedFacts = graphStore.getArtifactFacts(projectPath);
+    expect(
+      persistedFacts
+        .find((facts) => facts.filePath === "src/ComparisonJavaFixture.java")
+        ?.jvmFacts?.javaMemberCallReferences
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          receiverKind: "implicit-static",
+          methodName: "comparisonJavaHelper"
+        })
+      ])
+    );
+    expect(
+      persistedFacts
+        .find((facts) => facts.filePath === "comparison_fixture.py")
+        ?.edges.filter((edge) => edge.kind === "calls")
+    ).toHaveLength(1);
+
+    const reopened = new SymbolLatticeService(
+      new SqliteGraphStore(),
+      new FileSystemSourceCatalog()
+    );
+    await reopened.init({ projectPath });
+    const reopenedJavaCallers = await reopened.callers(
+      projectPath,
+      javaHelper?.qualifiedName ?? "missing"
+    );
+    const reopenedPythonCallers = await reopened.callers(
+      projectPath,
+      pythonHelper?.qualifiedName ?? "missing"
+    );
+    expect(reopenedJavaCallers.relations.map((relation) => relation.symbol.id)).toEqual([
+      javaEntry?.id
+    ]);
+    expect(reopenedPythonCallers.relations.map((relation) => relation.symbol.id)).toEqual([
+      pythonEntry?.id
+    ]);
+  });
+
   it("resolves lexically bound Java parameter and local receiver calls", async () => {
     const projectPath = await createInlineProject({
       "src/api/Base.java": [

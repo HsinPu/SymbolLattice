@@ -3243,6 +3243,14 @@ function staticJavaMemberCallReferences(input: {
   const lineStarts = lineStartsFor(input.extraction.sourceText);
   const references: JavaMemberCallReferenceFact[] = [];
 
+  function hasCompetingStaticImport(methodName: string): boolean {
+    const escapedName = methodName.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+    return new RegExp(
+      `^[ \\t]*import[ \\t]+static[ \\t]+[A-Za-z_$][A-Za-z0-9_$]*(?:\\.[A-Za-z_$][A-Za-z0-9_$]*)*\\.(?:${escapedName}|\\*)[ \\t]*;`,
+      "mu"
+    ).test(input.extraction.sourceText);
+  }
+
   interface ReceiverBindingBase {
     readonly name: string;
     readonly type: JavaCallTypeReferenceFact;
@@ -4731,7 +4739,27 @@ function staticJavaMemberCallReferences(input: {
         const ownerTypeRootName = ownerTypeSegments[0];
         const methodName = identifierText(input.extraction, methodNode);
         const arguments_ = staticJavaArguments(node);
-        if (explicitFieldName !== undefined && methodName !== null && arguments_ !== null) {
+        if (
+          receiverPrefix.trim().length === 0 &&
+          "isStatic" in input.callable &&
+          input.callable.isStatic &&
+          methodName !== null &&
+          arguments_ !== null &&
+          !hasCompetingStaticImport(methodName)
+        ) {
+          references.push({
+            sourceId: input.callableSymbol.id,
+            declaringTypeId: input.declaringType.id,
+            filePath: input.extraction.filePath,
+            receiverKind: "implicit-static",
+            methodName,
+            argumentCount: arguments_.length,
+            argumentTypes: arguments_.map((argument) =>
+              staticJavaArgumentType(input.extraction, argument, input.imports)
+            ),
+            range: rangeFor(lineStarts, methodNode.from, methodNode.to)
+          });
+        } else if (explicitFieldName !== undefined && methodName !== null && arguments_ !== null) {
           references.push({
             sourceId: input.callableSymbol.id,
             declaringTypeId: input.declaringType.id,

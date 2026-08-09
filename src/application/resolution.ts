@@ -7737,7 +7737,6 @@ function javaMethodAccessPlan(input: {
   const ownerType = uniqueJvmResolvedType(input.declaration.declaringTypeId, input.typesBySymbolId);
   if (
     visibility === undefined ||
-    visibility === "private" ||
     receiverType === null ||
     ownerType === null
   ) {
@@ -7764,6 +7763,13 @@ function javaMethodAccessPlan(input: {
     },
     hierarchyEdges: [...callerToOwnerPath, ...receiverToCallerPath]
   });
+
+  if (visibility === "private") {
+    return input.callerType.symbol.id === ownerType.symbol.id &&
+      receiverType.symbol.id === ownerType.symbol.id
+      ? evidence("declaring-class")
+      : null;
+  }
 
   if (visibility === "public") {
     return evidence("public");
@@ -7884,6 +7890,7 @@ function javaMethodSetPlan(input: {
   readonly invocationKind:
     | "expression"
     | "type-name-static"
+    | "implicit-static"
     | "this"
     | "super"
     | "parameter"
@@ -7972,7 +7979,11 @@ function javaMethodSetPlan(input: {
       continue;
     }
     for (const declaration of declarationsByOwnerId.get(ownerTypeSymbolId) ?? []) {
-      if (input.invocationKind === "type-name-static" && !declaration.isStatic) {
+      if (
+        (input.invocationKind === "type-name-static" ||
+          input.invocationKind === "implicit-static") &&
+        !declaration.isStatic
+      ) {
         continue;
       }
       // Java interface static methods belong to the declaring interface and are
@@ -7980,7 +7991,8 @@ function javaMethodSetPlan(input: {
       if (
         owner.kind === "interface" &&
         declaration.isStatic &&
-        (input.invocationKind !== "type-name-static" ||
+        ((input.invocationKind !== "type-name-static" &&
+          input.invocationKind !== "implicit-static") ||
           ownerTypeSymbolId !== input.receiverTypeSymbolId)
       ) {
         continue;
@@ -9477,7 +9489,7 @@ function projectJavaCallReferences(input: {
       continue;
     }
     const receiverTypeSymbolId =
-      reference.receiverKind === "this"
+      reference.receiverKind === "this" || reference.receiverKind === "implicit-static"
         ? declaringType.symbol.id
         : reference.receiverKind === "super"
           ? directSuperEdge?.targetId
