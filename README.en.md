@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.357.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.358.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## What it is
 
@@ -51,19 +51,19 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.357.0 usability snapshot
+## v0.358.0 usability snapshot
 
 The repeatable smoke matrix checks committed cases against the exported language and framework registries instead of treating README claims as proof.
 
-- Fifty-two priority languages complete `init`, no-op `sync`, changed `sync`, file inventory, and full-identity symbol lookup. Fifty-one pass B1 relation receipts; Ruby remains partial.
+- All 54 registered languages complete `init`, no-op `sync`, changed `sync`, file inventory, full-identity symbol lookup, and a B1 relation receipt.
 - Astro and Razor validate components bound to static page routes.
 - SQL, GraphQL, and Proto use an exact immutable file view to validate direct schema declarations without claiming complete dialect, schema-validation, or runtime-linkage semantics.
 - Relation receipts bind complete symbol identities. Edge-based receipts also require exact endpoints, `resolution: exact`, and `confidence: 1`; file-structure receipts require an exact path and complete symbol identity.
-- Groovy, CFML, and Ruby remain conservative partials for general calls. Later batches will use provable routes, file references, or another non-dynamic relation instead.
+- Groovy, CFML, and Ruby complete B1 through exact file-structure relationships; dynamic general calls remain conservatively excluded from exact edges.
 - Representative React Router, Next.js, Vue Router, SvelteKit, Astro, Spring Web, FastAPI, Django, and ASP.NET Core cases produce the expected route.
 - Nuxt Vue files scan and query successfully, but there is no dedicated Nuxt route capability yet.
 
-The exported registry covers more languages and frameworks than this first batch. Entries do not imply equal depth until they pass the same matrix.
+B1 means a language has a minimal reliable queryable relationship; it does not mean all 54 languages have equal cross-file or framework depth.
 
 ## MCP
 

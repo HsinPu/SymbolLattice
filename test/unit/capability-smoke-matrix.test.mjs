@@ -220,7 +220,7 @@ describe("capability smoke matrix contract", () => {
     });
 
     expect(plan.schemaVersion).toBe(2);
-    expect(plan.languageCases).toHaveLength(52);
+    expect(plan.languageCases).toHaveLength(54);
     expect(plan.frameworkCases).toHaveLength(10);
     expect(new Set(plan.registryCoverage.languages.selected)).toEqual(
       new Set([
@@ -276,6 +276,8 @@ describe("capability smoke matrix contract", () => {
         ,"sql"
         ,"graphql"
         ,"proto"
+        ,"groovy"
+        ,"cfml"
       ])
     );
     expect(plan.frameworkCases.filter((candidate) => candidate.capabilityId === null)).toEqual([
@@ -290,7 +292,6 @@ describe("capability smoke matrix contract", () => {
       "cpp-basic",
       "csharp-basic",
       "php-basic",
-      "ruby-basic",
       "kotlin-basic",
       "fortran-basic",
       "ada-basic",
@@ -458,7 +459,14 @@ describe("capability smoke matrix contract", () => {
         })
       );
     }
-    for (const id of ["sql-basic", "graphql-basic", "proto-basic"]) {
+    for (const id of [
+      "sql-basic",
+      "graphql-basic",
+      "proto-basic",
+      "groovy-basic",
+      "cfml-basic",
+      "ruby-basic"
+    ]) {
       expect(plan.languageCases.find((candidate) => candidate.id === id)?.assertions).toEqual(
         expect.objectContaining({
           symbols: expect.arrayContaining([
