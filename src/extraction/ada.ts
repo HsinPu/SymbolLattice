@@ -35,6 +35,12 @@ interface AdaUnit {
   readonly end: number;
 }
 
+interface AdaDirectCall {
+  readonly name: string;
+  readonly start: number;
+  readonly end: number;
+}
+
 const ADA_NAME = "[A-Za-z][A-Za-z0-9_]*(?:\\.[A-Za-z][A-Za-z0-9_]*)*";
 const PACKAGE_BODY_START = new RegExp(
   "^(?:private\\s+)?package\\s+body\\s+(" + ADA_NAME + ")\\s+is\\s*$",
@@ -283,6 +289,82 @@ function symbolKindFor(unit: AdaUnit): "module" | "function" {
   return unit.kind === "package" || unit.kind === "package-body" ? "module" : "function";
 }
 
+function isZeroArgumentAdaProcedureHeader(line: AdaLine, expectedName: string): boolean {
+  const escapedName = expectedName.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+  return new RegExp("^procedure\\s+" + escapedName + "\\s+is\\s*$", "iu").test(line.code);
+}
+
+/**
+ * Restrict the exact claim to a direct library procedure with no declarations:
+ * BEGIN followed by one unqualified procedure statement. This excludes local
+ * renames, access-to-subprogram values, nested declarations, and package use.
+ */
+function directAdaCall(unit: AdaUnit, lines: readonly AdaLine[]): AdaDirectCall | null {
+  const unitLines = lines.filter(
+    (line) => line.codeStart >= unit.start && line.codeEnd <= unit.end && line.code.length > 0
+  );
+  const header = unitLines[0];
+  const ending = unitLines.at(-1);
+  if (
+    header === undefined ||
+    ending === undefined ||
+    !isZeroArgumentAdaProcedureHeader(header, unit.name) ||
+    namedAdaEnd(ending)?.toLowerCase() !== unit.name.toLowerCase()
+  ) {
+    return null;
+  }
+  const body = unitLines.slice(1, -1);
+  const statement = body[1];
+  if (body.length !== 2 || body[0]?.code.toLowerCase() !== "begin" || statement === undefined) {
+    return null;
+  }
+  const match = new RegExp("^(" + ADA_NAME + ")\\s*;\\s*$", "iu").exec(statement.code);
+  const name = match?.[1];
+  if (match === null || name === undefined) {
+    return null;
+  }
+  const offset = statement.code.indexOf(name);
+  return offset < 0
+    ? null
+    : { name, start: statement.codeStart + offset, end: statement.codeStart + offset + name.length };
+}
+
+function permitsAdaDirectCalls(lines: readonly AdaLine[]): boolean {
+  return !lines.some((line) => /^(?:use|renames|generic|separate)\b/iu.test(line.code));
+}
+
+function hasDirectAdaContextWith(
+  caller: AdaUnit,
+  targetName: string,
+  units: readonly AdaUnit[],
+  lines: readonly AdaLine[]
+): boolean {
+  let contextStart = 0;
+  for (const unit of units) {
+    if (unit.start >= caller.start) {
+      break;
+    }
+    contextStart = Math.max(contextStart, unit.end);
+  }
+  const contextLines = lines.filter(
+    (line) =>
+      line.code.length > 0 && line.codeStart >= contextStart && line.codeStart < caller.start
+  );
+  if (contextLines.length === 0) {
+    return false;
+  }
+  const withNames: string[] = [];
+  for (const line of contextLines) {
+    const match = new RegExp("^with\\s+(" + ADA_NAME + ")\\s*;\\s*$", "iu").exec(line.code);
+    const withName = match?.[1];
+    if (match === null || withName === undefined) {
+      return false;
+    }
+    withNames.push(withName);
+  }
+  return withNames.filter((name) => name.toLowerCase() === targetName.toLowerCase()).length === 1;
+}
+
 /**
  * Emits source-ranged direct Ada library units without claiming full Ada
  * parsing, member analysis, specification/body pairing, or runtime behavior.
@@ -308,6 +390,7 @@ export function extractAdaFileFacts(input: AdaExtractFileFactsInput): ArtifactFa
   const symbols: SymbolNode[] = [fileNode];
   const edges: GraphEdge[] = [];
   const declarationOrdinals = new Map<string, number>();
+  const symbolsByUnit = new Map<AdaUnit, SymbolNode>();
 
   function addSymbol(inputSymbol: {
     readonly name: string;
@@ -315,7 +398,7 @@ export function extractAdaFileFacts(input: AdaExtractFileFactsInput): ArtifactFa
     readonly qualifiedName: string;
     readonly range: SourceRange;
     readonly containmentRuleId: string;
-  }): void {
+  }): SymbolNode {
     const identity = inputSymbol.qualifiedName + "\u0000" + inputSymbol.kind;
     const declarationOrdinal = declarationOrdinals.get(identity) ?? 0;
     declarationOrdinals.set(identity, declarationOrdinal + 1);
@@ -358,16 +441,78 @@ export function extractAdaFileFacts(input: AdaExtractFileFactsInput): ArtifactFa
         candidateSymbolIds: [symbol.id]
       }
     });
+    return symbol;
   }
 
-  for (const unit of staticAdaUnits(input) ?? []) {
-    addSymbol({
+  const units = staticAdaUnits(input) ?? [];
+  for (const unit of units) {
+    const symbol = addSymbol({
       name: unit.name,
       kind: symbolKindFor(unit),
       qualifiedName: input.filePath + "#" + unit.kind + ":" + unit.name,
       range: rangeForSpan(lineStarts, unit.start, unit.end),
       containmentRuleId: "language.ada." + unit.kind + ".direct-library-unit"
     });
+    symbolsByUnit.set(unit, symbol);
+  }
+
+  const lines = adaLines(input.sourceText);
+  if (lines !== null && permitsAdaDirectCalls(lines)) {
+    const procedures = units.filter((unit) => unit.kind === "procedure");
+    for (const callerUnit of procedures) {
+      const call = directAdaCall(callerUnit, lines);
+      if (
+        call === null ||
+        (callerUnit.name.includes(".") && !call.name.includes("."))
+      ) {
+        continue;
+      }
+      const candidates = procedures.filter(
+        (unit) =>
+          unit.name.toLowerCase() === call.name.toLowerCase() &&
+          isZeroArgumentAdaProcedureHeader(
+            lines.find((line) => line.codeStart === unit.start) ?? { code: "", codeStart: 0, codeEnd: 0 },
+            unit.name
+          )
+      );
+      if (candidates.length !== 1) {
+        continue;
+      }
+      const targetUnit = candidates[0];
+      const caller = symbolsByUnit.get(callerUnit);
+      const target = targetUnit === undefined ? undefined : symbolsByUnit.get(targetUnit);
+      if (
+        caller === undefined ||
+        target === undefined ||
+        !hasDirectAdaContextWith(callerUnit, call.name, units, lines)
+      ) {
+        continue;
+      }
+      const range = rangeForSpan(lineStarts, call.start, call.end);
+      edges.push({
+        id: createEdgeId({
+          sourceId: caller.id,
+          targetId: target.id,
+          kind: "calls",
+          line: range.start.line,
+          column: range.start.column,
+          referenceName: call.name
+        }),
+        sourceId: caller.id,
+        targetId: target.id,
+        kind: "calls",
+        filePath: input.filePath,
+        range,
+        resolution: "exact",
+        confidence: 1,
+        referenceName: call.name,
+        evidence: {
+          ruleId: "syntax.ada.same-file.unique-zero-argument-procedure-call.direct-context-with",
+          stage: "syntax",
+          candidateSymbolIds: [target.id]
+        }
+      });
+    }
   }
 
   return {

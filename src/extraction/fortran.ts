@@ -30,8 +30,44 @@ interface FortranUnit {
   readonly end: number;
 }
 
+interface FortranDirectCall {
+  readonly name: string;
+  readonly start: number;
+  readonly end: number;
+}
+
 const FIXED_FORM_EXTENSIONS: ReadonlySet<string> = new Set([".f", ".for", ".f77"]);
 const FORTRAN_IDENTIFIER = "[A-Za-z][A-Za-z0-9_]*";
+const FORTRAN_INTRINSIC_SUBROUTINES: ReadonlySet<string> = new Set([
+  "atomic_add",
+  "atomic_and",
+  "atomic_cas",
+  "atomic_define",
+  "atomic_fetch_add",
+  "atomic_fetch_and",
+  "atomic_fetch_or",
+  "atomic_fetch_xor",
+  "atomic_or",
+  "atomic_ref",
+  "atomic_xor",
+  "co_broadcast",
+  "co_max",
+  "co_min",
+  "co_reduce",
+  "cpu_time",
+  "date_and_time",
+  "event_query",
+  "execute_command_line",
+  "get_command",
+  "get_command_argument",
+  "get_environment_variable",
+  "move_alloc",
+  "mvbits",
+  "random_init",
+  "random_number",
+  "random_seed",
+  "system_clock"
+]);
 const MODULE_START = new RegExp("^module\\s+(" + FORTRAN_IDENTIFIER + ")\\s*$", "iu");
 const PROGRAM_START = new RegExp("^program\\s+(" + FORTRAN_IDENTIFIER + ")\\s*$", "iu");
 const SUBROUTINE_START = new RegExp(
@@ -332,6 +368,66 @@ function symbolKindFor(unit: FortranUnit): "module" | "function" {
   return unit.kind === "module" || unit.kind === "program" ? "module" : "function";
 }
 
+function isZeroArgumentFortranSubroutineHeader(line: FortranLine, expectedName: string): boolean {
+  const escapedName = expectedName.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+  return new RegExp(
+    "^(?:(?:recursive|pure|impure|elemental|non_recursive)\\s+)*subroutine\\s+" +
+      escapedName +
+      "\\s*\\(\\s*\\)(?:\\s+bind\\s*\\([^()]*\\))?\\s*$",
+    "iu"
+  ).test(line.code);
+}
+
+/**
+ * This deliberately recognizes only an otherwise declaration-free subroutine
+ * body containing one bare zero-argument CALL. That leaves procedure
+ * variables, interfaces, host association, and arbitrary local bindings out
+ * of the exact-edge claim.
+ */
+function directFortranCall(
+  unit: FortranUnit,
+  lines: readonly FortranLine[]
+): FortranDirectCall | null {
+  const unitLines = lines.filter(
+    (line) => line.codeStart >= unit.start && line.codeEnd <= unit.end && line.code.length > 0
+  );
+  const header = unitLines[0];
+  const ending = unitLines.at(-1);
+  if (
+    header === undefined ||
+    ending === undefined ||
+    !isZeroArgumentFortranSubroutineHeader(header, unit.name) ||
+    directUnitEnd(ending, unit.kind, unit.name) !== "match"
+  ) {
+    return null;
+  }
+  const body = unitLines.slice(1, -1).filter((line) => !/^implicit\s+none$/iu.test(line.code));
+  if (body.length !== 1) {
+    return null;
+  }
+  const line = body[0];
+  if (line === undefined) {
+    return null;
+  }
+  const match = new RegExp("^call\\s+(" + FORTRAN_IDENTIFIER + ")\\s*\\(\\s*\\)\\s*$", "iu").exec(
+    line.code
+  );
+  const name = match?.[1];
+  if (match === null || name === undefined) {
+    return null;
+  }
+  const offset = line.code.indexOf(name);
+  return offset < 0
+    ? null
+    : { name, start: line.codeStart + offset, end: line.codeStart + offset + name.length };
+}
+
+function permitsFortranDirectCalls(lines: readonly FortranLine[]): boolean {
+  return !lines.some((line) =>
+    /^(?:use|external|procedure|interface|associate|select\s+type|contains)\b/iu.test(line.code)
+  );
+}
+
 /**
  * Emits source-ranged Fortran program units without claiming full Fortran
  * parsing, generic END recovery, module-member analysis, or runtime behavior.
@@ -357,6 +453,7 @@ export function extractFortranFileFacts(input: FortranExtractFileFactsInput): Ar
   const symbols: SymbolNode[] = [fileNode];
   const edges: GraphEdge[] = [];
   const declarationOrdinals = new Map<string, number>();
+  const symbolsByUnit = new Map<FortranUnit, SymbolNode>();
 
   function addSymbol(inputSymbol: {
     readonly name: string;
@@ -364,7 +461,7 @@ export function extractFortranFileFacts(input: FortranExtractFileFactsInput): Ar
     readonly qualifiedName: string;
     readonly range: SourceRange;
     readonly containmentRuleId: string;
-  }): void {
+  }): SymbolNode {
     const identity = inputSymbol.qualifiedName + "\u0000" + inputSymbol.kind;
     const declarationOrdinal = declarationOrdinals.get(identity) ?? 0;
     declarationOrdinals.set(identity, declarationOrdinal + 1);
@@ -407,16 +504,71 @@ export function extractFortranFileFacts(input: FortranExtractFileFactsInput): Ar
         candidateSymbolIds: [symbol.id]
       }
     });
+    return symbol;
   }
 
-  for (const unit of staticFortranUnits(input) ?? []) {
-    addSymbol({
+  const units = staticFortranUnits(input) ?? [];
+  for (const unit of units) {
+    const symbol = addSymbol({
       name: unit.name,
       kind: symbolKindFor(unit),
       qualifiedName: input.filePath + "#" + unit.kind + ":" + unit.name,
       range: rangeForSpan(lineStarts, unit.start, unit.end),
       containmentRuleId: "language.fortran." + unit.kind + ".direct-program-unit"
     });
+    symbolsByUnit.set(unit, symbol);
+  }
+
+  const lines = fortranLines(input.sourceText, isFixedFormSource(input.filePath));
+  if (lines !== null && permitsFortranDirectCalls(lines)) {
+    const subroutines = units.filter((unit) => unit.kind === "subroutine");
+    for (const callerUnit of subroutines) {
+      const call = directFortranCall(callerUnit, lines);
+      if (call === null || FORTRAN_INTRINSIC_SUBROUTINES.has(call.name.toLowerCase())) {
+        continue;
+      }
+      const candidates = subroutines.filter(
+        (unit) =>
+          unit.name.toLowerCase() === call.name.toLowerCase() &&
+          isZeroArgumentFortranSubroutineHeader(
+            lines.find((line) => line.codeStart === unit.start) ?? { code: "", codeStart: 0, codeEnd: 0 },
+            unit.name
+          )
+      );
+      if (candidates.length !== 1) {
+        continue;
+      }
+      const targetUnit = candidates[0];
+      const caller = symbolsByUnit.get(callerUnit);
+      const target = targetUnit === undefined ? undefined : symbolsByUnit.get(targetUnit);
+      if (caller === undefined || target === undefined) {
+        continue;
+      }
+      const range = rangeForSpan(lineStarts, call.start, call.end);
+      edges.push({
+        id: createEdgeId({
+          sourceId: caller.id,
+          targetId: target.id,
+          kind: "calls",
+          line: range.start.line,
+          column: range.start.column,
+          referenceName: call.name
+        }),
+        sourceId: caller.id,
+        targetId: target.id,
+        kind: "calls",
+        filePath: input.filePath,
+        range,
+        resolution: "exact",
+        confidence: 1,
+        referenceName: call.name,
+        evidence: {
+          ruleId: "syntax.fortran.same-file.unique-zero-argument-subroutine-call",
+          stage: "syntax",
+          candidateSymbolIds: [target.id]
+        }
+      });
+    }
   }
 
   return {

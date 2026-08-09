@@ -22,6 +22,13 @@ interface ZigDeclaration {
   readonly isExported: boolean;
 }
 
+interface ZigDirectCall {
+  readonly callerName: string;
+  readonly name: string;
+  readonly start: number;
+  readonly end: number;
+}
+
 interface SanitizedZigSource {
   readonly valid: boolean;
   readonly text: string;
@@ -273,6 +280,70 @@ function staticZigDeclarations(sourceText: string): readonly ZigDeclaration[] {
 }
 
 /**
+ * The exact Zig edge is intentionally limited to a two-function source where
+ * the caller's entire body is one bare, zero-argument top-level call and the
+ * target is an empty zero-argument function. This excludes imports,
+ * usingnamespace, local values, comptime construction, and member calls.
+ */
+function staticZigDirectCalls(sourceText: string): readonly ZigDirectCall[] {
+  const sanitized = sanitizeZig(sourceText);
+  if (!sanitized.valid) {
+    return [];
+  }
+  const lines: Array<{ readonly text: string; readonly start: number }> = [];
+  let lineStart = 0;
+  while (lineStart <= sanitized.text.length) {
+    const lineEnd = lineEndAfter(sanitized.text, lineStart);
+    const text = sanitized.text.slice(lineStart, lineEnd);
+    if (text.trim().length > 0) {
+      lines.push({ text, start: lineStart });
+    }
+    if (lineEnd >= sanitized.text.length) {
+      break;
+    }
+    lineStart =
+      lineEnd +
+      (sanitized.text[lineEnd] === "\r" && sanitized.text[lineEnd + 1] === "\n" ? 2 : 1);
+  }
+  if (lines.length !== 2) {
+    return [];
+  }
+  const callerLine = lines[0];
+  const targetLine = lines[1];
+  if (callerLine === undefined || targetLine === undefined) {
+    return [];
+  }
+  const callMatch = /^\s*fn\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(\s*\)\s+void\s*\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\(\s*\)\s*;\s*\}\s*$/u.exec(
+    callerLine.text
+  );
+  const callerName = callMatch?.[1];
+  const name = callMatch?.[2];
+  if (callMatch === null || callerName === undefined || name === undefined) {
+    return [];
+  }
+  const escapedName = name.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+  if (
+    !new RegExp(
+      "^\\s*fn\\s+" + escapedName + "\\s*\\(\\s*\\)\\s+void\\s*\\{\\s*\\}\\s*$",
+      "u"
+    ).test(targetLine.text)
+  ) {
+    return [];
+  }
+  const offset = callerLine.text.lastIndexOf(name);
+  return offset < 0
+    ? []
+    : [
+        {
+          callerName,
+          name,
+          start: callerLine.start + offset,
+          end: callerLine.start + offset + name.length
+        }
+      ];
+}
+
+/**
  * Extracts source-proven Zig file, top-level container, and function symbols.
  * It deliberately excludes imports, calls, test blocks, anonymous containers,
  * nested container methods, and dynamic/comptime declaration construction.
@@ -347,6 +418,44 @@ export function extractZigFileFacts(input: ZigExtractFileFactsInput): ArtifactFa
             : "syntax.zig.top-level-container",
         stage: "syntax",
         candidateSymbolIds: [symbol.id]
+      }
+    });
+  }
+
+  for (const call of staticZigDirectCalls(input.sourceText)) {
+    const callers = symbols.filter(
+      (symbol) => symbol.kind === "function" && symbol.name === call.callerName
+    );
+    const candidates = symbols.filter(
+      (symbol) => symbol.kind === "function" && symbol.name === call.name
+    );
+    const caller = callers.length === 1 ? callers[0] : undefined;
+    const target = candidates.length === 1 ? candidates[0] : undefined;
+    if (caller === undefined || target === undefined) {
+      continue;
+    }
+    const range = rangeFor(lineStarts, call.start, call.end);
+    edges.push({
+      id: createEdgeId({
+        sourceId: caller.id,
+        targetId: target.id,
+        kind: "calls",
+        line: range.start.line,
+        column: range.start.column,
+        referenceName: call.name
+      }),
+      sourceId: caller.id,
+      targetId: target.id,
+      kind: "calls",
+      filePath: input.filePath,
+      range,
+      resolution: "exact",
+      confidence: 1,
+      referenceName: call.name,
+      evidence: {
+        ruleId: "syntax.zig.same-file.unique-zero-argument-top-level-function-call",
+        stage: "syntax",
+        candidateSymbolIds: [target.id]
       }
     });
   }

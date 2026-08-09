@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.349.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
+> v0.350.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
 
 ## 專案用途
 
@@ -51,12 +51,14 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.349.0 可用性快照
+## v0.350.0 可用性快照
 
 可重跑的 smoke matrix 會從正式語言與框架 registry 核對測試案例，而不是依 README 宣稱支援。
 
-- 14 個優先語言皆可完成 `init`、no-op `sync`、changed `sync`、檔案與 symbol 查詢：TypeScript、JavaScript、Python、Java、Go、Rust、C、C++、C#、PHP、Ruby、Kotlin、Swift、Dart。
-- 14 個優先語言中，除 Ruby 外的 13 種已能在最小案例建立經來源、目標與 edge ID 精確核對的基本 call 關係；Ruby 可掃描、查詢 module／singleton symbols，但 call 關係維持 fail-closed。
+- 17 個優先語言皆可完成 `init`、no-op `sync`、changed `sync`、檔案與 symbol 查詢：原有 14 種加上 Fortran、Ada、Zig。
+- 17 個優先語言中，除 Ruby 外的 16 種已能在最小案例建立經來源、目標與 edge ID 精確核對的基本 call 關係；Ruby 可掃描、查詢 module／singleton symbols，但 call 關係維持 fail-closed。
+- Fortran 只接受非 intrinsic 的唯一零參數 subroutine call；Ada 必須有 caller compilation unit 的直接 `with Target;` 可見性證據；Zig 只接受唯一 top-level 零參數裸呼叫。scope、import、child unit、qualified、dynamic 或多候選情況都 fail-closed。
+- Groovy 與 CFML 的一般呼叫具有動態派送、scope mutation 或 override 風險，本版審查後撤回 direct-call exact，不宣稱已達 B1。
 - Python 在有 `__init__.py` 證明的 regular package 內，可解析單層具名相對 import、其唯一 top-level function 的跨檔裸呼叫，以及唯一 class 的直接繼承；alias、增量 sync 與重新開啟索引都納入驗收。star／list、父層相對、namespace package、重綁、裝飾或重複宣告維持 fail-closed。
 - Swift 與 Dart 維持有界、零參數的同檔 direct-call 基線；不確定的跨檔可見性、binding、overload、closure、member／qualified call 一律拒絕 exact edge。
 - React Router、Next.js、Vue Router、SvelteKit、Astro、Spring Web、FastAPI、Django 與 ASP.NET Core 的代表案例可建立預期 route。

@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.349.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.350.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## What it is
 
@@ -51,12 +51,14 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.349.0 usability snapshot
+## v0.350.0 usability snapshot
 
 The repeatable smoke matrix checks committed cases against the exported language and framework registries instead of treating README claims as proof.
 
-- Fourteen priority languages complete `init`, no-op `sync`, changed `sync`, file inventory, and symbol lookup: TypeScript, JavaScript, Python, Java, Go, Rust, C, C++, C#, PHP, Ruby, Kotlin, Swift, and Dart.
-- Thirteen of the fourteen priority languages expose a basic call relation whose source, target, and edge identities are checked exactly. Ruby scans and exposes module-singleton symbols, but its call relationships remain fail-closed.
+- Seventeen priority languages complete `init`, no-op `sync`, changed `sync`, file inventory, and symbol lookup: the previous fourteen plus Fortran, Ada, and Zig.
+- Sixteen of the seventeen priority languages expose a basic call relation whose source, target, and edge identities are checked exactly. Ruby scans and exposes module-singleton symbols, but its call relationships remain fail-closed.
+- Fortran accepts only a unique non-intrinsic zero-argument subroutine call; Ada requires direct `with Target;` visibility evidence on the caller compilation unit; Zig accepts only a unique top-level zero-argument bare call. Scope, import, child-unit, qualified, dynamic, and multi-candidate cases fail closed.
+- Groovy and CFML direct calls remain deferred after review found dynamic dispatch, scope mutation, and override hazards; v0.350 does not claim B1 for them.
 - Inside a regular Python package proven by `__init__.py`, SymbolLattice resolves a single-level named relative import, a bare cross-file call to its unique top-level function, and direct inheritance from its unique class. Aliases, incremental sync, and index reopen are covered. Star or list imports, parent-relative or namespace packages, rebinding, decorators, and duplicate declarations fail closed.
 - Swift and Dart retain bounded zero-argument same-file direct-call baselines. Uncertain cross-file visibility, bindings, overloads, closures, and member or qualified calls fail closed.
 - Representative React Router, Next.js, Vue Router, SvelteKit, Astro, Spring Web, FastAPI, Django, and ASP.NET Core cases produce the expected route.
