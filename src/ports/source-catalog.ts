@@ -25,13 +25,17 @@ export interface ProjectFreshnessVerificationInput {
  * source text or resolver so a proven no-op remains memory-bounded.
  */
 export interface ProjectFreshnessVerification {
-  readonly policy: "full-content-configuration-candidates-v2";
+  readonly policy: "streaming-full-content-configuration-candidates-v3";
   readonly outcome: "proven-unchanged" | "source-files-changed" | "project-inputs-changed";
   readonly filesChecked: number;
   readonly sourceHash: "sha256";
   readonly retainedSourceText: false;
   readonly configurationPolicy: "configuration-candidates-v1";
   readonly configurationCandidatesChecked: number;
+  readonly sourceReadPolicy: "streaming-utf8-with-objective-c-header-classification-v1";
+  readonly configurationReadPolicy: "streaming-utf8-v1";
+  readonly discoveryPolicy: "single-project-walk-v1";
+  readonly maximumConcurrentReads: 8;
 }
 
 export type ModuleResolutionStrategy =

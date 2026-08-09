@@ -60,10 +60,29 @@ export function parseSymbolLatticeIndexPerformance(
     if (seen.has(phase.name)) {
       throw new Error(`SymbolLattice returned a duplicate phase: ${phase.name}.`);
     }
+    const residentSetSize = record(phase.residentSetSize);
+    if (
+      residentSetSize?.unit !== "bytes" ||
+      residentSetSize.samplingPolicy !== "phase-boundary-v1" ||
+      !nonnegativeFinite(residentSetSize.startBytes) ||
+      !nonnegativeFinite(residentSetSize.endBytes) ||
+      !nonnegativeFinite(residentSetSize.observedPeakBytes) ||
+      residentSetSize.observedPeakBytes < residentSetSize.startBytes ||
+      residentSetSize.observedPeakBytes < residentSetSize.endBytes
+    ) {
+      throw new Error(`SymbolLattice returned invalid resident-set-size evidence at phase ${phase.name}.`);
+    }
     seen.add(phase.name);
     return {
       name: phase.name as IndexPerformancePhaseName,
-      durationMs: phase.durationMs
+      durationMs: phase.durationMs,
+      residentSetSize: {
+        unit: "bytes" as const,
+        samplingPolicy: "phase-boundary-v1" as const,
+        startBytes: residentSetSize.startBytes,
+        endBytes: residentSetSize.endBytes,
+        observedPeakBytes: residentSetSize.observedPeakBytes
+      }
     };
   });
   if (

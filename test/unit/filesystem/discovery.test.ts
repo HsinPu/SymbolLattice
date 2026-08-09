@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, parse, resolve } from "node:path";
 
@@ -8,8 +8,10 @@ import {
   canonicalizeScopeRoots,
   discoverSourceFileFingerprints,
   discoverSourceFiles,
+  discoverFreshnessProjectPaths,
   getSourceLanguage,
   hashSource,
+  hashUtf8File,
   isUnsafeProjectPath,
   toProjectRelativePath
 } from "../../../src/infrastructure/filesystem/discovery.js";
@@ -32,14 +34,68 @@ afterEach(async () => {
 });
 
 describe("source discovery", () => {
+  it("streams the same UTF-8 SHA-256 identity as a complete decoded read", async () => {
+    const projectPath = await createProject();
+    const sourcePath = join(projectPath, "large.ts");
+    await writeFile(sourcePath, `export const text = "${"繁體中文🙂".repeat(200_000)}";\n`, "utf8");
+
+    const expected = hashSource(await readFile(sourcePath, "utf8"));
+
+    await expect(hashUtf8File(sourcePath)).resolves.toBe(expected);
+  });
+
+  it("preserves Node UTF-8 replacement semantics across stream boundaries", async () => {
+    const projectPath = await createProject();
+    const sourcePath = join(projectPath, "invalid.ts");
+    await writeFile(sourcePath, Buffer.concat([
+      Buffer.alloc(65_535, 0x61),
+      Buffer.from([0xf0, 0x9f]),
+      Buffer.from([0x61, 0x0a])
+    ]));
+
+    await expect(hashUtf8File(sourcePath)).resolves.toBe(
+      hashSource(await readFile(sourcePath, "utf8"))
+    );
+  });
+
+  it("discovers scoped sources and project-wide configuration candidates in one walk", async () => {
+    const projectPath = await createProject();
+    await mkdir(join(projectPath, "src"), { recursive: true });
+    await mkdir(join(projectPath, "outside"), { recursive: true });
+    await mkdir(join(projectPath, "node_modules", "hidden"), { recursive: true });
+    await writeFile(join(projectPath, ".gitignore"), "src/ignored.ts\n", "utf8");
+    await writeFile(join(projectPath, "src", "entry.ts"), "export const entry = true;\n", "utf8");
+    await writeFile(join(projectPath, "src", "ignored.ts"), "export const ignored = true;\n", "utf8");
+    await writeFile(join(projectPath, "outside", "other.ts"), "export const other = true;\n", "utf8");
+    await writeFile(join(projectPath, "outside", "package.json"), "{}\n", "utf8");
+    await writeFile(join(projectPath, "node_modules", "hidden", "package.json"), "{}\n", "utf8");
+
+    const result = await discoverFreshnessProjectPaths(projectPath, {
+      scopeRoots: ["src"],
+      isConfigurationCandidateFileName: (name) => name === "package.json"
+    });
+
+    expect(result.policy).toBe("single-project-walk-v1");
+    expect(result.sourcePaths.map((path) => path.replaceAll("\\", "/"))).toEqual([
+      expect.stringMatching(/\/src\/entry\.ts$/u)
+    ]);
+    expect(result.configurationPaths).toEqual(["outside/package.json"]);
+  });
+
   it("verifies full source hashes without retaining source text", async () => {
     const projectPath = await createProject();
     await mkdir(join(projectPath, "src"), { recursive: true });
     await writeFile(join(projectPath, "src", "entry.ts"), "export const answer = 42;\n", "utf8");
+    await writeFile(join(projectPath, "src", "bridge.h"), "@interface Bridge : NSObject\n@end\n", "utf8");
 
     const fingerprints = await discoverSourceFileFingerprints(projectPath);
 
     expect(fingerprints).toEqual([
+      {
+        relativePath: "src/bridge.h",
+        language: "objc",
+        contentHash: hashSource("@interface Bridge : NSObject\n@end\n")
+      },
       {
         relativePath: "src/entry.ts",
         language: "typescript",

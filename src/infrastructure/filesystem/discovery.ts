@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { createReadStream } from "node:fs";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { isAbsolute, parse, relative, resolve, sep } from "node:path";
@@ -137,6 +138,22 @@ export interface SourceDiscoveryOptions {
   readonly scopeRoots?: readonly string[];
 }
 
+export const FRESHNESS_PATH_DISCOVERY_POLICY = "single-project-walk-v1" as const;
+export const STREAMING_UTF8_HASH_POLICY = "streaming-utf8-v1" as const;
+export const SOURCE_FINGERPRINT_READ_POLICY =
+  "streaming-utf8-with-objective-c-header-classification-v1" as const;
+export const MAXIMUM_FRESHNESS_CONCURRENT_READS = 8 as const;
+
+export interface FreshnessProjectPathDiscovery {
+  readonly policy: typeof FRESHNESS_PATH_DISCOVERY_POLICY;
+  readonly sourcePaths: readonly string[];
+  readonly configurationPaths: readonly string[];
+}
+
+export interface FreshnessProjectPathDiscoveryOptions extends SourceDiscoveryOptions {
+  readonly isConfigurationCandidateFileName: (fileName: string) => boolean;
+}
+
 /**
  * A stable byte-wise comparison avoids host locale settings affecting graph
  * input order. All paths passed here are normalized POSIX project-relative
@@ -233,6 +250,16 @@ export function hashSource(sourceText: string): string {
   return createHash("sha256").update(sourceText).digest("hex");
 }
 
+/** Hash decoded UTF-8 incrementally without retaining the complete file string. */
+export async function hashUtf8File(filePath: string): Promise<string> {
+  const hash = createHash("sha256");
+  const stream = createReadStream(filePath, { encoding: "utf8" });
+  for await (const chunk of stream) {
+    hash.update(chunk);
+  }
+  return hash.digest("hex");
+}
+
 export function isUnsafeProjectPath(projectPath: string): boolean {
   const normalizedPath = resolve(projectPath);
   return normalizedPath === parse(normalizedPath).root || normalizedPath === resolve(homedir());
@@ -299,16 +326,24 @@ export async function discoverSourceFileFingerprints(
 ): Promise<readonly SourceFileFingerprint[]> {
   const normalizedProjectPath = resolve(projectPath);
   const paths = await discoverSourcePaths(normalizedProjectPath, options);
-  const fingerprints: SourceFileFingerprint[] = [];
-  const maximumConcurrentReads = 8;
+  return fingerprintSourcePaths(normalizedProjectPath, paths);
+}
 
-  for (let offset = 0; offset < paths.length; offset += maximumConcurrentReads) {
+export async function fingerprintSourcePaths(
+  projectPath: string,
+  paths: readonly string[]
+): Promise<readonly SourceFileFingerprint[]> {
+  const normalizedProjectPath = resolve(projectPath);
+  const fingerprints: SourceFileFingerprint[] = [];
+
+  for (let offset = 0; offset < paths.length; offset += MAXIMUM_FRESHNESS_CONCURRENT_READS) {
     const batch = await Promise.all(
-      paths.slice(offset, offset + maximumConcurrentReads).map(async (absolutePath) => {
-        const sourceText = await readFile(absolutePath, "utf8");
+      paths.slice(offset, offset + MAXIMUM_FRESHNESS_CONCURRENT_READS).map(async (absolutePath) => {
+        const objectiveCHeader = isObjectiveCHeaderPath(absolutePath);
+        const sourceText = objectiveCHeader ? await readFile(absolutePath, "utf8") : undefined;
         const language = getSourceLanguage(absolutePath, sourceText);
         if (language === null) {
-          if (isObjectiveCHeaderPath(absolutePath)) {
+          if (objectiveCHeader) {
             return null;
           }
           throw new Error(`Unsupported source file was discovered: ${absolutePath}`);
@@ -316,7 +351,7 @@ export async function discoverSourceFileFingerprints(
         return {
           relativePath: toProjectRelativePath(normalizedProjectPath, absolutePath),
           language,
-          contentHash: hashSource(sourceText)
+          contentHash: sourceText === undefined ? await hashUtf8File(absolutePath) : hashSource(sourceText)
         };
       })
     );
@@ -328,6 +363,59 @@ export async function discoverSourceFileFingerprints(
   }
 
   return fingerprints.sort((left, right) => compareProjectPaths(left.relativePath, right.relativePath));
+}
+
+/**
+ * Walk the project once for both scoped, gitignore-aware source paths and
+ * project-wide resolver configuration candidates.
+ */
+export async function discoverFreshnessProjectPaths(
+  projectPath: string,
+  options: FreshnessProjectPathDiscoveryOptions
+): Promise<FreshnessProjectPathDiscovery> {
+  const normalizedProjectPath = resolve(projectPath);
+  const scopeRoots = (await canonicalizeScopeRoots(normalizedProjectPath, options.scopeRoots))
+    .filter((scopeRoot) => !containsHardExcludedDirectory(scopeRoot));
+  const ignoreMatcher = await loadRootGitignore(normalizedProjectPath);
+  const sourcePaths: string[] = [];
+  const configurationPaths: string[] = [];
+
+  const insideSourceScope = (path: string): boolean =>
+    scopeRoots.some((scopeRoot) => scopeRoot === "." || path.startsWith(`${scopeRoot}/`));
+
+  async function visit(directoryPath: string, directoryRelativePath: string): Promise<void> {
+    const entries = await readdir(directoryPath, { withFileTypes: true });
+    for (const entry of entries.sort((left, right) => compareProjectPaths(left.name, right.name))) {
+      const entryPath = resolve(directoryPath, entry.name);
+      const entryRelativePath = joinProjectRelativePath(directoryRelativePath, entry.name);
+      if (entry.isDirectory()) {
+        if (!HARD_EXCLUDED_DIRECTORY_NAMES.has(entry.name)) {
+          await visit(entryPath, entryRelativePath);
+        }
+        continue;
+      }
+      if (!entry.isFile()) {
+        continue;
+      }
+      if (options.isConfigurationCandidateFileName(entry.name)) {
+        configurationPaths.push(entryRelativePath);
+      }
+      if (
+        insideSourceScope(entryRelativePath) &&
+        isSourceCandidatePath(entryRelativePath) &&
+        !ignoreMatcher.ignores(entryRelativePath)
+      ) {
+        sourcePaths.push(entryPath);
+      }
+    }
+  }
+
+  await visit(normalizedProjectPath, ".");
+  return {
+    policy: FRESHNESS_PATH_DISCOVERY_POLICY,
+    sourcePaths,
+    configurationPaths: configurationPaths.sort(compareProjectPaths)
+  };
 }
 
 async function discoverSourcePaths(

@@ -11061,7 +11061,7 @@ describe("SymbolLatticeService", () => {
 
     const indexed = await service.init({ projectPath });
     expect(indexed.operationPerformance).toMatchObject({
-      policy: "index-performance-v1",
+      policy: "index-performance-v2",
       operation: "index",
       clock: "monotonic-milliseconds"
     });
@@ -11074,6 +11074,18 @@ describe("SymbolLatticeService", () => {
       "status-read"
     ]);
     expect(indexed.operationPerformance?.phases.every((phase) => phase.durationMs >= 0)).toBe(true);
+    expect(indexed.operationPerformance?.phases.reduce(
+      (total, phase) => total + phase.durationMs,
+      0
+    )).toBeCloseTo(indexed.operationPerformance?.measuredDurationMs ?? Number.NaN, 3);
+    expect(indexed.operationPerformance?.phases.every((phase) =>
+      phase.residentSetSize.unit === "bytes" &&
+      phase.residentSetSize.samplingPolicy === "phase-boundary-v1" &&
+      phase.residentSetSize.startBytes >= 0 &&
+      phase.residentSetSize.endBytes >= 0 &&
+      phase.residentSetSize.observedPeakBytes >= phase.residentSetSize.startBytes &&
+      phase.residentSetSize.observedPeakBytes >= phase.residentSetSize.endBytes
+    )).toBe(true);
     expect(indexed.operationPerformance?.totalDurationMs).toBeGreaterThanOrEqual(
       indexed.operationPerformance?.measuredDurationMs ?? Number.POSITIVE_INFINITY
     );
@@ -11082,7 +11094,7 @@ describe("SymbolLatticeService", () => {
 
     const synced = await service.sync({ projectPath });
     expect(synced.operationPerformance).toMatchObject({
-      policy: "index-performance-v1",
+      policy: "index-performance-v2",
       operation: "sync",
       clock: "monotonic-milliseconds"
     });

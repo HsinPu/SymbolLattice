@@ -11,9 +11,14 @@ import type {
 } from "../../ports/source-catalog.js";
 import { createTypeScriptProjectModuleResolver } from "../typescript/index.js";
 import {
-  discoverSourceFileFingerprints,
   discoverSourceFiles,
+  discoverFreshnessProjectPaths,
+  fingerprintSourcePaths,
+  FRESHNESS_PATH_DISCOVERY_POLICY,
   isUnsafeProjectPath,
+  MAXIMUM_FRESHNESS_CONCURRENT_READS,
+  SOURCE_FINGERPRINT_READ_POLICY,
+  STREAMING_UTF8_HASH_POLICY,
   toProjectRelativePath
 } from "./discovery.js";
 import { createCargoWorkspaceProjectModuleResolver } from "./cargo-workspace.js";
@@ -25,7 +30,8 @@ import { detectJvmProjectModuleEvidence } from "./jvm-project.js";
 import { detectXcodeProjectEvidence } from "./xcode-project.js";
 import {
   CONFIGURATION_DISCOVERY_POLICY,
-  discoverConfigurationCandidateSnapshot
+  discoverConfigurationCandidateSnapshot,
+  isConfigurationCandidateFileName
 } from "./configuration-discovery.js";
 
 function mergeConfigurationPaths(
@@ -204,15 +210,21 @@ export class FileSystemSourceCatalog implements SourceCatalog {
     input: ProjectFreshnessVerificationInput
   ): Promise<ProjectFreshnessVerification> {
     const normalizedProjectPath = resolve(projectPath);
-    const fingerprints = await discoverSourceFileFingerprints(normalizedProjectPath, {
-      scopeRoots: input.indexInputs.scopeRoots
+    const paths = await discoverFreshnessProjectPaths(normalizedProjectPath, {
+      scopeRoots: input.indexInputs.scopeRoots,
+      isConfigurationCandidateFileName
     });
+    const fingerprints = await fingerprintSourcePaths(normalizedProjectPath, paths.sourcePaths);
     const receiptBase = {
-      policy: "full-content-configuration-candidates-v2" as const,
+      policy: "streaming-full-content-configuration-candidates-v3" as const,
       filesChecked: fingerprints.length,
       sourceHash: "sha256" as const,
       retainedSourceText: false as const,
-      configurationPolicy: CONFIGURATION_DISCOVERY_POLICY
+      configurationPolicy: CONFIGURATION_DISCOVERY_POLICY,
+      sourceReadPolicy: SOURCE_FINGERPRINT_READ_POLICY,
+      configurationReadPolicy: STREAMING_UTF8_HASH_POLICY,
+      discoveryPolicy: FRESHNESS_PATH_DISCOVERY_POLICY,
+      maximumConcurrentReads: MAXIMUM_FRESHNESS_CONCURRENT_READS
     };
     if (!freshnessFilesMatch(fingerprints, input.files)) {
       return {
@@ -234,7 +246,8 @@ export class FileSystemSourceCatalog implements SourceCatalog {
     }
     const configurationSnapshot = await discoverConfigurationCandidateSnapshot(
       normalizedProjectPath,
-      input.indexInputs.configurationInputs
+      input.indexInputs.configurationInputs,
+      paths.configurationPaths
     );
 
     return {

@@ -24,7 +24,7 @@ export const INDEX_WORK_REUSE_INVALIDATION_REASONS = [
 export type IndexWorkReuseInvalidationReason =
   (typeof INDEX_WORK_REUSE_INVALIDATION_REASONS)[number];
 
-export const INDEX_PERFORMANCE_POLICY = "index-performance-v1" as const;
+export const INDEX_PERFORMANCE_POLICY = "index-performance-v2" as const;
 
 export const INDEX_PERFORMANCE_PHASE_NAMES = [
   "load-prior-inputs",
@@ -46,6 +46,17 @@ export interface IndexPerformancePhase {
   readonly name: IndexPerformancePhaseName;
   /** Elapsed monotonic milliseconds spent in this phase. */
   readonly durationMs: number;
+  /**
+   * Process RSS observed at the phase boundaries. This is diagnostic evidence,
+   * not a claim that short-lived peaks between the two samples were captured.
+   */
+  readonly residentSetSize: {
+    readonly unit: "bytes";
+    readonly samplingPolicy: "phase-boundary-v1";
+    readonly startBytes: number;
+    readonly endBytes: number;
+    readonly observedPeakBytes: number;
+  };
 }
 
 /**

@@ -43,13 +43,17 @@ describe("filesystem source catalog freshness", () => {
       ])
     );
     expect(verification).toEqual({
-      policy: "full-content-configuration-candidates-v2",
+      policy: "streaming-full-content-configuration-candidates-v3",
       outcome: "proven-unchanged",
       filesChecked: 1,
       sourceHash: "sha256",
       retainedSourceText: false,
       configurationPolicy: "configuration-candidates-v1",
-      configurationCandidatesChecked: expect.any(Number)
+      configurationCandidatesChecked: expect.any(Number),
+      sourceReadPolicy: "streaming-utf8-with-objective-c-header-classification-v1",
+      configurationReadPolicy: "streaming-utf8-v1",
+      discoveryPolicy: "single-project-walk-v1",
+      maximumConcurrentReads: 8
     });
     expect(verification.configurationCandidatesChecked).toBeGreaterThanOrEqual(2);
   });

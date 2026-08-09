@@ -8,13 +8,20 @@ import {
 
 describe("comparison CLI adapters", () => {
   it("validates SymbolLattice process-local index performance receipts", () => {
+    const residentSetSize = {
+      unit: "bytes",
+      samplingPolicy: "phase-boundary-v1",
+      startBytes: 100,
+      endBytes: 120,
+      observedPeakBytes: 120
+    } as const;
     const receipt = {
-      policy: "index-performance-v1",
+      policy: "index-performance-v2",
       operation: "index",
       clock: "monotonic-milliseconds",
       phases: [
-        { name: "scan", durationMs: 4.25 },
-        { name: "extraction", durationMs: 5.75 }
+        { name: "scan", durationMs: 4.25, residentSetSize },
+        { name: "extraction", durationMs: 5.75, residentSetSize }
       ],
       totalDurationMs: 11,
       measuredDurationMs: 10,
@@ -32,14 +39,23 @@ describe("comparison CLI adapters", () => {
     expect(() => parseSymbolLatticeIndexPerformance(JSON.stringify({
       operationPerformance: { ...receipt, operation: "sync" }
     }), "index")).toThrow("index operation");
+    expect(() => parseSymbolLatticeIndexPerformance(JSON.stringify({
+      operationPerformance: {
+        ...receipt,
+        phases: [{
+          ...receipt.phases[0],
+          residentSetSize: { ...residentSetSize, observedPeakBytes: 99 }
+        }]
+      }
+    }), "index")).toThrow("resident-set-size");
 
     const noOpSyncReceipt = {
       ...receipt,
       operation: "sync" as const,
       phases: [
-        { name: "load-status", durationMs: 4.25 },
-        { name: "freshness-preflight", durationMs: 1.5 },
-        { name: "fast-path-check", durationMs: 5.75 }
+        { name: "load-status", durationMs: 4.25, residentSetSize },
+        { name: "freshness-preflight", durationMs: 1.5, residentSetSize },
+        { name: "fast-path-check", durationMs: 5.75, residentSetSize }
       ],
       totalDurationMs: 12.5,
       measuredDurationMs: 11.5,

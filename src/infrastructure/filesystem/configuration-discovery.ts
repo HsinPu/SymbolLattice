@@ -1,4 +1,4 @@
-import { readdir, readFile } from "node:fs/promises";
+import { readdir } from "node:fs/promises";
 import { resolve } from "node:path";
 
 import type { ProjectConfigurationInput } from "../../domain/index-inputs.js";
@@ -6,6 +6,7 @@ import {
   HARD_EXCLUDED_DIRECTORY_NAMES,
   compareProjectPaths,
   hashSource,
+  hashUtf8File,
   toProjectRelativePath
 } from "./discovery.js";
 
@@ -32,6 +33,10 @@ const CONFIGURATION_CANDIDATE_NAMES: ReadonlySet<string> = new Set([
   "settings.gradle.kts",
   "tsconfig.json"
 ]);
+
+export function isConfigurationCandidateFileName(fileName: string): boolean {
+  return CONFIGURATION_CANDIDATE_NAMES.has(fileName);
+}
 
 interface ConfigurationCandidateIdentity {
   readonly path: string;
@@ -64,7 +69,7 @@ async function discoverPresentCandidatePaths(projectPath: string): Promise<reado
         }
         continue;
       }
-      if (entry.isFile() && CONFIGURATION_CANDIDATE_NAMES.has(entry.name)) {
+      if (entry.isFile() && isConfigurationCandidateFileName(entry.name)) {
         paths.push(toProjectRelativePath(projectPath, entryPath));
       }
     }
@@ -79,8 +84,11 @@ async function readCandidateIdentity(
   path: string
 ): Promise<ConfigurationCandidateIdentity> {
   try {
-    const contents = await readFile(resolve(projectPath, ...path.split("/")), "utf8");
-    return { path, state: "present", contentHash: hashSource(contents) };
+    return {
+      path,
+      state: "present",
+      contentHash: await hashUtf8File(resolve(projectPath, ...path.split("/")))
+    };
   } catch (error) {
     if (
       typeof error === "object" &&
@@ -109,9 +117,12 @@ export async function discoverConfigurationCandidateInput(
 
 export async function discoverConfigurationCandidateSnapshot(
   projectPath: string,
-  trackedInputs: readonly ProjectConfigurationInput[]
+  trackedInputs: readonly ProjectConfigurationInput[],
+  presentCandidatePaths?: readonly string[]
 ): Promise<ConfigurationCandidateSnapshot> {
-  const candidatePaths = new Set(await discoverPresentCandidatePaths(projectPath));
+  const candidatePaths = new Set(
+    presentCandidatePaths ?? await discoverPresentCandidatePaths(projectPath)
+  );
   candidatePaths.add(".gitignore");
   for (const input of trackedInputs) {
     if (!isVirtualConfigurationInput(input)) {

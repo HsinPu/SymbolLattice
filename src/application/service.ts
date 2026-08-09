@@ -1225,44 +1225,70 @@ function fullIndexWork(sourceDocuments: readonly SourceDocument[]): IndexWork {
 interface MutableIndexPerformancePhase {
   readonly name: IndexPerformancePhaseName;
   readonly durationMs: number;
+  readonly residentSetSize: IndexOperationPerformance["phases"][number]["residentSetSize"];
+}
+
+interface IndexPerformancePhaseToken {
+  readonly startedAt: number;
+  readonly rssStartBytes: number;
 }
 
 class IndexPerformanceRecorder {
   private readonly operation: IndexOperationPerformance["operation"];
   private readonly now: () => number;
+  private readonly readResidentSetSize: () => number;
   private readonly startedAt: number;
   private readonly phases: MutableIndexPerformancePhase[] = [];
 
   public constructor(
     operation: IndexOperationPerformance["operation"],
-    now: () => number = () => Number(process.hrtime.bigint()) / 1_000_000
+    now: () => number = () => Number(process.hrtime.bigint()) / 1_000_000,
+    readResidentSetSize: () => number = () => process.memoryUsage().rss
   ) {
     this.operation = operation;
     this.now = now;
+    this.readResidentSetSize = readResidentSetSize;
     this.startedAt = this.now();
   }
 
-  public start(): number {
-    return this.now();
+  public start(): IndexPerformancePhaseToken {
+    return {
+      startedAt: this.now(),
+      rssStartBytes: Math.max(0, this.readResidentSetSize())
+    };
   }
 
-  public end(name: IndexPerformancePhaseName, startedAt: number): void {
-    this.phases.push({ name, durationMs: Math.max(0, this.now() - startedAt) });
+  public end(name: IndexPerformancePhaseName, token: IndexPerformancePhaseToken): void {
+    const rssEndBytes = Math.max(0, this.readResidentSetSize());
+    this.phases.push({
+      name,
+      durationMs: Math.max(0, this.now() - token.startedAt),
+      residentSetSize: {
+        unit: "bytes",
+        samplingPolicy: "phase-boundary-v1",
+        startBytes: token.rssStartBytes,
+        endBytes: rssEndBytes,
+        observedPeakBytes: Math.max(token.rssStartBytes, rssEndBytes)
+      }
+    });
   }
 
   public finish(): IndexOperationPerformance {
     const rawTotal = Math.max(0, this.now() - this.startedAt);
-    const rawMeasured = this.phases.reduce((total, phase) => total + phase.durationMs, 0);
-    const measuredDurationMs = roundPerformanceMilliseconds(rawMeasured);
+    const phases = this.phases.map((phase) => ({
+      name: phase.name,
+      durationMs: roundPerformanceMilliseconds(phase.durationMs),
+      residentSetSize: phase.residentSetSize
+    }));
+    const measuredDurationMs = roundPerformanceMilliseconds(
+      phases.reduce((total, phase) => total + phase.durationMs, 0)
+    );
     const totalDurationMs = Math.max(roundPerformanceMilliseconds(rawTotal), measuredDurationMs);
     return {
       policy: INDEX_PERFORMANCE_POLICY,
       operation: this.operation,
       clock: "monotonic-milliseconds",
-      phases: this.phases.map((phase) => ({
-        name: phase.name,
-        durationMs: roundPerformanceMilliseconds(phase.durationMs)
-      })),
+      phases,
       totalDurationMs,
       measuredDurationMs,
       unattributedDurationMs: roundPerformanceMilliseconds(
