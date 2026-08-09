@@ -220,7 +220,7 @@ describe("capability smoke matrix contract", () => {
     });
 
     expect(plan.schemaVersion).toBe(2);
-    expect(plan.languageCases).toHaveLength(47);
+    expect(plan.languageCases).toHaveLength(52);
     expect(plan.frameworkCases).toHaveLength(10);
     expect(new Set(plan.registryCoverage.languages.selected)).toEqual(
       new Set([
@@ -271,6 +271,11 @@ describe("capability smoke matrix contract", () => {
         ,"shell"
         ,"vue"
         ,"svelte"
+        ,"astro"
+        ,"razor"
+        ,"sql"
+        ,"graphql"
+        ,"proto"
       ])
     );
     expect(plan.frameworkCases.filter((candidate) => candidate.capabilityId === null)).toEqual([
@@ -435,6 +440,34 @@ describe("capability smoke matrix contract", () => {
             command: "routes",
             target: "component",
             expectedMethod: "NAVIGATE"
+          })])
+        })
+      );
+    }
+    for (const id of ["astro-basic", "razor-basic"]) {
+      expect(plan.languageCases.find((candidate) => candidate.id === id)?.assertions).toEqual(
+        expect.objectContaining({
+          symbols: expect.arrayContaining([
+            expect.objectContaining({ id: "component", kind: "variable" })
+          ]),
+          relations: expect.arrayContaining([expect.objectContaining({
+            command: "routes",
+            target: "component",
+            expectedMethod: "NAVIGATE"
+          })])
+        })
+      );
+    }
+    for (const id of ["sql-basic", "graphql-basic", "proto-basic"]) {
+      expect(plan.languageCases.find((candidate) => candidate.id === id)?.assertions).toEqual(
+        expect.objectContaining({
+          symbols: expect.arrayContaining([
+            expect.objectContaining({ id: "file", kind: "file" })
+          ]),
+          relations: expect.arrayContaining([expect.objectContaining({
+            command: "file-symbols",
+            source: "file",
+            kind: "contains"
           })])
         })
       );

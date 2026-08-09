@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.356.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
+> v0.357.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
 
 ## 專案用途
 
@@ -51,13 +51,13 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.356.0 可用性快照
+## v0.357.0 可用性快照
 
 可重跑的 smoke matrix 會從正式語言與框架 registry 核對測試案例，而不是依 README 宣稱支援。
 
-- 47 個優先語言皆可完成 `init`、no-op `sync`、changed `sync`、檔案與完整 identity symbol 查詢；其中 46 種通過 B1 關係驗收，Ruby 維持 partial。
-- Terraform 與 Shell 以精確檔案檢視驗證 file-to-declaration 結構；Nix 驗證專案內 literal import dependency。
-- Vue 與 Svelte 驗證元件到靜態路由；動態、缺失或多候選目標維持 fail-closed／unresolved。
+- 52 個優先語言皆可完成 `init`、no-op `sync`、changed `sync`、檔案與完整 identity symbol 查詢；其中 51 種通過 B1 關係驗收，Ruby 維持 partial。
+- Astro 與 Razor 驗證元件到靜態頁面路由。
+- SQL、GraphQL 與 Proto 以精確檔案檢視驗證 direct schema declaration；不宣稱完整 dialect、schema validation 或 runtime linkage。
 - 關係驗收核對完整 symbol identity；edge-based 收據另要求正確 endpoints、`resolution: exact` 與 `confidence: 1`，檔案結構收據則要求 exact path 與完整 symbol identity。
 - Groovy、CFML 與 Ruby 的一般呼叫仍維持保守 partial；後續會改採可證明的 route、file reference 或其他非動態關係。
 - React Router、Next.js、Vue Router、SvelteKit、Astro、Spring Web、FastAPI、Django 與 ASP.NET Core 的代表案例可建立預期 route。

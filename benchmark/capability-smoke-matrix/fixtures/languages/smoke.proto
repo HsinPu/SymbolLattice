@@ -1,0 +1,8 @@
+syntax = "proto3";
+
+service Greeter {
+  rpc Ping (PingRequest) returns (PingReply);
+}
+
+message PingRequest {}
+message PingReply {}
