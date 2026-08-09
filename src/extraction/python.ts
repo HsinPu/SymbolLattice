@@ -22,6 +22,10 @@ import {
   type FlaskBlueprintRouteFact,
   type FlaskImportedBlueprintRegistrationFact,
   type GraphEdge,
+  type PythonImportedClassInheritanceFact,
+  type PythonImportedFunctionCallFact,
+  type PythonRelativeNamedImportFact,
+  type PythonTopLevelDeclarationFact,
   type RouteMethod,
   type SanicBlueprintDeclarationFact,
   type SanicBlueprintGroupDeclarationFact,
@@ -61,6 +65,45 @@ interface FrameworkNamedImport {
   readonly importedName: string;
   readonly alias: string;
   readonly node: PythonSyntaxNode;
+}
+
+interface StaticPythonRelativeNamedImport {
+  readonly moduleName: string;
+  readonly importedName: string;
+  readonly localName: string;
+  readonly node: PythonSyntaxNode;
+}
+
+function staticPythonRelativeNamedImport(
+  input: PythonExtractFileFactsInput,
+  node: PythonSyntaxNode
+): StaticPythonRelativeNamedImport | null {
+  if (node.name !== "ImportStatement") {
+    return null;
+  }
+  const match = /^from[\t ]+\.([A-Za-z_][A-Za-z0-9_]*)[\t ]+import[\t ]+([A-Za-z_][A-Za-z0-9_]*)(?:[\t ]+as[\t ]+([A-Za-z_][A-Za-z0-9_]*))?[\t ]*$/u.exec(
+    nodeText(input, node)
+  );
+  if (match === null || match[1] === undefined || match[2] === undefined) {
+    return null;
+  }
+  return {
+    moduleName: match[1],
+    importedName: match[2],
+    localName: match[3] ?? match[2],
+    node
+  };
+}
+
+function hasPythonWildcardImport(
+  input: PythonExtractFileFactsInput,
+  topLevelNodes: readonly PythonSyntaxNode[]
+): boolean {
+  return topLevelNodes.some(
+    (node) =>
+      node.name === "ImportStatement" &&
+      /^from[\t ].*[\t ]+import[\t ]+\*[\t ]*$/u.test(nodeText(input, node))
+  );
 }
 
 interface DjangoUrlImport extends FrameworkNamedImport {
@@ -4030,6 +4073,17 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
   const edges: GraphEdge[] = [];
   const declarationOrdinals = new Map<string, number>();
   const symbolsByNodeKey = new Map<string, SymbolNode>();
+  const pythonFacts: {
+    topLevelDeclarations: PythonTopLevelDeclarationFact[];
+    relativeNamedImports: PythonRelativeNamedImportFact[];
+    importedFunctionCalls: PythonImportedFunctionCallFact[];
+    importedClassInheritances: PythonImportedClassInheritanceFact[];
+  } = {
+    topLevelDeclarations: [],
+    relativeNamedImports: [],
+    importedFunctionCalls: [],
+    importedClassInheritances: []
+  };
   const fastApiRouterFacts: {
     readonly routers: FastApiRouterDeclarationFact[];
     readonly routes: FastApiRouterRouteFact[];
@@ -4181,7 +4235,8 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
   }
 
   function addSameFileTopLevelFunctionCalls(
-    topLevelNodes: readonly PythonSyntaxNode[]
+    topLevelNodes: readonly PythonSyntaxNode[],
+    relativeNamedImports: readonly StaticPythonRelativeNamedImport[]
   ): void {
     if (
       topLevelNodes.some(
@@ -4222,6 +4277,11 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
       candidates.push(declaration);
       declarationsByName.set(declaration.name, candidates);
     }
+    const importsByLocalName = new Map<string, readonly StaticPythonRelativeNamedImport[]>();
+    for (const imported of relativeNamedImports) {
+      const candidates = importsByLocalName.get(imported.localName) ?? [];
+      importsByLocalName.set(imported.localName, [...candidates, imported]);
+    }
 
     function addTargetNames(node: PythonSyntaxNode, names: Set<string>): void {
       if (node.name === "VariableName") {
@@ -4251,6 +4311,15 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
       if (node.name === "ImportStatement" || node.name === "ScopeStatement") {
         for (const name of directVariableNames(input, node)) {
           names.add(name);
+        }
+        return;
+      }
+      // PEP 695 binds the alias name in the enclosing scope. Type parameters
+      // have their own scope, so deliberately retain only the direct alias.
+      if (node.name === "TypeDefinition") {
+        const alias = children.find((child) => child.name === "VariableName");
+        if (alias !== undefined) {
+          addTargetNames(alias, names);
         }
         return;
       }
@@ -4325,6 +4394,16 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
         for (const child of children) {
           addTargetNames(child, names);
         }
+        return;
+      }
+      // `case _ as name` binds `name`; omitting it can incorrectly resolve a
+      // bare imported call from inside the case body.
+      if (node.name === "AsPattern") {
+        const asIndex = children.findIndex((child) => child.name === "as");
+        const alias = asIndex < 0 ? undefined : children[asIndex + 1];
+        if (alias !== undefined) {
+          addTargetNames(alias, names);
+        }
       }
     }
 
@@ -4350,6 +4429,61 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
       for (const name of topLevelBindingNames(node)) {
         topLevelBindCounts.set(name, (topLevelBindCounts.get(name) ?? 0) + 1);
       }
+    }
+    for (const imported of relativeNamedImports) {
+      if (topLevelBindCounts.get(imported.localName) !== 1) {
+        continue;
+      }
+      pythonFacts.relativeNamedImports.push({
+        sourceId: fileNode.id,
+        filePath: input.filePath,
+        moduleName: imported.moduleName,
+        importedName: imported.importedName,
+        localName: imported.localName,
+        range: rangeFor(lineStarts, imported.node.from, imported.node.to)
+      });
+    }
+
+    for (const statement of topLevelNodes) {
+      if (statement.name === "DecoratedStatement") {
+        continue;
+      }
+      if (statement.name !== "FunctionDefinition" && statement.name !== "ClassDefinition") {
+        continue;
+      }
+      const name = declarationName(input, statement);
+      const symbol = symbolsByNodeKey.get(nodeKey(statement));
+      if (
+        name === null ||
+        (symbol?.kind !== "function" && symbol?.kind !== "class") ||
+        topLevelBindCounts.get(name) !== 1
+      ) {
+        continue;
+      }
+      pythonFacts.topLevelDeclarations.push({ symbolId: symbol.id, name, kind: symbol.kind });
+      if (symbol.kind !== "class") {
+        continue;
+      }
+      const header = /^class[\t ]+[A-Za-z_][A-Za-z0-9_]*[\t ]*\([\t ]*([A-Za-z_][A-Za-z0-9_]*)[\t ]*\)[\t ]*:/u.exec(
+        nodeText(input, statement)
+      );
+      const localName = header?.[1];
+      const matchingImports = localName === undefined ? [] : importsByLocalName.get(localName) ?? [];
+      if (
+        header === null ||
+        localName === undefined ||
+        matchingImports.length !== 1 ||
+        topLevelBindCounts.get(localName) !== 1
+      ) {
+        continue;
+      }
+      const baseOffset = header[0].lastIndexOf(localName);
+      pythonFacts.importedClassInheritances.push({
+        sourceId: symbol.id,
+        filePath: input.filePath,
+        localName,
+        range: rangeFor(lineStarts, statement.from + baseOffset, statement.from + baseOffset + localName.length)
+      });
     }
 
     function analyzeCaller(definition: PythonSyntaxNode): {
@@ -4377,6 +4511,24 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
             unsafeBindingNames.add(name);
           }
         }
+      }
+      function collectTypeParameterNames(candidate: PythonSyntaxNode): void {
+        if (candidate.name === "TypeParam") {
+          const nameNode = directChildren(candidate).find((child) => child.name === "VariableName");
+          const name = nameNode === undefined ? null : declarationName(input, nameNode);
+          if (name !== null) {
+            unsafeBindingNames.add(name);
+          }
+          return;
+        }
+        for (const child of directChildren(candidate)) {
+          collectTypeParameterNames(child);
+        }
+      }
+      for (const typeParameterList of directChildren(definition).filter(
+        (child) => child.name === "TypeParamList"
+      )) {
+        collectTypeParameterNames(typeParameterList);
       }
       const callsByName = new Map<string, PythonSyntaxNode[]>();
       function visitCall(candidate: PythonSyntaxNode): void {
@@ -4426,6 +4578,21 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
       for (const [targetName, calls] of analysis.callsByName) {
         const candidates = declarationsByName.get(targetName) ?? [];
         const target = candidates[0];
+        const importedCandidates = importsByLocalName.get(targetName) ?? [];
+        if (
+          !analysis.unsafeBindingNames.has(targetName) &&
+          importedCandidates.length === 1 &&
+          topLevelBindCounts.get(targetName) === 1
+        ) {
+          for (const call of calls) {
+            pythonFacts.importedFunctionCalls.push({
+              sourceId: caller.symbol.id,
+              filePath: input.filePath,
+              localName: targetName,
+              range: rangeFor(lineStarts, call.from, call.to)
+            });
+          }
+        }
         if (
           analysis.unsafeBindingNames.has(targetName) ||
           candidates.length !== 1 ||
@@ -4533,7 +4700,12 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
     for (const node of topLevelNodes) {
       visit(node, fileNode);
     }
-    addSameFileTopLevelFunctionCalls(topLevelNodes);
+    const pythonRelativeNamedImports = hasPythonWildcardImport(input, topLevelNodes)
+      ? []
+      : topLevelNodes
+          .map((node) => staticPythonRelativeNamedImport(input, node))
+          .filter((candidate): candidate is StaticPythonRelativeNamedImport => candidate !== null);
+    addSameFileTopLevelFunctionCalls(topLevelNodes, pythonRelativeNamedImports);
 
     const imports = topLevelNodes.flatMap((node) => staticFastApiImports(input, node));
     const djangoNinjaImports = topLevelNodes.flatMap((node) => staticDjangoNinjaImports(input, node));
@@ -6091,6 +6263,7 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
     djangoNinjaRouterFacts,
     flaskBlueprintFacts,
     sanicBlueprintFacts,
-    djangoUrlFacts
+    djangoUrlFacts,
+    pythonFacts
   };
 }

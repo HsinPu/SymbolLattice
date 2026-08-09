@@ -261,12 +261,12 @@ describe("capability smoke matrix contract", () => {
             expect.objectContaining({ id: "entry" }),
             expect.objectContaining({ id: "helper" })
           ]),
-          relations: [expect.objectContaining({
+          relations: expect.arrayContaining([expect.objectContaining({
             command: "callees",
             source: "entry",
             target: "helper",
             kind: "calls"
-          })]
+          })])
         })
       );
     }
@@ -384,7 +384,7 @@ describe("capability smoke matrix contract", () => {
           relations: [{ id: "route", command: "routes", expectedPath: "/" }]
         }
       }]
-    }), registries)).toThrow("required callees");
+    }), registries)).toThrow("required language relation");
     expect(createCapabilitySmokePlan(v2Manifest({
       languageCases: [],
       frameworkCases: [{
@@ -479,6 +479,85 @@ describe("capability smoke matrix contract", () => {
     };
     await expect(runCapabilitySmokeCase(candidate, "language", wrongTargetRuntime, 2))
       .resolves.toMatchObject({ classification: "partial-usable", stages: { symbol: true, relation: false } });
+  });
+
+  it("records exact hierarchy and file-import receipts for a multi-file language case", async () => {
+    const candidate = {
+      id: "python-b2",
+      language: "python",
+      fixturePath: "fixtures/python-b2",
+      expectedFilePath: "pkg/entry.py",
+      assertions: {
+        symbols: [
+          { id: "entry", name: "entry", filePath: "pkg/entry.py", kind: "function" },
+          { id: "helper", name: "helper", filePath: "pkg/helper.py", kind: "function" },
+          { id: "child", name: "Child", filePath: "pkg/entry.py", kind: "class" },
+          { id: "base", name: "Base", filePath: "pkg/helper.py", kind: "class" }
+        ],
+        relations: [
+          { id: "call", command: "callees", source: "entry", target: "helper", kind: "calls" },
+          { id: "heritage", command: "hierarchy", source: "child", target: "base", kind: "extends" },
+          {
+            id: "import",
+            command: "file-dependents",
+            sourceFile: "pkg/entry.py",
+            targetFile: "pkg/helper.py",
+            kind: "imports"
+          }
+        ]
+      }
+    };
+    const plan = createCapabilitySmokePlan(v2Manifest({ languageCases: [candidate] }), registries);
+    expect(plan.languageCases[0].assertions.relations).toEqual(candidate.assertions.relations);
+
+    const symbols = Object.fromEntries(candidate.assertions.symbols.map((symbol) => [
+      symbol.name,
+      { ...symbol, id: `symbol:${symbol.id}` }
+    ]));
+    const baseRuntime = successfulV2Runtime();
+    const runtime = {
+      ...baseRuntime,
+      async runJson(command, arguments_) {
+        if (command === "files") {
+          return { files: [{ filePath: "pkg/entry.py", language: "python" }] };
+        }
+        if (command === "find") return { symbols: [symbols[arguments_[0]]] };
+        if (command === "callees") {
+          return {
+            symbol: symbols.entry,
+            relations: [{
+              symbol: symbols.helper,
+              edge: { sourceId: symbols.entry.id, targetId: symbols.helper.id, kind: "calls" }
+            }]
+          };
+        }
+        if (command === "hierarchy") {
+          expect(arguments_[0]).toBe(symbols.Child.id);
+          return {
+            symbol: symbols.Child,
+            parents: [{
+              parent: symbols.Base,
+              edge: { sourceId: symbols.Child.id, targetId: symbols.Base.id, kind: "extends" }
+            }]
+          };
+        }
+        if (command === "file") {
+          expect(arguments_[0]).toBe("pkg/helper.py");
+          return {
+            selection: { filePath: "pkg/helper.py" },
+            dependents: [{ filePath: "pkg/entry.py", edgeKinds: ["imports"], edgeCount: 1 }]
+          };
+        }
+        return baseRuntime.runJson(command, arguments_);
+      }
+    };
+    const receipt = await runCapabilitySmokeCase(candidate, "language", runtime, 2);
+
+    expect(receipt.classification).toBe("basic-usable");
+    expect(receipt.assertions.relations).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "heritage", status: "passed", rootId: symbols.Child.id, targetId: symbols.Base.id }),
+      expect.objectContaining({ id: "import", status: "passed", sourceFile: "pkg/entry.py", targetFile: "pkg/helper.py", kind: "imports" })
+    ]));
   });
 
   it("rejects duplicate selected IDs and stale root or target metadata", async () => {

@@ -52,6 +52,13 @@
       "expectedTargets": ["comparison_python_helper"]
     },
     {
+      "id": "symbol-lattice-python-relative-import-call",
+      "projectId": "symbol-lattice",
+      "language": "python",
+      "reference": "python_b2_entry",
+      "expectedTargets": ["python_b2_helper"]
+    },
+    {
       "id": "codegraph-source-file-detection-calls",
       "projectId": "codegraph",
       "language": "typescript",

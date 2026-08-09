@@ -202,6 +202,152 @@ function referenceEvidence(
   };
 }
 
+/**
+ * Resolves the deliberately narrow Python B2 surface: one named import from a
+ * sibling module in a regular package.  Python's broader import machinery is
+ * intentionally outside this resolver; every missing, duplicate, decorated,
+ * rebound, namespace-package, or non-single-name shape simply emits no edge.
+ */
+function projectPythonRegularPackageRelativeNamedImports(input: {
+  readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
+  readonly fileSymbols: ReadonlyMap<string, SymbolNode>;
+  readonly knownFilePaths: ReadonlySet<string>;
+}): readonly GraphEdge[] {
+  const edges: GraphEdge[] = [];
+  for (const [filePath, facts] of [...input.factsByFile.entries()].sort(([left], [right]) =>
+    compareStableText(left, right)
+  )) {
+    const pythonFacts = facts.pythonFacts;
+    if (pythonFacts === undefined) {
+      continue;
+    }
+    for (const imported of pythonFacts.relativeNamedImports) {
+      if (imported.filePath !== filePath) {
+        continue;
+      }
+      const packageDirectory = filePath.includes("/") ? filePath.slice(0, filePath.lastIndexOf("/")) : "";
+      const packageInit = packageDirectory === "" ? "__init__.py" : `${packageDirectory}/__init__.py`;
+      const targetFilePath = packageDirectory === ""
+        ? `${imported.moduleName}.py`
+        : `${packageDirectory}/${imported.moduleName}.py`;
+      if (!input.knownFilePaths.has(packageInit) || !input.knownFilePaths.has(targetFilePath)) {
+        continue;
+      }
+      const sourceFile = input.fileSymbols.get(filePath);
+      const targetFile = input.fileSymbols.get(targetFilePath);
+      const targetFacts = input.factsByFile.get(targetFilePath)?.pythonFacts;
+      if (sourceFile?.id !== imported.sourceId || targetFile === undefined || targetFacts === undefined) {
+        continue;
+      }
+      const sourceBindings = pythonFacts.relativeNamedImports.filter(
+        (candidate) => candidate.localName === imported.localName
+      );
+      const targetDeclarations = targetFacts.topLevelDeclarations.filter(
+        (candidate) => candidate.name === imported.importedName
+      );
+      if (sourceBindings.length !== 1 || targetDeclarations.length !== 1) {
+        continue;
+      }
+      const targetDeclaration = targetDeclarations[0];
+      if (targetDeclaration === undefined) {
+        continue;
+      }
+      const declarationCandidateIds = [targetDeclaration.symbolId];
+      const fileImportCandidateIds = [targetFile.id, targetDeclaration.symbolId].sort(compareStableText);
+      edges.push({
+        id: createEdgeId({
+          sourceId: sourceFile.id,
+          targetId: targetFile.id,
+          kind: "imports",
+          line: imported.range.start.line,
+          column: imported.range.start.column,
+          referenceName: `.${imported.moduleName}`
+        }),
+        sourceId: sourceFile.id,
+        targetId: targetFile.id,
+        kind: "imports",
+        filePath,
+        range: imported.range,
+        resolution: "exact",
+        confidence: 1,
+        referenceName: `.${imported.moduleName}`,
+        evidence: referenceEvidence(
+          "module.python.regular-package.relative-named-import",
+          "module",
+          fileImportCandidateIds,
+          [],
+          [filePath, targetFilePath]
+        )
+      });
+      if (targetDeclaration.kind === "function") {
+        for (const call of pythonFacts.importedFunctionCalls) {
+          if (call.filePath !== filePath || call.localName !== imported.localName) {
+            continue;
+          }
+          edges.push({
+            id: createEdgeId({
+              sourceId: call.sourceId,
+              targetId: targetDeclaration.symbolId,
+              kind: "calls",
+              line: call.range.start.line,
+              column: call.range.start.column,
+              referenceName: call.localName
+            }),
+            sourceId: call.sourceId,
+            targetId: targetDeclaration.symbolId,
+            kind: "calls",
+            filePath,
+            range: call.range,
+            resolution: "exact",
+            confidence: 1,
+            referenceName: call.localName,
+            evidence: referenceEvidence(
+              "module.python.regular-package.relative-named-import.unique-top-level-function-call",
+              "module",
+              declarationCandidateIds,
+              [],
+              [filePath, targetFilePath]
+            )
+          });
+        }
+      }
+      if (targetDeclaration.kind === "class") {
+        for (const inheritance of pythonFacts.importedClassInheritances) {
+          if (inheritance.filePath !== filePath || inheritance.localName !== imported.localName) {
+            continue;
+          }
+          edges.push({
+            id: createEdgeId({
+              sourceId: inheritance.sourceId,
+              targetId: targetDeclaration.symbolId,
+              kind: "extends",
+              line: inheritance.range.start.line,
+              column: inheritance.range.start.column,
+              referenceName: inheritance.localName
+            }),
+            sourceId: inheritance.sourceId,
+            targetId: targetDeclaration.symbolId,
+            kind: "extends",
+            filePath,
+            range: inheritance.range,
+            resolution: "exact",
+            confidence: 1,
+            referenceName: inheritance.localName,
+            evidence: referenceEvidence(
+              "module.python.regular-package.relative-named-import.unique-top-level-class-inheritance",
+              "module",
+              declarationCandidateIds,
+              [],
+              [filePath, targetFilePath]
+            )
+          });
+        }
+      }
+    }
+  }
+  return edges;
+}
+
 const MAX_REFERENCE_RESOLVER_PROJECT_CANDIDATES = 128;
 
 interface ReferenceResolverPluginProjection {
@@ -11271,6 +11417,14 @@ export function resolveProjectFacts(input: {
     moduleResolutionByKey,
     moduleTargetPathByKey
   });
+
+  resolvedEdges.push(
+    ...projectPythonRegularPackageRelativeNamedImports({
+      factsByFile,
+      fileSymbols,
+      knownFilePaths
+    })
+  );
 
   const frameworkRoutePluginProjection = projectFrameworkRoutePluginImportedMounts({
     factsByFile,

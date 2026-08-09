@@ -81,6 +81,32 @@ function validateV2Assertions(value, label, profile) {
         kind: requireNonemptyString(record.kind, `${assertionLabel}.kind`)
       };
     }
+    if (command === "hierarchy") {
+      const source = requireNonemptyString(record.source, `${assertionLabel}.source`);
+      const target = requireNonemptyString(record.target, `${assertionLabel}.target`);
+      if (!symbolsById.has(source) || symbolsById.get(source)?.notApplicable !== undefined) {
+        throw new Error(`${assertionLabel}.source must reference an applicable symbol assertion.`);
+      }
+      if (!symbolsById.has(target) || symbolsById.get(target)?.notApplicable !== undefined) {
+        throw new Error(`${assertionLabel}.target must reference an applicable symbol assertion.`);
+      }
+      return {
+        id: record.id,
+        command,
+        source,
+        target,
+        kind: requireNonemptyString(record.kind, `${assertionLabel}.kind`)
+      };
+    }
+    if (command === "file-dependents") {
+      return {
+        id: record.id,
+        command,
+        sourceFile: requireNonemptyString(record.sourceFile, `${assertionLabel}.sourceFile`),
+        targetFile: requireNonemptyString(record.targetFile, `${assertionLabel}.targetFile`),
+        kind: requireNonemptyString(record.kind, `${assertionLabel}.kind`)
+      };
+    }
     if (command === "routes") {
       return {
         id: record.id,
@@ -102,9 +128,11 @@ function validateV2Assertions(value, label, profile) {
       throw new Error(`${label} must include at least one required symbol assertion.`);
     }
     if (!relations.some(
-      (assertion) => assertion.notApplicable === undefined && assertion.command === "callees"
+      (assertion) =>
+        assertion.notApplicable === undefined &&
+        ["callees", "hierarchy", "file-dependents"].includes(assertion.command)
     )) {
-      throw new Error(`${label} must include at least one required callees relation assertion.`);
+      throw new Error(`${label} must include at least one required language relation assertion.`);
     }
   }
   return { symbols, relations };
@@ -568,6 +596,75 @@ export async function runCapabilitySmokeCase(candidateValue, kind, runtimeValue,
               } else {
                 receipt.status = "failed";
                 receipt.message = `callees returned ${matches.length} exact edges for ${assertion.id}.`;
+                errors.push({ stage: "relation", assertionId: assertion.id, message: receipt.message });
+              }
+            } else if (assertion.command === "hierarchy") {
+              const source = resolvedSymbols.get(assertion.source);
+              const target = resolvedSymbols.get(assertion.target);
+              if (source === undefined || target === undefined) {
+                throw new Error("Hierarchy symbols were not resolved by exact identity.");
+              }
+              const result = await runtime.runJson("hierarchy", [
+                source.id,
+                "--project",
+                projectPath,
+                "--json",
+                "--limit",
+                "100"
+              ]);
+              receipt.rootId = result?.symbol?.id ?? null;
+              receipt.targetId = target.id;
+              const matches = Array.isArray(result?.parents)
+                ? result.parents.filter(
+                    (item) =>
+                      sameSymbolIdentity(result?.symbol, source) &&
+                      sameSymbolIdentity(item?.parent, target) &&
+                      item?.edge?.sourceId === source.id &&
+                      item?.edge?.targetId === target.id &&
+                      item?.edge?.kind === assertion.kind
+                  )
+                : [];
+              if (matches.length === 1) {
+                const edge = matches[0].edge;
+                receipt.status = "passed";
+                receipt.edge = {
+                  sourceId: edge.sourceId,
+                  targetId: edge.targetId,
+                  kind: edge.kind
+                };
+                evidence.relation ??= `${edge.kind} ${source.id} -> ${target.id}`;
+              } else {
+                receipt.status = "failed";
+                receipt.message = `hierarchy returned ${matches.length} exact edges for ${assertion.id}.`;
+                errors.push({ stage: "relation", assertionId: assertion.id, message: receipt.message });
+              }
+            } else if (assertion.command === "file-dependents") {
+              const result = await runtime.runJson("file", [
+                assertion.targetFile,
+                "--project",
+                projectPath,
+                "--json",
+                "--symbols-only"
+              ]);
+              const matches = result?.selection?.filePath === assertion.targetFile &&
+                Array.isArray(result?.dependents)
+                ? result.dependents.filter(
+                    (item) =>
+                      item?.filePath === assertion.sourceFile &&
+                      Array.isArray(item?.edgeKinds) &&
+                      item.edgeKinds.includes(assertion.kind)
+                  )
+                : [];
+              if (matches.length === 1) {
+                receipt.status = "passed";
+                receipt.sourceFile = assertion.sourceFile;
+                receipt.targetFile = assertion.targetFile;
+                receipt.kind = assertion.kind;
+                receipt.edgeCount = matches[0].edgeCount;
+                evidence.relation ??= `${assertion.kind} ${assertion.sourceFile} -> ${assertion.targetFile}`;
+              } else {
+                receipt.status = "failed";
+                receipt.message = `file returned ${matches.length} exact dependents for ${assertion.id}.`;
                 errors.push({ stage: "relation", assertionId: assertion.id, message: receipt.message });
               }
             } else if (assertion.command === "routes") {

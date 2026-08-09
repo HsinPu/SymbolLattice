@@ -799,7 +799,8 @@ function artifactFactsPayload(facts: PersistedArtifactFacts): ArtifactFacts {
     ...(facts.reactNativeFacts === undefined ? {} : { reactNativeFacts: facts.reactNativeFacts }),
     ...(facts.swiftObjectiveCFacts === undefined
       ? {}
-      : { swiftObjectiveCFacts: facts.swiftObjectiveCFacts })
+      : { swiftObjectiveCFacts: facts.swiftObjectiveCFacts }),
+    ...(facts.pythonFacts === undefined ? {} : { pythonFacts: facts.pythonFacts })
   };
 }
 

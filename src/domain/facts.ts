@@ -13,13 +13,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v242";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v243";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v127";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v128";
 
 /** Hard cap for one source-proven Java exhaustive if/else-if/else assignment join. */
 export const JAVA_EXHAUSTIVE_ASSIGNMENT_JOIN_MAXIMUM_BRANCHES = 8;
@@ -1606,6 +1606,47 @@ export interface JvmTypeFact {
   readonly packageName: string;
 }
 
+/** One unique, undecorated top-level Python declaration safe for B2 import resolution. */
+export interface PythonTopLevelDeclarationFact {
+  readonly symbolId: string;
+  readonly name: string;
+  readonly kind: "function" | "class";
+}
+
+/** A single-name `from .module import Name [as Alias]` parsed without recovery. */
+export interface PythonRelativeNamedImportFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly moduleName: string;
+  readonly importedName: string;
+  readonly localName: string;
+  readonly range: SourceRange;
+}
+
+/** A bare direct call through one syntax-proven Python relative named import. */
+export interface PythonImportedFunctionCallFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly localName: string;
+  readonly range: SourceRange;
+}
+
+/** One direct class base written through one syntax-proven Python relative named import. */
+export interface PythonImportedClassInheritanceFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly localName: string;
+  readonly range: SourceRange;
+}
+
+/** Syntax-only facts for deliberately narrow Python regular-package B2 resolution. */
+export interface PythonFacts {
+  readonly topLevelDeclarations: readonly PythonTopLevelDeclarationFact[];
+  readonly relativeNamedImports: readonly PythonRelativeNamedImportFact[];
+  readonly importedFunctionCalls: readonly PythonImportedFunctionCallFact[];
+  readonly importedClassInheritances: readonly PythonImportedClassInheritanceFact[];
+}
+
 /** The parsed direct JVM heritage shape before its target type is resolved. */
 export type JvmHeritageSyntax =
   | "java-class-superclass"
@@ -2438,6 +2479,8 @@ export interface ArtifactFacts {
   readonly reactNativeFacts?: ReactNativeFacts;
   /** Omitted only by artifact facts persisted before v0.194. */
   readonly swiftObjectiveCFacts?: SwiftObjectiveCFacts;
+  /** Omitted only by artifact facts persisted before v0.349. */
+  readonly pythonFacts?: PythonFacts;
 }
 
 /**
