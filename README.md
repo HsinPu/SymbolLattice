@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.351.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
+> v0.352.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
 
 ## 專案用途
 
@@ -51,14 +51,14 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.351.0 可用性快照
+## v0.352.0 可用性快照
 
 可重跑的 smoke matrix 會從正式語言與框架 registry 核對測試案例，而不是依 README 宣稱支援。
 
-- 22 個優先語言皆可完成 `init`、no-op `sync`、changed `sync`、檔案與完整 identity symbol 查詢；其中 21 種通過 B1 關係驗收，Ruby 維持 partial。
-- Lua 以 Lapis 的 literal route → local handler exact 關係達到 B1；一般 Lua direct-call 因 reflection 風險維持 fail-closed。Luau 只接受有界、唯一且無重綁的同檔零參數裸呼叫。
-- Pascal 只接受 declaration-before-use 的全域唯一 routine call；unit、uses、owner、nested routine、include directive、shadow 或多候選一律拒絕 exact。
-- R 與 Clojure 分別以 Plumber 與 Compojure 的 literal route → handler exact 關係達到 B1；一般 direct-call 因環境／Var mutation 與 quoted form 風險不投影。
+- 27 個優先語言皆可完成 `init`、no-op `sync`、changed `sync`、檔案與完整 identity symbol 查詢；其中 26 種通過 B1 關係驗收，Ruby 維持 partial。
+- Elixir、Erlang、Julia 與 Haskell新增有界的同模組／同檔精確呼叫；遇到匿名函式、compile attribute、動態 scope、方法重定義或 pattern equation 競爭即 fail-closed。
+- Perl 以 Dancer2 literal route → local coderef handler 的精確關係達到 B1；只有整份檔案符合嚴格靜態 allowlist 才會投影 route。
+- Lua、R 與 Clojure分別以 Lapis、Plumber 與 Compojure 的 literal route → handler 關係達到 B1；Luau 與 Pascal保留狹窄、可證明的直接呼叫。
 - 語言 route 驗收會核對完整 handler identity、edge endpoints、`resolution: exact` 與 `confidence: 1`，heuristic 或同路徑錯 handler 不會誤升 B1。
 - Groovy、CFML 與 Ruby 的一般呼叫仍維持保守 partial；後續會改採可證明的 route、file reference 或其他非動態關係。
 - React Router、Next.js、Vue Router、SvelteKit、Astro、Spring Web、FastAPI、Django 與 ASP.NET Core 的代表案例可建立預期 route。

@@ -35,6 +35,7 @@ interface ElixirBlockFrame {
   readonly scopePath?: string;
   readonly functionName?: string;
   readonly isExported?: boolean;
+  readonly isZeroArity?: boolean;
 }
 
 interface StaticElixirModule {
@@ -49,6 +50,16 @@ interface StaticElixirMethod {
   readonly start: number;
   readonly end: number;
   readonly isExported: boolean;
+  readonly isZeroArity: boolean;
+}
+
+interface StaticElixirCall {
+  readonly moduleName: string;
+  readonly callerName: string;
+  readonly callerStart: number;
+  readonly calleeName: string;
+  readonly start: number;
+  readonly end: number;
 }
 
 interface StaticPhoenixRoute {
@@ -64,6 +75,7 @@ interface ElixirStaticFacts {
   readonly valid: boolean;
   readonly modules: readonly StaticElixirModule[];
   readonly methods: readonly StaticElixirMethod[];
+  readonly directCalls: readonly StaticElixirCall[];
   readonly routes: readonly StaticPhoenixRoute[];
 }
 
@@ -87,10 +99,15 @@ const DIRECT_SCOPE_PATTERN = new RegExp(
   "u"
 );
 const DIRECT_FUNCTION_PATTERN = new RegExp(
-  `^\\s*(def|defp)\\s+(${ELIXIR_FUNCTION})\\s*\\([^()]*\\)\\s+do\\s*$`,
+  `^\\s*(def|defp)\\s+(${ELIXIR_FUNCTION})\\s*\\(([^()]*)\\)\\s+do\\s*$`,
   "u"
 );
 const DIRECT_PHOENIX_USE_PATTERN = /^\s*use\s+Phoenix\.Router(?:\s*,\s*helpers:\s*false)?\s*$/u;
+const DIRECT_BARE_ZERO_ARGUMENT_CALL_PATTERN = new RegExp(
+  `^\\s*(${ELIXIR_FUNCTION})\\s*\\(\\)\\s*$`,
+  "u"
+);
+const UNSAFE_DIRECT_CALL_MODULE_PATTERN = /^\s*(?:alias|import|require|use|defmacro|defmacrop)\b/u;
 const DIRECT_ROUTE_PATTERN = new RegExp(
   `^\\s*(${[...PHOENIX_ROUTE_METHODS.keys()].join("|")})\\s+"(\\/[^"\\\\\\s]*)"\\s*,\\s*(${ELIXIR_MODULE})\\s*,\\s*:(${ELIXIR_FUNCTION})\\s*$`,
   "u"
@@ -260,8 +277,22 @@ function nearestModule(stack: readonly ElixirBlockFrame[]): string | null {
   return null;
 }
 
+function nearestFunction(stack: readonly ElixirBlockFrame[]): ElixirBlockFrame | null {
+  for (let index = stack.length - 1; index >= 0; index -= 1) {
+    const candidate = stack[index];
+    if (candidate?.kind === "function") {
+      return candidate;
+    }
+  }
+  return null;
+}
+
 function isDirectModuleBody(stack: readonly ElixirBlockFrame[]): boolean {
   return stack.length === 1 && stack[0]?.kind === "module";
+}
+
+function isDirectModuleFunctionBody(stack: readonly ElixirBlockFrame[]): boolean {
+  return stack.length === 2 && stack[0]?.kind === "module" && stack[1]?.kind === "function";
 }
 
 function isDirectPhoenixRoutePosition(stack: readonly ElixirBlockFrame[]): boolean {
@@ -278,13 +309,16 @@ function opensUnknownElixirBlock(code: string): boolean {
 function staticElixirFacts(sourceText: string): ElixirStaticFacts {
   const sanitized = sanitizeElixirSource(sourceText);
   if (sanitized === null) {
-    return { valid: false, modules: [], methods: [], routes: [] };
+    return { valid: false, modules: [], methods: [], directCalls: [], routes: [] };
   }
 
   const modules: StaticElixirModule[] = [];
   const methods: StaticElixirMethod[] = [];
+  const directCalls: StaticElixirCall[] = [];
   const routes: StaticPhoenixRoute[] = [];
   const phoenixRouterModules = new Set<string>();
+  const unsafeDirectCallModules = new Set<string>();
+  const unsafeDirectCallFunctions = new Set<number>();
   const stack: ElixirBlockFrame[] = [];
 
   for (const line of linesFor(sourceText, sanitized)) {
@@ -295,7 +329,7 @@ function staticElixirFacts(sourceText: string): ElixirStaticFacts {
     if (/^\s*end\s*$/u.test(code)) {
       const frame = stack.pop();
       if (frame === undefined) {
-        return { valid: false, modules: [], methods: [], routes: [] };
+        return { valid: false, modules: [], methods: [], directCalls: [], routes: [] };
       }
       if (frame.kind === "module" && frame.moduleName !== undefined) {
         modules.push({ name: frame.moduleName, start: frame.start, end: line.end });
@@ -310,7 +344,8 @@ function staticElixirFacts(sourceText: string): ElixirStaticFacts {
           name: frame.functionName,
           start: frame.start,
           end: line.end,
-          isExported: frame.isExported
+          isExported: frame.isExported,
+          isZeroArity: frame.isZeroArity === true
         });
       }
       continue;
@@ -320,7 +355,7 @@ function staticElixirFacts(sourceText: string): ElixirStaticFacts {
     if (moduleMatch !== null) {
       const moduleName = moduleMatch[1];
       if (moduleName === undefined || stack.length !== 0) {
-        return { valid: false, modules: [], methods: [], routes: [] };
+        return { valid: false, modules: [], methods: [], directCalls: [], routes: [] };
       }
       stack.push({ kind: "module", start: line.start, moduleName });
       continue;
@@ -334,11 +369,23 @@ function staticElixirFacts(sourceText: string): ElixirStaticFacts {
       continue;
     }
 
+    if (isDirectModuleBody(stack) && UNSAFE_DIRECT_CALL_MODULE_PATTERN.test(code)) {
+      const moduleName = nearestModule(stack);
+      if (moduleName !== null) {
+        unsafeDirectCallModules.add(moduleName);
+      }
+    }
+
+    const activeFunction = nearestFunction(stack);
+    if (activeFunction !== null && /\bfn\b/u.test(code)) {
+      unsafeDirectCallFunctions.add(activeFunction.start);
+    }
+
     const scopeMatch = DIRECT_SCOPE_PATTERN.exec(code);
     if (scopeMatch !== null) {
       const scopePath = staticLiteralPath(scopeMatch[1] ?? "", true);
       if (scopePath === null || !isDirectPhoenixRoutePosition(stack)) {
-        return { valid: false, modules: [], methods: [], routes: [] };
+        return { valid: false, modules: [], methods: [], directCalls: [], routes: [] };
       }
       stack.push({ kind: "scope", start: line.start, scopePath });
       continue;
@@ -349,21 +396,47 @@ function staticElixirFacts(sourceText: string): ElixirStaticFacts {
       const moduleName = nearestModule(stack);
       const visibility = functionMatch[1];
       const name = functionMatch[2];
+      const parameters = functionMatch[3];
       if (
         moduleName === null ||
         name === undefined ||
+        parameters === undefined ||
         (visibility !== "def" && visibility !== "defp") ||
         !isDirectModuleBody(stack)
       ) {
-        return { valid: false, modules: [], methods: [], routes: [] };
+        return { valid: false, modules: [], methods: [], directCalls: [], routes: [] };
       }
       stack.push({
         kind: "function",
         start: line.start,
         moduleName,
         functionName: name,
-        isExported: visibility === "def"
+        isExported: visibility === "def",
+        isZeroArity: parameters.trim() === ""
       });
+      continue;
+    }
+
+    const callMatch = DIRECT_BARE_ZERO_ARGUMENT_CALL_PATTERN.exec(code);
+    if (callMatch !== null && isDirectModuleFunctionBody(stack)) {
+      const moduleName = nearestModule(stack);
+      const caller = stack[1];
+      const calleeName = callMatch[1];
+      if (
+        moduleName !== null &&
+        caller?.functionName !== undefined &&
+        calleeName !== undefined
+      ) {
+        const callStart = line.start + code.indexOf(calleeName);
+        directCalls.push({
+          moduleName,
+          callerName: caller.functionName,
+          callerStart: caller.start,
+          calleeName,
+          start: callStart,
+          end: callStart + calleeName.length + 2
+        });
+      }
       continue;
     }
 
@@ -404,8 +477,18 @@ function staticElixirFacts(sourceText: string): ElixirStaticFacts {
   }
 
   return stack.length === 0
-    ? { valid: true, modules, methods, routes }
-    : { valid: false, modules: [], methods: [], routes: [] };
+    ? {
+        valid: true,
+        modules,
+        methods,
+        directCalls: directCalls.filter(
+          (call) =>
+            !unsafeDirectCallModules.has(call.moduleName) &&
+            !unsafeDirectCallFunctions.has(call.callerStart)
+        ),
+        routes
+      }
+    : { valid: false, modules: [], methods: [], directCalls: [], routes: [] };
 }
 
 /**
@@ -573,6 +656,33 @@ export function extractElixirFileFacts(input: ElixirExtractFileFactsInput): Arti
     });
   }
 
+  function addDirectCall(callFact: StaticElixirCall, caller: SymbolNode, callee: SymbolNode): void {
+    const range = rangeFor(lineStarts, callFact.start, callFact.end);
+    edges.push({
+      id: createEdgeId({
+        sourceId: caller.id,
+        targetId: callee.id,
+        kind: "calls",
+        line: range.start.line,
+        column: range.start.column,
+        referenceName: callFact.calleeName
+      }),
+      sourceId: caller.id,
+      targetId: callee.id,
+      kind: "calls",
+      filePath: input.filePath,
+      range,
+      resolution: "exact",
+      confidence: 1,
+      referenceName: callFact.calleeName,
+      evidence: {
+        ruleId: "syntax.elixir.same-module.unique-bare-zero-argument-direct-call",
+        stage: "syntax",
+        candidateSymbolIds: [callee.id]
+      }
+    });
+  }
+
   if (staticFacts.valid) {
     const moduleSymbols = new Map<string, SymbolNode[]>();
     for (const moduleFact of [...staticFacts.modules].sort((left, right) => left.start - right.start)) {
@@ -581,6 +691,7 @@ export function extractElixirFileFacts(input: ElixirExtractFileFactsInput): Arti
     }
 
     const methodsByModuleAndName = new Map<string, SymbolNode[]>();
+    const zeroArityMethodsByModuleAndName = new Map<string, SymbolNode[]>();
     for (const methodFact of [...staticFacts.methods].sort((left, right) => left.start - right.start)) {
       const moduleCandidates = moduleSymbols.get(methodFact.moduleName) ?? [];
       if (moduleCandidates.length !== 1) {
@@ -596,11 +707,31 @@ export function extractElixirFileFacts(input: ElixirExtractFileFactsInput): Arti
         ...(methodsByModuleAndName.get(identity) ?? []),
         methodSymbol
       ]);
+      if (methodFact.isZeroArity) {
+        zeroArityMethodsByModuleAndName.set(identity, [
+          ...(zeroArityMethodsByModuleAndName.get(identity) ?? []),
+          methodSymbol
+        ]);
+      }
     }
 
     for (const routeFact of [...staticFacts.routes].sort((left, right) => left.start - right.start)) {
       const candidates = methodsByModuleAndName.get(`${routeFact.controller}\u0000${routeFact.action}`) ?? [];
       addPhoenixRoute(routeFact, candidates.length === 1 ? candidates[0] ?? null : null);
+    }
+
+    for (const callFact of staticFacts.directCalls) {
+      const callerCandidates =
+        methodsByModuleAndName.get(`${callFact.moduleName}\u0000${callFact.callerName}`) ?? [];
+      const calleeCandidates =
+        zeroArityMethodsByModuleAndName.get(`${callFact.moduleName}\u0000${callFact.calleeName}`) ?? [];
+      if (callerCandidates.length === 1 && calleeCandidates.length === 1) {
+        const caller = callerCandidates[0];
+        const callee = calleeCandidates[0];
+        if (caller !== undefined && callee !== undefined) {
+          addDirectCall(callFact, caller, callee);
+        }
+      }
     }
   }
 

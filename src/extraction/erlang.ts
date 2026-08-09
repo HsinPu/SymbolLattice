@@ -57,6 +57,14 @@ interface StaticErlangMethod {
   readonly isExported: boolean;
 }
 
+interface StaticErlangCall {
+  readonly callerName: string;
+  readonly callerArity: 0;
+  readonly calleeName: string;
+  readonly start: number;
+  readonly end: number;
+}
+
 interface StaticCowboyRoute {
   readonly path: string;
   readonly handlerModule: string;
@@ -68,6 +76,7 @@ interface ErlangStaticFacts {
   readonly valid: boolean;
   readonly module: StaticErlangModule | null;
   readonly methods: readonly StaticErlangMethod[];
+  readonly directCalls: readonly StaticErlangCall[];
   readonly routes: readonly StaticCowboyRoute[];
 }
 
@@ -462,6 +471,61 @@ function directFunction(
   };
 }
 
+function directZeroArityCall(
+  tokens: readonly ErlangToken[],
+  statement: ErlangStatement
+): StaticErlangCall | null {
+  const { startIndex, endIndex } = statement;
+  if (endIndex - startIndex !== 7) {
+    return null;
+  }
+  const caller = tokens[startIndex];
+  const callerOpening = startIndex + 1;
+  const callerClosing = startIndex + 2;
+  const arrow = tokens[startIndex + 3];
+  const callee = tokens[startIndex + 4];
+  const calleeOpening = startIndex + 5;
+  const calleeClosing = startIndex + 6;
+  const calleeClosingToken = tokens[calleeClosing];
+  if (
+    caller?.kind !== "atom" ||
+    tokens[callerOpening]?.text !== "(" ||
+    tokens[callerClosing]?.text !== ")" ||
+    arrow?.text !== "->" ||
+    callee?.kind !== "atom" ||
+    tokens[calleeOpening]?.text !== "(" ||
+    calleeClosingToken?.text !== ")"
+  ) {
+    return null;
+  }
+  return {
+    callerName: caller.text,
+    callerArity: 0,
+    calleeName: callee.text,
+    start: callee.start,
+    end: calleeClosingToken.end
+  };
+}
+
+function hasUnsafeDirectCallAttribute(
+  tokens: readonly ErlangToken[],
+  statements: readonly ErlangStatement[]
+): boolean {
+  return statements.some((statement) => {
+    if (tokens[statement.startIndex]?.text !== "-") {
+      return false;
+    }
+    const attribute = tokens[statement.startIndex + 1];
+    const name =
+      attribute?.kind === "atom"
+        ? attribute.text
+        : attribute?.kind === "quoted-atom" && attribute.escaped !== true
+          ? attribute.value
+          : null;
+    return name !== "module" && name !== "export";
+  });
+}
+
 function opaqueDelimitedTerm(
   kind: "opaque",
   tokens: readonly ErlangToken[],
@@ -679,21 +743,21 @@ function collectCowboyRoutes(
 function staticErlangFacts(sourceText: string): ErlangStaticFacts {
   const tokens = tokenizeErlang(sourceText);
   if (tokens === null) {
-    return { valid: false, module: null, methods: [], routes: [] };
+    return { valid: false, module: null, methods: [], directCalls: [], routes: [] };
   }
   const pairs = pairedDelimiters(tokens);
   if (pairs === null) {
-    return { valid: false, module: null, methods: [], routes: [] };
+    return { valid: false, module: null, methods: [], directCalls: [], routes: [] };
   }
   const statements = topLevelStatements(tokens);
   if (statements === null) {
-    return { valid: false, module: null, methods: [], routes: [] };
+    return { valid: false, module: null, methods: [], directCalls: [], routes: [] };
   }
   const modules = statements
     .map((statement) => directModule(tokens, statement))
     .filter((module): module is StaticErlangModule => module !== null);
   if (modules.length > 1) {
-    return { valid: false, module: null, methods: [], routes: [] };
+    return { valid: false, module: null, methods: [], directCalls: [], routes: [] };
   }
   const exported = new Set<string>();
   for (const statement of statements) {
@@ -702,7 +766,7 @@ function staticErlangFacts(sourceText: string): ErlangStaticFacts {
     }
     const entries = directExportEntries(tokens, statement, pairs);
     if (entries === null) {
-      return { valid: false, module: null, methods: [], routes: [] };
+      return { valid: false, module: null, methods: [], directCalls: [], routes: [] };
     }
     for (const entry of entries) {
       exported.add(entry);
@@ -715,10 +779,17 @@ function staticErlangFacts(sourceText: string): ErlangStaticFacts {
       : statements
           .map((statement) => directFunction(tokens, statement, pairs, exported))
           .filter((method): method is StaticErlangMethod => method !== null);
+  const directCalls =
+    module === null || hasUnsafeDirectCallAttribute(tokens, statements)
+      ? []
+      : statements
+          .map((statement) => directZeroArityCall(tokens, statement))
+          .filter((call): call is StaticErlangCall => call !== null);
   return {
     valid: true,
     module,
     methods,
+    directCalls,
     routes: module === null ? [] : collectCowboyRoutes(tokens, pairs)
   };
 }
@@ -932,6 +1003,34 @@ export function extractErlangFileFacts(input: ErlangExtractFileFactsInput): Arti
     });
   }
 
+  function addDirectCall(callFact: StaticErlangCall, caller: SymbolNode, callee: SymbolNode): void {
+    const range = rangeFor(lineStarts, callFact.start, callFact.end);
+    const referenceName = callFact.calleeName + "/0";
+    edges.push({
+      id: createEdgeId({
+        sourceId: caller.id,
+        targetId: callee.id,
+        kind: "calls",
+        line: range.start.line,
+        column: range.start.column,
+        referenceName
+      }),
+      sourceId: caller.id,
+      targetId: callee.id,
+      kind: "calls",
+      filePath: input.filePath,
+      range,
+      resolution: "exact",
+      confidence: 1,
+      referenceName,
+      evidence: {
+        ruleId: "syntax.erlang.same-module.unique-zero-arity-direct-call",
+        stage: "syntax",
+        candidateSymbolIds: [callee.id]
+      }
+    });
+  }
+
   if (staticFacts.valid && staticFacts.module !== null) {
     const moduleSymbol = addModule(staticFacts.module);
     const methodsByIdentity = new Map<string, SymbolNode[]>();
@@ -945,6 +1044,21 @@ export function extractErlangFileFacts(input: ErlangExtractFileFactsInput): Arti
         methodsByIdentity.get(routeFact.handlerModule + "\u0000init\u00002") ?? [];
       const exportedCandidates = candidates.filter((candidate) => candidate.isExported);
       addCowboyRoute(routeFact, exportedCandidates.length === 1 ? exportedCandidates[0] ?? null : null);
+    }
+    for (const callFact of staticFacts.directCalls) {
+      const callerCandidates =
+        methodsByIdentity.get(
+          staticFacts.module.name + "\u0000" + callFact.callerName + "\u0000" + callFact.callerArity
+        ) ?? [];
+      const calleeCandidates =
+        methodsByIdentity.get(staticFacts.module.name + "\u0000" + callFact.calleeName + "\u00000") ?? [];
+      if (callerCandidates.length === 1 && calleeCandidates.length === 1) {
+        const caller = callerCandidates[0];
+        const callee = calleeCandidates[0];
+        if (caller !== undefined && callee !== undefined) {
+          addDirectCall(callFact, caller, callee);
+        }
+      }
     }
   }
 

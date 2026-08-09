@@ -28,6 +28,15 @@ interface StaticHaskellFunction {
   readonly name: string;
   readonly start: number;
   readonly end: number;
+  readonly isUnitArgument: boolean;
+}
+
+interface StaticHaskellDirectCall {
+  readonly callerName: string;
+  readonly callerStart: number;
+  readonly calleeName: string;
+  readonly start: number;
+  readonly end: number;
 }
 
 interface StaticScottyRoute {
@@ -41,6 +50,8 @@ interface StaticScottyRoute {
 interface StaticHaskellFacts {
   readonly valid: boolean;
   readonly functions: readonly StaticHaskellFunction[];
+  readonly equationNames: readonly string[];
+  readonly calls: readonly StaticHaskellDirectCall[];
   readonly routes: readonly StaticScottyRoute[];
 }
 
@@ -254,7 +265,7 @@ function directHaskellFunction(line: HaskellLine): StaticHaskellFunction | null 
   if (line.indent !== 0) {
     return null;
   }
-  const match = /^([a-z_][A-Za-z0-9_']*)\s*=\s*\S/u.exec(line.content);
+  const match = /^([a-z_][A-Za-z0-9_']*)(\s+\(\))?\s*=\s*\S/u.exec(line.content);
   const name = match?.[1];
   if (name === undefined) {
     return null;
@@ -262,8 +273,52 @@ function directHaskellFunction(line: HaskellLine): StaticHaskellFunction | null 
   return {
     name,
     start: line.start,
-    end: line.start + line.content.length
+    end: line.start + line.content.length,
+    isUnitArgument: match?.[2] !== undefined
   };
+}
+
+function directHaskellUnitArgumentBareCall(line: HaskellLine): StaticHaskellDirectCall | null {
+  if (line.indent !== 0) {
+    return null;
+  }
+  const match =
+    /^([a-z_][A-Za-z0-9_']*)\s+\(\)\s*=\s+([a-z_][A-Za-z0-9_']*)\s+\(\)$/u.exec(
+      line.content
+    );
+  const callerName = match?.[1];
+  const calleeName = match?.[2];
+  if (callerName === undefined || calleeName === undefined) {
+    return null;
+  }
+  const calleeOffset = line.content.lastIndexOf(calleeName);
+  if (calleeOffset < 0) {
+    return null;
+  }
+  return {
+    callerName,
+    callerStart: line.start,
+    calleeName,
+    start: line.start + calleeOffset,
+    end: line.start + calleeOffset + calleeName.length
+  };
+}
+
+function topLevelHaskellEquationName(line: HaskellLine): string | null {
+  if (line.indent !== 0) {
+    return null;
+  }
+  const match = /^([a-z_][A-Za-z0-9_']*)(?:$|(?=\s|\(|\[|\{|=))/u.exec(line.content);
+  return match?.[1] ?? null;
+}
+
+function hasUnsafeHaskellDirectCallContext(lines: readonly HaskellLine[]): boolean {
+  return lines.some(
+    (line) =>
+      /^import\s/u.test(line.content) ||
+      line.content.includes("$(") ||
+      line.content.startsWith("{-#")
+  );
 }
 
 function isDirectScottyImport(line: HaskellLine): boolean {
@@ -301,16 +356,22 @@ function directScottyRoute(line: HaskellLine): StaticScottyRoute | null {
 function staticHaskellFacts(sourceText: string): StaticHaskellFacts {
   const sanitized = sanitizeHaskell(sourceText);
   if (!sanitized.valid) {
-    return { valid: false, functions: [], routes: [] };
+    return { valid: false, functions: [], equationNames: [], calls: [], routes: [] };
   }
   const lines = linesFor(sourceText, sanitized.text);
   if (lines === null) {
-    return { valid: false, functions: [], routes: [] };
+    return { valid: false, functions: [], equationNames: [], calls: [], routes: [] };
   }
 
   const functions = lines
     .map((line) => directHaskellFunction(line))
     .filter((functionFact): functionFact is StaticHaskellFunction => functionFact !== null);
+  const equationNames = lines
+    .map((line) => topLevelHaskellEquationName(line))
+    .filter((name): name is string => name !== null);
+  const calls = lines
+    .map((line) => directHaskellUnitArgumentBareCall(line))
+    .filter((callFact): callFact is StaticHaskellDirectCall => callFact !== null);
   const directScottyImportCount = lines.filter((line) => isDirectScottyImport(line)).length;
   const routes: StaticScottyRoute[] = [];
 
@@ -343,6 +404,8 @@ function staticHaskellFacts(sourceText: string): StaticHaskellFacts {
   return {
     valid: true,
     functions,
+    equationNames,
+    calls: hasUnsafeHaskellDirectCallContext(lines) ? [] : calls,
     routes: directScottyImportCount === 1 ? routes : []
   };
 }
@@ -485,9 +548,63 @@ export function extractHaskellFileFacts(input: HaskellExtractFileFactsInput): Ar
 
   if (staticFacts.valid) {
     const functionsByName = new Map<string, SymbolNode[]>();
+    const functionsByStart = new Map<number, SymbolNode>();
+    const unitArgumentFunctionsByName = new Map<string, SymbolNode[]>();
+    const equationCounts = new Map<string, number>();
+    for (const name of staticFacts.equationNames) {
+      equationCounts.set(name, (equationCounts.get(name) ?? 0) + 1);
+    }
     for (const functionFact of [...staticFacts.functions].sort((left, right) => left.start - right.start)) {
       const symbol = addFunction(functionFact);
       functionsByName.set(functionFact.name, [...(functionsByName.get(functionFact.name) ?? []), symbol]);
+      functionsByStart.set(functionFact.start, symbol);
+      if (functionFact.isUnitArgument) {
+        unitArgumentFunctionsByName.set(functionFact.name, [
+          ...(unitArgumentFunctionsByName.get(functionFact.name) ?? []),
+          symbol
+        ]);
+      }
+    }
+    for (const callFact of [...staticFacts.calls].sort((left, right) => left.start - right.start)) {
+      const caller = functionsByStart.get(callFact.callerStart);
+      const candidates = functionsByName.get(callFact.calleeName) ?? [];
+      const unitArgumentCandidates = unitArgumentFunctionsByName.get(callFact.calleeName) ?? [];
+      if (
+        caller === undefined ||
+        candidates.length !== 1 ||
+        unitArgumentCandidates.length !== 1 ||
+        equationCounts.get(callFact.calleeName) !== 1
+      ) {
+        continue;
+      }
+      const callee = unitArgumentCandidates[0];
+      if (callee === undefined) {
+        continue;
+      }
+      const range = rangeFor(lineStarts, callFact.start, callFact.end);
+      edges.push({
+        id: createEdgeId({
+          sourceId: caller.id,
+          targetId: callee.id,
+          kind: "calls",
+          line: range.start.line,
+          column: range.start.column,
+          referenceName: callFact.calleeName
+        }),
+        sourceId: caller.id,
+        targetId: callee.id,
+        kind: "calls",
+        filePath: input.filePath,
+        range,
+        resolution: "exact",
+        confidence: 1,
+        referenceName: callFact.calleeName,
+        evidence: {
+          ruleId: "syntax.haskell.same-file.unique-unit-argument-bare-function-call",
+          stage: "syntax",
+          candidateSymbolIds: [callee.id]
+        }
+      });
     }
     for (const routeFact of [...staticFacts.routes].sort((left, right) => left.start - right.start)) {
       const candidates = functionsByName.get(routeFact.handlerName) ?? [];

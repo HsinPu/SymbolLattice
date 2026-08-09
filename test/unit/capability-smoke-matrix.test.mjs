@@ -220,7 +220,7 @@ describe("capability smoke matrix contract", () => {
     });
 
     expect(plan.schemaVersion).toBe(2);
-    expect(plan.languageCases).toHaveLength(22);
+    expect(plan.languageCases).toHaveLength(27);
     expect(plan.frameworkCases).toHaveLength(10);
     expect(new Set(plan.registryCoverage.languages.selected)).toEqual(
       new Set([
@@ -246,6 +246,11 @@ describe("capability smoke matrix contract", () => {
         "lua",
         "luau",
         "pascal"
+        ,"elixir"
+        ,"erlang"
+        ,"perl"
+        ,"julia"
+        ,"haskell"
       ])
     );
     expect(plan.frameworkCases.filter((candidate) => candidate.capabilityId === null)).toEqual([
@@ -267,6 +272,10 @@ describe("capability smoke matrix contract", () => {
       "zig-basic",
       "luau-basic",
       "pascal-basic"
+      ,"elixir-basic"
+      ,"erlang-basic"
+      ,"julia-basic"
+      ,"haskell-basic"
     ]) {
       expect(plan.languageCases.find((candidate) => candidate.id === id)?.assertions).toEqual(
         expect.objectContaining({
@@ -296,6 +305,17 @@ describe("capability smoke matrix contract", () => {
         })
       );
     }
+    expect(plan.languageCases.find((candidate) => candidate.id === "perl-basic")?.assertions).toEqual(
+      expect.objectContaining({
+        symbols: expect.arrayContaining([expect.objectContaining({ id: "handler" })]),
+        relations: expect.arrayContaining([expect.objectContaining({
+          command: "routes",
+          target: "handler",
+          expectedMethod: "GET",
+          expectedPath: "/smoke"
+        })])
+      })
+    );
     for (const candidate of [...plan.languageCases, ...plan.frameworkCases]) {
       await expect(stat(resolve(projectRoot, candidate.fixturePath))).resolves.toBeDefined();
     }

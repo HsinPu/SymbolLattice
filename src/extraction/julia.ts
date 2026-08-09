@@ -31,6 +31,15 @@ interface StaticJuliaFunction {
   readonly name: string;
   readonly start: number;
   readonly end: number;
+  readonly isZeroArgument: boolean;
+}
+
+interface StaticJuliaDirectCall {
+  readonly callerName: string;
+  readonly callerStart: number;
+  readonly calleeName: string;
+  readonly start: number;
+  readonly end: number;
 }
 
 interface StaticGenieRoute {
@@ -44,6 +53,8 @@ interface StaticGenieRoute {
 interface StaticJuliaFacts {
   readonly valid: boolean;
   readonly functions: readonly StaticJuliaFunction[];
+  readonly methodDeclarationNames: readonly string[];
+  readonly calls: readonly StaticJuliaDirectCall[];
   readonly routes: readonly StaticGenieRoute[];
 }
 
@@ -290,8 +301,94 @@ function directJuliaFunction(
   return {
     name: name.text,
     start: name.start,
-    end: equals.end
+    end: equals.end,
+    isZeroArgument: parameterCloseIndex === index + 2
   };
+}
+
+function directJuliaZeroArgumentBareCall(
+  sourceText: string,
+  tokens: readonly JuliaToken[],
+  index: number,
+  pairs: ReadonlyMap<number, number>
+): StaticJuliaDirectCall | null {
+  const caller = directJuliaFunction(sourceText, tokens, index, pairs);
+  if (caller === null || !caller.isZeroArgument) {
+    return null;
+  }
+  const callerParameterClose = pairs.get(index + 1);
+  const calleeIndex = callerParameterClose === undefined ? undefined : callerParameterClose + 2;
+  const callee = calleeIndex === undefined ? undefined : tokens[calleeIndex];
+  const opening = calleeIndex === undefined ? undefined : tokens[calleeIndex + 1];
+  if (calleeIndex === undefined || callee?.kind !== "word" || !isSimpleJuliaIdentifier(callee.text) || opening?.text !== "(") {
+    return null;
+  }
+  const closingIndex = pairs.get(calleeIndex + 1);
+  const next = closingIndex === undefined ? undefined : tokens[closingIndex + 1];
+  if (
+    closingIndex !== calleeIndex + 2 ||
+    (next !== undefined && !startsDirectStatement(sourceText, tokens, closingIndex + 1))
+  ) {
+    return null;
+  }
+  return {
+    callerName: caller.name,
+    callerStart: caller.start,
+    calleeName: callee.text,
+    start: callee.start,
+    end: callee.end
+  };
+}
+
+function directJuliaFullFormMethodName(
+  sourceText: string,
+  tokens: readonly JuliaToken[],
+  index: number,
+  pairs: ReadonlyMap<number, number>
+): string | null {
+  const keyword = tokens[index];
+  if (
+    keyword?.kind !== "word" ||
+    keyword.text !== "function" ||
+    !startsDirectStatement(sourceText, tokens, index)
+  ) {
+    return null;
+  }
+  const name = tokens[index + 1];
+  const parameterOpen = tokens[index + 2];
+  if (name?.kind === "word" && isSimpleJuliaIdentifier(name.text) && parameterOpen?.text === "(") {
+    return pairs.get(index + 2) === undefined ? null : name.text;
+  }
+  const qualifier = tokens[index + 1];
+  const separator = tokens[index + 2];
+  const qualifiedName = tokens[index + 3];
+  const qualifiedParameterOpen = tokens[index + 4];
+  return qualifier?.kind === "word" &&
+    qualifier.text === "Main" &&
+    separator?.text === "." &&
+    qualifiedName?.kind === "word" &&
+    isSimpleJuliaIdentifier(qualifiedName.text) &&
+    qualifiedParameterOpen?.text === "(" &&
+    pairs.get(index + 4) !== undefined
+    ? qualifiedName.text
+    : null;
+}
+
+function hasOnlyJuliaB1TopLevelForms(
+  sourceText: string,
+  tokens: readonly JuliaToken[],
+  pairs: ReadonlyMap<number, number>
+): boolean {
+  for (let index = 0; index < tokens.length; index += 1) {
+    if (!startsDirectStatement(sourceText, tokens, index)) {
+      continue;
+    }
+    const functionFact = directJuliaFunction(sourceText, tokens, index, pairs);
+    if (functionFact === null || !functionFact.isZeroArgument) {
+      return false;
+    }
+  }
+  return true;
 }
 
 function isLiteralSlashPath(
@@ -390,18 +487,21 @@ function directGenieRoute(
 function staticJuliaFacts(sourceText: string): StaticJuliaFacts {
   const lexical = lexJulia(sourceText);
   if (!lexical.valid) {
-    return { valid: false, functions: [], routes: [] };
+    return { valid: false, functions: [], methodDeclarationNames: [], calls: [], routes: [] };
   }
   const delimiters = delimiterPairs(lexical.tokens);
   if (!delimiters.valid) {
-    return { valid: false, functions: [], routes: [] };
+    return { valid: false, functions: [], methodDeclarationNames: [], calls: [], routes: [] };
   }
 
   const functions: StaticJuliaFunction[] = [];
+  const methodDeclarationNames: string[] = [];
+  const calls: StaticJuliaDirectCall[] = [];
   const routes: StaticGenieRoute[] = [];
   let directGenieUseCount = 0;
   let delimiterDepth = 0;
   let blockDepth = 0;
+  const blockOpeners: string[] = [];
 
   for (let index = 0; index < lexical.tokens.length; index += 1) {
     const token = lexical.tokens[index];
@@ -409,10 +509,8 @@ function staticJuliaFacts(sourceText: string): StaticJuliaFacts {
       continue;
     }
 
-    if (delimiterDepth === 0 && blockDepth === 0) {
-      if (isDirectGenieUse(sourceText, lexical.tokens, index)) {
-        directGenieUseCount += 1;
-      }
+    const inTopLevelBegin = blockDepth === 1 && blockOpeners.at(-1) === "begin";
+    if (delimiterDepth === 0 && (blockDepth === 0 || inTopLevelBegin)) {
       const functionFact = directJuliaFunction(
         sourceText,
         lexical.tokens,
@@ -420,27 +518,55 @@ function staticJuliaFacts(sourceText: string): StaticJuliaFacts {
         delimiters.pairs
       );
       if (functionFact !== null) {
-        functions.push(functionFact);
+        if (blockDepth === 0) {
+          functions.push(functionFact);
+        }
+        methodDeclarationNames.push(functionFact.name);
       }
-      const routeFact = directGenieRoute(
+      const fullFormMethodName = directJuliaFullFormMethodName(
         sourceText,
         lexical.tokens,
         index,
         delimiters.pairs
       );
-      if (routeFact !== null) {
-        routes.push(routeFact);
+      if (fullFormMethodName !== null) {
+        methodDeclarationNames.push(fullFormMethodName);
+      }
+      if (blockDepth === 0) {
+        if (isDirectGenieUse(sourceText, lexical.tokens, index)) {
+          directGenieUseCount += 1;
+        }
+        const callFact = directJuliaZeroArgumentBareCall(
+          sourceText,
+          lexical.tokens,
+          index,
+          delimiters.pairs
+        );
+        if (callFact !== null) {
+          calls.push(callFact);
+        }
+        const routeFact = directGenieRoute(
+          sourceText,
+          lexical.tokens,
+          index,
+          delimiters.pairs
+        );
+        if (routeFact !== null) {
+          routes.push(routeFact);
+        }
       }
     }
 
     if (token.kind === "word" && delimiterDepth === 0) {
       if (token.text === "end") {
         if (blockDepth === 0) {
-          return { valid: false, functions: [], routes: [] };
+          return { valid: false, functions: [], methodDeclarationNames: [], calls: [], routes: [] };
         }
         blockDepth -= 1;
+        blockOpeners.pop();
       } else if (JULIA_BLOCK_OPENERS.has(token.text)) {
         blockDepth += 1;
+        blockOpeners.push(token.text);
       }
     }
 
@@ -455,11 +581,13 @@ function staticJuliaFacts(sourceText: string): StaticJuliaFacts {
   }
 
   if (blockDepth !== 0) {
-    return { valid: false, functions: [], routes: [] };
+    return { valid: false, functions: [], methodDeclarationNames: [], calls: [], routes: [] };
   }
   return {
     valid: true,
     functions,
+    methodDeclarationNames,
+    calls: hasOnlyJuliaB1TopLevelForms(sourceText, lexical.tokens, delimiters.pairs) ? calls : [],
     routes: directGenieUseCount === 1 ? routes : []
   };
 }
@@ -638,9 +766,63 @@ export function extractJuliaFileFacts(input: JuliaExtractFileFactsInput): Artifa
 
   if (staticFacts.valid) {
     const functionsByName = new Map<string, SymbolNode[]>();
+    const functionsByStart = new Map<number, SymbolNode>();
+    const zeroArgumentFunctionsByName = new Map<string, SymbolNode[]>();
+    const methodDeclarationCounts = new Map<string, number>();
+    for (const name of staticFacts.methodDeclarationNames) {
+      methodDeclarationCounts.set(name, (methodDeclarationCounts.get(name) ?? 0) + 1);
+    }
     for (const functionFact of [...staticFacts.functions].sort((left, right) => left.start - right.start)) {
       const symbol = addFunction(functionFact);
       functionsByName.set(functionFact.name, [...(functionsByName.get(functionFact.name) ?? []), symbol]);
+      functionsByStart.set(functionFact.start, symbol);
+      if (functionFact.isZeroArgument) {
+        zeroArgumentFunctionsByName.set(functionFact.name, [
+          ...(zeroArgumentFunctionsByName.get(functionFact.name) ?? []),
+          symbol
+        ]);
+      }
+    }
+    for (const callFact of [...staticFacts.calls].sort((left, right) => left.start - right.start)) {
+      const caller = functionsByStart.get(callFact.callerStart);
+      const candidates = functionsByName.get(callFact.calleeName) ?? [];
+      const zeroArgumentCandidates = zeroArgumentFunctionsByName.get(callFact.calleeName) ?? [];
+      if (
+        caller === undefined ||
+        candidates.length !== 1 ||
+        zeroArgumentCandidates.length !== 1 ||
+        methodDeclarationCounts.get(callFact.calleeName) !== 1
+      ) {
+        continue;
+      }
+      const callee = zeroArgumentCandidates[0];
+      if (callee === undefined) {
+        continue;
+      }
+      const range = rangeFor(lineStarts, callFact.start, callFact.end);
+      edges.push({
+        id: createEdgeId({
+          sourceId: caller.id,
+          targetId: callee.id,
+          kind: "calls",
+          line: range.start.line,
+          column: range.start.column,
+          referenceName: callFact.calleeName
+        }),
+        sourceId: caller.id,
+        targetId: callee.id,
+        kind: "calls",
+        filePath: input.filePath,
+        range,
+        resolution: "exact",
+        confidence: 1,
+        referenceName: callFact.calleeName,
+        evidence: {
+          ruleId: "syntax.julia.same-file.unique-zero-argument-bare-function-call",
+          stage: "syntax",
+          candidateSymbolIds: [callee.id]
+        }
+      });
     }
     for (const routeFact of [...staticFacts.routes].sort((left, right) => left.start - right.start)) {
       const candidates = functionsByName.get(routeFact.handlerName) ?? [];

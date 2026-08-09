@@ -292,6 +292,80 @@ function directPerlFunction(
   };
 }
 
+function hasUnsafePerlB1SubBody(
+  tokens: readonly PerlToken[],
+  bodyOpen: number,
+  bodyClose: number
+): boolean {
+  const unsafeWords = new Set([
+    "BEGIN",
+    "UNITCHECK",
+    "CHECK",
+    "INIT",
+    "END",
+    "eval",
+    "evalbytes",
+    "do",
+    "require"
+  ]);
+  for (let index = bodyOpen + 1; index < bodyClose; index += 1) {
+    const token = tokens[index];
+    if (token === undefined) {
+      continue;
+    }
+    if (
+      token.kind === "word" &&
+      [...unsafeWords].some((unsafeWord) => token.text === unsafeWord || token.text.endsWith("::" + unsafeWord))
+    ) {
+      return true;
+    }
+    if (token.kind === "word" && token.text === "undef" && ["&", "*"].includes(tokens[index + 1]?.text ?? "")) {
+      return true;
+    }
+    if (token.text === "*" && tokens[index + 1]?.kind === "word") {
+      return true;
+    }
+  }
+  return false;
+}
+
+function hasOnlyPerlB1TopLevelForms(
+  tokens: readonly PerlToken[],
+  pairs: ReadonlyMap<number, number>
+): boolean {
+  let index = 0;
+  while (index < tokens.length) {
+    const packageFact = directPerlPackage(tokens, index);
+    if (packageFact !== null) {
+      index += 3;
+      continue;
+    }
+    if (isDirectDancer2Use(tokens, index)) {
+      index += 3;
+      continue;
+    }
+    const functionFact = directPerlFunction(tokens, index, pairs);
+    if (functionFact !== null) {
+      const bodyOpen = index + 2;
+      const bodyClose = pairs.get(bodyOpen);
+      if (bodyClose === undefined) {
+        return false;
+      }
+      if (hasUnsafePerlB1SubBody(tokens, bodyOpen, bodyClose)) {
+        return false;
+      }
+      index = bodyClose + 1;
+      continue;
+    }
+    if (directDancer2Route(tokens, index) !== null) {
+      index += 6;
+      continue;
+    }
+    return false;
+  }
+  return true;
+}
+
 function isLiteralSlashPath(
   token: PerlToken | undefined
 ): token is PerlToken & { readonly value: string; readonly escaped: false } {
@@ -384,7 +458,12 @@ function staticPerlFacts(sourceText: string): StaticPerlFacts {
     valid: true,
     package: packageFact,
     functions,
-    routes: directDancer2UseCount === 1 && packages.length <= 1 ? routes : []
+    routes:
+      directDancer2UseCount === 1 &&
+      packages.length <= 1 &&
+      hasOnlyPerlB1TopLevelForms(lexical.tokens, delimiters.pairs)
+        ? routes
+        : []
   };
 }
 
