@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.353.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.354.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## What it is
 
@@ -51,15 +51,14 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.353.0 usability snapshot
+## v0.354.0 usability snapshot
 
 The repeatable smoke matrix checks committed cases against the exported language and framework registries instead of treating README claims as proof.
 
-- Thirty-two priority languages complete `init`, no-op `sync`, changed `sync`, file inventory, and full-identity symbol lookup. Thirty-one pass B1 relation receipts; Ruby remains partial.
-- OCaml, F#, and Nim accept only declaration-before-use, unique, same-file unit or zero-argument calls. Opens/imports/modules/macros, forward standard-library bindings, and multiple candidates fail closed.
-- Scala and VB.NET accept only unique zero-argument calls inside canonical objects or modules. Overloads, defaults, implicits, extensions, partials, shadows, qualified forms, and cross-file shapes do not produce exact edges.
-- The bounded Elixir, Erlang, Perl, Julia, Haskell, and route-based B1 relations from earlier versions retain the same conservative evidence contract.
-- Language route receipts bind the complete handler identity and edge endpoints and require `resolution: exact` with `confidence: 1`; heuristic or same-path wrong-handler records cannot pass B1.
+- Thirty-seven priority languages complete `init`, no-op `sync`, changed `sync`, file inventory, and full-identity symbol lookup. Thirty-six pass B1 relation receipts; Ruby remains partial.
+- ArkTS uses a local-component `handles` edge, Objective-C a unique same-file superclass, and Solidity a private zero-argument call inside one contract.
+- COBOL supports a unique same-PROGRAM paragraph `PERFORM`. Blade resolves literal `@extends` only when the project proves the conventional `resources/views` root; custom view roots fail closed.
+- Every language relation receipt binds complete symbol identities and edge endpoints and requires `resolution: exact` with `confidence: 1`; heuristic or wrong-target records cannot pass B1.
 - Groovy, CFML, and Ruby remain conservative partials for general calls. Later batches will use provable routes, file references, or another non-dynamic relation instead.
 - Representative React Router, Next.js, Vue Router, SvelteKit, Astro, Spring Web, FastAPI, Django, and ASP.NET Core cases produce the expected route.
 - Nuxt Vue files scan and query successfully, but there is no dedicated Nuxt route capability yet.

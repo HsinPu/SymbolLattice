@@ -118,6 +118,11 @@ export const HARD_EXCLUDED_DIRECTORY_NAMES: ReadonlySet<string> = new Set([
   "node_modules"
 ]);
 
+/** Languages reachable through extension routing or a path-specific discovery rule. */
+export const DISCOVERABLE_LANGUAGES: readonly SupportedLanguage[] = Object.freeze([
+  ...new Set<SupportedLanguage>([...SUPPORTED_EXTENSIONS.values(), "blade"])
+]);
+
 export interface SourceFile {
   readonly absolutePath: string;
   readonly relativePath: string;

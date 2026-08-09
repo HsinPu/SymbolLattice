@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.353.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
+> v0.354.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
 
 ## 專案用途
 
@@ -51,15 +51,14 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.353.0 可用性快照
+## v0.354.0 可用性快照
 
 可重跑的 smoke matrix 會從正式語言與框架 registry 核對測試案例，而不是依 README 宣稱支援。
 
-- 32 個優先語言皆可完成 `init`、no-op `sync`、changed `sync`、檔案與完整 identity symbol 查詢；其中 31 種通過 B1 關係驗收，Ruby 維持 partial。
-- OCaml、F#、Nim 只接受 declaration-before-use、唯一、同檔的 unit／零參數呼叫；open/import/module/macro、前向標準庫綁定或多候選即 fail-closed。
-- Scala 與 VB.NET 只接受 canonical object／module 內的唯一零參數呼叫；overload、default、implicit、extension、partial、shadow、qualified 或 cross-file 形狀不投影 exact。
-- 前幾版的 Elixir、Erlang、Perl、Julia、Haskell 與 route 型 B1 關係維持相同的保守證據契約。
-- 語言 route 驗收會核對完整 handler identity、edge endpoints、`resolution: exact` 與 `confidence: 1`，heuristic 或同路徑錯 handler 不會誤升 B1。
+- 37 個優先語言皆可完成 `init`、no-op `sync`、changed `sync`、檔案與完整 identity symbol 查詢；其中 36 種通過 B1 關係驗收，Ruby 維持 partial。
+- ArkTS 以本地元件 `handles`、Objective-C 以同檔唯一 superclass、Solidity 以同 contract 私有零參數呼叫建立 exact 關係。
+- COBOL 支援同 PROGRAM 的唯一 paragraph `PERFORM`；Blade 只在可證明為慣例 `resources/views` 專案時解析 literal `@extends`，自訂 view root 會 fail-closed。
+- 所有語言關係驗收都核對完整 symbol identity、edge endpoints、`resolution: exact` 與 `confidence: 1`；heuristic 或錯誤目標不會誤升 B1。
 - Groovy、CFML 與 Ruby 的一般呼叫仍維持保守 partial；後續會改採可證明的 route、file reference 或其他非動態關係。
 - React Router、Next.js、Vue Router、SvelteKit、Astro、Spring Web、FastAPI、Django 與 ASP.NET Core 的代表案例可建立預期 route。
 - Nuxt 可掃描與查詢 Vue 檔案，但目前沒有專用 Nuxt route capability。

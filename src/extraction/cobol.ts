@@ -68,6 +68,16 @@ const COBOL_END_PROGRAM = new RegExp(
   "iu"
 );
 const COBOL_PARAGRAPH = new RegExp("^\\s*(" + COBOL_IDENTIFIER + ")\\s*\\.\\s*$", "iu");
+const COBOL_SECTION = new RegExp(
+  "^\\s*(" + COBOL_IDENTIFIER + ")\\s+SECTION\\s*\\.\\s*$",
+  "iu"
+);
+const COBOL_END_DECLARATIVES = /^\s*END\s+DECLARATIVES\s*\.\s*$/iu;
+const COBOL_DIRECT_PARAGRAPH_PERFORM = new RegExp(
+  "^\\s*PERFORM\\s+(" + COBOL_IDENTIFIER + ")\\s*\\.\\s*$",
+  "iu"
+);
+const COBOL_AMBIGUOUS_PROCEDURE_CONTROL = /^\s*(?:ALTER|GO\s+TO|COPY|REPLACE)\b/iu;
 const COBOL_CICS_COMMAND_START = /^\s*EXEC\s+CICS\s+(?:RETURN|START)\b/iu;
 const COBOL_CICS_TRANSACTION_OWNER = new RegExp(
   "^\\s*\\d{1,2}\\s+(" +
@@ -419,24 +429,99 @@ function collectDirectCobolParagraphs(
   procedureEnd: number
 ): readonly CobolParagraph[] {
   const starts: Array<{ name: string; start: number }> = [];
+  const boundaries: number[] = [];
   for (let index = procedureLineIndex + 1; index < lines.length; index += 1) {
     const line = lines[index];
-    if (line === undefined || line.start >= procedureEnd || !isDirectParagraphLine(line)) {
+    if (line === undefined || line.start >= procedureEnd) {
       continue;
     }
-    const match = COBOL_PARAGRAPH.exec(codeFor(line));
+    const code = codeFor(line);
+    if (COBOL_SECTION.test(code) || COBOL_END_DECLARATIVES.test(code)) {
+      boundaries.push(line.start);
+      continue;
+    }
+    if (!isDirectParagraphLine(line)) {
+      continue;
+    }
+    const match = COBOL_PARAGRAPH.exec(code);
     const name = match?.[1];
-    if (name === undefined || !isCobolParagraphName(name)) {
-      continue;
+    if (name !== undefined && isCobolParagraphName(name)) {
+      starts.push({ name, start: line.start });
+      boundaries.push(line.start);
     }
-    starts.push({ name, start: line.start });
   }
 
   return starts.map((paragraph, index) => ({
     name: paragraph.name,
     start: paragraph.start,
-    end: starts[index + 1]?.start ?? procedureEnd
+    end: boundaries.find((boundary) => boundary > paragraph.start) ?? procedureEnd
   }));
+}
+
+interface CobolParagraphPerform {
+  readonly sourceName: string;
+  readonly targetName: string;
+  readonly start: number;
+  readonly end: number;
+}
+
+/**
+ * Retains only complete single-paragraph PERFORM statements whose source and
+ * target are uniquely declared within this one program. COPY/REPLACE, ALTER,
+ * and GO TO introduce compiler or runtime control-flow ambiguity, so this
+ * deliberately emits no relation from such a Procedure Division.
+ */
+function directCobolParagraphPerforms(
+  lines: readonly CobolLine[],
+  program: CobolProgram
+): readonly CobolParagraphPerform[] {
+  const procedureLines = lines.filter(
+    (line) => line.start >= program.procedureStart && line.start < program.procedureEnd
+  );
+  if (procedureLines.some((line) => COBOL_AMBIGUOUS_PROCEDURE_CONTROL.test(codeFor(line)))) {
+    return [];
+  }
+
+  const paragraphNames = new Map<string, number>();
+  for (const paragraph of program.paragraphs) {
+    const normalized = paragraph.name.toUpperCase();
+    paragraphNames.set(normalized, (paragraphNames.get(normalized) ?? 0) + 1);
+  }
+  if ([...paragraphNames.values()].some((count) => count !== 1)) {
+    return [];
+  }
+
+  const sectionNames = new Set<string>();
+  for (const line of procedureLines) {
+    const sectionName = COBOL_SECTION.exec(codeFor(line))?.[1];
+    if (sectionName !== undefined) {
+      sectionNames.add(sectionName.toUpperCase());
+    }
+  }
+
+  const performs: CobolParagraphPerform[] = [];
+  for (const line of procedureLines) {
+    const targetName = COBOL_DIRECT_PARAGRAPH_PERFORM.exec(codeFor(line))?.[1];
+    if (targetName === undefined) {
+      continue;
+    }
+    const targetKey = targetName.toUpperCase();
+    if (paragraphNames.get(targetKey) !== 1 || sectionNames.has(targetKey)) {
+      continue;
+    }
+    const source = program.paragraphs.find(
+      (paragraph) => line.start >= paragraph.start && line.start < paragraph.end
+    );
+    if (source !== undefined) {
+      performs.push({
+        sourceName: source.name,
+        targetName,
+        start: line.start,
+        end: line.contentEnd
+      });
+    }
+  }
+  return performs;
 }
 
 function directCobolProgram(
@@ -770,6 +855,42 @@ export function extractCobolFileFacts(input: CobolExtractFileFactsInput): Artifa
         referenceName,
         relationKind: "calls",
         range
+      });
+    }
+
+    for (const perform of directCobolParagraphPerforms(linesFor(sanitized.text), program)) {
+      const source = paragraphSymbols.find(
+        ({ symbol }) => symbol.name.toUpperCase() === perform.sourceName.toUpperCase()
+      )?.symbol;
+      const target = paragraphSymbols.find(
+        ({ symbol }) => symbol.name.toUpperCase() === perform.targetName.toUpperCase()
+      )?.symbol;
+      if (source === undefined || target === undefined) {
+        continue;
+      }
+      const range = rangeFor(lineStarts, perform.start, perform.end);
+      edges.push({
+        id: createEdgeId({
+          sourceId: source.id,
+          targetId: target.id,
+          kind: "calls",
+          line: range.start.line,
+          column: range.start.column,
+          referenceName: target.name
+        }),
+        sourceId: source.id,
+        targetId: target.id,
+        kind: "calls",
+        filePath: input.filePath,
+        range,
+        resolution: "exact",
+        confidence: 1,
+        referenceName: target.name,
+        evidence: {
+          ruleId: "syntax.cobol.same-program.unique-paragraph-perform",
+          stage: "syntax",
+          candidateSymbolIds: [target.id]
+        }
       });
     }
   }

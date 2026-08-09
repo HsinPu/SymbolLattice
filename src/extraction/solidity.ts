@@ -44,6 +44,10 @@ interface SolidityMember {
   readonly name: SolidityIdentifier;
   readonly start: number;
   readonly end: number;
+  readonly bodyStart: number | null;
+  readonly bodyEnd: number | null;
+  readonly hasNoParameters: boolean;
+  readonly isPrivate: boolean;
 }
 
 const SIMPLE_INHERITANCE_CLAUSE =
@@ -215,6 +219,31 @@ function matchingBrace(sourceText: string, start: number): number | null {
       continue;
     }
     if (character !== "}") {
+      continue;
+    }
+    depth -= 1;
+    if (depth === 0) {
+      return cursor;
+    }
+    if (depth < 0) {
+      return null;
+    }
+  }
+  return null;
+}
+
+function matchingParenthesis(sourceText: string, start: number): number | null {
+  if (sourceText[start] !== "(") {
+    return null;
+  }
+  let depth = 0;
+  for (let cursor = start; cursor < sourceText.length; cursor += 1) {
+    const character = sourceText[cursor];
+    if (character === "(") {
+      depth += 1;
+      continue;
+    }
+    if (character !== ")") {
       continue;
     }
     depth -= 1;
@@ -440,15 +469,29 @@ function completeMemberAt(
   if (sourceText[next] !== "(") {
     return null;
   }
+  const parameterEnd = matchingParenthesis(sourceText, next);
+  if (parameterEnd === null || parameterEnd >= containerEnd) {
+    return null;
+  }
   const end = memberEnd(sourceText, name.end, containerEnd);
   if (end === null) {
     return null;
   }
+  const bodyStart = declarationBodyStart(sourceText, parameterEnd + 1);
+  const bodyEnd = bodyStart === null ? null : matchingBrace(sourceText, bodyStart);
+  if (bodyEnd !== null && bodyEnd + 1 !== end) {
+    return null;
+  }
+  const headerEnd = bodyStart ?? end;
   return {
     keyword: memberKeyword,
     name,
     start: keyword.start,
-    end
+    end,
+    bodyStart,
+    bodyEnd,
+    hasNoParameters: sourceText.slice(next + 1, parameterEnd).trim() === "",
+    isPrivate: /\bprivate\b/u.test(sourceText.slice(parameterEnd + 1, headerEnd))
   };
 }
 
@@ -493,6 +536,63 @@ function containerSymbolKind(container: SolidityContainer): "class" | "interface
 
 function memberRuleId(keyword: SolidityMemberKeyword): string {
   return "language.solidity." + keyword + ".direct-member";
+}
+
+function hasAmbiguousPrivateCallContext(sourceText: string, source: SolidityMember): boolean {
+  if (source.bodyStart === null || source.bodyEnd === null) {
+    return true;
+  }
+  const header = sourceText.slice(source.name.end, source.bodyStart);
+  const body = sourceText.slice(source.bodyStart + 1, source.bodyEnd);
+  return /\b(?:function|returns)\b/u.test(header) || /\bassembly\b/u.test(body);
+}
+
+function onlyDirectPrivateZeroArgumentCall(
+  sourceText: string,
+  source: SolidityMember,
+  target: SolidityMember
+): SolidityIdentifier | null {
+  if (
+    source.bodyStart === null ||
+    source.bodyEnd === null ||
+    target.keyword !== "function" ||
+    !target.isPrivate ||
+    !target.hasNoParameters ||
+    hasAmbiguousPrivateCallContext(sourceText, source)
+  ) {
+    return null;
+  }
+  const bodyStart = source.bodyStart + 1;
+  const body = sourceText.slice(bodyStart, source.bodyEnd);
+  const occurrences = [...body.matchAll(/[A-Za-z_][A-Za-z0-9_]*/gu)].filter(
+    (occurrence) => occurrence[0] === target.name.name
+  );
+  const occurrence = occurrences[0];
+  if (occurrences.length !== 1 || occurrence?.index === undefined) {
+    return null;
+  }
+  const start = bodyStart + occurrence.index;
+  let previous = start - 1;
+  while (previous >= bodyStart && /\s/u.test(sourceText[previous] ?? "")) {
+    previous -= 1;
+  }
+  if (sourceText[previous] === ".") {
+    return null;
+  }
+  let cursor = start + target.name.name.length;
+  cursor = skipWhitespace(sourceText, cursor, source.bodyEnd);
+  if (sourceText[cursor] !== "(") {
+    return null;
+  }
+  const end = matchingParenthesis(sourceText, cursor);
+  if (
+    end === null ||
+    end >= source.bodyEnd ||
+    sourceText.slice(cursor + 1, end).trim() !== ""
+  ) {
+    return null;
+  }
+  return { name: target.name.name, start, end: end + 1 };
 }
 
 /**
@@ -602,6 +702,12 @@ export function extractSolidityFileFacts(input: SolidityExtractFileFactsInput): 
     return facts();
   }
 
+  const canProjectDirectPrivateCalls =
+    containers.length === 1 &&
+    containers[0]?.keyword === "contract" &&
+    containers[0]?.inheritanceReferences.length === 0 &&
+    !/\b(?:import|using)\b/u.test(code);
+
   for (const container of containers) {
     const containerRange = rangeForSpan(lineStarts, container.start, container.end);
     const containerKind = containerSymbolKind(container);
@@ -624,9 +730,10 @@ export function extractSolidityFileFacts(input: SolidityExtractFileFactsInput): 
       });
     }
 
+    const memberSymbols: Array<{ readonly member: SolidityMember; readonly symbol: SymbolNode }> = [];
     for (const member of directMembers(code, container)) {
       const memberRange = rangeForSpan(lineStarts, member.start, member.end);
-      addSymbol({
+      const symbol = addSymbol({
         name: member.name.name,
         kind: "method",
         qualifiedName: containerSymbol.qualifiedName + "::" + member.name.name,
@@ -635,6 +742,59 @@ export function extractSolidityFileFacts(input: SolidityExtractFileFactsInput): 
         parent: containerSymbol,
         containmentRuleId: memberRuleId(member.keyword)
       });
+      memberSymbols.push({ member, symbol });
+    }
+
+    if (!canProjectDirectPrivateCalls) {
+      continue;
+    }
+    for (const source of memberSymbols) {
+      if (source.member.keyword !== "function" || source.member.bodyStart === null) {
+        continue;
+      }
+      const targets = memberSymbols.filter(
+        (candidate) =>
+          candidate.member.keyword === "function" &&
+          candidate.member.isPrivate &&
+          candidate.member.hasNoParameters &&
+          candidate.member.bodyStart !== null
+      );
+      for (const target of targets) {
+        if (
+          memberSymbols.filter((candidate) => candidate.member.name.name === target.member.name.name)
+            .length !== 1
+        ) {
+          continue;
+        }
+        const call = onlyDirectPrivateZeroArgumentCall(code, source.member, target.member);
+        if (call === null) {
+          continue;
+        }
+        const range = rangeForSpan(lineStarts, call.start, call.end);
+        edges.push({
+          id: createEdgeId({
+            sourceId: source.symbol.id,
+            targetId: target.symbol.id,
+            kind: "calls",
+            line: range.start.line,
+            column: range.start.column,
+            referenceName: target.member.name.name
+          }),
+          sourceId: source.symbol.id,
+          targetId: target.symbol.id,
+          kind: "calls",
+          filePath: input.filePath,
+          range,
+          resolution: "exact",
+          confidence: 1,
+          referenceName: target.member.name.name,
+          evidence: {
+            ruleId: "syntax.solidity.same-contract.unique-private-zero-argument-function-call",
+            stage: "syntax",
+            candidateSymbolIds: [target.symbol.id]
+          }
+        });
+      }
     }
   }
 

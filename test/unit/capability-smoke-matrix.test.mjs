@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 
 import { ARTIFACT_LANGUAGES } from "../../src/domain/index.js";
 import { FRAMEWORK_CAPABILITY_IDS } from "../../src/extraction/index.js";
-import { SUPPORTED_EXTENSIONS } from "../../src/infrastructure/filesystem/index.js";
+import { DISCOVERABLE_LANGUAGES } from "../../src/infrastructure/filesystem/index.js";
 
 import * as capabilitySmokeMatrix from "../../scripts/capability-smoke-matrix.mjs";
 
@@ -215,12 +215,12 @@ describe("capability smoke matrix contract", () => {
     );
     const plan = createCapabilitySmokePlan(committedManifest, {
       artifactLanguages: ARTIFACT_LANGUAGES,
-      discoverableLanguages: [...new Set(SUPPORTED_EXTENSIONS.values())],
+      discoverableLanguages: DISCOVERABLE_LANGUAGES,
       frameworkCapabilityIds: FRAMEWORK_CAPABILITY_IDS
     });
 
     expect(plan.schemaVersion).toBe(2);
-    expect(plan.languageCases).toHaveLength(32);
+    expect(plan.languageCases).toHaveLength(37);
     expect(plan.frameworkCases).toHaveLength(10);
     expect(new Set(plan.registryCoverage.languages.selected)).toEqual(
       new Set([
@@ -256,6 +256,11 @@ describe("capability smoke matrix contract", () => {
         ,"nim"
         ,"scala"
         ,"vbnet"
+        ,"arkts"
+        ,"objc"
+        ,"solidity"
+        ,"cobol"
+        ,"blade"
       ])
     );
     expect(plan.frameworkCases.filter((candidate) => candidate.capabilityId === null)).toEqual([
@@ -286,6 +291,8 @@ describe("capability smoke matrix contract", () => {
       ,"nim-basic"
       ,"scala-basic"
       ,"vbnet-basic"
+      ,"solidity-basic"
+      ,"cobol-basic"
     ]) {
       expect(plan.languageCases.find((candidate) => candidate.id === id)?.assertions).toEqual(
         expect.objectContaining({
@@ -323,6 +330,40 @@ describe("capability smoke matrix contract", () => {
           target: "handler",
           expectedMethod: "GET",
           expectedPath: "/smoke"
+        })])
+      })
+    );
+    expect(plan.languageCases.find((candidate) => candidate.id === "blade-basic")?.assertions).toEqual(
+      expect.objectContaining({
+        symbols: expect.arrayContaining([
+          expect.objectContaining({ id: "page", kind: "file" }),
+          expect.objectContaining({ id: "layout", kind: "file" })
+        ]),
+        relations: expect.arrayContaining([expect.objectContaining({
+          command: "callees",
+          source: "page",
+          target: "layout",
+          kind: "calls"
+        })])
+      })
+    );
+    expect(plan.languageCases.find((candidate) => candidate.id === "arkts-basic")?.assertions).toEqual(
+      expect.objectContaining({
+        relations: expect.arrayContaining([expect.objectContaining({
+          command: "impact",
+          source: "entry",
+          target: "component",
+          kind: "handles"
+        })])
+      })
+    );
+    expect(plan.languageCases.find((candidate) => candidate.id === "objc-basic")?.assertions).toEqual(
+      expect.objectContaining({
+        relations: expect.arrayContaining([expect.objectContaining({
+          command: "hierarchy",
+          source: "child",
+          target: "parent",
+          kind: "extends"
         })])
       })
     );
@@ -473,6 +514,72 @@ describe("capability smoke matrix contract", () => {
       .rejects.toThrow("schemaVersion 1");
     await expect(runCapabilitySmokeCase(candidate, "language", successfulV2Runtime(), 2))
       .resolves.toMatchObject({ classification: "basic-usable" });
+  });
+
+  it("binds an impact receipt to one exact incoming edge and rejects heuristic evidence", async () => {
+    const candidate = {
+      ...v2Manifest().languageCases[0],
+      assertions: {
+        symbols: v2Manifest().languageCases[0].assertions.symbols,
+        relations: [{
+          id: "entry-handles-helper",
+          command: "impact",
+          source: "entry",
+          target: "helper",
+          kind: "handles"
+        }]
+      }
+    };
+    const impactResult = (resolution, confidence) => ({
+      symbol: {
+        id: "symbol:helper",
+        name: "typescriptHelper",
+        filePath: "src/typescript.ts",
+        kind: "function"
+      },
+      paths: [{
+        symbols: [
+          {
+            id: "symbol:helper",
+            name: "typescriptHelper",
+            filePath: "src/typescript.ts",
+            kind: "function"
+          },
+          {
+            id: "symbol:entry",
+            name: "typescriptEntry",
+            filePath: "src/typescript.ts",
+            kind: "function"
+          }
+        ],
+        edges: [{
+          sourceId: "symbol:entry",
+          targetId: "symbol:helper",
+          kind: "handles",
+          resolution,
+          confidence
+        }]
+      }]
+    });
+    const exactRuntime = successfulV2Runtime();
+    const exactBaseRunJson = exactRuntime.runJson.bind(exactRuntime);
+    exactRuntime.runJson = async (command, arguments_) => command === "impact"
+      ? impactResult("exact", 1)
+      : exactBaseRunJson(command, arguments_);
+    await expect(runCapabilitySmokeCase(candidate, "language", exactRuntime, 2)).resolves.toMatchObject({
+      classification: "basic-usable",
+      assertions: { relations: [expect.objectContaining({ status: "passed", kind: "handles" })] }
+    });
+
+    const heuristicRuntime = successfulV2Runtime();
+    const heuristicBaseRunJson = heuristicRuntime.runJson.bind(heuristicRuntime);
+    heuristicRuntime.runJson = async (command, arguments_) => command === "impact"
+      ? impactResult("heuristic", 0.4)
+      : heuristicBaseRunJson(command, arguments_);
+    await expect(runCapabilitySmokeCase(candidate, "language", heuristicRuntime, 2)).resolves.toMatchObject({
+      classification: "partial-usable",
+      assertions: { relations: [expect.objectContaining({ status: "failed" })] }
+    });
   });
 
   it("binds a language route receipt to the exact selected handler identity and edge", async () => {

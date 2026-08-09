@@ -28,10 +28,17 @@ type DirectObjectiveCContainerKind = "implementation" | "interface" | "protocol"
 interface StaticObjectiveCContainer {
   readonly kind: DirectObjectiveCContainerKind;
   readonly name: string;
+  readonly superclass: StaticObjectiveCSuperclass | null;
   readonly start: number;
   readonly end: number;
   readonly bodyStartLine: number;
   readonly endLine: number;
+}
+
+interface StaticObjectiveCSuperclass {
+  readonly name: string;
+  readonly start: number;
+  readonly end: number;
 }
 
 interface StaticObjectiveCMethod {
@@ -336,11 +343,15 @@ function firstCodeOffset(line: ObjectiveCLine): number {
 
 function directContainerHeader(
   line: ObjectiveCLine
-): { readonly kind: DirectObjectiveCContainerKind; readonly name: string } | null {
+): {
+  readonly kind: DirectObjectiveCContainerKind;
+  readonly name: string;
+  readonly superclass: StaticObjectiveCSuperclass | null;
+} | null {
   const implementation = DIRECT_IMPLEMENTATION_HEADER.exec(line.text);
   if (implementation !== null) {
     const name = implementation[1];
-    return name === undefined ? null : { kind: "implementation", name };
+    return name === undefined ? null : { kind: "implementation", name, superclass: null };
   }
 
   const interfaceHeader = DIRECT_INTERFACE_HEADER.exec(line.text);
@@ -348,7 +359,23 @@ function directContainerHeader(
     const name = interfaceHeader[1];
     const suffix = interfaceHeader[2]?.trim() ?? "";
     if (name !== undefined && (suffix === "" || DIRECT_INTERFACE_SUFFIX.test(suffix))) {
-      return { kind: "interface", name };
+      const superclassMatch = /^:[ \t]*([A-Za-z_][A-Za-z0-9_]*)\b/u.exec(suffix);
+      const superclassName = superclassMatch?.[1];
+      const afterClassName = line.text.indexOf(name) + name.length;
+      const superclassOffset =
+        superclassName === undefined ? -1 : line.text.indexOf(superclassName, afterClassName);
+      return {
+        kind: "interface",
+        name,
+        superclass:
+          superclassName === undefined || superclassOffset < 0
+            ? null
+            : {
+                name: superclassName,
+                start: line.start + superclassOffset,
+                end: line.start + superclassOffset + superclassName.length
+              }
+      };
     }
     return null;
   }
@@ -358,7 +385,7 @@ function directContainerHeader(
     const name = protocol[1];
     const suffix = protocol[2]?.trim() ?? "";
     if (name !== undefined && (suffix === "" || DIRECT_PROTOCOL_LIST.test(suffix))) {
-      return { kind: "protocol", name };
+      return { kind: "protocol", name, superclass: null };
     }
   }
 
@@ -407,6 +434,7 @@ function collectDirectContainers(
     containers.push({
       kind: header.kind,
       name: header.name,
+      superclass: header.superclass,
       start: firstCodeOffset(line),
       end: end.end,
       bodyStartLine: lineIndex + 1,
@@ -970,6 +998,7 @@ function collectDirectReactNativeObjectiveCExternModules(
     const container: StaticObjectiveCContainer = {
       kind: "interface",
       name: header.objcClassName,
+      superclass: null,
       start: firstCodeOffset(line),
       end: end.end,
       bodyStartLine: lineIndex + 1,
@@ -1040,6 +1069,11 @@ export function extractObjectiveCFileFacts(input: ObjectiveCExtractFileFactsInpu
   const edges: GraphEdge[] = [];
   const reactNativeNativeMethods: ReactNativeFacts["nativeMethods"][number][] = [];
   const reactNativeSwiftExternalBridgeMethods: ReactNativeSwiftExternalBridgeMethodFact[] = [];
+  const classSymbols = new Map<string, SymbolNode>();
+  const sameFileSuperclassReferences: Array<{
+    readonly source: SymbolNode;
+    readonly superclass: StaticObjectiveCSuperclass;
+  }> = [];
   const declarationOrdinals = new Map<string, number>();
 
   function nextOrdinal(qualifiedName: string, kind: SymbolNode["kind"]): number {
@@ -1292,6 +1326,13 @@ export function extractObjectiveCFileFacts(input: ObjectiveCExtractFileFactsInpu
         ? "language.objc.implementation.direct"
         : "language.objc.interface.direct"
     );
+    classSymbols.set(owner.container.name, parent);
+    if (owner.declaration?.superclass !== null && owner.declaration?.superclass !== undefined) {
+      sameFileSuperclassReferences.push({
+        source: parent,
+        superclass: owner.declaration.superclass
+      });
+    }
     const selectedMethods = new Map<
       string,
       {
@@ -1350,6 +1391,37 @@ export function extractObjectiveCFileFacts(input: ObjectiveCExtractFileFactsInpu
         });
       }
     }
+  }
+
+  for (const reference of sameFileSuperclassReferences) {
+    const target = classSymbols.get(reference.superclass.name);
+    if (target === undefined || target.id === reference.source.id) {
+      continue;
+    }
+    const range = rangeFor(lineStarts, reference.superclass.start, reference.superclass.end);
+    edges.push({
+      id: createEdgeId({
+        sourceId: reference.source.id,
+        targetId: target.id,
+        kind: "extends",
+        line: range.start.line,
+        column: range.start.column,
+        referenceName: reference.superclass.name
+      }),
+      sourceId: reference.source.id,
+      targetId: target.id,
+      kind: "extends",
+      filePath: input.filePath,
+      range,
+      resolution: "exact",
+      confidence: 1,
+      referenceName: reference.superclass.name,
+      evidence: {
+        ruleId: "syntax.objc.same-file.unique-interface-superclass",
+        stage: "syntax",
+        candidateSymbolIds: [target.id]
+      }
+    });
   }
 
   for (const externModule of reactNativeExternModules) {

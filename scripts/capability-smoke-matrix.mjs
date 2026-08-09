@@ -81,7 +81,7 @@ function validateV2Assertions(value, label, profile) {
         kind: requireNonemptyString(record.kind, `${assertionLabel}.kind`)
       };
     }
-    if (command === "hierarchy") {
+    if (command === "hierarchy" || command === "impact") {
       const source = requireNonemptyString(record.source, `${assertionLabel}.source`);
       const target = requireNonemptyString(record.target, `${assertionLabel}.target`);
       if (!symbolsById.has(source) || symbolsById.get(source)?.notApplicable !== undefined) {
@@ -143,7 +143,7 @@ function validateV2Assertions(value, label, profile) {
     if (!relations.some(
       (assertion) =>
         assertion.notApplicable === undefined &&
-        ["callees", "hierarchy", "file-dependents", "routes"].includes(assertion.command)
+        ["callees", "hierarchy", "impact", "file-dependents", "routes"].includes(assertion.command)
     )) {
       throw new Error(`${label} must include at least one required language relation assertion.`);
     }
@@ -651,6 +651,49 @@ export async function runCapabilitySmokeCase(candidateValue, kind, runtimeValue,
                 receipt.message = `hierarchy returned ${matches.length} exact edges for ${assertion.id}.`;
                 errors.push({ stage: "relation", assertionId: assertion.id, message: receipt.message });
               }
+            } else if (assertion.command === "impact") {
+              const source = resolvedSymbols.get(assertion.source);
+              const target = resolvedSymbols.get(assertion.target);
+              if (source === undefined || target === undefined) {
+                throw new Error("Impact endpoints were not resolved by exact identity.");
+              }
+              const result = await runtime.runJson("impact", [
+                target.id,
+                "--project",
+                projectPath,
+                "--json",
+                "--depth",
+                "1",
+                "--limit",
+                "100"
+              ]);
+              const matches = sameSymbolIdentity(result?.symbol, target) && Array.isArray(result?.paths)
+                ? result.paths.filter((path) => {
+                    const symbols = Array.isArray(path?.symbols) ? path.symbols : [];
+                    const edges = Array.isArray(path?.edges) ? path.edges : [];
+                    return symbols.length === 2 &&
+                      sameSymbolIdentity(symbols[0], target) &&
+                      sameSymbolIdentity(symbols[1], source) &&
+                      edges.length === 1 &&
+                      edges[0]?.sourceId === source.id &&
+                      edges[0]?.targetId === target.id &&
+                      edges[0]?.kind === assertion.kind &&
+                      edges[0]?.resolution === "exact" &&
+                      edges[0]?.confidence === 1;
+                  })
+                : [];
+              if (matches.length === 1) {
+                const edge = matches[0].edges[0];
+                receipt.status = "passed";
+                receipt.source = source;
+                receipt.target = target;
+                receipt.kind = edge.kind;
+                evidence.relation ??= `${edge.kind} ${source.id} -> ${target.id}`;
+              } else {
+                receipt.status = "failed";
+                receipt.message = `impact returned ${matches.length} exact edges for ${assertion.id}.`;
+                errors.push({ stage: "relation", assertionId: assertion.id, message: receipt.message });
+              }
             } else if (assertion.command === "file-dependents") {
               const result = await runtime.runJson("file", [
                 assertion.targetFile,
@@ -1009,9 +1052,7 @@ async function main(argv) {
   ]);
   const manifest = JSON.parse(manifestText);
   const packageJson = JSON.parse(packageText);
-  const discoverableLanguages = [
-    ...new Set([...filesystem.SUPPORTED_EXTENSIONS.values()])
-  ];
+  const discoverableLanguages = filesystem.DISCOVERABLE_LANGUAGES;
   const plan = createCapabilitySmokePlan(manifest, {
     artifactLanguages: domain.ARTIFACT_LANGUAGES,
     discoverableLanguages,

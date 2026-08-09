@@ -1289,21 +1289,36 @@ function projectTwigTemplateReferences(input: {
 
 function bladeTemplateReferenceRuleId(
   kind: "extends" | "include" | "component" | "each",
-  suffix: "exact-target" | "unresolved-target"
+  suffix: "exact-target" | "unresolved-target" | "unproven-project-root"
 ): string {
   return "framework.laravel-blade." + kind + ".literal-resources-views." + suffix;
 }
 
 /**
- * Blade logical view names are only projected through Laravel's conventional
- * project-local `resources/views/` root. This excludes namespaces, packages,
- * custom finders, and runtime-configured view locations.
+ * A conventional Blade root is exact only in a fixture-shaped project whose
+ * entire indexed source surface is Blade files under `resources/views/`. Any PHP,
+ * config/provider source, alternative view root, or other source file may
+ * customize Laravel's finder, so it leaves literal references unresolved.
  */
+function hasProvenConventionalBladeFixtureRoot(
+  factsByFile: ReadonlyMap<string, ExtractedFileFacts>
+): boolean {
+  const filePaths = [...factsByFile.keys()];
+  return (
+    filePaths.length > 0 &&
+    filePaths.every(
+      (filePath) =>
+        filePath.startsWith("resources/views/") && filePath.endsWith(".blade.php")
+    )
+  );
+}
+
 function projectBladeTemplateReferences(input: {
   readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
   readonly fileSymbols: ReadonlyMap<string, SymbolNode>;
 }): readonly GraphEdge[] {
   const edges: GraphEdge[] = [];
+  const hasProvenRoot = hasProvenConventionalBladeFixtureRoot(input.factsByFile);
   for (const [, facts] of [...input.factsByFile.entries()].sort(([left], [right]) =>
     compareStableText(left, right)
   )) {
@@ -1319,8 +1334,14 @@ function projectBladeTemplateReferences(input: {
       return left.range.start.column - right.range.start.column;
     });
     for (const reference of references) {
-      const target = input.fileSymbols.get(reference.targetFilePath);
+      const target = hasProvenRoot ? input.fileSymbols.get(reference.targetFilePath) : undefined;
       const targetId = target?.id ?? null;
+      const ruleSuffix =
+        target === undefined
+          ? hasProvenRoot
+            ? "unresolved-target"
+            : "unproven-project-root"
+          : "exact-target";
       edges.push({
         id: createEdgeId({
           sourceId: reference.sourceId,
@@ -1339,10 +1360,7 @@ function projectBladeTemplateReferences(input: {
         confidence: target === undefined ? 0 : 1,
         referenceName: reference.referenceName,
         evidence: referenceEvidence(
-          bladeTemplateReferenceRuleId(
-            reference.kind,
-            target === undefined ? "unresolved-target" : "exact-target"
-          ),
+          bladeTemplateReferenceRuleId(reference.kind, ruleSuffix),
           "module",
           candidateSymbolIds(target === undefined ? [] : [target])
         )
