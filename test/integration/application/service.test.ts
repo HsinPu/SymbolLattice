@@ -3290,6 +3290,119 @@ describe("SymbolLatticeService", () => {
     ]);
   });
 
+  it("indexes and persists bounded Go, Rust, C, and C++ same-file direct calls", async () => {
+    const projectPath = await createInlineProject({
+      "src/smoke.go": [
+        "package smoke",
+        "func goHelper() int { return 1 }",
+        "func goEntry() int { return goHelper() }"
+      ].join("\n"),
+      "src/smoke.rs": [
+        "pub fn rust_helper() -> i32 { 1 }",
+        "pub fn rust_entry() -> i32 { rust_helper() }"
+      ].join("\n"),
+      "src/smoke.c": [
+        "int c_helper(void) { return 1; }",
+        "int c_entry(void) { return c_helper(); }"
+      ].join("\n"),
+      "src/smoke.cpp": [
+        "int cpp_helper() { return 1; }",
+        "int cpp_entry() { return cpp_helper(); }"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+
+    const snapshot = graphStore.getSnapshot(projectPath);
+    const contracts = [
+      {
+        filePath: "src/smoke.go",
+        entry: "goEntry",
+        helper: "goHelper",
+        ruleId: "syntax.go.same-file.unique-package-function-call"
+      },
+      {
+        filePath: "src/smoke.rs",
+        entry: "rust_entry",
+        helper: "rust_helper",
+        ruleId: "syntax.rust.same-file.unique-top-level-function-call"
+      },
+      {
+        filePath: "src/smoke.c",
+        entry: "c_entry",
+        helper: "c_helper",
+        ruleId: "syntax.c.same-file.unique-top-level-function-call"
+      },
+      {
+        filePath: "src/smoke.cpp",
+        entry: "cpp_entry",
+        helper: "cpp_helper",
+        ruleId: "syntax.cpp.same-file.unique-top-level-function-call"
+      }
+    ] as const;
+
+    for (const contract of contracts) {
+      const entry = snapshot.symbols.find(
+        (candidate) =>
+          candidate.qualifiedName === `${contract.filePath}#${contract.entry}` &&
+          candidate.kind === "function"
+      );
+      const helper = snapshot.symbols.find(
+        (candidate) =>
+          candidate.qualifiedName === `${contract.filePath}#${contract.helper}` &&
+          candidate.kind === "function"
+      );
+      expect(entry).toBeDefined();
+      expect(helper).toBeDefined();
+
+      const callees = await service.callees(projectPath, entry?.id ?? "missing");
+      expect(callees.symbol.id).toBe(entry?.id);
+      expect(callees.relations).toEqual([
+        expect.objectContaining({
+          symbol: expect.objectContaining({ id: helper?.id }),
+          edge: expect.objectContaining({
+            sourceId: entry?.id,
+            targetId: helper?.id,
+            kind: "calls",
+            resolution: "exact",
+            confidence: 1,
+            evidence: {
+              ruleId: contract.ruleId,
+              stage: "syntax",
+              candidateSymbolIds: [helper?.id]
+            }
+          })
+        })
+      ]);
+      const callers = await service.callers(projectPath, helper?.id ?? "missing");
+      expect(callers.symbol.id).toBe(helper?.id);
+      expect(callers.relations.map((relation) => relation.symbol.id)).toEqual([entry?.id]);
+      expect(
+        graphStore
+          .getArtifactFacts(projectPath)
+          .find((facts) => facts.filePath === contract.filePath)
+          ?.edges.filter((edge) => edge.kind === "calls")
+      ).toHaveLength(1);
+    }
+
+    const reopened = new SymbolLatticeService(
+      new SqliteGraphStore(),
+      new FileSystemSourceCatalog()
+    );
+    await reopened.init({ projectPath });
+    for (const contract of contracts) {
+      const callers = await reopened.callers(
+        projectPath,
+        `${contract.filePath}#${contract.helper}`
+      );
+      expect(callers.relations.map((relation) => relation.symbol.name)).toEqual([
+        contract.entry
+      ]);
+    }
+  });
+
   it("resolves lexically bound Java parameter and local receiver calls", async () => {
     const projectPath = await createInlineProject({
       "src/api/Base.java": [

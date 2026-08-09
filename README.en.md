@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.345.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.346.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## What it is
 
@@ -51,13 +51,13 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.345.0 usability snapshot
+## v0.346.0 usability snapshot
 
 The repeatable smoke matrix checks committed cases against the exported language and framework registries instead of treating README claims as proof.
 
 - Fourteen priority languages complete `init`, no-op `sync`, changed `sync`, file inventory, and symbol lookup: TypeScript, JavaScript, Python, Java, Go, Rust, C, C++, C#, PHP, Ruby, Kotlin, Swift, and Dart.
-- TypeScript, JavaScript, Java, and Python expose a basic call relation whose source, target, and edge identities are checked exactly. The other ten priority languages scan and query successfully but still need deeper call relationships.
-- Java covers bounded unqualified `static` calls within the declaring class. Python covers direct calls between undecorated, un-rebound top-level functions in the same file. Unproven binding forms remain unresolved instead of producing false exact edges.
+- TypeScript, JavaScript, Java, Python, Go, Rust, C, and C++ expose a basic call relation whose source, target, and edge identities are checked exactly. The other six priority languages scan and query successfully but still need deeper call relationships.
+- Go, Rust, C, and C++ only create exact edges for unique, unshadowed bare calls between same-file top-level or free functions. Parameter or local shadowing, closures or lambdas, member or qualified calls, macros, overloads, and indirect calls fail closed.
 - Representative React Router, Next.js, Vue Router, SvelteKit, Astro, Spring Web, FastAPI, Django, and ASP.NET Core cases produce the expected route.
 - Nuxt Vue files scan and query successfully, but there is no dedicated Nuxt route capability yet.
 

@@ -24,6 +24,11 @@ interface StaticCppFunction {
   readonly name: string;
   readonly node: CppSyntaxNode;
   readonly body: CppSyntaxNode;
+  readonly parameterList: CppSyntaxNode;
+}
+
+interface StaticCppFunctionDeclaration {
+  readonly name: string;
 }
 
 interface StaticCppClass {
@@ -166,9 +171,159 @@ function staticCppFunction(input: CppExtractFileFactsInput, node: CppSyntaxNode)
   }
   const name = functionName(input, node, "Identifier");
   const bodies = directChildren(node).filter((child) => child.name === "CompoundStatement");
-  return name !== null && bodies.length === 1 && bodies[0] !== undefined
-    ? { name, node, body: bodies[0] }
+  const declarators = directChildren(node).filter((child) => child.name === "FunctionDeclarator");
+  const parameterLists =
+    declarators.length === 1 && declarators[0] !== undefined
+      ? directChildren(declarators[0]).filter((child) => child.name === "ParameterList")
+      : [];
+  return name !== null && bodies.length === 1 && bodies[0] !== undefined && parameterLists.length === 1 && parameterLists[0] !== undefined
+    ? { name, node, body: bodies[0], parameterList: parameterLists[0] }
     : null;
+}
+
+function staticCppFunctionDeclaration(
+  input: CppExtractFileFactsInput,
+  node: CppSyntaxNode
+): StaticCppFunctionDeclaration | null {
+  const declaration =
+    node.name === "TemplateDeclaration"
+      ? directChildren(node).find(
+          (child) => child.name === "Declaration" || child.name === "FunctionDefinition"
+        )
+      : node.name === "Declaration"
+        ? node
+        : undefined;
+  if (declaration === undefined) {
+    return null;
+  }
+  if (declaration.name === "FunctionDefinition") {
+    const name = functionName(input, declaration, "Identifier");
+    return name === null ? null : { name };
+  }
+  const declarators = directChildren(declaration).filter((child) => child.name === "FunctionDeclarator");
+  if (declarators.length !== 1 || declarators[0] === undefined) {
+    return null;
+  }
+  const names = directChildren(declarators[0])
+    .filter((child) => child.name === "Identifier")
+    .map((child) => identifierText(input, child))
+    .filter((candidate): candidate is string => candidate !== null);
+  return names.length === 1 && names[0] !== undefined ? { name: names[0] } : null;
+}
+
+function macroNames(input: CppExtractFileFactsInput, root: CppSyntaxNode): ReadonlySet<string> {
+  const names = new Set<string>();
+  function visit(node: CppSyntaxNode): void {
+    if (node.name === "PreprocDirective") {
+      const text = nodeText(input, node);
+      const match = /^\s*#\s*define\s+([A-Za-z_][A-Za-z0-9_]*)/u.exec(text);
+      if (match?.[1] !== undefined) {
+        names.add(match[1]);
+      } else if (/^\s*#\s*define\b/u.test(text)) {
+        for (const name of identifierNames(input, node)) {
+          names.add(name);
+        }
+      }
+    }
+    for (const child of directChildren(node)) {
+      visit(child);
+    }
+  }
+  visit(root);
+  return names;
+}
+
+function directBareCall(
+  input: CppExtractFileFactsInput,
+  statement: CppSyntaxNode
+): { readonly name: string; readonly node: CppSyntaxNode } | null {
+  if (statement.name !== "ExpressionStatement" && statement.name !== "ReturnStatement") {
+    return null;
+  }
+  const calls = directChildren(statement).filter((child) => child.name === "CallExpression");
+  if (calls.length !== 1 || calls[0] === undefined) {
+    return null;
+  }
+  const children = directChildren(calls[0]);
+  const callee = children[0];
+  const arguments_ = children[1];
+  const name = callee === undefined ? null : identifierText(input, callee);
+  return (
+    children.length === 2 &&
+    callee?.name === "Identifier" &&
+    arguments_?.name === "ArgumentList" &&
+    name !== null
+  )
+    ? { name, node: calls[0] }
+    : null;
+}
+
+function identifierNames(input: CppExtractFileFactsInput, node: CppSyntaxNode): readonly string[] {
+  const name = node.name === "Identifier" ? identifierText(input, node) : null;
+  return [
+    ...(name === null ? [] : [name]),
+    ...directChildren(node).flatMap((child) => identifierNames(input, child))
+  ];
+}
+
+function declaratorBindingNames(input: CppExtractFileFactsInput, node: CppSyntaxNode): readonly string[] {
+  if (node.name === "ParameterList") {
+    return [];
+  }
+  if (node.name === "TypeIdentifier") {
+    const name = identifierText(input, node);
+    return name === null ? [] : [name];
+  }
+  return directChildren(node).flatMap((child) => declaratorBindingNames(input, child));
+}
+
+function localBindingNames(input: CppExtractFileFactsInput, statement: CppSyntaxNode): readonly string[] {
+  if (statement.name === "AliasDeclaration") {
+    const name = directChildren(statement).find((child) => child.name === "TypeIdentifier");
+    return name === undefined ? [] : [identifierText(input, name)].filter((value): value is string => value !== null);
+  }
+  if (statement.name === "TypeDefinition") {
+    const declarators = directChildren(statement).filter((child) => child.name.endsWith("Declarator"));
+    if (declarators.length > 0) {
+      return declarators.flatMap((declarator) => declaratorBindingNames(input, declarator));
+    }
+    const names = directChildren(statement)
+      .filter((child) => child.name === "TypeIdentifier")
+      .map((child) => identifierText(input, child))
+      .filter((value): value is string => value !== null);
+    const name = names.at(-1);
+    return name === undefined ? [] : [name];
+  }
+  if (["StructSpecifier", "ClassSpecifier", "EnumSpecifier"].includes(statement.name)) {
+    const name = directChildren(statement).find((child) => child.name === "TypeIdentifier");
+    return name === undefined ? [] : [identifierText(input, name)].filter((value): value is string => value !== null);
+  }
+  return identifierNames(input, statement);
+}
+
+function directCallerCalls(
+  input: CppExtractFileFactsInput,
+  declaration: StaticCppFunction
+): readonly { readonly name: string; readonly node: CppSyntaxNode }[] {
+  const shadowedNames = new Set(identifierNames(input, declaration.parameterList));
+  const calls: Array<{ readonly name: string; readonly node: CppSyntaxNode }> = [];
+  for (const statement of directChildren(declaration.body)) {
+    if (
+      ["Declaration", "AliasDeclaration", "TypeDefinition", "StructSpecifier", "ClassSpecifier", "EnumSpecifier"].includes(
+        statement.name
+      )
+    ) {
+      for (const name of localBindingNames(input, statement)) {
+        shadowedNames.add(name);
+      }
+      continue;
+    }
+    const call = directBareCall(input, statement);
+    if (call !== null) {
+      calls.push(call);
+    }
+  }
+  return calls.filter((call) => !shadowedNames.has(call.name));
 }
 
 function staticCppClass(input: CppExtractFileFactsInput, node: CppSyntaxNode): StaticCppClass | null {
@@ -459,13 +614,50 @@ export function extractCppFileFacts(input: CppExtractFileFactsInput): ArtifactFa
     });
   }
 
+  function addCall(caller: SymbolNode, callee: SymbolNode, node: CppSyntaxNode): void {
+    const range = rangeFor(lineStarts, node.from, node.to);
+    edges.push({
+      id: createEdgeId({
+        sourceId: caller.id,
+        targetId: callee.id,
+        kind: "calls",
+        line: range.start.line,
+        column: range.start.column,
+        referenceName: callee.name
+      }),
+      sourceId: caller.id,
+      targetId: callee.id,
+      kind: "calls",
+      filePath: input.filePath,
+      range,
+      resolution: "exact",
+      confidence: 1,
+      referenceName: callee.name,
+      evidence: {
+        ruleId: "syntax.cpp.same-file.unique-top-level-function-call",
+        stage: "syntax",
+        candidateSymbolIds: [callee.id]
+      }
+    });
+  }
+
   if (!hasSyntaxError(root)) {
     const topLevel = directChildren(root);
     const functions = topLevel
       .map((node) => staticCppFunction(input, node))
       .filter((candidate): candidate is StaticCppFunction => candidate !== null);
+    const declarations = topLevel
+      .map((node) => staticCppFunctionDeclaration(input, node))
+      .filter((candidate): candidate is StaticCppFunctionDeclaration => candidate !== null);
     const functionSymbols = new Map<StaticCppFunction, SymbolNode>();
     const functionsByName = new Map<string, SymbolNode[]>();
+    const declarationCountsByName = new Map<string, number>();
+    for (const declaration of declarations) {
+      declarationCountsByName.set(
+        declaration.name,
+        (declarationCountsByName.get(declaration.name) ?? 0) + 1
+      );
+    }
     for (const functionDeclaration of functions) {
       const symbol = addFunction(functionDeclaration);
       functionSymbols.set(functionDeclaration, symbol);
@@ -473,6 +665,27 @@ export function extractCppFileFacts(input: CppExtractFileFactsInput): ArtifactFa
         ...(functionsByName.get(functionDeclaration.name) ?? []),
         symbol
       ]);
+    }
+
+    const definedMacros = macroNames(input, root);
+    for (const functionDeclaration of functions) {
+      const caller = functionSymbols.get(functionDeclaration);
+      if (caller === undefined) {
+        continue;
+      }
+      for (const call of directCallerCalls(input, functionDeclaration)) {
+        if (definedMacros.has(call.name)) {
+          continue;
+        }
+        const candidates = functionsByName.get(call.name) ?? [];
+        if (
+          candidates.length === 1 &&
+          candidates[0] !== undefined &&
+          (declarationCountsByName.get(call.name) ?? 0) === 0
+        ) {
+          addCall(caller, candidates[0], call.node);
+        }
+      }
     }
 
     for (const classDeclaration of topLevel

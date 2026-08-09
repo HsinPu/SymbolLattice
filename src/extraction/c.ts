@@ -32,6 +32,12 @@ interface StaticCFunction {
   readonly parameterList: CSyntaxNode;
 }
 
+interface StaticCFunctionDeclaration {
+  readonly name: string;
+  readonly node: CSyntaxNode;
+  readonly parameterList: CSyntaxNode;
+}
+
 interface StaticCivetWebRoute {
   readonly path: string;
   readonly handlerName: string;
@@ -137,6 +143,57 @@ function staticCFunction(input: CExtractFileFactsInput, node: CSyntaxNode): Stat
   return name === null || parameterList === undefined ? null : { name, node, body, parameterList };
 }
 
+function staticCFunctionDeclaration(
+  input: CExtractFileFactsInput,
+  node: CSyntaxNode
+): StaticCFunctionDeclaration | null {
+  if (node.name !== "Declaration") {
+    return null;
+  }
+  const declarators = directChildren(node).filter((child) => child.name === "FunctionDeclarator");
+  if (declarators.length !== 1 || declarators[0] === undefined) {
+    return null;
+  }
+  const children = directChildren(declarators[0]);
+  const names = children
+    .filter((child) => child.name === "Identifier")
+    .map((child) => identifierText(input, child))
+    .filter((candidate): candidate is string => candidate !== null);
+  const parameterLists = children.filter((child) => child.name === "ParameterList");
+  return names.length === 1 && names[0] !== undefined && parameterLists.length === 1 && parameterLists[0] !== undefined
+    ? { name: names[0], node, parameterList: parameterLists[0] }
+    : null;
+}
+
+function cParameterSignature(input: CExtractFileFactsInput, parameterList: CSyntaxNode): string {
+  const characters = nodeText(input, parameterList).split("");
+  function maskParameterNames(node: CSyntaxNode): void {
+    if (node.name === "Identifier") {
+      characters.fill(" ", node.from - parameterList.from, node.to - parameterList.from);
+      return;
+    }
+    for (const child of directChildren(node)) {
+      maskParameterNames(child);
+    }
+  }
+  maskParameterNames(parameterList);
+  return characters.join("").replace(/\s+/gu, "");
+}
+
+function cFunctionSignature(
+  input: CExtractFileFactsInput,
+  node: CSyntaxNode,
+  parameterList: CSyntaxNode
+): string | null {
+  const declarators = directChildren(node).filter((child) => child.name === "FunctionDeclarator");
+  const declarator = declarators.length === 1 ? declarators[0] : undefined;
+  if (declarator === undefined) {
+    return null;
+  }
+  const returnType = input.sourceText.slice(node.from, declarator.from).replace(/\s+/gu, "");
+  return returnType.length === 0 ? null : `${returnType}\u0000${cParameterSignature(input, parameterList)}`;
+}
+
 function includesCivetWeb(input: CExtractFileFactsInput, root: CSyntaxNode): boolean {
   return directChildren(root).some((node) => {
     if (node.name !== "PreprocDirective") {
@@ -204,6 +261,106 @@ function hasPotentialHandlerShadow(
     (statement) =>
       statement.name === "Declaration" && containsIdentifier(input, statement, handlerName)
   );
+}
+
+function macroNames(input: CExtractFileFactsInput, root: CSyntaxNode): ReadonlySet<string> {
+  const names = new Set<string>();
+  function visit(node: CSyntaxNode): void {
+    if (node.name === "PreprocDirective") {
+      const text = nodeText(input, node);
+      const match = /^\s*#\s*define\s+([A-Za-z_][A-Za-z0-9_]*)/u.exec(text);
+      if (match?.[1] !== undefined) {
+        names.add(match[1]);
+      } else if (/^\s*#\s*define\b/u.test(text)) {
+        for (const name of identifierNames(input, node)) {
+          names.add(name);
+        }
+      }
+    }
+    for (const child of directChildren(node)) {
+      visit(child);
+    }
+  }
+  visit(root);
+  return names;
+}
+
+function directBareCall(
+  input: CExtractFileFactsInput,
+  statement: CSyntaxNode
+): { readonly name: string; readonly node: CSyntaxNode } | null {
+  if (statement.name !== "ExpressionStatement" && statement.name !== "ReturnStatement") {
+    return null;
+  }
+  const calls = directChildren(statement).filter((child) => child.name === "CallExpression");
+  if (calls.length !== 1 || calls[0] === undefined) {
+    return null;
+  }
+  const children = directChildren(calls[0]);
+  const callee = children[0];
+  const arguments_ = children[1];
+  const name = callee === undefined ? null : identifierText(input, callee);
+  return (
+    children.length === 2 &&
+    callee?.name === "Identifier" &&
+    arguments_?.name === "ArgumentList" &&
+    name !== null
+  )
+    ? { name, node: calls[0] }
+    : null;
+}
+
+function identifierNames(input: CExtractFileFactsInput, node: CSyntaxNode): readonly string[] {
+  const name = node.name === "Identifier" ? identifierText(input, node) : null;
+  return [
+    ...(name === null ? [] : [name]),
+    ...directChildren(node).flatMap((child) => identifierNames(input, child))
+  ];
+}
+
+function localBindingNames(input: CExtractFileFactsInput, statement: CSyntaxNode): readonly string[] {
+  if (statement.name === "AliasDeclaration") {
+    const name = directChildren(statement).find((child) => child.name === "TypeIdentifier");
+    return name === undefined ? [] : [identifierText(input, name)].filter((value): value is string => value !== null);
+  }
+  if (statement.name === "TypeDefinition") {
+    const names = directChildren(statement)
+      .filter((child) => child.name === "TypeIdentifier")
+      .map((child) => identifierText(input, child))
+      .filter((value): value is string => value !== null);
+    const name = names.at(-1);
+    return name === undefined ? [] : [name];
+  }
+  if (["StructSpecifier", "ClassSpecifier", "EnumSpecifier"].includes(statement.name)) {
+    const name = directChildren(statement).find((child) => child.name === "TypeIdentifier");
+    return name === undefined ? [] : [identifierText(input, name)].filter((value): value is string => value !== null);
+  }
+  return identifierNames(input, statement);
+}
+
+function directCallerCalls(
+  input: CExtractFileFactsInput,
+  declaration: StaticCFunction
+): readonly { readonly name: string; readonly node: CSyntaxNode }[] {
+  const shadowedNames = new Set(identifierNames(input, declaration.parameterList));
+  const calls: Array<{ readonly name: string; readonly node: CSyntaxNode }> = [];
+  for (const statement of directChildren(declaration.body)) {
+    if (
+      ["Declaration", "AliasDeclaration", "TypeDefinition", "StructSpecifier", "ClassSpecifier", "EnumSpecifier"].includes(
+        statement.name
+      )
+    ) {
+      for (const name of localBindingNames(input, statement)) {
+        shadowedNames.add(name);
+      }
+      continue;
+    }
+    const call = directBareCall(input, statement);
+    if (call !== null) {
+      calls.push(call);
+    }
+  }
+  return calls.filter((call) => !shadowedNames.has(call.name));
 }
 
 /**
@@ -350,19 +507,88 @@ export function extractCFileFacts(input: CExtractFileFactsInput): ArtifactFacts 
     });
   }
 
+  function addCall(caller: SymbolNode, callee: SymbolNode, node: CSyntaxNode): void {
+    const range = rangeFor(lineStarts, node.from, node.to);
+    edges.push({
+      id: createEdgeId({
+        sourceId: caller.id,
+        targetId: callee.id,
+        kind: "calls",
+        line: range.start.line,
+        column: range.start.column,
+        referenceName: callee.name
+      }),
+      sourceId: caller.id,
+      targetId: callee.id,
+      kind: "calls",
+      filePath: input.filePath,
+      range,
+      resolution: "exact",
+      confidence: 1,
+      referenceName: callee.name,
+      evidence: {
+        ruleId: "syntax.c.same-file.unique-top-level-function-call",
+        stage: "syntax",
+        candidateSymbolIds: [callee.id]
+      }
+    });
+  }
+
   if (!hasSyntaxError(root)) {
     const functions = directChildren(root)
       .map((node) => staticCFunction(input, node))
       .filter((candidate): candidate is StaticCFunction => candidate !== null);
+    const declarations = directChildren(root)
+      .map((node) => staticCFunctionDeclaration(input, node))
+      .filter((candidate): candidate is StaticCFunctionDeclaration => candidate !== null);
     const symbolsByFunction = new Map<StaticCFunction, SymbolNode>();
     const functionsByName = new Map<string, SymbolNode[]>();
+    const functionSignaturesBySymbolId = new Map<string, string | null>();
+    const declarationSignaturesByName = new Map<string, Array<string | null>>();
+    for (const declaration of declarations) {
+      declarationSignaturesByName.set(declaration.name, [
+        ...(declarationSignaturesByName.get(declaration.name) ?? []),
+        cFunctionSignature(input, declaration.node, declaration.parameterList)
+      ]);
+    }
     for (const functionDeclaration of functions) {
       const symbol = addFunction(functionDeclaration);
       symbolsByFunction.set(functionDeclaration, symbol);
+      functionSignaturesBySymbolId.set(
+        symbol.id,
+        cFunctionSignature(input, functionDeclaration.node, functionDeclaration.parameterList)
+      );
       functionsByName.set(functionDeclaration.name, [
         ...(functionsByName.get(functionDeclaration.name) ?? []),
         symbol
       ]);
+    }
+
+    const definedMacros = macroNames(input, root);
+    for (const functionDeclaration of functions) {
+      const caller = symbolsByFunction.get(functionDeclaration);
+      if (caller === undefined) {
+        continue;
+      }
+      for (const call of directCallerCalls(input, functionDeclaration)) {
+        if (definedMacros.has(call.name)) {
+          continue;
+        }
+        const candidates = functionsByName.get(call.name) ?? [];
+        const candidate = candidates.length === 1 ? candidates[0] : undefined;
+        const candidateSignature =
+          candidate === undefined ? undefined : functionSignaturesBySymbolId.get(candidate.id);
+        if (
+          candidate !== undefined &&
+          candidateSignature !== undefined &&
+          candidateSignature !== null &&
+          declarationSignaturesByName
+            .get(call.name)
+            ?.every((signature) => signature === candidateSignature) !== false
+        ) {
+          addCall(caller, candidate, call.node);
+        }
+      }
     }
 
     if (includesCivetWeb(input, root)) {

@@ -16,6 +16,8 @@ export interface GoExtractFileFactsInput {
   readonly filePath: string;
   readonly sourceText: string;
   readonly language: "go";
+  /** Optional diagnostics hook; invoked exactly once for each direct-call caller body traversal. */
+  readonly directCallTraversalObserver?: () => void;
 }
 
 type GoSyntaxNode = ReturnType<typeof parser.parse>["topNode"];
@@ -25,6 +27,7 @@ interface StaticGoFunction {
   readonly node: GoSyntaxNode;
   readonly body: GoSyntaxNode;
   readonly parameterNames: readonly string[];
+  readonly bindingNames: readonly string[];
 }
 
 interface GinReceiver {
@@ -912,7 +915,64 @@ function staticGoFunction(
   const parameterNames = descendantsNamed(parameters, "DefName")
     .map((parameter) => identifierText(input, parameter))
     .filter((parameter): parameter is string => parameter !== null);
-  return { name, node, body, parameterNames };
+  const bindingNames = children
+    .filter((child) => child.name === "Parameters" || child.name === "TypeParameters")
+    .flatMap((parameterOrResult) => descendantsNamed(parameterOrResult, "DefName"))
+    .map((binding) => identifierText(input, binding))
+    .filter((binding): binding is string => binding !== null);
+  return { name, node, body, parameterNames, bindingNames };
+}
+
+function hasGoDotImport(root: GoSyntaxNode): boolean {
+  return directChildren(root)
+    .filter((node) => node.name === "ImportDecl")
+    .some((declaration) =>
+      descendantsNamed(declaration, "ImportSpec").some((specifier) =>
+        directChildren(specifier).some((child) => child.name === ".")
+      )
+    );
+}
+
+function staticGoDirectCalls(
+  input: GoExtractFileFactsInput,
+  functionDeclaration: StaticGoFunction
+): {
+  readonly callsByName: ReadonlyMap<string, readonly GoSyntaxNode[]>;
+  readonly unsafeBindingNames: ReadonlySet<string>;
+} {
+  input.directCallTraversalObserver?.();
+  const unsafeBindingNames = new Set(functionDeclaration.bindingNames);
+  const callsByName = new Map<string, GoSyntaxNode[]>();
+
+  function visit(candidate: GoSyntaxNode): void {
+    if (candidate !== functionDeclaration.body && candidate.name === "FunctionLiteral") {
+      return;
+    }
+    for (const name of directBoundNames(input, candidate)) {
+      unsafeBindingNames.add(name);
+    }
+    if (candidate.name === "DefName") {
+      const name = identifierText(input, candidate);
+      if (name !== null) {
+        unsafeBindingNames.add(name);
+      }
+    }
+    if (candidate.name === "CallExpr") {
+      const callee = directChildren(candidate)[0];
+      const name = callee?.name === "VariableName" ? identifierText(input, callee) : null;
+      if (name !== null && candidate.parent?.name !== "CallExpr") {
+        const calls = callsByName.get(name) ?? [];
+        calls.push(callee!);
+        callsByName.set(name, calls);
+      }
+    }
+    for (const child of directChildren(candidate)) {
+      visit(child);
+    }
+  }
+
+  visit(functionDeclaration.body);
+  return { callsByName, unsafeBindingNames };
 }
 
 /**
@@ -3089,6 +3149,33 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
     return symbol;
   }
 
+  function addDirectCall(caller: SymbolNode, target: SymbolNode, call: GoSyntaxNode): void {
+    const range = rangeFor(lineStarts, call.from, call.to);
+    edges.push({
+      id: createEdgeId({
+        sourceId: caller.id,
+        targetId: target.id,
+        kind: "calls",
+        line: range.start.line,
+        column: range.start.column,
+        referenceName: target.name
+      }),
+      sourceId: caller.id,
+      targetId: target.id,
+      kind: "calls",
+      filePath: input.filePath,
+      range,
+      resolution: "exact",
+      confidence: 1,
+      referenceName: target.name,
+      evidence: {
+        ruleId: "syntax.go.same-file.unique-package-function-call",
+        stage: "syntax",
+        candidateSymbolIds: [target.id]
+      }
+    });
+  }
+
   function addResolvedRoute(
     method: RouteMethod,
     path: string,
@@ -3423,6 +3510,30 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
       const sameName = functionsByName.get(functionDeclaration.name) ?? [];
       sameName.push(symbol);
       functionsByName.set(functionDeclaration.name, sameName);
+    }
+
+    const hasDotImport = hasGoDotImport(root);
+    for (const functionDeclaration of functions) {
+      const analysis = staticGoDirectCalls(input, functionDeclaration);
+      const callerCandidates = functionsByName.get(functionDeclaration.name) ?? [];
+      const caller = callerCandidates[0];
+      if (hasDotImport || callerCandidates.length !== 1 || caller === undefined) {
+        continue;
+      }
+      for (const [targetName, calls] of analysis.callsByName) {
+        const targetCandidates = functionsByName.get(targetName) ?? [];
+        const target = targetCandidates[0];
+        if (
+          analysis.unsafeBindingNames.has(targetName) ||
+          targetCandidates.length !== 1 ||
+          target === undefined
+        ) {
+          continue;
+        }
+        for (const call of calls) {
+          addDirectCall(caller, target, call);
+        }
+      }
     }
 
     const ginAliases = staticGinImportAliases(input, root);

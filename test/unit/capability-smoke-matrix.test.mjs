@@ -243,7 +243,14 @@ describe("capability smoke matrix contract", () => {
     expect(plan.frameworkCases.filter((candidate) => candidate.capabilityId === null)).toEqual([
       expect.objectContaining({ id: "nuxt-basic", framework: "Nuxt" })
     ]);
-    for (const id of ["java-basic", "python-basic"]) {
+    for (const id of [
+      "java-basic",
+      "python-basic",
+      "go-basic",
+      "rust-basic",
+      "c-basic",
+      "cpp-basic"
+    ]) {
       expect(plan.languageCases.find((candidate) => candidate.id === id)?.assertions).toEqual(
         expect.objectContaining({
           symbols: expect.arrayContaining([

@@ -17,6 +17,8 @@ export interface RustExtractFileFactsInput {
   readonly filePath: string;
   readonly sourceText: string;
   readonly language: "rust";
+  /** Optional diagnostics hook; invoked exactly once for each direct-call caller body traversal. */
+  readonly directCallTraversalObserver?: () => void;
 }
 
 type RustSyntaxNode = ReturnType<typeof parser.parse>["topNode"];
@@ -354,6 +356,16 @@ function staticTopLevelUseImports(
     });
 }
 
+function hasRustWildcardImport(root: RustSyntaxNode): boolean {
+  return root.name === "UseWildcard" || directChildren(root).some(hasRustWildcardImport);
+}
+
+function hasRustGlobImport(root: RustSyntaxNode): boolean {
+  return directChildren(root)
+    .filter((node) => node.name === "UseDeclaration")
+    .some(hasRustWildcardImport);
+}
+
 function staticRustExternalModules(
   input: RustExtractFileFactsInput,
   root: RustSyntaxNode
@@ -583,6 +595,60 @@ function staticRustFunction(
       : [],
     parameterNames: parameters.flatMap((parameter) => boundIdentifierNames(input, parameter))
   };
+}
+
+function staticRustDirectCalls(
+  input: RustExtractFileFactsInput,
+  functionDeclaration: StaticRustFunction
+): {
+  readonly callsByName: ReadonlyMap<string, readonly RustSyntaxNode[]>;
+  readonly unsafeBindingNames: ReadonlySet<string>;
+  readonly hasGlobImport: boolean;
+} {
+  input.directCallTraversalObserver?.();
+  const unsafeBindingNames = new Set(functionDeclaration.parameterNames);
+  const callsByName = new Map<string, RustSyntaxNode[]>();
+  let hasGlobImport = false;
+
+  function visit(candidate: RustSyntaxNode): void {
+    if (candidate !== functionDeclaration.body && candidate.name === "FunctionItem") {
+      const localFunction = staticRustFunction(input, candidate);
+      if (localFunction !== null) {
+        unsafeBindingNames.add(localFunction.name);
+      }
+      return;
+    }
+    if (candidate !== functionDeclaration.body && candidate.name === "ClosureExpression") {
+      return;
+    }
+    for (const name of directBoundNames(input, candidate)) {
+      unsafeBindingNames.add(name);
+    }
+    if (candidate.name === "BoundIdentifier") {
+      const name = identifierText(input, candidate);
+      if (name !== null) {
+        unsafeBindingNames.add(name);
+      }
+    }
+    if (candidate.name === "UseDeclaration" && hasRustWildcardImport(candidate)) {
+      hasGlobImport = true;
+    }
+    if (candidate.name === "CallExpression") {
+      const callee = directChildren(candidate)[0];
+      const name = callee?.name === "Identifier" ? identifierText(input, callee) : null;
+      if (name !== null && candidate.parent?.name !== "CallExpression") {
+        const calls = callsByName.get(name) ?? [];
+        calls.push(callee!);
+        callsByName.set(name, calls);
+      }
+    }
+    for (const child of directChildren(candidate)) {
+      visit(child);
+    }
+  }
+
+  visit(functionDeclaration.body);
+  return { callsByName, unsafeBindingNames, hasGlobImport };
 }
 
 function staticActixWebServiceConfig(
@@ -1909,6 +1975,33 @@ export function extractRustFileFacts(input: RustExtractFileFactsInput): Artifact
     return symbol;
   }
 
+  function addDirectCall(caller: SymbolNode, target: SymbolNode, call: RustSyntaxNode): void {
+    const range = rangeFor(lineStarts, call.from, call.to);
+    edges.push({
+      id: createEdgeId({
+        sourceId: caller.id,
+        targetId: target.id,
+        kind: "calls",
+        line: range.start.line,
+        column: range.start.column,
+        referenceName: target.name
+      }),
+      sourceId: caller.id,
+      targetId: target.id,
+      kind: "calls",
+      filePath: input.filePath,
+      range,
+      resolution: "exact",
+      confidence: 1,
+      referenceName: target.name,
+      evidence: {
+        ruleId: "syntax.rust.same-file.unique-top-level-function-call",
+        stage: "syntax",
+        candidateSymbolIds: [target.id]
+      }
+    });
+  }
+
   function addRustRoute(routeFact: StaticRustRoute, handler: SymbolNode): void {
     const routeName = `${routeFact.method} ${routeFact.path}`;
     const qualifiedName = `${input.filePath}#route:${routeName}`;
@@ -1968,6 +2061,32 @@ export function extractRustFileFacts(input: RustExtractFileFactsInput): Artifact
       const sameName = functionsByName.get(functionDeclaration.name) ?? [];
       sameName.push(symbol);
       functionsByName.set(functionDeclaration.name, sameName);
+    }
+
+    const importedNames = new Set(staticTopLevelUseImports(input, root).map((imported) => imported.localName));
+    const hasGlobImport = hasRustGlobImport(root);
+    for (const functionDeclaration of functions) {
+      const analysis = staticRustDirectCalls(input, functionDeclaration);
+      const callerCandidates = functionsByName.get(functionDeclaration.name) ?? [];
+      const caller = callerCandidates[0];
+      if (hasGlobImport || analysis.hasGlobImport || callerCandidates.length !== 1 || caller === undefined) {
+        continue;
+      }
+      for (const [targetName, calls] of analysis.callsByName) {
+        const targetCandidates = functionsByName.get(targetName) ?? [];
+        const target = targetCandidates[0];
+        if (
+          importedNames.has(targetName) ||
+          analysis.unsafeBindingNames.has(targetName) ||
+          targetCandidates.length !== 1 ||
+          target === undefined
+        ) {
+          continue;
+        }
+        for (const call of calls) {
+          addDirectCall(caller, target, call);
+        }
+      }
     }
 
     const attributeRouteAliases = staticRustAttributeRouteAliases(input, root);
