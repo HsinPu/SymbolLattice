@@ -1,7 +1,7 @@
-func swiftHelper() -> Int {
+private func swiftHelper() -> Int {
     1
 }
 
-func swiftEntry() -> Int {
+private func swiftEntry() -> Int {
     swiftHelper()
 }

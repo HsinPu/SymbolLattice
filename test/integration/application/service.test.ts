@@ -3541,6 +3541,100 @@ describe("SymbolLatticeService", () => {
     ).toEqual([]);
   });
 
+  it("indexes and persists bounded Swift and Dart zero-argument direct calls", async () => {
+    const projectPath = await createInlineProject({
+      "src/Smoke.swift": [
+        "private func swiftHelper() -> Int {",
+        "  1",
+        "}",
+        "private func swiftEntry() -> Int {",
+        "  swiftHelper()",
+        "}"
+      ].join("\n"),
+      "src/smoke.dart": [
+        "int dartHelper() => 1;",
+        "int dartEntry() => dartHelper();"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+
+    const contracts = [
+      {
+        filePath: "src/Smoke.swift",
+        entryQualifiedName: "src/Smoke.swift#swiftEntry",
+        helperQualifiedName: "src/Smoke.swift#swiftHelper",
+        entry: "swiftEntry",
+        helper: "swiftHelper",
+        ruleId: "syntax.swift.same-file.unique-file-private-top-level-function-call"
+      },
+      {
+        filePath: "src/smoke.dart",
+        entryQualifiedName: "src/smoke.dart#dartEntry",
+        helperQualifiedName: "src/smoke.dart#dartHelper",
+        entry: "dartEntry",
+        helper: "dartHelper",
+        ruleId: "syntax.dart.same-file.unique-top-level-zero-argument-function-call"
+      }
+    ] as const;
+
+    for (const contract of contracts) {
+      const snapshot = graphStore.getSnapshot(projectPath);
+      const entry = snapshot.symbols.find(
+        (candidate) => candidate.qualifiedName === contract.entryQualifiedName
+      );
+      const helper = snapshot.symbols.find(
+        (candidate) => candidate.qualifiedName === contract.helperQualifiedName
+      );
+      expect(entry).toMatchObject({ kind: "function", name: contract.entry });
+      expect(helper).toMatchObject({ kind: "function", name: contract.helper });
+
+      const callees = await service.callees(projectPath, entry?.id ?? "missing");
+      expect(callees.relations).toEqual([
+        expect.objectContaining({
+          symbol: expect.objectContaining({ id: helper?.id }),
+          edge: expect.objectContaining({
+            sourceId: entry?.id,
+            targetId: helper?.id,
+            kind: "calls",
+            resolution: "exact",
+            confidence: 1,
+            evidence: {
+              ruleId: contract.ruleId,
+              stage: "syntax",
+              candidateSymbolIds: [helper?.id]
+            }
+          })
+        })
+      ]);
+      expect(
+        (await service.callers(projectPath, helper?.id ?? "missing")).relations.map(
+          (relation) => relation.symbol.id
+        )
+      ).toEqual([entry?.id]);
+      expect(
+        graphStore
+          .getArtifactFacts(projectPath)
+          .find((facts) => facts.filePath === contract.filePath)
+          ?.edges.filter((edge) => edge.kind === "calls")
+      ).toHaveLength(1);
+    }
+
+    const reopened = new SymbolLatticeService(
+      new SqliteGraphStore(),
+      new FileSystemSourceCatalog()
+    );
+    for (const contract of contracts) {
+      expect(
+        (await reopened.callers(projectPath, contract.helperQualifiedName)).relations.map(
+          (relation) => relation.symbol.name
+        )
+      ).toEqual([contract.entry]);
+    }
+  });
+
   it("resolves lexically bound Java parameter and local receiver calls", async () => {
     const projectPath = await createInlineProject({
       "src/api/Base.java": [

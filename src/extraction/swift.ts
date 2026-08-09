@@ -49,6 +49,12 @@ interface StaticSwiftFunction {
   readonly objcSelector: string | null;
 }
 
+interface StaticSwiftPlainCall {
+  readonly name: string;
+  readonly nameNode: SwiftSyntaxNode;
+  readonly node: SwiftSyntaxNode;
+}
+
 interface StaticVaporRoute {
   readonly method: RouteMethod;
   readonly path: string;
@@ -142,7 +148,11 @@ function hasSyntaxError(node: SwiftSyntaxNode): boolean {
 }
 
 function identifierText(node: SwiftSyntaxNode): string | null {
-  const value = nodeText(node);
+  const rawValue = nodeText(node);
+  const value =
+    rawValue.length >= 3 && rawValue[0] === "`" && rawValue.at(-1) === "`"
+      ? rawValue.slice(1, -1)
+      : rawValue;
   return /^[A-Za-z_][A-Za-z0-9_]*$/u.test(value) ? value : null;
 }
 
@@ -328,6 +338,118 @@ function staticSwiftFunction(node: SwiftSyntaxNode): StaticSwiftFunction | null 
     objcSelector:
       node.kind() === "function_declaration" ? directSwiftObjectiveCSelector(node) : null
   };
+}
+
+function syntaxNodeKey(node: SwiftSyntaxNode): string {
+  const range = node.range();
+  return `${node.kind()}:${range.start.line}:${range.start.column}:${range.end.line}:${range.end.column}`;
+}
+
+function isFilePrivateZeroParameterFunction(declaration: StaticSwiftFunction): boolean {
+  if (declaration.body === null) {
+    return false;
+  }
+  const children = directChildren(declaration.node);
+  const visibilities = children
+    .filter((child) => child.kind() === "modifiers")
+    .flatMap((modifiers) => directChildren(modifiers))
+    .filter((modifier) => modifier.kind() === "visibility_modifier")
+    .map((modifier) => nodeText(modifier));
+  return (
+    visibilities.length === 1 &&
+    (visibilities[0] === "private" || visibilities[0] === "fileprivate") &&
+    !children.some(
+      (child) =>
+        child.kind() === "parameter" ||
+        child.kind() === "type_parameters" ||
+        child.kind() === "generic_parameter_clause"
+    )
+  );
+}
+
+function staticSwiftPlainEmptyCall(node: SwiftSyntaxNode): StaticSwiftPlainCall | null {
+  if (node.kind() !== "call_expression") {
+    return null;
+  }
+  const children = directChildren(node);
+  const nameNode = children[0];
+  const suffix = children[1];
+  if (
+    nameNode?.kind() !== "simple_identifier" ||
+    suffix?.kind() !== "call_suffix" ||
+    children.length !== 2
+  ) {
+    return null;
+  }
+  const name = identifierText(nameNode);
+  const suffixChildren = directChildren(suffix);
+  const argumentsNode = suffixChildren[0];
+  if (
+    name === null ||
+    argumentsNode?.kind() !== "value_arguments" ||
+    suffixChildren.length !== 1
+  ) {
+    return null;
+  }
+  const argumentChildren = directChildren(argumentsNode);
+  return argumentChildren.length === 2 &&
+    argumentChildren[0]?.kind() === "(" &&
+    argumentChildren[1]?.kind() === ")"
+    ? { name, nameNode, node }
+    : null;
+}
+
+function directSwiftPlainCalls(body: SwiftSyntaxNode): readonly StaticSwiftPlainCall[] {
+  const calls: StaticSwiftPlainCall[] = [];
+  function visit(node: SwiftSyntaxNode, isRoot: boolean): void {
+    if (
+      !isRoot &&
+      (node.kind() === "function_declaration" ||
+        node.kind() === "lambda_literal" ||
+        node.kind() === "class_declaration" ||
+        node.kind() === "protocol_declaration")
+    ) {
+      return;
+    }
+    const call = staticSwiftPlainEmptyCall(node);
+    if (call !== null) {
+      calls.push(call);
+      return;
+    }
+    for (const child of directChildren(node)) {
+      visit(child, false);
+    }
+  }
+  visit(body, true);
+  return calls;
+}
+
+function hasNamedIdentifierExcept(
+  root: SwiftSyntaxNode,
+  name: string,
+  allowedNodeKeys: ReadonlySet<string>
+): boolean {
+  if (
+    (root.kind() === "simple_identifier" || root.kind() === "type_identifier") &&
+    identifierText(root) === name &&
+    !allowedNodeKeys.has(syntaxNodeKey(root))
+  ) {
+    return true;
+  }
+  return directChildren(root).some((child) => hasNamedIdentifierExcept(child, name, allowedNodeKeys));
+}
+
+function hasTopLevelNameCompetition(
+  topLevel: readonly SwiftSyntaxNode[],
+  target: StaticSwiftFunction
+): boolean {
+  const targetKey = syntaxNodeKey(target.node);
+  return topLevel.some((node) => {
+    if (syntaxNodeKey(node) === targetKey || node.kind() === "function_declaration") {
+      return false;
+    }
+    return hasNamedIdentifierExcept(node, target.name, new Set<string>());
+  });
 }
 
 function hasDirectVaporImport(root: SwiftSyntaxNode): boolean {
@@ -575,6 +697,37 @@ export function extractSwiftFileFacts(input: SwiftExtractFileFactsInput): Artifa
     });
   }
 
+  function addDirectCall(
+    caller: SymbolNode,
+    target: SymbolNode,
+    call: StaticSwiftPlainCall
+  ): void {
+    const range = rangeForNode(call.node);
+    edges.push({
+      id: createEdgeId({
+        sourceId: caller.id,
+        targetId: target.id,
+        kind: "calls",
+        line: range.start.line,
+        column: range.start.column,
+        referenceName: call.name
+      }),
+      sourceId: caller.id,
+      targetId: target.id,
+      kind: "calls",
+      filePath: input.filePath,
+      range,
+      resolution: "exact",
+      confidence: 1,
+      referenceName: call.name,
+      evidence: {
+        ruleId: "syntax.swift.same-file.unique-file-private-top-level-function-call",
+        stage: "syntax",
+        candidateSymbolIds: [target.id]
+      }
+    });
+  }
+
   function addType(declaration: StaticSwiftType): SymbolNode {
     const qualifiedName = input.filePath + "#" + declaration.name;
     const declarationOrdinal = nextOrdinal(qualifiedName, declaration.kind);
@@ -732,7 +885,10 @@ export function extractSwiftFileFacts(input: SwiftExtractFileFactsInput): Artifa
       .filter((node) => node.kind() === "function_declaration")
       .map((node) => staticSwiftFunction(node))
       .filter((candidate): candidate is StaticSwiftFunction => candidate !== null);
-    const functionsByName = new Map<string, SymbolNode[]>();
+    const functionsByName = new Map<
+      string,
+      { readonly declaration: StaticSwiftFunction; readonly symbol: SymbolNode }[]
+    >();
     const extendedTypeNames = new Set(
       topLevelExtensions.map((declaration) => declaration.extendedTypeName)
     );
@@ -791,8 +947,54 @@ export function extractSwiftFileFacts(input: SwiftExtractFileFactsInput): Artifa
     for (const functionDeclaration of topLevelFunctions) {
       const symbol = addFunction(functionDeclaration);
       const candidates = functionsByName.get(functionDeclaration.name) ?? [];
-      candidates.push(symbol);
+      candidates.push({ declaration: functionDeclaration, symbol });
       functionsByName.set(functionDeclaration.name, candidates);
+    }
+
+    if (!topLevel.some((node) => node.kind() === "import_declaration")) {
+      for (const callerDeclaration of topLevelFunctions) {
+        if (callerDeclaration.body === null) {
+          continue;
+        }
+        const callerCandidates = functionsByName.get(callerDeclaration.name) ?? [];
+        const caller = callerCandidates.find(
+          (candidate) => syntaxNodeKey(candidate.declaration.node) === syntaxNodeKey(callerDeclaration.node)
+        )?.symbol;
+        if (caller === undefined) {
+          continue;
+        }
+        const plainCalls = directSwiftPlainCalls(callerDeclaration.body);
+        for (const call of plainCalls) {
+          const targetCandidates = functionsByName.get(call.name) ?? [];
+          const target = targetCandidates[0];
+          if (
+            target === undefined ||
+            targetCandidates.length !== 1 ||
+            !isFilePrivateZeroParameterFunction(target.declaration) ||
+            hasTopLevelNameCompetition(topLevel, target.declaration)
+          ) {
+            continue;
+          }
+          const allowedNodeKeys = new Set([syntaxNodeKey(call.nameNode)]);
+          if (callerDeclaration.name === call.name) {
+            const callerNameNode = directChildren(callerDeclaration.node).find(
+              (child) => child.kind() === "simple_identifier"
+            );
+            if (callerNameNode !== undefined) {
+              allowedNodeKeys.add(syntaxNodeKey(callerNameNode));
+            }
+          }
+          for (const siblingCall of plainCalls) {
+            if (siblingCall.name === call.name) {
+              allowedNodeKeys.add(syntaxNodeKey(siblingCall.nameNode));
+            }
+          }
+          if (hasNamedIdentifierExcept(callerDeclaration.node, call.name, allowedNodeKeys)) {
+            continue;
+          }
+          addDirectCall(caller, target.symbol, call);
+        }
+      }
     }
 
     if (hasDirectVaporImport(root)) {
@@ -806,7 +1008,7 @@ export function extractSwiftFileFacts(input: SwiftExtractFileFactsInput): Artifa
           if (handlerCandidates.length === 1) {
             const handler = handlerCandidates[0];
             if (handler !== undefined) {
-              addVaporRoute(route, handler);
+              addVaporRoute(route, handler.symbol);
             }
           }
         }
