@@ -69,6 +69,13 @@ interface StaticLapisRoute {
   readonly end: number;
 }
 
+interface StaticLuaDirectCall {
+  readonly caller: StaticLuaFunction;
+  readonly targetName: string;
+  readonly start: number;
+  readonly end: number;
+}
+
 const LUA_KEYWORDS = new Set([
   "and",
   "break",
@@ -539,6 +546,157 @@ function hasRebindingBetween(
   return (rebindings.get(name) ?? []).some((offset) => offset > after && offset < before);
 }
 
+function hasUnprovenTopLevelLuaEffect(sourceText: string, structure: LuaStructure): boolean {
+  for (let index = 0; index < structure.tokens.length; index += 1) {
+    const token = structure.tokens[index];
+    if (token === undefined || structure.depthBefore[index] !== 0) {
+      continue;
+    }
+    if (
+      token.text === "function" &&
+      (startsDirectStatement(sourceText, structure.tokens, index) ||
+        (structure.tokens[index - 1]?.text === "local" &&
+          startsDirectStatement(sourceText, structure.tokens, index - 1)) ||
+        (structure.tokens[index - 1]?.text === "export" &&
+          startsDirectStatement(sourceText, structure.tokens, index - 1)))
+    ) {
+      continue;
+    }
+    if (
+      (token.text === "local" || token.text === "export") &&
+      structure.tokens[index + 1]?.text === "function" &&
+      startsDirectStatement(sourceText, structure.tokens, index)
+    ) {
+      continue;
+    }
+    return true;
+  }
+  return false;
+}
+
+function hasLuaLexicalShadow(
+  structure: LuaStructure,
+  functionIndex: number,
+  functionEndIndex: number,
+  name: string
+): boolean {
+  const parametersEnd = structure.pairedParentheses.get(functionIndex + 2);
+  if (parametersEnd === undefined) {
+    return true;
+  }
+  for (let index = functionIndex + 3; index < parametersEnd; index += 1) {
+    if (identifierText(structure.tokens[index]) === name) {
+      return true;
+    }
+  }
+  for (let index = parametersEnd + 1; index < functionEndIndex; index += 1) {
+    if (
+      structure.depthBefore[index] === 1 &&
+      structure.tokens[index]?.text === "local" &&
+      identifierText(structure.tokens[index + 1]) === name
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function hasLuaTargetMutationOrEnvironmentReflection(
+  structure: LuaStructure,
+  targetName: string
+): boolean {
+  for (let index = 0; index < structure.tokens.length; index += 1) {
+    const token = structure.tokens[index];
+    if (token === undefined) {
+      continue;
+    }
+    if (
+      (structure.depthBefore[index] ?? 0) > 0 &&
+      ((token.text === "debug" &&
+        structure.tokens[index + 1]?.text === "." &&
+        identifierText(structure.tokens[index + 2]) !== null) ||
+        token.text === "_ENV")
+    ) {
+      return true;
+    }
+    if (identifierText(token) !== targetName) {
+      continue;
+    }
+    if (structure.tokens[index + 1]?.text === "=") {
+      return true;
+    }
+    let cursor = index + 1;
+    while (
+      structure.tokens[cursor]?.text === "," &&
+      identifierText(structure.tokens[cursor + 1]) !== null
+    ) {
+      cursor += 2;
+    }
+    if (cursor > index + 1 && structure.tokens[cursor]?.text === "=") {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Collects only calls whose lexical shape is a bare `name()` directly in a
+ * top-level function body. The deliberately broad environment gate keeps this
+ * B1 pass out of Lua's mutable global/import and metatable semantics.
+ */
+function collectStaticLuaDirectCalls(
+  sourceText: string,
+  structure: LuaStructure,
+  functions: readonly StaticLuaFunction[],
+  rebindings: ReadonlyMap<string, readonly number[]>
+): readonly StaticLuaDirectCall[] {
+  if (hasUnprovenTopLevelLuaEffect(sourceText, structure)) {
+    return [];
+  }
+  const calls: StaticLuaDirectCall[] = [];
+  for (const caller of functions) {
+    const functionIndex = structure.tokens.findIndex(
+      (token, index) =>
+        token.text === "function" &&
+        structure.depthBefore[index] === 0 &&
+        token.start >= caller.start &&
+        identifierText(structure.tokens[index + 1]) === caller.name
+    );
+    const functionEndIndex =
+      functionIndex < 0 ? undefined : structure.functionEnds.get(functionIndex);
+    const parametersEnd =
+      functionIndex < 0 ? undefined : structure.pairedParentheses.get(functionIndex + 2);
+    if (functionIndex < 0 || functionEndIndex === undefined || parametersEnd === undefined) {
+      continue;
+    }
+    for (let index = parametersEnd + 1; index < functionEndIndex; index += 1) {
+      const token = structure.tokens[index];
+      const targetName = identifierText(token);
+      const close = structure.pairedParentheses.get(index + 1);
+      if (
+        token === undefined ||
+        targetName === null ||
+        structure.depthBefore[index] !== 1 ||
+        structure.tokens[index - 1]?.text === "." ||
+        structure.tokens[index - 1]?.text === ":" ||
+        structure.tokens[index + 1]?.text !== "(" ||
+        close === undefined ||
+        close !== index + 2 ||
+        (rebindings.get(targetName)?.length ?? 0) > 0 ||
+        hasLuaTargetMutationOrEnvironmentReflection(structure, targetName) ||
+        hasLuaLexicalShadow(structure, functionIndex, functionEndIndex, targetName)
+      ) {
+        continue;
+      }
+      const closingToken = structure.tokens[close];
+      if (closingToken !== undefined) {
+        calls.push({ caller, targetName, start: token.start, end: closingToken.end });
+      }
+    }
+  }
+  return calls;
+}
+
 function directLapisModuleBinding(
   sourceText: string,
   structure: LuaStructure,
@@ -876,6 +1034,33 @@ export function extractLuaFileFacts(input: LuaExtractFileFactsInput): ArtifactFa
     });
   }
 
+  function addDirectCall(call: StaticLuaDirectCall, caller: SymbolNode, callee: SymbolNode): void {
+    const range = rangeFor(lineStarts, call.start, call.end);
+    edges.push({
+      id: createEdgeId({
+        sourceId: caller.id,
+        targetId: callee.id,
+        kind: "calls",
+        line: range.start.line,
+        column: range.start.column,
+        referenceName: call.targetName
+      }),
+      sourceId: caller.id,
+      targetId: callee.id,
+      kind: "calls",
+      filePath: input.filePath,
+      range,
+      resolution: "exact",
+      confidence: 1,
+      referenceName: call.targetName,
+      evidence: {
+        ruleId: `syntax.${input.language}.same-file.unique-zero-argument-bare-function-call`,
+        stage: "syntax",
+        candidateSymbolIds: [callee.id]
+      }
+    });
+  }
+
   if (structure.valid) {
     const functions = collectTopLevelFunctions(input.sourceText, structure, input.language);
     const functionsByName = new Map<string, { readonly declaration: StaticLuaFunction; readonly symbol: SymbolNode }[]>();
@@ -885,8 +1070,24 @@ export function extractLuaFileFacts(input: LuaExtractFileFactsInput): ArtifactFa
       functionsByName.set(declaration.name, [...existing, { declaration, symbol }]);
     }
 
+    const rebindings = collectTopLevelRebindings(input.sourceText, structure);
+    if (input.language === "luau") {
+      for (const call of collectStaticLuaDirectCalls(input.sourceText, structure, functions, rebindings)) {
+        const callerCandidates = functionsByName.get(call.caller.name) ?? [];
+        const targetCandidates = (functionsByName.get(call.targetName) ?? []).filter(
+          (candidate) => candidate.declaration.isLocal && candidate.declaration.start < call.start
+        );
+        if (callerCandidates.length === 1 && targetCandidates.length === 1) {
+          const caller = callerCandidates[0];
+          const target = targetCandidates[0];
+          if (caller !== undefined && target !== undefined) {
+            addDirectCall(call, caller.symbol, target.symbol);
+          }
+        }
+      }
+    }
+
     if (input.language === "lua") {
-      const rebindings = collectTopLevelRebindings(input.sourceText, structure);
       const applications = collectLapisApplicationBindings(input.sourceText, structure, rebindings);
       for (let index = 0; index < structure.tokens.length; index += 1) {
         const route = staticLapisRoute(input.sourceText, structure, index);

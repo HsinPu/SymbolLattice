@@ -220,7 +220,7 @@ describe("capability smoke matrix contract", () => {
     });
 
     expect(plan.schemaVersion).toBe(2);
-    expect(plan.languageCases).toHaveLength(17);
+    expect(plan.languageCases).toHaveLength(22);
     expect(plan.frameworkCases).toHaveLength(10);
     expect(new Set(plan.registryCoverage.languages.selected)).toEqual(
       new Set([
@@ -240,7 +240,12 @@ describe("capability smoke matrix contract", () => {
         "dart",
         "fortran",
         "ada",
-        "zig"
+        "zig",
+        "r",
+        "clojure",
+        "lua",
+        "luau",
+        "pascal"
       ])
     );
     expect(plan.frameworkCases.filter((candidate) => candidate.capabilityId === null)).toEqual([
@@ -259,7 +264,9 @@ describe("capability smoke matrix contract", () => {
       "kotlin-basic",
       "fortran-basic",
       "ada-basic",
-      "zig-basic"
+      "zig-basic",
+      "luau-basic",
+      "pascal-basic"
     ]) {
       expect(plan.languageCases.find((candidate) => candidate.id === id)?.assertions).toEqual(
         expect.objectContaining({
@@ -272,6 +279,19 @@ describe("capability smoke matrix contract", () => {
             source: "entry",
             target: "helper",
             kind: "calls"
+          })])
+        })
+      );
+    }
+    for (const id of ["r-basic", "clojure-basic", "lua-basic"]) {
+      expect(plan.languageCases.find((candidate) => candidate.id === id)?.assertions).toEqual(
+        expect.objectContaining({
+          symbols: expect.arrayContaining([expect.objectContaining({ id: "handler" })]),
+          relations: expect.arrayContaining([expect.objectContaining({
+            command: "routes",
+            target: "handler",
+            expectedMethod: "GET",
+            expectedPath: "/health"
           })])
         })
       );
@@ -381,7 +401,16 @@ describe("capability smoke matrix contract", () => {
           relations: [{ id: "route", command: "routes", expectedPath: "/" }]
         }
       }]
-    }), registries)).toThrow("required symbol");
+    }), registries)).toThrow("target");
+    expect(createCapabilitySmokePlan(v2Manifest({
+      languageCases: [{
+        ...v2Manifest().languageCases[0],
+        assertions: {
+          symbols: assertions.symbols,
+          relations: [{ id: "route", command: "routes", target: "entry", expectedPath: "/" }]
+        }
+      }]
+    }), registries).languageCases).toHaveLength(1);
     expect(() => createCapabilitySmokePlan(v2Manifest({
       languageCases: [{
         ...v2Manifest().languageCases[0],
@@ -390,7 +419,7 @@ describe("capability smoke matrix contract", () => {
           relations: [{ id: "route", command: "routes", expectedPath: "/" }]
         }
       }]
-    }), registries)).toThrow("required language relation");
+    }), registries)).toThrow("target");
     expect(createCapabilitySmokePlan(v2Manifest({
       languageCases: [],
       frameworkCases: [{
@@ -414,6 +443,104 @@ describe("capability smoke matrix contract", () => {
       .rejects.toThrow("schemaVersion 1");
     await expect(runCapabilitySmokeCase(candidate, "language", successfulV2Runtime(), 2))
       .resolves.toMatchObject({ classification: "basic-usable" });
+  });
+
+  it("binds a language route receipt to the exact selected handler identity and edge", async () => {
+    const candidate = {
+      ...v2Manifest().languageCases[0],
+      assertions: {
+        symbols: [v2Manifest().languageCases[0].assertions.symbols[0]],
+        relations: [{
+          id: "entry-route",
+          command: "routes",
+          target: "entry",
+          expectedMethod: "GET",
+          expectedPath: "/"
+        }]
+      }
+    };
+    const runtime = successfulV2Runtime();
+    const baseRunJson = runtime.runJson.bind(runtime);
+    runtime.runJson = async (command, arguments_) => command === "routes"
+      ? {
+          routes: [{
+            method: "GET",
+            path: "/",
+            route: { id: "symbol:route" },
+            handler: {
+              id: "symbol:entry",
+              name: "typescriptEntry",
+              filePath: "src/typescript.ts",
+              kind: "function"
+            },
+            edge: {
+              sourceId: "symbol:route",
+              targetId: "symbol:entry",
+              kind: "routes",
+              resolution: "exact",
+              confidence: 1
+            }
+          }]
+        }
+      : baseRunJson(command, arguments_);
+
+    await expect(runCapabilitySmokeCase(candidate, "language", runtime, 2)).resolves.toMatchObject({
+      classification: "basic-usable",
+      assertions: { relations: [expect.objectContaining({ status: "passed", targetId: "symbol:entry" })] }
+    });
+
+    const heuristicRuntime = successfulV2Runtime();
+    const heuristicBaseRunJson = heuristicRuntime.runJson.bind(heuristicRuntime);
+    heuristicRuntime.runJson = async (command, arguments_) => command === "routes"
+      ? {
+          routes: [{
+            method: "GET",
+            path: "/",
+            route: { id: "symbol:route" },
+            handler: {
+              id: "symbol:entry",
+              name: "typescriptEntry",
+              filePath: "src/typescript.ts",
+              kind: "function"
+            },
+            edge: {
+              sourceId: "symbol:route",
+              targetId: "symbol:entry",
+              kind: "routes",
+              resolution: "heuristic",
+              confidence: 0.4
+            }
+          }]
+        }
+      : heuristicBaseRunJson(command, arguments_);
+    await expect(runCapabilitySmokeCase(candidate, "language", heuristicRuntime, 2)).resolves.toMatchObject({
+      classification: "partial-usable",
+      assertions: { relations: [expect.objectContaining({ status: "failed" })] }
+    });
+
+    const impostorRuntime = successfulV2Runtime();
+    const impostorBaseRunJson = impostorRuntime.runJson.bind(impostorRuntime);
+    impostorRuntime.runJson = async (command, arguments_) => command === "routes"
+      ? {
+          routes: [{
+            method: "GET",
+            path: "/",
+            route: { id: "symbol:route" },
+            handler: { id: "symbol:impostor", name: "typescriptEntry", filePath: "src/typescript.ts", kind: "function" },
+            edge: {
+              sourceId: "symbol:route",
+              targetId: "symbol:impostor",
+              kind: "routes",
+              resolution: "exact",
+              confidence: 1
+            }
+          }]
+        }
+      : impostorBaseRunJson(command, arguments_);
+    await expect(runCapabilitySmokeCase(candidate, "language", impostorRuntime, 2)).resolves.toMatchObject({
+      classification: "partial-usable",
+      assertions: { relations: [expect.objectContaining({ status: "failed" })] }
+    });
   });
 
   it("records v2 exact symbol and call-edge receipts without accepting same-name impostors", async () => {

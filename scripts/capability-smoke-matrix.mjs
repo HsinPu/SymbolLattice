@@ -108,9 +108,22 @@ function validateV2Assertions(value, label, profile) {
       };
     }
     if (command === "routes") {
+      const target = record.target === undefined
+        ? undefined
+        : requireNonemptyString(record.target, `${assertionLabel}.target`);
+      if (profile === "language" && target === undefined) {
+        throw new Error(`${assertionLabel}.target is required for a language route assertion.`);
+      }
+      if (
+        target !== undefined &&
+        (!symbolsById.has(target) || symbolsById.get(target)?.notApplicable !== undefined)
+      ) {
+        throw new Error(`${assertionLabel}.target must reference an applicable symbol assertion.`);
+      }
       return {
         id: record.id,
         command,
+        ...(target === undefined ? {} : { target }),
         expectedPath: requireNonemptyString(record.expectedPath, `${assertionLabel}.expectedPath`),
         ...(record.expectedMethod === undefined
           ? {}
@@ -130,7 +143,7 @@ function validateV2Assertions(value, label, profile) {
     if (!relations.some(
       (assertion) =>
         assertion.notApplicable === undefined &&
-        ["callees", "hierarchy", "file-dependents"].includes(assertion.command)
+        ["callees", "hierarchy", "file-dependents", "routes"].includes(assertion.command)
     )) {
       throw new Error(`${label} must include at least one required language relation assertion.`);
     }
@@ -668,6 +681,12 @@ export async function runCapabilitySmokeCase(candidateValue, kind, runtimeValue,
                 errors.push({ stage: "relation", assertionId: assertion.id, message: receipt.message });
               }
             } else if (assertion.command === "routes") {
+              const target = assertion.target === undefined
+                ? undefined
+                : resolvedSymbols.get(assertion.target);
+              if (assertion.target !== undefined && target === undefined) {
+                throw new Error("Route handler was not resolved by exact identity.");
+              }
               const result = await runtime.runJson("routes", [
                 "--project",
                 projectPath,
@@ -679,12 +698,32 @@ export async function runCapabilitySmokeCase(candidateValue, kind, runtimeValue,
                 ? result.routes.filter(
                     (item) =>
                       item?.path === assertion.expectedPath &&
-                      (assertion.expectedMethod === undefined || item?.method === assertion.expectedMethod)
+                      (assertion.expectedMethod === undefined || item?.method === assertion.expectedMethod) &&
+                      (target === undefined || (
+                        sameSymbolIdentity(item?.handler, target) &&
+                        typeof item?.route?.id === "string" &&
+                        item.route.id.length > 0 &&
+                        item?.edge?.sourceId === item.route.id &&
+                        item?.edge?.targetId === target.id &&
+                        item?.edge?.kind === "routes" &&
+                        item?.edge?.resolution === "exact" &&
+                        item?.edge?.confidence === 1
+                      ))
                   )
                 : [];
               if (matches.length === 1) {
                 receipt.status = "passed";
                 receipt.route = { method: matches[0].method, path: matches[0].path };
+                if (target !== undefined) {
+                  receipt.targetId = target.id;
+                  receipt.edge = {
+                    sourceId: matches[0].edge.sourceId,
+                    targetId: matches[0].edge.targetId,
+                    kind: matches[0].edge.kind,
+                    resolution: matches[0].edge.resolution,
+                    confidence: matches[0].edge.confidence
+                  };
+                }
                 evidence.relation ??= `${matches[0].method} ${matches[0].path}`;
               } else {
                 receipt.status = "failed";

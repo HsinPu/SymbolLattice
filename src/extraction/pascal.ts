@@ -28,6 +28,13 @@ interface StaticPascalRoutine {
   readonly end: number;
 }
 
+interface StaticPascalDirectCall {
+  readonly caller: StaticPascalRoutine;
+  readonly targetName: string;
+  readonly start: number;
+  readonly end: number;
+}
+
 interface StaticHorseRoute {
   readonly method: HorseRouteMethod;
   readonly path: string;
@@ -370,6 +377,71 @@ function collectDirectPascalRoutines(lines: readonly PascalLine[]): readonly Sta
   return routines;
 }
 
+function collectDirectPascalCalls(
+  sourceText: string,
+  lines: readonly PascalLine[],
+  routines: readonly StaticPascalRoutine[],
+  hasCompilerIncludeDirective: boolean
+): readonly StaticPascalDirectCall[] {
+  if (
+    hasCompilerIncludeDirective ||
+    lines.some((line) => /^unit\b/iu.test(line.content)) ||
+    lines.some((line) => /^uses\b/iu.test(line.content)) ||
+    /\b(?:forward|external|overload|with)\b/iu.test(sourceText)
+  ) {
+    return [];
+  }
+  const calls: StaticPascalDirectCall[] = [];
+  for (const caller of routines) {
+    if (caller.name.includes(".")) {
+      continue;
+    }
+    const callerLines = lines.filter((line) => caller.start < line.start && line.end < caller.end);
+    if (
+      callerLines.some(
+        (line) => line.indent > 0 && /^(?:procedure|function)\b/iu.test(line.content)
+      )
+    ) {
+      continue;
+    }
+    for (const line of callerLines) {
+      const match = /^([A-Za-z_][A-Za-z0-9_]*)\s*\(\s*\)\s*;\s*$/u.exec(line.content);
+      const targetName = match?.[1];
+      if (targetName === undefined) {
+        continue;
+      }
+      const targetCandidates = routines.filter(
+        (routine) =>
+          !routine.name.includes(".") &&
+          routine.end < caller.start &&
+          routine.name.toLowerCase() === targetName.toLowerCase()
+      );
+      const callerText = sourceText.slice(caller.start, caller.end);
+      if (
+        targetCandidates.length !== 1 ||
+        new RegExp(`\\b${targetName}\\s*:`, "iu").test(callerText)
+      ) {
+        continue;
+      }
+      const callStart = line.start + line.content.indexOf(targetName);
+      calls.push({
+        caller,
+        targetName,
+        start: callStart,
+        end: callStart + targetName.length + 2
+      });
+    }
+  }
+  return calls;
+}
+
+function hasPascalCompilerIncludeDirective(sourceText: string): boolean {
+  return (
+    /\{\$\s*(?:I|INCLUDE)(?=\s|\})/iu.test(sourceText) ||
+    /\(\*\$\s*(?:I|INCLUDE)(?=\s|\*)/iu.test(sourceText)
+  );
+}
+
 function isDirectPascalProgramDeclaration(line: PascalLine): boolean {
   return (
     line.indent === 0 &&
@@ -689,6 +761,33 @@ export function extractPascalFileFacts(input: PascalExtractFileFactsInput): Arti
     });
   }
 
+  function addDirectCall(call: StaticPascalDirectCall, caller: SymbolNode, callee: SymbolNode): void {
+    const range = rangeFor(lineStarts, call.start, call.end);
+    edges.push({
+      id: createEdgeId({
+        sourceId: caller.id,
+        targetId: callee.id,
+        kind: "calls",
+        line: range.start.line,
+        column: range.start.column,
+        referenceName: call.targetName
+      }),
+      sourceId: caller.id,
+      targetId: callee.id,
+      kind: "calls",
+      filePath: input.filePath,
+      range,
+      resolution: "exact",
+      confidence: 1,
+      referenceName: call.targetName,
+      evidence: {
+        ruleId: "syntax.pascal.same-file.unique-zero-argument-bare-routine-call",
+        stage: "syntax",
+        candidateSymbolIds: [callee.id]
+      }
+    });
+  }
+
   if (sanitized.valid) {
     const sanitizedLines = linesFor(sanitized.text);
     const routines = collectDirectPascalRoutines(sanitizedLines);
@@ -699,6 +798,27 @@ export function extractPascalFileFacts(input: PascalExtractFileFactsInput): Arti
       const existing = routinesByName.get(normalizedName) ?? [];
       existing.push({ routine, symbol });
       routinesByName.set(normalizedName, existing);
+    }
+
+    for (const call of collectDirectPascalCalls(
+      sanitized.text,
+      sanitizedLines,
+      routines,
+      hasPascalCompilerIncludeDirective(input.sourceText)
+    )) {
+      const callerCandidates = (routinesByName.get(call.caller.name.toLowerCase()) ?? []).filter(
+        (candidate) => !candidate.routine.name.includes(".")
+      );
+      const targetCandidates = (routinesByName.get(call.targetName.toLowerCase()) ?? []).filter(
+        (candidate) => !candidate.routine.name.includes(".") && candidate.routine.end < call.caller.start
+      );
+      if (callerCandidates.length === 1 && targetCandidates.length === 1) {
+        const caller = callerCandidates[0];
+        const target = targetCandidates[0];
+        if (caller !== undefined && target !== undefined) {
+          addDirectCall(call, caller.symbol, target.symbol);
+        }
+      }
     }
 
     for (const routeFact of collectDirectHorseRoutes(
