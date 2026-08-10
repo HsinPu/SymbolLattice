@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.361.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
+> v0.362.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
 
 ## 專案用途
 
@@ -51,7 +51,7 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.361.0 可用性快照
+## v0.362.0 可用性快照
 
 可重跑的 smoke matrix 會從正式語言與框架 registry 核對測試案例，而不是依 README 宣稱支援。
 
@@ -62,6 +62,7 @@ node dist/cli/main.js explore "Trace createOrder to persistence" --project /path
 - Terraform 可驗證 output 到同檔唯一 resource traversal；GraphQL 可驗證 type 到單一 interface implementation；Proto 可驗證 RPC 到同檔唯一 request／response message。
 - SQL 以精確檔案檢視驗證 bounded view-to-table reference；上述 schema／IaC 關係不宣稱完整 dialect、schema validation、plan/apply 或 runtime linkage。
 - 關係驗收核對完整 symbol identity；edge-based 收據另要求正確 endpoints、`resolution: exact` 與 `confidence: 1`，檔案結構收據則要求 exact path 與完整 symbol identity。
+- Capability 發版閘門會阻擋任何語言 partial、scan-only 或 unavailable；框架案例仍可誠實保留 partial 診斷。
 - Groovy 可驗證同檔唯一直接類別繼承；CFML 可驗證結構隔離 `.cfc` 的 remote entrypoint 到 handler。兩者的動態一般呼叫仍保守不產生 exact edge。
 - React Router、Next.js、Vue Router、SvelteKit、Astro、Spring Web、FastAPI、Django 與 ASP.NET Core 的代表案例可建立預期 route。
 - Nuxt 可掃描與查詢 Vue 檔案，但目前沒有專用 Nuxt route capability。

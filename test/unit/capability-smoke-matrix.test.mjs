@@ -85,15 +85,21 @@ function v2Manifest(overrides = {}) {
           symbols: [
             {
               id: "entry",
+              expectedId: "symbol:entry",
               name: "typescriptEntry",
+              qualifiedName: "src/typescript.ts#typescriptEntry",
               filePath: "src/typescript.ts",
-              kind: "function"
+              kind: "function",
+              declarationOrdinal: 0
             },
             {
               id: "helper",
+              expectedId: "symbol:helper",
               name: "typescriptHelper",
+              qualifiedName: "src/typescript.ts#typescriptHelper",
               filePath: "src/typescript.ts",
-              kind: "function"
+              kind: "function",
+              declarationOrdinal: 0
             }
           ],
           relations: [
@@ -119,14 +125,18 @@ function successfulV2Runtime(overrides = {}) {
     typescriptEntry: {
       id: "symbol:entry",
       name: "typescriptEntry",
+      qualifiedName: "src/typescript.ts#typescriptEntry",
       filePath: "src/typescript.ts",
-      kind: "function"
+      kind: "function",
+      declarationOrdinal: 0
     },
     typescriptHelper: {
       id: "symbol:helper",
       name: "typescriptHelper",
+      qualifiedName: "src/typescript.ts#typescriptHelper",
       filePath: "src/typescript.ts",
-      kind: "function"
+      kind: "function",
+      declarationOrdinal: 0
     }
   };
   return {
@@ -164,7 +174,9 @@ function successfulV2Runtime(overrides = {}) {
               edge: {
                 sourceId: "symbol:entry",
                 targetId: "symbol:helper",
-                kind: "calls"
+                kind: "calls",
+                resolution: "exact",
+                confidence: 1
               }
             }
           ]
@@ -728,22 +740,24 @@ describe("capability smoke matrix contract", () => {
       name: "main.tf",
       qualifiedName: "src/main.tf",
       filePath: "src/main.tf",
-      kind: "file"
+      kind: "file",
+      declarationOrdinal: 0
     };
     const resource = {
       id: "symbol:resource",
       name: "resource aws_instance.web",
       qualifiedName: "src/main.tf#resource:aws_instance.web",
       filePath: "src/main.tf",
-      kind: "resource"
+      kind: "resource",
+      declarationOrdinal: 0
     };
     const candidate = {
       ...v2Manifest().languageCases[0],
       expectedFilePath: file.filePath,
       assertions: {
         symbols: [
-          { id: "file", name: file.name, filePath: file.filePath, kind: file.kind },
-          { id: "resource", name: resource.name, filePath: resource.filePath, kind: resource.kind }
+          { ...file, id: "file", expectedId: file.id },
+          { ...resource, id: "resource", expectedId: resource.id }
         ],
         relations: [{
           id: "file-contains-resource",
@@ -809,22 +823,28 @@ describe("capability smoke matrix contract", () => {
       symbol: {
         id: "symbol:helper",
         name: "typescriptHelper",
+        qualifiedName: "src/typescript.ts#typescriptHelper",
         filePath: "src/typescript.ts",
-        kind: "function"
+        kind: "function",
+        declarationOrdinal: 0
       },
       paths: [{
         symbols: [
           {
             id: "symbol:helper",
             name: "typescriptHelper",
+            qualifiedName: "src/typescript.ts#typescriptHelper",
             filePath: "src/typescript.ts",
-            kind: "function"
+            kind: "function",
+            declarationOrdinal: 0
           },
           {
             id: "symbol:entry",
             name: "typescriptEntry",
+            qualifiedName: "src/typescript.ts#typescriptEntry",
             filePath: "src/typescript.ts",
-            kind: "function"
+            kind: "function",
+            declarationOrdinal: 0
           }
         ],
         edges: [{
@@ -882,8 +902,10 @@ describe("capability smoke matrix contract", () => {
             handler: {
               id: "symbol:entry",
               name: "typescriptEntry",
+              qualifiedName: "src/typescript.ts#typescriptEntry",
               filePath: "src/typescript.ts",
-              kind: "function"
+              kind: "function",
+              declarationOrdinal: 0
             },
             edge: {
               sourceId: "symbol:route",
@@ -912,8 +934,10 @@ describe("capability smoke matrix contract", () => {
             handler: {
               id: "symbol:entry",
               name: "typescriptEntry",
+              qualifiedName: "src/typescript.ts#typescriptEntry",
               filePath: "src/typescript.ts",
-              kind: "function"
+              kind: "function",
+              declarationOrdinal: 0
             },
             edge: {
               sourceId: "symbol:route",
@@ -957,8 +981,8 @@ describe("capability smoke matrix contract", () => {
 
   it("records v2 exact symbol and call-edge receipts without accepting same-name impostors", async () => {
     const candidate = v2Manifest().languageCases[0];
-    await expect(runCapabilitySmokeCase(candidate, "language", successfulV2Runtime(), 2))
-      .resolves.toMatchObject({
+    const successfulReceipt = await runCapabilitySmokeCase(candidate, "language", successfulV2Runtime(), 2);
+    expect(successfulReceipt).toMatchObject({
         classification: "basic-usable",
         stages: { symbol: true, relation: true },
         assertions: {
@@ -971,7 +995,13 @@ describe("capability smoke matrix contract", () => {
             status: "passed",
             rootId: "symbol:entry",
             targetId: "symbol:helper",
-            edge: { sourceId: "symbol:entry", targetId: "symbol:helper", kind: "calls" }
+            edge: {
+              sourceId: "symbol:entry",
+              targetId: "symbol:helper",
+              kind: "calls",
+              resolution: "exact",
+              confidence: 1
+            }
           })]
         }
       });
@@ -1005,8 +1035,10 @@ describe("capability smoke matrix contract", () => {
             symbol: {
               id: "symbol:entry",
               name: "typescriptEntry",
+              qualifiedName: "src/typescript.ts#typescriptEntry",
               filePath: "src/typescript.ts",
-              kind: "function"
+              kind: "function",
+              declarationOrdinal: 0
             },
             relations: [{
               symbol: {
@@ -1034,10 +1066,10 @@ describe("capability smoke matrix contract", () => {
       expectedFilePath: "pkg/entry.py",
       assertions: {
         symbols: [
-          { id: "entry", name: "entry", filePath: "pkg/entry.py", kind: "function" },
-          { id: "helper", name: "helper", filePath: "pkg/helper.py", kind: "function" },
-          { id: "child", name: "Child", filePath: "pkg/entry.py", kind: "class" },
-          { id: "base", name: "Base", filePath: "pkg/helper.py", kind: "class" }
+          { id: "entry", expectedId: "symbol:entry", name: "entry", qualifiedName: "pkg/entry.py#entry", filePath: "pkg/entry.py", kind: "function", declarationOrdinal: 0 },
+          { id: "helper", expectedId: "symbol:helper", name: "helper", qualifiedName: "pkg/helper.py#helper", filePath: "pkg/helper.py", kind: "function", declarationOrdinal: 0 },
+          { id: "child", expectedId: "symbol:child", name: "Child", qualifiedName: "pkg/entry.py#Child", filePath: "pkg/entry.py", kind: "class", declarationOrdinal: 0 },
+          { id: "base", expectedId: "symbol:base", name: "Base", qualifiedName: "pkg/helper.py#Base", filePath: "pkg/helper.py", kind: "class", declarationOrdinal: 0 }
         ],
         relations: [
           { id: "call", command: "callees", source: "entry", target: "helper", kind: "calls" },
@@ -1057,7 +1089,7 @@ describe("capability smoke matrix contract", () => {
 
     const symbols = Object.fromEntries(candidate.assertions.symbols.map((symbol) => [
       symbol.name,
-      { ...symbol, id: `symbol:${symbol.id}` }
+      { ...symbol, id: symbol.expectedId }
     ]));
     const baseRuntime = successfulV2Runtime();
     const runtime = {
@@ -1072,7 +1104,13 @@ describe("capability smoke matrix contract", () => {
             symbol: symbols.entry,
             relations: [{
               symbol: symbols.helper,
-              edge: { sourceId: symbols.entry.id, targetId: symbols.helper.id, kind: "calls" }
+              edge: {
+                sourceId: symbols.entry.id,
+                targetId: symbols.helper.id,
+                kind: "calls",
+                resolution: "exact",
+                confidence: 1
+              }
             }]
           };
         }
@@ -1082,7 +1120,13 @@ describe("capability smoke matrix contract", () => {
             symbol: symbols.Child,
             parents: [{
               parent: symbols.Base,
-              edge: { sourceId: symbols.Child.id, targetId: symbols.Base.id, kind: "extends" }
+              edge: {
+                sourceId: symbols.Child.id,
+                targetId: symbols.Base.id,
+                kind: "extends",
+                resolution: "exact",
+                confidence: 1
+              }
             }]
           };
         }
@@ -1130,7 +1174,7 @@ describe("capability smoke matrix contract", () => {
         stages: { symbol: false, relation: false },
         assertions: {
           symbols: expect.arrayContaining([
-            expect.objectContaining({ id: "entry", status: "failed" }),
+            expect.objectContaining({ id: "entry", status: "passed" }),
             expect.objectContaining({ id: "helper", status: "failed" })
           ])
         }
@@ -1206,16 +1250,176 @@ describe("capability smoke matrix contract", () => {
           relations: [expect.objectContaining({ status: "not-applicable" })]
         }
       });
+
+  });
+
+  it("rejects heuristic or low-confidence callees evidence", async () => {
+    const candidate = v2Manifest().languageCases[0];
+    for (const edge of [
+      { resolution: "heuristic", confidence: 0.4 },
+      { resolution: "exact", confidence: 0.4 }
+    ]) {
+      const runtime = successfulV2Runtime();
+      const baseRunJson = runtime.runJson.bind(runtime);
+      runtime.runJson = async (command, arguments_) => command === "callees"
+        ? {
+            symbol: {
+              id: "symbol:entry",
+              name: "typescriptEntry",
+              qualifiedName: "src/typescript.ts#typescriptEntry",
+              filePath: "src/typescript.ts",
+              kind: "function",
+              declarationOrdinal: 0
+            },
+            relations: [{
+              symbol: {
+                id: "symbol:helper",
+                name: "typescriptHelper",
+                qualifiedName: "src/typescript.ts#typescriptHelper",
+                filePath: "src/typescript.ts",
+                kind: "function",
+                declarationOrdinal: 0
+              },
+              edge: {
+                sourceId: "symbol:entry",
+                targetId: "symbol:helper",
+                kind: "calls",
+                ...edge
+              }
+            }]
+          }
+        : baseRunJson(command, arguments_);
+      await expect(runCapabilitySmokeCase(candidate, "language", runtime, 2))
+        .resolves.toMatchObject({
+          classification: "partial-usable",
+          stages: { symbol: true, relation: false }
+        });
+    }
+  });
+
+  it("requires exact confidence-one hierarchy evidence", async () => {
+    const candidate = {
+      ...v2Manifest().languageCases[0],
+      assertions: {
+        symbols: v2Manifest().languageCases[0].assertions.symbols,
+        relations: [{
+          id: "entry-extends-helper",
+          command: "hierarchy",
+          source: "entry",
+          target: "helper",
+          kind: "extends"
+        }]
+      }
+    };
+    for (const [resolution, confidence, classification] of [
+      ["exact", 1, "basic-usable"],
+      ["heuristic", 0.4, "partial-usable"],
+      ["exact", 0.4, "partial-usable"]
+    ]) {
+      const runtime = successfulV2Runtime();
+      const baseRunJson = runtime.runJson.bind(runtime);
+      runtime.runJson = async (command, arguments_) => command === "hierarchy"
+        ? {
+            symbol: {
+              id: "symbol:entry",
+              name: "typescriptEntry",
+              qualifiedName: "src/typescript.ts#typescriptEntry",
+              filePath: "src/typescript.ts",
+              kind: "function",
+              declarationOrdinal: 0
+            },
+            parents: [{
+              parent: {
+                id: "symbol:helper",
+                name: "typescriptHelper",
+                qualifiedName: "src/typescript.ts#typescriptHelper",
+                filePath: "src/typescript.ts",
+                kind: "function",
+                declarationOrdinal: 0
+              },
+              edge: {
+                sourceId: "symbol:entry",
+                targetId: "symbol:helper",
+                kind: "extends",
+                resolution,
+                confidence
+              }
+            }]
+          }
+        : baseRunJson(command, arguments_);
+      await expect(runCapabilitySmokeCase(candidate, "language", runtime, 2))
+        .resolves.toMatchObject({ classification });
+    }
+  });
+
+  it("requires a stable expected symbol ID and rejects a same-shape impostor", async () => {
+    const candidate = v2Manifest().languageCases[0];
+    const missingIdentity = structuredClone(candidate);
+    delete missingIdentity.assertions.symbols[0].expectedId;
+    await expect(runCapabilitySmokeCase(missingIdentity, "language", successfulV2Runtime(), 2))
+      .rejects.toThrow(/expectedId/);
+
+    const impostorRuntime = successfulV2Runtime();
+    const baseRunJson = impostorRuntime.runJson.bind(impostorRuntime);
+    impostorRuntime.runJson = async (command, arguments_) => command === "find" && arguments_[0] === "typescriptEntry"
+      ? { symbols: [{
+          id: "symbol:impostor",
+          name: "typescriptEntry",
+          filePath: "src/typescript.ts",
+          kind: "function"
+        }] }
+      : baseRunJson(command, arguments_);
+    await expect(runCapabilitySmokeCase(candidate, "language", impostorRuntime, 2))
+      .resolves.toMatchObject({
+        classification: "scan-only",
+        stages: { symbol: false, relation: false }
+      });
+
+    const staleIdentityRuntime = successfulV2Runtime();
+    const staleBaseRunJson = staleIdentityRuntime.runJson.bind(staleIdentityRuntime);
+    staleIdentityRuntime.runJson = async (command, arguments_) => command === "find" && arguments_[0] === "typescriptEntry"
+      ? { symbols: [{
+          id: "symbol:entry",
+          name: "typescriptEntry",
+          qualifiedName: "src/typescript.ts#WrongOwner.typescriptEntry",
+          filePath: "src/typescript.ts",
+          kind: "function",
+          declarationOrdinal: 0
+        }] }
+      : staleBaseRunJson(command, arguments_);
+    await expect(runCapabilitySmokeCase(candidate, "language", staleIdentityRuntime, 2))
+      .resolves.toMatchObject({
+        classification: "scan-only",
+        stages: { symbol: false, relation: false }
+      });
   });
 
   it("separates capability diagnostics from execution-integrity failures", async () => {
     const diagnosticSummary = capabilitySmokeMatrix.capabilitySmokeFailureSummary([{
       id: "expected-partial",
+      kind: "framework",
       classification: "partial-usable",
       errors: [{ stage: "relation", message: "expected capability miss" }]
     }]);
     expect(diagnosticSummary).toMatchObject({ failedCases: 0, errorCount: 0, cases: [] });
     expect(capabilitySmokeMatrix.capabilitySmokeExitCode(diagnosticSummary)).toBe(0);
+
+    for (const classification of ["partial-usable", "scan-only"]) {
+      const languageSummary = capabilitySmokeMatrix.capabilitySmokeFailureSummary([{
+        id: `broken-${classification}`,
+        kind: "language",
+        classification,
+        errors: [{ stage: "relation", message: "B1 receipt missing" }]
+      }]);
+      expect(languageSummary).toMatchObject({
+        failedCases: 1,
+        cases: [expect.objectContaining({
+          id: `broken-${classification}`,
+          paths: [`classification.${classification}`]
+        })]
+      });
+      expect(capabilitySmokeMatrix.capabilitySmokeExitCode(languageSummary)).toBe(1);
+    }
 
     const receipt = await runCapabilitySmokeCase(
       v2Manifest().languageCases[0],

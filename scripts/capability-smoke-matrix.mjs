@@ -49,9 +49,17 @@ function validateV2Assertions(value, label, profile) {
     }
     return {
       id: record.id,
+      expectedId: requireNonemptyString(record.expectedId, `${assertionLabel}.expectedId`),
       name: requireNonemptyString(record.name, `${assertionLabel}.name`),
+      qualifiedName: requireNonemptyString(record.qualifiedName, `${assertionLabel}.qualifiedName`),
       filePath: requireNonemptyString(record.filePath, `${assertionLabel}.filePath`),
-      kind: requireNonemptyString(record.kind, `${assertionLabel}.kind`)
+      kind: requireNonemptyString(record.kind, `${assertionLabel}.kind`),
+      declarationOrdinal: (() => {
+        if (!Number.isInteger(record.declarationOrdinal) || record.declarationOrdinal < 0) {
+          throw new Error(`${assertionLabel}.declarationOrdinal must be a nonnegative integer.`);
+        }
+        return record.declarationOrdinal;
+      })()
     };
   });
   const symbolsById = new Map(symbols.map((assertion) => [assertion.id, assertion]));
@@ -296,8 +304,20 @@ function sameSymbolIdentity(actual, expected) {
   return (
     actual?.id === expected?.id &&
     actual?.name === expected?.name &&
+    actual?.qualifiedName === expected?.qualifiedName &&
     actual?.filePath === expected?.filePath &&
-    actual?.kind === expected?.kind
+    actual?.kind === expected?.kind &&
+    actual?.declarationOrdinal === expected?.declarationOrdinal
+  );
+}
+
+function isExactEdge(edge, sourceId, targetId, kind) {
+  return (
+    edge?.sourceId === sourceId &&
+    edge?.targetId === targetId &&
+    edge?.kind === kind &&
+    edge?.resolution === "exact" &&
+    edge?.confidence === 1
   );
 }
 
@@ -319,8 +339,13 @@ export function capabilitySmokeFailureSummary(casesValue) {
     const integrityErrors = errors.filter(
       (error) => error?.failureKind === "cleanup" || error?.failureKind === "runner"
     );
+    const languageCapabilityFailure =
+      receipt.kind === "language" && receipt.classification !== "basic-usable";
     const paths = [
       ...(receipt.classification === "unavailable" ? ["classification.unavailable"] : []),
+      ...(languageCapabilityFailure && receipt.classification !== "unavailable"
+        ? [`classification.${receipt.classification}`]
+        : []),
       ...integrityErrors.map((error) => `errors.${error.stage}`)
     ];
     return { id: receipt.id, paths, errors: integrityErrors };
@@ -386,9 +411,12 @@ export async function runCapabilitySmokeCase(candidateValue, kind, runtimeValue,
           ...(assertion.notApplicable === undefined
             ? {
                 expected: {
+                  expectedId: assertion.expectedId,
                   name: assertion.name,
+                  qualifiedName: assertion.qualifiedName,
                   filePath: assertion.filePath,
-                  kind: assertion.kind
+                  kind: assertion.kind,
+                  declarationOrdinal: assertion.declarationOrdinal
                 },
                 actualId: null
               }
@@ -510,10 +538,11 @@ export async function runCapabilitySmokeCase(candidateValue, kind, runtimeValue,
             ? result.symbols.filter(
                 (item) =>
                   item?.name === assertion.name &&
+                  item?.qualifiedName === assertion.qualifiedName &&
                   item?.filePath === assertion.filePath &&
                   item?.kind === assertion.kind &&
-                  typeof item?.id === "string" &&
-                  item.id.length > 0
+                  item?.id === assertion.expectedId &&
+                  item?.declarationOrdinal === assertion.declarationOrdinal
               )
             : [];
           if (matches.length === 1) {
@@ -592,9 +621,7 @@ export async function runCapabilitySmokeCase(candidateValue, kind, runtimeValue,
                     (item) =>
                       sameSymbolIdentity(result?.symbol, source) &&
                       sameSymbolIdentity(item?.symbol, target) &&
-                      item?.edge?.sourceId === source.id &&
-                      item?.edge?.targetId === target.id &&
-                      item?.edge?.kind === assertion.kind
+                      isExactEdge(item?.edge, source.id, target.id, assertion.kind)
                   )
                 : [];
               if (matches.length === 1) {
@@ -603,7 +630,9 @@ export async function runCapabilitySmokeCase(candidateValue, kind, runtimeValue,
                 receipt.edge = {
                   sourceId: edge.sourceId,
                   targetId: edge.targetId,
-                  kind: edge.kind
+                  kind: edge.kind,
+                  resolution: edge.resolution,
+                  confidence: edge.confidence
                 };
                 evidence.relation ??= `${edge.kind} ${source.id} -> ${target.id}`;
               } else {
@@ -670,9 +699,7 @@ export async function runCapabilitySmokeCase(candidateValue, kind, runtimeValue,
                     (item) =>
                       sameSymbolIdentity(result?.symbol, source) &&
                       sameSymbolIdentity(item?.parent, target) &&
-                      item?.edge?.sourceId === source.id &&
-                      item?.edge?.targetId === target.id &&
-                      item?.edge?.kind === assertion.kind
+                      isExactEdge(item?.edge, source.id, target.id, assertion.kind)
                   )
                 : [];
               if (matches.length === 1) {
@@ -681,7 +708,9 @@ export async function runCapabilitySmokeCase(candidateValue, kind, runtimeValue,
                 receipt.edge = {
                   sourceId: edge.sourceId,
                   targetId: edge.targetId,
-                  kind: edge.kind
+                  kind: edge.kind,
+                  resolution: edge.resolution,
+                  confidence: edge.confidence
                 };
                 evidence.relation ??= `${edge.kind} ${source.id} -> ${target.id}`;
               } else {
