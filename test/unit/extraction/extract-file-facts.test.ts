@@ -17331,6 +17331,7 @@ describe("source extraction", () => {
         "export const prerender = true;",
         "</script>",
         '<script lang="ts">',
+        'import Nav from "../Nav.svelte";',
         "export let title: string;",
         'function greeting() { return "catalog"; }',
         "</script>",
@@ -17350,10 +17351,21 @@ describe("source extraction", () => {
     ]);
     expect(facts.pendingReferences).toEqual([
       expect.objectContaining({
+        referenceName: "../Nav.svelte",
+        relationKind: "imports"
+      }),
+      expect.objectContaining({
         referenceName: "default",
         relationKind: "routes",
         routeFramework: "sveltekit",
         routeRegistration: "sveltekit-filesystem-page"
+      })
+    ]);
+    expect(facts.importBindings).toEqual([
+      expect.objectContaining({
+        moduleSpecifier: "../Nav.svelte",
+        localName: "Nav",
+        importedName: "default"
       })
     ]);
     expect(facts.referenceScopes).toEqual([

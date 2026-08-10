@@ -5,6 +5,7 @@ import type {
   ArtifactFacts,
   ExportBinding,
   GraphEdge,
+  ImportBinding,
   LocalBinding,
   PendingReference,
   ReferenceScope,
@@ -280,6 +281,7 @@ export function extractSvelteFileFacts(input: SvelteExtractFileFactsInput): Arti
   const pendingReferences: PendingReference[] = [];
   const localBindings: LocalBinding[] = [];
   const referenceScopes: ReferenceScope[] = [];
+  const importBindings: ImportBinding[] = [];
   const exportBindings: ExportBinding[] = [];
   const declarationOrdinals = new Map<string, number>();
 
@@ -382,7 +384,7 @@ export function extractSvelteFileFacts(input: SvelteExtractFileFactsInput): Arti
   });
 
   for (const entry of parsedBlocks) {
-    if (entry.block.kind !== "instance" || entry.sourceFile === null) {
+    if (entry.sourceFile === null) {
       continue;
     }
     const sourceFile = entry.sourceFile;
@@ -392,6 +394,66 @@ export function extractSvelteFileFacts(input: SvelteExtractFileFactsInput): Arti
         entry.block.contentStart + node.getStart(sourceFile),
         entry.block.contentStart + node.getEnd()
       );
+
+    for (const statement of sourceFile.statements) {
+      if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) {
+        continue;
+      }
+      const moduleSpecifier = statement.moduleSpecifier.text;
+      const referenceRange = rangeForNode(statement.moduleSpecifier);
+      pendingReferences.push({
+        id: createEdgeId({
+          sourceId: fileNode.id,
+          targetId: null,
+          kind: "imports",
+          line: referenceRange.start.line,
+          column: referenceRange.start.column,
+          referenceName: moduleSpecifier
+        }),
+        sourceId: fileNode.id,
+        filePath: input.filePath,
+        referenceName: moduleSpecifier,
+        relationKind: "imports",
+        range: referenceRange
+      });
+
+      const importClause = statement.importClause;
+      if (importClause?.name !== undefined) {
+        importBindings.push({
+          moduleSpecifier,
+          localName: importClause.name.text,
+          importedName: "default",
+          range: rangeForNode(importClause.name),
+          ...(importClause.isTypeOnly ? { isTypeOnly: true } : {})
+        });
+      }
+      if (importClause?.namedBindings !== undefined && ts.isNamedImports(importClause.namedBindings)) {
+        for (const element of importClause.namedBindings.elements) {
+          importBindings.push({
+            moduleSpecifier,
+            localName: element.name.text,
+            importedName: element.propertyName?.text ?? element.name.text,
+            range: rangeForNode(element),
+            ...(importClause.isTypeOnly || element.isTypeOnly ? { isTypeOnly: true } : {})
+          });
+        }
+      } else if (
+        importClause?.namedBindings !== undefined &&
+        ts.isNamespaceImport(importClause.namedBindings)
+      ) {
+        importBindings.push({
+          moduleSpecifier,
+          localName: importClause.namedBindings.name.text,
+          importedName: "*",
+          range: rangeForNode(importClause.namedBindings),
+          ...(importClause.isTypeOnly ? { isTypeOnly: true } : {})
+        });
+      }
+    }
+
+    if (entry.block.kind !== "instance") {
+      continue;
+    }
 
     for (const statement of sourceFile.statements) {
       if (ts.isFunctionDeclaration(statement) && statement.name !== undefined) {
@@ -499,7 +561,7 @@ export function extractSvelteFileFacts(input: SvelteExtractFileFactsInput): Arti
     pendingReferences,
     localBindings,
     referenceScopes,
-    importBindings: [],
+    importBindings,
     exportBindings,
     reExportBindings: []
   };

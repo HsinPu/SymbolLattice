@@ -3703,6 +3703,58 @@ describe("TypeScript configuration module resolution", () => {
     );
   });
 
+  it("ignores a missing generated local extends conservatively while tracking its absence", async () => {
+    const project = await createConfiguredProject({
+      "jsconfig.json": JSON.stringify({
+        extends: "./.svelte-kit/tsconfig.json",
+        compilerOptions: {
+          baseUrl: ".",
+          paths: { "$lib/*": ["src/lib/*"] }
+        }
+      }),
+      "src/lib/helper.js": "export function helper() { return 1; }",
+      "src/relative.js": 'import { helper } from "./lib/helper"; export const value = helper();',
+      "src/alias.js": 'import { helper } from "$lib/helper"; export const value = helper();'
+    });
+
+    const configuredResolver = createTypeScriptProjectModuleResolver(project);
+
+    expect(configuredResolver.moduleResolver.resolve("src/relative.js", "./lib/helper")).toEqual({
+      targetFilePath: "src/lib/helper.js",
+      strategy: "relative",
+      configurationPaths: []
+    });
+    expect(configuredResolver.moduleResolver.resolve("src/alias.js", "$lib/helper")).toEqual({
+      targetFilePath: null,
+      strategy: "unresolved",
+      configurationPaths: ["jsconfig.json", ".svelte-kit/tsconfig.json"]
+    });
+    expect(configuredResolver.hasProjectConfigurationResolution("src/alias.js", "$lib/helper")).toBe(false);
+    expect(configuredResolver.configurationInputs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: "jsconfig", path: "jsconfig.json", state: "present" }),
+        expect.objectContaining({
+          kind: "extends",
+          path: ".svelte-kit/tsconfig.json",
+          state: "absent",
+          contentHash: null
+        }),
+        expect.objectContaining({ kind: "tsconfig", path: "tsconfig.json", state: "absent" })
+      ])
+    );
+  });
+
+  it("rejects an ordinary missing local extends instead of masking a configuration typo", async () => {
+    const project = await createConfiguredProject({
+      "tsconfig.json": JSON.stringify({ extends: "./config/typo.json" }),
+      "src/index.ts": "export const value = 1;"
+    });
+
+    expect(() => createTypeScriptProjectModuleResolver(project)).toThrow(
+      /cannot read project-local extends "\.\/config\/typo\.json"/u
+    );
+  });
+
   it("normalizes malformed configs into ProjectConfigurationError", async () => {
     const malformed = await createConfiguredProject({ "tsconfig.json": "{ invalid json" });
 

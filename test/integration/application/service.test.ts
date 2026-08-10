@@ -25866,6 +25866,53 @@ describe("SymbolLatticeService", () => {
     );
   });
 
+  it("indexes SvelteKit source before its generated config exists", async () => {
+    const projectPath = await createInlineProject({
+      "jsconfig.json": JSON.stringify({ extends: "./.svelte-kit/tsconfig.json" }),
+      "src/routes/+page.svelte": "<main>Generated config is intentionally absent</main>",
+      "src/routes/+layout.svelte": [
+        "<script>",
+        'import Nav from "./Nav.svelte";',
+        "</script>",
+        "<Nav />"
+      ].join("\n"),
+      "src/routes/Nav.svelte": "<nav>Navigation</nav>"
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    const indexed = await service.init({ projectPath });
+    const page = (await service.find(projectPath, "src/routes/+page.svelte#default")).symbols[0];
+    const nav = (await service.find(projectPath, "src/routes/Nav.svelte#default")).symbols[0];
+    const snapshot = graphStore.getSnapshot(projectPath);
+    const navFile = snapshot.symbols.find(
+      (symbol) => symbol.kind === "file" && symbol.filePath === "src/routes/Nav.svelte"
+    );
+    const layoutImport = snapshot.edges.find(
+        (edge) =>
+          edge.kind === "imports" &&
+          edge.filePath === "src/routes/+layout.svelte" &&
+          edge.referenceName === "./Nav.svelte"
+      );
+
+    expect(indexed).toMatchObject({ stale: false, counts: { files: 3 } });
+    expect(page).toMatchObject({
+      filePath: "src/routes/+page.svelte",
+      qualifiedName: "src/routes/+page.svelte#default"
+    });
+    expect(nav).toBeDefined();
+    expect(navFile).toBeDefined();
+    expect(layoutImport).toMatchObject({
+      targetId: navFile?.id,
+      resolution: "exact",
+      confidence: 1,
+      evidence: expect.objectContaining({
+        ruleId: "module.relative-specifier",
+        candidateSymbolIds: expect.arrayContaining([navFile?.id])
+      })
+    });
+  });
+
   it("indexes Svelte SFC default components and static SvelteKit filesystem pages", async () => {
     const projectPath = await createInlineProject({
       "src/routes/+page.svelte": [

@@ -54,8 +54,14 @@ interface LoadedConfiguration {
 
 interface LoadedConfigurationChain {
   readonly configurations: readonly LoadedConfiguration[];
-  /** A package-style extends is intentionally not read or trusted by the indexer. */
-  readonly hasExternalExtends: boolean;
+  readonly missingConfigurationInputs: readonly ProjectConfigurationInput[];
+  /** An external or not-yet-generated extends is intentionally not trusted by the indexer. */
+  readonly hasUnavailableExtends: boolean;
+}
+
+interface LocalExtendsResolution {
+  readonly targetPath: string | null;
+  readonly missingRelativePath: string | null;
 }
 
 function sourceHash(sourceText: string): string {
@@ -183,7 +189,7 @@ function resolveLocalExtendsPath(
   projectPath: string,
   parentPath: string,
   specifier: string
-): string {
+): LocalExtendsResolution {
   const isRelativeSpecifier = specifier.startsWith(".") || isAbsolute(specifier);
   if (!isRelativeSpecifier) {
     throw configurationError(
@@ -198,24 +204,25 @@ function resolveLocalExtendsPath(
   const candidates = rawCandidate.endsWith(".json")
     ? [rawCandidate]
     : [rawCandidate, `${rawCandidate}.json`];
-  const targetPath = candidates.find((candidate) => existsSync(candidate));
-  const parentRelativePath = projectRelativePath(projectPath, parentPath) ?? parentPath;
-
-  if (targetPath === undefined) {
+  const candidateRelativePaths = candidates.map((candidate) =>
+    projectRelativePath(projectPath, candidate)
+  );
+  if (candidateRelativePaths.some((candidate) => candidate === null)) {
     throw configurationError(
-      parentRelativePath,
-      `cannot read project-local extends "${specifier}"`
-    );
-  }
-
-  if (projectRelativePath(projectPath, targetPath) === null) {
-    throw configurationError(
-      parentRelativePath,
+      projectRelativePath(projectPath, parentPath) ?? parentPath,
       `extends "${specifier}" resolves outside the project root`
     );
   }
+  const targetPath = candidates.find((candidate) => existsSync(candidate));
 
-  return targetPath;
+  if (targetPath === undefined) {
+    return {
+      targetPath: null,
+      missingRelativePath: candidateRelativePaths[0] ?? null
+    };
+  }
+
+  return { targetPath, missingRelativePath: null };
 }
 
 function loadConfigurationChain(
@@ -224,8 +231,9 @@ function loadConfigurationChain(
   selectedKind: "tsconfig" | "jsconfig"
 ): LoadedConfigurationChain {
   const chain: LoadedConfiguration[] = [];
+  const missingConfigurationInputs: ProjectConfigurationInput[] = [];
   const seenPaths = new Set<string>();
-  let hasExternalExtends = false;
+  let hasUnavailableExtends = false;
 
   function load(absolutePath: string, kind: ProjectConfigurationInput["kind"]): void {
     const key = fileSystemKey(absolutePath);
@@ -270,15 +278,32 @@ function loadConfigurationChain(
     }
 
     if (!extendsValue.startsWith(".") && !isAbsolute(extendsValue)) {
-      hasExternalExtends = true;
+      hasUnavailableExtends = true;
       return;
     }
 
-    load(resolveLocalExtendsPath(projectPath, absolutePath, extendsValue), "extends");
+    const resolution = resolveLocalExtendsPath(projectPath, absolutePath, extendsValue);
+    if (resolution.targetPath === null) {
+      if (resolution.missingRelativePath === null) {
+        throw configurationError(relativePath, `cannot track project-local extends "${extendsValue}"`);
+      }
+      if (resolution.missingRelativePath !== ".svelte-kit/tsconfig.json") {
+        throw configurationError(relativePath, `cannot read project-local extends "${extendsValue}"`);
+      }
+      hasUnavailableExtends = true;
+      missingConfigurationInputs.push({
+        kind: "extends",
+        path: resolution.missingRelativePath,
+        state: "absent",
+        contentHash: null
+      });
+      return;
+    }
+    load(resolution.targetPath, "extends");
   }
 
   load(selectedPath, selectedKind);
-  return { configurations: chain, hasExternalExtends };
+  return { configurations: chain, missingConfigurationInputs, hasUnavailableExtends };
 }
 
 function parseCompilerOptions(
@@ -455,7 +480,10 @@ export function createTypeScriptProjectModuleResolver(input: {
   const selectedPath = resolve(projectPath, selectedInput.path);
   const loadedChain = loadConfigurationChain(projectPath, selectedPath, selectedInput.kind);
   const chain = loadedChain.configurations;
-  const configurationPaths = chain.map((configuration) => configuration.relativePath);
+  const configurationPaths = [
+    ...chain.map((configuration) => configuration.relativePath),
+    ...loadedChain.missingConfigurationInputs.map((configuration) => configuration.path)
+  ];
   const chainInputs = chain.map<ProjectConfigurationInput>((configuration) => ({
     kind: configuration.kind,
     path: configuration.relativePath,
@@ -464,6 +492,7 @@ export function createTypeScriptProjectModuleResolver(input: {
   }));
   const configurationInputs = [
     ...chainInputs,
+    ...loadedChain.missingConfigurationInputs,
     ...(selectedInput.kind === "jsconfig" ? [tsconfigInput] : [])
   ]
     .filter(
@@ -477,7 +506,7 @@ export function createTypeScriptProjectModuleResolver(input: {
       return byPath === 0 ? compareStableText(left.kind, right.kind) : byPath;
     });
 
-  if (loadedChain.hasExternalExtends) {
+  if (loadedChain.hasUnavailableExtends) {
     return {
       moduleResolver: {
         resolve(fromFilePath, moduleSpecifier) {

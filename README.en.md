@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.368.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.369.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## What it is
 
@@ -51,7 +51,7 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.368.0 usability snapshot
+## v0.369.0 usability snapshot
 
 The repeatable smoke matrix checks committed cases against the exported language and framework registries instead of treating README claims as proof.
 
@@ -61,6 +61,7 @@ The repeatable smoke matrix checks committed cases against the exported language
 - The third real-project acceptance uses a fixed Koa commit; JavaScript now proves a bounded strict-mode CommonJS `module.exports` class, literal `require(...)` file dependency, and lexical helper call while keeping overridable `this` dispatch unresolved.
 - The fourth real-project acceptance uses a fixed OpenHarmony `app_samples/ETSUI/CustomComponent` commit; ArkTS preserves complete exact evidence for `@Entry`/`@Component` identity, UI-root `handles`, and literal relative `.ets` imports, while ArkUI component-DSL call depth remains future work.
 - The fifth real-project acceptance uses a fixed commit of the official Vue Router playground; package-style tsconfig extends no longer blocks indexing, one parse-clean `<script setup>` proves its default component, and SFC-local imports plus imported Vue Router handlers carry complete exact evidence.
+- The sixth real-project acceptance uses a fixed commit of the official Svelte RealWorld app; a not-yet-generated `.svelte-kit/tsconfig.json` no longer blocks indexing, and Svelte components, SFC-local imports, and SvelteKit filesystem routes carry complete exact evidence.
 - All 54 languages now prove at least one reliable behavioral or dependency relationship beyond `contains`, completing the first B1 depth-alignment pass.
 - Ruby uses a literal Rails route to a controller method, Shell uses a bounded top-level `export -f` function reference, and SQL uses a bounded view-to-table reference.
 - Astro and Razor validate components bound to static page routes.
