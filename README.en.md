@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.363.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.364.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## What it is
 
@@ -51,11 +51,12 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.363.0 usability snapshot
+## v0.364.0 usability snapshot
 
 The repeatable smoke matrix checks committed cases against the exported language and framework registries instead of treating README claims as proof.
 
 - All 54 registered languages complete `init`, no-op `sync`, changed `sync`, file inventory, full-identity symbol lookup, and a B1 relation receipt.
+- The first real-project acceptance uses a fixed Spring PetClinic commit; Java now resolves same-class private instance helper calls exactly while remaining conservative for overridable general instance dispatch.
 - All 54 languages now prove at least one reliable behavioral or dependency relationship beyond `contains`, completing the first B1 depth-alignment pass.
 - Ruby uses a literal Rails route to a controller method, Shell uses a bounded top-level `export -f` function reference, and SQL uses a bounded view-to-table reference.
 - Astro and Razor validate components bound to static page routes.

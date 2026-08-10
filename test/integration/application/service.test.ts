@@ -3101,13 +3101,17 @@ describe("SymbolLatticeService", () => {
     );
   });
 
-  it("indexes and persists exact Java implicit-static and Python same-file direct calls", async () => {
+  it("indexes and persists exact Java implicit-static, private-instance, and Python same-file direct calls", async () => {
     const projectPath = await createInlineProject({
       "src/ComparisonJavaFixture.java": [
         "public class ComparisonJavaFixture {",
         "  private static void comparisonJavaHelper() {}",
         "  static void comparisonJavaEntry() { comparisonJavaHelper(); }",
         "  void nonStaticEntry() { comparisonJavaHelper(); }",
+        "  private void privateInstanceHelper() {}",
+        "  void privateInstanceEntry() { privateInstanceHelper(); }",
+        "  void packageInstanceHelper() {}",
+        "  void packageInstanceEntry() { packageInstanceHelper(); }",
         "  void instanceOnly() {}",
         "  static void invalidInstanceTarget() { instanceOnly(); }",
         "  static void overloaded(int value) {}",
@@ -3176,10 +3180,18 @@ describe("SymbolLatticeService", () => {
     const javaEntry = symbol(
       "src/ComparisonJavaFixture.java#ComparisonJavaFixture.comparisonJavaEntry"
     );
+    const javaPrivateInstanceHelper = symbol(
+      "src/ComparisonJavaFixture.java#ComparisonJavaFixture.privateInstanceHelper"
+    );
+    const javaPrivateInstanceEntry = symbol(
+      "src/ComparisonJavaFixture.java#ComparisonJavaFixture.privateInstanceEntry"
+    );
     const pythonHelper = symbol("comparison_fixture.py#comparison_python_helper");
     const pythonEntry = symbol("comparison_fixture.py#comparison_python_entry");
     expect(javaHelper).toBeDefined();
     expect(javaEntry).toBeDefined();
+    expect(javaPrivateInstanceHelper).toBeDefined();
+    expect(javaPrivateInstanceEntry).toBeDefined();
     expect(pythonHelper).toBeDefined();
     expect(pythonEntry).toBeDefined();
 
@@ -3203,6 +3215,27 @@ describe("SymbolLatticeService", () => {
     ]);
     const javaCallees = await service.callees(projectPath, javaEntry?.qualifiedName ?? "missing");
     expect(javaCallees.relations.map((relation) => relation.symbol.id)).toEqual([javaHelper?.id]);
+    const javaPrivateInstanceCallees = await service.callees(
+      projectPath,
+      javaPrivateInstanceEntry?.qualifiedName ?? "missing"
+    );
+    expect(javaPrivateInstanceCallees.relations).toEqual([
+      expect.objectContaining({
+        symbol: expect.objectContaining({ id: javaPrivateInstanceHelper?.id }),
+        edge: expect.objectContaining({
+          resolution: "exact",
+          confidence: 1,
+          evidence: expect.objectContaining({
+            ruleId: expect.stringContaining("call.java.member.implicit-instance"),
+            callAccess: expect.objectContaining({
+              visibility: "private",
+              decision: "declaring-class"
+            }),
+            callDispatch: expect.objectContaining({ invocationKind: "implicit-instance" })
+          })
+        })
+      })
+    ]);
 
     const pythonCallers = await service.callers(
       projectPath,
@@ -3232,9 +3265,11 @@ describe("SymbolLatticeService", () => {
 
     expect(
       snapshot.edges.filter(
-        (edge) =>
+          (edge) =>
           edge.kind === "calls" &&
-          (edge.referenceName === "instanceOnly" || edge.referenceName === "overloaded")
+          (edge.referenceName === "instanceOnly" ||
+            edge.referenceName === "overloaded" ||
+            edge.referenceName === "packageInstanceHelper")
       )
     ).toEqual([]);
     expect(
@@ -3260,6 +3295,10 @@ describe("SymbolLatticeService", () => {
         expect.objectContaining({
           receiverKind: "implicit-static",
           methodName: "comparisonJavaHelper"
+        }),
+        expect.objectContaining({
+          receiverKind: "implicit-instance",
+          methodName: "privateInstanceHelper"
         })
       ])
     );
@@ -4455,7 +4494,14 @@ describe("SymbolLatticeService", () => {
     expect(callAt("src/app/Runner.java", 8)).toBeUndefined();
     expect(callAt("src/app/Runner.java", 10)).toBeUndefined();
     expect(callAt("src/app/OrPattern.java", 5)).toBeUndefined();
-    expect(callAt("src/app/RightPattern.java", 6)).toBeUndefined();
+    expect(callAt("src/app/RightPattern.java", 6)).toMatchObject({
+      targetId: symbolId("src/app/RightPattern.java#RightPattern.ready"),
+      resolution: "exact",
+      confidence: 1,
+      evidence: expect.objectContaining({
+        callDispatch: expect.objectContaining({ invocationKind: "implicit-instance" })
+      })
+    });
     expect(callAt("src/app/Assigned.java", 6)).toBeUndefined();
     expect(callAt("src/app/Assigned.java", 7)).toBeUndefined();
     expect(callAt("src/app/Unbraced.java", 5)).toBeUndefined();
@@ -6152,12 +6198,13 @@ describe("SymbolLatticeService", () => {
     const snapshot = graphStore.getSnapshot(projectPath);
     const symbol = (qualifiedName: string) =>
       snapshot.symbols.find((candidate) => candidate.qualifiedName === qualifiedName);
-    const callAt = (line: number) =>
+    const callAt = (line: number, referenceName?: string) =>
       snapshot.edges.find(
         (edge) =>
           edge.kind === "calls" &&
           edge.filePath === "src/app/Runner.java" &&
-          edge.range.start.line === line
+          edge.range.start.line === line &&
+          (referenceName === undefined || edge.referenceName === referenceName)
       );
     const serviceId = symbol("src/api/Service.java#Service")?.id;
     const failureId = symbol("src/api/Failure.java#Failure")?.id;
@@ -6188,7 +6235,7 @@ describe("SymbolLatticeService", () => {
         })
       })
     );
-    expect(callAt(15)?.evidence?.callDispatch).toEqual(
+    expect(callAt(15, "execute")?.evidence?.callDispatch).toEqual(
       expect.objectContaining({
         invocationKind: "lambda",
         receiverTypeSymbolId: serviceId,
@@ -6204,8 +6251,16 @@ describe("SymbolLatticeService", () => {
     expect(callAt(18)?.evidence?.callDispatch).toEqual(
       expect.objectContaining({ invocationKind: "parameter", receiverTypeSymbolId: serviceId })
     );
+    expect(callAt(17, "consume")).toMatchObject({
+      targetId: symbol("src/app/Runner.java#Runner.consume")?.id,
+      resolution: "exact",
+      confidence: 1,
+      evidence: expect.objectContaining({
+        callDispatch: expect.objectContaining({ invocationKind: "implicit-instance" })
+      })
+    });
 
-    for (const line of [10, 14, 16, 17, 20]) {
+    for (const line of [10, 14, 16, 20]) {
       expect(callAt(line)).toBeUndefined();
     }
 

@@ -4741,8 +4741,6 @@ function staticJavaMemberCallReferences(input: {
         const arguments_ = staticJavaArguments(node);
         if (
           receiverPrefix.trim().length === 0 &&
-          "isStatic" in input.callable &&
-          input.callable.isStatic &&
           methodName !== null &&
           arguments_ !== null &&
           !hasCompetingStaticImport(methodName)
@@ -4751,7 +4749,10 @@ function staticJavaMemberCallReferences(input: {
             sourceId: input.callableSymbol.id,
             declaringTypeId: input.declaringType.id,
             filePath: input.extraction.filePath,
-            receiverKind: "implicit-static",
+            receiverKind:
+              "isStatic" in input.callable && input.callable.isStatic
+                ? "implicit-static"
+                : "implicit-instance",
             methodName,
             argumentCount: arguments_.length,
             argumentTypes: arguments_.map((argument) =>

@@ -6,6 +6,18 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.364.0] - 2026-08-10
+
+### Added
+
+- Added the first fixed-commit, real GitHub project acceptance run using Spring PetClinic, with the same source scanned by SymbolLattice and CodeGraph and checked against source-level ground truth.
+- Java now records bare instance-call candidates and resolves them only when the target is one unique, non-static private method declared on the exact caller class.
+
+### Safety and compatibility
+
+- Public, protected, package-visible, inherited, interface, static, statically imported, and otherwise ambiguous bare instance calls remain unresolved instead of producing optimistic exact edges.
+- Artifact extraction advances to `multi-language-ast-v244` and project resolution to `project-resolver-v129`; `sync` re-extracts and reprojects unchanged source once.
+
 ## [0.253.0] - 2026-08-04
 
 ### Added

@@ -8,4 +8,10 @@ public final class ComparisonJavaFixture {
   }
 
   private static void comparisonJavaHelper() {}
+
+  public void comparisonJavaPrivateInstanceEntry() {
+    comparisonJavaPrivateInstanceHelper();
+  }
+
+  private void comparisonJavaPrivateInstanceHelper() {}
 }

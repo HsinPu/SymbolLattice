@@ -13,13 +13,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v243";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v244";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v128";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v129";
 
 /** Hard cap for one source-proven Java exhaustive if/else-if/else assignment join. */
 export const JAVA_EXHAUSTIVE_ASSIGNMENT_JOIN_MAXIMUM_BRANCHES = 8;
@@ -786,6 +786,7 @@ export interface CallDispatchEvidence {
     | "expression"
     | "type-name-static"
     | "implicit-static"
+    | "implicit-instance"
     | "this"
     | "super"
     | "parameter"
@@ -1833,6 +1834,13 @@ export type JavaMemberCallReferenceFact =
   | (JavaMemberCallReferenceBaseFact & {
       /** Bare invocation in a static callable; resolution is locked to the declaring type. */
       readonly receiverKind: "implicit-static";
+    })
+  | (JavaMemberCallReferenceBaseFact & {
+      /**
+       * Bare invocation in an instance callable. Project resolution may select only one
+       * non-static private method declared on this exact class; wider dispatch stays unresolved.
+       */
+      readonly receiverKind: "implicit-instance";
     })
   | (JavaMemberCallReferenceBaseFact & {
       readonly receiverKind: "this" | "super";

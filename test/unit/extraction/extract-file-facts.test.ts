@@ -2694,7 +2694,7 @@ describe("source extraction", () => {
     expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
   });
 
-  it("retains only bounded Java implicit-static and Python same-file top-level direct calls", () => {
+  it("retains only bounded Java implicit-static or private-instance candidates and Python same-file top-level direct calls", () => {
     const javaFacts = extractFileFacts({
       filePath: "src/ComparisonJavaFixture.java",
       language: "java",
@@ -2703,6 +2703,10 @@ describe("source extraction", () => {
         "  private static void comparisonJavaHelper() {}",
         "  static void comparisonJavaEntry() { comparisonJavaHelper(); }",
         "  void instanceEntry() { comparisonJavaHelper(); }",
+        "  private void privateInstanceHelper() {}",
+        "  void privateInstanceEntry() { privateInstanceHelper(); }",
+        "  void packageInstanceHelper() {}",
+        "  void packageInstanceEntry() { packageInstanceHelper(); }",
         "  void instanceHelper() {}",
         "  static void invalidInstanceTarget() { instanceHelper(); }",
         "}"
@@ -2713,6 +2717,21 @@ describe("source extraction", () => {
       expect.objectContaining({
         receiverKind: "implicit-static",
         methodName: "comparisonJavaHelper",
+        argumentCount: 0
+      }),
+      expect.objectContaining({
+        receiverKind: "implicit-instance",
+        methodName: "comparisonJavaHelper",
+        argumentCount: 0
+      }),
+      expect.objectContaining({
+        receiverKind: "implicit-instance",
+        methodName: "privateInstanceHelper",
+        argumentCount: 0
+      }),
+      expect.objectContaining({
+        receiverKind: "implicit-instance",
+        methodName: "packageInstanceHelper",
         argumentCount: 0
       }),
       expect.objectContaining({

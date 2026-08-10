@@ -45,6 +45,13 @@
       "expectedTargets": ["comparisonJavaHelper"]
     },
     {
+      "id": "symbol-lattice-java-private-instance-call",
+      "projectId": "symbol-lattice",
+      "language": "java",
+      "reference": "comparisonJavaPrivateInstanceEntry",
+      "expectedTargets": ["comparisonJavaPrivateInstanceHelper"]
+    },
+    {
       "id": "symbol-lattice-python-function-call",
       "projectId": "symbol-lattice",
       "language": "python",

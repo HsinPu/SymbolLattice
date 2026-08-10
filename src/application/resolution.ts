@@ -8055,6 +8055,7 @@ function javaMethodSetPlan(input: {
     | "expression"
     | "type-name-static"
     | "implicit-static"
+    | "implicit-instance"
     | "this"
     | "super"
     | "parameter"
@@ -8143,6 +8144,16 @@ function javaMethodSetPlan(input: {
       continue;
     }
     for (const declaration of declarationsByOwnerId.get(ownerTypeSymbolId) ?? []) {
+      if (
+        input.invocationKind === "implicit-instance" &&
+        (owner.kind !== "class" ||
+          ownerTypeSymbolId !== input.receiverTypeSymbolId ||
+          input.callerType.symbol.id !== input.receiverTypeSymbolId ||
+          declaration.visibility !== "private" ||
+          declaration.isStatic)
+      ) {
+        continue;
+      }
       if (
         (input.invocationKind === "type-name-static" ||
           input.invocationKind === "implicit-static") &&
@@ -9653,7 +9664,9 @@ function projectJavaCallReferences(input: {
       continue;
     }
     const receiverTypeSymbolId =
-      reference.receiverKind === "this" || reference.receiverKind === "implicit-static"
+      reference.receiverKind === "this" ||
+      reference.receiverKind === "implicit-static" ||
+      reference.receiverKind === "implicit-instance"
         ? declaringType.symbol.id
         : reference.receiverKind === "super"
           ? directSuperEdge?.targetId
