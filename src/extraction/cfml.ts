@@ -30,6 +30,8 @@ interface CfmlFunction {
   readonly name: string;
   readonly start: number;
   readonly end: number;
+  readonly isRemote: boolean;
+  readonly structuralStart: number;
 }
 
 interface CfmlTag {
@@ -75,12 +77,12 @@ function positionFor(lineStarts: readonly number[], offset: number): SourcePosit
       lower = middle + 1;
       continue;
     }
-    return { line: middle + 1, column: offset - start };
+    return { line: middle + 1, column: offset - start + 1 };
   }
   const finalIndex = Math.max(0, lineStarts.length - 1);
   return {
     line: finalIndex + 1,
-    column: Math.max(0, offset - (lineStarts[finalIndex] ?? 0))
+    column: Math.max(1, offset - (lineStarts[finalIndex] ?? 0) + 1)
   };
 }
 
@@ -355,13 +357,29 @@ function directScriptFunctions(
     if (declarationEnd === null) {
       return null;
     }
+    const prefixStart = sourceText.lastIndexOf("\n", Math.max(0, functionStart - 1)) + 1;
     functions.push({
       name,
       start: functionStart,
-      end: declarationEnd
+      end: declarationEnd,
+      isRemote: /(?:^|\s)remote(?:\s|$)/iu.test(linePrefix(sourceText, functionStart)),
+      structuralStart: prefixStart
     });
   }
   return functions;
+}
+
+function hasOnlyDirectCfmlFunctions(
+  sourceText: string,
+  start: number,
+  end: number,
+  functions: readonly CfmlFunction[]
+): boolean {
+  const remainder = sourceText.slice(start, end).split("");
+  for (const fn of functions) {
+    blankRange(remainder, Math.max(0, fn.structuralStart - start), fn.end - start);
+  }
+  return remainder.join("").trim().length === 0;
 }
 
 function tagAt(sourceText: string, start: number): CfmlTag | "none" | "invalid" {
@@ -524,7 +542,9 @@ function tagFunctionName(sourceText: string, tag: CfmlTag): CfmlFunction | null 
   return {
     name,
     start: tag.start + offset,
-    end: tag.start + offset + name.length
+    end: tag.start + offset + name.length,
+    isRemote: false,
+    structuralStart: tag.start
   };
 }
 
@@ -553,7 +573,9 @@ function tagContainerFunctions(
     functions.push({
       name: name.name,
       start: tag.start,
-      end: tags[endIndex]?.end ?? tag.end
+      end: tags[endIndex]?.end ?? tag.end,
+      isRemote: false,
+      structuralStart: tag.start
     });
     index = endIndex + 1;
   }
@@ -612,7 +634,7 @@ export function extractCfmlFileFacts(input: CfmlExtractFileFactsInput): Artifact
 
   function addSymbol(inputSymbol: {
     readonly name: string;
-    readonly kind: Extract<SymbolKind, "class" | "interface" | "function" | "method">;
+    readonly kind: Extract<SymbolKind, "class" | "interface" | "function" | "method" | "entrypoint">;
     readonly qualifiedName: string;
     readonly range: SourceRange;
     readonly isExported: boolean;
@@ -686,9 +708,10 @@ export function extractCfmlFileFacts(input: CfmlExtractFileFactsInput): Artifact
     parent: SymbolNode,
     members: readonly CfmlFunction[],
     ruleId: string
-  ): void {
+  ): ReadonlyArray<{ readonly member: CfmlFunction; readonly symbol: SymbolNode }> {
+    const records: Array<{ readonly member: CfmlFunction; readonly symbol: SymbolNode }> = [];
     for (const member of members) {
-      addSymbol({
+      const symbol = addSymbol({
         name: member.name,
         kind: "method",
         qualifiedName: parent.qualifiedName + "::" + member.name,
@@ -696,6 +719,61 @@ export function extractCfmlFileFacts(input: CfmlExtractFileFactsInput): Artifact
         isExported: false,
         parent,
         containmentRuleId: ruleId
+      });
+      records.push({ member, symbol });
+    }
+    return records;
+  }
+
+  function addRemoteEntrypoints(
+    parent: SymbolNode,
+    members: ReadonlyArray<{ readonly member: CfmlFunction; readonly symbol: SymbolNode }>,
+    structurallyIsolated: boolean
+  ): void {
+    if (!structurallyIsolated || members.length !== 1) {
+      return;
+    }
+    for (const record of members) {
+      if (
+        !record.member.isRemote ||
+        members.filter((candidate) => candidate.member.name.toLowerCase() === record.member.name.toLowerCase())
+          .length !== 1
+      ) {
+        continue;
+      }
+      const range = rangeForSpan(lineStarts, record.member.start, record.member.end);
+      const referenceName = `${parent.name}.${record.member.name}`;
+      const entrypoint = addSymbol({
+        name: `CFML REMOTE ${referenceName}`,
+        kind: "entrypoint",
+        qualifiedName: `${parent.qualifiedName}::entrypoint:remote:${record.member.name}`,
+        range,
+        isExported: true,
+        parent,
+        containmentRuleId: "syntax.cfml.remote-method-entrypoint"
+      });
+      edges.push({
+        id: createEdgeId({
+          sourceId: entrypoint.id,
+          targetId: record.symbol.id,
+          kind: "handles",
+          line: range.start.line,
+          column: range.start.column,
+          referenceName
+        }),
+        sourceId: entrypoint.id,
+        targetId: record.symbol.id,
+        kind: "handles",
+        filePath: input.filePath,
+        range,
+        resolution: "exact",
+        confidence: 1,
+        referenceName,
+        evidence: {
+          ruleId: "syntax.cfml.structurally-isolated-cfc-remote-method-entrypoint",
+          stage: "syntax",
+          candidateSymbolIds: [record.symbol.id]
+        }
       });
     }
   }
@@ -728,7 +806,14 @@ export function extractCfmlFileFacts(input: CfmlExtractFileFactsInput): Artifact
         edges: []
       };
     }
-    addMembers(parent, members, "language.cfml.function.direct-member");
+    const memberRecords = addMembers(parent, members, "language.cfml.function.direct-member");
+    if (isCfcFile(input.filePath) && containers.length === 1 && tags.length === 0) {
+      addRemoteEntrypoints(
+        parent,
+        memberRecords,
+        hasOnlyDirectCfmlFunctions(code, container.bodyStart + 1, container.end - 1, members)
+      );
+    }
   }
 
   let tagContainers = 0;
@@ -783,7 +868,16 @@ export function extractCfmlFileFacts(input: CfmlExtractFileFactsInput): Artifact
       fileRange,
       "language.cfml.cfc.implicit-component"
     );
-    addMembers(parent, bareFunctions, "language.cfml.function.implicit-component-member");
+    const memberRecords = addMembers(
+      parent,
+      bareFunctions,
+      "language.cfml.function.implicit-component-member"
+    );
+    addRemoteEntrypoints(
+      parent,
+      memberRecords,
+      hasOnlyDirectCfmlFunctions(code, 0, code.length, bareFunctions)
+    );
     return facts();
   }
   for (const fn of bareFunctions) {

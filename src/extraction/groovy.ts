@@ -22,6 +22,11 @@ interface GroovyDeclaration {
   readonly name: string;
   readonly start: number;
   readonly end: number;
+  readonly superclass?: {
+    readonly name: string;
+    readonly start: number;
+    readonly end: number;
+  };
 }
 
 interface GroovyIdentifier {
@@ -339,9 +344,32 @@ function directContainerDeclaration(
     return null;
   }
   const closingBrace = matchingDelimiter(sourceText, openingBrace, "{", "}");
-  return closingBrace === null
-    ? null
-    : { kind, name: name.name, start, end: closingBrace + 1 };
+  if (closingBrace === null) {
+    return null;
+  }
+  const header = sourceText.slice(name.end, openingBrace);
+  const superclassMatch =
+    kind === "class"
+      ? /^\s+extends\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*$/u.exec(header)
+      : null;
+  const superclassName = superclassMatch?.[1];
+  const superclassOffset =
+    superclassName === undefined ? -1 : header.indexOf(superclassName, superclassMatch?.index ?? 0);
+  return {
+    kind,
+    name: name.name,
+    start,
+    end: closingBrace + 1,
+    ...(superclassName === undefined || superclassOffset < 0
+      ? {}
+      : {
+          superclass: {
+            name: superclassName,
+            start: name.end + superclassOffset,
+            end: name.end + superclassOffset + superclassName.length
+          }
+        })
+  };
 }
 
 function directFunctionDeclaration(sourceText: string, start: number): GroovyDeclaration | null {
@@ -436,6 +464,21 @@ function staticGroovyDeclarations(sourceText: string): readonly GroovyDeclaratio
   return braceDepth === 0 && parenthesisDepth === 0 && bracketDepth === 0 ? declarations : null;
 }
 
+function hasOnlyGroovyDeclarations(
+  sourceText: string,
+  declarations: readonly GroovyDeclaration[]
+): boolean {
+  const sanitized = sanitizeGroovySource(sourceText);
+  if (sanitized === null) {
+    return false;
+  }
+  const remainder = sanitized.split("");
+  for (const declaration of declarations) {
+    blankSourceSpan(remainder, declaration.start, declaration.end);
+  }
+  return remainder.join("").trim().length === 0;
+}
+
 function symbolKindFor(
   declaration: GroovyDeclaration
 ): "class" | "interface" | "type" | "function" {
@@ -485,7 +528,7 @@ export function extractGroovyFileFacts(input: GroovyExtractFileFactsInput): Arti
     readonly range: SourceRange;
     readonly parent: SymbolNode;
     readonly containmentRuleId: string;
-  }): void {
+  }): SymbolNode {
     const identity = inputSymbol.qualifiedName + "\u0000" + inputSymbol.kind;
     const declarationOrdinal = declarationOrdinals.get(identity) ?? 0;
     declarationOrdinals.set(identity, declarationOrdinal + 1);
@@ -528,10 +571,16 @@ export function extractGroovyFileFacts(input: GroovyExtractFileFactsInput): Arti
         candidateSymbolIds: [symbol.id]
       }
     });
+    return symbol;
   }
 
-  for (const declaration of staticGroovyDeclarations(input.sourceText) ?? []) {
-    addSymbol({
+  const declarations = staticGroovyDeclarations(input.sourceText) ?? [];
+  const declarationSymbols: Array<{
+    readonly declaration: GroovyDeclaration;
+    readonly symbol: SymbolNode;
+  }> = [];
+  for (const declaration of declarations) {
+    const symbol = addSymbol({
       name: declaration.name,
       kind: symbolKindFor(declaration),
       qualifiedName: input.filePath + "#" + declaration.kind + ":" + declaration.name,
@@ -539,6 +588,52 @@ export function extractGroovyFileFacts(input: GroovyExtractFileFactsInput): Arti
       parent: fileNode,
       containmentRuleId: "language.groovy." + declaration.kind + ".direct-top-level"
     });
+    declarationSymbols.push({ declaration, symbol });
+  }
+
+  if (hasOnlyGroovyDeclarations(input.sourceText, declarations)) {
+    for (const source of declarationSymbols) {
+      const superclass = source.declaration.superclass;
+      if (superclass === undefined) {
+        continue;
+      }
+      const sources = declarationSymbols.filter(
+        (candidate) =>
+          candidate.declaration.kind === "class" && candidate.declaration.name === source.declaration.name
+      );
+      const targets = declarationSymbols.filter(
+        (candidate) =>
+          candidate.declaration.kind === "class" && candidate.declaration.name === superclass.name
+      );
+      const target = sources.length === 1 && targets.length === 1 ? targets[0] : undefined;
+      if (target === undefined || target.symbol.id === source.symbol.id) {
+        continue;
+      }
+      const range = rangeForSpan(lineStarts, superclass.start, superclass.end);
+      edges.push({
+        id: createEdgeId({
+          sourceId: source.symbol.id,
+          targetId: target.symbol.id,
+          kind: "extends",
+          line: range.start.line,
+          column: range.start.column,
+          referenceName: superclass.name
+        }),
+        sourceId: source.symbol.id,
+        targetId: target.symbol.id,
+        kind: "extends",
+        filePath: input.filePath,
+        range,
+        resolution: "exact",
+        confidence: 1,
+        referenceName: superclass.name,
+        evidence: {
+          ruleId: "syntax.groovy.same-file.unique-direct-class-superclass",
+          stage: "syntax",
+          candidateSymbolIds: [target.symbol.id]
+        }
+      });
+    }
   }
 
   return {

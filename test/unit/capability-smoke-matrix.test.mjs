@@ -459,20 +459,34 @@ describe("capability smoke matrix contract", () => {
         })
       );
     }
-    for (const id of ["groovy-basic", "cfml-basic"]) {
-      expect(plan.languageCases.find((candidate) => candidate.id === id)?.assertions).toEqual(
-        expect.objectContaining({
-          symbols: expect.arrayContaining([
-            expect.objectContaining({ id: "file", kind: "file" })
-          ]),
-          relations: expect.arrayContaining([expect.objectContaining({
-            command: "file-symbols",
-            source: "file",
-            kind: "contains"
-          })])
-        })
-      );
-    }
+    expect(plan.languageCases.find((candidate) => candidate.id === "groovy-basic")?.assertions).toEqual(
+      expect.objectContaining({
+        symbols: expect.arrayContaining([
+          expect.objectContaining({ id: "child", kind: "class" }),
+          expect.objectContaining({ id: "parent", kind: "class" })
+        ]),
+        relations: expect.arrayContaining([expect.objectContaining({
+          command: "hierarchy",
+          source: "child",
+          target: "parent",
+          kind: "extends"
+        })])
+      })
+    );
+    expect(plan.languageCases.find((candidate) => candidate.id === "cfml-basic")?.assertions).toEqual(
+      expect.objectContaining({
+        symbols: expect.arrayContaining([
+          expect.objectContaining({ id: "entrypoint", kind: "entrypoint" }),
+          expect.objectContaining({ id: "handler", kind: "method" })
+        ]),
+        relations: expect.arrayContaining([expect.objectContaining({
+          command: "impact",
+          source: "entrypoint",
+          target: "handler",
+          kind: "handles"
+        })])
+      })
+    );
     expect(plan.languageCases.find((candidate) => candidate.id === "graphql-basic")?.assertions).toEqual(
       expect.objectContaining({
         symbols: expect.arrayContaining([

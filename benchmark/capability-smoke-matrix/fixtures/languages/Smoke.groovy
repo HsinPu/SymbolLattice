@@ -1,2 +1,2 @@
-def groovyHelper() { 1 }
-def groovyEntry() { groovyHelper() }
+class Parent {}
+class Smoke extends Parent {}

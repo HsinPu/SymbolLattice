@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.360.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.361.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## What it is
 
@@ -51,18 +51,18 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.360.0 usability snapshot
+## v0.361.0 usability snapshot
 
 The repeatable smoke matrix checks committed cases against the exported language and framework registries instead of treating README claims as proof.
 
 - All 54 registered languages complete `init`, no-op `sync`, changed `sync`, file inventory, full-identity symbol lookup, and a B1 relation receipt.
-- Fifty-two now prove a behavioral or dependency relationship beyond `contains`; only Groovy and CFML remain in the B1 depth-alignment queue.
+- All 54 languages now prove at least one reliable behavioral or dependency relationship beyond `contains`, completing the first B1 depth-alignment pass.
 - Ruby uses a literal Rails route to a controller method, Shell uses a bounded top-level `export -f` function reference, and SQL uses a bounded view-to-table reference.
 - Astro and Razor validate components bound to static page routes.
 - Terraform validates an output traversal to one unique same-file resource; GraphQL validates a type implementing one interface; Proto validates an RPC referencing unique same-file request and response messages.
 - SQL validates a bounded view-to-table reference. These schema and IaC relations do not claim complete dialect, schema-validation, plan/apply, or runtime-linkage semantics.
 - Relation receipts bind complete symbol identities. Edge-based receipts also require exact endpoints, `resolution: exact`, and `confidence: 1`; file-structure receipts require an exact path and complete symbol identity.
-- Groovy and CFML currently complete lifecycle B1 through exact file structure; dynamic general calls remain conservatively excluded from exact edges.
+- Groovy validates unique direct same-file class inheritance; CFML validates a structurally isolated `.cfc` remote entry point bound to its handler. Dynamic general calls remain conservatively excluded from exact edges.
 - Representative React Router, Next.js, Vue Router, SvelteKit, Astro, Spring Web, FastAPI, Django, and ASP.NET Core cases produce the expected route.
 - Nuxt Vue files scan and query successfully, but there is no dedicated Nuxt route capability yet.
 
