@@ -6,6 +6,18 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.365.0] - 2026-08-10
+
+### Added
+
+- Added a fixed-commit real-project acceptance run for the official NestJS TypeScript starter, using identical SymbolLattice and CodeGraph source plus source-level ground truth.
+- Recorded reproducible lifecycle, persisted-query, exact relative-import, exact NestJS route, native Jest/build, and isolated one-file changed-sync receipts.
+
+### Safety and compatibility
+
+- No extractor or resolver semantics changed: the real project confirmed the existing TypeScript B1 import and route contracts.
+- Nest dependency-injection member dispatch remains unresolved because providers can be replaced at runtime; the acceptance does not manufacture an optimistic exact call edge.
+
 ## [0.364.0] - 2026-08-10
 
 ### Added
