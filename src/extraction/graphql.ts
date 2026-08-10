@@ -21,6 +21,11 @@ interface GraphqlDeclaration {
   readonly name: string;
   readonly start: number;
   readonly end: number;
+  readonly implementedInterface?: {
+    readonly name: string;
+    readonly start: number;
+    readonly end: number;
+  };
 }
 
 interface GraphqlToken {
@@ -369,8 +374,22 @@ function directBracedDefinition(
   if (closingToken === undefined) {
     return null;
   }
+  const header = tokens.slice(index + 2, opening);
+  const implementedInterface =
+    (kind === "type" || kind === "interface") &&
+    header.length === 2 &&
+    header[0]?.text === "implements" &&
+    header[1]?.kind === "name"
+      ? { name: header[1].text, start: header[1].start, end: header[1].end }
+      : undefined;
   return {
-    declaration: { kind, name: name.text, start: keyword.start, end: closingToken.end },
+    declaration: {
+      kind,
+      name: name.text,
+      start: keyword.start,
+      end: closingToken.end,
+      ...(implementedInterface === undefined ? {} : { implementedInterface })
+    },
     endTokenIndex: closing
   };
 }
@@ -559,6 +578,10 @@ export function extractGraphqlFileFacts(input: GraphqlExtractFileFactsInput): Ar
   const symbols: SymbolNode[] = [fileNode];
   const edges: GraphEdge[] = [];
   const declarationOrdinals = new Map<string, number>();
+  const declarationSymbols: Array<{
+    readonly declaration: GraphqlDeclaration;
+    readonly symbol: SymbolNode;
+  }> = [];
 
   for (const declaration of declarations) {
     const kind = symbolKindFor(declaration.kind);
@@ -583,6 +606,7 @@ export function extractGraphqlFileFacts(input: GraphqlExtractFileFactsInput): Ar
       declarationOrdinal
     };
     symbols.push(symbol);
+    declarationSymbols.push({ declaration, symbol });
     edges.push({
       id: createEdgeId({
         sourceId: fileNode.id,
@@ -604,6 +628,51 @@ export function extractGraphqlFileFacts(input: GraphqlExtractFileFactsInput): Ar
         ruleId: `language.graphql.${declaration.kind}.direct-definition`,
         stage: "syntax",
         candidateSymbolIds: [symbol.id]
+      }
+    });
+  }
+
+  for (const source of declarationSymbols) {
+    const implemented = source.declaration.implementedInterface;
+    if (implemented === undefined) {
+      continue;
+    }
+    const sourceCandidates = declarationSymbols.filter(
+      (candidate) =>
+        candidate.declaration.kind === source.declaration.kind &&
+        candidate.declaration.name === source.declaration.name
+    );
+    const targets = declarationSymbols.filter(
+      (candidate) =>
+        candidate.declaration.kind === "interface" &&
+        candidate.declaration.name === implemented.name
+    );
+    const target = sourceCandidates.length === 1 && targets.length === 1 ? targets[0] : undefined;
+    if (target === undefined) {
+      continue;
+    }
+    const range = rangeFor(lineStarts, implemented.start, implemented.end);
+    edges.push({
+      id: createEdgeId({
+        sourceId: source.symbol.id,
+        targetId: target.symbol.id,
+        kind: "extends",
+        line: range.start.line,
+        column: range.start.column,
+        referenceName: implemented.name
+      }),
+      sourceId: source.symbol.id,
+      targetId: target.symbol.id,
+      kind: "extends",
+      filePath: input.filePath,
+      range,
+      resolution: "exact",
+      confidence: 1,
+      referenceName: implemented.name,
+      evidence: {
+        ruleId: "syntax.graphql.same-file.unique-direct-interface-implementation",
+        stage: "syntax",
+        candidateSymbolIds: [target.symbol.id]
       }
     });
   }

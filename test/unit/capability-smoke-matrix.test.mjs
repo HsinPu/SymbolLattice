@@ -407,20 +407,20 @@ describe("capability smoke matrix contract", () => {
         })
       );
     }
-    for (const id of ["terraform-basic"]) {
-      expect(plan.languageCases.find((candidate) => candidate.id === id)?.assertions).toEqual(
-        expect.objectContaining({
-          symbols: expect.arrayContaining([
-            expect.objectContaining({ id: "file", kind: "file" })
-          ]),
-          relations: expect.arrayContaining([expect.objectContaining({
-            command: "file-symbols",
-            source: "file",
-            kind: "contains"
-          })])
-        })
-      );
-    }
+    expect(plan.languageCases.find((candidate) => candidate.id === "terraform-basic")?.assertions).toEqual(
+      expect.objectContaining({
+        symbols: expect.arrayContaining([
+          expect.objectContaining({ id: "output", kind: "variable" }),
+          expect.objectContaining({ id: "resource", kind: "resource" })
+        ]),
+        relations: expect.arrayContaining([expect.objectContaining({
+          command: "callees",
+          source: "output",
+          target: "resource",
+          kind: "references"
+        })])
+      })
+    );
     expect(plan.languageCases.find((candidate) => candidate.id === "nix-basic")?.assertions).toEqual(
       expect.objectContaining({
         relations: expect.arrayContaining([expect.objectContaining({
@@ -459,7 +459,7 @@ describe("capability smoke matrix contract", () => {
         })
       );
     }
-    for (const id of ["graphql-basic", "proto-basic", "groovy-basic", "cfml-basic"]) {
+    for (const id of ["groovy-basic", "cfml-basic"]) {
       expect(plan.languageCases.find((candidate) => candidate.id === id)?.assertions).toEqual(
         expect.objectContaining({
           symbols: expect.arrayContaining([
@@ -473,6 +473,33 @@ describe("capability smoke matrix contract", () => {
         })
       );
     }
+    expect(plan.languageCases.find((candidate) => candidate.id === "graphql-basic")?.assertions).toEqual(
+      expect.objectContaining({
+        symbols: expect.arrayContaining([
+          expect.objectContaining({ id: "type", kind: "class" }),
+          expect.objectContaining({ id: "interface", kind: "interface" })
+        ]),
+        relations: expect.arrayContaining([expect.objectContaining({
+          command: "hierarchy",
+          source: "type",
+          target: "interface",
+          kind: "extends"
+        })])
+      })
+    );
+    expect(plan.languageCases.find((candidate) => candidate.id === "proto-basic")?.assertions).toEqual(
+      expect.objectContaining({
+        symbols: expect.arrayContaining([
+          expect.objectContaining({ id: "rpc", kind: "method" }),
+          expect.objectContaining({ id: "request", kind: "class" }),
+          expect.objectContaining({ id: "response", kind: "class" })
+        ]),
+        relations: expect.arrayContaining([
+          expect.objectContaining({ command: "callees", source: "rpc", target: "request", kind: "references" }),
+          expect.objectContaining({ command: "callees", source: "rpc", target: "response", kind: "references" })
+        ])
+      })
+    );
     expect(plan.languageCases.find((candidate) => candidate.id === "ruby-basic")?.assertions).toEqual(
       expect.objectContaining({
         symbols: expect.arrayContaining([expect.objectContaining({ id: "handler", kind: "method" })]),

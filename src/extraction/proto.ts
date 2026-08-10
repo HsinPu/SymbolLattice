@@ -46,6 +46,15 @@ interface ProtoRpc {
   readonly name: string;
   readonly start: number;
   readonly end: number;
+  readonly requestType: ProtoRpcMessageType;
+  readonly responseType: ProtoRpcMessageType;
+}
+
+interface ProtoRpcMessageType {
+  readonly name: string;
+  readonly start: number;
+  readonly end: number;
+  readonly qualified: boolean;
 }
 
 interface ParsedProtoRpc {
@@ -315,22 +324,41 @@ function directProtoDeclaration(
   };
 }
 
-function qualifiedMessageTypeEnd(tokens: readonly ProtoToken[], start: number): number | null {
+function protoRpcMessageType(
+  tokens: readonly ProtoToken[],
+  start: number
+): { readonly type: ProtoRpcMessageType; readonly endTokenIndex: number } | null {
   let index = start;
+  const firstToken = tokens[index];
+  let qualified = false;
   if (tokens[index]?.text === ".") {
+    qualified = true;
     index += 1;
   }
-  if (tokens[index]?.kind !== "name") {
+  const firstName = tokens[index];
+  if (firstName?.kind !== "name") {
     return null;
   }
+  let finalName = firstName;
   index += 1;
   while (tokens[index]?.text === ".") {
-    if (tokens[index + 1]?.kind !== "name") {
+    const nextName = tokens[index + 1];
+    if (nextName?.kind !== "name") {
       return null;
     }
+    qualified = true;
+    finalName = nextName;
     index += 2;
   }
-  return index;
+  return {
+    type: {
+      name: finalName.text,
+      start: firstToken?.start ?? firstName.start,
+      end: finalName.end,
+      qualified
+    },
+    endTokenIndex: index
+  };
 }
 
 function directProtoRpc(
@@ -347,11 +375,11 @@ function directProtoRpc(
   if (tokens[cursor]?.text === "stream") {
     cursor += 1;
   }
-  const requestEnd = qualifiedMessageTypeEnd(tokens, cursor);
-  if (requestEnd === null || tokens[requestEnd]?.text !== ")" || tokens[requestEnd + 1]?.text !== "returns") {
+  const request = protoRpcMessageType(tokens, cursor);
+  if (request === null || tokens[request.endTokenIndex]?.text !== ")" || tokens[request.endTokenIndex + 1]?.text !== "returns") {
     return null;
   }
-  cursor = requestEnd + 2;
+  cursor = request.endTokenIndex + 2;
   if (tokens[cursor]?.text !== "(") {
     return null;
   }
@@ -359,17 +387,23 @@ function directProtoRpc(
   if (tokens[cursor]?.text === "stream") {
     cursor += 1;
   }
-  const responseEnd = qualifiedMessageTypeEnd(tokens, cursor);
-  if (responseEnd === null || tokens[responseEnd]?.text !== ")" || tokens[responseEnd + 1]?.text !== ";") {
+  const response = protoRpcMessageType(tokens, cursor);
+  if (response === null || tokens[response.endTokenIndex]?.text !== ")" || tokens[response.endTokenIndex + 1]?.text !== ";") {
     return null;
   }
-  const semicolonIndex = responseEnd + 1;
+  const semicolonIndex = response.endTokenIndex + 1;
   const semicolon = tokens[semicolonIndex];
   if (semicolon === undefined || semicolonIndex >= closingTokenIndex) {
     return null;
   }
   return {
-    rpc: { name: name.text, start: keyword.start, end: semicolon.end },
+    rpc: {
+      name: name.text,
+      start: keyword.start,
+      end: semicolon.end,
+      requestType: request.type,
+      responseType: response.type
+    },
     endTokenIndex: semicolonIndex
   };
 }
@@ -569,6 +603,15 @@ export function extractProtoFileFacts(input: ProtoExtractFileFactsInput): Artifa
   const symbols: SymbolNode[] = [fileNode];
   const edges: GraphEdge[] = [];
   const declarationOrdinals = new Map<string, number>();
+  const declarationSymbols: Array<{
+    readonly declaration: ProtoDeclaration;
+    readonly symbol: SymbolNode;
+  }> = [];
+  const rpcSymbols: Array<{
+    readonly rpc: ProtoRpc;
+    readonly symbol: SymbolNode;
+    readonly serviceId: string;
+  }> = [];
 
   function addSymbol(inputSymbol: {
     readonly name: string;
@@ -637,11 +680,12 @@ export function extractProtoFileFacts(input: ProtoExtractFileFactsInput): Artifa
       parent: fileNode,
       containmentRuleId: `language.proto.${declaration.kind}.direct-definition`
     });
+    declarationSymbols.push({ declaration, symbol });
     if (declaration.kind !== "service") {
       continue;
     }
     for (const rpc of directServiceRpcs(tokens, declaration)) {
-      addSymbol({
+      const rpcSymbol = addSymbol({
         name: rpc.name,
         kind: "method",
         qualifiedName: `${symbol.qualifiedName}::${rpc.name}`,
@@ -650,6 +694,68 @@ export function extractProtoFileFacts(input: ProtoExtractFileFactsInput): Artifa
         parent: symbol,
         containmentRuleId: "language.proto.rpc.direct-service-member"
       });
+      rpcSymbols.push({ rpc, symbol: rpcSymbol, serviceId: symbol.id });
+    }
+  }
+
+  const hasImport = tokens.some((token) => token.text === "import");
+  if (!hasImport) {
+    for (const source of rpcSymbols) {
+      const duplicateRpc = rpcSymbols.filter(
+        (candidate) => candidate.serviceId === source.serviceId && candidate.rpc.name === source.rpc.name
+      ).length !== 1;
+      const resolveMessage = (type: ProtoRpcMessageType) => {
+        if (type.qualified) {
+          return undefined;
+        }
+        const candidates = declarationSymbols.filter(
+          (candidate) =>
+            candidate.declaration.kind === "message" && candidate.declaration.name === type.name
+        );
+        return candidates.length === 1 ? candidates[0] : undefined;
+      };
+      const request = resolveMessage(source.rpc.requestType);
+      const response = resolveMessage(source.rpc.responseType);
+      if (duplicateRpc || request === undefined || response === undefined) {
+        continue;
+      }
+      for (const relation of [
+        {
+          type: source.rpc.requestType,
+          target: request,
+          ruleId: "syntax.proto.same-file.unique-rpc-request-message-reference"
+        },
+        {
+          type: source.rpc.responseType,
+          target: response,
+          ruleId: "syntax.proto.same-file.unique-rpc-response-message-reference"
+        }
+      ] as const) {
+        const range = rangeForSpan(lineStarts, relation.type.start, relation.type.end);
+        edges.push({
+          id: createEdgeId({
+            sourceId: source.symbol.id,
+            targetId: relation.target.symbol.id,
+            kind: "references",
+            line: range.start.line,
+            column: range.start.column,
+            referenceName: relation.type.name
+          }),
+          sourceId: source.symbol.id,
+          targetId: relation.target.symbol.id,
+          kind: "references",
+          filePath: input.filePath,
+          range,
+          resolution: "exact",
+          confidence: 1,
+          referenceName: relation.type.name,
+          evidence: {
+            ruleId: relation.ruleId,
+            stage: "syntax",
+            candidateSymbolIds: [relation.target.symbol.id]
+          }
+        });
+      }
     }
   }
 

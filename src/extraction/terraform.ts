@@ -24,6 +24,8 @@ interface TerraformBlock {
   readonly labels: readonly string[];
   readonly start: number;
   readonly end: number;
+  readonly bodyStart: number;
+  readonly bodyEnd: number;
 }
 
 interface TerraformSymbolShape {
@@ -76,12 +78,12 @@ function positionFor(lineStarts: readonly number[], offset: number): SourcePosit
       lower = middle + 1;
       continue;
     }
-    return { line: middle + 1, column: offset - start };
+    return { line: middle + 1, column: offset - start + 1 };
   }
   const finalIndex = Math.max(0, lineStarts.length - 1);
   return {
     line: finalIndex + 1,
-    column: Math.max(0, offset - (lineStarts[finalIndex] ?? 0))
+    column: Math.max(1, offset - (lineStarts[finalIndex] ?? 0) + 1)
   };
 }
 
@@ -343,7 +345,34 @@ function terraformBlockAt(
   if (end === null) {
     return null;
   }
-  return { kind, labels, start, end: end + 1 };
+  return { kind, labels, start, end: end + 1, bodyStart: index + 1, bodyEnd: end };
+}
+
+interface TerraformOutputResourceTraversal {
+  readonly address: string;
+  readonly start: number;
+  readonly end: number;
+}
+
+function directOutputResourceTraversal(
+  code: string,
+  block: TerraformBlock
+): TerraformOutputResourceTraversal | null {
+  if (block.kind !== "output") {
+    return null;
+  }
+  const body = code.slice(block.bodyStart, block.bodyEnd);
+  const match = /^\s*value\s*=\s*([A-Za-z0-9_-]+)\.([A-Za-z0-9_-]+)\.[A-Za-z0-9_-]+\s*$/u.exec(body);
+  if (match === null) {
+    return null;
+  }
+  const address = `${match[1]}.${match[2]}`;
+  const relativeStart = body.indexOf(address, match.index);
+  if (relativeStart === -1) {
+    return null;
+  }
+  const start = block.bodyStart + relativeStart;
+  return { address, start, end: start + address.length };
 }
 
 /**
@@ -481,6 +510,7 @@ export function extractTerraformFileFacts(input: TerraformExtractFileFactsInput)
   const localBindings: LocalBinding[] = [];
   const exportBindings: ExportBinding[] = [];
   const declarationOrdinals = new Map<string, number>();
+  const blockSymbols: Array<{ readonly block: TerraformBlock; readonly symbol: SymbolNode }> = [];
 
   function addContainment(symbol: SymbolNode, range: SourceRange, ruleId: string): void {
     edges.push({
@@ -508,7 +538,9 @@ export function extractTerraformFileFacts(input: TerraformExtractFileFactsInput)
     });
   }
 
-  for (const block of terraformBlocks(input.sourceText)) {
+  const blocks = terraformBlocks(input.sourceText);
+  const code = terraformCodeMask(input.sourceText);
+  for (const block of blocks) {
     const shape = symbolShape(block);
     const range = rangeForSpan(lineStarts, block.start, block.end);
     const qualifiedName = input.filePath + "#" + shape.qualifiedSuffix;
@@ -531,6 +563,7 @@ export function extractTerraformFileFacts(input: TerraformExtractFileFactsInput)
       declarationOrdinal
     };
     symbols.push(symbol);
+    blockSymbols.push({ block, symbol });
     addContainment(symbol, range, shape.containmentRuleId);
     localBindings.push({
       name: shape.localBindingName,
@@ -542,6 +575,48 @@ export function extractTerraformFileFacts(input: TerraformExtractFileFactsInput)
         localName: shape.localBindingName,
         exportedName: shape.exportName,
         range
+      });
+    }
+  }
+
+  if (code !== null) {
+    for (const source of blockSymbols) {
+      const traversal = directOutputResourceTraversal(code, source.block);
+      if (traversal === null) {
+        continue;
+      }
+      const targets = blockSymbols.filter(
+        (candidate) =>
+          candidate.block.kind === "resource" &&
+          candidate.block.labels.join(".") === traversal.address
+      );
+      const target = targets.length === 1 ? targets[0] : undefined;
+      if (target === undefined) {
+        continue;
+      }
+      const range = rangeForSpan(lineStarts, traversal.start, traversal.end);
+      edges.push({
+        id: createEdgeId({
+          sourceId: source.symbol.id,
+          targetId: target.symbol.id,
+          kind: "references",
+          line: range.start.line,
+          column: range.start.column,
+          referenceName: traversal.address
+        }),
+        sourceId: source.symbol.id,
+        targetId: target.symbol.id,
+        kind: "references",
+        filePath: input.filePath,
+        range,
+        resolution: "exact",
+        confidence: 1,
+        referenceName: traversal.address,
+        evidence: {
+          ruleId: "syntax.terraform.same-file.unique-output-resource-traversal",
+          stage: "syntax",
+          candidateSymbolIds: [target.symbol.id]
+        }
       });
     }
   }
