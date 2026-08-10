@@ -1,3 +1,5 @@
+import ts from "typescript";
+
 import {
   createEdgeId,
   createSymbolId,
@@ -5,6 +7,7 @@ import {
   type ExportBinding,
   type GraphEdge,
   type LocalBinding,
+  type PendingReference,
   type SourcePosition,
   type SourceRange,
   type SymbolNode
@@ -25,6 +28,40 @@ interface ArkTsComponentDeclaration {
 }
 
 const FILE_SCOPE_ID = "arkts:file";
+
+interface ArkTsStaticImport {
+  readonly specifier: string;
+  readonly start: number;
+  readonly end: number;
+}
+
+function arkTsStaticImports(
+  sourceText: string,
+  filePath: string
+): readonly ArkTsStaticImport[] {
+  const sourceFile = ts.createSourceFile(
+    filePath,
+    sourceText,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS
+  );
+  const imports: ArkTsStaticImport[] = [];
+  for (const statement of sourceFile.statements) {
+    if (!ts.isImportDeclaration(statement)) {
+      break;
+    }
+    if (!ts.isStringLiteral(statement.moduleSpecifier)) {
+      continue;
+    }
+    imports.push({
+      specifier: statement.moduleSpecifier.text,
+      start: statement.moduleSpecifier.getStart(sourceFile),
+      end: statement.moduleSpecifier.getEnd()
+    });
+  }
+  return imports;
+}
 
 function lineStartsFor(sourceText: string): readonly number[] {
   const starts = [0];
@@ -338,10 +375,30 @@ export function extractArkTsFileFacts(input: ArkTsExtractFileFactsInput): Artifa
   };
   const symbols: SymbolNode[] = [fileNode];
   const edges: GraphEdge[] = [];
+  const pendingReferences: PendingReference[] = [];
   const localBindings: LocalBinding[] = [];
   const exportBindings: ExportBinding[] = [];
   const componentOrdinals = new Map<string, number>();
   const entrypointOrdinals = new Map<string, number>();
+
+  for (const imported of arkTsStaticImports(input.sourceText, input.filePath)) {
+    const range = rangeForSpan(lineStarts, imported.start, imported.end);
+    pendingReferences.push({
+      id: createEdgeId({
+        sourceId: fileNode.id,
+        targetId: null,
+        kind: "imports",
+        line: range.start.line,
+        column: range.start.column,
+        referenceName: imported.specifier
+      }),
+      sourceId: fileNode.id,
+      filePath: input.filePath,
+      referenceName: imported.specifier,
+      relationKind: "imports",
+      range
+    });
+  }
 
   function addContainment(target: SymbolNode, range: SourceRange, ruleId: string): void {
     edges.push({
@@ -457,7 +514,7 @@ export function extractArkTsFileFacts(input: ArkTsExtractFileFactsInput): Artifa
   return {
     symbols,
     edges,
-    pendingReferences: [],
+    pendingReferences,
     localBindings,
     referenceScopes: [],
     importBindings: [],

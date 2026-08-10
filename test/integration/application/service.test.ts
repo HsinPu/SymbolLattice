@@ -11263,6 +11263,62 @@ describe("SymbolLatticeService", () => {
     });
   });
 
+  it("persists exact ArkTS static relative file dependencies across reopen", async () => {
+    const projectPath = await createInlineProject({
+      "src/pages/Index.ets": [
+        "import { TopView } from '../common/topView'",
+        "@Entry",
+        "@Component",
+        "struct Index {",
+        "  build() { TopView() }",
+        "}",
+        ""
+      ].join("\n"),
+      "src/common/topView.ets": [
+        "@Component",
+        "export struct TopView {",
+        "  build() {}",
+        "}",
+        ""
+      ].join("\n")
+    });
+    const service = createService();
+    const initialized = await service.init({ projectPath });
+
+    const topView = await service.fileView(projectPath, "src/common/topView.ets", {
+      symbolsOnly: true
+    });
+    expect(topView.dependents).toEqual([
+      expect.objectContaining({
+        filePath: "src/pages/Index.ets",
+        edgeKinds: ["imports"],
+        edgeCount: 1,
+        edges: [
+          expect.objectContaining({
+            kind: "imports",
+            resolution: "exact",
+            confidence: 1,
+            evidence: expect.objectContaining({
+              ruleId: "module.relative-specifier",
+              stage: "module",
+              candidateSymbolIds: expect.any(Array)
+            })
+          })
+        ]
+      })
+    ]);
+    const dependency = topView.dependents[0]!.edges[0]!;
+    expect(dependency.evidence?.candidateSymbolIds).toContain(dependency.targetId);
+
+    const noOp = await service.sync({ projectPath });
+    expect(noOp.generationId).toBe(initialized.generationId);
+    const reopened = createService();
+    expect(
+      (await reopened.fileView(projectPath, "src/common/topView.ets", { symbolsOnly: true }))
+        .dependents
+    ).toEqual(topView.dependents);
+  });
+
   it("persists exact JavaScript CommonJS export classes and local file dependencies", async () => {
     const projectPath = await createInlineProject({
       "lib/application.js": [

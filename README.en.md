@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.366.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.367.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## What it is
 
@@ -51,7 +51,7 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.366.0 usability snapshot
+## v0.367.0 usability snapshot
 
 The repeatable smoke matrix checks committed cases against the exported language and framework registries instead of treating README claims as proof.
 
@@ -59,6 +59,7 @@ The repeatable smoke matrix checks committed cases against the exported language
 - The first real-project acceptance uses a fixed Spring PetClinic commit; Java now resolves same-class private instance helper calls exactly while remaining conservative for overridable general instance dispatch.
 - The second real-project acceptance uses a fixed NestJS TypeScript starter commit; relative imports and the `GET /` route carry complete exact evidence, while runtime-replaceable DI method dispatch remains unresolved.
 - The third real-project acceptance uses a fixed Koa commit; JavaScript now proves a bounded strict-mode CommonJS `module.exports` class, literal `require(...)` file dependency, and lexical helper call while keeping overridable `this` dispatch unresolved.
+- The fourth real-project acceptance uses a fixed OpenHarmony `app_samples/ETSUI/CustomComponent` commit; ArkTS preserves complete exact evidence for `@Entry`/`@Component` identity, UI-root `handles`, and literal relative `.ets` imports, while ArkUI component-DSL call depth remains future work.
 - All 54 languages now prove at least one reliable behavioral or dependency relationship beyond `contains`, completing the first B1 depth-alignment pass.
 - Ruby uses a literal Rails route to a controller method, Shell uses a bounded top-level `export -f` function reference, and SQL uses a bounded view-to-table reference.
 - Astro and Razor validate components bound to static page routes.

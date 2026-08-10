@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.366.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
+> v0.367.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
 
 ## 專案用途
 
@@ -51,7 +51,7 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.366.0 可用性快照
+## v0.367.0 可用性快照
 
 可重跑的 smoke matrix 會從正式語言與框架 registry 核對測試案例，而不是依 README 宣稱支援。
 
@@ -59,6 +59,7 @@ node dist/cli/main.js explore "Trace createOrder to persistence" --project /path
 - 第一個真實專案驗收使用固定 commit 的 Spring PetClinic；Java 可精確解析同類別 private instance helper 呼叫，同時對可覆寫的一般 instance dispatch 保持保守。
 - 第二個真實專案驗收使用固定 commit 的 NestJS TypeScript starter；相對 import 與 `GET /` route 具有完整 exact evidence，runtime 可替換的 DI method dispatch 維持 unresolved。
 - 第三個真實專案驗收使用固定 commit 的 Koa；JavaScript 可精確辨識受限的 strict-mode CommonJS `module.exports` class、literal `require(...)` 檔案依賴與 lexical helper call，同時對可覆寫的 `this` dispatch 保持 unresolved。
+- 第四個真實專案驗收使用固定 commit 的 OpenHarmony `app_samples/ETSUI/CustomComponent`；ArkTS 可保留 `@Entry`／`@Component` identity、UI root `handles` 與 literal relative `.ets` import 的完整 exact evidence，ArkUI component DSL 呼叫深度留待後續版本。
 - 54 種語言皆已有至少一種非純 `contains` 的可靠行為或依賴關係，完成第一輪 B1 深度對齊。
 - Ruby 以 Rails literal route 到 controller method、Shell 以頂層 `export -f` function reference、SQL 以 bounded view-to-table reference 完成深度對齊。
 - Astro 與 Razor 驗證元件到靜態頁面路由。

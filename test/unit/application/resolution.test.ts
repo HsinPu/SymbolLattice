@@ -13,6 +13,9 @@ import type { SourceDocument } from "../../../src/ports/source-catalog.js";
 const temporaryProjectPaths: string[] = [];
 
 function languageForPath(relativePath: string): SourceDocument["language"] {
+  if (/\.ets$/i.test(relativePath)) {
+    return "arkts";
+  }
   if (/\.svelte$/i.test(relativePath)) {
     return "svelte";
   }
@@ -38,7 +41,7 @@ async function createConfiguredProject(
   return {
     projectPath,
     sourceDocuments: Object.entries(files)
-      .filter(([relativePath]) => /\.(?:[cm]?[jt]sx?|svelte|astro)$/i.test(relativePath))
+      .filter(([relativePath]) => /\.(?:[cm]?[jt]sx?|svelte|astro|ets)$/i.test(relativePath))
       .map(([relativePath, sourceText]) => ({
         absolutePath: resolve(projectPath, ...relativePath.split("/")),
         relativePath,
@@ -72,6 +75,33 @@ afterEach(async () => {
 });
 
 describe("project reference resolution", () => {
+  it("resolves a unique extensionless ArkTS import and rejects cross-extension ambiguity", async () => {
+    const uniqueProject = await createConfiguredProject({
+      "src/common/TopView.ets": "@Component struct TopView {}",
+      "src/pages/Index.ets": 'import { TopView } from "../common/TopView";\n@Entry @Component struct Index {}'
+    });
+    const uniqueResolver = createTypeScriptProjectModuleResolver(uniqueProject);
+    expect(uniqueResolver.moduleResolver.resolve("src/pages/Index.ets", "../common/TopView")).toEqual({
+      targetFilePath: "src/common/TopView.ets",
+      strategy: "relative",
+      configurationPaths: []
+    });
+
+    const ambiguousProject = await createConfiguredProject({
+      "src/common/TopView.ets": "@Component struct TopView {}",
+      "src/common/TopView.ts": "export class TopView {}",
+      "src/pages/Index.ets": 'import { TopView } from "../common/TopView";\n@Entry @Component struct Index {}'
+    });
+    const ambiguousResolver = createTypeScriptProjectModuleResolver(ambiguousProject);
+    expect(
+      ambiguousResolver.moduleResolver.resolve("src/pages/Index.ets", "../common/TopView")
+    ).toEqual({
+      targetFilePath: null,
+      strategy: "unresolved",
+      configurationPaths: []
+    });
+  });
+
   it("resolves an extensionless TypeScript default import to a Svelte component", async () => {
     const project = await createConfiguredProject({
       "src/App.svelte": "<main>App</main>",
