@@ -26,6 +26,12 @@ interface StaticShellFunction {
   readonly end: number;
 }
 
+interface StaticShellFunctionExport {
+  readonly name: string;
+  readonly start: number;
+  readonly end: number;
+}
+
 interface SanitizedShellSource {
   readonly valid: boolean;
   readonly text: string;
@@ -318,11 +324,70 @@ function directShellFunctions(sourceText: string): readonly StaticShellFunction[
   return controlDepth === 0 && genericBraceDepth === 0 ? functions : [];
 }
 
+const DIRECT_FUNCTION_EXPORT = new RegExp(
+  `^export[ \\t]+-f[ \\t]+(${SHELL_IDENTIFIER})[ \\t]*$`,
+  "u"
+);
+
+/**
+ * Recognizes only a complete top-level Bash `export -f name` statement after
+ * the referenced direct function declaration. Any other executable top-level
+ * statement makes this relationship slice fail closed.
+ */
+function directShellFunctionExports(
+  sourceText: string,
+  functions: readonly StaticShellFunction[]
+): readonly StaticShellFunctionExport[] {
+  if (functions.some((fn) => fn.name === "export")) {
+    return [];
+  }
+  const sanitized = sanitizeShellSource(sourceText);
+  if (!sanitized.valid) {
+    return [];
+  }
+  const exports: StaticShellFunctionExport[] = [];
+  for (const line of shellLines(sourceText, sanitized.text)) {
+    const uncovered = line.text.split("");
+    for (const fn of functions) {
+      const overlapStart = Math.max(line.start, fn.start);
+      const overlapEnd = Math.min(line.end, fn.end);
+      for (let index = overlapStart; index < overlapEnd; index += 1) {
+        uncovered[index - line.start] = " ";
+      }
+    }
+    const visible = uncovered.join("");
+    const content = visible.trim();
+    if (content.length === 0) {
+      continue;
+    }
+    const match = DIRECT_FUNCTION_EXPORT.exec(content);
+    const name = match?.[1];
+    if (name === undefined) {
+      return [];
+    }
+    const nameOffset = visible.indexOf(name);
+    if (nameOffset < 0) {
+      return [];
+    }
+    const candidates = functions.filter((fn) => fn.name === name && fn.end <= line.start);
+    if (candidates.length !== 1) {
+      return [];
+    }
+    exports.push({
+      name,
+      start: line.start + nameOffset,
+      end: line.start + nameOffset + name.length
+    });
+  }
+  return exports;
+}
+
 /**
  * Extracts a deliberately narrow Shell/Bash declaration surface. It retains
  * only complete, direct top-level POSIX `name() { ... }` or Bash
- * `function name { ... }` declarations; commands, sources, calls, and runtime
- * shell semantics stay out of scope.
+ * `function name { ... }` declarations. A canonical top-level `export -f`
+ * statement may reference one unique prior declaration; calls, sources, and
+ * broader runtime shell semantics stay out of scope.
  */
 export function extractShellFileFacts(input: ShellExtractFileFactsInput): ArtifactFacts {
   const lineStarts = lineStartsFor(input.sourceText);
@@ -346,8 +411,10 @@ export function extractShellFileFacts(input: ShellExtractFileFactsInput): Artifa
   const symbols: SymbolNode[] = [fileNode];
   const edges: GraphEdge[] = [];
   const declarationOrdinals = new Map<string, number>();
+  const functions = directShellFunctions(input.sourceText);
+  const functionSymbolsByName = new Map<string, SymbolNode[]>();
 
-  for (const functionFact of directShellFunctions(input.sourceText)) {
+  for (const functionFact of functions) {
     const qualifiedName = `${input.filePath}#${functionFact.name}`;
     const identity = `${qualifiedName}\u0000function`;
     const declarationOrdinal = declarationOrdinals.get(identity) ?? 0;
@@ -369,6 +436,10 @@ export function extractShellFileFacts(input: ShellExtractFileFactsInput): Artifa
       declarationOrdinal
     };
     symbols.push(symbol);
+    functionSymbolsByName.set(functionFact.name, [
+      ...(functionSymbolsByName.get(functionFact.name) ?? []),
+      symbol
+    ]);
     edges.push({
       id: createEdgeId({
         sourceId: fileNode.id,
@@ -390,6 +461,38 @@ export function extractShellFileFacts(input: ShellExtractFileFactsInput): Artifa
         ruleId: "language.shell.function.direct-top-level",
         stage: "syntax",
         candidateSymbolIds: [symbol.id]
+      }
+    });
+  }
+
+  for (const exported of directShellFunctionExports(input.sourceText, functions)) {
+    const candidates = functionSymbolsByName.get(exported.name) ?? [];
+    const target = candidates.length === 1 ? candidates[0] : undefined;
+    if (target === undefined) {
+      continue;
+    }
+    const range = rangeFor(lineStarts, exported.start, exported.end);
+    edges.push({
+      id: createEdgeId({
+        sourceId: fileNode.id,
+        targetId: target.id,
+        kind: "references",
+        line: range.start.line,
+        column: range.start.column,
+        referenceName: exported.name
+      }),
+      sourceId: fileNode.id,
+      targetId: target.id,
+      kind: "references",
+      filePath: input.filePath,
+      range,
+      resolution: "exact",
+      confidence: 1,
+      referenceName: exported.name,
+      evidence: {
+        ruleId: "syntax.shell.direct-top-level-export-function-reference",
+        stage: "syntax",
+        candidateSymbolIds: [target.id]
       }
     });
   }

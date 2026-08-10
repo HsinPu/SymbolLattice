@@ -21,6 +21,7 @@ interface SqlDeclaration {
   readonly name: string;
   readonly start: number;
   readonly end: number;
+  readonly reference?: SqlIdentifier;
 }
 
 interface SqlStatement {
@@ -37,6 +38,7 @@ interface SanitizedSqlSource {
 
 interface SqlIdentifier {
   readonly name: string;
+  readonly start: number;
   readonly end: number;
 }
 
@@ -290,7 +292,7 @@ function readSqlIdentifier(text: string, index: number, limit: number): SqlIdent
   while (end < limit && isSqlIdentifierPart(text[end])) {
     end += 1;
   }
-  return { name: text.slice(start, end), end };
+  return { name: text.slice(start, end), start, end };
 }
 
 function readQualifiedSqlIdentifier(text: string, index: number, limit: number): SqlIdentifier | null {
@@ -304,7 +306,7 @@ function readQualifiedSqlIdentifier(text: string, index: number, limit: number):
   while (true) {
     const dot = skipWhitespace(text, cursor, limit);
     if (text[dot] !== ".") {
-      return { name: parts.join("."), end: cursor };
+      return { name: parts.join("."), start: first.start, end: cursor };
     }
     const next = readSqlIdentifier(text, dot + 1, limit);
     if (next === null) {
@@ -450,7 +452,26 @@ function directSqlViewDeclaration(text: string, statement: SqlStatement): SqlDec
     return null;
   }
 
-  return { kind: "view", name: name.name, start, end: statement.end + 1 };
+  const selectKeyword = consumeKeyword(text, queryStart, statement.end, "SELECT");
+  let reference: SqlIdentifier | undefined;
+  if (selectKeyword !== null) {
+    const star = skipWhitespace(text, selectKeyword, statement.end);
+    const fromKeyword =
+      text[star] === "*" ? consumeKeyword(text, star + 1, statement.end, "FROM") : null;
+    const table =
+      fromKeyword === null ? null : readQualifiedSqlIdentifier(text, fromKeyword, statement.end);
+    if (table !== null && skipWhitespace(text, table.end, statement.end) === statement.end) {
+      reference = table;
+    }
+  }
+
+  return {
+    kind: "view",
+    name: name.name,
+    start,
+    end: statement.end + 1,
+    ...(reference === undefined ? {} : { reference })
+  };
 }
 
 /**
@@ -484,6 +505,29 @@ function staticSqlDeclarations(sourceText: string): readonly SqlDeclaration[] {
   return declarations;
 }
 
+function hasOnlyDirectSqlDeclarations(sourceText: string): boolean {
+  const sanitized = sanitizeSqlSource(sourceText);
+  if (!sanitized.valid) {
+    return false;
+  }
+  let statementStart = 0;
+  for (let index = 0; index < sanitized.text.length; index += 1) {
+    if (sanitized.text[index] !== ";") {
+      continue;
+    }
+    const statement = { start: statementStart, end: index };
+    if (
+      sanitized.text.slice(statementStart, index).trim().length > 0 &&
+      directSqlTableDeclaration(sanitized.text, statement) === null &&
+      directSqlViewDeclaration(sanitized.text, statement) === null
+    ) {
+      return false;
+    }
+    statementStart = index + 1;
+  }
+  return sanitized.text.slice(statementStart).trim().length === 0;
+}
+
 /**
  * Emits direct SQL schema declaration facts without claiming a dialect parser,
  * query planner, database connection, migration order, or runtime database
@@ -511,6 +555,8 @@ export function extractSqlFileFacts(input: SqlExtractFileFactsInput): ArtifactFa
   const symbols: SymbolNode[] = [fileNode];
   const edges: GraphEdge[] = [];
   const declarationOrdinals = new Map<string, number>();
+  const declarationSymbols: { readonly declaration: SqlDeclaration; readonly symbol: SymbolNode }[] = [];
+  const relationshipSafe = hasOnlyDirectSqlDeclarations(input.sourceText);
 
   for (const declaration of declarations) {
     const qualifiedName = `${input.filePath}#sql-${declaration.kind}:${declaration.name}`;
@@ -534,6 +580,7 @@ export function extractSqlFileFacts(input: SqlExtractFileFactsInput): ArtifactFa
       declarationOrdinal
     };
     symbols.push(symbol);
+    declarationSymbols.push({ declaration, symbol });
     edges.push({
       id: createEdgeId({
         sourceId: fileNode.id,
@@ -555,6 +602,46 @@ export function extractSqlFileFacts(input: SqlExtractFileFactsInput): ArtifactFa
         ruleId: `language.sql.create-${declaration.kind}.direct-ddl`,
         stage: "syntax",
         candidateSymbolIds: [symbol.id]
+      }
+    });
+  }
+
+  for (const entry of declarationSymbols) {
+    const reference = entry.declaration.reference;
+    if (!relationshipSafe || entry.declaration.kind !== "view" || reference === undefined) {
+      continue;
+    }
+    const candidates = declarationSymbols.filter(
+      (candidate) =>
+        candidate.declaration.kind === "table" &&
+        candidate.declaration.name.toUpperCase() === reference.name.toUpperCase()
+    );
+    const target = candidates.length === 1 ? candidates[0]?.symbol : undefined;
+    if (target === undefined) {
+      continue;
+    }
+    const range = rangeFor(lineStarts, reference.start, reference.end);
+    edges.push({
+      id: createEdgeId({
+        sourceId: entry.symbol.id,
+        targetId: target.id,
+        kind: "references",
+        line: range.start.line,
+        column: range.start.column,
+        referenceName: reference.name
+      }),
+      sourceId: entry.symbol.id,
+      targetId: target.id,
+      kind: "references",
+      filePath: input.filePath,
+      range,
+      resolution: "exact",
+      confidence: 1,
+      referenceName: reference.name,
+      evidence: {
+        ruleId: "syntax.sql.same-file.unique-direct-view-table-reference",
+        stage: "syntax",
+        candidateSymbolIds: [target.id]
       }
     });
   }

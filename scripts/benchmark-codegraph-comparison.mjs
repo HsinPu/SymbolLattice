@@ -222,16 +222,24 @@ function safeDestination(root, relativePath) {
 async function copyWorktree(repositoryPath, destination) {
   const output = await gitOutput(repositoryPath, ["ls-files", "-co", "--exclude-standard", "-z"]);
   const paths = [...new Set(output.split("\u0000").filter(Boolean))].sort((left, right) => left.localeCompare(right, "en"));
+  let copiedFiles = 0;
   for (const filePath of paths) {
     requireRelativePath(filePath, "Git worktree path");
     const source = safeDestination(repositoryPath, filePath);
-    const stat = await lstat(source);
+    let stat;
+    try {
+      stat = await lstat(source);
+    } catch (error) {
+      if (error?.code === "ENOENT") continue;
+      throw error;
+    }
     requireCondition(stat.isFile(), `Benchmark snapshots accept regular files only: ${filePath}`);
     const target = safeDestination(destination, filePath);
     await mkdir(dirname(target), { recursive: true });
     await copyFile(source, target);
+    copiedFiles += 1;
   }
-  return paths.length;
+  return copiedFiles;
 }
 
 async function resolveCodeGraphLaunch(workspacePath) {
@@ -578,7 +586,7 @@ async function main() {
         logicalCpuCount: cpus().length
       },
       protocol: {
-        sourceSnapshot: "git tracked plus untracked non-ignored regular files",
+        sourceSnapshot: "existing git tracked plus untracked non-ignored regular files; working-tree deletions are omitted",
         isolation: "temporary per-engine worktree copy removed after the run",
         correctnessScope: "curated project-local function and method callees",
         cliQueries: "both engines use their JSON callees command; latency includes each command's complete response contract",

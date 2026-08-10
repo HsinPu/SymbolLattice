@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.358.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
+> v0.359.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
 
 ## 專案用途
 
@@ -51,19 +51,21 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.358.0 可用性快照
+## v0.359.0 可用性快照
 
 可重跑的 smoke matrix 會從正式語言與框架 registry 核對測試案例，而不是依 README 宣稱支援。
 
 - 54 個正式語言皆可完成 `init`、no-op `sync`、changed `sync`、檔案與完整 identity symbol 查詢，並全數通過 B1 關係驗收。
+- 其中 49 種已有非純 `contains` 的行為或依賴關係；B1 深度對齊尚有 Terraform、GraphQL、Proto、Groovy、CFML 五種。
+- Ruby 以 Rails literal route 到 controller method、Shell 以頂層 `export -f` function reference、SQL 以 bounded view-to-table reference 完成深度對齊。
 - Astro 與 Razor 驗證元件到靜態頁面路由。
 - SQL、GraphQL 與 Proto 以精確檔案檢視驗證 direct schema declaration；不宣稱完整 dialect、schema validation 或 runtime linkage。
 - 關係驗收核對完整 symbol identity；edge-based 收據另要求正確 endpoints、`resolution: exact` 與 `confidence: 1`，檔案結構收據則要求 exact path 與完整 symbol identity。
-- Groovy、CFML 與 Ruby 以精確檔案結構關係完成 B1；動態的一般呼叫仍保守不產生 exact edge。
+- Groovy 與 CFML 暫以精確檔案結構關係通過 lifecycle B1；動態的一般呼叫仍保守不產生 exact edge。
 - React Router、Next.js、Vue Router、SvelteKit、Astro、Spring Web、FastAPI、Django 與 ASP.NET Core 的代表案例可建立預期 route。
 - Nuxt 可掃描與查詢 Vue 檔案，但目前沒有專用 Nuxt route capability。
 
-B1 代表具備可查詢的最小可靠關係，不代表 54 種語言已具有相同的跨檔案與框架深度。
+B1 深度對齊要求語言具備非純檔案包含的可靠關係；不代表 54 種語言已具有相同的跨檔案與框架深度。
 
 ## MCP
 

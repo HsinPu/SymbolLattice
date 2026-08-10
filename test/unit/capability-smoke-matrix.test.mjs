@@ -407,7 +407,7 @@ describe("capability smoke matrix contract", () => {
         })
       );
     }
-    for (const id of ["terraform-basic", "shell-basic"]) {
+    for (const id of ["terraform-basic"]) {
       expect(plan.languageCases.find((candidate) => candidate.id === id)?.assertions).toEqual(
         expect.objectContaining({
           symbols: expect.arrayContaining([
@@ -459,14 +459,7 @@ describe("capability smoke matrix contract", () => {
         })
       );
     }
-    for (const id of [
-      "sql-basic",
-      "graphql-basic",
-      "proto-basic",
-      "groovy-basic",
-      "cfml-basic",
-      "ruby-basic"
-    ]) {
+    for (const id of ["graphql-basic", "proto-basic", "groovy-basic", "cfml-basic"]) {
       expect(plan.languageCases.find((candidate) => candidate.id === id)?.assertions).toEqual(
         expect.objectContaining({
           symbols: expect.arrayContaining([
@@ -480,6 +473,45 @@ describe("capability smoke matrix contract", () => {
         })
       );
     }
+    expect(plan.languageCases.find((candidate) => candidate.id === "ruby-basic")?.assertions).toEqual(
+      expect.objectContaining({
+        symbols: expect.arrayContaining([expect.objectContaining({ id: "handler", kind: "method" })]),
+        relations: expect.arrayContaining([expect.objectContaining({
+          command: "routes",
+          target: "handler",
+          expectedMethod: "GET",
+          expectedPath: "/health"
+        })])
+      })
+    );
+    expect(plan.languageCases.find((candidate) => candidate.id === "shell-basic")?.assertions).toEqual(
+      expect.objectContaining({
+        symbols: expect.arrayContaining([
+          expect.objectContaining({ id: "file", kind: "file" }),
+          expect.objectContaining({ id: "function", kind: "function" })
+        ]),
+        relations: expect.arrayContaining([expect.objectContaining({
+          command: "callees",
+          source: "file",
+          target: "function",
+          kind: "references"
+        })])
+      })
+    );
+    expect(plan.languageCases.find((candidate) => candidate.id === "sql-basic")?.assertions).toEqual(
+      expect.objectContaining({
+        symbols: expect.arrayContaining([
+          expect.objectContaining({ id: "view", kind: "resource" }),
+          expect.objectContaining({ id: "table", kind: "resource" })
+        ]),
+        relations: expect.arrayContaining([expect.objectContaining({
+          command: "callees",
+          source: "view",
+          target: "table",
+          kind: "references"
+        })])
+      })
+    );
     expect(plan.languageCases.find((candidate) => candidate.id === "arkts-basic")?.assertions).toEqual(
       expect.objectContaining({
         relations: expect.arrayContaining([expect.objectContaining({

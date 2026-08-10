@@ -2,3 +2,5 @@
 deploy() {
   printf '%s\n' "ready"
 }
+
+export -f deploy

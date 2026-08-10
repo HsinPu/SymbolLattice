@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.358.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.359.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## What it is
 
@@ -51,19 +51,21 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.358.0 usability snapshot
+## v0.359.0 usability snapshot
 
 The repeatable smoke matrix checks committed cases against the exported language and framework registries instead of treating README claims as proof.
 
 - All 54 registered languages complete `init`, no-op `sync`, changed `sync`, file inventory, full-identity symbol lookup, and a B1 relation receipt.
+- Forty-nine now prove a behavioral or dependency relationship beyond `contains`; Terraform, GraphQL, Proto, Groovy, and CFML remain in the B1 depth-alignment queue.
+- Ruby uses a literal Rails route to a controller method, Shell uses a bounded top-level `export -f` function reference, and SQL uses a bounded view-to-table reference.
 - Astro and Razor validate components bound to static page routes.
 - SQL, GraphQL, and Proto use an exact immutable file view to validate direct schema declarations without claiming complete dialect, schema-validation, or runtime-linkage semantics.
 - Relation receipts bind complete symbol identities. Edge-based receipts also require exact endpoints, `resolution: exact`, and `confidence: 1`; file-structure receipts require an exact path and complete symbol identity.
-- Groovy, CFML, and Ruby complete B1 through exact file-structure relationships; dynamic general calls remain conservatively excluded from exact edges.
+- Groovy and CFML currently complete lifecycle B1 through exact file structure; dynamic general calls remain conservatively excluded from exact edges.
 - Representative React Router, Next.js, Vue Router, SvelteKit, Astro, Spring Web, FastAPI, Django, and ASP.NET Core cases produce the expected route.
 - Nuxt Vue files scan and query successfully, but there is no dedicated Nuxt route capability yet.
 
-B1 means a language has a minimal reliable queryable relationship; it does not mean all 54 languages have equal cross-file or framework depth.
+B1 depth alignment requires a reliable relationship beyond file containment; it does not mean all 54 languages have equal cross-file or framework depth.
 
 ## MCP
 
