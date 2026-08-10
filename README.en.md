@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.362.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.363.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## What it is
 
@@ -51,7 +51,7 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.362.0 usability snapshot
+## v0.363.0 usability snapshot
 
 The repeatable smoke matrix checks committed cases against the exported language and framework registries instead of treating README claims as proof.
 
@@ -61,7 +61,8 @@ The repeatable smoke matrix checks committed cases against the exported language
 - Astro and Razor validate components bound to static page routes.
 - Terraform validates an output traversal to one unique same-file resource; GraphQL validates a type implementing one interface; Proto validates an RPC referencing unique same-file request and response messages.
 - SQL validates a bounded view-to-table reference. These schema and IaC relations do not claim complete dialect, schema-validation, plan/apply, or runtime-linkage semantics.
-- Relation receipts bind complete symbol identities. Edge-based receipts also require exact endpoints, `resolution: exact`, and `confidence: 1`; file-structure receipts require an exact path and complete symbol identity.
+- All 57 required relations verify exact endpoints, `resolution: exact`, `confidence: 1`, and candidate evidence containing the selected target; the benchmark preserves the complete evidence receipt.
+- File dependency queries return concrete exact import/export edges, so the Nix and Python B1 checks no longer rely on aggregate `edgeKinds` alone.
 - The capability release gate blocks any partial, scan-only, or unavailable language case while still retaining honest partial diagnostics for framework cases.
 - Groovy validates unique direct same-file class inheritance; CFML validates a structurally isolated `.cfc` remote entry point bound to its handler. Dynamic general calls remain conservatively excluded from exact edges.
 - Representative React Router, Next.js, Vue Router, SvelteKit, Astro, Spring Web, FastAPI, Django, and ASP.NET Core cases produce the expected route.

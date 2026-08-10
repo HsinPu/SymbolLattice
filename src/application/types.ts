@@ -855,10 +855,17 @@ export interface FileViewSymbol {
   readonly isExported: boolean;
 }
 
+export type FileViewDependencyEdge = GraphEdge & {
+  readonly targetId: string;
+  readonly kind: Extract<EdgeKind, "imports" | "exports">;
+  readonly resolution: "exact";
+};
+
 export interface FileViewDependent {
   readonly filePath: string;
   readonly edgeKinds: readonly Extract<EdgeKind, "imports" | "exports">[];
   readonly edgeCount: number;
+  readonly edges: readonly FileViewDependencyEdge[];
 }
 
 /** One immutable active-generation file view; never reconstructed from the live worktree. */

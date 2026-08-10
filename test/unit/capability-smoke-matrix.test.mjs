@@ -13,6 +13,7 @@ import * as capabilitySmokeMatrix from "../../scripts/capability-smoke-matrix.mj
 
 const {
   classifyCapabilitySmokeStages,
+  capabilitySmokeEvidenceCoverage,
   createCliRuntime,
   createCapabilitySmokePlan,
   runCapabilitySmokeCase
@@ -141,6 +142,7 @@ function successfulV2Runtime(overrides = {}) {
   };
   return {
     async prepareProject() {
+      changed = false;
       return "C:/fixture/project";
     },
     async mutate() {
@@ -176,7 +178,8 @@ function successfulV2Runtime(overrides = {}) {
                 targetId: "symbol:helper",
                 kind: "calls",
                 resolution: "exact",
-                confidence: 1
+                confidence: 1,
+                evidence: exactEvidence("symbol:helper")
               }
             }
           ]
@@ -184,6 +187,15 @@ function successfulV2Runtime(overrides = {}) {
       }
       throw new Error(`Unexpected command: ${command}`);
     },
+    ...overrides
+  };
+}
+
+function exactEvidence(targetId, overrides = {}) {
+  return {
+    ruleId: "syntax.test.exact-edge",
+    stage: "syntax",
+    candidateSymbolIds: [targetId],
     ...overrides
   };
 }
@@ -852,7 +864,8 @@ describe("capability smoke matrix contract", () => {
           targetId: "symbol:helper",
           kind: "handles",
           resolution,
-          confidence
+          confidence,
+          evidence: exactEvidence("symbol:helper")
         }]
       }]
     });
@@ -912,7 +925,8 @@ describe("capability smoke matrix contract", () => {
               targetId: "symbol:entry",
               kind: "routes",
               resolution: "exact",
-              confidence: 1
+              confidence: 1,
+              evidence: exactEvidence("symbol:entry")
             }
           }]
         }
@@ -1000,7 +1014,8 @@ describe("capability smoke matrix contract", () => {
               targetId: "symbol:helper",
               kind: "calls",
               resolution: "exact",
-              confidence: 1
+              confidence: 1,
+              evidence: exactEvidence("symbol:helper")
             }
           })]
         }
@@ -1079,6 +1094,8 @@ describe("capability smoke matrix contract", () => {
             command: "file-dependents",
             sourceFile: "pkg/entry.py",
             targetFile: "pkg/helper.py",
+            expectedSourceId: "symbol:file-entry",
+            expectedTargetId: "symbol:file-helper",
             kind: "imports"
           }
         ]
@@ -1109,7 +1126,8 @@ describe("capability smoke matrix contract", () => {
                 targetId: symbols.helper.id,
                 kind: "calls",
                 resolution: "exact",
-                confidence: 1
+                confidence: 1,
+                evidence: exactEvidence(symbols.helper.id)
               }
             }]
           };
@@ -1125,7 +1143,8 @@ describe("capability smoke matrix contract", () => {
                 targetId: symbols.Base.id,
                 kind: "extends",
                 resolution: "exact",
-                confidence: 1
+                confidence: 1,
+                evidence: exactEvidence(symbols.Base.id)
               }
             }]
           };
@@ -1133,8 +1152,20 @@ describe("capability smoke matrix contract", () => {
         if (command === "file") {
           expect(arguments_[0]).toBe("pkg/helper.py");
           return {
-            selection: { filePath: "pkg/helper.py" },
-            dependents: [{ filePath: "pkg/entry.py", edgeKinds: ["imports"], edgeCount: 1 }]
+            selection: { filePath: "pkg/helper.py", resolution: "exact-path" },
+            dependents: [{
+              filePath: "pkg/entry.py",
+              edgeKinds: ["imports"],
+              edgeCount: 2,
+              edges: [1, 2].map(() => ({
+                sourceId: "symbol:file-entry",
+                targetId: "symbol:file-helper",
+                kind: "imports",
+                resolution: "exact",
+                confidence: 1,
+                evidence: exactEvidence("symbol:file-helper")
+              }))
+            }]
           };
         }
         return baseRuntime.runJson(command, arguments_);
@@ -1145,8 +1176,61 @@ describe("capability smoke matrix contract", () => {
     expect(receipt.classification).toBe("basic-usable");
     expect(receipt.assertions.relations).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: "heritage", status: "passed", rootId: symbols.Child.id, targetId: symbols.Base.id }),
-      expect.objectContaining({ id: "import", status: "passed", sourceFile: "pkg/entry.py", targetFile: "pkg/helper.py", kind: "imports" })
+      expect.objectContaining({
+        id: "import",
+        status: "passed",
+        sourceFile: "pkg/entry.py",
+        targetFile: "pkg/helper.py",
+        rootId: "symbol:file-entry",
+        targetId: "symbol:file-helper",
+        kind: "imports",
+        edgeCount: 2,
+        edge: expect.objectContaining({ evidence: exactEvidence("symbol:file-helper") }),
+        edges: [
+          expect.objectContaining({ evidence: exactEvidence("symbol:file-helper") }),
+          expect.objectContaining({ evidence: exactEvidence("symbol:file-helper") })
+        ]
+      })
     ]));
+
+    const aggregateOnlyRuntime = {
+      ...runtime,
+      async runJson(command, arguments_) {
+        const result = await runtime.runJson(command, arguments_);
+        if (command !== "file") return result;
+        return {
+          ...result,
+          dependents: result.dependents.map(({ edges: _edges, ...dependent }) => dependent)
+        };
+      }
+    };
+    await expect(runCapabilitySmokeCase(candidate, "language", aggregateOnlyRuntime, 2))
+      .resolves.toMatchObject({
+        classification: "partial-usable",
+        assertions: { relations: expect.arrayContaining([expect.objectContaining({ id: "import", status: "failed" })]) }
+      });
+
+    const oneInvalidConcreteEdgeRuntime = {
+      ...runtime,
+      async runJson(command, arguments_) {
+        const result = await runtime.runJson(command, arguments_);
+        if (command !== "file") return result;
+        return {
+          ...result,
+          dependents: result.dependents.map((dependent) => ({
+            ...dependent,
+            edges: dependent.edges.map((edge, index) => index === 0
+              ? edge
+              : { ...edge, evidence: exactEvidence("symbol:wrong-target") })
+          }))
+        };
+      }
+    };
+    await expect(runCapabilitySmokeCase(candidate, "language", oneInvalidConcreteEdgeRuntime, 2))
+      .resolves.toMatchObject({
+        classification: "partial-usable",
+        assertions: { relations: expect.arrayContaining([expect.objectContaining({ id: "import", status: "failed" })]) }
+      });
   });
 
   it("rejects duplicate selected IDs and stale root or target metadata", async () => {
@@ -1297,6 +1381,78 @@ describe("capability smoke matrix contract", () => {
     }
   });
 
+  it("requires deterministic exact-edge candidate evidence and records it in the receipt", async () => {
+    const candidate = v2Manifest().languageCases[0];
+    const validReceipt = await runCapabilitySmokeCase(candidate, "language", successfulV2Runtime(), 2);
+    expect(validReceipt).toMatchObject({
+      classification: "basic-usable",
+      assertions: {
+        relations: [expect.objectContaining({
+          status: "passed",
+          edge: expect.objectContaining({
+            evidence: exactEvidence("symbol:helper")
+          })
+        })]
+      }
+    });
+
+    for (const evidence of [
+      undefined,
+      exactEvidence("symbol:other"),
+      exactEvidence("symbol:helper", { candidateSymbolIds: ["symbol:helper", "symbol:helper"] }),
+      exactEvidence("symbol:helper", { candidateSymbolIds: ["symbol:z", "symbol:helper"] }),
+      exactEvidence("symbol:helper", { stage: "heuristic" }),
+      exactEvidence("symbol:helper", { ruleId: "" })
+    ]) {
+      const runtime = successfulV2Runtime();
+      const baseRunJson = runtime.runJson.bind(runtime);
+      runtime.runJson = async (command, arguments_) => {
+        const result = await baseRunJson(command, arguments_);
+        if (command !== "callees") return result;
+        return {
+          ...result,
+          relations: result.relations.map((relation) => ({
+            ...relation,
+            edge: { ...relation.edge, evidence }
+          }))
+        };
+      };
+      await expect(runCapabilitySmokeCase(candidate, "language", runtime, 2))
+        .resolves.toMatchObject({
+          classification: "partial-usable",
+          stages: { symbol: true, relation: false }
+        });
+    }
+  });
+
+  it("summarizes language evidence coverage without counting framework diagnostics", () => {
+    expect(capabilitySmokeEvidenceCoverage([
+      {
+        kind: "language",
+        assertions: {
+          relations: [
+            { status: "passed", edge: { targetId: "symbol:a", evidence: exactEvidence("symbol:a") } },
+            { status: "failed" },
+            {
+              status: "failed",
+              edge: { targetId: "symbol:b", evidence: exactEvidence("symbol:other") }
+            },
+            { status: "not-applicable" }
+          ]
+        }
+      },
+      {
+        kind: "framework",
+        assertions: { relations: [{ status: "passed" }] }
+      }
+    ])).toEqual({
+      requiredRelations: 3,
+      verifiedRelations: 1,
+      missingEvidence: 1,
+      invalidEvidence: 1
+    });
+  });
+
   it("requires exact confidence-one hierarchy evidence", async () => {
     const candidate = {
       ...v2Manifest().languageCases[0],
@@ -1342,7 +1498,8 @@ describe("capability smoke matrix contract", () => {
                 targetId: "symbol:helper",
                 kind: "extends",
                 resolution,
-                confidence
+                confidence,
+                evidence: exactEvidence("symbol:helper")
               }
             }]
           }

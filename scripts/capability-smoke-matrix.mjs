@@ -31,6 +31,11 @@ function requireUniqueStrings(values, label) {
   return [...values];
 }
 
+function expectedFileSymbolId(filePath) {
+  const encodedPath = encodeURIComponent(filePath);
+  return `symbol:${encodedPath}:${encodedPath}:file:0`;
+}
+
 function validateNotApplicable(value, label) {
   const notApplicable = requireRecord(value, label);
   requireNonemptyString(notApplicable.reason, `${label}.reason`);
@@ -107,11 +112,19 @@ function validateV2Assertions(value, label, profile) {
       };
     }
     if (command === "file-dependents") {
+      const sourceFile = requireNonemptyString(record.sourceFile, `${assertionLabel}.sourceFile`);
+      const targetFile = requireNonemptyString(record.targetFile, `${assertionLabel}.targetFile`);
       return {
         id: record.id,
         command,
-        sourceFile: requireNonemptyString(record.sourceFile, `${assertionLabel}.sourceFile`),
-        targetFile: requireNonemptyString(record.targetFile, `${assertionLabel}.targetFile`),
+        sourceFile,
+        targetFile,
+        expectedSourceId: record.expectedSourceId === undefined
+          ? expectedFileSymbolId(sourceFile)
+          : requireNonemptyString(record.expectedSourceId, `${assertionLabel}.expectedSourceId`),
+        expectedTargetId: record.expectedTargetId === undefined
+          ? expectedFileSymbolId(targetFile)
+          : requireNonemptyString(record.expectedTargetId, `${assertionLabel}.expectedTargetId`),
         kind: requireNonemptyString(record.kind, `${assertionLabel}.kind`)
       };
     }
@@ -311,14 +324,84 @@ function sameSymbolIdentity(actual, expected) {
   );
 }
 
+const EXACT_EDGE_EVIDENCE_STAGES = new Set(["syntax", "lexical", "module", "legacy"]);
+
+function hasExactEdgeEvidence(edge, targetId) {
+  const evidence = edge?.evidence;
+  if (
+    typeof evidence?.ruleId !== "string" ||
+    evidence.ruleId.trim().length === 0 ||
+    !EXACT_EDGE_EVIDENCE_STAGES.has(evidence?.stage) ||
+    !Array.isArray(evidence?.candidateSymbolIds) ||
+    !evidence.candidateSymbolIds.includes(targetId)
+  ) {
+    return false;
+  }
+  const candidates = evidence.candidateSymbolIds;
+  if (candidates.some((candidate) => typeof candidate !== "string" || candidate.length === 0)) {
+    return false;
+  }
+  if (new Set(candidates).size !== candidates.length) {
+    return false;
+  }
+  return candidates.every((candidate, index) => index === 0 || candidates[index - 1] < candidate);
+}
+
 function isExactEdge(edge, sourceId, targetId, kind) {
   return (
     edge?.sourceId === sourceId &&
     edge?.targetId === targetId &&
     edge?.kind === kind &&
     edge?.resolution === "exact" &&
-    edge?.confidence === 1
+    edge?.confidence === 1 &&
+    hasExactEdgeEvidence(edge, targetId)
   );
+}
+
+function exactEdgeReceipt(edge) {
+  return {
+    sourceId: edge.sourceId,
+    targetId: edge.targetId,
+    kind: edge.kind,
+    resolution: edge.resolution,
+    confidence: edge.confidence,
+    evidence: edge.evidence
+  };
+}
+
+export function capabilitySmokeEvidenceCoverage(casesValue) {
+  const cases = requireArray(casesValue, "cases");
+  const relations = cases.flatMap((candidate, caseIndex) => {
+    const receipt = requireRecord(candidate, `cases[${caseIndex}]`);
+    if (receipt.kind !== "language" || receipt.assertions === undefined) {
+      return [];
+    }
+    const assertions = requireRecord(receipt.assertions, `cases[${caseIndex}].assertions`);
+    return requireArray(assertions.relations, `cases[${caseIndex}].assertions.relations`)
+      .filter((relation) => relation?.status !== "not-applicable");
+  });
+  let verifiedRelations = 0;
+  let missingEvidence = 0;
+  let invalidEvidence = 0;
+  for (const relation of relations) {
+    if (relation?.edge?.evidence === undefined) {
+      missingEvidence += 1;
+    } else if (
+      relation.status === "passed" &&
+      typeof relation.edge.targetId === "string" &&
+      hasExactEdgeEvidence(relation.edge, relation.edge.targetId)
+    ) {
+      verifiedRelations += 1;
+    } else {
+      invalidEvidence += 1;
+    }
+  }
+  return {
+    requiredRelations: relations.length,
+    verifiedRelations,
+    missingEvidence,
+    invalidEvidence
+  };
 }
 
 function requireRuntimeSchemaVersion(value) {
@@ -627,13 +710,7 @@ export async function runCapabilitySmokeCase(candidateValue, kind, runtimeValue,
               if (matches.length === 1) {
                 const edge = matches[0].edge;
                 receipt.status = "passed";
-                receipt.edge = {
-                  sourceId: edge.sourceId,
-                  targetId: edge.targetId,
-                  kind: edge.kind,
-                  resolution: edge.resolution,
-                  confidence: edge.confidence
-                };
+                receipt.edge = exactEdgeReceipt(edge);
                 evidence.relation ??= `${edge.kind} ${source.id} -> ${target.id}`;
               } else {
                 receipt.status = "failed";
@@ -705,13 +782,7 @@ export async function runCapabilitySmokeCase(candidateValue, kind, runtimeValue,
               if (matches.length === 1) {
                 const edge = matches[0].edge;
                 receipt.status = "passed";
-                receipt.edge = {
-                  sourceId: edge.sourceId,
-                  targetId: edge.targetId,
-                  kind: edge.kind,
-                  resolution: edge.resolution,
-                  confidence: edge.confidence
-                };
+                receipt.edge = exactEdgeReceipt(edge);
                 evidence.relation ??= `${edge.kind} ${source.id} -> ${target.id}`;
               } else {
                 receipt.status = "failed";
@@ -742,11 +813,7 @@ export async function runCapabilitySmokeCase(candidateValue, kind, runtimeValue,
                       sameSymbolIdentity(symbols[0], target) &&
                       sameSymbolIdentity(symbols[1], source) &&
                       edges.length === 1 &&
-                      edges[0]?.sourceId === source.id &&
-                      edges[0]?.targetId === target.id &&
-                      edges[0]?.kind === assertion.kind &&
-                      edges[0]?.resolution === "exact" &&
-                      edges[0]?.confidence === 1;
+                      isExactEdge(edges[0], source.id, target.id, assertion.kind);
                   })
                 : [];
               if (matches.length === 1) {
@@ -755,6 +822,7 @@ export async function runCapabilitySmokeCase(candidateValue, kind, runtimeValue,
                 receipt.source = source;
                 receipt.target = target;
                 receipt.kind = edge.kind;
+                receipt.edge = exactEdgeReceipt(edge);
                 evidence.relation ??= `${edge.kind} ${source.id} -> ${target.id}`;
               } else {
                 receipt.status = "failed";
@@ -769,21 +837,42 @@ export async function runCapabilitySmokeCase(candidateValue, kind, runtimeValue,
                 "--json",
                 "--symbols-only"
               ]);
-              const matches = result?.selection?.filePath === assertion.targetFile &&
+              const matches = result?.selection?.resolution === "exact-path" &&
+                result?.selection?.filePath === assertion.targetFile &&
                 Array.isArray(result?.dependents)
                 ? result.dependents.filter(
                     (item) =>
                       item?.filePath === assertion.sourceFile &&
                       Array.isArray(item?.edgeKinds) &&
-                      item.edgeKinds.includes(assertion.kind)
+                      item.edgeKinds.includes(assertion.kind) &&
+                      Array.isArray(item?.edges) &&
+                      item.edgeCount === item.edges.length &&
+                      item.edges.filter((edge) => edge?.kind === assertion.kind).length > 0 &&
+                      item.edges
+                        .filter((edge) => edge?.kind === assertion.kind)
+                        .every((edge) =>
+                          isExactEdge(
+                            edge,
+                            assertion.expectedSourceId,
+                            assertion.expectedTargetId,
+                            assertion.kind
+                          )
+                        )
                   )
                 : [];
               if (matches.length === 1) {
+                const edges = matches[0].edges
+                  .filter((candidate) => candidate.kind === assertion.kind)
+                  .map(exactEdgeReceipt);
                 receipt.status = "passed";
+                receipt.rootId = assertion.expectedSourceId;
+                receipt.targetId = assertion.expectedTargetId;
                 receipt.sourceFile = assertion.sourceFile;
                 receipt.targetFile = assertion.targetFile;
                 receipt.kind = assertion.kind;
                 receipt.edgeCount = matches[0].edgeCount;
+                receipt.edge = edges[0];
+                receipt.edges = edges;
                 evidence.relation ??= `${assertion.kind} ${assertion.sourceFile} -> ${assertion.targetFile}`;
               } else {
                 receipt.status = "failed";
@@ -813,11 +902,7 @@ export async function runCapabilitySmokeCase(candidateValue, kind, runtimeValue,
                         sameSymbolIdentity(item?.handler, target) &&
                         typeof item?.route?.id === "string" &&
                         item.route.id.length > 0 &&
-                        item?.edge?.sourceId === item.route.id &&
-                        item?.edge?.targetId === target.id &&
-                        item?.edge?.kind === "routes" &&
-                        item?.edge?.resolution === "exact" &&
-                        item?.edge?.confidence === 1
+                        isExactEdge(item?.edge, item.route.id, target.id, "routes")
                       ))
                   )
                 : [];
@@ -826,13 +911,7 @@ export async function runCapabilitySmokeCase(candidateValue, kind, runtimeValue,
                 receipt.route = { method: matches[0].method, path: matches[0].path };
                 if (target !== undefined) {
                   receipt.targetId = target.id;
-                  receipt.edge = {
-                    sourceId: matches[0].edge.sourceId,
-                    targetId: matches[0].edge.targetId,
-                    kind: matches[0].edge.kind,
-                    resolution: matches[0].edge.resolution,
-                    confidence: matches[0].edge.confidence
-                  };
+                  receipt.edge = exactEdgeReceipt(matches[0].edge);
                 }
                 evidence.relation ??= `${matches[0].method} ${matches[0].path}`;
               } else {
@@ -1145,6 +1224,7 @@ async function main(argv) {
     ])
   );
   const failureSummary = capabilitySmokeFailureSummary(cases);
+  const evidenceCoverage = capabilitySmokeEvidenceCoverage(cases);
   const result = {
     schemaVersion: plan.schemaVersion,
     matrixId: plan.matrixId,
@@ -1157,6 +1237,7 @@ async function main(argv) {
       frameworks: plan.frameworkCases.length
     },
     summary,
+    evidenceCoverage,
     failureSummary,
     cases,
     retainedTemporaryProjects: runtime.retainedProjects
@@ -1168,7 +1249,13 @@ async function main(argv) {
     await mkdir(dirname(outputPath), { recursive: true });
     await writeFile(outputPath, `${JSON.stringify(result, null, 2)}\n`, "utf8");
     process.stdout.write(
-      `${JSON.stringify({ outputPath, summary, failureSummary, selectedCases: result.selectedCases }, null, 2)}\n`
+      `${JSON.stringify({
+        outputPath,
+        summary,
+        evidenceCoverage,
+        failureSummary,
+        selectedCases: result.selectedCases
+      }, null, 2)}\n`
     );
   }
   if (capabilitySmokeExitCode(failureSummary) !== 0) {

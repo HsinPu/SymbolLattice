@@ -10044,8 +10044,25 @@ describe("SymbolLatticeService", () => {
       expect.arrayContaining([expect.objectContaining({ name: "persistedTarget", kind: "function" })])
     );
     expect(result.dependents).toEqual([
-      { filePath: "src/consumer.ts", edgeKinds: ["imports"], edgeCount: 1 }
+      {
+        filePath: "src/consumer.ts",
+        edgeKinds: ["imports"],
+        edgeCount: 1,
+        edges: [expect.objectContaining({
+          sourceId: expect.any(String),
+          targetId: expect.any(String),
+          kind: "imports",
+          resolution: "exact",
+          confidence: 1,
+          evidence: expect.objectContaining({
+            ruleId: expect.any(String),
+            candidateSymbolIds: expect.any(Array)
+          })
+        })]
+      }
     ]);
+    const dependencyEdge = result.dependents[0]!.edges[0]!;
+    expect(dependencyEdge.evidence?.candidateSymbolIds).toContain(dependencyEdge.targetId);
     expect(JSON.stringify(result)).not.toContain("liveReplacement");
 
     await expect(

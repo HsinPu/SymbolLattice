@@ -161,6 +161,7 @@ import {
   ARTIFACT_LANGUAGES,
   DEFAULT_EXACT_IMPACT_EDGE_KINDS,
   DEFAULT_EXACT_TOPOLOGY_EDGE_KINDS,
+  EDGE_EVIDENCE_STAGES,
   MAX_SOURCE_SEARCH_LIMIT
 } from "../domain/index.js";
 import { SYMBOL_LATTICE_VERSION } from "../version.js";
@@ -2298,7 +2299,19 @@ const fileViewOutputSchema = z
     dependents: z.array(z.object({
       filePath: z.string().min(1),
       edgeKinds: z.array(z.enum(["imports", "exports"])),
-      edgeCount: z.number().int().positive()
+      edgeCount: z.number().int().positive(),
+      edges: z.array(z.object({
+        sourceId: z.string().min(1),
+        targetId: z.string().min(1),
+        kind: z.enum(["imports", "exports"]),
+        resolution: z.literal("exact"),
+        confidence: z.number().min(0).max(1),
+        evidence: z.object({
+          ruleId: z.string().min(1),
+          stage: z.enum(EDGE_EVIDENCE_STAGES),
+          candidateSymbolIds: z.array(z.string().min(1))
+        }).passthrough().optional()
+      }).passthrough())
     }))
   })
   .passthrough();

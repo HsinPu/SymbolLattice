@@ -241,6 +241,7 @@ import type {
   FilesResult,
   FileViewOptions,
   FileViewResult,
+  FileViewDependencyEdge,
   FindResult,
   GenerationDiffOptions,
   GenerationDiffResult,
@@ -2357,7 +2358,11 @@ export class SymbolLatticeService {
     );
     const dependentEvidence = new Map<
       string,
-      { edgeKinds: Set<"imports" | "exports">; edgeCount: number }
+      {
+        edgeKinds: Set<"imports" | "exports">;
+        edgeCount: number;
+        edges: FileViewDependencyEdge[];
+      }
     >();
     if (targetFileSymbol !== undefined) {
       for (const edge of bundle.snapshot.edges) {
@@ -2374,10 +2379,12 @@ export class SymbolLatticeService {
         }
         const evidence = dependentEvidence.get(source.filePath) ?? {
           edgeKinds: new Set<"imports" | "exports">(),
-          edgeCount: 0
+          edgeCount: 0,
+          edges: []
         };
         evidence.edgeKinds.add(edge.kind);
         evidence.edgeCount += 1;
+        evidence.edges.push(edge as FileViewDependencyEdge);
         dependentEvidence.set(source.filePath, evidence);
       }
     }
@@ -2385,7 +2392,8 @@ export class SymbolLatticeService {
       .map(([dependentPath, evidence]) => ({
         filePath: dependentPath,
         edgeKinds: [...evidence.edgeKinds].sort(compareText),
-        edgeCount: evidence.edgeCount
+        edgeCount: evidence.edgeCount,
+        edges: [...evidence.edges].sort((left, right) => compareText(left.id, right.id))
       }))
       .sort((left, right) => compareText(left.filePath, right.filePath));
 
