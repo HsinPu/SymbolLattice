@@ -17172,6 +17172,62 @@ describe("source extraction", () => {
     expect(facts.edges.filter((edge) => edge.kind === "contains")).toHaveLength(2);
   });
 
+  it("extracts the implicit script-setup component and its direct ESM imports", () => {
+    const facts = extractFileFacts({
+      filePath: "src/App.vue",
+      language: "vue",
+      sourceText: [
+        "<template><AppLink /></template>",
+        '<script setup lang="ts">',
+        'import AppLink from "./AppLink.vue";',
+        'import type { RouteLocation } from "vue-router";',
+        "const current: RouteLocation | null = null;",
+        "</script>"
+      ].join("\n")
+    });
+
+    expect(facts.symbols).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: "variable", name: "default", isExported: true }),
+        expect.objectContaining({ kind: "variable", name: "current" })
+      ])
+    );
+    expect(facts.exportBindings).toEqual([
+      expect.objectContaining({ localName: "default", exportedName: "default" })
+    ]);
+    expect(facts.importBindings).toEqual([
+      expect.objectContaining({
+        moduleSpecifier: "./AppLink.vue",
+        localName: "AppLink",
+        importedName: "default"
+      }),
+      expect.objectContaining({
+        moduleSpecifier: "vue-router",
+        localName: "RouteLocation",
+        importedName: "RouteLocation",
+        isTypeOnly: true
+      })
+    ]);
+    expect(facts.pendingReferences.map((reference) => reference.referenceName)).toEqual([
+      "./AppLink.vue",
+      "vue-router"
+    ]);
+
+    const unsupportedExport = extractFileFacts({
+      filePath: "src/Unsupported.vue",
+      language: "vue",
+      sourceText: [
+        '<script setup lang="ts">',
+        "export const unsupported = true;",
+        "</script>"
+      ].join("\n")
+    });
+    expect(unsupportedExport.symbols).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: "default", isExported: true })])
+    );
+    expect(unsupportedExport.exportBindings).toEqual([]);
+  });
+
   it("extracts literal Vue option-object default exports but rejects ambiguous SFC script proof", () => {
     const optionComponent = extractFileFacts({
       filePath: "src/views/SettingsView.vue",

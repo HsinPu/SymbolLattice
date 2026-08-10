@@ -3669,15 +3669,45 @@ describe("TypeScript configuration module resolution", () => {
     );
   });
 
-  it("normalizes malformed or external configs into ProjectConfigurationError", async () => {
-    const malformed = await createConfiguredProject({ "tsconfig.json": "{ invalid json" });
-    const external = await createConfiguredProject({
-      "tsconfig.json": JSON.stringify({ extends: "@tsconfig/node22/tsconfig.json" })
+  it("ignores an external extends conservatively while preserving exact relative imports", async () => {
+    const project = await createConfiguredProject({
+      "tsconfig.json": JSON.stringify({
+        extends: "@vue/tsconfig/tsconfig.dom.json",
+        compilerOptions: {
+          baseUrl: ".",
+          paths: { "@local/*": ["src/*"] }
+        }
+      }),
+      "src/helper.ts": "export function helper() { return 1; }",
+      "src/relative.ts": 'import { helper } from "./helper"; export const value = helper();',
+      "src/alias.ts": 'import { helper } from "@local/helper"; export const value = helper();'
     });
+
+    const configuredResolver = createTypeScriptProjectModuleResolver(project);
+
+    expect(configuredResolver.moduleResolver.resolve("src/relative.ts", "./helper")).toEqual({
+      targetFilePath: "src/helper.ts",
+      strategy: "relative",
+      configurationPaths: []
+    });
+    expect(configuredResolver.moduleResolver.resolve("src/alias.ts", "@local/helper")).toEqual({
+      targetFilePath: null,
+      strategy: "unresolved",
+      configurationPaths: ["tsconfig.json"]
+    });
+    expect(configuredResolver.hasProjectConfigurationResolution("src/alias.ts", "@local/helper")).toBe(false);
+    expect(configuredResolver.configurationInputs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: "tsconfig", path: "tsconfig.json", state: "present" })
+      ])
+    );
+  });
+
+  it("normalizes malformed configs into ProjectConfigurationError", async () => {
+    const malformed = await createConfiguredProject({ "tsconfig.json": "{ invalid json" });
 
     expect(() => createTypeScriptProjectModuleResolver(malformed)).toThrow(ProjectConfigurationError);
     expect(() => createTypeScriptProjectModuleResolver(malformed)).not.toThrow(/Debug Failure/);
-    expect(() => createTypeScriptProjectModuleResolver(external)).toThrow(ProjectConfigurationError);
   });
 
   it("resolves a named re-export chain to the original declaration with route evidence", () => {

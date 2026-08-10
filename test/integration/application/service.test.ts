@@ -11377,6 +11377,45 @@ describe("SymbolLatticeService", () => {
     expect(await service.getStatus(projectPath)).toMatchObject({ initialized: false, stale: false });
   });
 
+  it("indexes a project with an external tsconfig extends without trusting external aliases", async () => {
+    const projectPath = await createInlineProject({
+      "tsconfig.json": JSON.stringify({
+        extends: "@vue/tsconfig/tsconfig.dom.json",
+        compilerOptions: {
+          baseUrl: ".",
+          paths: { "@local/*": ["src/*"] }
+        }
+      }),
+      "src/helper.ts": "export function helper() { return 1; }\n",
+      "src/relative.ts": 'import { helper } from "./helper"; export const relative = helper();\n',
+      "src/alias.ts": 'import { helper } from "@local/helper"; export const alias = helper();\n'
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    const initialized = await service.init({ projectPath });
+
+    expect(initialized).toMatchObject({ stale: false, counts: { files: 3 } });
+    const helper = (await service.find(projectPath, "helper")).symbols.find(
+      (symbol) => symbol.qualifiedName === "src/helper.ts#helper"
+    );
+    expect(helper).toBeDefined();
+    const callers = await service.callers(projectPath, helper?.id ?? "missing");
+    expect(callers.relations.map((relation) => relation.symbol.qualifiedName)).toContain(
+      "src/relative.ts#relative"
+    );
+    expect(callers.relations.map((relation) => relation.symbol.qualifiedName)).not.toContain(
+      "src/alias.ts#alias"
+    );
+    const aliasImport = graphStore
+      .getSnapshot(projectPath)
+      .edges.find((edge) => edge.kind === "imports" && edge.referenceName === "@local/helper");
+    expect(aliasImport).toMatchObject({
+      resolution: "unresolved",
+      evidence: expect.objectContaining({ configurationPaths: ["tsconfig.json"] })
+    });
+  });
+
   it("persists scope and configuration identity, resolves aliases, and detects configuration-only drift", async () => {
     const projectPath = await createFixtureProject(configuredFixturePath);
     const graphStore = new SqliteGraphStore();
@@ -25708,14 +25747,29 @@ describe("SymbolLatticeService", () => {
         "export default SettingsView;",
         "</script>"
       ].join("\n"),
+      "src/views/UserView.vue": [
+        "<template><main>User</main></template>",
+        '<script setup lang="ts">',
+        'import { computed } from "vue";',
+        'const title = computed(() => "User");',
+        "</script>"
+      ].join("\n"),
+      "src/App.vue": [
+        "<template><HomeView /></template>",
+        '<script setup lang="ts">',
+        'import HomeView from "./views/HomeView.vue";',
+        "</script>"
+      ].join("\n"),
       "src/router/index.ts": [
         'import { createRouter, createWebHistory } from "vue-router";',
         'import HomeView from "../views/HomeView";',
         'import SettingsView from "../views/SettingsView";',
+        'import UserView from "../views/UserView.vue";',
         "",
         "const routes = [",
         '  { path: "/", component: HomeView },',
-        '  { path: "/settings", component: SettingsView }',
+        '  { path: "/settings", component: SettingsView },',
+        '  { path: "/users/:id", component: UserView }',
         "];",
         "",
         "export const router = createRouter({ history: createWebHistory(), routes });"
@@ -25733,9 +25787,9 @@ describe("SymbolLatticeService", () => {
 
     expect(indexed).toMatchObject({
       stale: false,
-      counts: { files: 3, symbols: expect.any(Number), edges: expect.any(Number) }
+      counts: { files: 5, symbols: expect.any(Number), edges: expect.any(Number) }
     });
-    expect(persistedVueFacts).toHaveLength(2);
+    expect(persistedVueFacts).toHaveLength(4);
     expect(
       persistedVueFacts.every(
         (facts) => facts.extractorVersion === ARTIFACT_FACTS_EXTRACTOR_VERSION
@@ -25770,9 +25824,40 @@ describe("SymbolLatticeService", () => {
               stage: "module"
             })
           })
+        }),
+        expect.objectContaining({
+          method: "NAVIGATE",
+          path: "/users/:id",
+          handler: expect.objectContaining({
+            qualifiedName: "src/views/UserView.vue#default"
+          }),
+          edge: expect.objectContaining({
+            resolution: "exact",
+            confidence: 1,
+            evidence: expect.objectContaining({
+              ruleId: "framework.vue-router.create-router.routes-option.imported-handler",
+              stage: "module"
+            })
+          })
         })
       ])
     );
+    const appImport = graphStore
+      .getSnapshot(projectPath)
+      .edges.find(
+        (edge) =>
+          edge.kind === "imports" &&
+          edge.filePath === "src/App.vue" &&
+          edge.referenceName === "./views/HomeView.vue"
+      );
+    expect(appImport).toMatchObject({
+      resolution: "exact",
+      confidence: 1,
+      evidence: expect.objectContaining({
+        ruleId: "module.relative-specifier",
+        candidateSymbolIds: expect.arrayContaining([appImport?.targetId])
+      })
+    });
     expect(search.results).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ filePath: "src/views/HomeView.vue", language: "vue" }),

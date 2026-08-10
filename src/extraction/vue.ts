@@ -6,6 +6,8 @@ import {
   type ArtifactFacts,
   type ExportBinding,
   type GraphEdge,
+  type ImportBinding,
+  type PendingReference,
   type SourcePosition,
   type SourceRange,
   type SymbolKind,
@@ -209,6 +211,15 @@ function hasExportModifier(node: ts.Node): boolean {
   );
 }
 
+function hasDirectModuleExport(sourceFile: ts.SourceFile): boolean {
+  return sourceFile.statements.some(
+    (statement) =>
+      ts.isExportAssignment(statement) ||
+      ts.isExportDeclaration(statement) ||
+      hasExportModifier(statement)
+  );
+}
+
 function directDefineComponentImport(sourceFile: ts.SourceFile): boolean {
   let exactCount = 0;
   let unsupported = false;
@@ -290,14 +301,17 @@ function parseScript(
 }
 
 /**
- * Extracts source-visible declarations from one inline Vue SFC script.
- * Script-setup compiler synthesis, templates, styles, and arbitrary SFC
- * transforms intentionally remain outside this static first slice.
+ * Extracts source-visible declarations and direct ESM imports from one inline
+ * Vue SFC script. A valid `<script setup>` block proves one implicit default
+ * component export; templates, styles, and arbitrary SFC transforms remain
+ * outside this static slice.
  */
 export function extractVueFileFacts(input: VueExtractFileFactsInput): ArtifactFacts {
   const lineStarts = lineStartsFor(input.sourceText);
   const symbols: SymbolNode[] = [];
   const edges: GraphEdge[] = [];
+  const pendingReferences: PendingReference[] = [];
+  const importBindings: ImportBinding[] = [];
   const exportBindings: ExportBinding[] = [];
   const declarationOrdinals = new Map<string, number>();
   const fileName = input.filePath.split(/[\\/]/u).at(-1) ?? input.filePath;
@@ -426,6 +440,62 @@ export function extractVueFileFacts(input: VueExtractFileFactsInput): ArtifactFa
   const directComponentNames = new Set<string>();
 
   for (const statement of sourceFile.statements) {
+    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) {
+      continue;
+    }
+    const moduleSpecifier = statement.moduleSpecifier.text;
+    const referenceRange = rangeForNode(statement.moduleSpecifier);
+    pendingReferences.push({
+      id: createEdgeId({
+        sourceId: fileNode.id,
+        targetId: null,
+        kind: "imports",
+        line: referenceRange.start.line,
+        column: referenceRange.start.column,
+        referenceName: moduleSpecifier
+      }),
+      sourceId: fileNode.id,
+      filePath: input.filePath,
+      referenceName: moduleSpecifier,
+      relationKind: "imports",
+      range: referenceRange
+    });
+
+    const importClause = statement.importClause;
+    if (importClause?.name !== undefined) {
+      importBindings.push({
+        moduleSpecifier,
+        localName: importClause.name.text,
+        importedName: "default",
+        range: rangeForNode(importClause.name),
+        ...(importClause.isTypeOnly ? { isTypeOnly: true } : {})
+      });
+    }
+    if (importClause?.namedBindings !== undefined && ts.isNamedImports(importClause.namedBindings)) {
+      for (const element of importClause.namedBindings.elements) {
+        importBindings.push({
+          moduleSpecifier,
+          localName: element.name.text,
+          importedName: element.propertyName?.text ?? element.name.text,
+          range: rangeForNode(element),
+          ...(importClause.isTypeOnly || element.isTypeOnly ? { isTypeOnly: true } : {})
+        });
+      }
+    } else if (
+      importClause?.namedBindings !== undefined &&
+      ts.isNamespaceImport(importClause.namedBindings)
+    ) {
+      importBindings.push({
+        moduleSpecifier,
+        localName: importClause.namedBindings.name.text,
+        importedName: "*",
+        range: rangeForNode(importClause.namedBindings),
+        ...(importClause.isTypeOnly ? { isTypeOnly: true } : {})
+      });
+    }
+  }
+
+  for (const statement of sourceFile.statements) {
     if (ts.isFunctionDeclaration(statement) && statement.name !== undefined) {
       addNamedSymbol(statement.name.text, "function", statement, hasExportModifier(statement));
       continue;
@@ -471,7 +541,14 @@ export function extractVueFileFacts(input: VueExtractFileFactsInput): ArtifactFa
       ts.isExportAssignment(statement) && !statement.isExportEquals
   );
   const defaultExport = defaultExports.length === 1 ? defaultExports[0] : undefined;
-  if (defaultExport !== undefined && !activeBlock.setup) {
+  if (activeBlock.setup && !hasDirectModuleExport(sourceFile)) {
+    addNamedSymbol("default", "variable", sourceFile, true);
+    exportBindings.push({
+      localName: "default",
+      exportedName: "default",
+      range: rangeForNode(sourceFile)
+    });
+  } else if (defaultExport !== undefined) {
     const expression = defaultExport.expression;
     if (ts.isIdentifier(expression) && directComponentNames.has(expression.text)) {
       const candidates = symbolsByName.get(expression.text) ?? [];
@@ -498,10 +575,10 @@ export function extractVueFileFacts(input: VueExtractFileFactsInput): ArtifactFa
   return {
     symbols,
     edges,
-    pendingReferences: [],
+    pendingReferences,
     localBindings: [],
     referenceScopes: [],
-    importBindings: [],
+    importBindings,
     exportBindings,
     reExportBindings: []
   };

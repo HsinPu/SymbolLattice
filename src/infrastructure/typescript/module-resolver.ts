@@ -52,6 +52,12 @@ interface LoadedConfiguration {
   readonly kind: ProjectConfigurationInput["kind"];
 }
 
+interface LoadedConfigurationChain {
+  readonly configurations: readonly LoadedConfiguration[];
+  /** A package-style extends is intentionally not read or trusted by the indexer. */
+  readonly hasExternalExtends: boolean;
+}
+
 function sourceHash(sourceText: string): string {
   return createHash("sha256").update(sourceText, "utf8").digest("hex");
 }
@@ -216,9 +222,10 @@ function loadConfigurationChain(
   projectPath: string,
   selectedPath: string,
   selectedKind: "tsconfig" | "jsconfig"
-): readonly LoadedConfiguration[] {
+): LoadedConfigurationChain {
   const chain: LoadedConfiguration[] = [];
   const seenPaths = new Set<string>();
+  let hasExternalExtends = false;
 
   function load(absolutePath: string, kind: ProjectConfigurationInput["kind"]): void {
     const key = fileSystemKey(absolutePath);
@@ -262,11 +269,16 @@ function loadConfigurationChain(
       throw configurationError(relativePath, 'the "extends" property must be a string');
     }
 
+    if (!extendsValue.startsWith(".") && !isAbsolute(extendsValue)) {
+      hasExternalExtends = true;
+      return;
+    }
+
     load(resolveLocalExtendsPath(projectPath, absolutePath, extendsValue), "extends");
   }
 
   load(selectedPath, selectedKind);
-  return chain;
+  return { configurations: chain, hasExternalExtends };
 }
 
 function parseCompilerOptions(
@@ -441,8 +453,8 @@ export function createTypeScriptProjectModuleResolver(input: {
   }
 
   const selectedPath = resolve(projectPath, selectedInput.path);
-  const chain = loadConfigurationChain(projectPath, selectedPath, selectedInput.kind);
-  const compilerOptions = parseCompilerOptions(projectPath, selectedPath, selectedInput.path);
+  const loadedChain = loadConfigurationChain(projectPath, selectedPath, selectedInput.kind);
+  const chain = loadedChain.configurations;
   const configurationPaths = chain.map((configuration) => configuration.relativePath);
   const chainInputs = chain.map<ProjectConfigurationInput>((configuration) => ({
     kind: configuration.kind,
@@ -464,6 +476,24 @@ export function createTypeScriptProjectModuleResolver(input: {
       const byPath = compareStableText(left.path, right.path);
       return byPath === 0 ? compareStableText(left.kind, right.kind) : byPath;
     });
+
+  if (loadedChain.hasExternalExtends) {
+    return {
+      moduleResolver: {
+        resolve(fromFilePath, moduleSpecifier) {
+          return moduleSpecifier.startsWith(".")
+            ? exactRelativeTarget(knownFilePaths, fromFilePath, moduleSpecifier)
+            : unresolved(configurationPaths);
+        }
+      },
+      configurationInputs,
+      hasProjectConfigurationResolution() {
+        return false;
+      }
+    };
+  }
+
+  const compilerOptions = parseCompilerOptions(projectPath, selectedPath, selectedInput.path);
 
   function containingFilePath(fromFilePath: string): string {
     const sourceDocument = input.sourceDocuments.find(
