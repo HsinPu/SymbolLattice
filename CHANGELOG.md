@@ -6,6 +6,21 @@ All notable changes to SymbolLattice are documented in this file.
 
 No unreleased changes.
 
+## [0.366.0] - 2026-08-10
+
+### Added
+
+- Added a fixed-commit real-project JavaScript acceptance run for Koa, scanning identical source with SymbolLattice and CodeGraph and checking results against source-level ground truth.
+- Added deliberately narrow CommonJS facts for a unique named class assigned directly to `module.exports` and top-level literal `require(...)` bindings.
+- Recorded native tests, lint, build, graph initialization, no-op synchronization, isolated one-file changed synchronization, persisted reopen queries, and exact-evidence comparison receipts.
+
+### Safety and compatibility
+
+- CommonJS projection requires a strict-mode directive prologue, no ECMAScript module syntax, unshadowed `module` and `require` globals, one direct named class export, and literal top-level `require(...)` bindings.
+- Dynamic, nested, reflective, shadowed, non-strict, or mixed-module forms remain unresolved instead of producing optimistic exact edges.
+- Overridable `this` dispatch remains unresolved; the Koa comparison records CodeGraph's optimistic results separately rather than treating them as ground truth.
+- Artifact extraction advances to `multi-language-ast-v245`; `sync` re-extracts unchanged source once so persisted graphs cannot reuse stale JavaScript facts.
+
 ## [0.365.0] - 2026-08-10
 
 ### Added

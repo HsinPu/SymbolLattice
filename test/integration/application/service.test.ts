@@ -11263,6 +11263,57 @@ describe("SymbolLatticeService", () => {
     });
   });
 
+  it("persists exact JavaScript CommonJS export classes and local file dependencies", async () => {
+    const projectPath = await createInlineProject({
+      "lib/application.js": [
+        "'use strict'",
+        "const request = require('./request')",
+        "module.exports = class Application {",
+        "  create () { return request.create() }",
+        "}",
+        ""
+      ].join("\n"),
+      "lib/request.js": "module.exports = { create () { return {} } }\n"
+    });
+    const service = createService();
+    const initialized = await service.init({ projectPath });
+
+    const application = (await service.find(projectPath, "Application")).symbols.find(
+      (symbol) => symbol.qualifiedName === "lib/application.js#Application"
+    );
+    expect(application).toMatchObject({ kind: "class", isExported: true });
+
+    const request = await service.fileView(projectPath, "lib/request.js", { symbolsOnly: true });
+    expect(request.dependents).toEqual([
+      expect.objectContaining({
+        filePath: "lib/application.js",
+        edgeKinds: ["imports"],
+        edgeCount: 1,
+        edges: [
+          expect.objectContaining({
+            kind: "imports",
+            resolution: "exact",
+            confidence: 1,
+            evidence: expect.objectContaining({
+              ruleId: "module.relative-specifier",
+              stage: "module",
+              candidateSymbolIds: expect.any(Array)
+            })
+          })
+        ]
+      })
+    ]);
+    const dependency = request.dependents[0]!.edges[0]!;
+    expect(dependency.evidence?.candidateSymbolIds).toContain(dependency.targetId);
+
+    const noOp = await service.sync({ projectPath });
+    expect(noOp.generationId).toBe(initialized.generationId);
+    const reopened = createService();
+    expect(
+      (await reopened.find(projectPath, "Application")).symbols.map((symbol) => symbol.qualifiedName)
+    ).toContain("lib/application.js#Application");
+  });
+
   it("does not create an index while answering status for a new project", async () => {
     const projectPath = await createFixtureProject();
     const service = createService();

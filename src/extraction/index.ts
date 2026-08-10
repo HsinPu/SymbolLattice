@@ -354,6 +354,195 @@ function collectExplicitExportNames(sourceFile: ts.SourceFile): ReadonlySet<stri
   return names;
 }
 
+function bindingNameIncludes(name: ts.BindingName, expected: string): boolean {
+  if (ts.isIdentifier(name)) {
+    return name.text === expected;
+  }
+  return name.elements.some(
+    (element) => !ts.isOmittedExpression(element) && bindingNameIncludes(element.name, expected)
+  );
+}
+
+function hasDirectSourceBinding(sourceFile: ts.SourceFile, expected: string): boolean {
+  return sourceFile.statements.some((statement) => {
+    if (
+      (ts.isFunctionDeclaration(statement) || ts.isClassDeclaration(statement)) &&
+      statement.name?.text === expected
+    ) {
+      return true;
+    }
+    if (ts.isVariableStatement(statement)) {
+      return statement.declarationList.declarations.some((declaration) =>
+        bindingNameIncludes(declaration.name, expected)
+      );
+    }
+    if (ts.isImportDeclaration(statement) && statement.importClause !== undefined) {
+      const clause = statement.importClause;
+      if (clause.name?.text === expected) {
+        return true;
+      }
+      if (clause.namedBindings !== undefined) {
+        if (ts.isNamespaceImport(clause.namedBindings)) {
+          return clause.namedBindings.name.text === expected;
+        }
+        return clause.namedBindings.elements.some((element) => element.name.text === expected);
+      }
+    }
+    return false;
+  });
+}
+
+function hasEcmaScriptModuleSyntax(sourceFile: ts.SourceFile): boolean {
+  return sourceFile.statements.some(
+    (statement) =>
+      ts.isImportDeclaration(statement) ||
+      ts.isExportDeclaration(statement) ||
+      ts.isExportAssignment(statement) ||
+      hasExportModifier(statement)
+  );
+}
+
+function hasUseStrictDirective(sourceFile: ts.SourceFile): boolean {
+  for (const statement of sourceFile.statements) {
+    if (!ts.isExpressionStatement(statement) || !ts.isStringLiteral(statement.expression)) {
+      return false;
+    }
+    if (statement.expression.text === "use strict") {
+      return true;
+    }
+  }
+  return false;
+}
+
+function hasOnlyDirectCommonJsRequireUses(sourceFile: ts.SourceFile): boolean {
+  let valid = true;
+  function visit(node: ts.Node): void {
+    if (ts.isIdentifier(node) && node.text === "require") {
+      const call = node.parent;
+      const argument = ts.isCallExpression(call) ? call.arguments[0] : undefined;
+      const declaration = ts.isCallExpression(call) && call.expression === node ? call.parent : undefined;
+      const declarationList =
+        declaration !== undefined && ts.isVariableDeclaration(declaration)
+          ? declaration.parent
+          : undefined;
+      const statement =
+        declarationList !== undefined && ts.isVariableDeclarationList(declarationList)
+          ? declarationList.parent
+          : undefined;
+      if (
+        !ts.isCallExpression(call) ||
+        call.arguments.length !== 1 ||
+        argument === undefined ||
+        !ts.isStringLiteral(argument) ||
+        statement === undefined ||
+        !ts.isVariableStatement(statement) ||
+        statement.parent !== sourceFile
+      ) {
+        valid = false;
+      }
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(sourceFile);
+  return valid;
+}
+
+function hasOnlyDirectCommonJsModuleUses(sourceFile: ts.SourceFile): boolean {
+  let valid = true;
+  function visit(node: ts.Node): void {
+    if (ts.isIdentifier(node) && node.text === "module") {
+      const access = node.parent;
+      const directTarget = ts.isPropertyAccessExpression(access) ? access : undefined;
+      const augmentedTarget =
+        directTarget !== undefined &&
+        directTarget.expression === node &&
+        directTarget.name.text === "exports" &&
+        ts.isPropertyAccessExpression(directTarget.parent) &&
+        directTarget.parent.expression === directTarget
+          ? directTarget.parent
+          : undefined;
+      const target = augmentedTarget ?? directTarget;
+      const assignment = target === undefined ? undefined : target.parent;
+      const statement =
+        assignment !== undefined && ts.isBinaryExpression(assignment)
+          ? assignment.parent
+          : undefined;
+      if (
+        directTarget === undefined ||
+        directTarget.expression !== node ||
+        directTarget.name.text !== "exports" ||
+        assignment === undefined ||
+        !ts.isBinaryExpression(assignment) ||
+        assignment.left !== target ||
+        assignment.operatorToken.kind !== ts.SyntaxKind.EqualsToken ||
+        statement === undefined ||
+        !ts.isExpressionStatement(statement) ||
+        statement.parent !== sourceFile
+      ) {
+        valid = false;
+      }
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(sourceFile);
+  return valid;
+}
+
+function directCommonJsExportClass(sourceFile: ts.SourceFile): ts.ClassExpression | null {
+  const assignments = sourceFile.statements.flatMap((statement) => {
+    if (!ts.isExpressionStatement(statement) || !ts.isBinaryExpression(statement.expression)) {
+      return [];
+    }
+    const expression = statement.expression;
+    if (
+      expression.operatorToken.kind !== ts.SyntaxKind.EqualsToken ||
+      !ts.isPropertyAccessExpression(expression.left) ||
+      !ts.isIdentifier(expression.left.expression) ||
+      expression.left.expression.text !== "module" ||
+      expression.left.name.text !== "exports"
+    ) {
+      return [];
+    }
+    return [expression];
+  });
+  if (assignments.length !== 1) {
+    return null;
+  }
+  const expression = assignments[0]?.right;
+  return expression !== undefined && ts.isClassExpression(expression) && expression.name !== undefined
+    ? expression
+    : null;
+}
+
+function directCommonJsRequires(sourceFile: ts.SourceFile): ReadonlyMap<ts.VariableDeclaration, ts.StringLiteral> {
+  const requires = new Map<ts.VariableDeclaration, ts.StringLiteral>();
+  for (const statement of sourceFile.statements) {
+    if (!ts.isVariableStatement(statement)) {
+      continue;
+    }
+    for (const declaration of statement.declarationList.declarations) {
+      const initializer = declaration.initializer;
+      const argument =
+        initializer !== undefined && ts.isCallExpression(initializer)
+          ? initializer.arguments[0]
+          : undefined;
+      if (
+        initializer === undefined ||
+        !ts.isCallExpression(initializer) ||
+        !ts.isIdentifier(initializer.expression) ||
+        initializer.expression.text !== "require" ||
+        initializer.arguments.length !== 1 ||
+        argument === undefined ||
+        !ts.isStringLiteral(argument)
+      ) {
+        continue;
+      }
+      requires.set(declaration, argument);
+    }
+  }
+  return requires;
+}
+
 function isLexicalScope(node: ts.Node): boolean {
   return (
     ts.isSourceFile(node) ||
@@ -5717,6 +5906,22 @@ export function extractFileFacts(
   const isAstroEndpointSource =
     input.frameworkEvidence?.astro === true && astroEndpointPath(input.filePath) !== null;
   const explicitExportNames = collectExplicitExportNames(sourceFile);
+  const commonJsSyntaxEnabled =
+    input.language === "javascript" &&
+    hasUseStrictDirective(sourceFile) &&
+    !hasEcmaScriptModuleSyntax(sourceFile);
+  const commonJsExportClass =
+    commonJsSyntaxEnabled &&
+    !hasDirectSourceBinding(sourceFile, "module") &&
+    hasOnlyDirectCommonJsModuleUses(sourceFile)
+    ? directCommonJsExportClass(sourceFile)
+    : null;
+  const commonJsRequires =
+    commonJsSyntaxEnabled &&
+    !hasDirectSourceBinding(sourceFile, "require") &&
+    hasOnlyDirectCommonJsRequireUses(sourceFile)
+    ? directCommonJsRequires(sourceFile)
+    : new Map<ts.VariableDeclaration, ts.StringLiteral>();
   const symbols: SymbolNode[] = [];
   const edges: GraphEdge[] = [];
   const pendingReferences: PendingReference[] = [];
@@ -6456,12 +6661,17 @@ export function extractFileFacts(
     }
 
     let info = declarationInfo(node, explicitExportNames);
+    if (info === null && node === commonJsExportClass && commonJsExportClass.name !== undefined) {
+      info = { name: commonJsExportClass.name.text, kind: "class", isExported: true };
+    }
     const exportAssignment = ts.isExportAssignment(node) ? node : null;
     const expressionInfo =
       exportAssignment === null ? null : defaultExportExpressionInfo(exportAssignment);
     let heritageDeclaration: HeritageDeclaration | null = null;
     if (ts.isClassDeclaration(node) || ts.isInterfaceDeclaration(node)) {
       heritageDeclaration = node;
+    } else if (node === commonJsExportClass) {
+      heritageDeclaration = commonJsExportClass;
     } else if (exportAssignment !== null && ts.isClassExpression(exportAssignment.expression)) {
       heritageDeclaration = exportAssignment.expression;
     }
@@ -6473,7 +6683,7 @@ export function extractFileFacts(
     if (
       declaredSymbol !== null &&
       info !== null &&
-      (hasDefaultModifier(node) || expressionInfo !== null)
+      (hasDefaultModifier(node) || expressionInfo !== null || node === commonJsExportClass)
     ) {
       exportBindings.push({
         localName: info.name,
@@ -6487,6 +6697,12 @@ export function extractFileFacts(
         exportedName: "default",
         range: sourceRange(sourceFile, node)
       });
+    }
+    if (ts.isVariableDeclaration(node)) {
+      const commonJsSpecifier = commonJsRequires.get(node);
+      if (commonJsSpecifier !== undefined) {
+        addPendingReference(fileNode.id, commonJsSpecifier.text, "imports", commonJsSpecifier);
+      }
     }
     if (declaredSymbol !== null && heritageDeclaration !== null) {
       for (const reference of staticHeritageReferences(sourceFile, heritageDeclaration)) {
