@@ -5,6 +5,7 @@ import {
   createSymbolId,
   type ArtifactFacts,
   type GraphEdge,
+  type GoProjectImportFact,
   type RouteMethod,
   type SourcePosition,
   type SourceRange,
@@ -28,6 +29,10 @@ interface StaticGoFunction {
   readonly body: GoSyntaxNode;
   readonly parameterNames: readonly string[];
   readonly bindingNames: readonly string[];
+}
+
+interface StaticGoMethod extends StaticGoFunction {
+  readonly receiverName: string;
 }
 
 interface GinReceiver {
@@ -921,6 +926,137 @@ function staticGoFunction(
     .map((binding) => identifierText(input, binding))
     .filter((binding): binding is string => binding !== null);
   return { name, node, body, parameterNames, bindingNames };
+}
+
+function staticGoMethod(
+  input: GoExtractFileFactsInput,
+  node: GoSyntaxNode
+): StaticGoMethod | null {
+  if (node.name !== "MethodDecl" || hasSyntaxError(node)) {
+    return null;
+  }
+  const children = directChildren(node);
+  const parameterLists = children.filter((child) => child.name === "Parameters");
+  const receiverParameters = parameterLists[0];
+  const parameters = parameterLists[1];
+  const nameNode = children.find((child) => child.name === "FieldName");
+  const body = children.find((child) => child.name === "Block");
+  const name = nameNode === undefined ? null : identifierText(input, nameNode);
+  const receiverMatch =
+    receiverParameters === undefined
+      ? null
+      : /^\(\s*(?:[A-Za-z_][A-Za-z0-9_]*\s+)?\*?([A-Za-z_][A-Za-z0-9_]*)\s*\)$/u.exec(
+          nodeText(input, receiverParameters)
+        );
+  if (
+    name === null ||
+    body === undefined ||
+    parameters === undefined ||
+    receiverMatch?.[1] === undefined
+  ) {
+    return null;
+  }
+  const parameterNames = descendantsNamed(parameters, "DefName")
+    .map((parameter) => identifierText(input, parameter))
+    .filter((parameter): parameter is string => parameter !== null);
+  const bindingNames = children
+    .filter((child) => child.name === "Parameters" || child.name === "TypeParameters")
+    .flatMap((parameterOrResult) => descendantsNamed(parameterOrResult, "DefName"))
+    .map((binding) => identifierText(input, binding))
+    .filter((binding): binding is string => binding !== null);
+  return {
+    name,
+    node,
+    body,
+    parameterNames,
+    bindingNames,
+    receiverName: receiverMatch[1]
+  };
+}
+
+function staticGoProjectImports(
+  input: GoExtractFileFactsInput,
+  root: GoSyntaxNode,
+  lineStarts: readonly number[]
+): readonly GoProjectImportFact[] {
+  const imports: GoProjectImportFact[] = [];
+  for (const declaration of directChildren(root).filter((node) => node.name === "ImportDecl")) {
+    for (const specifier of descendantsNamed(declaration, "ImportSpec")) {
+      if (hasSyntaxError(specifier)) {
+        continue;
+      }
+      const children = directChildren(specifier);
+      const stringNode = children.find((child) => child.name === "String");
+      const aliasNode = children.find((child) => child.name === "DefName" || child.name === ".");
+      const moduleSpecifier =
+        stringNode === undefined ? null : staticPlainGoString(input, stringNode);
+      const localName = aliasNode?.name === "DefName" ? identifierText(input, aliasNode) : undefined;
+      if (
+        moduleSpecifier === null ||
+        aliasNode?.name === "." ||
+        localName === null
+      ) {
+        continue;
+      }
+      imports.push({
+        moduleSpecifier,
+        range: rangeFor(lineStarts, specifier.from, specifier.to),
+        ...(localName === undefined ? {} : { localName })
+      });
+    }
+  }
+  return imports;
+}
+
+function hasGoProjectSafeHeader(root: GoSyntaxNode): boolean {
+  const children = directChildren(root);
+  const packageClauses = children.filter((node) => node.name === "PackageClause");
+  if (packageClauses.length !== 1 || packageClauses[0] === undefined || hasSyntaxError(packageClauses[0])) {
+    return false;
+  }
+  const packageIndex = children.indexOf(packageClauses[0]);
+  if (packageIndex < 0) {
+    return false;
+  }
+  for (const child of children.slice(0, packageIndex)) {
+    if (!isGoComment(child)) {
+      return false;
+    }
+  }
+  let headerEnded = false;
+  for (const child of children.slice(packageIndex + 1)) {
+    if (child.name === "ImportDecl") {
+      if (headerEnded) {
+        return false;
+      }
+      if (hasSyntaxError(child)) {
+        return false;
+      }
+      continue;
+    }
+    if (isGoComment(child)) {
+      continue;
+    }
+    headerEnded = true;
+  }
+  return true;
+}
+
+function hasRecognizedGoBuildConstraint(input: GoExtractFileFactsInput): boolean {
+  return /(?:^|\r?\n)\/\/(?:go:build|\s*\+build)\b/u.test(input.sourceText);
+}
+
+function hasRecognizedGoPlatformSuffix(filePath: string): boolean {
+  const baseName = filePath.split(/[\\/]/u).at(-1) ?? filePath;
+  const stem = baseName.replace(/\.go$/u, "");
+  const suffixes = stem.split("_").slice(1);
+  const platforms = new Set([
+    "aix", "android", "darwin", "dragonfly", "freebsd", "hurd", "illumos", "ios", "js",
+    "linux", "netbsd", "openbsd", "plan9", "solaris", "wasip1", "windows", "386", "amd64",
+    "amd64p32", "arm", "arm64", "arm64be", "loong64", "mips", "mips64", "mips64le", "mips64p32",
+    "mips64p32le", "mipsle", "ppc", "ppc64", "ppc64le", "riscv", "riscv64", "s390", "s390x", "sparc", "sparc64", "wasm"
+  ]);
+  return suffixes.some((suffix) => platforms.has(suffix));
 }
 
 function hasGoDotImport(root: GoSyntaxNode): boolean {
@@ -3078,6 +3214,7 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
   const symbols: SymbolNode[] = [];
   const edges: GraphEdge[] = [];
   let goFrameStandardRouterFacts: ArtifactFacts["goFrameStandardRouterFacts"];
+  let goProjectFacts: ArtifactFacts["goProjectFacts"];
   const declarationOrdinals = new Map<string, number>();
   const fileName = input.filePath.split(/[\\/]/u).at(-1) ?? input.filePath;
   const fileNode: SymbolNode = {
@@ -3146,6 +3283,39 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
     };
     symbols.push(symbol);
     addContainment(symbol, functionDeclaration.node);
+    return symbol;
+  }
+
+  const methodSymbols = new Map<number, SymbolNode>();
+
+  function addMethod(methodDeclaration: StaticGoMethod): SymbolNode {
+    const existing = methodSymbols.get(methodDeclaration.node.from);
+    if (existing !== undefined) {
+      return existing;
+    }
+    const qualifiedName =
+      input.filePath + "#" + methodDeclaration.receiverName + "." + methodDeclaration.name;
+    const identity = qualifiedName + "\u0000method";
+    const declarationOrdinal = declarationOrdinals.get(identity) ?? 0;
+    declarationOrdinals.set(identity, declarationOrdinal + 1);
+    const symbol: SymbolNode = {
+      id: createSymbolId({
+        filePath: input.filePath,
+        qualifiedName,
+        kind: "method",
+        declarationOrdinal
+      }),
+      name: methodDeclaration.name,
+      qualifiedName,
+      kind: "method",
+      filePath: input.filePath,
+      range: rangeFor(lineStarts, methodDeclaration.node.from, methodDeclaration.node.to),
+      isExported: /^[A-Z]/u.test(methodDeclaration.name),
+      declarationOrdinal
+    };
+    symbols.push(symbol);
+    addContainment(symbol, methodDeclaration.node);
+    methodSymbols.set(methodDeclaration.node.from, symbol);
     return symbol;
   }
 
@@ -3340,24 +3510,19 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
     );
   }
 
-  const goFrameMethodSymbols = new Map<number, SymbolNode>();
-
   function goFrameMethodSymbol(method: StaticGoFrameMethod): SymbolNode {
-    const existing = goFrameMethodSymbols.get(method.node.from);
+    const existing = methodSymbols.get(method.node.from);
     if (existing !== undefined) {
       return existing;
     }
+    const genericMethod = staticGoMethod(input, method.node);
+    if (genericMethod !== null) {
+      return addMethod(genericMethod);
+    }
     const qualifiedName = input.filePath + "#" + method.controllerName + "." + method.name;
-    const identity = qualifiedName + "\u0000method";
-    const declarationOrdinal = declarationOrdinals.get(identity) ?? 0;
-    declarationOrdinals.set(identity, declarationOrdinal + 1);
+    const declarationOrdinal = declarationOrdinals.get(qualifiedName + "\u0000method") ?? 0;
     const symbol: SymbolNode = {
-      id: createSymbolId({
-        filePath: input.filePath,
-        qualifiedName,
-        kind: "method",
-        declarationOrdinal
-      }),
+      id: createSymbolId({ filePath: input.filePath, qualifiedName, kind: "method", declarationOrdinal }),
       name: method.name,
       qualifiedName,
       kind: "method",
@@ -3366,9 +3531,10 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
       isExported: /^[A-Z]/u.test(method.name),
       declarationOrdinal
     };
+    declarationOrdinals.set(qualifiedName + "\u0000method", declarationOrdinal + 1);
     symbols.push(symbol);
     addContainment(symbol, method.node);
-    goFrameMethodSymbols.set(method.node.from, symbol);
+    methodSymbols.set(method.node.from, symbol);
     return symbol;
   }
 
@@ -3500,21 +3666,38 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
     );
   }
 
+  const functions = directChildren(root)
+    .map((node) => staticGoFunction(input, node))
+    .filter(
+      (candidate): candidate is StaticGoFunction => candidate !== null && !hasSyntaxError(candidate.node)
+    );
+  const methods = directChildren(root)
+    .map((node) => staticGoMethod(input, node))
+    .filter((candidate): candidate is StaticGoMethod => candidate !== null);
+  const functionsByName = new Map<string, SymbolNode[]>();
+  const functionSymbols = new Map<StaticGoFunction, SymbolNode>();
+  const methodSymbolsByDeclaration = new Map<StaticGoMethod, SymbolNode>();
+  for (const functionDeclaration of functions) {
+    const symbol = addFunction(functionDeclaration);
+    functionSymbols.set(functionDeclaration, symbol);
+    const sameName = functionsByName.get(functionDeclaration.name) ?? [];
+    sameName.push(symbol);
+    functionsByName.set(functionDeclaration.name, sameName);
+  }
+  for (const methodDeclaration of methods) {
+    methodSymbolsByDeclaration.set(methodDeclaration, addMethod(methodDeclaration));
+  }
+  const directCallAnalyses = new Map<
+    StaticGoFunction,
+    ReturnType<typeof staticGoDirectCalls>
+  >();
+
   if (!hasSyntaxError(root)) {
-    const functions = directChildren(root)
-      .map((node) => staticGoFunction(input, node))
-      .filter((candidate): candidate is StaticGoFunction => candidate !== null);
-    const functionsByName = new Map<string, SymbolNode[]>();
-    for (const functionDeclaration of functions) {
-      const symbol = addFunction(functionDeclaration);
-      const sameName = functionsByName.get(functionDeclaration.name) ?? [];
-      sameName.push(symbol);
-      functionsByName.set(functionDeclaration.name, sameName);
-    }
 
     const hasDotImport = hasGoDotImport(root);
     for (const functionDeclaration of functions) {
       const analysis = staticGoDirectCalls(input, functionDeclaration);
+      directCallAnalyses.set(functionDeclaration, analysis);
       const callerCandidates = functionsByName.get(functionDeclaration.name) ?? [];
       const caller = callerCandidates[0];
       if (hasDotImport || callerCandidates.length !== 1 || caller === undefined) {
@@ -4265,6 +4448,74 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
     }
   }
 
+  const projectFileName = input.filePath.split(/[\\/]/u).at(-1) ?? input.filePath;
+  const isTestFile = /_test\.go$/u.test(projectFileName);
+  const isGoToolIgnoredFile = projectFileName.startsWith("_") || projectFileName.startsWith(".");
+  const projectPackageName = staticGoPackageName(input, root);
+  if (
+    !isTestFile &&
+    !isGoToolIgnoredFile &&
+    projectPackageName !== null &&
+    hasGoProjectSafeHeader(root)
+  ) {
+    const projectImports = staticGoProjectImports(input, root, lineStarts);
+    const bareCalls: Array<{
+      readonly callerId: string;
+      readonly targetName: string;
+      readonly range: SourceRange;
+    }> = [];
+    if (!hasGoDotImport(root)) {
+      const callers = [
+        ...functions.map((declaration) => ({
+          declaration,
+          symbol: functionSymbols.get(declaration)
+        })),
+        ...methods.map((declaration) => ({
+          declaration,
+          symbol: methodSymbolsByDeclaration.get(declaration)
+        }))
+      ];
+      for (const caller of callers) {
+        if (caller.symbol === undefined) {
+          continue;
+        }
+        const analysis =
+          directCallAnalyses.get(caller.declaration) ??
+          staticGoDirectCalls(input, caller.declaration);
+        for (const [targetName, callsForTarget] of analysis.callsByName) {
+          if (analysis.unsafeBindingNames.has(targetName)) {
+            continue;
+          }
+          for (const call of callsForTarget) {
+            bareCalls.push({
+              callerId: caller.symbol.id,
+              targetName,
+              range: rangeFor(lineStarts, call.from, call.to)
+            });
+          }
+        }
+      }
+    }
+    goProjectFacts = {
+      packageName: projectPackageName,
+      functions: functions.map((declaration) => {
+        const symbol = functionSymbols.get(declaration);
+        if (symbol === undefined) {
+          throw new Error("Missing Go function symbol for syntax-proven declaration.");
+        }
+        return {
+          name: declaration.name,
+          symbolId: symbol.id,
+          filePath: input.filePath,
+          unconditionallyAvailable:
+            !hasRecognizedGoBuildConstraint(input) && !hasRecognizedGoPlatformSuffix(input.filePath)
+        };
+      }),
+      imports: projectImports,
+      bareCalls
+    };
+  }
+
   return {
     symbols,
     edges,
@@ -4289,6 +4540,7 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
       routes: [],
       importedRouterInclusions: []
     },
-    ...(goFrameStandardRouterFacts === undefined ? {} : { goFrameStandardRouterFacts })
+    ...(goFrameStandardRouterFacts === undefined ? {} : { goFrameStandardRouterFacts }),
+    ...(goProjectFacts === undefined ? {} : { goProjectFacts })
   };
 }

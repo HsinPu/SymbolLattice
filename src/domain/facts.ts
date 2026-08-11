@@ -13,13 +13,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v259";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v260";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v140";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v141";
 
 /** Hard cap for one source-proven Java exhaustive if/else-if/else assignment join. */
 export const JAVA_EXHAUSTIVE_ASSIGNMENT_JOIN_MAXIMUM_BRANCHES = 8;
@@ -1507,6 +1507,36 @@ export interface GoFrameStandardRouterFacts {
   readonly explicitImports?: readonly GoFrameStandardRouterExplicitImportFact[];
 }
 
+/** One syntax-proven top-level Go package function retained for package resolution. */
+export interface GoProjectFunctionFact {
+  readonly name: string;
+  readonly symbolId: string;
+  readonly filePath: string;
+  readonly unconditionallyAvailable: boolean;
+}
+
+/** One eligible literal Go import; `localName` is present only for an explicit alias. */
+export interface GoProjectImportFact {
+  readonly moduleSpecifier: string;
+  readonly range: SourceRange;
+  readonly localName?: string;
+}
+
+/** One direct bare Go call whose caller declaration and header are syntax-proven. */
+export interface GoProjectBareCallFact {
+  readonly callerId: string;
+  readonly targetName: string;
+  readonly range: SourceRange;
+}
+
+/** Syntax-only Go package facts retained for a later bounded project resolver. */
+export interface GoProjectFacts {
+  readonly packageName: string;
+  readonly functions: readonly GoProjectFunctionFact[];
+  readonly imports: readonly GoProjectImportFact[];
+  readonly bareCalls: readonly GoProjectBareCallFact[];
+}
+
 /** A direct external `mod name;` declaration retained for Rust module proof. */
 export interface RustActixExternalModuleFact {
   readonly name: string;
@@ -2487,6 +2517,8 @@ export interface ArtifactFacts {
   readonly djangoUrlFacts?: DjangoUrlFacts;
   /** Omitted only by artifact facts persisted before v0.129. */
   readonly goFrameStandardRouterFacts?: GoFrameStandardRouterFacts;
+  /** Omitted only by artifact facts persisted before v0.373. */
+  readonly goProjectFacts?: GoProjectFacts;
   /** Omitted only by artifact facts persisted before v0.118. */
   readonly rustActixServiceConfigFacts?: RustActixServiceConfigFacts;
   /** Omitted only by artifact facts persisted before v0.46. */

@@ -114,11 +114,11 @@ describe("Python B2 regular-package resolution", () => {
       expect.arrayContaining([
         expect.objectContaining({
           filePath: "src/requests/utils.py",
-          extractorVersion: "multi-language-ast-v259"
+          extractorVersion: "multi-language-ast-v260"
         }),
         expect.objectContaining({
           filePath: "src/requests/sessions.py",
-          extractorVersion: "multi-language-ast-v259"
+          extractorVersion: "multi-language-ast-v260"
         })
       ])
     );

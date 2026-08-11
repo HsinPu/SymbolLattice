@@ -17122,7 +17122,7 @@ describe("source extraction", () => {
     expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
   });
 
-  it("fails closed for Go syntax errors instead of emitting partial declarations or routes", () => {
+  it("keeps only complete Go declarations through unrelated syntax recovery and emits no routes", () => {
     const facts = extractFileFacts({
       filePath: "cmd/server/broken.go",
       language: "go",
@@ -17137,7 +17137,9 @@ describe("source extraction", () => {
       ].join("\n")
     });
 
-    expect(facts.symbols.filter((symbol) => symbol.kind === "function")).toEqual([]);
+    expect(facts.symbols.filter((symbol) => symbol.kind === "function")).toEqual([
+      expect.objectContaining({ name: "health" })
+    ]);
     expect(facts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
     expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
   });

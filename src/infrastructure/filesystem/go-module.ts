@@ -46,14 +46,19 @@ function isSafeGoModulePath(value: string): boolean {
 
 /**
  * Reads the intentionally narrow root-module subset needed to map an exact
- * internal import path onto an already indexed Go source directory. `replace`,
- * nested modules, and external modules remain deliberately unresolved.
+ * internal import path onto an already indexed Go source directory. A
+ * non-comment root line beginning a `replace` directive disables this narrow
+ * resolver: replacements, nested modules, and external modules remain
+ * deliberately unresolved rather than guessed.
  */
 function parseGoModulePath(sourceText: string): string | null {
   let modulePath: string | null = null;
 
   for (const rawLine of sourceText.split(/\r?\n/u)) {
     const line = rawLine.replace(/\s+\/\/.*$/u, "").trim();
+    if (/^replace(?:\s|\(|$)/u.test(line)) {
+      return null;
+    }
     if (!line.startsWith("module")) {
       continue;
     }
@@ -85,10 +90,15 @@ function firstGoPackageFileByDirectory(
   const firstByDirectory = new Map<string, string>();
   const sourceFiles = sourceDocuments
     .filter(
-      (document) =>
-        document.language === "go" &&
-        document.relativePath.endsWith(".go") &&
-        !document.relativePath.endsWith("_test.go")
+      (document) => {
+        const fileName = document.relativePath.slice(document.relativePath.lastIndexOf("/") + 1);
+        // Keep representatives aligned with files the Go tool considers buildable.
+        return document.language === "go" &&
+          fileName.endsWith(".go") &&
+          !fileName.endsWith("_test.go") &&
+          !fileName.startsWith("_") &&
+          !fileName.startsWith(".");
+      }
     )
     .sort((left, right) => compareStableText(left.relativePath, right.relativePath));
 

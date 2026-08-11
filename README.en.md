@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.372.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.373.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## What it is
 
@@ -51,11 +51,10 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.372.0 highlights
+## v0.373.0 highlights
 
-- Python B1 was verified against a fixed SHA of `psf/requests` v2.34.2: safe standalone bare-`yield` nested control-flow recovery, parenthesized multi-name imports with one dot, and an exact bare call from a direct top-level-class method to an imported top-level function.
-- The acceptance evidence also covers exact evidence, no-op behavior, persisted reopen, and changed sync.
-- Wildcard, parent-relative, namespace, dynamic, rebound, ambiguous, decorated, and otherwise unproven shapes remain fail-closed and do not produce exact edges.
+- Go B1 preserves simple receiver-method symbols after unrelated parser recovery, emits exact same-package cross-file bare-function calls only when the target is unique and unconditional, and resolves root-`go.mod` local package imports to a deterministic representative file.
+- `replace`, nested modules, external or ambiguous imports, build-constrained files, and shadowed, dynamic, selector, and interface dispatch remain fail-closed. This does not claim generic type inference or runtime dispatch.
 
 ## MCP
 

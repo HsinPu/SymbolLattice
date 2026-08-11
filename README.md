@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.372.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
+> v0.373.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
 
 ## 專案用途
 
@@ -51,11 +51,10 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.372.0 重點
+## v0.373.0 重點
 
-- 以固定 SHA 的 `psf/requests` v2.34.2 驗證 Python B1；支援安全的獨立 bare `yield` 巢狀控制流程復原、帶一個點的括號多名稱 import，以及頂層 class 的直接 method 對 imported top-level function 的 exact bare call。
-- 同步驗證 exact evidence、no-op、持久化 reopen 與變更後的 sync 行為。
-- wildcard、parent-relative、namespace、dynamic、rebound、ambiguous、decorated 與未能證明的 shape 仍維持 fail-closed，不會產生 exact edge。
+- Go B1 支援：無關 parser recovery 後仍保留簡單 receiver method symbol；同 package、跨檔案、目標唯一且無條件的 bare function call 可產生 exact edge；根目錄 `go.mod` 的本機 package import 會解析到確定性的代表檔案。
+- `replace`、巢狀 module、外部或 ambiguous import、build-constrained 檔案，以及 shadowed、dynamic、selector 與 interface dispatch 均維持 fail-closed；不宣稱 generic 型別推論或 runtime dispatch。
 
 ## MCP
 

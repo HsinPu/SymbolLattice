@@ -721,6 +721,60 @@ describe("SqliteGraphStore", () => {
     );
   });
 
+  it("round-trips optional Go package facts across a fresh store", async () => {
+    const projectPath = await temporaryProject();
+    const store = new SqliteGraphStore();
+    const graphSnapshot = snapshot([symbol("go-options", "getOptions")]);
+    const facts = persistedFacts(graphSnapshot).map((artifactFacts) => ({
+      ...artifactFacts,
+      language: "go" as const,
+      goProjectFacts: {
+        packageName: "fsnotify",
+        functions: [
+          {
+            name: "getOptions",
+            symbolId: "go-options",
+            filePath: "src/example.ts",
+            unconditionallyAvailable: false
+          }
+        ],
+        imports: [
+          {
+            moduleSpecifier: "golang.org/x/sys/windows",
+            range: {
+              start: { line: 1, column: 8 },
+              end: { line: 1, column: 35 }
+            },
+            localName: "windows"
+          }
+        ],
+        bareCalls: [
+          {
+            callerId: "go-options",
+            targetName: "getOptions",
+            range: {
+              start: { line: 2, column: 3 },
+              end: { line: 2, column: 13 }
+            }
+          }
+        ]
+      }
+    }));
+
+    store.replaceProjectFacts({
+      projectPath,
+      snapshot: graphSnapshot,
+      indexedAt: "2026-08-11T00:00:00.000Z",
+      artifactFacts: facts,
+      indexInputs: indexInputs("go-project-facts"),
+      resolverVersion: "test-resolver-go-project-facts"
+    });
+
+    expect(new SqliteGraphStore().getArtifactFacts(projectPath)[0]?.goProjectFacts).toEqual(
+      facts[0]?.goProjectFacts
+    );
+  });
+
   it("keeps a default-project reader open across committed generations and reopens it after close", async () => {
     const projectPath = await temporaryProject();
     const writer = new SqliteGraphStore();

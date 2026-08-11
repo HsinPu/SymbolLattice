@@ -60,6 +60,76 @@ describe("root Go module package resolution", () => {
     );
   });
 
+  it.each([
+    ["an inline replace directive", "replace example.test/warehouse/api/request => ../request\n"],
+    [
+      "a replace block",
+      "replace (\n  example.test/warehouse/api/request => ../request\n)\n"
+    ],
+    ["a malformed replace directive", "replace\n"],
+    [
+      "duplicate replace directives",
+      "replace example.test/warehouse/api/request => ../request\n" +
+        "replace example.test/warehouse/api/other => ../other\n"
+    ]
+  ])("fails closed for %s", async (_description, replaceDirective) => {
+    const projectPath = await createProject({
+      "go.mod": "module example.test/warehouse\n\ngo 1.22\n\n" + replaceDirective,
+      "cmd/server/main.go": "package main\n",
+      "api/request/list.go": "package request\n"
+    });
+    const scan = await new FileSystemSourceCatalog().scan(projectPath);
+
+    expect(
+      scan.moduleResolver.resolve("cmd/server/main.go", "example.test/warehouse/api/request")
+    ).toEqual({
+      targetFilePath: null,
+      strategy: "unresolved",
+      configurationPaths: ["go.mod"]
+    });
+  });
+
+  it("does not mistake commented replace text for a replace directive", async () => {
+    const projectPath = await createProject({
+      "go.mod":
+        "// replace example.test/warehouse/api/request => ../request\n" +
+        "module example.test/warehouse // replace is only documentation\n\n" +
+        "go 1.22\n",
+      "cmd/server/main.go": "package main\n",
+      "api/request/list.go": "package request\n"
+    });
+    const scan = await new FileSystemSourceCatalog().scan(projectPath);
+
+    expect(
+      scan.moduleResolver.resolve("cmd/server/main.go", "example.test/warehouse/api/request")
+    ).toEqual({
+      targetFilePath: "api/request/list.go",
+      strategy: "go-module-package",
+      configurationPaths: ["go.mod"]
+    });
+  });
+
+  it.each(["_ignored.go", ".ignored.go"])(
+    "does not select %s as a root-module package representative",
+    async (ignoredFileName) => {
+      const projectPath = await createProject({
+        "go.mod": "module example.test/warehouse\n\ngo 1.22\n",
+        "cmd/server/main.go": "package main\n",
+        [`api/request/${ignoredFileName}`]: "package request\n",
+        "api/request/list.go": "package request\n"
+      });
+      const scan = await new FileSystemSourceCatalog().scan(projectPath);
+
+      expect(
+        scan.moduleResolver.resolve("cmd/server/main.go", "example.test/warehouse/api/request")
+      ).toEqual({
+        targetFilePath: "api/request/list.go",
+        strategy: "go-module-package",
+        configurationPaths: ["go.mod"]
+      });
+    }
+  );
+
   it("does not guess a module import when the root go.mod is absent", async () => {
     const projectPath = await createProject({
       "cmd/server/main.go": "package main\n",

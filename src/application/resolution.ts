@@ -4220,6 +4220,176 @@ function goPackageDirectory(filePath: string): string {
   return separator === -1 ? "" : filePath.slice(0, separator);
 }
 
+/**
+ * Projects only the small Go surface already retained by goProjectFacts: a
+ * bare call may cross files only within one exact package directory, and an
+ * import may target only the deterministic representative returned by the
+ * root go.mod resolver.  It intentionally does not infer package names from
+ * paths, select between duplicate declarations, or cross build constraints.
+ */
+function projectGoProjectFacts(input: {
+  readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
+  readonly fileSymbols: ReadonlyMap<string, SymbolNode>;
+  readonly symbolsById: ReadonlyMap<string, SymbolNode>;
+  readonly knownFilePaths: ReadonlySet<string>;
+  readonly moduleResolver: ProjectModuleResolver | undefined;
+}): readonly GraphEdge[] {
+  const edges: GraphEdge[] = [];
+  const functionsByPackageAndName = new Map<
+    string,
+    Array<{
+      readonly filePath: string;
+      readonly symbolId: string;
+      readonly unconditionallyAvailable: boolean;
+    }>
+  >();
+  const packageKey = (filePath: string, packageName: string, functionName: string): string =>
+    `${goPackageDirectory(filePath)}\u0000${packageName}\u0000${functionName}`;
+  const isOwnedFunctionFact = (
+    artifactFilePath: string,
+    functionFact: {
+      readonly name: string;
+      readonly symbolId: string;
+      readonly filePath: string;
+    }
+  ): boolean => {
+    const symbol = input.symbolsById.get(functionFact.symbolId);
+    return functionFact.filePath === artifactFilePath &&
+      symbol !== undefined &&
+      symbol.kind === "function" &&
+      symbol.filePath === artifactFilePath &&
+      symbol.name === functionFact.name;
+  };
+
+  for (const [filePath, facts] of [...input.factsByFile.entries()].sort(([left], [right]) =>
+    compareStableText(left, right)
+  )) {
+    const goFacts = facts.goProjectFacts;
+    if (goFacts === undefined || !goFacts.functions.every((functionFact) =>
+      isOwnedFunctionFact(filePath, functionFact)
+    )) {
+      continue;
+    }
+    for (const functionFact of goFacts.functions) {
+      const key = packageKey(filePath, goFacts.packageName, functionFact.name);
+      const candidates = functionsByPackageAndName.get(key) ?? [];
+      candidates.push({
+        filePath: functionFact.filePath,
+        symbolId: functionFact.symbolId,
+        unconditionallyAvailable: functionFact.unconditionallyAvailable
+      });
+      functionsByPackageAndName.set(key, candidates);
+    }
+  }
+
+  for (const candidates of functionsByPackageAndName.values()) {
+    candidates.sort(
+      (left, right) => compareStableText(left.filePath, right.filePath) || compareStableText(left.symbolId, right.symbolId)
+    );
+  }
+
+  for (const [filePath, facts] of [...input.factsByFile.entries()].sort(([left], [right]) =>
+    compareStableText(left, right)
+  )) {
+    const goFacts = facts.goProjectFacts;
+    const sourceFile = input.fileSymbols.get(filePath);
+    if (goFacts === undefined || sourceFile === undefined) {
+      continue;
+    }
+
+    for (const call of goFacts.bareCalls) {
+      const caller = input.symbolsById.get(call.callerId);
+      const candidates = functionsByPackageAndName.get(
+        packageKey(filePath, goFacts.packageName, call.targetName)
+      ) ?? [];
+      if (
+        caller === undefined ||
+        caller.filePath !== filePath ||
+        (caller.kind !== "function" && caller.kind !== "method") ||
+        candidates.length !== 1 ||
+        candidates[0] === undefined ||
+        candidates[0].filePath === filePath ||
+        !candidates[0].unconditionallyAvailable
+      ) {
+        continue;
+      }
+      const target = input.symbolsById.get(candidates[0].symbolId);
+      if (target === undefined || target.filePath !== candidates[0].filePath) {
+        continue;
+      }
+      edges.push({
+        id: createEdgeId({
+          sourceId: caller.id,
+          targetId: target.id,
+          kind: "calls",
+          line: call.range.start.line,
+          column: call.range.start.column,
+          referenceName: call.targetName
+        }),
+        sourceId: caller.id,
+        targetId: target.id,
+        kind: "calls",
+        filePath,
+        range: call.range,
+        resolution: "exact",
+        confidence: 1,
+        referenceName: call.targetName,
+        evidence: referenceEvidence(
+          "project.go.same-package.unique-unconditional-package-function-call",
+          "module",
+          [target.id],
+          [],
+          [filePath, target.filePath]
+        )
+      });
+    }
+
+    if (input.moduleResolver === undefined) {
+      continue;
+    }
+    for (const imported of goFacts.imports) {
+      const resolution = input.moduleResolver.resolve(filePath, imported.moduleSpecifier);
+      if (
+        resolution.strategy !== "go-module-package" ||
+        resolution.targetFilePath === null ||
+        !input.knownFilePaths.has(resolution.targetFilePath)
+      ) {
+        continue;
+      }
+      const target = input.fileSymbols.get(resolution.targetFilePath);
+      if (target === undefined) {
+        continue;
+      }
+      edges.push({
+        id: createEdgeId({
+          sourceId: sourceFile.id,
+          targetId: target.id,
+          kind: "imports",
+          line: imported.range.start.line,
+          column: imported.range.start.column,
+          referenceName: imported.moduleSpecifier
+        }),
+        sourceId: sourceFile.id,
+        targetId: target.id,
+        kind: "imports",
+        filePath,
+        range: imported.range,
+        resolution: "exact",
+        confidence: 1,
+        referenceName: imported.moduleSpecifier,
+        evidence: referenceEvidence(
+          "project.go.root-module.local-package-import-representative-file",
+          "module",
+          [target.id],
+          resolution.configurationPaths,
+          [filePath, resolution.targetFilePath]
+        )
+      });
+    }
+  }
+  return edges;
+}
+
 function goFrameStandardRouterPath(prefix: string, path: string): string | null {
   if (
     !path.startsWith("/") ||
@@ -11656,6 +11826,16 @@ export function resolveProjectFacts(input: {
   for (const symbol of goFrameStandardRouterRouteProjection.symbols) {
     symbolsById.set(symbol.id, symbol);
   }
+
+  resolvedEdges.push(
+    ...projectGoProjectFacts({
+      factsByFile,
+      fileSymbols,
+      symbolsById,
+      knownFilePaths,
+      moduleResolver: input.moduleResolver
+    })
+  );
 
   const fastifyPluginRouteProjection = projectFastifyImportedPluginRoutes({
     factsByFile,
