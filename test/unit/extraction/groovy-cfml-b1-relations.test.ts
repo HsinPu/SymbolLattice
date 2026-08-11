@@ -29,6 +29,91 @@ describe("Groovy and CFML B1 relations", () => {
     ]);
   });
 
+  it("links a direct Groovy superclass after a canonical package and non-colliding direct import", () => {
+    const facts = extractFileFacts({
+      filePath: "src/Smoke.groovy",
+      language: "groovy",
+      sourceText: [
+        "package org.example.smoke",
+        "import vendor.utility.Toolkit",
+        "class SmokeTest extends Toolkit {}",
+        "class Parent {}",
+        "class Child extends Parent {}"
+      ].join("\n")
+    });
+    const child = facts.symbols.find((symbol) => symbol.name === "Child");
+    const parent = facts.symbols.find((symbol) => symbol.name === "Parent");
+
+    expect(facts.edges.filter((edge) => edge.kind === "extends")).toEqual([
+      expect.objectContaining({
+        sourceId: child?.id,
+        targetId: parent?.id,
+        referenceName: "Parent",
+        resolution: "exact",
+        confidence: 1,
+        evidence: {
+          ruleId: "syntax.groovy.same-file.unique-direct-class-superclass",
+          stage: "syntax",
+          candidateSymbolIds: [parent?.id]
+        }
+      })
+    ]);
+  });
+
+  it("links a direct Groovy superclass after a non-colliding two-segment direct import", () => {
+    const facts = extractFileFacts({
+      filePath: "src/Smoke.groovy",
+      language: "groovy",
+      sourceText: [
+        "package org.example.smoke",
+        "import picocli.CommandLine",
+        "class Parent {}",
+        "class Child extends Parent {}"
+      ].join("\n")
+    });
+    const child = facts.symbols.find((symbol) => symbol.name === "Child");
+    const parent = facts.symbols.find((symbol) => symbol.name === "Parent");
+
+    expect(facts.edges.filter((edge) => edge.kind === "extends")).toEqual([
+      expect.objectContaining({
+        sourceId: child?.id,
+        targetId: parent?.id,
+        referenceName: "Parent",
+        resolution: "exact",
+        confidence: 1,
+        evidence: {
+          ruleId: "syntax.groovy.same-file.unique-direct-class-superclass",
+          stage: "syntax",
+          candidateSymbolIds: [parent?.id]
+        }
+      })
+    ]);
+  });
+
+  it("fails closed for non-canonical Groovy preambles and executable script text", () => {
+    const cases = [
+      ["package org.example.smoke", "import vendor.Parent", "class Parent {}", "class Child extends Parent {}"].join("\n"),
+      ["package org.example.smoke", "import static vendor.Parent.helper", "class Parent {}", "class Child extends Parent {}"].join("\n"),
+      ["package org.example.smoke", "import vendor.*", "class Parent {}", "class Child extends Parent {}"].join("\n"),
+      ["package org.example.smoke", "import vendor.Parent as LocalParent", "class Parent {}", "class Child extends Parent {}"].join("\n"),
+      ["package org.example.smoke", "import vendor..Parent", "class Parent {}", "class Child extends Parent {}"].join("\n"),
+      ["package org.example.smoke", "import Toolkit", "class Parent {}", "class Child extends Parent {}"].join("\n"),
+      ["package org.example.smoke", "import vendor.utility.Toolkit", "import vendor.utility.Toolkit", "class Parent {}", "class Child extends Parent {}"].join("\n"),
+      ["package org..smoke", "class Parent {}", "class Child extends Parent {}"].join("\n"),
+      ["package org.example.smoke", "package org.example.other", "class Parent {}", "class Child extends Parent {}"].join("\n"),
+      ["class Parent {}", "package org.example.smoke", "class Child extends Parent {}"].join("\n"),
+      ["package org.example.smoke", "class Parent {}", "class Child extends vendor.Parent {}"].join("\n"),
+      ["package org.example.smoke", "class Parent<T> {}", "class Child extends Parent<String> {}"].join("\n"),
+      ["package org.example.smoke", "interface Parent {}", "class Child implements Parent {}"].join("\n"),
+      ["package org.example.smoke", "class Parent {}", "class Child extends Parent implements Runnable {}"].join("\n"),
+      ["package org.example.smoke", "mode = 1", "class Parent {}", "class Child extends Parent {}"].join("\n")
+    ];
+    for (const sourceText of cases) {
+      const facts = extractFileFacts({ filePath: "src/Smoke.groovy", language: "groovy", sourceText });
+      expect(facts.edges.filter((edge) => edge.kind === "extends"), sourceText).toEqual([]);
+    }
+  });
+
   it("fails closed for ambiguous or non-canonical Groovy inheritance", () => {
     const cases = [
       "class Smoke extends Parent {}",

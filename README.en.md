@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.374.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.375.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## What it is
 
@@ -51,10 +51,10 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.374.0 highlights
+## v0.375.0 highlights
 
-- Rust B1 preserves generic public-function identity after unrelated parser recovery, emits exact same-file direct calls only when they can be statically proven, and emits an import edge to a directly resolved module file in the root crate.
-- Malformed source, `cfg` conditions, unresolved `path` attributes, ambiguous targets, and workspace boundaries remain fail-closed. This does not claim trait dispatch, macro expansion, Cargo semantics, or runtime dispatch.
+- Groovy B1 accepts a leading canonical dotted `package` and plain direct `import` preamble alongside uniquely proven bare same-file class inheritance. It emits an `exact` `extends` edge only when the target is unique and no candidate import terminal collides.
+- Static, wildcard, alias, malformed, duplicate, or late imports remain unresolved, as do dynamic, metaprogramming, runtime behavior, qualified or generic superclasses, and `implements`; none are claimed as supported.
 
 ## MCP
 

@@ -34,6 +34,16 @@ interface GroovyIdentifier {
   readonly end: number;
 }
 
+interface GroovySourceSpan {
+  readonly start: number;
+  readonly end: number;
+}
+
+interface GroovyPreamble {
+  readonly spans: readonly GroovySourceSpan[];
+  readonly importTerminals: readonly string[];
+}
+
 const GROOVY_CONTAINER_KINDS: readonly GroovyContainerKind[] = [
   "class",
   "interface",
@@ -234,6 +244,100 @@ function readIdentifier(sourceText: string, start: number): GroovyIdentifier | n
     end += 1;
   }
   return { name: sourceText.slice(start, end), end };
+}
+
+function readQualifiedIdentifier(
+  sourceText: string,
+  start: number,
+  minimumSegments: number
+): GroovyIdentifier | null {
+  const first = readIdentifier(sourceText, start);
+  if (first === null) {
+    return null;
+  }
+  let end = first.end;
+  let segments = 1;
+  while (sourceText[end] === ".") {
+    const next = readIdentifier(sourceText, end + 1);
+    if (next === null) {
+      return null;
+    }
+    end = next.end;
+    segments += 1;
+  }
+  return segments >= minimumSegments ? { name: sourceText.slice(start, end), end } : null;
+}
+
+function directiveEnd(sourceText: string, start: number): number | null {
+  let index = start;
+  while (sourceText[index] === " " || sourceText[index] === "\t" || sourceText[index] === "\f") {
+    index += 1;
+  }
+  if (index === sourceText.length) {
+    return index;
+  }
+  if (sourceText[index] === "\r") {
+    return sourceText[index + 1] === "\n" ? index + 2 : index + 1;
+  }
+  return sourceText[index] === "\n" ? index + 1 : null;
+}
+
+function canonicalGroovyPreamble(sourceText: string): GroovyPreamble | null {
+  const sanitized = sanitizeGroovySource(sourceText);
+  if (sanitized === null) {
+    return null;
+  }
+
+  const spans: GroovySourceSpan[] = [];
+  const importTerminals: string[] = [];
+  const importNames = new Set<string>();
+  let index = skipWhitespace(sanitized, 0);
+  if (matchesKeyword(sanitized, index, "package")) {
+    const packageName = readQualifiedIdentifier(
+      sanitized,
+      skipWhitespace(sanitized, index + "package".length),
+      2
+    );
+    if (packageName === null) {
+      return null;
+    }
+    const end = directiveEnd(sanitized, packageName.end);
+    if (end === null) {
+      return null;
+    }
+    spans.push({ start: index, end });
+    index = end;
+  }
+
+  while (true) {
+    index = skipWhitespace(sanitized, index);
+    if (!matchesKeyword(sanitized, index, "import")) {
+      return { spans, importTerminals };
+    }
+    const importName = readQualifiedIdentifier(
+      sanitized,
+      skipWhitespace(sanitized, index + "import".length),
+      2
+    );
+    if (importName === null) {
+      return null;
+    }
+    if (importNames.has(importName.name)) {
+      return null;
+    }
+    const end = directiveEnd(sanitized, importName.end);
+    if (end === null) {
+      return null;
+    }
+    const terminal = importName.name.split(".").at(-1);
+    if (terminal === undefined) {
+      return null;
+    }
+    spans.push({ start: index, end });
+    importNames.add(importName.name);
+    importTerminals.push(terminal);
+    index = end;
+  }
 }
 
 function matchesKeyword(sourceText: string, start: number, keyword: string): boolean {
@@ -466,13 +570,17 @@ function staticGroovyDeclarations(sourceText: string): readonly GroovyDeclaratio
 
 function hasOnlyGroovyDeclarations(
   sourceText: string,
-  declarations: readonly GroovyDeclaration[]
+  declarations: readonly GroovyDeclaration[],
+  preamble: GroovyPreamble
 ): boolean {
   const sanitized = sanitizeGroovySource(sourceText);
   if (sanitized === null) {
     return false;
   }
   const remainder = sanitized.split("");
+  for (const span of preamble.spans) {
+    blankSourceSpan(remainder, span.start, span.end);
+  }
   for (const declaration of declarations) {
     blankSourceSpan(remainder, declaration.start, declaration.end);
   }
@@ -575,6 +683,7 @@ export function extractGroovyFileFacts(input: GroovyExtractFileFactsInput): Arti
   }
 
   const declarations = staticGroovyDeclarations(input.sourceText) ?? [];
+  const preamble = canonicalGroovyPreamble(input.sourceText);
   const declarationSymbols: Array<{
     readonly declaration: GroovyDeclaration;
     readonly symbol: SymbolNode;
@@ -591,7 +700,7 @@ export function extractGroovyFileFacts(input: GroovyExtractFileFactsInput): Arti
     declarationSymbols.push({ declaration, symbol });
   }
 
-  if (hasOnlyGroovyDeclarations(input.sourceText, declarations)) {
+  if (preamble !== null && hasOnlyGroovyDeclarations(input.sourceText, declarations, preamble)) {
     for (const source of declarationSymbols) {
       const superclass = source.declaration.superclass;
       if (superclass === undefined) {
@@ -606,7 +715,11 @@ export function extractGroovyFileFacts(input: GroovyExtractFileFactsInput): Arti
           candidate.declaration.kind === "class" && candidate.declaration.name === superclass.name
       );
       const target = sources.length === 1 && targets.length === 1 ? targets[0] : undefined;
-      if (target === undefined || target.symbol.id === source.symbol.id) {
+      if (
+        target === undefined ||
+        target.symbol.id === source.symbol.id ||
+        preamble.importTerminals.includes(superclass.name)
+      ) {
         continue;
       }
       const range = rangeForSpan(lineStarts, superclass.start, superclass.end);

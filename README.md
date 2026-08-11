@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.374.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
+> v0.375.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
 
 ## 專案用途
 
@@ -51,10 +51,10 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.374.0 重點
+## v0.375.0 重點
 
-- Rust B1 會在無關的 parser recovery 後保留泛型公開函式的身分，並只為可靜態證明的同檔直接呼叫建立 exact edge；根 crate 中已證明的直接 module import 會建立至目標檔案的 import edge。
-- malformed source、`cfg` 條件、無法解析的 `path`、模糊目標與 workspace 邊界都會 fail-closed；不宣稱 trait dispatch、macro expansion、Cargo 語意或 runtime dispatch。
+- Groovy B1 支援由開頭的標準 dotted `package` 與 plain direct `import` 組成的 preamble，並可同時建立唯一可證明的 bare 同檔 class inheritance；只有目標唯一且候選 import 的 terminal 名稱不衝突時，才建立 `exact` `extends` edge。
+- static、wildcard、alias、malformed、duplicate 或 late import，以及 dynamic、metaprogramming、runtime 行為、qualified 或 generic superclass 和 `implements` 都維持 unresolved／不宣稱支援。
 
 ## MCP
 
