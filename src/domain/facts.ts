@@ -13,13 +13,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v263";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v264";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v142";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v143";
 
 /** Hard cap for one source-proven Java exhaustive if/else-if/else assignment join. */
 export const JAVA_EXHAUSTIVE_ASSIGNMENT_JOIN_MAXIMUM_BRANCHES = 8;
@@ -1537,6 +1537,23 @@ export interface GoProjectFacts {
   readonly bareCalls: readonly GoProjectBareCallFact[];
 }
 
+/** One complete direct root Ada package specification or body retained for project pairing. */
+export interface AdaProjectPackageUnitFact {
+  readonly role: "spec" | "body";
+  readonly normalizedFullName: string;
+  readonly symbolId: string;
+  readonly filePath: string;
+  readonly unitRange: SourceRange;
+  readonly headerRange: SourceRange;
+  readonly nameRange: SourceRange;
+  readonly endRange: SourceRange;
+}
+
+/** Syntax-only Ada package-unit facts retained for a later bounded project resolver. */
+export interface AdaProjectFacts {
+  readonly packageUnits: readonly AdaProjectPackageUnitFact[];
+}
+
 /** A direct external `mod name;` declaration retained for Rust module proof. */
 export interface RustActixExternalModuleFact {
   readonly name: string;
@@ -2557,6 +2574,8 @@ export interface ArtifactFacts {
   readonly goProjectFacts?: GoProjectFacts;
   /** Omitted only by artifact facts persisted before v0.374. */
   readonly rustProjectFacts?: RustProjectFacts;
+  /** Omitted only by artifact facts persisted before v0.377. */
+  readonly adaProjectFacts?: AdaProjectFacts;
   /** Omitted only by artifact facts persisted before v0.118. */
   readonly rustActixServiceConfigFacts?: RustActixServiceConfigFacts;
   /** Omitted only by artifact facts persisted before v0.46. */

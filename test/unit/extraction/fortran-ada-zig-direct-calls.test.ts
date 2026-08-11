@@ -481,6 +481,130 @@ end adaHelper;`
     ]);
   });
 
+  it("retains exact Ada root package specification and body facts", () => {
+    const specification = extractAdaFileFacts({
+      filePath: "src/mixed_case.ads",
+      language: "ada",
+      sourceText: [
+        "generic",
+        "  type Item is private;",
+        "PACKAGE Mixed_Case IS",
+        "  procedure Run;",
+        "END MIXED_CASE;"
+      ].join("\r\n")
+    });
+    const specificationSymbol = specification.symbols.find(
+      (symbol) => symbol.kind === "module" && symbol.name === "Mixed_Case"
+    );
+
+    expect(specificationSymbol).toBeDefined();
+    expect(specification.adaProjectFacts).toEqual({
+      packageUnits: [
+        {
+          role: "spec",
+          normalizedFullName: "mixed_case",
+          symbolId: specificationSymbol?.id,
+          filePath: "src/mixed_case.ads",
+          unitRange: {
+            start: { line: 3, column: 1 },
+            end: { line: 5, column: 16 }
+          },
+          headerRange: {
+            start: { line: 3, column: 1 },
+            end: { line: 3, column: 22 }
+          },
+          nameRange: {
+            start: { line: 3, column: 9 },
+            end: { line: 3, column: 19 }
+          },
+          endRange: {
+            start: { line: 5, column: 5 },
+            end: { line: 5, column: 15 }
+          }
+        }
+      ]
+    });
+    expect(specification.adaProjectFacts?.packageUnits[0]?.unitRange).toEqual(
+      specificationSymbol?.range
+    );
+
+    const body = extractAdaFileFacts({
+      filePath: "src/mixed_case.adb",
+      language: "ada",
+      sourceText: "package body MIXED_CASE is\r\nend Mixed_Case;"
+    });
+    const bodySymbol = body.symbols.find(
+      (symbol) => symbol.kind === "module" && symbol.name === "MIXED_CASE"
+    );
+    expect(body.adaProjectFacts).toEqual({
+      packageUnits: [
+        expect.objectContaining({
+          role: "body",
+          normalizedFullName: "mixed_case",
+          symbolId: bodySymbol?.id,
+          filePath: "src/mixed_case.adb",
+          unitRange: bodySymbol?.range,
+          headerRange: {
+            start: { line: 1, column: 1 },
+            end: { line: 1, column: 27 }
+          },
+          nameRange: {
+            start: { line: 1, column: 14 },
+            end: { line: 1, column: 24 }
+          },
+          endRange: {
+            start: { line: 2, column: 5 },
+            end: { line: 2, column: 15 }
+          }
+        })
+      ]
+    });
+  });
+
+  it("keeps Ada package project facts bounded to direct complete root units", () => {
+    const excluded = [
+      ["child unit", "package Parent.Child is\nend Parent.Child;"],
+      ["renaming", "package Alias renames Root;"],
+      ["instantiation", "package Instance is new Generic_Package;"],
+      ["subunit", "separate (Parent)\npackage body Root is\nend Root;"],
+      ["incomplete", "package Root is"]
+    ] as const;
+
+    for (const [description, sourceText] of excluded) {
+      const facts = extractAdaFileFacts({
+        filePath: "src/root.ads",
+        language: "ada",
+        sourceText
+      });
+      expect(facts.adaProjectFacts, description).toEqual({ packageUnits: [] });
+    }
+
+    const nested = extractAdaFileFacts({
+      filePath: "src/root.ads",
+      language: "ada",
+      sourceText: `package Root is
+  package Nested is
+  end Nested;
+end Root;`
+    });
+    expect(nested.adaProjectFacts?.packageUnits.map((unit) => unit.normalizedFullName)).toEqual([
+      "root"
+    ]);
+  });
+
+  it("omits Ada package project facts for reserved words and illegal underscores", () => {
+    const invalidNames = ["End", "Body", "Package", "Bad__Name", "Bad_"] as const;
+
+    for (const name of invalidNames) {
+      const facts = extractAdaFileFacts({
+        filePath: "src/invalid.ads",
+        language: "ada",
+        sourceText: `package ${name} is\nend ${name};`
+      });
+      expect(facts.adaProjectFacts, name).toEqual({ packageUnits: [] });
+    }
+  });
+
   it("emits one exact Zig zero-argument top-level function call with unique target evidence", () => {
     const facts = extractZigFileFacts({
       filePath: "src/smoke.zig",

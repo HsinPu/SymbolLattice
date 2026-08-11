@@ -775,6 +775,78 @@ describe("SqliteGraphStore", () => {
     );
   });
 
+  it("round-trips optional Ada package facts while preserving legacy absence", async () => {
+    const projectPath = await temporaryProject();
+    const store = new SqliteGraphStore();
+    const packageSymbol: SymbolNode = {
+      ...symbol("ada-package", "Result"),
+      kind: "module",
+      range: {
+        start: { line: 1, column: 1 },
+        end: { line: 2, column: 12 }
+      }
+    };
+    const graphSnapshot = snapshot([packageSymbol]);
+    const facts: readonly PersistedArtifactFacts[] = persistedFacts(graphSnapshot).map(
+      (artifactFacts) => ({
+        ...artifactFacts,
+        language: "ada" as const,
+        adaProjectFacts: {
+          packageUnits: [
+            {
+              role: "spec" as const,
+              normalizedFullName: "result",
+              symbolId: packageSymbol.id,
+              filePath: packageSymbol.filePath,
+              unitRange: packageSymbol.range,
+              headerRange: {
+                start: { line: 1, column: 1 },
+                end: { line: 1, column: 18 }
+              },
+              nameRange: {
+                start: { line: 1, column: 9 },
+                end: { line: 1, column: 15 }
+              },
+              endRange: {
+                start: { line: 2, column: 5 },
+                end: { line: 2, column: 11 }
+              }
+            }
+          ]
+        }
+      })
+    );
+
+    store.replaceProjectFacts({
+      projectPath,
+      snapshot: graphSnapshot,
+      indexedAt: "2026-08-12T00:00:00.000Z",
+      artifactFacts: facts,
+      indexInputs: indexInputs("ada-project-facts"),
+      resolverVersion: "test-resolver-ada-project-facts"
+    });
+
+    expect(new SqliteGraphStore().getArtifactFacts(projectPath)[0]?.adaProjectFacts).toEqual(
+      facts[0]?.adaProjectFacts
+    );
+
+    const legacyProjectPath = await temporaryProject();
+    const legacyStore = new SqliteGraphStore();
+    legacyStore.replaceProjectFacts({
+      projectPath: legacyProjectPath,
+      snapshot: graphSnapshot,
+      indexedAt: "2026-08-12T00:01:00.000Z",
+      artifactFacts: persistedFacts(graphSnapshot),
+      indexInputs: indexInputs("legacy-without-ada-project-facts"),
+      resolverVersion: "test-resolver-legacy-without-ada-project-facts"
+    });
+    const legacyFacts = new SqliteGraphStore().getArtifactFacts(legacyProjectPath)[0];
+    expect(legacyFacts?.adaProjectFacts).toBeUndefined();
+    expect(legacyFacts === undefined ? true : Object.hasOwn(legacyFacts, "adaProjectFacts")).toBe(
+      false
+    );
+  });
+
   it("keeps a default-project reader open across committed generations and reopens it after close", async () => {
     const projectPath = await temporaryProject();
     const writer = new SqliteGraphStore();

@@ -1,6 +1,7 @@
 import {
   createEdgeId,
   createSymbolId,
+  type AdaProjectPackageUnitFact,
   type ArtifactFacts,
   type GraphEdge,
   type SourcePosition,
@@ -25,11 +26,25 @@ interface AdaLine {
 interface AdaHeader {
   readonly kind: AdaUnitKind;
   readonly name: string;
+  readonly nameStart: number;
+  readonly nameEnd: number;
   readonly requiresNamedEnd: boolean;
 }
 
 interface AdaUnit {
   readonly kind: AdaUnitKind;
+  readonly name: string;
+  readonly start: number;
+  readonly end: number;
+  readonly headerStart: number;
+  readonly headerEnd: number;
+  readonly nameStart: number;
+  readonly nameEnd: number;
+  readonly endNameStart?: number;
+  readonly endNameEnd?: number;
+}
+
+interface AdaNamedEnd {
   readonly name: string;
   readonly start: number;
   readonly end: number;
@@ -42,6 +57,83 @@ interface AdaDirectCall {
 }
 
 const ADA_NAME = "[A-Za-z][A-Za-z0-9_]*(?:\\.[A-Za-z][A-Za-z0-9_]*)*";
+const ADA_IDENTIFIER = /^[A-Za-z](?:[A-Za-z0-9]|_[A-Za-z0-9])*$/u;
+const ADA_RESERVED_WORDS = new Set([
+  "abort",
+  "abs",
+  "abstract",
+  "accept",
+  "access",
+  "aliased",
+  "all",
+  "and",
+  "array",
+  "at",
+  "begin",
+  "body",
+  "case",
+  "constant",
+  "declare",
+  "delay",
+  "delta",
+  "digits",
+  "do",
+  "else",
+  "elsif",
+  "end",
+  "entry",
+  "exception",
+  "exit",
+  "for",
+  "function",
+  "generic",
+  "goto",
+  "if",
+  "in",
+  "interface",
+  "is",
+  "limited",
+  "loop",
+  "mod",
+  "new",
+  "not",
+  "null",
+  "of",
+  "or",
+  "others",
+  "out",
+  "overriding",
+  "package",
+  "parallel",
+  "pragma",
+  "private",
+  "procedure",
+  "protected",
+  "raise",
+  "range",
+  "record",
+  "rem",
+  "renames",
+  "requeue",
+  "return",
+  "reverse",
+  "select",
+  "separate",
+  "some",
+  "subtype",
+  "synchronized",
+  "tagged",
+  "task",
+  "terminate",
+  "then",
+  "type",
+  "until",
+  "use",
+  "when",
+  "while",
+  "with",
+  "xor"
+]);
 const PACKAGE_BODY_START = new RegExp(
   "^(?:private\\s+)?package\\s+body\\s+(" + ADA_NAME + ")\\s+is\\s*$",
   "iu"
@@ -83,6 +175,11 @@ function lineStartsFor(sourceText: string): readonly number[] {
     }
   }
   return starts;
+}
+
+function normalizedLegalAdaIdentifier(value: string): string | null {
+  const normalized = value.toLowerCase();
+  return ADA_IDENTIFIER.test(value) && !ADA_RESERVED_WORDS.has(normalized) ? normalized : null;
 }
 
 function positionFor(lineStarts: readonly number[], offset: number): SourcePosition {
@@ -176,40 +273,70 @@ function adaLines(sourceText: string): readonly AdaLine[] | null {
   return lines;
 }
 
+function headerFromMatch(
+  line: AdaLine,
+  kind: AdaUnitKind,
+  match: RegExpExecArray,
+  prefix: RegExp,
+  requiresNamedEnd: boolean
+): AdaHeader | null {
+  const name = match[1];
+  const prefixMatch = prefix.exec(line.code);
+  if (name === undefined || prefixMatch === null) {
+    return null;
+  }
+  const nameStart = line.codeStart + prefixMatch[0].length;
+  return { kind, name, nameStart, nameEnd: nameStart + name.length, requiresNamedEnd };
+}
+
 function directAdaHeader(line: AdaLine): AdaHeader | null {
   const packageBody = PACKAGE_BODY_START.exec(line.code);
   if (packageBody !== null) {
-    return { kind: "package-body", name: packageBody[1] ?? "", requiresNamedEnd: true };
+    return headerFromMatch(
+      line,
+      "package-body",
+      packageBody,
+      /^(?:private\s+)?package\s+body\s+/iu,
+      true
+    );
   }
   const pkg = PACKAGE_START.exec(line.code);
   if (pkg !== null) {
-    return { kind: "package", name: pkg[1] ?? "", requiresNamedEnd: true };
+    return headerFromMatch(line, "package", pkg, /^(?:private\s+)?package\s+/iu, true);
   }
   const procedureBody = PROCEDURE_BODY_START.exec(line.code);
   if (procedureBody !== null) {
-    return { kind: "procedure", name: procedureBody[1] ?? "", requiresNamedEnd: true };
+    return headerFromMatch(line, "procedure", procedureBody, /^procedure\s+/iu, true);
   }
   const fnBody = FUNCTION_BODY_START.exec(line.code);
   if (fnBody !== null) {
-    return { kind: "function", name: fnBody[1] ?? "", requiresNamedEnd: true };
+    return headerFromMatch(line, "function", fnBody, /^function\s+/iu, true);
   }
   const procedureDeclaration = PROCEDURE_DECLARATION.exec(line.code);
   if (procedureDeclaration !== null) {
-    return {
-      kind: "procedure",
-      name: procedureDeclaration[1] ?? "",
-      requiresNamedEnd: false
-    };
+    return headerFromMatch(
+      line,
+      "procedure",
+      procedureDeclaration,
+      /^procedure\s+/iu,
+      false
+    );
   }
   const functionDeclaration = FUNCTION_DECLARATION.exec(line.code);
   return functionDeclaration === null
     ? null
-    : { kind: "function", name: functionDeclaration[1] ?? "", requiresNamedEnd: false };
+    : headerFromMatch(line, "function", functionDeclaration, /^function\s+/iu, false);
 }
 
-function namedAdaEnd(line: AdaLine): string | null {
+function namedAdaEnd(line: AdaLine): AdaNamedEnd | null {
   const ending = new RegExp("^end\\s+(" + ADA_NAME + ")\\s*;\\s*$", "iu").exec(line.code);
-  return ending?.[1] ?? null;
+  const name = ending?.[1];
+  const prefix = /^end\s+/iu.exec(line.code);
+  if (name === undefined || prefix === null) {
+    return null;
+  }
+  const start = line.codeStart + prefix[0].length;
+  return { name, start, end: start + name.length };
 }
 
 /**
@@ -226,8 +353,8 @@ function matchingAdaBodyEnd(
     if (line === undefined) {
       break;
     }
-    const declaredName = namedAdaEnd(line);
-    if (declaredName !== null && declaredName.toLowerCase() === expectedName.toLowerCase()) {
+    const declaredName = namedAdaEnd(line)?.name;
+    if (declaredName !== undefined && declaredName.toLowerCase() === expectedName.toLowerCase()) {
       return index;
     }
   }
@@ -261,7 +388,11 @@ function staticAdaUnits(input: AdaExtractFileFactsInput): readonly AdaUnit[] | n
         kind: header.kind,
         name: header.name,
         start: line.codeStart,
-        end: line.codeEnd
+        end: line.codeEnd,
+        headerStart: line.codeStart,
+        headerEnd: line.codeEnd,
+        nameStart: header.nameStart,
+        nameEnd: header.nameEnd
       });
       index += 1;
       continue;
@@ -274,11 +405,21 @@ function staticAdaUnits(input: AdaExtractFileFactsInput): readonly AdaUnit[] | n
     if (endLine === undefined) {
       return null;
     }
+    const ending = namedAdaEnd(endLine);
+    if (ending === null) {
+      return null;
+    }
     units.push({
       kind: header.kind,
       name: header.name,
       start: line.codeStart,
-      end: endLine.codeEnd
+      end: endLine.codeEnd,
+      headerStart: line.codeStart,
+      headerEnd: line.codeEnd,
+      nameStart: header.nameStart,
+      nameEnd: header.nameEnd,
+      endNameStart: ending.start,
+      endNameEnd: ending.end
     });
     index = endIndex + 1;
   }
@@ -287,6 +428,17 @@ function staticAdaUnits(input: AdaExtractFileFactsInput): readonly AdaUnit[] | n
 
 function symbolKindFor(unit: AdaUnit): "module" | "function" {
   return unit.kind === "package" || unit.kind === "package-body" ? "module" : "function";
+}
+
+function isAdaSubunit(unit: AdaUnit, lines: readonly AdaLine[]): boolean {
+  const preceding = lines.filter(
+    (line) => line.code.length > 0 && line.codeEnd <= unit.headerStart
+  ).at(-1);
+  return preceding === undefined
+    ? false
+    : new RegExp("^separate\\s*\\(\\s*" + ADA_NAME + "\\s*\\)\\s*$", "iu").test(
+        preceding.code
+      );
 }
 
 function isZeroArgumentAdaProcedureHeader(line: AdaLine, expectedName: string): boolean {
@@ -309,7 +461,7 @@ function directAdaCall(unit: AdaUnit, lines: readonly AdaLine[]): AdaDirectCall 
     header === undefined ||
     ending === undefined ||
     !isZeroArgumentAdaProcedureHeader(header, unit.name) ||
-    namedAdaEnd(ending)?.toLowerCase() !== unit.name.toLowerCase()
+    namedAdaEnd(ending)?.name.toLowerCase() !== unit.name.toLowerCase()
   ) {
     return null;
   }
@@ -391,6 +543,7 @@ export function extractAdaFileFacts(input: AdaExtractFileFactsInput): ArtifactFa
   const edges: GraphEdge[] = [];
   const declarationOrdinals = new Map<string, number>();
   const symbolsByUnit = new Map<AdaUnit, SymbolNode>();
+  const packageUnits: AdaProjectPackageUnitFact[] = [];
 
   function addSymbol(inputSymbol: {
     readonly name: string;
@@ -445,6 +598,7 @@ export function extractAdaFileFacts(input: AdaExtractFileFactsInput): ArtifactFa
   }
 
   const units = staticAdaUnits(input) ?? [];
+  const lines = adaLines(input.sourceText);
   for (const unit of units) {
     const symbol = addSymbol({
       name: unit.name,
@@ -454,9 +608,29 @@ export function extractAdaFileFacts(input: AdaExtractFileFactsInput): ArtifactFa
       containmentRuleId: "language.ada." + unit.kind + ".direct-library-unit"
     });
     symbolsByUnit.set(unit, symbol);
+    const normalizedFullName = normalizedLegalAdaIdentifier(unit.name);
+    if (
+      (unit.kind === "package" || unit.kind === "package-body") &&
+      !unit.name.includes(".") &&
+      normalizedFullName !== null &&
+      lines !== null &&
+      !isAdaSubunit(unit, lines) &&
+      unit.endNameStart !== undefined &&
+      unit.endNameEnd !== undefined
+    ) {
+      packageUnits.push({
+        role: unit.kind === "package" ? "spec" : "body",
+        normalizedFullName,
+        symbolId: symbol.id,
+        filePath: input.filePath,
+        unitRange: symbol.range,
+        headerRange: rangeForSpan(lineStarts, unit.headerStart, unit.headerEnd),
+        nameRange: rangeForSpan(lineStarts, unit.nameStart, unit.nameEnd),
+        endRange: rangeForSpan(lineStarts, unit.endNameStart, unit.endNameEnd)
+      });
+    }
   }
 
-  const lines = adaLines(input.sourceText);
   if (lines !== null && permitsAdaDirectCalls(lines)) {
     const procedures = units.filter((unit) => unit.kind === "procedure");
     for (const callerUnit of procedures) {
@@ -523,6 +697,7 @@ export function extractAdaFileFacts(input: AdaExtractFileFactsInput): ArtifactFa
     referenceScopes: [],
     importBindings: [],
     exportBindings: [],
-    reExportBindings: []
+    reExportBindings: [],
+    adaProjectFacts: { packageUnits }
   };
 }

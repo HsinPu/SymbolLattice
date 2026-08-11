@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.376.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
+> v0.377.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
 
 ## 專案用途
 
@@ -51,10 +51,10 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.376.0 重點
+## v0.377.0 重點
 
-- 在固定的 `fortran-lang/stdlib` v0.7.0 驗收中，Fortran B1 可辨識小寫 `.f90` 的 module 內 member symbol，並對 `trueloc` 內帶引數的 `CALL logicalloc(...)` 建立保守的同 module direct-call。SymbolLattice 為 `TP 3 / FP 0 / FN 0`；CodeGraph 為 `TP 0 / FP 0 / FN 3`。
-- 按慣例可能需要 preprocessing 的大寫副檔名仍會建立 symbol，但不建立 exact call。source-local preprocessing／conditional 若影響或包住 caller、call site 或 target，便維持 fail-closed；平衡且無關的 conditional／macro block 可保留 exact call。`interface`、dynamic、type-bound 與 ambiguous 情況也維持 fail-closed。此界線依副檔名與原始碼證據判定，不涵蓋編譯器對小寫檔案額外強制啟用 preprocessing 的情況。
+- 在固定的 `abitofhelp/result` v1.0.0 真實專案驗收中，Ada B1 的結果為 SymbolLattice `TP 3 / FP 0 / FN 0`、CodeGraph `TP 0 / FP 0 / FN 3`。
+- 只對同一目錄、canonical sibling `.adb`／`.ads` 且完整名稱唯一的 root library package body → spec 建立 exact reference。child/custom filename、rename、instance、subunit、duplicate，以及偽造或 malformed fact 全部 fail-closed；不宣稱泛用的 Ada 跨檔案支援。
 
 ## MCP
 

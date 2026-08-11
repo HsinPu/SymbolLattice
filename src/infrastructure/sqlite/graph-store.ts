@@ -785,6 +785,7 @@ function artifactFactsPayload(facts: PersistedArtifactFacts): ArtifactFacts {
       : { goFrameStandardRouterFacts: facts.goFrameStandardRouterFacts }),
     ...(facts.goProjectFacts === undefined ? {} : { goProjectFacts: facts.goProjectFacts }),
     ...(facts.rustProjectFacts === undefined ? {} : { rustProjectFacts: facts.rustProjectFacts }),
+    ...(facts.adaProjectFacts === undefined ? {} : { adaProjectFacts: facts.adaProjectFacts }),
     ...(facts.rustActixServiceConfigFacts === undefined
       ? {}
       : { rustActixServiceConfigFacts: facts.rustActixServiceConfigFacts }),
