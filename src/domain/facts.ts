@@ -13,13 +13,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v260";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v261";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v141";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v142";
 
 /** Hard cap for one source-proven Java exhaustive if/else-if/else assignment join. */
 export const JAVA_EXHAUSTIVE_ASSIGNMENT_JOIN_MAXIMUM_BRANCHES = 8;
@@ -1596,6 +1596,42 @@ export interface RustActixServiceConfigFacts {
   readonly importedMounts: readonly RustActixImportedServiceConfigMountFact[];
 }
 
+/** A direct unconditional `mod name;` declaration from a Rust crate root. */
+export interface RustProjectModuleFact {
+  readonly name: string;
+  readonly filePath: string;
+  readonly range: SourceRange;
+  readonly unconditionallyAvailable: boolean;
+}
+
+/** A direct unconditional `use crate::module::Name;` declaration from one Rust module. */
+export interface RustProjectImportFact {
+  readonly modulePath: readonly string[];
+  readonly importedName: string;
+  readonly range: SourceRange;
+  readonly unconditionallyAvailable: boolean;
+}
+
+/** One public, top-level Rust declaration retained for a later exact crate resolver. */
+export interface RustProjectDeclarationFact {
+  readonly name: string;
+  readonly symbolId: string;
+  readonly filePath: string;
+  readonly kind: "function" | "type";
+  readonly range: SourceRange;
+  readonly unconditionallyAvailable: boolean;
+}
+
+/**
+ * Syntax-only Rust facts. They prove physical root modules, direct crate
+ * imports, and public declaration targets without resolving a cross-file edge.
+ */
+export interface RustProjectFacts {
+  readonly modules: readonly RustProjectModuleFact[];
+  readonly imports: readonly RustProjectImportFact[];
+  readonly declarations: readonly RustProjectDeclarationFact[];
+}
+
 /** A Scala class or object declaration with its direct package-clause proof. */
 export interface ScalaClassFact {
   readonly symbolId: string;
@@ -2519,6 +2555,8 @@ export interface ArtifactFacts {
   readonly goFrameStandardRouterFacts?: GoFrameStandardRouterFacts;
   /** Omitted only by artifact facts persisted before v0.373. */
   readonly goProjectFacts?: GoProjectFacts;
+  /** Omitted only by artifact facts persisted before v0.374. */
+  readonly rustProjectFacts?: RustProjectFacts;
   /** Omitted only by artifact facts persisted before v0.118. */
   readonly rustActixServiceConfigFacts?: RustActixServiceConfigFacts;
   /** Omitted only by artifact facts persisted before v0.46. */

@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.373.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.374.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## What it is
 
@@ -51,10 +51,10 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.373.0 highlights
+## v0.374.0 highlights
 
-- Go B1 preserves simple receiver-method symbols after unrelated parser recovery, emits exact same-package cross-file bare-function calls only when the target is unique and unconditional, and resolves root-`go.mod` local package imports to a deterministic representative file.
-- `replace`, nested modules, external or ambiguous imports, build-constrained files, and shadowed, dynamic, selector, and interface dispatch remain fail-closed. This does not claim generic type inference or runtime dispatch.
+- Rust B1 preserves generic public-function identity after unrelated parser recovery, emits exact same-file direct calls only when they can be statically proven, and emits an import edge to a directly resolved module file in the root crate.
+- Malformed source, `cfg` conditions, unresolved `path` attributes, ambiguous targets, and workspace boundaries remain fail-closed. This does not claim trait dispatch, macro expansion, Cargo semantics, or runtime dispatch.
 
 ## MCP
 

@@ -352,6 +352,411 @@ fn callee() {}
     ]);
   });
 
+  it("retains strict Rust crate-root module, module import, and target declaration facts", () => {
+    const rootFacts = extractRustFileFacts({
+      filePath: "src/lib.rs",
+      language: "rust",
+      sourceText: `mod map;
+mod value;`
+    });
+    const mapFacts = extractRustFileFacts({
+      filePath: "src/map.rs",
+      language: "rust",
+      sourceText: `use crate::value::Value;`
+    });
+    const valueFacts = extractRustFileFacts({
+      filePath: "src/value.rs",
+      language: "rust",
+      sourceText: `/// Represents any valid JSON value.
+#[derive(Clone, Eq, PartialEq, Hash)]
+pub enum Value { Unit }`
+    });
+    const deFacts = extractRustFileFacts({
+      filePath: "src/de.rs",
+      language: "rust",
+      sourceText: `pub fn from_str<'a, T>(input: &'a str) -> T
+where
+    T: Default,
+{
+    T::default()
+}`
+    });
+
+    expect(rootFacts.rustProjectFacts?.modules).toEqual([
+      expect.objectContaining({ name: "map", filePath: "src/lib.rs", unconditionallyAvailable: true }),
+      expect.objectContaining({ name: "value", filePath: "src/lib.rs", unconditionallyAvailable: true })
+    ]);
+    expect(mapFacts.rustProjectFacts?.imports).toEqual([
+      expect.objectContaining({ modulePath: ["value"], importedName: "Value" })
+    ]);
+    const value = valueFacts.symbols.find((symbol) => symbol.kind === "type" && symbol.name === "Value");
+    expect(value).toMatchObject({ qualifiedName: "src/value.rs#Value", isExported: true });
+    expect(valueFacts.rustProjectFacts?.declarations).toEqual([
+      expect.objectContaining({ name: "Value", symbolId: value?.id, filePath: "src/value.rs", kind: "type" })
+    ]);
+    expect(functionByName(deFacts, "from_str")).toMatchObject({
+      qualifiedName: "src/de.rs#from_str",
+      isExported: true
+    });
+    expect(deFacts.rustProjectFacts?.declarations).toEqual([
+      expect.objectContaining({ name: "from_str", kind: "function", unconditionallyAvailable: true })
+    ]);
+  });
+
+  it("retains serde-json's parse-clean top-level generic from_str through unrelated recovery", () => {
+    const facts = extractRustFileFacts({
+      filePath: "src/de.rs",
+      language: "rust",
+      sourceText: `macro_rules! overflow {
+    ($a:ident * 10 + $b:ident, $c:expr) => {
+        match $c {
+            c => $a >= c / 10 && ($a > c / 10 || $b > c % 10),
+        }
+    };
+}
+
+pub fn from_str<'a, T>(s: &'a str) -> Result<T>
+where
+    T: de::Deserialize<'a>,
+{
+    from_trait(read::StrRead::new(s))
+}`
+    });
+
+    const fromStr = functionByName(facts, "from_str");
+    expect(fromStr).toMatchObject({
+      qualifiedName: "src/de.rs#from_str",
+      kind: "function",
+      isExported: true
+    });
+    expect(facts.edges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sourceId: expect.any(String), targetId: fromStr.id, kind: "contains" })
+      ])
+    );
+    expect(facts.rustProjectFacts?.declarations).toEqual([
+      expect.objectContaining({ name: "from_str", symbolId: fromStr.id, unconditionallyAvailable: true })
+    ]);
+  });
+
+  it("keeps cfg-decorated function symbols while excluding unconditional project declarations", () => {
+    const facts = extractRustFileFacts({
+      filePath: "src/de.rs",
+      language: "rust",
+      sourceText: `#[cfg(feature = "arbitrary_precision")]
+pub fn from_str() { helper(); }
+fn helper() {}`
+    });
+
+    const fromStr = functionByName(facts, "from_str");
+    const helper = functionByName(facts, "helper");
+    expect(facts.edges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ targetId: fromStr.id, kind: "contains", resolution: "exact" }),
+        expect.objectContaining({
+          sourceId: fromStr.id,
+          targetId: helper.id,
+          kind: "calls",
+          resolution: "exact"
+        })
+      ])
+    );
+    expect(facts.rustProjectFacts?.declarations).toEqual([]);
+  });
+
+  it("does not let a well-formed conditional declaration poison an unrelated unconditional target", () => {
+    const facts = extractRustFileFacts({
+      filePath: "src/de.rs",
+      language: "rust",
+      sourceText: `#[cfg(feature = "std")]
+#[cfg_attr(docsrs, doc(cfg(feature = "std")))]
+pub fn from_reader() {}
+
+pub fn from_str() {}`
+    });
+
+    expect(facts.rustProjectFacts?.declarations).toEqual([
+      expect.objectContaining({ name: "from_str", kind: "function" })
+    ]);
+  });
+
+  it("does not let well-formed conditional or inline modules poison physical root modules", () => {
+    const facts = extractRustFileFacts({
+      filePath: "src/lib.rs",
+      language: "rust",
+      sourceText: `mod map;
+mod value;
+#[cfg(feature = "optional")]
+mod optional;
+pub mod inline {}`
+    });
+    const collidingFacts = extractRustFileFacts({
+      filePath: "src/lib.rs",
+      language: "rust",
+      sourceText: `mod map;
+#[cfg(feature = "optional")]
+mod map;`
+    });
+
+    expect(facts.rustProjectFacts?.modules).toEqual([
+      expect.objectContaining({ name: "map" }),
+      expect.objectContaining({ name: "value" })
+    ]);
+    expect(collidingFacts.rustProjectFacts?.modules ?? []).toEqual([]);
+  });
+
+  it("round-trips Rust project facts through SQLite artifact persistence", async () => {
+    const projectPath = await createPersistedProject("src/lib.rs", `mod map;
+mod value;`);
+    await writeFile(resolve(projectPath, "src", "map.rs"), "use crate::value::Value;\n", "utf8");
+    await writeFile(resolve(projectPath, "src", "value.rs"), "pub enum Value { Unit }\n", "utf8");
+    const store = new SqliteGraphStore();
+    const service = new SymbolLatticeService(store, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+
+    const persistedByPath = new Map(
+      store.getArtifactFacts(projectPath).map((facts) => [facts.filePath, facts])
+    );
+    expect(persistedByPath.get("src/lib.rs")).toMatchObject({
+      rustProjectFacts: { modules: expect.arrayContaining([expect.objectContaining({ name: "map" })]) }
+    });
+    expect(persistedByPath.get("src/map.rs")).toMatchObject({
+      rustProjectFacts: {
+        imports: [expect.objectContaining({ modulePath: ["value"], importedName: "Value" })]
+      }
+    });
+    expect(persistedByPath.get("src/value.rs")).toMatchObject({
+      rustProjectFacts: { declarations: [expect.objectContaining({ name: "Value", kind: "type" })] }
+    });
+  });
+
+  it("fails closed for conditional, unsafe, or ambiguous Rust project facts", () => {
+    for (const [description, filePath, sourceText] of [
+      ["cfg module", "src/lib.rs", `#[cfg(feature = "x")]\nmod value;`],
+      ["path module", "src/lib.rs", `#[path = "other.rs"]\nmod value;`],
+      ["cfg enum", "src/value.rs", `#[cfg(feature = "x")]\npub enum Value { Unit }`],
+      ["parse error", "src/value.rs", `pub enum Value {`],
+      ["test context", "tests/map.rs", `use crate::value::Value;`],
+      ["generated context", "generated/map.rs", `use crate::value::Value;`]
+    ] as const) {
+      const facts = extractRustFileFacts({ filePath, language: "rust", sourceText });
+      expect(facts.rustProjectFacts, description).toBeUndefined();
+      expect(facts.symbols.filter((symbol) => symbol.kind !== "file"), description).toEqual([]);
+    }
+
+    for (const [description, sourceText] of [
+      ["alias import", `use crate::value::Value as LocalValue;`],
+      ["group import", `use crate::value::{Value, Other};`],
+      ["glob import", `use crate::value::*;`],
+      ["super import", `use super::value::Value;`],
+      ["external import", `use external::value::Value;`]
+    ] as const) {
+      const facts = extractRustFileFacts({ filePath: "src/map.rs", language: "rust", sourceText });
+      expect(facts.rustProjectFacts?.imports, description).toEqual([]);
+    }
+
+    for (const [description, sourceText] of [
+      ["trait declaration", `pub trait Value {}`],
+      ["impl declaration", `pub struct Value;\nimpl Value {}`],
+      ["macro declaration", `make_value!();`],
+      ["duplicate declaration", `pub enum Value { Unit }\npub enum Value { Other }`]
+    ] as const) {
+      const facts = extractRustFileFacts({ filePath: "src/value.rs", language: "rust", sourceText });
+      expect(facts.rustProjectFacts?.declarations, description).toEqual([]);
+      expect(facts.symbols.filter((symbol) => symbol.kind === "type"), description).toEqual([]);
+    }
+  });
+
+  it("suppresses accepted Rust project facts that collide with malformed direct siblings", () => {
+    for (const [description, filePath, sourceText, fact] of [
+      [
+        "enum",
+        "src/value.rs",
+        `pub enum Value { Unit }\npub enum Value {`,
+        "declarations"
+      ],
+      [
+        "function",
+        "src/de.rs",
+        `pub fn from_str() {}\npub fn from_str(`,
+        "declarations"
+      ],
+      ["module", "src/lib.rs", `mod map;\nmod value;\nmod value`, "modules"],
+      [
+        "import",
+        "src/map.rs",
+        `use crate::value::Value;\nuse crate::value::Value`,
+        "imports"
+      ],
+      [
+        "attributed enum",
+        "src/value.rs",
+        `pub enum Value { Unit }\n#[derive(Clone)]\npub enum Value {`,
+        "declarations"
+      ],
+      [
+        "attributed module",
+        "src/lib.rs",
+        `mod value;\n#[derive(Clone)]\nmod value`,
+        "modules"
+      ],
+      [
+        "attributed import",
+        "src/map.rs",
+        `use crate::value::Value;\n#[derive(Clone)]\nuse crate::value::Value`,
+        "imports"
+      ]
+    ] as const) {
+      const facts = extractRustFileFacts({ filePath, language: "rust", sourceText });
+      expect(facts.rustProjectFacts?.[fact] ?? [], description).toEqual([]);
+      if (fact === "declarations") {
+        expect(facts.symbols.filter((symbol) => symbol.kind === "type"), description).toEqual([]);
+      }
+      if (description === "function") {
+        expect(facts.symbols.filter((symbol) => symbol.name === "from_str"), description).toHaveLength(1);
+      }
+    }
+  });
+
+  it("suppresses a Rust project fact category when a different-name sibling is malformed", () => {
+    const enumFacts = extractRustFileFacts({
+      filePath: "src/value.rs",
+      language: "rust",
+      sourceText: `pub enum Value { Unit }\npub enum Broken {`
+    });
+    const moduleFacts = extractRustFileFacts({
+      filePath: "src/lib.rs",
+      language: "rust",
+      sourceText: `mod map;\nmod broken`
+    });
+    const importFacts = extractRustFileFacts({
+      filePath: "src/map.rs",
+      language: "rust",
+      sourceText: `use crate::value::Value;\nuse crate::broken::Other`
+    });
+
+    expect(enumFacts.rustProjectFacts?.declarations ?? []).toEqual([]);
+    expect(moduleFacts.rustProjectFacts?.modules ?? []).toEqual([]);
+    expect(importFacts.rustProjectFacts?.imports ?? []).toEqual([]);
+  });
+
+  it("suppresses all Rust crate imports when any direct use candidate is unsafe", () => {
+    for (const [description, unsafeUse] of [
+      ["malformed group", `use crate::value::{Value`],
+      ["incomplete alias", `use crate::value::Value as`],
+      ["attributed alias", `#[allow(unused_imports)]\nuse crate::value::Value as Alias;`],
+      ["unknown direct use", `use crate::value;`]
+    ] as const) {
+      const facts = extractRustFileFacts({
+        filePath: "src/map.rs",
+        language: "rust",
+        sourceText: `use crate::value::Value;\n${unsafeUse}`
+      });
+      expect(facts.rustProjectFacts?.imports ?? [], description).toEqual(
+        description === "attributed alias"
+          ? [expect.objectContaining({ modulePath: ["value"], importedName: "Value" })]
+          : []
+      );
+    }
+  });
+
+  it("keeps Rust project facts through unrelated direct macro recovery", () => {
+    const recoveryPrefix = `macro_rules! overflow {
+    ($value:expr) => { $value % 10 };
+}`;
+    const rootFacts = extractRustFileFacts({
+      filePath: "src/lib.rs",
+      language: "rust",
+      sourceText: `${recoveryPrefix}\nmod map;`
+    });
+    const importFacts = extractRustFileFacts({
+      filePath: "src/map.rs",
+      language: "rust",
+      sourceText: `${recoveryPrefix}\nuse crate::value::Value;`
+    });
+    const enumFacts = extractRustFileFacts({
+      filePath: "src/value.rs",
+      language: "rust",
+      sourceText: `${recoveryPrefix}\npub enum Value { Unit }`
+    });
+
+    expect(rootFacts.rustProjectFacts?.modules).toEqual([
+      expect.objectContaining({ name: "map" })
+    ]);
+    expect(importFacts.rustProjectFacts?.imports).toEqual([
+      expect.objectContaining({ modulePath: ["value"], importedName: "Value" })
+    ]);
+    expect(enumFacts.rustProjectFacts?.declarations).toEqual([
+      expect.objectContaining({ name: "Value", kind: "type" })
+    ]);
+  });
+
+  it("fails closed for Rust project facts under direct conditional inner attributes", () => {
+    for (const [attribute, filePath, declaration] of [
+      [`#![cfg(test)]`, "src/lib.rs", `mod map;`],
+      [`#![cfg_attr(test, allow(dead_code))]`, "src/lib.rs", `mod map;`],
+      [`#![cfg(test)]`, "src/map.rs", `use crate::value::Value;`],
+      [
+        `#![cfg_attr(test, allow(dead_code))]`,
+        "src/map.rs",
+        `use crate::value::Value;`
+      ],
+      [`#![cfg(test)]`, "src/de.rs", `pub fn from_str() { helper(); }\nfn helper() {}`],
+      [
+        `#![cfg_attr(test, allow(dead_code))]`,
+        "src/de.rs",
+        `pub fn from_str() { helper(); }\nfn helper() {}`
+      ]
+    ] as const) {
+      const facts = extractRustFileFacts({
+        filePath,
+        language: "rust",
+        sourceText: `${attribute}\n${declaration}`
+      });
+
+      expect(facts.rustProjectFacts, `${attribute} ${filePath}`).toBeUndefined();
+      if (filePath === "src/de.rs") {
+        const fromStr = functionByName(facts, "from_str");
+        const helper = functionByName(facts, "helper");
+        expect(fromStr).toMatchObject({
+          qualifiedName: "src/de.rs#from_str",
+          kind: "function"
+        });
+        expect(facts.edges).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              sourceId: fromStr.id,
+              targetId: helper.id,
+              kind: "calls",
+              resolution: "exact"
+            })
+          ])
+        );
+      }
+    }
+  });
+
+  it("does not resolve a Rust project import when another direct use is malformed", async () => {
+    const projectPath = await createPersistedProject("src/lib.rs", `mod map;\nmod value;`);
+    await writeFile(
+      resolve(projectPath, "src", "map.rs"),
+      `use crate::value::Value;\nuse crate::value::{Value`,
+      "utf8"
+    );
+    await writeFile(resolve(projectPath, "src", "value.rs"), "pub enum Value { Unit }\n", "utf8");
+    const store = new SqliteGraphStore();
+    const service = new SymbolLatticeService(store, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+
+    expect(
+      store
+        .getSnapshot(projectPath)
+        .edges.filter((edge) => edge.filePath === "src/map.rs" && edge.kind === "imports")
+    ).toEqual([]);
+  });
+
   it("keeps persisted Go and Rust call results across a fresh service without reinitializing", async () => {
     const goProject = await createPersistedProject(
       "src/sample.go",

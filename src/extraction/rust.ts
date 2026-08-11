@@ -92,6 +92,16 @@ interface StaticRustExternalModule {
   readonly node: RustSyntaxNode;
 }
 
+interface StaticRustProjectEnum {
+  readonly name: string;
+  readonly node: RustSyntaxNode;
+}
+
+interface StaticRustAttributedItem {
+  readonly node: RustSyntaxNode;
+  readonly attributes: readonly RustSyntaxNode[];
+}
+
 interface StaticActixWebImportedServiceConfig {
   readonly configurationName: string;
   /** The root direct external module, retained for persisted-fact compatibility. */
@@ -382,6 +392,269 @@ function staticRustExternalModules(
       !children.some((child) => child.name === "Block");
     return name === null || !isExternal ? [] : [{ name, node }];
   });
+}
+
+function hasRustConditionalAttribute(
+  input: RustExtractFileFactsInput,
+  attributes: readonly RustSyntaxNode[]
+): boolean {
+  return attributes.some((attribute) => /^#\[\s*cfg(?:_attr)?\b/u.test(nodeText(input, attribute)));
+}
+
+function hasRustConditionalInnerAttribute(
+  input: RustExtractFileFactsInput,
+  root: RustSyntaxNode
+): boolean {
+  return directChildren(root).some(
+    (node) =>
+      node.name === "InnerAttribute" &&
+      /^#!\[\s*cfg(?:_attr)?\b/u.test(nodeText(input, node))
+  );
+}
+
+function hasRustProjectFactAttributeAmbiguity(
+  input: RustExtractFileFactsInput,
+  attributes: readonly RustSyntaxNode[]
+): boolean {
+  return attributes.some((attribute) =>
+    /^#\[\s*(?:cfg(?:_attr)?|path)\b/u.test(nodeText(input, attribute))
+  );
+}
+
+function hasRustPathAttribute(
+  input: RustExtractFileFactsInput,
+  attributes: readonly RustSyntaxNode[]
+): boolean {
+  return attributes.some((attribute) => /^#\[\s*path\b/u.test(nodeText(input, attribute)));
+}
+
+function directRustAttributedItem(
+  node: RustSyntaxNode,
+  itemName: string
+): StaticRustAttributedItem | null {
+  if (node.name === itemName) {
+    return { node, attributes: [] };
+  }
+  if (node.name !== "AttributeItem") {
+    return null;
+  }
+  const children = directChildren(node);
+  const items = children.filter((child) => child.name === itemName);
+  const item = items[0];
+  return items.length !== 1 || item === undefined
+    ? null
+    : {
+        node: item,
+        attributes: children.filter((child) => child.name === "Attribute")
+      };
+}
+
+function staticRustAttributedItem(
+  node: RustSyntaxNode,
+  itemName: string
+): StaticRustAttributedItem | null {
+  const attributed = directRustAttributedItem(node, itemName);
+  return attributed === null || hasSyntaxError(node) ? null : attributed;
+}
+
+function directRustProjectItemName(
+  input: RustExtractFileFactsInput,
+  node: RustSyntaxNode,
+  itemName: "EnumItem" | "FunctionItem" | "ModItem",
+  keyword: "enum" | "fn" | "mod",
+  identifierName: "TypeIdentifier" | "BoundIdentifier"
+): string | null {
+  const attributed = directRustAttributedItem(node, itemName);
+  if (attributed === null) {
+    return null;
+  }
+  const children = directChildren(attributed.node);
+  const keywordIndex = children.findIndex((child) => child.name === keyword);
+  const nameNode = children.slice(keywordIndex + 1).find((child) => child.name === identifierName);
+  return keywordIndex < 0 || nameNode === undefined ? null : identifierText(input, nameNode);
+}
+
+function directRustProjectImportKey(
+  input: RustExtractFileFactsInput,
+  node: RustSyntaxNode
+): string | null {
+  const attributed = directRustAttributedItem(node, "UseDeclaration");
+  if (attributed === null) {
+    return null;
+  }
+  const match = /^use\s+(crate(?:::[A-Za-z_][A-Za-z0-9_]*){2,})\s*;?$/u.exec(
+    nodeText(input, attributed.node)
+  );
+  return match?.[1] ?? null;
+}
+
+function occurrenceCount(values: readonly string[], value: string): number {
+  return values.filter((candidate) => candidate === value).length;
+}
+
+function isSafeRustProjectModuleCandidate(
+  input: RustExtractFileFactsInput,
+  node: RustSyntaxNode
+): boolean {
+  const attributed = directRustAttributedItem(node, "ModItem");
+  if (
+    attributed === null ||
+    hasSyntaxError(node) ||
+    hasRustPathAttribute(input, attributed.attributes) ||
+    directRustProjectItemName(input, node, "ModItem", "mod", "BoundIdentifier") === null
+  ) {
+    return false;
+  }
+  const children = directChildren(attributed.node);
+  const isExternal = children.some((child) => child.name === ";") &&
+    !children.some((child) => child.name === "DeclarationList");
+  const isInline = children.some((child) => child.name === "DeclarationList") &&
+    !children.some((child) => child.name === ";");
+  return isExternal || isInline;
+}
+
+function isSafeRustProjectImportCandidate(
+  input: RustExtractFileFactsInput,
+  node: RustSyntaxNode,
+  acceptedLocalNames: readonly string[]
+): boolean {
+  const attributed = directRustAttributedItem(node, "UseDeclaration");
+  if (
+    attributed === null ||
+    hasSyntaxError(node) ||
+    hasRustPathAttribute(input, attributed.attributes)
+  ) {
+    return false;
+  }
+  if (staticRustProjectImport(input, node) !== null) {
+    return true;
+  }
+  const text = nodeText(input, attributed.node);
+  const target = directUseImportTarget(attributed.node);
+  if (target === null) {
+    return false;
+  }
+  if (text.includes("*")) {
+    return acceptedLocalNames.length === 0;
+  }
+  const imports = staticUseImports(input, target);
+  if (imports.length === 0 || imports.some((imported) => acceptedLocalNames.includes(imported.localName))) {
+    return false;
+  }
+  if (text.includes("{") || /\bas\b/u.test(text)) {
+    return true;
+  }
+  const simplePath = /^use\s+([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)+)\s*;$/u.exec(text);
+  return simplePath?.[1]?.split("::")[0] !== "crate";
+}
+
+function hasAmbiguousRustProjectItem(
+  input: RustExtractFileFactsInput,
+  root: RustSyntaxNode
+): boolean {
+  return directChildren(root).some((node) => {
+    if (node.name !== "AttributeItem") {
+      return false;
+    }
+    const children = directChildren(node);
+    const isProjectItem = children.some((child) =>
+      ["ModItem", "UseDeclaration", "EnumItem"].includes(child.name)
+    );
+    return (
+      isProjectItem &&
+      hasRustProjectFactAttributeAmbiguity(
+        input,
+        children.filter((child) => child.name === "Attribute")
+      )
+    );
+  });
+}
+
+function staticRustProjectModule(
+  input: RustExtractFileFactsInput,
+  node: RustSyntaxNode
+): StaticRustExternalModule | null {
+  const attributed = staticRustAttributedItem(node, "ModItem");
+  if (
+    attributed === null ||
+    hasRustProjectFactAttributeAmbiguity(input, attributed.attributes)
+  ) {
+    return null;
+  }
+  const children = directChildren(attributed.node);
+  const modIndex = children.findIndex((child) => child.name === "mod");
+  const nameNode = modIndex < 0 ? undefined : children[modIndex + 1];
+  const name = nameNode === undefined ? null : identifierText(input, nameNode);
+  const isExternal = children.some((child) => child.name === ";") &&
+    !children.some((child) => child.name === "Block");
+  return name === null || !isExternal ? null : { name, node: attributed.node };
+}
+
+function staticRustProjectImport(
+  input: RustExtractFileFactsInput,
+  node: RustSyntaxNode
+): { readonly modulePath: readonly string[]; readonly importedName: string; readonly node: RustSyntaxNode } | null {
+  const attributed = staticRustAttributedItem(node, "UseDeclaration");
+  if (
+    attributed === null ||
+    hasRustProjectFactAttributeAmbiguity(input, attributed.attributes)
+  ) {
+    return null;
+  }
+  const target = directUseImportTarget(attributed.node);
+  const segments = target === null ? null : staticPathSegments(input, target);
+  if (
+    segments === null ||
+    segments.length < 3 ||
+    segments[0] !== "crate" ||
+    !/^use\s+crate(?:::[A-Za-z_][A-Za-z0-9_]*)+\s*;$/u.test(
+      nodeText(input, attributed.node)
+    )
+  ) {
+    return null;
+  }
+  const importedName = segments.at(-1);
+  const modulePath = segments.slice(1, -1);
+  return importedName === undefined || modulePath.length === 0
+    ? null
+    : { modulePath, importedName, node: attributed.node };
+}
+
+function staticRustProjectEnum(
+  input: RustExtractFileFactsInput,
+  node: RustSyntaxNode
+): StaticRustProjectEnum | null {
+  const attributed = staticRustAttributedItem(node, "EnumItem");
+  if (
+    attributed === null ||
+    hasRustProjectFactAttributeAmbiguity(input, attributed.attributes)
+  ) {
+    return null;
+  }
+  const children = directChildren(attributed.node);
+  const enumIndex = children.findIndex((child) => child.name === "enum");
+  const nameNode = enumIndex < 0 ? undefined : children[enumIndex + 1];
+  const name = nameNode === undefined ? null : identifierText(input, nameNode);
+  const isPublic = children.some((child) => child.name === "Vis" && nodeText(input, child) === "pub");
+  return name === null || !isPublic ? null : { name, node: attributed.node };
+}
+
+function isRustProjectSourceFile(filePath: string): boolean {
+  const pathSegments = filePath.split(/[\\/]/u).filter((segment) => segment.length > 0);
+  return !pathSegments.some(
+    (segment) =>
+      segment === "test" ||
+      segment === "tests" ||
+      segment === "target" ||
+      segment === "generated" ||
+      segment.startsWith("_") ||
+      segment.startsWith(".")
+  );
+}
+
+function isRustCrateRoot(filePath: string): boolean {
+  const fileName = filePath.split(/[\\/]/u).at(-1);
+  return fileName === "lib.rs" || fileName === "main.rs";
 }
 
 function staticActixWebImportedServiceConfigs(
@@ -1905,6 +2178,7 @@ export function extractRustFileFacts(input: RustExtractFileFactsInput): Artifact
   const edges: GraphEdge[] = [];
   const declarationOrdinals = new Map<string, number>();
   let rustActixServiceConfigFacts: RustActixServiceConfigFacts | undefined;
+  let rustProjectFacts: ArtifactFacts["rustProjectFacts"];
   const fileName = input.filePath.split(/[\\/]/u).at(-1) ?? input.filePath;
   const fileNode: SymbolNode = {
     id: createSymbolId({
@@ -1972,6 +2246,31 @@ export function extractRustFileFacts(input: RustExtractFileFactsInput): Artifact
     };
     symbols.push(symbol);
     addContainment(symbol, functionDeclaration.node);
+    return symbol;
+  }
+
+  function addProjectEnum(enumDeclaration: StaticRustProjectEnum): SymbolNode {
+    const qualifiedName = `${input.filePath}#${enumDeclaration.name}`;
+    const identity = `${qualifiedName}\u0000type`;
+    const declarationOrdinal = declarationOrdinals.get(identity) ?? 0;
+    declarationOrdinals.set(identity, declarationOrdinal + 1);
+    const symbol: SymbolNode = {
+      id: createSymbolId({
+        filePath: input.filePath,
+        qualifiedName,
+        kind: "type",
+        declarationOrdinal
+      }),
+      name: enumDeclaration.name,
+      qualifiedName,
+      kind: "type",
+      filePath: input.filePath,
+      range: rangeFor(lineStarts, enumDeclaration.node.from, enumDeclaration.node.to),
+      isExported: true,
+      declarationOrdinal
+    };
+    symbols.push(symbol);
+    addContainment(symbol, enumDeclaration.node);
     return symbol;
   }
 
@@ -2051,18 +2350,203 @@ export function extractRustFileFacts(input: RustExtractFileFactsInput): Artifact
     });
   }
 
-  if (!hasSyntaxError(root)) {
-    const functions = directChildren(root)
-      .map((node) => staticRustFunction(input, node))
-      .filter((candidate): candidate is StaticRustFunction => candidate !== null);
-    const functionsByName = new Map<string, SymbolNode[]>();
-    for (const functionDeclaration of functions) {
-      const symbol = addFunction(functionDeclaration);
-      const sameName = functionsByName.get(functionDeclaration.name) ?? [];
-      sameName.push(symbol);
-      functionsByName.set(functionDeclaration.name, sameName);
-    }
+  const rootHasSyntaxError = hasSyntaxError(root);
+  const functions = directChildren(root)
+    .map((node) => staticRustFunction(input, node))
+    .filter((candidate): candidate is StaticRustFunction => candidate !== null)
+    .filter(
+      (candidate) =>
+        !hasSyntaxError(candidate.node) &&
+        candidate.attributes.every((attribute) => !hasSyntaxError(attribute))
+    );
+  const functionsByName = new Map<string, SymbolNode[]>();
+  const functionSymbols = new Map<StaticRustFunction, SymbolNode>();
+  for (const functionDeclaration of functions) {
+    const symbol = addFunction(functionDeclaration);
+    functionSymbols.set(functionDeclaration, symbol);
+    const sameName = functionsByName.get(functionDeclaration.name) ?? [];
+    sameName.push(symbol);
+    functionsByName.set(functionDeclaration.name, sameName);
+  }
 
+  if (
+    isRustProjectSourceFile(input.filePath) &&
+    !hasRustConditionalInnerAttribute(input, root)
+  ) {
+      const projectNodes = directChildren(root);
+      const moduleCollisionNames = projectNodes.flatMap((node) => {
+        const name = directRustProjectItemName(input, node, "ModItem", "mod", "BoundIdentifier");
+        return name === null ? [] : [name];
+      });
+      const importCollisionKeys = projectNodes.flatMap((node) => {
+        const key = directRustProjectImportKey(input, node);
+        return key === null ? [] : [key];
+      });
+      const declarationCollisionNames = projectNodes.flatMap((node) => {
+        const enumName = directRustProjectItemName(
+          input,
+          node,
+          "EnumItem",
+          "enum",
+          "TypeIdentifier"
+        );
+        const functionName = directRustProjectItemName(
+          input,
+          node,
+          "FunctionItem",
+          "fn",
+          "BoundIdentifier"
+        );
+        return [enumName, functionName].filter((name): name is string => name !== null);
+      });
+      const projectModuleNodes = projectNodes.filter(
+        (node) => directRustAttributedItem(node, "ModItem") !== null
+      );
+      const moduleCategoryIsSafe = projectModuleNodes.every(
+        (node) => isSafeRustProjectModuleCandidate(input, node)
+      );
+      const projectImportNodes = projectNodes.filter(
+        (node) => directRustAttributedItem(node, "UseDeclaration") !== null
+      );
+      const acceptedProjectImports = projectImportNodes
+        .map((node) => staticRustProjectImport(input, node))
+        .filter(
+          (
+            candidate
+          ): candidate is {
+            readonly modulePath: readonly string[];
+            readonly importedName: string;
+            readonly node: RustSyntaxNode;
+          } => candidate !== null
+        );
+      const acceptedImportNames = acceptedProjectImports.map((candidate) => candidate.importedName);
+      const importCategoryIsSafe =
+        acceptedImportNames.every(
+          (name) => occurrenceCount(acceptedImportNames, name) === 1
+        ) &&
+        projectImportNodes.every((node) =>
+          isSafeRustProjectImportCandidate(input, node, acceptedImportNames)
+        );
+      const declarationCategoryIsSafe = projectNodes.every((node) => {
+        const enumItem = directRustAttributedItem(node, "EnumItem");
+        if (enumItem !== null) {
+          return (
+            staticRustAttributedItem(node, "EnumItem") !== null &&
+            !hasRustPathAttribute(input, enumItem.attributes) &&
+            directRustProjectItemName(input, node, "EnumItem", "enum", "TypeIdentifier") !== null
+          );
+        }
+        const functionItem = directRustAttributedItem(node, "FunctionItem");
+        if (functionItem === null) {
+          return true;
+        }
+        return (
+          !hasSyntaxError(node) &&
+          staticRustFunction(input, node) !== null &&
+          !hasRustPathAttribute(input, functionItem.attributes)
+        );
+      });
+      const modules = !isRustCrateRoot(input.filePath) || !moduleCategoryIsSafe
+        ? []
+        : projectModuleNodes
+            .map((node) => staticRustProjectModule(input, node))
+            .filter((candidate): candidate is StaticRustExternalModule => candidate !== null)
+            .filter(
+              (candidate) => occurrenceCount(moduleCollisionNames, candidate.name) === 1
+            )
+            .map((module) => ({
+              name: module.name,
+              filePath: input.filePath,
+              range: rangeFor(lineStarts, module.node.from, module.node.to),
+              unconditionallyAvailable: true
+            }));
+      const imports = !importCategoryIsSafe
+        ? []
+        : acceptedProjectImports
+        .filter(
+          (candidate) =>
+            occurrenceCount(
+              importCollisionKeys,
+              ["crate", ...candidate.modulePath, candidate.importedName].join("::")
+            ) === 1
+        )
+        .map((imported) => ({
+          modulePath: imported.modulePath,
+          importedName: imported.importedName,
+          range: rangeFor(lineStarts, imported.node.from, imported.node.to),
+          unconditionallyAvailable: true
+        }));
+      const projectEnums = projectNodes
+        .map((node) => staticRustProjectEnum(input, node))
+        .filter((candidate): candidate is StaticRustProjectEnum => candidate !== null);
+      const uniqueProjectEnums = projectEnums.filter(
+        (candidate) => occurrenceCount(declarationCollisionNames, candidate.name) === 1
+      );
+      const enumSymbols = new Map<StaticRustProjectEnum, SymbolNode>();
+      for (const enumDeclaration of uniqueProjectEnums) {
+        enumSymbols.set(enumDeclaration, addProjectEnum(enumDeclaration));
+      }
+      const declarationCandidates = [
+        ...functions.flatMap((functionDeclaration) => {
+          const symbol = functionSymbols.get(functionDeclaration);
+          const children = directChildren(functionDeclaration.node);
+          const isPublic = children.some(
+            (child) => child.name === "Vis" && nodeText(input, child) === "pub"
+          );
+          return symbol === undefined ||
+            !isPublic ||
+            hasRustProjectFactAttributeAmbiguity(input, functionDeclaration.attributes)
+            ? []
+            : [
+                {
+                  name: functionDeclaration.name,
+                  symbol,
+                  kind: "function" as const,
+                  node: functionDeclaration.node
+                }
+              ];
+        }),
+        ...uniqueProjectEnums.flatMap((enumDeclaration) => {
+          const symbol = enumSymbols.get(enumDeclaration);
+          return symbol === undefined
+            ? []
+            : [
+                {
+                  name: enumDeclaration.name,
+                  symbol,
+                  kind: "type" as const,
+                  node: enumDeclaration.node
+                }
+              ];
+        })
+      ];
+      const extractedRustProjectFacts = {
+        modules,
+        imports,
+        declarations: (declarationCategoryIsSafe ? declarationCandidates : [])
+          .filter((candidate) => occurrenceCount(declarationCollisionNames, candidate.name) === 1)
+          .map((declaration) => ({
+            name: declaration.name,
+            symbolId: declaration.symbol.id,
+            filePath: input.filePath,
+            kind: declaration.kind,
+            range: rangeFor(lineStarts, declaration.node.from, declaration.node.to),
+            unconditionallyAvailable: true
+          }))
+      };
+      const hasProjectFacts =
+        modules.length > 0 ||
+        imports.length > 0 ||
+        extractedRustProjectFacts.declarations.length > 0;
+      if (
+        hasProjectFacts ||
+        (!rootHasSyntaxError && !hasAmbiguousRustProjectItem(input, root))
+      ) {
+        rustProjectFacts = extractedRustProjectFacts;
+      }
+  }
+
+  if (!rootHasSyntaxError) {
     const importedNames = new Set(staticTopLevelUseImports(input, root).map((imported) => imported.localName));
     const hasGlobImport = hasRustGlobImport(root);
     for (const functionDeclaration of functions) {
@@ -2323,6 +2807,7 @@ export function extractRustFileFacts(input: RustExtractFileFactsInput): Artifact
       routes: [],
       importedRouterInclusions: []
     },
-    ...(rustActixServiceConfigFacts === undefined ? {} : { rustActixServiceConfigFacts })
+    ...(rustActixServiceConfigFacts === undefined ? {} : { rustActixServiceConfigFacts }),
+    ...(rustProjectFacts === undefined ? {} : { rustProjectFacts })
   };
 }

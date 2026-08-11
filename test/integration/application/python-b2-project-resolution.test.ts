@@ -5,6 +5,7 @@ import { resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { SymbolLatticeService } from "../../../src/application/index.js";
+import { ARTIFACT_FACTS_EXTRACTOR_VERSION } from "../../../src/domain/index.js";
 import { extractFileFacts } from "../../../src/extraction/index.js";
 import { FileSystemSourceCatalog } from "../../../src/infrastructure/filesystem/index.js";
 import { SqliteGraphStore } from "../../../src/infrastructure/sqlite/index.js";
@@ -114,11 +115,11 @@ describe("Python B2 regular-package resolution", () => {
       expect.arrayContaining([
         expect.objectContaining({
           filePath: "src/requests/utils.py",
-          extractorVersion: "multi-language-ast-v260"
+          extractorVersion: ARTIFACT_FACTS_EXTRACTOR_VERSION
         }),
         expect.objectContaining({
           filePath: "src/requests/sessions.py",
-          extractorVersion: "multi-language-ast-v260"
+          extractorVersion: ARTIFACT_FACTS_EXTRACTOR_VERSION
         })
       ])
     );

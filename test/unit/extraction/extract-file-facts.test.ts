@@ -17104,7 +17104,7 @@ describe("source extraction", () => {
     expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
   });
 
-  it("fails closed for Rust syntax errors instead of emitting partial declarations or routes", () => {
+  it("keeps a parse-clean Rust function while failing closed around malformed routes", () => {
     const facts = extractFileFacts({
       filePath: "src/broken.rs",
       language: "rust",
@@ -17117,9 +17117,27 @@ describe("source extraction", () => {
       ].join("\n")
     });
 
-    expect(facts.symbols.filter((symbol) => symbol.kind === "function")).toEqual([]);
+    expect(facts.symbols.filter((symbol) => symbol.kind === "function")).toEqual([
+      {
+        id: "symbol:src%2Fbroken.rs:src%2Fbroken.rs%23health:function:0",
+        name: "health",
+        qualifiedName: "src/broken.rs#health",
+        kind: "function",
+        filePath: "src/broken.rs",
+        range: {
+          start: { line: 2, column: 1 },
+          end: { line: 2, column: 21 }
+        },
+        isExported: false,
+        declarationOrdinal: 0
+      }
+    ]);
     expect(facts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
     expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+    expect(facts.edges.filter((edge) => edge.range.start.line >= 3)).toEqual([]);
+    expect(facts.rustProjectFacts?.modules ?? []).toEqual([]);
+    expect(facts.rustProjectFacts?.imports ?? []).toEqual([]);
+    expect(facts.rustProjectFacts?.declarations ?? []).toEqual([]);
   });
 
   it("keeps only complete Go declarations through unrelated syntax recovery and emits no routes", () => {

@@ -4220,6 +4220,206 @@ function goPackageDirectory(filePath: string): string {
   return separator === -1 ? "" : filePath.slice(0, separator);
 }
 
+function rustRangeText(sourceText: string, range: SourceRange): string | null {
+  const lineStarts = [0];
+  const lineEnds: number[] = [];
+  for (let index = 0; index < sourceText.length; index += 1) {
+    const character = sourceText.charCodeAt(index);
+    if (character === 13) {
+      lineEnds.push(index);
+      if (sourceText.charCodeAt(index + 1) === 10) {
+        index += 1;
+      }
+      lineStarts.push(index + 1);
+    } else if (character === 10) {
+      lineEnds.push(index);
+      lineStarts.push(index + 1);
+    }
+  }
+  lineEnds.push(sourceText.length);
+  const offsetFor = (line: number, column: number): number | null => {
+    if (!Number.isSafeInteger(line) || !Number.isSafeInteger(column) || line < 1 || column < 1) {
+      return null;
+    }
+    const lineStart = lineStarts[line - 1];
+    const lineEnd = lineEnds[line - 1];
+    if (lineStart === undefined || lineEnd === undefined || column > lineEnd - lineStart + 1) {
+      return null;
+    }
+    return lineStart + column - 1;
+  };
+  const start = offsetFor(range.start.line, range.start.column);
+  const end = offsetFor(range.end.line, range.end.column);
+  return start === null || end === null || end <= start ? null : sourceText.slice(start, end);
+}
+
+function rustDirectProjectModuleText(name: string): RegExp {
+  return new RegExp(`^(?:pub(?:\\([^)]*\\))?\\s+)?mod\\s+${name};$`, "u");
+}
+
+function rustProjectPhysicalModulePath(
+  knownFilePaths: ReadonlySet<string>,
+  moduleName: string
+): string | null {
+  if (!isRustDirectExternalModuleName(moduleName)) {
+    return null;
+  }
+  const candidates = [`src/${moduleName}.rs`, `src/${moduleName}/mod.rs`].filter((path) =>
+    knownFilePaths.has(path)
+  );
+  return candidates.length === 1 && candidates[0] !== undefined ? candidates[0] : null;
+}
+
+/**
+ * Resolves a deliberately tiny Rust crate surface: one root-declared child
+ * module importing one public declaration from another root-declared child.
+ * Cargo metadata, nested module paths, aliases, re-exports, and binary or
+ * workspace layouts remain outside this exact projection.
+ */
+function projectRustProjectFacts(input: {
+  readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
+  readonly fileSymbols: ReadonlyMap<string, SymbolNode>;
+  readonly symbolsById: ReadonlyMap<string, SymbolNode>;
+  readonly knownFilePaths: ReadonlySet<string>;
+  readonly sourceDocumentsByPath: ReadonlyMap<string, SourceDocument>;
+}): readonly GraphEdge[] {
+  const rootCandidates = ["src/lib.rs", "src/main.rs"].filter((path) => input.knownFilePaths.has(path));
+  if (rootCandidates.length !== 1 || rootCandidates[0] === undefined) {
+    return [];
+  }
+  const rootFilePath = rootCandidates[0];
+  if (
+    [...input.knownFilePaths].some((path) =>
+      path.startsWith("src/bin/") ||
+      (path !== rootFilePath && /(?:^|\/)src\/(?:lib|main)\.rs$/u.test(path))
+    )
+  ) {
+    return [];
+  }
+  const rootFacts = input.factsByFile.get(rootFilePath)?.rustProjectFacts;
+  const rootDocument = input.sourceDocumentsByPath.get(rootFilePath);
+  if (rootFacts === undefined || rootDocument === undefined) {
+    return [];
+  }
+  const validRootModules = rootFacts.modules.filter((module) =>
+    module.unconditionallyAvailable &&
+    module.filePath === rootFilePath &&
+    isRustDirectExternalModuleName(module.name) &&
+    rustRangeText(rootDocument.sourceText, module.range) !== null &&
+    rustDirectProjectModuleText(module.name).test(
+      (rustRangeText(rootDocument.sourceText, module.range) ?? "").trim()
+    )
+  );
+  if (validRootModules.length !== rootFacts.modules.length) {
+    return [];
+  }
+
+  const edges: GraphEdge[] = [];
+  for (const [sourceFilePath, sourceFacts] of [...input.factsByFile.entries()].sort(([left], [right]) =>
+    compareStableText(left, right)
+  )) {
+    const sourceProjectFacts = sourceFacts.rustProjectFacts;
+    const sourceFile = input.fileSymbols.get(sourceFilePath);
+    const sourceDocument = input.sourceDocumentsByPath.get(sourceFilePath);
+    if (sourceProjectFacts === undefined || sourceFile === undefined || sourceDocument === undefined) {
+      continue;
+    }
+    const sourceModuleFacts = validRootModules.filter((module) =>
+      rustProjectPhysicalModulePath(input.knownFilePaths, module.name) === sourceFilePath
+    );
+    if (sourceModuleFacts.length !== 1 || sourceModuleFacts[0] === undefined) {
+      continue;
+    }
+    const sourceModule = sourceModuleFacts[0];
+    if (validRootModules.filter((module) => module.name === sourceModule.name).length !== 1) {
+      continue;
+    }
+
+    for (const imported of sourceProjectFacts.imports) {
+      const matchingImports = sourceProjectFacts.imports.filter(
+        (candidate) =>
+          candidate.modulePath.length === imported.modulePath.length &&
+          candidate.modulePath.every((segment, index) => segment === imported.modulePath[index]) &&
+          candidate.importedName === imported.importedName
+      );
+      const importText = rustRangeText(sourceDocument.sourceText, imported.range);
+      if (
+        matchingImports.length !== 1 ||
+        !imported.unconditionallyAvailable ||
+        imported.modulePath.length !== 1 ||
+        !isRustDirectExternalModuleName(imported.modulePath[0] ?? "") ||
+        !isRustDirectExternalModuleName(imported.importedName) ||
+        importText === null ||
+        importText.trim() !== `use crate::${imported.modulePath[0]}::${imported.importedName};`
+      ) {
+        continue;
+      }
+      const targetModuleName = imported.modulePath[0];
+      if (targetModuleName === undefined || targetModuleName === sourceModule.name) {
+        continue;
+      }
+      const targetModuleFacts = validRootModules.filter((module) => module.name === targetModuleName);
+      const targetFilePath = rustProjectPhysicalModulePath(input.knownFilePaths, targetModuleName);
+      if (targetModuleFacts.length !== 1 || targetFilePath === null) {
+        continue;
+      }
+      const targetFacts = input.factsByFile.get(targetFilePath)?.rustProjectFacts;
+      const targetFile = input.fileSymbols.get(targetFilePath);
+      const targetDocument = input.sourceDocumentsByPath.get(targetFilePath);
+      if (targetFacts === undefined || targetFile === undefined || targetDocument === undefined) {
+        continue;
+      }
+      const declarations = targetFacts.declarations.filter((declaration) => {
+        const symbol = input.symbolsById.get(declaration.symbolId);
+        const declarationText = rustRangeText(targetDocument.sourceText, declaration.range)?.trim();
+        const expectedPrefix = declaration.kind === "function" ? "pub fn " : "pub enum ";
+        return declaration.unconditionallyAvailable &&
+          declaration.name === imported.importedName &&
+          declaration.filePath === targetFilePath &&
+          symbol !== undefined &&
+          symbol.kind === declaration.kind &&
+          symbol.filePath === targetFilePath &&
+          symbol.name === declaration.name &&
+          symbol.range.start.line === declaration.range.start.line &&
+          symbol.range.start.column === declaration.range.start.column &&
+          symbol.range.end.line === declaration.range.end.line &&
+          symbol.range.end.column === declaration.range.end.column &&
+          declarationText !== undefined &&
+          declarationText.startsWith(`${expectedPrefix}${declaration.name}`);
+      });
+      if (declarations.length !== 1) {
+        continue;
+      }
+      edges.push({
+        id: createEdgeId({
+          sourceId: sourceFile.id,
+          targetId: targetFile.id,
+          kind: "imports",
+          line: imported.range.start.line,
+          column: imported.range.start.column,
+          referenceName: `crate::${targetModuleName}::${imported.importedName}`
+        }),
+        sourceId: sourceFile.id,
+        targetId: targetFile.id,
+        kind: "imports",
+        filePath: sourceFilePath,
+        range: imported.range,
+        resolution: "exact",
+        confidence: 1,
+        referenceName: `crate::${targetModuleName}::${imported.importedName}`,
+        evidence: referenceEvidence(
+          "project.rust.crate.direct-module.named-import-file",
+          "module",
+          [targetFile.id],
+          [],
+          [sourceFilePath, rootFilePath, targetFilePath]
+        )
+      });
+    }
+  }
+  return edges;
+}
+
 /**
  * Projects only the small Go surface already retained by goProjectFacts: a
  * bare call may cross files only within one exact package directory, and an
@@ -11826,6 +12026,16 @@ export function resolveProjectFacts(input: {
   for (const symbol of goFrameStandardRouterRouteProjection.symbols) {
     symbolsById.set(symbol.id, symbol);
   }
+
+  resolvedEdges.push(
+    ...projectRustProjectFacts({
+      factsByFile,
+      fileSymbols,
+      symbolsById,
+      knownFilePaths,
+      sourceDocumentsByPath
+    })
+  );
 
   resolvedEdges.push(
     ...projectGoProjectFacts({
