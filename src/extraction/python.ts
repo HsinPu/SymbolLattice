@@ -71,28 +71,109 @@ interface StaticPythonRelativeNamedImport {
   readonly moduleName: string;
   readonly importedName: string;
   readonly localName: string;
-  readonly node: PythonSyntaxNode;
+  readonly from: number;
+  readonly to: number;
 }
 
 function staticPythonRelativeNamedImport(
   input: PythonExtractFileFactsInput,
   node: PythonSyntaxNode
-): StaticPythonRelativeNamedImport | null {
-  if (node.name !== "ImportStatement") {
-    return null;
+): readonly StaticPythonRelativeNamedImport[] {
+  if (node.name !== "ImportStatement" || hasSyntaxError(node)) {
+    return [];
   }
-  const match = /^from[\t ]+\.([A-Za-z_][A-Za-z0-9_]*)[\t ]+import[\t ]+([A-Za-z_][A-Za-z0-9_]*)(?:[\t ]+as[\t ]+([A-Za-z_][A-Za-z0-9_]*))?[\t ]*$/u.exec(
-    nodeText(input, node)
-  );
-  if (match === null || match[1] === undefined || match[2] === undefined) {
-    return null;
+  const children = directChildren(node);
+  const module = children[2];
+  if (
+    children[0]?.name !== "from" ||
+    children[1]?.name !== "." ||
+    module === undefined ||
+    children[3]?.name !== "import"
+  ) {
+    return [];
   }
-  return {
-    moduleName: match[1],
-    importedName: match[2],
-    localName: match[3] ?? match[2],
-    node
-  };
+  const moduleName = declarationName(input, module);
+  if (moduleName === null) {
+    return [];
+  }
+  const confirmedModuleName = moduleName;
+
+  function binding(
+    importedNode: PythonSyntaxNode,
+    localNode: PythonSyntaxNode
+  ): StaticPythonRelativeNamedImport | null {
+    const importedName = declarationName(input, importedNode);
+    const localName = declarationName(input, localNode);
+    return importedName === null || localName === null
+      ? null
+      : {
+          moduleName: confirmedModuleName,
+          importedName,
+          localName,
+          from: importedNode.from,
+          to: localNode.to
+        };
+  }
+
+  const firstImported = children[4];
+  if (firstImported === undefined) {
+    return [];
+  }
+  if (firstImported.name !== "(") {
+    if (firstImported.name !== "VariableName") {
+      return [];
+    }
+    if (children.length === 5) {
+      const result = binding(firstImported, firstImported);
+      return result === null ? [] : [result];
+    }
+    if (children.length === 7 && children[5]?.name === "as" && children[6]?.name === "VariableName") {
+      const result = binding(firstImported, children[6]);
+      return result === null ? [] : [result];
+    }
+    return [];
+  }
+
+  const imports: StaticPythonRelativeNamedImport[] = [];
+  let index = 5;
+  while (index < children.length) {
+    while (children[index]?.name === "Comment") {
+      index += 1;
+    }
+    if (children[index]?.name === ")") {
+      return imports.length === 0 || index !== children.length - 1 ? [] : imports;
+    }
+    const imported = children[index];
+    if (imported?.name !== "VariableName") {
+      return [];
+    }
+    index += 1;
+    let local = imported;
+    if (children[index]?.name === "as") {
+      const alias = children[index + 1];
+      if (alias?.name !== "VariableName") {
+        return [];
+      }
+      local = alias;
+      index += 2;
+    }
+    const result = binding(imported, local);
+    if (result === null) {
+      return [];
+    }
+    imports.push(result);
+    while (children[index]?.name === "Comment") {
+      index += 1;
+    }
+    if (children[index]?.name === ")") {
+      return index === children.length - 1 ? imports : [];
+    }
+    if (children[index]?.name !== ",") {
+      return [];
+    }
+    index += 1;
+  }
+  return [];
 }
 
 function hasPythonWildcardImport(
@@ -612,6 +693,58 @@ function rangeFor(lineStarts: readonly number[], from: number, to: number): Sour
 
 function hasSyntaxError(node: PythonSyntaxNode): boolean {
   return node.type.isError || directChildren(node).some((child) => hasSyntaxError(child));
+}
+
+function hasOnlyStandaloneBareYieldRecovery(
+  input: PythonExtractFileFactsInput,
+  root: PythonSyntaxNode
+): boolean {
+  const errors: PythonSyntaxNode[] = [];
+  function collect(node: PythonSyntaxNode): void {
+    if (node.type.isError) {
+      errors.push(node);
+    }
+    for (const child of directChildren(node)) {
+      collect(child);
+    }
+  }
+  collect(root);
+  const error = errors[0];
+  if (errors.length !== 1 || error === undefined || error.from !== error.to) {
+    return false;
+  }
+  const yieldStatement = error.parent;
+  if (yieldStatement?.name !== "YieldStatement") {
+    return false;
+  }
+  const children = directChildren(yieldStatement);
+  const errorIndex = children.findIndex(
+    (child) => child.type.isError && child.from === error.from && child.to === error.to
+  );
+  const previous = errorIndex > 0 ? children[errorIndex - 1] : undefined;
+  if (
+    previous?.name === "yield" &&
+    previous.to === error.from &&
+    nodeText(input, yieldStatement) === "yield"
+  ) {
+    const allowedAncestors = new Set([
+      "Body",
+      "TryStatement",
+      "IfStatement",
+      "ForStatement",
+      "WhileStatement",
+      "WithStatement"
+    ]);
+    for (let ancestor = yieldStatement.parent; ancestor !== null; ancestor = ancestor.parent) {
+      if (ancestor.name === "FunctionDefinition") {
+        return true;
+      }
+      if (ancestor.name === "Script" || !allowedAncestors.has(ancestor.name)) {
+        return false;
+      }
+    }
+  }
+  return false;
 }
 
 function declarationName(
@@ -4271,6 +4404,33 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
         ? []
         : [{ definition, name, symbol }];
     });
+    const directClassMethodCandidates = topLevelNodes.flatMap((statement) => {
+      if (statement.name !== "ClassDefinition") {
+        return [];
+      }
+      const className = declarationName(input, statement);
+      const classSymbol = symbolsByNodeKey.get(nodeKey(statement));
+      const bodies = directChildren(statement).filter((child) => child.name === "Body");
+      const body = bodies.length === 1 ? bodies[0] : undefined;
+      if (className === null || classSymbol?.kind !== "class" || body === undefined) {
+        return [];
+      }
+      const methods = directChildren(body).filter((child) => child.name === "FunctionDefinition");
+      const methodNameCounts = new Map<string, number>();
+      for (const method of methods) {
+        const name = declarationName(input, method);
+        if (name !== null) {
+          methodNameCounts.set(name, (methodNameCounts.get(name) ?? 0) + 1);
+        }
+      }
+      return methods.flatMap((definition) => {
+        const name = declarationName(input, definition);
+        const symbol = symbolsByNodeKey.get(nodeKey(definition));
+        return name === null || symbol?.kind !== "method"
+          ? []
+          : [{ definition, name, symbol, className, methodNameCounts }];
+      });
+    });
     const declarationsByName = new Map<string, typeof declarations>();
     for (const declaration of declarations) {
       const candidates = declarationsByName.get(declaration.name) ?? [];
@@ -4430,8 +4590,18 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
         topLevelBindCounts.set(name, (topLevelBindCounts.get(name) ?? 0) + 1);
       }
     }
+    const directClassMethods = directClassMethodCandidates
+      .filter(
+        (candidate) =>
+          topLevelBindCounts.get(candidate.className) === 1 &&
+          candidate.methodNameCounts.get(candidate.name) === 1
+      )
+      .map(({ definition, name, symbol }) => ({ definition, name, symbol }));
     for (const imported of relativeNamedImports) {
-      if (topLevelBindCounts.get(imported.localName) !== 1) {
+      if (
+        topLevelBindCounts.get(imported.localName) !== 1 ||
+        (importsByLocalName.get(imported.localName)?.length ?? 0) !== 1
+      ) {
         continue;
       }
       pythonFacts.relativeNamedImports.push({
@@ -4440,7 +4610,7 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
         moduleName: imported.moduleName,
         importedName: imported.importedName,
         localName: imported.localName,
-        range: rangeFor(lineStarts, imported.node.from, imported.node.to)
+        range: rangeFor(lineStarts, imported.from, imported.to)
       });
     }
 
@@ -4573,7 +4743,7 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
       return { callsByName, unsafeBindingNames };
     }
 
-    for (const caller of declarations) {
+    for (const caller of [...declarations, ...directClassMethods]) {
       const analysis = analyzeCaller(caller.definition);
       for (const [targetName, calls] of analysis.callsByName) {
         const candidates = declarationsByName.get(targetName) ?? [];
@@ -4595,6 +4765,7 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
         }
         if (
           analysis.unsafeBindingNames.has(targetName) ||
+          caller.symbol.kind !== "function" ||
           candidates.length !== 1 ||
           target === undefined ||
           topLevelBindCounts.get(targetName) !== 1
@@ -4695,16 +4866,14 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
     addPythonRoute(decorator.method, decorator.node, handler, path, ruleId);
   }
 
-  if (!hasSyntaxError(root)) {
+  if (!hasSyntaxError(root) || hasOnlyStandaloneBareYieldRecovery(input, root)) {
     const topLevelNodes = directChildren(root);
     for (const node of topLevelNodes) {
       visit(node, fileNode);
     }
     const pythonRelativeNamedImports = hasPythonWildcardImport(input, topLevelNodes)
       ? []
-      : topLevelNodes
-          .map((node) => staticPythonRelativeNamedImport(input, node))
-          .filter((candidate): candidate is StaticPythonRelativeNamedImport => candidate !== null);
+      : topLevelNodes.flatMap((node) => staticPythonRelativeNamedImport(input, node));
     addSameFileTopLevelFunctionCalls(topLevelNodes, pythonRelativeNamedImports);
 
     const imports = topLevelNodes.flatMap((node) => staticFastApiImports(input, node));

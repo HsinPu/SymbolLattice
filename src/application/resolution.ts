@@ -230,7 +230,14 @@ function projectPythonRegularPackageRelativeNamedImports(input: {
       const targetFilePath = packageDirectory === ""
         ? `${imported.moduleName}.py`
         : `${packageDirectory}/${imported.moduleName}.py`;
-      if (!input.knownFilePaths.has(packageInit) || !input.knownFilePaths.has(targetFilePath)) {
+      const packageTargetFilePath = packageDirectory === ""
+        ? `${imported.moduleName}/__init__.py`
+        : `${packageDirectory}/${imported.moduleName}/__init__.py`;
+      if (
+        !input.knownFilePaths.has(packageInit) ||
+        !input.knownFilePaths.has(targetFilePath) ||
+        input.knownFilePaths.has(packageTargetFilePath)
+      ) {
         continue;
       }
       const sourceFile = input.fileSymbols.get(filePath);

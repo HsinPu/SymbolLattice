@@ -2952,6 +2952,210 @@ describe("source extraction", () => {
     );
   });
 
+  it("retains Python B1 declarations through the standalone-yield recovery shape and reads parenthesized one-dot imports", () => {
+    const utilsFacts = extractPythonFileFacts({
+      filePath: "requests/utils.py",
+      language: "python",
+      sourceText: [
+        "def before_recovery():",
+        "    return None",
+        "",
+        "def recoverable_generator():",
+        "    yield",
+        "",
+        "def default_headers() -> CaseInsensitiveDict[str]:",
+        "    return CaseInsensitiveDict()",
+        "",
+        "def after_recovery():",
+        "    return None"
+      ].join("\n")
+    });
+    const sessionFacts = extractPythonFileFacts({
+      filePath: "requests/sessions.py",
+      language: "python",
+      sourceText: [
+        "from .utils import (",
+        "    default_headers,",
+        "    get_netrc_auth as netrc_auth,  # Requests-shaped alias",
+        ")",
+        "",
+        "class Session:",
+        "    def __init__(self):",
+        "        self.headers = default_headers()"
+      ].join("\n")
+    });
+
+    expect(utilsFacts.pythonFacts?.topLevelDeclarations.map((fact) => [fact.name, fact.kind])).toEqual([
+      ["before_recovery", "function"],
+      ["recoverable_generator", "function"],
+      ["default_headers", "function"],
+      ["after_recovery", "function"]
+    ]);
+    expect(sessionFacts.pythonFacts?.relativeNamedImports).toEqual([
+      expect.objectContaining({
+        moduleName: "utils",
+        importedName: "default_headers",
+        localName: "default_headers",
+        range: { start: { line: 2, column: 5 }, end: { line: 2, column: 20 } }
+      }),
+      expect.objectContaining({
+        moduleName: "utils",
+        importedName: "get_netrc_auth",
+        localName: "netrc_auth",
+        range: { start: { line: 3, column: 5 }, end: { line: 3, column: 33 } }
+      })
+    ]);
+    expect(sessionFacts.pythonFacts?.importedFunctionCalls).toEqual([
+      expect.objectContaining({
+        sourceId: "symbol:requests%2Fsessions.py:requests%2Fsessions.py%23Session.__init__:method:0",
+        localName: "default_headers",
+        range: { start: { line: 8, column: 24 }, end: { line: 8, column: 39 } }
+      })
+    ]);
+  });
+
+  it("retains declarations after the Requests set_environ try-finally bare-yield recovery", () => {
+    const facts = extractPythonFileFacts({
+      filePath: "requests/utils.py",
+      language: "python",
+      sourceText: [
+        "def set_environ():",
+        "    try:",
+        "        yield",
+        "    finally:",
+        "        restore_environment()",
+        "",
+        "def default_headers() -> CaseInsensitiveDict[str]:",
+        "    return CaseInsensitiveDict()"
+      ].join("\n")
+    });
+
+    expect(
+      facts.symbols
+        .filter((symbol) => symbol.kind === "function")
+        .map((symbol) => symbol.qualifiedName)
+    ).toContain("requests/utils.py#default_headers");
+    expect(facts.pythonFacts?.topLevelDeclarations.map((fact) => [fact.name, fact.kind])).toEqual([
+      ["set_environ", "function"],
+      ["default_headers", "function"]
+    ]);
+  });
+
+  it("fails closed for unsupported Python relative named-import forms", () => {
+    const sources = [
+      "from .utils import *\ndef entry():\n    return default_headers()",
+      "from ..utils import default_headers\ndef entry():\n    return default_headers()",
+      "from .utils import default_headers, get_netrc_auth\ndef entry():\n    return default_headers()",
+      "from .utils import (default_headers as headers, get_netrc_auth as headers)\ndef entry():\n    return headers()",
+      "from .utils import (default_headers as)\ndef entry():\n    return default_headers()"
+    ];
+
+    for (const sourceText of sources) {
+      const facts = extractPythonFileFacts({
+        filePath: "requests/sessions.py",
+        language: "python",
+        sourceText
+      });
+      expect(facts.pythonFacts?.relativeNamedImports, sourceText).toEqual([]);
+      expect(facts.pythonFacts?.importedFunctionCalls, sourceText).toEqual([]);
+    }
+
+    const otherRecovery = extractPythonFileFacts({
+      filePath: "requests/utils.py",
+      language: "python",
+      sourceText: "def before():\n    return None\n\ndef broken():\n    yield from\n\ndef after():\n    return None"
+    });
+    expect(otherRecovery.pythonFacts?.topLevelDeclarations).toEqual([]);
+
+    const rejectedBareYieldRecoveries = [
+      "yield\n\ndef after():\n    return None",
+      "def outer():\n    class Nested:\n        yield\n\ndef after():\n    return None",
+      "def outer():\n    callback = lambda: yield\n\ndef after():\n    return None",
+      "def generator():\n    try:\n        yield\n    finally:\n        cleanup()\n\ndef broken(:\n\ndef after():\n    return None"
+    ];
+    for (const sourceText of rejectedBareYieldRecoveries) {
+      const facts = extractPythonFileFacts({
+        filePath: "requests/utils.py",
+        language: "python",
+        sourceText
+      });
+      expect(facts.pythonFacts?.topLevelDeclarations, sourceText).toEqual([]);
+    }
+  });
+
+  it("fails closed for shadowed, ambiguous, duplicate, or decorated imported calls from direct class methods", () => {
+    const source = (methodLines: readonly string[]) =>
+      [
+        "from .utils import (",
+        "    default_headers,",
+        ")",
+        "",
+        "class Session:",
+        ...methodLines
+      ].join("\n");
+    const sources = [
+      source(["    def __init__(self, default_headers):", "        self.headers = default_headers()"]),
+      source(["    def __init__(self):", "        default_headers = lambda: {}", "        self.headers = default_headers()"]),
+      source(["    def __init__(self):", "        def nested():", "            return default_headers()", "        self.headers = nested()"]),
+      source(["    def __init__(self):", "        callback = lambda: default_headers()", "        self.headers = callback()"]),
+      source(["    def __init__(self):", "        global default_headers", "        self.headers = default_headers()"]),
+      source(["    def __init__(self):", "        from foreign import default_headers", "        self.headers = default_headers()"]),
+      source(["    def __init__(self, values):", "        self.headers = [default_headers() for default_headers in values]"]),
+      source(["    def __init__(self):", "        self.headers = default_headers()", "    def __init__(self):", "        self.headers = default_headers()"]),
+      [
+        "from .utils import default_headers",
+        "",
+        "@decorator",
+        "class Session:",
+        "    def __init__(self):",
+        "        self.headers = default_headers()"
+      ].join("\n"),
+      [
+        "from .utils import default_headers",
+        "",
+        "class Session:",
+        "    @decorator",
+        "    def __init__(self):",
+        "        self.headers = default_headers()"
+      ].join("\n"),
+      [
+        "from .utils import default_headers",
+        "",
+        "class Session:",
+        "    def __init__(self):",
+        "        self.headers = default_headers()",
+        "",
+        "class Session:",
+        "    def __init__(self):",
+        "        self.headers = default_headers()"
+      ].join("\n"),
+      [
+        "from .utils import *",
+        "",
+        "class Session:",
+        "    def __init__(self):",
+        "        self.headers = default_headers()"
+      ].join("\n"),
+      [
+        "from .utils import (default_headers, get_netrc_auth as default_headers)",
+        "",
+        "class Session:",
+        "    def __init__(self):",
+        "        self.headers = default_headers()"
+      ].join("\n")
+    ];
+
+    for (const sourceText of sources) {
+      const facts = extractPythonFileFacts({
+        filePath: "requests/sessions.py",
+        language: "python",
+        sourceText
+      });
+      expect(facts.pythonFacts?.importedFunctionCalls, sourceText).toEqual([]);
+      expect(facts.edges.filter((edge) => edge.kind === "calls"), sourceText).toEqual([]);
+    }
+  });
+
   it("extracts Python declarations and direct FastAPI decorator routes with syntax evidence", () => {
     const facts = extractFileFacts({
       filePath: "app/main.py",

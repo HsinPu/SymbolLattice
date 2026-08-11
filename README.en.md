@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.371.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.372.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## What it is
 
@@ -51,11 +51,11 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.371.0 highlights
+## v0.372.0 highlights
 
-- Razor Pages `.cshtml` files provide page identity and conventional filesystem routes; for example, `Index.cshtml` maps to `/`.
-- A page's `@model` conventional companion can provide exact auxiliary reference evidence; it does not replace route or handler proof.
-- Razor Page handlers such as `OnPost...` are deliberately not claimed as exact cross-language edges yet. They remain unresolved instead of turning convention or runtime behavior into a false static relationship.
+- Python B1 was verified against a fixed SHA of `psf/requests` v2.34.2: safe standalone bare-`yield` nested control-flow recovery, parenthesized multi-name imports with one dot, and an exact bare call from a direct top-level-class method to an imported top-level function.
+- The acceptance evidence also covers exact evidence, no-op behavior, persisted reopen, and changed sync.
+- Wildcard, parent-relative, namespace, dynamic, rebound, ambiguous, decorated, and otherwise unproven shapes remain fail-closed and do not produce exact edges.
 
 ## MCP
 

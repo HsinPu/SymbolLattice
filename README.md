@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.371.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
+> v0.372.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
 
 ## 專案用途
 
@@ -51,11 +51,11 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.371.0 重點
+## v0.372.0 重點
 
-- Razor Pages `.cshtml` 可建立頁面 identity 與慣例式檔案系統 route，例如 `Index.cshtml` 對應根路徑 `/`。
-- 同一頁的 `@model` 慣例 companion 可提供精確的輔助參考證據；它不取代 route 或 handler 的證明。
-- `OnPost...` 等 Razor Page handler 的跨語言連結尚未宣稱為 exact edge，維持 unresolved，避免把慣例或執行期行為誤報為靜態關係。
+- 以固定 SHA 的 `psf/requests` v2.34.2 驗證 Python B1；支援安全的獨立 bare `yield` 巢狀控制流程復原、帶一個點的括號多名稱 import，以及頂層 class 的直接 method 對 imported top-level function 的 exact bare call。
+- 同步驗證 exact evidence、no-op、持久化 reopen 與變更後的 sync 行為。
+- wildcard、parent-relative、namespace、dynamic、rebound、ambiguous、decorated 與未能證明的 shape 仍維持 fail-closed，不會產生 exact edge。
 
 ## MCP
 

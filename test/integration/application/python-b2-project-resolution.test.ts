@@ -5,6 +5,7 @@ import { resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { SymbolLatticeService } from "../../../src/application/index.js";
+import { extractFileFacts } from "../../../src/extraction/index.js";
 import { FileSystemSourceCatalog } from "../../../src/infrastructure/filesystem/index.js";
 import { SqliteGraphStore } from "../../../src/infrastructure/sqlite/index.js";
 
@@ -32,6 +33,349 @@ afterEach(async () => {
 });
 
 describe("Python B2 regular-package resolution", () => {
+  it("re-extracts stale Python facts after the extractor version upgrades", async () => {
+    const projectPath = await createInlineProject({
+      "src/requests/__init__.py": "",
+      "src/requests/utils.py": [
+        "def default_headers():",
+        "    return {}"
+      ].join("\n"),
+      "src/requests/sessions.py": [
+        "from .utils import default_headers",
+        "",
+        "class Session:",
+        "    def __init__(self):",
+        "        self.headers = default_headers()"
+      ].join("\n")
+    });
+    const staleExtractor = Object.assign(
+      (input: Parameters<typeof extractFileFacts>[0]) => {
+        const facts = extractFileFacts(input);
+        return input.language !== "python"
+          ? facts
+          : {
+              ...facts,
+              symbols: facts.symbols.filter((symbol) => symbol.kind === "file"),
+              edges: [],
+              pythonFacts: undefined
+            };
+      },
+      { version: "multi-language-ast-v258" }
+    );
+    const initialStore = new SqliteGraphStore();
+    const initialService = new SymbolLatticeService(initialStore, new FileSystemSourceCatalog(), {
+      artifactFactsExtractor: staleExtractor
+    });
+
+    const initial = await initialService.init({ projectPath });
+    const staleFactsByPath = new Map(
+      initialStore.getArtifactFacts(projectPath).map((facts) => [facts.filePath, facts])
+    );
+    for (const filePath of ["src/requests/utils.py", "src/requests/sessions.py"]) {
+      expect(staleFactsByPath.get(filePath)).toMatchObject({
+        filePath,
+        extractorVersion: "multi-language-ast-v258"
+      });
+      expect(staleFactsByPath.get(filePath)?.pythonFacts).toBeUndefined();
+      expect(staleFactsByPath.get(filePath)?.symbols).toHaveLength(1);
+    }
+    expect(
+      initialStore
+        .getSnapshot(projectPath)
+        .edges.filter(
+          (edge) =>
+            edge.filePath === "src/requests/sessions.py" &&
+            ["imports", "calls"].includes(edge.kind) &&
+            edge.evidence?.ruleId.startsWith("module.python.regular-package.")
+        )
+    ).toEqual([]);
+
+    const upgradedStore = new SqliteGraphStore();
+    const upgradedService = new SymbolLatticeService(upgradedStore, new FileSystemSourceCatalog());
+    expect(await upgradedService.getStatus(projectPath)).toMatchObject({
+      stale: true,
+      staleReasons: ["indexer-version-changed"]
+    });
+
+    const synced = await upgradedService.sync({ projectPath });
+    expect(synced.generationId).not.toBe(initial.generationId);
+    expect(synced).toMatchObject({ stale: false, staleReasons: [] });
+    expect(synced.lastIndexWork).toMatchObject({
+      mode: "incremental",
+      reExtractedFiles: expect.arrayContaining([
+        "src/requests/utils.py",
+        "src/requests/sessions.py"
+      ]),
+      reuseInvalidationReasons: ["extractor-version-changed"]
+    });
+    expect(synced.lastIndexWork?.reusedArtifactFiles).not.toContain("src/requests/utils.py");
+    expect(synced.lastIndexWork?.reusedArtifactFiles).not.toContain("src/requests/sessions.py");
+    expect(upgradedStore.getArtifactFacts(projectPath)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          filePath: "src/requests/utils.py",
+          extractorVersion: "multi-language-ast-v259"
+        }),
+        expect.objectContaining({
+          filePath: "src/requests/sessions.py",
+          extractorVersion: "multi-language-ast-v259"
+        })
+      ])
+    );
+
+    const snapshot = upgradedStore.getSnapshot(projectPath);
+    const symbol = (qualifiedName: string) =>
+      snapshot.symbols.find((candidate) => candidate.qualifiedName === qualifiedName);
+    const utils = symbol("src/requests/utils.py");
+    const sessions = symbol("src/requests/sessions.py");
+    const defaultHeaders = symbol("src/requests/utils.py#default_headers");
+    const initialize = symbol("src/requests/sessions.py#Session.__init__");
+    const exactImport = snapshot.edges.find(
+      (edge) =>
+        edge.kind === "imports" &&
+        edge.filePath === "src/requests/sessions.py" &&
+        edge.referenceName === ".utils" &&
+        edge.evidence?.ruleId === "module.python.regular-package.relative-named-import"
+    );
+    const exactCall = snapshot.edges.find(
+      (edge) =>
+        edge.kind === "calls" &&
+        edge.filePath === "src/requests/sessions.py" &&
+        edge.referenceName === "default_headers" &&
+        edge.evidence?.ruleId ===
+          "module.python.regular-package.relative-named-import.unique-top-level-function-call"
+    );
+    expect(exactImport).toMatchObject({
+      sourceId: sessions?.id,
+      targetId: utils?.id,
+      resolution: "exact",
+      confidence: 1,
+      evidence: expect.objectContaining({
+        candidateSymbolIds: [utils?.id, defaultHeaders?.id].sort()
+      })
+    });
+    expect(exactCall).toMatchObject({
+      sourceId: initialize?.id,
+      targetId: defaultHeaders?.id,
+      resolution: "exact",
+      confidence: 1,
+      evidence: expect.objectContaining({ candidateSymbolIds: [defaultHeaders?.id] })
+    });
+  });
+
+  it("fails closed for parenthesized relative imports with module-package collisions", async () => {
+    const projectPath = await createInlineProject({
+      "pkg/__init__.py": "",
+      "pkg/utils.py": [
+        "def default_headers():",
+        "    return {\"source\": \"module\"}"
+      ].join("\n"),
+      "pkg/utils/__init__.py": [
+        "def default_headers():",
+        "    return {\"source\": \"package\"}"
+      ].join("\n"),
+      "pkg/sessions.py": [
+        "from .utils import (",
+        "    default_headers,",
+        ")",
+        "",
+        "class Session:",
+        "    def __init__(self):",
+        "        self.headers = default_headers()"
+      ].join("\n")
+    });
+    const store = new SqliteGraphStore();
+    const service = new SymbolLatticeService(store, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+
+    expect(
+      store
+        .getSnapshot(projectPath)
+        .edges.filter(
+          (edge) =>
+            edge.filePath === "pkg/sessions.py" &&
+            edge.evidence?.ruleId.startsWith("module.python.regular-package.")
+        )
+    ).toEqual([]);
+  });
+
+  it("keeps Requests-shaped relative bindings exact across persistence and incremental sync", async () => {
+    // The recoverable bare yield is function-scoped; module-level yields remain unsupported.
+    const projectPath = await createInlineProject({
+      "src/requests/__init__.py": "",
+      "src/requests/utils.py": [
+        "def helper_before_headers():",
+        "    return None",
+        "",
+        "def recoverable_generator():",
+        "    yield",
+        "",
+        "def default_headers() -> CaseInsensitiveDict[str]:",
+        "    return CaseInsensitiveDict()",
+        "",
+        "def helper_after_headers():",
+        "    return None"
+      ].join("\n"),
+      "src/requests/sessions.py": [
+        "from .utils import (",
+        "    default_headers,",
+        "    helper_after_headers as HeaderType,  # Requests-style alias",
+        ")",
+        "",
+        "class Session:",
+        "    def __init__(self):",
+        "        self.headers = default_headers()"
+      ].join("\n")
+    });
+    const store = new SqliteGraphStore();
+    const service = new SymbolLatticeService(store, new FileSystemSourceCatalog());
+    const symbols = () => store.getSnapshot(projectPath).symbols;
+    const symbol = (qualifiedName: string) =>
+      symbols().find((candidate) => candidate.qualifiedName === qualifiedName);
+    const exactImport = () =>
+      store
+        .getSnapshot(projectPath)
+        .edges.find(
+          (edge) =>
+            edge.kind === "imports" &&
+            edge.filePath === "src/requests/sessions.py" &&
+            edge.referenceName === ".utils" &&
+            edge.evidence?.ruleId === "module.python.regular-package.relative-named-import"
+        );
+    const exactCall = () =>
+      store
+        .getSnapshot(projectPath)
+        .edges.find(
+          (edge) =>
+            edge.kind === "calls" &&
+            edge.filePath === "src/requests/sessions.py" &&
+            edge.referenceName === "default_headers" &&
+            edge.evidence?.ruleId ===
+              "module.python.regular-package.relative-named-import.unique-top-level-function-call"
+        );
+
+    const initial = await service.init({ projectPath });
+    const sessions = symbol("src/requests/sessions.py");
+    const utils = symbol("src/requests/utils.py");
+    const session = symbol("src/requests/sessions.py#Session");
+    const initialize = symbol("src/requests/sessions.py#Session.__init__");
+    const defaultHeaders = symbol("src/requests/utils.py#default_headers");
+
+    expect(session).toMatchObject({
+      qualifiedName: "src/requests/sessions.py#Session",
+      kind: "class"
+    });
+    expect(defaultHeaders).toMatchObject({
+      qualifiedName: "src/requests/utils.py#default_headers",
+      kind: "function"
+    });
+    expect(exactImport()).toMatchObject({
+      sourceId: sessions?.id,
+      targetId: utils?.id,
+      resolution: "exact",
+      confidence: 1,
+      evidence: {
+        ruleId: "module.python.regular-package.relative-named-import",
+        stage: "module"
+      }
+    });
+    expect(exactImport()?.evidence?.candidateSymbolIds).toContain(defaultHeaders?.id);
+    expect(exactCall()).toMatchObject({
+      sourceId: initialize?.id,
+      targetId: defaultHeaders?.id,
+      resolution: "exact",
+      confidence: 1,
+      evidence: {
+        ruleId: "module.python.regular-package.relative-named-import.unique-top-level-function-call",
+        stage: "module"
+      }
+    });
+    expect(exactCall()?.evidence?.candidateSymbolIds).toContain(defaultHeaders?.id);
+    expect(
+      store
+        .getSnapshot(projectPath)
+        .edges.filter(
+          (edge) =>
+            edge.kind === "calls" &&
+            edge.sourceId === initialize?.id &&
+            edge.targetId !== null &&
+            symbols().find((candidate) => candidate.id === edge.targetId)?.filePath ===
+              "src/requests/sessions.py"
+        )
+    ).toEqual([]);
+
+    const callers = await service.callers(projectPath, defaultHeaders?.qualifiedName ?? "missing");
+    const callees = await service.callees(projectPath, initialize?.qualifiedName ?? "missing");
+    expect(callers.relations.map((relation) => relation.symbol.id)).toEqual([initialize?.id]);
+    expect(callees.relations.map((relation) => relation.symbol.id)).toEqual([defaultHeaders?.id]);
+    const explanation = await service.explainEdge(projectPath, exactCall()?.id ?? "missing-edge");
+    expect(explanation).toMatchObject({
+      source: { id: initialize?.id },
+      target: { id: defaultHeaders?.id },
+      edge: {
+        resolution: "exact",
+        confidence: 1,
+        evidence: expect.objectContaining({
+          ruleId: "module.python.regular-package.relative-named-import.unique-top-level-function-call",
+          stage: "module"
+        })
+      }
+    });
+
+    const noOp = await service.sync({ projectPath });
+    expect(noOp.generationId).toBe(initial.generationId);
+
+    const reopened = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+    expect(
+      (await reopened.callers(projectPath, defaultHeaders?.qualifiedName ?? "missing")).relations.map(
+        (relation) => relation.symbol.id
+      )
+    ).toEqual([initialize?.id]);
+
+    await writeFile(
+      resolve(projectPath, "src", "requests", "sessions.py"),
+      [
+        "from .utils import (",
+        "    default_headers,",
+        "    helper_after_headers as HeaderType,  # Requests-style alias",
+        ")",
+        "",
+        "class Session:",
+        "    def __init__(self):",
+        "        self.headers = default_headers()",
+        "        self.header_type = HeaderType"
+      ].join("\n"),
+      "utf8"
+    );
+    const importerSync = await service.sync({ projectPath });
+    expect(importerSync.generationId).not.toBe(initial.generationId);
+    expect(exactCall()).toMatchObject({ sourceId: initialize?.id, targetId: defaultHeaders?.id });
+
+    await writeFile(
+      resolve(projectPath, "src", "requests", "utils.py"),
+      [
+        "def helper_before_headers():",
+        "    return None",
+        "",
+        "def recoverable_generator():",
+        "    yield",
+        "",
+        "def default_headers() -> CaseInsensitiveDict[str]:",
+        "    return CaseInsensitiveDict()",
+        "",
+        "def helper_after_headers():",
+        "    return None",
+        "# target changed"
+      ].join("\n"),
+      "utf8"
+    );
+    const targetSync = await service.sync({ projectPath });
+    expect(targetSync.generationId).not.toBe(importerSync.generationId);
+    expect(exactImport()).toMatchObject({ sourceId: sessions?.id, targetId: utils?.id });
+    expect(exactCall()).toMatchObject({ sourceId: initialize?.id, targetId: defaultHeaders?.id });
+  });
+
   it("persists exact file imports, imported bare calls, and imported direct inheritance", async () => {
     const projectPath = await createInlineProject({
       "pkg/__init__.py": "",
