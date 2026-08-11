@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.375.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.376.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## What it is
 
@@ -51,10 +51,10 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.375.0 highlights
+## v0.376.0 highlights
 
-- Groovy B1 accepts a leading canonical dotted `package` and plain direct `import` preamble alongside uniquely proven bare same-file class inheritance. It emits an `exact` `extends` edge only when the target is unique and no candidate import terminal collides.
-- Static, wildcard, alias, malformed, duplicate, or late imports remain unresolved, as do dynamic, metaprogramming, runtime behavior, qualified or generic superclasses, and `implements`; none are claimed as supported.
+- In the fixed `fortran-lang/stdlib` v0.7.0 acceptance, Fortran B1 recognizes module-contained member symbols in lowercase `.f90` files and conservatively resolves the argument-bearing `CALL logicalloc(...)` inside `trueloc` as a same-module direct call. SymbolLattice scored `TP 3 / FP 0 / FN 0`; CodeGraph scored `TP 0 / FP 0 / FN 3`.
+- Conventional uppercase preprocessing-prone extensions still produce symbols but no exact calls. Source-local preprocessing or conditionals fail closed when they affect or wrap the caller, call site, or target; balanced unrelated conditional or macro blocks may retain exact calls. `interface`, dynamic, type-bound, and ambiguous cases also fail closed. This boundary follows extension conventions and source evidence; it does not cover compiler configurations that externally force preprocessing for lowercase files.
 
 ## MCP
 
