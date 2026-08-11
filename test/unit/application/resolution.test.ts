@@ -78,6 +78,61 @@ afterEach(async () => {
 });
 
 describe("project reference resolution", () => {
+  it("fails closed for duplicate or conflicting persisted Razor companion class facts", () => {
+    const sourceDocuments: readonly SourceDocument[] = [
+      {
+        absolutePath: "C:/project/Pages/Index.cshtml",
+        relativePath: "Pages/Index.cshtml",
+        language: "razor",
+        sourceText: ["@page", "@model IndexModel"].join("\n"),
+        contentHash: "razor"
+      },
+      {
+        absolutePath: "C:/project/Pages/Index.cshtml.cs",
+        relativePath: "Pages/Index.cshtml.cs",
+        language: "csharp",
+        sourceText: "public class IndexModel {}\n",
+        contentHash: "csharp"
+      }
+    ];
+    const extractedFiles = sourceDocuments.map((document) =>
+      extractFileFacts({ filePath: document.relativePath, language: document.language, sourceText: document.sourceText })
+    );
+    const pageFacts = extractedFiles.find((facts) => facts.symbols[0]?.filePath === "Pages/Index.cshtml");
+    const csharpFacts = extractedFiles.find((facts) => facts.symbols[0]?.filePath === "Pages/Index.cshtml.cs");
+    const model = csharpFacts?.symbols.find((symbol) => symbol.kind === "class" && symbol.name === "IndexModel");
+    const page = pageFacts?.symbols.find((symbol) => symbol.qualifiedName === "Pages/Index.cshtml#default");
+    if (pageFacts === undefined || csharpFacts === undefined || model === undefined || page === undefined) {
+      throw new Error("Expected Razor companion fixtures.");
+    }
+    const directClassFact = csharpFacts.csharpDirectClassFacts?.find((fact) => fact.classId === model.id);
+    if (directClassFact === undefined) {
+      throw new Error("Expected direct C# class fact.");
+    }
+
+    for (const duplicate of [
+      { ...directClassFact },
+      { ...directClassFact, isPartial: true }
+    ]) {
+      const snapshot = resolveProjectFacts({
+        sourceDocuments,
+        extractedFiles: [
+          pageFacts,
+          {
+            ...csharpFacts,
+            csharpDirectClassFacts: [directClassFact, duplicate]
+          }
+        ],
+        indexedAt: "2026-08-11T00:00:00.000Z"
+      });
+      expect(
+        snapshot.edges.filter(
+          (edge) => edge.sourceId === page.id && edge.targetId === model.id && edge.kind === "references"
+        )
+      ).toEqual([]);
+    }
+  });
+
   it("resolves a unique extensionless ArkTS import and rejects cross-extension ambiguity", async () => {
     const uniqueProject = await createConfiguredProject({
       "src/common/TopView.ets": "@Component struct TopView {}",

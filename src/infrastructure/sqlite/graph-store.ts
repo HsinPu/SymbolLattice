@@ -800,6 +800,8 @@ function artifactFactsPayload(facts: PersistedArtifactFacts): ArtifactFacts {
     ...(facts.swiftObjectiveCFacts === undefined
       ? {}
       : { swiftObjectiveCFacts: facts.swiftObjectiveCFacts }),
+    ...(facts.razorFacts === undefined ? {} : { razorFacts: facts.razorFacts }),
+    ...(facts.csharpDirectClassFacts === undefined ? {} : { csharpDirectClassFacts: facts.csharpDirectClassFacts }),
     ...(facts.pythonFacts === undefined ? {} : { pythonFacts: facts.pythonFacts })
   };
 }

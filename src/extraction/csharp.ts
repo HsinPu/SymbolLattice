@@ -678,6 +678,7 @@ export function extractCsharpFileFacts(input: CsharpExtractFileFactsInput): Arti
   const lineStarts = lineStartsFor(input.sourceText);
   const symbols: SymbolNode[] = [];
   const edges: GraphEdge[] = [];
+  const csharpDirectClassFacts: { classId: string; isPartial: boolean }[] = [];
   const declarationOrdinals = new Map<string, number>();
   const fileName = input.filePath.split(/[\\/]/u).at(-1) ?? input.filePath;
   const fileNode: SymbolNode = {
@@ -898,6 +899,9 @@ export function extractCsharpFileFacts(input: CsharpExtractFileFactsInput): Arti
 
     for (const type of types) {
       const typeSymbol = addType(type);
+      if (type.kind === "class") {
+        csharpDirectClassFacts.push({ classId: typeSymbol.id, isPartial: type.isPartial });
+      }
       const controllerPath = staticControllerPath(type, hasMvcImport);
       const methods = directChildren(type.body)
         .map((node) => staticCsharpMethod(node))
@@ -1038,6 +1042,7 @@ export function extractCsharpFileFacts(input: CsharpExtractFileFactsInput): Arti
       routers: [],
       routes: [],
       importedRouterInclusions: []
-    }
+    },
+    csharpDirectClassFacts
   };
 }

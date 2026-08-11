@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.370.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
+> v0.371.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
 
 ## 專案用途
 
@@ -51,11 +51,11 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.370.0 重點
+## v0.371.0 重點
 
-- Astro 靜態頁面可建立 filesystem route；開頭 frontmatter 僅在可乾淨解析時擷取直接 ESM import。
-- Astro 頁面對 root 自有 `baseUrl`／`paths` 的 source-only alias 可建立 exact import proof，並保留選定目標與設定證據。
-- 混合 target、動態 import、template／外部 script 與更多 Astro 語意保持 unresolved，避免產生錯誤 exact edge。
+- Razor Pages `.cshtml` 可建立頁面 identity 與慣例式檔案系統 route，例如 `Index.cshtml` 對應根路徑 `/`。
+- 同一頁的 `@model` 慣例 companion 可提供精確的輔助參考證據；它不取代 route 或 handler 的證明。
+- `OnPost...` 等 Razor Page handler 的跨語言連結尚未宣稱為 exact edge，維持 unresolved，避免把慣例或執行期行為誤報為靜態關係。
 
 ## MCP
 

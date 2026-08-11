@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.370.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.371.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## What it is
 
@@ -51,11 +51,11 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.370.0 highlights
+## v0.371.0 highlights
 
-- Astro static pages produce filesystem routes, and only parse-clean opening frontmatter contributes direct ESM import facts.
-- An Astro page can prove an exact import through a root-owned `baseUrl`/`paths` source-only alias, retaining the selected target and configuration evidence.
-- Mixed targets, dynamic imports, template or external scripts, and deeper Astro semantics remain unresolved rather than becoming false exact edges.
+- Razor Pages `.cshtml` files provide page identity and conventional filesystem routes; for example, `Index.cshtml` maps to `/`.
+- A page's `@model` conventional companion can provide exact auxiliary reference evidence; it does not replace route or handler proof.
+- Razor Page handlers such as `OnPost...` are deliberately not claimed as exact cross-language edges yet. They remain unresolved instead of turning convention or runtime behavior into a false static relationship.
 
 ## MCP
 

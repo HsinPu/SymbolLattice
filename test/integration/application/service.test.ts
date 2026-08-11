@@ -2186,7 +2186,6 @@ describe("SymbolLatticeService", () => {
     const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
 
     await service.init({ projectPath });
-
     const snapshot = graphStore.getSnapshot(projectPath);
     const symbol = (qualifiedName: string) =>
       snapshot.symbols.find((candidate) => candidate.qualifiedName === qualifiedName);
@@ -26342,9 +26341,9 @@ describe("SymbolLatticeService", () => {
 
     expect(indexed).toMatchObject({
       stale: false,
-      counts: { files: 3, symbols: expect.any(Number), edges: expect.any(Number) }
+      counts: { files: 4, symbols: expect.any(Number), edges: expect.any(Number) }
     });
-    expect(persistedRazorFacts).toHaveLength(3);
+    expect(persistedRazorFacts).toHaveLength(4);
     expect(
       persistedRazorFacts.every(
         (facts) => facts.extractorVersion === ARTIFACT_FACTS_EXTRACTOR_VERSION
@@ -26410,6 +26409,178 @@ describe("SymbolLatticeService", () => {
         })
       ])
     );
+  });
+
+  it("projects conventional Razor Pages model references while leaving post handlers unresolved across reopen and changed sync", async () => {
+    const projectPath = await createInlineProject({
+      "Pages/Index.cshtml": [
+        "\ufeff@page",
+        "@model IndexModel",
+        '<form method="post" asp-page-handler="AddMessage">',
+        "  <button>Save</button>",
+        "</form>"
+      ].join("\n"),
+      "Pages/Index.cshtml.cs": [
+        "public class IndexModel : PageModel {",
+        "  public System.Threading.Tasks.Task OnPostAddMessageAsync() => System.Threading.Tasks.Task.CompletedTask;",
+        "}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const initialGenerationId = graphStore.getStatus(projectPath).generationId;
+    const assertProjected = async (store: SqliteGraphStore): Promise<void> => {
+      expect(
+        store.getArtifactFacts(projectPath).find((facts) => facts.filePath === "Pages/Index.cshtml")?.razorFacts
+      ).toEqual(
+        expect.objectContaining({ model: expect.objectContaining({ modelName: "IndexModel" }) })
+      );
+      const snapshot = store.getSnapshot(projectPath);
+      const page = snapshot.symbols.find((symbol) => symbol.qualifiedName === "Pages/Index.cshtml#default");
+      const model = snapshot.symbols.find((symbol) => symbol.qualifiedName === "Pages/Index.cshtml.cs#IndexModel");
+      const handler = snapshot.symbols.find(
+        (symbol) => symbol.qualifiedName === "Pages/Index.cshtml.cs#IndexModel.OnPostAddMessageAsync"
+      );
+      if (page === undefined || model === undefined || handler === undefined) {
+        throw new Error("Expected Razor Page symbols.");
+      }
+      expect(snapshot.edges).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            sourceId: page.id,
+            targetId: model.id,
+            kind: "references",
+            resolution: "exact",
+            confidence: 1,
+            evidence: expect.objectContaining({
+              ruleId: "framework.razor-pages.direct-model.conventional-companion",
+              stage: "module",
+              candidateSymbolIds: [model.id]
+            })
+          }),
+        ])
+      );
+      expect(
+        snapshot.edges.filter((edge) => edge.sourceId === page.id && edge.targetId === handler.id && edge.kind === "handles")
+      ).toEqual([]);
+    };
+
+    await assertProjected(graphStore);
+    const noOp = await service.sync({ projectPath });
+    expect(noOp.generationId).toBe(initialGenerationId);
+    const reopenedStore = new SqliteGraphStore();
+    const reopened = new SymbolLatticeService(reopenedStore, new FileSystemSourceCatalog());
+    await reopened.init({ projectPath });
+    await assertProjected(reopenedStore);
+    await writeFile(
+      join(projectPath, "Pages", "Index.cshtml.cs"),
+      [
+        "public class IndexModel : PageModel {",
+        "  public System.Threading.Tasks.Task OnPostAddMessageAsync() => System.Threading.Tasks.Task.CompletedTask;",
+        "  public void Changed() {}",
+        "}"
+      ].join(
+        "\n"
+      ),
+      "utf8"
+    );
+    const changed = await service.sync({ projectPath });
+    expect(changed).toMatchObject({
+      stale: false,
+      lastIndexWork: expect.objectContaining({ reExtractedFiles: ["Pages/Index.cshtml.cs"] })
+    });
+    expect(changed.generationId).not.toBe(initialGenerationId);
+    await assertProjected(graphStore);
+  });
+
+  it("fails closed for Razor Pages partial, overloaded, and non-companion C# targets", async () => {
+    const projectPath = await createInlineProject({
+      "Pages/Ambiguous.cshtml": [
+        "@page",
+        "@model AmbiguousModel",
+        '<form method="post" asp-page-handler="Save"></form>'
+      ].join("\n"),
+      "Pages/Ambiguous.cshtml.cs": [
+        "public class AmbiguousModel {",
+        "  public void OnPostSave() {}",
+        "  public void OnPostSaveAsync() {}",
+        "}"
+      ].join("\n"),
+      "Pages/Partial.cshtml": ["@page", "@model PartialModel"].join("\n"),
+      "Pages/Partial.cshtml.cs": "public partial class PartialModel {}\n",
+      "Pages/LongPartial.cshtml": ["@page", "@model LongPartialModel"].join("\n"),
+      "Pages/LongPartial.cshtml.cs": `[System.Obsolete("${"x".repeat(1024)}")] public partial class LongPartialModel {}\n`,
+      "Pages/External.cshtml": ["@page", "@model ExternalModel"].join("\n"),
+      "Models/ExternalModel.cs": "public class ExternalModel {}\n",
+      "Pages/Code.cshtml": ["@page", "@{", '  var raw = """', "@model CodeModel", '""";', "}"].join("\n"),
+      "Pages/Code.cshtml.cs": "public class CodeModel {}\n",
+      "Pages/Private.cshtml": ["@page", "@model PrivateModel", '<form method="post" asp-page-handler="Save"></form>'].join("\n"),
+      "Pages/Private.cshtml.cs": "public class PrivateModel { private void OnPostSave() {} }\n",
+      "Pages/Static.cshtml": ["@page", "@model StaticModel", '<form method="post" asp-page-handler="Save"></form>'].join("\n"),
+      "Pages/Static.cshtml.cs": "public class StaticModel { public static void OnPostSave() {} }\n",
+      "Pages/Generic.cshtml": ["@page", "@model GenericModel", '<form method="post" asp-page-handler="Save"></form>'].join("\n"),
+      "Pages/Generic.cshtml.cs": "public class GenericModel { public void OnPostSave<T>() {} }\n",
+      "Pages/NonHandler.cshtml": ["@page", "@model NonHandlerModel", '<form method="post" asp-page-handler="Save"></form>'].join("\n"),
+      "Pages/NonHandler.cshtml.cs": "public class NonHandlerModel { [NonHandler] public void OnPostSave() {} }\n",
+      "Pages/NoBase.cshtml": ["@page", "@model NoBaseModel", '<form method="post" asp-page-handler="Save"></form>'].join("\n"),
+      "Pages/NoBase.cshtml.cs": "public class NoBaseModel { public void OnPostSave() {} }\n",
+      "Pages/Base.cshtml": ["@page", "@model BaseModel", '<form method="post" asp-page-handler="Save"></form>'].join("\n"),
+      "Pages/Base.cshtml.cs": "public class BaseModel : CustomBase { public void OnPostSave() {} }\n",
+      "Pages/Override.cshtml": ["@page", "@model OverrideModel", '<form method="post" asp-page-handler="Save"></form>'].join("\n"),
+      "Pages/Override.cshtml.cs": "public class OverrideModel : PageModel { public override void OnPostSave() {} }\n"
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const snapshot = graphStore.getSnapshot(projectPath);
+    const page = (path: string) => snapshot.symbols.find((symbol) => symbol.qualifiedName === `${path}#default`);
+    const partial = snapshot.symbols.find(
+      (symbol) => symbol.qualifiedName === "Pages/Partial.cshtml.cs#PartialModel"
+    );
+    const longPartial = snapshot.symbols.find(
+      (symbol) => symbol.qualifiedName === "Pages/LongPartial.cshtml.cs#LongPartialModel"
+    );
+    const external = snapshot.symbols.find(
+      (symbol) => symbol.qualifiedName === "Models/ExternalModel.cs#ExternalModel"
+    );
+    const codeModel = snapshot.symbols.find((symbol) => symbol.qualifiedName === "Pages/Code.cshtml.cs#CodeModel");
+
+    expect(
+      snapshot.edges.filter((edge) => edge.sourceId === page("Pages/Ambiguous.cshtml")?.id && edge.kind === "handles")
+    ).toEqual([]);
+    expect(
+      snapshot.edges.filter(
+        (edge) =>
+          edge.sourceId === page("Pages/Partial.cshtml")?.id && edge.targetId === partial?.id && edge.kind === "references"
+      )
+    ).toEqual([]);
+    expect(
+      snapshot.edges.filter(
+        (edge) =>
+          edge.sourceId === page("Pages/LongPartial.cshtml")?.id && edge.targetId === longPartial?.id && edge.kind === "references"
+      )
+    ).toEqual([]);
+    expect(
+      snapshot.edges.filter(
+        (edge) =>
+          edge.sourceId === page("Pages/External.cshtml")?.id && edge.targetId === external?.id && edge.kind === "references"
+      )
+    ).toEqual([]);
+    expect(
+      snapshot.edges.filter(
+        (edge) => edge.sourceId === page("Pages/Code.cshtml")?.id && edge.targetId === codeModel?.id && edge.kind === "references"
+      )
+    ).toEqual([]);
+    for (const path of ["Private", "Static", "Generic", "NonHandler", "NoBase", "Base", "Override"]) {
+      expect(
+        snapshot.edges.filter(
+          (edge) => edge.sourceId === page(`Pages/${path}.cshtml`)?.id && edge.kind === "handles"
+        )
+      ).toEqual([]);
+    }
   });
 
   it("indexes ArkTS ArkUI components and direct UI root entrypoints", async () => {

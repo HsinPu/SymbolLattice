@@ -6,6 +6,7 @@ import type {
   LocalBinding,
   PendingReference,
   ReferenceScope,
+  RazorFacts,
   SourceRange,
   SymbolNode
 } from "../domain/index.js";
@@ -18,6 +19,12 @@ export interface RazorExtractFileFactsInput {
 
 interface RazorPageDirective {
   readonly path: string;
+  readonly start: number;
+  readonly end: number;
+}
+
+interface RazorModelDirective {
+  readonly modelName: string;
   readonly start: number;
   readonly end: number;
 }
@@ -115,6 +122,97 @@ function razorStaticPageDirectives(sourceText: string): readonly RazorPageDirect
   return directives;
 }
 
+function conventionalCshtmlRoute(filePath: string): string | null {
+  const normalized = filePath.replaceAll("\\", "/");
+  if (!normalized.endsWith(".cshtml")) {
+    return null;
+  }
+  const parts = normalized.split("/");
+  const pagesIndexes = parts
+    .map((part, index) => (part === "Pages" ? index : -1))
+    .filter((index) => index !== -1);
+  const pagesIndex = pagesIndexes[0];
+  if (
+    pagesIndexes.length !== 1 ||
+    pagesIndex === undefined ||
+    pagesIndex === parts.length - 1 ||
+    parts.slice(0, pagesIndex).includes("Areas")
+  ) {
+    return null;
+  }
+  const pageParts = parts.slice(pagesIndex + 1);
+  const fileName = pageParts.at(-1);
+  if (fileName === undefined || !/^[A-Za-z0-9_-]+\.cshtml$/u.test(fileName)) {
+    return null;
+  }
+  const segments = [...pageParts.slice(0, -1), fileName.slice(0, -".cshtml".length)];
+  if (segments.some((segment) => !/^[A-Za-z0-9_-]+$/u.test(segment))) {
+    return null;
+  }
+  if (segments.at(-1) === "Index") {
+    segments.pop();
+  }
+  return segments.length === 0 ? "/" : "/" + segments.join("/");
+}
+
+interface CshtmlLeadingDirectives {
+  readonly page: RazorPageDirective | null;
+  readonly model: RazorModelDirective | null;
+}
+
+function skipCshtmlPrologueTrivia(sourceText: string, start: number): number | null {
+  let cursor = start;
+  while (cursor < sourceText.length) {
+    if (/[\t\n\f\r ]/u.test(sourceText[cursor] ?? "")) {
+      cursor += 1;
+      continue;
+    }
+    if (sourceText.startsWith("@*", cursor)) {
+      const close = sourceText.indexOf("*@", cursor + 2);
+      if (close === -1) return null;
+      cursor = close + 2;
+      continue;
+    }
+    if (sourceText.startsWith("<!--", cursor)) {
+      const close = sourceText.indexOf("-->", cursor + 4);
+      if (close === -1) return null;
+      cursor = close + 3;
+      continue;
+    }
+    return cursor;
+  }
+  return cursor;
+}
+
+/** Parses only the safe leading Razor Pages directive prologue, never body text. */
+function leadingCshtmlDirectives(sourceText: string): CshtmlLeadingDirectives {
+  let cursor = sourceText.startsWith("\uFEFF") ? 1 : 0;
+  const pageStart = skipCshtmlPrologueTrivia(sourceText, cursor);
+  if (pageStart === null) return { page: null, model: null };
+  cursor = pageStart;
+  const pageMatch = /^@page[\t ]*(?:\r?\n|$)/u.exec(sourceText.slice(cursor));
+  if (pageMatch === null) return { page: null, model: null };
+  const page = { path: "", start: cursor, end: cursor + pageMatch[0].length };
+  cursor += pageMatch[0].length;
+
+  const modelStart = skipCshtmlPrologueTrivia(sourceText, cursor);
+  if (modelStart === null) return { page: null, model: null };
+  cursor = modelStart;
+  const modelMatch = /^@model[\t ]+([A-Za-z_][A-Za-z0-9_]*)[\t ]*(?:\r?\n|$)/u.exec(sourceText.slice(cursor));
+  let model: RazorModelDirective | null = null;
+  if (modelMatch !== null && modelMatch[1] !== undefined) {
+    const modelName = modelMatch[1];
+    const start = cursor + modelMatch[0].indexOf(modelName);
+    model = { modelName, start, end: start + modelName.length };
+    cursor += modelMatch[0].length;
+  }
+
+  const next = skipCshtmlPrologueTrivia(sourceText, cursor);
+  if (next === null) return { page: null, model: null };
+  if (/^@[A-Za-z_]/u.test(sourceText.slice(next))) return { page: null, model: null };
+  return { page, model };
+}
+
 /**
  * Extracts a deliberately narrow Razor component contract. A `.razor` file
  * always contributes its conventional local component; only standalone,
@@ -197,7 +295,19 @@ export function extractRazorFileFacts(input: RazorExtractFileFactsInput): Artifa
     scopeId: FILE_SCOPE_ID
   });
 
-  for (const directive of razorStaticPageDirectives(input.sourceText)) {
+  const isCshtml = input.filePath.toLowerCase().endsWith(".cshtml");
+  const cshtmlDirectives = isCshtml ? leadingCshtmlDirectives(input.sourceText) : null;
+  const cshtmlRoute = isCshtml ? conventionalCshtmlRoute(input.filePath) : null;
+  const cshtmlPageDirective =
+    cshtmlDirectives === null || cshtmlDirectives.page === null || cshtmlRoute === null ? null : cshtmlDirectives.page;
+  const cshtmlModel =
+    cshtmlPageDirective === null ? null : cshtmlDirectives?.model ?? null;
+  const pageDirectives =
+    isCshtml
+      ? cshtmlPageDirective === null || cshtmlRoute === null ? [] : [{ ...cshtmlPageDirective, path: cshtmlRoute }]
+      : razorStaticPageDirectives(input.sourceText);
+
+  for (const directive of pageDirectives) {
     const name = "NAVIGATE " + directive.path;
     const identity = input.filePath + "#route:" + name;
     const declarationOrdinal = routeOrdinals.get(identity) ?? 0;
@@ -266,6 +376,19 @@ export function extractRazorFileFacts(input: RazorExtractFileFactsInput): Artifa
     });
   }
 
+  const razorFacts: RazorFacts | undefined =
+    isCshtml && cshtmlPageDirective !== null && cshtmlModel !== null
+      ? {
+          fileSymbolId: fileNode.id,
+          defaultSymbolId: component.id,
+          model: {
+            sourceId: component.id,
+            modelName: cshtmlModel.modelName,
+            range: rangeForSpan(lineStarts, cshtmlModel.start, cshtmlModel.end)
+          }
+        }
+      : undefined;
+
   return {
     symbols,
     edges,
@@ -274,6 +397,7 @@ export function extractRazorFileFacts(input: RazorExtractFileFactsInput): Artifa
     referenceScopes,
     importBindings: [],
     exportBindings,
-    reExportBindings: []
+    reExportBindings: [],
+    ...(razorFacts === undefined ? {} : { razorFacts })
   };
 }

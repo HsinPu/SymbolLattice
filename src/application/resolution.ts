@@ -1370,6 +1370,97 @@ function projectBladeTemplateReferences(input: {
   return edges;
 }
 
+/**
+ * Resolves Razor Pages only through the one canonical same-path code-behind.
+ * The retained Razor facts intentionally never enter generic name resolution:
+ * a missing, partial, nested, or overloaded C# shape simply yields no edge.
+ */
+function projectRazorPagesReferences(input: {
+  readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
+  readonly symbolsById: ReadonlyMap<string, SymbolNode>;
+  readonly sourceDocumentsByPath: ReadonlyMap<string, SourceDocument>;
+  readonly structuralEdges: readonly GraphEdge[];
+}): readonly GraphEdge[] {
+  const edges: GraphEdge[] = [];
+  for (const [pagePath, pageFacts] of [...input.factsByFile.entries()].sort(([left], [right]) =>
+    compareStableText(left, right)
+  )) {
+    const razorFacts = pageFacts.razorFacts;
+    if (razorFacts === undefined || razorFacts.model === undefined) {
+      continue;
+    }
+    const pageFile = input.symbolsById.get(razorFacts.fileSymbolId);
+    const pageDefault = input.symbolsById.get(razorFacts.defaultSymbolId);
+    if (
+      pageFile?.kind !== "file" ||
+      pageFile.filePath !== pagePath ||
+      pageDefault === undefined ||
+      pageDefault.filePath !== pagePath ||
+      razorFacts.model.sourceId !== pageDefault.id
+    ) {
+      continue;
+    }
+    const companionPath = `${pagePath}.cs`;
+    const companionFacts = input.factsByFile.get(companionPath);
+    const companionDocument = input.sourceDocumentsByPath.get(companionPath);
+    if (companionFacts === undefined || companionDocument?.language !== "csharp") {
+      continue;
+    }
+    const companionFile = companionFacts.symbols.find((symbol) => symbol.kind === "file");
+    if (companionFile === undefined || companionFile.filePath !== companionPath) {
+      continue;
+    }
+    const directlyContains = (parentId: string, childId: string): boolean =>
+      input.structuralEdges.some(
+        (edge) => edge.kind === "contains" && edge.sourceId === parentId && edge.targetId === childId
+      );
+    const hasExactlyOneNonPartialClassFact = (classId: string): boolean => {
+      const matchingFacts = (companionFacts.csharpDirectClassFacts ?? []).filter(
+        (candidate) => candidate.classId === classId
+      );
+      return matchingFacts.length === 1 && matchingFacts[0]?.isPartial === false;
+    };
+    const modelCandidates = companionFacts.symbols.filter(
+      (symbol) =>
+        symbol.kind === "class" &&
+        symbol.name === razorFacts.model?.modelName &&
+        symbol.filePath === companionPath &&
+        directlyContains(companionFile.id, symbol.id) &&
+        hasExactlyOneNonPartialClassFact(symbol.id)
+    );
+    if (modelCandidates.length !== 1 || modelCandidates[0] === undefined) {
+      continue;
+    }
+    const model = modelCandidates[0];
+    edges.push({
+      id: createEdgeId({
+        sourceId: razorFacts.model.sourceId,
+        targetId: model.id,
+        kind: "references",
+        line: razorFacts.model.range.start.line,
+        column: razorFacts.model.range.start.column,
+        referenceName: razorFacts.model.modelName
+      }),
+      sourceId: razorFacts.model.sourceId,
+      targetId: model.id,
+      kind: "references",
+      filePath: pagePath,
+      range: razorFacts.model.range,
+      resolution: "exact",
+      confidence: 1,
+      referenceName: razorFacts.model.modelName,
+      evidence: referenceEvidence(
+        "framework.razor-pages.direct-model.conventional-companion",
+        "module",
+        [model.id],
+        [],
+        [pagePath, companionPath]
+      )
+    });
+  }
+  return edges;
+}
+
 function isSpringBootPropertiesFile(filePath: string): boolean {
   const fileName = filePath.split(/[\\/]/u).at(-1) ?? filePath;
   return /^(application|bootstrap)(?:-[A-Za-z0-9_.-]+)?\.properties$/iu.test(fileName);
@@ -11330,6 +11421,14 @@ export function resolveProjectFacts(input: {
     ...projectBladeTemplateReferences({
       factsByFile,
       fileSymbols
+    })
+  );
+  resolvedEdges.push(
+    ...projectRazorPagesReferences({
+      factsByFile,
+      symbolsById,
+      sourceDocumentsByPath,
+      structuralEdges
     })
   );
   resolvedEdges.push(

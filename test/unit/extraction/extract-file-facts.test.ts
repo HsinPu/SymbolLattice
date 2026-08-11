@@ -17737,6 +17737,158 @@ describe("source extraction", () => {
     expect(facts.pendingReferences).toEqual([]);
   });
 
+  it("extracts only conventional Razor Pages bare directives and direct models", () => {
+    const facts = extractFileFacts({
+      filePath: "Pages/Index.cshtml",
+      language: "razor",
+      sourceText: [
+        "\ufeff@page",
+        "@model IndexModel",
+        '<form method="post" asp-page-handler="AddMessage">',
+        "  <button>Save</button>",
+        "</form>"
+      ].join("\n")
+    });
+
+    expect(facts.symbols.map((symbol) => [symbol.kind, symbol.name])).toEqual([
+      ["file", "Index.cshtml"],
+      ["variable", "default"],
+      ["route", "NAVIGATE /"]
+    ]);
+    expect(facts.pendingReferences).toEqual([
+      expect.objectContaining({
+        referenceName: "default",
+        relationKind: "routes",
+        routeFramework: "blazor",
+        routeRegistration: "blazor-page-directive"
+      })
+    ]);
+    expect(facts.razorFacts).toEqual({
+      fileSymbolId: expect.any(String),
+      defaultSymbolId: expect.any(String),
+      model: expect.objectContaining({ modelName: "IndexModel" })
+    });
+
+    for (const filePath of ["Views/Index.cshtml", "Pages/Other.cshtml"]) {
+      const invalid = extractFileFacts({
+        filePath,
+        language: "razor",
+        sourceText: filePath.startsWith("Views/") ? "@page" : '@page "/other"'
+      });
+      expect(invalid.pendingReferences).toEqual([]);
+      expect(invalid.razorFacts).toBeUndefined();
+    }
+    const nestedPages = extractFileFacts({
+      filePath: "Pages/Admin/Pages/Index.cshtml",
+      language: "razor",
+      sourceText: ["@page", "@model IndexModel"].join("\n")
+    });
+    expect(nestedPages.pendingReferences.filter((reference) => reference.relationKind === "routes")).toEqual([]);
+    expect(nestedPages.razorFacts).toBeUndefined();
+  });
+
+  it("fails closed for ambiguous, computed, commented, and non-local Razor Pages route and model syntax", () => {
+    const invalidSources = [
+      ["Pages/Index.cshtml", ["@page", "@page", "@model IndexModel"].join("\n"), false],
+      ["Pages/Index.cshtml", ['@page \\', '  "not-standalone"', "@model IndexModel"].join("\n"), false],
+      ["Pages/Index.cshtml", ["@* @page *@", "@model IndexModel"].join("\n"), false],
+      ["Pages/Index.cshtml", ["@page", "@model App.IndexModel"].join("\n"), false, false],
+      [
+        "Pages/Index.cshtml",
+        ["@page", "@model IndexModel", '<form method="post" asp-page-handler="@HandlerName"></form>'].join(
+          "\n"
+        ),
+        true,
+        true
+      ],
+      [
+        "Pages/Index.cshtml",
+        ["@page", "@model IndexModel", '<form method="post" asp-page="Other" asp-page-handler="Save"></form>'].join(
+          "\n"
+        ),
+        true,
+        true
+      ],
+      [
+        "Pages/Index.cshtml",
+        ["@page", "@model IndexModel", '<form method="post" asp-page-handler="Save">', "<form></form>", "</form>"].join(
+          "\n"
+        ),
+        true,
+        true
+      ]
+    ] as const;
+
+    for (const [filePath, sourceText, keepsRoute, keepsModel] of invalidSources) {
+      const facts = extractFileFacts({ filePath, language: "razor", sourceText });
+      if (keepsModel === true) {
+        expect(facts.razorFacts).toEqual(expect.objectContaining({ model: expect.objectContaining({ modelName: "IndexModel" }) }));
+      } else {
+        expect(facts.razorFacts).toBeUndefined();
+      }
+      expect(facts.pendingReferences.filter((reference) => reference.relationKind === "routes")).toHaveLength(
+        keepsRoute ? 1 : 0
+      );
+    }
+  });
+
+  it("accepts Razor Pages directives only from the leading safe prologue", () => {
+    const modelBeforePage = extractFileFacts({
+      filePath: "Pages/Index.cshtml",
+      language: "razor",
+      sourceText: ["@model IndexModel", "@page"].join("\n")
+    });
+    expect(modelBeforePage.pendingReferences.filter((reference) => reference.relationKind === "routes")).toEqual([]);
+    expect(modelBeforePage.razorFacts).toBeUndefined();
+
+    for (const sourceText of [
+      ["@{", '  var raw = """', "@page", "@model CodeOnlyModel", '""";', "}"].join("\n"),
+      ["@{", '  var verbatim = @"', "@page", '";', "}"].join("\n"),
+      ["@{", '  var interpolated = $"""', "@page", '""";', "}"].join("\n")
+    ]) {
+      const fakePageInCode = extractFileFacts({
+        filePath: "Pages/CodeOnly.cshtml",
+        language: "razor",
+        sourceText
+      });
+      expect(fakePageInCode.pendingReferences.filter((reference) => reference.relationKind === "routes")).toEqual([]);
+      expect(fakePageInCode.razorFacts).toBeUndefined();
+    }
+
+    const fakeModelInCode = extractFileFacts({
+      filePath: "Pages/Index.cshtml",
+      language: "razor",
+      sourceText: ["@page", "@{", '  var raw = """', "@model CodeModel", '""";', "}"].join("\n")
+    });
+    expect(fakeModelInCode.pendingReferences.filter((reference) => reference.relationKind === "routes")).toHaveLength(1);
+    expect(fakeModelInCode.razorFacts).toBeUndefined();
+  });
+
+  it("does not treat Areas or raw-text containers as conventional Razor Pages model surfaces", () => {
+    const area = extractFileFacts({
+      filePath: "Areas/Admin/Pages/Index.cshtml",
+      language: "razor",
+      sourceText: ["@page", "@model AdminIndexModel"].join("\n")
+    });
+    expect(area.razorFacts).toBeUndefined();
+    expect(area.pendingReferences.filter((reference) => reference.relationKind === "routes")).toEqual([]);
+
+    for (const container of ["script", "style", "textarea", "template"]) {
+      const facts = extractFileFacts({
+        filePath: "Pages/Index.cshtml",
+        language: "razor",
+        sourceText: [
+          "@page",
+          "@model IndexModel",
+          `<${container}>`,
+          '<form method="post" asp-page-handler="NotAHandler"></form>',
+          `</${container}>`
+        ].join("\n")
+      });
+      expect(facts.razorFacts, container).toEqual(expect.objectContaining({ model: expect.objectContaining({ modelName: "IndexModel" }) }));
+    }
+  });
+
   it("extracts complete ArkTS ArkUI component structs and direct UI roots", () => {
     const facts = extractFileFacts({
       filePath: "entry/src/main/ets/pages/Home.ets",

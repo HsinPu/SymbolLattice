@@ -152,6 +152,7 @@ describe("source discovery", () => {
     await writeFile(join(projectPath, "src", "p.svelte"), "<main />\n", "utf8");
     await writeFile(join(projectPath, "src", "q.astro"), "<main />\n", "utf8");
     await writeFile(join(projectPath, "src", "r.razor"), "<main />\n", "utf8");
+    await writeFile(join(projectPath, "src", "r.cshtml"), "@page \"/\"\n", "utf8");
     await writeFile(join(projectPath, "src", "s.ets"), "@Component struct App {}\n", "utf8");
     await writeFile(join(projectPath, "src", "s.sh"), "deploy() { :; }\n", "utf8");
     await writeFile(join(projectPath, "src", "t.tf"), "resource \"aws_s3_bucket\" \"assets\" {}\n", "utf8");
@@ -213,6 +214,7 @@ describe("source discovery", () => {
       "src/o.vue",
       "src/p.svelte",
       "src/q.astro",
+      "src/r.cshtml",
       "src/r.razor",
       "src/s.ets",
       "src/s.sh",
@@ -270,6 +272,7 @@ describe("source discovery", () => {
       "vue",
       "svelte",
       "astro",
+      "razor",
       "razor",
       "arkts",
       "shell",

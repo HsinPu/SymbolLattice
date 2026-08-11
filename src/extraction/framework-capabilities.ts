@@ -191,7 +191,10 @@ export const FRAMEWORK_CAPABILITIES = [
     languages: ["razor"],
     routeFramework: "blazor",
     routeRegistrations: ["blazor-page-directive"],
-    surfaces: [".razor conventional components", "standalone literal @page directive routes"]
+    surfaces: [
+      ".razor conventional components and standalone literal @page directive routes",
+      ".cshtml conventional Pages bare @page routes with direct same-path @model companion references"
+    ]
   },
   {
     id: "arkui",
