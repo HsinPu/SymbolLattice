@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.369.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
+> v0.370.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
 
 ## 專案用途
 
@@ -51,30 +51,11 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.369.0 可用性快照
+## v0.370.0 重點
 
-可重跑的 smoke matrix 會從正式語言與框架 registry 核對測試案例，而不是依 README 宣稱支援。
-
-- 54 個正式語言皆可完成 `init`、no-op `sync`、changed `sync`、檔案與完整 identity symbol 查詢，並全數通過 B1 關係驗收。
-- 第一個真實專案驗收使用固定 commit 的 Spring PetClinic；Java 可精確解析同類別 private instance helper 呼叫，同時對可覆寫的一般 instance dispatch 保持保守。
-- 第二個真實專案驗收使用固定 commit 的 NestJS TypeScript starter；相對 import 與 `GET /` route 具有完整 exact evidence，runtime 可替換的 DI method dispatch 維持 unresolved。
-- 第三個真實專案驗收使用固定 commit 的 Koa；JavaScript 可精確辨識受限的 strict-mode CommonJS `module.exports` class、literal `require(...)` 檔案依賴與 lexical helper call，同時對可覆寫的 `this` dispatch 保持 unresolved。
-- 第四個真實專案驗收使用固定 commit 的 OpenHarmony `app_samples/ETSUI/CustomComponent`；ArkTS 可保留 `@Entry`／`@Component` identity、UI root `handles` 與 literal relative `.ets` import 的完整 exact evidence，ArkUI component DSL 呼叫深度留待後續版本。
-- 第五個真實專案驗收使用固定 commit 的 Vue 官方 Router playground；套件式 tsconfig extends 不再阻止掃描，單一可解析的 `<script setup>` 可建立 default component，SFC local import 與 Vue Router imported handler 具有完整 exact evidence。
-- 第六個真實專案驗收使用固定 commit 的 Svelte 官方 RealWorld；缺少尚未生成的 `.svelte-kit/tsconfig.json` 不再阻止索引，Svelte component、SFC local import 與 SvelteKit filesystem route 皆具有完整 exact evidence。
-- 54 種語言皆已有至少一種非純 `contains` 的可靠行為或依賴關係，完成第一輪 B1 深度對齊。
-- Ruby 以 Rails literal route 到 controller method、Shell 以頂層 `export -f` function reference、SQL 以 bounded view-to-table reference 完成深度對齊。
-- Astro 與 Razor 驗證元件到靜態頁面路由。
-- Terraform 可驗證 output 到同檔唯一 resource traversal；GraphQL 可驗證 type 到單一 interface implementation；Proto 可驗證 RPC 到同檔唯一 request／response message。
-- SQL 以精確檔案檢視驗證 bounded view-to-table reference；上述 schema／IaC 關係不宣稱完整 dialect、schema validation、plan/apply 或 runtime linkage。
-- 57 條 required relation 全部驗證正確 endpoints、`resolution: exact`、`confidence: 1` 與包含 selected target 的 candidate evidence，benchmark 會保存完整證據收據。
-- 檔案依賴查詢會回傳具體 exact import／export edges；Nix 與 Python 不再只靠 aggregate `edgeKinds` 取得 B1。
-- Capability 發版閘門會阻擋任何語言 partial、scan-only 或 unavailable；框架案例仍可誠實保留 partial 診斷。
-- Groovy 可驗證同檔唯一直接類別繼承；CFML 可驗證結構隔離 `.cfc` 的 remote entrypoint 到 handler。兩者的動態一般呼叫仍保守不產生 exact edge。
-- React Router、Next.js、Vue Router、SvelteKit、Astro、Spring Web、FastAPI、Django 與 ASP.NET Core 的代表案例可建立預期 route。
-- Nuxt 可掃描與查詢 Vue 檔案，但目前沒有專用 Nuxt route capability。
-
-B1 深度對齊要求語言具備非純檔案包含的可靠關係；不代表 54 種語言已具有相同的跨檔案與框架深度。
+- Astro 靜態頁面可建立 filesystem route；開頭 frontmatter 僅在可乾淨解析時擷取直接 ESM import。
+- Astro 頁面對 root 自有 `baseUrl`／`paths` 的 source-only alias 可建立 exact import proof，並保留選定目標與設定證據。
+- 混合 target、動態 import、template／外部 script 與更多 Astro 語意保持 unresolved，避免產生錯誤 exact edge。
 
 ## MCP
 

@@ -114,9 +114,14 @@ export class FileSystemSourceCatalog implements SourceCatalog {
   public async scan(projectPath: string, options?: ProjectScanOptions): Promise<ProjectScan> {
     const normalizedProjectPath = resolve(projectPath);
     const sourceDocuments = await discoverSourceFiles(normalizedProjectPath, options);
+    const astroProject = await detectAstroProject(normalizedProjectPath);
+    const astroConfigurationPath = astroProject.enabled
+      ? astroProject.configurationInputs.find((input) => input.state === "present")?.path
+      : undefined;
     const typeScriptResolver = createTypeScriptProjectModuleResolver({
       projectPath: normalizedProjectPath,
-      sourceDocuments
+      sourceDocuments,
+      ...(astroConfigurationPath === undefined ? {} : { astroConfigurationPath })
     });
     const workspaceResolver = await createWorkspaceProjectModuleResolver({
       projectPath: normalizedProjectPath,
@@ -130,7 +135,6 @@ export class FileSystemSourceCatalog implements SourceCatalog {
       projectPath: normalizedProjectPath,
       sourceDocuments
     });
-    const astroProject = await detectAstroProject(normalizedProjectPath);
     const xcodeProject = await detectXcodeProjectEvidence(normalizedProjectPath, sourceDocuments);
     const jvmProject = await detectJvmProjectModuleEvidence(normalizedProjectPath, sourceDocuments);
     const inputOptions =

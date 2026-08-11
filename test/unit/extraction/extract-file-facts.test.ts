@@ -17447,6 +17447,55 @@ describe("source extraction", () => {
     ]);
   });
 
+  it("extracts direct TypeScript ESM imports from parse-clean Astro opening frontmatter", () => {
+    const facts = extractFileFacts({
+      filePath: "src/pages/index.astro",
+      language: "astro",
+      sourceText: [
+        "---",
+        'import PrimaryLayout from "~/layouts/PrimaryLayout.astro";',
+        'import { heading as pageHeading, type Metadata } from "~/content/page";',
+        'import * as helpers from "~/helpers";',
+        'import type { Theme } from "~/theme";',
+        "---",
+        "<PrimaryLayout>{pageHeading}</PrimaryLayout>"
+      ].join("\n")
+    });
+
+    expect(facts.pendingReferences.filter((reference) => reference.relationKind === "imports")).toEqual([
+      expect.objectContaining({ referenceName: "~/layouts/PrimaryLayout.astro" }),
+      expect.objectContaining({ referenceName: "~/content/page" }),
+      expect.objectContaining({ referenceName: "~/helpers" }),
+      expect.objectContaining({ referenceName: "~/theme" })
+    ]);
+    expect(facts.importBindings).toEqual([
+      expect.objectContaining({
+        moduleSpecifier: "~/layouts/PrimaryLayout.astro",
+        localName: "PrimaryLayout",
+        importedName: "default",
+        range: { start: { line: 2, column: 7 }, end: { line: 2, column: 20 } }
+      }),
+      expect.objectContaining({
+        moduleSpecifier: "~/content/page",
+        localName: "pageHeading",
+        importedName: "heading"
+      }),
+      expect.objectContaining({
+        moduleSpecifier: "~/content/page",
+        localName: "Metadata",
+        importedName: "Metadata",
+        isTypeOnly: true
+      }),
+      expect.objectContaining({ moduleSpecifier: "~/helpers", localName: "helpers", importedName: "*" }),
+      expect.objectContaining({
+        moduleSpecifier: "~/theme",
+        localName: "Theme",
+        importedName: "Theme",
+        isTypeOnly: true
+      })
+    ]);
+  });
+
   it("extracts exact Astro dynamic and rest page navigation", () => {
     const dynamicPage = extractFileFacts({
       filePath: "src/pages/blog/[slug].astro",

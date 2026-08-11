@@ -19,6 +19,9 @@ function languageForPath(relativePath: string): SourceDocument["language"] {
   if (/\.svelte$/i.test(relativePath)) {
     return "svelte";
   }
+  if (/\.vue$/i.test(relativePath)) {
+    return "vue";
+  }
   if (/\.astro$/i.test(relativePath)) {
     return "astro";
   }
@@ -41,7 +44,7 @@ async function createConfiguredProject(
   return {
     projectPath,
     sourceDocuments: Object.entries(files)
-      .filter(([relativePath]) => /\.(?:[cm]?[jt]sx?|svelte|astro|ets)$/i.test(relativePath))
+      .filter(([relativePath]) => /\.(?:[cm]?[jt]sx?|vue|svelte|astro|ets)$/i.test(relativePath))
       .map(([relativePath, sourceText]) => ({
         absolutePath: resolve(projectPath, ...relativePath.split("/")),
         relativePath,
@@ -3428,6 +3431,272 @@ describe("literal route handler resolution", () => {
 });
 
 describe("TypeScript configuration module resolution", () => {
+  it("falls back to one explicit SFC paths substitution only when arbitrary extensions are enabled", async () => {
+    const project = await createConfiguredProject({
+      "tsconfig.json": JSON.stringify({
+        compilerOptions: {
+          module: "ESNext",
+          moduleResolution: "Bundler",
+          baseUrl: ".",
+          allowArbitraryExtensions: true,
+          paths: { "~/*": ["src/*"] }
+        }
+      }),
+      "src/consumer.ts": "export const consumer = true;",
+      "src/layouts/PrimaryLayout.astro": "<slot />",
+      "src/components/Notice.vue": "<template><main /></template>",
+      "src/components/Navigation.svelte": "<nav />"
+    });
+    const configuredResolver = createTypeScriptProjectModuleResolver(project);
+
+    expect(configuredResolver.moduleResolver.resolve("src/consumer.ts", "~/layouts/PrimaryLayout.astro")).toEqual({
+      targetFilePath: "src/layouts/PrimaryLayout.astro",
+      strategy: "tsconfig-paths",
+      configurationPaths: ["tsconfig.json"]
+    });
+    expect(configuredResolver.moduleResolver.resolve("src/consumer.ts", "~/components/Notice.vue")).toEqual({
+      targetFilePath: "src/components/Notice.vue",
+      strategy: "tsconfig-paths",
+      configurationPaths: ["tsconfig.json"]
+    });
+    expect(configuredResolver.moduleResolver.resolve("src/consumer.ts", "~/components/Navigation.svelte")).toEqual({
+      targetFilePath: "src/components/Navigation.svelte",
+      strategy: "tsconfig-paths",
+      configurationPaths: ["tsconfig.json"]
+    });
+    expect(configuredResolver.moduleResolver.resolve("src/consumer.ts", "~/layouts/PrimaryLayout")).toEqual({
+      targetFilePath: null,
+      strategy: "unresolved",
+      configurationPaths: ["tsconfig.json"]
+    });
+  });
+
+  it("uses TypeScript's inherited paths base path when no baseUrl is declared", async () => {
+    const project = await createConfiguredProject({
+      "tsconfig.json": JSON.stringify({ extends: "./config/base.json" }),
+      "config/base.json": JSON.stringify({
+        compilerOptions: {
+          allowArbitraryExtensions: true,
+          paths: { "~/*": ["src/*"] }
+        }
+      }),
+      "src/consumer.ts": "export const consumer = true;",
+      "config/src/layouts/PrimaryLayout.astro": "<slot />",
+      "src/layouts/PrimaryLayout.astro": "<main>wrong root</main>"
+    });
+    const configuredResolver = createTypeScriptProjectModuleResolver(project);
+
+    expect(configuredResolver.moduleResolver.resolve("src/consumer.ts", "~/layouts/PrimaryLayout.astro")).toEqual({
+      targetFilePath: "config/src/layouts/PrimaryLayout.astro",
+      strategy: "tsconfig-paths",
+      configurationPaths: ["tsconfig.json", "config/base.json"]
+    });
+  });
+
+  it("recovers an Astro-only explicit alias from root-owned paths when Astro's external config is unavailable", async () => {
+    const project = await createConfiguredProject({
+      "tsconfig.json": JSON.stringify({
+        extends: "astro/tsconfigs/strictest",
+        compilerOptions: { baseUrl: ".", paths: { "~/*": ["src/*"] } }
+      }),
+      "astro.config.ts": "export default {};",
+      "src/pages/index.astro": 'import Layout from "~/layouts/PrimaryLayout.astro";',
+      "src/layouts/PrimaryLayout.astro": "<slot />"
+    });
+    const configuredResolver = createTypeScriptProjectModuleResolver({
+      ...project,
+      astroConfigurationPath: "astro.config.ts"
+    });
+
+    expect(configuredResolver.moduleResolver.resolve(
+      "src/pages/index.astro",
+      "~/layouts/PrimaryLayout.astro"
+    )).toEqual({
+      targetFilePath: "src/layouts/PrimaryLayout.astro",
+      strategy: "tsconfig-paths",
+      configurationPaths: ["tsconfig.json", "astro.config.ts"]
+    });
+  });
+
+  it("fails closed for source-only Astro recovery without its narrow evidence", async () => {
+    const project = await createConfiguredProject({
+      "tsconfig.json": JSON.stringify({
+        extends: "astro/tsconfigs/strictest",
+        compilerOptions: { baseUrl: ".", paths: { "~/*": ["src/*"] } }
+      }),
+      "astro.config.ts": "export default {};",
+      "src/pages/index.astro": 'import Layout from "~/layouts/PrimaryLayout.astro";',
+      "src/consumer.ts": 'import Layout from "~/layouts/PrimaryLayout.astro";',
+      "src/layouts/PrimaryLayout.astro": "<slot />",
+      "src/components/Notice.vue": "<template />",
+      "src/components/Navigation.svelte": "<nav />",
+      "src/components/helper.ts": "export const helper = true;"
+    });
+    const withAstroEvidence = createTypeScriptProjectModuleResolver({
+      ...project,
+      astroConfigurationPath: "astro.config.ts"
+    });
+    const withoutAstroEvidence = createTypeScriptProjectModuleResolver(project);
+    const unresolvedResult = {
+      targetFilePath: null,
+      strategy: "unresolved",
+      configurationPaths: ["tsconfig.json"]
+    };
+
+    expect(withoutAstroEvidence.moduleResolver.resolve(
+      "src/pages/index.astro",
+      "~/layouts/PrimaryLayout.astro"
+    )).toEqual(unresolvedResult);
+    expect(withAstroEvidence.moduleResolver.resolve(
+      "src/consumer.ts",
+      "~/layouts/PrimaryLayout.astro"
+    )).toEqual(unresolvedResult);
+    expect(withAstroEvidence.moduleResolver.resolve(
+      "src/pages/index.astro",
+      "~/layouts/PrimaryLayout"
+    )).toEqual(unresolvedResult);
+    expect(withAstroEvidence.moduleResolver.resolve(
+      "src/pages/index.astro",
+      "~/components/Notice.vue"
+    )).toEqual(unresolvedResult);
+    expect(withAstroEvidence.moduleResolver.resolve(
+      "src/pages/index.astro",
+      "~/components/Navigation.svelte"
+    )).toEqual(unresolvedResult);
+    expect(withAstroEvidence.moduleResolver.resolve(
+      "src/pages/index.astro",
+      "~/components/helper.ts"
+    )).toEqual(unresolvedResult);
+
+    const baseUrlOnly = await createConfiguredProject({
+      "tsconfig.json": JSON.stringify({
+        extends: "astro/tsconfigs/strictest",
+        compilerOptions: { baseUrl: "." }
+      }),
+      "astro.config.ts": "export default {};",
+      "src/pages/index.astro": 'import Layout from "~/layouts/PrimaryLayout.astro";',
+      "src/layouts/PrimaryLayout.astro": "<slot />"
+    });
+    expect(createTypeScriptProjectModuleResolver({
+      ...baseUrlOnly,
+      astroConfigurationPath: "astro.config.ts"
+    }).moduleResolver.resolve("src/pages/index.astro", "~/layouts/PrimaryLayout.astro")).toEqual({
+      targetFilePath: null,
+      strategy: "unresolved",
+      configurationPaths: ["tsconfig.json"]
+    });
+
+    const ambiguous = await createConfiguredProject({
+      "tsconfig.json": JSON.stringify({
+        extends: "astro/tsconfigs/strictest",
+        compilerOptions: {
+          baseUrl: ".",
+          paths: { "~/*": ["src/*"], "~/layouts/*": ["src/layouts/*"] }
+        }
+      }),
+      "astro.config.ts": "export default {};",
+      "src/pages/index.astro": 'import Layout from "~/layouts/PrimaryLayout.astro";',
+      "src/layouts/PrimaryLayout.astro": "<slot />"
+    });
+    expect(createTypeScriptProjectModuleResolver({
+      ...ambiguous,
+      astroConfigurationPath: "astro.config.ts"
+    }).moduleResolver.resolve("src/pages/index.astro", "~/layouts/PrimaryLayout.astro")).toEqual({
+      targetFilePath: null,
+      strategy: "unresolved",
+      configurationPaths: ["tsconfig.json"]
+    });
+  });
+
+  it("rejects source-only Astro path replacements that do not mirror their pattern star grammar", async () => {
+    const wildcard = await createConfiguredProject({
+      "tsconfig.json": JSON.stringify({
+        extends: "astro/tsconfigs/strictest",
+        compilerOptions: { baseUrl: ".", paths: { "~/*": ["src/*/*"] } }
+      }),
+      "astro.config.ts": "export default {};",
+      "src/pages/index.astro": 'import Layout from "~/layouts/PrimaryLayout.astro";',
+      "src/layouts/PrimaryLayout.astro/layouts/PrimaryLayout.astro": "<slot />"
+    });
+    const exact = await createConfiguredProject({
+      "tsconfig.json": JSON.stringify({
+        extends: "astro/tsconfigs/strictest",
+        compilerOptions: { baseUrl: ".", paths: { "@layout.astro": ["src/*.astro"] } }
+      }),
+      "astro.config.ts": "export default {};",
+      "src/pages/index.astro": 'import Layout from "@layout.astro";'
+    });
+    const syntheticTarget: SourceDocument = {
+      absolutePath: resolve(exact.projectPath, "src", ".astro"),
+      relativePath: "src/.astro",
+      language: "astro",
+      sourceText: "<slot />",
+      contentHash: "test:synthetic-astro-target"
+    };
+
+    expect(createTypeScriptProjectModuleResolver({
+      ...wildcard,
+      astroConfigurationPath: "astro.config.ts"
+    }).moduleResolver.resolve("src/pages/index.astro", "~/layouts/PrimaryLayout.astro")).toEqual({
+      targetFilePath: null,
+      strategy: "unresolved",
+      configurationPaths: ["tsconfig.json"]
+    });
+    expect(createTypeScriptProjectModuleResolver({
+      ...exact,
+      sourceDocuments: [...exact.sourceDocuments, syntheticTarget],
+      astroConfigurationPath: "astro.config.ts"
+    }).moduleResolver.resolve("src/pages/index.astro", "@layout.astro")).toEqual({
+      targetFilePath: null,
+      strategy: "unresolved",
+      configurationPaths: ["tsconfig.json"]
+    });
+  });
+
+  it("does not fall back for disabled arbitrary SFC extensions or ambiguous paths patterns", async () => {
+    const disabled = await createConfiguredProject({
+      "tsconfig.json": JSON.stringify({
+        compilerOptions: {
+          module: "ESNext",
+          moduleResolution: "Bundler",
+          baseUrl: ".",
+          paths: { "~/*": ["src/*"] }
+        }
+      }),
+      "src/consumer.ts": "export const consumer = true;",
+      "src/layouts/PrimaryLayout.astro": "<slot />"
+    });
+    const ambiguous = await createConfiguredProject({
+      "tsconfig.json": JSON.stringify({
+        compilerOptions: {
+          module: "ESNext",
+          moduleResolution: "Bundler",
+          baseUrl: ".",
+          allowArbitraryExtensions: true,
+          paths: {
+            "~/*": ["src/*"],
+            "~/layouts/*": ["src/layouts/*"]
+          }
+        }
+      }),
+      "src/consumer.ts": "export const consumer = true;",
+      "src/layouts/PrimaryLayout.astro": "<slot />"
+    });
+
+    expect(
+      createTypeScriptProjectModuleResolver(disabled).moduleResolver.resolve(
+        "src/consumer.ts",
+        "~/layouts/PrimaryLayout.astro"
+      )
+    ).toEqual({ targetFilePath: null, strategy: "unresolved", configurationPaths: ["tsconfig.json"] });
+    expect(
+      createTypeScriptProjectModuleResolver(ambiguous).moduleResolver.resolve(
+        "src/consumer.ts",
+        "~/layouts/PrimaryLayout.astro"
+      )
+    ).toEqual({ targetFilePath: null, strategy: "unresolved", configurationPaths: ["tsconfig.json"] });
+  });
+
   it("resolves exact and wildcard paths aliases with deterministic import and call evidence", async () => {
     const project = await createConfiguredProject({
       "tsconfig.json": JSON.stringify({

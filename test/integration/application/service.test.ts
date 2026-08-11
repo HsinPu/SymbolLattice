@@ -26131,6 +26131,87 @@ describe("SymbolLatticeService", () => {
     );
   });
 
+  it("resolves Astro frontmatter alias imports across init, persisted reopen, and sync without losing unrelated facts", async () => {
+    const projectPath = await createInlineProject({
+      "tsconfig.json": JSON.stringify({
+        extends: "astro/tsconfigs/strictest",
+        compilerOptions: {
+          baseUrl: ".",
+          paths: { "~/*": ["src/*"] }
+        }
+      }),
+      "astro.config.ts": "export default {};\n",
+      "src/pages/index.astro": [
+        "---",
+        'import PrimaryLayout from "~/layouts/PrimaryLayout.astro";',
+        "---",
+        "<PrimaryLayout><main>Home</main></PrimaryLayout>"
+      ].join("\n"),
+      "src/layouts/PrimaryLayout.astro": "<slot />\n",
+      "src/unrelated.ts": "export const retained = true;\n"
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const layout = (await service.find(projectPath, "src/layouts/PrimaryLayout.astro")).symbols[0];
+    if (layout === undefined) {
+      throw new Error("Expected indexed Astro layout file.");
+    }
+    const assertExactAliasImport = async (
+      candidate: SymbolLatticeService,
+      store: SqliteGraphStore
+    ): Promise<void> => {
+      const snapshot = store.getSnapshot(projectPath);
+      const page = snapshot.symbols.find((symbol) => symbol.qualifiedName === "src/pages/index.astro");
+      const edge = snapshot.edges.find(
+        (candidateEdge) =>
+          candidateEdge.kind === "imports" &&
+          candidateEdge.sourceId === page?.id &&
+          candidateEdge.targetId === layout.id
+      );
+      expect(edge).toMatchObject({
+        range: { start: { line: 2, column: 26 }, end: { line: 2, column: 57 } },
+        resolution: "exact",
+        confidence: 1,
+        evidence: expect.objectContaining({
+          candidateSymbolIds: expect.arrayContaining([layout.id]),
+          configurationPaths: expect.arrayContaining(["tsconfig.json", "astro.config.ts"])
+        })
+      });
+      const explanation = await candidate.explainEdge(projectPath, edge?.id ?? "missing");
+      expect(explanation).toMatchObject({
+        source: { qualifiedName: "src/pages/index.astro" },
+        target: { qualifiedName: "src/layouts/PrimaryLayout.astro" },
+        edge: expect.objectContaining({ kind: "imports", resolution: "exact", confidence: 1 })
+      });
+    };
+
+    await assertExactAliasImport(service, graphStore);
+    expect(
+      (graphStore.getArtifactFacts(projectPath)
+        .find((facts) => facts.filePath === "src/pages/index.astro")?.importBindings)
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          moduleSpecifier: "~/layouts/PrimaryLayout.astro",
+          localName: "PrimaryLayout",
+          importedName: "default"
+        })
+      ])
+    );
+    expect(await service.sync({ projectPath })).toMatchObject({ stale: false, staleReasons: [] });
+    expect(graphStore.getArtifactFacts(projectPath)).toEqual(
+      expect.arrayContaining([expect.objectContaining({ filePath: "src/unrelated.ts" })])
+    );
+    await assertExactAliasImport(service, graphStore);
+
+    const reopenedStore = new SqliteGraphStore();
+    const reopened = new SymbolLatticeService(reopenedStore, new FileSystemSourceCatalog());
+    await reopened.init({ projectPath });
+    await assertExactAliasImport(reopened, reopenedStore);
+  });
+
   it("indexes Astro endpoints only with unique config evidence and updates them across config drift", async () => {
     const projectPath = await createInlineProject({
       "src/pages/api/[id].json.ts": [

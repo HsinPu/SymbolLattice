@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.369.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.370.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## What it is
 
@@ -51,30 +51,11 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.369.0 usability snapshot
+## v0.370.0 highlights
 
-The repeatable smoke matrix checks committed cases against the exported language and framework registries instead of treating README claims as proof.
-
-- All 54 registered languages complete `init`, no-op `sync`, changed `sync`, file inventory, full-identity symbol lookup, and a B1 relation receipt.
-- The first real-project acceptance uses a fixed Spring PetClinic commit; Java now resolves same-class private instance helper calls exactly while remaining conservative for overridable general instance dispatch.
-- The second real-project acceptance uses a fixed NestJS TypeScript starter commit; relative imports and the `GET /` route carry complete exact evidence, while runtime-replaceable DI method dispatch remains unresolved.
-- The third real-project acceptance uses a fixed Koa commit; JavaScript now proves a bounded strict-mode CommonJS `module.exports` class, literal `require(...)` file dependency, and lexical helper call while keeping overridable `this` dispatch unresolved.
-- The fourth real-project acceptance uses a fixed OpenHarmony `app_samples/ETSUI/CustomComponent` commit; ArkTS preserves complete exact evidence for `@Entry`/`@Component` identity, UI-root `handles`, and literal relative `.ets` imports, while ArkUI component-DSL call depth remains future work.
-- The fifth real-project acceptance uses a fixed commit of the official Vue Router playground; package-style tsconfig extends no longer blocks indexing, one parse-clean `<script setup>` proves its default component, and SFC-local imports plus imported Vue Router handlers carry complete exact evidence.
-- The sixth real-project acceptance uses a fixed commit of the official Svelte RealWorld app; a not-yet-generated `.svelte-kit/tsconfig.json` no longer blocks indexing, and Svelte components, SFC-local imports, and SvelteKit filesystem routes carry complete exact evidence.
-- All 54 languages now prove at least one reliable behavioral or dependency relationship beyond `contains`, completing the first B1 depth-alignment pass.
-- Ruby uses a literal Rails route to a controller method, Shell uses a bounded top-level `export -f` function reference, and SQL uses a bounded view-to-table reference.
-- Astro and Razor validate components bound to static page routes.
-- Terraform validates an output traversal to one unique same-file resource; GraphQL validates a type implementing one interface; Proto validates an RPC referencing unique same-file request and response messages.
-- SQL validates a bounded view-to-table reference. These schema and IaC relations do not claim complete dialect, schema-validation, plan/apply, or runtime-linkage semantics.
-- All 57 required relations verify exact endpoints, `resolution: exact`, `confidence: 1`, and candidate evidence containing the selected target; the benchmark preserves the complete evidence receipt.
-- File dependency queries return concrete exact import/export edges, so the Nix and Python B1 checks no longer rely on aggregate `edgeKinds` alone.
-- The capability release gate blocks any partial, scan-only, or unavailable language case while still retaining honest partial diagnostics for framework cases.
-- Groovy validates unique direct same-file class inheritance; CFML validates a structurally isolated `.cfc` remote entry point bound to its handler. Dynamic general calls remain conservatively excluded from exact edges.
-- Representative React Router, Next.js, Vue Router, SvelteKit, Astro, Spring Web, FastAPI, Django, and ASP.NET Core cases produce the expected route.
-- Nuxt Vue files scan and query successfully, but there is no dedicated Nuxt route capability yet.
-
-B1 depth alignment requires a reliable relationship beyond file containment; it does not mean all 54 languages have equal cross-file or framework depth.
+- Astro static pages produce filesystem routes, and only parse-clean opening frontmatter contributes direct ESM import facts.
+- An Astro page can prove an exact import through a root-owned `baseUrl`/`paths` source-only alias, retaining the selected target and configuration evidence.
+- Mixed targets, dynamic imports, template or external scripts, and deeper Astro semantics remain unresolved rather than becoming false exact edges.
 
 ## MCP
 

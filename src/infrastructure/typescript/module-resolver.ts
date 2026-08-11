@@ -368,6 +368,159 @@ function matchesPathPattern(moduleSpecifier: string, patterns: Readonly<Record<s
   });
 }
 
+function pathPatternSubstitution(pattern: string, moduleSpecifier: string): string | null {
+  const starIndex = pattern.indexOf("*");
+  if (starIndex === -1) {
+    return pattern === moduleSpecifier ? "" : null;
+  }
+  if (pattern.indexOf("*", starIndex + 1) !== -1) {
+    return null;
+  }
+  const prefix = pattern.slice(0, starIndex);
+  const suffix = pattern.slice(starIndex + 1);
+  if (
+    !moduleSpecifier.startsWith(prefix) ||
+    !moduleSpecifier.endsWith(suffix) ||
+    moduleSpecifier.length < prefix.length + suffix.length
+  ) {
+    return null;
+  }
+  return moduleSpecifier.slice(prefix.length, moduleSpecifier.length - suffix.length);
+}
+
+function hasCompatiblePathReplacementStar(pattern: string, replacement: string): boolean {
+  const replacementStarIndex = replacement.indexOf("*");
+  if (replacementStarIndex === -1) {
+    return true;
+  }
+  return pattern.indexOf("*") !== -1 && replacement.indexOf("*", replacementStarIndex + 1) === -1;
+}
+
+function configurationDeclaresPaths(configuration: LoadedConfiguration): boolean {
+  const parsed = ts.parseConfigFileTextToJson(configuration.absolutePath, configuration.sourceText).config;
+  if (!isRecord(parsed) || !isRecord(parsed.compilerOptions)) {
+    return false;
+  }
+  return Object.hasOwn(parsed.compilerOptions, "paths") && isRecord(parsed.compilerOptions.paths);
+}
+
+function compilerPathsBasePath(compilerOptions: ts.CompilerOptions): string | null {
+  const value = (compilerOptions as ts.CompilerOptions & { readonly pathsBasePath?: unknown }).pathsBasePath;
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+function explicitSfcPathsTarget(input: {
+  readonly projectPath: string;
+  readonly moduleSpecifier: string;
+  readonly compilerOptions: ts.CompilerOptions;
+  readonly knownRelativePathByAbsolutePath: ReadonlyMap<string, string>;
+  readonly requiresPathsBasePath: boolean;
+}): string | null {
+  if (
+    input.compilerOptions.allowArbitraryExtensions !== true ||
+    !/\.(?:vue|svelte|astro)$/iu.test(input.moduleSpecifier) ||
+    input.compilerOptions.paths === undefined
+  ) {
+    return null;
+  }
+
+  const matchingPatterns = Object.entries(input.compilerOptions.paths)
+    .map(([pattern, replacements]) => ({ pattern, replacements, substitution: pathPatternSubstitution(pattern, input.moduleSpecifier) }))
+    .filter((candidate) => candidate.substitution !== null);
+  if (matchingPatterns.length !== 1) {
+    return null;
+  }
+
+  const match = matchingPatterns[0];
+  if (match === undefined || match.substitution === null) {
+    return null;
+  }
+  const pathsBasePath = compilerPathsBasePath(input.compilerOptions);
+  if (input.compilerOptions.baseUrl === undefined && input.requiresPathsBasePath && pathsBasePath === null) {
+    return null;
+  }
+  const basePath = input.compilerOptions.baseUrl ?? pathsBasePath ?? input.projectPath;
+  const targetKeys = new Set(
+    match.replacements.map((replacement) =>
+      fileSystemKey(resolve(basePath, replacement.replaceAll("*", match.substitution!)))
+    )
+  );
+  if (targetKeys.size !== 1) {
+    return null;
+  }
+  const targetKey = targetKeys.values().next().value as string | undefined;
+  return targetKey === undefined ? null : input.knownRelativePathByAbsolutePath.get(targetKey) ?? null;
+}
+
+function rootAstroSfcPathsTarget(input: {
+  readonly projectPath: string;
+  readonly fromFilePath: string;
+  readonly moduleSpecifier: string;
+  readonly rootConfiguration: LoadedConfiguration;
+  readonly astroConfigurationPath: string | undefined;
+  readonly knownRelativePathByAbsolutePath: ReadonlyMap<string, string>;
+}): string | null {
+  if (
+    input.astroConfigurationPath === undefined ||
+    !input.fromFilePath.endsWith(".astro") ||
+    input.moduleSpecifier.startsWith(".") ||
+    !input.moduleSpecifier.endsWith(".astro")
+  ) {
+    return null;
+  }
+
+  const parsed = ts.parseConfigFileTextToJson(
+    input.rootConfiguration.absolutePath,
+    input.rootConfiguration.sourceText
+  ).config;
+  if (!isRecord(parsed) || !isRecord(parsed.compilerOptions)) {
+    return null;
+  }
+  const compilerOptions = parsed.compilerOptions;
+  if (
+    !Object.hasOwn(compilerOptions, "baseUrl") ||
+    typeof compilerOptions.baseUrl !== "string" ||
+    !Object.hasOwn(compilerOptions, "paths") ||
+    !isRecord(compilerOptions.paths)
+  ) {
+    return null;
+  }
+
+  const matchingPatterns = Object.entries(compilerOptions.paths)
+    .map(([pattern, replacements]) => ({
+      pattern,
+      replacements,
+      substitution: pathPatternSubstitution(pattern, input.moduleSpecifier)
+    }))
+    .filter((candidate) => candidate.substitution !== null && Array.isArray(candidate.replacements));
+  if (matchingPatterns.length !== 1) {
+    return null;
+  }
+
+  const match = matchingPatterns[0];
+  const replacements = match?.replacements;
+  if (
+    match === undefined ||
+    match.substitution === null ||
+    !Array.isArray(replacements) ||
+    replacements.length !== 1 ||
+    typeof replacements[0] !== "string" ||
+    !hasCompatiblePathReplacementStar(match.pattern, replacements[0])
+  ) {
+    return null;
+  }
+  const targetPath = resolve(
+    input.projectPath,
+    compilerOptions.baseUrl,
+    replacements[0].replaceAll("*", match.substitution)
+  );
+  if (!targetPath.endsWith(".astro") || !isWithinDirectory(input.projectPath, targetPath)) {
+    return null;
+  }
+
+  return input.knownRelativePathByAbsolutePath.get(fileSystemKey(targetPath)) ?? null;
+}
+
 function isWithinDirectory(directory: string, candidate: string): boolean {
   const value = relative(directory, candidate);
   return value === "" || (!isAbsolute(value) && value !== ".." && !value.startsWith(`..${"/"}`) && !value.startsWith(`..${"\\"}`));
@@ -447,6 +600,8 @@ function nonRelativeStrategy(
 export function createTypeScriptProjectModuleResolver(input: {
   readonly projectPath: string;
   readonly sourceDocuments: readonly SourceDocument[];
+  /** A unique root Astro config observed by the source catalog. */
+  readonly astroConfigurationPath?: string;
 }): TypeScriptProjectModuleResolver {
   const projectPath = resolve(input.projectPath);
   const tsconfigInput = rootConfigurationInput(projectPath, "tsconfig.json", "tsconfig");
@@ -507,22 +662,47 @@ export function createTypeScriptProjectModuleResolver(input: {
     });
 
   if (loadedChain.hasUnavailableExtends) {
+    const astroConfigurationPaths = input.astroConfigurationPath === undefined
+      ? configurationPaths
+      : [...configurationPaths, input.astroConfigurationPath];
+    function astroFallbackTarget(fromFilePath: string, moduleSpecifier: string): string | null {
+      return rootAstroSfcPathsTarget({
+        projectPath,
+        fromFilePath,
+        moduleSpecifier,
+        rootConfiguration: chain[0]!,
+        astroConfigurationPath: input.astroConfigurationPath,
+        knownRelativePathByAbsolutePath
+      });
+    }
     return {
       moduleResolver: {
         resolve(fromFilePath, moduleSpecifier) {
-          return moduleSpecifier.startsWith(".")
-            ? exactRelativeTarget(knownFilePaths, fromFilePath, moduleSpecifier)
-            : unresolved(configurationPaths);
+          if (moduleSpecifier.startsWith(".")) {
+            return exactRelativeTarget(knownFilePaths, fromFilePath, moduleSpecifier);
+          }
+          const targetFilePath = astroFallbackTarget(fromFilePath, moduleSpecifier);
+          return targetFilePath === null
+            ? unresolved(configurationPaths)
+            : {
+                targetFilePath,
+                strategy: "tsconfig-paths",
+                configurationPaths: astroConfigurationPaths
+              };
         }
       },
       configurationInputs,
-      hasProjectConfigurationResolution() {
-        return false;
+      hasProjectConfigurationResolution(fromFilePath, moduleSpecifier) {
+        return astroFallbackTarget(fromFilePath, moduleSpecifier) !== null;
       }
     };
   }
 
   const compilerOptions = parseCompilerOptions(projectPath, selectedPath, selectedInput.path);
+  const requiresPathsBasePath =
+    compilerOptions.baseUrl === undefined &&
+    !configurationDeclaresPaths(chain[0]!) &&
+    chain.slice(1).some(configurationDeclaresPaths);
 
   function containingFilePath(fromFilePath: string): string {
     const sourceDocument = input.sourceDocuments.find(
@@ -551,8 +731,15 @@ export function createTypeScriptProjectModuleResolver(input: {
     const targetPath = resolvedModulePath(moduleSpecifier, containingFile, compilerOptions);
 
     return (
-      targetPath !== null &&
-      nonRelativeStrategy(moduleSpecifier, containingFile, targetPath, compilerOptions) !== null
+      (targetPath !== null &&
+        nonRelativeStrategy(moduleSpecifier, containingFile, targetPath, compilerOptions) !== null) ||
+      explicitSfcPathsTarget({
+        projectPath,
+        moduleSpecifier,
+        compilerOptions,
+        knownRelativePathByAbsolutePath,
+        requiresPathsBasePath
+      }) !== null
     );
   }
 
@@ -566,7 +753,16 @@ export function createTypeScriptProjectModuleResolver(input: {
         const containingFile = containingFilePath(fromFilePath);
         const targetPath = resolvedModulePath(moduleSpecifier, containingFile, compilerOptions);
         if (targetPath === null) {
-          return unresolved(configurationPaths);
+          const fallbackTargetFilePath = explicitSfcPathsTarget({
+            projectPath,
+            moduleSpecifier,
+            compilerOptions,
+            knownRelativePathByAbsolutePath,
+            requiresPathsBasePath
+          });
+          return fallbackTargetFilePath === null
+            ? unresolved(configurationPaths)
+            : { targetFilePath: fallbackTargetFilePath, strategy: "tsconfig-paths", configurationPaths };
         }
 
         const targetFilePath = knownRelativePathByAbsolutePath.get(fileSystemKey(targetPath));
