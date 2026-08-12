@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.385.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
+> v0.386.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
 
 ## 簡介
 
@@ -44,11 +44,11 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.385.0 重點
+## v0.386.0 重點
 
-- 固定來源驗收使用 [`r-lib/prettyunits` v1.2.0](https://github.com/r-lib/prettyunits/releases/tag/v1.2.0) 的 commit [`8305a9a97d65bbbd6eb5902076bc2f3a701c43e9`](https://github.com/r-lib/prettyunits/tree/8305a9a97d65bbbd6eb5902076bc2f3a701c43e9)，掃描完整 [`R/color.R`](https://github.com/r-lib/prettyunits/blob/8305a9a97d65bbbd6eb5902076bc2f3a701c43e9/R/color.R)。三項 B1 truth 為 `pretty_color` 與 `color_diff_cie76` 兩個 function identity，以及 file 到 `pretty_color` 的 containment；SymbolLattice 為 `TP 3 / FP 0 / FN 0`，CodeGraph 1.5 為 `TP 2 / FP 0 / FN 1`。
-- R 驗收僅涵蓋這些由語法直接證明的 declaration 與 containment；不宣稱 call、runtime behavior 或 `NAMESPACE` export。
-- extractor facts 維持 v272，resolver 維持 v143。驗證環境中沒有 `R` 與 `Rscript`，因此 native runtime 驗證標示為 environment-blocked；這不等同於執行通過或失敗。
+- 固定來源驗收使用 [`elixir-lang/elixir` v1.20.2](https://github.com/elixir-lang/elixir/releases/tag/v1.20.2) 的 commit [`545dddf138e4cb1ee874e6f2c26882c9b438f551`](https://github.com/elixir-lang/elixir/tree/545dddf138e4cb1ee874e6f2c26882c9b438f551)，掃描完整 [`lib/elixir/lib/supervisor/default.ex`](https://github.com/elixir-lang/elixir/blob/545dddf138e4cb1ee874e6f2c26882c9b438f551/lib/elixir/lib/supervisor/default.ex)。三項 B1 truth 為 `Supervisor.Default` module identity、`init` method identity，以及 module 到 `init` 的 containment；SymbolLattice 為 `TP 3／FP 0／FN 0`，CodeGraph 1.5 為 `TP 0／FP 0／FN 3`。
+- Elixir 驗收僅涵蓋由語法直接證明的 declaration 與 containment；不宣稱 direct call、OTP runtime behavior 或動態 dispatch。
+- extractor facts 維持 v272，resolver 維持 v143。驗證環境中沒有 `elixir`、`mix` 與 `erl`，因此 native runtime 驗證標示為 environment-blocked；這不等同於執行通過或失敗。
 
 ## MCP
 
