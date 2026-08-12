@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.396.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.397.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## What it is
 
@@ -51,11 +51,11 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.396.0 highlights
+## v0.397.0 highlights
 
-- Fixed-source acceptance uses official [`dotnet/samples`](https://github.com/dotnet/samples) at commit [`5fee0c35e0e8efc02a5234ed55bb2592f6d1b0b6`](https://github.com/dotnet/samples/tree/5fee0c35e0e8efc02a5234ed55bb2592f6d1b0b6), scanning the complete [`core/extensions/DllMapDemo/Map.cs`](https://github.com/dotnet/samples/blob/5fee0c35e0e8efc02a5234ed55bb2592f6d1b0b6/core/extensions/DllMapDemo/Map.cs). The three B1 truths are the `MapAndLoad` method identity, the `MapLibraryName` method identity, and the exact direct call from `MapAndLoad` to `MapLibraryName`; SymbolLattice and CodeGraph 1.5 both score `TP 3 / FP 0 / FN 0`.
-- C# direct-call exactness now checks fixed parameter and call-argument counts, and fails closed for any preprocessing directive, default/`params`/extension parameters, overloads, partial or non-static classes, local/lambda shadows, and member or indirect calls. It does not claim complete overload resolution, type conversion, cross-file, or runtime semantics.
-- Extractor facts advance to v274 and the resolver remains v143. If the .NET SDK or C# compiler is unavailable in the validation environment, native validation is marked environment-blocked rather than reported as passed or failed.
+- Fixed-source acceptance uses official [`ruby/spec`](https://github.com/ruby/spec) at commit [`0f44fd58585fcdc652da70521ecb753f6fda80f9`](https://github.com/ruby/spec/tree/0f44fd58585fcdc652da70521ecb753f6fda80f9), scanning the complete [`library/coverage/fixtures/second_class.rb`](https://github.com/ruby/spec/blob/0f44fd58585fcdc652da70521ecb753f6fda80f9/library/coverage/fixtures/second_class.rb). The three B1 truths are the `SecondClass` class identity, the `some_method` method identity, and the exact containment from `SecondClass` to `some_method`; SymbolLattice scores `TP 3 / FP 0 / FN 0`.
+- This release qualifies the existing Ruby symbol/containment surface without adding a general direct-call inference. It makes no runtime, metaprogramming, monkey-patch, dynamic-dispatch, or cross-file semantic claim. CodeGraph 1.5 is scored separately against the same three truths.
+- Extractor facts remain v274 and the resolver remains v143. If a Ruby runtime is unavailable in the validation environment, native validation is marked environment-blocked rather than reported as passed or failed.
 
 ## MCP
 

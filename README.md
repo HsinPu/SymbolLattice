@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.396.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
+> v0.397.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
 
 ## 簡介
 
@@ -44,11 +44,11 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.396.0 重點
+## v0.397.0 重點
 
-- 固定來源驗收使用官方 [`dotnet/samples`](https://github.com/dotnet/samples) 的 commit [`5fee0c35e0e8efc02a5234ed55bb2592f6d1b0b6`](https://github.com/dotnet/samples/tree/5fee0c35e0e8efc02a5234ed55bb2592f6d1b0b6)，掃描完整 [`core/extensions/DllMapDemo/Map.cs`](https://github.com/dotnet/samples/blob/5fee0c35e0e8efc02a5234ed55bb2592f6d1b0b6/core/extensions/DllMapDemo/Map.cs)。三項 B1 truth 為 `MapAndLoad` method identity、`MapLibraryName` method identity，以及 `MapAndLoad` 到 `MapLibraryName` 的 exact direct call；SymbolLattice 與 CodeGraph 1.5 都是 `TP 3／FP 0／FN 0`。
-- C# direct-call exactness 現在核對固定參數與呼叫引數數量，並在任何 preprocessing directive、default／`params`／extension parameter、overload、partial／非 static class、local／lambda shadow 或 member／indirect call 存在時保守停用。不宣稱完整 overload resolution、型別轉換、跨檔案或 runtime semantics。
-- extractor facts 更新為 v274，resolver 維持 v143。驗證環境沒有可用 .NET SDK／C# compiler 時，原生驗證會標示為 environment-blocked，不會誤報成執行通過或失敗。
+- 固定來源驗收使用官方 [`ruby/spec`](https://github.com/ruby/spec) 的 commit [`0f44fd58585fcdc652da70521ecb753f6fda80f9`](https://github.com/ruby/spec/tree/0f44fd58585fcdc652da70521ecb753f6fda80f9)，掃描完整 [`library/coverage/fixtures/second_class.rb`](https://github.com/ruby/spec/blob/0f44fd58585fcdc652da70521ecb753f6fda80f9/library/coverage/fixtures/second_class.rb)。三項 B1 truth 為 `SecondClass` class identity、`some_method` method identity，以及 `SecondClass` 到 `some_method` 的 exact containment；SymbolLattice 是 `TP 3／FP 0／FN 0`。
+- 本版驗收現有 Ruby symbol／containment 表面，不新增一般 direct-call 推論，也不宣稱 runtime、metaprogramming、monkey patch、dynamic dispatch 或跨檔案語義。CodeGraph 1.5 會依相同三項 truth 獨立計分。
+- extractor facts 維持 v274，resolver 維持 v143。驗證環境沒有可用 Ruby runtime 時，原生驗證會標示為 environment-blocked，不會誤報成執行通過或失敗。
 
 ## MCP
 
