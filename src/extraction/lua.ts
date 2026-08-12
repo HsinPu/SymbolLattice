@@ -69,6 +69,22 @@ interface StaticLapisRoute {
   readonly end: number;
 }
 
+interface StaticLapisInlineRoute {
+  readonly receiverName: string;
+  readonly method: LapisRouteMethod;
+  readonly path: string;
+  readonly start: number;
+  readonly end: number;
+  readonly handlerStart: number;
+  readonly handlerEnd: number;
+}
+
+interface StaticLapisEnable {
+  readonly receiverName: string;
+  readonly start: number;
+  readonly end: number;
+}
+
 interface StaticLuaDirectCall {
   readonly caller: StaticLuaFunction;
   readonly targetName: string;
@@ -291,13 +307,23 @@ function analyzeLuaStructure(sourceText: string): LuaStructure {
         pendingConditional = "if";
         break;
       case "elseif":
+        if (blockStack.at(-1)?.kind !== "if") {
+          valid = false;
+        }
         pendingConditional = "elseif";
         break;
       case "then":
-        if (pendingConditional === "if") {
+        if (pendingConditional === null) {
+          valid = false;
+        } else if (pendingConditional === "if") {
           blockStack.push({ kind: "if" });
         }
         pendingConditional = null;
+        break;
+      case "else":
+        if (blockStack.at(-1)?.kind !== "if") {
+          valid = false;
+        }
         break;
       case "do":
         blockStack.push({ kind: "do" });
@@ -326,7 +352,7 @@ function analyzeLuaStructure(sourceText: string): LuaStructure {
     }
   }
 
-  if (blockStack.length > 0 || delimiterStack.length > 0) {
+  if (blockStack.length > 0 || delimiterStack.length > 0 || pendingConditional !== null) {
     valid = false;
   }
   return { tokens: lexed.tokens, valid, depthBefore, functionEnds, pairedParentheses };
@@ -477,7 +503,8 @@ function collectTopLevelFunctions(
 
 function collectTopLevelRebindings(
   sourceText: string,
-  structure: LuaStructure
+  structure: LuaStructure,
+  includeFunctionDeclarations = false
 ): ReadonlyMap<string, readonly number[]> {
   const locations = new Map<string, number[]>();
   const add = (name: string, offset: number): void => {
@@ -493,6 +520,13 @@ function collectTopLevelRebindings(
     }
     if (token.text === "local" && startsDirectStatement(sourceText, structure.tokens, index)) {
       if (structure.tokens[index + 1]?.text === "function") {
+        if (includeFunctionDeclarations) {
+          const nameToken = structure.tokens[index + 2];
+          const name = identifierText(nameToken);
+          if (name !== null && nameToken !== undefined) {
+            add(name, nameToken.start);
+          }
+        }
         continue;
       }
       let cursor = index + 1;
@@ -509,6 +543,18 @@ function collectTopLevelRebindings(
           break;
         }
         cursor += 2;
+      }
+      continue;
+    }
+    if (
+      includeFunctionDeclarations &&
+      token.text === "function" &&
+      startsDirectStatement(sourceText, structure.tokens, index)
+    ) {
+      const nameToken = structure.tokens[index + 1];
+      const name = identifierText(nameToken);
+      if (name !== null && nameToken !== undefined) {
+        add(name, nameToken.start);
       }
       continue;
     }
@@ -804,7 +850,8 @@ function collectLapisApplicationBindings(
     if (
       expressionEnd === null ||
       endToken === undefined ||
-      !endsDirectStatement(sourceText, structure.tokens, expressionEnd)
+      !endsDirectStatement(sourceText, structure.tokens, expressionEnd) ||
+      hasRebindingBetween(rebindings, "require", -1, localToken.start)
     ) {
       continue;
     }
@@ -892,6 +939,536 @@ function staticLapisRoute(
         start: receiver.start,
         end: endToken.end
       };
+}
+
+function hasValidInlineFunctionParameters(
+  structure: LuaStructure,
+  openingParenthesis: number,
+  closingParenthesis: number
+): boolean {
+  const tokens = structure.tokens;
+  let cursor = openingParenthesis + 1;
+  if (cursor === closingParenthesis) {
+    return true;
+  }
+  while (cursor < closingParenthesis) {
+    if (identifierText(tokens[cursor]) !== null) {
+      cursor += 1;
+    } else if (
+      tokens[cursor]?.text === "." &&
+      tokens[cursor + 1]?.text === "." &&
+      tokens[cursor + 2]?.text === "." &&
+      tokens[cursor]?.end === tokens[cursor + 1]?.start &&
+      tokens[cursor + 1]?.end === tokens[cursor + 2]?.start &&
+      cursor + 3 === closingParenthesis
+    ) {
+      return true;
+    } else {
+      return false;
+    }
+    if (cursor === closingParenthesis) {
+      return true;
+    }
+    if (tokens[cursor]?.text !== ",") {
+      return false;
+    }
+    cursor += 1;
+    if (cursor === closingParenthesis) {
+      return false;
+    }
+  }
+  return false;
+}
+
+/**
+ * Parses only the handler-body subset needed by the accepted Lapis examples.
+ * Unsupported Lua statements deliberately fail closed instead of becoming
+ * evidence for an exact route edge.
+ */
+class BoundedLuaHandlerParser {
+  private position: number;
+
+  public constructor(
+    private readonly sourceText: string,
+    private readonly structure: LuaStructure,
+    private readonly start: number,
+    private readonly end: number
+  ) {
+    this.position = start;
+  }
+
+  public parse(): boolean {
+    while (this.position < this.end) {
+      if (this.consume(";")) {
+        continue;
+      }
+      if (this.consume("local")) {
+        if (!this.parseLocalDeclaration()) {
+          return false;
+        }
+        continue;
+      }
+      if (this.consume("return")) {
+        if (this.position < this.end && this.token()?.text !== ";" && !this.parseExpressionList()) {
+          return false;
+        }
+        this.consume(";");
+        return this.position === this.end;
+      }
+      return false;
+    }
+    return true;
+  }
+
+  private parseLocalDeclaration(): boolean {
+    if (identifierText(this.token()) === null) {
+      return false;
+    }
+    this.position += 1;
+    while (this.consume(",")) {
+      if (identifierText(this.token()) === null) {
+        return false;
+      }
+      this.position += 1;
+    }
+    return this.consume("=") && this.parseExpressionList();
+  }
+
+  private parseExpressionList(): boolean {
+    if (!this.parseExpression()) {
+      return false;
+    }
+    while (this.consume(",")) {
+      if (!this.parseExpression()) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  private parseExpression(): boolean {
+    if (!this.parseUnaryExpression()) {
+      return false;
+    }
+    while (this.consumeBinaryOperator()) {
+      if (!this.parseUnaryExpression()) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  private parseUnaryExpression(): boolean {
+    while (["not", "#", "-", "~"].includes(this.token()?.text ?? "")) {
+      this.position += 1;
+    }
+    return this.parseSuffixedExpression();
+  }
+
+  private parseSuffixedExpression(): boolean {
+    const primary = this.parsePrimaryExpression();
+    if (primary === null) {
+      return false;
+    }
+    if (primary === "value") {
+      return true;
+    }
+    while (this.position < this.end) {
+      if (this.token()?.text === "." && identifierText(this.token(1)) !== null) {
+        this.position += 2;
+        continue;
+      }
+      if (this.consume("[")) {
+        if (!this.parseExpression() || !this.consume("]")) {
+          return false;
+        }
+        continue;
+      }
+      if (this.consume(":")) {
+        if (identifierText(this.token()) === null) {
+          return false;
+        }
+        this.position += 1;
+        if (!this.parseCallArguments()) {
+          return false;
+        }
+        continue;
+      }
+      if (this.isCallArgumentStart()) {
+        if (!this.parseCallArguments()) {
+          return false;
+        }
+        continue;
+      }
+      break;
+    }
+    return true;
+  }
+
+  private parsePrimaryExpression(): "prefix" | "value" | null {
+    const token = this.token();
+    if (token?.kind === "identifier") {
+      this.position += 1;
+      return "prefix";
+    }
+    if (token?.kind === "string" || ["nil", "true", "false"].includes(token?.text ?? "")) {
+      this.position += 1;
+      return "value";
+    }
+    if (this.parseNumber()) {
+      return "value";
+    }
+    if (this.consume("(")) {
+      return this.parseExpression() && this.consume(")") ? "prefix" : null;
+    }
+    if (token?.text === "{") {
+      return this.parseTableConstructor() ? "value" : null;
+    }
+    if (token?.text === "function") {
+      return this.parseFunctionExpression() ? "value" : null;
+    }
+    return null;
+  }
+
+  private parseNumber(): boolean {
+    const token = this.token();
+    if (token === undefined || token.kind !== "symbol" || !/^\d$/u.test(token.text)) {
+      return false;
+    }
+    const match = /^(?:0[xX][\dA-Fa-f]+(?:\.[\dA-Fa-f]*)?(?:[pP][+-]?\d+)?|(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)/u.exec(
+      this.sourceText.slice(token.start)
+    );
+    const literalEnd = match === null ? token.end : token.start + match[0].length;
+    let cursor = this.position;
+    while (cursor < this.end && (this.structure.tokens[cursor]?.end ?? 0) <= literalEnd) {
+      cursor += 1;
+    }
+    if (cursor === this.position || this.structure.tokens[cursor - 1]?.end !== literalEnd) {
+      return false;
+    }
+    this.position = cursor;
+    return true;
+  }
+
+  private parseTableConstructor(): boolean {
+    if (!this.consume("{")) {
+      return false;
+    }
+    if (this.consume("}")) {
+      return true;
+    }
+    while (this.position < this.end) {
+      if (this.consume("[")) {
+        if (!this.parseExpression() || !this.consume("]") || !this.consume("=") || !this.parseExpression()) {
+          return false;
+        }
+      } else if (identifierText(this.token()) !== null && this.token(1)?.text === "=") {
+        this.position += 2;
+        if (!this.parseExpression()) {
+          return false;
+        }
+      } else if (!this.parseExpression()) {
+        return false;
+      }
+      if (this.consume("}")) {
+        return true;
+      }
+      if (!this.consume(",") && !this.consume(";")) {
+        return false;
+      }
+      if (this.consume("}")) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private parseFunctionExpression(): boolean {
+    const functionIndex = this.position;
+    const parametersStart = functionIndex + 1;
+    const parametersEnd = this.structure.pairedParentheses.get(parametersStart);
+    const functionEnd = this.structure.functionEnds.get(functionIndex);
+    if (
+      !this.consume("function") ||
+      this.token()?.text !== "(" ||
+      parametersEnd === undefined ||
+      functionEnd === undefined ||
+      functionEnd >= this.end ||
+      !hasValidInlineFunctionParameters(this.structure, parametersStart, parametersEnd)
+    ) {
+      return false;
+    }
+    const body = new BoundedLuaHandlerParser(
+      this.sourceText,
+      this.structure,
+      parametersEnd + 1,
+      functionEnd
+    );
+    if (!body.parse()) {
+      return false;
+    }
+    this.position = functionEnd + 1;
+    return true;
+  }
+
+  private parseCallArguments(): boolean {
+    if (this.consume("(")) {
+      if (this.consume(")")) {
+        return true;
+      }
+      return this.parseExpressionList() && this.consume(")");
+    }
+    if (this.token()?.kind === "string") {
+      this.position += 1;
+      return true;
+    }
+    return this.token()?.text === "{" && this.parseTableConstructor();
+  }
+
+  private isCallArgumentStart(): boolean {
+    const token = this.token();
+    return token?.text === "(" || token?.text === "{" || token?.kind === "string";
+  }
+
+  private consumeBinaryOperator(): boolean {
+    if (["and", "or"].includes(this.token()?.text ?? "")) {
+      this.position += 1;
+      return true;
+    }
+    for (const operator of ["//", "<<", ">>", "==", "~=", "<=", ">=", "..", "+", "-", "*", "/", "%", "^", "&", "|", "~", "<", ">"] as const) {
+      const parts = [...operator];
+      if (this.matches(parts)) {
+        this.position += parts.length;
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private matches(parts: readonly string[]): boolean {
+    for (let offset = 0; offset < parts.length; offset += 1) {
+      const token = this.token(offset);
+      if (token === undefined || token.text !== parts[offset]) {
+        return false;
+      }
+      if (offset > 0 && this.token(offset - 1)?.end !== token.start) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  private consume(text: string): boolean {
+    if (this.token()?.text !== text) {
+      return false;
+    }
+    this.position += 1;
+    return true;
+  }
+
+  private token(offset = 0): LuaToken | undefined {
+    const index = this.position + offset;
+    return index < this.end ? this.structure.tokens[index] : undefined;
+  }
+}
+
+function hasValidInlineFunctionBody(
+  sourceText: string,
+  structure: LuaStructure,
+  bodyStart: number,
+  functionEnd: number
+): boolean {
+  return new BoundedLuaHandlerParser(sourceText, structure, bodyStart, functionEnd).parse();
+}
+
+function staticLapisInlineRoute(
+  sourceText: string,
+  structure: LuaStructure,
+  index: number
+): StaticLapisInlineRoute | null {
+  const tokens = structure.tokens;
+  const receiver = tokens[index];
+  const receiverName = identifierText(receiver);
+  const methodToken = tokens[index + 2];
+  const openingParenthesis = index + 3;
+  const closingParenthesis = structure.pairedParentheses.get(openingParenthesis);
+  if (
+    receiver === undefined ||
+    receiverName === null ||
+    structure.depthBefore[index] !== 0 ||
+    !startsDirectStatement(sourceText, tokens, index) ||
+    tokens[index + 1]?.text !== ":" ||
+    methodToken?.kind !== "identifier" ||
+    tokens[openingParenthesis]?.text !== "(" ||
+    closingParenthesis === undefined ||
+    !endsDirectStatement(sourceText, tokens, closingParenthesis)
+  ) {
+    return null;
+  }
+
+  const method = methodToken.text === "match" ? "ALL" : LAPIS_HTTP_METHODS.get(methodToken.text);
+  if (method === undefined || tokens[openingParenthesis + 2]?.text !== ",") {
+    return null;
+  }
+
+  let pathTokenIndex = openingParenthesis + 1;
+  let functionIndex = openingParenthesis + 3;
+  if (tokens[functionIndex]?.text !== "function") {
+    if (
+      staticPlainLuaString(tokens[pathTokenIndex]) === null ||
+      staticPlainLuaString(tokens[openingParenthesis + 3]) === null ||
+      tokens[openingParenthesis + 4]?.text !== "," ||
+      tokens[openingParenthesis + 5]?.text !== "function"
+    ) {
+      return null;
+    }
+    pathTokenIndex = openingParenthesis + 3;
+    functionIndex = openingParenthesis + 5;
+  }
+
+  const path = staticLapisPath(tokens[pathTokenIndex]);
+  const functionEndIndex = structure.functionEnds.get(functionIndex);
+  const functionToken = tokens[functionIndex];
+  const functionEnd = functionEndIndex === undefined ? undefined : tokens[functionEndIndex];
+  const parametersEnd = structure.pairedParentheses.get(functionIndex + 1);
+  if (
+    path === null ||
+    functionToken === undefined ||
+    tokens[functionIndex + 1]?.text !== "(" ||
+    parametersEnd === undefined ||
+    functionEndIndex === undefined ||
+    functionEnd === undefined ||
+    functionEndIndex + 1 !== closingParenthesis ||
+    !hasValidInlineFunctionParameters(structure, functionIndex + 1, parametersEnd) ||
+    !hasValidInlineFunctionBody(sourceText, structure, parametersEnd + 1, functionEndIndex)
+  ) {
+    return null;
+  }
+  const endToken = tokens[closingParenthesis];
+  return endToken === undefined
+    ? null
+    : {
+        receiverName,
+        method,
+        path,
+        start: receiver.start,
+        end: endToken.end,
+        handlerStart: functionToken.start,
+        handlerEnd: functionEnd.end
+      };
+}
+
+function staticLapisEtluaEnable(
+  sourceText: string,
+  structure: LuaStructure,
+  index: number
+): StaticLapisEnable | null {
+  const tokens = structure.tokens;
+  const receiver = tokens[index];
+  const receiverName = identifierText(receiver);
+  const openingParenthesis = index + 3;
+  const closingParenthesis = structure.pairedParentheses.get(openingParenthesis);
+  if (
+    receiver === undefined ||
+    receiverName === null ||
+    structure.depthBefore[index] !== 0 ||
+    !startsDirectStatement(sourceText, tokens, index) ||
+    tokens[index + 1]?.text !== ":" ||
+    tokens[index + 2]?.text !== "enable" ||
+    tokens[openingParenthesis]?.text !== "(" ||
+    staticPlainLuaString(tokens[openingParenthesis + 1]) !== "etlua" ||
+    closingParenthesis !== openingParenthesis + 2 ||
+    !endsDirectStatement(sourceText, tokens, closingParenthesis)
+  ) {
+    return null;
+  }
+  const endToken = tokens[closingParenthesis];
+  return endToken === undefined
+    ? null
+    : { receiverName, start: receiver.start, end: endToken.end };
+}
+
+function hasOnlySafeLapisTopLevelStatements(
+  sourceText: string,
+  structure: LuaStructure,
+  applications: readonly StaticLuaBinding[]
+): boolean {
+  if (applications.length !== 1) {
+    return false;
+  }
+  const applicationNames = new Set(applications.map((application) => application.name));
+  const routes = structure.tokens.flatMap((_, index) => {
+    const named = staticLapisRoute(sourceText, structure, index);
+    const inline = staticLapisInlineRoute(sourceText, structure, index);
+    return named === null && inline === null ? [] : [named ?? inline];
+  });
+  const firstRouteStart = routes.at(0)?.start;
+  let etluaEnableCount = 0;
+  let hasTerminalApplicationReturn = false;
+  for (let index = 0; index < structure.tokens.length; index += 1) {
+    const token = structure.tokens[index];
+    if (token === undefined || structure.depthBefore[index] !== 0) {
+      continue;
+    }
+    if (!startsDirectStatement(sourceText, structure.tokens, index)) {
+      continue;
+    }
+    if (hasTerminalApplicationReturn) {
+      if (token.text === ";") {
+        continue;
+      }
+      return false;
+    }
+    if (token.text === "local") {
+      const localFunctionName =
+        structure.tokens[index + 1]?.text === "function"
+          ? identifierText(structure.tokens[index + 2])
+          : null;
+      if (
+        localFunctionName !== null &&
+        localFunctionName !== "require" &&
+        !applicationNames.has(localFunctionName)
+      ) {
+        continue;
+      }
+      if (
+        directLapisModuleBinding(sourceText, structure, index) !== null ||
+        applications.some((application) => application.start === token.start)
+      ) {
+        continue;
+      }
+      return false;
+    }
+    if (
+      token.text === "return" &&
+      applicationNames.has(identifierText(structure.tokens[index + 1]) ?? "") &&
+      endsDirectStatement(sourceText, structure.tokens, index + 1)
+    ) {
+      hasTerminalApplicationReturn = true;
+      continue;
+    }
+    const enable = staticLapisEtluaEnable(sourceText, structure, index);
+    if (enable !== null) {
+      const application = applications[0];
+      if (
+        application === undefined ||
+        enable.receiverName !== application.name ||
+        application.end >= enable.start ||
+        firstRouteStart === undefined ||
+        enable.end >= firstRouteStart ||
+        ++etluaEnableCount > 1
+      ) {
+        return false;
+      }
+      continue;
+    }
+    const route = staticLapisRoute(sourceText, structure, index) ?? staticLapisInlineRoute(sourceText, structure, index);
+    if (route !== null && applicationNames.has(route.receiverName)) {
+      continue;
+    }
+    return false;
+  }
+  return true;
 }
 
 /**
@@ -987,7 +1564,11 @@ export function extractLuaFileFacts(input: LuaExtractFileFactsInput): ArtifactFa
     return symbol;
   }
 
-  function addLapisRoute(routeFact: StaticLapisRoute, handler: SymbolNode): void {
+  function addLapisRoute(
+    routeFact: Pick<StaticLapisRoute, "method" | "path" | "start" | "end">,
+    handler: SymbolNode,
+    ruleId = "framework.lapis.direct-application.literal-route.local-function"
+  ): void {
     const routeName = `${routeFact.method} ${routeFact.path}`;
     const qualifiedName = `${fileNode.qualifiedName}#route:${routeName}`;
     const declarationOrdinal = nextOrdinal(qualifiedName, "route");
@@ -1027,11 +1608,39 @@ export function extractLuaFileFacts(input: LuaExtractFileFactsInput): ArtifactFa
       confidence: 1,
       referenceName: handler.name,
       evidence: {
-        ruleId: "framework.lapis.direct-application.literal-route.local-function",
+        ruleId,
         stage: "syntax",
         candidateSymbolIds: [handler.id]
       }
     });
+  }
+
+  function addInlineLapisRoute(routeFact: StaticLapisInlineRoute): void {
+    const routeName = `${routeFact.method} ${routeFact.path}`;
+    const qualifiedName = `${fileNode.qualifiedName}#route:${routeName}#handler`;
+    const declarationOrdinal = nextOrdinal(qualifiedName, "function");
+    const handler: SymbolNode = {
+      id: createSymbolId({
+        filePath: input.filePath,
+        qualifiedName,
+        kind: "function",
+        declarationOrdinal
+      }),
+      name: "<anonymous route handler>",
+      qualifiedName,
+      kind: "function",
+      filePath: input.filePath,
+      range: rangeFor(lineStarts, routeFact.handlerStart, routeFact.handlerEnd),
+      isExported: false,
+      declarationOrdinal
+    };
+    symbols.push(handler);
+    addContainment(fileNode, handler, routeFact.handlerStart, routeFact.handlerEnd);
+    addLapisRoute(
+      routeFact,
+      handler,
+      "framework.lapis.direct-application.literal-route.inline-function"
+    );
   }
 
   function addDirectCall(call: StaticLuaDirectCall, caller: SymbolNode, callee: SymbolNode): void {
@@ -1088,33 +1697,49 @@ export function extractLuaFileFacts(input: LuaExtractFileFactsInput): ArtifactFa
     }
 
     if (input.language === "lua") {
-      const applications = collectLapisApplicationBindings(input.sourceText, structure, rebindings);
-      for (let index = 0; index < structure.tokens.length; index += 1) {
-        const route = staticLapisRoute(input.sourceText, structure, index);
-        if (route === null) {
-          continue;
-        }
-        const applicationCandidates = applications.filter(
-          (application) =>
-            application.name === route.receiverName &&
-            application.end < route.start &&
-            !hasRebindingBetween(rebindings, application.name, application.end, route.start)
-        );
-        const handlerCandidates = (functionsByName.get(route.handlerName) ?? []).filter(
-          (candidate) =>
-            candidate.declaration.isLocal &&
-            candidate.declaration.end < route.start &&
-            !hasRebindingBetween(
-              rebindings,
-              route.handlerName,
-              candidate.declaration.end,
-              route.start
-            )
-        );
-        if (applicationCandidates.length === 1 && handlerCandidates.length === 1) {
-          const handler = handlerCandidates[0];
-          if (handler !== undefined) {
-            addLapisRoute(route, handler.symbol);
+      const lapisRebindings = collectTopLevelRebindings(input.sourceText, structure, true);
+      const applications = collectLapisApplicationBindings(input.sourceText, structure, lapisRebindings);
+      if (hasOnlySafeLapisTopLevelStatements(input.sourceText, structure, applications)) {
+        for (let index = 0; index < structure.tokens.length; index += 1) {
+          const inlineRoute = staticLapisInlineRoute(input.sourceText, structure, index);
+          const route = staticLapisRoute(input.sourceText, structure, index);
+          const routeReceiverName = inlineRoute?.receiverName ?? route?.receiverName;
+          const routeStart = inlineRoute?.start ?? route?.start;
+          if (routeReceiverName === undefined || routeStart === undefined) {
+            continue;
+          }
+          const applicationCandidates = applications.filter(
+            (application) =>
+              application.name === routeReceiverName &&
+              application.end < routeStart &&
+              !hasRebindingBetween(lapisRebindings, application.name, application.end, routeStart)
+          );
+          if (applicationCandidates.length !== 1) {
+            continue;
+          }
+          if (inlineRoute !== null) {
+            addInlineLapisRoute(inlineRoute);
+            continue;
+          }
+          if (route !== null) {
+            const handlerDeclarations = functionsByName.get(route.handlerName) ?? [];
+            const handlerCandidates = handlerDeclarations.filter(
+              (candidate) =>
+                candidate.declaration.isLocal &&
+                candidate.declaration.end < route.start &&
+                !hasRebindingBetween(
+                  lapisRebindings,
+                  route.handlerName,
+                  candidate.declaration.end,
+                  route.start
+                )
+            );
+            if (handlerDeclarations.length === 1 && handlerCandidates.length === 1) {
+              const handler = handlerCandidates[0];
+              if (handler !== undefined) {
+                addLapisRoute(route, handler.symbol);
+              }
+            }
           }
         }
       }

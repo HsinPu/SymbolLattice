@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.380.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
+> v0.381.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
 
 ## 簡介
 
@@ -44,11 +44,11 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.380.0 重點
+## v0.381.0 重點
 
-- 固定 fixture 驗收採用 LLVM 20.1.8 的 `clang/test/CodeGen/2002-07-31-BadAssert.c`，commit `87f0227…`，授權為 `Apache-2.0 WITH LLVM-exception`。驗證 `SetInternalFPFZero` 與 `denormalize` identity，以及兩者的 exact typed direct call；SymbolLattice 與 CodeGraph 1.5 均為 `TP 3 / FP 0 / FN 0`。
-- C 抽取器針對 prototype／arity 歧義、preprocessor／macro 影響、ordinary namespace shadow 與 static linkage 採取 fail-closed。extractor facts 為 v265，resolver 維持 v143。
-- 不宣稱支援 include、preprocessor configuration、cross-translation-unit resolution、function pointer 或 runtime behavior；原生 compiler 驗證為 environment-blocked。
+- 固定 fixture 驗收採用 `leafo/lapis` v1.18.0 的 `example.lua` inline routes，commit `7c9f0ceebd869e64f3379da596ccad389c8a55c4`，授權為 MIT。SymbolLattice 為 `TP 3 / FP 0 / FN 0`；CodeGraph 1.5 為 `TP 0 / FP 0 / FN 3`。
+- 僅當匿名函式直接作為 literal Lapis route registration 的 handler 時，才建立 exact route 關係。direct call、`require`、imported handler、inline wrapped handler、metatable 與 dynamic dispatch 都不會據此成為 exact。
+- Lua 抽取器維持保守邊界：extractor facts 為 v269，resolver 為 v143；不宣稱 runtime behavior。
 
 ## MCP
 

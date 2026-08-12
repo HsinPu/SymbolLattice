@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.380.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.381.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## What it is
 
@@ -51,10 +51,11 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.380.0 highlights
+## v0.381.0 highlights
 
-- Fixed-fixture acceptance uses LLVM 20.1.8 `clang/test/CodeGen/2002-07-31-BadAssert.c` at commit `87f0227…` (`Apache-2.0 WITH LLVM-exception`). It verifies the `SetInternalFPFZero` and `denormalize` identities plus their exact typed direct call: SymbolLattice and CodeGraph 1.5 both score `TP 3 / FP 0 / FN 0`.
-- C extraction now fails closed around prototype and arity ambiguity, preprocessor and macro effects, ordinary-namespace shadows, and static linkage. Extractor facts are v265; resolver remains v143. It does not claim support for includes, preprocessor configurations, cross-translation-unit resolution, function pointers, or runtime behavior; native compiler verification is environment-blocked.
+- Fixed-fixture acceptance uses the `example.lua` inline routes from `leafo/lapis` v1.18.0 at commit `7c9f0ceebd869e64f3379da596ccad389c8a55c4` (MIT). SymbolLattice scores `TP 3 / FP 0 / FN 0`; CodeGraph 1.5 scores `TP 0 / FP 0 / FN 3`.
+- An exact route relation is created only when an anonymous function is directly the handler of a literal Lapis route registration. Direct calls, `require`, imported handlers, inline wrapped handlers, metatables, and dynamic dispatch do not become exact through this rule.
+- Lua extraction keeps conservative boundaries: extractor facts are v269 and the resolver is v143. It makes no runtime-behavior claim.
 
 ## MCP
 

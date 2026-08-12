@@ -76,6 +76,363 @@ app:get("/smoke", lapisHandler)`
     ]);
   });
 
+  it("retains an exact Lapis route before a terminal return app", () => {
+    const sources = [
+      `local app = require("lapis").Application()
+local function handler() end
+app:get("/return-newline", handler)
+return app`,
+      `local app = require("lapis").Application()
+local function handler() end
+app:get("/return-semicolon", handler); return app`
+    ] as const;
+
+    for (const sourceText of sources) {
+      const facts = extractLuaFileFacts({ filePath: "src/routes.lua", language: "lua", sourceText });
+      expect(routes(facts)).toHaveLength(1);
+    }
+  });
+
+  it("emits exact official-shaped Lapis inline handlers with stable identity, ranges, containment, and route evidence", () => {
+    const sourceText = `local lapis = require("lapis")
+local app = lapis.Application()
+
+app:enable("etlua") -- route-neutral template setup
+
+app:get("/hello", function(self)
+  return { render = "hello" }
+end)
+
+app:post("create", "/items", function(self)
+  local nested = function()
+    return "nested"
+  end
+  return { json = nested() }
+end)
+
+app:match("/fallback", function()
+  return { status = 204 }
+end)
+return app`;
+    const facts = extractLuaFileFacts({
+      filePath: "src/routes.lua",
+      language: "lua",
+      sourceText
+    });
+    const handlers = facts.symbols.filter(
+      (symbol) => symbol.kind === "function" && symbol.name === "<anonymous route handler>"
+    );
+    const routeSymbols = facts.symbols.filter((symbol) => symbol.kind === "route");
+
+    expect(handlers).toEqual([
+      expect.objectContaining({
+        id: "symbol:src%2Froutes.lua:src%2Froutes.lua%23route%3AGET%20%2Fhello%23handler:function:0",
+        qualifiedName: "src/routes.lua#route:GET /hello#handler",
+        range: {
+          start: { line: 6, column: 19 },
+          end: { line: 8, column: 4 }
+        },
+        isExported: false,
+        declarationOrdinal: 0
+      }),
+      expect.objectContaining({
+        id: "symbol:src%2Froutes.lua:src%2Froutes.lua%23route%3APOST%20%2Fitems%23handler:function:0",
+        qualifiedName: "src/routes.lua#route:POST /items#handler",
+        range: {
+          start: { line: 10, column: 30 },
+          end: { line: 15, column: 4 }
+        },
+        isExported: false,
+        declarationOrdinal: 0
+      }),
+      expect.objectContaining({
+        id: "symbol:src%2Froutes.lua:src%2Froutes.lua%23route%3AALL%20%2Ffallback%23handler:function:0",
+        qualifiedName: "src/routes.lua#route:ALL /fallback#handler",
+        range: {
+          start: { line: 17, column: 24 },
+          end: { line: 19, column: 4 }
+        },
+        isExported: false,
+        declarationOrdinal: 0
+      })
+    ]);
+    expect(routeSymbols.map((symbol) => symbol.qualifiedName)).toEqual([
+      "src/routes.lua#route:GET /hello",
+      "src/routes.lua#route:POST /items",
+      "src/routes.lua#route:ALL /fallback"
+    ]);
+    expect(
+      facts.edges
+        .filter(
+          (edge) =>
+            edge.kind === "contains" &&
+            handlers.some((handler) => handler.id === edge.targetId) &&
+            edge.sourceId === facts.symbols[0]?.id
+        )
+        .map((edge) => edge.targetId)
+    ).toEqual(handlers.map((handler) => handler.id));
+    expect(routes(facts)).toEqual(
+      handlers.map((handler) =>
+        expect.objectContaining({
+          targetId: handler.id,
+          resolution: "exact",
+          confidence: 1,
+          referenceName: "<anonymous route handler>",
+          evidence: {
+            ruleId: "framework.lapis.direct-application.literal-route.inline-function",
+            stage: "syntax",
+            candidateSymbolIds: [handler.id]
+          }
+        })
+      )
+    );
+  });
+
+  it("uses lexical ordinals for duplicate Lapis inline route and handler identities", () => {
+    const facts = extractLuaFileFacts({
+      filePath: "src/routes.lua",
+      language: "lua",
+      sourceText: `local app = require("lapis").Application()
+app:get("/duplicate", function() return { status = 200 } end);
+app:get("/duplicate", function() return { status = 201 } end)`
+    });
+    const handlers = facts.symbols.filter(
+      (symbol) => symbol.kind === "function" && symbol.name === "<anonymous route handler>"
+    );
+    const routeSymbols = facts.symbols.filter((symbol) => symbol.kind === "route");
+
+    expect(handlers.map(({ id, qualifiedName, declarationOrdinal }) => ({ id, qualifiedName, declarationOrdinal }))).toEqual([
+      {
+        id: "symbol:src%2Froutes.lua:src%2Froutes.lua%23route%3AGET%20%2Fduplicate%23handler:function:0",
+        qualifiedName: "src/routes.lua#route:GET /duplicate#handler",
+        declarationOrdinal: 0
+      },
+      {
+        id: "symbol:src%2Froutes.lua:src%2Froutes.lua%23route%3AGET%20%2Fduplicate%23handler:function:1",
+        qualifiedName: "src/routes.lua#route:GET /duplicate#handler",
+        declarationOrdinal: 1
+      }
+    ]);
+    expect(routeSymbols.map(({ qualifiedName, declarationOrdinal }) => ({ qualifiedName, declarationOrdinal }))).toEqual([
+      { qualifiedName: "src/routes.lua#route:GET /duplicate", declarationOrdinal: 0 },
+      { qualifiedName: "src/routes.lua#route:GET /duplicate", declarationOrdinal: 1 }
+    ]);
+    expect(routes(facts).map((edge) => edge.targetId)).toEqual(handlers.map((handler) => handler.id));
+  });
+
+  it("accepts the bounded official Lapis return-expression subset", () => {
+    const facts = extractLuaFileFacts({
+      filePath: "src/routes.lua",
+      language: "lua",
+      sourceText: `local app = require("lapis").Application()
+app:get("/hello/:name", function(self)
+  return "Hello " .. self.params.name
+end)
+return app`
+    });
+
+    expect(routes(facts)).toEqual([
+      expect.objectContaining({
+        resolution: "exact",
+        confidence: 1,
+        referenceName: "<anonymous route handler>"
+      })
+    ]);
+  });
+
+  it("fails closed for unsafe or non-direct Lapis inline handler registrations", () => {
+    const sources = [
+      ["dynamic path", `local app = require("lapis").Application()\napp:get(path, function() end)`],
+      ["wrapped handler", `local app = require("lapis").Application()\napp:get("/x", wrap(function() end))`],
+      ["invoked handler", `local app = require("lapis").Application()\napp:get("/x", (function() end)())`],
+      ["extra handler argument", `local app = require("lapis").Application()\napp:get("/x", function() end, extra)`],
+      ["nonfinal handler", `local app = require("lapis").Application()\napp:get("/x", function() end, "later")`],
+      ["nested route", `local app = require("lapis").Application()\nif true then\n  app:get("/x", function() end)\nend`],
+      ["dot route", `local app = require("lapis").Application()\napp.get("/x", function() end)`],
+      ["bracket route", `local app = require("lapis").Application()\napp["get"]("/x", function() end)`],
+      ["application rebinding", `local app = require("lapis").Application()\napp = other\napp:get("/x", function() end)`],
+      ["multiple applications", `local one = require("lapis").Application()\nlocal two = require("lapis").Application()\none:get("/x", function() end)`],
+      ["top-level foreign return", `local app = require("lapis").Application()\napp:get("/x", function() end)\nreturn other`],
+      ["nonterminal application return", `local app = require("lapis").Application()\nreturn app\napp:get("/x", function() end)`],
+      ["enable wrong value", `local app = require("lapis").Application()\napp:enable("other")\napp:get("/x", function() end)`],
+      ["enable twice", `local app = require("lapis").Application()\napp:enable("etlua")\napp:enable("etlua")\napp:get("/x", function() end)`],
+      ["enable after route", `local app = require("lapis").Application()\napp:get("/x", function() end)\napp:enable("etlua")`],
+      ["missing parameter comma", `local app = require("lapis").Application()\napp:get("/x", function(self other) end)`],
+      ["repeated parameter comma", `local app = require("lapis").Application()\napp:get("/x", function(self,,other) end)`],
+      ["missing return expression comma", `local app = require("lapis").Application()\napp:get("/x", function() return 1 2 end)`],
+      ["missing local name", `local app = require("lapis").Application()\napp:get("/x", function() local = 1 end)`],
+      ["missing local expression comma", `local app = require("lapis").Application()\napp:get("/x", function() local x = 1 2 end)`],
+      ["repeated return comma", `local app = require("lapis").Application()\napp:get("/x", function() return 1,,2 end)`],
+      ["missing table field value", `local app = require("lapis").Application()\napp:get("/x", function() return { a = } end)`],
+      ["missing call argument", `local app = require("lapis").Application()\napp:get("/x", function() return foo(,) end)`],
+      ["missing return value", `local app = require("lapis").Application()\napp:get("/x", function() return , end)`],
+      ["break outside loop", `local app = require("lapis").Application()\napp:get("/x", function() break end)`],
+      ["numeric call suffix", `local app = require("lapis").Application()\napp:get("/x", function() return 1() end)`],
+      ["direct function call suffix", `local app = require("lapis").Application()\napp:get("/x", function() return function() end() end)`],
+      ["non-vararg ellipsis", `local app = require("lapis").Application()\napp:get("/x", function() return ... end)`],
+      ["spaced vararg parameter", `local app = require("lapis").Application()\napp:get("/x", function(. . .) return 1 end)`],
+      ["repeated post-return semicolon", `local app = require("lapis").Application()\napp:get("/x", function() return;; end)`],
+      ["malformed function", `local app = require("lapis").Application()\napp:get("/x", function()`]
+    ] as const;
+
+    for (const [description, sourceText] of sources) {
+      const facts = extractLuaFileFacts({ filePath: "src/routes.lua", language: "lua", sourceText });
+      expect(routes(facts), description).toEqual([]);
+    }
+
+    const luauFacts = extractLuaFileFacts({
+      filePath: "src/routes.luau",
+      language: "luau",
+      sourceText: `local app = require("lapis").Application()
+app:get("/x", function() end)`
+    });
+    expect(routes(luauFacts)).toEqual([]);
+  });
+
+  it("fails closed for mutable Lapis construction, registration, and handler state", () => {
+    const sources = [
+      [
+        "local require shadow before construction",
+        `local require = function() return {} end
+local app = require("lapis").Application()
+local function handler() end
+app:get("/shadow", handler)`
+      ],
+      [
+        "global require shadow before construction",
+        `require = function() return {} end
+local app = require("lapis").Application()
+local function handler() end
+app:get("/shadow", handler)`
+      ],
+      [
+        "route method assignment before registration",
+        `local app = require("lapis").Application()
+local function handler() end
+app.get = function() end
+app:get("/mutation", handler)`
+      ],
+      [
+        "prior invoked handler mutation",
+        `local app = require("lapis").Application()
+local function handler() end
+local function mutate() handler = function() end end
+mutate()
+app:get("/call", handler)`
+      ],
+      [
+        "unmatched if",
+        `local app = require("lapis").Application()
+local function handler() end
+if true
+app:get("/if", handler)`
+      ],
+      [
+        "stray elseif",
+        `local app = require("lapis").Application()
+local function handler() end
+elseif true then
+app:get("/elseif", handler)`
+      ],
+      [
+        "local require function declaration before construction",
+        `local function require() return {} end
+local app = require("lapis").Application()
+local function handler() end
+app:get("/require-local-function", handler)`
+      ],
+      [
+        "global require function declaration before construction",
+        `function require() return {} end
+local app = require("lapis").Application()
+local function handler() end
+app:get("/require-global-function", handler)`
+      ],
+      [
+        "match method assignment before registration",
+        `local app = require("lapis").Application()
+local function handler() end
+app.match = function() end
+app:get("/match", handler)`
+      ],
+      [
+        "bracket method assignment before registration",
+        `local app = require("lapis").Application()
+local function handler() end
+app["get"] = function() end
+app:get("/bracket", handler)`
+      ],
+      [
+        "dotted mutator invocation before registration",
+        `local app = require("lapis").Application()
+local function handler() end
+mutator.run()
+app:get("/dotted-call", handler)`
+      ],
+      [
+        "method mutator invocation before registration",
+        `local app = require("lapis").Application()
+local function handler() end
+mutator:run()
+app:get("/method-call", handler)`
+      ],
+      [
+        "standalone else",
+        `local app = require("lapis").Application()
+local function handler() end
+else
+app:get("/else", handler)`
+      ],
+      [
+        "standalone then",
+        `local app = require("lapis").Application()
+local function handler() end
+then
+app:get("/then", handler)`
+      ],
+      [
+        "application local function shadow before registration",
+        `local app = require("lapis").Application()
+local function app() end
+local function handler() end
+app:get("/shadowed-app", handler)`
+      ],
+      [
+        "module alias local function shadow before construction",
+        `local lapis = require("lapis")
+local function lapis() end
+local app = lapis.Application()
+local function handler() end
+app:get("/shadowed-module", handler)`
+      ],
+      [
+        "handler local function shadow before registration",
+        `local app = require("lapis").Application()
+local function handler() end
+local function handler() end
+app:get("/shadowed-handler", handler)`
+      ],
+      [
+        "route after terminal return on a new line",
+        `local app = require("lapis").Application()
+local function handler() end
+return app
+app:get("/after-return", handler)`
+      ],
+      [
+        "route after terminal return semicolon",
+        `local app = require("lapis").Application()
+local function handler() end
+return app; app:get("/after-return-semicolon", handler)`
+      ]
+    ] as const;
+
+    for (const [description, sourceText] of sources) {
+      const facts = extractLuaFileFacts({ filePath: "src/routes.lua", language: "lua", sourceText });
+      expect(routes(facts), description).toEqual([]);
+    }
+  });
+
   it("emits one exact Luau typed zero-argument bare-function call with unique target evidence", () => {
     const facts = extractLuaFileFacts({
       filePath: "src/smoke.luau",

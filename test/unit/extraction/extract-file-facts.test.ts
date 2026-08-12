@@ -10814,7 +10814,6 @@ describe("source extraction", () => {
     for (const facts of [
       missingFramework,
       dynamicPath,
-      inlineHandler,
       reboundHandler,
       lateHandler,
       tableWrappedRoute,
@@ -10823,6 +10822,15 @@ describe("source extraction", () => {
       expect(facts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
       expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
     }
+    expect(inlineHandler.symbols.filter((symbol) => symbol.kind === "route")).toHaveLength(1);
+    expect(inlineHandler.edges.filter((edge) => edge.kind === "routes")).toEqual([
+      expect.objectContaining({
+        referenceName: "<anonymous route handler>",
+        evidence: expect.objectContaining({
+          ruleId: "framework.lapis.direct-application.literal-route.inline-function"
+        })
+      })
+    ]);
     expect(broken.symbols.filter((symbol) => symbol.kind === "function")).toEqual([]);
   });
 
