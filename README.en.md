@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.402.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.403.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## What it is
 
@@ -51,10 +51,10 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.402.0 highlights
+## v0.403.0 highlights
 
-- Fixed-source acceptance uses official [`dotnet/docs`](https://github.com/dotnet/docs) at commit [`2c76c7edad105d84e0c97be66f807e238fd49f6d`](https://github.com/dotnet/docs/tree/2c76c7edad105d84e0c97be66f807e238fd49f6d), scanning the complete [`StringLibrary/Class1.vb`](https://github.com/dotnet/docs/blob/2c76c7edad105d84e0c97be66f807e238fd49f6d/docs/core/tutorials/snippets/create-class-library/vb/StringLibrary/Class1.vb). The three B1 truths are the `StringLibrary` module identity, the `StartsWithUpper` method identity, and exact module-to-method containment; SymbolLattice and CodeGraph 1.5 both score **TP 3 / FP 0 / FN 0**.
-- Extension/runtime behavior, method calls, Imports resolution, and cross-file or assembly semantics are not truths. Extractor facts remain v274 and the resolver remains v143; unavailable native VB.NET tooling is reported as environment-blocked.
+- Fixed-source acceptance uses official [`hashicorp/terraform`](https://github.com/hashicorp/terraform) at commit [`660d029178eb4d03dad21ae94142115b5765fe2c`](https://github.com/hashicorp/terraform/tree/660d029178eb4d03dad21ae94142115b5765fe2c), scanning the complete [`pass_with_outputs/main.tf`](https://github.com/hashicorp/terraform/blob/660d029178eb4d03dad21ae94142115b5765fe2c/internal/command/testdata/test/pass_with_outputs/main.tf). The three B1 truths are the `resource test_resource.foo` identity, the `output value` identity, and the unique same-file direct output-to-resource reference; SymbolLattice and CodeGraph 1.5 both score **TP 3 / FP 0 / FN 0**.
+- Provider state, plan/apply results, cross-file or module-source resolution, dynamic expressions, and runtime semantics are not truths. Extractor facts remain v274 and the resolver remains v143; unavailable Terraform/OpenTofu CLIs are reported as environment-blocked.
 
 ## MCP
 

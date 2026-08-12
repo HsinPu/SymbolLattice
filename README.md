@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.402.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
+> v0.403.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
 
 ## 簡介
 
@@ -44,10 +44,10 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.402.0 重點
+## v0.403.0 重點
 
-- 固定來源驗收使用官方 [`dotnet/docs`](https://github.com/dotnet/docs) commit [`2c76c7edad105d84e0c97be66f807e238fd49f6d`](https://github.com/dotnet/docs/tree/2c76c7edad105d84e0c97be66f807e238fd49f6d)，掃描完整 [`StringLibrary/Class1.vb`](https://github.com/dotnet/docs/blob/2c76c7edad105d84e0c97be66f807e238fd49f6d/docs/core/tutorials/snippets/create-class-library/vb/StringLibrary/Class1.vb)。三項 B1 truth 為 `StringLibrary` module identity、`StartsWithUpper` method identity，以及 module→method exact containment；SymbolLattice 與 CodeGraph 1.5 均為 **TP 3／FP 0／FN 0**。
-- 不把 extension/runtime 行為、方法呼叫、Imports 解析、跨檔案或組件語義算成 truth。extractor facts 維持 v274，resolver 維持 v143；原生 VB.NET 工具不可用時標示 environment-blocked。
+- 固定來源驗收使用官方 [`hashicorp/terraform`](https://github.com/hashicorp/terraform) commit [`660d029178eb4d03dad21ae94142115b5765fe2c`](https://github.com/hashicorp/terraform/tree/660d029178eb4d03dad21ae94142115b5765fe2c)，掃描完整 [`pass_with_outputs/main.tf`](https://github.com/hashicorp/terraform/blob/660d029178eb4d03dad21ae94142115b5765fe2c/internal/command/testdata/test/pass_with_outputs/main.tf)。三項 B1 truth 為 `resource test_resource.foo` identity、`output value` identity，以及 output→resource 唯一同檔直接參照；SymbolLattice 與 CodeGraph 1.5 均為 **TP 3／FP 0／FN 0**。
+- 不宣稱 provider state、plan/apply 結果、跨檔案或 module-source 解析、動態 expression 與 runtime 語義。extractor facts 維持 v274，resolver 維持 v143；Terraform/OpenTofu CLI 不可用，native validation 標示 environment-blocked。
 
 ## MCP
 
