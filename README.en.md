@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.401.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.402.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## What it is
 
@@ -51,11 +51,10 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.401.0 highlights
+## v0.402.0 highlights
 
-- Fixed-source acceptance uses official [`scala/scala3-example-project`](https://github.com/scala/scala3-example-project) at commit [`f0b8bb13d7e49bd5ed1d73250c5cc307ae361028`](https://github.com/scala/scala3-example-project/tree/f0b8bb13d7e49bd5ed1d73250c5cc307ae361028), scanning the complete [`src/main/scala/ParameterUntupling.scala`](https://github.com/scala/scala3-example-project/blob/f0b8bb13d7e49bd5ed1d73250c5cc307ae361028/src/main/scala/ParameterUntupling.scala). The three B1 truths are the `ParameterUntupling` object identity, the `test` method identity, and exact object-to-method containment; SymbolLattice and CodeGraph 1.5 both score `TP 3 / FP 0 / FN 0`.
-- This release qualifies the existing Scala symbol/containment surface. Lambdas, collection calls, `println`, runtime behavior, and build dependencies are not truths, and no cross-file semantics or general Scala call-resolution claim is made.
-- Extractor facts remain v274 and the resolver remains v143. If Scala, scalac, and sbt are unavailable in the validation environment, native validation is marked environment-blocked rather than reported as passed or failed.
+- Fixed-source acceptance uses official [`dotnet/docs`](https://github.com/dotnet/docs) at commit [`2c76c7edad105d84e0c97be66f807e238fd49f6d`](https://github.com/dotnet/docs/tree/2c76c7edad105d84e0c97be66f807e238fd49f6d), scanning the complete [`StringLibrary/Class1.vb`](https://github.com/dotnet/docs/blob/2c76c7edad105d84e0c97be66f807e238fd49f6d/docs/core/tutorials/snippets/create-class-library/vb/StringLibrary/Class1.vb). The three B1 truths are the `StringLibrary` module identity, the `StartsWithUpper` method identity, and exact module-to-method containment; SymbolLattice and CodeGraph 1.5 both score **TP 3 / FP 0 / FN 0**.
+- Extension/runtime behavior, method calls, Imports resolution, and cross-file or assembly semantics are not truths. Extractor facts remain v274 and the resolver remains v143; unavailable native VB.NET tooling is reported as environment-blocked.
 
 ## MCP
 

@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.401.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
+> v0.402.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
 
 ## 簡介
 
@@ -44,11 +44,10 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.401.0 重點
+## v0.402.0 重點
 
-- 固定來源驗收使用官方 [`scala/scala3-example-project`](https://github.com/scala/scala3-example-project) commit [`f0b8bb13d7e49bd5ed1d73250c5cc307ae361028`](https://github.com/scala/scala3-example-project/tree/f0b8bb13d7e49bd5ed1d73250c5cc307ae361028)，掃描完整 [`src/main/scala/ParameterUntupling.scala`](https://github.com/scala/scala3-example-project/blob/f0b8bb13d7e49bd5ed1d73250c5cc307ae361028/src/main/scala/ParameterUntupling.scala)。三項 B1 truth 為 `ParameterUntupling` object identity、`test` method identity，以及 object 到 method 的 exact containment；SymbolLattice 與 CodeGraph 1.5 都是 `TP 3／FP 0／FN 0`。
-- 本版驗收既有 Scala symbol／containment 表面，不把 lambda、collection calls、println、runtime 或 build dependency 算成 truth，也不宣稱跨檔案語義或一般 Scala call resolution。
-- extractor facts 維持 v274，resolver 維持 v143。驗證環境沒有可用 Scala／scalac／sbt 時，原生驗證會標示為 environment-blocked，不會誤報成執行通過或失敗。
+- 固定來源驗收使用官方 [`dotnet/docs`](https://github.com/dotnet/docs) commit [`2c76c7edad105d84e0c97be66f807e238fd49f6d`](https://github.com/dotnet/docs/tree/2c76c7edad105d84e0c97be66f807e238fd49f6d)，掃描完整 [`StringLibrary/Class1.vb`](https://github.com/dotnet/docs/blob/2c76c7edad105d84e0c97be66f807e238fd49f6d/docs/core/tutorials/snippets/create-class-library/vb/StringLibrary/Class1.vb)。三項 B1 truth 為 `StringLibrary` module identity、`StartsWithUpper` method identity，以及 module→method exact containment；SymbolLattice 與 CodeGraph 1.5 均為 **TP 3／FP 0／FN 0**。
+- 不把 extension/runtime 行為、方法呼叫、Imports 解析、跨檔案或組件語義算成 truth。extractor facts 維持 v274，resolver 維持 v143；原生 VB.NET 工具不可用時標示 environment-blocked。
 
 ## MCP
 
