@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.395.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
+> v0.396.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
 
 ## 簡介
 
@@ -44,11 +44,11 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.395.0 重點
+## v0.396.0 重點
 
-- 固定來源驗收使用官方 [`llvm/llvm-project` 20.1.8](https://github.com/llvm/llvm-project/tree/llvmorg-20.1.8) 的 commit [`87f0227cb60147a26a1eeb4fb06e3b505e9c7261`](https://github.com/llvm/llvm-project/tree/87f0227cb60147a26a1eeb4fb06e3b505e9c7261)，掃描完整 [`clang/test/CodeGenCXX/flatten.cpp`](https://github.com/llvm/llvm-project/blob/87f0227cb60147a26a1eeb4fb06e3b505e9c7261/clang/test/CodeGenCXX/flatten.cpp)。三項 B1 truth 為 `f` function identity、`g` function identity，以及 `g` 到 `f` 的 exact direct call；SymbolLattice 與 CodeGraph 1.5 都是 `TP 3／FP 0／FN 0`。
-- C++ direct-call exactness 現在對所有預處理 directive 保守停用，並拒絕 enum enumerator shadow、參數數量不符、overload／template declaration、local／type shadow、member／indirect／lambda call。不宣稱完整 overload resolution、default／variadic argument、include 或 runtime semantics。
-- extractor facts 更新為 v273，resolver 維持 v143。驗證環境沒有可用 Clang／G++，因此原生驗證標示為 environment-blocked，不會誤報成執行通過或失敗。
+- 固定來源驗收使用官方 [`dotnet/samples`](https://github.com/dotnet/samples) 的 commit [`5fee0c35e0e8efc02a5234ed55bb2592f6d1b0b6`](https://github.com/dotnet/samples/tree/5fee0c35e0e8efc02a5234ed55bb2592f6d1b0b6)，掃描完整 [`core/extensions/DllMapDemo/Map.cs`](https://github.com/dotnet/samples/blob/5fee0c35e0e8efc02a5234ed55bb2592f6d1b0b6/core/extensions/DllMapDemo/Map.cs)。三項 B1 truth 為 `MapAndLoad` method identity、`MapLibraryName` method identity，以及 `MapAndLoad` 到 `MapLibraryName` 的 exact direct call；SymbolLattice 與 CodeGraph 1.5 都是 `TP 3／FP 0／FN 0`。
+- C# direct-call exactness 現在核對固定參數與呼叫引數數量，並在任何 preprocessing directive、default／`params`／extension parameter、overload、partial／非 static class、local／lambda shadow 或 member／indirect call 存在時保守停用。不宣稱完整 overload resolution、型別轉換、跨檔案或 runtime semantics。
+- extractor facts 更新為 v274，resolver 維持 v143。驗證環境沒有可用 .NET SDK／C# compiler 時，原生驗證會標示為 environment-blocked，不會誤報成執行通過或失敗。
 
 ## MCP
 

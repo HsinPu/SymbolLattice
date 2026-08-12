@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.395.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.396.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## What it is
 
@@ -51,11 +51,11 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.395.0 highlights
+## v0.396.0 highlights
 
-- Fixed-source acceptance uses official [`llvm/llvm-project` 20.1.8](https://github.com/llvm/llvm-project/tree/llvmorg-20.1.8) at commit [`87f0227cb60147a26a1eeb4fb06e3b505e9c7261`](https://github.com/llvm/llvm-project/tree/87f0227cb60147a26a1eeb4fb06e3b505e9c7261), scanning the complete [`clang/test/CodeGenCXX/flatten.cpp`](https://github.com/llvm/llvm-project/blob/87f0227cb60147a26a1eeb4fb06e3b505e9c7261/clang/test/CodeGenCXX/flatten.cpp). The three B1 truths are the `f` function identity, the `g` function identity, and the exact direct call from `g` to `f`; SymbolLattice and CodeGraph 1.5 both score `TP 3 / FP 0 / FN 0`.
-- C++ direct-call exactness now fails closed for every preprocessing directive and rejects enum-enumerator shadowing, argument-count mismatches, overload or template declarations, local/type shadows, and member, indirect, or lambda calls. It does not claim complete overload resolution, default/variadic arguments, include semantics, or runtime behavior.
-- Extractor facts advance to v273 and the resolver remains v143. Clang and G++ are unavailable in the validation environment, so native validation is marked environment-blocked rather than reported as passed or failed.
+- Fixed-source acceptance uses official [`dotnet/samples`](https://github.com/dotnet/samples) at commit [`5fee0c35e0e8efc02a5234ed55bb2592f6d1b0b6`](https://github.com/dotnet/samples/tree/5fee0c35e0e8efc02a5234ed55bb2592f6d1b0b6), scanning the complete [`core/extensions/DllMapDemo/Map.cs`](https://github.com/dotnet/samples/blob/5fee0c35e0e8efc02a5234ed55bb2592f6d1b0b6/core/extensions/DllMapDemo/Map.cs). The three B1 truths are the `MapAndLoad` method identity, the `MapLibraryName` method identity, and the exact direct call from `MapAndLoad` to `MapLibraryName`; SymbolLattice and CodeGraph 1.5 both score `TP 3 / FP 0 / FN 0`.
+- C# direct-call exactness now checks fixed parameter and call-argument counts, and fails closed for any preprocessing directive, default/`params`/extension parameters, overloads, partial or non-static classes, local/lambda shadows, and member or indirect calls. It does not claim complete overload resolution, type conversion, cross-file, or runtime semantics.
+- Extractor facts advance to v274 and the resolver remains v143. If the .NET SDK or C# compiler is unavailable in the validation environment, native validation is marked environment-blocked rather than reported as passed or failed.
 
 ## MCP
 

@@ -39,6 +39,7 @@ interface StaticCsharpMethod {
   readonly isStatic: boolean;
   readonly name: string;
   readonly node: CsharpSyntaxNode;
+  readonly parameterCount: number | null;
 }
 
 interface StaticCsharpFunction {
@@ -366,10 +367,23 @@ function staticCsharpMethod(node: CsharpSyntaxNode): StaticCsharpMethod | null {
   const body = children.find(
     (child) => child.kind() === "block" || child.kind() === "arrow_expression_clause"
   );
+  const parameterList = children[parametersIndex];
+  const parameterCount = parameterList === undefined ? null : boundedCsharpParameterCount(parameterList);
   const isStatic = children.some(
     (child) => child.kind() === "modifier" && nodeText(child) === "static"
   );
-  return name === null ? null : { body: body ?? null, isStatic, name, node };
+  return name === null ? null : { body: body ?? null, isStatic, name, node, parameterCount };
+}
+
+function boundedCsharpParameterCount(parameterList: CsharpSyntaxNode): number | null {
+  const children = directChildren(parameterList);
+  if (children.some((child) => !["(", ")", ",", "parameter"].includes(String(child.kind())))) {
+    return null;
+  }
+  const parameters = children.filter((child) => child.kind() === "parameter");
+  return parameters.some((parameter) => /\b(?:params|this)\b|=/u.test(nodeText(parameter)))
+    ? null
+    : parameters.length;
 }
 
 function hasAmbiguousCsharpUsing(root: CsharpSyntaxNode): boolean {
@@ -388,11 +402,11 @@ function hasCsharpMethodParameterNamed(method: StaticCsharpMethod, name: string)
 }
 
 function csharpDirectCalls(body: CsharpSyntaxNode): {
-  readonly calls: readonly { readonly name: string; readonly node: CsharpSyntaxNode }[];
+  readonly calls: readonly { readonly argumentCount: number; readonly name: string; readonly node: CsharpSyntaxNode }[];
   readonly boundNames: ReadonlySet<string>;
   readonly unsafe: boolean;
 } {
-  const calls: Array<{ readonly name: string; readonly node: CsharpSyntaxNode }> = [];
+  const calls: Array<{ readonly argumentCount: number; readonly name: string; readonly node: CsharpSyntaxNode }> = [];
   const boundNames = new Set<string>();
   let unsafe = false;
   const bindingKinds: ReadonlySet<string> = new Set([
@@ -430,8 +444,15 @@ function csharpDirectCalls(body: CsharpSyntaxNode): {
       const callee = children[0];
       const arguments_ = children[1];
       const name = callee === undefined ? null : identifierText(callee);
-      if (name !== null && arguments_?.kind() === "argument_list" && children.length === 2) {
-        calls.push({ name, node });
+      const argumentChildren = arguments_ === undefined ? [] : directChildren(arguments_);
+      const argumentCount = argumentChildren.filter((child) => child.kind() === "argument").length;
+      if (
+        name !== null &&
+        arguments_?.kind() === "argument_list" &&
+        children.length === 2 &&
+        argumentChildren.every((child) => ["(", ")", ",", "argument"].includes(String(child.kind())))
+      ) {
+        calls.push({ argumentCount, name, node });
       }
     }
     for (const child of directChildren(node)) {
@@ -440,6 +461,10 @@ function csharpDirectCalls(body: CsharpSyntaxNode): {
   };
   visit(body);
   return { calls, boundNames, unsafe };
+}
+
+function hasCsharpPreprocessing(node: CsharpSyntaxNode): boolean {
+  return String(node.kind()).startsWith("preproc_") || directChildren(node).some((child) => hasCsharpPreprocessing(child));
 }
 
 function staticCsharpFunction(node: CsharpSyntaxNode): StaticCsharpFunction | null {
@@ -924,7 +949,7 @@ export function extractCsharpFileFacts(input: CsharpExtractFileFactsInput): Arti
       }
     }
 
-    if (!hasAmbiguousCsharpUsing(root)) {
+    if (!hasAmbiguousCsharpUsing(root) && !hasCsharpPreprocessing(root)) {
       for (const caller of staticClassMethods) {
         if (
           caller.type.kind !== "class" ||
@@ -953,7 +978,9 @@ export function extractCsharpFileFacts(input: CsharpExtractFileFactsInput): Arti
           if (
             candidates.length !== 1 ||
             candidates[0] === undefined ||
-            !candidates[0].declaration.isStatic
+            !candidates[0].declaration.isStatic ||
+            candidates[0].declaration.parameterCount === null ||
+            candidates[0].declaration.parameterCount !== call.argumentCount
           ) {
             continue;
           }

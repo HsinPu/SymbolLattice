@@ -65,13 +65,26 @@ describe("C# and Kotlin bounded same-file direct calls", () => {
       ["overload", `public static class Smoke { public static int Entry() => CsharpHelper(); public static int CsharpHelper() => 1; public static int CsharpHelper(int value) => value; }`],
       ["partial static class", `public static partial class Smoke { public static int Entry() => CsharpHelper(); public static int CsharpHelper() => 1; } public static partial class Smoke { public static int CsharpHelper(int value) => value; }`],
       ["partial static class may extend across files", `public static partial class Smoke { public static int Entry() => CsharpHelper(); public static int CsharpHelper() => 1; }`],
-      ["other class", `public static class Smoke { public static int Entry() => CsharpHelper(); } public static class Other { public static int CsharpHelper() => 1; }`]
+      ["other class", `public static class Smoke { public static int Entry() => CsharpHelper(); } public static class Other { public static int CsharpHelper() => 1; }`],
+      ["missing argument", `public static class Smoke { public static int Entry() => CsharpHelper(); public static int CsharpHelper(int value) => value; }`],
+      ["extra argument", `public static class Smoke { public static int Entry() => CsharpHelper(1); public static int CsharpHelper() => 1; }`],
+      ["conditional call", `public static class Smoke { public static int CsharpHelper() => 1; public static int Entry() {\n#if FEATURE\nreturn CsharpHelper();\n#else\nreturn 0;\n#endif\n} }`]
     ] as const;
 
     for (const [description, sourceText] of sources) {
       const facts = extractCsharpFileFacts({ filePath: "src/Smoke.cs", language: "csharp", sourceText });
       expect(calls(facts), description).toEqual([]);
     }
+  });
+
+  it("retains exact C# calls when bounded argument counts match", () => {
+    const facts = extractCsharpFileFacts({
+      filePath: "src/Smoke.cs",
+      language: "csharp",
+      sourceText: `public static class Smoke { public static int Entry() => CsharpHelper(1); public static int CsharpHelper(int value) => value; }`
+    });
+
+    expect(calls(facts)).toHaveLength(1);
   });
 
   it("emits one exact Kotlin zero-argument top-level function call with unique target evidence", () => {
