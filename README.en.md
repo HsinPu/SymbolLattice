@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.397.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.398.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## What it is
 
@@ -51,11 +51,11 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.397.0 highlights
+## v0.398.0 highlights
 
-- Fixed-source acceptance uses official [`ruby/spec`](https://github.com/ruby/spec) at commit [`0f44fd58585fcdc652da70521ecb753f6fda80f9`](https://github.com/ruby/spec/tree/0f44fd58585fcdc652da70521ecb753f6fda80f9), scanning the complete [`library/coverage/fixtures/second_class.rb`](https://github.com/ruby/spec/blob/0f44fd58585fcdc652da70521ecb753f6fda80f9/library/coverage/fixtures/second_class.rb). The three B1 truths are the `SecondClass` class identity, the `some_method` method identity, and the exact containment from `SecondClass` to `some_method`; SymbolLattice scores `TP 3 / FP 0 / FN 0`.
-- This release qualifies the existing Ruby symbol/containment surface without adding a general direct-call inference. It makes no runtime, metaprogramming, monkey-patch, dynamic-dispatch, or cross-file semantic claim. CodeGraph 1.5 is scored separately against the same three truths.
-- Extractor facts remain v274 and the resolver remains v143. If a Ruby runtime is unavailable in the validation environment, native validation is marked environment-blocked rather than reported as passed or failed.
+- Fixed-source acceptance uses official [`Kotlin/kotlin-koans`](https://github.com/Kotlin/kotlin-koans) at commit [`5935a3cab5293bd7967b1bf1f4d2ae713f9e0e9e`](https://github.com/Kotlin/kotlin-koans/tree/5935a3cab5293bd7967b1bf1f4d2ae713f9e0e9e), scanning the complete [`test/i_introduction/_0_Hello_World/N00StartKtTest.kt`](https://github.com/Kotlin/kotlin-koans/blob/5935a3cab5293bd7967b1bf1f4d2ae713f9e0e9e/test/i_introduction/_0_Hello_World/N00StartKtTest.kt). The three B1 truths are the `N00StartKtTest` class identity, the `testOk` method identity, and exact class-to-method containment; SymbolLattice and CodeGraph 1.5 both score `TP 3 / FP 0 / FN 0`.
+- This release qualifies the existing Kotlin symbol/containment surface. The JUnit annotation, `assertEquals`, `task0`, and runtime behavior are not truths, and no dependency-resolution or cross-file semantic claim is made.
+- Extractor facts remain v274 and the resolver remains v143. If a Kotlin compiler/runtime is unavailable in the validation environment, native validation is marked environment-blocked rather than reported as passed or failed.
 
 ## MCP
 
