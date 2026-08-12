@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.400.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.401.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## What it is
 
@@ -51,11 +51,11 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.400.0 highlights
+## v0.401.0 highlights
 
-- Fixed-source acceptance uses official [`dart-lang/samples`](https://github.com/dart-lang/samples) at commit [`adebcfac11d1e5119ed46055635d41b1d3cce7e5`](https://github.com/dart-lang/samples/tree/adebcfac11d1e5119ed46055635d41b1d3cce7e5), scanning the complete [`null_safety/calculate_lix/lib/lix.dart`](https://github.com/dart-lang/samples/blob/adebcfac11d1e5119ed46055635d41b1d3cce7e5/null_safety/calculate_lix/lib/lix.dart). The three B1 truths are the `Lix` class identity, the `describe` method identity, and exact class-to-method containment; SymbolLattice and CodeGraph 1.5 both score `TP 3 / FP 0 / FN 0`.
-- This release qualifies the existing Dart symbol/containment surface. The constructor, `_calculate()` member call, runtime behavior, and package dependencies are not truths, and no cross-file semantic claim is made.
-- Extractor facts remain v274 and the resolver remains v143. If a Dart SDK/runtime is unavailable in the validation environment, native validation is marked environment-blocked rather than reported as passed or failed.
+- Fixed-source acceptance uses official [`scala/scala3-example-project`](https://github.com/scala/scala3-example-project) at commit [`f0b8bb13d7e49bd5ed1d73250c5cc307ae361028`](https://github.com/scala/scala3-example-project/tree/f0b8bb13d7e49bd5ed1d73250c5cc307ae361028), scanning the complete [`src/main/scala/ParameterUntupling.scala`](https://github.com/scala/scala3-example-project/blob/f0b8bb13d7e49bd5ed1d73250c5cc307ae361028/src/main/scala/ParameterUntupling.scala). The three B1 truths are the `ParameterUntupling` object identity, the `test` method identity, and exact object-to-method containment; SymbolLattice and CodeGraph 1.5 both score `TP 3 / FP 0 / FN 0`.
+- This release qualifies the existing Scala symbol/containment surface. Lambdas, collection calls, `println`, runtime behavior, and build dependencies are not truths, and no cross-file semantics or general Scala call-resolution claim is made.
+- Extractor facts remain v274 and the resolver remains v143. If Scala, scalac, and sbt are unavailable in the validation environment, native validation is marked environment-blocked rather than reported as passed or failed.
 
 ## MCP
 
