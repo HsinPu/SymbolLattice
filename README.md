@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.384.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
+> v0.385.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
 
 ## 簡介
 
@@ -44,11 +44,11 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.384.0 重點
+## v0.385.0 重點
 
-- 固定來源驗收使用 [`llvm/llvm-project` 20.1.0](https://github.com/llvm/llvm-project/releases/tag/llvmorg-20.1.0) 的 peeled commit [`68f0da5431dec2de8aed7ca0e54792c98cb110c4`](https://github.com/llvm/llvm-project/tree/68f0da5431dec2de8aed7ca0e54792c98cb110c4)，掃描完整 [`clang/test/CodeGenObjC/gnustep2-class.m`](https://github.com/llvm/llvm-project/blob/68f0da5431dec2de8aed7ca0e54792c98cb110c4/clang/test/CodeGenObjC/gnustep2-class.m)。三項 B1 truth 為 `X`、`+clsMeth` 與 `X extends Super`；SymbolLattice 為 `TP 3 / FP 0 / FN 0`，CodeGraph 1.5 為 `TP 2 / FP 0 / FN 1`。
-- Objective-C facts 僅來自完整、直接且唯一的 interface、implementation、protocol、method 與同檔 superclass 證據。未知 preprocessor 分支、條件式 React Native bridge、category、class extension、重複或 malformed method、未配對 delimiter／directive 與 literal 偽裝均 fail closed；dynamic dispatch 不會成為 exact call。
-- extractor facts 為 v272，resolver 維持 v143。原生 `clang` 不在驗證環境的 `PATH`，因此 native compiler 驗證標示為 environment-blocked；這不等同於編譯通過或失敗。
+- 固定來源驗收使用 [`r-lib/prettyunits` v1.2.0](https://github.com/r-lib/prettyunits/releases/tag/v1.2.0) 的 commit [`8305a9a97d65bbbd6eb5902076bc2f3a701c43e9`](https://github.com/r-lib/prettyunits/tree/8305a9a97d65bbbd6eb5902076bc2f3a701c43e9)，掃描完整 [`R/color.R`](https://github.com/r-lib/prettyunits/blob/8305a9a97d65bbbd6eb5902076bc2f3a701c43e9/R/color.R)。三項 B1 truth 為 `pretty_color` 與 `color_diff_cie76` 兩個 function identity，以及 file 到 `pretty_color` 的 containment；SymbolLattice 為 `TP 3 / FP 0 / FN 0`，CodeGraph 1.5 為 `TP 2 / FP 0 / FN 1`。
+- R 驗收僅涵蓋這些由語法直接證明的 declaration 與 containment；不宣稱 call、runtime behavior 或 `NAMESPACE` export。
+- extractor facts 維持 v272，resolver 維持 v143。驗證環境中沒有 `R` 與 `Rscript`，因此 native runtime 驗證標示為 environment-blocked；這不等同於執行通過或失敗。
 
 ## MCP
 
