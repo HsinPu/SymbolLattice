@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.387.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
+> v0.388.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
 
 ## 簡介
 
@@ -44,11 +44,11 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.387.0 重點
+## v0.388.0 重點
 
-- 固定來源驗收使用 [`erlang/otp` OTP-28.5.0.5](https://github.com/erlang/otp/releases/tag/OTP-28.5.0.5) 的 peeled commit [`61bcb2fdaa72f789d98c3b5afce92da43d944688`](https://github.com/erlang/otp/tree/61bcb2fdaa72f789d98c3b5afce92da43d944688)，掃描完整 [`lib/kernel/src/erl_reply.erl`](https://github.com/erlang/otp/blob/61bcb2fdaa72f789d98c3b5afce92da43d944688/lib/kernel/src/erl_reply.erl)。三項 B1 truth 為 `erl_reply` module identity、`ip_string_to_tuple/1` method identity，以及 module 到該 method 的 containment；SymbolLattice 與 CodeGraph 1.5 都是 `TP 3／FP 0／FN 0`。
-- Erlang 驗收僅涵蓋由語法直接證明的 declaration 與 containment；不宣稱 direct call、BEAM runtime behavior 或動態 dispatch。
-- extractor facts 維持 v272，resolver 維持 v143。驗證環境中沒有 `erl`、`erlc` 與 `rebar3`，因此 native runtime 驗證標示為 environment-blocked；這不等同於執行通過或失敗。
+- 固定來源驗收使用官方 [`clojure/tools.namespace` v1.5.1](https://github.com/clojure/tools.namespace/releases/tag/v1.5.1) 的 commit [`b14a58a88cd5aa7605dc5bc77d8786cb264fabf7`](https://github.com/clojure/tools.namespace/tree/b14a58a88cd5aa7605dc5bc77d8786cb264fabf7)，掃描完整 [`src/test/clojure/clojure/tools/namespace/parse_test.clj`](https://github.com/clojure/tools.namespace/blob/b14a58a88cd5aa7605dc5bc77d8786cb264fabf7/src/test/clojure/clojure/tools/namespace/parse_test.clj)。三項 B1 truth 為 `clojure.tools.namespace.parse-test` namespace identity、`str->ns-decl` function identity，以及 namespace 到該 function 的 exact containment；SymbolLattice 是 `TP 3／FP 0／FN 0`，CodeGraph 1.5 因未掃描 `.clj` 而是 `TP 0／FP 0／FN 3`。
+- Clojure 驗收僅涵蓋由語法直接證明的 declaration 與 containment；不宣稱一般 direct call、macro expansion、動態 binding、JVM runtime behavior 或套件 export。
+- extractor facts 維持 v272，resolver 維持 v143。驗證環境中的原生 Clojure 工具若不可用，會標示為 environment-blocked，不會誤報成執行通過或失敗。
 
 ## MCP
 
