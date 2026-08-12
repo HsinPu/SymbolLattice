@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.378.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
+> v0.379.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
 
 ## 專案用途
 
@@ -51,10 +51,10 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.378.0 重點
+## v0.379.0 重點
 
-- 在固定的 WordPress 6.7.0（commit `262f4b6…`）真實專案驗收中，來源為 `load.php`：`wp_get_development_mode` 與 `wp_is_development_mode` identity，以及同檔案 direct call，SymbolLattice 為 `TP 3 / FP 0 / FN 0`，CodeGraph 為 `TP 3 / FP 0 / FN 0`。
-- 此版沒有產品語意變更；extractor v264 與 resolver v143 維持不變。namespace、include、autoload、method、hook 與 runtime 關係不在此驗收的宣稱範圍；PHP／Composer 原生環境檢查為 environment-blocked。
+- 固定真實專案驗收使用 `laravel/quickstart-basic` commit `f6cebbc60224bed89e4443dd69a8f770bc75e837`（MIT），並鎖定雜湊的兩個來源檔：`tasks.blade.php` 與 `layouts/app.blade.php`。驗收 ground truth 為兩個 view identity 和 literal `@extends` 關係：SymbolLattice 為 `TP 3 / FP 0 / FN 0`；CodeGraph 1.5 為 `TP 2 / FP 0 / FN 1`。
+- 全 repo baseline 中，兩者都是 `TP 2 / FP 0 / FN 1`。SymbolLattice 將該關係保留為 unresolved，因為任意 PHP runtime 的 `ViewFinder` mutation 無法僅從來源證明。本版沒有 production semantic change；extractor v264 與 resolver v143 維持不變。不宣稱支援任意 Laravel runtime `ViewFinder`、config/provider/dynamic PHP、namespace/package/component/include；PHP／Composer 原生環境檢查為 environment-blocked。
 
 ## MCP
 

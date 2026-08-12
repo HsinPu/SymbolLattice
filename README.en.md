@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.378.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.379.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## What it is
 
@@ -51,10 +51,10 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.378.0 highlights
+## v0.379.0 highlights
 
-- In fixed real-project acceptance for WordPress 6.7.0 (commit `262f4b6…`), using `load.php` as the source, identities for `wp_get_development_mode` and `wp_is_development_mode` plus their same-file direct call scored `TP 3 / FP 0 / FN 0` for SymbolLattice and `TP 3 / FP 0 / FN 0` for CodeGraph.
-- There is no product semantic change in this release; extractor v264 and resolver v143 are unchanged. Namespace, include, autoload, method, hook, and runtime relationships are not claims of this acceptance; the native PHP/Composer environment check is environment-blocked.
+- Fixed real-project acceptance uses `laravel/quickstart-basic` at commit `f6cebbc60224bed89e4443dd69a8f770bc75e837` (MIT) and a hash-locked two-file source slice: `tasks.blade.php` and `layouts/app.blade.php`. The selected ground truth is the two view identities plus the literal `@extends` relation: SymbolLattice scored `TP 3 / FP 0 / FN 0`; CodeGraph 1.5 scored `TP 2 / FP 0 / FN 1`.
+- On the full-repository baseline, both tools scored `TP 2 / FP 0 / FN 1`. SymbolLattice leaves the unresolved relation unresolved because an arbitrary PHP runtime `ViewFinder` mutation cannot be proven from source. This release has no production semantic change: extractor v264 and resolver v143 are unchanged. It does not claim support for arbitrary Laravel runtime `ViewFinder`, config/provider/dynamic PHP, namespaces/packages/components/includes; the native PHP/Composer check is environment-blocked.
 
 ## MCP
 
