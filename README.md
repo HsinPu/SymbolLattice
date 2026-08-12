@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.403.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
+> v0.404.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
 
 ## 簡介
 
@@ -44,10 +44,10 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.403.0 重點
+## v0.404.0 重點
 
-- 固定來源驗收使用官方 [`hashicorp/terraform`](https://github.com/hashicorp/terraform) commit [`660d029178eb4d03dad21ae94142115b5765fe2c`](https://github.com/hashicorp/terraform/tree/660d029178eb4d03dad21ae94142115b5765fe2c)，掃描完整 [`pass_with_outputs/main.tf`](https://github.com/hashicorp/terraform/blob/660d029178eb4d03dad21ae94142115b5765fe2c/internal/command/testdata/test/pass_with_outputs/main.tf)。三項 B1 truth 為 `resource test_resource.foo` identity、`output value` identity，以及 output→resource 唯一同檔直接參照；SymbolLattice 與 CodeGraph 1.5 均為 **TP 3／FP 0／FN 0**。
-- 不宣稱 provider state、plan/apply 結果、跨檔案或 module-source 解析、動態 expression 與 runtime 語義。extractor facts 維持 v274，resolver 維持 v143；Terraform/OpenTofu CLI 不可用，native validation 標示 environment-blocked。
+- 固定來源驗收使用官方 [`Shopify/dawn`](https://github.com/Shopify/dawn) commit [`258f00f64365e2018ca4c62778a6bf55a5d3cd18`](https://github.com/Shopify/dawn/tree/258f00f64365e2018ca4c62778a6bf55a5d3cd18)，掃描完整 [`layout/password.liquid`](https://github.com/Shopify/dawn/blob/258f00f64365e2018ca4c62778a6bf55a5d3cd18/layout/password.liquid) 與 [`snippets/meta-tags.liquid`](https://github.com/Shopify/dawn/blob/258f00f64365e2018ca4c62778a6bf55a5d3cd18/snippets/meta-tags.liquid)。三項 B1 truth 為兩個檔案 identity，以及 password template→meta-tags snippet 的唯一字面 render；SymbolLattice 與 CodeGraph 1.5 均為 **TP 3／FP 0／FN 0**。
+- 不宣稱動態 snippet 名稱、變數與 filter 求值、Shopify runtime、section schema 或跨 theme dependency 語義。extractor facts 維持 v274，resolver 維持 v143；未執行 Shopify runtime rendering。
 
 ## MCP
 

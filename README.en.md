@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.403.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.404.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## What it is
 
@@ -51,10 +51,10 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.403.0 highlights
+## v0.404.0 highlights
 
-- Fixed-source acceptance uses official [`hashicorp/terraform`](https://github.com/hashicorp/terraform) at commit [`660d029178eb4d03dad21ae94142115b5765fe2c`](https://github.com/hashicorp/terraform/tree/660d029178eb4d03dad21ae94142115b5765fe2c), scanning the complete [`pass_with_outputs/main.tf`](https://github.com/hashicorp/terraform/blob/660d029178eb4d03dad21ae94142115b5765fe2c/internal/command/testdata/test/pass_with_outputs/main.tf). The three B1 truths are the `resource test_resource.foo` identity, the `output value` identity, and the unique same-file direct output-to-resource reference; SymbolLattice and CodeGraph 1.5 both score **TP 3 / FP 0 / FN 0**.
-- Provider state, plan/apply results, cross-file or module-source resolution, dynamic expressions, and runtime semantics are not truths. Extractor facts remain v274 and the resolver remains v143; unavailable Terraform/OpenTofu CLIs are reported as environment-blocked.
+- Fixed-source acceptance uses official [`Shopify/dawn`](https://github.com/Shopify/dawn) at commit [`258f00f64365e2018ca4c62778a6bf55a5d3cd18`](https://github.com/Shopify/dawn/tree/258f00f64365e2018ca4c62778a6bf55a5d3cd18), scanning the complete [`layout/password.liquid`](https://github.com/Shopify/dawn/blob/258f00f64365e2018ca4c62778a6bf55a5d3cd18/layout/password.liquid) and [`snippets/meta-tags.liquid`](https://github.com/Shopify/dawn/blob/258f00f64365e2018ca4c62778a6bf55a5d3cd18/snippets/meta-tags.liquid). The three B1 truths are the two file identities and the unique literal render from the password template to the meta-tags snippet; SymbolLattice and CodeGraph 1.5 both score **TP 3 / FP 0 / FN 0**.
+- Dynamic snippet names, variable/filter evaluation, Shopify runtime behavior, section schemas, and cross-theme dependency semantics are not truths. Extractor facts remain v274 and the resolver remains v143; Shopify runtime rendering was not executed.
 
 ## MCP
 
